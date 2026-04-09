@@ -2,6 +2,8 @@
 
 #include "lua_engine_internal.h"
 
+#include <string>
+
 extern "C" {
 #include "lauxlib.h"
 #include "lua.h"
@@ -10,6 +12,7 @@ extern "C" {
 namespace sdmod::detail {
 
 void RegisterFunction(lua_State* state, lua_CFunction function, const char* name);
+std::string* SwapLuaPrintCaptureSink(std::string* sink);
 
 void RegisterLuaRuntimeBindings(lua_State* state);
 void RegisterLuaEventBindings(lua_State* state);

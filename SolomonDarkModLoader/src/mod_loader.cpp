@@ -7,6 +7,7 @@
 #include "bot_runtime.h"
 #include "logger.h"
 #include "lua_engine.h"
+#include "lua_exec_pipe.h"
 #include "memory_access.h"
 #include "multiplayer_foundation.h"
 #include "native_mods.h"
@@ -135,6 +136,7 @@ void RefreshStartupStatusSnapshot(StartupStatusSnapshot* snapshot) {
 }
 
 void ShutdownPartialRuntime() {
+    StopLuaExecPipeServer();
     ShutdownBackgroundFocusBypass();
     ShutdownGameplayKeyboardInjection();
     ShutdownRunLifecycleHooks();
@@ -318,6 +320,14 @@ void Initialize(HMODULE module_handle) {
                 write_failed_status("run-lifecycle-hooks-failed", message);
                 return;
             }
+
+            if (!StartLuaExecPipeServer()) {
+                const std::string message = "Lua exec pipe server failed to start.";
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status("lua-exec-pipe-failed", message);
+                return;
+            }
         } else {
             Log("Lua engine disabled by runtime flags.");
         }
@@ -396,6 +406,7 @@ void Shutdown() {
     }
 
     Log("SolomonDarkModLoader shutting down.");
+    StopLuaExecPipeServer();
     ShutdownBackgroundFocusBypass();
     ShutdownGameplayKeyboardInjection();
     ShutdownRunLifecycleHooks();

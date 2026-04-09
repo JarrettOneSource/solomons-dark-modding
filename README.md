@@ -7,6 +7,15 @@ Repository scope:
 - this repository intentionally excludes original game files, staged runtime output, local editor state, and one-off reverse-engineering scratch artifacts
 - keep a local Solomon's Dark game copy outside this repository and point the launcher at it when needed
 
+Current status (2026-04-09):
+
+- the repo is now split into a standalone public Solomon's Dark workspace with the launcher, injected loader, sample mods, scripts, and reverse-engineering notes in one place
+- the launcher and WPF UI can stage a local game copy, apply overlays, inject the loader, and surface structured startup state
+- the loader hosts a real embedded Lua runtime, native mod loading, gameplay/runtime hooks, and the first loader-owned bot runtime
+- standalone wizard bots can now be created, registered, published into real gameplay slots, and rendered in arena probes, but the current visual still borrows the player's render context and needs an independent render-node path
+- the debug/runtime toolchain now includes a live Lua execution pipe plus PowerShell/Python client helpers so runtime probes can read memory, write fields, and execute Lua code against the running game
+- the latest rendering and bot findings are captured in `docs/bot-render-re-map.md` and `docs/bot-and-multiplayer-plan.md`
+
 Current scope:
 
 - `SolomonDarkModLauncher/`: CLI-first launcher for mod discovery, persistent enable or disable state, staged file mirroring, Steam bootstrap staging, runtime metadata staging, launch, and loader injection
@@ -30,9 +39,10 @@ Current behavior:
 - the injected loader attempts `steam_api.dll` load, `SteamAPI_Init`, and legacy friends or matchmaking or networking interface binding so Steam P2P groundwork exists before gameplay sync work begins
 - the injected loader builds as `Win32`, initializes a real embedded Lua engine behind runtime flags, hosts loader-owned `sd` Lua APIs, and hosts native runtime DLL mods through `SDModPlugin_Initialize` or `SDModPlugin_Shutdown`
 - the loader now exposes a first scriptable bot runtime through `sd.bots.*` and drives Lua callbacks from the existing runtime tick service
-- wizard bot rendering now follows the recovered gameplay-slot actor path (`Gameplay_CreatePlayerSlot` -> native `PlayerWizard` allocation/ctor/progression setup -> `ActorWorld_Register`) plus a post-create prime of the local player's render descriptor block; the staged bot-regression harness now passes in both hub and `testrun`
+- wizard bot rendering now depends on a real gameplay slot entry plus stock `PlayerActorTick`; the arena bot is visible again, but independent render-node ownership and correct wizard-specific visuals are still follow-up work
 - the launcher stages `config/binary-layout.ini` into `.sdmod/config/` and the loader consumes it for the configured image base and recovered UI anchors
 - the launcher stages `config/debug-ui.ini` into `.sdmod/config/`; when enabled, the loader uses the configured text draw helper, the live `MsgBox` root-object seams for the beta modal, and the D3D9 device global to classify Solomon Dark UI elements and render an opt-in `EndScene` overlay
+- when Lua is enabled, the loader also starts a named-pipe Lua exec server so external scripts can submit code to the live runtime and capture returned values plus `print(...)` output
 - the loader still keeps the low-level memory access layer so Solomon Dark hook work can restart from a cleaner baseline
 
 Build:
@@ -78,6 +88,15 @@ Window capture for overlay verification:
 py -3 .\scripts\capture_window.py --title SolomonDark --output .\runtime\debug-ui-current.png --method window
 py -3 .\scripts\capture_window.py --title SolomonDark --output .\runtime\debug-ui-screen.png --method screen --activate
 ```
+
+Live Lua exec helpers:
+
+```powershell
+pwsh ./scripts/Invoke-LuaExec.ps1 -Code "return sd.world.get_scene()"
+py -3 ./tools/lua-exec.py "return sd.debug.read_u32(0x008203F0)"
+```
+
+These helpers require a running Solomon's Dark process launched through the mod loader with Lua enabled.
 
 The stage report is written to `runtime/stage/.sdmod/stage-report.json`.
 The staged binary layout is written to `runtime/stage/.sdmod/config/binary-layout.ini`.

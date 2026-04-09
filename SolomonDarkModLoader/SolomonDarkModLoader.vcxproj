@@ -111,6 +111,7 @@
     <ClInclude Include="include\steam_bootstrap_internal.h" />
     <ClInclude Include="include\target_game.h" />
     <ClInclude Include="include\x86_hook.h" />
+    <ClInclude Include="src\lua_exec_pipe.h" />
     <ClInclude Include="src\lua_engine_bindings_internal.h" />
     <ClInclude Include="src\mod_loader_internal.h" />
     <ClInclude Include="src\lua_engine_internal.h" />
@@ -130,6 +131,7 @@
     <ClCompile Include="src\lua_engine_bindings.cpp" />
     <ClCompile Include="src\lua_engine_bindings_bots.cpp" />
     <ClCompile Include="src\lua_engine_bindings_debug.cpp" />
+    <ClCompile Include="src\lua_exec_pipe.cpp" />
     <ClCompile Include="src\lua_engine_bindings_gameplay.cpp" />
     <ClCompile Include="src\lua_engine_bindings_input.cpp" />
     <ClCompile Include="src\lua_engine_bindings_runtime.cpp" />

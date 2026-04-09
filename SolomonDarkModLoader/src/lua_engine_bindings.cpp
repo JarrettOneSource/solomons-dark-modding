@@ -7,6 +7,8 @@
 namespace sdmod::detail {
 namespace {
 
+thread_local std::string* g_lua_print_capture_sink = nullptr;
+
 int LuaPrint(lua_State* state) {
     auto* mod = GetLoadedLuaMod(state);
     std::string message;
@@ -22,6 +24,13 @@ int LuaPrint(lua_State* state) {
         lua_pop(state, 1);
     }
 
+    if (g_lua_print_capture_sink != nullptr) {
+        if (!g_lua_print_capture_sink->empty()) {
+            g_lua_print_capture_sink->append("\n");
+        }
+        g_lua_print_capture_sink->append(message);
+    }
+
     if (mod != nullptr) {
         LogLuaMessage(*mod, message);
     } else {
@@ -35,6 +44,12 @@ int LuaPrint(lua_State* state) {
 void RegisterFunction(lua_State* state, lua_CFunction function, const char* name) {
     lua_pushcfunction(state, function);
     lua_setfield(state, -2, name);
+}
+
+std::string* SwapLuaPrintCaptureSink(std::string* sink) {
+    auto* previous_sink = g_lua_print_capture_sink;
+    g_lua_print_capture_sink = sink;
+    return previous_sink;
 }
 
 LoadedLuaMod* GetLoadedLuaMod(lua_State* state) {

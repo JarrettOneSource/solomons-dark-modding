@@ -307,50 +307,56 @@ HP/state only on change. Bosses can use 20Hz for smoother updates.
 - [x] Runtime debug toolkit for investigation
 - [x] 77 named functions in Ghidra pseudo-codebase
 
-## Current Bot Status (2026-04-08)
+## Current Bot Status (2026-04-09)
 
 ### Working:
-- [x] Bot entity creation via direct player constructor (FUN_0052b4c0, alloc 0x398 bytes)
-- [x] Bot registered into world via ActorWorld_Register (0x0063F6D0)
-- [x] Bot renders as a proper wizard sprite again instead of the black silhouette path
-- [x] ALLY health bar appears for bot
-- [x] Physics/collision works (bot collides with trees, walls)
-- [x] Input decoupled — bot does NOT mirror player keyboard/mouse
-- [x] Puppet mode — drive-state byte held high, control-brain scrubbed each frame
-- [x] Independent world-space position (not parented to player)
-- [x] Lua patrol working (move_to between two points)
+- [x] Bot entity creation still works through the direct player-actor constructor path (`_aligned_malloc(0x398)` -> `PlayerActor` ctor -> `ActorWorld_Register`)
+- [x] Bot is now VISIBLE in the arena. The current visual is wrong, but a wizard sprite does render.
+- [x] Bot has collision, stays in place, and pathfinds back to its patrol point when pushed.
+- [x] Arena rendering is stable only when the bot is published into a real gameplay slot (`gameplay + 0x1358 + slot * 4`, slot `1..3`).
+- [x] Stock `PlayerActorTick` runs on the bot; skipping it makes the bot invisible.
+- [x] Input remains decoupled through puppet drive-state/control scrubbing rather than by bypassing the stock tick.
+- [x] Lua patrol still works (`move_to` between points).
 - [x] Scene API (sd.world.get_scene())
 - [x] move_to / stop / get_state Lua API
 
 ### Known Issues:
-- [x] Crash after bot creation fixed. Root cause was nulling `actor + 0x58`, which `FUN_00513090` dereferences on the first render/update frame.
-- [ ] Independent wizard-type visuals keyed by `wizard_id` are still pending. Current workaround mirrors the local player's resolved sprite/render state.
-- [ ] Hub bot rendering not working (arena only)
-- [ ] Only 1 bot tested (multi-bot may crash like before)
+- [ ] `actor + 0x04` is still shared with the local player, so the bot is parented to the player transform instead of owning its own render node.
+- [ ] The current sprite is wrong: black robes, incorrect frame selection, and T-pose-like animation.
+- [ ] Independent wizard visuals keyed by `wizard_id` are still pending.
+- [ ] `Object_Allocate` (`0x00402030`) was the obvious candidate for independent render-node allocation, but substituting it for `_aligned_malloc` corrupted the heap.
+- [ ] Synthetic source profiles (`FUN_005E3080`) still need donor descriptor supplementation; without live atlas context the descriptor bytes stay empty.
 
 ### Architecture:
-- Bot entity created via: _aligned_malloc(0x398) → PlayerActorCtor(0x0052b4c0) → ActorWorld_Register(0x0063F6D0)
-- NOT using Gameplay_CreatePlayerSlot (that creates ally-AI actors with input mirroring)
-- Puppet mode: preserve world/context at `actor + 0x58`, clear slot mirrors, bypass stock `PlayerActorTick`, and advance animation from loader-owned state
-- Wizard visuals: current live workaround copies the local player's resolved actor render state into the standalone bot so the sprite atlas, robe color, and staff selection match the visible player. Independent `wizard_id` selection remains follow-up work.
-- Movement: per-frame velocity application via game's movement system
+- Bot entity created via: `_aligned_malloc(0x398)` -> `PlayerActor` ctor (`0x0052B4C0`) -> `ActorWorld_Register` (`0x0063F6D0`)
+- The ctor chain is now recovered: `Object_Ctor` -> `Puppet_Ctor` -> `GoodGuy_Ctor` -> `Player_Ctor` -> `PlayerActor` ctor. Each layer writes its own vtable.
+- `actor + 0x04` is the render context / scene-graph node pointer. Reusing the player's value makes the bot visible, but also proves the parenting bug because the bot inherits the player transform.
+- Arena rendering currently needs all three gates at once: a non-null `actor + 0x04`, a real gameplay slot entry (`slot 1..3`), and stock `PlayerActorTick` running every frame.
+- Arena rendering ignores the hub visual-link path. The local player in arena can render with null source-profile/equip/progression/anim-table fields that matter in the hub pipeline.
+- Wizard visuals remain split from basic visibility: synthetic source profiles can create the weapon attachment, but descriptor bytes still need donor supplementation for the correct independent wizard sprite.
+- Movement remains game-native: collision resolves through the stock movement path, and the bot returns to patrol after being pushed.
 - Cleanup: ActorWorld_Unregister → destructor → _aligned_free
 
 ### Key RE Findings:
-- Player actor constructor: FUN_0052b4c0 (__thiscall, takes zeroed 0x398-byte allocation)
-- Actor world/context pointer: +0x58 (required by render/update code, not safe to null)
-- Actor slot byte: +0x5C (gameplay slot index, must be cleared for standalone)
-- Movement controller: owner+0x378
-- Slot linkage mirrors: +0x164, +0x166 (must be cleared)
-- `FUN_00513090` / crash site: dereferences the world/context family behind `actor + 0x58`
-- `FUN_0061AA00`: stock wizard clone path. It does not copy the entire render window; it refreshes progression, rebuilds visual state, then attaches `0xA8` visual-link objects into equip-runtime sinks.
-- Actor visual rebuild call: actor vtable slot `+0x18`
-- Actor descriptor block: `actor + 0x244`
-- Actor-side visual attachment field: `actor + 0x264`
-- Equip-runtime visual-link sinks: nested off `actor + 0x1FC` at `+0x1C`, `+0x18`, and `+0x30`
-- Standalone safe path: keep `+0x58`, skip stock `PlayerActorTick`, drive movement/animation from loader state only
-- Wizard visual safe path, current temporary version: direct standalone spawn plus donor resolved-render-state copy. This is enough to restore correct robes/staff while keeping the bot out of the gameplay slot system.
+1. `actor + 0x04`: render context / scene-graph node pointer. `Object_Ctor` (`0x00401FF0`) seeds it with a ctor sentinel and game initialization later overwrites it with a heap pointer. When it stays null/uninitialized, the actor has collision but no sprite. Copying the player's `+0x04` makes the bot visible but parents it to the player transform.
+2. `actor + 0x05`: flag byte. Player probe reads `0`; fresh bot reads `1` after ctor. `ActorWorld_Register` checks this byte.
+3. `Object_Allocate` (`0x00402030`): calls `operator_new` and stores the result in global `DAT_00B4019C`. `Object_Ctor` checks that global. Replacing `_aligned_malloc` with `Object_Allocate` caused heap corruption and needs more investigation.
+4. Constructor chain: `FUN_00401FF0` (`Object`) -> `FUN_006287D0` (`Puppet`) -> `FUN_0052A410` (`GoodGuy`) -> `FUN_0052A500` (`Player`) -> `0x0052B4C0` (`PlayerActor`). Each layer writes its own vtable.
+5. Player actor vtable at `0x00793F74`:
+   - `[0] +0x00 = 0x0052D340` (destructor)
+   - `[1] +0x04 = 0x0052B900`
+   - `[2] +0x08 = 0x00548B00` (`PlayerActorTick`)
+   - `[3] +0x0C = 0x00528A60`
+   - `[4] +0x10 = 0x0042E260`
+   - `[5] +0x14 = 0x00529C90`
+   - `[6] +0x18 = 0x00401FD0` (sets `actor + 0x05 = 1`)
+   - `[7] +0x1C = 0x0054BA80` (`ActorAnimationAdvance`)
+   - `[14] +0x38 = 0x00623C60` (`ActorMoveByDelta`)
+6. Stock `PlayerActorTick` must run. Returning early in puppet mode makes the bot invisible even when the rest of the visual state is present, so input isolation has to happen via puppet drive state instead.
+7. Gameplay slot assignment is required. The bot must live in slot `1..3` at `gameplay + 0x1358 + slot * 4` for the arena render pipeline. Slot `-1` is invisible; slot `0` conflicts with the local player.
+8. Arena rendering ignores the hub visual-link system. The local player in arena renders with null values at source profile (`+0x178`), equip runtime (`+0x1FC`), progression runtime (`+0x200`), anim state pointer (`+0x21C`), and render frame table (`+0x22C`).
+9. Synthetic source profile (`FUN_005E3080`) sets the weapon attachment and variant bytes correctly, but the descriptor block stays empty without live atlas context. Donor descriptor copy is still needed as a supplement.
 
 ## Immediate Next Step
 
-Finish the create-screen wizard-selection trace. The latest live probe shows that all create element and discipline actions dispatch against one create owner rooted at the first dword of `0x008203F0`, while the gameplay local-player actor watchers stay unchanged. The next step is to walk that create owner's preview and source-profile fields into `FUN_00466FA0 -> FUN_005E3080`, then reuse that source-profile pipeline for standalone bot `wizard_id` visuals.
+Recover or allocate a unique render node for `actor + 0x04` without tripping the `Object_Allocate` / heap-ownership path. Once the bot has its own scene node, fix sprite selection by supplementing the synthetic source profile with donor descriptor bytes.

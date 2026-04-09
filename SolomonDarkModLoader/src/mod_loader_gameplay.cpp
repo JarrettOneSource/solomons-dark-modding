@@ -3256,6 +3256,9 @@ bool FinalizeStandaloneWizardBotActorState(
         (void)memory.TryWriteField<uintptr_t>(actor_address, kActorHubVisualAttachmentPtrOffset, 0);
     }
 
+    auto& mem_pre = ProcessMemory::Instance();
+    const auto pre_04 = mem_pre.ReadFieldOr<uintptr_t>(actor_address, 0x04, 0);
+
     DWORD exception_code = 0;
     if (!CallGameplayActorAttachSafe(gameplay_address, actor_address, &exception_code)) {
         if (error_message != nullptr) {
@@ -3264,6 +3267,9 @@ bool FinalizeStandaloneWizardBotActorState(
         }
         return false;
     }
+
+    const auto post_04 = mem_pre.ReadFieldOr<uintptr_t>(actor_address, 0x04, 0);
+    Log("[bots] +04 before/after gameplay attach: " + HexString(pre_04) + " -> " + HexString(post_04));
 
     {
         auto& mem = ProcessMemory::Instance();
@@ -3278,6 +3284,15 @@ bool FinalizeStandaloneWizardBotActorState(
             Log("[bots] assigned bot to slot " + std::to_string(kBotSlot));
         }
 
+        uintptr_t slot0_actor = 0;
+        TryResolvePlayerActor(gameplay_address, &slot0_actor);
+        if (slot0_actor != 0) {
+            const auto player_04 = mem.ReadFieldOr<uintptr_t>(slot0_actor, 0x04, 0);
+            if (player_04 != 0) {
+                (void)mem.TryWriteField<uintptr_t>(actor_address, 0x04, player_04);
+            }
+        }
+
         uintptr_t anim_slot_address = 0;
         if (TryResolveActorAnimationStateSlotAddress(actor_address, &anim_slot_address) &&
             anim_slot_address != 0) {
@@ -3286,6 +3301,13 @@ bool FinalizeStandaloneWizardBotActorState(
         }
         auto dump = [&](const char* label, uintptr_t addr) {
             Log(std::string("[bots] ") + label +
+                " vtable=" + HexString(mem.ReadFieldOr<uintptr_t>(addr, 0x00, 0)) +
+                " +04=" + HexString(mem.ReadFieldOr<uintptr_t>(addr, 0x04, 0)) +
+                " +05=" + std::to_string(mem.ReadFieldOr<std::uint8_t>(addr, 0x05, 0xFF)) +
+                " +08=" + HexString(mem.ReadFieldOr<uintptr_t>(addr, 0x08, 0)) +
+                " +0C=" + HexString(mem.ReadFieldOr<uintptr_t>(addr, 0x0C, 0)) +
+                " +10=" + HexString(mem.ReadFieldOr<uintptr_t>(addr, 0x10, 0)) +
+                " +14=" + std::to_string(mem.ReadFieldOr<std::int32_t>(addr, 0x14, -1)) +
                 " +58=" + HexString(mem.ReadFieldOr<uintptr_t>(addr, 0x58, 0)) +
                 " +5C=" + std::to_string(static_cast<int>(mem.ReadFieldOr<std::int8_t>(addr, 0x5C, -1))) +
                 " +138=" + HexString(mem.ReadFieldOr<uintptr_t>(addr, 0x138, 0)) +
@@ -6108,18 +6130,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             "player_tick",
             nullptr);
         ApplyStandaloneWizardPuppetDriveState(actor_address, standalone_actor_moving);
-        const auto animation_advance_address =
-            memory.ResolveGameAddressOrZero(kActorAnimationAdvance);
-        DWORD exception_code = 0;
-        if (!CallActorAnimationAdvanceSafe(
-                animation_advance_address,
-                actor_address,
-                &exception_code) &&
-            exception_code != 0) {
-            Log(
-                "[bots] standalone animation advance skipped. actor=" + HexString(actor_address) +
-                " code=0x" + HexString(exception_code));
-        }
+        original(self);
         return;
     }
 
