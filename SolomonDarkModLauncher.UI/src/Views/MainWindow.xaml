@@ -1,0 +1,311 @@
+<Window x:Class="SolomonDarkModLauncher.UI.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        mc:Ignorable="d"
+        Title="Solomon Dark Mod Manager"
+        Width="720"
+        Height="860"
+        MinWidth="560"
+        MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        Background="{StaticResource WindowBackgroundBrush}"
+        Foreground="{StaticResource TextPrimaryBrush}">
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="36"
+                            ResizeBorderThickness="6"
+                            GlassFrameThickness="0"
+                            CornerRadius="0"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="36" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Background="{StaticResource TitleBarBackgroundBrush}" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="16,0" VerticalAlignment="Center">
+                <TextBlock Text="&#x25C6;" Foreground="{StaticResource AccentBrush}" FontSize="14" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Style="{StaticResource TitleBarButtonStyle}" Click="MinimizeButton_Click" Content="&#x2500;" />
+                <Button x:Name="MaximizeButton" Style="{StaticResource TitleBarButtonStyle}" Click="MaximizeButton_Click" Content="&#x25A1;" />
+                <Button Style="{StaticResource TitleBarCloseButtonStyle}" Click="CloseButton_Click" Content="&#x2715;" />
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="24,20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0"
+                    Margin="0,0,0,16"
+                    Padding="14,12"
+                    Background="{StaticResource ErrorBannerBackgroundBrush}"
+                    BorderBrush="{StaticResource ErrorBannerBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasError}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock Text="{Binding ErrorMessage}"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           Foreground="{StaticResource ErrorBrush}"
+                           TextWrapping="Wrap" />
+            </Border>
+
+            <StackPanel Grid.Row="1" Margin="0,0,0,12">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Instance"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                        <TextBox Width="120"
+                                 Margin="8,0,8,0"
+                                 VerticalContentAlignment="Center"
+                                 Text="{Binding InstanceName, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource DarkTextBoxStyle}" />
+                        <Button Content="Use"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Command="{Binding ApplyInstanceCommand}" />
+                        <Button Content="Refresh"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Command="{Binding RefreshCommand}"
+                                Margin="0" />
+                    </StackPanel>
+
+                    <TextBlock Text="Mods"
+                               VerticalAlignment="Center"
+                               FontSize="18"
+                               FontWeight="SemiBold" />
+                </DockPanel>
+
+                <TextBlock Text="{Binding InstanceSummaryText}"
+                           Margin="0,6,0,0"
+                           FontSize="12"
+                           Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+
+            <Grid Grid.Row="2" MinHeight="260">
+                <Border Background="{StaticResource CardBackgroundBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10" />
+
+                <ListBox ItemsSource="{Binding Mods}"
+                         Margin="10,10,4,10"
+                         Style="{StaticResource ModListBoxStyle}"
+                         ItemContainerStyle="{StaticResource ModListBoxItemStyle}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,8,8"
+                                    Padding="16,12"
+                                    Background="{StaticResource CardBackgroundBrush}"
+                                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8">
+                                <Border.ContextMenu>
+                                    <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                        <MenuItem Header="Open Folder" Command="{Binding OpenFolderCommand}" />
+                                        <MenuItem Header="View Manifest" Command="{Binding ViewManifestCommand}" />
+                                    </ContextMenu>
+                                </Border.ContextMenu>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right"
+                                                       Margin="12,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="12"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       Text="{Binding Version}" />
+                                            <TextBlock FontSize="14"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       Text="{Binding Name}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                            <Border Margin="0,0,8,0"
+                                                    Padding="6,2"
+                                                    Background="{Binding RuntimeBadgeBackground}"
+                                                    CornerRadius="3">
+                                                <TextBlock FontSize="10"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{Binding RuntimeBadgeForeground}"
+                                                           Text="{Binding RuntimeKindUpper}" />
+                                            </Border>
+                                            <TextBlock VerticalAlignment="Center"
+                                                       FontSize="12"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       Text="{Binding PriorityText}" />
+                                        </StackPanel>
+
+                                        <TextBlock Margin="0,8,0,0"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Text="{Binding OverlaySummary}" />
+                                        <TextBlock Margin="0,3,0,0"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   Text="{Binding DependencySummary}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <CheckBox Grid.Column="1"
+                                              Margin="16,0,0,0"
+                                              VerticalAlignment="Center"
+                                              IsChecked="{Binding IsEnabled}"
+                                              Style="{StaticResource ToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <TextBlock Margin="32,0"
+                           Width="280"
+                           VerticalAlignment="Center"
+                           Panel.ZIndex="1"
+                           FontSize="13"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           Text="No mods found. Add mods to the mods directory and click Refresh."
+                           TextAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Mods.Count}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+
+            <TextBlock Grid.Row="3"
+                       Margin="0,12,0,0"
+                       FontSize="12"
+                       Foreground="{StaticResource TextMutedBrush}"
+                       Text="{Binding ModSummaryText}" />
+
+            <Button Grid.Row="4"
+                    Margin="0,20,0,0"
+                    HorizontalAlignment="Center"
+                    Command="{Binding LaunchCommand}"
+                    Content="{Binding LaunchButtonText}"
+                    Style="{StaticResource PrimaryButtonStyle}" />
+
+            <Expander Grid.Row="5"
+                      Margin="0,16,0,0"
+                      Header="Advanced"
+                      Style="{StaticResource AdvancedExpanderStyle}">
+                <StackPanel Margin="0,8,0,0">
+                    <WrapPanel>
+                        <Button Content="Stage Only" Command="{Binding StageCommand}" Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button Content="Open Mods Folder" Command="{Binding OpenModsFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button Content="Open Stage Folder" Command="{Binding OpenStageFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button Content="Open Profile Folder" Command="{Binding OpenProfileFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button Content="Open Game Folder" Command="{Binding OpenGameFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0" />
+                    </WrapPanel>
+
+                    <Border Margin="0,12,0,0"
+                            Padding="12,10"
+                            Background="{StaticResource CardBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                        <DockPanel LastChildFill="True">
+                            <CheckBox DockPanel.Dock="Right"
+                                      Margin="16,0,0,0"
+                                      VerticalAlignment="Center"
+                                      IsChecked="{Binding DebugUiEnabled}"
+                                      Style="{StaticResource ToggleSwitchStyle}" />
+
+                            <StackPanel>
+                                <TextBlock Text="Loader Debug UI Overlay"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}" />
+                                <TextBlock Margin="0,4,0,0"
+                                           FontSize="12"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           Text="Draw loader-owned UI bounds and keep the built-in Lua UI bridge available during stage and launch."
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                            <TextBlock Text="Workspace" Style="{StaticResource FieldLabelStyle}" />
+                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding WorkspaceRoot}" TextWrapping="Wrap" />
+
+                            <TextBlock Margin="0,12,0,0" Text="Game Directory" Style="{StaticResource FieldLabelStyle}" />
+                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding GameDirectory}" TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Current Command" Style="{StaticResource FieldLabelStyle}" />
+                            <TextBox Text="{Binding CommandPreviewText, Mode=OneWay}" Style="{StaticResource CommandTextBoxStyle}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Margin="0,14,0,6" Text="Command Transcript" Style="{StaticResource FieldLabelStyle}" />
+                    <TextBox Height="220"
+                             Text="{Binding TranscriptText, Mode=OneWay}"
+                             Style="{StaticResource CommandTextBoxStyle}" />
+                </StackPanel>
+            </Expander>
+        </Grid>
+
+        <Border Grid.Row="2" Background="{StaticResource TitleBarBackgroundBrush}" Padding="16,8">
+            <TextBlock FontSize="11"
+                       Foreground="{StaticResource TextMutedBrush}"
+                       Text="{Binding StatusText}" />
+        </Border>
+    </Grid>
+</Window>

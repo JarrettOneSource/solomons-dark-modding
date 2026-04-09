@@ -1,0 +1,17 @@
+{
+  "id": "sample.lua.ui_sandbox_lab",
+  "name": "Lua UI Sandbox Lab",
+  "version": "0.5.0",
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "events.runtime.tick",
+      "ui.snapshot.read",
+      "ui.action.query",
+      "ui.action.activate",
+      "bots.runtime",
+      "bots.create"
+    ]
+  }
+}

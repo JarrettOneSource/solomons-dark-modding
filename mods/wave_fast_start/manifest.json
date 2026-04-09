@@ -1,0 +1,13 @@
+{
+  "id": "sample.waves.fast_start",
+  "name": "Fast Start Wave Override",
+  "version": "0.1.0",
+  "enabled": false,
+  "overlays": [
+    {
+      "target": "data/wave.txt",
+      "source": "files/data/wave.txt",
+      "format": "plaintext-wave"
+    }
+  ]
+}

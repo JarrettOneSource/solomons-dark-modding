@@ -1,0 +1,7 @@
+{
+  "notes": [
+    "Placeholder story override file.",
+    "Replace this with a real parsed and reserialized thestory.rson once the schema is fully documented."
+  ],
+  "status": "not_yet_compatible_with_retail_loader"
+}

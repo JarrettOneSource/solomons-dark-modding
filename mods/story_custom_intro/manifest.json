@@ -1,0 +1,13 @@
+{
+  "id": "sample.story.custom_intro",
+  "name": "Custom Intro Story Override",
+  "version": "0.1.0",
+  "enabled": false,
+  "overlays": [
+    {
+      "target": "data/thestory.rson",
+      "source": "files/data/thestory.rson",
+      "format": "plaintext-rson"
+    }
+  ]
+}

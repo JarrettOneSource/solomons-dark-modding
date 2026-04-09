@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PlatformTarget>x86</PlatformTarget>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <RootNamespace>SolomonDarkModLauncher</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="SolomonDarkModLauncher.UI\**\*.cs" />
+    <None Remove="SolomonDarkModLauncher.UI\**\*" />
+    <Content Include="assets\**\*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="BuildNativeLoader"
+          BeforeTargets="Build"
+          Condition="'$(OS)' == 'Windows_NT' and '$(MSBuildRuntimeType)' != 'Core'">
+    <PropertyGroup>
+      <NativeLoaderProjectPath>$(MSBuildProjectDirectory)\..\SolomonDarkModLoader\SolomonDarkModLoader.vcxproj</NativeLoaderProjectPath>
+      <NativeLoaderPath>$(MSBuildProjectDirectory)\..\bin\$(Configuration)\Win32\SolomonDarkModLoader.dll</NativeLoaderPath>
+    </PropertyGroup>
+
+    <MSBuild
+      Projects="$(NativeLoaderProjectPath)"
+      Targets="Build"
+      Properties="Configuration=$(Configuration);Platform=Win32" />
+
+    <Error
+      Condition="!Exists('$(NativeLoaderPath)')"
+      Text="Native loader build did not produce $(NativeLoaderPath)." />
+  </Target>
+
+  <Target Name="CopyNativeLoader" AfterTargets="Build">
+    <PropertyGroup>
+      <NativeLoaderPath>$(MSBuildProjectDirectory)\..\bin\$(Configuration)\Win32\SolomonDarkModLoader.dll</NativeLoaderPath>
+    </PropertyGroup>
+
+    <Copy
+      Condition="Exists('$(NativeLoaderPath)')"
+      SourceFiles="$(NativeLoaderPath)"
+      DestinationFolder="$(OutDir)" />
+
+    <Copy
+      Condition="Exists('$(NativeLoaderPath)') and '$(RuntimeIdentifier)' != ''"
+      SourceFiles="$(NativeLoaderPath)"
+      DestinationFolder="$(OutDir)$(RuntimeIdentifier)\" />
+  </Target>
+</Project>

@@ -1,0 +1,36 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31912.275
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SolomonDarkModLoader", "SolomonDarkModLoader\SolomonDarkModLoader.vcxproj", "{EA6CCCEF-9BD2-424C-9069-D83F77B127E1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolomonDarkModLauncher", "SolomonDarkModLauncher\SolomonDarkModLauncher.csproj", "{FAACB5DC-3829-4FAD-87F2-F1F51CBFEBF7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolomonDarkModLauncher.UI", "SolomonDarkModLauncher.UI\SolomonDarkModLauncher.UI.csproj", "{92D349A9-E052-40B6-93B4-A3AAD798517E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EA6CCCEF-9BD2-424C-9069-D83F77B127E1}.Debug|Win32.ActiveCfg = Debug|Win32
+		{EA6CCCEF-9BD2-424C-9069-D83F77B127E1}.Debug|Win32.Build.0 = Debug|Win32
+		{EA6CCCEF-9BD2-424C-9069-D83F77B127E1}.Release|Win32.ActiveCfg = Release|Win32
+		{EA6CCCEF-9BD2-424C-9069-D83F77B127E1}.Release|Win32.Build.0 = Release|Win32
+		{FAACB5DC-3829-4FAD-87F2-F1F51CBFEBF7}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{FAACB5DC-3829-4FAD-87F2-F1F51CBFEBF7}.Debug|Win32.Build.0 = Debug|Any CPU
+		{FAACB5DC-3829-4FAD-87F2-F1F51CBFEBF7}.Release|Win32.ActiveCfg = Release|Any CPU
+		{FAACB5DC-3829-4FAD-87F2-F1F51CBFEBF7}.Release|Win32.Build.0 = Release|Any CPU
+		{92D349A9-E052-40B6-93B4-A3AAD798517E}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{92D349A9-E052-40B6-93B4-A3AAD798517E}.Debug|Win32.Build.0 = Debug|Any CPU
+		{92D349A9-E052-40B6-93B4-A3AAD798517E}.Release|Win32.ActiveCfg = Release|Any CPU
+		{92D349A9-E052-40B6-93B4-A3AAD798517E}.Release|Win32.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {550E834E-BCF7-4FE1-8847-8DABE6ED4FE3}
+	EndGlobalSection
+EndGlobal

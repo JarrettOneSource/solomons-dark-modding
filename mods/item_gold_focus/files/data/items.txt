@@ -1,0 +1,12 @@
+RING
+	Effect_FindMoreGold:+200%
+	$750
+RING
+	Effect_FindMoreGold:+300%
+	$1200
+RING
+	Effect_XPBonus:+50%
+	$900
+RING
+	Effect_RecoverMana:+100%
+	$1200

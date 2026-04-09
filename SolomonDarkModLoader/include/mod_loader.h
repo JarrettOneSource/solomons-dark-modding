@@ -1,0 +1,178 @@
+#pragma once
+
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <string_view>
+
+#include <Windows.h>
+
+namespace sdmod {
+
+struct SDModPlayerState {
+    bool valid = false;
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    float mp = 0.0f;
+    float max_mp = 0.0f;
+    int xp = -1;
+    int level = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    int gold = 0;
+    uintptr_t actor_address = 0;
+    uintptr_t render_subject_address = 0;
+    uintptr_t world_address = 0;
+    uintptr_t progression_address = 0;
+    uintptr_t animation_state_ptr = 0;
+    uintptr_t render_frame_table = 0;
+    uintptr_t hub_visual_attachment_ptr = 0;
+    uintptr_t hub_visual_source_profile_address = 0;
+    std::uint32_t hub_visual_descriptor_signature = 0;
+    uintptr_t render_subject_animation_state_ptr = 0;
+    uintptr_t render_subject_frame_table = 0;
+    uintptr_t render_subject_hub_visual_attachment_ptr = 0;
+    uintptr_t render_subject_hub_visual_source_profile_address = 0;
+    std::uint32_t render_subject_hub_visual_descriptor_signature = 0;
+    uintptr_t progression_handle_address = 0;
+    uintptr_t equip_handle_address = 0;
+    uintptr_t equip_runtime_state_address = 0;
+    int actor_slot = -1;
+    int resolved_animation_state_id = -1;
+    int hub_visual_source_kind = 0;
+    int render_subject_hub_visual_source_kind = 0;
+    std::uint32_t render_drive_flags = 0;
+    std::uint32_t render_subject_drive_flags = 0;
+    std::uint8_t anim_drive_state = 0;
+    std::uint8_t render_subject_anim_drive_state = 0;
+    std::uint8_t render_variant_primary = 0;
+    std::uint8_t render_variant_secondary = 0;
+    std::uint8_t render_weapon_type = 0;
+    std::uint8_t render_selection_byte = 0;
+    std::uint8_t render_variant_tertiary = 0;
+    std::uint8_t render_subject_variant_primary = 0;
+    std::uint8_t render_subject_variant_secondary = 0;
+    std::uint8_t render_subject_weapon_type = 0;
+    std::uint8_t render_subject_selection_byte = 0;
+    std::uint8_t render_subject_variant_tertiary = 0;
+    float walk_cycle_primary = 0.0f;
+    float walk_cycle_secondary = 0.0f;
+    float render_drive_stride = 0.0f;
+    float render_advance_rate = 0.0f;
+    float render_advance_phase = 0.0f;
+    float render_drive_overlay_alpha = 0.0f;
+    float render_drive_move_blend = 0.0f;
+    bool gameplay_attach_applied = false;
+};
+
+struct SDModWorldState {
+    bool valid = false;
+    int wave = 0;
+    int enemy_count = 0;
+    std::uint64_t time_elapsed_ms = 0;
+};
+
+struct SDModSceneState {
+    bool valid = false;
+    std::string kind;
+    std::string name;
+    uintptr_t gameplay_scene_address = 0;
+    uintptr_t world_address = 0;
+    uintptr_t arena_address = 0;
+    uintptr_t region_state_address = 0;
+    int current_region_index = -1;
+    int region_type_id = -1;
+    int pending_level_kind = 0;
+    int transition_target_a = 0;
+    int transition_target_b = 0;
+};
+
+struct SDModBotGameplayState {
+    bool available = false;
+    bool entity_materialized = false;
+    bool moving = false;
+    std::uint64_t bot_id = 0;
+    std::int32_t wizard_id = 0;
+    uintptr_t actor_address = 0;
+    uintptr_t world_address = 0;
+    uintptr_t animation_state_ptr = 0;
+    uintptr_t render_frame_table = 0;
+    uintptr_t hub_visual_attachment_ptr = 0;
+    uintptr_t hub_visual_proxy_address = 0;
+    uintptr_t hub_visual_source_profile_address = 0;
+    uintptr_t progression_handle_address = 0;
+    uintptr_t equip_handle_address = 0;
+    uintptr_t progression_runtime_state_address = 0;
+    uintptr_t equip_runtime_state_address = 0;
+    int gameplay_slot = -1;
+    int actor_slot = -1;
+    int slot_anim_state_index = -1;
+    int resolved_animation_state_id = -1;
+    int hub_visual_source_kind = 0;
+    std::uint32_t hub_visual_descriptor_signature = 0;
+    std::uint32_t render_drive_flags = 0;
+    std::uint8_t anim_drive_state = 0;
+    std::uint8_t render_variant_primary = 0;
+    std::uint8_t render_variant_secondary = 0;
+    std::uint8_t render_weapon_type = 0;
+    std::uint8_t render_selection_byte = 0;
+    std::uint8_t render_variant_tertiary = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    float heading = 0.0f;
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    float mp = 0.0f;
+    float max_mp = 0.0f;
+    float walk_cycle_primary = 0.0f;
+    float walk_cycle_secondary = 0.0f;
+    float render_drive_stride = 0.0f;
+    float render_advance_rate = 0.0f;
+    float render_advance_phase = 0.0f;
+    float render_drive_overlay_alpha = 0.0f;
+    float render_drive_move_blend = 0.0f;
+    bool gameplay_attach_applied = false;
+};
+
+void Initialize(HMODULE module_handle);
+void Shutdown();
+
+std::filesystem::path GetModulePath(HMODULE module_handle);
+std::filesystem::path GetModuleDirectory(HMODULE module_handle);
+std::filesystem::path GetHostProcessPath();
+std::filesystem::path GetHostProcessDirectory();
+std::filesystem::path GetStageRuntimeDirectory();
+std::filesystem::path GetProjectRoot(HMODULE module_handle);
+std::string HexString(uintptr_t value);
+
+bool InitializeGameplayKeyboardInjection(std::string* error_message);
+void ShutdownGameplayKeyboardInjection();
+bool IsGameplayKeyboardInjectionInitialized();
+bool QueueGameplayMouseLeftClick(std::string* error_message);
+std::uint64_t GetGameplayMouseLeftEdgeSerial();
+std::uint64_t GetGameplayMouseLeftEdgeTickMs();
+bool QueueGameplayKeyPress(std::string_view binding_name, std::string* error_message);
+bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_message);
+bool QueueGameplayStartWaves(std::string* error_message);
+bool QueueHubStartTestrun(std::string* error_message);
+bool QueueGameplaySwitchRegion(int region_index, std::string* error_message);
+bool QueueWizardBotEntitySync(
+    std::uint64_t bot_id,
+    std::int32_t wizard_id,
+    bool has_transform,
+    float position_x,
+    float position_y,
+    float heading,
+    std::string* error_message);
+bool QueueWizardBotDestroy(std::uint64_t bot_id, std::string* error_message);
+bool IsRunLifecycleActive();
+int GetRunLifecycleCurrentWave();
+std::uint64_t GetRunLifecycleElapsedMilliseconds();
+bool TryGetPlayerState(SDModPlayerState* state);
+bool TryGetWorldState(SDModWorldState* state);
+bool TryGetSceneState(SDModSceneState* state);
+bool TryGetWizardBotGameplayState(std::uint64_t bot_id, SDModBotGameplayState* state);
+bool SpawnEnemyByType(int type_id, float x, float y, std::string* error_message);
+bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);
+
+}  // namespace sdmod

@@ -1,0 +1,150 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <string>
+
+namespace sdmod {
+
+struct DebugUiOverlayConfig {
+    std::filesystem::path source_path;
+    bool enabled = false;
+    uintptr_t text_draw_helper = 0;
+    uintptr_t string_assign_helper = 0;
+    uintptr_t dialog_add_line_helper = 0;
+    uintptr_t dialog_primary_button_helper = 0;
+    uintptr_t dialog_secondary_button_helper = 0;
+    uintptr_t dialog_finalize_helper = 0;
+    uintptr_t exact_text_render_helper = 0;
+    uintptr_t dark_cloud_browser_exact_text_render_helper = 0;
+    uintptr_t ui_labeled_control_render_helper = 0;
+    uintptr_t ui_labeled_control_alt_render_helper = 0;
+    uintptr_t ui_unlabeled_control_render_helper = 0;
+    uintptr_t ui_panel_render_helper = 0;
+    uintptr_t ui_rect_dispatch_helper = 0;
+    uintptr_t glyph_draw_helper = 0;
+    uintptr_t text_quad_draw_helper = 0;
+    uintptr_t dark_cloud_browser_render_helper = 0;
+    uintptr_t dark_cloud_browser_vftable = 0;
+    uintptr_t settings_render_helper = 0;
+    uintptr_t myquick_panel_render_helper = 0;
+    uintptr_t myquick_panel_modal_loop_helper = 0;
+    uintptr_t simple_menu_modal_loop_helper = 0;
+    uintptr_t device_pointer_global = 0;
+    uintptr_t ui_render_context_global = 0;
+    uintptr_t title_main_menu_vftable = 0;
+    uintptr_t myquick_panel_vftable = 0;
+    size_t title_main_menu_button_array_offset = 0;
+    size_t title_main_menu_button_stride = 0;
+    size_t title_main_menu_button_count = 0;
+    size_t title_main_menu_button_left_offset = 0;
+    size_t title_main_menu_button_top_offset = 0;
+    size_t title_main_menu_button_width_offset = 0;
+    size_t title_main_menu_button_height_offset = 0;
+    size_t title_main_menu_mode_offset = 0;
+    size_t myquick_panel_left_offset = 0;
+    size_t myquick_panel_top_offset = 0;
+    size_t myquick_panel_width_offset = 0;
+    size_t myquick_panel_height_offset = 0;
+    size_t myquick_panel_builder_owner_offset = 0;
+    size_t myquick_panel_builder_offset = 0;
+    size_t myquick_panel_builder_root_control_offset = 0;
+    size_t myquick_panel_builder_widget_entries_begin_offset = 0;
+    size_t myquick_panel_builder_widget_entries_end_offset = 0;
+    size_t myquick_panel_builder_widget_entry_stride = 0;
+    size_t myquick_panel_builder_widget_entry_primary_offset = 0;
+    size_t myquick_panel_builder_widget_entry_secondary_offset = 0;
+    size_t myquick_panel_widget_parent_offset = 0;
+    size_t ui_widget_parent_offset = 0;
+    size_t dark_cloud_browser_control_left_offset = 0;
+    size_t dark_cloud_browser_control_top_offset = 0;
+    size_t dark_cloud_browser_control_width_offset = 0;
+    size_t dark_cloud_browser_control_height_offset = 0;
+    size_t dark_cloud_browser_text_owner_offset = 0;
+    size_t dark_cloud_browser_primary_action_control_offset = 0;
+    size_t dark_cloud_browser_secondary_action_control_offset = 0;
+    size_t dark_cloud_browser_aux_left_control_offset = 0;
+    size_t dark_cloud_browser_aux_right_control_offset = 0;
+    size_t dark_cloud_browser_recent_tab_control_offset = 0;
+    size_t dark_cloud_browser_online_levels_tab_control_offset = 0;
+    size_t dark_cloud_browser_my_levels_tab_control_offset = 0;
+    size_t dark_cloud_browser_footer_action_control_offset = 0;
+    uintptr_t dark_cloud_browser_modal_header_text_caller = 0;
+    size_t settings_control_list_count_offset = 0;
+    size_t settings_control_list_entries_offset = 0;
+    size_t settings_control_child_count_offset = 0;
+    size_t settings_control_child_list_offset = 0;
+    size_t settings_control_left_offset = 0;
+    size_t settings_control_top_offset = 0;
+    size_t settings_control_width_offset = 0;
+    size_t settings_control_height_offset = 0;
+    size_t settings_control_label_pointer_offset = 0;
+    size_t settings_control_label_enabled_offset = 0;
+    size_t settings_control_dispatch_offset = 0;
+    size_t settings_done_button_control_offset = 0;
+    uintptr_t settings_rollout_vftable = 0;
+    size_t settings_rollout_dispatch_offset = 0;
+    uintptr_t settings_section_header_text_caller = 0;
+    uintptr_t settings_panel_title_text_caller = 0;
+    uintptr_t settings_control_label_text_caller_primary = 0;
+    uintptr_t settings_control_label_text_caller_secondary = 0;
+    size_t settings_section_widget_left_offset = 0;
+    size_t settings_section_widget_top_offset = 0;
+    size_t settings_section_widget_width_offset = 0;
+    size_t settings_section_widget_height_offset = 0;
+    uintptr_t main_menu_render_helper = 0;
+    uintptr_t hall_of_fame_render_helper = 0;
+    uintptr_t hall_of_fame_vftable = 0;
+    uintptr_t spell_picker_render_helper = 0;
+    uintptr_t spell_picker_vftable = 0;
+    uintptr_t simple_menu_vftable = 0;
+    size_t simple_menu_left_offset = 0;
+    size_t simple_menu_top_offset = 0;
+    size_t simple_menu_width_offset = 0;
+    size_t simple_menu_height_offset = 0;
+    size_t simple_menu_control_list_offset = 0;
+    size_t simple_menu_control_list_count_offset = 0;
+    size_t simple_menu_control_list_entries_offset = 0;
+    size_t simple_menu_control_left_offset = 0;
+    size_t simple_menu_control_top_offset = 0;
+    size_t simple_menu_control_width_offset = 0;
+    size_t simple_menu_control_height_offset = 0;
+    uintptr_t msgbox_vftable = 0;
+    size_t msgbox_panel_left_offset = 0;
+    size_t msgbox_panel_top_offset = 0;
+    size_t msgbox_panel_width_offset = 0;
+    size_t msgbox_panel_height_offset = 0;
+    size_t msgbox_primary_button_left_offset = 0;
+    size_t msgbox_primary_button_top_offset = 0;
+    size_t msgbox_primary_button_width_offset = 0;
+    size_t msgbox_primary_button_height_offset = 0;
+    size_t msgbox_primary_button_control_offset = 0;
+    size_t msgbox_secondary_button_left_offset = 0;
+    size_t msgbox_secondary_button_top_offset = 0;
+    size_t msgbox_secondary_button_half_width_offset = 0;
+    size_t msgbox_secondary_button_half_height_offset = 0;
+    size_t msgbox_secondary_button_control_offset = 0;
+    size_t msgbox_primary_label_offset = 0;
+    size_t msgbox_secondary_label_offset = 0;
+    size_t msgbox_line_list_offset = 0;
+    size_t msgbox_line_list_count_offset = 0;
+    size_t msgbox_line_list_entries_offset = 0;
+    size_t msgbox_line_wrapper_object_offset = 0;
+    size_t msgbox_line_height_offset = 0;
+    uintptr_t msgbox_content_left_padding_global = 0;
+    uintptr_t msgbox_content_top_padding_global = 0;
+    size_t surface_range_slop = 0x1000;
+    size_t stack_scan_slots = 24;
+    size_t max_tracked_elements_per_frame = 256;
+};
+
+bool InitializeDebugUiOverlayConfig(const std::filesystem::path& stage_runtime_directory);
+void ShutdownDebugUiOverlayConfig();
+
+bool IsDebugUiOverlayConfigLoaded();
+const DebugUiOverlayConfig* TryGetDebugUiOverlayConfig();
+std::string GetDebugUiOverlayConfigLoadError();
+std::filesystem::path GetDebugUiOverlayConfigPath(const std::filesystem::path& stage_runtime_directory);
+
+}  // namespace sdmod

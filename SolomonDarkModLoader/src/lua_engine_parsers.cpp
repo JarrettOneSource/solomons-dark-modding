@@ -1,0 +1,634 @@
+#include "lua_engine_internal.h"
+
+extern "C" {
+#include "lua.h"
+#include "lauxlib.h"
+}
+
+#include <algorithm>
+#include <string>
+
+namespace sdmod::detail {
+namespace {
+
+bool EnsureTable(lua_State* state, int index, const char* api_name, std::string* error_message) {
+    if (error_message == nullptr) {
+        return false;
+    }
+
+    if (!lua_istable(state, index)) {
+        *error_message = std::string(api_name) + " expects a table";
+        return false;
+    }
+
+    return true;
+}
+
+bool ReadOptionalStringField(
+    lua_State* state,
+    int table_index,
+    const char* field_name,
+    std::string* value,
+    bool* has_value,
+    std::string* error_message) {
+    if (value == nullptr || has_value == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    lua_getfield(state, table_index, field_name);
+    if (lua_isnil(state, -1)) {
+        lua_pop(state, 1);
+        *has_value = false;
+        return true;
+    }
+
+    if (!lua_isstring(state, -1)) {
+        *error_message = std::string(field_name) + " must be a string";
+        lua_pop(state, 1);
+        return false;
+    }
+
+    *value = lua_tostring(state, -1);
+    *has_value = true;
+    lua_pop(state, 1);
+    return true;
+}
+
+bool ReadOptionalBooleanField(
+    lua_State* state,
+    int table_index,
+    const char* field_name,
+    bool* value,
+    bool* has_value,
+    std::string* error_message) {
+    if (value == nullptr || has_value == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    lua_getfield(state, table_index, field_name);
+    if (lua_isnil(state, -1)) {
+        lua_pop(state, 1);
+        *has_value = false;
+        return true;
+    }
+
+    if (!lua_isboolean(state, -1)) {
+        *error_message = std::string(field_name) + " must be a boolean";
+        lua_pop(state, 1);
+        return false;
+    }
+
+    *value = lua_toboolean(state, -1) != 0;
+    *has_value = true;
+    lua_pop(state, 1);
+    return true;
+}
+
+bool ReadOptionalIntegerField(
+    lua_State* state,
+    int table_index,
+    const char* field_name,
+    std::int32_t* value,
+    bool* has_value,
+    std::string* error_message) {
+    if (value == nullptr || has_value == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    lua_getfield(state, table_index, field_name);
+    if (lua_isnil(state, -1)) {
+        lua_pop(state, 1);
+        *has_value = false;
+        return true;
+    }
+
+    if (!lua_isinteger(state, -1)) {
+        *error_message = std::string(field_name) + " must be an integer";
+        lua_pop(state, 1);
+        return false;
+    }
+
+    *value = static_cast<std::int32_t>(lua_tointeger(state, -1));
+    *has_value = true;
+    lua_pop(state, 1);
+    return true;
+}
+
+bool ReadOptionalNumberField(
+    lua_State* state,
+    int table_index,
+    const char* field_name,
+    float* value,
+    bool* has_value,
+    std::string* error_message) {
+    if (value == nullptr || has_value == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    lua_getfield(state, table_index, field_name);
+    if (lua_isnil(state, -1)) {
+        lua_pop(state, 1);
+        *has_value = false;
+        return true;
+    }
+
+    if (!lua_isnumber(state, -1)) {
+        *error_message = std::string(field_name) + " must be a number";
+        lua_pop(state, 1);
+        return false;
+    }
+
+    *value = static_cast<float>(lua_tonumber(state, -1));
+    *has_value = true;
+    lua_pop(state, 1);
+    return true;
+}
+
+bool ReadPositionField(
+    lua_State* state,
+    int table_index,
+    float* position_x,
+    float* position_y,
+    bool* has_position,
+    std::string* error_message) {
+    if (position_x == nullptr || position_y == nullptr || has_position == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    lua_getfield(state, table_index, "position");
+    if (lua_isnil(state, -1)) {
+        lua_pop(state, 1);
+        *has_position = false;
+        return true;
+    }
+
+    if (!lua_istable(state, -1)) {
+        *error_message = "position must be a table";
+        lua_pop(state, 1);
+        return false;
+    }
+
+    lua_getfield(state, -1, "x");
+    if (!lua_isnumber(state, -1)) {
+        *error_message = "position.x must be a number";
+        lua_pop(state, 2);
+        return false;
+    }
+    *position_x = static_cast<float>(lua_tonumber(state, -1));
+    lua_pop(state, 1);
+
+    lua_getfield(state, -1, "y");
+    if (!lua_isnumber(state, -1)) {
+        *error_message = "position.y must be a number";
+        lua_pop(state, 2);
+        return false;
+    }
+    *position_y = static_cast<float>(lua_tonumber(state, -1));
+    lua_pop(state, 2);
+    *has_position = true;
+    return true;
+}
+
+bool ReadLoadoutField(
+    lua_State* state,
+    int table_index,
+    multiplayer::BotLoadoutInfo* loadout,
+    bool* has_loadout,
+    std::string* error_message) {
+    if (loadout == nullptr || has_loadout == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    lua_getfield(state, table_index, "loadout");
+    if (lua_isnil(state, -1)) {
+        lua_pop(state, 1);
+        *has_loadout = false;
+        return true;
+    }
+
+    if (!lua_istable(state, -1)) {
+        *error_message = "loadout must be a table";
+        lua_pop(state, 1);
+        return false;
+    }
+
+    *loadout = multiplayer::BotLoadoutInfo{};
+
+    bool has_primary_skill_id = false;
+    if (!ReadOptionalIntegerField(state, lua_gettop(state), "primary_skill_id", &loadout->primary_skill_id, &has_primary_skill_id, error_message)) {
+        lua_pop(state, 1);
+        return false;
+    }
+
+    bool has_primary_combo_id = false;
+    if (!ReadOptionalIntegerField(state, lua_gettop(state), "primary_combo_id", &loadout->primary_combo_id, &has_primary_combo_id, error_message)) {
+        lua_pop(state, 1);
+        return false;
+    }
+
+    lua_getfield(state, -1, "secondary_skill_ids");
+    if (!lua_isnil(state, -1)) {
+        if (!lua_istable(state, -1)) {
+            *error_message = "loadout.secondary_skill_ids must be a table";
+            lua_pop(state, 2);
+            return false;
+        }
+
+        const auto length = lua_rawlen(state, -1);
+        if (length > loadout->secondary_skill_ids.size()) {
+            *error_message = "loadout.secondary_skill_ids supports at most three entries";
+            lua_pop(state, 2);
+            return false;
+        }
+
+        for (lua_Unsigned index = 1; index <= length; ++index) {
+            lua_rawgeti(state, -1, static_cast<lua_Integer>(index));
+            if (!lua_isinteger(state, -1)) {
+                *error_message = "loadout.secondary_skill_ids entries must be integers";
+                lua_pop(state, 3);
+                return false;
+            }
+
+            loadout->secondary_skill_ids[static_cast<std::size_t>(index - 1)] =
+                static_cast<std::int32_t>(lua_tointeger(state, -1));
+            lua_pop(state, 1);
+        }
+    }
+
+    lua_pop(state, 2);
+    *has_loadout = true;
+    return true;
+}
+
+void PushSecondaryLoadout(lua_State* state, const multiplayer::BotLoadoutInfo& loadout) {
+    lua_createtable(state, static_cast<int>(loadout.secondary_skill_ids.size()), 0);
+    for (std::size_t index = 0; index < loadout.secondary_skill_ids.size(); ++index) {
+        lua_pushinteger(state, static_cast<lua_Integer>(loadout.secondary_skill_ids[index]));
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+}
+
+void PushLoadout(lua_State* state, const multiplayer::BotLoadoutInfo& loadout) {
+    lua_createtable(state, 0, 3);
+    lua_pushinteger(state, static_cast<lua_Integer>(loadout.primary_skill_id));
+    lua_setfield(state, -2, "primary_skill_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(loadout.primary_combo_id));
+    lua_setfield(state, -2, "primary_combo_id");
+    PushSecondaryLoadout(state, loadout);
+    lua_setfield(state, -2, "secondary_skill_ids");
+}
+
+}  // namespace
+
+bool ParseBotIdArgument(lua_State* state, int index, std::uint64_t* bot_id, std::string* error_message) {
+    if (bot_id == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    if (!lua_isinteger(state, index)) {
+        *error_message = "bot id must be an integer";
+        return false;
+    }
+
+    const auto value = static_cast<std::int64_t>(lua_tointeger(state, index));
+    if (value <= 0) {
+        *error_message = "bot id must be greater than zero";
+        return false;
+    }
+
+    *bot_id = static_cast<std::uint64_t>(value);
+    return true;
+}
+
+bool ParseBotCreateRequest(
+    lua_State* state,
+    int index,
+    multiplayer::BotCreateRequest* request,
+    std::string* error_message) {
+    if (request == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    if (!EnsureTable(state, index, "sd.bots.create", error_message)) {
+        return false;
+    }
+
+    *request = multiplayer::BotCreateRequest{};
+    const auto table_index = lua_absindex(state, index);
+
+    bool has_display_name = false;
+    if (!ReadOptionalStringField(state, table_index, "name", &request->display_name, &has_display_name, error_message)) {
+        return false;
+    }
+
+    bool has_wizard_id = false;
+    if (!ReadOptionalIntegerField(state, table_index, "wizard_id", &request->wizard_id, &has_wizard_id, error_message)) {
+        return false;
+    }
+    if (!has_wizard_id) {
+        *error_message = "sd.bots.create requires wizard_id";
+        return false;
+    }
+
+    bool has_ready = false;
+    if (!ReadOptionalBooleanField(state, table_index, "ready", &request->ready, &has_ready, error_message)) {
+        return false;
+    }
+
+    if (!ReadPositionField(state, table_index, &request->position_x, &request->position_y, &request->has_transform, error_message)) {
+        return false;
+    }
+
+    bool has_heading = false;
+    if (!ReadOptionalNumberField(state, table_index, "heading", &request->heading, &has_heading, error_message)) {
+        return false;
+    }
+    if (has_heading && !request->has_transform) {
+        *error_message = "sd.bots.create requires position when heading is provided";
+        return false;
+    }
+
+    bool has_loadout = false;
+    if (!ReadLoadoutField(state, table_index, &request->loadout, &has_loadout, error_message)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool ParseBotUpdateRequest(
+    lua_State* state,
+    int index,
+    multiplayer::BotUpdateRequest* request,
+    std::string* error_message) {
+    if (request == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    if (!EnsureTable(state, index, "sd.bots.update", error_message)) {
+        return false;
+    }
+
+    *request = multiplayer::BotUpdateRequest{};
+    const auto table_index = lua_absindex(state, index);
+
+    lua_getfield(state, table_index, "id");
+    if (!lua_isinteger(state, -1)) {
+        *error_message = "sd.bots.update requires id";
+        lua_pop(state, 1);
+        return false;
+    }
+    request->bot_id = static_cast<std::uint64_t>(lua_tointeger(state, -1));
+    lua_pop(state, 1);
+    if (request->bot_id == 0) {
+        *error_message = "sd.bots.update requires id != 0";
+        return false;
+    }
+
+    if (!ReadOptionalStringField(state, table_index, "name", &request->display_name, &request->has_display_name, error_message) ||
+        !ReadOptionalIntegerField(state, table_index, "wizard_id", &request->wizard_id, &request->has_wizard_id, error_message) ||
+        !ReadOptionalBooleanField(state, table_index, "ready", &request->ready, &request->has_ready, error_message)) {
+        return false;
+    }
+
+    if (!ReadPositionField(state, table_index, &request->position_x, &request->position_y, &request->has_transform, error_message)) {
+        return false;
+    }
+
+    bool has_heading = false;
+    if (!ReadOptionalNumberField(state, table_index, "heading", &request->heading, &has_heading, error_message)) {
+        return false;
+    }
+    if (has_heading && !request->has_transform) {
+        *error_message = "sd.bots.update requires position when heading is provided";
+        return false;
+    }
+
+    if (!ReadLoadoutField(state, table_index, &request->loadout, &request->has_loadout, error_message)) {
+        return false;
+    }
+
+    if (request->has_display_name || request->has_wizard_id || request->has_ready || request->has_transform ||
+        request->has_loadout) {
+        return true;
+    }
+
+    *error_message = "sd.bots.update requires at least one field to update";
+    return false;
+}
+
+bool ParseBotCastRequest(
+    lua_State* state,
+    int index,
+    multiplayer::BotCastRequest* request,
+    std::string* error_message) {
+    if (request == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    if (!EnsureTable(state, index, "sd.bots.cast", error_message)) {
+        return false;
+    }
+
+    *request = multiplayer::BotCastRequest{};
+    const auto table_index = lua_absindex(state, index);
+
+    lua_getfield(state, table_index, "id");
+    if (!lua_isinteger(state, -1)) {
+        *error_message = "sd.bots.cast requires id";
+        lua_pop(state, 1);
+        return false;
+    }
+    request->bot_id = static_cast<std::uint64_t>(lua_tointeger(state, -1));
+    lua_pop(state, 1);
+    if (request->bot_id == 0) {
+        *error_message = "sd.bots.cast requires id != 0";
+        return false;
+    }
+
+    lua_getfield(state, table_index, "kind");
+    if (!lua_isstring(state, -1)) {
+        *error_message = "sd.bots.cast requires kind";
+        lua_pop(state, 1);
+        return false;
+    }
+
+    const auto cast_kind = std::string(lua_tostring(state, -1));
+    lua_pop(state, 1);
+    if (cast_kind == "primary") {
+        request->kind = multiplayer::BotCastKind::Primary;
+        request->secondary_slot = -1;
+        return true;
+    }
+
+    if (cast_kind != "secondary") {
+        *error_message = "sd.bots.cast kind must be primary or secondary";
+        return false;
+    }
+
+    request->kind = multiplayer::BotCastKind::Secondary;
+    lua_getfield(state, table_index, "slot");
+    if (!lua_isinteger(state, -1)) {
+        *error_message = "sd.bots.cast secondary slot is required";
+        lua_pop(state, 1);
+        return false;
+    }
+
+    request->secondary_slot = static_cast<std::int32_t>(lua_tointeger(state, -1));
+    lua_pop(state, 1);
+    if (request->secondary_slot < 0 || request->secondary_slot > 2) {
+        *error_message = "sd.bots.cast secondary slot must be in range [0, 2]";
+        return false;
+    }
+
+    return true;
+}
+
+void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot) {
+    lua_createtable(state, 0, 47);
+    lua_pushboolean(state, snapshot.available ? 1 : 0);
+    lua_setfield(state, -2, "available");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.bot_id));
+    lua_setfield(state, -2, "id");
+    lua_pushstring(state, snapshot.display_name.c_str());
+    lua_setfield(state, -2, "name");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.wizard_id));
+    lua_setfield(state, -2, "wizard_id");
+    lua_pushboolean(state, snapshot.ready ? 1 : 0);
+    lua_setfield(state, -2, "ready");
+    lua_pushboolean(state, snapshot.in_run ? 1 : 0);
+    lua_setfield(state, -2, "in_run");
+    lua_pushboolean(state, snapshot.runtime_valid ? 1 : 0);
+    lua_setfield(state, -2, "runtime_valid");
+    lua_pushboolean(state, snapshot.transform_valid ? 1 : 0);
+    lua_setfield(state, -2, "transform_valid");
+    lua_pushboolean(state, snapshot.entity_materialized ? 1 : 0);
+    lua_setfield(state, -2, "entity_materialized");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.run_nonce));
+    lua_setfield(state, -2, "run_nonce");
+    lua_createtable(state, 0, 2);
+    lua_pushnumber(state, snapshot.position_x);
+    lua_setfield(state, -2, "x");
+    lua_pushnumber(state, snapshot.position_y);
+    lua_setfield(state, -2, "y");
+    lua_setfield(state, -2, "position");
+    lua_pushnumber(state, snapshot.position_x);
+    lua_setfield(state, -2, "x");
+    lua_pushnumber(state, snapshot.position_y);
+    lua_setfield(state, -2, "y");
+    lua_pushnumber(state, snapshot.heading);
+    lua_setfield(state, -2, "heading");
+    lua_pushnumber(state, snapshot.hp);
+    lua_setfield(state, -2, "hp");
+    lua_pushnumber(state, snapshot.max_hp);
+    lua_setfield(state, -2, "max_hp");
+    lua_pushnumber(state, snapshot.mp);
+    lua_setfield(state, -2, "mp");
+    lua_pushnumber(state, snapshot.max_mp);
+    lua_setfield(state, -2, "max_mp");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.actor_address));
+    lua_setfield(state, -2, "actor_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.world_address));
+    lua_setfield(state, -2, "world_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.animation_state_ptr));
+    lua_setfield(state, -2, "animation_state_ptr");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.render_frame_table));
+    lua_setfield(state, -2, "render_frame_table");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.hub_visual_attachment_ptr));
+    lua_setfield(state, -2, "hub_visual_attachment_ptr");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.hub_visual_source_profile_address));
+    lua_setfield(state, -2, "hub_visual_source_profile_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.hub_visual_descriptor_signature));
+    lua_setfield(state, -2, "hub_visual_descriptor_signature");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.hub_visual_proxy_address));
+    lua_setfield(state, -2, "hub_visual_proxy_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.progression_handle_address));
+    lua_setfield(state, -2, "progression_handle_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.equip_handle_address));
+    lua_setfield(state, -2, "equip_handle_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.progression_runtime_state_address));
+    lua_setfield(state, -2, "progression_runtime_state_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.equip_runtime_state_address));
+    lua_setfield(state, -2, "equip_runtime_state_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.gameplay_slot));
+    lua_setfield(state, -2, "gameplay_slot");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.actor_slot));
+    lua_setfield(state, -2, "actor_slot");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.slot_anim_state_index));
+    lua_setfield(state, -2, "slot_anim_state_index");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.resolved_animation_state_id));
+    lua_setfield(state, -2, "resolved_animation_state_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.hub_visual_source_kind));
+    lua_setfield(state, -2, "hub_visual_source_kind");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.render_drive_flags));
+    lua_setfield(state, -2, "render_drive_flags");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.anim_drive_state));
+    lua_setfield(state, -2, "anim_drive_state");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.render_variant_primary));
+    lua_setfield(state, -2, "render_variant_primary");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.render_variant_secondary));
+    lua_setfield(state, -2, "render_variant_secondary");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.render_weapon_type));
+    lua_setfield(state, -2, "render_weapon_type");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.render_selection_byte));
+    lua_setfield(state, -2, "render_selection_byte");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.render_variant_tertiary));
+    lua_setfield(state, -2, "render_variant_tertiary");
+    lua_pushnumber(state, snapshot.walk_cycle_primary);
+    lua_setfield(state, -2, "walk_cycle_primary");
+    lua_pushnumber(state, snapshot.walk_cycle_secondary);
+    lua_setfield(state, -2, "walk_cycle_secondary");
+    lua_pushnumber(state, snapshot.render_drive_stride);
+    lua_setfield(state, -2, "render_drive_stride");
+    lua_pushnumber(state, snapshot.render_advance_rate);
+    lua_setfield(state, -2, "render_advance_rate");
+    lua_pushnumber(state, snapshot.render_advance_phase);
+    lua_setfield(state, -2, "render_advance_phase");
+    lua_pushnumber(state, snapshot.render_drive_overlay_alpha);
+    lua_setfield(state, -2, "render_drive_overlay_alpha");
+    lua_pushnumber(state, snapshot.render_drive_move_blend);
+    lua_setfield(state, -2, "render_drive_move_blend");
+    lua_pushboolean(state, snapshot.gameplay_attach_applied ? 1 : 0);
+    lua_setfield(state, -2, "gameplay_attach_applied");
+    lua_pushstring(state, multiplayer::BotControllerStateLabel(snapshot.state));
+    lua_setfield(state, -2, "state");
+    lua_pushboolean(state, snapshot.moving ? 1 : 0);
+    lua_setfield(state, -2, "moving");
+    lua_pushboolean(state, snapshot.has_target ? 1 : 0);
+    lua_setfield(state, -2, "has_target");
+    if (snapshot.has_target) {
+        lua_pushnumber(state, snapshot.target_x);
+        lua_setfield(state, -2, "target_x");
+        lua_pushnumber(state, snapshot.target_y);
+        lua_setfield(state, -2, "target_y");
+    } else {
+        lua_pushnil(state);
+        lua_setfield(state, -2, "target_x");
+        lua_pushnil(state);
+        lua_setfield(state, -2, "target_y");
+    }
+    lua_pushnumber(state, snapshot.distance_to_target);
+    lua_setfield(state, -2, "distance_to_target");
+    PushLoadout(state, snapshot.loadout);
+    lua_setfield(state, -2, "loadout");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.queued_cast_count));
+    lua_setfield(state, -2, "queued_cast_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.last_queued_cast_ms));
+    lua_setfield(state, -2, "last_queued_cast_ms");
+}
+
+void PushBotSnapshotArray(lua_State* state) {
+    const auto count = multiplayer::GetBotCount();
+    lua_createtable(state, static_cast<int>(count), 0);
+    for (std::uint32_t index = 0; index < count; ++index) {
+        multiplayer::BotSnapshot snapshot;
+        if (!multiplayer::ReadBotSnapshotByIndex(index, &snapshot)) {
+            continue;
+        }
+
+        PushBotSnapshot(state, snapshot);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+}
+
+}  // namespace sdmod::detail

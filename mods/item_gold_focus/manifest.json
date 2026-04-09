@@ -1,0 +1,13 @@
+{
+  "id": "sample.items.gold_focus",
+  "name": "Gold Focus Item Table Override",
+  "version": "0.1.0",
+  "enabled": false,
+  "overlays": [
+    {
+      "target": "data/items.txt",
+      "source": "files/data/items.txt",
+      "format": "plaintext-items"
+    }
+  ]
+}

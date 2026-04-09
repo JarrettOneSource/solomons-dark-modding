@@ -1,0 +1,15 @@
+{
+  "id": "sample.lua.dark_cloud_sort_bootstrap",
+  "name": "Lua Title Menu Bootstrap",
+  "version": "0.2.0",
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "events.runtime.tick",
+      "ui.snapshot.read",
+      "ui.action.query",
+      "ui.action.activate"
+    ]
+  }
+}

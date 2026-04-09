@@ -1,0 +1,13 @@
+{
+  "id": "sample.skill.shock_nova",
+  "name": "Shock Nova Skill Override",
+  "version": "0.1.0",
+  "enabled": true,
+  "overlays": [
+    {
+      "target": "data/ringoffire.txt",
+      "source": "files/data/ringoffire.txt",
+      "format": "plaintext-skill"
+    }
+  ]
+}
