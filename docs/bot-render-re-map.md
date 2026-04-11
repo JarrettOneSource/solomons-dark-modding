@@ -6,18 +6,25 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 
 - The loader materializes wizard bots through the player ctor directly, not through `Gameplay_CreatePlayerSlot`.
 - The live standalone pipeline is:
-  - allocate `0x398` bytes with `_aligned_malloc(..., 16)`
-  - zero the allocation
+  - allocate `0x398` bytes through `Object_Allocate(0x398)`
   - call `FUN_0052B4C0(self)` at `0x0052B4C0`
   - assign the scene/world pointer at `actor + 0x58`
   - build standalone progression and equip wrappers
   - seed wizard visuals from `wizard_id` through the runtime/progression state
   - allow stock `PlayerActorTick` to run so the render pipeline advances the bot sprite
   - call `ActorWorld_Register(world, actor)` at `0x0063F6D0`
-  - publish the actor into a real gameplay slot at `gameplay + 0x1358 + slot * 4` (`slot 1..3`)
-  - keep `actor + 0x04` non-null so the bot has a scene attachment for sprite rendering
+  - reserve the first free gameplay slot in `1..3`, then publish the actor into `gameplay + 0x1358 + slot * 4`
+  - try to rely on the actor's own `+0x04` initialization first, but still borrow slot-0 player's `+0x04` as a fallback when the bot render context still looks unresolved
   - clear slot identity mirrors only when they interfere with standalone ownership, not the render slot table itself
 - The loader still does not use `Gameplay_CreatePlayerSlot`, but arena rendering does require the bot to exist in the gameplay slot table.
+- The April 10, 2026 residual fix changed the standalone actor path from raw `_aligned_malloc` ownership to the same `Object_Allocate` / scalar-deleting-destructor contract used by stock actor creation. Runtime validation of a truly independent `+0x04` render context is still pending because the donor fallback remains in code.
+
+## Current Code Audit (2026-04-11)
+
+- The current loader still calls `FUN_005E3080` through a guarded wrapper while synthetic or donor source-profile staging is live.
+- The loader clears `actor +0x174/+0x178` again after that staging step, so synthetic source state is intentionally temporary.
+- The loader also clears the actor-side descriptor block at `+0x244..+0x263` after progression refresh, after gameplay attach, and again during standalone bot tick repair.
+- That means the current code path is still a hybrid: it uses source-profile descriptor building as a setup step, but does not leave that state live across gameplay/tick.
 
 ## Recovered Standalone Spawn Sequence
 
@@ -40,7 +47,7 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 ## Verified Functions
 
 - `Object_Ctor` (`0x00401FF0`): base object constructor. Seeds the render-context slot at `actor + 0x04` and participates in the allocator/global tracking path.
-- `Object_Allocate` (`0x00402030`): allocator that calls `operator_new` and stores the result in `DAT_00B4019C`. Swapping it in for `_aligned_malloc` caused heap corruption during bot render-node probes.
+- `Object_Allocate` (`0x00402030`): allocator that calls `operator_new` and stores the result in `DAT_00B4019C`. Both recovered stock actor creation paths use it for player actors.
 - `Puppet_Ctor` (`0x006287D0`): puppet-layer constructor in the player actor chain.
 - `GoodGuy_Ctor` (`0x0052A410`): ally/good-guy constructor in the player actor chain.
 - `Player_Ctor` (`0x0052A500`): player-layer constructor in the player actor chain.
@@ -108,12 +115,48 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 - Equip runtime pointer: `actor + 0x1FC`
 - Progression runtime pointer: `actor + 0x200`
 - Animation state pointer: `actor + 0x21C`
-- Render frame table pointer: `actor + 0x22C`
+- Packed discrete frame offset/countdown field: `actor + 0x22C`
 - Render descriptor block: `actor + 0x244`
 - Actor-side visual attachment field: `actor + 0x264`
 - Progression wrapper pointer: `actor + 0x300`
 - Equip wrapper pointer: `actor + 0x304`
 - Registered slot mirrors: `actor + 0x164`, `actor + 0x166`
+
+## Wizard Source Profile Layout
+
+- `FUN_00466FA0` (`0x00466FA0`) is the preview / selector-side bridge into the live wizard render path.
+- That function allocates a type `0x1397` object through `FUN_005B7080`, then seeds:
+  - `actor + 0x174 = *(int *)(source + 0x4C)`
+  - `actor + 0x178 = source`
+  - `actor + 0x17C = source + 0x50`
+  - `FUN_005E3080(actor)` immediately after
+- `FUN_005E3080` (`0x005E3080`) expects `*(int *)(source + 0x4C) == 3` for wizard visuals.
+- Source-profile selector fields consumed by `FUN_005E3080`:
+  - `source + 0x9C`: `Hat Type`
+  - `source + 0x9D`: `Robe Type`
+  - `source + 0xA0`: render-helper / pose selector
+  - `source + 0xA4`: weapon type (`1 = staff`, `2 = wand`)
+  - `source + 0xA8`: tertiary visual variant
+- Source-profile color payload consumed by `FUN_005E3080`:
+  - `source + 0xB4 .. +0xC0`: cloth color `float4`
+  - `source + 0xC4 .. +0xD0`: trim color `float4`
+  - `source + 0xC0` and `source + 0xD0` are the final float lanes of those blocks and are tested as floats before descriptor generation
+- `FUN_005E3080` copies both 16-byte color blocks to stack and passes them through `FUN_0040FC60(..., DAT_00785368)`, then writes the results into `actor + 0x244 .. +0x260`.
+- If cloth alpha `source + 0xC0` or trim alpha `source + 0xD0` is `0.0`, `FUN_005E3080` replaces that 16-byte block with the default returned by `FUN_004630E0`.
+- The actor-side selector bytes populated by `FUN_005E3080` are:
+  - `actor + 0x23C`: hat type
+  - `actor + 0x23D`: robe type
+  - `actor + 0x23E`: weapon type
+  - `actor + 0x23F`: render-helper / pose selector
+  - `actor + 0x240`: tertiary variant
+
+## Wizard Render Dispatch
+
+- `FUN_00622430` (`0x00622430`) is the render dispatch that checks `actor + 0x174`.
+- When `actor + 0x174 == 3`, it calls `FUN_00621780` (`0x00621780`) for the wizard sprite path.
+- `FUN_00621780` reads the actor-side selectors above plus the descriptor block at `actor + 0x244 .. +0x260`.
+- `actor + 0x23C` and `actor + 0x23D` are the discrete atlas selectors for hat / robe type.
+- `actor + 0x23F` is not the main robe-color selector; it switches among the render helpers reached through `FUN_005E9FC0`.
 
 ## Arena vs. Hub Visual State
 
@@ -123,7 +166,7 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
   - `actor + 0x1FC` (equip runtime)
   - `actor + 0x200` (progression runtime)
   - `actor + 0x21C` (anim state pointer)
-  - `actor + 0x22C` (render frame table)
+  - `actor + 0x22C` (packed discrete frame state, not a pointer)
 - Those fields matter in the hub clone path, but they are not the arena sprite-visibility gate.
 
 ## Live April 9 Probe
@@ -140,7 +183,7 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 
 - `actor + 0x04` is the current arena render-context gate. A null or unresolved value gives the bot collision without a visible sprite. Sharing the player's value makes the bot visible but also parents it to the player transform, so the bot needs its own render node.
 - `Object_Ctor` seeds `actor + 0x04` with a ctor sentinel, and real initialized actors later get a heap pointer there during game initialization.
-- `Object_Allocate` writes its allocation to `DAT_00B4019C`, and `Object_Ctor` checks that global. Replacing `_aligned_malloc` with `Object_Allocate` caused heap corruption, so the correct render-node allocation path is still unresolved.
+- `Object_Allocate` writes its allocation to `DAT_00B4019C`, and `Object_Ctor` checks that global. The earlier heap-corruption probe was most likely mixing stock allocation with raw-allocation cleanup. The current loader now uses the stock allocator/destructor contract for standalone actors, but it still conditionally restores slot-0's `+0x04` when `NeedsBorrowedActorRenderContext(...)` says the bot render context is unresolved.
 - `actor + 0x05` is checked by `ActorWorld_Register`, and `ActorVisual_SetInitFlag` (`0x00401FD0`) writes it to `1`. Live probes show player `= 0`, fresh bot `= 1`.
 - `actor + 0x58` must stay valid after spawn. It is a required world/context pointer for render and update code.
 - Detaching by nulling `actor + 0x58` is invalid and crashes on the next frame.
@@ -148,8 +191,11 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 - The bot must live in a real gameplay slot (`1..3`) at `gameplay + 0x1358 + slot * 4` for the arena render pipeline to process it. Slot `-1` is invisible; slot `0` collides with the local player path.
 - `actor + 0x264` is not a stable "copy me from the local player" field. In the stock clone path it is consumed into the equip-runtime visual sink and then cleared on the source actor.
 - `actor + 0x264` is not a stable readiness signal for gameplay donor actors. In live arena runs the local player can render correctly while the equip-runtime visual-link probes and `+0x264` both read back as `0`.
+- The April 10, 2026 bot fix stops donor-clobbering bot-owned animation state. Standalone bots now keep their own `+0x21C` selection state and their own `+0x220..+0x263` frame/motion state after runtime wiring.
 - The resolved render-state windows (`0x138..0x268`), descriptor blocks, visual-link objects, and source profiles are not the hard gate for arena sprite rendering. The local player can have these read back as null/zero and still render.
-- `FUN_005E3080` can synthesize the weapon attachment and variant bytes, but it does not fill the descriptor block without live atlas context. Donor descriptor copy is still required for correct independent wizard visuals.
+- `FUN_005E3080` does fill the descriptor block from the external source-profile color payload at `source + 0xB4 .. +0xD0`.
+- A synthetic source profile that sets only `source + 0xC0` / `source + 0xD0` to `1.0f` while leaving the RGB lanes at zero produces cloth / trim color vectors `[0, 0, 0, 1]`, which yields black robes.
+- Current loader caveat: even after `FUN_005E3080` fills the actor-side descriptor block, `ClearActorLiveDescriptorBlock` zeros `+0x244..+0x263` again during priming, attach, and tick repair. If the recovered body-render path is right, this is still a likely source of wrong or unstable body visuals.
 
 ## Stock Wizard Clone Path
 
@@ -174,11 +220,13 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
   - a non-null render / scene attachment value at `actor + 0x04`
   - a real gameplay slot entry at `gameplay + 0x1358 + slot * 4`
   - stock `PlayerActorTick` running on the bot
-- The current broken visual state is:
-  - sharing the player's `+0x04` makes the bot visible but parents it to the player transform
-  - the sprite lands in the black-robes / T-pose-like path because frame selection is still wrong
-  - synthetic source profiles passed through `FUN_005E3080` can create the weapon attachment and set the variant bytes, but the descriptor block bytes stay empty without live atlas context
-- Independent `wizard_id` sprite selection is still the follow-up task after the bot gets its own render node.
+- The April 10, 2026 animation fix is:
+  - do not donor-copy `+0x220..+0x263` after `WireStandaloneWizardRuntimeHandles` has created the bot's own selection/progression state
+  - do not overwrite the bot's `+0x21C` value with the donor's resolved animation state during spawn or per-tick repair
+  - transfer the stock-built attachment from actor `+0x264` into equip sink `+0x30`
+- The remaining non-stock rendering issues visible in code are:
+  - the shared `actor + 0x04` render-context fallback is still present when standalone initialization does not produce a live node on its own
+  - the actor-side descriptor block is still cleared after setup, attach, and tick repair, even though the recovered body-render path says it consumes `+0x244..+0x263`
 
 ## Create Screen Wizard Selection Probe
 
@@ -207,12 +255,13 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 
 ## Current Validation
 
-- Live validation on April 9, 2026 showed:
+- Live validation on April 9, 2026 showed the pre-fix behavior:
   - the standalone bot materialized again through the direct ctor path
   - the bot rendered as a visible wizard sprite in the arena
   - the bot kept collision, stayed in place, and pathfound back when pushed
   - the bot patrolled independently at a stable offset from the player under Lua `move_to`
   - the current visibility proof still depends on the shared `actor + 0x04` render context, so the bot remains parented to the player transform and the sprite stays in the black-robes / T-pose-like path
+- The April 10, 2026 residual fix changes the allocator/cleanup contract and removes the explicit `+0x04` alias write. That new path has not been runtime-validated yet.
 
 ## Crash Investigation
 
