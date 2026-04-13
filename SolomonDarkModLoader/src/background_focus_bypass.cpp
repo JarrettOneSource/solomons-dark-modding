@@ -1,6 +1,7 @@
 #include "logger.h"
 #include "memory_access.h"
 #include "mod_loader.h"
+#include "gameplay_seams.h"
 #include "mod_loader_internal.h"
 #include "x86_hook.h"
 
@@ -13,8 +14,7 @@ namespace {
 
 using GameWindowProcFn = LRESULT(__stdcall*)(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
 
-constexpr uintptr_t kGameWindowProc = 0x00443440;
-constexpr size_t kGameWindowProcPatchSize = 6;
+constexpr size_t kGameWindowProcMinimumPatchSize = 5;
 
 struct BackgroundFocusBypassState {
     X86Hook window_proc_hook = {};
@@ -43,6 +43,10 @@ bool InitializeBackgroundFocusBypass(std::string* error_message) {
         return true;
     }
 
+    if (!InitializeGameplaySeams(error_message)) {
+        return false;
+    }
+
     const auto resolved_window_proc = ProcessMemory::Instance().ResolveGameAddressOrZero(kGameWindowProc);
     if (resolved_window_proc == 0) {
         if (error_message != nullptr) {
@@ -52,10 +56,10 @@ bool InitializeBackgroundFocusBypass(std::string* error_message) {
     }
 
     std::string hook_error;
-    if (!InstallX86Hook(
+    if (!InstallSafeX86Hook(
             reinterpret_cast<void*>(resolved_window_proc),
             reinterpret_cast<void*>(&DetourGameWindowProc),
-            kGameWindowProcPatchSize,
+            kGameWindowProcMinimumPatchSize,
             &g_background_focus_bypass_state.window_proc_hook,
             &hook_error)) {
         if (error_message != nullptr) {
@@ -75,7 +79,9 @@ bool InitializeBackgroundFocusBypass(std::string* error_message) {
     }
 
     g_background_focus_bypass_state.initialized = true;
-    Log("Installed background focus bypass hook at " + HexString(resolved_window_proc) + ".");
+    Log(
+        "Installed background focus bypass hook at " + HexString(resolved_window_proc) +
+        " patch=" + std::to_string(g_background_focus_bypass_state.window_proc_hook.patch_size) + ".");
     return true;
 }
 

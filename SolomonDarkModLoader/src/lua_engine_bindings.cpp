@@ -9,19 +9,30 @@ namespace {
 
 thread_local std::string* g_lua_print_capture_sink = nullptr;
 
+int LuaToStringThunk(lua_State* state) {
+    luaL_checkany(state, 1);
+    luaL_tolstring(state, 1, nullptr);
+    return 1;
+}
+
 int LuaPrint(lua_State* state) {
     auto* mod = GetLoadedLuaMod(state);
     std::string message;
     const auto argument_count = lua_gettop(state);
     for (int index = 1; index <= argument_count; ++index) {
-        const auto* text = luaL_tolstring(state, index, nullptr);
         if (!message.empty()) {
             message.append("\t");
         }
-        if (text != nullptr) {
+
+        std::string text;
+        std::string stringify_error;
+        if (TryLuaValueToString(state, index, &text, &stringify_error)) {
             message.append(text);
+        } else {
+            message.append("<print tostring failed: ");
+            message.append(stringify_error.empty() ? "unknown error" : stringify_error);
+            message.push_back('>');
         }
-        lua_pop(state, 1);
     }
 
     if (g_lua_print_capture_sink != nullptr) {
@@ -50,6 +61,45 @@ std::string* SwapLuaPrintCaptureSink(std::string* sink) {
     auto* previous_sink = g_lua_print_capture_sink;
     g_lua_print_capture_sink = sink;
     return previous_sink;
+}
+
+bool TryLuaValueToString(lua_State* state, int index, std::string* text, std::string* error_message) {
+    if (text == nullptr) {
+        return false;
+    }
+
+    text->clear();
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (state == nullptr) {
+        if (error_message != nullptr) {
+            *error_message = "Lua state was null.";
+        }
+        return false;
+    }
+
+    const int absolute_index = lua_absindex(state, index);
+    lua_pushcfunction(state, &LuaToStringThunk);
+    lua_pushvalue(state, absolute_index);
+    if (lua_pcall(state, 1, 1, 0) != LUA_OK) {
+        if (error_message != nullptr) {
+            const auto* message = lua_tostring(state, -1);
+            *error_message = message == nullptr ? "unknown Lua tostring failure" : message;
+        }
+        lua_pop(state, 1);
+        return false;
+    }
+
+    size_t length = 0;
+    const auto* value = lua_tolstring(state, -1, &length);
+    if (value != nullptr) {
+        text->assign(value, length);
+    } else {
+        text->assign(lua_typename(state, lua_type(state, absolute_index)));
+    }
+    lua_pop(state, 1);
+    return true;
 }
 
 LoadedLuaMod* GetLoadedLuaMod(lua_State* state) {
@@ -90,6 +140,8 @@ bool RegisterLuaBindings(LoadedLuaMod* mod, std::string* error_message) {
     RegisterLuaGameplayBindings(mod->state);
     RegisterLuaHubBindings(mod->state);
     RegisterLuaDebugBindings(mod->state);
+    lua_pushvalue(mod->state, -1);
+    lua_setfield(mod->state, LUA_REGISTRYINDEX, kLuaSdRegistryKey);
     lua_setglobal(mod->state, "sd");
     return true;
 }

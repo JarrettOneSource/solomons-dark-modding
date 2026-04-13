@@ -6,6 +6,15 @@
 from ghidra.program.model.mem import MemoryAccessException
 
 
+def read_program_pointer(mem, addr):
+    pointer_size = currentProgram.getDefaultPointerSize()
+    if pointer_size == 4:
+        return mem.getInt(addr) & 0xffffffff
+    if pointer_size == 8:
+        return mem.getLong(addr) & 0xffffffffffffffff
+    raise ValueError("unsupported pointer size: %d" % pointer_size)
+
+
 def parse_args():
     args = [a for a in getScriptArgs() if a.strip()]
     if len(args) < 2:
@@ -44,7 +53,7 @@ for name in names:
     if name.startswith("0x") or name.startswith("0X"):
         addr = toAddr(name)
         try:
-            target = toAddr(mem.getLong(addr.add(slot)))
+            target = toAddr(read_program_pointer(mem, addr.add(slot)))
         except MemoryAccessException as exc:
             print("%s slot_addr=%s ERROR %s" % (name, addr.add(slot), exc))
             continue
@@ -64,7 +73,7 @@ for name in names:
         addr = sym.getAddress()
         slot_addr = addr.add(slot)
         try:
-            target = toAddr(mem.getLong(slot_addr))
+            target = toAddr(read_program_pointer(mem, slot_addr))
         except MemoryAccessException as exc:
             print("%s @ %s slot_addr=%s ERROR %s" % (sym.getName(), addr, slot_addr, exc))
             continue

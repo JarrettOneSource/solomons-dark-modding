@@ -111,9 +111,15 @@
     <ClInclude Include="include\steam_bootstrap_internal.h" />
     <ClInclude Include="include\target_game.h" />
     <ClInclude Include="include\x86_hook.h" />
+    <ClInclude Include="src\gameplay_seams.h" />
+    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks.inl" />
     <ClInclude Include="src\lua_exec_pipe.h" />
     <ClInclude Include="src\lua_engine_bindings_internal.h" />
     <ClInclude Include="src\mod_loader_internal.h" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\scene_and_animation.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization.inl" />
     <ClInclude Include="src\lua_engine_internal.h" />
   </ItemGroup>
   <ItemGroup>
@@ -126,6 +132,7 @@
     <ClCompile Include="src\debug_ui_config.cpp" />
     <ClCompile Include="src\debug_ui_overlay.cpp" />
     <ClCompile Include="src\dllmain.cpp" />
+    <ClCompile Include="src\gameplay_seams.cpp" />
     <ClCompile Include="src\logger.cpp" />
     <ClCompile Include="src\lua_engine.cpp" />
     <ClCompile Include="src\lua_engine_bindings.cpp" />

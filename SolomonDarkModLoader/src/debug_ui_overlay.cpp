@@ -144,13 +144,6 @@ constexpr ULONGLONG kTrackedDialogDismissArmDelayMs = 300;
 constexpr ULONGLONG kTrackedDialogMaximumLifetimeMs = 300000;
 constexpr ULONGLONG kTrackedDialogHigherPrioritySurfaceCutoverDelayMs = 200;
 constexpr std::size_t kMaximumUiWidgetParentDepth = 16;
-constexpr std::size_t kUiRolloutParentOffset = 0xC4;
-constexpr std::size_t kUiRolloutParentControlActionVtableByteOffset = 0xCC;
-constexpr std::size_t kDarkCloudBrowserModalButtonRolloutOffset = 0x78;
-constexpr std::size_t kDarkCloudBrowserModalHeaderGroupLeftOffset = 0x28;
-constexpr std::size_t kDarkCloudBrowserModalHeaderGroupTopOffset = 0x2C;
-constexpr std::size_t kDarkCloudBrowserModalHeaderGroupWidthOffset = 0x30;
-constexpr std::size_t kDarkCloudBrowserModalHeaderGroupHeightOffset = 0x34;
 constexpr std::size_t kUiOwnerControlActionVtableSlotIndex = 4;
 
 struct SurfaceObservationRange {

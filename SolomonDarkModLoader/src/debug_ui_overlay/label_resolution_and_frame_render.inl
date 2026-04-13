@@ -271,81 +271,56 @@ std::vector<OverlayRenderElement> TryBuildDarkCloudBrowserOverlayRenderElements(
     }
 
     if (browser_address != 0) {
-        // Read list widget geometry from the browser's child list widget at +0x324.
-        // This is a generic list widget (vftable 0xB1794C) with standard fields:
-        //   +0x14/+0x18/+0x1C/+0x20: left/top/width/height (standard widget rect)
-        //   +0x28: entry count (int)
-        //   +0x64: max visible rows (int)
-        //   +0xB4: row height (float)
-        constexpr std::size_t kBrowserListWidgetOffset = 0x324;
-        constexpr std::size_t kListWidgetRowHeightOffset = 0xB4;
-
         uintptr_t list_widget = 0;
-        TryReadPointerField(reinterpret_cast<const void*>(browser_address), kBrowserListWidgetOffset, &list_widget);
+        TryReadPointerField(
+            reinterpret_cast<const void*>(browser_address),
+            g_debug_ui_overlay_state.config.dark_cloud_browser_list_widget_offset,
+            &list_widget);
 
         if (list_widget != 0) {
             float list_left = 0, list_top = 0, list_right = 0, list_bottom = 0;
             float list_row_height = 0;
+            int entry_count = 0;
+            int max_visible = 0;
 
             TryReadExactControlRect(g_debug_ui_overlay_state.config,
                 reinterpret_cast<const void*>(list_widget), &list_left, &list_top, &list_right, &list_bottom);
-            TryReadPlainField(reinterpret_cast<const void*>(list_widget), kListWidgetRowHeightOffset, &list_row_height);
+            TryReadPlainField(
+                reinterpret_cast<const void*>(list_widget),
+                g_debug_ui_overlay_state.config.dark_cloud_browser_list_widget_row_height_offset,
+                &list_row_height);
+            TryReadPlainField(
+                reinterpret_cast<const void*>(list_widget),
+                g_debug_ui_overlay_state.config.dark_cloud_browser_list_widget_entry_count_offset,
+                &entry_count);
+            TryReadPlainField(
+                reinterpret_cast<const void*>(list_widget),
+                g_debug_ui_overlay_state.config.dark_cloud_browser_list_widget_max_visible_rows_offset,
+                &max_visible);
 
             if (list_row_height > 1.0f && list_right > list_left && list_bottom > list_top) {
-                // Read candidate count fields and log them to find the right one.
-                int f28 = 0, f64 = 0, f74 = 0, fE4 = 0;
-                TryReadPlainField(reinterpret_cast<const void*>(list_widget), 0x28, &f28);
-                TryReadPlainField(reinterpret_cast<const void*>(list_widget), 0x64, &f64);
-                TryReadPlainField(reinterpret_cast<const void*>(list_widget), 0x74, &f74);
-                TryReadPlainField(reinterpret_cast<const void*>(list_widget), 0xE4, &fE4);
-
-                const int max_visible = f64 > 0 ? f64 : 15;
-
-                // The list widget has per-row child objects at a known stride.
-                // Probe the widget for an array of row pointers — populated rows have
-                // non-null data, empty rows have null. Check offsets +0x30..+0x6C
-                // (the widget had self-pointers here, but they might be per-row on
-                // widgets with >1 entry). Also try stride patterns.
-                //
-                // Probe: for each candidate row-array base, check if pointer[i] is
-                // null for indices beyond the content rows.
-                constexpr std::size_t kRowDataBaseOffset = 0xC4;  // candidate from earlier probe
+                const int clamped_max_visible = max_visible > 0 ? max_visible : 15;
                 int probed_content_count = 0;
                 uintptr_t row_data_base = 0;
-                TryReadPointerField(reinterpret_cast<const void*>(list_widget), kRowDataBaseOffset, &row_data_base);
+                TryReadPointerField(
+                    reinterpret_cast<const void*>(list_widget),
+                    g_debug_ui_overlay_state.config.dark_cloud_browser_list_widget_row_data_base_offset,
+                    &row_data_base);
 
                 if (row_data_base != 0 && row_data_base > 0x100000) {
-                    // Check pointer array at row_data_base — each 4 bytes is a row data pointer.
-                    for (int ri = 0; ri < max_visible; ++ri) {
+                    for (int ri = 0; ri < clamped_max_visible; ++ri) {
                         uintptr_t row_ptr = 0;
                         if (TryReadPointerField(reinterpret_cast<const void*>(row_data_base), ri * 4, &row_ptr) &&
                             row_ptr != 0 && row_ptr > 0x10000) {
                             ++probed_content_count;
                         } else {
-                            break;  // First null row = end of content
+                            break;
                         }
                     }
                 }
 
-                // If probing didn't work, fall back to widget+0x28 capped at max_visible.
-                int draw_count = probed_content_count > 0 ? probed_content_count : (std::min)(f28, max_visible);
-
-                static int s_list_widget_log_count = 0;
-                if (s_list_widget_log_count < 3) {
-                    ++s_list_widget_log_count;
-                    // Dump ALL small-int fields from the list widget to find content_count=2.
-                    std::string dump = "Debug UI DCB widget_int_scan: draw=" + std::to_string(draw_count);
-                    for (std::size_t off = 0x00; off <= 0x120; off += 4) {
-                        int val = 0;
-                        TryReadPlainField(reinterpret_cast<const void*>(list_widget), off, &val);
-                        if (val >= 1 && val <= 20) {
-                            dump += " [" + HexString(off) + "]=" + std::to_string(val);
-                        }
-                    }
-                    Log(dump);
-                }
-
-                // Skip row 0 (column header "BONEYARD NAME" etc.) — entries start at row 1.
+                const int draw_count =
+                    probed_content_count > 0 ? probed_content_count : (std::min)(entry_count, clamped_max_visible);
                 constexpr int kHeaderRowCount = 1;
                 for (int i = 0; i < draw_count; ++i) {
                     const float row_top = list_top + static_cast<float>(i + kHeaderRowCount) * list_row_height;
@@ -376,7 +351,11 @@ std::vector<OverlayRenderElement> TryBuildDarkCloudBrowserOverlayRenderElements(
     {
         uintptr_t lw = 0;
         if (browser_address != 0 &&
-            TryReadPointerField(reinterpret_cast<const void*>(browser_address), 0x324, &lw) && lw != 0) {
+            TryReadPointerField(
+                reinterpret_cast<const void*>(browser_address),
+                g_debug_ui_overlay_state.config.dark_cloud_browser_list_widget_offset,
+                &lw) &&
+            lw != 0) {
             TryReadExactControlRect(g_debug_ui_overlay_state.config,
                 reinterpret_cast<const void*>(lw), &list_area_left, &list_area_top, &list_area_right, &list_area_bottom);
         }

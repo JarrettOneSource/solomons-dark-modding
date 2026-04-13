@@ -58,7 +58,7 @@ bool TryReadDarkCloudBrowserModalRolloutScreenRect(
     uintptr_t parent_address = 0;
     if (!TryReadPointerField(
             reinterpret_cast<const void*>(rollout_address),
-            kUiRolloutParentOffset,
+            config.ui_rollout_parent_offset,
             &parent_address) ||
         parent_address == 0 || parent_address == rollout_address) {
         return false;
@@ -131,19 +131,19 @@ bool TryReadDarkCloudBrowserModalHeaderOwnerLocalRect(
     float group_height = 0.0f;
     if (!TryReadPlainField(
             reinterpret_cast<const void*>(source_object_ptr),
-            kDarkCloudBrowserModalHeaderGroupLeftOffset,
+            config.dark_cloud_browser_modal_header_group_left_offset,
             &group_left) ||
         !TryReadPlainField(
             reinterpret_cast<const void*>(source_object_ptr),
-            kDarkCloudBrowserModalHeaderGroupTopOffset,
+            config.dark_cloud_browser_modal_header_group_top_offset,
             &group_top) ||
         !TryReadPlainField(
             reinterpret_cast<const void*>(source_object_ptr),
-            kDarkCloudBrowserModalHeaderGroupWidthOffset,
+            config.dark_cloud_browser_modal_header_group_width_offset,
             &group_width) ||
         !TryReadPlainField(
             reinterpret_cast<const void*>(source_object_ptr),
-            kDarkCloudBrowserModalHeaderGroupHeightOffset,
+            config.dark_cloud_browser_modal_header_group_height_offset,
             &group_height)) {
         return false;
     }
@@ -285,7 +285,7 @@ bool TryResolveDarkCloudBrowserModalLocalTextRect(
     uintptr_t rollout_address = 0;
     if (TryReadPointerField(
             reinterpret_cast<const void*>(source_object_ptr),
-            kDarkCloudBrowserModalButtonRolloutOffset,
+            config.dark_cloud_browser_modal_button_rollout_offset,
             &rollout_address) &&
         rollout_address != 0) {
         float rollout_left = 0.0f;

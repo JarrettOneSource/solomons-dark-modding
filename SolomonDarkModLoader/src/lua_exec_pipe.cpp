@@ -176,11 +176,26 @@ std::string SerializeResponse(const LuaExecResponse& response) {
     return payload.str();
 }
 
-std::string LuaValueToString(lua_State* state, int index) {
-    const char* value = luaL_tolstring(state, index, nullptr);
-    std::string text = value == nullptr ? lua_typename(state, lua_type(state, index)) : value;
+bool EnsureSdGlobal(lua_State* state) {
+    if (state == nullptr) {
+        return false;
+    }
+
+    lua_getglobal(state, "sd");
+    const bool has_global_sd = lua_istable(state, -1);
     lua_pop(state, 1);
-    return text;
+    if (has_global_sd) {
+        return true;
+    }
+
+    lua_getfield(state, LUA_REGISTRYINDEX, detail::kLuaSdRegistryKey);
+    const bool has_registry_sd = lua_istable(state, -1);
+    if (has_registry_sd) {
+        lua_pushvalue(state, -1);
+        lua_setglobal(state, "sd");
+    }
+    lua_pop(state, 1);
+    return has_registry_sd;
 }
 
 LuaExecResponse ExecuteLuaCode(const std::string& code) {
@@ -190,7 +205,12 @@ LuaExecResponse ExecuteLuaCode(const std::string& code) {
         return response;
     }
 
-    std::scoped_lock lock(detail::LuaEngineMutex());
+    std::unique_lock lock(detail::LuaEngineMutex(), std::try_to_lock);
+    if (!lock.owns_lock()) {
+        response.error = "Lua engine is busy executing on another thread. Try again.";
+        return response;
+    }
+
     if (!detail::LuaEngineInitializedFlag()) {
         response.error = "Lua engine is not initialized.";
         return response;
@@ -204,6 +224,11 @@ LuaExecResponse ExecuteLuaCode(const std::string& code) {
 
     lua_State* state = mods.front()->state;
     const int stack_top_before = lua_gettop(state);
+    if (!EnsureSdGlobal(state)) {
+        response.error = "Lua runtime binding 'sd' is unavailable.";
+        lua_settop(state, stack_top_before);
+        return response;
+    }
     LuaPrintCaptureGuard capture_guard(&response.print_output);
 
     const int status = luaL_dostring(state, code.c_str());
@@ -217,7 +242,16 @@ LuaExecResponse ExecuteLuaCode(const std::string& code) {
     const int result_count = lua_gettop(state) - stack_top_before;
     response.results.reserve(static_cast<std::size_t>(result_count));
     for (int index = stack_top_before + 1; index <= lua_gettop(state); ++index) {
-        response.results.push_back(LuaValueToString(state, index));
+        std::string result_text;
+        std::string stringify_error;
+        if (!detail::TryLuaValueToString(state, index, &result_text, &stringify_error)) {
+            response.error =
+                "Failed to stringify Lua result: " +
+                (stringify_error.empty() ? std::string("unknown Lua tostring failure") : stringify_error);
+            lua_settop(state, stack_top_before);
+            return response;
+        }
+        response.results.push_back(std::move(result_text));
     }
 
     lua_settop(state, stack_top_before);
@@ -463,6 +497,14 @@ void StopLuaExecPipeServer() {
         SetEvent(g_pipe_stop_event);
     }
     if (g_pipe_thread.joinable()) {
+        std::atomic<bool> keep_nudging = true;
+        std::thread nudge_thread([&keep_nudging]() {
+            while (keep_nudging.load(std::memory_order_acquire)) {
+                NudgePipeServerForShutdown();
+                Sleep(10);
+            }
+        });
+
         const BOOL canceled = CancelSynchronousIo(g_pipe_thread.native_handle());
         if (!canceled) {
             const DWORD error = GetLastError();
@@ -470,8 +512,9 @@ void StopLuaExecPipeServer() {
                 LogPipeWin32Failure("CancelSynchronousIo", error);
             }
         }
-        NudgePipeServerForShutdown();
         g_pipe_thread.join();
+        keep_nudging.store(false, std::memory_order_release);
+        nudge_thread.join();
     }
     if (g_pipe_stop_event != nullptr) {
         CloseHandle(g_pipe_stop_event);

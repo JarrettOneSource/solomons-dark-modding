@@ -293,7 +293,11 @@ bool HasLuaRuntimeTickHandlers() {
 }
 
 void DispatchLuaRuntimeTick(const SDModRuntimeTickContext& context) {
-    std::scoped_lock lock(detail::LuaEngineMutex());
+    std::unique_lock lock(detail::LuaEngineMutex(), std::try_to_lock);
+    if (!lock.owns_lock()) {
+        return;
+    }
+
     if (!detail::LuaEngineInitializedFlag()) {
         return;
     }

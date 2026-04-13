@@ -1,4 +1,5 @@
 #include "lua_engine_events.h"
+#include "gameplay_seams.h"
 #include "logger.h"
 #include "memory_access.h"
 #include "mod_loader.h"
@@ -30,42 +31,10 @@ using DropSpawnedFn =
     void(__fastcall*)(void* self, void* unused_edx, std::uint32_t x_bits, std::uint32_t y_bits, int amount, int lifetime);
 using LevelUpFn = void(__fastcall*)(void* self, void* unused_edx);
 
-// Hook targets (Ghidra virtual addresses).
 struct HookTarget {
     uintptr_t address;
     size_t patch_size;
 };
-
-constexpr HookTarget kCreateArena  = {0x0046EA90, 6};  // "Create New ARENA" virtual method
-constexpr HookTarget kStartGame    = {0x004BED40, 7};  // "on START GAME" menu-initiated
-constexpr HookTarget kRunEnded     = {0x005CB570, 7};  // GameOver trigger (__cdecl)
-// Primary wave-spawner tick — fires when the player enters the wave zone.
-// Decrements countdowns, reads parsed wave entries, dispatches enemy spawns.
-// __fastcall(this). Prologue: PUSH EBP(1) + MOV EBP,ESP(2) + AND ESP,-8(3) = 6.
-constexpr HookTarget kWaveSpawnerTick = {0x0046D000, 6};
-// Enemy_Create. __thiscall(this, spawn_anchor, enemy_config, spawn_context, mode, seed, allow_override).
-// Prologue: PUSH -1 (2) + PUSH 0x765d88 (5) = 7.
-constexpr HookTarget kEnemySpawned = {0x00469580, 7};
-// Shared enemy death finalizer. __thiscall(this). Prologue:
-// PUSH ESI (1) + MOV ESI,ECX (2) + CMP byte ptr [ESI + 0x1AC],0 (7) = 10.
-constexpr HookTarget kEnemyDeath = {0x004819D0, 10};
-// Spell-family cast entrypoints branched to by FUN_00548A00. Hooking the shared
-// dispatcher proved unstable in live runs, while these downstream targets are
-// already proven stable via the runtime trace system.
-constexpr HookTarget kSpellCast3EB = {0x005408F0, 8};
-constexpr HookTarget kSpellCast018 = {0x0053F9C0, 8};
-constexpr HookTarget kSpellCast020 = {0x00543860, 8};
-constexpr HookTarget kSpellCast028 = {0x00544C60, 7};
-constexpr HookTarget kSpellCast3EC = {0x00541870, 8};
-constexpr HookTarget kSpellCast3ED = {0x00542D20, 8};
-constexpr HookTarget kSpellCast3EE = {0x00545360, 8};
-constexpr HookTarget kSpellCast3EF = {0x0052BB60, 7};
-constexpr HookTarget kSpellCast3F0 = {0x00545C20, 7};
-constexpr HookTarget kGoldChanged = {0x005A7C60, 9};
-constexpr HookTarget kDropSpawned = {0x0046AA90, 7};
-// Player progression level-up routine. __fastcall(progression).
-// Prologue: PUSH ESI(1) + MOV ESI,ECX(2) + MOV DL,[ESI+0x40](3) = 6.
-constexpr HookTarget kLevelUp = {0x0067C250, 6};
 
 enum HookIndex : size_t {
     kHookCreateArena = 0,
@@ -100,30 +69,38 @@ struct RunLifecycleState {
     std::unordered_map<uintptr_t, int> enemy_types_by_address;
     bool initialized = false;
 } g_state;
-
-constexpr size_t kActorPositionXOffset = 0x18;
-constexpr size_t kActorPositionYOffset = 0x1C;
-constexpr size_t kEnemyDeathHandledOffset = 0x1AC;
-constexpr size_t kEnemyConfigOffset = 0x1D0;
-constexpr size_t kEnemyTypeOffset = 0x4C;
-constexpr size_t kProgressionLevelOffset = 0x30;
-constexpr size_t kProgressionXpOffset = 0x34;
-constexpr size_t kSpellDirectionXOffset = 0x158;
-constexpr size_t kSpellDirectionYOffset = 0x15C;
 constexpr std::uint64_t kSpellCastClickWindowMs = 400;
 constexpr char kUnknownKillMethod[] = "unknown";
-constexpr uintptr_t kGoldGlobal = 0x0081A388;
 constexpr char kGoldSourcePickup[] = "pickup";
 constexpr char kGoldSourceSpend[] = "spend";
 constexpr char kGoldSourceScript[] = "script";
 constexpr char kGoldSourceUnknown[] = "unknown";
 constexpr char kDropKindGold[] = "gold";
 
-constexpr uintptr_t kGoldPickupCaller = 0x005E66B0;
-constexpr uintptr_t kGoldSpendCaller = 0x0056BF70;
-constexpr uintptr_t kGoldShopCaller = 0x0056C340;
-constexpr uintptr_t kGoldMirrorCaller = 0x0055FAF0;
-constexpr uintptr_t kGoldScriptCaller = 0x00689750;
+void BuildHookTargets(HookTarget* targets) {
+    if (targets == nullptr) {
+        return;
+    }
+
+    targets[kHookCreateArena] = {kArenaCreate, 6};      // "Create New ARENA" virtual method
+    targets[kHookStartGame] = {kStartGame, 7};          // "on START GAME" menu-initiated
+    targets[kHookRunEnded] = {kRunEnded, 7};            // GameOver trigger (__cdecl)
+    targets[kHookWaveSpawnerTick] = {kWaveSpawnerTick, 6};
+    targets[kHookEnemySpawned] = {kSpawnEnemy, 7};
+    targets[kHookEnemyDeath] = {kEnemyDeath, 10};
+    targets[kHookSpellCast3EB] = {kSpellCast3EB, 8};
+    targets[kHookSpellCast018] = {kSpellCast018, 8};
+    targets[kHookSpellCast020] = {kSpellCast020, 8};
+    targets[kHookSpellCast028] = {kSpellCast028, 7};
+    targets[kHookSpellCast3EC] = {kSpellCast3EC, 8};
+    targets[kHookSpellCast3ED] = {kSpellCast3ED, 8};
+    targets[kHookSpellCast3EE] = {kSpellCast3EE, 8};
+    targets[kHookSpellCast3EF] = {kSpellCast3EF, 7};
+    targets[kHookSpellCast3F0] = {kSpellCast3F0, 7};
+    targets[kHookGoldChanged] = {kGoldChanged, 9};
+    targets[kHookDropSpawned] = {kSpawnRewardGold, 7};
+    targets[kHookLevelUp] = {kLevelUp, 6};
+}
 
 bool IsRunActive() {
     return g_state.run_active.load(std::memory_order_acquire);
@@ -493,26 +470,13 @@ bool InitializeRunLifecycleHooks(std::string* error_message) {
     if (error_message != nullptr) error_message->clear();
     if (g_state.initialized) return true;
 
-    constexpr HookTarget targets[] = {
-        kCreateArena,
-        kStartGame,
-        kRunEnded,
-        kWaveSpawnerTick,
-        kEnemySpawned,
-        kEnemyDeath,
-        kSpellCast3EB,
-        kSpellCast018,
-        kSpellCast020,
-        kSpellCast028,
-        kSpellCast3EC,
-        kSpellCast3ED,
-        kSpellCast3EE,
-        kSpellCast3EF,
-        kSpellCast3F0,
-        kGoldChanged,
-        kDropSpawned,
-        kLevelUp,
-    };
+    if (!InitializeGameplaySeams(error_message)) {
+        return false;
+    }
+
+    HookTarget targets[kHookCount] = {};
+    BuildHookTargets(targets);
+
     uintptr_t resolved[kHookCount] = {};
     for (size_t i = 0; i < kHookCount; ++i) {
         resolved[i] = ProcessMemory::Instance().ResolveGameAddressOrZero(targets[i].address);

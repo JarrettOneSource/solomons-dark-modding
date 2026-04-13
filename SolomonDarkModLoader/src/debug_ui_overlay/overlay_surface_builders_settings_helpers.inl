@@ -389,7 +389,10 @@ bool TryIsCustomizeKeyboardRolloutExpanded(
     }
 
     uintptr_t owner_context_settings_address = 0;
-    (void)TryReadResolvedGamePointer(0x0081C264, &owner_context_settings_address);
+    const auto owner_context_global_address = GetUiSurfaceAddress("settings", "owner_context_global");
+    if (owner_context_global_address != 0) {
+        (void)TryReadResolvedGamePointer(owner_context_global_address, &owner_context_settings_address);
+    }
     const auto normalized_target_label = NormalizeSemanticUiToken("CUSTOMIZE KEYBOARD");
 
     for (const auto root_control : root_controls) {
@@ -413,7 +416,9 @@ bool TryIsCustomizeKeyboardRolloutExpanded(
 
         const auto rollout_child_control = child_controls[2];
         std::uint8_t rollout_child_enabled = 0xff;
-        if (!TryReadByteValueDirect(rollout_child_control + 0x35, &rollout_child_enabled)) {
+        if (!TryReadByteValueDirect(
+                rollout_child_control + config.settings_control_enabled_byte_offset,
+                &rollout_child_enabled)) {
             return false;
         }
 
@@ -432,4 +437,3 @@ bool TryIsCustomizeKeyboardRolloutExpanded(
 
     return false;
 }
-

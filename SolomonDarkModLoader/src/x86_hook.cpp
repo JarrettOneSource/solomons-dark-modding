@@ -1,6 +1,8 @@
 #include "x86_hook.h"
+#include "third_party/hde32.h"
 
 #include <cstring>
+#include <sstream>
 
 namespace sdmod {
 namespace {
@@ -30,9 +32,33 @@ bool WriteRelativeJump(void* location, const void* destination, std::string* err
     return true;
 }
 
-}  // namespace
+std::string FormatProtectFlags(DWORD protect) {
+    std::ostringstream out;
+    out << "0x" << std::hex << std::uppercase << protect;
+    return out.str();
+}
 
-bool InstallX86Hook(void* target, void* detour, size_t patch_size, X86Hook* hook, std::string* error_message) {
+std::string BuildVirtualProtectFailureDetail(void* target, size_t patch_size, DWORD last_error) {
+    MEMORY_BASIC_INFORMATION info = {};
+    std::ostringstream out;
+    out << "VirtualProtect failed while patching the target function."
+        << " gle=" << last_error
+        << " target=0x" << std::hex << std::uppercase << reinterpret_cast<std::uintptr_t>(target)
+        << " size=0x" << patch_size;
+    if (VirtualQuery(target, &info, sizeof(info)) == sizeof(info)) {
+        out << " region_base=0x" << reinterpret_cast<std::uintptr_t>(info.BaseAddress)
+            << " region_size=0x" << info.RegionSize
+            << " state=" << FormatProtectFlags(info.State)
+            << " protect=" << FormatProtectFlags(info.Protect)
+            << " alloc_protect=" << FormatProtectFlags(info.AllocationProtect)
+            << " type=" << FormatProtectFlags(info.Type);
+    } else {
+        out << " region_query_failed";
+    }
+    return out.str();
+}
+
+bool InstallX86HookResolved(void* target, void* detour, size_t patch_size, X86Hook* hook, std::string* error_message) {
     if (hook == nullptr) {
         if (error_message != nullptr) {
             *error_message = "Hook destination was null.";
@@ -59,9 +85,9 @@ bool InstallX86Hook(void* target, void* detour, size_t patch_size, X86Hook* hook
     hook->detour = detour;
     hook->patch_size = patch_size;
 
-    std::memcpy(hook->original_bytes.data(), target, patch_size);
+    std::memcpy(hook->original_bytes.data(), target, hook->patch_size);
 
-    const auto trampoline_size = patch_size + 5;
+    const auto trampoline_size = hook->patch_size + 5;
     auto* trampoline = static_cast<std::uint8_t*>(
         VirtualAlloc(nullptr, trampoline_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
     if (trampoline == nullptr) {
@@ -71,19 +97,22 @@ bool InstallX86Hook(void* target, void* detour, size_t patch_size, X86Hook* hook
         return false;
     }
 
-    std::memcpy(trampoline, hook->original_bytes.data(), patch_size);
-    if (!WriteRelativeJump(trampoline + patch_size, static_cast<std::uint8_t*>(target) + patch_size, error_message)) {
+    std::memcpy(trampoline, hook->original_bytes.data(), hook->patch_size);
+    if (!WriteRelativeJump(
+            trampoline + hook->patch_size,
+            static_cast<std::uint8_t*>(target) + hook->patch_size,
+            error_message)) {
         VirtualFree(trampoline, 0, MEM_RELEASE);
         return false;
     }
     hook->trampoline = trampoline;
 
     DWORD old_protection = 0;
-    if (!VirtualProtect(target, patch_size, PAGE_EXECUTE_READWRITE, &old_protection)) {
+    if (!VirtualProtect(target, hook->patch_size, PAGE_EXECUTE_READWRITE, &old_protection)) {
         hook->trampoline = nullptr;
         VirtualFree(trampoline, 0, MEM_RELEASE);
         if (error_message != nullptr) {
-            *error_message = "VirtualProtect failed while patching the target function.";
+            *error_message = BuildVirtualProtectFailureDetail(target, hook->patch_size, GetLastError());
         }
         return false;
     }
@@ -91,25 +120,84 @@ bool InstallX86Hook(void* target, void* detour, size_t patch_size, X86Hook* hook
     auto* target_bytes = static_cast<std::uint8_t*>(target);
     const auto restore_protection = [&]() {
         DWORD ignored = 0;
-        VirtualProtect(target, patch_size, old_protection, &ignored);
-        FlushInstructionCache(GetCurrentProcess(), target, patch_size);
+        VirtualProtect(target, hook->patch_size, old_protection, &ignored);
+        FlushInstructionCache(GetCurrentProcess(), target, hook->patch_size);
     };
 
     if (!WriteRelativeJump(target, detour, error_message)) {
-        std::memcpy(target_bytes, hook->original_bytes.data(), patch_size);
+        std::memcpy(target_bytes, hook->original_bytes.data(), hook->patch_size);
         restore_protection();
         hook->trampoline = nullptr;
         VirtualFree(trampoline, 0, MEM_RELEASE);
         return false;
     }
 
-    for (size_t index = 5; index < patch_size; ++index) {
+    for (size_t index = 5; index < hook->patch_size; ++index) {
         target_bytes[index] = 0x90;
     }
 
     restore_protection();
     hook->installed = true;
     return true;
+}
+
+}  // namespace
+
+size_t ResolveX86HookPatchSize(void* target, size_t minimum_patch_size, std::string* error_message) {
+    if (target == nullptr || minimum_patch_size < 5 || minimum_patch_size > 16) {
+        if (error_message != nullptr) {
+            *error_message = "Hook patch size must be between 5 and 16 bytes.";
+        }
+        return 0;
+    }
+
+    auto* const bytes = static_cast<const std::uint8_t*>(target);
+    size_t total_size = 0;
+    while (total_size < minimum_patch_size) {
+        hde32s hs = {};
+        const auto length = static_cast<size_t>(hde32_disasm(bytes + total_size, &hs));
+        if (length == 0 || (hs.flags & F_ERROR) != 0) {
+            if (error_message != nullptr) {
+                std::ostringstream out;
+                out << "Instruction decode failed at +0x" << std::hex << std::uppercase << total_size
+                    << " flags=0x" << hs.flags;
+                *error_message = out.str();
+            }
+            return 0;
+        }
+
+        if ((hs.flags & F_RELATIVE) != 0) {
+            if (error_message != nullptr) {
+                std::ostringstream out;
+                out << "Relative control-flow instruction in hook prologue at +0x"
+                    << std::hex << std::uppercase << total_size;
+                *error_message = out.str();
+            }
+            return 0;
+        }
+
+        total_size += length;
+        if (total_size > 16) {
+            if (error_message != nullptr) {
+                *error_message = "Hook patch would exceed the 16-byte trampoline buffer.";
+            }
+            return 0;
+        }
+    }
+
+    return total_size;
+}
+
+bool InstallX86Hook(void* target, void* detour, size_t patch_size, X86Hook* hook, std::string* error_message) {
+    return InstallX86HookResolved(target, detour, patch_size, hook, error_message);
+}
+
+bool InstallSafeX86Hook(void* target, void* detour, size_t minimum_patch_size, X86Hook* hook, std::string* error_message) {
+    const auto safe_patch_size = ResolveX86HookPatchSize(target, minimum_patch_size, error_message);
+    if (safe_patch_size == 0) {
+        return false;
+    }
+    return InstallX86HookResolved(target, detour, safe_patch_size, hook, error_message);
 }
 
 void RemoveX86Hook(X86Hook* hook) {

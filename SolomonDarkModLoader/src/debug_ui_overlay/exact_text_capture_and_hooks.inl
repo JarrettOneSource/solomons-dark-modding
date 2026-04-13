@@ -315,7 +315,14 @@ void ObserveActiveExactTextGlyph(float glyph_offset_x, float glyph_offset_y) {
     float base_x = 0.0f;
     float base_y = 0.0f;
     const auto* render_context = reinterpret_cast<const void*>(render_context_address);
-    if (!TryReadPlainField(render_context, 0x238, &base_x) || !TryReadPlainField(render_context, 0x23c, &base_y)) {
+    if (!TryReadPlainField(
+            render_context,
+            g_debug_ui_overlay_state.config.ui_render_context_base_x_offset,
+            &base_x) ||
+        !TryReadPlainField(
+            render_context,
+            g_debug_ui_overlay_state.config.ui_render_context_base_y_offset,
+            &base_y)) {
         return;
     }
 

@@ -287,6 +287,23 @@ bool LoadBinaryLayoutFromDisk(
 
         if (StartsWith(section_name, "action.")) {
             parsed_layout.ui_actions.push_back(BuildUiActionDefinition(section_name, properties));
+            continue;
+        }
+
+        if (section_name == "binary") {
+            continue;
+        }
+
+        auto& numeric_section = parsed_layout.numeric_sections[section_name];
+        for (const auto& [key, value] : properties) {
+            const auto parsed = TryParseAddress(value);
+            if (parsed.has_value()) {
+                numeric_section[key] = *parsed;
+            }
+        }
+
+        if (numeric_section.empty()) {
+            parsed_layout.numeric_sections.erase(section_name);
         }
     }
 

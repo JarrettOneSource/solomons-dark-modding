@@ -5,7 +5,11 @@ param(
     [string]$Code,
 
     [Parameter(Mandatory = $false)]
-    [switch]$Interactive
+    [switch]$Interactive,
+
+    [Parameter(ValueFromPipeline = $true)]
+    [AllowEmptyString()]
+    [string[]]$InputObject
 )
 
 Set-StrictMode -Version Latest
@@ -13,8 +17,6 @@ $ErrorActionPreference = 'Stop'
 
 $pipeName = 'SolomonDarkModLoader_LuaExec'
 $utf8 = [System.Text.UTF8Encoding]::new($false)
-$pipedChunks = [System.Collections.Generic.List[string]]::new()
-
 function Invoke-LuaExecCode {
     param(
         [Parameter(Mandatory = $true)]
@@ -195,55 +197,86 @@ function Invoke-LuaExecInteractive {
     }
 }
 
-try {
-    foreach ($chunk in $input) {
-        $pipedChunks.Add([string]$chunk)
-    }
+function Invoke-LuaExecMain {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyString()]
+        [string]$Code,
 
-    $hasCode = $PSBoundParameters.ContainsKey('Code')
-    $hasPipelineInput = $pipedChunks.Count -gt 0
-    $hasRedirectedInput = [Console]::IsInputRedirected
+        [Parameter(Mandatory = $false)]
+        [switch]$Interactive,
 
-    if ($Interactive) {
-        if ($hasCode -or $hasPipelineInput -or $hasRedirectedInput) {
-            throw 'Interactive mode does not accept -Code or piped input.'
+        [AllowEmptyString()]
+        [string[]]$InputObject
+    )
+
+    try {
+        $pipedChunks = [System.Collections.Generic.List[string]]::new()
+        if ($null -ne $InputObject) {
+            foreach ($chunk in $InputObject) {
+                $pipedChunks.Add($chunk)
+            }
         }
 
-        Invoke-LuaExecInteractive
-        return
-    }
+        $hasCode = $PSBoundParameters.ContainsKey('Code')
+        $hasPipelineInput = $pipedChunks.Count -gt 0
+        $hasRedirectedInput = [Console]::IsInputRedirected
 
-    if ($hasCode) {
-        Write-LuaExecResponse -Text (Invoke-LuaExecCode -LuaCode $Code)
-        return
-    }
+        if ($Interactive) {
+            if ($hasCode -or $hasPipelineInput -or $hasRedirectedInput) {
+                throw 'Interactive mode does not accept -Code or piped input.'
+            }
 
-    if ($hasPipelineInput) {
-        Write-LuaExecResponse -Text (Invoke-LuaExecCode -LuaCode ($pipedChunks -join [Environment]::NewLine))
-        return
-    }
-
-    if ($hasRedirectedInput) {
-        $stdin = [Console]::In.ReadToEnd()
-        if ([string]::IsNullOrWhiteSpace($stdin)) {
+            Invoke-LuaExecInteractive
             return
         }
 
-        Write-LuaExecResponse -Text (Invoke-LuaExecCode -LuaCode $stdin)
-        return
-    }
+        if ($hasCode) {
+            Write-LuaExecResponse -Text (Invoke-LuaExecCode -LuaCode $Code)
+            return
+        }
 
-    throw 'No Lua code provided. Use -Code, -Interactive, or pipe input.'
-} catch {
-    $message = $_.Exception.Message
-    if ([string]::IsNullOrWhiteSpace($message)) {
-        $message = 'Lua exec failed.'
-    }
+        if ($hasPipelineInput) {
+            Write-LuaExecResponse -Text (Invoke-LuaExecCode -LuaCode ($pipedChunks -join [Environment]::NewLine))
+            return
+        }
 
-    if (-not $message.StartsWith('ERROR:', [System.StringComparison]::OrdinalIgnoreCase)) {
-        $message = "ERROR: $message"
-    }
+        if ($hasRedirectedInput) {
+            $stdin = [Console]::In.ReadToEnd()
+            if ([string]::IsNullOrWhiteSpace($stdin)) {
+                return
+            }
 
-    [Console]::Error.WriteLine($message)
-    exit 1
+            Write-LuaExecResponse -Text (Invoke-LuaExecCode -LuaCode $stdin)
+            return
+        }
+
+        throw 'No Lua code provided. Use -Code, -Interactive, or pipe input.'
+    } catch {
+        $message = $_.Exception.Message
+        if ([string]::IsNullOrWhiteSpace($message)) {
+            $message = 'Lua exec failed.'
+        }
+
+        if (-not $message.StartsWith('ERROR:', [System.StringComparison]::OrdinalIgnoreCase)) {
+            $message = "ERROR: $message"
+        }
+
+        [Console]::Error.WriteLine($message)
+        exit 1
+    }
 }
+
+$invokeParams = @{}
+if ($PSBoundParameters.ContainsKey('Code')) {
+    $invokeParams.Code = $Code
+}
+if ($Interactive) {
+    $invokeParams.Interactive = $true
+}
+if ($PSBoundParameters.ContainsKey('InputObject')) {
+    $invokeParams.InputObject = $InputObject
+}
+
+Invoke-LuaExecMain @invokeParams

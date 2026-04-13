@@ -24,6 +24,7 @@ struct BotCreateRequest {
     std::int32_t wizard_id = 0;
     bool ready = false;
     bool has_transform = false;
+    bool has_heading = false;
     float position_x = 0.0f;
     float position_y = 0.0f;
     float heading = 0.0f;
@@ -39,6 +40,7 @@ struct BotUpdateRequest {
     bool has_ready = false;
     bool ready = false;
     bool has_transform = false;
+    bool has_heading = false;
     float position_x = 0.0f;
     float position_y = 0.0f;
     float heading = 0.0f;
@@ -70,6 +72,15 @@ struct BotMovementIntentSnapshot {
     float target_x = 0.0f;
     float target_y = 0.0f;
     float distance_to_target = 0.0f;
+};
+
+struct BotEquipVisualLaneState {
+    uintptr_t wrapper_address = 0;
+    uintptr_t holder_address = 0;
+    uintptr_t current_object_address = 0;
+    std::uint32_t holder_kind = 0;
+    uintptr_t current_object_vtable = 0;
+    std::uint32_t current_object_type_id = 0;
 };
 
 struct BotSnapshot {
@@ -122,6 +133,9 @@ struct BotSnapshot {
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;
+    BotEquipVisualLaneState primary_visual_lane;
+    BotEquipVisualLaneState secondary_visual_lane;
+    BotEquipVisualLaneState attachment_visual_lane;
     BotControllerState state = BotControllerState::Idle;
     bool moving = false;
     bool has_target = false;

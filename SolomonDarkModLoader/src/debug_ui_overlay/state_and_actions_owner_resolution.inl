@@ -48,38 +48,48 @@ void MaybeLogSettingsControlsLiveState(
         return;
     }
 
+    const auto* config = TryGetDebugUiOverlayConfig();
     uintptr_t owner_vftable = 0;
     uintptr_t owner_child_list = 0;
-    uintptr_t owner_selected_child = 0;
     uintptr_t callback_owner = 0;
     uintptr_t callback_owner_vftable = 0;
-    uintptr_t callback_owner_slot_cc = 0;
+    uintptr_t callback_owner_action_slot = 0;
     std::uint32_t owner_child_count = 0;
-    std::uint8_t owner_e4 = 0;
     uintptr_t matched_child_base_address = 0;
     uintptr_t dispatch_control_address = 0;
-    std::uint8_t child_34 = 0;
-    std::uint8_t child_35 = 0;
+    std::uint8_t child_enabled = 0xff;
     uintptr_t child_vftable = 0;
     std::string owner_child_states;
-    constexpr uintptr_t kSettingsOwnerGlobalAddress = 0x0081C264;
-    constexpr uintptr_t kSettingsOwnerAltGlobalAddress1 = 0x008203EC;
-    constexpr uintptr_t kSettingsOwnerAltGlobalAddress2 = 0x008203E8;
+    const auto settings_owner_global_address = GetUiSurfaceAddress("settings", "owner_global");
+    const auto settings_owner_alt_global_address_1 = GetUiSurfaceAddress("settings", "owner_alt_global_1");
+    const auto settings_owner_alt_global_address_2 = GetUiSurfaceAddress("settings", "owner_alt_global_2");
 
     if (owner_control_address != 0) {
         (void)TryReadPointerValueDirect(owner_control_address, &owner_vftable);
-        (void)TryReadUInt32ValueDirect(owner_control_address + 0xF0, &owner_child_count);
-        (void)TryReadPointerValueDirect(owner_control_address + 0xFC, &owner_child_list);
-        (void)TryReadByteValueDirect(owner_control_address + 0xE4, &owner_e4);
-        (void)TryReadPointerValueDirect(owner_control_address + 0x100, &owner_selected_child);
-        if (TryReadPointerValueDirect(owner_control_address + 0xC4, &callback_owner) && callback_owner != 0) {
-            (void)TryReadPointerValueDirect(callback_owner, &callback_owner_vftable);
-            if (callback_owner_vftable != 0) {
-                (void)TryReadPointerValueDirect(callback_owner_vftable + 0xCC, &callback_owner_slot_cc);
+        if (config != nullptr) {
+            (void)TryReadUInt32ValueDirect(
+                owner_control_address + config->settings_control_child_count_offset,
+                &owner_child_count);
+            (void)TryReadPointerValueDirect(
+                owner_control_address + config->settings_control_child_list_offset,
+                &owner_child_list);
+            if (TryReadPointerValueDirect(
+                    owner_control_address + config->settings_control_callback_owner_offset,
+                    &callback_owner) &&
+                callback_owner != 0) {
+                (void)TryReadPointerValueDirect(callback_owner, &callback_owner_vftable);
+                if (callback_owner_vftable != 0) {
+                    (void)TryReadPointerValueDirect(
+                        callback_owner_vftable + config->ui_owner_control_action_vtable_byte_offset,
+                        &callback_owner_action_slot);
+                }
             }
         }
 
-        if (owner_child_list != 0 && owner_child_count != 0) {
+        if (config != nullptr &&
+            owner_child_list != 0 &&
+            owner_child_count != 0 &&
+            config->settings_control_dispatch_offset != 0) {
             const std::uint32_t max_logged_children = (owner_child_count < 8u) ? owner_child_count : 8u;
             owner_child_states.reserve(static_cast<std::size_t>(max_logged_children) * 48u);
 
@@ -90,18 +100,19 @@ void MaybeLogSettingsControlsLiveState(
                     continue;
                 }
 
-                const uintptr_t candidate_dispatch = candidate_child + 0x64;
-                std::uint8_t candidate_34 = 0;
-                std::uint8_t candidate_35 = 0;
-                (void)TryReadByteValueDirect(candidate_child + 0x34, &candidate_34);
-                (void)TryReadByteValueDirect(candidate_child + 0x35, &candidate_35);
+                const uintptr_t candidate_dispatch =
+                    candidate_child + config->settings_control_dispatch_offset;
+                std::uint8_t candidate_enabled = 0xff;
+                (void)TryReadByteValueDirect(
+                    candidate_child + config->settings_control_enabled_byte_offset,
+                    &candidate_enabled);
 
                 if (!owner_child_states.empty()) {
                     owner_child_states += ";";
                 }
 
                 owner_child_states += std::to_string(index) + ":" + HexString(candidate_child) +
-                    "[" + std::to_string(candidate_34) + "/" + std::to_string(candidate_35) + "]" +
+                    "[" + std::to_string(candidate_enabled) + "]" +
                     "->" + HexString(candidate_dispatch);
 
                 if (candidate_child == child_control_address) {
@@ -126,73 +137,20 @@ void MaybeLogSettingsControlsLiveState(
 
     if (matched_child_base_address == 0 && child_control_address != 0) {
         matched_child_base_address = child_control_address;
-        dispatch_control_address = child_control_address + 0x64;
+        dispatch_control_address =
+            config != nullptr
+                ? child_control_address + config->settings_control_dispatch_offset
+                : child_control_address;
     }
 
     if (matched_child_base_address != 0) {
         (void)TryReadPointerValueDirect(matched_child_base_address, &child_vftable);
-        (void)TryReadByteValueDirect(matched_child_base_address + 0x34, &child_34);
-        (void)TryReadByteValueDirect(matched_child_base_address + 0x35, &child_35);
-    }
-
-    auto format_settings_object_probe = [&](uintptr_t object_address) {
-        if (object_address == 0) {
-            return std::string("null");
+        if (config != nullptr) {
+            (void)TryReadByteValueDirect(
+                matched_child_base_address + config->settings_control_enabled_byte_offset,
+                &child_enabled);
         }
-
-        std::string probe = HexString(object_address);
-
-        uintptr_t object_vftable = 0;
-        probe += "{vft=" +
-            std::string(TryReadPointerValueDirect(object_address, &object_vftable)
-                            ? HexString(object_vftable)
-                            : "unreadable");
-
-        const auto append_pointer_field = [&](std::string_view field_name, uintptr_t field_offset) {
-            uintptr_t field_value = 0;
-            probe +=
-                " " + std::string(field_name) + "=" +
-                std::string(TryReadPointerValueDirect(object_address + field_offset, &field_value)
-                                ? HexString(field_value)
-                                : "unreadable");
-        };
-
-        const auto append_uint_field = [&](std::string_view field_name, uintptr_t field_offset) {
-            std::uint32_t field_value = 0;
-            probe +=
-                " " + std::string(field_name) + "=" +
-                std::string(TryReadUInt32ValueDirect(object_address + field_offset, &field_value)
-                                ? std::to_string(field_value)
-                                : "unreadable");
-        };
-
-        const auto append_byte_field = [&](std::string_view field_name, uintptr_t field_offset) {
-            std::uint8_t field_value = 0;
-            probe +=
-                " " + std::string(field_name) + "=" +
-                std::string(TryReadByteValueDirect(object_address + field_offset, &field_value)
-                                ? std::to_string(field_value)
-                                : "unreadable");
-        };
-
-        append_pointer_field("slot_22c", 0x22C);
-        append_uint_field("flags_290", 0x290);
-        append_pointer_field("slot_2ec", 0x2EC);
-        append_uint_field("flags_350", 0x350);
-        append_pointer_field("slot_d4c", 0xD4C);
-        append_uint_field("flags_db0", 0xDB0);
-        append_pointer_field("source_15a0", 0x15A0);
-        append_pointer_field("source_1654", 0x1654);
-        append_pointer_field("result_1664", 0x1664);
-        append_byte_field("flag_1ac0", 0x1AC0);
-        append_byte_field("flag_1ac1", 0x1AC1);
-        append_byte_field("flag_1ac2", 0x1AC2);
-        append_byte_field("flag_1ac3", 0x1AC3);
-        append_byte_field("flag_1ac4", 0x1AC4);
-        append_byte_field("flag_1cd5", 0x1CD5);
-        probe += "}";
-        return probe;
-    };
+    }
 
     auto format_settings_global_probe = [&](std::string_view field_name, uintptr_t global_address) {
         const auto resolved_global_address =
@@ -206,9 +164,6 @@ void MaybeLogSettingsControlsLiveState(
             "{abs=" + HexString(global_address) +
             " resolved=" + HexString(resolved_global_address) +
             " value=" + (has_global_value ? HexString(global_value) : std::string("unreadable"));
-        if (has_global_value && global_value != 0) {
-            probe += " object=" + format_settings_object_probe(global_value);
-        }
         probe += "}";
         return probe;
     };
@@ -216,24 +171,20 @@ void MaybeLogSettingsControlsLiveState(
     std::string message =
         "Debug UI settings.controls live state: reason=" + std::string(reason) +
         " settings=" + HexString(settings_address) +
-        " settings_object=" + format_settings_object_probe(settings_address) +
-        " " + format_settings_global_probe("global_81c264", kSettingsOwnerGlobalAddress) +
-        " " + format_settings_global_probe("global_8203ec", kSettingsOwnerAltGlobalAddress1) +
-        " " + format_settings_global_probe("global_8203e8", kSettingsOwnerAltGlobalAddress2) +
+        " " + format_settings_global_probe("owner_global", settings_owner_global_address) +
+        " " + format_settings_global_probe("owner_alt_global_1", settings_owner_alt_global_address_1) +
+        " " + format_settings_global_probe("owner_alt_global_2", settings_owner_alt_global_address_2) +
         " owner=" + HexString(owner_control_address) +
         " owner_vftable=" + HexString(owner_vftable) +
         " owner_child_count=" + std::to_string(owner_child_count) +
         " owner_child_list=" + HexString(owner_child_list) +
-        " owner_e4=" + std::to_string(owner_e4) +
-        " owner_100=" + HexString(owner_selected_child) +
         " callback_owner=" + HexString(callback_owner) +
         " callback_owner_vftable=" + HexString(callback_owner_vftable) +
-        " callback_owner_slot_cc=" + HexString(callback_owner_slot_cc) +
+        " callback_owner_action_slot=" + HexString(callback_owner_action_slot) +
         " child_input=" + HexString(child_control_address) +
         " child=" + HexString(matched_child_base_address) +
         " child_vftable=" + HexString(child_vftable) +
-        " child_34=" + std::to_string(child_34) +
-        " child_35=" + std::to_string(child_35) +
+        " child_enabled=" + std::to_string(child_enabled) +
         " dispatch_control=" + HexString(dispatch_control_address) +
         " owner_children=" + owner_child_states +
         " label=" + SanitizeSettingsLiveStateLabel(label) +
@@ -655,34 +606,11 @@ bool TryResolvePreferredUiActionOwnerAddress(
 
             for (const auto& [source, candidate_address] : candidates) {
                 uintptr_t candidate_vftable = 0;
-                uintptr_t login_button_vftable = 0;
-                uintptr_t controls_button_vftable = 0;
-                uintptr_t tweak_button_vftable = 0;
-                uintptr_t controls_guard_pointer = 0;
-                uintptr_t controls_modal_pointer = 0;
-                uintptr_t controls_source_pointer = 0;
-                uintptr_t controls_result_pointer = 0;
                 (void)TryReadPointerValueDirect(candidate_address, &candidate_vftable);
-                (void)TryReadPointerValueDirect(candidate_address + 0x22C, &login_button_vftable);
-                (void)TryReadPointerValueDirect(candidate_address + 0x2EC, &controls_button_vftable);
-                (void)TryReadPointerValueDirect(candidate_address + 0xD4C, &tweak_button_vftable);
-                (void)TryReadPointerValueDirect(candidate_address + 0x3A8, &controls_guard_pointer);
-                (void)TryReadPointerValueDirect(candidate_address + 0x15A0, &controls_modal_pointer);
-                (void)TryReadPointerValueDirect(candidate_address + 0x1654, &controls_source_pointer);
-                (void)TryReadPointerValueDirect(candidate_address + 0x1664, &controls_result_pointer);
-
                 probe_log +=
                     " " + source +
                     "=" + HexString(candidate_address) +
-                    "{vft=" + HexString(candidate_vftable) +
-                    " login_btn=" + HexString(login_button_vftable) +
-                    " controls_btn=" + HexString(controls_button_vftable) +
-                    " tweak_btn=" + HexString(tweak_button_vftable) +
-                    " guard=" + HexString(controls_guard_pointer) +
-                    " modal=" + HexString(controls_modal_pointer) +
-                    " source_1654=" + HexString(controls_source_pointer) +
-                    " result_1664=" + HexString(controls_result_pointer) +
-                    " expected_guard=" + HexString(candidate_address + 0x1AC1) + "}";
+                    "{vft=" + HexString(candidate_vftable) + "}";
             }
             Log(probe_log);
         }

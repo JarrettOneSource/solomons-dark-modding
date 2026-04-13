@@ -25,8 +25,6 @@ std::vector<OverlayRenderElement> TryBuildHallOfFameOverlayRenderElements(
             continue;
         }
 
-        const auto center_x = (element.min_x + element.max_x) * 0.5f;
-        const auto center_y = (element.min_y + element.max_y) * 0.5f;
         const auto overlaps_existing = std::any_of(
             render_elements.begin(),
             render_elements.end(),
@@ -402,4 +400,3 @@ std::vector<OverlayRenderElement> BuildDialogOverlayRenderElements(const DialogO
 
     return render_elements;
 }
-

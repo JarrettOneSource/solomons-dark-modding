@@ -216,4 +216,37 @@ bool ProcessMemory::IsWritableRange(uintptr_t address, size_t size) {
     return IsRangeAccessible(address, size, true);
 }
 
+bool ProcessMemory::IsExecutableRange(uintptr_t address, size_t size) {
+    if (address == 0 || size == 0) {
+        return false;
+    }
+
+    auto current = address;
+    auto remaining = size;
+    while (remaining > 0) {
+        MemoryRegionInfo region{};
+        if (!ResolveRegion(current, &region)) {
+            return false;
+        }
+
+        if (!region.committed || region.guarded || region.no_access || !region.executable) {
+            return false;
+        }
+
+        if (current < region.base || current >= region.end) {
+            return false;
+        }
+
+        const auto available = static_cast<size_t>(region.end - current);
+        if (available >= remaining) {
+            return true;
+        }
+
+        remaining -= available;
+        current = region.end;
+    }
+
+    return true;
+}
+
 }  // namespace sdmod

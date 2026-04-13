@@ -9,6 +9,15 @@
 
 namespace sdmod {
 
+struct SDModEquipVisualLaneState {
+    uintptr_t wrapper_address = 0;
+    uintptr_t holder_address = 0;
+    uintptr_t current_object_address = 0;
+    std::uint32_t holder_kind = 0;
+    uintptr_t current_object_vtable = 0;
+    std::uint32_t current_object_type_id = 0;
+};
+
 struct SDModPlayerState {
     bool valid = false;
     float hp = 0.0f;
@@ -63,6 +72,9 @@ struct SDModPlayerState {
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;
+    SDModEquipVisualLaneState primary_visual_lane;
+    SDModEquipVisualLaneState secondary_visual_lane;
+    SDModEquipVisualLaneState attachment_visual_lane;
 };
 
 struct SDModWorldState {
@@ -85,6 +97,15 @@ struct SDModSceneState {
     int pending_level_kind = 0;
     int transition_target_a = 0;
     int transition_target_b = 0;
+};
+
+struct SDModGameplaySelectionDebugState {
+    bool valid = false;
+    uintptr_t table_address = 0;
+    int entry_count = 0;
+    std::int32_t slot_selection_entries[4] = {};
+    std::int32_t player_selection_state_0 = 0;
+    std::int32_t player_selection_state_1 = 0;
 };
 
 struct SDModBotGameplayState {
@@ -132,6 +153,9 @@ struct SDModBotGameplayState {
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;
+    SDModEquipVisualLaneState primary_visual_lane;
+    SDModEquipVisualLaneState secondary_visual_lane;
+    SDModEquipVisualLaneState attachment_visual_lane;
 };
 
 void Initialize(HMODULE module_handle);
@@ -160,6 +184,7 @@ bool QueueWizardBotEntitySync(
     std::uint64_t bot_id,
     std::int32_t wizard_id,
     bool has_transform,
+    bool has_heading,
     float position_x,
     float position_y,
     float heading,
@@ -171,6 +196,7 @@ std::uint64_t GetRunLifecycleElapsedMilliseconds();
 bool TryGetPlayerState(SDModPlayerState* state);
 bool TryGetWorldState(SDModWorldState* state);
 bool TryGetSceneState(SDModSceneState* state);
+bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state);
 bool TryGetWizardBotGameplayState(std::uint64_t bot_id, SDModBotGameplayState* state);
 bool SpawnEnemyByType(int type_id, float x, float y, std::string* error_message);
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);

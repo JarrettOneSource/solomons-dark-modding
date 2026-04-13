@@ -36,12 +36,19 @@ bool TryReadStringObject(uintptr_t object_address, std::string* value) {
         return false;
     }
 
+    const auto* config = TryGetDebugUiOverlayConfig();
+    if (config == nullptr ||
+        config->string_object_text_pointer_offset == 0 ||
+        config->string_object_length_offset == 0) {
+        return false;
+    }
+
     auto& memory = ProcessMemory::Instance();
 
     std::uint32_t text_pointer = 0;
     std::uint32_t length = 0;
-    if (!memory.TryReadValue(object_address + 0x4, &text_pointer) ||
-        !memory.TryReadValue(object_address + 0x10, &length)) {
+    if (!memory.TryReadValue(object_address + config->string_object_text_pointer_offset, &text_pointer) ||
+        !memory.TryReadValue(object_address + config->string_object_length_offset, &length)) {
         return false;
     }
 
@@ -680,4 +687,3 @@ bool TryReadTranslatedMyQuickPanelBuilderWidgetRect(
     *bottom = panel_top + local_bottom;
     return IsPlausibleSurfaceWidgetRect(*left, *top, *right - *left, *bottom - *top);
 }
-

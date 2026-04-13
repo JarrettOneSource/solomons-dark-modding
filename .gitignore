@@ -1,6 +1,8 @@
 .codex
+.codex-venv/
 .venv-tools/
 .venv_capture/
+.venv-minidump/
 .vs/
 __pycache__/
 bin/
@@ -10,6 +12,9 @@ dist/
 runtime/
 screenshots/
 tools/procdump/
+screenshot*.png
+nul
+*/nul
 
 SolomonDarkModLauncher/bin/
 SolomonDarkModLauncher/obj/
@@ -32,3 +37,12 @@ SolomonDarkModLoader.zip
 C:*
 .[\\]runtime*
 .runtimeghidra-*
+
+# Local reverse-engineering project artifacts.
+*.gpr
+*.gpr.lock
+*.rep/
+*.gzf
+ghidra_project/
+ghidra_projects/
+pseudocode/

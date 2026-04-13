@@ -18,7 +18,12 @@ struct X86Hook {
     std::array<std::uint8_t, 16> original_bytes = {};
 };
 
+// Resolves a minimum requested patch size to a whole-instruction x86 prologue
+// size that the trampoline can safely copy. Returns 0 on failure.
+size_t ResolveX86HookPatchSize(void* target, size_t minimum_patch_size, std::string* error_message);
+
 bool InstallX86Hook(void* target, void* detour, size_t patch_size, X86Hook* hook, std::string* error_message);
+bool InstallSafeX86Hook(void* target, void* detour, size_t minimum_patch_size, X86Hook* hook, std::string* error_message);
 void RemoveX86Hook(X86Hook* hook);
 
 template <typename T>

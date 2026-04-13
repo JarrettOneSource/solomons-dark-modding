@@ -86,6 +86,15 @@
     <ClInclude Include="include\x86_hook.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\gameplay_seams.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\lua_exec_pipe.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -93,6 +102,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\scene_and_animation.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization.inl">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -119,6 +137,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\dllmain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gameplay_seams.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\logger.cpp">

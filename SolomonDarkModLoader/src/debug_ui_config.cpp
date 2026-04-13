@@ -581,7 +581,11 @@ bool ParseDebugUiOverlayConfig(
         return true;
     };
 
-    if (!parse_required_size("title_main_menu_button_array_offset", &parsed.title_main_menu_button_array_offset) ||
+    if (!parse_required_size("string_object_text_pointer_offset", &parsed.string_object_text_pointer_offset) ||
+        !parse_required_size("string_object_length_offset", &parsed.string_object_length_offset) ||
+        !parse_required_size("ui_render_context_base_x_offset", &parsed.ui_render_context_base_x_offset) ||
+        !parse_required_size("ui_render_context_base_y_offset", &parsed.ui_render_context_base_y_offset) ||
+        !parse_required_size("title_main_menu_button_array_offset", &parsed.title_main_menu_button_array_offset) ||
         !parse_required_size("title_main_menu_button_stride", &parsed.title_main_menu_button_stride) ||
         !parse_required_size("title_main_menu_button_count", &parsed.title_main_menu_button_count) ||
         !parse_required_size("title_main_menu_button_left_offset", &parsed.title_main_menu_button_left_offset) ||
@@ -615,6 +619,10 @@ bool ParseDebugUiOverlayConfig(
             &parsed.myquick_panel_builder_widget_entry_secondary_offset) ||
         !parse_required_size("myquick_panel_widget_parent_offset", &parsed.myquick_panel_widget_parent_offset) ||
         !parse_required_size("ui_widget_parent_offset", &parsed.ui_widget_parent_offset) ||
+        !parse_required_size("ui_rollout_parent_offset", &parsed.ui_rollout_parent_offset) ||
+        !parse_required_size(
+            "ui_owner_control_action_vtable_byte_offset",
+            &parsed.ui_owner_control_action_vtable_byte_offset) ||
         !parse_required_size("dark_cloud_browser_control_left_offset", &parsed.dark_cloud_browser_control_left_offset) ||
         !parse_required_size("dark_cloud_browser_control_top_offset", &parsed.dark_cloud_browser_control_top_offset) ||
         !parse_required_size("dark_cloud_browser_control_width_offset", &parsed.dark_cloud_browser_control_width_offset) ||
@@ -644,6 +652,36 @@ bool ParseDebugUiOverlayConfig(
         !parse_required_size(
             "dark_cloud_browser_footer_action_control_offset",
             &parsed.dark_cloud_browser_footer_action_control_offset) ||
+        !parse_required_size(
+            "dark_cloud_browser_modal_button_rollout_offset",
+            &parsed.dark_cloud_browser_modal_button_rollout_offset) ||
+        !parse_required_size(
+            "dark_cloud_browser_modal_header_group_left_offset",
+            &parsed.dark_cloud_browser_modal_header_group_left_offset) ||
+        !parse_required_size(
+            "dark_cloud_browser_modal_header_group_top_offset",
+            &parsed.dark_cloud_browser_modal_header_group_top_offset) ||
+        !parse_required_size(
+            "dark_cloud_browser_modal_header_group_width_offset",
+            &parsed.dark_cloud_browser_modal_header_group_width_offset) ||
+        !parse_required_size(
+            "dark_cloud_browser_modal_header_group_height_offset",
+            &parsed.dark_cloud_browser_modal_header_group_height_offset) ||
+        !parse_required_size(
+            "dark_cloud_browser_list_widget_offset",
+            &parsed.dark_cloud_browser_list_widget_offset) ||
+        !parse_required_size(
+            "dark_cloud_browser_list_widget_entry_count_offset",
+            &parsed.dark_cloud_browser_list_widget_entry_count_offset) ||
+        !parse_required_size(
+            "dark_cloud_browser_list_widget_max_visible_rows_offset",
+            &parsed.dark_cloud_browser_list_widget_max_visible_rows_offset) ||
+        !parse_required_size(
+            "dark_cloud_browser_list_widget_row_height_offset",
+            &parsed.dark_cloud_browser_list_widget_row_height_offset) ||
+        !parse_required_size(
+            "dark_cloud_browser_list_widget_row_data_base_offset",
+            &parsed.dark_cloud_browser_list_widget_row_data_base_offset) ||
         !parse_required_size("settings_control_list_count_offset", &parsed.settings_control_list_count_offset) ||
         !parse_required_size("settings_control_list_entries_offset", &parsed.settings_control_list_entries_offset) ||
         !parse_required_size("settings_control_child_count_offset", &parsed.settings_control_child_count_offset) ||
@@ -654,10 +692,21 @@ bool ParseDebugUiOverlayConfig(
         !parse_required_size("settings_control_height_offset", &parsed.settings_control_height_offset) ||
         !parse_required_size("settings_control_label_pointer_offset", &parsed.settings_control_label_pointer_offset) ||
         !parse_required_size("settings_control_label_enabled_offset", &parsed.settings_control_label_enabled_offset) ||
+        !parse_required_size("settings_control_enabled_byte_offset", &parsed.settings_control_enabled_byte_offset) ||
         !parse_required_size("settings_control_dispatch_offset", &parsed.settings_control_dispatch_offset) ||
+        !parse_required_size("settings_control_callback_owner_offset", &parsed.settings_control_callback_owner_offset) ||
         !parse_required_size("settings_done_button_control_offset", &parsed.settings_done_button_control_offset) ||
         !parse_required_address("settings_rollout_vftable", &parsed.settings_rollout_vftable) ||
         !parse_required_size("settings_rollout_dispatch_offset", &parsed.settings_rollout_dispatch_offset) ||
+        !parse_required_size(
+            "settings_controls_guard_pointer_offset",
+            &parsed.settings_controls_guard_pointer_offset) ||
+        !parse_required_size(
+            "settings_controls_expected_guard_offset",
+            &parsed.settings_controls_expected_guard_offset) ||
+        !parse_required_size("control_noarg_owner_offset", &parsed.control_noarg_owner_offset) ||
+        !parse_required_size("control_noarg_context_offset", &parsed.control_noarg_context_offset) ||
+        !parse_required_size("control_noarg_callback_offset", &parsed.control_noarg_callback_offset) ||
         !parse_required_size("settings_section_widget_left_offset", &parsed.settings_section_widget_left_offset) ||
         !parse_required_size("settings_section_widget_top_offset", &parsed.settings_section_widget_top_offset) ||
         !parse_required_size("settings_section_widget_width_offset", &parsed.settings_section_widget_width_offset) ||

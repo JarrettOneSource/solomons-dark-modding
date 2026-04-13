@@ -13,6 +13,7 @@ namespace sdmod::detail {
 
 void RegisterFunction(lua_State* state, lua_CFunction function, const char* name);
 std::string* SwapLuaPrintCaptureSink(std::string* sink);
+bool TryLuaValueToString(lua_State* state, int index, std::string* text, std::string* error_message);
 
 void RegisterLuaRuntimeBindings(lua_State* state);
 void RegisterLuaEventBindings(lua_State* state);

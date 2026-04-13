@@ -415,11 +415,12 @@ bool TryInvokeOwnerControlActionByControlAddress(
     if (action_name == "settings.controls" &&
         config != nullptr &&
         IsSettingsRolloutControl(*config, owner_address)) {
-        constexpr uintptr_t kSettingsControlsGuardPointerOffset = 0x3A8;
-        constexpr uintptr_t kSettingsControlsExpectedGuardOffset = 0x1AC1;
         uintptr_t guard_pointer = 0;
-        if (TryReadPointerValueDirect(owner_address + kSettingsControlsGuardPointerOffset, &guard_pointer)) {
-            const auto expected_guard_pointer = owner_address + kSettingsControlsExpectedGuardOffset;
+        if (TryReadPointerValueDirect(
+                owner_address + config->settings_controls_guard_pointer_offset,
+                &guard_pointer)) {
+            const auto expected_guard_pointer =
+                owner_address + config->settings_controls_expected_guard_offset;
 
             bool guard_pointer_is_readable = false;
             if (guard_pointer != 0) {
@@ -435,7 +436,7 @@ bool TryInvokeOwnerControlActionByControlAddress(
                 }
 
                 if (ProcessMemory::Instance().TryWriteValue(
-                        owner_address + kSettingsControlsGuardPointerOffset,
+                        owner_address + config->settings_controls_guard_pointer_offset,
                         repaired_guard_pointer)) {
                     static int s_settings_controls_guard_repair_logs_remaining = 8;
                     if (s_settings_controls_guard_repair_logs_remaining > 0) {
@@ -701,12 +702,21 @@ bool TryInvokeControlNoArgAction(
     uintptr_t app_address = 0;
     uintptr_t current_overlay_address = 0;
     uintptr_t current_overlay_vftable = 0;
+    const auto* config = TryGetDebugUiOverlayConfig();
+    const auto app_global_address = GetBinaryLayoutNumericValueOrZero("debug_ui.globals", "app");
+    const auto current_overlay_offset =
+        GetBinaryLayoutNumericValueOrZero("debug_ui.globals", "app_current_overlay_offset");
     (void)TryReadPointerValueDirect(control_address, &control_vftable);
-    (void)TryReadPointerValueDirect(control_address + 0x78, &control_owner);
-    (void)TryReadPointerValueDirect(control_address + 0x7C, &control_context);
-    (void)TryReadPointerValueDirect(control_address + 0xE8, &control_callback);
-    if (TryReadResolvedGamePointer(0x00B401A8, &app_address) && app_address != 0) {
-        (void)TryReadPointerValueDirect(app_address + 0xD7C, &current_overlay_address);
+    if (config != nullptr) {
+        (void)TryReadPointerValueDirect(control_address + config->control_noarg_owner_offset, &control_owner);
+        (void)TryReadPointerValueDirect(control_address + config->control_noarg_context_offset, &control_context);
+        (void)TryReadPointerValueDirect(control_address + config->control_noarg_callback_offset, &control_callback);
+    }
+    if (app_global_address != 0 &&
+        current_overlay_offset != 0 &&
+        TryReadResolvedGamePointer(app_global_address, &app_address) &&
+        app_address != 0) {
+        (void)TryReadPointerValueDirect(app_address + current_overlay_offset, &current_overlay_address);
         if (current_overlay_address != 0) {
             (void)TryReadPointerValueDirect(current_overlay_address, &current_overlay_vftable);
         }
@@ -742,4 +752,3 @@ bool TryInvokeControlNoArgAction(
 
     return dispatched;
 }
-

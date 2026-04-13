@@ -1,6 +1,7 @@
 #include "binary_layout.h"
 #include "debug_ui_config.h"
 #include "debug_ui_overlay.h"
+#include "gameplay_seams.h"
 #include "mod_loader.h"
 #include "mod_loader_internal.h"
 
@@ -149,6 +150,7 @@ void ShutdownPartialRuntime() {
     ShutdownSteamBootstrap();
     ShutdownLuaEngine();
     ShutdownDebugUiOverlayConfig();
+    ShutdownGameplaySeams();
     ShutdownBinaryLayout();
 }
 
@@ -161,6 +163,7 @@ void Initialize(HMODULE module_handle) {
     const auto stage_runtime_directory = GetStageRuntimeDirectory();
     std::filesystem::create_directories(stage_runtime_directory / "logs");
     InitializeLogger(stage_runtime_directory / "logs" / "solomondarkmodloader.log");
+    InstallCrashHandler(stage_runtime_directory / "logs" / "solomondarkmodloader.crash.log");
     ResetStartupStatus(stage_runtime_directory);
 
     StartupStatusSnapshot startup_status;
@@ -419,8 +422,10 @@ void Shutdown() {
     ShutdownSteamBootstrap();
     ShutdownLuaEngine();
     ShutdownDebugUiOverlayConfig();
+    ShutdownGameplaySeams();
     ShutdownBinaryLayout();
     FlushLogger();
+    ShutdownCrashHandler();
     ShutdownLogger();
     g_module_handle = nullptr;
     g_project_root.clear();

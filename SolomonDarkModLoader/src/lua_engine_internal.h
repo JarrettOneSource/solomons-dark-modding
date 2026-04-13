@@ -18,6 +18,7 @@ namespace detail {
 
 inline constexpr char kLuaLoadedModRegistryKey[] = "sdmod.loaded_mod";
 inline constexpr char kLuaEventHandlersRegistryKey[] = "sdmod.event_handlers";
+inline constexpr char kLuaSdRegistryKey[] = "sdmod.globals.sd";
 inline constexpr char kRuntimeTickEventName[] = "runtime.tick";
 inline constexpr char kRunStartedEventName[] = "run.started";
 inline constexpr char kRunEndedEventName[] = "run.ended";

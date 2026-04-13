@@ -216,8 +216,14 @@ std::vector<OverlayRenderElement> TryBuildSettingsOverlayRenderElements(
             std::uint32_t child_count = 0;
             uintptr_t child_list = 0;
             uintptr_t first_child = 0;
-            (void)TryReadPlainField(reinterpret_cast<const void*>(control_address), 0xF0, &child_count);
-            (void)TryReadPointerField(reinterpret_cast<const void*>(control_address), 0xFC, &child_list);
+            (void)TryReadPlainField(
+                reinterpret_cast<const void*>(control_address),
+                config->settings_control_child_count_offset,
+                &child_count);
+            (void)TryReadPointerField(
+                reinterpret_cast<const void*>(control_address),
+                config->settings_control_child_list_offset,
+                &child_list);
             if (child_list != 0) {
                 (void)TryReadPointerAt(child_list, &first_child);
             }
@@ -483,11 +489,15 @@ std::vector<OverlayRenderElement> TryBuildSettingsOverlayRenderElements(
             const auto callback_source_object =
                 resolved_action_owner_control != 0 ? resolved_action_owner_control : actionable_source_object;
             if (callback_source_object != 0 &&
-                TryReadPointerValueDirect(callback_source_object + 0xC4, &callback_owner) &&
+                TryReadPointerValueDirect(
+                    callback_source_object + config->settings_control_callback_owner_offset,
+                    &callback_owner) &&
                 callback_owner != 0) {
                 (void)TryReadPointerValueDirect(callback_owner, &callback_owner_vftable);
                 if (callback_owner_vftable != 0) {
-                    (void)TryReadPointerValueDirect(callback_owner_vftable + 0xCC, &callback_owner_slot_cc);
+                    (void)TryReadPointerValueDirect(
+                        callback_owner_vftable + config->ui_owner_control_action_vtable_byte_offset,
+                        &callback_owner_slot_cc);
                 }
             }
             Log(

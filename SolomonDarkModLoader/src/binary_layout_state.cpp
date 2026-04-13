@@ -5,6 +5,29 @@
 namespace sdmod {
 namespace {
 
+bool TryGetNumericValue(
+    const BinaryLayout& layout,
+    std::string_view section_id,
+    std::string_view key,
+    uintptr_t* value) {
+    if (value == nullptr) {
+        return false;
+    }
+
+    const auto section_it = layout.numeric_sections.find(std::string(section_id));
+    if (section_it == layout.numeric_sections.end()) {
+        return false;
+    }
+
+    const auto value_it = section_it->second.find(std::string(key));
+    if (value_it == section_it->second.end()) {
+        return false;
+    }
+
+    *value = value_it->second;
+    return true;
+}
+
 template <typename TDefinition>
 const TDefinition* FindDefinitionById(const std::vector<TDefinition>& definitions, std::string_view id) {
     for (const auto& definition : definitions) {
@@ -89,6 +112,16 @@ const UiActionDefinition* FindUiActionDefinition(std::string_view id) {
     }
 
     return FindDefinitionById(state.layout.ui_actions, id);
+}
+
+bool TryGetBinaryLayoutNumericValue(std::string_view section_id, std::string_view key, uintptr_t* value) {
+    auto& state = GetBinaryLayoutState();
+    std::scoped_lock lock(state.mutex);
+    if (!state.loaded) {
+        return false;
+    }
+
+    return TryGetNumericValue(state.layout, section_id, key, value);
 }
 
 uintptr_t GetConfiguredImageBase() {

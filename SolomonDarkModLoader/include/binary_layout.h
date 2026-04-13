@@ -34,6 +34,7 @@ struct BinaryLayout {
     std::string binary_name;
     std::string binary_version;
     uintptr_t image_base = 0;
+    std::map<std::string, std::map<std::string, uintptr_t>> numeric_sections;
     std::vector<UiSurfaceDefinition> ui_surfaces;
     std::vector<UiActionDefinition> ui_actions;
 };
@@ -47,6 +48,7 @@ std::string GetBinaryLayoutLoadError();
 
 const UiSurfaceDefinition* FindUiSurfaceDefinition(std::string_view id);
 const UiActionDefinition* FindUiActionDefinition(std::string_view id);
+bool TryGetBinaryLayoutNumericValue(std::string_view section_id, std::string_view key, uintptr_t* value);
 
 uintptr_t GetConfiguredImageBase();
 std::filesystem::path GetBinaryLayoutPath(const std::filesystem::path& stage_runtime_directory);

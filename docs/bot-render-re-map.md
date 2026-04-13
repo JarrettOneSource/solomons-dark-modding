@@ -1,32 +1,147 @@
 # Bot Render RE Map
 
-This note records the recovered Solomon Dark standalone wizard path now used by the loader for visible bot puppets.
+This note records the recovered Solomon Dark gameplay-slot wizard path now used by the loader for visible bot puppets.
+
+## Current Late-April 12 Read
+- High-confidence current state:
+  - the bad extra-prop / wrong-sprite-composition bug is no longer the active problem
+  - current remaining issue is robe/orb color correctness
+  - correct slot progression ids alone are not enough to fix that color path
+- Newly ruled-out branch:
+  - in a stable water-bot run, the bot's source-profile cloth payload was already blue
+  - actor-side selector windows also matched the stock player
+  - zeroing the bot-local equip runtime pointers (`actor +0x304`, `actor +0x1FC`) did not remove the orange orb lane
+  - so the remaining mismatch is not just “wrong wizard id” and not just “bot-local equip runtime exists”
+- New direct lane comparison result:
+  - stock player lane objects and bot lane objects can now be read directly from Lua
+  - attachment lane:
+    - player and bot both carry type `0x1B5C`
+    - they do **not** share the same live object
+    - their payload bytes differ early in the object head
+  - holder-kind/type ordering:
+    - stock player rails show `kind=1 -> type=0x1B5D`
+    - stock player rails show `kind=2 -> type=0x1B5E`
+    - the bot rails follow that same holder-kind/type ordering
+    - our current `primary` / `secondary` names are therefore likely reversed relative to stock semantics
+- Current investigation seam:
+  - follow the stock player's robe/hat/staff/orb objects through gameplay-owned sink holders and asset/model accessors
+  - do not start by watching raw `.bundle` memory pages
+- New rich item-path finding:
+  - `0x005E3080` is not the full stock orb/staff initialization path; it only creates a bare `0x1B5C` / `0x1B63` object and stores it at `actor +0x264`
+  - the richer stock item builder path is `0x004645B0` / `0x004699B0`
+  - `0x0046A360` proved `0x004699B0` is called as `cdecl` with one template-pointer argument
+  - a direct bot experiment using `0x004699B0(source_attachment)` was reverted because it regressed the bot attachment lane / frame
+  - the remaining unknown is the template record contract that feeds those richer builders during stock startup
+- New late-pass attachment finding:
+  - `TransferSourceActorAttachmentToTargetEquipVisualLane()` is not leaving a dangling pointer through source cleanup
+  - source cleanup logs now show the transferred `0x1B5C` attachment item head is byte-identical before and after `DestroyWizardCloneSourceActor()`
+  - that rules out temporary-source lifetime as the cause of the remaining orb mismatch
+  - the active root cause is narrower:
+    - the source-built `0x1B5C` created under `0x005E3080` is missing stock player-start state in the mid-object region
+    - full `0x88` snapshot diff against the player item shows missing/nonzero clusters around `+0x34`, `+0x50`, `+0x58`, `+0x6A..+0x73`, and `+0x7E..+0x85`
+    - robe/hat helper items already carry valid element-sensitive float4 blocks at `+0x88..+0xA4`
+    - so the remaining bug is attachment-item construction/finalization, not helper-item color seeding
+ - New player-vs-bot same-element result:
+ - controlled manual Air / Fire / Earth player runs showed the stock player helper float4s change per element, but same-element bots still do not match them
+  - the synthetic source-profile palette in `GetWizardElementColor()` was originally approximate and measurably wrong for Fire/Water/Earth/Air
+  - the source-profile path expects the **pre-transform** cloth color, while the measured stock player helper values are **post-transform**
+  - the stock helper transform is `helper = 0.2 * source + 0.8 * grayscale(source)` with grayscale weights `0.3086 / 0.6094 / 0.0820`
+  - after replacing `GetWizardElementColor()` with reconstructed pre-transform source values, a fresh Earth bot run produced helper float4s that matched the measured stock Earth helper colors exactly
+  - that fixes the helper-color side of the remaining visual mismatch
+ - New stock-clone result:
+  - a diagnostic call to `WizardCloneFromSourceActor` immediately after source descriptor build produced a clone attachment item that matched the source-built `0x1B5C`
+  - that means `0x0061AA00` is not the place where the stock player-start path adds the missing `0x1B5C` mid-object state
+  - the richer player-start item-build path remains the only strong candidate for the missing attachment contract
+ - New attachment-lane regression finding:
+  - the temporary `stock_clone_diagnostic` call was mutating the source actor by transferring `source +0x264` into the diagnostic clone before the gameplay-slot bot path reused it
+  - removing that diagnostic restored the gameplay-slot bot attachment lane immediately in fresh runs
+  - fresh attach logs now show `EquipAttachmentSink_Attach` on the gameplay-slot bot's attachment holder storing the `0x1B5C` object successfully, and the final `slot_actor_attachment_seeded` summary keeps that object live
+- New tooling available for this pass:
+  - `sd.debug.dump_ptr_chain` / `resolve_ptr_chain`
+  - `sd.debug.get_trace_hits` / `get_write_hits`
+  - `sd.debug.dump_struct`
+  - `sd.debug.dump_vtable`
+  - see `docs/lua-memory-tooling.md`
+
+## April 12 Attachment Finding
+- Final gameplay-slot result:
+  - the gameplay-slot bot actor is correctly isolated from the slot-table progression wrapper and can be seeded with the stock water actor-side render window
+  - the source-built descriptor block at `actor +0x244..+0x263` is **not** safe to keep live on gameplay-slot bots
+  - improved crash logs showed the failing path as `__CxxThrowException -> operator_new -> FUN_0043A6B0 -> FUN_0053B680 -> ActorAnimation_Advance`
+  - `FUN_0053B680` is entered from `ActorAnimation_Advance` when `actor +0x248 != 0` and it reuses `actor +0x244` as a count/capacity input, so leaving transformed color payload bytes there produces `std::bad_alloc`
+  - the final fix is: use the built descriptor to seed robe/hat helper lanes and selector bytes, then clear the descriptor block back off the bot actor before stock animation/update uses it
+- Final attachment conclusion:
+  - gameplay-slot bots do **not** need a live standalone `0x1B5C` attachment item for the visible orb/staff presentation in this path
+  - live probing showed the visible orb/staff remained after clearing both `actor +0x264` and the equip attachment sink object
+  - the final gameplay-slot path therefore removed the live attachment-item construction experiment instead of trying to repair its runtime contract
+
+## Gameplay-Owned Sink Chain
+- The live player visuals are not just actor-local fields.
+- Current recovered ownership chain:
+  - gameplay object owns sink-holder wrappers at:
+    - `gameplay +0x1428`
+    - `gameplay +0x142C`
+    - `gameplay +0x1440`
+  - each holder points to a sink object
+  - sink object `+0x04` points at the current attached runtime item/object
+- This chain is now one of the main comparison seams for the remaining color issue.
 
 ## Loader Path
 
-- The loader materializes wizard bots through the player ctor directly, not through `Gameplay_CreatePlayerSlot`.
-- The live standalone pipeline is:
-  - allocate `0x398` bytes through `Object_Allocate(0x398)`
-  - call `FUN_0052B4C0(self)` at `0x0052B4C0`
-  - assign the scene/world pointer at `actor + 0x58`
-  - build standalone progression and equip wrappers
-  - seed wizard visuals from `wizard_id` through the runtime/progression state
-  - allow stock `PlayerActorTick` to run so the render pipeline advances the bot sprite
-  - call `ActorWorld_Register(world, actor)` at `0x0063F6D0`
-  - reserve the first free gameplay slot in `1..3`, then publish the actor into `gameplay + 0x1358 + slot * 4`
-  - try to rely on the actor's own `+0x04` initialization first, but still borrow slot-0 player's `+0x04` as a fallback when the bot render context still looks unresolved
-  - clear slot identity mirrors only when they interfere with standalone ownership, not the render slot table itself
-- The loader still does not use `Gameplay_CreatePlayerSlot`, but arena rendering does require the bot to exist in the gameplay slot table.
-- The April 10, 2026 residual fix changed the standalone actor path from raw `_aligned_malloc` ownership to the same `Object_Allocate` / scalar-deleting-destructor contract used by stock actor creation. Runtime validation of a truly independent `+0x04` render context is still pending because the donor fallback remains in code.
+- The loader now materializes the visible bot through the gameplay-slot path, not the older direct standalone ctor path.
+- The live gameplay-slot pipeline is:
+  - call `Gameplay_CreatePlayerSlot(slot)` so the gameplay slot tables and stock slot actor exist
+  - replace the slot actor's shared progression contamination with an actor-owned progression wrapper/runtime
+  - seed the actor's wizard appearance/runtime selection state from `wizard_id`
+  - create a temporary stock source actor only to compile the canonical wizard render window
+  - attach robe/hat helper lanes from the built descriptor
+  - mirror the selector bytes from the source actor onto the gameplay-slot bot actor
+  - immediately clear the actor-local descriptor block back to zero
+  - register the slot actor through `ActorWorld_RegisterGameplaySlotActor`
+  - allow stock `PlayerActorTick`, `PlayerActor_SlotOverlayCallback`, and `ActorAnimation_Advance` to run while clearing the transient descriptor block before/after those passes
+- Historical note:
+  - older sections below that talk about direct standalone actor creation and live staff attachment are useful RE history, but they are no longer the active gameplay-slot bot implementation
+- The April 10, 2026 residual fix changed the standalone actor path from raw `_aligned_malloc` ownership to the same `Object_Allocate` / scalar-deleting-destructor contract used by stock actor creation. Runtime validation of a truly independent `+0x04` render transition is still pending, but the older donor-fallback note is stale in the current source tree.
+- Fresh April 11 RE on `ActorWorld_Register` / `ActorWorld_Unregister` tightened the remaining bug:
+  - the generic register path already inserts the actor into `Region +0x310`, `Region +0x360`, and `Region +0x500`
+  - it keys `Region +0x500` by `(actor_group, resolved_world_slot)` and writes that exact pair into `actor +0x5C/+0x5E`
+  - the loader then rewrites `actor +0x5C` to the gameplay slot later, without rerunning stock registration through the slot-owned path
+  - the stock slot-owned path instead uses `ActorWorld_RegisterGameplaySlotActor` so the Region bucket identity, slot-active byte, and gameplay slot all agree on the same pair
 
 ## Current Code Audit (2026-04-11)
 
+Historical note:
+- this section captures the intermediate hybrid path that led to the final gameplay-slot cutover
+- where it conflicts with the April 12 attachment finding / loader path sections above, treat it as investigation history rather than the active design
+
 - The current loader still calls `FUN_005E3080` through a guarded wrapper while synthetic or donor source-profile staging is live.
+- The current loader no longer calls the old standalone `ApplyWizardElementAppearanceToDescriptor()` helper. Fresh April 11 decompile proved the stock slot-0 appearance path is not a grouped `ApplyChoice x4` contract.
+- The current loader also no longer calls player vtable slot `+0x18` during standalone priming. That helper is only `ActorVisual_SetInitFlag` and prematurely setting `actor +0x05 = 1` was blocking the stock slot-register attach init.
 - The loader clears `actor +0x174/+0x178` again after that staging step, so synthetic source state is intentionally temporary.
-- The loader also clears the actor-side descriptor block at `+0x244..+0x263` after progression refresh, after gameplay attach, and again during standalone bot tick repair.
-- That means the current code path is still a hybrid: it uses source-profile descriptor building as a setup step, but does not leave that state live across gameplay/tick.
+- Keeping the actor-side descriptor block at `+0x244..+0x263` live regressed the bot back to a one-wizard frame. The current code therefore clears that bundle before helper creation, again after gameplay attach, and again during standalone bot tick repair.
+- That means the current code path is still a hybrid: it uses source-profile descriptor building as a setup step, but intentionally does not leave that state live across gameplay/tick.
+- The remaining April 11 duplication bug was also hybrid: the bot's standalone equip attachment lane was correct, but the loader contaminated the actor-side body sprite selector lane by copying donor `+0x23C/+0x23D/+0x23F/+0x240` into the synthetic source profile before `FUN_005E3080`.
+- The current code now keeps those selector bytes wizard-owned. Live validation shows the bot at `variants=0/0/0/0` while the equip attachment sink remains populated.
+- April 11 teardown analysis corrected an older assumption about the stock slot-actor sweep:
+  - the stack-local object at vtable `0x007846CC` is a generic growable pointer list, not an actor-dispatch shim
+  - `GameplayHud_RenderDispatch` (`0x00512060`) case `100` collects gameplay-slot actors into that temporary list through `0x402720 -> 0x4013C0 -> 0x4013E0`
+  - after collection, the same case iterates the list and calls each actor's vtable slots `+0x28` and `+0x1C`
+  - actor vtable slot `+0x28` is now named `PlayerActor_SlotOverlayCallback` (`0x00528AD0`)
+  - `PlayerActor_SlotOverlayCallback` does not contain a direct delete call in the recovered decompile, so the active delete/crash investigation has shifted into deeper nested stock helpers
+  - `PointerList_DeleteBatch` (`0x004024C0`) is now named as the shared list deleter reached by the embedded `PuppetManager` core
+  - the first direct hook on `PointerList_DeleteBatch` crashed immediately because the loader patched 6 bytes and split the prologue instruction at `0x004024C5`; the safe whole-instruction prologue boundary is 5 bytes
+  - the earlier `Region_DeleteActor` name was too specific: `0x00641070` is actually `PuppetManager_DeletePuppet`, the embedded `PuppetManager` vtable slot `+0x28` callback
+  - `Region_Ctor` (`0x00652830`) installs that `PuppetManager` subobject at `Region + 0x310` and points manager `+0x4C` back at the owning Region
+  - `ManagedPointerList_SweepParityLane` (`0x004022A0`) is the generic parity-lane sweep helper used under that manager and keyed off `g_pGameWorldState + 0x28`
+  - `ManagedPointerList_RemoveFromAllLanes` (`0x00402450`) removes one tracked pointer from the owner's main list and both side lanes
+  - stock persistent gameplay-slot actors do not use only `ActorWorld_Register`; they are rebound through `ActorWorld_RegisterGameplaySlotActor` (`0x00641090`), `ActorWorld_UnregisterGameplaySlotActor` (`0x00641130`), and `WorldCellGrid_RebindActor` (`0x005217B0`)
+  - the current live teardown problem is therefore a Region/PuppetManager ownership failure caused by a slot-registration contract mismatch, not a direct call from the HUD overlay loop into a Region method
 
 ## Recovered Standalone Spawn Sequence
+
+Historical branch:
+- this section documents the older direct standalone/world-actor path for RE continuity
+- it is no longer the active gameplay-slot bot implementation
 
 - Standalone actor allocation size: `0x398`
 - Player ctor: `FUN_0052B4C0` (`0x0052B4C0`)
@@ -53,13 +168,32 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 - `Player_Ctor` (`0x0052A500`): player-layer constructor in the player actor chain.
 - `FUN_0052B4C0` (`0x0052B4C0`): player actor ctor used for standalone wizard materialization.
 - `ActorVisual_SetInitFlag` (`0x00401FD0`): tiny vtable helper that writes `*(uint8_t *)(actor + 0x05) = 1`.
+- Loader-side note: this helper is not a visual refresh. The standalone bot path should leave `actor +0x05` clear until `ActorWorld_RegisterGameplaySlotActor` is ready to run the actor's `+0x44` attach init.
 - `FUN_00513090` (`0x00513090`): render/update path that requires a valid world/context pointer at `actor + 0x58`.
 - `FUN_0061AA00` (`0x0061AA00`): stock wizard-puppet factory used by the game to clone a renderable wizard actor from an existing wizard source.
+- `Region_Ctor` (`0x00652830`): Region constructor. Installs the embedded `PuppetManager` at `Region + 0x310`, seeds its owner pointer, and initializes nearby helper subobjects.
 - `PlayerActorDtor` (`0x0052D340`): player actor destructor at vtable slot `0`.
 - `PlayerActorTick` (`0x00548B00`): stock player tick. This must run on the bot for visible sprite rendering.
 - `PlayerActorMoveStep` (`0x00525800`): stock movement step helper used as reference for puppet movement support.
 - `ActorWorld_Register` (`0x0063F6D0`): inserts the actor into the live world bucket table.
-- `ActorWorld_Unregister` (`0x0063F600`): used during loader-owned bot cleanup.
+- `ActorWorld_Unregister` (`0x0063F600`): detaches an actor from the world bucket table, clears `actor +0x58` when owned by that world, and clears any gameplay-slot actor whose registered mirrors `+0x164/+0x166` still match the removed actor's slot pair.
+- More precise April 11 detail for the pair above:
+  - `ActorWorld_Register` writes `actor +0x5C = actor_group` and `actor +0x5E = resolved_world_slot`, stores the actor at `Region +0x500 + (actor_group * 0x800 + resolved_world_slot) * 4`, and inserts it into the Region-side participant manager at `+0x310`
+  - `ActorWorld_Unregister` removes from those same Region-side containers using the actor's *current* `+0x5C/+0x5E` pair
+  - this is why the loader's post-register rewrite of `actor +0x5C` is now considered a primary ownership bug candidate
+- `PuppetManager_DeletePuppet` (`0x00641070`): embedded `PuppetManager` vtable slot `+0x28`. Deletes tracked puppets by calling `ActorWorld_Unregister(actor, 0)` and then the shared object delete helper.
+- `ManagedPointerList_SweepParityLane` (`0x004022A0`): shared parity sweep helper used by manager-owned pointer lists. Chooses one of two side lanes from `g_pGameWorldState + 0x28`, flushes the active lane through vtable slot `+0x2C`, then either retires or requeues each main-list item based on bytes `+0x04/+0x05`.
+- `ManagedPointerList_RemoveFromAllLanes` (`0x00402450`): companion removal helper that drops one tracked pointer from the owner's main list and both embedded side lanes.
+- `ActorWorld_RegisterGameplaySlotActor` (`0x00641090`): stock persistent-slot world registration helper. Inserts `g_pGameplayScene->slot_actor_table[slot]` into the Region-owned participant manager, mirrors it into `Region +0x500 + slot*0x2000`, repairs owner/slot fields, and finishes with `WorldCellGrid_RebindActor(Region +0x378, actor)`.
+- `ActorWorld_UnregisterGameplaySlotActor` (`0x00641130`): stock persistent-slot unregister helper. Clears `Region +0x7C + slot` and calls `ActorWorld_Unregister(slot_actor, 1)` when the gameplay scene is live.
+- `WorldCellGrid_RebindActor` (`0x005217B0`): world-cell binder called by stock slot registration. Computes the actor's grid cell from `actor +0x18/+0x1C`, removes the actor from the old cell at `actor +0x54`, and inserts it into the new cell.
+- `Actor_CopyRegisteredSlotMirrorsFromSourceActor` (`0x005289E0`): copies `source +0x5C/+0x5E` into `actor +0x164/+0x166`; passing null clears both mirrors to `-1`.
+- `PlayerActor_EnsureProgressionHandleFromGameplaySlot` (`0x0052B900`): ensures `actor +0x300` points at a live progression wrapper, borrowing `gameplay +0x1654 + slot*4` when the actor-side wrapper is null or empty.
+- `GameplayHud_RenderDispatch` (`0x00512060`): switch-based gameplay HUD renderer. Case `100` performs the stock gameplay-slot overlay sweep and calls actor vtable slots `+0x28` then `+0x1C`.
+- `PlayerActor_SlotOverlayCallback` (`0x00528AD0`): player-actor vtable slot `+0x28` used by the slot overlay sweep. Draws actor-relative overlay sprites and writes `actor +0x1F4/+0x1F8` in the long-move branch.
+- `PointerList_DeleteBatch` (`0x004024C0`): shared pointer-list batch deleter. Iterates `list +0x14` for `count = list +0x08`, dispatches `this->vtable[+0x28]` for each entry, then clears or frees the list storage depending on `list +0x11`.
+- `ActorSensor_GatherProximityHits` (`0x0057F0E0`): deeper stock proximity/sense helper reached through `0x00624B40`; scans nearby records and accumulates weighted hits into a caller-owned output list.
+- `PuppetManager_Vtable` (`0x0079F044`): embedded manager vtable installed by `Region_Ctor` at `Region + 0x310`.
 
 ## Player Actor Vtable Dump
 
@@ -68,7 +202,7 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 
 ```text
 [00] +0x00  0x0052D340  PlayerActorDtor
-[01] +0x04  0x0052B900  FUN_0052B900
+[01] +0x04  0x0052B900  PlayerActor_EnsureProgressionHandleFromGameplaySlot
 [02] +0x08  0x00548B00  PlayerActorTick
 [03] +0x0C  0x00528A60  FUN_00528A60
 [04] +0x10  0x0042E260  FUN_0042E260
@@ -77,7 +211,7 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 [07] +0x1C  0x0054BA80  ActorAnimationAdvance
 [08] +0x20  0x005468C0  FUN_005468C0
 [09] +0x24  0x0052C2A0  FUN_0052C2A0
-[10] +0x28  0x00528AD0  FUN_00528AD0
+[10] +0x28  0x00528AD0  PlayerActor_SlotOverlayCallback
 [11] +0x2C  0x0055C300  FUN_0055C300
 [12] +0x30  0x005299A0  FUN_005299A0
 [13] +0x34  0x00448D50  FUN_00448D50
@@ -103,7 +237,7 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 
 ## Verified Actor Offsets
 
-- Render context / scene-graph node pointer: `actor + 0x04`
+- Object-header word / ctor sentinel lane: `actor + 0x04`
 - Init flag byte: `actor + 0x05`
 - World/context pointer: `actor + 0x58`
 - Gameplay slot byte: `actor + 0x5C`
@@ -149,6 +283,10 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
   - `actor + 0x23E`: weapon type
   - `actor + 0x23F`: render-helper / pose selector
   - `actor + 0x240`: tertiary variant
+- Loader-specific caveat:
+  - `CreateSyntheticWizardSourceProfile(wizard_id)` already seeds wizard-correct selector bytes
+  - the old duplication bug came from `PrimeStandaloneWizardBotActor` overwriting those selector bytes with donor actor values before calling `FUN_005E3080`
+  - the current code no longer does that, so the actor-side base sprite selector lane stays wizard-correct
 
 ## Wizard Render Dispatch
 
@@ -157,6 +295,30 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 - `FUN_00621780` reads the actor-side selectors above plus the descriptor block at `actor + 0x244 .. +0x260`.
 - `actor + 0x23C` and `actor + 0x23D` are the discrete atlas selectors for hat / robe type.
 - `actor + 0x23F` is not the main robe-color selector; it switches among the render helpers reached through `FUN_005E9FC0`.
+- `FUN_00621780` specifically branches on `actor +0x23E`; when that byte is `0`, it falls back to `actor +0x240` and chooses alternate body sprite rows from that tertiary variant.
+- In other words, `+0x240` is a structural body/accessory selector, not just a cosmetic tint flag.
+
+## Actor-Side Setup Writer
+
+- `FUN_00462790` is a stock setup writer that copies source-profile fields into actor-side render state for several source kinds.
+- Relevant recovered writes:
+  - `actor +0x240 = source +0x97` for source kinds `0x3E9`, `0x3EA`, and `0x3EB`
+  - `actor +0x264` bitfield assembly for source kind `0x3F0`
+  - `actor +0x23C = source +0x8C` and `actor +0x244 = source +0x94` for source kind `0x3F2`
+- This matters because it confirms the body/accessory selector lane is populated from source-profile state before the live wizard render path ever samples it.
+
+## Slot-0 Appearance Pipeline Correction
+
+- `FUN_005D0290` is still the slot-0 "apply selected wizard" stage, but the earlier grouped-helper model was wrong.
+- Fresh April 11 decompile shows the actual contract:
+  - map the selected wizard element to three primary choice ids plus one secondary id
+  - call `FUN_00660320(choice_id, 0)` for the three primary ids
+  - write those ids into the slot-0 progression/runtime object at `+0x82C/+0x86C/+0x870`
+  - resolve the secondary id and call `FUN_00660320(choice_id, 1)`
+  - update `g_pGameplayIndexStateTable + 0x30`
+  - call `FUN_0065F9A0`
+  - write the secondary id into `+0x830`
+- `FUN_00660320` itself is therefore a per-choice processor with an `ensure_assets` flag, not a `group = 0..3` dispatcher.
 
 ## Arena vs. Hub Visual State
 
@@ -181,9 +343,9 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 
 ## Critical Invariants
 
-- `actor + 0x04` is the current arena render-context gate. A null or unresolved value gives the bot collision without a visible sprite. Sharing the player's value makes the bot visible but also parents it to the player transform, so the bot needs its own render node.
-- `Object_Ctor` seeds `actor + 0x04` with a ctor sentinel, and real initialized actors later get a heap pointer there during game initialization.
-- `Object_Allocate` writes its allocation to `DAT_00B4019C`, and `Object_Ctor` checks that global. The earlier heap-corruption probe was most likely mixing stock allocation with raw-allocation cleanup. The current loader now uses the stock allocator/destructor contract for standalone actors, but it still conditionally restores slot-0's `+0x04` when `NeedsBorrowedActorRenderContext(...)` says the bot render context is unresolved.
+- `Object_Ctor` seeds `actor + 0x04` with a ctor/header sentinel pattern.
+- Current April 11 teardown work no longer treats `actor +0x04` as a proven transferable render-node pointer. The live bot still shows sentinel-like values there during the failing teardown run, so the older “copy player +0x04 to make the bot visible” theory is now considered stale.
+- `Object_Allocate` writes its allocation to `DAT_00B4019C`, and `Object_Ctor` checks that global. The earlier heap-corruption probe was most likely mixing stock allocation with raw-allocation cleanup.
 - `actor + 0x05` is checked by `ActorWorld_Register`, and `ActorVisual_SetInitFlag` (`0x00401FD0`) writes it to `1`. Live probes show player `= 0`, fresh bot `= 1`.
 - `actor + 0x58` must stay valid after spawn. It is a required world/context pointer for render and update code.
 - Detaching by nulling `actor + 0x58` is invalid and crashes on the next frame.
@@ -227,6 +389,27 @@ This note records the recovered Solomon Dark standalone wizard path now used by 
 - The remaining non-stock rendering issues visible in code are:
   - the shared `actor + 0x04` render-context fallback is still present when standalone initialization does not produce a live node on its own
   - the actor-side descriptor block is still cleared after setup, attach, and tick repair, even though the recovered body-render path says it consumes `+0x244..+0x263`
+
+## Confirmed April 11 Duplication Root Cause
+
+- Symptom:
+  - the orange standalone bot renders the correct orb/staff
+  - but also shows an extra right-side staff and left-side scroll bundle
+- Confirmed visual ownership split:
+  - the correct orb/staff is the standalone attachment moved from actor `+0x264` into equip sink `+0x30`
+  - the extra props are actor-side body sprite art selected by `+0x23E/+0x240`
+- Live proof:
+  - baseline bot was `variants=0/0/0/1`
+  - writing only `bot +0x240 = 0` removed the extra side staff / scroll bundle while the orb/staff remained visible
+  - restoring only `bot +0x240 = 1` brought the extra props back
+- Root cause:
+  - the old loader path copied donor selector bytes into the synthetic source profile before `FUN_005E3080`
+  - that contaminated the bot's actor-side body sprite lane with the local player's structural accessory variant
+  - the bot therefore renders both:
+    - player-style body/accessory art from the actor-side lane
+    - standalone orb/staff art from the equip attachment lane
+- This is the clean root-level issue to fix before custom-art work. The problem is not the attachment sink itself; it is the actor-side selector contamination that makes the body renderer draw accessory-bearing base art in parallel with the attachment-owned staff.
+- The current code now applies that root-level fix by keeping the synthetic selector bytes wizard-owned.
 
 ## Create Screen Wizard Selection Probe
 

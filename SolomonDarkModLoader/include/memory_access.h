@@ -35,6 +35,7 @@ public:
 
     bool IsReadableRange(uintptr_t address, size_t size);
     bool IsWritableRange(uintptr_t address, size_t size);
+    bool IsExecutableRange(uintptr_t address, size_t size);
 
     bool TryRead(uintptr_t address, void* buffer, size_t size);
     bool TryWrite(uintptr_t address, const void* buffer, size_t size);

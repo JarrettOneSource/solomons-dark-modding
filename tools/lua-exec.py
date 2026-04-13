@@ -10,7 +10,6 @@ import subprocess
 import sys
 from ctypes import wintypes
 from pathlib import Path
-from typing import Any
 
 PIPE_NAME = r"\\.\pipe\SolomonDarkModLoader_LuaExec"
 BUFFER_SIZE = 4096
@@ -29,10 +28,6 @@ PIPE_READMODE_MESSAGE = 2
 INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 
 
-class PipeError(RuntimeError):
-    """Transport error while talking to the Lua exec pipe."""
-
-
 def _is_wsl() -> bool:
     try:
         with open("/proc/version", "r", encoding="utf-8", errors="replace") as handle:
@@ -47,36 +42,11 @@ def _repo_root() -> Path:
 
 def _ensure_message_size(kind: str, size: int) -> None:
     if size <= 0:
-        raise PipeError(f"{kind} was empty.")
+        raise RuntimeError(f"ERROR: {kind} was empty.")
     if size > MAX_MESSAGE_SIZE:
-        raise PipeError(f"{kind} exceeded the maximum pipe payload size of {MAX_MESSAGE_SIZE} bytes.")
-
-
-def _normalize_response(text: str) -> dict[str, Any]:
-    stripped = text.strip()
-    if not stripped:
-        raise PipeError("Pipe closed without returning a response.")
-
-    try:
-        payload = json.loads(stripped)
-    except json.JSONDecodeError:
-        if stripped.startswith("ERROR:"):
-            return {
-                "ok": False,
-                "print_output": "",
-                "results": [],
-                "error": stripped[len("ERROR:") :].strip() or stripped,
-            }
-        return {
-            "ok": True,
-            "print_output": "",
-            "results": [text.rstrip("\r\n")],
-            "error": "",
-        }
-
-    if not isinstance(payload, dict):
-        raise PipeError("Pipe returned an unexpected JSON payload.")
-    return payload
+        raise RuntimeError(
+            f"ERROR: {kind} exceeded the maximum pipe payload size of {MAX_MESSAGE_SIZE} bytes."
+        )
 
 
 def _send_lua_wsl(code: str) -> str:
@@ -100,32 +70,74 @@ def _send_lua_wsl(code: str) -> str:
             check=False,
         )
     except FileNotFoundError as exc:
-        raise PipeError("powershell.exe was not found from WSL.") from exc
+        raise RuntimeError("ERROR: powershell.exe was not found from WSL.") from exc
 
     if result.returncode != 0:
-        message = result.stderr.strip() or result.stdout.strip() or "PowerShell Lua exec bridge failed."
-        raise PipeError(message)
+        message = result.stderr.strip() or result.stdout.strip() or "ERROR: PowerShell Lua exec bridge failed."
+        raise RuntimeError(message)
 
     return result.stdout
 
 
-def _send_lua_pywin32(code: str, timeout_ms: int) -> str:
-    import pywintypes
-    import win32file
-    import win32pipe
-
-    payload = code.encode("utf-8")
-    _ensure_message_size("Request", len(payload))
+def _format_response(payload: str) -> tuple[str, str, int]:
+    stripped = payload.strip()
+    if not stripped:
+        return "", "Pipe closed without returning a response.\n", 1
 
     try:
-        win32pipe.WaitNamedPipe(PIPE_NAME, timeout_ms)
-    except pywintypes.error as exc:
-        if exc.winerror in {ERROR_FILE_NOT_FOUND, ERROR_SEM_TIMEOUT}:
-            raise PipeError("Cannot connect to pipe. Is the game running with the mod loader?") from exc
-        raise PipeError(f"WaitNamedPipe failed: {exc.strerror or exc}") from exc
+        response = json.loads(stripped)
+    except json.JSONDecodeError:
+        if stripped.startswith("ERROR:"):
+            return "", f"{stripped[len('ERROR:') :].strip() or stripped}\n", 1
+        return payload, "", 0
+
+    if not isinstance(response, dict):
+        return payload, "", 0
+
+    if not {"ok", "print_output", "results", "error"}.issubset(response):
+        return payload, "", 0
+
+    stdout_parts: list[str] = []
+    print_output = response.get("print_output")
+    if isinstance(print_output, str) and print_output:
+        stdout_parts.append(print_output if print_output.endswith("\n") else f"{print_output}\n")
+
+    if response.get("ok"):
+        results = response.get("results")
+        if isinstance(results, list) and results:
+            stdout_parts.extend(f"{result}\n" for result in results)
+        elif not stdout_parts:
+            stdout_parts.append("ok\n")
+        return "".join(stdout_parts), "", 0
+
+    error = response.get("error")
+    if isinstance(error, str) and error:
+        return "".join(stdout_parts), f"{error}\n", 1
+    return "".join(stdout_parts), "Lua execution failed.\n", 1
+
+
+def send_lua(code: str) -> str:
+    _ensure_message_size("Request", len(code.encode("utf-8")))
+
+    if _is_wsl():
+        return _send_lua_wsl(code)
+
+    try:
+        import pywintypes
+        import win32file
+        import win32pipe
+    except ImportError:
+        return _send_lua_ctypes(code)
 
     handle = None
     try:
+        try:
+            win32pipe.WaitNamedPipe(PIPE_NAME, 5000)
+        except pywintypes.error as exc:
+            if exc.winerror in {ERROR_FILE_NOT_FOUND, ERROR_SEM_TIMEOUT}:
+                raise RuntimeError("ERROR: Cannot connect to pipe. Is the game running with the mod loader?") from exc
+            raise RuntimeError(f"ERROR: WaitNamedPipe failed: {exc.strerror or exc}") from exc
+
         handle = win32file.CreateFile(
             PIPE_NAME,
             win32file.GENERIC_READ | win32file.GENERIC_WRITE,
@@ -137,9 +149,10 @@ def _send_lua_pywin32(code: str, timeout_ms: int) -> str:
         )
         win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
 
+        payload = code.encode("utf-8")
         status, written = win32file.WriteFile(handle, payload)
         if status != 0 or written != len(payload):
-            raise PipeError(f"Short pipe write: expected {len(payload)} bytes, wrote {written}")
+            raise RuntimeError(f"ERROR: Short pipe write: expected {len(payload)} bytes, wrote {written}.")
 
         chunks: list[bytes] = []
         total_size = 0
@@ -148,36 +161,33 @@ def _send_lua_pywin32(code: str, timeout_ms: int) -> str:
             if data:
                 total_size += len(data)
                 if total_size > MAX_MESSAGE_SIZE:
-                    raise PipeError(
-                        f"Response exceeded the maximum pipe payload size of {MAX_MESSAGE_SIZE} bytes."
+                    raise RuntimeError(
+                        f"ERROR: Response exceeded the maximum pipe payload size of {MAX_MESSAGE_SIZE} bytes."
                     )
                 chunks.append(data)
 
             if status == 0:
                 break
             if status != ERROR_MORE_DATA:
-                raise PipeError(f"ReadFile failed with status {status}.")
+                raise RuntimeError(f"ERROR: ReadFile failed with status {status}.")
 
         if not chunks:
-            raise PipeError("Pipe closed without returning a response.")
+            raise RuntimeError("ERROR: Pipe closed without returning a response.")
         return b"".join(chunks).decode("utf-8", errors="replace")
     except pywintypes.error as exc:
-        if exc.winerror in {ERROR_BROKEN_PIPE, ERROR_NO_DATA}:
-            raise PipeError("The Lua exec pipe closed before returning a response.") from exc
-        raise PipeError(exc.strerror or str(exc)) from exc
+        if exc.winerror in {ERROR_BROKEN_PIPE, ERROR_NO_DATA, ERROR_FILE_NOT_FOUND}:
+            raise RuntimeError("ERROR: Cannot connect to pipe. Is the game running with the mod loader?") from exc
+        raise RuntimeError(f"ERROR: {exc.strerror or exc}") from exc
     finally:
         if handle is not None:
             handle.Close()
 
 
-def _send_lua_ctypes(code: str, timeout_ms: int) -> str:
+def _send_lua_ctypes(code: str) -> str:
     if os.name != "nt":
-        raise PipeError("Native Lua exec requires Windows Python or WSL.")
+        raise RuntimeError("ERROR: Native Lua exec requires Windows Python or WSL.")
 
-    payload = code.encode("utf-8")
-    _ensure_message_size("Request", len(payload))
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32 = ctypes.windll.kernel32
     kernel32.CreateFileW.argtypes = [
         wintypes.LPCWSTR,
         wintypes.DWORD,
@@ -198,7 +208,7 @@ def _send_lua_ctypes(code: str, timeout_ms: int) -> str:
     kernel32.ReadFile.restype = wintypes.BOOL
     kernel32.WriteFile.argtypes = [
         wintypes.HANDLE,
-        wintypes.LPCVOID,
+        wintypes.LPVOID,
         wintypes.DWORD,
         ctypes.POINTER(wintypes.DWORD),
         wintypes.LPVOID,
@@ -216,11 +226,11 @@ def _send_lua_ctypes(code: str, timeout_ms: int) -> str:
     kernel32.WaitNamedPipeW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD]
     kernel32.WaitNamedPipeW.restype = wintypes.BOOL
 
-    if not kernel32.WaitNamedPipeW(PIPE_NAME, timeout_ms):
+    if not kernel32.WaitNamedPipeW(PIPE_NAME, 5000):
         error = ctypes.get_last_error()
         if error in {ERROR_FILE_NOT_FOUND, ERROR_SEM_TIMEOUT}:
-            raise PipeError("Cannot connect to pipe. Is the game running with the mod loader?")
-        raise PipeError(f"WaitNamedPipeW failed: {ctypes.FormatError(error).strip()} (code={error})")
+            raise RuntimeError("ERROR: Cannot connect to pipe. Is the game running with the mod loader?")
+        raise RuntimeError(f"ERROR: WaitNamedPipeW failed: {ctypes.FormatError(error).strip()} (code={error})")
 
     handle = kernel32.CreateFileW(
         PIPE_NAME,
@@ -233,22 +243,24 @@ def _send_lua_ctypes(code: str, timeout_ms: int) -> str:
     )
     if handle == INVALID_HANDLE_VALUE:
         error = ctypes.get_last_error()
-        raise PipeError(f"CreateFileW failed: {ctypes.FormatError(error).strip()} (code={error})")
+        raise RuntimeError(f"ERROR: CreateFileW failed: {ctypes.FormatError(error).strip()} (code={error})")
 
     try:
         mode = wintypes.DWORD(PIPE_READMODE_MESSAGE)
         if not kernel32.SetNamedPipeHandleState(handle, ctypes.byref(mode), None, None):
             error = ctypes.get_last_error()
-            raise PipeError(
-                f"SetNamedPipeHandleState failed: {ctypes.FormatError(error).strip()} (code={error})"
+            raise RuntimeError(
+                f"ERROR: SetNamedPipeHandleState failed: {ctypes.FormatError(error).strip()} (code={error})"
             )
 
+        payload = code.encode("utf-8")
+        payload_buffer = ctypes.create_string_buffer(payload)
         written = wintypes.DWORD(0)
-        if not kernel32.WriteFile(handle, payload, len(payload), ctypes.byref(written), None):
+        if not kernel32.WriteFile(handle, payload_buffer, len(payload), ctypes.byref(written), None):
             error = ctypes.get_last_error()
-            raise PipeError(f"WriteFile failed: {ctypes.FormatError(error).strip()} (code={error})")
+            raise RuntimeError(f"ERROR: WriteFile failed: {ctypes.FormatError(error).strip()} (code={error})")
         if written.value != len(payload):
-            raise PipeError(f"Short pipe write: expected {len(payload)} bytes, wrote {written.value}")
+            raise RuntimeError(f"ERROR: Short pipe write: expected {len(payload)} bytes, wrote {written.value}.")
 
         chunks: list[bytes] = []
         total_size = 0
@@ -259,8 +271,8 @@ def _send_lua_ctypes(code: str, timeout_ms: int) -> str:
             if read.value:
                 total_size += read.value
                 if total_size > MAX_MESSAGE_SIZE:
-                    raise PipeError(
-                        f"Response exceeded the maximum pipe payload size of {MAX_MESSAGE_SIZE} bytes."
+                    raise RuntimeError(
+                        f"ERROR: Response exceeded the maximum pipe payload size of {MAX_MESSAGE_SIZE} bytes."
                     )
                 chunks.append(buffer.raw[: read.value])
 
@@ -271,36 +283,18 @@ def _send_lua_ctypes(code: str, timeout_ms: int) -> str:
             if error == ERROR_MORE_DATA:
                 continue
             if error in {ERROR_BROKEN_PIPE, ERROR_NO_DATA} and not chunks:
-                raise PipeError("The Lua exec pipe closed before returning a response.")
-            raise PipeError(f"ReadFile failed: {ctypes.FormatError(error).strip()} (code={error})")
+                raise RuntimeError("ERROR: Pipe closed without returning a response.")
+            raise RuntimeError(f"ERROR: ReadFile failed: {ctypes.FormatError(error).strip()} (code={error})")
 
         if not chunks:
-            raise PipeError("Pipe closed without returning a response.")
+            raise RuntimeError("ERROR: Pipe closed without returning a response.")
         return b"".join(chunks).decode("utf-8", errors="replace")
     finally:
         kernel32.CloseHandle(handle)
 
 
-def send_lua(code: str, timeout_ms: int = 5000) -> dict[str, Any]:
-    if not code.strip():
-        raise PipeError("No Lua code was provided.")
-
-    if _is_wsl():
-        return _normalize_response(_send_lua_wsl(code))
-
-    try:
-        import win32file  # noqa: F401
-        import win32pipe  # noqa: F401
-    except ImportError:
-        return _normalize_response(_send_lua_ctypes(code, timeout_ms))
-
-    return _normalize_response(_send_lua_pywin32(code, timeout_ms))
-
-
-def _write_result(result: str, *, append_newline: bool = False) -> None:
+def _write_result(result: str) -> None:
     sys.stdout.write(result)
-    if append_newline and result and not result.endswith("\n"):
-        sys.stdout.write("\n")
     sys.stdout.flush()
 
 
@@ -314,39 +308,13 @@ def _write_error(message: str) -> None:
     sys.stderr.flush()
 
 
-def _emit_response(response: dict[str, Any], *, append_newline: bool = False) -> int:
-    print_output = response.get("print_output")
-    if isinstance(print_output, str) and print_output:
-        _write_result(print_output, append_newline=not print_output.endswith("\n"))
-
-    if response.get("ok"):
-        results = response.get("results")
-        if isinstance(results, list) and results:
-            for result in results:
-                _write_result(f"{result}", append_newline=True)
-        elif not print_output:
-            _write_result("ok", append_newline=True)
-        elif append_newline and not print_output.endswith("\n"):
-            _write_result("", append_newline=True)
-        return 0
-
-    error = response.get("error")
-    _write_error(str(error).strip() if error else "Lua execution failed.")
-    return 1
-
-
 def _run_repl() -> int:
-    print("Solomon Dark Lua REPL (type 'exit' to quit)")
     while True:
-        try:
-            code = input("> ")
-        except EOFError:
-            print()
+        line = sys.stdin.readline()
+        if line == "":
             return 0
-        except KeyboardInterrupt:
-            print()
-            continue
 
+        code = line.rstrip("\r\n")
         stripped = code.strip()
         if not stripped:
             continue
@@ -354,30 +322,47 @@ def _run_repl() -> int:
             return 0
 
         try:
-            response = send_lua(code)
-        except PipeError as exc:
-            _write_error(str(exc))
-            continue
-        _emit_response(response, append_newline=True)
+            stdout_text, stderr_text, exit_code = _format_response(send_lua(code))
+            if stdout_text:
+                _write_result(stdout_text)
+            if stderr_text:
+                _write_error(stderr_text.rstrip("\n"))
+            if exit_code != 0:
+                continue
+        except RuntimeError as exc:
+            _write_error(str(exc).strip())
+
+    return 0
 
 
 def main() -> int:
     if len(sys.argv) > 1:
         code = " ".join(sys.argv[1:])
         try:
-            return _emit_response(send_lua(code))
-        except PipeError as exc:
-            _write_error(str(exc))
+            stdout_text, stderr_text, exit_code = _format_response(send_lua(code))
+            if stdout_text:
+                _write_result(stdout_text)
+            if stderr_text:
+                _write_error(stderr_text.rstrip("\n"))
+            return exit_code
+        except RuntimeError as exc:
+            _write_error(str(exc).strip())
             return 1
 
     if not sys.stdin.isatty():
         code = sys.stdin.read()
         if not code.strip():
             return 0
+
         try:
-            return _emit_response(send_lua(code))
-        except PipeError as exc:
-            _write_error(str(exc))
+            stdout_text, stderr_text, exit_code = _format_response(send_lua(code))
+            if stdout_text:
+                _write_result(stdout_text)
+            if stderr_text:
+                _write_error(stderr_text.rstrip("\n"))
+            return exit_code
+        except RuntimeError as exc:
+            _write_error(str(exc).strip())
             return 1
 
     try:

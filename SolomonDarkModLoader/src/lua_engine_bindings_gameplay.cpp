@@ -15,6 +15,22 @@ void PushPositionTable(lua_State* state, float x, float y) {
     lua_setfield(state, -2, "y");
 }
 
+void PushEquipVisualLaneState(lua_State* state, const SDModEquipVisualLaneState& lane) {
+    lua_createtable(state, 0, 6);
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.wrapper_address));
+    lua_setfield(state, -2, "wrapper_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.holder_address));
+    lua_setfield(state, -2, "holder_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.current_object_address));
+    lua_setfield(state, -2, "current_object_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.holder_kind));
+    lua_setfield(state, -2, "holder_kind");
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.current_object_vtable));
+    lua_setfield(state, -2, "current_object_vtable");
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.current_object_type_id));
+    lua_setfield(state, -2, "current_object_type_id");
+}
+
 int LuaGameplayStartWaves(lua_State* state) {
     std::string error_message;
     if (!QueueGameplayStartWaves(&error_message)) {
@@ -32,7 +48,7 @@ int LuaPlayerGetState(lua_State* state) {
         return 1;
     }
 
-    lua_createtable(state, 0, 52);
+    lua_createtable(state, 0, 55);
     lua_pushnumber(state, static_cast<lua_Number>(player_state.hp));
     lua_setfield(state, -2, "hp");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.max_hp));
@@ -141,6 +157,12 @@ int LuaPlayerGetState(lua_State* state) {
     lua_setfield(state, -2, "render_drive_move_blend");
     lua_pushboolean(state, player_state.gameplay_attach_applied ? 1 : 0);
     lua_setfield(state, -2, "gameplay_attach_applied");
+    PushEquipVisualLaneState(state, player_state.primary_visual_lane);
+    lua_setfield(state, -2, "primary_visual_lane");
+    PushEquipVisualLaneState(state, player_state.secondary_visual_lane);
+    lua_setfield(state, -2, "secondary_visual_lane");
+    PushEquipVisualLaneState(state, player_state.attachment_visual_lane);
+    lua_setfield(state, -2, "attachment_visual_lane");
     PushPositionTable(state, player_state.x, player_state.y);
     lua_setfield(state, -2, "position");
     return 1;
@@ -208,6 +230,31 @@ int LuaWorldGetScene(lua_State* state) {
     return 1;
 }
 
+int LuaGameplayGetSelectionDebugState(lua_State* state) {
+    SDModGameplaySelectionDebugState debug_state;
+    if (!TryGetGameplaySelectionDebugState(&debug_state) || !debug_state.valid) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_createtable(state, 0, 5);
+    lua_pushinteger(state, static_cast<lua_Integer>(debug_state.table_address));
+    lua_setfield(state, -2, "table_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(debug_state.entry_count));
+    lua_setfield(state, -2, "entry_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(debug_state.player_selection_state_0));
+    lua_setfield(state, -2, "player_selection_state_0");
+    lua_pushinteger(state, static_cast<lua_Integer>(debug_state.player_selection_state_1));
+    lua_setfield(state, -2, "player_selection_state_1");
+    lua_createtable(state, 4, 0);
+    for (int slot_index = 0; slot_index < 4; ++slot_index) {
+        lua_pushinteger(state, static_cast<lua_Integer>(debug_state.slot_selection_entries[slot_index]));
+        lua_rawseti(state, -2, static_cast<lua_Integer>(slot_index + 1));
+    }
+    lua_setfield(state, -2, "slot_selection_entries");
+    return 1;
+}
+
 int LuaWorldSpawnEnemy(lua_State* state) {
     luaL_checktype(state, 1, LUA_TTABLE);
     lua_getfield(state, 1, "type_id");
@@ -261,8 +308,9 @@ int LuaWorldSpawnReward(lua_State* state) {
 }  // namespace
 
 void RegisterLuaGameplayBindings(lua_State* state) {
-    lua_createtable(state, 0, 1);
+    lua_createtable(state, 0, 2);
     RegisterFunction(state, &LuaGameplayStartWaves, "start_waves");
+    RegisterFunction(state, &LuaGameplayGetSelectionDebugState, "get_selection_debug_state");
     lua_setfield(state, -2, "gameplay");
 
     lua_createtable(state, 0, 1);

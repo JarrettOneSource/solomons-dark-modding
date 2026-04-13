@@ -343,6 +343,7 @@ bool ParseBotCreateRequest(
     if (!ReadOptionalNumberField(state, table_index, "heading", &request->heading, &has_heading, error_message)) {
         return false;
     }
+    request->has_heading = has_heading;
     if (has_heading && !request->has_transform) {
         *error_message = "sd.bots.create requires position when heading is provided";
         return false;
@@ -399,6 +400,7 @@ bool ParseBotUpdateRequest(
     if (!ReadOptionalNumberField(state, table_index, "heading", &request->heading, &has_heading, error_message)) {
         return false;
     }
+    request->has_heading = has_heading;
     if (has_heading && !request->has_transform) {
         *error_message = "sd.bots.update requires position when heading is provided";
         return false;
@@ -484,8 +486,26 @@ bool ParseBotCastRequest(
     return true;
 }
 
+void PushBotEquipVisualLaneState(
+    lua_State* state,
+    const multiplayer::BotEquipVisualLaneState& lane) {
+    lua_createtable(state, 0, 6);
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.wrapper_address));
+    lua_setfield(state, -2, "wrapper_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.holder_address));
+    lua_setfield(state, -2, "holder_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.current_object_address));
+    lua_setfield(state, -2, "current_object_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.holder_kind));
+    lua_setfield(state, -2, "holder_kind");
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.current_object_vtable));
+    lua_setfield(state, -2, "current_object_vtable");
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.current_object_type_id));
+    lua_setfield(state, -2, "current_object_type_id");
+}
+
 void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot) {
-    lua_createtable(state, 0, 47);
+    lua_createtable(state, 0, 50);
     lua_pushboolean(state, snapshot.available ? 1 : 0);
     lua_setfield(state, -2, "available");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.bot_id));
@@ -588,6 +608,12 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "render_drive_overlay_alpha");
     lua_pushnumber(state, snapshot.render_drive_move_blend);
     lua_setfield(state, -2, "render_drive_move_blend");
+    PushBotEquipVisualLaneState(state, snapshot.primary_visual_lane);
+    lua_setfield(state, -2, "primary_visual_lane");
+    PushBotEquipVisualLaneState(state, snapshot.secondary_visual_lane);
+    lua_setfield(state, -2, "secondary_visual_lane");
+    PushBotEquipVisualLaneState(state, snapshot.attachment_visual_lane);
+    lua_setfield(state, -2, "attachment_visual_lane");
     lua_pushboolean(state, snapshot.gameplay_attach_applied ? 1 : 0);
     lua_setfield(state, -2, "gameplay_attach_applied");
     lua_pushstring(state, multiplayer::BotControllerStateLabel(snapshot.state));

@@ -86,6 +86,20 @@ uintptr_t GetDefinitionAddress(
     return it->second;
 }
 
+uintptr_t GetUiSurfaceAddress(std::string_view surface_id, std::string_view key) {
+    const auto* surface_definition = FindUiSurfaceDefinition(surface_id);
+    if (surface_definition == nullptr) {
+        return 0;
+    }
+
+    return GetDefinitionAddress(surface_definition->addresses, key);
+}
+
+uintptr_t GetBinaryLayoutNumericValueOrZero(std::string_view section_id, std::string_view key) {
+    uintptr_t value = 0;
+    return TryGetBinaryLayoutNumericValue(section_id, key, &value) ? value : 0;
+}
+
 bool IsUsableDebugUiSurfaceSnapshot(const DebugUiSurfaceSnapshot& snapshot) {
     if (snapshot.elements.empty()) {
         return false;
@@ -175,8 +189,20 @@ bool TryReadUiActionCallbackOwnerAddress(
         return false;
     }
 
+    const auto* config = TryGetDebugUiOverlayConfig();
+    if (config == nullptr || config->settings_control_callback_owner_offset == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "UI action '" + std::string(action_id) + "' is missing the settings callback-owner offset.";
+        }
+        return false;
+    }
+
     uintptr_t callback_owner = 0;
-    if (!TryReadPointerValueDirect(owner_control_address + 0xC4, &callback_owner) || callback_owner == 0) {
+    if (!TryReadPointerValueDirect(
+            owner_control_address + config->settings_control_callback_owner_offset,
+            &callback_owner) ||
+        callback_owner == 0) {
         if (error_message != nullptr) {
             *error_message =
                 "UI action '" + std::string(action_id) + "' could not resolve a callback owner from the live owner control.";
@@ -217,4 +243,3 @@ bool TryResolveUiActionChildDispatchControlAddress(
         dispatch_control_address,
         error_message);
 }
-

@@ -354,8 +354,8 @@ HP/state only on change. Bosses can use 20Hz for smoother updates.
    - `[14] +0x38 = 0x00623C60` (`ActorMoveByDelta`)
 6. Stock `PlayerActorTick` must run. Returning early in puppet mode makes the bot invisible even when the rest of the visual state is present, so input isolation has to happen via puppet drive state instead.
 7. Gameplay slot assignment is required. The bot must live in slot `1..3` at `gameplay + 0x1358 + slot * 4` for the arena render pipeline. Slot `-1` is invisible; slot `0` conflicts with the local player.
-8. Arena rendering ignores the hub visual-link system. The local player in arena renders with null values at source profile (`+0x178`), equip runtime (`+0x1FC`), progression runtime (`+0x200`), anim state pointer (`+0x21C`), and render frame table (`+0x22C`).
-9. Synthetic source profile (`FUN_005E3080`) sets the weapon attachment and variant bytes correctly, but the descriptor block stays empty without live atlas context. Donor descriptor copy is still needed as a supplement.
+8. Arena rendering ignores the hub visual-link system. The local player in arena renders with null values at source profile (`+0x178`), equip runtime (`+0x1FC`), progression runtime (`+0x200`), anim state pointer (`+0x21C`), and the packed discrete frame-state field (`+0x22C`).
+9. Synthetic source profile (`FUN_005E3080`) sets the weapon attachment and variant bytes correctly, but animation correctness still depends on preserving bot-owned `+0x21C` and `+0x220..+0x263` state instead of donor-copying those windows.
 
 ## Immediate Next Step
 
