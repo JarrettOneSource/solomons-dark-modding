@@ -1400,14 +1400,26 @@ void AdvanceStandaloneWizardWalkCycleState(
     auto secondary = binding->dynamic_walk_cycle_secondary;
 
     primary += displacement_distance / primary_divisor;
-    while (primary >= primary_wrap_threshold) {
-        primary -= primary_wrap_threshold;
+    if (std::isfinite(primary) && primary_wrap_threshold > 0.0001f) {
+        primary = std::fmod(primary, primary_wrap_threshold);
+        if (primary < 0.0f) {
+            primary += primary_wrap_threshold;
+        }
     }
 
     secondary += displacement_distance / secondary_divisor;
-    while (secondary >= secondary_wrap_threshold) {
-        secondary -= secondary_wrap_step;
+    if (std::isfinite(secondary) && primary_wrap_threshold > 0.0001f) {
+        secondary = std::fmod(secondary, primary_wrap_threshold);
+        if (secondary < 0.0f) {
+            secondary += primary_wrap_threshold;
+        }
     }
+
+    // The stock secondary walk-cycle globals are currently not stable for the
+    // gameplay-slot bot path. Keep the secondary phase bounded to the same
+    // stride window as the primary phase so the moving sprite state remains
+    // coherent and does not spike to unusable values.
+    secondary = primary;
 
     binding->dynamic_walk_cycle_primary = primary;
     binding->dynamic_walk_cycle_secondary = secondary;
@@ -1422,16 +1434,15 @@ void StopWizardBotActorMotion(uintptr_t actor_address) {
         return;
     }
 
-    BotEntityBinding* binding = nullptr;
-    {
-        std::lock_guard<std::recursive_mutex> lock(g_bot_entities_mutex);
-        binding = FindBotEntityForActor(actor_address);
-    }
-
-    if (binding != nullptr && binding->kind == BotEntityBinding::Kind::StandaloneWizard) {
+    std::lock_guard<std::recursive_mutex> lock(g_bot_entities_mutex);
+    if (auto* binding = FindBotEntityForActor(actor_address);
+        binding != nullptr && binding->kind == BotEntityBinding::Kind::StandaloneWizard) {
         ApplyObservedBotAnimationState(binding, actor_address, false);
+        binding->dynamic_walk_cycle_primary = 0.0f;
+        binding->dynamic_walk_cycle_secondary = 0.0f;
         binding->dynamic_render_drive_stride = 0.0f;
         binding->dynamic_render_advance_rate = 0.0f;
+        binding->dynamic_render_advance_phase = 0.0f;
         binding->dynamic_render_drive_move_blend = 0.0f;
         ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
         return;
@@ -1568,8 +1579,8 @@ bool ApplyWizardBotMovementStep(BotEntityBinding* binding, std::string* error_me
         } __except (EXCEPTION_EXECUTE_HANDLER) {
         }
     };
-    const auto move_step_x = direction_x;
-    const auto move_step_y = direction_y;
+    const auto move_step_x = direction_x * kWizardBotMovementStepScale;
+    const auto move_step_y = direction_y * kWizardBotMovementStepScale;
     DWORD exception_code = 0;
     if ((binding->kind == BotEntityBinding::Kind::PlaceholderEnemy ||
          binding->kind == BotEntityBinding::Kind::StandaloneWizard) &&
@@ -1584,8 +1595,28 @@ bool ApplyWizardBotMovementStep(BotEntityBinding* binding, std::string* error_me
         const auto position_after_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
         const auto delta_x = position_after_x - position_before_x;
         const auto delta_y = position_after_y - position_before_y;
+        const auto displacement_distance = std::sqrt((delta_x * delta_x) + (delta_y * delta_y));
         if (binding->desired_heading_valid) {
             (void)memory.TryWriteField(actor_address, kActorHeadingOffset, binding->desired_heading);
+        }
+        if (binding->kind == BotEntityBinding::Kind::StandaloneWizard) {
+            AdvanceStandaloneWizardWalkCycleState(binding, displacement_distance);
+            ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
+        }
+        if (displacement_distance <= 0.0001f) {
+            static std::uint64_t s_last_stuck_move_log_ms = 0;
+            const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+            if (now_ms - s_last_stuck_move_log_ms >= 1000) {
+                s_last_stuck_move_log_ms = now_ms;
+                Log(
+                    "[bots] zero-displacement move step. bot_id=" + std::to_string(binding->bot_id) +
+                    " actor=" + HexString(actor_address) +
+                    " before=(" + std::to_string(position_before_x) + ", " + std::to_string(position_before_y) + ")" +
+                    " after=(" + std::to_string(position_after_x) + ", " + std::to_string(position_after_y) + ")" +
+                    " dir=(" + std::to_string(direction_x) + ", " + std::to_string(direction_y) + ")" +
+                    " desired_heading=" + std::to_string(binding->desired_heading) +
+                    " target=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")");
+            }
         }
         LogWizardBotMovementFrame(
             binding,
@@ -1635,7 +1666,7 @@ void SyncWizardBotMovementIntent(BotEntityBinding* binding) {
     binding->distance_to_target = intent.distance_to_target;
 }
 
-void TickWizardBotMovementControllers(uintptr_t gameplay_address, std::uint64_t now_ms) {
+void TickWizardBotSceneBindings(uintptr_t gameplay_address, std::uint64_t now_ms) {
     SceneContextSnapshot scene_context;
     const bool have_scene_context = TryBuildSceneContextSnapshot(gameplay_address, &scene_context);
     std::vector<BotRematerializationRequest> rematerialization_requests;
@@ -1716,35 +1747,35 @@ void TickWizardBotMovementControllers(uintptr_t gameplay_address, std::uint64_t 
     }
 }
 
-void TickWizardBotMovementControllersIfActive() {
+void TickWizardBotSceneBindingsIfActive() {
     if (!g_gameplay_keyboard_injection.initialized) {
         return;
     }
 
-    static std::uint64_t s_last_movement_tick_ms = 0;
-    static std::uint64_t s_last_movement_tick_log_ms = 0;
+    static std::uint64_t s_last_scene_binding_tick_ms = 0;
+    static std::uint64_t s_last_scene_binding_log_ms = 0;
     const auto now_ms = static_cast<std::uint64_t>(::GetTickCount64());
-    if (now_ms - s_last_movement_tick_log_ms >= 1000) {
-        s_last_movement_tick_log_ms = now_ms;
+    if (now_ms - s_last_scene_binding_log_ms >= 1000) {
+        s_last_scene_binding_log_ms = now_ms;
         std::uint32_t bot_count = 0;
-        std::uint32_t active_count = 0;
+        std::uint32_t materialized_count = 0;
         {
             std::lock_guard<std::recursive_mutex> lock(g_bot_entities_mutex);
             bot_count = static_cast<std::uint32_t>(g_bot_entities.size());
             for (const auto& binding : g_bot_entities) {
-                if (binding.actor_address != 0 && binding.movement_active) {
-                    ++active_count;
+                if (binding.actor_address != 0) {
+                    ++materialized_count;
                 }
             }
         }
         Log(
-            "[bots] movement_tick heartbeat bots=" + std::to_string(bot_count) +
-            " active=" + std::to_string(active_count));
+            "[bots] scene_binding_tick heartbeat bots=" + std::to_string(bot_count) +
+            " materialized=" + std::to_string(materialized_count));
     }
-    if (now_ms - s_last_movement_tick_ms < 50) {
+    if (now_ms - s_last_scene_binding_tick_ms < kWizardBotSceneBindingTickIntervalMs) {
         return;
     }
-    s_last_movement_tick_ms = now_ms;
+    s_last_scene_binding_tick_ms = now_ms;
 
     uintptr_t gameplay_address = 0;
     if (!TryResolveCurrentGameplayScene(&gameplay_address) || gameplay_address == 0) {
@@ -1752,5 +1783,5 @@ void TickWizardBotMovementControllersIfActive() {
     }
 
     std::lock_guard<std::recursive_mutex> pump_lock(g_gameplay_action_pump_mutex);
-    TickWizardBotMovementControllers(gameplay_address, now_ms);
+    TickWizardBotSceneBindings(gameplay_address, now_ms);
 }

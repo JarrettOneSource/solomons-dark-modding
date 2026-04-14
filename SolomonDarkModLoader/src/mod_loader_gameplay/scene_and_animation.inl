@@ -637,10 +637,6 @@ void ApplyStandaloneWizardDynamicAnimationState(
     auto& memory = ProcessMemory::Instance();
     (void)memory.TryWriteField(actor_address, kActorWalkCyclePrimaryOffset, binding->dynamic_walk_cycle_primary);
     (void)memory.TryWriteField(actor_address, kActorWalkCycleSecondaryOffset, binding->dynamic_walk_cycle_secondary);
-    (void)memory.TryWriteField(actor_address, kActorRenderDriveStrideScaleOffset, binding->dynamic_render_drive_stride);
-    (void)memory.TryWriteField(actor_address, kActorRenderAdvanceRateOffset, binding->dynamic_render_advance_rate);
-    (void)memory.TryWriteField(actor_address, kActorRenderAdvancePhaseOffset, binding->dynamic_render_advance_phase);
-    (void)memory.TryWriteField(actor_address, kActorRenderDriveMoveBlendOffset, binding->dynamic_render_drive_move_blend);
 }
 
 void SeedBotAnimationDriveProfile(uintptr_t source_actor_address, uintptr_t destination_actor_address) {

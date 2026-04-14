@@ -215,6 +215,20 @@ void ApplyControllerStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot)
     }
 }
 
+float NormalizeHeadingDegrees(float heading_degrees) {
+    if (!std::isfinite(heading_degrees)) {
+        return 0.0f;
+    }
+
+    while (heading_degrees < 0.0f) {
+        heading_degrees += 360.0f;
+    }
+    while (heading_degrees >= 360.0f) {
+        heading_degrees -= 360.0f;
+    }
+    return heading_degrees;
+}
+
 void DeriveControllerMotionFromTransform(
     PendingBotMovementIntent* intent,
     bool have_transform,
@@ -260,7 +274,18 @@ void DeriveControllerMotionFromTransform(
         intent->direction_x = delta_x / distance;
         intent->direction_y = delta_y / distance;
         intent->desired_heading_valid = true;
-        intent->desired_heading = static_cast<float>(std::atan2(delta_y, delta_x));
+        // Stock wizard animation rows are driven from actor +0x6C, and in the
+        // gameplay-slot bot path there is no live +0x21C control object to
+        // override that direction selection. The stock sprite bank convention
+        // is rotated 90 degrees from the controller's raw atan2 heading:
+        //   0   = up
+        //   90  = right
+        //   180 = down
+        //   270 = left
+        // so the bot's world-space heading must be converted into that
+        // gameplay-facing convention before it is written back to +0x6C.
+        intent->desired_heading = NormalizeHeadingDegrees(
+            static_cast<float>(std::atan2(delta_y, delta_x) * (180.0 / 3.14159265358979323846) + 90.0));
         return;
     }
 

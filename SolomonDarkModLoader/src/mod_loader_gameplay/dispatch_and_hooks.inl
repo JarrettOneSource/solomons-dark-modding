@@ -1812,6 +1812,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         std::lock_guard<std::recursive_mutex> lock(g_bot_entities_mutex);
         if (auto* binding = FindBotEntityForActor(actor_address);
             binding != nullptr && binding->kind == BotEntityBinding::Kind::StandaloneWizard) {
+            SyncWizardBotMovementIntent(binding);
             standalone_puppet_actor = true;
             standalone_actor_moving = binding->movement_active;
             standalone_actor_should_restore_desired_heading =
@@ -1832,6 +1833,15 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
 
     auto& memory = ProcessMemory::Instance();
     if (standalone_puppet_actor) {
+        static std::uint64_t s_last_native_bot_tick_log_ms = 0;
+        const auto native_tick_now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        if (native_tick_now_ms - s_last_native_bot_tick_log_ms >= 1000) {
+            s_last_native_bot_tick_log_ms = native_tick_now_ms;
+            Log(
+                "[bots] native bot tick. actor=" + HexString(actor_address) +
+                " moving=" + std::to_string(standalone_actor_moving ? 1 : 0) +
+                " desired_heading=" + std::to_string(standalone_actor_desired_heading));
+        }
         const auto position_before_x =
             memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
         const auto position_before_y =
@@ -1861,8 +1871,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         original(self);
 
         // Idle ticks can still mirror the owner transform onto the puppet. Keep
-        // the restore only for idle frames so stock movement steps can land
-        // during active patrol locomotion.
+        // the restore only for idle frames so the external gameplay-thread move
+        // step can land during active patrol locomotion.
         if (!standalone_actor_moving) {
             (void)memory.TryWriteField(actor_address, kActorPositionXOffset, position_before_x);
             (void)memory.TryWriteField(actor_address, kActorPositionYOffset, position_before_y);
@@ -1875,7 +1885,9 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         std::lock_guard<std::recursive_mutex> lock(g_bot_entities_mutex);
         if (auto* binding = FindBotEntityForActor(actor_address);
             binding != nullptr && binding->kind == BotEntityBinding::Kind::StandaloneWizard) {
-            ApplyObservedBotAnimationState(binding, actor_address, standalone_actor_moving);
+            SyncWizardBotMovementIntent(binding);
+            ApplyObservedBotAnimationState(binding, actor_address, binding->movement_active);
+            PublishWizardBotGameplaySnapshot(*binding);
         }
         NormalizeGameplaySlotBotActorVisualState(actor_address);
         return;
@@ -1883,7 +1895,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
 
     original(self);
     if (memory.ReadFieldOr<std::int8_t>(actor_address, kActorSlotOffset, static_cast<std::int8_t>(-1)) == 0) {
-        TickWizardBotMovementControllersIfActive();
+        TickWizardBotSceneBindingsIfActive();
     }
     LogLocalPlayerAnimationProbe();
 }
