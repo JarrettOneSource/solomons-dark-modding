@@ -56,7 +56,6 @@ using ActorWorldRegisterFn = std::uint32_t(__thiscall*)(void* self, int actor_gr
 using ActorWorldUnregisterFn = void(__thiscall*)(void* self, void* actor, char remove_from_container);
 using ActorWorldRegisterGameplaySlotActorFn = void(__thiscall*)(void* self, int slot_index);
 using ActorWorldUnregisterGameplaySlotActorFn = void(__thiscall*)(void* self, int slot_index);
-using PlayerActorMoveStepFn = std::uint32_t(__thiscall*)(void* self, void* actor, float move_x, float move_y, int flags);
 using ActorMoveByDeltaFn = void(__thiscall*)(void* self, float move_x, float move_y, int flags);
 using ActorAnimationAdvanceFn = void(__thiscall*)(void* self);
 using PlayerActorRefreshRuntimeHandlesFn = void(__thiscall*)(void* self);
@@ -438,6 +437,7 @@ struct ObservedActorAnimationDriveProfile {
     float walk_cycle_primary = 0.0f;
     float walk_cycle_secondary = 0.0f;
     float render_drive_stride = 0.0f;
+    float render_advance_rate = 0.0f;
 };
 
 struct BotEntityBinding {
@@ -461,7 +461,6 @@ struct BotEntityBinding {
     float target_x = 0.0f;
     float target_y = 0.0f;
     float distance_to_target = 0.0f;
-    std::uint64_t last_movement_log_ms = 0;
     std::uint64_t next_scene_materialize_retry_ms = 0;
     int home_region_index = -1;
     int home_region_type_id = -1;
@@ -471,6 +470,12 @@ struct BotEntityBinding {
     int last_applied_animation_state_id = kUnknownAnimationStateId - 1;
     ObservedActorAnimationDriveProfile standalone_idle_animation_drive_profile;
     ObservedActorAnimationDriveProfile standalone_moving_animation_drive_profile;
+    float dynamic_walk_cycle_primary = 0.0f;
+    float dynamic_walk_cycle_secondary = 0.0f;
+    float dynamic_render_drive_stride = 0.0f;
+    float dynamic_render_advance_rate = 0.0f;
+    float dynamic_render_advance_phase = 0.0f;
+    float dynamic_render_drive_move_blend = 0.0f;
     uintptr_t standalone_progression_wrapper_address = 0;
     uintptr_t standalone_progression_inner_address = 0;
     uintptr_t standalone_equip_wrapper_address = 0;
@@ -612,13 +617,17 @@ void AppendEquipVisualLaneSummary(
 
 std::vector<BotEntityBinding> g_bot_entities;
 std::recursive_mutex g_bot_entities_mutex;
-std::unordered_map<uintptr_t, std::uint64_t> g_tracked_attachment_manager_signatures;
 std::mutex g_wizard_bot_snapshot_mutex;
 std::vector<WizardBotGameplaySnapshot> g_wizard_bot_gameplay_snapshots;
 std::recursive_mutex g_gameplay_action_pump_mutex;
+std::uint64_t g_last_wizard_bot_crash_summary_refresh_ms = 0;
+std::uint64_t g_last_gameplay_hud_case100_log_ms = 0;
 
 ObservedActorAnimationDriveProfile g_observed_idle_animation_profile;
 ObservedActorAnimationDriveProfile g_observed_moving_animation_profile;
+bool g_local_player_animation_probe_has_last_position = false;
+float g_local_player_animation_probe_last_x = 0.0f;
+float g_local_player_animation_probe_last_y = 0.0f;
 
 std::string BuildWizardBotCrashSummaryLocked() {
     std::ostringstream out;

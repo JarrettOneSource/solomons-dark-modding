@@ -205,8 +205,8 @@ Current external CLI fallback already installed:
     - comparing helper-item float blocks when a deeper stock-contract question remains
     - tracing future work on full discipline/loadout ownership beyond the current element-only MVP
 - Important harness note:
-  - the sandbox patrol presets default to a fire bot (`wizard_id = 0`)
-  - set `SDMOD_TEST_AUTOSPAWN_BOT_WIZARD_ID` when testing other color paths so a harness default is not mistaken for a render bug
+  - `sample.lua.ui_sandbox_lab` no longer auto-spawns patrol bots during `testrun`
+  - enable `sample.lua.bots` when you want the current single-bot patrol harness, or use the live debug helpers to spawn targeted test bots on demand
 - Current direct-Lua comparison result:
   - `sd.player.get_state()` now exposes `primary_visual_lane`, `secondary_visual_lane`, and `attachment_visual_lane`
   - in the current stable water-bot run, player vs bot attachment lanes were both `0x1B5C` but pointed at different live objects with different payload bytes

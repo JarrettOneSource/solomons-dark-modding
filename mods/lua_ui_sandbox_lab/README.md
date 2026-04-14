@@ -27,9 +27,8 @@ Notes:
 
 - The loader now exposes `sd.ui.get_snapshot`, `sd.ui.find_element`, `sd.ui.find_action`, `sd.ui.get_action_dispatch`, and `sd.ui.activate_action`, so the sandbox waits on live surfaces, resolves canonical action ids, tracks request lifecycle, and dispatches the game's own owner/control handlers without OS mouse injection.
 - `enter_gameplay_start_run` now starts the run through the native `sd.hub.start_testrun()` binding. The separate `enter_gameplay_hub_trace_start_button` preset is reserved for diagnostic tracing when you need to study the live hub button click path.
-- `enter_gameplay_start_run` is the current arena bot-regression preset. It enters `testrun`, spawns a single slot-backed companion wizard, waits for the visual regression summary, and is the supported arena path for bot-visibility verification.
-- `enter_gameplay_start_run_ready` is the matching no-auto-spawn `testrun` preset. Use it when you want a settled arena scene first, then plan to arm traces or spawn bots manually through the live debug tools.
-- Patrol bot presets default to `wizard_id = 0` unless you override `SDMOD_TEST_AUTOSPAWN_BOT_WIZARD_ID`. Use that override when you want color tests for water/earth/air/mind instead of the default fire bot.
+- `enter_gameplay_start_run` now stops at a settled `testrun` scene without owning any bot behavior. Use the standalone `sample.lua.bots` mod when you want the current single-bot patrol harness during a run, or spawn bots manually through the live debug tools.
+- `enter_gameplay_start_run_ready` remains the matching settled `testrun` preset for trace/debug workflows.
 - Combined create/gameplay presets now support explicit element + discipline selection:
   - `create_ready_fire_body`
   - `create_ready_water_mind`
@@ -54,4 +53,4 @@ Notes:
 - The sandbox now exercises `dialog`, `main_menu`, `dark_cloud_browser`, `dark_cloud_search`, `settings`, `controls`, `simple_menu`, `pause_menu`, `create`, `inventory`, and `skills`.
 - `inventory`, `skills`, and true gameplay `pause_menu` follow-through are currently verified probe paths, not yet fully promoted first-class `sd.ui` surfaces.
 - Every step logs the preset name, step index, action kind, current surface, and result so failed transitions are easier to localize.
-- The default preset is the current browser sort probe. Change the preset file or environment variable when you want a different entry point.
+- The sandbox no longer owns default bot follow automation. Change the preset file or environment variable when you want a specific UI or gameplay-entry probe path.

@@ -7,21 +7,17 @@ local function new_context(config, actions)
     lifecycle_events = {
       ["run.started"] = false,
     },
-    spawned_bot_id = nil,
-    patrol = nil,
-    patrol_loop_confirmed = false,
-    last_patrol_trace_ms = 0,
     mode = nil,
     active_preset = nil,
     mode_handlers = {},
   }
 
   function ctx.log_error(message)
-    print("[patrol.bot] " .. tostring(message))
+    print("[ui.sandbox] " .. tostring(message))
   end
 
   function ctx.log_status(message)
-    print("[patrol.bot] " .. tostring(message))
+    print("[ui.sandbox] " .. tostring(message))
   end
 
   function ctx.fail(message)

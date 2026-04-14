@@ -1135,11 +1135,8 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
                 " gameplay=" + (have_gameplay_address ? HexString(gameplay_address) : std::string("0x00000000")) +
                 " cast_intent=" + std::to_string(wrote_cast_intent ? 1 : 0));
         }
-        TickWizardBotMovementControllersIfActive();
         return;
     }
-
-    TickWizardBotMovementControllersIfActive();
 }
 
 void LogStandaloneWizardActorLifecycleEvent(
@@ -1431,159 +1428,6 @@ bool TryCaptureTrackedStandaloneWizardBindingIdentity(
     return false;
 }
 
-void LogStandaloneWizardActorBoundaryEvent(
-    std::string_view label,
-    uintptr_t actor_address,
-    std::uint64_t bot_id,
-    int gameplay_slot,
-    uintptr_t caller_address) {
-    if (actor_address == 0 || bot_id == 0) {
-        return;
-    }
-
-    Log(
-        "[bots] " + std::string(label) +
-        " actor=" + HexString(actor_address) +
-        " bot_id=" + std::to_string(bot_id) +
-        " binding_slot=" + std::to_string(gameplay_slot) +
-        " caller=" + HexString(caller_address) +
-        " stack=" + CaptureStackTraceSummary(1, 5));
-}
-
-void LogStandaloneWizardActorProbeEvent(
-    std::string_view label,
-    uintptr_t actor_address,
-    uintptr_t caller_address) {
-    if (actor_address == 0) {
-        return;
-    }
-
-    std::uint64_t bot_id = 0;
-    int gameplay_slot = -1;
-    bool tracked = false;
-    {
-        std::lock_guard<std::recursive_mutex> lock(g_bot_entities_mutex);
-        if (const auto* binding = FindBotEntityForActor(actor_address);
-            binding != nullptr && binding->kind == BotEntityBinding::Kind::StandaloneWizard) {
-            bot_id = binding->bot_id;
-            gameplay_slot = binding->gameplay_slot;
-            tracked = true;
-        }
-    }
-    if (!tracked) {
-        return;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    uintptr_t gameplay_address = 0;
-    uintptr_t slot_table_actor_address = 0;
-    uintptr_t slot_table_progression_wrapper = 0;
-    if (TryResolveCurrentGameplayScene(&gameplay_address) &&
-        gameplay_address != 0 &&
-        gameplay_slot >= 0 &&
-        gameplay_slot < static_cast<int>(kGameplayPlayerSlotCount)) {
-        const auto actor_slot_offset =
-            kGameplayPlayerActorOffset + static_cast<std::size_t>(gameplay_slot) * kGameplayPlayerSlotStride;
-        const auto progression_slot_offset =
-            kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(gameplay_slot) * kGameplayPlayerSlotStride;
-        slot_table_actor_address =
-            memory.ReadFieldOr<uintptr_t>(gameplay_address, actor_slot_offset, 0);
-        slot_table_progression_wrapper =
-            memory.ReadFieldOr<uintptr_t>(gameplay_address, progression_slot_offset, 0);
-    }
-
-    const auto actor_progression_wrapper =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
-    const auto actor_equip_wrapper =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipHandleOffset, 0);
-    Log(
-        "[bots] " + std::string(label) +
-        " actor=" + HexString(actor_address) +
-        " bot_id=" + std::to_string(bot_id) +
-        " binding_slot=" + std::to_string(gameplay_slot) +
-        " caller=" + HexString(caller_address) +
-        " vtable=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x00, 0)) +
-        " +04=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kObjectHeaderWordOffset, 0)) +
-        " owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
-        " slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
-            actor_address,
-            kActorSlotOffset,
-            -1))) +
-        " reg_slot=" + std::to_string(static_cast<unsigned>(memory.ReadFieldOr<std::uint8_t>(
-            actor_address,
-            kActorRegisteredSlotMirrorOffset,
-            0xFF))) +
-        " reg_id=" + std::to_string(static_cast<unsigned>(memory.ReadFieldOr<std::uint16_t>(
-            actor_address,
-            kActorRegisteredSlotIdMirrorOffset,
-            0xFFFF))) +
-        " +160=" + std::to_string(static_cast<unsigned>(memory.ReadFieldOr<std::uint8_t>(
-            actor_address,
-            kActorAnimationDriveStateByteOffset,
-            0))) +
-        " +1BC=" + std::to_string(memory.ReadFieldOr<std::int32_t>(
-            actor_address,
-            kActorAnimationMoveDurationTicksOffset,
-            0)) +
-        " slot_table_actor=" + HexString(slot_table_actor_address) +
-        " slot_table_prog=" + HexString(slot_table_progression_wrapper) +
-        " slot_table_prog_inner=" + HexString(ReadSmartPointerInnerObject(slot_table_progression_wrapper)) +
-        " actor_prog=" + HexString(actor_progression_wrapper) +
-        " actor_prog_inner=" + HexString(ReadSmartPointerInnerObject(actor_progression_wrapper)) +
-        " actor_equip=" + HexString(actor_equip_wrapper) +
-        " actor_equip_inner=" + HexString(ReadSmartPointerInnerObject(actor_equip_wrapper)) +
-        " +1FC=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipRuntimeStateOffset, 0)) +
-        " +200=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
-        " +21C=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0)) +
-        " stack=" + CaptureStackTraceSummary(1, 5));
-}
-
-void LogTrackedAttachmentManagerStateIfChanged(
-    std::string_view label,
-    uintptr_t actor_address) {
-    if (actor_address == 0) {
-        return;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    const auto equip_runtime_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipRuntimeStateOffset, 0);
-    const auto lane = ReadEquipVisualLaneState(
-        equip_runtime_address,
-        kActorEquipRuntimeVisualLinkAttachmentOffset);
-    if (lane.current_object_address == 0) {
-        return;
-    }
-
-    const auto signature = HashMemoryBlockFNV1a32(
-        lane.current_object_address + 0x6C,
-        0x1C);
-    const std::uint64_t combined_signature =
-        (static_cast<std::uint64_t>(static_cast<std::uint32_t>(lane.current_object_address)) << 32) |
-        static_cast<std::uint64_t>(signature);
-    const auto previous = g_tracked_attachment_manager_signatures.find(actor_address);
-    if (previous != g_tracked_attachment_manager_signatures.end() &&
-        previous->second == combined_signature) {
-        return;
-    }
-    g_tracked_attachment_manager_signatures[actor_address] = combined_signature;
-
-    std::ostringstream out;
-    out << "[bots] " << label
-        << " actor=" << HexString(actor_address)
-        << " attachment=" << HexString(lane.current_object_address)
-        << " type=0x" << HexString(static_cast<uintptr_t>(lane.current_object_type_id))
-        << " mgr_sig=0x" << HexString(signature)
-        << " +6C=" << HexString(memory.ReadFieldOr<std::uint32_t>(lane.current_object_address, 0x6C, 0))
-        << " +70=" << HexString(memory.ReadFieldOr<std::uint32_t>(lane.current_object_address, 0x70, 0))
-        << " +74=" << HexString(memory.ReadFieldOr<std::uint32_t>(lane.current_object_address, 0x74, 0))
-        << " +78=" << HexString(memory.ReadFieldOr<std::uint32_t>(lane.current_object_address, 0x78, 0))
-        << " +7C=" << HexString(memory.ReadFieldOr<std::uint32_t>(lane.current_object_address, 0x7C, 0))
-        << " +80=" << HexString(memory.ReadFieldOr<std::uint32_t>(lane.current_object_address, 0x80, 0))
-        << " +84=" << HexString(memory.ReadFieldOr<std::uint32_t>(lane.current_object_address, 0x84, 0));
-    Log(out.str());
-}
-
 void __fastcall HookPlayerActorEnsureProgressionHandle(void* self, void* /*unused_edx*/) {
     const auto original = GetX86HookTrampoline<PlayerActorNoArgMethodFn>(
         g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
@@ -1591,10 +1435,6 @@ void __fastcall HookPlayerActorEnsureProgressionHandle(void* self, void* /*unuse
         return;
     }
 
-    LogStandaloneWizardActorProbeEvent(
-        "player_vslot_04 enter",
-        reinterpret_cast<uintptr_t>(self),
-        reinterpret_cast<uintptr_t>(_ReturnAddress()));
     original(self);
 }
 
@@ -1696,36 +1536,16 @@ void __fastcall HookPlayerActorVtable28(void* self, void* /*unused_edx*/) {
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
-    std::uint64_t bot_id = 0;
-    int gameplay_slot = -1;
-    const bool tracked =
-        TryCaptureTrackedStandaloneWizardBindingIdentity(actor_address, &bot_id, &gameplay_slot);
     const auto previous_depth = g_player_actor_vslot28_depth;
     const auto previous_actor = g_player_actor_vslot28_actor;
     const auto previous_caller = g_player_actor_vslot28_caller;
     ++g_player_actor_vslot28_depth;
     g_player_actor_vslot28_actor = actor_address;
     g_player_actor_vslot28_caller = reinterpret_cast<uintptr_t>(_ReturnAddress());
-    LogStandaloneWizardActorProbeEvent(
-        "player_vslot_28 enter",
-        actor_address,
-        reinterpret_cast<uintptr_t>(_ReturnAddress()));
-    if (tracked) {
-        LogTrackedAttachmentManagerStateIfChanged("player_vslot_28 pre_attachment", actor_address);
-    }
     original(self);
     g_player_actor_vslot28_depth = previous_depth;
     g_player_actor_vslot28_actor = previous_actor;
     g_player_actor_vslot28_caller = previous_caller;
-    if (tracked) {
-        LogTrackedAttachmentManagerStateIfChanged("player_vslot_28 post_attachment", actor_address);
-        LogStandaloneWizardActorBoundaryEvent(
-            "player_vslot_28 exit",
-            actor_address,
-            bot_id,
-            gameplay_slot,
-            reinterpret_cast<uintptr_t>(_ReturnAddress()));
-    }
 }
 
 void __fastcall HookGameplayHudRenderDispatch(void* self, void* /*unused_edx*/, int render_case) {
@@ -1747,6 +1567,7 @@ void __fastcall HookGameplayHudRenderDispatch(void* self, void* /*unused_edx*/, 
     g_gameplay_hud_case100_owner = reinterpret_cast<uintptr_t>(self);
     g_gameplay_hud_case100_caller = reinterpret_cast<uintptr_t>(_ReturnAddress());
     original(self, render_case);
+    TickWizardBotMovementControllersIfActive();
     g_gameplay_hud_case100_depth = previous_depth;
     g_gameplay_hud_case100_owner = previous_owner;
     g_gameplay_hud_case100_caller = previous_caller;
@@ -1760,30 +1581,12 @@ void __fastcall HookActorAnimationAdvance(void* self, void* /*unused_edx*/) {
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
-    std::uint64_t bot_id = 0;
-    int gameplay_slot = -1;
     const bool tracked =
-        TryCaptureTrackedStandaloneWizardBindingIdentity(actor_address, &bot_id, &gameplay_slot);
-    LogStandaloneWizardActorProbeEvent(
-        "actor_animation_advance enter",
-        actor_address,
-        reinterpret_cast<uintptr_t>(_ReturnAddress()));
-    if (tracked) {
-        LogTrackedAttachmentManagerStateIfChanged("anim_advance pre_attachment", actor_address);
-    }
+        TryCaptureTrackedStandaloneWizardBindingIdentity(actor_address, nullptr, nullptr);
     if (tracked) {
         NormalizeGameplaySlotBotActorVisualState(actor_address);
     }
     original(self);
-    if (tracked) {
-        LogTrackedAttachmentManagerStateIfChanged("anim_advance post_attachment", actor_address);
-        LogStandaloneWizardActorBoundaryEvent(
-            "actor_animation_advance exit",
-            actor_address,
-            bot_id,
-            gameplay_slot,
-            reinterpret_cast<uintptr_t>(_ReturnAddress()));
-    }
 }
 
 void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
@@ -1796,6 +1599,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
     bool standalone_puppet_actor = false;
     bool standalone_actor_moving = false;
+    bool standalone_actor_should_restore_desired_heading = false;
+    float standalone_actor_desired_heading = 0.0f;
     uintptr_t standalone_actor_world = 0;
     {
         std::lock_guard<std::recursive_mutex> lock(g_bot_entities_mutex);
@@ -1803,32 +1608,23 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             binding != nullptr && binding->kind == BotEntityBinding::Kind::StandaloneWizard) {
             standalone_puppet_actor = true;
             standalone_actor_moving = binding->movement_active;
+            standalone_actor_should_restore_desired_heading =
+                binding->movement_active &&
+                binding->desired_heading_valid &&
+                binding->controller_state != multiplayer::BotControllerState::Attacking;
+            standalone_actor_desired_heading = binding->desired_heading;
             standalone_actor_world = binding->materialized_world_address;
         }
     }
 
     auto& memory = ProcessMemory::Instance();
     if (standalone_puppet_actor) {
-        const auto vtable_before =
-            memory.ReadFieldOr<uintptr_t>(actor_address, 0x00, 0);
         const auto position_before_x =
             memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
         const auto position_before_y =
             memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
         const auto heading_before =
             memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
-        Log(
-            "[bots] tick enter actor=" + HexString(actor_address) +
-            " vtable=" + HexString(vtable_before) +
-            " owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
-            " slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
-                actor_address,
-                kActorSlotOffset,
-                -1))) +
-            " +1FC=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipRuntimeStateOffset, 0)) +
-            " +200=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
-            " +21C=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0)));
-        LogTrackedAttachmentManagerStateIfChanged("tick pre_attachment", actor_address);
 
         (void)EnsureStandaloneWizardWorldOwner(
             actor_address,
@@ -1843,29 +1639,23 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     binding,
                     actor_address,
                     standalone_actor_moving);
+                ApplyStandaloneWizardPuppetDriveState(
+                    binding,
+                    actor_address,
+                    standalone_actor_moving);
             }
         }
-        ApplyStandaloneWizardPuppetDriveState(actor_address, standalone_actor_moving);
         original(self);
-        Log(
-            "[bots] tick exit actor=" + HexString(actor_address) +
-            " vtable=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x00, 0)) +
-            " owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
-            " slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
-                actor_address,
-                kActorSlotOffset,
-                -1))) +
-            " +1FC=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipRuntimeStateOffset, 0)) +
-            " +200=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
-            " +21C=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0)));
-        LogTrackedAttachmentManagerStateIfChanged("tick post_attachment", actor_address);
 
         // The native player tick can still mirror owner transform/anim state onto
         // the puppet. Restore transform and then re-apply the desired animation
         // selection on the live control object after native writes have landed.
         (void)memory.TryWriteField(actor_address, kActorPositionXOffset, position_before_x);
         (void)memory.TryWriteField(actor_address, kActorPositionYOffset, position_before_y);
-        (void)memory.TryWriteField(actor_address, kActorHeadingOffset, heading_before);
+        (void)memory.TryWriteField(
+            actor_address,
+            kActorHeadingOffset,
+            standalone_actor_should_restore_desired_heading ? standalone_actor_desired_heading : heading_before);
 
         std::lock_guard<std::recursive_mutex> lock(g_bot_entities_mutex);
         if (auto* binding = FindBotEntityForActor(actor_address);

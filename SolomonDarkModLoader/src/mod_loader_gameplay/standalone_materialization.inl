@@ -759,16 +759,7 @@ void ClearActorSyntheticVisualSourceState(uintptr_t actor_address) {
 }
 
 void NormalizeGameplaySlotBotActorVisualState(uintptr_t actor_address) {
-    if (actor_address == 0) {
-        return;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    std::array<std::uint8_t, kActorHubVisualDescriptorBlockSize> cleared_descriptor{};
-    (void)memory.TryWrite(
-        actor_address + kActorHubVisualDescriptorBlockOffset,
-        cleared_descriptor.data(),
-        cleared_descriptor.size());
+    (void)actor_address;
 }
 
 bool CreateStandaloneWizardVisualLinkObject(
@@ -1211,7 +1202,7 @@ bool PrimeGameplaySlotBotSelectionState(
             "[bots] gameplay-slot actor animation prime skipped. actor=" + HexString(actor_address) +
             " desired=" + std::to_string(selection_state));
     }
-    ApplyStandaloneWizardPuppetDriveState(actor_address, false);
+    ApplyStandaloneWizardPuppetDriveState(nullptr, actor_address, false);
     Log(
         "[bots] visual stage=selection_post_refresh bot={" +
         BuildActorVisualDebugSummary(actor_address) +

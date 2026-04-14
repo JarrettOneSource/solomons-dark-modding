@@ -33,7 +33,7 @@ Example manifest:
 Included sample mods:
 
 - `item_gold_focus`
-- `lua_bot_brain_demo`
+- `lua_bots` (spawns a single patrol bot for movement, facing, and animation diagnosis)
 - `lua_dark_cloud_sort_bootstrap` (semantic dialog-dismiss bootstrap to the title menu checkpoint)
 - `lua_ui_sandbox_lab` (semantic UI lab presets backed by live snapshots and engine-level action activation; preset selected via config file or environment)
 - `skill_shock_nova`

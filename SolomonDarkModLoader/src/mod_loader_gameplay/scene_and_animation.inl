@@ -454,6 +454,21 @@ int ResolveActorAnimationStateId(uintptr_t actor_address) {
     return memory.ReadValueOr<int>(slot_address, kUnknownAnimationStateId);
 }
 
+bool TryResolvePlayerActorForSlot(uintptr_t gameplay_address, int slot_index, uintptr_t* actor_address);
+
+int ResolveGameplayBaselineAnimationState() {
+    uintptr_t gameplay_address = 0;
+    uintptr_t local_actor_address = 0;
+    if (!TryResolveCurrentGameplayScene(&gameplay_address) || gameplay_address == 0 ||
+        !TryResolvePlayerActorForSlot(gameplay_address, 0, &local_actor_address) ||
+        local_actor_address == 0) {
+        return 0;
+    }
+
+    const auto state_id = ResolveActorAnimationStateId(local_actor_address);
+    return state_id == kUnknownAnimationStateId ? 0 : state_id;
+}
+
 bool TryWriteActorAnimationStateIdDirect(uintptr_t actor_address, int state_id) {
     if (actor_address == 0 || state_id == kUnknownAnimationStateId) {
         return false;
@@ -479,13 +494,15 @@ bool CaptureActorAnimationDriveProfile(
         return false;
     }
 
+    profile->valid = true;
     profile->walk_cycle_primary =
         memory.ReadFieldOr<float>(actor_address, kActorWalkCyclePrimaryOffset, 0.0f);
     profile->walk_cycle_secondary =
         memory.ReadFieldOr<float>(actor_address, kActorWalkCycleSecondaryOffset, 0.0f);
     profile->render_drive_stride =
         memory.ReadFieldOr<float>(actor_address, kActorRenderDriveStrideScaleOffset, 0.0f);
-    profile->valid = true;
+    profile->render_advance_rate =
+        memory.ReadFieldOr<float>(actor_address, kActorRenderAdvanceRateOffset, 0.0f);
     return true;
 }
 
@@ -497,19 +514,19 @@ bool ApplyActorAnimationDriveProfile(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const bool wrote_config = memory.TryWrite(
+    const auto config_written = memory.TryWrite(
         actor_address + kActorAnimationConfigBlockOffset,
         profile.config_bytes.data(),
         profile.config_bytes.size());
-    const bool wrote_primary =
-        memory.TryWriteField(actor_address, kActorWalkCyclePrimaryOffset, profile.walk_cycle_primary);
-    const bool wrote_secondary =
-        memory.TryWriteField(actor_address, kActorWalkCycleSecondaryOffset, profile.walk_cycle_secondary);
-    const bool wrote_stride = memory.TryWriteField(
+    if (!config_written) {
+        return false;
+    }
+
+    (void)memory.TryWriteField(
         actor_address,
-        kActorRenderDriveStrideScaleOffset,
-        profile.render_drive_stride);
-    return wrote_config || wrote_primary || wrote_secondary || wrote_stride;
+        kActorRenderAdvanceRateOffset,
+        profile.render_advance_rate);
+    return true;
 }
 
 void CaptureObservedPlayerAnimationDriveProfile(uintptr_t actor_address, bool moving_now) {
@@ -610,6 +627,22 @@ void ApplyStandaloneWizardAnimationDriveProfile(
     }
 }
 
+void ApplyStandaloneWizardDynamicAnimationState(
+    const BotEntityBinding* binding,
+    uintptr_t actor_address) {
+    if (binding == nullptr || actor_address == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    (void)memory.TryWriteField(actor_address, kActorWalkCyclePrimaryOffset, binding->dynamic_walk_cycle_primary);
+    (void)memory.TryWriteField(actor_address, kActorWalkCycleSecondaryOffset, binding->dynamic_walk_cycle_secondary);
+    (void)memory.TryWriteField(actor_address, kActorRenderDriveStrideScaleOffset, binding->dynamic_render_drive_stride);
+    (void)memory.TryWriteField(actor_address, kActorRenderAdvanceRateOffset, binding->dynamic_render_advance_rate);
+    (void)memory.TryWriteField(actor_address, kActorRenderAdvancePhaseOffset, binding->dynamic_render_advance_phase);
+    (void)memory.TryWriteField(actor_address, kActorRenderDriveMoveBlendOffset, binding->dynamic_render_drive_move_blend);
+}
+
 void SeedBotAnimationDriveProfile(uintptr_t source_actor_address, uintptr_t destination_actor_address) {
     if (source_actor_address == 0 || destination_actor_address == 0) {
         return;
@@ -685,13 +718,17 @@ void ResetStandaloneWizardControlBrain(uintptr_t actor_address) {
     (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainMoveInputYOffset, 0.0f);
 }
 
-void ApplyStandaloneWizardPuppetDriveState(uintptr_t actor_address, bool moving) {
+void ApplyStandaloneWizardPuppetDriveState(
+    const BotEntityBinding* binding,
+    uintptr_t actor_address,
+    bool moving) {
     if (actor_address == 0) {
         return;
     }
 
     auto& memory = ProcessMemory::Instance();
-    (void)memory.TryWriteField(actor_address, kActorAnimationDriveStateByteOffset, static_cast<std::uint8_t>(0));
+    const auto control_brain_address =
+        memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
     if (!moving) {
         (void)memory.TryWriteField(actor_address, kActorAnimationMoveDurationTicksOffset, 0);
     } else {
@@ -706,6 +743,32 @@ void ApplyStandaloneWizardPuppetDriveState(uintptr_t actor_address, bool moving)
     }
 
     ResetStandaloneWizardControlBrain(actor_address);
+    if (control_brain_address == 0 || binding == nullptr || !moving) {
+        return;
+    }
+
+    float move_input_x = binding->direction_x;
+    float move_input_y = binding->direction_y;
+    const auto magnitude = std::sqrt((move_input_x * move_input_x) + (move_input_y * move_input_y));
+    if (magnitude > 0.0001f) {
+        move_input_x /= magnitude;
+        move_input_y /= magnitude;
+    } else {
+        move_input_x = 0.0f;
+        move_input_y = 0.0f;
+    }
+
+    const auto desired_heading =
+        binding->desired_heading_valid
+            ? binding->desired_heading
+            : memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
+    (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainHeadingAccumulatorOffset, desired_heading);
+    (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainDesiredFacingOffset, desired_heading);
+    (void)memory.TryWriteValue<float>(
+        control_brain_address + kActorControlBrainDesiredFacingSmoothedOffset,
+        desired_heading);
+    (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainMoveInputXOffset, move_input_x);
+    (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainMoveInputYOffset, move_input_y);
 }
 
 bool TryReadMemoryBlock(uintptr_t address, std::size_t size, std::vector<std::uint8_t>* bytes) {
