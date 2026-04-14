@@ -15,12 +15,6 @@ void InitializeParticipantDefaults(ParticipantInfo* participant, ParticipantKind
     }
 
     participant->kind = kind;
-    if (participant->wizard_id == -1) {
-        participant->wizard_id = 0;
-    }
-    if (participant->runtime.wizard_id == -1) {
-        participant->runtime.wizard_id = participant->wizard_id;
-    }
 }
 
 void InitializeLocalParticipantLocked(RuntimeState& state) {
@@ -32,9 +26,8 @@ void InitializeLocalParticipantLocked(RuntimeState& state) {
     participant.participant_id = kLocalParticipantId;
     participant.kind = ParticipantKind::LocalHuman;
     participant.name = "Wizard";
-    participant.wizard_id = 0;
     participant.is_owner = true;
-    participant.runtime.wizard_id = participant.wizard_id;
+    participant.character_profile = DefaultCharacterProfile();
     state.participants.push_back(std::move(participant));
 }
 
@@ -51,6 +44,24 @@ RuntimeState& MutableRuntimeState() {
 }
 
 }  // namespace detail
+
+MultiplayerCharacterProfile DefaultCharacterProfile() {
+    return MultiplayerCharacterProfile{};
+}
+
+bool IsValidCharacterProfile(const MultiplayerCharacterProfile& profile) {
+    if (profile.element_id < 0 || profile.element_id > 4) {
+        return false;
+    }
+
+    const auto discipline_id = static_cast<std::int32_t>(profile.discipline_id);
+    if (discipline_id < static_cast<std::int32_t>(CharacterDisciplineId::Mind) ||
+        discipline_id > static_cast<std::int32_t>(CharacterDisciplineId::Arcane)) {
+        return false;
+    }
+
+    return true;
+}
 
 void InitializeRuntimeState() {
     std::scoped_lock lock(g_runtime_state_mutex);
@@ -168,8 +179,7 @@ ParticipantInfo* UpsertRemoteHumanParticipant(RuntimeState& state, std::uint64_t
     created.participant_id = participant_id;
     created.kind = ParticipantKind::RemoteHuman;
     created.name = "Remote Wizard";
-    created.wizard_id = 0;
-    created.runtime.wizard_id = created.wizard_id;
+    created.character_profile = DefaultCharacterProfile();
     state.participants.push_back(std::move(created));
     return &state.participants.back();
 }
@@ -189,8 +199,7 @@ ParticipantInfo* UpsertLuaBotParticipant(RuntimeState& state, std::uint64_t part
     created.participant_id = participant_id;
     created.kind = ParticipantKind::LuaBot;
     created.name = "Lua Bot";
-    created.wizard_id = 0;
-    created.runtime.wizard_id = created.wizard_id;
+    created.character_profile = DefaultCharacterProfile();
     state.participants.push_back(std::move(created));
     return &state.participants.back();
 }

@@ -30,7 +30,8 @@ Every bot feature should be built as a "participant" feature. When we add multip
 │       ┌───────────────────────────────────┐        │
 │       │     ParticipantState              │        │
 │       │  position, heading, hp, mp,       │        │
-│       │  wizard_id, skills, cast_queue    │        │
+│       │  character_profile, skills,       │        │
+│       │  inventory, cast_queue            │        │
 │       └───────────────┬───────────────────┘        │
 │                       │                            │
 │                       ▼                            │
@@ -47,7 +48,7 @@ Get a second wizard to appear in the game world, driven by code.
 - Use Ghidra to find how the player wizard is created at run start
 - Trace from Arena_Create (0x0046EA90) or the region switch (0x005CDDD0)
 - Find the function that allocates and initializes a wizard entity
-- Determine the struct layout (position, heading, HP, MP, wizard_id, animation state)
+- Determine the struct layout (position, heading, HP, MP, character profile, animation state)
 
 ### 1.2 Spawn a bot entity
 - Call the wizard creation function to spawn a second wizard
@@ -56,8 +57,8 @@ Get a second wizard to appear in the game world, driven by code.
 - Ensure it doesn't crash or interfere with the player wizard
 
 ### 1.3 Wire to existing bot_runtime.h API
-- `sd.bots.create({wizard_id=N, position={x,y}})` spawns a real entity
-- `sd.bots.update({id=N, position={x,y}, heading=F})` moves the entity
+- `sd.bots.create({profile={element_id=..., discipline_id=..., ...}, position={x,y}})` spawns a real entity
+- `sd.bots.update({id=N, profile={...}, position={x,y}, heading=F})` updates the entity
 - `sd.bots.destroy(id)` removes the entity
 - Store bot_id -> entity_ptr mapping
 
@@ -65,7 +66,10 @@ Get a second wizard to appear in the game world, driven by code.
 ```lua
 sd.events.on("wave.started", function(e)
   local bot = sd.bots.create({
-    wizard_id = 2,
+    profile = {
+      element_id = 2,
+      discipline_id = 2,
+    },
     x = 100.0, y = 100.0,
   })
   log("bot spawned: " .. tostring(bot))
@@ -148,7 +152,7 @@ Abstract bots into the general participant system.
 struct ParticipantState {
     uint64_t id;
     ParticipantKind kind;  // LocalHuman, LuaBot, RemoteHuman
-    int wizard_id;
+    MultiplayerCharacterProfile character_profile;
     bool ready;
     float position_x, position_y;
     float heading;
@@ -314,6 +318,7 @@ HP/state only on change. Bosses can use 20Hz for smoother updates.
 - [x] Bot is now VISIBLE in the arena. The current visual is wrong, but a wizard sprite does render.
 - [x] Bot has collision, stays in place, and pathfinds back to its patrol point when pushed.
 - [x] Arena rendering is stable only when the bot is published into a real gameplay slot (`gameplay + 0x1358 + slot * 4`, slot `1..3`).
+- [x] Hostile AI compatibility now has a clean runtime cutover: stock hostile selection still prefers slot `0`, but the loader widens `MonsterPathfinding_RefreshTarget` so nearer gameplay-slot participants in slots `1..3` can be selected, retained, and attacked too.
 - [x] Stock `PlayerActorTick` runs on the bot; skipping it makes the bot invisible.
 - [x] Input remains decoupled through puppet drive-state/control scrubbing rather than by bypassing the stock tick.
 - [x] Lua patrol still works (`move_to` between points).
@@ -335,6 +340,11 @@ HP/state only on change. Bosses can use 20Hz for smoother updates.
 - Arena rendering ignores the hub visual-link path. The local player in arena can render with null source-profile/equip/progression/anim-table fields that matter in the hub pipeline.
 - Wizard visuals remain split from basic visibility: synthetic source profiles can create the weapon attachment, but descriptor bytes still need donor supplementation for the correct independent wizard sprite.
 - Movement remains game-native: collision resolves through the stock movement path, and the bot returns to patrol after being pushed.
+- Hostile targeting validation now has live proof on the stock wave path:
+  - slot-1 bot actor `0x02D4D7A8` was promoted over the stock slot-0 player target
+  - hostile `0x14A3D638` logged `promoted_bucket_delta=2048`
+  - five seconds later that hostile still held `target = 0x02D4D7A8` with `mirror = 2048`
+  - the bot's HP dropped from `50.0` to `18.5`, then to `-293.5`
 - Cleanup: ActorWorld_Unregister → destructor → _aligned_free
 
 ### Key RE Findings:

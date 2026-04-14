@@ -174,6 +174,10 @@ def query_bot_state(bot_id: int) -> dict[str, str]:
           return
         end
         emit("available", bot.available)
+        if type(bot.profile) == "table" then
+          emit("profile_element_id", bot.profile.element_id)
+          emit("profile_discipline_id", bot.profile.discipline_id)
+        end
         for _, key in ipairs({{
           "bot_id",
           "actor_address",
@@ -257,7 +261,7 @@ def arm_shared_write_watches(config: configparser.ConfigParser, gameplay_address
     run_lua("\n".join(lines))
 
 
-def spawn_bot(config: configparser.ConfigParser, wizard_id: int, offset_x: float, offset_y: float, heading: float) -> int:
+def spawn_bot(config: configparser.ConfigParser, element_id: int, offset_x: float, offset_y: float, heading: float) -> int:
     code = textwrap.dedent(
         f"""
         local player = sd.player and sd.player.get_state and sd.player.get_state()
@@ -268,7 +272,10 @@ def spawn_bot(config: configparser.ConfigParser, wizard_id: int, offset_x: float
         local y = (tonumber(player.y) or 0.0) + ({offset_y})
         local bot_id = sd.bots.create({{
           name = "Live Render Debug Bot",
-          wizard_id = {wizard_id},
+          profile = {{
+            element_id = {element_id},
+            discipline_id = 2,
+          }},
           ready = true,
           position = {{ x = x, y = y }},
           heading = {heading},
@@ -352,7 +359,7 @@ def cmd_arm_and_spawn(args: argparse.Namespace) -> int:
     arm_shared_probe(config, gameplay_address, player_actor)
     if args.with_write_watches:
         arm_shared_write_watches(config, gameplay_address, player_actor)
-    bot_id = spawn_bot(config, args.wizard_id, args.offset_x, args.offset_y, args.heading)
+    bot_id = spawn_bot(config, args.element_id, args.offset_x, args.offset_y, args.heading)
     partial_state = {
         "scene": scene,
         "player_before_spawn": player,
@@ -413,7 +420,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     arm_parser.add_argument("--scene", default="testrun")
     arm_parser.add_argument("--timeout", type=float, default=30.0)
-    arm_parser.add_argument("--wizard-id", type=int, default=0)
+    arm_parser.add_argument("--element-id", type=int, default=0)
     arm_parser.add_argument("--offset-x", type=float, default=32.0)
     arm_parser.add_argument("--offset-y", type=float, default=0.0)
     arm_parser.add_argument("--heading", type=float, default=0.0)

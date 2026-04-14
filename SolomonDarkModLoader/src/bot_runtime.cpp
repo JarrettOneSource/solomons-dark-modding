@@ -40,7 +40,7 @@ struct PendingBotCast {
 struct PendingBotEntitySync {
     std::uint64_t bot_id = 0;
     std::uint64_t generation = 0;
-    std::int32_t wizard_id = 0;
+    MultiplayerCharacterProfile character_profile;
     bool has_transform = false;
     bool has_heading = false;
     float position_x = 0.0f;

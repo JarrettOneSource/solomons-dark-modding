@@ -4,7 +4,6 @@ local actions = require_mod("scripts/lib/actions.lua")
 local common = require_mod("scripts/lib/common.lua")
 local config = require_mod("scripts/lib/config.lua")
 local create_probe = require_mod("scripts/lib/create_probe.lua")
-local patrol = require_mod("scripts/lib/patrol.lua")
 local setup = require_mod("scripts/lib/setup.lua")
 local trace_util = require_mod("scripts/lib/trace_util.lua")
 local wizard_compare = require_mod("scripts/lib/wizard_compare.lua")
@@ -37,7 +36,6 @@ local function start()
   ctx.mode, ctx.active_preset = setup.resolve_mode()
   arm_startup_traces_if_requested(ctx)
 
-  ctx.mode_handlers.patrol = patrol.new(ctx)
   ctx.mode_handlers.create_probe = create_probe.new(ctx)
   ctx.mode_handlers.wizard_compare = wizard_compare.new(ctx)
 
@@ -50,7 +48,6 @@ local function start()
 
   sd.events.on("run.ended", function()
     ctx.lifecycle_events["run.started"] = false
-    ctx.mode_handlers.patrol.on_run_ended()
     ctx.mode_handlers.wizard_compare.on_run_ended()
   end)
 
@@ -65,8 +62,6 @@ local function start()
       ctx.mode_handlers.create_probe.run(now_ms, setup_runner.setup_complete)
     elseif ctx.mode == "wizard_compare" then
       ctx.mode_handlers.wizard_compare.update(now_ms, setup_runner.setup_complete)
-    else
-      ctx.mode_handlers.patrol.update(now_ms)
     end
   end)
 end

@@ -461,7 +461,7 @@ bool ApplySourceActorRenderSnapshotToTargetActor(
 
 bool CreateWizardCloneSourceActor(
     uintptr_t world_address,
-    int wizard_id,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
     float heading,
@@ -505,7 +505,7 @@ bool CreateWizardCloneSourceActor(
         0,
         0);
 
-    uintptr_t staged_source_profile_address = CreateSyntheticWizardSourceProfile(wizard_id);
+    uintptr_t staged_source_profile_address = CreateSyntheticWizardSourceProfile(character_profile);
     if (staged_source_profile_address == 0) {
         if (error_message != nullptr) {
             *error_message = "Wizard clone source-profile allocation failed.";
@@ -759,16 +759,7 @@ void ClearActorSyntheticVisualSourceState(uintptr_t actor_address) {
 }
 
 void NormalizeGameplaySlotBotActorVisualState(uintptr_t actor_address) {
-    if (actor_address == 0) {
-        return;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    std::array<std::uint8_t, kActorHubVisualDescriptorBlockSize> cleared_descriptor{};
-    (void)memory.TryWrite(
-        actor_address + kActorHubVisualDescriptorBlockOffset,
-        cleared_descriptor.data(),
-        cleared_descriptor.size());
+    (void)actor_address;
 }
 
 bool CreateStandaloneWizardVisualLinkObject(
@@ -862,7 +853,7 @@ bool CreateStandaloneWizardVisualLinkObject(
     return true;
 }
 
-bool AttachObjectToEquipVisualLane(
+bool SetEquipVisualLaneObject(
     uintptr_t actor_address,
     std::size_t lane_offset,
     uintptr_t object_address,
@@ -871,11 +862,11 @@ bool AttachObjectToEquipVisualLane(
     if (error_message != nullptr) {
         error_message->clear();
     }
-    if (actor_address == 0 || object_address == 0) {
+    if (actor_address == 0) {
         if (error_message != nullptr) {
             *error_message =
                 "Standalone " + std::string(label) +
-                " attach requires a live actor and object.";
+                " lane update requires a live actor.";
         }
         return false;
     }
@@ -917,10 +908,12 @@ bool AttachObjectToEquipVisualLane(
             "holder_object_before",
             holder_object_before);
     }
-    AppendAttachmentObjectDebugSummary(
-        &before_out,
-        "object_new_state",
-        object_address);
+    if (object_address != 0) {
+        AppendAttachmentObjectDebugSummary(
+            &before_out,
+            "object_new_state",
+            object_address);
+    }
     Log(before_out.str());
 
     DWORD exception_code = 0;
@@ -932,7 +925,7 @@ bool AttachObjectToEquipVisualLane(
         if (error_message != nullptr) {
             *error_message =
                 "Standalone " + std::string(label) +
-                " attach failed with 0x" + HexString(exception_code) + ".";
+                " lane update failed with 0x" + HexString(exception_code) + ".";
         }
         return false;
     }
@@ -957,6 +950,54 @@ bool AttachObjectToEquipVisualLane(
     return true;
 }
 
+bool DetachGameplaySlotBotVisualLanes(uintptr_t actor_address, std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (actor_address == 0) {
+        return true;
+    }
+
+    std::string lane_error;
+    if (!SetEquipVisualLaneObject(
+            actor_address,
+            kActorEquipRuntimeVisualLinkPrimaryOffset,
+            0,
+            "primary",
+            &lane_error)) {
+        if (error_message != nullptr) {
+            *error_message = lane_error;
+        }
+        return false;
+    }
+
+    if (!SetEquipVisualLaneObject(
+            actor_address,
+            kActorEquipRuntimeVisualLinkSecondaryOffset,
+            0,
+            "secondary",
+            &lane_error)) {
+        if (error_message != nullptr) {
+            *error_message = lane_error;
+        }
+        return false;
+    }
+
+    if (!SetEquipVisualLaneObject(
+            actor_address,
+            kActorEquipRuntimeVisualLinkAttachmentOffset,
+            0,
+            "attachment",
+            &lane_error)) {
+        if (error_message != nullptr) {
+            *error_message = lane_error;
+        }
+        return false;
+    }
+
+    return true;
+}
+
 bool AttachBuiltDescriptorToEquipVisualLane(
     uintptr_t actor_address,
     std::size_t lane_offset,
@@ -973,7 +1014,7 @@ bool AttachBuiltDescriptorToEquipVisualLane(
         return false;
     }
 
-    if (!AttachObjectToEquipVisualLane(
+    if (!SetEquipVisualLaneObject(
             actor_address,
             lane_offset,
             object_address,
@@ -1007,7 +1048,7 @@ bool TransferActorAttachmentToEquipVisualLane(
         return true;
     }
 
-    if (!AttachObjectToEquipVisualLane(
+    if (!SetEquipVisualLaneObject(
             actor_address,
             kActorEquipRuntimeVisualLinkAttachmentOffset,
             attachment_address,
@@ -1051,7 +1092,7 @@ bool TransferSourceActorAttachmentToTargetEquipVisualLane(
         return true;
     }
 
-    if (!AttachObjectToEquipVisualLane(
+    if (!SetEquipVisualLaneObject(
             target_actor_address,
             kActorEquipRuntimeVisualLinkAttachmentOffset,
             source_attachment_address,
@@ -1077,7 +1118,7 @@ bool PrimeGameplaySlotBotSelectionState(
     uintptr_t actor_address,
     uintptr_t progression_address,
     int slot_index,
-    int wizard_id,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
     std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
@@ -1091,8 +1132,8 @@ bool PrimeGameplaySlotBotSelectionState(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto choice_ids = ResolveWizardAppearanceChoiceIds(wizard_id);
-    const auto selection_state = ResolveStandaloneWizardSelectionState(wizard_id);
+    const auto choice_ids = ResolveProfileAppearanceChoiceIds(character_profile);
+    const auto selection_state = ResolveProfileSelectionState(character_profile);
     const auto apply_choice_address = memory.ResolveGameAddressOrZero(kPlayerAppearanceApplyChoice);
     if (apply_choice_address == 0) {
         if (error_message != nullptr) {
@@ -1211,7 +1252,7 @@ bool PrimeGameplaySlotBotSelectionState(
             "[bots] gameplay-slot actor animation prime skipped. actor=" + HexString(actor_address) +
             " desired=" + std::to_string(selection_state));
     }
-    ApplyStandaloneWizardPuppetDriveState(actor_address, false);
+    ApplyStandaloneWizardPuppetDriveState(nullptr, actor_address, false);
     Log(
         "[bots] visual stage=selection_post_refresh bot={" +
         BuildActorVisualDebugSummary(actor_address) +
@@ -1581,7 +1622,7 @@ bool WireGameplaySlotBotRuntimeHandles(
 bool SeedGameplaySlotBotRenderStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t world_address,
-    int wizard_id,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
     float heading,
@@ -1615,7 +1656,7 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
     std::string stage_error;
     if (!CreateWizardCloneSourceActor(
             world_address,
-            wizard_id,
+            character_profile,
             x,
             y,
             heading,
@@ -1705,7 +1746,7 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
         cleanup_source();
     }
     Log(
-        "[bots] visual stage=slot_actor_attachment_seeded bot={" +
+        "[bots] visual stage=slot_actor_helper_lanes_seeded bot={" +
         BuildActorVisualDebugSummary(actor_address) + "}");
     return true;
 }
@@ -1714,7 +1755,7 @@ bool CreateGameplaySlotBotActor(
     uintptr_t gameplay_address,
     uintptr_t world_address,
     int slot_index,
-    int wizard_id,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
     float heading,
@@ -1740,44 +1781,53 @@ bool CreateGameplaySlotBotActor(
 
     auto& memory = ProcessMemory::Instance();
     (void)world_address;
-    const auto create_slot_address = memory.ResolveGameAddressOrZero(kGameplayCreatePlayerSlot);
-    if (create_slot_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Unable to resolve Gameplay_CreatePlayerSlot.";
-        }
-        return false;
-    }
-
-    DWORD exception_code = 0;
-    if (!CallGameplayCreatePlayerSlotSafe(
-            create_slot_address,
-            gameplay_address,
-            slot_index,
-            &exception_code)) {
-        if (error_message != nullptr) {
-            *error_message =
-                "Gameplay_CreatePlayerSlot failed with 0x" + HexString(exception_code) + ".";
-        }
-        return false;
-    }
-
     uintptr_t slot_actor_address = 0;
     uintptr_t slot_progression_address = 0;
-    if (!TryResolvePlayerActorForSlot(gameplay_address, slot_index, &slot_actor_address) ||
-        slot_actor_address == 0) {
-        if (error_message != nullptr) {
-            *error_message =
-                "Gameplay_CreatePlayerSlot did not publish a slot actor.";
+    const bool have_existing_slot_actor =
+        TryResolvePlayerActorForSlot(gameplay_address, slot_index, &slot_actor_address) &&
+        slot_actor_address != 0;
+    const bool have_existing_slot_progression =
+        TryResolvePlayerProgressionForSlot(gameplay_address, slot_index, &slot_progression_address) &&
+        slot_progression_address != 0;
+
+    if (!have_existing_slot_actor || !have_existing_slot_progression) {
+        const auto create_slot_address = memory.ResolveGameAddressOrZero(kGameplayCreatePlayerSlot);
+        if (create_slot_address == 0) {
+            if (error_message != nullptr) {
+                *error_message = "Unable to resolve Gameplay_CreatePlayerSlot.";
+            }
+            return false;
         }
-        return false;
-    }
-    if (!TryResolvePlayerProgressionForSlot(gameplay_address, slot_index, &slot_progression_address) ||
-        slot_progression_address == 0) {
-        if (error_message != nullptr) {
-            *error_message =
-                "Gameplay_CreatePlayerSlot did not publish a slot progression object.";
+
+        DWORD exception_code = 0;
+        if (!CallGameplayCreatePlayerSlotSafe(
+                create_slot_address,
+                gameplay_address,
+                slot_index,
+                &exception_code)) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Gameplay_CreatePlayerSlot failed with 0x" + HexString(exception_code) + ".";
+            }
+            return false;
         }
-        return false;
+
+        if (!TryResolvePlayerActorForSlot(gameplay_address, slot_index, &slot_actor_address) ||
+            slot_actor_address == 0) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Gameplay_CreatePlayerSlot did not publish a slot actor.";
+            }
+            return false;
+        }
+        if (!TryResolvePlayerProgressionForSlot(gameplay_address, slot_index, &slot_progression_address) ||
+            slot_progression_address == 0) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Gameplay_CreatePlayerSlot did not publish a slot progression object.";
+            }
+            return false;
+        }
     }
 
     PrimeGameplaySlotBotActor(
@@ -1842,35 +1892,11 @@ bool CreateGameplaySlotBotActor(
     (void)memory.TryWriteField<std::uint32_t>(slot_actor_address, kActorHubVisualSourceAuxPointerOffset, 0x00000101u);
     (void)memory.TryWriteField<uintptr_t>(slot_actor_address, kActorHubVisualAttachmentPtrOffset, 0);
 
-    if (memory.ReadFieldOr<uintptr_t>(slot_actor_address, kActorAnimationSelectionStateOffset, 0) == 0) {
-        const auto ensure_selection_state_address =
-            memory.ResolveGameAddressOrZero(kPlayerActorRefreshRuntimeHandles);
-        if (ensure_selection_state_address == 0) {
-            if (error_message != nullptr) {
-                *error_message = "Unable to resolve the stock gameplay-slot selection-state allocator.";
-            }
-            return false;
-        }
-
-        DWORD selection_exception_code = 0;
-        if (!CallPlayerActorRefreshRuntimeHandlesSafe(
-                ensure_selection_state_address,
-                slot_actor_address,
-                &selection_exception_code)) {
-            if (error_message != nullptr) {
-                *error_message =
-                    "Gameplay-slot selection-state allocation failed with 0x" +
-                    HexString(selection_exception_code) + ".";
-            }
-            return false;
-        }
-    }
-
     if (!PrimeGameplaySlotBotSelectionState(
             slot_actor_address,
             slot_progression_address,
             slot_index,
-            wizard_id,
+            character_profile,
             &stage_error)) {
         if (error_message != nullptr) {
             *error_message = std::move(stage_error);
@@ -1890,7 +1916,7 @@ bool CreateGameplaySlotBotActor(
     if (!SeedGameplaySlotBotRenderStateFromSourceActor(
             slot_actor_address,
             world_address,
-            wizard_id,
+            character_profile,
             x,
             y,
             heading,
@@ -1962,6 +1988,14 @@ bool FinalizeGameplaySlotBotRegistration(
         return false;
     }
 
+    uintptr_t local_actor_address = 0;
+    if (TryResolvePlayerActorForSlot(gameplay_address, 0, &local_actor_address) &&
+        local_actor_address != 0) {
+        const auto local_header_word =
+            memory.ReadFieldOr<std::uint32_t>(local_actor_address, kObjectHeaderWordOffset, 0);
+        (void)memory.TryWriteField(actor_address, kObjectHeaderWordOffset, local_header_word);
+    }
+
     DWORD exception_code = 0;
     if (!CallActorWorldRegisterGameplaySlotActorSafe(
             register_slot_address,
@@ -1982,32 +2016,26 @@ bool FinalizeGameplaySlotBotRegistration(
         actor_address,
         0);
 
+    if (local_actor_address != 0) {
+        const auto local_header_word =
+            memory.ReadFieldOr<std::uint32_t>(local_actor_address, kObjectHeaderWordOffset, 0);
+        (void)memory.TryWriteField(actor_address, kObjectHeaderWordOffset, local_header_word);
+    }
+
     if (!SyncActorRegisteredSlotMirrorsFromCurrentIdentity(actor_address, error_message)) {
         return false;
     }
 
-    exception_code = 0;
-    if (!CallGameplayActorAttachSafe(
-            gameplay_address,
-            actor_address,
-            &exception_code)) {
-        if (error_message != nullptr) {
-            *error_message =
-                "Gameplay attach failed with 0x" + HexString(exception_code) + ".";
-        }
-        return false;
-    }
+    // Keep the wrapper handle cleared, but preserve the live equip runtime
+    // pointer so the seeded robe/hat helper lanes remain reachable.
+    (void)memory.TryWriteField(actor_address, kActorEquipHandleOffset, static_cast<uintptr_t>(0));
 
-    LogBotVisualDebugStage(
-        "finalize_after_slot_attach",
-        0,
-        actor_address,
-        0);
-
-    NormalizeGameplaySlotBotActorVisualState(actor_address);
-
+    // Stock gameplay-slot registration already inserts and rebinds the actor
+    // into the live region/cell path. The extra gameplay attach call appears to
+    // feed the immediate world-unregister wave for bot actors, so keep the slot
+    // registration path authoritative here.
     if (binding != nullptr) {
-        binding->gameplay_attach_applied = true;
+        binding->gameplay_attach_applied = false;
     }
     return true;
 }
@@ -2017,7 +2045,6 @@ bool DestroyGameplaySlotBotResources(
     int slot_index,
     uintptr_t actor_address,
     uintptr_t world_address,
-    bool registered_in_world,
     uintptr_t synthetic_source_profile_address,
     std::string* error_message) {
     if (error_message != nullptr) {
@@ -2047,7 +2074,17 @@ bool DestroyGameplaySlotBotResources(
         world_address = memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
     }
 
-    if (registered_in_world && world_address != 0) {
+    if (actor_address != 0) {
+        std::string detach_error;
+        if (!DetachGameplaySlotBotVisualLanes(actor_address, &detach_error)) {
+            if (error_message != nullptr) {
+                *error_message = detach_error;
+            }
+            return false;
+        }
+    }
+
+    if (world_address != 0) {
         const auto unregister_slot_address =
             memory.ResolveGameAddressOrZero(kActorWorldUnregisterGameplaySlotActor);
         if (unregister_slot_address == 0) {
@@ -2070,91 +2107,12 @@ bool DestroyGameplaySlotBotResources(
             }
             return false;
         }
-    } else if (actor_address != 0 && world_address != 0) {
-        const auto unregister_address = memory.ResolveGameAddressOrZero(kActorWorldUnregister);
-        if (unregister_address == 0) {
-            if (error_message != nullptr) {
-                *error_message = "Unable to resolve ActorWorld_Unregister.";
-            }
-            return false;
-        }
-
-        DWORD exception_code = 0;
-        if (!CallActorWorldUnregisterSafe(
-                unregister_address,
-                world_address,
-                actor_address,
-                1,
-                &exception_code)) {
-            if (error_message != nullptr) {
-                *error_message =
-                    "ActorWorld_Unregister failed with 0x" + HexString(exception_code) + ".";
-            }
-            return false;
-        }
     }
 
     (void)memory.TryWriteField<uintptr_t>(gameplay_address, actor_slot_offset, 0);
     (void)memory.TryWriteField<uintptr_t>(gameplay_address, progression_slot_offset, 0);
 
-    if (synthetic_source_profile_address == 0 && actor_address != 0) {
-        synthetic_source_profile_address = memory.ReadFieldOr<uintptr_t>(
-            actor_address,
-            kActorHubVisualSourceProfileOffset,
-            0);
-    }
-    if (synthetic_source_profile_address != 0 && actor_address != 0) {
-        (void)memory.TryWriteField<std::int32_t>(
-            actor_address,
-            kActorHubVisualSourceKindOffset,
-            0);
-        (void)memory.TryWriteField<uintptr_t>(
-            actor_address,
-            kActorHubVisualSourceProfileOffset,
-            0);
-        (void)memory.TryWriteField<uintptr_t>(
-            actor_address,
-            kActorHubVisualSourceAuxPointerOffset,
-            0);
-    }
-
-    if (actor_address != 0) {
-        const auto object_delete_address = memory.ResolveGameAddressOrZero(kObjectDelete);
-        if (object_delete_address == 0) {
-            if (error_message != nullptr) {
-                *error_message = "Unable to resolve Object_Delete.";
-            }
-            return false;
-        }
-
-        DWORD exception_code = 0;
-        if (!CallObjectDeleteSafe(object_delete_address, actor_address, &exception_code)) {
-            if (error_message != nullptr) {
-                *error_message =
-                    "Object_Delete failed with 0x" + HexString(exception_code) + ".";
-            }
-            return false;
-        }
-    }
-
-    if (synthetic_source_profile_address != 0) {
-        DestroySyntheticWizardSourceProfile(synthetic_source_profile_address);
-    }
-
-    if (published_progression_wrapper != 0) {
-        DWORD exception_code = 0;
-        if (!ReleaseSmartPointerWrapperSafe(
-                published_progression_wrapper,
-                &exception_code) &&
-            exception_code != 0) {
-            if (error_message != nullptr) {
-                *error_message =
-                    "Progression wrapper release failed with 0x" +
-                    HexString(exception_code) + ".";
-            }
-            return false;
-        }
-    }
+    (void)synthetic_source_profile_address;
 
     return true;
 }

@@ -21,22 +21,21 @@ enum class BotControllerState {
 
 struct BotCreateRequest {
     std::string display_name;
-    std::int32_t wizard_id = 0;
+    MultiplayerCharacterProfile character_profile;
     bool ready = false;
     bool has_transform = false;
     bool has_heading = false;
     float position_x = 0.0f;
     float position_y = 0.0f;
     float heading = 0.0f;
-    BotLoadoutInfo loadout;
 };
 
 struct BotUpdateRequest {
     std::uint64_t bot_id = 0;
     bool has_display_name = false;
     std::string display_name;
-    bool has_wizard_id = false;
-    std::int32_t wizard_id = 0;
+    bool has_character_profile = false;
+    MultiplayerCharacterProfile character_profile;
     bool has_ready = false;
     bool ready = false;
     bool has_transform = false;
@@ -44,8 +43,6 @@ struct BotUpdateRequest {
     float position_x = 0.0f;
     float position_y = 0.0f;
     float heading = 0.0f;
-    bool has_loadout = false;
-    BotLoadoutInfo loadout;
 };
 
 struct BotCastRequest {
@@ -87,7 +84,7 @@ struct BotSnapshot {
     bool available = false;
     std::uint64_t bot_id = 0;
     std::string display_name;
-    std::int32_t wizard_id = 0;
+    MultiplayerCharacterProfile character_profile;
     bool ready = false;
     bool in_run = false;
     bool runtime_valid = false;
@@ -142,7 +139,6 @@ struct BotSnapshot {
     float target_x = 0.0f;
     float target_y = 0.0f;
     float distance_to_target = 0.0f;
-    BotLoadoutInfo loadout;
     std::uint64_t queued_cast_count = 0;
     std::uint64_t last_queued_cast_ms = 0;
 };

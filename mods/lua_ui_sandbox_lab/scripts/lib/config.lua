@@ -98,18 +98,6 @@ local REQUIRED_SECTIONS = {
   timing = {
     "create_probe_wait_ms",
   },
-  patrol = {
-    "spawn_offset_x",
-    "spawn_offset_y",
-    "half_distance",
-    "arrival_distance",
-  },
-  input_probe = {
-    "player_move_threshold",
-    "retry_delay_ms",
-    "timeout_ms",
-    "patrol_band_slop",
-  },
   wizard_selection_state_offsets = {
     "index_0",
     "index_1",

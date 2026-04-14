@@ -1,4 +1,4 @@
-local DEFAULT_MODE = "patrol"
+local DEFAULT_MODE = "idle"
 local require_mod = sd.runtime.require_mod
 local trace_util = require_mod("scripts/lib/trace_util.lua")
 local ACTIVE_PRESET_PATH = "config/active_preset.txt"
@@ -109,25 +109,7 @@ local function build_steps(mode, actions, active_preset)
   local create_element_action = resolve_create_element_action(actions, active_preset)
   local create_discipline_action = resolve_create_discipline_action(actions, active_preset)
 
-  local patrol_steps = {
-    { kind = "wait_action", action_id = actions.dialog_primary, surface_id = "dialog" },
-    { kind = "activate_action", action_id = actions.dialog_primary, surface_id = "dialog" },
-    { kind = "wait_surface", surface_id = "main_menu" },
-    { kind = "wait_action", action_id = actions.main_menu_play, surface_id = "main_menu" },
-    { kind = "activate_action", action_id = actions.main_menu_play, surface_id = "main_menu" },
-    { kind = "wait_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
-    { kind = "activate_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
-    { kind = "delay", duration_ms = 5000 },
-    { kind = "activate_action", action_id = create_element_action, surface_id = "create", skip_find = true },
-    { kind = "delay", duration_ms = 3000 },
-    { kind = "activate_action", action_id = create_discipline_action, surface_id = "create", skip_find = true },
-    { kind = "delay", duration_ms = 18000 },
-    { kind = "hub_start_testrun" },
-    { kind = "delay", duration_ms = 5000 },
-    { kind = "spawn_patrol_bot" },
-  }
-
-  local testrun_ready_steps = {
+  local testrun_steps = {
     { kind = "wait_action", action_id = actions.dialog_primary, surface_id = "dialog" },
     { kind = "activate_action", action_id = actions.dialog_primary, surface_id = "dialog" },
     { kind = "wait_surface", surface_id = "main_menu" },
@@ -202,9 +184,9 @@ local function build_steps(mode, actions, active_preset)
   end
   if active_preset == "enter_gameplay_start_run_ready" or
       (selected_element ~= nil and active_preset:match("^map_create_")) then
-    return testrun_ready_steps
+    return testrun_steps
   end
-  return patrol_steps
+  return testrun_steps
 end
 
 local function new(ctx)
@@ -328,10 +310,6 @@ local function new(ctx)
       end
 
       return nil
-    end
-
-    if step.kind == "spawn_patrol_bot" then
-      return ctx.mode_handlers.patrol.spawn_patrol_bot()
     end
 
     return false, "unsupported step kind"

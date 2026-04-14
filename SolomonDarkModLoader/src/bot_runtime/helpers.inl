@@ -124,7 +124,7 @@ void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) 
     snapshot->available = true;
     snapshot->bot_id = participant.participant_id;
     snapshot->display_name = participant.name;
-    snapshot->wizard_id = participant.wizard_id;
+    snapshot->character_profile = participant.character_profile;
     snapshot->ready = participant.ready;
     snapshot->in_run = participant.runtime.in_run;
     snapshot->runtime_valid = participant.runtime.valid;
@@ -133,7 +133,6 @@ void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) 
     snapshot->position_x = participant.runtime.position_x;
     snapshot->position_y = participant.runtime.position_y;
     snapshot->heading = participant.runtime.heading;
-    snapshot->loadout = participant.loadout;
     if (const auto* pending_cast = FindPendingCast(participant.participant_id); pending_cast != nullptr) {
         snapshot->queued_cast_count = pending_cast->queued_cast_count;
         snapshot->last_queued_cast_ms = pending_cast->queued_at_ms;
@@ -271,7 +270,7 @@ void DeriveControllerMotionFromTransform(
 }
 
 bool IsValidCreateRequest(const BotCreateRequest& request) {
-    return request.wizard_id >= 0;
+    return IsValidCharacterProfile(request.character_profile);
 }
 
 bool IsValidUpdateRequest(const BotUpdateRequest& request) {
@@ -323,10 +322,20 @@ void ApplyLoadout(ParticipantInfo* participant, const BotLoadoutInfo& loadout) {
         return;
     }
 
-    participant->loadout = loadout;
     participant->runtime.primary_skill_id = loadout.primary_skill_id;
     participant->runtime.primary_combo_id = loadout.primary_combo_id;
     participant->runtime.queued_secondary_ids = loadout.secondary_skill_ids;
+}
+
+void ApplyCharacterProfile(ParticipantInfo* participant, const MultiplayerCharacterProfile& profile) {
+    if (participant == nullptr) {
+        return;
+    }
+
+    participant->character_profile = profile;
+    participant->runtime.level = profile.level;
+    participant->runtime.experience_current = profile.experience;
+    ApplyLoadout(participant, profile.loadout);
 }
 
 void ResetPendingState() {
@@ -354,7 +363,7 @@ void DestroyAllBotsLocked() {
 
 void SchedulePendingEntitySyncLocked(
     std::uint64_t bot_id,
-    std::int32_t wizard_id,
+    const MultiplayerCharacterProfile& character_profile,
     bool has_transform,
     bool has_heading,
     float position_x,
@@ -369,7 +378,7 @@ void SchedulePendingEntitySyncLocked(
     }
 
     pending_sync->generation = g_next_entity_sync_generation++;
-    pending_sync->wizard_id = wizard_id;
+    pending_sync->character_profile = character_profile;
     pending_sync->has_transform = has_transform;
     pending_sync->has_heading = has_heading;
     pending_sync->position_x = position_x;
@@ -418,7 +427,7 @@ void SchedulePendingDestroyLocked(std::uint64_t bot_id) {
 
 bool TryDispatchEntitySync(
     std::uint64_t bot_id,
-    std::int32_t wizard_id,
+    const MultiplayerCharacterProfile& character_profile,
     bool has_transform,
     bool has_heading,
     float position_x,
@@ -427,7 +436,7 @@ bool TryDispatchEntitySync(
     std::string* error_message) {
     return QueueWizardBotEntitySync(
         bot_id,
-        wizard_id,
+        character_profile,
         has_transform,
         has_heading,
         position_x,

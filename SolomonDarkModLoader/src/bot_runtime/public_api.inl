@@ -38,7 +38,6 @@ bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
     }
 
     const auto bot_id = g_next_bot_id++;
-    std::int32_t sync_wizard_id = request.wizard_id;
     const bool sync_has_transform = request.has_transform;
     const bool sync_has_heading = request.has_heading;
     const float sync_position_x = request.position_x;
@@ -51,12 +50,10 @@ bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
         }
 
         participant->name = request.display_name.empty() ? DefaultBotName(bot_id) : request.display_name;
-        participant->wizard_id = request.wizard_id;
         participant->ready = request.ready;
         participant->transport_connected = true;
         participant->transport_using_relay = false;
-        participant->runtime.wizard_id = request.wizard_id;
-        ApplyLoadout(participant, request.loadout);
+        ApplyCharacterProfile(participant, request.character_profile);
     });
 
     if (out_bot_id != nullptr) {
@@ -75,7 +72,7 @@ bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
     std::string sync_error_message;
         if (!TryDispatchEntitySync(
                 bot_id,
-                sync_wizard_id,
+                request.character_profile,
                 sync_has_transform,
                 sync_has_heading,
                 sync_position_x,
@@ -84,7 +81,7 @@ bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
                 &sync_error_message)) {
             SchedulePendingEntitySyncLocked(
                 bot_id,
-                sync_wizard_id,
+                request.character_profile,
                 sync_has_transform,
                 sync_has_heading,
                 sync_position_x,
@@ -121,7 +118,10 @@ bool DestroyBot(std::uint64_t bot_id) {
         RemovePendingCast(bot_id);
         RemovePendingEntitySync(bot_id);
         RemovePendingMovementIntent(bot_id);
-        SchedulePendingDestroyLocked(bot_id);
+        std::string destroy_error_message;
+        if (!TryDispatchDestroy(bot_id, &destroy_error_message)) {
+            SchedulePendingDestroyLocked(bot_id);
+        }
         Log("[bots] destroyed lua bot id=" + std::to_string(bot_id));
     }
 
@@ -164,7 +164,7 @@ bool UpdateBot(const BotUpdateRequest& request) {
     }
 
     bool updated = false;
-    std::int32_t sync_wizard_id = 0;
+    MultiplayerCharacterProfile sync_character_profile = DefaultCharacterProfile();
     bool sync_has_transform = false;
     bool sync_has_heading = false;
     float sync_position_x = 0.0f;
@@ -179,9 +179,8 @@ bool UpdateBot(const BotUpdateRequest& request) {
         if (request.has_display_name) {
             participant->name = request.display_name.empty() ? DefaultBotName(request.bot_id) : request.display_name;
         }
-        if (request.has_wizard_id) {
-            participant->wizard_id = request.wizard_id;
-            participant->runtime.wizard_id = request.wizard_id;
+        if (request.has_character_profile) {
+            ApplyCharacterProfile(participant, request.character_profile);
         }
         if (request.has_ready) {
             participant->ready = request.ready;
@@ -194,10 +193,7 @@ bool UpdateBot(const BotUpdateRequest& request) {
                 request.has_heading,
                 request.heading);
         }
-        if (request.has_loadout) {
-            ApplyLoadout(participant, request.loadout);
-        }
-        sync_wizard_id = participant->wizard_id;
+        sync_character_profile = participant->character_profile;
         sync_has_transform = participant->runtime.transform_valid;
         sync_has_heading = request.has_heading;
         sync_position_x = participant->runtime.position_x;
@@ -206,11 +202,11 @@ bool UpdateBot(const BotUpdateRequest& request) {
         updated = true;
     });
 
-    if (updated && (request.has_wizard_id || request.has_transform)) {
+    if (updated && (request.has_character_profile || request.has_transform)) {
         std::string sync_error_message;
         if (!TryDispatchEntitySync(
                 request.bot_id,
-                sync_wizard_id,
+                sync_character_profile,
                 sync_has_transform,
                 sync_has_heading,
                 sync_position_x,
@@ -219,7 +215,7 @@ bool UpdateBot(const BotUpdateRequest& request) {
                 &sync_error_message)) {
             SchedulePendingEntitySyncLocked(
                 request.bot_id,
-                sync_wizard_id,
+                sync_character_profile,
                 sync_has_transform,
                 sync_has_heading,
                 sync_position_x,
@@ -391,26 +387,52 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
             return;
         }
 
+        controller_intents = g_bot_movement_intents;
+        destroy_requests = g_pending_destroys;
+
         for (auto& pending_sync : g_pending_entity_syncs) {
             if (pending_sync.next_attempt_ms > monotonic_ms) {
+                continue;
+            }
+
+            if (FindPendingDestroy(pending_sync.bot_id) != nullptr) {
                 continue;
             }
 
             pending_sync.next_attempt_ms = monotonic_ms + 250;
             ready_syncs.push_back(pending_sync);
         }
-
-        controller_intents = g_bot_movement_intents;
-        destroy_requests = g_pending_destroys;
     }
 
     RuntimeState runtime = SnapshotRuntimeState();
 
+    for (const auto& pending_destroy : destroy_requests) {
+        std::string error_message;
+        if (!TryDispatchDestroy(pending_destroy.bot_id, &error_message)) {
+            continue;
+        }
+
+        std::scoped_lock lock(g_bot_runtime_mutex);
+        auto* current_pending_destroy = FindPendingDestroy(pending_destroy.bot_id);
+        if (current_pending_destroy != nullptr && current_pending_destroy->generation == pending_destroy.generation) {
+            RemovePendingDestroy(pending_destroy.bot_id);
+        }
+    }
+
     for (const auto& pending_sync : ready_syncs) {
+        if (FindBot(runtime, pending_sync.bot_id) == nullptr) {
+            std::scoped_lock lock(g_bot_runtime_mutex);
+            auto* current_pending_sync = FindPendingEntitySync(pending_sync.bot_id);
+            if (current_pending_sync != nullptr && current_pending_sync->generation == pending_sync.generation) {
+                RemovePendingEntitySync(pending_sync.bot_id);
+            }
+            continue;
+        }
+
         std::string sync_error_message;
         if (!TryDispatchEntitySync(
                 pending_sync.bot_id,
-                pending_sync.wizard_id,
+                pending_sync.character_profile,
                 pending_sync.has_transform,
                 pending_sync.has_heading,
                 pending_sync.position_x,
@@ -486,19 +508,6 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
             current_pending_intent->direction_y = updated_intent.direction_y;
             current_pending_intent->desired_heading_valid = updated_intent.desired_heading_valid;
             current_pending_intent->desired_heading = updated_intent.desired_heading;
-        }
-    }
-
-    for (const auto& pending_destroy : destroy_requests) {
-        std::string error_message;
-        if (!TryDispatchDestroy(pending_destroy.bot_id, &error_message)) {
-            continue;
-        }
-
-        std::scoped_lock lock(g_bot_runtime_mutex);
-        auto* current_pending_destroy = FindPendingDestroy(pending_destroy.bot_id);
-        if (current_pending_destroy != nullptr && current_pending_destroy->generation == pending_destroy.generation) {
-            RemovePendingDestroy(pending_destroy.bot_id);
         }
     }
 }

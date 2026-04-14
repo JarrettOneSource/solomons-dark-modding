@@ -25,6 +25,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     const auto pointer_list_delete_batch =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPointerListDeleteBatch);
     const auto actor_world_unregister = ProcessMemory::Instance().ResolveGameAddressOrZero(kActorWorldUnregister);
+    const auto monster_pathfinding_refresh_target =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kMonsterPathfindingRefreshTarget);
     if (mouse_helper == 0 || helper == 0 || player_actor_tick == 0 ||
         player_actor_progression_handle == 0 ||
         player_actor_dtor == 0 ||
@@ -33,7 +35,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         actor_animation_advance == 0 ||
         puppet_manager_delete_puppet == 0 ||
         pointer_list_delete_batch == 0 ||
-        actor_world_unregister == 0) {
+        actor_world_unregister == 0 ||
+        monster_pathfinding_refresh_target == 0) {
         if (error_message != nullptr) {
             *error_message = "Unable to resolve gameplay input, lifecycle, or tracked actor helpers.";
         }
@@ -228,6 +231,29 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(monster_pathfinding_refresh_target),
+            reinterpret_cast<void*>(&HookMonsterPathfindingRefreshTarget),
+            kMonsterPathfindingRefreshTargetHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook,
+            &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
+        if (error_message != nullptr) {
+            *error_message = "Failed to install hostile target refresh hook: " + hook_error;
+        }
+        return false;
+    }
+
     g_gameplay_keyboard_injection.initialized = true;
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
@@ -259,7 +285,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " anim_advance=" + HexString(actor_animation_advance) +
         " puppet_manager_delete_puppet=" + HexString(puppet_manager_delete_puppet) +
         " pointer_list_delete_batch=" + HexString(pointer_list_delete_batch) +
-        " world_unregister=" + HexString(actor_world_unregister));
+        " world_unregister=" + HexString(actor_world_unregister) +
+        " hostile_target_refresh=" + HexString(monster_pathfinding_refresh_target));
     return true;
 }
 
@@ -276,6 +303,7 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
     for (auto& pending : g_gameplay_keyboard_injection.pending_scancodes) {
         pending.store(0, std::memory_order_release);
     }
@@ -523,7 +551,7 @@ bool QueueGameplayStartWaves(std::string* error_message) {
 
 bool QueueWizardBotEntitySync(
     std::uint64_t bot_id,
-    std::int32_t wizard_id,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
     bool has_transform,
     bool has_heading,
     float position_x,
@@ -532,7 +560,7 @@ bool QueueWizardBotEntitySync(
     std::string* error_message) {
     PendingWizardBotSyncRequest request;
     request.bot_id = bot_id;
-    request.wizard_id = wizard_id;
+    request.character_profile = character_profile;
     request.has_transform = has_transform;
     request.has_heading = has_heading;
     request.x = position_x;
@@ -592,7 +620,7 @@ bool TryGetWizardBotGameplayState(std::uint64_t bot_id, SDModBotGameplayState* s
     state->entity_materialized = it->entity_materialized;
     state->moving = it->moving;
     state->bot_id = it->bot_id;
-    state->wizard_id = it->wizard_id;
+    state->character_profile = it->character_profile;
     state->actor_address = it->actor_address;
     state->world_address = it->world_address;
     state->animation_state_ptr = it->animation_state_ptr;

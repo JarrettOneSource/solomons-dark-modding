@@ -3,6 +3,19 @@
 Read this after context compaction or in a new session to resume instantly.
 
 ## Current Late-April 12 State
+- April 14, 2026 profile cutover status:
+  - the bot API/runtime layer is no longer `wizard_id`-centric
+  - participants now own `character_profile`, with:
+    - `element_id`
+    - `discipline_id`
+    - `appearance_choice_ids`
+    - `loadout`
+    - `level`
+    - `experience`
+  - `sd.bots.create` / `sd.bots.update` now require `profile = { ... }` for authoritative character identity
+  - gameplay queue/materialization now carries the profile and derives the stock element lane from it
+  - the remaining top-level `runtime.wizard_id` field is now only a derived gameplay mirror while stock seams still consume an element lane rather than a full character object
+  - live validation already proves the new API round-trips the profile and still resolves the correct stock element lanes in `testrun`
 - Final April 13, 2026 status:
   - the user-facing element semantics were mislabeled in the loader
   - the decisive fix was a semantic remap, not another bot-only render workaround
@@ -54,7 +67,7 @@ Read this after context compaction or in a new session to resume instantly.
 - Architecture constraint going forward:
   - do not let bots inherit the local player's spells, inventory, or visual/loadout objects
   - the long-term multiplayer target is one participant rail where each participant owns its own wizard loadout and matching presentation
-  - the current MVP bar is lower but still explicit: a bot's selected `wizard_id` must drive its own progression/loadout mapping and its own visible presentation
+  - the current MVP bar is lower but still explicit: a bot's selected character profile must drive its own progression/loadout mapping and its own visible presentation
 - The strongest current structural finding:
   - a stock slot-0 actor in `testrun` renders correctly with a much leaner contract than the loader had been assuming:
     - `actor +0x300` points at the gameplay slot wrapper
@@ -439,6 +452,18 @@ See `wizard-render-animation-deep-dive.md` for comprehensive analysis.
 Historical timeline note:
 - the numbered items below are preserved as the investigation timeline
 - any statements that conflict with the April 12 final gameplay-slot cutover are superseded by the top-of-file update and current-state sections
+18. **Gameplay destroy crash root cause (April 14, 2026)**:
+   - the delayed materialized bot destroy crash was a phase bug, not just a bad unregister helper
+   - gameplay-world mutations were being pumped from the D3D9 frame action pump, which is a render-phase hook
+   - destroying a materialized gameplay-slot bot from that phase left the engine inside the same-frame render/list sweep and reproduced the `0x002B9A8C` access violation
+   - the structural fix was:
+     - make destroy supersede stale sync requests in both the bot runtime and gameplay queue
+     - stop running gameplay-world actions from the render-phase frame pump while a gameplay scene is active
+     - pump gameplay-world actions from the local slot-0 `PlayerActorTick` safe phase instead
+19. **Gameplay-slot visual-lane teardown (April 14, 2026)**:
+   - `EquipAttachmentSink_Attach (0x00575850)` for non-type-7 sinks stores `sink + 0x04 = item`, so `item = 0` is a real stock detach operation
+   - gameplay-slot destroy now explicitly detaches the primary, secondary, and attachment visual lanes before slot unregister
+   - direct `PuppetManagerDeletePuppet` was proven to be the wrong rail for gameplay-slot actors because it drives the destructor path and crashes on these slot-owned actors
 1. **Position fix**: Changed spawn to use `ResolveWizardBotTransform(gameplay, request, &x, &y, &heading)` instead of inline fallback to (0,0,0). Bot now spawns at player.x + 32.
 2. **Allocator/destructor fix**: Standalone actors now use the same `Object_Allocate(0x398)` plus scalar-deleting-dtor contract as recovered stock player actors.
 3. **Guarded descriptor build**: `ActorBuildRenderDescriptorFromSource` is still used, but only through a guarded wrapper around synthetic or donor source-profile staging.
@@ -477,10 +502,10 @@ Historical timeline note:
 - **Vtable addresses must be ASLR-resolved** — raw VAs like 0x007857BC crash
 
 ## Next Steps (in priority order)
-1. **Cut over to the stock slot-owned registration contract** — compare the current loader path to `ActorWorld_RegisterGameplaySlotActor` / `ActorWorld_UnregisterGameplaySlotActor` and stop publishing the bot as a transient world actor plus manual slot table patch
-2. **Runtime-validate independent `actor +0x04` ownership** — once the stock slot-owned path is in place, confirm the bot gets its own stable scene/render transition and remove any remaining stale donor assumptions
+1. **Validate the new safe-phase action pump under scene churn** — repeat hub -> run -> hub plus bot spawn/destroy/rematerialize cycles on the player-tick gameplay pump
+2. **Remove stale historical notes about slot destroy instability** — this file still preserves older dead ends that are now superseded by the phase-fix model
 3. **Keep reducing stock-pipeline mixing** — the current path still combines source-profile staging, clone-like helper creation, manual slot publish, and repair-time patches
-4. **Test all element types** — spawn bots with wizard_id `0..4` to verify that body/accessory selectors, colors, and attachment ownership all stay wizard-correct
+4. **Test all element/discipline combinations** — validate mixed-profile rendering and lifecycle on the new structural path
 
 ## Key Files
 - `SolomonDarkModLoader/src/mod_loader_gameplay.cpp` — all bot spawn code
