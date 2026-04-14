@@ -21,12 +21,30 @@ struct BotLoadoutInfo {
     std::array<std::int32_t, 3> secondary_skill_ids = {-1, -1, -1};
 };
 
+enum class CharacterDisciplineId : std::int32_t {
+    Mind = 0,
+    Body = 1,
+    Arcane = 2,
+};
+
+struct CharacterAppearanceInfo {
+    std::array<std::int32_t, 4> choice_ids = {-1, -1, -1, -1};
+};
+
+struct MultiplayerCharacterProfile {
+    std::int32_t element_id = 0;
+    CharacterDisciplineId discipline_id = CharacterDisciplineId::Arcane;
+    CharacterAppearanceInfo appearance;
+    BotLoadoutInfo loadout;
+    std::int32_t level = 0;
+    std::int32_t experience = 0;
+};
+
 struct ParticipantRuntimeInfo {
     bool valid = false;
     bool in_run = false;
     bool transform_valid = false;
     std::uint32_t run_nonce = 0;
-    std::int32_t wizard_id = -1;
     std::int32_t level = 0;
     std::int32_t wave = 0;
     std::int32_t life_current = 0;
@@ -48,14 +66,13 @@ struct ParticipantInfo {
     ParticipantKind kind = ParticipantKind::LocalHuman;
     std::uint64_t steam_id = 0;
     std::string name;
-    std::int32_t wizard_id = -1;
     bool ready = false;
     bool is_owner = false;
     bool transport_connected = false;
     bool transport_using_relay = false;
     std::uint64_t last_packet_ms = 0;
+    MultiplayerCharacterProfile character_profile;
     ParticipantRuntimeInfo runtime;
-    BotLoadoutInfo loadout;
 };
 
 enum class SessionStatus {
@@ -92,6 +109,9 @@ struct RuntimeState {
 
 constexpr std::uint64_t kLocalParticipantId = 1ull;
 constexpr std::uint64_t kFirstLuaBotParticipantId = 0x1000000000001000ull;
+
+MultiplayerCharacterProfile DefaultCharacterProfile();
+bool IsValidCharacterProfile(const MultiplayerCharacterProfile& profile);
 
 void InitializeRuntimeState();
 void ShutdownRuntimeState();

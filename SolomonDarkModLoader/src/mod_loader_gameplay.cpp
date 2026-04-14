@@ -56,6 +56,8 @@ using ActorWorldRegisterFn = std::uint32_t(__thiscall*)(void* self, int actor_gr
 using ActorWorldUnregisterFn = void(__thiscall*)(void* self, void* actor, char remove_from_container);
 using ActorWorldRegisterGameplaySlotActorFn = void(__thiscall*)(void* self, int slot_index);
 using ActorWorldUnregisterGameplaySlotActorFn = void(__thiscall*)(void* self, int slot_index);
+using MonsterPathfindingRefreshTargetFn = void(__fastcall*)(void* self, void* unused_edx);
+using PlayerActorMoveStepFn = std::uint32_t(__thiscall*)(void* self, void* actor, float move_x, float move_y, unsigned int flags);
 using ActorMoveByDeltaFn = void(__thiscall*)(void* self, float move_x, float move_y, int flags);
 using ActorAnimationAdvanceFn = void(__thiscall*)(void* self);
 using PlayerActorRefreshRuntimeHandlesFn = void(__thiscall*)(void* self);
@@ -160,6 +162,7 @@ constexpr std::size_t kPointerListDeleteBatchHookPatchSize = 5;
 constexpr std::size_t kActorWorldUnregisterHookPatchSize = 6;
 constexpr int kWizardSourceActorFactoryTypeId = 0x1397;
 constexpr std::size_t kActorAnimationAdvanceHookPatchSize = 6;
+constexpr std::size_t kMonsterPathfindingRefreshTargetHookMinimumPatchSize = 5;
 constexpr int kArenaRegionIndex = 5;
 constexpr std::size_t kStandaloneWizardVisualRuntimeSize = 0x8E4;
 constexpr std::size_t kStandaloneWizardVisualLinkSize = 0xA8;
@@ -209,6 +212,9 @@ constexpr int kFirstWizardBotSlot = 1;
 constexpr int kHubRegionIndex = 0;
 constexpr float kDefaultWizardBotOffsetX = 32.0f;
 constexpr float kDefaultWizardBotOffsetY = 0.0f;
+constexpr std::size_t kHostileCurrentTargetActorOffset = 0x168;
+constexpr std::size_t kHostileTargetBucketDeltaOffset = 0x164;
+constexpr std::int32_t kActorWorldBucketStride = 0x800;
 constexpr int kSceneTypeHub = 0xFA1;
 constexpr int kSceneTypeMemorator = 0xFA2;
 constexpr int kSceneTypeDowser = 0xFA3;
@@ -277,7 +283,48 @@ WizardAppearanceChoiceIds ResolveWizardAppearanceChoiceIds(int wizard_id) {
     }
 }
 
-uintptr_t CreateSyntheticWizardSourceProfile(int wizard_id) {
+std::int32_t ResolveProfileElementId(const multiplayer::MultiplayerCharacterProfile& character_profile) {
+    return character_profile.element_id;
+}
+
+bool HasExplicitProfileAppearanceChoices(const multiplayer::MultiplayerCharacterProfile& character_profile) {
+    return std::all_of(
+        character_profile.appearance.choice_ids.begin(),
+        character_profile.appearance.choice_ids.end(),
+        [](std::int32_t value) {
+            return value >= 0;
+        });
+}
+
+WizardAppearanceChoiceIds ResolveProfileAppearanceChoiceIds(
+    const multiplayer::MultiplayerCharacterProfile& character_profile) {
+    if (HasExplicitProfileAppearanceChoices(character_profile)) {
+        return {
+            character_profile.appearance.choice_ids[0],
+            character_profile.appearance.choice_ids[1],
+            character_profile.appearance.choice_ids[2],
+            character_profile.appearance.choice_ids[3],
+        };
+    }
+
+    auto choice_ids = ResolveWizardAppearanceChoiceIds(ResolveProfileElementId(character_profile));
+    switch (character_profile.discipline_id) {
+    case multiplayer::CharacterDisciplineId::Mind:
+        choice_ids.secondary = 4;
+        break;
+    case multiplayer::CharacterDisciplineId::Body:
+        choice_ids.secondary = 5;
+        break;
+    case multiplayer::CharacterDisciplineId::Arcane:
+    default:
+        choice_ids.secondary = 6;
+        break;
+    }
+    return choice_ids;
+}
+
+uintptr_t CreateSyntheticWizardSourceProfile(const multiplayer::MultiplayerCharacterProfile& character_profile) {
+    const auto wizard_id = ResolveProfileElementId(character_profile);
     const auto& profile = kWizardSourceProfileTemplates[
         (wizard_id >= 0 && wizard_id < kWizardSourceProfileTemplateCount) ? wizard_id : 0];
     const auto element_color = GetWizardElementColor(wizard_id);
@@ -384,7 +431,7 @@ struct PendingRewardSpawnRequest {
 
 struct PendingWizardBotSyncRequest {
     std::uint64_t bot_id = 0;
-    std::int32_t wizard_id = 0;
+    multiplayer::MultiplayerCharacterProfile character_profile;
     bool has_transform = false;
     bool has_heading = false;
     float x = 0.0f;
@@ -410,6 +457,7 @@ struct GameplayKeyboardInjectionState {
     X86Hook puppet_manager_delete_puppet_hook;
     X86Hook pointer_list_delete_batch_hook;
     X86Hook actor_world_unregister_hook;
+    X86Hook monster_pathfinding_refresh_target_hook;
     bool initialized = false;
     std::array<std::atomic<std::uint32_t>, 256> pending_scancodes{};
     std::atomic<bool> last_observed_mouse_left_down{false};
@@ -447,7 +495,7 @@ struct BotEntityBinding {
     };
 
     std::uint64_t bot_id = 0;
-    std::int32_t wizard_id = 0;
+    multiplayer::MultiplayerCharacterProfile character_profile;
     uintptr_t actor_address = 0;
     int gameplay_slot = -1;
     Kind kind = Kind::PlaceholderEnemy;
@@ -496,7 +544,7 @@ struct SceneContextSnapshot {
 
 struct BotRematerializationRequest {
     std::uint64_t bot_id = 0;
-    std::int32_t wizard_id = 0;
+    multiplayer::MultiplayerCharacterProfile character_profile;
     bool has_transform = false;
     float x = 0.0f;
     float y = 0.0f;
@@ -513,7 +561,7 @@ struct WizardBotGameplaySnapshot {
     std::uint64_t bot_id = 0;
     bool entity_materialized = false;
     bool moving = false;
-    std::int32_t wizard_id = 0;
+    multiplayer::MultiplayerCharacterProfile character_profile;
     uintptr_t actor_address = 0;
     uintptr_t world_address = 0;
     uintptr_t animation_state_ptr = 0;
@@ -637,7 +685,8 @@ std::string BuildWizardBotCrashSummaryLocked() {
     for (const auto& snapshot : g_wizard_bot_gameplay_snapshots) {
         out << "\r\n"
             << "  bot_id=" << snapshot.bot_id
-            << " wizard_id=" << snapshot.wizard_id
+            << " element_id=" << snapshot.character_profile.element_id
+            << " discipline_id=" << static_cast<std::int32_t>(snapshot.character_profile.discipline_id)
             << " materialized=" << (snapshot.entity_materialized ? "true" : "false")
             << " moving=" << (snapshot.moving ? "true" : "false")
             << " slot=" << snapshot.gameplay_slot
@@ -677,7 +726,7 @@ void ApplyObservedBotAnimationState(BotEntityBinding* binding, uintptr_t actor_a
 void PublishWizardBotGameplaySnapshot(const BotEntityBinding& binding);
 void RememberBotEntity(
     std::uint64_t bot_id,
-    std::int32_t wizard_id,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
     uintptr_t actor_address,
     BotEntityBinding::Kind kind,
     int gameplay_slot,
@@ -762,13 +811,13 @@ bool PrimeGameplaySlotBotSelectionState(
     uintptr_t actor_address,
     uintptr_t progression_address,
     int slot_index,
-    int wizard_id,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
     std::string* error_message);
 bool CreateGameplaySlotBotActor(
     uintptr_t gameplay_address,
     uintptr_t world_address,
     int slot_index,
-    int wizard_id,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
     float heading,

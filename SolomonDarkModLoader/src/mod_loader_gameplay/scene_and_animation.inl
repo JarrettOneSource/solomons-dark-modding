@@ -1072,18 +1072,12 @@ bool SyncActorRegisteredSlotMirrorsFromCurrentIdentity(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto actor_group = memory.ReadFieldOr<std::int8_t>(actor_address, kActorSlotOffset, static_cast<std::int8_t>(-1));
-    const auto world_slot = memory.ReadFieldOr<std::int16_t>(actor_address, kActorWorldSlotOffset, static_cast<std::int16_t>(-1));
     if (!memory.TryWriteField(
             actor_address,
             kActorRegisteredSlotMirrorOffset,
-            static_cast<std::uint8_t>(actor_group)) ||
-        !memory.TryWriteField(
-            actor_address,
-            kActorRegisteredSlotIdMirrorOffset,
-            static_cast<std::uint16_t>(world_slot))) {
+            static_cast<std::uint32_t>(0xFFFF00FF))) {
         if (error_message != nullptr) {
-            *error_message = "Failed to sync actor registered-slot mirrors from the live slot identity.";
+            *error_message = "Failed to clear actor registered-slot mirrors to the stock gameplay-slot sentinel.";
         }
         return false;
     }
@@ -1182,4 +1176,8 @@ int ResolveStandaloneWizardSelectionState(int wizard_id) {
     default:
         return kStandaloneWizardHiddenSelectionState;
     }
+}
+
+int ResolveProfileSelectionState(const multiplayer::MultiplayerCharacterProfile& character_profile) {
+    return ResolveStandaloneWizardSelectionState(ResolveProfileElementId(character_profile));
 }

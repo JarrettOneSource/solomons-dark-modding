@@ -1,5 +1,7 @@
 #pragma once
 
+#include "multiplayer_runtime_state.h"
+
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -113,7 +115,7 @@ struct SDModBotGameplayState {
     bool entity_materialized = false;
     bool moving = false;
     std::uint64_t bot_id = 0;
-    std::int32_t wizard_id = 0;
+    multiplayer::MultiplayerCharacterProfile character_profile;
     uintptr_t actor_address = 0;
     uintptr_t world_address = 0;
     uintptr_t animation_state_ptr = 0;
@@ -182,7 +184,7 @@ bool QueueHubStartTestrun(std::string* error_message);
 bool QueueGameplaySwitchRegion(int region_index, std::string* error_message);
 bool QueueWizardBotEntitySync(
     std::uint64_t bot_id,
-    std::int32_t wizard_id,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
     bool has_transform,
     bool has_heading,
     float position_x,

@@ -190,9 +190,22 @@ Current external CLI fallback already installed:
   - if a trace target resolves to non-executable memory, treat that as an RE bug in the mapped address, not as a hook-installer bug
 
 ## Current Rendering Investigation Focus
+- Final April 14, 2026 lifecycle finding:
+  - the materialized bot destroy crash was a **phase bug**
+  - gameplay-world actions were being pumped from the D3D9 frame action pump, which runs in a render-phase hook
+  - destroying bots from that phase left the game inside the same-frame render/list sweep and reproduced the `0x002B9A8C` access violation
+  - the current safe contract is:
+    - hub/menu actions may still use the frame pump
+    - gameplay-world actions are pumped from the local slot-0 `PlayerActorTick` safe phase
+    - destroy supersedes stale syncs before they reach the gameplay queue
+  - `EquipAttachmentSink_Attach` with `item = 0` is now used as the stock detach seam for gameplay-slot visual lanes during destroy
 - Final April 13, 2026 status:
   - the loader-side sprite-composition bug is fixed
   - the remaining robe/orb bug was resolved by correcting the **public element semantics**
+  - the bot/runtime API is now profile-centric:
+    - `sd.bots.create({ profile = { element_id=..., discipline_id=..., loadout=... }, ... })`
+    - `sd.bots.update({ id=..., profile = { ... } })`
+    - `sd.bots.get_state(id).profile` is now the authoritative bot character identity in Lua
   - create-screen action ids and gameplay wizard mappings had been mislabeled relative to the stock colors
   - the current authoritative user-facing mapping is:
     - `fire` -> slot `16` -> orange
@@ -213,7 +226,7 @@ Current external CLI fallback already installed:
   - the player/bot lane labels are also a naming hazard: the recovered stock holder-kind/type ordering implies our current `primary` and `secondary` names are likely reversed relative to stock semantics
 - Current April 12 water-automation finding:
   - after the background-focus hook fix, the `map_create_water` harness again reaches stable `testrun`
-  - both the local player and a spawned water bot (`wizard_id = 1`) carry the same water progression appearance ids: `3 / 6 / 32 / 35`
+  - both the local player and a spawned water-profile bot carry the same water progression appearance ids: `3 / 6 / 32 / 35`
   - the bot helper float4s read the expected stock-water values (`0.39679638 / 0.46394697 / 0.54945219`)
   - the automated local player helper float4s do **not** match that stock-water reference (`0.34542164 / 0.44866666 / 0.55803943`)
   - that means the automation harness is no longer crashing, but the automated local player is still not a trustworthy water visual reference

@@ -99,7 +99,7 @@ void UpsertPendingWizardBotDestroyRequest(std::uint64_t bot_id) {
 
 void RememberBotEntity(
     std::uint64_t bot_id,
-    std::int32_t wizard_id,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
     uintptr_t actor_address,
     BotEntityBinding::Kind kind,
     int gameplay_slot = -1,
@@ -130,7 +130,7 @@ void RememberBotEntity(
         binding->dynamic_render_drive_move_blend = 0.0f;
     }
 
-    binding->wizard_id = wizard_id;
+    binding->character_profile = character_profile;
     binding->actor_address = actor_address;
     binding->gameplay_slot = gameplay_slot;
     binding->kind = kind;
@@ -234,7 +234,6 @@ void DematerializeWizardBotEntityNow(std::uint64_t bot_id, bool forget_binding, 
                     binding->gameplay_slot,
                     binding->actor_address,
                     binding->materialized_world_address,
-                    binding->gameplay_attach_applied,
                     binding->synthetic_source_profile_address,
                     &destroy_error);
             } else {
@@ -293,7 +292,7 @@ WizardBotGameplaySnapshot BuildWizardBotGameplaySnapshot(const BotEntityBinding&
     snapshot.bot_id = binding.bot_id;
     snapshot.entity_materialized = binding.actor_address != 0;
     snapshot.moving = binding.movement_active;
-    snapshot.wizard_id = binding.wizard_id;
+    snapshot.character_profile = binding.character_profile;
     snapshot.actor_address = binding.actor_address;
     snapshot.hub_visual_proxy_address = 0;
     snapshot.gameplay_slot = binding.gameplay_slot;
@@ -444,7 +443,7 @@ bool TryBuildBotRematerializationRequest(
     }
 
     request->bot_id = binding.bot_id;
-    request->wizard_id = bot_snapshot.wizard_id;
+    request->character_profile = bot_snapshot.character_profile;
     request->has_transform = bot_snapshot.transform_valid;
     request->x = bot_snapshot.position_x;
     request->y = bot_snapshot.position_y;
@@ -473,7 +472,7 @@ void QueueBotRematerialization(const BotRematerializationRequest& request) {
     std::string error_message;
     if (!QueueWizardBotEntitySync(
             request.bot_id,
-            request.wizard_id,
+            request.character_profile,
             request.has_transform,
             true,
             request.x,
@@ -1230,6 +1229,38 @@ bool CallActorMoveByDeltaSafe(
     }
 }
 
+bool CallPlayerActorMoveStepSafe(
+    uintptr_t move_step_address,
+    uintptr_t world_address,
+    uintptr_t actor_address,
+    float move_x,
+    float move_y,
+    unsigned int flags,
+    DWORD* exception_code,
+    std::uint32_t* result) {
+    auto* move_step = reinterpret_cast<PlayerActorMoveStepFn>(move_step_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (result != nullptr) {
+        *result = 0;
+    }
+    if (move_step == nullptr || world_address == 0 || actor_address == 0) {
+        return false;
+    }
+
+    __try {
+        const auto move_result =
+            move_step(reinterpret_cast<void*>(world_address), reinterpret_cast<void*>(actor_address), move_x, move_y, flags);
+        if (result != nullptr) {
+            *result = move_result;
+        }
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
 bool CallActorWorldUnregisterSafe(
     uintptr_t actor_world_unregister_address,
     uintptr_t world_address,
@@ -1418,7 +1449,7 @@ void ApplyObservedBotAnimationState(BotEntityBinding* binding, uintptr_t actor_a
     ApplyStandaloneWizardPuppetDriveState(binding, actor_address, moving);
     ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
 
-    const auto desired_state_id = ResolveStandaloneWizardSelectionState(binding->wizard_id);
+    const auto desired_state_id = ResolveProfileSelectionState(binding->character_profile);
     if (TryWriteActorAnimationStateIdDirect(actor_address, desired_state_id)) {
         binding->last_applied_animation_state_id = desired_state_id;
         return;
@@ -1492,10 +1523,16 @@ bool ApplyWizardBotMovementStep(BotEntityBinding* binding, std::string* error_me
 
     auto& memory = ProcessMemory::Instance();
     const auto actor_address = binding->actor_address;
+    const auto live_world_address =
+        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, binding->materialized_world_address);
+    const auto live_move_scene_address = live_world_address;
+    if (live_world_address != 0 && binding->materialized_world_address != live_world_address) {
+        binding->materialized_world_address = live_world_address;
+    }
     if (binding->kind == BotEntityBinding::Kind::StandaloneWizard) {
         (void)EnsureStandaloneWizardWorldOwner(
             actor_address,
-            binding->materialized_world_address,
+            live_world_address,
             "movement_step",
             nullptr);
     }
@@ -1515,8 +1552,6 @@ bool ApplyWizardBotMovementStep(BotEntityBinding* binding, std::string* error_me
     const auto position_before_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
     const auto velocity_x = direction_x;
     const auto velocity_y = direction_y;
-    ApplyObservedBotAnimationState(binding, actor_address, true);
-
     const auto owner_address =
         memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
     const auto move_by_delta_address =
@@ -1551,13 +1586,6 @@ bool ApplyWizardBotMovementStep(BotEntityBinding* binding, std::string* error_me
         const auto delta_y = position_after_y - position_before_y;
         if (binding->desired_heading_valid) {
             (void)memory.TryWriteField(actor_address, kActorHeadingOffset, binding->desired_heading);
-        }
-        if (std::fabs(delta_x) > 0.001f || std::fabs(delta_y) > 0.001f) {
-            AdvanceStandaloneWizardWalkCycleState(
-                binding,
-                std::sqrt((delta_x * delta_x) + (delta_y * delta_y)));
-            ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
-            advance_actor_animation(actor_address);
         }
         LogWizardBotMovementFrame(
             binding,
@@ -1625,7 +1653,7 @@ void TickWizardBotMovementControllers(uintptr_t gameplay_address, std::uint64_t 
                     if (multiplayer::ReadBotSnapshot(binding.bot_id, &bot_snapshot) && bot_snapshot.available) {
                         PendingWizardBotSyncRequest sync_request;
                         sync_request.bot_id = binding.bot_id;
-                        sync_request.wizard_id = bot_snapshot.wizard_id;
+                        sync_request.character_profile = bot_snapshot.character_profile;
                         sync_request.has_transform = bot_snapshot.transform_valid;
                         sync_request.has_heading = bot_snapshot.transform_valid;
                         sync_request.x = bot_snapshot.position_x;
@@ -1673,7 +1701,7 @@ void TickWizardBotMovementControllers(uintptr_t gameplay_address, std::uint64_t 
         std::string error_message;
         if (!QueueWizardBotEntitySync(
                 sync_request.bot_id,
-                sync_request.wizard_id,
+                sync_request.character_profile,
                 sync_request.has_transform,
                 sync_request.has_heading,
                 sync_request.x,
@@ -1682,7 +1710,7 @@ void TickWizardBotMovementControllers(uintptr_t gameplay_address, std::uint64_t 
                 &error_message)) {
             Log(
                 "[bots] queued scene materialize failed. bot_id=" + std::to_string(sync_request.bot_id) +
-                " wizard_id=" + std::to_string(sync_request.wizard_id) +
+                " element_id=" + std::to_string(sync_request.character_profile.element_id) +
                 " error=" + error_message);
         }
     }
@@ -1694,7 +1722,25 @@ void TickWizardBotMovementControllersIfActive() {
     }
 
     static std::uint64_t s_last_movement_tick_ms = 0;
+    static std::uint64_t s_last_movement_tick_log_ms = 0;
     const auto now_ms = static_cast<std::uint64_t>(::GetTickCount64());
+    if (now_ms - s_last_movement_tick_log_ms >= 1000) {
+        s_last_movement_tick_log_ms = now_ms;
+        std::uint32_t bot_count = 0;
+        std::uint32_t active_count = 0;
+        {
+            std::lock_guard<std::recursive_mutex> lock(g_bot_entities_mutex);
+            bot_count = static_cast<std::uint32_t>(g_bot_entities.size());
+            for (const auto& binding : g_bot_entities) {
+                if (binding.actor_address != 0 && binding.movement_active) {
+                    ++active_count;
+                }
+            }
+        }
+        Log(
+            "[bots] movement_tick heartbeat bots=" + std::to_string(bot_count) +
+            " active=" + std::to_string(active_count));
+    }
     if (now_ms - s_last_movement_tick_ms < 50) {
         return;
     }

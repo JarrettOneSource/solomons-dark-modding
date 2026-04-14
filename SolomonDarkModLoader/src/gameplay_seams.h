@@ -40,6 +40,7 @@ extern uintptr_t kActorWorldRegister;
 extern uintptr_t kActorWorldUnregister;
 extern uintptr_t kActorWorldRegisterGameplaySlotActor;
 extern uintptr_t kActorWorldUnregisterGameplaySlotActor;
+extern uintptr_t kMonsterPathfindingRefreshTarget;
 extern uintptr_t kActorProgressionRefresh;
 extern uintptr_t kPlayerAppearanceApplyChoice;
 extern uintptr_t kPlayerActorRefreshRuntimeHandles;

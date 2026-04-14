@@ -64,6 +64,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "actor_world_unregister", kActorWorldUnregister),
         SDMOD_ADDR("gameplay.hooks", "actor_world_register_gameplay_slot_actor", kActorWorldRegisterGameplaySlotActor),
         SDMOD_ADDR("gameplay.hooks", "actor_world_unregister_gameplay_slot_actor", kActorWorldUnregisterGameplaySlotActor),
+        SDMOD_ADDR("gameplay.hooks", "monster_pathfinding_refresh_target", kMonsterPathfindingRefreshTarget),
         SDMOD_ADDR("gameplay.hooks", "actor_progression_refresh", kActorProgressionRefresh),
         SDMOD_ADDR("gameplay.hooks", "player_appearance_apply_choice", kPlayerAppearanceApplyChoice),
         SDMOD_ADDR("gameplay.hooks", "player_actor_refresh_runtime_handles", kPlayerActorRefreshRuntimeHandles),
@@ -368,6 +369,7 @@ uintptr_t kActorWorldRegister = 0;
 uintptr_t kActorWorldUnregister = 0;
 uintptr_t kActorWorldRegisterGameplaySlotActor = 0;
 uintptr_t kActorWorldUnregisterGameplaySlotActor = 0;
+uintptr_t kMonsterPathfindingRefreshTarget = 0;
 uintptr_t kActorProgressionRefresh = 0;
 uintptr_t kPlayerAppearanceApplyChoice = 0;
 uintptr_t kPlayerActorRefreshRuntimeHandles = 0;

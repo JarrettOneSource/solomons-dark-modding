@@ -278,6 +278,180 @@ void PushLoadout(lua_State* state, const multiplayer::BotLoadoutInfo& loadout) {
     lua_setfield(state, -2, "secondary_skill_ids");
 }
 
+bool ReadAppearanceChoicesField(
+    lua_State* state,
+    int table_index,
+    multiplayer::CharacterAppearanceInfo* appearance,
+    std::string* error_message) {
+    if (appearance == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    lua_getfield(state, table_index, "appearance_choice_ids");
+    if (lua_isnil(state, -1)) {
+        lua_pop(state, 1);
+        return true;
+    }
+
+    if (!lua_istable(state, -1)) {
+        *error_message = "profile.appearance_choice_ids must be a table";
+        lua_pop(state, 1);
+        return false;
+    }
+
+    const auto length = static_cast<std::size_t>(lua_rawlen(state, -1));
+    if (length > appearance->choice_ids.size()) {
+        *error_message = "profile.appearance_choice_ids supports at most four entries";
+        lua_pop(state, 1);
+        return false;
+    }
+
+    for (std::size_t index = 0; index < length; ++index) {
+        lua_rawgeti(state, -1, static_cast<lua_Integer>(index + 1));
+        if (!lua_isinteger(state, -1)) {
+            *error_message = "profile.appearance_choice_ids entries must be integers";
+            lua_pop(state, 2);
+            return false;
+        }
+
+        appearance->choice_ids[index] = static_cast<std::int32_t>(lua_tointeger(state, -1));
+        lua_pop(state, 1);
+    }
+
+    lua_pop(state, 1);
+    return true;
+}
+
+bool ReadCharacterProfileValue(
+    lua_State* state,
+    int profile_index,
+    multiplayer::MultiplayerCharacterProfile* profile,
+    std::string* error_message) {
+    if (profile == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    if (!EnsureTable(state, profile_index, "profile", error_message)) {
+        return false;
+    }
+
+    *profile = multiplayer::DefaultCharacterProfile();
+    const auto table_index = lua_absindex(state, profile_index);
+
+    bool has_element_id = false;
+    if (!ReadOptionalIntegerField(
+            state,
+            table_index,
+            "element_id",
+            &profile->element_id,
+            &has_element_id,
+            error_message)) {
+        return false;
+    }
+    if (!has_element_id) {
+        *error_message = "profile.element_id is required";
+        return false;
+    }
+
+    std::int32_t discipline_id = static_cast<std::int32_t>(profile->discipline_id);
+    bool has_discipline_id = false;
+    if (!ReadOptionalIntegerField(
+            state,
+            table_index,
+            "discipline_id",
+            &discipline_id,
+            &has_discipline_id,
+            error_message)) {
+        return false;
+    }
+    if (has_discipline_id) {
+        profile->discipline_id = static_cast<multiplayer::CharacterDisciplineId>(discipline_id);
+    }
+
+    if (!ReadAppearanceChoicesField(state, table_index, &profile->appearance, error_message)) {
+        return false;
+    }
+
+    bool has_loadout = false;
+    if (!ReadLoadoutField(state, table_index, &profile->loadout, &has_loadout, error_message)) {
+        return false;
+    }
+
+    bool has_level = false;
+    if (!ReadOptionalIntegerField(state, table_index, "level", &profile->level, &has_level, error_message)) {
+        return false;
+    }
+
+    bool has_experience = false;
+    if (!ReadOptionalIntegerField(
+            state,
+            table_index,
+            "experience",
+            &profile->experience,
+            &has_experience,
+            error_message)) {
+        return false;
+    }
+
+    if (!multiplayer::IsValidCharacterProfile(*profile)) {
+        *error_message = "profile contains invalid element_id or discipline_id";
+        return false;
+    }
+
+    return true;
+}
+
+bool ReadCharacterProfileField(
+    lua_State* state,
+    int table_index,
+    multiplayer::MultiplayerCharacterProfile* profile,
+    bool* has_profile,
+    std::string* error_message) {
+    if (profile == nullptr || has_profile == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    lua_getfield(state, table_index, "profile");
+    if (lua_isnil(state, -1)) {
+        *has_profile = false;
+        lua_pop(state, 1);
+        return true;
+    }
+
+    const bool ok = ReadCharacterProfileValue(state, -1, profile, error_message);
+    lua_pop(state, 1);
+    if (!ok) {
+        return false;
+    }
+
+    *has_profile = true;
+    return true;
+}
+
+void PushAppearanceChoices(lua_State* state, const multiplayer::CharacterAppearanceInfo& appearance) {
+    lua_createtable(state, static_cast<int>(appearance.choice_ids.size()), 0);
+    for (std::size_t index = 0; index < appearance.choice_ids.size(); ++index) {
+        lua_pushinteger(state, static_cast<lua_Integer>(appearance.choice_ids[index]));
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+}
+
+void PushCharacterProfile(lua_State* state, const multiplayer::MultiplayerCharacterProfile& profile) {
+    lua_createtable(state, 0, 5);
+    lua_pushinteger(state, static_cast<lua_Integer>(profile.element_id));
+    lua_setfield(state, -2, "element_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(profile.discipline_id));
+    lua_setfield(state, -2, "discipline_id");
+    PushAppearanceChoices(state, profile.appearance);
+    lua_setfield(state, -2, "appearance_choice_ids");
+    PushLoadout(state, profile.loadout);
+    lua_setfield(state, -2, "loadout");
+    lua_pushinteger(state, static_cast<lua_Integer>(profile.level));
+    lua_setfield(state, -2, "level");
+    lua_pushinteger(state, static_cast<lua_Integer>(profile.experience));
+    lua_setfield(state, -2, "experience");
+}
+
 }  // namespace
 
 bool ParseBotIdArgument(lua_State* state, int index, std::uint64_t* bot_id, std::string* error_message) {
@@ -321,12 +495,12 @@ bool ParseBotCreateRequest(
         return false;
     }
 
-    bool has_wizard_id = false;
-    if (!ReadOptionalIntegerField(state, table_index, "wizard_id", &request->wizard_id, &has_wizard_id, error_message)) {
+    bool has_profile = false;
+    if (!ReadCharacterProfileField(state, table_index, &request->character_profile, &has_profile, error_message)) {
         return false;
     }
-    if (!has_wizard_id) {
-        *error_message = "sd.bots.create requires wizard_id";
+    if (!has_profile) {
+        *error_message = "sd.bots.create requires profile";
         return false;
     }
 
@@ -346,11 +520,6 @@ bool ParseBotCreateRequest(
     request->has_heading = has_heading;
     if (has_heading && !request->has_transform) {
         *error_message = "sd.bots.create requires position when heading is provided";
-        return false;
-    }
-
-    bool has_loadout = false;
-    if (!ReadLoadoutField(state, table_index, &request->loadout, &has_loadout, error_message)) {
         return false;
     }
 
@@ -387,8 +556,16 @@ bool ParseBotUpdateRequest(
     }
 
     if (!ReadOptionalStringField(state, table_index, "name", &request->display_name, &request->has_display_name, error_message) ||
-        !ReadOptionalIntegerField(state, table_index, "wizard_id", &request->wizard_id, &request->has_wizard_id, error_message) ||
         !ReadOptionalBooleanField(state, table_index, "ready", &request->ready, &request->has_ready, error_message)) {
+        return false;
+    }
+
+    if (!ReadCharacterProfileField(
+            state,
+            table_index,
+            &request->character_profile,
+            &request->has_character_profile,
+            error_message)) {
         return false;
     }
 
@@ -406,12 +583,7 @@ bool ParseBotUpdateRequest(
         return false;
     }
 
-    if (!ReadLoadoutField(state, table_index, &request->loadout, &request->has_loadout, error_message)) {
-        return false;
-    }
-
-    if (request->has_display_name || request->has_wizard_id || request->has_ready || request->has_transform ||
-        request->has_loadout) {
+    if (request->has_display_name || request->has_character_profile || request->has_ready || request->has_transform) {
         return true;
     }
 
@@ -512,8 +684,8 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "id");
     lua_pushstring(state, snapshot.display_name.c_str());
     lua_setfield(state, -2, "name");
-    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.wizard_id));
-    lua_setfield(state, -2, "wizard_id");
+    PushCharacterProfile(state, snapshot.character_profile);
+    lua_setfield(state, -2, "profile");
     lua_pushboolean(state, snapshot.ready ? 1 : 0);
     lua_setfield(state, -2, "ready");
     lua_pushboolean(state, snapshot.in_run ? 1 : 0);
@@ -635,8 +807,6 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     }
     lua_pushnumber(state, snapshot.distance_to_target);
     lua_setfield(state, -2, "distance_to_target");
-    PushLoadout(state, snapshot.loadout);
-    lua_setfield(state, -2, "loadout");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.queued_cast_count));
     lua_setfield(state, -2, "queued_cast_count");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.last_queued_cast_ms));

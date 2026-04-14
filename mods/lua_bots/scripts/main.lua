@@ -276,7 +276,10 @@ local function ensure_bot_spawned(now_ms)
   local spawn = state.patrol.a
   local bot_id = sd.bots.create({
     name = BOT_NAME,
-    wizard_id = BOT_WIZARD_ID,
+    profile = {
+      element_id = BOT_WIZARD_ID,
+      discipline_id = 2,
+    },
     ready = true,
     position = { x = spawn.x, y = spawn.y },
   })
