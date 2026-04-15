@@ -116,6 +116,7 @@ struct SDModBotGameplayState {
     bool moving = false;
     std::uint64_t bot_id = 0;
     multiplayer::MultiplayerCharacterProfile character_profile;
+    multiplayer::ParticipantSceneIntent scene_intent;
     uintptr_t actor_address = 0;
     uintptr_t world_address = 0;
     uintptr_t animation_state_ptr = 0;
@@ -185,6 +186,7 @@ bool QueueGameplaySwitchRegion(int region_index, std::string* error_message);
 bool QueueWizardBotEntitySync(
     std::uint64_t bot_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
+    const multiplayer::ParticipantSceneIntent& scene_intent,
     bool has_transform,
     bool has_heading,
     float position_x,

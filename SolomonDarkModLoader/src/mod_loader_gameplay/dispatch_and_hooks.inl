@@ -171,6 +171,7 @@ bool TryUpdateBotEntity(
 
     (void)memory.TryWriteField(binding->actor_address, kActorHeadingOffset, heading);
     binding->character_profile = request.character_profile;
+    binding->scene_intent = request.scene_intent;
     PublishWizardBotGameplaySnapshot(*binding);
     return true;
 }
@@ -484,6 +485,7 @@ bool TrySpawnStandaloneWizardBotEntity(
     RememberBotEntity(
         request.bot_id,
         request.character_profile,
+        request.scene_intent,
         actor_address,
         BotEntityBinding::Kind::StandaloneWizard,
         gameplay_slot,
@@ -513,7 +515,6 @@ bool TrySpawnStandaloneWizardBotEntity(
             SceneContextSnapshot scene_context;
             if (TryBuildSceneContextSnapshot(gameplay_address, &scene_context)) {
                 binding->materialized_region_index = scene_context.current_region_index;
-                UpdateBotHomeScene(binding, scene_context);
             }
 
             PublishWizardBotGameplaySnapshot(*binding);
@@ -1737,6 +1738,30 @@ void __fastcall HookPlayerActorVtable28(void* self, void* /*unused_edx*/) {
     ++g_player_actor_vslot28_depth;
     g_player_actor_vslot28_actor = actor_address;
     g_player_actor_vslot28_caller = reinterpret_cast<uintptr_t>(_ReturnAddress());
+    {
+        static std::uint64_t s_last_overlay_callback_log_ms = 0;
+        static std::uint64_t s_last_nonlocal_overlay_callback_log_ms = 0;
+        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        const auto slot =
+            ProcessMemory::Instance().ReadFieldOr<std::int8_t>(
+                actor_address,
+                kActorSlotOffset,
+                static_cast<std::int8_t>(-1));
+        if (slot > 0) {
+            if (now_ms - s_last_nonlocal_overlay_callback_log_ms >= 1000) {
+                s_last_nonlocal_overlay_callback_log_ms = now_ms;
+                Log(
+                    "[bots] nonlocal slot overlay callback. actor=" + HexString(actor_address) +
+                    " slot=" + std::to_string(static_cast<int>(slot)) +
+                    " hud_case100_depth=" + std::to_string(g_gameplay_hud_case100_depth));
+            }
+        } else if (slot == 0 && now_ms - s_last_overlay_callback_log_ms >= 1000) {
+            s_last_overlay_callback_log_ms = now_ms;
+            Log(
+                "[bots] slot overlay callback. actor=" + HexString(actor_address) +
+                " slot=0 hud_case100_depth=" + std::to_string(g_gameplay_hud_case100_depth));
+        }
+    }
     original(self);
     g_player_actor_vslot28_depth = previous_depth;
     g_player_actor_vslot28_actor = previous_actor;
@@ -1808,11 +1833,22 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     bool standalone_actor_should_restore_desired_heading = false;
     float standalone_actor_desired_heading = 0.0f;
     uintptr_t standalone_actor_world = 0;
+    std::string standalone_path_error_message;
+    std::string standalone_move_error_message;
+    const auto native_tick_now_ms = static_cast<std::uint64_t>(GetTickCount64());
     {
         std::lock_guard<std::recursive_mutex> lock(g_bot_entities_mutex);
         if (auto* binding = FindBotEntityForActor(actor_address);
             binding != nullptr && binding->kind == BotEntityBinding::Kind::StandaloneWizard) {
             SyncWizardBotMovementIntent(binding);
+            if (!UpdateWizardBotPathMotion(binding, native_tick_now_ms, &standalone_path_error_message) &&
+                !standalone_path_error_message.empty()) {
+                Log(
+                    "[bots] native tick path update failed. bot_id=" + std::to_string(binding->bot_id) +
+                    " actor=" + HexString(actor_address) +
+                    " error=" + standalone_path_error_message);
+                standalone_path_error_message.clear();
+            }
             standalone_puppet_actor = true;
             standalone_actor_moving = binding->movement_active;
             standalone_actor_should_restore_desired_heading =
@@ -1834,7 +1870,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     auto& memory = ProcessMemory::Instance();
     if (standalone_puppet_actor) {
         static std::uint64_t s_last_native_bot_tick_log_ms = 0;
-        const auto native_tick_now_ms = static_cast<std::uint64_t>(GetTickCount64());
         if (native_tick_now_ms - s_last_native_bot_tick_log_ms >= 1000) {
             s_last_native_bot_tick_log_ms = native_tick_now_ms;
             Log(
@@ -1871,21 +1906,28 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         original(self);
 
         // Idle ticks can still mirror the owner transform onto the puppet. Keep
-        // the restore only for idle frames so the external gameplay-thread move
-        // step can land during active patrol locomotion.
+        // the restore only for idle frames so the bot-owned movement step can
+        // land during active locomotion.
         if (!standalone_actor_moving) {
             (void)memory.TryWriteField(actor_address, kActorPositionXOffset, position_before_x);
             (void)memory.TryWriteField(actor_address, kActorPositionYOffset, position_before_y);
         }
-        (void)memory.TryWriteField(
-            actor_address,
-            kActorHeadingOffset,
-            standalone_actor_should_restore_desired_heading ? standalone_actor_desired_heading : heading_before);
 
         std::lock_guard<std::recursive_mutex> lock(g_bot_entities_mutex);
         if (auto* binding = FindBotEntityForActor(actor_address);
             binding != nullptr && binding->kind == BotEntityBinding::Kind::StandaloneWizard) {
-            SyncWizardBotMovementIntent(binding);
+            if (!ApplyWizardBotMovementStep(binding, &standalone_move_error_message) &&
+                !standalone_move_error_message.empty()) {
+                Log(
+                    "[bots] native tick movement step failed. bot_id=" + std::to_string(binding->bot_id) +
+                    " actor=" + HexString(actor_address) +
+                    " error=" + standalone_move_error_message);
+                standalone_move_error_message.clear();
+            }
+            (void)memory.TryWriteField(
+                actor_address,
+                kActorHeadingOffset,
+                standalone_actor_should_restore_desired_heading ? standalone_actor_desired_heading : heading_before);
             ApplyObservedBotAnimationState(binding, actor_address, binding->movement_active);
             PublishWizardBotGameplaySnapshot(*binding);
         }

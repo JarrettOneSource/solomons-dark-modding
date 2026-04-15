@@ -22,6 +22,8 @@ enum class BotControllerState {
 struct BotCreateRequest {
     std::string display_name;
     MultiplayerCharacterProfile character_profile;
+    bool has_scene_intent = false;
+    ParticipantSceneIntent scene_intent;
     bool ready = false;
     bool has_transform = false;
     bool has_heading = false;
@@ -36,6 +38,8 @@ struct BotUpdateRequest {
     std::string display_name;
     bool has_character_profile = false;
     MultiplayerCharacterProfile character_profile;
+    bool has_scene_intent = false;
+    ParticipantSceneIntent scene_intent;
     bool has_ready = false;
     bool ready = false;
     bool has_transform = false;
@@ -59,6 +63,7 @@ struct BotMoveToRequest {
 
 struct BotMovementIntentSnapshot {
     bool available = false;
+    std::uint64_t revision = 0;
     BotControllerState state = BotControllerState::Idle;
     bool moving = false;
     bool has_target = false;
@@ -90,6 +95,7 @@ struct BotSnapshot {
     bool runtime_valid = false;
     bool transform_valid = false;
     std::uint32_t run_nonce = 0;
+    ParticipantSceneIntent scene_intent;
     float position_x = 0.0f;
     float position_y = 0.0f;
     float heading = 0.0f;
@@ -161,6 +167,8 @@ std::uint32_t GetBotCount();
 bool ReadBotSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot);
 bool ReadBotSnapshotByIndex(std::uint32_t index, BotSnapshot* snapshot);
 std::size_t GetPendingBotCastCount();
+void SetAllBotSceneIntentsToRun();
+void SetAllBotSceneIntentsToSharedHub();
 const char* BotControllerStateLabel(BotControllerState state);
 
 }  // namespace sdmod::multiplayer

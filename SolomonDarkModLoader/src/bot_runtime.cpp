@@ -41,6 +41,7 @@ struct PendingBotEntitySync {
     std::uint64_t bot_id = 0;
     std::uint64_t generation = 0;
     MultiplayerCharacterProfile character_profile;
+    ParticipantSceneIntent scene_intent;
     bool has_transform = false;
     bool has_heading = false;
     float position_x = 0.0f;

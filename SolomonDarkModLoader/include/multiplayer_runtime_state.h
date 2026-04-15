@@ -27,6 +27,12 @@ enum class CharacterDisciplineId : std::int32_t {
     Arcane = 2,
 };
 
+enum class ParticipantSceneIntentKind : std::int32_t {
+    SharedHub = 0,
+    PrivateRegion = 1,
+    Run = 2,
+};
+
 struct CharacterAppearanceInfo {
     std::array<std::int32_t, 4> choice_ids = {-1, -1, -1, -1};
 };
@@ -38,6 +44,12 @@ struct MultiplayerCharacterProfile {
     BotLoadoutInfo loadout;
     std::int32_t level = 0;
     std::int32_t experience = 0;
+};
+
+struct ParticipantSceneIntent {
+    ParticipantSceneIntentKind kind = ParticipantSceneIntentKind::SharedHub;
+    std::int32_t region_index = -1;
+    std::int32_t region_type_id = -1;
 };
 
 struct ParticipantRuntimeInfo {
@@ -59,6 +71,7 @@ struct ParticipantRuntimeInfo {
     float position_x = 0.0f;
     float position_y = 0.0f;
     float heading = 0.0f;
+    ParticipantSceneIntent scene_intent;
 };
 
 struct ParticipantInfo {
@@ -112,6 +125,8 @@ constexpr std::uint64_t kFirstLuaBotParticipantId = 0x1000000000001000ull;
 
 MultiplayerCharacterProfile DefaultCharacterProfile();
 bool IsValidCharacterProfile(const MultiplayerCharacterProfile& profile);
+bool IsValidParticipantSceneIntent(const ParticipantSceneIntent& scene_intent);
+ParticipantSceneIntent DefaultParticipantSceneIntent();
 
 void InitializeRuntimeState();
 void ShutdownRuntimeState();
@@ -137,6 +152,7 @@ bool IsLuaBotParticipant(const ParticipantInfo& participant);
 const char* SessionStatusLabel(SessionStatus status);
 const char* SessionTransportLabel(SessionTransportKind kind);
 const char* ParticipantKindLabel(ParticipantKind kind);
+const char* ParticipantSceneIntentKindLabel(ParticipantSceneIntentKind kind);
 
 }  // namespace sdmod::multiplayer
 

@@ -353,21 +353,12 @@ bool HasBotMaterializedSceneChanged(const BotEntityBinding& binding, const Scene
     return scene_changed || world_changed || region_changed;
 }
 
-void UpdateBotHomeScene(BotEntityBinding* binding, const SceneContextSnapshot& scene_context) {
-    if (binding == nullptr || scene_context.world_address == 0) {
-        return;
-    }
+bool IsSharedHubSceneContext(const SceneContextSnapshot& scene_context) {
+    return scene_context.current_region_index == kHubRegionIndex || scene_context.region_type_id == kSceneTypeHub;
+}
 
-    if (scene_context.current_region_index == kArenaRegionIndex || scene_context.region_type_id == kSceneTypeArena) {
-        return;
-    }
-
-    if (scene_context.current_region_index >= 0) {
-        binding->home_region_index = scene_context.current_region_index;
-    }
-    if (scene_context.region_type_id >= 0) {
-        binding->home_region_type_id = scene_context.region_type_id;
-    }
+bool IsArenaSceneContext(const SceneContextSnapshot& scene_context) {
+    return scene_context.current_region_index == kArenaRegionIndex || scene_context.region_type_id == kSceneTypeArena;
 }
 
 bool ShouldBotBeMaterializedInScene(const BotEntityBinding& binding, const SceneContextSnapshot& scene_context) {
@@ -375,25 +366,24 @@ bool ShouldBotBeMaterializedInScene(const BotEntityBinding& binding, const Scene
         return false;
     }
 
-    if (scene_context.current_region_index == kArenaRegionIndex || scene_context.region_type_id == kSceneTypeArena) {
-        return true;
+    switch (binding.scene_intent.kind) {
+    case multiplayer::ParticipantSceneIntentKind::Run:
+        return IsArenaSceneContext(scene_context);
+    case multiplayer::ParticipantSceneIntentKind::SharedHub:
+        return IsSharedHubSceneContext(scene_context);
+    case multiplayer::ParticipantSceneIntentKind::PrivateRegion: {
+        const bool region_matches =
+            binding.scene_intent.region_index >= 0 &&
+            scene_context.current_region_index >= 0 &&
+            binding.scene_intent.region_index == scene_context.current_region_index;
+        const bool type_matches =
+            binding.scene_intent.region_type_id >= 0 &&
+            scene_context.region_type_id >= 0 &&
+            binding.scene_intent.region_type_id == scene_context.region_type_id;
+        return region_matches || type_matches;
     }
-
-    const bool have_home_region_index = binding.home_region_index >= 0;
-    const bool have_home_region_type_id = binding.home_region_type_id >= 0;
-    if (!have_home_region_index && !have_home_region_type_id) {
-        return true;
     }
-
-    const bool region_matches =
-        have_home_region_index &&
-        scene_context.current_region_index >= 0 &&
-        binding.home_region_index == scene_context.current_region_index;
-    const bool type_matches =
-        have_home_region_type_id &&
-        scene_context.region_type_id >= 0 &&
-        binding.home_region_type_id == scene_context.region_type_id;
-    return region_matches || type_matches;
+    return false;
 }
 
 int ResolveActorAnimationStateSlotIndex(uintptr_t actor_address) {

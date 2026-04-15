@@ -100,6 +100,7 @@ void UpsertPendingWizardBotDestroyRequest(std::uint64_t bot_id) {
 void RememberBotEntity(
     std::uint64_t bot_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
+    const multiplayer::ParticipantSceneIntent& scene_intent,
     uintptr_t actor_address,
     BotEntityBinding::Kind kind,
     int gameplay_slot = -1,
@@ -131,6 +132,7 @@ void RememberBotEntity(
     }
 
     binding->character_profile = character_profile;
+    binding->scene_intent = scene_intent;
     binding->actor_address = actor_address;
     binding->gameplay_slot = gameplay_slot;
     binding->kind = kind;
@@ -293,6 +295,7 @@ WizardBotGameplaySnapshot BuildWizardBotGameplaySnapshot(const BotEntityBinding&
     snapshot.entity_materialized = binding.actor_address != 0;
     snapshot.moving = binding.movement_active;
     snapshot.character_profile = binding.character_profile;
+    snapshot.scene_intent = binding.scene_intent;
     snapshot.actor_address = binding.actor_address;
     snapshot.hub_visual_proxy_address = 0;
     snapshot.gameplay_slot = binding.gameplay_slot;
@@ -444,6 +447,7 @@ bool TryBuildBotRematerializationRequest(
 
     request->bot_id = binding.bot_id;
     request->character_profile = bot_snapshot.character_profile;
+    request->scene_intent = bot_snapshot.scene_intent;
     request->has_transform = bot_snapshot.transform_valid;
     request->x = bot_snapshot.position_x;
     request->y = bot_snapshot.position_y;
@@ -473,6 +477,7 @@ void QueueBotRematerialization(const BotRematerializationRequest& request) {
     if (!QueueWizardBotEntitySync(
             request.bot_id,
             request.character_profile,
+            request.scene_intent,
             request.has_transform,
             true,
             request.x,
@@ -1536,7 +1541,6 @@ bool ApplyWizardBotMovementStep(BotEntityBinding* binding, std::string* error_me
     const auto actor_address = binding->actor_address;
     const auto live_world_address =
         memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, binding->materialized_world_address);
-    const auto live_move_scene_address = live_world_address;
     if (live_world_address != 0 && binding->materialized_world_address != live_world_address) {
         binding->materialized_world_address = live_world_address;
     }
@@ -1565,8 +1569,10 @@ bool ApplyWizardBotMovementStep(BotEntityBinding* binding, std::string* error_me
     const auto velocity_y = direction_y;
     const auto owner_address =
         memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
-    const auto move_by_delta_address =
-        ProcessMemory::Instance().ResolveGameAddressOrZero(kActorMoveByDelta);
+    const auto movement_controller_address =
+        live_world_address != 0 ? (live_world_address + kActorOwnerMovementControllerOffset) : 0;
+    const auto move_step_address =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorMoveStep);
     auto* actor_animation_advance =
         GetX86HookTrampoline<ActorAnimationAdvanceFn>(g_gameplay_keyboard_injection.actor_animation_advance_hook);
     const auto advance_actor_animation = [&](uintptr_t address) {
@@ -1579,18 +1585,28 @@ bool ApplyWizardBotMovementStep(BotEntityBinding* binding, std::string* error_me
         } __except (EXCEPTION_EXECUTE_HANDLER) {
         }
     };
-    const auto move_step_x = direction_x * kWizardBotMovementStepScale;
-    const auto move_step_y = direction_y * kWizardBotMovementStepScale;
+    auto move_step_scale =
+        memory.ReadFieldOr<float>(actor_address, kActorMoveStepScaleOffset, 1.0f);
+    if (!std::isfinite(move_step_scale) || move_step_scale <= 0.0f) {
+        move_step_scale = 1.0f;
+    }
+    const auto move_step_x = direction_x * move_step_scale;
+    const auto move_step_y = direction_y * move_step_scale;
     DWORD exception_code = 0;
+    std::uint32_t move_result = 0;
     if ((binding->kind == BotEntityBinding::Kind::PlaceholderEnemy ||
          binding->kind == BotEntityBinding::Kind::StandaloneWizard) &&
-        move_by_delta_address != 0 &&
-        CallActorMoveByDeltaSafe(
-            move_by_delta_address,
+        move_step_address != 0 &&
+        movement_controller_address != 0 &&
+        CallPlayerActorMoveStepSafe(
+            move_step_address,
+            movement_controller_address,
             actor_address,
             move_step_x,
             move_step_y,
-            &exception_code)) {
+            0,
+            &exception_code,
+            &move_result)) {
         const auto position_after_x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
         const auto position_after_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
         const auto delta_x = position_after_x - position_before_x;
@@ -1615,14 +1631,16 @@ bool ApplyWizardBotMovementStep(BotEntityBinding* binding, std::string* error_me
                     " after=(" + std::to_string(position_after_x) + ", " + std::to_string(position_after_y) + ")" +
                     " dir=(" + std::to_string(direction_x) + ", " + std::to_string(direction_y) + ")" +
                     " desired_heading=" + std::to_string(binding->desired_heading) +
-                    " target=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")");
+                    " move_step_scale=" + std::to_string(move_step_scale) +
+                    " destination=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")" +
+                    " waypoint=(" + std::to_string(binding->current_waypoint_x) + ", " + std::to_string(binding->current_waypoint_y) + ")");
             }
         }
         LogWizardBotMovementFrame(
             binding,
             actor_address,
             owner_address,
-            0,
+            movement_controller_address,
             direction_x,
             direction_y,
             velocity_x,
@@ -1631,13 +1649,15 @@ bool ApplyWizardBotMovementStep(BotEntityBinding* binding, std::string* error_me
             position_before_y,
             position_after_x,
             position_after_y,
-            "actor_delta");
+            move_result != 0 ? "player_move_step_ok" : "player_move_step_blocked");
         PublishWizardBotGameplaySnapshot(*binding);
         return true;
     }
 
     if (exception_code != 0 && error_message != nullptr) {
-        *error_message = "ActorMoveByDelta threw 0x" + HexString(exception_code) + ".";
+        *error_message = "PlayerActor_MoveStep threw 0x" + HexString(exception_code) + ".";
+    } else if (error_message != nullptr && movement_controller_address == 0) {
+        *error_message = "PlayerActor_MoveStep requires a live movement controller.";
     }
 
     PublishWizardBotGameplaySnapshot(*binding);
@@ -1654,11 +1674,14 @@ void SyncWizardBotMovementIntent(BotEntityBinding* binding) {
         return;
     }
 
+    binding->movement_intent_revision = intent.revision;
     binding->controller_state = intent.state;
     binding->movement_active = intent.moving;
     binding->has_target = intent.has_target;
-    binding->direction_x = intent.direction_x;
-    binding->direction_y = intent.direction_y;
+    if (!intent.moving) {
+        binding->direction_x = 0.0f;
+        binding->direction_y = 0.0f;
+    }
     binding->desired_heading_valid = intent.desired_heading_valid;
     binding->desired_heading = intent.desired_heading;
     binding->target_x = intent.target_x;
@@ -1676,15 +1699,20 @@ void TickWizardBotSceneBindings(uintptr_t gameplay_address, std::uint64_t now_ms
         std::lock_guard<std::recursive_mutex> lock(g_bot_entities_mutex);
         for (auto& binding : g_bot_entities) {
             SyncWizardBotMovementIntent(&binding);
+            multiplayer::BotSnapshot bot_snapshot;
+            if (multiplayer::ReadBotSnapshot(binding.bot_id, &bot_snapshot) && bot_snapshot.available) {
+                binding.character_profile = bot_snapshot.character_profile;
+                binding.scene_intent = bot_snapshot.scene_intent;
+            }
             const bool should_be_materialized =
                 have_scene_context && ShouldBotBeMaterializedInScene(binding, scene_context);
             if (binding.actor_address == 0) {
                 if (should_be_materialized && now_ms >= binding.next_scene_materialize_retry_ms) {
-                    multiplayer::BotSnapshot bot_snapshot;
-                    if (multiplayer::ReadBotSnapshot(binding.bot_id, &bot_snapshot) && bot_snapshot.available) {
+                    if (bot_snapshot.available) {
                         PendingWizardBotSyncRequest sync_request;
                         sync_request.bot_id = binding.bot_id;
                         sync_request.character_profile = bot_snapshot.character_profile;
+                        sync_request.scene_intent = bot_snapshot.scene_intent;
                         sync_request.has_transform = bot_snapshot.transform_valid;
                         sync_request.has_heading = bot_snapshot.transform_valid;
                         sync_request.x = bot_snapshot.position_x;
@@ -1710,13 +1738,6 @@ void TickWizardBotSceneBindings(uintptr_t gameplay_address, std::uint64_t now_ms
                 continue;
             }
 
-            std::string error_message;
-            if (!ApplyWizardBotMovementStep(&binding, &error_message) && !error_message.empty()) {
-                Log(
-                    "[bots] movement step failed. bot_id=" + std::to_string(binding.bot_id) +
-                    " actor=" + HexString(binding.actor_address) +
-                    " error=" + error_message);
-            }
         }
     }
 
@@ -1733,6 +1754,7 @@ void TickWizardBotSceneBindings(uintptr_t gameplay_address, std::uint64_t now_ms
         if (!QueueWizardBotEntitySync(
                 sync_request.bot_id,
                 sync_request.character_profile,
+                sync_request.scene_intent,
                 sync_request.has_transform,
                 sync_request.has_heading,
                 sync_request.x,

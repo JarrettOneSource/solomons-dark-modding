@@ -183,6 +183,10 @@ Tasks:
 
 - add `element_id` and `discipline_id` to the participant model
 - add explicit appearance-choice storage
+- add explicit participant scene-membership state:
+  - `shared_hub`
+  - `private_region`
+  - `run`
 - add conversion helpers:
   - create-screen selection -> `MultiplayerCharacterProfile`
   - local save/startup state -> `MultiplayerCharacterProfile`
@@ -197,6 +201,28 @@ Acceptance criteria:
   - create preview
   - bot spawn
   - remote player materialization
+- scene presence is explicit and not inferred from whichever non-arena scene the
+  local player happens to be standing in
+
+April 15, 2026 note:
+
+- first scene-membership cutover is now in progress
+- the old `home_region_index/home_region_type_id` heuristic has been replaced by
+  an explicit scene-intent model in the bot/runtime path
+- `sd.bots.create/update` now accept:
+  - `scene = { kind = "shared_hub" | "private_region" | "run", region_index = ..., region_type_id = ... }`
+- current live validation already proves:
+  - hub bots can materialize with `scene.kind = SharedHub`
+  - a hub-started run flips that participant to `scene.kind = Run`
+  - rematerialization into `testrun` now follows the participant-owned scene
+    intent instead of the old home-region heuristic
+  - the current residual on this slice is narrower:
+    - hub co-presence and hub -> run promotion are working
+    - private-scene divergence (for example, host enters library while other
+      participants stay in shared hub) still needs direct live validation
+    - hub pathfinding is active on the same A* stack, but the tested waypoint
+      currently produced zero displacement and needs a separate movement
+      follow-up
 
 ### Track 2: Visual Materialization Cleanup
 

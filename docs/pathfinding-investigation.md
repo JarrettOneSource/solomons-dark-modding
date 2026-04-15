@@ -5,14 +5,32 @@ Date: 2026-04-13
 ## Project State Today
 
 - Workspace currently splits into three useful surfaces:
-  - `Mod Loader/` for launcher, injected loader, Lua runtime, gameplay seams, and loader-owned bot movement.
+  - `Mod Loader/` for launcher, injected loader, Lua runtime, gameplay seams, and loader-owned bot movement/pathing.
   - `Decompiled Game/reverse-engineering/` for curated maps, pseudo-source, and manual RE artifacts.
   - `Decompiled Game/ghidra_project*` plus `Mod Loader/tools/ghidra-scripts/` for repeatable headless Ghidra passes.
-- Current loader bot movement is working, but it is **not** a stock path planner:
-  - `sd.bots.move_to(id, x, y)` only stores target intent.
-  - `TickBotRuntime()` derives a normalized direction vector plus desired heading.
-  - gameplay-side movement applies that vector through stock `ActorMoveByDelta (0x00623C60)`.
-  - collision and world motion remain game-native, but there is no loader-owned route planning, waypoint graph, or navmesh solver yet.
+- Current loader bot movement/pathing is now split cleanly:
+  - `sd.bots.move_to(id, x, y)` stores destination intent plus a revision counter.
+  - runtime keeps the destination current, but no longer owns straight-line steering.
+  - gameplay-side bot bindings build and follow a loader-owned A* route over the
+    native scene grid.
+  - each waypoint is executed through stock `PlayerActor_MoveStep (0x00525800)`,
+    now from the standalone bot actor's own `PlayerActorTick` cadence rather than
+    the older 50 ms scene-binding mover.
+  - the per-step movement budget is read from the bot actor's native
+    `+0x218 move_step_scale` field before calling `PlayerActor_MoveStep`, which
+    matches the stock player-side pattern recovered from `PlayerActorTick`.
+  - collision, sliding, animation advance ownership, and world motion remain
+    game-native.
+  - April 15 scene-membership cutover:
+    - hub bots now materialize as `scene.kind = SharedHub` participants instead
+      of relying on the older `home_region_*` heuristic
+    - the same movement stack is still used there; the live log shows the bot
+      receiving A* waypoints and entering the gameplay-thread path-follow loop
+      in the hub
+    - current residual:
+      - the tested hub waypoint still ended in repeated `zero-displacement move
+        step` logs, so the scene-membership cutover is proven but hub movement
+        needs its own follow-up pass
 
 ## Verified Stock Pathfinding Anchors
 
@@ -320,7 +338,177 @@ Date: 2026-04-13
     - `mirror = 2048`
   - attack proof:
     - bot HP dropped from `50.0` to `18.5`, then to `-293.5`
-    - hostile AI is now acquiring, retaining, and attacking gameplay-slot bots
+  - hostile AI is now acquiring, retaining, and attacking gameplay-slot bots
+
+## Current A-to-B Conclusion
+
+- Current recovered native "pathfinding" is still a chase stack, not a reusable
+  arbitrary destination solver.
+- What is proven today:
+  - `MonsterPathfinding_SelectNearestTarget` picks the nearest live target from
+    a flat actor list.
+  - `MonsterPathfinding_RefreshTarget` scales retarget cadence from monster
+    definition byte `+0xB9`, refreshes the current target, computes a heading,
+    and then falls straight into shared movement.
+  - `Badguy_CommonChaseTick` is the shared steering layer above
+    `Badguy_MoveStep`, and `Badguy_MoveStep` is only a wrapper over
+    `PlayerActor_MoveStep`.
+  - `PlayerActor_MoveStep` owns collision-aware movement and grid rebinding, so
+    it is the reusable obstacle/collision executor in the stock stack.
+- What is not proven:
+  - any navmesh, waypoint graph, flood fill, A*, or other point-to-point route
+    generator for arbitrary actor destinations
+  - any native helper that takes "point A -> point B" and returns a path for a
+    bot to follow
+- Current loader bot movement therefore remains:
+  - target point intent in bot runtime
+  - normalized straight-line direction vector
+  - gameplay-thread `ActorMoveByDelta` / `PlayerActor_MoveStep`
+- New April 14 control-brain finding:
+  - `PlayerActorTick (0x00548B00)` calls
+    `PlayerActor_UpdateControlBrainTargeting (0x0052C910)`
+  - that helper mutates the `actor + 0x21C` selection/control brain directly:
+    - decrements retarget ticks at `+0x08`
+    - clears or refreshes target slot/handle at `+0x04/+0x06`
+    - writes steering/control floats at `+0x20/+0x28/+0x2C`
+  - helper `0x00641160` used inside that path is now identified as
+    `FindNearestFlaggedActorAroundPoint`
+    - scans `world + 0x324` for the nearest flagged actor around a supplied
+      `(x,y)` position
+    - excludes the calling actor
+  - helper `0x00476010` used there is now identified as
+    `ActorTargetHandle_WriteFromActor`
+    - copies `target + 0x5C/+0x5E` into the packed target-handle pair
+  - current implication:
+    - this native control-brain branch is still actor-target-driven follow/chase
+      logic
+    - it does not yet show a world-coordinate destination writer or waypoint
+      planner for arbitrary point A -> point B travel
+- Current implementation consequence:
+  - directly reusing the hostile helpers for arbitrary bot A->B travel would be
+    the wrong cutover because those helpers are tightly coupled to monster
+    definitions, hostile target buckets, and chase-state timers
+  - the cleaner native-facing next seam, if it exists, is a stock
+    control-brain / point-click destination path rather than the hostile chase
+    path
+  - if no such destination seam is recovered, the only honest route to bot
+    A->B pathing is more RE or a loader-owned waypoint/path solver feeding the
+    stock movement executor
+
+## Current Loader Pathing Implementation
+
+- April 14 cutover: the loader now uses a gameplay-thread A* solver for
+  `sd.bots.move_to(...)`.
+- Current ownership split:
+  - runtime intent:
+    - final destination
+    - movement revision
+    - high-level moving/idle state
+  - gameplay-thread bot binding:
+    - grid snapshot
+    - path build / retry state
+    - waypoint list
+    - current waypoint steering
+  - stock game:
+    - final movement execution through `PlayerActor_MoveStep`
+    - native per-actor movement budget from `actor + 0x218`
+    - standalone bot movement cadence from the bot actor's own `PlayerActorTick`
+    - collision resolution / sliding / grid rebinding
+- Traversability substrate:
+  - neighbor generation comes from the recovered native scene grid
+  - traversability uses the recovered native placement query wrapper
+    `MovementCollision_TestCirclePlacement (0x00523C90)`
+- Live validation status:
+  - clean `testrun` launch with only `sample.lua.ui_sandbox_lab` enabled works
+    when the bootstrap settles before `sd.hub.start_testrun()`
+  - open-space route test:
+    - built path from `(31,3)` to `(31,7)`
+    - emitted 3 waypoints
+    - bot walked the route and stopped cleanly
+  - previously failing target test:
+    - destination `(1000, 3222)` used to fail with
+      `A* search found no path. start=(38, 8) goal=(32, 10)`
+    - after the start-cell relocation/follow fixes, the same style of target now
+      builds a 3-waypoint route
+    - live path example:
+      - `(850,3150) -> (950,3150) -> (1050,3250)`
+    - bot walks that route and settles with movement cleared
+- Root-cause fixes that moved the branch from failing to working:
+  - corrected grid-axis mapping for world `(x,y)` -> grid `(row,column)`
+  - cleared stale failed-path cooldown behavior across new move revisions
+  - kept the final waypoint on a valid cell-center route unless the exact
+    destination is already safely inside that final waypoint
+  - fixed the relocated-start bug:
+    - if the solver relocates the start cell, it now expands neighbors from the
+      relocated cell center rather than the actor's raw blocked position
+    - it also keeps the relocated start waypoint in the final route instead of
+      discarding it as though the actor had started there already
+  - removed the old global movement scalar:
+    - bot movement no longer multiplies direction by a loader-owned guessed
+      constant
+    - the bot tick now reads `actor + 0x218` and applies movement once per
+      native bot actor tick instead of once per 50 ms scene-binding heartbeat
+
+## Scene Grid Semantics For Loader-Owned Pathing
+
+- The stock scene grid is now specific enough to reuse for a loader-owned path
+  solver.
+- `ResolveSceneGridCellFromScaledCoords (0x00521260)`:
+  - floors scaled coordinates into integer cell indices
+  - bounds-checks against:
+    - `scene + 0xD8` = grid height
+    - `scene + 0xDC` = grid width
+  - resolves the cell address as:
+    - `scene + 0xB4 + (grid_height * grid_x + grid_y) * 0x18`
+- `PlayerActor_MoveStep (0x00525800)` uses the same formula directly:
+  - `grid_x = floor(actor_x / *(float *)(scene + 0xE0))`
+  - `grid_y = floor(actor_y / *(float *)(scene + 0xE4))`
+  - so:
+    - `scene + 0xE0` = cell width / x scale
+    - `scene + 0xE4` = cell height / y scale
+    - each grid cell record is `0x18` bytes
+- `WorldCellGrid_RebindActor (0x005217B0)` and `SceneGrid_AttachActorIfActive`
+  helper `0x005212F0` both route through `0x00521260`, confirming that the
+  same cell-address function is used for stable actor-to-cell membership.
+- Collision gather helpers also now confirm the grid is the native movement
+  substrate:
+  - `MovementCollision_BuildCellOverlapList (0x00521B80)`
+    - computes the actor's current cell from position/radius
+    - sweeps neighboring cells
+    - dispatches occupied cells through the callback vtable at `context + 0x38`
+  - `MovementCollision_ProbeAdjacentCells (0x005218C0)`
+    - probes direction-adjacent cells based on movement vector
+    - dispatches candidate cells through the callback vtable at `context + 0x50`
+- New cell/query details from deeper decompilation plus live runtime checks:
+  - live `testrun` grid sample now confirms:
+    - `grid + 0xE0/+0xE4 = 100.0 / 100.0`
+    - `grid + 0xDC/+0xD8 = 34 / 25`
+  - the cell records at `scene + 0xB4` are live `0x18`-byte objects
+  - the primary overlap builder `0x00521B80` treats:
+    - `cell + 0x0C` as the active/occupied discriminator
+    - `cell + 0x10` as a collision mask/classification consulted by the
+      higher-level collision queries
+  - the higher-level query wrappers are now partially identified:
+    - `MovementCollision_TestCirclePlacementExtended (0x005238C0)`
+      - rebuilds overlap lists from the same movement context
+      - rejects occupied cells whose collision mask intersects the tested mask
+      - also checks type-2 hazard/object overlap
+      - is used by several placement/search helpers to find nearby valid points
+    - `MovementCollision_TestCirclePlacement (0x00523C90)`
+      - smaller placement query used by dynamic-object response
+      - returns nonzero when a proposed circle placement is blocked
+  - current implementation consequence:
+    - these placement-query helpers are a better substrate for a loader-owned
+      path solver than guessing raw cell semantics from each `0x18` record
+    - the solver can use the native grid for neighbor generation and the native
+      collision query wrappers as a traversability oracle
+- Current implication for implementation:
+  - if bots need true point A -> point B routing, the clean next substrate is
+    this native scene grid plus the existing stock movement executor
+    `PlayerActor_MoveStep`
+  - remaining unknown is no longer the cell addressing formula; it is whether
+    the loader should rely directly on the newly identified placement-query
+    wrappers or continue deeper until every cell mask/value is fully named
 
 ## Exact Next Runtime Probes
 

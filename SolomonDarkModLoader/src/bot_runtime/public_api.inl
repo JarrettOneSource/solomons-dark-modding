@@ -43,6 +43,8 @@ bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
     const float sync_position_x = request.position_x;
     const float sync_position_y = request.position_y;
     const float sync_heading = request.heading;
+    const auto sync_scene_intent =
+        request.has_scene_intent ? request.scene_intent : ResolveDefaultBotSceneIntentFromCurrentScene();
     UpdateRuntimeState([&](RuntimeState& state) {
         auto* participant = UpsertLuaBotParticipant(state, bot_id);
         if (participant == nullptr) {
@@ -54,6 +56,7 @@ bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
         participant->transport_connected = true;
         participant->transport_using_relay = false;
         ApplyCharacterProfile(participant, request.character_profile);
+        ApplySceneIntent(participant, sync_scene_intent);
     });
 
     if (out_bot_id != nullptr) {
@@ -73,6 +76,7 @@ bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
         if (!TryDispatchEntitySync(
                 bot_id,
                 request.character_profile,
+                sync_scene_intent,
                 sync_has_transform,
                 sync_has_heading,
                 sync_position_x,
@@ -82,6 +86,7 @@ bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
             SchedulePendingEntitySyncLocked(
                 bot_id,
                 request.character_profile,
+                sync_scene_intent,
                 sync_has_transform,
                 sync_has_heading,
                 sync_position_x,
@@ -165,6 +170,7 @@ bool UpdateBot(const BotUpdateRequest& request) {
 
     bool updated = false;
     MultiplayerCharacterProfile sync_character_profile = DefaultCharacterProfile();
+    ParticipantSceneIntent sync_scene_intent = DefaultParticipantSceneIntent();
     bool sync_has_transform = false;
     bool sync_has_heading = false;
     float sync_position_x = 0.0f;
@@ -182,6 +188,9 @@ bool UpdateBot(const BotUpdateRequest& request) {
         if (request.has_character_profile) {
             ApplyCharacterProfile(participant, request.character_profile);
         }
+        if (request.has_scene_intent) {
+            ApplySceneIntent(participant, request.scene_intent);
+        }
         if (request.has_ready) {
             participant->ready = request.ready;
         }
@@ -194,6 +203,7 @@ bool UpdateBot(const BotUpdateRequest& request) {
                 request.heading);
         }
         sync_character_profile = participant->character_profile;
+        sync_scene_intent = participant->runtime.scene_intent;
         sync_has_transform = participant->runtime.transform_valid;
         sync_has_heading = request.has_heading;
         sync_position_x = participant->runtime.position_x;
@@ -202,11 +212,12 @@ bool UpdateBot(const BotUpdateRequest& request) {
         updated = true;
     });
 
-    if (updated && (request.has_character_profile || request.has_transform)) {
+    if (updated && (request.has_character_profile || request.has_scene_intent || request.has_transform)) {
         std::string sync_error_message;
         if (!TryDispatchEntitySync(
                 request.bot_id,
                 sync_character_profile,
+                sync_scene_intent,
                 sync_has_transform,
                 sync_has_heading,
                 sync_position_x,
@@ -216,6 +227,7 @@ bool UpdateBot(const BotUpdateRequest& request) {
             SchedulePendingEntitySyncLocked(
                 request.bot_id,
                 sync_character_profile,
+                sync_scene_intent,
                 sync_has_transform,
                 sync_has_heading,
                 sync_position_x,
@@ -362,6 +374,7 @@ bool ReadBotMovementIntent(std::uint64_t bot_id, BotMovementIntentSnapshot* snap
 
     snapshot->available = true;
     if (const auto* pending_intent = FindPendingMovementIntent(bot_id); pending_intent != nullptr) {
+        snapshot->revision = pending_intent->revision;
         snapshot->state = pending_intent->state;
         snapshot->moving = pending_intent->state == BotControllerState::Moving;
         snapshot->has_target = pending_intent->has_target;
@@ -433,6 +446,7 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
         if (!TryDispatchEntitySync(
                 pending_sync.bot_id,
                 pending_sync.character_profile,
+                pending_sync.scene_intent,
                 pending_sync.has_transform,
                 pending_sync.has_heading,
                 pending_sync.position_x,
@@ -482,7 +496,8 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
                 }
 
                 live_participant->runtime.valid = true;
-                live_participant->runtime.in_run = true;
+                live_participant->runtime.in_run =
+                    live_participant->runtime.scene_intent.kind == ParticipantSceneIntentKind::Run;
                 live_participant->runtime.transform_valid = true;
                 live_participant->runtime.position_x = gameplay_state.x;
                 live_participant->runtime.position_y = gameplay_state.y;
@@ -608,6 +623,52 @@ bool ReadBotSnapshotByIndex(std::uint32_t index, BotSnapshot* snapshot) {
 std::size_t GetPendingBotCastCount() {
     std::scoped_lock lock(g_bot_runtime_mutex);
     return g_pending_casts.size();
+}
+
+void SetAllBotSceneIntentsToRun() {
+    std::scoped_lock lock(g_bot_runtime_mutex);
+    if (!g_bot_runtime_initialized) {
+        return;
+    }
+
+    UpdateRuntimeState([](RuntimeState& state) {
+        for (auto& participant : state.participants) {
+            if (!IsLuaBotParticipant(participant)) {
+                continue;
+            }
+
+            ApplySceneIntent(
+                &participant,
+                ParticipantSceneIntent{
+                    ParticipantSceneIntentKind::Run,
+                    -1,
+                    -1,
+                });
+        }
+    });
+}
+
+void SetAllBotSceneIntentsToSharedHub() {
+    std::scoped_lock lock(g_bot_runtime_mutex);
+    if (!g_bot_runtime_initialized) {
+        return;
+    }
+
+    UpdateRuntimeState([](RuntimeState& state) {
+        for (auto& participant : state.participants) {
+            if (!IsLuaBotParticipant(participant)) {
+                continue;
+            }
+
+            ApplySceneIntent(
+                &participant,
+                ParticipantSceneIntent{
+                    ParticipantSceneIntentKind::SharedHub,
+                    0,
+                    0,
+                });
+        }
+    });
 }
 
 const char* BotControllerStateLabel(BotControllerState state) {

@@ -40,6 +40,7 @@ local function parse_create_selection(active_preset)
 
   local mode, suffix = active_preset:match("^(create_ready)_(.+)$")
   if mode ~= nil then
+    suffix = suffix:gsub("_hub$", "")
     local element, discipline = suffix:match("^([a-z]+)_([a-z]+)$")
     if element ~= nil and ELEMENT_ACTIONS[element] ~= nil and DISCIPLINE_ACTIONS[discipline] ~= nil then
       return element, discipline
@@ -51,6 +52,7 @@ local function parse_create_selection(active_preset)
 
   mode, suffix = active_preset:match("^(map_create)_(.+)$")
   if mode ~= nil then
+    suffix = suffix:gsub("_hub$", "")
     local element, discipline = suffix:match("^([a-z]+)_([a-z]+)$")
     if element ~= nil and ELEMENT_ACTIONS[element] ~= nil and DISCIPLINE_ACTIONS[discipline] ~= nil then
       return element, discipline
@@ -61,6 +63,10 @@ local function parse_create_selection(active_preset)
   end
 
   return nil, nil
+end
+
+local function wants_hub_stop(active_preset)
+  return type(active_preset) == "string" and active_preset:match("_hub$") ~= nil
 end
 
 local function resolve_create_element_action(actions, active_preset)
@@ -179,7 +185,7 @@ local function build_steps(mode, actions, active_preset)
     return trace_rich_item_startup_steps
   end
   local selected_element, _ = parse_create_selection(active_preset)
-  if selected_element ~= nil and active_preset:match("^create_ready_") then
+  if selected_element ~= nil and (active_preset:match("^create_ready_") or wants_hub_stop(active_preset)) then
     return create_ready_steps
   end
   if active_preset == "enter_gameplay_start_run_ready" or

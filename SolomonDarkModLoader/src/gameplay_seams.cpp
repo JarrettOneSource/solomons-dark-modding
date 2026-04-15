@@ -58,6 +58,8 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "standalone_wizard_visual_link_attach", kStandaloneWizardVisualLinkAttach),
         SDMOD_ADDR("gameplay.hooks", "actor_build_render_descriptor_from_source", kActorBuildRenderDescriptorFromSource),
         SDMOD_ADDR("gameplay.hooks", "player_actor_move_step", kPlayerActorMoveStep),
+        SDMOD_ADDR("gameplay.hooks", "movement_collision_test_circle_placement", kMovementCollisionTestCirclePlacement),
+        SDMOD_ADDR("gameplay.hooks", "movement_collision_test_circle_placement_extended", kMovementCollisionTestCirclePlacementExtended),
         SDMOD_ADDR("gameplay.hooks", "actor_move_by_delta", kActorMoveByDelta),
         SDMOD_ADDR("gameplay.hooks", "actor_animation_advance", kActorAnimationAdvance),
         SDMOD_ADDR("gameplay.hooks", "actor_world_register", kActorWorldRegister),
@@ -190,6 +192,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "pointer_list_items", kPointerListItemsOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_position_x", kActorPositionXOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_position_y", kActorPositionYOffset),
+        SDMOD_SIZE("gameplay.offsets", "actor_collision_radius", kActorCollisionRadiusOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_unknown_reset", kActorUnknownResetOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_primary_flag_mask", kActorPrimaryFlagMaskOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_secondary_flag_mask", kActorSecondaryFlagMaskOffset),
@@ -363,6 +366,8 @@ uintptr_t kStandaloneWizardVisualLinkSecondaryCtor = 0;
 uintptr_t kStandaloneWizardVisualLinkAttach = 0;
 uintptr_t kActorBuildRenderDescriptorFromSource = 0;
 uintptr_t kPlayerActorMoveStep = 0;
+uintptr_t kMovementCollisionTestCirclePlacement = 0;
+uintptr_t kMovementCollisionTestCirclePlacementExtended = 0;
 uintptr_t kActorMoveByDelta = 0;
 uintptr_t kActorAnimationAdvance = 0;
 uintptr_t kActorWorldRegister = 0;
@@ -476,6 +481,7 @@ std::size_t kPointerListOwnsStorageFlagOffset = 0;
 std::size_t kPointerListItemsOffset = 0;
 std::size_t kActorPositionXOffset = 0;
 std::size_t kActorPositionYOffset = 0;
+std::size_t kActorCollisionRadiusOffset = 0;
 std::size_t kActorUnknownResetOffset = 0;
 std::size_t kActorPrimaryFlagMaskOffset = 0;
 std::size_t kActorSecondaryFlagMaskOffset = 0;

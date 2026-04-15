@@ -35,6 +35,13 @@ Notes:
   - `map_create_fire_arcane`
   - `map_create_air_body`
   If the discipline suffix is omitted, the sandbox still defaults to `arcane`.
+- The same combined presets now support a `_hub` suffix when you want the harness
+  to stop in the settled hub instead of auto-starting a run:
+  - `map_create_water_body_hub`
+  - `map_create_fire_arcane_hub`
+  - `create_ready_air_body_hub`
+  The `_hub` suffix keeps the create flow and element/discipline clicks, but
+  stops before `sd.hub.start_testrun()`.
 - The create-screen element semantics were corrected on April 13, 2026. The public preset names now match the actual stock visuals:
   - `fire` -> orange
   - `water` -> blue
