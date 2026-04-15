@@ -3,6 +3,26 @@
 Read this after context compaction or in a new session to resume instantly.
 
 ## Current Late-April 12 State
+- April 15, 2026 hub/scene-presence cutover:
+  - bots now carry explicit `scene` intent in the runtime API:
+    - `shared_hub`
+    - `private_region`
+    - `run`
+  - `sd.bots.create/update` accept `scene = { kind = ..., region_index = ..., region_type_id = ... }`
+  - if omitted, the loader derives a default from the active scene:
+    - hub root -> `SharedHub`
+    - hub interior -> `PrivateRegion`
+    - `testrun` -> `Run`
+  - the old gameplay binding heuristic based on `home_region_index/home_region_type_id`
+    is gone
+  - current live validation proves:
+    - a bot can materialize in the hub as `scene.kind = SharedHub`
+    - `sd.hub.start_testrun()` promotes that participant to `scene.kind = Run`
+    - the same participant rematerializes correctly in `testrun`
+  - current residual:
+    - direct private-scene divergence still needs live validation
+    - hub movement is on the A* path-follow stack, but the tested waypoint
+      still produced zero displacement
 - April 14, 2026 profile cutover status:
   - the bot API/runtime layer is no longer `wizard_id`-centric
   - participants now own `character_profile`, with:

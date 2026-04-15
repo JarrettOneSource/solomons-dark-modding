@@ -1,4 +1,5 @@
 #include "lua_engine_events.h"
+#include "bot_runtime.h"
 #include "gameplay_seams.h"
 #include "logger.h"
 #include "memory_access.h"
@@ -295,6 +296,7 @@ void __cdecl HookRunEnded() {
     g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
     g_state.run_start_tick_ms.store(0, std::memory_order_release);
     ClearRememberedEnemyTypes();
+    multiplayer::SetAllBotSceneIntentsToSharedHub();
     DispatchLuaRunEnded("death");
 }
 

@@ -428,6 +428,99 @@ bool ReadCharacterProfileField(
     return true;
 }
 
+bool ReadSceneIntentValue(
+    lua_State* state,
+    int scene_index,
+    multiplayer::ParticipantSceneIntent* scene_intent,
+    std::string* error_message) {
+    if (scene_intent == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    if (!EnsureTable(state, scene_index, "scene", error_message)) {
+        return false;
+    }
+
+    *scene_intent = multiplayer::DefaultParticipantSceneIntent();
+    const auto table_index = lua_absindex(state, scene_index);
+
+    lua_getfield(state, table_index, "kind");
+    if (!lua_isstring(state, -1)) {
+        *error_message = "scene.kind is required";
+        lua_pop(state, 1);
+        return false;
+    }
+
+    const auto kind = std::string(lua_tostring(state, -1));
+    lua_pop(state, 1);
+    if (kind == "shared_hub") {
+        scene_intent->kind = multiplayer::ParticipantSceneIntentKind::SharedHub;
+    } else if (kind == "private_region") {
+        scene_intent->kind = multiplayer::ParticipantSceneIntentKind::PrivateRegion;
+    } else if (kind == "run") {
+        scene_intent->kind = multiplayer::ParticipantSceneIntentKind::Run;
+    } else {
+        *error_message = "scene.kind must be shared_hub, private_region, or run";
+        return false;
+    }
+
+    bool has_region_index = false;
+    if (!ReadOptionalIntegerField(
+            state,
+            table_index,
+            "region_index",
+            &scene_intent->region_index,
+            &has_region_index,
+            error_message)) {
+        return false;
+    }
+
+    bool has_region_type_id = false;
+    if (!ReadOptionalIntegerField(
+            state,
+            table_index,
+            "region_type_id",
+            &scene_intent->region_type_id,
+            &has_region_type_id,
+            error_message)) {
+        return false;
+    }
+
+    if (!multiplayer::IsValidParticipantSceneIntent(*scene_intent)) {
+        *error_message = "scene contains invalid kind/region fields";
+        return false;
+    }
+
+    return true;
+}
+
+bool ReadSceneIntentField(
+    lua_State* state,
+    int table_index,
+    multiplayer::ParticipantSceneIntent* scene_intent,
+    bool* has_scene_intent,
+    std::string* error_message) {
+    if (scene_intent == nullptr || has_scene_intent == nullptr || error_message == nullptr) {
+        return false;
+    }
+
+    lua_getfield(state, table_index, "scene");
+    if (lua_isnil(state, -1)) {
+        *has_scene_intent = false;
+        lua_pop(state, 1);
+        return true;
+    }
+
+    const bool ok = ReadSceneIntentValue(state, -1, scene_intent, error_message);
+    lua_pop(state, 1);
+    if (!ok) {
+        return false;
+    }
+
+    *has_scene_intent = true;
+    return true;
+}
+
 void PushAppearanceChoices(lua_State* state, const multiplayer::CharacterAppearanceInfo& appearance) {
     lua_createtable(state, static_cast<int>(appearance.choice_ids.size()), 0);
     for (std::size_t index = 0; index < appearance.choice_ids.size(); ++index) {
@@ -450,6 +543,16 @@ void PushCharacterProfile(lua_State* state, const multiplayer::MultiplayerCharac
     lua_setfield(state, -2, "level");
     lua_pushinteger(state, static_cast<lua_Integer>(profile.experience));
     lua_setfield(state, -2, "experience");
+}
+
+void PushSceneIntent(lua_State* state, const multiplayer::ParticipantSceneIntent& scene_intent) {
+    lua_createtable(state, 0, 3);
+    lua_pushstring(state, multiplayer::ParticipantSceneIntentKindLabel(scene_intent.kind));
+    lua_setfield(state, -2, "kind");
+    lua_pushinteger(state, static_cast<lua_Integer>(scene_intent.region_index));
+    lua_setfield(state, -2, "region_index");
+    lua_pushinteger(state, static_cast<lua_Integer>(scene_intent.region_type_id));
+    lua_setfield(state, -2, "region_type_id");
 }
 
 }  // namespace
@@ -501,6 +604,15 @@ bool ParseBotCreateRequest(
     }
     if (!has_profile) {
         *error_message = "sd.bots.create requires profile";
+        return false;
+    }
+
+    if (!ReadSceneIntentField(
+            state,
+            table_index,
+            &request->scene_intent,
+            &request->has_scene_intent,
+            error_message)) {
         return false;
     }
 
@@ -569,6 +681,15 @@ bool ParseBotUpdateRequest(
         return false;
     }
 
+    if (!ReadSceneIntentField(
+            state,
+            table_index,
+            &request->scene_intent,
+            &request->has_scene_intent,
+            error_message)) {
+        return false;
+    }
+
     if (!ReadPositionField(state, table_index, &request->position_x, &request->position_y, &request->has_transform, error_message)) {
         return false;
     }
@@ -583,7 +704,11 @@ bool ParseBotUpdateRequest(
         return false;
     }
 
-    if (request->has_display_name || request->has_character_profile || request->has_ready || request->has_transform) {
+    if (request->has_display_name ||
+        request->has_character_profile ||
+        request->has_scene_intent ||
+        request->has_ready ||
+        request->has_transform) {
         return true;
     }
 
@@ -677,7 +802,7 @@ void PushBotEquipVisualLaneState(
 }
 
 void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot) {
-    lua_createtable(state, 0, 50);
+    lua_createtable(state, 0, 51);
     lua_pushboolean(state, snapshot.available ? 1 : 0);
     lua_setfield(state, -2, "available");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.bot_id));
@@ -686,6 +811,8 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "name");
     PushCharacterProfile(state, snapshot.character_profile);
     lua_setfield(state, -2, "profile");
+    PushSceneIntent(state, snapshot.scene_intent);
+    lua_setfield(state, -2, "scene");
     lua_pushboolean(state, snapshot.ready ? 1 : 0);
     lua_setfield(state, -2, "ready");
     lua_pushboolean(state, snapshot.in_run ? 1 : 0);

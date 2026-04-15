@@ -49,6 +49,10 @@ MultiplayerCharacterProfile DefaultCharacterProfile() {
     return MultiplayerCharacterProfile{};
 }
 
+ParticipantSceneIntent DefaultParticipantSceneIntent() {
+    return ParticipantSceneIntent{};
+}
+
 bool IsValidCharacterProfile(const MultiplayerCharacterProfile& profile) {
     if (profile.element_id < 0 || profile.element_id > 4) {
         return false;
@@ -58,6 +62,20 @@ bool IsValidCharacterProfile(const MultiplayerCharacterProfile& profile) {
     if (discipline_id < static_cast<std::int32_t>(CharacterDisciplineId::Mind) ||
         discipline_id > static_cast<std::int32_t>(CharacterDisciplineId::Arcane)) {
         return false;
+    }
+
+    return true;
+}
+
+bool IsValidParticipantSceneIntent(const ParticipantSceneIntent& scene_intent) {
+    const auto kind = static_cast<std::int32_t>(scene_intent.kind);
+    if (kind < static_cast<std::int32_t>(ParticipantSceneIntentKind::SharedHub) ||
+        kind > static_cast<std::int32_t>(ParticipantSceneIntentKind::Run)) {
+        return false;
+    }
+
+    if (scene_intent.kind == ParticipantSceneIntentKind::PrivateRegion) {
+        return scene_intent.region_index >= 0 || scene_intent.region_type_id >= 0;
     }
 
     return true;
@@ -248,6 +266,19 @@ const char* ParticipantKindLabel(ParticipantKind kind) {
         return "RemoteHuman";
     case ParticipantKind::LuaBot:
         return "LuaBot";
+    }
+
+    return "Unknown";
+}
+
+const char* ParticipantSceneIntentKindLabel(ParticipantSceneIntentKind kind) {
+    switch (kind) {
+    case ParticipantSceneIntentKind::SharedHub:
+        return "SharedHub";
+    case ParticipantSceneIntentKind::PrivateRegion:
+        return "PrivateRegion";
+    case ParticipantSceneIntentKind::Run:
+        return "Run";
     }
 
     return "Unknown";

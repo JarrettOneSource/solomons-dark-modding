@@ -456,6 +456,8 @@ bool QueueHubStartTestrun(std::string* error_message) {
         return false;
     }
 
+    multiplayer::SetAllBotSceneIntentsToRun();
+
     g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.exchange(1, std::memory_order_acq_rel);
     std::uint8_t testrun_mode_flag = 0;
     uintptr_t arena_vtable = 0;
@@ -552,6 +554,7 @@ bool QueueGameplayStartWaves(std::string* error_message) {
 bool QueueWizardBotEntitySync(
     std::uint64_t bot_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
+    const multiplayer::ParticipantSceneIntent& scene_intent,
     bool has_transform,
     bool has_heading,
     float position_x,
@@ -561,6 +564,7 @@ bool QueueWizardBotEntitySync(
     PendingWizardBotSyncRequest request;
     request.bot_id = bot_id;
     request.character_profile = character_profile;
+    request.scene_intent = scene_intent;
     request.has_transform = has_transform;
     request.has_heading = has_heading;
     request.x = position_x;
@@ -621,6 +625,7 @@ bool TryGetWizardBotGameplayState(std::uint64_t bot_id, SDModBotGameplayState* s
     state->moving = it->moving;
     state->bot_id = it->bot_id;
     state->character_profile = it->character_profile;
+    state->scene_intent = it->scene_intent;
     state->actor_address = it->actor_address;
     state->world_address = it->world_address;
     state->animation_state_ptr = it->animation_state_ptr;

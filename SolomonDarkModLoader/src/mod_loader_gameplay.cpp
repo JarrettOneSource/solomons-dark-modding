@@ -58,6 +58,9 @@ using ActorWorldRegisterGameplaySlotActorFn = void(__thiscall*)(void* self, int 
 using ActorWorldUnregisterGameplaySlotActorFn = void(__thiscall*)(void* self, int slot_index);
 using MonsterPathfindingRefreshTargetFn = void(__fastcall*)(void* self, void* unused_edx);
 using PlayerActorMoveStepFn = std::uint32_t(__thiscall*)(void* self, void* actor, float move_x, float move_y, unsigned int flags);
+using MovementCollisionTestCirclePlacementFn = std::uint32_t(__thiscall*)(void* self, float x, float y, float radius, std::uint32_t mask);
+using MovementCollisionTestCirclePlacementExtendedFn =
+    std::uint32_t(__thiscall*)(void* self, float x, float y, float radius, std::uint32_t cell_mask, std::uint32_t object_mask);
 using ActorMoveByDeltaFn = void(__thiscall*)(void* self, float move_x, float move_y, int flags);
 using ActorAnimationAdvanceFn = void(__thiscall*)(void* self);
 using PlayerActorRefreshRuntimeHandlesFn = void(__thiscall*)(void* self);
@@ -195,7 +198,9 @@ constexpr std::uint64_t kWaveStartRetryDelayMs = 250;
 constexpr std::uint64_t kWizardBotSyncRetryDelayMs = 250;
 constexpr std::uint64_t kWizardBotSyncDispatchSpacingMs = 500;
 constexpr std::uint64_t kWizardBotSceneBindingTickIntervalMs = 50;
-constexpr float kWizardBotMovementStepScale = 3.0f;
+constexpr float kWizardBotPathWaypointArrivalThreshold = 12.0f;
+constexpr float kWizardBotPathFinalArrivalThreshold = 8.0f;
+constexpr std::uint64_t kWizardBotPathRetryDelayMs = 500;
 constexpr std::uint64_t kGameplayRegionSwitchRetryDelayMs = 250;
 constexpr std::uint64_t kGameplayRegionSwitchDispatchSpacingMs = 500;
 constexpr DWORD kHubStartTestrunDispatchCooldownMs = 5000;
@@ -434,6 +439,7 @@ struct PendingRewardSpawnRequest {
 struct PendingWizardBotSyncRequest {
     std::uint64_t bot_id = 0;
     multiplayer::MultiplayerCharacterProfile character_profile;
+    multiplayer::ParticipantSceneIntent scene_intent;
     bool has_transform = false;
     bool has_heading = false;
     float x = 0.0f;
@@ -490,6 +496,13 @@ struct ObservedActorAnimationDriveProfile {
     float render_advance_rate = 0.0f;
 };
 
+struct BotPathWaypoint {
+    int grid_x = -1;
+    int grid_y = -1;
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
 struct BotEntityBinding {
     enum class Kind : std::uint8_t {
         PlaceholderEnemy = 0,
@@ -498,10 +511,12 @@ struct BotEntityBinding {
 
     std::uint64_t bot_id = 0;
     multiplayer::MultiplayerCharacterProfile character_profile;
+    multiplayer::ParticipantSceneIntent scene_intent;
     uintptr_t actor_address = 0;
     int gameplay_slot = -1;
     Kind kind = Kind::PlaceholderEnemy;
     multiplayer::BotControllerState controller_state = multiplayer::BotControllerState::Idle;
+    std::uint64_t movement_intent_revision = 0;
     bool movement_active = false;
     bool has_target = false;
     float direction_x = 0.0f;
@@ -511,9 +526,16 @@ struct BotEntityBinding {
     float target_x = 0.0f;
     float target_y = 0.0f;
     float distance_to_target = 0.0f;
+    bool path_active = false;
+    bool path_failed = false;
+    std::uint64_t active_path_revision = 0;
+    std::uint64_t next_path_retry_not_before_ms = 0;
+    std::uint64_t last_path_debug_log_ms = 0;
+    std::size_t path_waypoint_index = 0;
+    float current_waypoint_x = 0.0f;
+    float current_waypoint_y = 0.0f;
+    std::vector<BotPathWaypoint> path_waypoints;
     std::uint64_t next_scene_materialize_retry_ms = 0;
-    int home_region_index = -1;
-    int home_region_type_id = -1;
     uintptr_t materialized_scene_address = 0;
     uintptr_t materialized_world_address = 0;
     int materialized_region_index = -1;
@@ -547,6 +569,7 @@ struct SceneContextSnapshot {
 struct BotRematerializationRequest {
     std::uint64_t bot_id = 0;
     multiplayer::MultiplayerCharacterProfile character_profile;
+    multiplayer::ParticipantSceneIntent scene_intent;
     bool has_transform = false;
     float x = 0.0f;
     float y = 0.0f;
@@ -564,6 +587,7 @@ struct WizardBotGameplaySnapshot {
     bool entity_materialized = false;
     bool moving = false;
     multiplayer::MultiplayerCharacterProfile character_profile;
+    multiplayer::ParticipantSceneIntent scene_intent;
     uintptr_t actor_address = 0;
     uintptr_t world_address = 0;
     uintptr_t animation_state_ptr = 0;
@@ -885,6 +909,7 @@ bool EnsureStandaloneWizardWorldOwner(
 
 #include "mod_loader_gameplay/scene_and_animation.inl"
 #include "mod_loader_gameplay/standalone_materialization.inl"
+#include "mod_loader_gameplay/bot_pathfinding.inl"
 #include "mod_loader_gameplay/bot_registry_and_movement.inl"
 #include "mod_loader_gameplay/dispatch_and_hooks.inl"
 

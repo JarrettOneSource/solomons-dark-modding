@@ -130,6 +130,7 @@ void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) 
     snapshot->runtime_valid = participant.runtime.valid;
     snapshot->transform_valid = participant.runtime.transform_valid;
     snapshot->run_nonce = participant.runtime.run_nonce;
+    snapshot->scene_intent = participant.runtime.scene_intent;
     snapshot->position_x = participant.runtime.position_x;
     snapshot->position_y = participant.runtime.position_y;
     snapshot->heading = participant.runtime.heading;
@@ -195,9 +196,6 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
     CopyEquipVisualLaneState(gameplay_state.primary_visual_lane, &snapshot->primary_visual_lane);
     CopyEquipVisualLaneState(gameplay_state.secondary_visual_lane, &snapshot->secondary_visual_lane);
     CopyEquipVisualLaneState(gameplay_state.attachment_visual_lane, &snapshot->attachment_visual_lane);
-    if (gameplay_state.entity_materialized) {
-        snapshot->in_run = true;
-    }
 }
 
 void ApplyControllerStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
@@ -271,21 +269,14 @@ void DeriveControllerMotionFromTransform(
             return;
         }
 
-        intent->direction_x = delta_x / distance;
-        intent->direction_y = delta_y / distance;
+        // Final-destination ownership now lives in runtime, but actual path
+        // generation and per-step steering live on the gameplay thread.
+        // Runtime keeps the destination and the remaining distance current so
+        // gameplay can rebuild paths when the intent revision changes.
+        intent->direction_x = 0.0f;
+        intent->direction_y = 0.0f;
         intent->desired_heading_valid = true;
-        // Stock wizard animation rows are driven from actor +0x6C, and in the
-        // gameplay-slot bot path there is no live +0x21C control object to
-        // override that direction selection. The stock sprite bank convention
-        // is rotated 90 degrees from the controller's raw atan2 heading:
-        //   0   = up
-        //   90  = right
-        //   180 = down
-        //   270 = left
-        // so the bot's world-space heading must be converted into that
-        // gameplay-facing convention before it is written back to +0x6C.
-        intent->desired_heading = NormalizeHeadingDegrees(
-            static_cast<float>(std::atan2(delta_y, delta_x) * (180.0 / 3.14159265358979323846) + 90.0));
+        intent->desired_heading = current_heading;
         return;
     }
 
@@ -295,11 +286,14 @@ void DeriveControllerMotionFromTransform(
 }
 
 bool IsValidCreateRequest(const BotCreateRequest& request) {
-    return IsValidCharacterProfile(request.character_profile);
+    return
+        IsValidCharacterProfile(request.character_profile) &&
+        (!request.has_scene_intent || IsValidParticipantSceneIntent(request.scene_intent));
 }
 
 bool IsValidUpdateRequest(const BotUpdateRequest& request) {
-    return request.bot_id != 0;
+    return request.bot_id != 0 &&
+        (!request.has_scene_intent || IsValidParticipantSceneIntent(request.scene_intent));
 }
 
 bool IsValidCastRequest(const BotCastRequest& request) {
@@ -321,6 +315,34 @@ bool IsValidMoveRequest(const BotMoveToRequest& request) {
     }
 
     return std::isfinite(request.target_x) && std::isfinite(request.target_y);
+}
+
+ParticipantSceneIntent ResolveDefaultBotSceneIntentFromCurrentScene() {
+    ParticipantSceneIntent scene_intent = DefaultParticipantSceneIntent();
+
+    SDModSceneState scene_state;
+    if (!TryGetSceneState(&scene_state) || !scene_state.valid) {
+        return scene_intent;
+    }
+
+    if (scene_state.name == "testrun" || scene_state.kind == "arena") {
+        scene_intent.kind = ParticipantSceneIntentKind::Run;
+        scene_intent.region_index = scene_state.current_region_index;
+        scene_intent.region_type_id = scene_state.region_type_id;
+        return scene_intent;
+    }
+
+    if (scene_state.name == "hub" || scene_state.kind == "hub") {
+        scene_intent.kind = ParticipantSceneIntentKind::SharedHub;
+        scene_intent.region_index = scene_state.current_region_index;
+        scene_intent.region_type_id = scene_state.region_type_id;
+        return scene_intent;
+    }
+
+    scene_intent.kind = ParticipantSceneIntentKind::PrivateRegion;
+    scene_intent.region_index = scene_state.current_region_index;
+    scene_intent.region_type_id = scene_state.region_type_id;
+    return scene_intent;
 }
 
 void ApplyTransform(
@@ -350,6 +372,15 @@ void ApplyLoadout(ParticipantInfo* participant, const BotLoadoutInfo& loadout) {
     participant->runtime.primary_skill_id = loadout.primary_skill_id;
     participant->runtime.primary_combo_id = loadout.primary_combo_id;
     participant->runtime.queued_secondary_ids = loadout.secondary_skill_ids;
+}
+
+void ApplySceneIntent(ParticipantInfo* participant, const ParticipantSceneIntent& scene_intent) {
+    if (participant == nullptr) {
+        return;
+    }
+
+    participant->runtime.scene_intent = scene_intent;
+    participant->runtime.in_run = scene_intent.kind == ParticipantSceneIntentKind::Run;
 }
 
 void ApplyCharacterProfile(ParticipantInfo* participant, const MultiplayerCharacterProfile& profile) {
@@ -389,6 +420,7 @@ void DestroyAllBotsLocked() {
 void SchedulePendingEntitySyncLocked(
     std::uint64_t bot_id,
     const MultiplayerCharacterProfile& character_profile,
+    const ParticipantSceneIntent& scene_intent,
     bool has_transform,
     bool has_heading,
     float position_x,
@@ -404,6 +436,7 @@ void SchedulePendingEntitySyncLocked(
 
     pending_sync->generation = g_next_entity_sync_generation++;
     pending_sync->character_profile = character_profile;
+    pending_sync->scene_intent = scene_intent;
     pending_sync->has_transform = has_transform;
     pending_sync->has_heading = has_heading;
     pending_sync->position_x = position_x;
@@ -453,6 +486,7 @@ void SchedulePendingDestroyLocked(std::uint64_t bot_id) {
 bool TryDispatchEntitySync(
     std::uint64_t bot_id,
     const MultiplayerCharacterProfile& character_profile,
+    const ParticipantSceneIntent& scene_intent,
     bool has_transform,
     bool has_heading,
     float position_x,
@@ -462,6 +496,7 @@ bool TryDispatchEntitySync(
     return QueueWizardBotEntitySync(
         bot_id,
         character_profile,
+        scene_intent,
         has_transform,
         has_heading,
         position_x,
