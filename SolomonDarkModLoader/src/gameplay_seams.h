@@ -165,7 +165,6 @@ extern std::size_t kActorRenderDriveFlagsOffset;
 extern std::size_t kActorMovementSpeedMultiplierOffset;
 extern std::size_t kActorAnimationConfigBlockOffset;
 extern std::size_t kActorAnimationDriveParameterOffset;
-extern std::size_t kActorPerTickSpeedOffset;
 extern std::size_t kActorMoveStepScaleOffset;
 extern std::size_t kActorAnimationDriveStateByteOffset;
 extern std::size_t kActorAnimationMoveDurationTicksOffset;

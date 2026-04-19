@@ -208,7 +208,6 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "actor_movement_speed_multiplier", kActorMovementSpeedMultiplierOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_animation_config_block", kActorAnimationConfigBlockOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_animation_drive_parameter", kActorAnimationDriveParameterOffset),
-        SDMOD_SIZE("gameplay.offsets", "actor_per_tick_speed", kActorPerTickSpeedOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_move_step_scale", kActorMoveStepScaleOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_animation_drive_state_byte", kActorAnimationDriveStateByteOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_animation_move_duration_ticks", kActorAnimationMoveDurationTicksOffset),
@@ -502,7 +501,6 @@ std::size_t kActorRenderDriveFlagsOffset = 0;
 std::size_t kActorMovementSpeedMultiplierOffset = 0;
 std::size_t kActorAnimationConfigBlockOffset = 0;
 std::size_t kActorAnimationDriveParameterOffset = 0;
-std::size_t kActorPerTickSpeedOffset = 0;
 std::size_t kActorMoveStepScaleOffset = 0;
 std::size_t kActorAnimationDriveStateByteOffset = 0;
 std::size_t kActorAnimationMoveDurationTicksOffset = 0;

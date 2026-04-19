@@ -1,0 +1,25 @@
+Read /tmp/sd-netcode/brainstorm.md. Your working directory is the Solomon's Dark repo root — inspect the actual files referenced in the brainstorm. Do not trust the summary; open the code.
+
+Your job is to challenge this netcode brainstorm. Return FINDINGS FIRST, ordered by severity, with concrete file refs (path + line). If the approach is sound, say so explicitly and list only the real gaps. If it's structurally wrong, say so bluntly and propose the correction.
+
+Pressure-test each of these specifically:
+
+1. "Headless-ish exe as dedicated server" (option a). Inspect where the sim actually ticks. Check Mod Loader/SolomonDarkModLoader/src/ for the D3D9 EndScene hook, the runtime tick dispatcher, any Arena_* / run lifecycle hook points. Is the sim truly coupled to rendering, or is there a sim-tick call path we could invoke without presenting a frame? Also consider: the exe is x86 and Steam-gated (AppID 3362180). Can a headless copy pass `SteamAPI_Init` on a server box that doesn't own the game? Or does dedicated require a different login model?
+
+2. Protocol header gap. The current SDMP protocol (Mod Loader/SolomonDarkModLoader/include/multiplayer_runtime_protocol.h) has only State / Launch / Cast / Progression. Sync'd enemies and drops need more. Is extending this header the right move, or should we start over with a netentity / snapshot framing (variable-size snapshot bursts, event channels, reliability flags)? What packets are actually missing (enemy spawn, enemy snapshot burst, enemy event, drop spawn, drop pickup, damage, death, chat, state-resync)?
+
+3. Unified NetEntity vs separate replication paths. Inspect Mod Loader/SolomonDarkModLoader/include/bot_runtime.h and Mod Loader/SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_*.inl. Does the existing participant shape actually support a bot slot being taken over by a remote human without re-spawning the actor? If not, what is the narrowest change?
+
+4. Tick decoupling. The game runs at frame rate around D3D9 EndScene. If host runs a fixed 30 Hz or 60 Hz sim tick for replication, how does that coexist with render-path-driven `PlayerActorTick` and enemy AI? Do we need a parallel sim thread, or can we snapshot at the EndScene rate and interpolate on receivers? What does the existing bot code assume about tick cadence?
+
+5. Enemy snapshot rate. 10-20 Hz for enemies including Banshee curves — is that enough for ARPG feel? Inspect anything in docs/ or src/ around enemy AI / movement to see how fast enemy state actually changes. Would we need 30 Hz for bosses specifically?
+
+6. Lua API cheat surface. Grep for lua_engine_bindings_* and list setters that write gameplay state directly (position, HP, level, inventory, progression). Which must become "send intent to host" calls in multiplayer? Which can stay local-only? The named-pipe Lua exec server — what's the minimum disable path in multiplayer builds?
+
+7. Reconnection and full-state resync. What's in the baseline "join-in-progress" packet catalog? Think about: participant list, enemy list, drop list, run state, wave index, boss phase, each player's progression. Is snapshot-burst enough, or do we need an explicit "world-snapshot" reliable packet?
+
+8. Bot-to-remote-human swap. Concretely: today a bot is `RemoteParticipant + LuaBrain`. Tomorrow we want `RemoteParticipant + Native` fed by network input. Does the existing entity materialization / tick path allow swapping input source without destroying and re-creating the actor? What code would actually need to change?
+
+9. What did I miss that you would lose sleep over if we shipped with only what is in this brainstorm? Don't hold back.
+
+Format: start with a 5-line executive verdict (APPROVE / APPROVE WITH CAVEATS / REFUTE + one-line reason), then findings ordered severity-high-to-low, each with file refs and a proposed correction. End with the three highest-leverage next actions.

@@ -134,20 +134,12 @@ void LogWizardBotMovementFrame(
     const auto delta_y = position_after_y - position_before_y;
     const auto d = std::sqrt(delta_x * delta_x + delta_y * delta_y);
     const auto scale_0x74 = memory.ReadFieldOr<float>(actor_address, kActorMoveSpeedScaleOffset, 0.0f);
-    const auto per_tick_speed_2d4 = memory.ReadFieldOr<float>(actor_address, kActorPerTickSpeedOffset, 0.0f);
-    const auto dur_0x1BC = memory.ReadFieldOr<float>(actor_address, 0x1BC, 0.0f);
-    const auto accel_0x1E0 = memory.ReadFieldOr<float>(actor_address, 0x1E0, 0.0f);
-    const auto blend_0x268 = memory.ReadFieldOr<float>(actor_address, 0x268, 0.0f);
-    auto player_per_tick_speed_2d4 = 0.0f;
-    uintptr_t player_probe_scene_address = 0;
-    uintptr_t player_probe_actor_address = 0;
-    if (TryResolveCurrentGameplayScene(&player_probe_scene_address) &&
-        player_probe_scene_address != 0 &&
-        TryResolvePlayerActorForSlot(player_probe_scene_address, 0, &player_probe_actor_address) &&
-        player_probe_actor_address != 0) {
-        player_per_tick_speed_2d4 =
-            memory.ReadFieldOr<float>(player_probe_actor_address, kActorPerTickSpeedOffset, 0.0f);
-    }
+    const auto move_step_scale_0x218 =
+        memory.ReadFieldOr<float>(actor_address, kActorMoveStepScaleOffset, 0.0f);
+    const auto dir_x_0x158 =
+        memory.ReadFieldOr<float>(actor_address, kActorAnimationConfigBlockOffset, 0.0f);
+    const auto dir_y_0x15C =
+        memory.ReadFieldOr<float>(actor_address, kActorAnimationDriveParameterOffset, 0.0f);
     Log(
         "[bots] standalone_mv bot=" + std::to_string(binding->bot_id) +
         " before=(" + std::to_string(position_before_x) + "," + std::to_string(position_before_y) + ")" +
@@ -155,11 +147,9 @@ void LogWizardBotMovementFrame(
         " d=" + std::to_string(d) +
         " dir=(" + std::to_string(direction_x) + "," + std::to_string(direction_y) + ")" +
         " 0x74=" + std::to_string(scale_0x74) +
-        " 0x2D4=" + std::to_string(per_tick_speed_2d4) +
-        " player_0x2D4=" + std::to_string(player_per_tick_speed_2d4) +
-        " 0x1BC=" + std::to_string(dur_0x1BC) +
-        " 0x1E0=" + std::to_string(accel_0x1E0) +
-        " 0x268=" + std::to_string(blend_0x268) +
+        " 0x218=" + std::to_string(move_step_scale_0x218) +
+        " 0x158=" + std::to_string(dir_x_0x158) +
+        " 0x15C=" + std::to_string(dir_y_0x15C) +
         " path=" + std::string(path_label != nullptr ? path_label : ""));
 }
 

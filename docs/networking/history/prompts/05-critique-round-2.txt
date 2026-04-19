@@ -1,0 +1,27 @@
+Read /tmp/sd-netcode/plan_v2.md. This is the revised netcode plan after round-1 Codex critique (/tmp/sd-netcode/critique/last.txt) and round-1 Codex web research (/tmp/sd-netcode/research/last.txt). You have the Solomon's Dark repo as cwd — inspect actual code, do not trust the plan's summaries.
+
+Your job: second-pass critique. Round 1 found 8 severe issues (bots not generic, no SteamGameServer_Init, slot-0 coupling, Lua surface fatal, drops are gold-only, enemy seams thin, no world-snapshot, protocol needs replacement). v2 tries to address these. Tell us what round 1 missed AND what v2 broke.
+
+Return FINDINGS FIRST, ordered by severity, with file refs. End with a verdict line (APPROVE / APPROVE WITH CAVEATS / REFUTE) and the three highest-leverage next actions.
+
+Specifically pressure-test these v2 decisions:
+
+1. Phase 0 gating is load-bearing. Grep for every lua binding that mutates gameplay state and confirm the proposed "host-intent RPC or disable" pattern covers them. Also check: is disabling the named-pipe exec server enough, or are there other dev/debug backdoors (memory read/write tools, injected hotkeys, save-state manipulators, Lua-exec HTTP endpoint, anything) that must also be gated? I do not want to discover a second backdoor after v1 ships.
+
+2. Host-sim + client-prediction + reconciliation for the local player. This is a real architecture change from v1's "local player owns its pose." Inspect `PlayerActorTick` call sites and the existing bot puppet drive-state path. Can we actually predict + reconcile on this engine, or does `PlayerActorTick` assume single-authority-per-actor in a way that makes rollback impossible? If the latter, is there a weaker pattern (client intent + host state lag absorption without rollback) that would still be acceptable? Tell us bluntly if we're committing to something the engine won't bend to.
+
+3. Phase 1 scope honesty. The phase order claims P2P-host-first can ship without dedicated-server infrastructure. Is that actually true? Inspect what the hidden local player = host implies for: (a) the non-host clients needing a locally-rendered wizard actor that is host-driven (which is bot-like — does the participant rail actually handle that today?), (b) the host running the sim for all four players (does slot-0 coupling force the host to BE one of the players, or can the host run sim for others independently?), (c) any assumption that enemies / waves only advance when a local player is in a given region. If Phase 1 secretly needs Phase 3 capability, surface it.
+
+4. LuaBrain -> Native participant-controller swap. Open question 6 in the plan. Which is the right place to do the swap: pre-materialization (easy, requires knowing owner at actor-create time) or hot-swap runtime (hard, allows reconnection / controller promotion / demotion)? Inspect the participant lifecycle code and tell us which is actually reachable in the current architecture.
+
+5. Protocol catalog review. The v2 catalog adds mod-manifest, clock-sync, full-state-bootstrap, save-provenance, etc. Is any essential family missing (e.g. input-replay-for-prediction-rollback packet, chat, admin command envelope, host migration state, spectator, telemetry)? Is any family overdesigned for v1 and better deferred? Call both.
+
+6. Is 15-20 Hz enemy snapshot actually defensible for this game specifically? Look at the recovered enemy behavior and movement code (everything in `Mod Loader/docs/pathfinding-*`, `enemy_*`, `monster_*` related). Estimate: at what snapshot rate does stagger/knockback/phase-change become visibly wrong on a 120 ms-behind client? Propose a concrete rate that is defensible for this game, not a generic number from a blog.
+
+7. Save/world/server as a replicated object. The research found this is an emerging co-op genre norm (Valheim/V Rising/Enshrouded/Palworld/Wicked). But our game is run-based (arena + waves + hub), not persistent-world. Is save-as-object still the right framing, or is it over-applied from a different genre? If it is right, what's the minimum viable identity object for a run-based game (run nonce + participants + loadout + mod-manifest + timestamp)? If it's over-applied, say so.
+
+8. What did round 1 miss? The round-1 critique is in /tmp/sd-netcode/critique/last.txt. Read it. Look for anything structural it overlooked — e.g. inventory sync, progression determinism, save-file corruption during reconnect, Steam P2P port forwarding / NAT fallback, mobile/console expectations, build-flavor issues (Debug vs Release with Lua enabled), Unicode handling in player names, time source drift. Anything round 1 was wrong about? Say so.
+
+9. Final verdict on ship-order inversion. Round 1 said "P2P-host-first, generic participant rail second, dedicated last." v2 adopts that. But is the participant rail actually the right thing to generalize second instead of first? Or should it be Phase 0 work (before any network code), since the plan marks "LuaBrain -> Native swap" as Phase 0 gating anyway? Call the right split.
+
+Format: 5-line executive summary, findings ordered severity-high-to-low with file refs and concrete corrections, verdict line, three next actions.

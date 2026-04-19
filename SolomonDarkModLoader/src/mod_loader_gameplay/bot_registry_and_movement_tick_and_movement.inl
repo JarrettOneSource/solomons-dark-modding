@@ -250,8 +250,6 @@ bool DriveRegisteredGameNpcMovement(
         const auto target_0x168 =
             memory.ReadFieldOr<std::uint32_t>(actor_address, 0x168, 0);
         const auto blend_0x268 = memory.ReadFieldOr<float>(actor_address, 0x268, 0.0f);
-        const auto per_tick_speed_2d4 =
-            memory.ReadFieldOr<float>(actor_address, kActorPerTickSpeedOffset, 0.0f);
         Log(
             "[bots] regnpc_mv bot=" + std::to_string(binding->bot_id) +
             " pos=(" + std::to_string(current_x) + "," + std::to_string(current_y) + ")" +
@@ -263,7 +261,6 @@ bool DriveRegisteredGameNpcMovement(
             " 0x1BC=" + std::to_string(scale_0x1BC) +
             " 0x1E0=" + std::to_string(accel_0x1E0) +
             " 0x168=0x" + HexString(target_0x168) +
-            " 0x2D4=" + std::to_string(per_tick_speed_2d4) +
             " 0x268=" + std::to_string(blend_0x268));
         state.last_log_ms = now_ms;
         state.last_x = current_x;
@@ -299,72 +296,6 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
     }
     const auto magnitude = std::sqrt(
         binding->direction_x * binding->direction_x + binding->direction_y * binding->direction_y);
-
-    // Task #56 diagnostic: probe bot vs player profile template IDs. The
-    // 0x3EF gate in PlayerActorTick (0x0054a881) only writes [0x2D4] for
-    // actors whose progression handle has [+0x750] == 0x3EF. Resolve scene
-    // + local player up-front so the probe can fire for stationary bots
-    // too (movement_active may be false while we still want to understand
-    // why [0x2D4] stays zero on bot clones).
-    uintptr_t scene_address_for_speed = 0;
-    uintptr_t local_player_actor_address = 0;
-    if (TryResolveCurrentGameplayScene(&scene_address_for_speed) &&
-        scene_address_for_speed != 0) {
-        (void)TryResolvePlayerActorForSlot(scene_address_for_speed, 0, &local_player_actor_address);
-    }
-    {
-        static std::uint64_t s_last_template_probe_log_ms = 0;
-        const auto probe_now_ms = static_cast<std::uint64_t>(GetTickCount64());
-        if (probe_now_ms - s_last_template_probe_log_ms >= 2000) {
-            s_last_template_probe_log_ms = probe_now_ms;
-            const auto describe_actor_template = [&](const char* label,
-                                                     uintptr_t probed_actor,
-                                                     std::ostringstream& out) {
-                if (probed_actor == 0) {
-                    out << " " << label << "=null";
-                    return;
-                }
-                const auto slot = memory.ReadFieldOr<std::int8_t>(
-                    probed_actor, kActorSlotOffset, -1);
-                const auto override_inner = memory.ReadFieldOr<uintptr_t>(
-                    probed_actor, kActorProgressionRuntimeStateOffset, 0);
-                uintptr_t slot_wrapper = 0;
-                uintptr_t slot_inner = 0;
-                if (scene_address_for_speed != 0 && slot >= 0) {
-                    const auto slot_offset =
-                        kGameplayPlayerProgressionHandleOffset +
-                        static_cast<std::size_t>(slot) *
-                            kGameplayPlayerSlotStride;
-                    slot_wrapper = memory.ReadFieldOr<uintptr_t>(
-                        scene_address_for_speed, slot_offset, 0);
-                    slot_inner = ReadSmartPointerInnerObject(slot_wrapper);
-                }
-                const auto effective_inner =
-                    override_inner != 0 ? override_inner : slot_inner;
-                const auto template_id = effective_inner != 0
-                                             ? memory.ReadFieldOr<std::uint32_t>(
-                                                   effective_inner, 0x750, 0)
-                                             : 0;
-                std::ostringstream tid_hex;
-                tid_hex << "0x" << std::hex << template_id;
-                out << " " << label << "{actor=" << HexString(probed_actor)
-                    << " slot=" << static_cast<int>(slot)
-                    << " override_inner=" << HexString(override_inner)
-                    << " slot_wrapper=" << HexString(slot_wrapper)
-                    << " slot_inner=" << HexString(slot_inner)
-                    << " effective=" << HexString(effective_inner)
-                    << " template_id=" << tid_hex.str() << "}";
-            };
-            std::ostringstream out;
-            out << "[bots] template_probe bot_id=" << binding->bot_id
-                << " scene=" << HexString(scene_address_for_speed)
-                << " movement_active=" << (binding->movement_active ? 1 : 0)
-                << " magnitude=" << magnitude;
-            describe_actor_template("bot", actor_address, out);
-            describe_actor_template("player", local_player_actor_address, out);
-            Log(out.str());
-        }
-    }
 
     if (IsRegisteredGameNpcKind(binding->kind)) {
         PublishParticipantGameplaySnapshot(*binding);

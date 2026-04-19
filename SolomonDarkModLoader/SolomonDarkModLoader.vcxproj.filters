@@ -23,10 +23,19 @@
     <ClInclude Include="include\debug_ui_config.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\debug_ui_config_internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="include\debug_ui_overlay.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\logger.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\logger_internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_parsers_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\lua_engine.h">
@@ -60,6 +69,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\runtime_debug.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\runtime_debug_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\runtime_flags.h">
@@ -126,6 +138,33 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\helpers.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\control_observers_exact_capture_helpers.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\control_observers_browser_and_settings_capture.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\control_observers_menu_and_panel_capture.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\label_resolution_helpers.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\label_resolution_surface_registry_and_frame_render.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_and_actions_action_state.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_and_actions_owner_candidate_resolution.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_and_actions_owner_memory_helpers.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_and_actions_surface_owner_resolution.inl">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding.inl">
@@ -307,6 +346,9 @@
     <ClCompile Include="src\debug_ui_config.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\debug_ui_config_ini.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\debug_ui_overlay.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -314,6 +356,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\gameplay_seams.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\logger_core.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\logger_crash_reporting.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\logger_exception_handlers.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\logger.cpp">
@@ -326,6 +377,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_input.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_parser_helpers.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_parser_requests.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_parser_snapshots.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_runtime.cpp">
@@ -374,6 +434,21 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_debug.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\runtime_debug_core.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\runtime_debug_hde32.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\runtime_debug_snapshot.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\runtime_debug_trace.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\runtime_debug_watch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_flags.cpp">
