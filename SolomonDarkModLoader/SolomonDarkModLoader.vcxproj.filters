@@ -89,12 +89,6 @@
     <ClInclude Include="src\gameplay_seams.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement.inl">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks.inl">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\lua_exec_pipe.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -104,13 +98,193 @@
     <ClInclude Include="src\mod_loader_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_field_accessors.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_hits_and_errors.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_memory_inspection.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_native_calls.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_nav_grid_and_copy.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_snapshots_and_chains.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_tracing_and_watches.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_typed_readers_and_writers.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\helpers.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_cell_math.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_grid_setup.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_motion_update.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_nearest_traversable.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_path_building.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_state_management.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_traversability.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_actor_call_wrappers.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_motion_helpers.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_lifecycle.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_registry.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_snapshot.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_seh_and_lifecycle_calls.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_smart_pointer_helpers.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_spawn_and_modifiers.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_tick_and_movement.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_actor_lifecycle_hooks.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_execute_requests.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_gameplay_thread_dispatch.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_mouse_refresh_hook.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_pump_loop.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_request_queues.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_standalone_wizard_tracking.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_tick_and_render_hooks.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_gameplay_action_queues.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_keyboard_injection.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_participant_queues.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_state_getters.inl">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation.inl">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_actor_animation_state.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_actor_runtime.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_binding_resolution.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_bot_priming_and_selection.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_drive_profiles.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_gameplay_state.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_memory_and_progression.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_scene_context.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_actor_render_state.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_debug_summaries.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_equip_visual_lanes.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_selection_priming.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_slot_bot_creation.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_slot_bot_destruction.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_clone_source.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_element_colors.inl">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_resources.inl">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

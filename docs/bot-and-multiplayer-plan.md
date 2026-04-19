@@ -58,7 +58,8 @@ Get a second wizard to appear in the game world, driven by code.
 
 ### 1.3 Wire to existing bot_runtime.h API
 - `sd.bots.create({profile={element_id=..., discipline_id=..., ...}, position={x,y}})` spawns a real entity
-- `sd.bots.update({id=N, profile={...}, position={x,y}, heading=F})` updates the entity
+- `sd.bots.update({id=N, profile={...}, position={x,y}, heading=F})` updates runtime state and requests a gameplay sync
+- do **not** treat `sd.bots.update({position=...})` as a stock-safe teleport for a materialized registered `GameNpc`; see `docs/bugs/registered_gamenpc_transform_update_instability.md`
 - `sd.bots.destroy(id)` removes the entity
 - Store bot_id -> entity_ptr mapping
 
@@ -89,13 +90,8 @@ Make the bot move and interact with the world.
 ```lua
 sd.events.on("runtime.tick", function()
   local player = sd.player.get_state()
-  -- Follow the player
-  sd.bots.update({
-    id = my_bot,
-    x = player.position.x + 2.0,
-    y = player.position.y + 2.0,
-    heading = 0.0,
-  })
+  -- Follow the player through movement intent, not raw transform rewrites.
+  sd.bots.move_to(my_bot, player.position.x + 2.0, player.position.y + 2.0)
 end)
 ```
 
@@ -135,7 +131,7 @@ sd.events.on("runtime.tick", function()
   local enemies = sd.world.get_enemies()
   local nearest = find_nearest(enemies, player.position)
 
-  sd.bots.update({id = bot, x = player.x + 2, y = player.y + 2})
+  sd.bots.move_to(bot, player.x + 2, player.y + 2)
 
   if nearest then
     sd.bots.cast({id = bot, spell_id = 1, target_x = nearest.x, target_y = nearest.y})

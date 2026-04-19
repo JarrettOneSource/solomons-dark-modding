@@ -71,7 +71,7 @@ struct PendingBotDestroy {
 
 std::mutex g_bot_runtime_mutex;
 bool g_bot_runtime_initialized = false;
-std::uint64_t g_next_bot_id = kFirstLuaBotParticipantId;
+std::uint64_t g_next_bot_id = kFirstLuaControlledParticipantId;
 std::uint64_t g_next_cast_sequence = 1;
 std::uint64_t g_next_entity_sync_generation = 1;
 std::uint64_t g_next_movement_intent_revision = 1;

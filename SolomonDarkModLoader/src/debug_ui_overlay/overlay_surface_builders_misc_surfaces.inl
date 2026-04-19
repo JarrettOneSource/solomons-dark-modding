@@ -1,5 +1,91 @@
 void SortOverlayRenderElementsByTopLeft(std::vector<OverlayRenderElement>* render_elements);
 
+std::vector<OverlayRenderElement> TryBuildCreateOverlayRenderElements() {
+    const auto* create_surface = FindUiSurfaceDefinition("create");
+    if (create_surface == nullptr || create_surface->action_ids.empty()) {
+        return {};
+    }
+
+    SDModSceneState scene_state;
+    if (TryGetSceneState(&scene_state) && scene_state.valid && scene_state.name != "transition") {
+        return {};
+    }
+
+    const auto object_global = GetDefinitionAddress(create_surface->addresses, "object_global");
+    uintptr_t create_owner = 0;
+    if (object_global == 0 || !TryResolveCreateSurfaceOwnerPointer(object_global, &create_owner) || create_owner == 0) {
+        return {};
+    }
+
+    std::vector<OverlayRenderElement> render_elements;
+    render_elements.reserve(create_surface->action_ids.size());
+
+    for (const auto& action_id : create_surface->action_ids) {
+        const auto* action_definition = FindUiActionDefinition(action_id);
+        if (action_definition == nullptr || action_definition->label.empty()) {
+            continue;
+        }
+
+        const auto point_list_offset = GetDefinitionAddress(action_definition->addresses, "point_list_offset");
+        const auto point_index = GetDefinitionAddress(action_definition->addresses, "point_index");
+        const auto configured_point_stride = GetDefinitionAddress(action_definition->addresses, "point_stride");
+        const auto point_x_offset = GetDefinitionAddress(action_definition->addresses, "point_x_offset");
+        const auto configured_point_y_offset = GetDefinitionAddress(action_definition->addresses, "point_y_offset");
+        const auto point_stride = configured_point_stride != 0 ? configured_point_stride : sizeof(std::int32_t) * 2;
+        const auto point_y_offset =
+            configured_point_y_offset != 0 ? configured_point_y_offset : sizeof(std::int32_t);
+        if (point_list_offset == 0) {
+            continue;
+        }
+
+        const auto point_address = create_owner + point_list_offset + point_index * point_stride;
+        float point_x = 0.0f;
+        float point_y = 0.0f;
+        if (!TryReadPlainField(reinterpret_cast<const void*>(point_address), point_x_offset, &point_x) ||
+            !TryReadPlainField(reinterpret_cast<const void*>(point_address), point_y_offset, &point_y)) {
+            continue;
+        }
+
+        if (!std::isfinite(point_x) || !std::isfinite(point_y) ||
+            point_x < 0.0f || point_y < 0.0f || point_x > 4096.0f || point_y > 4096.0f) {
+            continue;
+        }
+
+        const bool is_element_action = action_definition->id.find("create.select_element_") == 0;
+        const float half_width = is_element_action ? 88.0f : 72.0f;
+        const float half_height = is_element_action ? 56.0f : 48.0f;
+
+        OverlayRenderElement render_element;
+        render_element.surface_id = "create";
+        render_element.surface_title = create_surface->title.empty() ? std::string("Create") : create_surface->title;
+        render_element.label = action_definition->label;
+        render_element.action_id = action_definition->id;
+        render_element.source_object_ptr = point_address;
+        render_element.surface_object_ptr = create_owner;
+        render_element.show_label = true;
+        render_element.left = point_x - half_width;
+        render_element.top = point_y - half_height;
+        render_element.right = point_x + half_width;
+        render_element.bottom = point_y + half_height;
+        render_elements.push_back(std::move(render_element));
+    }
+
+    if (!render_elements.empty()) {
+        static bool s_logged_create_first_elements = false;
+        if (!s_logged_create_first_elements) {
+            s_logged_create_first_elements = true;
+            Log(
+                "Debug UI synthesized create surface from the live create owner. owner=" +
+                HexString(create_owner) +
+                " actions=" + std::to_string(render_elements.size()));
+        }
+
+        SortOverlayRenderElementsByTopLeft(&render_elements);
+    }
+
+    return render_elements;
+}
+
 std::vector<OverlayRenderElement> TryBuildHallOfFameOverlayRenderElements(
     const std::vector<ObservedUiElement>& exact_text_elements) {
     uintptr_t hof_address = 0;

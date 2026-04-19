@@ -4,7 +4,7 @@ bool InitializeBotRuntime() {
         return true;
     }
 
-    g_next_bot_id = kFirstLuaBotParticipantId;
+    g_next_bot_id = kFirstLuaControlledParticipantId;
     ResetPendingState();
     g_bot_runtime_initialized = true;
     Log("Bot runtime initialized.");
@@ -46,7 +46,10 @@ bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
     const auto sync_scene_intent =
         request.has_scene_intent ? request.scene_intent : ResolveDefaultBotSceneIntentFromCurrentScene();
     UpdateRuntimeState([&](RuntimeState& state) {
-        auto* participant = UpsertLuaBotParticipant(state, bot_id);
+        auto* participant = UpsertRemoteParticipant(
+            state,
+            bot_id,
+            ParticipantControllerKind::LuaBrain);
         if (participant == nullptr) {
             return;
         }
@@ -57,6 +60,14 @@ bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
         participant->transport_using_relay = false;
         ApplyCharacterProfile(participant, request.character_profile);
         ApplySceneIntent(participant, sync_scene_intent);
+        if (request.has_transform) {
+            ApplyTransform(
+                participant,
+                request.position_x,
+                request.position_y,
+                request.has_heading,
+                request.heading);
+        }
     });
 
     if (out_bot_id != nullptr) {
@@ -113,7 +124,7 @@ bool DestroyBot(std::uint64_t bot_id) {
         const auto previous_size = state.participants.size();
         state.participants.erase(
             std::remove_if(state.participants.begin(), state.participants.end(), [&](const ParticipantInfo& participant) {
-                return participant.participant_id == bot_id && IsLuaBotParticipant(participant);
+                return participant.participant_id == bot_id && IsLuaControlledParticipant(participant);
             }),
             state.participants.end());
         removed = state.participants.size() != previous_size;
@@ -142,14 +153,14 @@ void DestroyAllBots() {
 
     RuntimeState runtime = SnapshotRuntimeState();
     for (const auto& participant : runtime.participants) {
-        if (IsLuaBotParticipant(participant)) {
+        if (IsLuaControlledParticipant(participant)) {
             SchedulePendingDestroyLocked(participant.participant_id);
         }
     }
     UpdateRuntimeState([](RuntimeState& state) {
         state.participants.erase(
             std::remove_if(state.participants.begin(), state.participants.end(), [](const ParticipantInfo& participant) {
-                return IsLuaBotParticipant(participant);
+                return IsLuaControlledParticipant(participant);
             }),
             state.participants.end());
     });
@@ -166,6 +177,20 @@ bool UpdateBot(const BotUpdateRequest& request) {
     std::scoped_lock lock(g_bot_runtime_mutex);
     if (!g_bot_runtime_initialized || !IsValidUpdateRequest(request)) {
         return false;
+    }
+
+    if (request.has_transform && !request.has_scene_intent) {
+        SDModParticipantGameplayState gameplay_state;
+        if (TryGetParticipantGameplayState(request.bot_id, &gameplay_state) &&
+            gameplay_state.available &&
+            gameplay_state.entity_materialized &&
+            gameplay_state.entity_kind == kSDModParticipantGameplayKindRegisteredGameNpc) {
+            Log(
+                "[bots] rejecting transform-only update for materialized registered_gamenpc. bot_id=" +
+                std::to_string(request.bot_id) +
+                " actor=" + HexString(gameplay_state.actor_address));
+            return false;
+        }
     }
 
     bool updated = false;
@@ -481,35 +506,40 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
             current_heading = participant->runtime.heading;
         }
 
-        SDModBotGameplayState gameplay_state;
-        if (TryGetWizardBotGameplayState(pending_intent.bot_id, &gameplay_state) &&
+        SDModParticipantGameplayState gameplay_state;
+        bool registered_gamenpc_native_movement = false;
+        if (TryGetParticipantGameplayState(pending_intent.bot_id, &gameplay_state) &&
             gameplay_state.available &&
             gameplay_state.entity_materialized) {
             have_transform = true;
             current_x = gameplay_state.x;
             current_y = gameplay_state.y;
             current_heading = gameplay_state.heading;
-            UpdateRuntimeState([&](RuntimeState& state) {
-                auto* live_participant = FindBot(state, pending_intent.bot_id);
-                if (live_participant == nullptr) {
-                    return;
-                }
-
-                live_participant->runtime.valid = true;
-                live_participant->runtime.in_run =
-                    live_participant->runtime.scene_intent.kind == ParticipantSceneIntentKind::Run;
-                live_participant->runtime.transform_valid = true;
-                live_participant->runtime.position_x = gameplay_state.x;
-                live_participant->runtime.position_y = gameplay_state.y;
-                live_participant->runtime.heading = gameplay_state.heading;
-                live_participant->runtime.life_current = static_cast<std::int32_t>(gameplay_state.hp);
-                live_participant->runtime.life_max = static_cast<std::int32_t>(gameplay_state.max_hp);
-                live_participant->runtime.mana_current = static_cast<std::int32_t>(gameplay_state.mp);
-                live_participant->runtime.mana_max = static_cast<std::int32_t>(gameplay_state.max_mp);
-            });
+            registered_gamenpc_native_movement =
+                gameplay_state.entity_kind == kSDModParticipantGameplayKindRegisteredGameNpc;
         }
 
-        DeriveControllerMotionFromTransform(&updated_intent, have_transform, current_x, current_y, current_heading);
+        if (registered_gamenpc_native_movement &&
+            updated_intent.state == BotControllerState::Moving &&
+            gameplay_state.movement_intent_revision == pending_intent.revision &&
+            !gameplay_state.moving) {
+            // Registered GameNpc movement is consumed on the gameplay scene-binding
+            // tick, not immediately at the runtime API boundary. Only treat
+            // moving=false as native completion after gameplay has observed the
+            // same movement intent revision; otherwise a freshly queued move_to()
+            // is collapsed back to idle before gameplay can build the path.
+            updated_intent.state = BotControllerState::Idle;
+            updated_intent.has_target = false;
+            updated_intent.target_x = current_x;
+            updated_intent.target_y = current_y;
+            updated_intent.distance_to_target = 0.0f;
+            updated_intent.direction_x = 0.0f;
+            updated_intent.direction_y = 0.0f;
+            updated_intent.desired_heading_valid = true;
+            updated_intent.desired_heading = current_heading;
+        } else {
+            DeriveControllerMotionFromTransform(&updated_intent, have_transform, current_x, current_y, current_heading);
+        }
 
         std::scoped_lock lock(g_bot_runtime_mutex);
         auto* current_pending_intent = FindPendingMovementIntent(pending_intent.bot_id);
@@ -571,7 +601,7 @@ std::uint32_t GetBotCount() {
     return static_cast<std::uint32_t>(std::count_if(
         snapshot.participants.begin(),
         snapshot.participants.end(),
-        [](const ParticipantInfo& participant) { return IsLuaBotParticipant(participant); }));
+        [](const ParticipantInfo& participant) { return IsLuaControlledParticipant(participant); }));
 }
 
 bool ReadBotSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
@@ -602,7 +632,7 @@ bool ReadBotSnapshotByIndex(std::uint32_t index, BotSnapshot* snapshot) {
     RuntimeState runtime = SnapshotRuntimeState();
     std::uint32_t current_index = 0;
     for (const auto& participant : runtime.participants) {
-        if (!IsLuaBotParticipant(participant)) {
+        if (!IsLuaControlledParticipant(participant)) {
             continue;
         }
 
@@ -633,7 +663,7 @@ void SetAllBotSceneIntentsToRun() {
 
     UpdateRuntimeState([](RuntimeState& state) {
         for (auto& participant : state.participants) {
-            if (!IsLuaBotParticipant(participant)) {
+            if (!IsLuaControlledParticipant(participant)) {
                 continue;
             }
 
@@ -656,7 +686,7 @@ void SetAllBotSceneIntentsToSharedHub() {
 
     UpdateRuntimeState([](RuntimeState& state) {
         for (auto& participant : state.participants) {
-            if (!IsLuaBotParticipant(participant)) {
+            if (!IsLuaControlledParticipant(participant)) {
                 continue;
             }
 

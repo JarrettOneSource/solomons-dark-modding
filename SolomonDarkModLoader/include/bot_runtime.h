@@ -89,6 +89,8 @@ struct BotSnapshot {
     bool available = false;
     std::uint64_t bot_id = 0;
     std::string display_name;
+    ParticipantKind participant_kind = ParticipantKind::RemoteParticipant;
+    ParticipantControllerKind controller_kind = ParticipantControllerKind::LuaBrain;
     MultiplayerCharacterProfile character_profile;
     bool ready = false;
     bool in_run = false;

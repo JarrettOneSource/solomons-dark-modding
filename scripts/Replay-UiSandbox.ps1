@@ -20,6 +20,8 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $launcher = Join-Path $root "dist/launcher/SolomonDarkModLauncher.exe"
 $captureScript = Join-Path $PSScriptRoot "capture_window.py"
+$clickScript = Join-Path $PSScriptRoot "click_window.py"
+$luaExecScript = Join-Path $PSScriptRoot "Invoke-LuaExec.ps1"
 $sendKeysScript = Join-Path $PSScriptRoot "send_window_keys.py"
 $loaderLog = Join-Path $root "runtime/stage/.sdmod/logs/solomondarkmodloader.log"
 $sandboxPresetPath = Join-Path $root "mods/lua_ui_sandbox_lab/config/active_preset.txt"
@@ -27,6 +29,7 @@ $traceLog = Join-Path $root "runtime/replay-ui-sandbox.log"
 $sandboxModId = "sample.lua.ui_sandbox_lab"
 $bootstrapModId = "sample.lua.dark_cloud_sort_bootstrap"
 $sandboxPresetEnvVar = "SDMOD_UI_SANDBOX_PRESET"
+$createScreenSettleDelayMs = 5000
 
 function Assert-LastExitCode {
     param([string]$Step)
@@ -147,6 +150,126 @@ function Set-ActiveSandboxPreset {
     }
 
     Set-Content -LiteralPath $sandboxPresetPath -Value $PresetName -NoNewline
+}
+
+function Resolve-CreateSelectionPreset {
+    param([Parameter(Mandatory = $true)][string]$PresetName)
+
+    $normalized = $PresetName
+    if ($normalized -match "_hub$") {
+        $normalized = $normalized.Substring(0, $normalized.Length - 4)
+    }
+
+    if ($normalized -match '^(create_ready|map_create)_(?<element>[a-z]+)_(?<discipline>[a-z]+)$') {
+        return @{
+            element = $Matches.element
+            discipline = $Matches.discipline
+        }
+    }
+
+    if ($normalized -match '^(create_ready|map_create)_(?<element>[a-z]+)$') {
+        return @{
+            element = $Matches.element
+            discipline = "arcane"
+        }
+    }
+
+    return $null
+}
+
+function Wait-ForCreateSurface {
+    param([int]$TimeoutSeconds = 20)
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (Test-Path -LiteralPath $loaderLog) {
+            $contents = Read-SharedTextFile -Path $loaderLog
+            if ($contents -match 'surface=create title=Create') {
+                return
+            }
+        }
+        Start-Sleep -Milliseconds 250
+    }
+
+    throw "Timed out waiting for the create surface."
+}
+
+function Get-CreateActionCenter {
+    param([Parameter(Mandatory = $true)][string]$ActionId)
+
+    $centers = @{
+        "create.select_element_ether" = @{ X = 826; Y = 369 }
+        "create.select_element_earth" = @{ X = 656; Y = 417 }
+        "create.select_element_fire"  = @{ X = 924; Y = 515 }
+        "create.select_element_water" = @{ X = 650; Y = 593 }
+        "create.select_element_air"   = @{ X = 816; Y = 654 }
+        "create.select_discipline_arcane" = @{ X = 725; Y = 460 }
+        "create.select_discipline_body"   = @{ X = 875; Y = 460 }
+        "create.select_discipline_mind"   = @{ X = 1025; Y = 460 }
+    }
+
+    if (-not $centers.ContainsKey($ActionId)) {
+        throw "No create action center is configured for '$ActionId'."
+    }
+
+    return $centers[$ActionId]
+}
+
+function Invoke-CreateSelectionAutomation {
+    param(
+        [Parameter(Mandatory = $true)][int]$ProcessId,
+        [Parameter(Mandatory = $true)][string]$PresetName
+    )
+
+    $selection = Resolve-CreateSelectionPreset -PresetName $PresetName
+    if ($null -eq $selection) {
+        return
+    }
+
+    Wait-ForCreateSurface -TimeoutSeconds 20
+    Start-Sleep -Milliseconds $createScreenSettleDelayMs
+
+    $elementActionId = "create.select_element_$($selection.element)"
+    $disciplineActionId = "create.select_discipline_$($selection.discipline)"
+
+    $elementCenter = Get-CreateActionCenter -ActionId $elementActionId
+    Write-TraceLine "preset=$PresetName stage=create-click action=$elementActionId x=$($elementCenter.X) y=$($elementCenter.Y)"
+    & py -3 $clickScript --pid $ProcessId --x $elementCenter.X --y $elementCenter.Y --activate
+    Assert-LastExitCode "Create element click"
+
+    Start-Sleep -Milliseconds 1500
+
+    $disciplineCenter = Get-CreateActionCenter -ActionId $disciplineActionId
+    Write-TraceLine "preset=$PresetName stage=create-click action=$disciplineActionId x=$($disciplineCenter.X) y=$($disciplineCenter.Y)"
+    & py -3 $clickScript --pid $ProcessId --x $disciplineCenter.X --y $disciplineCenter.Y --activate
+    Assert-LastExitCode "Create discipline click"
+}
+
+function Wait-ForHubBotReady {
+    param(
+        [Parameter(Mandatory = $true)][string]$LogPath,
+        [int]$TimeoutSeconds = 30
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $spawnMarker = "[lua.bots] spawned Lua Patrol Bot"
+
+    while ((Get-Date) -lt $deadline) {
+        if (-not (Get-Process SolomonDark -ErrorAction SilentlyContinue)) {
+            throw "SolomonDark exited before the hub bot became ready."
+        }
+
+        if (Test-Path -LiteralPath $LogPath) {
+            $contents = Read-SharedTextFile -Path $LogPath
+            if ($contents.Contains($spawnMarker)) {
+                return "complete"
+            }
+        }
+
+        Start-Sleep -Milliseconds 250
+    }
+
+    throw "Timed out waiting for the hub bot spawn marker."
 }
 
 function Read-LauncherCommandOutput {
@@ -325,7 +448,18 @@ try {
         throw (Get-LauncherCommandFailureMessage -LaunchHandle $launchHandle)
     }
     Write-TraceLine "preset=$Preset stage=launch-returned exited=$($launchHandle.Process.HasExited) exit_code=$launchExitCode"
-    $outcome = Wait-ForSandboxOutcome -LogPath $loaderLog -PresetName $Preset -TimeoutSeconds $CompletionTimeoutSeconds
+
+    $selection = Resolve-CreateSelectionPreset -PresetName $Preset
+    if ($null -ne $selection) {
+        Invoke-CreateSelectionAutomation -ProcessId $process.Id -PresetName $Preset
+    }
+
+    if ($null -ne $selection -and $Preset -match '_hub$') {
+        $outcome = Wait-ForHubBotReady -LogPath $loaderLog -TimeoutSeconds $CompletionTimeoutSeconds
+    }
+    else {
+        $outcome = Wait-ForSandboxOutcome -LogPath $loaderLog -PresetName $Preset -TimeoutSeconds $CompletionTimeoutSeconds
+    }
     Write-TraceLine "preset=$Preset stage=outcome outcome=$outcome"
 
     $resolvedPostKeys = @()

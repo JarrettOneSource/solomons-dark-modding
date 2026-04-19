@@ -58,6 +58,10 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "standalone_wizard_visual_link_attach", kStandaloneWizardVisualLinkAttach),
         SDMOD_ADDR("gameplay.hooks", "actor_build_render_descriptor_from_source", kActorBuildRenderDescriptorFromSource),
         SDMOD_ADDR("gameplay.hooks", "player_actor_move_step", kPlayerActorMoveStep),
+        SDMOD_ADDR("gameplay.hooks", "actor_get_profile", kActorGetProfile),
+        SDMOD_ADDR("gameplay.hooks", "profile_resolve_stat_entry", kProfileResolveStatEntry),
+        SDMOD_ADDR("gameplay.hooks", "stat_book_compute_value", kStatBookComputeValue),
+        SDMOD_ADDR("gameplay.hooks", "world_cell_grid_rebind_actor", kWorldCellGridRebindActor),
         SDMOD_ADDR("gameplay.hooks", "movement_collision_test_circle_placement", kMovementCollisionTestCirclePlacement),
         SDMOD_ADDR("gameplay.hooks", "movement_collision_test_circle_placement_extended", kMovementCollisionTestCirclePlacementExtended),
         SDMOD_ADDR("gameplay.hooks", "actor_move_by_delta", kActorMoveByDelta),
@@ -71,6 +75,8 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "player_appearance_apply_choice", kPlayerAppearanceApplyChoice),
         SDMOD_ADDR("gameplay.hooks", "player_actor_refresh_runtime_handles", kPlayerActorRefreshRuntimeHandles),
         SDMOD_ADDR("gameplay.hooks", "standalone_wizard_equip_ctor", kStandaloneWizardEquipCtor),
+        SDMOD_ADDR("gameplay.hooks", "gamenpc_set_move_goal", kGameNpcSetMoveGoal),
+        SDMOD_ADDR("gameplay.hooks", "gamenpc_set_tracked_slot_assist", kGameNpcSetTrackedSlotAssist),
         SDMOD_ADDR("gameplay.hooks", "item_staff_ctor", kItemStaffCtor),
         SDMOD_ADDR("gameplay.hooks", "item_wand_ctor", kItemWandCtor),
         SDMOD_ADDR("gameplay.hooks", "arena_start_run_dispatch", kArenaStartRunDispatch),
@@ -202,10 +208,9 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "actor_movement_speed_multiplier", kActorMovementSpeedMultiplierOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_animation_config_block", kActorAnimationConfigBlockOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_animation_drive_parameter", kActorAnimationDriveParameterOffset),
+        SDMOD_SIZE("gameplay.offsets", "actor_per_tick_speed", kActorPerTickSpeedOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_move_step_scale", kActorMoveStepScaleOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_animation_drive_state_byte", kActorAnimationDriveStateByteOffset),
-        SDMOD_SIZE("gameplay.offsets", "actor_registered_slot_mirror", kActorRegisteredSlotMirrorOffset),
-        SDMOD_SIZE("gameplay.offsets", "actor_registered_slot_id_mirror", kActorRegisteredSlotIdMirrorOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_animation_move_duration_ticks", kActorAnimationMoveDurationTicksOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_hub_visual_source_kind", kActorHubVisualSourceKindOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_hub_visual_source_profile", kActorHubVisualSourceProfileOffset),
@@ -366,6 +371,10 @@ uintptr_t kStandaloneWizardVisualLinkSecondaryCtor = 0;
 uintptr_t kStandaloneWizardVisualLinkAttach = 0;
 uintptr_t kActorBuildRenderDescriptorFromSource = 0;
 uintptr_t kPlayerActorMoveStep = 0;
+uintptr_t kActorGetProfile = 0;
+uintptr_t kProfileResolveStatEntry = 0;
+uintptr_t kStatBookComputeValue = 0;
+uintptr_t kWorldCellGridRebindActor = 0;
 uintptr_t kMovementCollisionTestCirclePlacement = 0;
 uintptr_t kMovementCollisionTestCirclePlacementExtended = 0;
 uintptr_t kActorMoveByDelta = 0;
@@ -379,6 +388,8 @@ uintptr_t kActorProgressionRefresh = 0;
 uintptr_t kPlayerAppearanceApplyChoice = 0;
 uintptr_t kPlayerActorRefreshRuntimeHandles = 0;
 uintptr_t kStandaloneWizardEquipCtor = 0;
+uintptr_t kGameNpcSetMoveGoal = 0;
+uintptr_t kGameNpcSetTrackedSlotAssist = 0;
 uintptr_t kItemStaffCtor = 0;
 uintptr_t kItemWandCtor = 0;
 uintptr_t kArenaStartRunDispatch = 0;
@@ -491,10 +502,9 @@ std::size_t kActorRenderDriveFlagsOffset = 0;
 std::size_t kActorMovementSpeedMultiplierOffset = 0;
 std::size_t kActorAnimationConfigBlockOffset = 0;
 std::size_t kActorAnimationDriveParameterOffset = 0;
+std::size_t kActorPerTickSpeedOffset = 0;
 std::size_t kActorMoveStepScaleOffset = 0;
 std::size_t kActorAnimationDriveStateByteOffset = 0;
-std::size_t kActorRegisteredSlotMirrorOffset = 0;
-std::size_t kActorRegisteredSlotIdMirrorOffset = 0;
 std::size_t kActorAnimationMoveDurationTicksOffset = 0;
 std::size_t kActorHubVisualSourceKindOffset = 0;
 std::size_t kActorHubVisualSourceProfileOffset = 0;

@@ -31,6 +31,40 @@ void PushEquipVisualLaneState(lua_State* state, const SDModEquipVisualLaneState&
     lua_setfield(state, -2, "current_object_type_id");
 }
 
+void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
+    lua_createtable(state, 0, 13);
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.actor_address));
+    lua_setfield(state, -2, "actor_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.vtable_address));
+    lua_setfield(state, -2, "vtable_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.first_method_address));
+    lua_setfield(state, -2, "first_method_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.object_type_id));
+    lua_setfield(state, -2, "object_type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.object_header_word));
+    lua_setfield(state, -2, "object_header_word");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.owner_address));
+    lua_setfield(state, -2, "owner_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.actor_slot));
+    lua_setfield(state, -2, "actor_slot");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.world_slot));
+    lua_setfield(state, -2, "world_slot");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.x));
+    lua_setfield(state, -2, "x");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.y));
+    lua_setfield(state, -2, "y");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.anim_drive_state));
+    lua_setfield(state, -2, "anim_drive_state");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.progression_handle_address));
+    lua_setfield(state, -2, "progression_handle_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.equip_handle_address));
+    lua_setfield(state, -2, "equip_handle_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.animation_state_ptr));
+    lua_setfield(state, -2, "animation_state_ptr");
+    PushPositionTable(state, actor.x, actor.y);
+    lua_setfield(state, -2, "position");
+}
+
 int LuaGameplayStartWaves(lua_State* state) {
     std::string error_message;
     if (!QueueGameplayStartWaves(&error_message)) {
@@ -255,6 +289,23 @@ int LuaGameplayGetSelectionDebugState(lua_State* state) {
     return 1;
 }
 
+int LuaWorldListActors(lua_State* state) {
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_createtable(state, static_cast<int>(actors.size()), 0);
+    int lua_index = 1;
+    for (const auto& actor : actors) {
+        PushSceneActorState(state, actor);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(lua_index));
+        ++lua_index;
+    }
+    return 1;
+}
+
 int LuaWorldSpawnEnemy(lua_State* state) {
     luaL_checktype(state, 1, LUA_TTABLE);
     lua_getfield(state, 1, "type_id");
@@ -317,9 +368,10 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaPlayerGetState, "get_state");
     lua_setfield(state, -2, "player");
 
-    lua_createtable(state, 0, 4);
+    lua_createtable(state, 0, 5);
     RegisterFunction(state, &LuaWorldGetState, "get_state");
     RegisterFunction(state, &LuaWorldGetScene, "get_scene");
+    RegisterFunction(state, &LuaWorldListActors, "list_actors");
     RegisterFunction(state, &LuaWorldSpawnEnemy, "spawn_enemy");
     RegisterFunction(state, &LuaWorldSpawnReward, "spawn_reward");
     lua_setfield(state, -2, "world");

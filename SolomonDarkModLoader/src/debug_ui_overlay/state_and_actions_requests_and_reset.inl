@@ -315,7 +315,7 @@ bool TryQueueSemanticUiActionRequest(
         return false;
     }
 
-    if (expectation.dispatch_kind == "direct_write" || expectation.dispatch_kind == "owner_point_click") {
+    if (expectation.dispatch_kind == "direct_write") {
         uintptr_t owner_address = 0;
         if (TryResolveLiveUiSurfaceOwner(surface_root_id, 0, &owner_address) && owner_address != 0) {
             return TryDispatchSemanticUiActionRequestImmediately(
@@ -602,6 +602,7 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     state->recent_assigned_strings.clear();
     state->recent_assigned_strings_updated_at = 0;
     state->tracked_title_main_menu_object = 0;
+    state->last_create_owner_object = 0;
     state->dark_cloud_browser_render = TrackedSurfaceRenderState{};
     state->settings_render = TrackedSurfaceRenderState{};
     state->myquick_panel_render = TrackedSurfaceRenderState{};

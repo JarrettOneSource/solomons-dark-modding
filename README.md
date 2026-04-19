@@ -1,73 +1,78 @@
 # Solomon's Dark Modding
 
-This workspace is the reset baseline for bringing modding support to `SolomonDark.exe`.
+A modding framework for `SolomonDark.exe`. Stages a local game copy, applies file overlays, and injects a native loader that hosts Lua scripts, native DLL mods, a scriptable bot runtime, and an opt-in debug overlay.
 
-Repository scope:
+The repository excludes original game files, staged runtime output, and local editor state. Keep a local Solomon's Dark copy outside this repository and point the launcher at it.
 
-- this repository intentionally excludes original game files, staged runtime output, local editor state, and one-off reverse-engineering scratch artifacts
-- keep a local Solomon's Dark game copy outside this repository and point the launcher at it when needed
+## Components
 
-Current status (2026-04-09):
+- `SolomonDarkModLauncher/` — CLI launcher. Discovers mods, tracks enable/disable state, mirrors the retail tree into `runtime/stage/`, stages runtime manifests, launches the staged copy, and injects the loader.
+- `SolomonDarkModLauncher.UI/` — WPF front-end that shells the CLI through its `--json` contract.
+- `SolomonDarkModLoader/` — x86 native DLL. Hosts the embedded Lua runtime, the `sd.*` script API, native DLL mods, the bot runtime, Steam bootstrap, and the D3D9 debug overlay.
+- `config/` — binary-layout anchors and debug overlay configuration staged into the game tree.
+- `mods/` — sample mods (overlay, Lua, native, and hybrid).
+- `scripts/` — build, reset, verification, window capture, and Lua-exec helpers.
+- `tools/ghidra-scripts/` — Ghidra automation for reverse engineering.
+- `docs/` — design notes, binary maps, and investigation write-ups.
 
-- the repo is now split into a standalone public Solomon's Dark workspace with the launcher, injected loader, sample mods, scripts, and reverse-engineering notes in one place
-- the launcher and WPF UI can stage a local game copy, apply overlays, inject the loader, and surface structured startup state
-- the loader hosts a real embedded Lua runtime, native mod loading, gameplay/runtime hooks, and the first loader-owned bot runtime
-- standalone wizard bots can now be created, registered, published into real gameplay slots, and rendered in arena probes, but the current visual still borrows the player's render context and needs an independent render-node path
-- the debug/runtime toolchain now includes a live Lua execution pipe plus PowerShell/Python client helpers so runtime probes can read memory, write fields, and execute Lua code against the running game
-- the latest rendering and bot findings are captured in `docs/bot-render-re-map.md` and `docs/bot-and-multiplayer-plan.md`
+## Mod types
 
-Current scope:
+Mods are discovered from `manifest.json`. Each mod may be:
 
-- `SolomonDarkModLauncher/`: CLI-first launcher for mod discovery, persistent enable or disable state, staged file mirroring, Steam bootstrap staging, runtime metadata staging, launch, and loader injection
-- `SolomonDarkModLauncher.UI/`: standalone WPF wrapper that shells `SolomonDarkModLauncher.exe` and renders its structured output
-- `SolomonDarkModLoader/`: x86 native DLL scaffold with structured startup reporting, runtime feature flags, runtime bootstrap parsing, native-mod host plumbing, Steamworks bootstrap validation, a real embedded Lua runtime, a loader-owned synthetic bot runtime, and in-process memory-access helpers preserved for future runtime work
-- `config/`: staged binary-layout metadata, first-pass Solomon Dark UI coverage anchors, and launcher-owned debug UI overlay config
-- `mods/`: sample overlay mods plus sample runtime mods for Lua or native extension points
-- `scripts/`: build, reset, and Ghidra helpers
-- `tools/ghidra-scripts/`: Ghidra automation scripts carried forward for reverse engineering
+- **Overlay** — files under `files/` copied over the staged tree in priority order.
+- **Lua** — entry scripts under `scripts/` loaded by the embedded Lua runtime.
+- **Native** — DLLs under `native/` loaded through `SDModPlugin_Initialize` / `SDModPlugin_Shutdown`.
+- **Hybrid** — any combination of the above.
 
-Current behavior:
+Sample mods: `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`, `wave_fast_start`, `lua_bots`, `lua_dark_cloud_sort_bootstrap`, `lua_ui_sandbox_lab`.
 
-- the launcher defaults to the local `../SolomonDarkAbandonware` copy when it exists
-- the launcher remains CLI-first and authoritative
-- the GUI lives in a separate `SolomonDarkModLauncher.UI` project and shells the CLI through the `--json` contract instead of maintaining a separate control path
-- mods can be pure overlays, pure runtime mods, or hybrids that stage both overlay files and runtime metadata
-- the launcher mirrors the retail tree into `runtime/stage/`, applies enabled overlays, stages runtime manifests under `.sdmod/runtime/`, launches the staged copy, injects `SolomonDarkModLoader.dll`, and waits for structured loader startup completion
-- the launcher stages `steam_appid.txt` with AppID `3362180` by default and can copy an x86 `steam_api.dll` into the staged game root when the mirrored build does not already ship one
-- the launcher always stages `runtime-flags.ini` and `runtime-bootstrap.ini`; the injected loader consumes those files as its runtime contract
-- the injected loader writes `.sdmod/startup-status.json` with a per-launch token so the launcher can distinguish the current run from stale prior-stage artifacts
-- the injected loader attempts `steam_api.dll` load, `SteamAPI_Init`, and legacy friends or matchmaking or networking interface binding so Steam P2P groundwork exists before gameplay sync work begins
-- the injected loader builds as `Win32`, initializes a real embedded Lua engine behind runtime flags, hosts loader-owned `sd` Lua APIs, and hosts native runtime DLL mods through `SDModPlugin_Initialize` or `SDModPlugin_Shutdown`
-- the loader now exposes a first scriptable bot runtime through `sd.bots.*` and drives Lua callbacks from the existing runtime tick service
-- wizard bot rendering now depends on a real gameplay slot entry plus stock `PlayerActorTick`; the arena bot is visible again, but independent render-node ownership and correct wizard-specific visuals are still follow-up work
-- the launcher stages `config/binary-layout.ini` into `.sdmod/config/` and the loader consumes it for the configured image base and recovered UI anchors
-- the launcher stages `config/debug-ui.ini` into `.sdmod/config/`; when enabled, the loader uses the configured text draw helper, the live `MsgBox` root-object seams for the beta modal, and the D3D9 device global to classify Solomon Dark UI elements and render an opt-in `EndScene` overlay
-- when Lua is enabled, the loader also starts a named-pipe Lua exec server so external scripts can submit code to the live runtime and capture returned values plus `print(...)` output
-- the loader still keeps the low-level memory access layer so Solomon Dark hook work can restart from a cleaner baseline
+## Runtime contract
 
-Build:
+The launcher stages these files into `runtime/stage/.sdmod/`:
+
+- `runtime/runtime-flags.ini` and `runtime/runtime-bootstrap.ini` — the loader's runtime contract.
+- `config/binary-layout.ini` — image base and recovered UI anchors.
+- `config/debug-ui.ini` — debug overlay configuration.
+- `stage-report.json` — launcher's staging report.
+- `startup-status.json` — per-launch token written by the loader so the launcher can distinguish the current run from stale artifacts.
+
+The launcher also stages `steam_appid.txt` (AppID `3362180`) and copies an x86 `steam_api.dll` into the staged game root when one is not already present. Provide a 32-bit Steamworks runtime at `SolomonDarkModLauncher/assets/steam/win32/steam_api.dll` or pass `--steam-api-dll`.
+
+## Loader features
+
+- Embedded Lua engine with the `sd.*` API (gameplay, runtime, UI, input, debug, bots).
+- Native DLL mod host (`SDModPlugin_Initialize` / `SDModPlugin_Shutdown`).
+- Scriptable bot runtime exposed through `sd.bots.*`, driven from the runtime tick service.
+- Steam bootstrap: `steam_api.dll` load, `SteamAPI_Init`, and legacy friends/matchmaking/networking interface binding.
+- Memory-access helpers for hook development and live probing.
+- Named-pipe Lua exec server for external scripts to submit code to the live runtime and capture return values plus `print(...)` output.
+- D3D9 `EndScene` debug overlay using the configured text draw helper and live `MsgBox` seams.
+
+## Build
 
 ```powershell
 pwsh ./scripts/Build-All.ps1
 ```
 
-Repeatable workspace verification:
+## Verify
 
 ```powershell
 pwsh ./scripts/Verify-Workspace.ps1 -Configuration Debug
 pwsh ./scripts/Verify-Workspace.ps1 -Configuration Debug -LaunchAndVerifyLoader
 ```
 
-Common commands:
+## Run
+
+CLI (defaults to `../SolomonDarkAbandonware` when present):
 
 ```powershell
 ./dist/launcher/SolomonDarkModLauncher.exe list-mods
 ./dist/launcher/SolomonDarkModLauncher.exe enable-mod sample.items.gold_focus
 ./dist/launcher/SolomonDarkModLauncher.exe disable-mod sample.items.gold_focus
 ./dist/launcher/SolomonDarkModLauncher.exe stage
-./dist/launcher/SolomonDarkModLauncher.exe launch
 ./dist/launcher/SolomonDarkModLauncher.exe stage --runtime-profile bootstrap_only
-./dist/launcher/SolomonDarkModLauncher.exe launch --steam-api-dll path\\to\\steam_api.dll
+./dist/launcher/SolomonDarkModLauncher.exe launch
+./dist/launcher/SolomonDarkModLauncher.exe launch --steam-api-dll path\to\steam_api.dll
 ```
 
 GUI:
@@ -76,37 +81,31 @@ GUI:
 ./dist/ui/SolomonDarkModLauncher.UI.exe
 ```
 
-Visual Studio:
+Visual Studio: open `SolomonDarkModding.sln`, set `SolomonDarkModLauncher.UI` as the startup project, `F5`.
 
-- open `SolomonDarkModding.sln`
-- set `SolomonDarkModLauncher.UI` as the Startup Project
-- press `F5` to launch the GUI directly
+## Runtime helpers
 
-Window capture for overlay verification:
-
-```powershell
-py -3 .\scripts\capture_window.py --title SolomonDark --output .\runtime\debug-ui-current.png --method window
-py -3 .\scripts\capture_window.py --title SolomonDark --output .\runtime\debug-ui-screen.png --method screen --activate
-```
-
-Live Lua exec helpers:
+Live Lua exec (requires a running Solomon's Dark process launched through the loader with Lua enabled):
 
 ```powershell
 pwsh ./scripts/Invoke-LuaExec.ps1 -Code "return sd.world.get_scene()"
 py -3 ./tools/lua-exec.py "return sd.debug.read_u32(0x008203F0)"
 ```
 
-These helpers require a running Solomon's Dark process launched through the mod loader with Lua enabled.
+Window capture for overlay verification:
 
-The stage report is written to `runtime/stage/.sdmod/stage-report.json`.
-The staged binary layout is written to `runtime/stage/.sdmod/config/binary-layout.ini`.
-The staged runtime flags and bootstrap manifest are written to `runtime/stage/.sdmod/runtime/`.
-The loader startup contract is written to `runtime/stage/.sdmod/startup-status.json`.
-If the staged Solomon Dark build does not already contain `steam_api.dll`, place the 32-bit Steamworks runtime at `SolomonDarkModLauncher/assets/steam/win32/steam_api.dll` or pass `--steam-api-dll`.
+```powershell
+py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-ui-current.png --method window
+py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-ui-screen.png --method screen --activate
+```
 
-Framework planning notes for the SD rebuild live at `docs/sd-framework-rebuild-roadmap.md`.
-Recovered wizard bot render-path notes live at `docs/bot-render-re-map.md`.
-Module ownership and extension rules live at `docs/expansion-guide.md`.
-Recovered UI seams and first-pass coverage notes live at `docs/ui-binary-map.md`.
-Recovered higher-level UI engine architecture and hook targets live at `docs/ui-engine-system-map.md`.
-Debug overlay architecture and limits live at `docs/debug-ui-overlay.md`.
+## Documentation
+
+- `docs/sd-framework-rebuild-roadmap.md` — framework planning.
+- `docs/expansion-guide.md` — module ownership and extension rules.
+- `docs/ui-binary-map.md` — recovered UI seams and coverage.
+- `docs/ui-engine-system-map.md` — higher-level UI engine architecture and hook targets.
+- `docs/debug-ui-overlay.md` — debug overlay architecture and limits.
+- `docs/bot-render-re-map.md` — wizard bot render-path notes.
+- `docs/bot-and-multiplayer-plan.md` — bot and multiplayer plan.
+- `TODO.md` — current hook and API work.

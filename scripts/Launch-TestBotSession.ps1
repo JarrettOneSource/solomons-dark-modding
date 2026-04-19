@@ -1,5 +1,5 @@
 param(
-    [string]$Preset = "static_bot_render_debug"
+    [string]$Preset = "map_create_fire_mind"
 )
 
 Get-Process SolomonDark* -ErrorAction SilentlyContinue | Stop-Process -Force

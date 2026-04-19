@@ -24,6 +24,70 @@ bool TryReadUInt32ValueDirect(uintptr_t address, std::uint32_t* value) {
     }
 }
 
+bool TryResolveValidatedUiOwnerPointer(
+    uintptr_t owner_pointer,
+    uintptr_t expected_vftable_address,
+    uintptr_t* resolved_owner_address) {
+    if (resolved_owner_address == nullptr) {
+        return false;
+    }
+
+    *resolved_owner_address = 0;
+    if (owner_pointer == 0) {
+        return false;
+    }
+
+    if (expected_vftable_address == 0) {
+        *resolved_owner_address = owner_pointer;
+        return true;
+    }
+
+    const auto resolved_expected_vftable =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(expected_vftable_address);
+    if (resolved_expected_vftable == 0) {
+        return false;
+    }
+
+    uintptr_t owner_vftable = 0;
+    if (!TryReadPointerValueDirect(owner_pointer, &owner_vftable) ||
+        owner_vftable != resolved_expected_vftable) {
+        return false;
+    }
+
+    *resolved_owner_address = owner_pointer;
+    return true;
+}
+
+bool TryResolveCreateSurfaceOwnerPointer(uintptr_t object_global_address, uintptr_t* owner_address) {
+    if (owner_address == nullptr || object_global_address == 0) {
+        return false;
+    }
+
+    *owner_address = 0;
+
+    const auto* surface_definition = FindUiSurfaceDefinition("create");
+    const auto expected_vftable_address =
+        surface_definition != nullptr ? GetDefinitionAddress(surface_definition->addresses, "vftable") : 0;
+
+    uintptr_t candidate_pointer = 0;
+    if (!TryReadResolvedGamePointer(object_global_address, &candidate_pointer) || candidate_pointer == 0) {
+        return false;
+    }
+
+    if (TryResolveValidatedUiOwnerPointer(candidate_pointer, expected_vftable_address, owner_address) &&
+        *owner_address != 0) {
+        return true;
+    }
+
+    uintptr_t nested_owner_pointer = 0;
+    if (!TryReadPointerValueDirect(candidate_pointer, &nested_owner_pointer) || nested_owner_pointer == 0) {
+        return false;
+    }
+
+    return TryResolveValidatedUiOwnerPointer(nested_owner_pointer, expected_vftable_address, owner_address) &&
+           *owner_address != 0;
+}
+
 std::string SanitizeSettingsLiveStateLabel(std::string_view value) {
     std::string sanitized(value);
     for (auto& ch : sanitized) {
@@ -690,14 +754,42 @@ bool TryResolveLiveUiSurfaceOwner(
         }
     } else if (surface_root_id == "create") {
         const auto* surface_definition = FindUiSurfaceDefinition("create");
+        const auto expected_create_vftable =
+            surface_definition != nullptr ? GetDefinitionAddress(surface_definition->addresses, "vftable") : 0;
         if (surface_definition != nullptr) {
             const auto object_global = GetDefinitionAddress(surface_definition->addresses, "object_global");
             if (object_global != 0) {
                 uintptr_t create_object = 0;
-                if (TryReadResolvedGamePointer(object_global, &create_object) && create_object != 0) {
+                if (TryResolveCreateSurfaceOwnerPointer(object_global, &create_object) && create_object != 0) {
+                    {
+                        std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+                        g_debug_ui_overlay_state.last_create_owner_object = create_object;
+                    }
                     *owner_address = create_object;
                     return true;
                 }
+            }
+        }
+
+        uintptr_t cached_create_object = 0;
+        {
+            std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+            cached_create_object = g_debug_ui_overlay_state.last_create_owner_object;
+        }
+        if (cached_create_object != 0) {
+            uintptr_t validated_create_object = 0;
+            if (TryResolveValidatedUiOwnerPointer(
+                    cached_create_object,
+                    expected_create_vftable,
+                    &validated_create_object) &&
+                validated_create_object != 0) {
+                *owner_address = validated_create_object;
+                return true;
+            }
+
+            std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+            if (g_debug_ui_overlay_state.last_create_owner_object == cached_create_object) {
+                g_debug_ui_overlay_state.last_create_owner_object = 0;
             }
         }
     }

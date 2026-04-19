@@ -189,13 +189,104 @@ Important loader/runtime caveat:
   - pathfinding mode `+0xB9`
 - `Drop_Spawn` then routes resulting drop actors back through the same world registration machinery used by other live actors
 
+## Follow-Up Findings
+
+Date: 2026-04-15
+
+### Inventory screen object and category caches
+
+- `0x00560380` -> `InventoryScreen_Ctor`
+  - constructs the standalone inventory screen object that backs `Inventory_Build`
+  - stores the active screen singleton in `DAT_00819E58`
+  - current browsed inventory root lives at `screen + 0x88`
+  - the 13 UI category arrays live at `screen + 0xE00..+0xEC0`
+  - their paired counts live at `screen + 0xE08..+0xEC8`
+- `0x00570C10` -> `InventoryScreen_GetCurrentInventoryRoot`
+  - trivial accessor for `screen + 0x88`
+  - this is the active inventory root used by drag/drop, equip, and sack browsing
+- `0x005B4C10` -> `InventoryScreen_ResetCategoryCaches`
+  - destroys and zeroes the same `+0xE00..+0xEC8` category arrays/counts that `Inventory_Build` later renders
+
+Current interpretation:
+
+- `Inventory_Build`'s `param_1` is an inventory-screen UI object, not the gameplay scene
+- the rendered slot groups are cached UI category views built on top of the currently selected inventory root, not separate ownership containers in gameplay memory
+
+### Additional inventory and equip helpers
+
+- `0x00550450` -> `Item_IsEquipmentOrContainer`
+  - returns true for ring / amulet / staff / hat / robe / sack / wand
+- `0x00552650` -> `Inventory_FindItemByTypeRecursive`
+  - recursive embedded-list scan by runtime item type id
+  - descends into `0x1B60`
+- `0x00570CD0` -> `EquipAttachmentSink_AcceptsItem`
+  - validates item types against sink kinds before attach / drag-drop
+  - kind `1` = hat, `2` = robe, `4` = staff or wand, `5` = ring, `6` = amulet
+- `0x0066F020` -> `EquipAttachmentSink_UnequipCurrentIntoInventory`
+  - clears the selected equip sink
+  - reinserts the detached item into the active inventory root
+  - refreshes progression/runtime state after the move
+
+### Item definition parse layer
+
+- `0x00574D60` -> `ItemSet_Parse`
+  - parses `ITEMSET`
+  - owns a display name, a set-bonus FX list, and a nested item-recipe list
+- `0x00573570` -> `ItemRecipe_Parse`
+  - parses one `ITEM` definition from `items.cfg`
+  - this is a blueprint / recipe object, not a live `SdItemBase`
+  - verified recipe fields:
+    - `+0x84` runtime item type id
+    - `+0x89` rarity byte
+    - `+0x8C` primary color float4
+    - `+0x9C` secondary color float4
+    - `+0x6C` parsed FX list
+- `0x005722A0` -> `ItemFx_Parse`
+  - parses one `FX_*` token into a compact FX object
+  - writes the effect-kind byte at `fx + 0x14`
+  - writes optional numeric magnitude at `fx + 0x20`
+  - item recipes and item sets both route through this parser
+- `0x00571980` -> `Item_GetDisplayTypeName`
+  - formats item-facing type labels
+  - `0x1B60` displays as `Sack`
+
+### Nested container type `0x1B60`
+
+- `0x1B60` is now best interpreted as a real nested inventory item
+- stock display name is `Sack`
+- the recursive potion and type-search helpers descend into it as another embedded item-list root
+- the inventory action flow opens it as a nested inventory browse target instead of consuming or equipping it
+
+### FX runtime interpretation
+
+- current high-confidence runtime seam remains `ActorProgressionRefresh (0x0065F9A0)`
+- parser-side findings now separate:
+  - item / set definition parsing
+  - FX object parsing and storage
+  - runtime stat rebuild after equip/use changes
+- still unresolved:
+  - the exact native function that walks the parsed FX lists and applies the final stat deltas into live progression fields
+
+### Remaining gaps after follow-up pass
+
+- unresolved runtime item factory:
+  - we now have the parse-layer objects (`ItemRecipe_Parse`, `ItemSet_Parse`, `ItemFx_Parse`)
+  - we still do not have the exact function that materializes a parsed equipment recipe into a live `SdItemBase`-derived object on demand
+- unresolved non-gold drop factory:
+  - `Drop_Spawn` remains gold-only in the verified path
+  - monster drop flags are still verified on the config side only
+- unresolved walk-over pickup bridge:
+  - `MovementCollision_ResolveDynamicObjects` is too broad to claim as the pickup transfer path
+  - we still need the specific drop-actor callback / collision branch that leads into `Inventory_InsertOrStackItem`
+
 ## Current Best Next Targets
 
 - static:
-  - inspect item base / container vtables around `0x00572F20` and `0x00575850`
-  - inspect `Gameplay_FinalizePlayerStart` neighbors for exact item-list insertion order
-  - resolve the actual drop actor type created by `Drop_Spawn`
+  - follow the parse-layer handoff from `ItemRecipe_Parse (0x00573570)` into the runtime item factory that produces live `SdItemBase`-derived objects
+  - identify the exact item/equip UI functions behind current placeholders `0x00562520` and `0x0056DE50`
+  - resolve the actual non-gold drop actor / factory path beyond `Drop_Spawn`'s verified gold branch
 - live:
   - add a typed debug helper to enumerate `SdGameplayScene.item_list_root`
   - verify current player potion objects and placeholder-item removal path
-  - trace `Inventory_InsertOrStackItem` during player-start or reward grants
+  - trace `Inventory_InsertOrStackItem` during reward pickup / equip swap flows
+  - confirm the sack (`0x1B60`) inner item-list layout directly at runtime

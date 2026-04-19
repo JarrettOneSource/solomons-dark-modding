@@ -42,6 +42,10 @@ Notes:
   - `create_ready_air_body_hub`
   The `_hub` suffix keeps the create flow and element/discipline clicks, but
   stops before `sd.hub.start_testrun()`.
+- The create/setup harness now explicitly handles the “existing wizard” branch
+  on `main_menu.new_game`. If the game shows the replacement confirmation
+  dialog, the harness confirms it and continues into character creation instead
+  of hanging behind the modal.
 - The create-screen element semantics were corrected on April 13, 2026. The public preset names now match the actual stock visuals:
   - `fire` -> orange
   - `water` -> blue

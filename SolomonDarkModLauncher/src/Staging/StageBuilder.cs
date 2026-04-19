@@ -14,6 +14,7 @@ internal static class StageBuilder
         var stageMirror = FileTreeMirror.Synchronize(
             configuration.Game.InstallDirectory,
             configuration.Workspace.StageRootPath);
+        StageSandboxCompatibilityLinks.Materialize(configuration.Workspace.StageRootPath);
 
         var appliedOverlayCount = OverlayStageMaterializer.Materialize(
             configuration.Workspace.StageRootPath,

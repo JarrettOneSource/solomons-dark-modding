@@ -802,13 +802,17 @@ void PushBotEquipVisualLaneState(
 }
 
 void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot) {
-    lua_createtable(state, 0, 51);
+    lua_createtable(state, 0, 53);
     lua_pushboolean(state, snapshot.available ? 1 : 0);
     lua_setfield(state, -2, "available");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.bot_id));
     lua_setfield(state, -2, "id");
     lua_pushstring(state, snapshot.display_name.c_str());
     lua_setfield(state, -2, "name");
+    lua_pushstring(state, multiplayer::ParticipantKindLabel(snapshot.participant_kind));
+    lua_setfield(state, -2, "participant_kind");
+    lua_pushstring(state, multiplayer::ParticipantControllerKindLabel(snapshot.controller_kind));
+    lua_setfield(state, -2, "controller_kind");
     PushCharacterProfile(state, snapshot.character_profile);
     lua_setfield(state, -2, "profile");
     PushSceneIntent(state, snapshot.scene_intent);

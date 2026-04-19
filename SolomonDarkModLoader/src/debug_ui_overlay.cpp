@@ -5,6 +5,7 @@
 #include "d3d9_end_scene_hook.h"
 #include "debug_ui_config.h"
 #include "logger.h"
+#include "lua_engine_events.h"
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "x86_hook.h"
@@ -25,6 +26,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -457,6 +459,7 @@ struct DebugUiOverlayState {
     std::vector<std::string> recent_assigned_strings;
     ULONGLONG recent_assigned_strings_updated_at = 0;
     uintptr_t tracked_title_main_menu_object = 0;
+    uintptr_t last_create_owner_object = 0;
     TrackedSurfaceRenderState dark_cloud_browser_render;
     TrackedSurfaceRenderState settings_render;
     TrackedSurfaceRenderState myquick_panel_render;

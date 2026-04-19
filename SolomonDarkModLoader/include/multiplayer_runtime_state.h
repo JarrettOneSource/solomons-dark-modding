@@ -11,8 +11,12 @@ namespace sdmod::multiplayer {
 
 enum class ParticipantKind {
     LocalHuman,
-    RemoteHuman,
-    LuaBot,
+    RemoteParticipant,
+};
+
+enum class ParticipantControllerKind {
+    Native,
+    LuaBrain,
 };
 
 struct BotLoadoutInfo {
@@ -77,6 +81,7 @@ struct ParticipantRuntimeInfo {
 struct ParticipantInfo {
     std::uint64_t participant_id = 0;
     ParticipantKind kind = ParticipantKind::LocalHuman;
+    ParticipantControllerKind controller_kind = ParticipantControllerKind::Native;
     std::uint64_t steam_id = 0;
     std::string name;
     bool ready = false;
@@ -121,7 +126,7 @@ struct RuntimeState {
 };
 
 constexpr std::uint64_t kLocalParticipantId = 1ull;
-constexpr std::uint64_t kFirstLuaBotParticipantId = 0x1000000000001000ull;
+constexpr std::uint64_t kFirstLuaControlledParticipantId = 0x1000000000001000ull;
 
 MultiplayerCharacterProfile DefaultCharacterProfile();
 bool IsValidCharacterProfile(const MultiplayerCharacterProfile& profile);
@@ -143,15 +148,19 @@ const ParticipantInfo* FindParticipant(const RuntimeState& state, std::uint64_t 
 ParticipantInfo* FindLocalParticipant(RuntimeState& state);
 const ParticipantInfo* FindLocalParticipant(const RuntimeState& state);
 ParticipantInfo* UpsertLocalParticipant(RuntimeState& state);
-ParticipantInfo* UpsertRemoteHumanParticipant(RuntimeState& state, std::uint64_t participant_id);
-ParticipantInfo* UpsertLuaBotParticipant(RuntimeState& state, std::uint64_t participant_id);
+ParticipantInfo* UpsertRemoteParticipant(
+    RuntimeState& state,
+    std::uint64_t participant_id,
+    ParticipantControllerKind controller_kind);
 bool IsLocalHumanParticipant(const ParticipantInfo& participant);
-bool IsRemoteHumanParticipant(const ParticipantInfo& participant);
-bool IsLuaBotParticipant(const ParticipantInfo& participant);
+bool IsRemoteParticipant(const ParticipantInfo& participant);
+bool IsLuaControlledParticipant(const ParticipantInfo& participant);
+bool IsNativeControlledParticipant(const ParticipantInfo& participant);
 
 const char* SessionStatusLabel(SessionStatus status);
 const char* SessionTransportLabel(SessionTransportKind kind);
 const char* ParticipantKindLabel(ParticipantKind kind);
+const char* ParticipantControllerKindLabel(ParticipantControllerKind kind);
 const char* ParticipantSceneIntentKindLabel(ParticipantSceneIntentKind kind);
 
 }  // namespace sdmod::multiplayer

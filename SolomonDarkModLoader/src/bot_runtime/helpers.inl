@@ -18,7 +18,7 @@ BotLoadoutInfo DefaultBotLoadout() {
 }
 
 std::string DefaultBotName(std::uint64_t bot_id) {
-    return "Lua Bot " + std::to_string(bot_id - kFirstLuaBotParticipantId + 1ull);
+    return "Lua Bot " + std::to_string(bot_id - kFirstLuaControlledParticipantId + 1ull);
 }
 
 const char* BotControllerStateLabelInternal(BotControllerState state) {
@@ -108,12 +108,12 @@ void RemovePendingDestroy(std::uint64_t bot_id) {
 
 ParticipantInfo* FindBot(RuntimeState& state, std::uint64_t bot_id) {
     auto* participant = FindParticipant(state, bot_id);
-    return participant != nullptr && IsLuaBotParticipant(*participant) ? participant : nullptr;
+    return participant != nullptr && IsLuaControlledParticipant(*participant) ? participant : nullptr;
 }
 
 const ParticipantInfo* FindBot(const RuntimeState& state, std::uint64_t bot_id) {
     const auto* participant = FindParticipant(state, bot_id);
-    return participant != nullptr && IsLuaBotParticipant(*participant) ? participant : nullptr;
+    return participant != nullptr && IsLuaControlledParticipant(*participant) ? participant : nullptr;
 }
 
 void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) {
@@ -124,6 +124,8 @@ void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) 
     snapshot->available = true;
     snapshot->bot_id = participant.participant_id;
     snapshot->display_name = participant.name;
+    snapshot->participant_kind = participant.kind;
+    snapshot->controller_kind = participant.controller_kind;
     snapshot->character_profile = participant.character_profile;
     snapshot->ready = participant.ready;
     snapshot->in_run = participant.runtime.in_run;
@@ -145,21 +147,12 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
         return;
     }
 
-    SDModBotGameplayState gameplay_state;
-    if (!TryGetWizardBotGameplayState(bot_id, &gameplay_state) || !gameplay_state.available) {
+    SDModParticipantGameplayState gameplay_state;
+    if (!TryGetParticipantGameplayState(bot_id, &gameplay_state) || !gameplay_state.available) {
         return;
     }
 
-    snapshot->runtime_valid = snapshot->runtime_valid || gameplay_state.entity_materialized;
-    snapshot->transform_valid = snapshot->transform_valid || gameplay_state.entity_materialized;
     snapshot->entity_materialized = gameplay_state.entity_materialized;
-    snapshot->position_x = gameplay_state.x;
-    snapshot->position_y = gameplay_state.y;
-    snapshot->heading = gameplay_state.heading;
-    snapshot->hp = gameplay_state.hp;
-    snapshot->max_hp = gameplay_state.max_hp;
-    snapshot->mp = gameplay_state.mp;
-    snapshot->max_mp = gameplay_state.max_mp;
     snapshot->moving = gameplay_state.moving;
     snapshot->actor_address = gameplay_state.actor_address;
     snapshot->world_address = gameplay_state.world_address;
@@ -196,6 +189,21 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
     CopyEquipVisualLaneState(gameplay_state.primary_visual_lane, &snapshot->primary_visual_lane);
     CopyEquipVisualLaneState(gameplay_state.secondary_visual_lane, &snapshot->secondary_visual_lane);
     CopyEquipVisualLaneState(gameplay_state.attachment_visual_lane, &snapshot->attachment_visual_lane);
+
+    if (!gameplay_state.entity_materialized) {
+        return;
+    }
+
+    snapshot->runtime_valid = true;
+    snapshot->transform_valid = true;
+    snapshot->position_x = gameplay_state.x;
+    snapshot->position_y = gameplay_state.y;
+    snapshot->heading = gameplay_state.heading;
+    snapshot->hp = gameplay_state.hp;
+    snapshot->max_hp = gameplay_state.max_hp;
+    snapshot->mp = gameplay_state.mp;
+    snapshot->max_mp = gameplay_state.max_mp;
+    snapshot->in_run = true;
 }
 
 void ApplyControllerStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
@@ -409,7 +417,7 @@ void DestroyAllBotsLocked() {
     UpdateRuntimeState([](RuntimeState& state) {
         state.participants.erase(
             std::remove_if(state.participants.begin(), state.participants.end(), [](const ParticipantInfo& participant) {
-                return IsLuaBotParticipant(participant);
+                return IsLuaControlledParticipant(participant);
             }),
             state.participants.end());
     });
@@ -493,7 +501,7 @@ bool TryDispatchEntitySync(
     float position_y,
     float heading,
     std::string* error_message) {
-    return QueueWizardBotEntitySync(
+    return QueueParticipantEntitySync(
         bot_id,
         character_profile,
         scene_intent,
@@ -506,5 +514,5 @@ bool TryDispatchEntitySync(
 }
 
 bool TryDispatchDestroy(std::uint64_t bot_id, std::string* error_message) {
-    return QueueWizardBotDestroy(bot_id, error_message);
+    return QueueParticipantDestroy(bot_id, error_message);
 }

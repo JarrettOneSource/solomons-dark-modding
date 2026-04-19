@@ -206,6 +206,10 @@ Current external CLI fallback already installed:
     - `sd.bots.create({ profile = { element_id=..., discipline_id=..., loadout=... }, ... })`
     - `sd.bots.update({ id=..., profile = { ... } })`
     - `sd.bots.get_state(id).profile` is now the authoritative bot character identity in Lua
+  - April 18, 2026 relocation caution:
+    - `sd.bots.update({ id=..., position={x,y}, heading=... })` is **not** currently a stock-safe teleport for a materialized registered `GameNpc`
+    - the current gameplay update path only writes actor `x/y/heading`; it does not yet implement the full native relocation contract
+    - see `docs/bugs/registered_gamenpc_transform_update_instability.md` before using position updates as a live relocation tool
   - create-screen action ids and gameplay wizard mappings had been mislabeled relative to the stock colors
   - the current authoritative user-facing mapping is:
     - `fire` -> slot `16` -> orange

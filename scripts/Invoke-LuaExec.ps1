@@ -17,6 +17,53 @@ $ErrorActionPreference = 'Stop'
 
 $pipeName = 'SolomonDarkModLoader_LuaExec'
 $utf8 = [System.Text.UTF8Encoding]::new($false)
+
+function Test-SolomonDarkRunning {
+    $processes = Get-Process SolomonDark -ErrorAction SilentlyContinue
+    return $null -ne $processes -and @($processes).Count -gt 0
+}
+
+function Get-SolomonDarkCrashDiagnostics {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $searchPaths = @(
+        (Join-Path $repoRoot "runtime"),
+        (Join-Path $repoRoot "runtime\stage\.sdmod\logs")
+    )
+
+    $artifacts = [System.Collections.Generic.List[string]]::new()
+    foreach ($path in $searchPaths) {
+        if (-not (Test-Path $path)) {
+            continue
+        }
+
+        Get-ChildItem -Path $path -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object {
+                $extension = $_.Extension.ToLowerInvariant()
+                if ($extension -in @('.log', '.dmp', '.mdmp')) {
+                    return $true
+                }
+
+                if ($extension -eq '.txt' -and $_.DirectoryName -match '[\\/]logs([\\/]|$)') {
+                    return $true
+                }
+
+                return $false
+            } |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 8 |
+            ForEach-Object {
+                $artifacts.Add($_.FullName)
+            }
+    }
+
+    if ($artifacts.Count -eq 0) {
+        return "Game process not detected. The game may have crashed or exited before the Lua runtime came up. No crash/log artifacts were found under runtime/ or runtime/stage/.sdmod/logs."
+    }
+
+    $artifactSummary = ($artifacts | Select-Object -Unique) -join '; '
+    return "Game process not detected. The game may have crashed or exited before the Lua runtime came up. Check these artifacts: $artifactSummary"
+}
+
 function Invoke-LuaExecCode {
     param(
         [Parameter(Mandatory = $true)]
@@ -63,11 +110,19 @@ function Invoke-LuaExecCode {
 
         return $utf8.GetString($memory.ToArray())
     } catch [System.TimeoutException] {
-        throw "Cannot connect to pipe '$pipeName'. Is the game running with the mod loader?"
+        if (-not (Test-SolomonDarkRunning)) {
+            throw "Cannot connect to pipe '$pipeName'. $(Get-SolomonDarkCrashDiagnostics)"
+        }
+
+        throw "Cannot connect to pipe '$pipeName'. SolomonDark.exe is running, so the mod loader or Lua runtime may not be initialized yet."
     } catch [System.IO.IOException] {
         $message = $_.Exception.Message
         if ([string]::IsNullOrWhiteSpace($message)) {
             $message = "I/O error while talking to pipe '$pipeName'."
+        }
+
+        if (-not (Test-SolomonDarkRunning)) {
+            $message += " " + (Get-SolomonDarkCrashDiagnostics)
         }
 
         throw $message

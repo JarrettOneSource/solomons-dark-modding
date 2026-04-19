@@ -29,6 +29,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -56,8 +57,12 @@ using ActorWorldRegisterFn = std::uint32_t(__thiscall*)(void* self, int actor_gr
 using ActorWorldUnregisterFn = void(__thiscall*)(void* self, void* actor, char remove_from_container);
 using ActorWorldRegisterGameplaySlotActorFn = void(__thiscall*)(void* self, int slot_index);
 using ActorWorldUnregisterGameplaySlotActorFn = void(__thiscall*)(void* self, int slot_index);
+using WorldCellGridRebindActorFn = void(__thiscall*)(void* self, void* actor);
 using MonsterPathfindingRefreshTargetFn = void(__fastcall*)(void* self, void* unused_edx);
 using PlayerActorMoveStepFn = std::uint32_t(__thiscall*)(void* self, void* actor, float move_x, float move_y, unsigned int flags);
+using ActorGetProfileFn = void*(__thiscall*)(void* self);
+using ProfileResolveStatEntryFn = void*(__thiscall*)(void* self, int stat_index);
+using StatBookComputeValueFn = float(__thiscall*)(void* self, float base_value, int entry_idx, char apply_modifier);
 using MovementCollisionTestCirclePlacementFn = std::uint32_t(__thiscall*)(void* self, float x, float y, float radius, std::uint32_t mask);
 using MovementCollisionTestCirclePlacementExtendedFn =
     std::uint32_t(__thiscall*)(void* self, float x, float y, float radius, std::uint32_t cell_mask, std::uint32_t object_mask);
@@ -66,6 +71,8 @@ using ActorAnimationAdvanceFn = void(__thiscall*)(void* self);
 using PlayerActorRefreshRuntimeHandlesFn = void(__thiscall*)(void* self);
 using ActorProgressionRefreshFn = void(__thiscall*)(void* self);
 using PlayerAppearanceApplyChoiceFn = void(__thiscall*)(void* progression, int choice_id, int ensure_assets);
+using GameNpcSetMoveGoalFn = void(__thiscall*)(void* self, std::uint8_t mode, int follow_flag, float x, float y, float extra_scalar);
+using GameNpcSetTrackedSlotAssistFn = void(__thiscall*)(void* self, int slot_index, int require_callback);
 using GameplayActorAttachFn = void(__thiscall*)(void* self, void* actor);
 using StandaloneWizardVisualLinkAttachFn = std::uint8_t(__thiscall*)(void* self, void* value);
 using ActorBuildRenderDescriptorFromSourceFn = void(__thiscall*)(void* self);
@@ -124,6 +131,11 @@ bool CallActorWorldRegisterGameplaySlotActorSafe(
     uintptr_t world_address,
     int slot_index,
     DWORD* exception_code);
+bool CallWorldCellGridRebindActorSafe(
+    uintptr_t rebind_address,
+    uintptr_t world_address,
+    uintptr_t actor_address,
+    DWORD* exception_code);
 bool CallActorWorldUnregisterGameplaySlotActorSafe(
     uintptr_t unregister_address,
     uintptr_t world_address,
@@ -163,6 +175,7 @@ constexpr std::size_t kPuppetManagerDeletePuppetHookPatchSize = 6;
 // re-audited.
 constexpr std::size_t kPointerListDeleteBatchHookPatchSize = 5;
 constexpr std::size_t kActorWorldUnregisterHookPatchSize = 6;
+constexpr std::size_t kGameplaySwitchRegionHookMinimumPatchSize = 5;
 constexpr int kWizardSourceActorFactoryTypeId = 0x1397;
 constexpr std::size_t kActorAnimationAdvanceHookPatchSize = 6;
 constexpr std::size_t kMonsterPathfindingRefreshTargetHookMinimumPatchSize = 5;
@@ -203,6 +216,7 @@ constexpr float kWizardBotPathFinalArrivalThreshold = 8.0f;
 constexpr std::uint64_t kWizardBotPathRetryDelayMs = 500;
 constexpr std::uint64_t kGameplayRegionSwitchRetryDelayMs = 250;
 constexpr std::uint64_t kGameplayRegionSwitchDispatchSpacingMs = 500;
+constexpr std::uint64_t kGameplaySceneChurnDelayMs = 1500;
 constexpr DWORD kHubStartTestrunDispatchCooldownMs = 5000;
 constexpr std::uint32_t kInjectedGameplayMouseClickFrames = 2;
 constexpr std::size_t kEnemyConfigBufferSize = 216;
@@ -222,6 +236,8 @@ constexpr float kDefaultWizardBotOffsetY = 0.0f;
 constexpr std::size_t kHostileCurrentTargetActorOffset = 0x168;
 constexpr std::size_t kHostileTargetBucketDeltaOffset = 0x164;
 constexpr std::int32_t kActorWorldBucketStride = 0x800;
+constexpr std::size_t kActorWorldBucketTableOffset = 0x500;
+constexpr std::size_t kSceneActorBucketScanCount = 0x2000;
 constexpr int kSceneTypeHub = 0xFA1;
 constexpr int kSceneTypeMemorator = 0xFA2;
 constexpr int kSceneTypeDowser = 0xFA3;
@@ -242,9 +258,9 @@ struct ElementColorDescriptor {
 };
 
 ElementColorDescriptor GetWizardElementColor(int wizard_id);
+int ResolveStandaloneWizardRenderSelectionIndex(int wizard_id);
 
 struct WizardSourceProfileTemplate {
-    std::uint8_t render_selection = 0;
     std::int8_t variant_primary = 0;
     std::int8_t variant_secondary = 0;
     std::int8_t weapon_type = 1;
@@ -265,11 +281,11 @@ struct WizardAppearanceChoiceIds {
 // use the richer selector window so `ActorBuildRenderDescriptorFromSource` can
 // still synthesize the staff/orb attachment and helper visuals.
 constexpr WizardSourceProfileTemplate kWizardSourceProfileTemplates[] = {
-    {1, 1, 1, 1, 0},  // fire source actor
-    {1, 1, 1, 1, 0},  // water source actor
-    {1, 1, 1, 1, 0},  // earth source actor
-    {1, 1, 1, 1, 0},  // air source actor
-    {1, 1, 1, 1, 0},  // ether source actor
+    {1, 1, 1, 0},  // fire source actor
+    {1, 1, 1, 0},  // water source actor
+    {1, 1, 1, 0},  // earth source actor
+    {1, 1, 1, 0},  // air source actor
+    {1, 1, 1, 0},  // ether source actor
 };
 constexpr int kWizardSourceProfileTemplateCount =
     static_cast<int>(sizeof(kWizardSourceProfileTemplates) / sizeof(kWizardSourceProfileTemplates[0]));
@@ -347,14 +363,15 @@ uintptr_t CreateSyntheticWizardSourceProfile(const multiplayer::MultiplayerChara
         kStandaloneWizardVisualSourceKind;
 
     // Variant bytes that drive the wizard descriptor build and staff/orb
-    // attachment creation on the slot actor while the synthetic source profile
-    // is staged.
+    // attachment creation while the synthetic source profile is staged. The
+    // coarse render-selection byte is the stock element branch consumed by the
+    // attachment/orb path; keep it aligned with the public element semantics.
     *reinterpret_cast<std::int8_t*>(buffer + kSourceProfileVariantPrimaryOffset) =
         profile.variant_primary;
     *reinterpret_cast<std::int8_t*>(buffer + kSourceProfileVariantSecondaryOffset) =
         profile.variant_secondary;
     *reinterpret_cast<std::uint8_t*>(buffer + kSourceProfileRenderSelectionOffset) =
-        profile.render_selection;
+        static_cast<std::uint8_t>(ResolveStandaloneWizardRenderSelectionIndex(wizard_id));
     *reinterpret_cast<std::int8_t*>(buffer + kSourceProfileWeaponTypeOffset) =
         profile.weapon_type;
     *reinterpret_cast<std::uint8_t*>(buffer + kSourceProfileVariantTertiaryOffset) =
@@ -436,7 +453,7 @@ struct PendingRewardSpawnRequest {
     float y = 0.0f;
 };
 
-struct PendingWizardBotSyncRequest {
+struct PendingParticipantEntitySyncRequest {
     std::uint64_t bot_id = 0;
     multiplayer::MultiplayerCharacterProfile character_profile;
     multiplayer::ParticipantSceneIntent scene_intent;
@@ -465,6 +482,7 @@ struct GameplayKeyboardInjectionState {
     X86Hook puppet_manager_delete_puppet_hook;
     X86Hook pointer_list_delete_batch_hook;
     X86Hook actor_world_unregister_hook;
+    X86Hook gameplay_switch_region_hook;
     X86Hook monster_pathfinding_refresh_target_hook;
     bool initialized = false;
     std::array<std::atomic<std::uint32_t>, 256> pending_scancodes{};
@@ -479,12 +497,13 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint64_t> start_waves_retry_not_before_ms{0};
     std::atomic<std::uint64_t> wizard_bot_sync_not_before_ms{0};
     std::atomic<std::uint64_t> gameplay_region_switch_not_before_ms{0};
+    std::atomic<std::uint64_t> scene_churn_not_before_ms{0};
     std::mutex pending_gameplay_world_actions_mutex;
     std::deque<PendingEnemySpawnRequest> pending_enemy_spawn_requests;
     std::deque<PendingRewardSpawnRequest> pending_reward_spawn_requests;
-    std::deque<PendingWizardBotSyncRequest> pending_wizard_bot_sync_requests;
+    std::deque<PendingParticipantEntitySyncRequest> pending_participant_sync_requests;
     std::deque<PendingGameplayRegionSwitchRequest> pending_gameplay_region_switch_requests;
-    std::deque<std::uint64_t> pending_wizard_bot_destroy_requests;
+    std::deque<std::uint64_t> pending_participant_destroy_requests;
 } g_gameplay_keyboard_injection;
 
 struct ObservedActorAnimationDriveProfile {
@@ -503,10 +522,12 @@ struct BotPathWaypoint {
     float y = 0.0f;
 };
 
-struct BotEntityBinding {
+struct ParticipantEntityBinding {
     enum class Kind : std::uint8_t {
         PlaceholderEnemy = 0,
         StandaloneWizard = 1,
+        GameplaySlotWizard = 2,
+        RegisteredGameNpc = 3,
     };
 
     std::uint64_t bot_id = 0;
@@ -552,10 +573,31 @@ struct BotEntityBinding {
     uintptr_t standalone_progression_inner_address = 0;
     uintptr_t standalone_equip_wrapper_address = 0;
     uintptr_t standalone_equip_inner_address = 0;
+    bool registered_gamenpc_goal_active = false;
+    bool registered_gamenpc_following_local_slot = false;
+    float registered_gamenpc_goal_x = 0.0f;
+    float registered_gamenpc_goal_y = 0.0f;
     bool gameplay_attach_applied = false;
     bool raw_allocation = false;
     uintptr_t synthetic_source_profile_address = 0;
 };
+
+bool IsStandaloneWizardKind(ParticipantEntityBinding::Kind kind) {
+    return kind == ParticipantEntityBinding::Kind::StandaloneWizard;
+}
+
+bool IsGameplaySlotWizardKind(ParticipantEntityBinding::Kind kind) {
+    return kind == ParticipantEntityBinding::Kind::GameplaySlotWizard;
+}
+
+bool IsRegisteredGameNpcKind(ParticipantEntityBinding::Kind kind) {
+    return kind == ParticipantEntityBinding::Kind::RegisteredGameNpc;
+}
+
+bool IsWizardParticipantKind(ParticipantEntityBinding::Kind kind) {
+    return IsStandaloneWizardKind(kind) || IsGameplaySlotWizardKind(kind) ||
+           IsRegisteredGameNpcKind(kind);
+}
 
 struct SceneContextSnapshot {
     uintptr_t gameplay_scene_address = 0;
@@ -566,7 +608,7 @@ struct SceneContextSnapshot {
     int region_type_id = -1;
 };
 
-struct BotRematerializationRequest {
+struct ParticipantRematerializationRequest {
     std::uint64_t bot_id = 0;
     multiplayer::MultiplayerCharacterProfile character_profile;
     multiplayer::ParticipantSceneIntent scene_intent;
@@ -582,10 +624,12 @@ struct BotRematerializationRequest {
     int next_region_index = -1;
 };
 
-struct WizardBotGameplaySnapshot {
+struct ParticipantGameplaySnapshot {
     std::uint64_t bot_id = 0;
     bool entity_materialized = false;
     bool moving = false;
+    int entity_kind = kSDModParticipantGameplayKindUnknown;
+    std::uint64_t movement_intent_revision = 0;
     multiplayer::MultiplayerCharacterProfile character_profile;
     multiplayer::ParticipantSceneIntent scene_intent;
     uintptr_t actor_address = 0;
@@ -689,10 +733,10 @@ void AppendEquipVisualLaneSummary(
          << "}";
 }
 
-std::vector<BotEntityBinding> g_bot_entities;
-std::recursive_mutex g_bot_entities_mutex;
+std::vector<ParticipantEntityBinding> g_participant_entities;
+std::recursive_mutex g_participant_entities_mutex;
 std::mutex g_wizard_bot_snapshot_mutex;
-std::vector<WizardBotGameplaySnapshot> g_wizard_bot_gameplay_snapshots;
+std::vector<ParticipantGameplaySnapshot> g_participant_gameplay_snapshots;
 std::recursive_mutex g_gameplay_action_pump_mutex;
 std::uint64_t g_last_wizard_bot_crash_summary_refresh_ms = 0;
 std::uint64_t g_last_gameplay_hud_case100_log_ms = 0;
@@ -703,12 +747,97 @@ bool g_local_player_animation_probe_has_last_position = false;
 float g_local_player_animation_probe_last_x = 0.0f;
 float g_local_player_animation_probe_last_y = 0.0f;
 
+void AppendMovementControllerSummary(std::ostringstream* out, uintptr_t world_address) {
+    if (out == nullptr || world_address == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto movement_controller_address = world_address + kActorOwnerMovementControllerOffset;
+    const auto primary_count = memory.ReadFieldOr<std::int32_t>(movement_controller_address, 0x40, 0);
+    const auto primary_list = memory.ReadFieldOr<uintptr_t>(movement_controller_address, 0x4C, 0);
+    const auto secondary_count = memory.ReadFieldOr<std::int32_t>(movement_controller_address, 0x70, 0);
+    const auto secondary_list = memory.ReadFieldOr<uintptr_t>(movement_controller_address, 0x7C, 0);
+
+    *out << " movement{ctx=" << HexString(movement_controller_address)
+         << " primary_count=" << primary_count
+         << " primary_list=" << HexString(primary_list);
+
+    if (primary_list != 0) {
+        *out << " primary0=" << HexString(memory.ReadFieldOr<uintptr_t>(primary_list, 0x0, 0))
+             << " primary1=" << HexString(memory.ReadFieldOr<uintptr_t>(primary_list, 0x4, 0));
+    }
+
+    *out << " secondary_count=" << secondary_count
+         << " secondary_list=" << HexString(secondary_list);
+
+    if (secondary_list != 0) {
+        *out << " secondary0=" << HexString(memory.ReadFieldOr<uintptr_t>(secondary_list, 0x0, 0))
+             << " secondary1=" << HexString(memory.ReadFieldOr<uintptr_t>(secondary_list, 0x4, 0));
+    }
+
+    *out << "}";
+}
+
+void AppendActorCoreStateSummary(std::ostringstream* out, uintptr_t actor_address) {
+    if (out == nullptr || actor_address == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    *out << " actor_core{cell=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x54, 0))
+         << " owner_field=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x58, 0))
+         << " slot=" << std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
+                actor_address,
+                kActorSlotOffset,
+                -1)))
+         << " world_slot=" << std::to_string(static_cast<int>(memory.ReadFieldOr<std::int16_t>(
+                actor_address,
+                kActorWorldSlotOffset,
+                static_cast<std::int16_t>(-1))))
+         << " radius=" << std::to_string(memory.ReadFieldOr<float>(actor_address, kActorCollisionRadiusOffset, 0.0f))
+         << " mask=" << HexString(static_cast<uintptr_t>(memory.ReadFieldOr<std::uint32_t>(
+                actor_address,
+                kActorPrimaryFlagMaskOffset,
+                0)))
+         << " mask2=" << HexString(static_cast<uintptr_t>(memory.ReadFieldOr<std::uint32_t>(
+                actor_address,
+                kActorSecondaryFlagMaskOffset,
+                0)))
+         << "}";
+}
+
+void AppendGameNpcStateSummary(std::ostringstream* out, uintptr_t actor_address) {
+    if (out == nullptr || actor_address == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    *out << " gamenpc{source_kind=" << std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, 0x174, 0))
+         << " source_profile=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x178, 0))
+         << " source_aux=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x17C, 0))
+         << " branch=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x181, 0))
+         << " active=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x180, 0))
+         << " desired_yaw=" << std::to_string(memory.ReadFieldOr<float>(actor_address, 0x188, 0.0f))
+         << " source_profile_74_mirror=" << HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, 0x194, 0))
+         << " tick_counter=" << std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, 0x18C, 0))
+         << " goal_x=" << std::to_string(memory.ReadFieldOr<float>(actor_address, 0x19C, 0.0f))
+         << " goal_y=" << std::to_string(memory.ReadFieldOr<float>(actor_address, 0x1A0, 0.0f))
+         << " move_flag=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x198, 0))
+         << " move_speed=" << std::to_string(memory.ReadFieldOr<float>(actor_address, 0x1B4, 0.0f))
+         << " source_profile_56_mirror=" << HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, 0x1C0, 0))
+         << " tracked_slot=" << std::to_string(memory.ReadFieldOr<std::int8_t>(actor_address, 0x1C2, -1))
+         << " callback=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x1C3, 0))
+         << " render_drive_effect_timer=" << std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, 0x1C4, 0))
+         << "}";
+}
+
 std::string BuildWizardBotCrashSummaryLocked() {
     std::ostringstream out;
-    out << "wizard_bot_snapshots count=" << g_wizard_bot_gameplay_snapshots.size()
+    out << "participant_snapshots count=" << g_participant_gameplay_snapshots.size()
         << " gameplay_injection_initialized="
         << (g_gameplay_keyboard_injection.initialized ? "true" : "false");
-    for (const auto& snapshot : g_wizard_bot_gameplay_snapshots) {
+    for (const auto& snapshot : g_participant_gameplay_snapshots) {
         out << "\r\n"
             << "  bot_id=" << snapshot.bot_id
             << " element_id=" << snapshot.character_profile.element_id
@@ -736,6 +865,9 @@ std::string BuildWizardBotCrashSummaryLocked() {
         AppendEquipVisualLaneSummary(&out, "primary", snapshot.primary_visual_lane);
         AppendEquipVisualLaneSummary(&out, "secondary", snapshot.secondary_visual_lane);
         AppendEquipVisualLaneSummary(&out, "attachment", snapshot.attachment_visual_lane);
+        AppendActorCoreStateSummary(&out, snapshot.actor_address);
+        AppendGameNpcStateSummary(&out, snapshot.actor_address);
+        AppendMovementControllerSummary(&out, snapshot.world_address);
     }
     return out.str();
 }
@@ -745,19 +877,20 @@ void RefreshWizardBotCrashSummaryLocked() {
 }
 
 void PumpQueuedGameplayActions();
-BotEntityBinding* FindBotEntity(std::uint64_t bot_id);
-BotEntityBinding* FindBotEntityForGameplaySlot(int gameplay_slot);
+ParticipantEntityBinding* FindParticipantEntity(std::uint64_t participant_id);
+ParticipantEntityBinding* FindParticipantEntityForGameplaySlot(int gameplay_slot);
 void StopWizardBotActorMotion(uintptr_t actor_address);
-void ApplyObservedBotAnimationState(BotEntityBinding* binding, uintptr_t actor_address, bool moving);
-void PublishWizardBotGameplaySnapshot(const BotEntityBinding& binding);
-void RememberBotEntity(
+void StopRegisteredGameNpcMotion(ParticipantEntityBinding* binding);
+void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t actor_address, bool moving);
+void PublishParticipantGameplaySnapshot(const ParticipantEntityBinding& binding);
+void RememberParticipantEntity(
     std::uint64_t bot_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     uintptr_t actor_address,
-    BotEntityBinding::Kind kind,
+    ParticipantEntityBinding::Kind kind,
     int gameplay_slot,
     bool raw_allocation);
-void ResetBotEntityMaterializationState(BotEntityBinding* binding);
+void ResetParticipantEntityMaterializationState(ParticipantEntityBinding* binding);
 bool TryResolveLocalPlayerWorldContext(
     uintptr_t gameplay_address,
     uintptr_t* actor_address,
@@ -790,6 +923,23 @@ bool CallPlayerAppearanceApplyChoiceSafe(
     int choice_id,
     int ensure_assets,
     DWORD* exception_code);
+bool CallGameNpcSetMoveGoalSafe(
+    uintptr_t set_move_goal_address,
+    uintptr_t npc_address,
+    std::uint8_t mode,
+    int follow_flag,
+    float x,
+    float y,
+    float extra_scalar,
+    DWORD* exception_code,
+    SehExceptionDetails* exception_details);
+bool CallGameNpcSetTrackedSlotAssistSafe(
+    uintptr_t set_tracked_slot_assist_address,
+    uintptr_t npc_address,
+    int slot_index,
+    int require_callback,
+    DWORD* exception_code,
+    SehExceptionDetails* exception_details);
 bool CallGameplayActorAttachSafe(
     uintptr_t gameplay_address,
     uintptr_t actor_address,
@@ -855,14 +1005,18 @@ bool FinalizeGameplaySlotBotRegistration(
     uintptr_t world_address,
     int slot_index,
     uintptr_t actor_address,
-    BotEntityBinding* binding,
+    ParticipantEntityBinding* binding,
     std::string* error_message);
 bool DestroyLoaderOwnedWizardActor(
     uintptr_t actor_address,
     uintptr_t world_address,
     bool raw_allocation,
     std::string* error_message);
-void DestroyWizardBotEntityNow(std::uint64_t bot_id);
+bool DestroyRegisteredGameNpcActor(
+    uintptr_t actor_address,
+    uintptr_t world_address,
+    std::string* error_message);
+void DestroyParticipantEntityNow(std::uint64_t participant_id);
 
 bool EnsureStandaloneWizardWorldOwner(
     uintptr_t actor_address,

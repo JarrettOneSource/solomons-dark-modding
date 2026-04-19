@@ -1,8 +1,11 @@
 #include "logger.h"
 
+#include "memory_access.h"
+
 #include <Windows.h>
 #include <DbgHelp.h>
 
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -211,6 +214,74 @@ bool TryReadCrashU32(uintptr_t address, std::uint32_t* value) {
         *value = 0;
         return false;
     }
+}
+
+void AppendMovementContextCandidate(std::ostringstream* out, const char* label, uintptr_t context_address) {
+    if (out == nullptr || label == nullptr) {
+        return;
+    }
+    // Windows MinimumApplicationAddress is typically 0x10000. Anything below is
+    // guaranteed unmapped (e.g. small integers passed in a register). Reading
+    // at ctx+0x40 here would itself AV and re-enter this vectored handler in a
+    // stack-eating cascade, so reject small values up front.
+    if (context_address < 0x10000) {
+        return;
+    }
+
+    std::uint32_t primary_count = 0;
+    std::uint32_t primary_list = 0;
+    std::uint32_t secondary_count = 0;
+    std::uint32_t secondary_list = 0;
+    if (!TryReadCrashU32(context_address + 0x40, &primary_count) ||
+        !TryReadCrashU32(context_address + 0x4C, &primary_list) ||
+        !TryReadCrashU32(context_address + 0x70, &secondary_count) ||
+        !TryReadCrashU32(context_address + 0x7C, &secondary_list)) {
+        return;
+    }
+    if (primary_count > 256 || secondary_count > 256) {
+        return;
+    }
+
+    *out << " " << label << "{ctx=0x" << HexString(context_address)
+         << " primary_count=" << std::dec << primary_count
+         << " primary_list=0x" << HexString(primary_list)
+         << " secondary_count=" << std::dec << secondary_count
+         << " secondary_list=0x" << HexString(secondary_list);
+
+    const auto append_entries = [&](const char* entry_label, std::uint32_t list_address) {
+        if (list_address == 0) {
+            return;
+        }
+        for (int index = 0; index < 4; ++index) {
+            std::uint32_t entry_address = 0;
+            if (!TryReadCrashU32(
+                    static_cast<uintptr_t>(list_address) + static_cast<uintptr_t>(index * sizeof(std::uint32_t)),
+                    &entry_address)) {
+                break;
+            }
+            *out << " " << entry_label << index << "=0x" << HexString(entry_address);
+            if (entry_address == 0) {
+                continue;
+            }
+
+            std::uint32_t value_0c = 0;
+            std::uint32_t value_10 = 0;
+            std::uint32_t value_14 = 0;
+            if (TryReadCrashU32(static_cast<uintptr_t>(entry_address) + 0x0C, &value_0c)) {
+                *out << " " << entry_label << index << "_0c=0x" << HexString(value_0c);
+            }
+            if (TryReadCrashU32(static_cast<uintptr_t>(entry_address) + 0x10, &value_10)) {
+                *out << " " << entry_label << index << "_10=0x" << HexString(value_10);
+            }
+            if (TryReadCrashU32(static_cast<uintptr_t>(entry_address) + 0x14, &value_14)) {
+                *out << " " << entry_label << index << "_14=0x" << HexString(value_14);
+            }
+        }
+    };
+
+    append_entries("primary", primary_list);
+    append_entries("secondary", secondary_list);
+    *out << "}";
 }
 
 std::string DescribeAddress(uintptr_t address);
@@ -424,12 +495,19 @@ LONG WINAPI CrashExceptionFilter(EXCEPTION_POINTERS* exception_pointers) {
     const auto eip = static_cast<unsigned long>(context != nullptr ? context->Eip : 0);
     const auto esp = static_cast<unsigned long>(context != nullptr ? context->Esp : 0);
     const auto ebp = static_cast<unsigned long>(context != nullptr ? context->Ebp : 0);
+    const auto eax = static_cast<unsigned long>(context != nullptr ? context->Eax : 0);
+    const auto ebx = static_cast<unsigned long>(context != nullptr ? context->Ebx : 0);
+    const auto ecx = static_cast<unsigned long>(context != nullptr ? context->Ecx : 0);
+    const auto edx = static_cast<unsigned long>(context != nullptr ? context->Edx : 0);
+    const auto esi = static_cast<unsigned long>(context != nullptr ? context->Esi : 0);
+    const auto edi = static_cast<unsigned long>(context != nullptr ? context->Edi : 0);
     const auto length = std::snprintf(
         line,
         sizeof(line),
         "[%04u-%02u-%02u %02u:%02u:%02u.%03u] unhandled exception"
         " tid=%lu code=0x%08lX address=0x%08lX access_type=0x%08lX access_address=0x%08lX"
-        " eip=0x%08lX esp=0x%08lX ebp=0x%08lX\r\n",
+        " eip=0x%08lX esp=0x%08lX ebp=0x%08lX"
+        " eax=0x%08lX ebx=0x%08lX ecx=0x%08lX edx=0x%08lX esi=0x%08lX edi=0x%08lX\r\n",
         static_cast<unsigned>(now.wYear),
         static_cast<unsigned>(now.wMonth),
         static_cast<unsigned>(now.wDay),
@@ -444,7 +522,13 @@ LONG WINAPI CrashExceptionFilter(EXCEPTION_POINTERS* exception_pointers) {
         access_address,
         eip,
         esp,
-        ebp);
+        ebp,
+        eax,
+        ebx,
+        ecx,
+        edx,
+        esi,
+        edi);
 #else
     const auto length = std::snprintf(
         line,
@@ -547,16 +631,112 @@ LONG WINAPI CrashExceptionFilter(EXCEPTION_POINTERS* exception_pointers) {
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+// Vectored handlers run BEFORE SEH __try/__except, so if our own diagnostic
+// reads inside the handler AV (e.g. small value in a register treated as a
+// pointer), the handler re-enters itself and eats one 4 KiB stack guard-page
+// per nesting level until the thread dies. Guard explicitly with a thread-
+// local depth counter so re-entries return immediately without running any
+// diagnostic code that could fault again.
+thread_local int g_first_chance_handler_depth = 0;
+struct FirstChanceHandlerDepthGuard {
+    FirstChanceHandlerDepthGuard() { ++g_first_chance_handler_depth; }
+    ~FirstChanceHandlerDepthGuard() { --g_first_chance_handler_depth; }
+};
+
 LONG CALLBACK FirstChanceExceptionLogger(EXCEPTION_POINTERS* exception_pointers) {
     if (exception_pointers == nullptr || exception_pointers->ExceptionRecord == nullptr) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
 
+    if (g_first_chance_handler_depth > 0) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+
     const auto* record = exception_pointers->ExceptionRecord;
-    const auto* context = exception_pointers->ContextRecord;
+    auto* context = exception_pointers->ContextRecord;
     const DWORD code = record->ExceptionCode;
     if (code != 0xE06D7363 && code != EXCEPTION_ACCESS_VIOLATION && code != 0x40000015) {
         return EXCEPTION_CONTINUE_SEARCH;
+    }
+
+    FirstChanceHandlerDepthGuard reentrancy_scope;
+
+    // Game functions that iterate the movement ctx primary list can race with
+    // concurrent writers and observe primary_list[0] == NULL while primary_count
+    // is > 0. The game has no bounds check before dereferencing the entry, so it
+    // AVs. Each known-crashing dispatch site has a distinct eip / register
+    // pattern; recover by rewriting the faulting eip to the matching loop-
+    // increment slot so the scan continues at the next entry.
+    // Require a read fault (access_type 0) before considering recovery. Both
+    // known crash sites are read dereferences; a write or execute fault at the
+    // same eip would indicate a different failure mode that we must not silently
+    // eat.
+    const DWORD access_type_for_recovery = record->NumberParameters >= 1
+        ? static_cast<DWORD>(record->ExceptionInformation[0])
+        : 0xFFFFFFFFu;
+    if (code == EXCEPTION_ACCESS_VIOLATION && context != nullptr &&
+        access_type_for_recovery == 0) {
+        const uintptr_t eax_val = static_cast<uintptr_t>(context->Eax);
+        const uintptr_t esi_val = static_cast<uintptr_t>(context->Esi);
+        const uintptr_t eip_val = static_cast<uintptr_t>(context->Eip);
+        const uintptr_t access_addr = record->NumberParameters >= 2
+            ? static_cast<uintptr_t>(record->ExceptionInformation[1])
+            : 0;
+        const uintptr_t exception_addr = reinterpret_cast<uintptr_t>(record->ExceptionAddress);
+        const auto& memory = ProcessMemory::Instance();
+
+        struct NullPrimaryEntryRecovery {
+            const char* description;
+            std::uintptr_t crash_ghidra_eip;
+            std::uintptr_t recover_ghidra_eip;
+            bool match_eax_null;  // true: crash register is EAX; false: ESI
+            std::uintptr_t expected_access;
+        };
+        static constexpr NullPrimaryEntryRecovery kNullEntryRecoveries[] = {
+            // FUN_00912500 `CMP byte [ESI+0xC], 0x2`: loop increment after the
+            // JNZ-skip lane at 0x009126C2.
+            {"MovementCollision_QueryType2Hazards", 0x009125E0, 0x009126C2, false, 0xC},
+            // FUN_00522CE0 `MOV ECX, [EAX+0x10]` (mask load before FLDZ): jump
+            // to the loop-increment at 0x00522E00. The FLDZ at 0x00522D13 has
+            // not executed yet, so we must NOT land on the 0x00522DFE FSTP ST0
+            // sibling lane — that would pop a non-existent FP slot.
+            {"MovementCollision_IteratePrimary", 0x00522D10, 0x00522E00, true, 0x10},
+        };
+
+        for (const auto& entry : kNullEntryRecoveries) {
+            const uintptr_t crash_eip = memory.ResolveGameAddressOrZero(entry.crash_ghidra_eip);
+            if (crash_eip == 0 || eip_val != crash_eip) {
+                continue;
+            }
+            // ExceptionRecord.ExceptionAddress and context->Eip should agree at
+            // a synchronous AV. A divergence implies the AV was queued with a
+            // different eip (e.g. asynchronous fault or out-of-band signal) and
+            // our recovery assumptions about the instruction stream do not hold.
+            if (exception_addr != eip_val) {
+                continue;
+            }
+            const bool reg_matches = entry.match_eax_null ? (eax_val == 0) : (esi_val == 0);
+            if (!reg_matches || access_addr != entry.expected_access) {
+                continue;
+            }
+            const uintptr_t recover_eip = memory.ResolveGameAddressOrZero(entry.recover_ghidra_eip);
+            if (recover_eip == 0) {
+                break;
+            }
+            static std::atomic<unsigned int> g_null_hazard_recoveries{0};
+            const unsigned int recovery_seq = ++g_null_hazard_recoveries;
+            std::ostringstream recovered;
+            recovered << '[' << Timestamp()
+                      << "] recovered NULL primary_list entry in "
+                      << entry.description
+                      << " tid=" << GetCurrentThreadId()
+                      << " seq=" << recovery_seq
+                      << " eip=0x" << HexString(eip_val)
+                      << " -> 0x" << HexString(recover_eip);
+            Log(recovered.str());
+            context->Eip = static_cast<DWORD>(recover_eip);
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
     }
 
     unsigned int occurrence = 0;
@@ -576,6 +756,18 @@ LONG CALLBACK FirstChanceExceptionLogger(EXCEPTION_POINTERS* exception_pointers)
         context != nullptr ? static_cast<uintptr_t>(context->Esp) : 0;
     const uintptr_t ebp =
         context != nullptr ? static_cast<uintptr_t>(context->Ebp) : 0;
+    const uintptr_t eax =
+        context != nullptr ? static_cast<uintptr_t>(context->Eax) : 0;
+    const uintptr_t ebx =
+        context != nullptr ? static_cast<uintptr_t>(context->Ebx) : 0;
+    const uintptr_t ecx =
+        context != nullptr ? static_cast<uintptr_t>(context->Ecx) : 0;
+    const uintptr_t edx =
+        context != nullptr ? static_cast<uintptr_t>(context->Edx) : 0;
+    const uintptr_t esi =
+        context != nullptr ? static_cast<uintptr_t>(context->Esi) : 0;
+    const uintptr_t edi =
+        context != nullptr ? static_cast<uintptr_t>(context->Edi) : 0;
     const DWORD access_type =
         record->NumberParameters >= 1 ? static_cast<DWORD>(record->ExceptionInformation[0]) : 0;
     const uintptr_t access_address =
@@ -590,16 +782,55 @@ LONG CALLBACK FirstChanceExceptionLogger(EXCEPTION_POINTERS* exception_pointers)
         << " access_address=0x" << HexString(access_address)
         << " eip=0x" << HexString(eip)
         << " esp=0x" << HexString(esp)
-        << " ebp=0x" << HexString(ebp);
+        << " ebp=0x" << HexString(ebp)
+        << " eax=0x" << HexString(eax)
+        << " ebx=0x" << HexString(ebx)
+        << " ecx=0x" << HexString(ecx)
+        << " edx=0x" << HexString(edx)
+        << " esi=0x" << HexString(esi)
+        << " edi=0x" << HexString(edi);
+    if (eip != 0) {
+        out << " eip_info: " << DescribeAddress(eip);
+        std::uint8_t bytes[16] = {};
+        std::size_t bytes_read = 0;
+        for (std::size_t i = 0; i < sizeof(bytes); ++i) {
+            std::uint32_t word = 0;
+            if (TryReadCrashU32(eip + static_cast<uintptr_t>(i & ~std::size_t{0x3}), &word)) {
+                bytes[i] = static_cast<std::uint8_t>((word >> ((i & 0x3) * 8)) & 0xFF);
+                ++bytes_read;
+            } else {
+                break;
+            }
+        }
+        if (bytes_read > 0) {
+            out << " eip_bytes=";
+            for (std::size_t i = 0; i < bytes_read; ++i) {
+                if (i > 0) {
+                    out << ' ';
+                }
+                out << std::uppercase << std::setw(2) << std::setfill('0') << std::hex
+                    << static_cast<unsigned int>(bytes[i]) << std::nouppercase << std::setfill(' ');
+            }
+        }
+    }
     if (esp != 0) {
         out << " esp_info: " << DescribeAddress(esp);
         out << " stack_words";
-        for (int i = 0; i < 8; ++i) {
+        for (int i = 0; i < 16; ++i) {
             std::uint32_t word = 0;
             const auto word_address = esp + static_cast<uintptr_t>(i * sizeof(std::uint32_t));
             if (TryReadCrashU32(word_address, &word)) {
                 out << " [" << HexString(word_address) << "]=0x" << HexString(word);
             }
+        }
+    }
+    if (code == EXCEPTION_ACCESS_VIOLATION) {
+        AppendMovementContextCandidate(&out, "ctx_ebx", ebx);
+        if (esi != ebx) {
+            AppendMovementContextCandidate(&out, "ctx_esi", esi);
+        }
+        if (ecx != ebx && ecx != esi) {
+            AppendMovementContextCandidate(&out, "ctx_ecx", ecx);
         }
     }
     Log(out.str());

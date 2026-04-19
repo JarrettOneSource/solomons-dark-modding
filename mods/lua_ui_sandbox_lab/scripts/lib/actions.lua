@@ -1,6 +1,7 @@
 return {
   dialog_primary = "dialog.primary",
   main_menu_play = "main_menu.play",
+  main_menu_resume_last_game = "main_menu.resume_last_game",
   main_menu_new_game = "main_menu.new_game",
   create_select_earth = "create.select_element_earth",
   create_select_ether = "create.select_element_ether",

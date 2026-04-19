@@ -522,7 +522,7 @@ std::vector<std::string> BuildMainMenuButtonLabels(int mode) {
     case 0:
         return {"PLAY", "EXPLORE THE DARK CLOUD", "SETTINGS", "HALL OF FAME"};
     case 1:
-        return {"RESUME LAST GAME", "NEW GAME", "HALL OF FAME", "BACK"};
+        return {"LAST GAME", "NEW GAME", "HALL OF FAME", "BACK"};
     default:
         return {};
     }

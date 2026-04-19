@@ -6,10 +6,17 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <Windows.h>
 
 namespace sdmod {
+
+constexpr int kSDModParticipantGameplayKindUnknown = -1;
+constexpr int kSDModParticipantGameplayKindPlaceholderEnemy = 0;
+constexpr int kSDModParticipantGameplayKindStandaloneWizard = 1;
+constexpr int kSDModParticipantGameplayKindGameplaySlotWizard = 2;
+constexpr int kSDModParticipantGameplayKindRegisteredGameNpc = 3;
 
 struct SDModEquipVisualLaneState {
     uintptr_t wrapper_address = 0;
@@ -101,6 +108,24 @@ struct SDModSceneState {
     int transition_target_b = 0;
 };
 
+struct SDModSceneActorState {
+    bool valid = false;
+    uintptr_t actor_address = 0;
+    uintptr_t vtable_address = 0;
+    uintptr_t first_method_address = 0;
+    std::uint32_t object_type_id = 0;
+    std::uint32_t object_header_word = 0;
+    uintptr_t owner_address = 0;
+    int actor_slot = -1;
+    int world_slot = -1;
+    float x = 0.0f;
+    float y = 0.0f;
+    std::uint8_t anim_drive_state = 0;
+    uintptr_t progression_handle_address = 0;
+    uintptr_t equip_handle_address = 0;
+    uintptr_t animation_state_ptr = 0;
+};
+
 struct SDModGameplaySelectionDebugState {
     bool valid = false;
     uintptr_t table_address = 0;
@@ -110,11 +135,46 @@ struct SDModGameplaySelectionDebugState {
     std::int32_t player_selection_state_1 = 0;
 };
 
-struct SDModBotGameplayState {
+struct SDModGameplayNavCellState {
+    struct Sample {
+        int sample_x = 0;
+        int sample_y = 0;
+        float world_x = 0.0f;
+        float world_y = 0.0f;
+        bool traversable = false;
+    };
+
+    int grid_x = 0;
+    int grid_y = 0;
+    float center_x = 0.0f;
+    float center_y = 0.0f;
+    bool traversable = false;
+    std::vector<Sample> samples;
+};
+
+struct SDModGameplayNavGridState {
+    bool valid = false;
+    uintptr_t world_address = 0;
+    uintptr_t controller_address = 0;
+    uintptr_t cells_address = 0;
+    uintptr_t probe_actor_address = 0;
+    int width = 0;
+    int height = 0;
+    float cell_width = 0.0f;
+    float cell_height = 0.0f;
+    float probe_x = 0.0f;
+    float probe_y = 0.0f;
+    int subdivisions = 1;
+    std::vector<SDModGameplayNavCellState> cells;
+};
+
+struct SDModParticipantGameplayState {
     bool available = false;
     bool entity_materialized = false;
     bool moving = false;
-    std::uint64_t bot_id = 0;
+    int entity_kind = kSDModParticipantGameplayKindUnknown;
+    std::uint64_t movement_intent_revision = 0;
+    std::uint64_t participant_id = 0;
     multiplayer::MultiplayerCharacterProfile character_profile;
     multiplayer::ParticipantSceneIntent scene_intent;
     uintptr_t actor_address = 0;
@@ -183,8 +243,8 @@ bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_messa
 bool QueueGameplayStartWaves(std::string* error_message);
 bool QueueHubStartTestrun(std::string* error_message);
 bool QueueGameplaySwitchRegion(int region_index, std::string* error_message);
-bool QueueWizardBotEntitySync(
-    std::uint64_t bot_id,
+bool QueueParticipantEntitySync(
+    std::uint64_t participant_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     const multiplayer::ParticipantSceneIntent& scene_intent,
     bool has_transform,
@@ -193,15 +253,19 @@ bool QueueWizardBotEntitySync(
     float position_y,
     float heading,
     std::string* error_message);
-bool QueueWizardBotDestroy(std::uint64_t bot_id, std::string* error_message);
+bool QueueParticipantDestroy(std::uint64_t participant_id, std::string* error_message);
 bool IsRunLifecycleActive();
 int GetRunLifecycleCurrentWave();
 std::uint64_t GetRunLifecycleElapsedMilliseconds();
 bool TryGetPlayerState(SDModPlayerState* state);
 bool TryGetWorldState(SDModWorldState* state);
 bool TryGetSceneState(SDModSceneState* state);
+bool TryListSceneActors(std::vector<SDModSceneActorState>* actors);
 bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state);
-bool TryGetWizardBotGameplayState(std::uint64_t bot_id, SDModBotGameplayState* state);
+bool TryGetGameplayNavGridState(SDModGameplayNavGridState* state, int subdivisions = 1);
+bool TryGetParticipantGameplayState(
+    std::uint64_t participant_id,
+    SDModParticipantGameplayState* state);
 bool SpawnEnemyByType(int type_id, float x, float y, std::string* error_message);
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);
 

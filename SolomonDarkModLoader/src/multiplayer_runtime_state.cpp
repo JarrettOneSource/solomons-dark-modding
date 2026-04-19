@@ -9,12 +9,16 @@ namespace {
 std::mutex g_runtime_state_mutex;
 RuntimeState g_runtime_state;
 
-void InitializeParticipantDefaults(ParticipantInfo* participant, ParticipantKind kind) {
+void InitializeParticipantDefaults(
+    ParticipantInfo* participant,
+    ParticipantKind kind,
+    ParticipantControllerKind controller_kind) {
     if (participant == nullptr) {
         return;
     }
 
     participant->kind = kind;
+    participant->controller_kind = controller_kind;
 }
 
 void InitializeLocalParticipantLocked(RuntimeState& state) {
@@ -25,6 +29,7 @@ void InitializeLocalParticipantLocked(RuntimeState& state) {
     ParticipantInfo participant;
     participant.participant_id = kLocalParticipantId;
     participant.kind = ParticipantKind::LocalHuman;
+    participant.controller_kind = ParticipantControllerKind::Native;
     participant.name = "Wizard";
     participant.is_owner = true;
     participant.character_profile = DefaultCharacterProfile();
@@ -170,7 +175,10 @@ const ParticipantInfo* FindLocalParticipant(const RuntimeState& state) {
 ParticipantInfo* UpsertLocalParticipant(RuntimeState& state) {
     auto* participant = FindLocalParticipant(state);
     if (participant != nullptr) {
-        InitializeParticipantDefaults(participant, ParticipantKind::LocalHuman);
+        InitializeParticipantDefaults(
+            participant,
+            ParticipantKind::LocalHuman,
+            ParticipantControllerKind::Native);
         participant->is_owner = true;
         if (participant->name.empty()) {
             participant->name = "Wizard";
@@ -182,41 +190,30 @@ ParticipantInfo* UpsertLocalParticipant(RuntimeState& state) {
     return FindLocalParticipant(state);
 }
 
-ParticipantInfo* UpsertRemoteHumanParticipant(RuntimeState& state, std::uint64_t participant_id) {
+ParticipantInfo* UpsertRemoteParticipant(
+    RuntimeState& state,
+    std::uint64_t participant_id,
+    ParticipantControllerKind controller_kind) {
     if (participant_id == 0) {
         return nullptr;
     }
 
     auto* participant = FindParticipant(state, participant_id);
     if (participant != nullptr) {
-        InitializeParticipantDefaults(participant, ParticipantKind::RemoteHuman);
+        InitializeParticipantDefaults(
+            participant,
+            ParticipantKind::RemoteParticipant,
+            controller_kind);
         return participant;
     }
 
     ParticipantInfo created;
     created.participant_id = participant_id;
-    created.kind = ParticipantKind::RemoteHuman;
-    created.name = "Remote Wizard";
-    created.character_profile = DefaultCharacterProfile();
-    state.participants.push_back(std::move(created));
-    return &state.participants.back();
-}
-
-ParticipantInfo* UpsertLuaBotParticipant(RuntimeState& state, std::uint64_t participant_id) {
-    if (participant_id == 0) {
-        return nullptr;
-    }
-
-    auto* participant = FindParticipant(state, participant_id);
-    if (participant != nullptr) {
-        InitializeParticipantDefaults(participant, ParticipantKind::LuaBot);
-        return participant;
-    }
-
-    ParticipantInfo created;
-    created.participant_id = participant_id;
-    created.kind = ParticipantKind::LuaBot;
-    created.name = "Lua Bot";
+    created.kind = ParticipantKind::RemoteParticipant;
+    created.controller_kind = controller_kind;
+    created.name = controller_kind == ParticipantControllerKind::LuaBrain
+                       ? "Lua Bot"
+                       : "Remote Wizard";
     created.character_profile = DefaultCharacterProfile();
     state.participants.push_back(std::move(created));
     return &state.participants.back();
@@ -226,12 +223,17 @@ bool IsLocalHumanParticipant(const ParticipantInfo& participant) {
     return participant.kind == ParticipantKind::LocalHuman;
 }
 
-bool IsRemoteHumanParticipant(const ParticipantInfo& participant) {
-    return participant.kind == ParticipantKind::RemoteHuman;
+bool IsRemoteParticipant(const ParticipantInfo& participant) {
+    return participant.kind == ParticipantKind::RemoteParticipant;
 }
 
-bool IsLuaBotParticipant(const ParticipantInfo& participant) {
-    return participant.kind == ParticipantKind::LuaBot;
+bool IsLuaControlledParticipant(const ParticipantInfo& participant) {
+    return IsRemoteParticipant(participant) &&
+           participant.controller_kind == ParticipantControllerKind::LuaBrain;
+}
+
+bool IsNativeControlledParticipant(const ParticipantInfo& participant) {
+    return participant.controller_kind == ParticipantControllerKind::Native;
 }
 
 const char* SessionStatusLabel(SessionStatus status) {
@@ -262,10 +264,19 @@ const char* ParticipantKindLabel(ParticipantKind kind) {
     switch (kind) {
     case ParticipantKind::LocalHuman:
         return "LocalHuman";
-    case ParticipantKind::RemoteHuman:
-        return "RemoteHuman";
-    case ParticipantKind::LuaBot:
-        return "LuaBot";
+    case ParticipantKind::RemoteParticipant:
+        return "RemoteParticipant";
+    }
+
+    return "Unknown";
+}
+
+const char* ParticipantControllerKindLabel(ParticipantControllerKind kind) {
+    switch (kind) {
+    case ParticipantControllerKind::Native:
+        return "Native";
+    case ParticipantControllerKind::LuaBrain:
+        return "LuaBrain";
     }
 
     return "Unknown";

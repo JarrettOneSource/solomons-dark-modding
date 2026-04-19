@@ -476,10 +476,19 @@ Date: 2026-04-13
     - computes the actor's current cell from position/radius
     - sweeps neighboring cells
     - dispatches occupied cells through the callback vtable at `context + 0x38`
+    - rebuild lifecycle:
+      - if `context + 0x49 != 0`, frees the old primary list at `context + 0x4C`
+      - then zeroes `context + 0x40/+0x44/+0x4C`
+      - rebuilds the primary overlap list from the actor's current position,
+        radius, and the scene-grid scales at `context + 0xC8/+0xCC`
   - `MovementCollision_ProbeAdjacentCells (0x005218C0)`
     - probes direction-adjacent cells based on movement vector
     - dispatches candidate cells through the callback vtable at `context + 0x50`
-- New cell/query details from deeper decompilation plus live runtime checks:
+    - rebuild lifecycle:
+      - if `param_3 == 0` and `context + 0x61 != 0`, frees the old adjacent
+        list at `context + 0x64`
+      - then zeroes `context + 0x58/+0x5C/+0x64`
+  - New cell/query details from deeper decompilation plus live runtime checks:
   - live `testrun` grid sample now confirms:
     - `grid + 0xE0/+0xE4 = 100.0 / 100.0`
     - `grid + 0xDC/+0xD8 = 34 / 25`
@@ -488,11 +497,34 @@ Date: 2026-04-13
     - `cell + 0x0C` as the active/occupied discriminator
     - `cell + 0x10` as a collision mask/classification consulted by the
       higher-level collision queries
-  - the higher-level query wrappers are now partially identified:
-    - `MovementCollision_TestCirclePlacementExtended (0x005238C0)`
-      - rebuilds overlap lists from the same movement context
-      - rejects occupied cells whose collision mask intersects the tested mask
-      - also checks type-2 hazard/object overlap
+  - crash-site refinement on the higher-level wrappers now shows:
+    - `MovementCollision_TestCirclePlacement (0x00523C90)` walks the primary
+      overlap list rooted at `movement_context + 0x4C`
+      - each primary entry is expected to expose:
+        - `+0x0C` active/type discriminator
+        - `+0x10` collision mask/classification
+        - `+0x04/+0x08` payload used by the circle-vs-cell rect test path
+      - the `SolomonDark.exe + 0x00123D70` and `+0x00122D10` crash sites both
+        confirm that null entries in those lists are fatal
+    - the same helper also walks the secondary overlap/object list rooted at
+      `movement_context + 0x7C`
+      - each secondary entry is expected to expose:
+        - `+0x00/+0x04/+0x08/+0x0C` axis-aligned bounds payload
+        - `+0x14` collision mask/classification
+      - the `SolomonDark.exe + 0x00123E33` teleport crash dereferenced
+        `TEST [entry + 0x14], mask` with `entry == 0`
+    - the higher-level query wrappers are now partially identified:
+      - `MovementCollision_BuildCellOverlapList (0x00521B80)` is the stock
+        builder for the primary overlap list rooted at `movement_context + 0x4C`
+      - `MovementCollision_QueryType2Hazards (0x00522500)` is the stock
+        builder for the secondary hazard/object list rooted at
+        `movement_context + 0x7C`
+        - if `context + 0x79 != 0`, frees the old secondary list and zeroes
+          `context + 0x70/+0x74/+0x7C` before rebuilding
+      - `MovementCollision_TestCirclePlacementExtended (0x005238C0)`
+        - rebuilds overlap lists from the same movement context
+        - rejects occupied cells whose collision mask intersects the tested mask
+        - also checks type-2 hazard/object overlap
       - is used by several placement/search helpers to find nearby valid points
     - `MovementCollision_TestCirclePlacement (0x00523C90)`
       - smaller placement query used by dynamic-object response
@@ -502,6 +534,16 @@ Date: 2026-04-13
       path solver than guessing raw cell semantics from each `0x18` record
     - the solver can use the native grid for neighbor generation and the native
       collision query wrappers as a traversability oracle
+    - null entries in either overlap list are not benign:
+      - the `+0x4C` primary list is dereferenced by
+        `MovementCollision_ResolveType2Hazards (0x00522CE0)` at
+        `SolomonDark.exe + 0x00122D10`
+      - the `+0x7C` secondary list is dereferenced by
+        `MovementCollision_TestCirclePlacement (0x00523C90)` at
+        `SolomonDark.exe + 0x00123E33`
+      - that means any relocation path that bypasses the stock builders or
+        leaves their preconditions stale can crash later movement/collision
+        code even if the immediate transform write "worked"
 - Current implication for implementation:
   - if bots need true point A -> point B routing, the clean next substrate is
     this native scene grid plus the existing stock movement executor

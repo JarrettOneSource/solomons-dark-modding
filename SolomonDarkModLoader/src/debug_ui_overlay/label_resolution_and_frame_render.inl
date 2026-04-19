@@ -446,7 +446,7 @@ std::vector<OverlayRenderElement> TryBuildTitleMainMenuOverlayRenderElements(
 
     uintptr_t main_menu_address = 0;
     if (!TryReadActiveTitleMainMenu(*config, nullptr, &main_menu_address) ||
-        (CountRecognizedTitleMainMenuLines(exact_lines) < 2 && observed_main_menu_elements < 2)) {
+        main_menu_address == 0) {
         return {};
     }
 
@@ -535,7 +535,12 @@ std::vector<OverlayRenderElement> TryBuildTitleMainMenuOverlayRenderElements(
             existing_it->source_object_ptr = exact_control.object_ptr;
             existing_it->surface_object_ptr = main_menu_address;
             const auto exact_action_id = ResolveConfiguredUiActionId("main_menu", label);
-            if (!label.empty() && (existing_it->label.empty() || !exact_action_id.empty())) {
+            const bool can_override_with_exact_label =
+                !label.empty() &&
+                (existing_it->action_id.empty() ||
+                 (!exact_action_id.empty() && exact_action_id == existing_it->action_id) ||
+                 existing_it->label.empty());
+            if (can_override_with_exact_label) {
                 existing_it->label = label;
                 existing_it->action_id = exact_action_id;
             }
@@ -623,6 +628,7 @@ static SurfaceRegistryEntry s_surface_registry[] = {
     // Priority order: first match wins.
     {"controls",            "Controls",             true,  false, true,  false},
     {"settings",            "Settings",             true,  false, false, false},
+    {"create",              "Create",               true,  true,  true,  false},
     {"dark_cloud_search",   "Dark Cloud search",    false, true,  true,  false},
     {"quick_panel",         "QuickPanel",           true,  false, true,  false},
     {"simple_menu",         "SimpleMenu",           false, true,  true,  false},
@@ -661,6 +667,7 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
     struct { const char* id; std::vector<OverlayRenderElement> elems; } built[] = {
         {"controls",           TryBuildControlsOverlayRenderElements(exact_text_elements, exact_control_elements)},
         {"settings",           TryBuildSettingsOverlayRenderElements(exact_text_elements, exact_control_elements)},
+        {"create",             TryBuildCreateOverlayRenderElements()},
         {"dark_cloud_search",  TryBuildDarkCloudSearchOverlayRenderElements(quick_panel_render_elements)},
         {"quick_panel",        std::vector<OverlayRenderElement>(quick_panel_render_elements)},
         {"simple_menu",        TryBuildSimpleMenuOverlayRenderElements(exact_text_elements, exact_control_elements)},

@@ -28,6 +28,20 @@ local function new_context(config, actions)
     ctx.failed = true
     ctx.failure_message = tostring(message)
     ctx.log_error(ctx.failure_message)
+    if type(ctx.active_preset) == "string" and ctx.active_preset ~= "" then
+      ctx.log_error("sequence aborted preset=" .. ctx.active_preset .. " reason=" .. ctx.failure_message)
+    end
+  end
+
+  function ctx.mark_sequence_complete()
+    if ctx.sequence_complete_logged then
+      return
+    end
+
+    ctx.sequence_complete_logged = true
+    if type(ctx.active_preset) == "string" and ctx.active_preset ~= "" then
+      ctx.log_status("sequence complete preset=" .. ctx.active_preset)
+    end
   end
 
   function ctx.get_snapshot()
