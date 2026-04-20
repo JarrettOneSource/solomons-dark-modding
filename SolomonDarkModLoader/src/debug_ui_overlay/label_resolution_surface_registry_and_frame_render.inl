@@ -14,11 +14,6 @@ struct SurfaceRegistryEntry {
     bool first_frame_logged;
 };
 
-struct BuiltSurfaceResult {
-    std::vector<OverlayRenderElement> elements;
-    SurfaceRegistryEntry* entry;
-};
-
 static SurfaceRegistryEntry s_surface_registry[] = {
     // Priority order: first match wins.
     {"controls",            "Controls",             true,  false, true,  false},
