@@ -214,17 +214,23 @@ bool CreateGameplaySlotBotActor(
     }
 
     auto& memory = ProcessMemory::Instance();
-    (void)world_address;
     uintptr_t slot_actor_address = 0;
     uintptr_t slot_progression_address = 0;
+    uintptr_t slot_progression_wrapper_address = 0;
     const bool have_existing_slot_actor =
         TryResolvePlayerActorForSlot(gameplay_address, slot_index, &slot_actor_address) &&
         slot_actor_address != 0;
     const bool have_existing_slot_progression =
         TryResolvePlayerProgressionForSlot(gameplay_address, slot_index, &slot_progression_address) &&
         slot_progression_address != 0;
+    const bool have_existing_progression_wrapper =
+        TryResolvePlayerProgressionHandleForSlot(
+            gameplay_address,
+            slot_index,
+            &slot_progression_wrapper_address) &&
+        slot_progression_wrapper_address != 0;
 
-    if (!have_existing_slot_actor || !have_existing_slot_progression) {
+    if (!have_existing_slot_actor || !have_existing_slot_progression || !have_existing_progression_wrapper) {
         const auto create_slot_address = memory.ResolveGameAddressOrZero(kGameplayCreatePlayerSlot);
         if (create_slot_address == 0) {
             if (error_message != nullptr) {
@@ -262,26 +268,50 @@ bool CreateGameplaySlotBotActor(
             }
             return false;
         }
+        if (!TryResolvePlayerProgressionHandleForSlot(
+                gameplay_address,
+                slot_index,
+                &slot_progression_wrapper_address) ||
+            slot_progression_wrapper_address == 0) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Gameplay_CreatePlayerSlot did not publish a slot progression wrapper.";
+            }
+            return false;
+        }
     }
 
-    PrimeGameplaySlotBotActor(
-        gameplay_address,
-        slot_index,
-        slot_actor_address,
-        slot_progression_address,
-        x,
-        y,
-        heading);
-
-    std::string stage_error;
-
-    // Keep gameplay-slot actors on the stock slot contract. Only clear stale
-    // synthetic source markers from older experiments; preserve whatever stock
-    // runtime/equip state the slot factory already established.
+    // Clear stale synthetic markers from older experimental paths before the
+    // stock runtime refresh runs, so the slot factory's fresh state isn't
+    // shadowed by leftovers from a prior bot in this slot.
     (void)memory.TryWriteField<std::uint32_t>(slot_actor_address, kActorHubVisualSourceKindOffset, 0);
     (void)memory.TryWriteField<uintptr_t>(slot_actor_address, kActorHubVisualSourceProfileOffset, 0);
     (void)memory.TryWriteField<uintptr_t>(slot_actor_address, kActorHubVisualSourceAuxPointerOffset, 0);
     (void)memory.TryWriteField<uintptr_t>(slot_actor_address, kActorHubVisualAttachmentPtrOffset, 0);
+
+    std::string prime_error;
+    Log(
+        "[bots] create_slot_actor before_prime gameplay=" + HexString(gameplay_address) +
+        " slot=" + std::to_string(slot_index) +
+        " actor=" + HexString(slot_actor_address) +
+        " slot_prog=" + HexString(slot_progression_wrapper_address) +
+        " slot_prog_inner=" + HexString(slot_progression_address));
+    if (!PrimeGameplaySlotBotActor(
+            gameplay_address,
+            world_address,
+            slot_index,
+            slot_actor_address,
+            slot_progression_address,
+            character_profile,
+            x,
+            y,
+            heading,
+            &prime_error)) {
+        if (error_message != nullptr) {
+            *error_message = std::move(prime_error);
+        }
+        return false;
+    }
 
     LogBotVisualDebugStage(
         "slot_actor_pre_register",
@@ -308,10 +338,10 @@ bool FinalizeGameplaySlotBotRegistration(
     if (error_message != nullptr) {
         error_message->clear();
     }
-    if (gameplay_address == 0 || actor_address == 0 || slot_index < 0) {
+    if (gameplay_address == 0 || world_address == 0 || actor_address == 0 || slot_index < 0) {
         if (error_message != nullptr) {
             *error_message =
-                "Gameplay-slot publish requires a live gameplay scene, slot index, and actor.";
+                "Gameplay-slot publish requires a live gameplay scene, world, slot index, and actor.";
         }
         return false;
     }
@@ -335,12 +365,35 @@ bool FinalizeGameplaySlotBotRegistration(
         return false;
     }
 
+    const auto register_slot_address =
+        memory.ResolveGameAddressOrZero(kActorWorldRegisterGameplaySlotActor);
+    if (register_slot_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Unable to resolve ActorWorld_RegisterGameplaySlotActor.";
+        }
+        return false;
+    }
+
+    DWORD exception_code = 0;
+    if (!CallActorWorldRegisterGameplaySlotActorSafe(
+            register_slot_address,
+            world_address,
+            slot_index,
+            &exception_code)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "ActorWorld_RegisterGameplaySlotActor failed with 0x" +
+                HexString(exception_code) + ".";
+        }
+        return false;
+    }
+
     if (binding != nullptr) {
-        binding->gameplay_attach_applied = false;
+        binding->gameplay_attach_applied = true;
     }
     LogBotVisualDebugStage(
-        "finalize_slot_table_only",
-        0,
+        "finalize_slot_registered",
+        world_address,
         actor_address,
         0);
     return true;

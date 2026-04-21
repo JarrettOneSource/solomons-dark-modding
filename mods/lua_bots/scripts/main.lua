@@ -5,15 +5,38 @@ local LEGACY_MANAGED_BOT_NAMES = {
   ["Lua Bot Earth"] = true,
 }
 
+local function default_primary_entry_index_for_element(element_id)
+  -- Stock create-ready mapping recovered from live runs:
+  --   earth -> 0x08
+  --   ether -> 0x10
+  --   fire  -> 0x18
+  --   water -> 0x20
+  --   air   -> 0x28
+  local map = {
+    [0] = 0x18, -- fire
+    [1] = 0x20, -- water
+    [2] = 0x08, -- earth
+    [3] = 0x28, -- air
+    [4] = 0x10, -- ether
+  }
+  return map[tonumber(element_id) or -1] or 0x10
+end
+
+local BOT_ELEMENT_ID = 4
+local BOT_PRIMARY_ENTRY_INDEX = default_primary_entry_index_for_element(BOT_ELEMENT_ID)
+
 local BOT_PROFILE = {
-  element_id = 4,
+  element_id = BOT_ELEMENT_ID,
   discipline_id = 1,
   level = 1,
   experience = 0,
   loadout = {
-    primary_skill_id = 11,
-    primary_combo_id = 22,
-    secondary_skill_ids = { 33, 44, 55 },
+    -- Keep the sample bot on the pure element primary by default. Mixed
+    -- pairs such as 0x10 + 0x28 resolve to a combo/special ability, which is
+    -- not the intended baseline attack for this harness bot.
+    primary_entry_index = BOT_PRIMARY_ENTRY_INDEX,
+    primary_combo_entry_index = BOT_PRIMARY_ENTRY_INDEX,
+    secondary_entry_indices = { -1, -1, -1 },
   },
 }
 
@@ -25,10 +48,15 @@ local ARRIVAL_DISTANCE = 8.0
 local FOLLOW_TARGET_REFRESH_DISTANCE = 24.0
 local COMMAND_COOLDOWN_MS = 250
 local TICK_INTERVAL_MS = 100
+local CAST_COOLDOWN_MS = 2000
+local ATTACK_HOLD_MS = 750
+local ATTACK_DIAG_INTERVAL_MS = 1000
+local DEFAULT_ATTACK_RANGE = 360.0
+local CAST_MIN_DISTANCE = 48.0
 local SPAWN_RETRY_MS = 500
 local SCENE_UPDATE_COOLDOWN_MS = 250
-local NAV_GRID_REFRESH_MS = 1000
-local NAV_GRID_SUBDIVISIONS = 4
+local NAV_GRID_REFRESH_MS = 3000
+local NAV_GRID_SUBDIVISIONS = 2
 local ENABLE_FOLLOW_MOVEMENT = true
 local ENTRANCE_TRIGGER_DISTANCE = 96.0
 local ENTRANCE_ARRIVAL_DISTANCE = 20.0
@@ -75,6 +103,9 @@ local SUPPORTED_PRIVATE_AREAS = {
 local state = {
   bot_id = nil,
   last_command_ms = 0,
+  last_cast_ms = 0,
+  last_attack_diag_ms = 0,
+  attack_hold_until_ms = 0,
   last_spawn_attempt_ms = 0,
   last_scene_sync_ms = 0,
   last_tick_ms = 0,
@@ -101,6 +132,21 @@ lua_bots_debug = state
 
 local function log(message)
   print("[lua.bots] " .. tostring(message))
+end
+
+local function get_probe_state()
+  local probe = rawget(_G, "lua_bots_probe")
+  if type(probe) ~= "table" then
+    return nil
+  end
+  if probe.enabled ~= true then
+    return nil
+  end
+  local probe_bot_id = tonumber(probe.bot_id)
+  if probe_bot_id ~= nil and probe_bot_id > 0 and tonumber(state.bot_id) ~= probe_bot_id then
+    return nil
+  end
+  return probe
 end
 
 local function distance(ax, ay, bx, by)
@@ -156,6 +202,9 @@ end
 local function clear_follow_state()
   state.bot_id = nil
   state.last_command_ms = 0
+  state.last_cast_ms = 0
+  state.last_attack_diag_ms = 0
+  state.attack_hold_until_ms = 0
   state.last_spawn_attempt_ms = 0
   state.last_scene_sync_ms = 0
   state.follow_target = nil
@@ -410,6 +459,176 @@ local function ensure_bot_spawned(now_ms, player, scene_intent, anchor)
   return bot
 end
 
+-- Actor object_type_id semantics:
+--   1    = player/bot wizard
+--   1001 = inert placement (items/walls/drops)
+--   2012 = hostile enemy
+--   5009 = hostile variant
+--   5010 = hostile boss/variant
+-- Enemies share actor_slot=0 with players (so slot is not a discriminator),
+-- and their anim_drive_state is non-zero while ticking, so we filter by type.
+local ENEMY_OBJECT_TYPE_IDS = { [2012] = true, [5009] = true, [5010] = true }
+
+local function is_enemy_actor(actor, bot)
+  if type(actor) ~= "table" then
+    return false
+  end
+  local address = tonumber(actor.actor_address) or 0
+  if address == 0 then
+    return false
+  end
+  if type(bot) == "table" and address == (tonumber(bot.actor_address) or 0) then
+    return false
+  end
+  local type_id = tonumber(actor.object_type_id) or 0
+  if not ENEMY_OBJECT_TYPE_IDS[type_id] then
+    return false
+  end
+  return true
+end
+
+local function find_nearest_enemy(bot, preferred_actor_address)
+  if type(sd.world) ~= "table" or type(sd.world.list_actors) ~= "function" then
+    return nil, nil
+  end
+  local actors = sd.world.list_actors()
+  if type(actors) ~= "table" then
+    return nil, nil
+  end
+  local bot_x = tonumber(bot.x) or 0.0
+  local bot_y = tonumber(bot.y) or 0.0
+  local preferred = tonumber(preferred_actor_address) or 0
+  if preferred ~= 0 then
+    for _, actor in ipairs(actors) do
+      if is_enemy_actor(actor, bot) and (tonumber(actor.actor_address) or 0) == preferred then
+        local gap = distance(bot_x, bot_y, tonumber(actor.x) or 0.0, tonumber(actor.y) or 0.0)
+        return actor, gap
+      end
+    end
+    return nil, nil
+  end
+
+  local best, best_gap = nil, math.huge
+  for _, actor in ipairs(actors) do
+    if is_enemy_actor(actor, bot) then
+      local gap = distance(bot_x, bot_y, tonumber(actor.x) or 0.0, tonumber(actor.y) or 0.0)
+      if gap < best_gap then
+        best = actor
+        best_gap = gap
+      end
+    end
+  end
+  if best == nil then
+    return nil, nil
+  end
+  return best, best_gap
+end
+
+local function should_log_attack_diag(now_ms)
+  now_ms = tonumber(now_ms) or 0
+  local last_ms = tonumber(state.last_attack_diag_ms) or 0
+  if now_ms - last_ms < ATTACK_DIAG_INTERVAL_MS then
+    return false
+  end
+  state.last_attack_diag_ms = now_ms
+  return true
+end
+
+local function issue_auto_attack(now_ms, scene, bot, probe)
+  if state.bot_id == nil then
+    return false
+  end
+  if type(sd.bots) ~= "table" or type(sd.bots.cast) ~= "function" then
+    return false
+  end
+  if type(bot) ~= "table" or not bot.available or (tonumber(bot.actor_address) or 0) == 0 or not bot.transform_valid then
+    return false
+  end
+  if tostring(bot.state or "") == "attacking" then
+    return false
+  end
+  -- Never force casts outside a wave/run: produces visual glitches and suspect
+  -- internal state because stock code disables attacking between waves.
+  if type(scene) ~= "table" or tostring(scene.name or "") ~= "testrun" then
+    return false
+  end
+  if now_ms - state.last_cast_ms < CAST_COOLDOWN_MS then
+    return false
+  end
+  local mp = tonumber(bot.mp) or 0
+  local max_mp = tonumber(bot.max_mp) or 0
+  if max_mp > 0 and mp / max_mp < 0.10 then
+    return false
+  end
+
+  local range = DEFAULT_ATTACK_RANGE
+  local preferred_actor_address = type(probe) == "table" and tonumber(probe.target_actor_address) or nil
+  local enemy, gap = find_nearest_enemy(bot, preferred_actor_address)
+  if enemy == nil then
+    if should_log_attack_diag(now_ms) then
+      local reason = preferred_actor_address ~= nil and preferred_actor_address ~= 0
+        and "probe_target_missing" or "no_enemy_in_scene"
+      log(string.format(
+        "attack_skip id=%s reason=%s",
+        tostring(state.bot_id),
+        reason))
+    end
+    return false
+  end
+  if gap > range then
+    if should_log_attack_diag(now_ms) then
+      log(string.format(
+        "attack_skip id=%s reason=out_of_range enemy=0x%X gap=%.2f range=%.1f",
+        tostring(state.bot_id),
+        tonumber(enemy.actor_address) or 0,
+        gap,
+        range))
+    end
+    return false
+  end
+  if gap < CAST_MIN_DISTANCE then
+    if should_log_attack_diag(now_ms) then
+      log(string.format(
+        "attack_skip id=%s reason=too_close enemy=0x%X gap=%.2f min=%.1f",
+        tostring(state.bot_id),
+        tonumber(enemy.actor_address) or 0,
+        gap,
+        CAST_MIN_DISTANCE))
+    end
+    return false
+  end
+
+  local target_x = tonumber(enemy.x) or 0.0
+  local target_y = tonumber(enemy.y) or 0.0
+  state.follow_target = nil
+  if type(sd) == "table" and type(sd.bots) == "table" and type(sd.bots.stop) == "function" then
+    pcall(sd.bots.stop, state.bot_id)
+  end
+  local ok = sd.bots.cast({
+    id = state.bot_id,
+    kind = "primary",
+    target_actor_address = tonumber(enemy.actor_address) or 0,
+    target = { x = target_x, y = target_y },
+  })
+  if ok then
+    state.last_cast_ms = now_ms
+    state.attack_hold_until_ms = now_ms + ATTACK_HOLD_MS
+    log(string.format(
+      "attack id=%s primary enemy=0x%X target=(%.2f, %.2f) gap=%.2f range=%.1f",
+      tostring(state.bot_id),
+      tonumber(enemy.actor_address) or 0,
+      target_x,
+      target_y,
+      gap,
+      range))
+  else
+    log(string.format(
+      "attack failed id=%s primary",
+      tostring(state.bot_id)))
+  end
+  return ok
+end
+
 local function stop_follow_move(reason)
   if state.bot_id == nil then
     return
@@ -573,13 +792,32 @@ local function compute_follow_target(player, bot)
   }
 end
 
-local function update_same_scene_follow(now_ms, player, bot)
+local function update_same_scene_follow(now_ms, scene, player, bot)
   if type(player) ~= "table" or type(bot) ~= "table" then
     return
   end
 
   local actor_address = tonumber(bot.actor_address) or 0
   if actor_address == 0 or not bot.transform_valid then
+    return
+  end
+
+  local probe = get_probe_state()
+
+  if issue_auto_attack(now_ms, scene, bot, probe) then
+    return
+  end
+
+  if type(probe) == "table" and probe.disable_follow ~= false then
+    state.follow_target = nil
+    return
+  end
+
+  if tostring(bot.state or "") == "attacking" then
+    return
+  end
+
+  if now_ms < (state.attack_hold_until_ms or 0) then
     return
   end
 
@@ -774,7 +1012,7 @@ local function handle_hub_state(now_ms, scene, player, bot)
 
   state.target_area_name = nil
   state.travel_state = "idle"
-  update_same_scene_follow(now_ms, player, bot)
+  update_same_scene_follow(now_ms, scene, player, bot)
 end
 
 local function handle_private_state(now_ms, scene, player, bot)
@@ -798,10 +1036,10 @@ local function handle_private_state(now_ms, scene, player, bot)
 
   state.travel_state = "in_private_area"
   state.target_area_name = area.name
-  update_same_scene_follow(now_ms, player, bot)
+  update_same_scene_follow(now_ms, scene, player, bot)
 end
 
-local function handle_run_state(now_ms, player, bot)
+local function handle_run_state(now_ms, scene, player, bot)
   reset_travel_candidate()
   state.target_area_name = nil
   if state.pending_run_promotion and not scene_matches(bot.scene, { kind = "run" }) then
@@ -812,7 +1050,7 @@ local function handle_run_state(now_ms, player, bot)
   end
   state.pending_run_promotion = false
   state.travel_state = "run"
-  update_same_scene_follow(now_ms, player, bot)
+  update_same_scene_follow(now_ms, scene, player, bot)
 end
 
 sd.events.on("run.started", function()
@@ -830,6 +1068,10 @@ sd.events.on("run.ended", function()
 end)
 
 sd.events.on("runtime.tick", function(event)
+  if rawget(_G, "lua_bots_disable_tick") == true then
+    return
+  end
+
   local now_ms = tonumber(event.monotonic_milliseconds) or 0
   if now_ms - state.last_tick_ms < TICK_INTERVAL_MS then
     return
@@ -862,7 +1104,7 @@ sd.events.on("runtime.tick", function(event)
   if scene_name == "hub" then
     handle_hub_state(now_ms, scene, player, bot)
   elseif scene_name == "testrun" then
-    handle_run_state(now_ms, player, bot)
+    handle_run_state(now_ms, scene, player, bot)
   else
     handle_private_state(now_ms, scene, player, bot)
   end

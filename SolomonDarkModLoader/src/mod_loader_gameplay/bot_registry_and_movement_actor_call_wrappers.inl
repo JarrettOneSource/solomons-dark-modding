@@ -68,6 +68,32 @@ bool CallActorProgressionRefreshSafe(
     }
 }
 
+bool CallSkillsWizardBuildPrimarySpellSafe(
+    uintptr_t build_address,
+    uintptr_t progression_address,
+    float primary_entry_arg,
+    float combo_entry_arg,
+    DWORD* exception_code) {
+    auto* build_primary_spell =
+        reinterpret_cast<SkillsWizardBuildPrimarySpellFn>(build_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (build_primary_spell == nullptr || progression_address == 0) {
+        return false;
+    }
+
+    __try {
+        build_primary_spell(
+            reinterpret_cast<void*>(progression_address),
+            primary_entry_arg,
+            combo_entry_arg);
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
 bool CallPlayerAppearanceApplyChoiceSafe(
     uintptr_t apply_choice_address,
     uintptr_t progression_address,
@@ -87,6 +113,106 @@ bool CallPlayerAppearanceApplyChoiceSafe(
         return true;
     } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
         return false;
+    }
+}
+
+bool EnterLocalPlayerCastShim(
+    const ParticipantEntityBinding* binding,
+    LocalPlayerCastShimState* state) {
+    if (state == nullptr) {
+        return false;
+    }
+
+    *state = LocalPlayerCastShimState{};
+    if (binding == nullptr ||
+        binding->actor_address == 0 ||
+        binding->gameplay_slot <= 0) {
+        return false;
+    }
+
+    uintptr_t gameplay_address = 0;
+    if (!TryResolveCurrentGameplayScene(&gameplay_address) || gameplay_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto slot0_actor_address_ptr =
+        gameplay_address + kGameplayPlayerActorOffset;
+    const auto slot0_progression_handle_ptr =
+        gameplay_address + kGameplayPlayerProgressionHandleOffset;
+    const auto source_progression_handle_ptr =
+        gameplay_address + kGameplayPlayerProgressionHandleOffset +
+        static_cast<std::size_t>(binding->gameplay_slot) * kGameplayPlayerSlotStride;
+    const auto local_player_actor_global =
+        memory.ResolveGameAddressOrZero(kLocalPlayerActorGlobal);
+
+    const auto source_progression_handle =
+        memory.ReadValueOr<uintptr_t>(source_progression_handle_ptr, 0);
+    if (source_progression_handle == 0) {
+        return false;
+    }
+
+    state->gameplay_address = gameplay_address;
+    state->actor_address = binding->actor_address;
+    state->gameplay_slot = binding->gameplay_slot;
+    state->saved_actor_slot = memory.ReadFieldOr<std::uint8_t>(
+        binding->actor_address,
+        kActorSlotOffset,
+        static_cast<std::uint8_t>(0));
+    state->saved_slot0_actor = memory.ReadValueOr<uintptr_t>(slot0_actor_address_ptr, 0);
+    state->saved_slot0_progression_handle =
+        memory.ReadValueOr<uintptr_t>(slot0_progression_handle_ptr, 0);
+    state->saved_local_player_actor =
+        local_player_actor_global != 0
+            ? memory.ReadValueOr<uintptr_t>(local_player_actor_global, 0)
+            : 0;
+
+    if (!memory.TryWriteField<std::uint8_t>(
+            binding->actor_address,
+            kActorSlotOffset,
+            static_cast<std::uint8_t>(0)) ||
+        !memory.TryWriteValue(slot0_actor_address_ptr, binding->actor_address) ||
+        !memory.TryWriteValue(slot0_progression_handle_ptr, source_progression_handle) ||
+        (local_player_actor_global != 0 &&
+         !memory.TryWriteValue(local_player_actor_global, binding->actor_address))) {
+        if (local_player_actor_global != 0) {
+            (void)memory.TryWriteValue(local_player_actor_global, state->saved_local_player_actor);
+        }
+        (void)memory.TryWriteValue(slot0_progression_handle_ptr, state->saved_slot0_progression_handle);
+        (void)memory.TryWriteValue(slot0_actor_address_ptr, state->saved_slot0_actor);
+        (void)memory.TryWriteField<std::uint8_t>(
+            binding->actor_address,
+            kActorSlotOffset,
+            state->saved_actor_slot);
+        *state = LocalPlayerCastShimState{};
+        return false;
+    }
+
+    state->active = true;
+    return true;
+}
+
+void LeaveLocalPlayerCastShim(const LocalPlayerCastShimState& state) {
+    if (!state.active) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto slot0_actor_address_ptr =
+        state.gameplay_address + kGameplayPlayerActorOffset;
+    const auto slot0_progression_handle_ptr =
+        state.gameplay_address + kGameplayPlayerProgressionHandleOffset;
+    const auto local_player_actor_global =
+        memory.ResolveGameAddressOrZero(kLocalPlayerActorGlobal);
+
+    (void)memory.TryWriteField<std::uint8_t>(
+        state.actor_address,
+        kActorSlotOffset,
+        state.saved_actor_slot);
+    (void)memory.TryWriteValue(slot0_actor_address_ptr, state.saved_slot0_actor);
+    (void)memory.TryWriteValue(slot0_progression_handle_ptr, state.saved_slot0_progression_handle);
+    if (local_player_actor_global != 0) {
+        (void)memory.TryWriteValue(local_player_actor_global, state.saved_local_player_actor);
     }
 }
 
@@ -350,6 +476,46 @@ bool CallPlayerActorMoveStepSafe(
         if (result != nullptr) {
             *result = move_result;
         }
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool CallSpellCastDispatcherSafe(
+    uintptr_t dispatcher_address,
+    uintptr_t actor_address,
+    DWORD* exception_code) {
+    auto* dispatcher = reinterpret_cast<SpellCastDispatcherFn>(dispatcher_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (dispatcher == nullptr || actor_address == 0) {
+        return false;
+    }
+
+    __try {
+        dispatcher(reinterpret_cast<void*>(actor_address));
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool CallCastActiveHandleCleanupSafe(
+    uintptr_t cleanup_address,
+    uintptr_t actor_address,
+    DWORD* exception_code) {
+    auto* cleanup = reinterpret_cast<CastActiveHandleCleanupFn>(cleanup_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (cleanup == nullptr || actor_address == 0) {
+        return false;
+    }
+
+    __try {
+        cleanup(reinterpret_cast<void*>(actor_address));
         return true;
     } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
         return false;

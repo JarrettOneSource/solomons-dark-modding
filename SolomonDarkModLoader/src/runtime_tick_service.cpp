@@ -2,7 +2,6 @@
 
 #include "bot_runtime.h"
 #include "logger.h"
-#include "lua_engine.h"
 #include "native_mods.h"
 #include "runtime_debug.h"
 
@@ -32,7 +31,6 @@ void RuntimeTickThreadMain() {
             GetTickCount64(),
         };
         multiplayer::TickBotRuntime(context.monotonic_milliseconds);
-        DispatchLuaRuntimeTick(context);
         DispatchNativeModRuntimeTick(context);
         RuntimeDebug_Tick();
 

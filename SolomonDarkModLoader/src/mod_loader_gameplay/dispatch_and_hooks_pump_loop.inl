@@ -1,7 +1,21 @@
 thread_local bool g_allow_gameplay_action_pump_in_gameplay = false;
 
 void PumpQueuedGameplayActions() {
+    lua_exec_diag::g_last_pump_enter_ms.store(
+        static_cast<std::uint64_t>(GetTickCount64()),
+        std::memory_order_release);
     std::lock_guard<std::recursive_mutex> pump_lock(g_gameplay_action_pump_mutex);
+    lua_exec_diag::g_last_pump_locked_ms.store(
+        static_cast<std::uint64_t>(GetTickCount64()),
+        std::memory_order_release);
+
+    // Drain pipe-exec requests on every frame pump (EndScene and
+    // HookPlayerActorTick both call us) so Lua snippets fired from the
+    // pipe resolve on the main thread in any UI context — main menu,
+    // loading screens, or live gameplay. Runtime.tick dispatch stays
+    // gated on gameplay and is owned by PumpLuaWorkOnGameplayThread.
+    PumpLuaExecQueueOnMainThread();
+
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
     const auto wizard_bot_sync_not_before_ms =
         g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.load(std::memory_order_acquire);
@@ -207,5 +221,6 @@ void PumpQueuedGameplayActions() {
         }
     }
 
+    RebuildNavGridSnapshotIfRequested_GameplayThread();
 }
 

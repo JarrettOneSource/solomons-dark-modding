@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-19
 **Status:** Committed. Supersedes earlier drafts in `history/`.
-**Context:** Solomon's Dark is a single-player retail ARPG. This plan adds 4-player co-op as a DLL-level mod. Not an FPS, not competitive, not persistent-world.
+**Context:** Solomon's Dark is a single-player retail ARPG. This plan adds 4-player co-op as a DLL-level mod. Not an FPS, not competitive, not persistent-world. Launch scope is 4 players; the architecture should avoid hardcoding 4 where practical so 8-10 player private sessions remain a later stretch target, not a ship promise.
 
 ## TL;DR
 
@@ -32,6 +32,13 @@ One player hosts a normal Solomon's Dark session and becomes the authoritative w
 | Reliable events | Immediate |
 
 Sampling happens on the stock game thread after native updates — no extra sim thread.
+
+## Player count / scaling
+
+- v1 is designed, tested, and balanced around **4-player co-op**.
+- Avoid hardcoding `4` into protocol, roster, or actor-plumbing decisions where the cost is low.
+- `8-10` players is a plausible later private-session stretch target, but **not** a launch commitment.
+- Above 4 players, the likely bottlenecks are host CPU and enemy / effect / drop replication fanout, plus combat readability, more than raw player-input traffic.
 
 ## Packet families
 
@@ -135,6 +142,7 @@ This is how Terraria, Magicka, V Rising, and Divinity: Original Sin actually pla
 - Host can cheat in their own session (trusted-peer model)
 - Cross-region divergence (host sims one region; multi-region is later work)
 - Durable inventory persistence beyond one run (Phase 3+)
+- Gold-only drops are likely the biggest intentional v1 gameplay limitation; non-gold inventory replication stays deferred until the RE work lands.
 
 ## Run-identity object (replaces "save-provenance" from earlier drafts)
 

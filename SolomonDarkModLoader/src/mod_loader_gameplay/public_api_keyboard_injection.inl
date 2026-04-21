@@ -364,6 +364,6 @@ void ShutdownGameplayKeyboardInjection() {
         RefreshWizardBotCrashSummaryLocked();
     }
     g_gameplay_keyboard_injection.initialized = false;
+    FlushNavGridSnapshotOnSceneUnload();
     SetCrashContextSummary("participant_snapshots count=0 gameplay_injection_initialized=false");
 }
-

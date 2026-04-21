@@ -20,6 +20,29 @@ April 18 scope correction:
 - because of that, the default hub selector now stays on the standalone clone
   rail until a real long-lived `GameNpc` contract is recovered
 
+April 20 crash correction:
+
+- the fresh shared-hub crash did follow the stock clone handoff, but the
+  loader then misclassified the clone as `RegisteredGameNpc`
+- `WizardCloneFromSourceActor (0x0061AA00)` allocates a fresh player actor
+  through `PlayerActorCtor (0x0052B4C0)`, not a `GameNpc (0x1397)`
+- the crashing runtime log showed that exact mismatch:
+  - the post-handoff actor was remembered as `RegisteredGameNpc`
+  - but its live `object_type` was `0x1`, not `0x1397`
+- the first follow retarget then called the native `GameNpc` movement helper
+  (`GameNpc_SetMoveGoal` / `0x005E9D50`) on that player-family clone
+- stock `PlayerActorTick` later faulted in
+  `FUN_00533520 -> FUN_004022A0 -> FUN_004024C0`, where
+  `FUN_004024C0` expects `count > 0` arrays to have a non-null backing pointer
+  and crashed on `mov eax, [eax]`
+
+Current implication:
+
+- `WizardCloneFromSourceActor` output belongs to the standalone/player rail
+- it must never be remembered or driven as `RegisteredGameNpc`
+- the registered rail remains blocked until the loader can materialize a true
+  long-lived `0x1397` actor without mixing in the clone/player family
+
 Two things were proven:
 
 1. `sd.bots.update({ position = ... })` is accepted and reaches the gameplay
@@ -30,6 +53,12 @@ Two things were proven:
 So the current implementation is not "a teleport that sometimes fails." It is a
 partial transform patch being applied to an actor class whose world/movement
 state has stricter stock invariants than the loader is currently honoring.
+
+The April 20 crash adds a second, separate invariant:
+
+- the loader must not classify a player-family clone as `RegisteredGameNpc`
+- once that classification is wrong, the registered-NPC follow helpers write
+  the wrong state model onto the clone before stock player tick code runs
 
 ## Verified Evidence
 

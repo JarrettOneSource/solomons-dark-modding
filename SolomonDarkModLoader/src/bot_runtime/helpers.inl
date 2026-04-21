@@ -310,7 +310,7 @@ bool IsValidCastRequest(const BotCastRequest& request) {
     }
 
     if (request.kind == BotCastKind::Secondary &&
-        (request.secondary_slot < 0 || request.secondary_slot >= static_cast<std::int32_t>(DefaultBotLoadout().secondary_skill_ids.size()))) {
+        (request.secondary_slot < 0 || request.secondary_slot >= static_cast<std::int32_t>(DefaultBotLoadout().secondary_entry_indices.size()))) {
         return false;
     }
 
@@ -377,9 +377,9 @@ void ApplyLoadout(ParticipantInfo* participant, const BotLoadoutInfo& loadout) {
         return;
     }
 
-    participant->runtime.primary_skill_id = loadout.primary_skill_id;
-    participant->runtime.primary_combo_id = loadout.primary_combo_id;
-    participant->runtime.queued_secondary_ids = loadout.secondary_skill_ids;
+    participant->runtime.primary_entry_index = loadout.primary_entry_index;
+    participant->runtime.primary_combo_entry_index = loadout.primary_combo_entry_index;
+    participant->runtime.queued_secondary_entry_indices = loadout.secondary_entry_indices;
 }
 
 void ApplySceneIntent(ParticipantInfo* participant, const ParticipantSceneIntent& scene_intent) {

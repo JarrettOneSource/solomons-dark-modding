@@ -148,6 +148,44 @@ float ReadFloatFieldOrZero(uintptr_t address, size_t offset) {
     return ProcessMemory::Instance().ReadFieldOr<float>(address, offset, 0.0f);
 }
 
+std::string DescribeSpellCastHookActorState(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return "actor=0x0";
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    SDModPlayerState player_state{};
+    const bool have_player_state = TryGetPlayerState(&player_state) && player_state.valid;
+    const bool is_local_actor = have_player_state && player_state.actor_address == actor_address;
+
+    return
+        "actor=" + HexString(actor_address) +
+        " local=" + std::to_string(is_local_actor ? 1 : 0) +
+        " owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
+        " slot=" + std::to_string(memory.ReadFieldOr<int>(actor_address, kActorSlotOffset, -1)) +
+        " world_slot=" + std::to_string(memory.ReadFieldOr<int>(actor_address, kActorWorldSlotOffset, -1)) +
+        " skill=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0)) +
+        " prev=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset + sizeof(std::int32_t), 0)) +
+        " drive=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0)) +
+        " no_int=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0)) +
+        " group=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF)) +
+        " cast_slot=" + HexString(memory.ReadFieldOr<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset, 0xFFFF)) +
+        " heading=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f)) +
+        " aimx=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorAimTargetXOffset, 0.0f)) +
+        " aimy=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorAimTargetYOffset, 0.0f)) +
+        " aux0=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0)) +
+        " aux1=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0)) +
+        " f278=" + std::to_string(memory.ReadFieldOr<std::uint32_t>(actor_address, 0x278, 0)) +
+        " f29c=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x29C, 0.0f)) +
+        " f2a0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2A0, 0.0f)) +
+        " f2d0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2D0, 0.0f)) +
+        " f2d4=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2D4, 0.0f)) +
+        " f2d8=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2D8, 0.0f)) +
+        " selection_ptr=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0)) +
+        " progression_runtime=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
+        " progression_handle=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0));
+}
+
 int ReadRoundedXpOrUnknown(uintptr_t address) {
     if (address == 0) {
         return -1;
@@ -253,8 +291,20 @@ SDMOD_DEFINE_SPELL_CAST_HOOK(028, kHookSpellCast028, 0x28)
 SDMOD_DEFINE_SPELL_CAST_HOOK(3EC, kHookSpellCast3EC, 0x3EC)
 SDMOD_DEFINE_SPELL_CAST_HOOK(3ED, kHookSpellCast3ED, 0x3ED)
 SDMOD_DEFINE_SPELL_CAST_HOOK(3EE, kHookSpellCast3EE, 0x3EE)
-SDMOD_DEFINE_SPELL_CAST_HOOK(3EF, kHookSpellCast3EF, 0x3EF)
 SDMOD_DEFINE_SPELL_CAST_HOOK(3F0, kHookSpellCast3F0, 0x3F0)
+
+void __fastcall HookSpellCast_3EF(void* self, void* unused_edx) {
+    const auto original = GetX86HookTrampoline<SpellCastFn>(g_state.hooks[kHookSpellCast3EF]);
+    if (original == nullptr) {
+        return;
+    }
+
+    const auto self_address = reinterpret_cast<uintptr_t>(self);
+    Log("[bots] spell_3ef hook enter. " + DescribeSpellCastHookActorState(self_address));
+    original(self, unused_edx);
+    Log("[bots] spell_3ef hook exit. " + DescribeSpellCastHookActorState(self_address));
+    DispatchSpellCastForSelf(self_address, 0x3EF);
+}
 
 #undef SDMOD_DEFINE_SPELL_CAST_HOOK
 

@@ -18,38 +18,39 @@ bool PrimeGameplaySlotBotSelectionState(
     auto& memory = ProcessMemory::Instance();
     const auto choice_ids = ResolveProfileAppearanceChoiceIds(character_profile);
     const auto selection_state = ResolveProfileSelectionState(character_profile);
-    const auto apply_choice_address = memory.ResolveGameAddressOrZero(kPlayerAppearanceApplyChoice);
-    if (apply_choice_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Unable to resolve PlayerAppearance_ApplyChoice.";
-        }
-        return false;
+    uintptr_t gameplay_address = 0;
+    uintptr_t slot_progression_wrapper = 0;
+    uintptr_t slot_progression_inner = 0;
+    if (TryResolveCurrentGameplayScene(&gameplay_address) && gameplay_address != 0) {
+        (void)TryResolvePlayerProgressionHandleForSlot(
+            gameplay_address,
+            slot_index,
+            &slot_progression_wrapper);
+        slot_progression_inner = ReadSmartPointerInnerObject(slot_progression_wrapper);
     }
+    Log(
+        "[bots] selection_prime entry actor=" + HexString(actor_address) +
+        " slot=" + std::to_string(slot_index) +
+        " param_prog=" + HexString(progression_address) +
+        " actor_prog_runtime=" + HexString(
+            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
+        " actor_prog_handle=" + HexString(
+            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0)) +
+        " actor_prog_inner=" + HexString(ReadSmartPointerInnerObject(
+            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0))) +
+        " slot_prog=" + HexString(slot_progression_wrapper) +
+        " slot_prog_inner=" + HexString(slot_progression_inner));
 
-    const auto apply_choice = [&](int choice_id, int ensure_assets, const char* label) {
-        DWORD exception_code = 0;
-        if (CallPlayerAppearanceApplyChoiceSafe(
-                apply_choice_address,
-                progression_address,
-                choice_id,
-                ensure_assets,
-                &exception_code)) {
-            return true;
-        }
-        if (error_message != nullptr) {
-            *error_message =
-                std::string("PlayerAppearance_ApplyChoice failed for ") + label +
-                " with 0x" + HexString(exception_code) + ".";
-        }
-        return false;
-    };
-
-    if (!apply_choice(choice_ids.primary_a, 0, "primary_a") ||
-        !apply_choice(choice_ids.primary_b, 0, "primary_b") ||
-        !apply_choice(choice_ids.primary_c, 0, "primary_c")) {
-        return false;
-    }
-
+    // Gameplay_CreatePlayerSlot allocates a fresh PlayerProgression, but the
+    // stock "new character" flow (FUN_005D0290) is what actually grows the
+    // appearance table vector at progression+0x20 before calling
+    // PlayerAppearance_ApplyChoice. For arena bots we skip ApplyChoice — the
+    // slot's appearance vector is empty, so ApplyChoice(choice_id >= table_count)
+    // access-violates inside the grow path. Direct writes to the choice-id
+    // fields plus ActorProgressionRefresh downstream give us the same observable
+    // progression state, and the actor's visuals come from the cloned source
+    // descriptor seeded by SeedGameplaySlotBotRenderStateFromSourceActor, which
+    // does not require ApplyChoice to have run.
     if (!memory.TryWriteField(
             progression_address,
             kPlayerProgressionAppearancePrimaryAOffset,
@@ -69,19 +70,13 @@ bool PrimeGameplaySlotBotSelectionState(
         return false;
     }
 
-    if (!apply_choice(choice_ids.secondary, 1, "secondary")) {
-        return false;
-    }
-
     if (!TryWriteGameplaySelectionStateForSlot(slot_index, selection_state, error_message)) {
         return false;
     }
+    (void)TryWriteActorAnimationStateIdDirect(actor_address, selection_state);
 
     const auto animation_selection_state_address =
         memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
-    if (animation_selection_state_address != 0) {
-        (void)memory.TryWriteValue(animation_selection_state_address, selection_state);
-    }
     Log(
         "[bots] visual stage=selection_pre_refresh bot={" +
         BuildActorVisualDebugSummary(actor_address) +
@@ -118,6 +113,30 @@ bool PrimeGameplaySlotBotSelectionState(
         return false;
     }
 
+    ParticipantEntityBinding temporary_binding{};
+    temporary_binding.actor_address = actor_address;
+    temporary_binding.gameplay_slot = slot_index;
+    LocalPlayerCastShimState shim_state;
+    const auto shim_active = EnterLocalPlayerCastShim(&temporary_binding, &shim_state);
+
+    int resolved_primary_skill_id = -1;
+    std::string loadout_error;
+    const auto loadout_ok = shim_active &&
+        ApplyProfilePrimaryLoadoutToSkillsWizard(
+            progression_address,
+            character_profile,
+            &resolved_primary_skill_id,
+            &loadout_error);
+    LeaveLocalPlayerCastShim(shim_state);
+    if (!loadout_ok) {
+        if (error_message != nullptr) {
+            *error_message = shim_active
+                ? std::move(loadout_error)
+                : "Gameplay-slot loadout projection could not enter the scoped local-player shim.";
+        }
+        return false;
+    }
+
     if (!memory.TryWriteField(
             progression_address,
             kPlayerProgressionAppearanceSecondaryOffset,
@@ -128,20 +147,19 @@ bool PrimeGameplaySlotBotSelectionState(
         return false;
     }
 
-    if (animation_selection_state_address != 0) {
-        (void)memory.TryWriteValue(animation_selection_state_address, selection_state);
-    }
-    if (!TryWriteActorAnimationStateIdDirect(actor_address, selection_state)) {
-        Log(
-            "[bots] gameplay-slot actor animation prime skipped. actor=" + HexString(actor_address) +
-            " desired=" + std::to_string(selection_state));
-    }
+    // Keep gameplay-slot actors on the stock slot-handle path for progression,
+    // but preserve their owned selection/control object. Bots need an actor-
+    // local selection brain so cast targeting and future per-participant
+    // combat/loadout state do not collapse back through shared gameplay input
+    // globals.
+    (void)memory.TryWriteField<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0);
     ApplyStandaloneWizardPuppetDriveState(nullptr, actor_address, false);
     Log(
         "[bots] visual stage=selection_post_refresh bot={" +
         BuildActorVisualDebugSummary(actor_address) +
         "} progression=" + HexString(progression_address) +
-        " selection_state=" + std::to_string(selection_state));
+        " selection_state=" + std::to_string(selection_state) +
+        " primary_spell_id=" + std::to_string(resolved_primary_skill_id));
     return true;
 }
 
@@ -200,4 +218,3 @@ bool PrimeStandaloneWizardProgressionSelectionState(
 
     return true;
 }
-

@@ -50,6 +50,7 @@ extern uintptr_t kMonsterPathfindingRefreshTarget;
 extern uintptr_t kActorProgressionRefresh;
 extern uintptr_t kPlayerAppearanceApplyChoice;
 extern uintptr_t kPlayerActorRefreshRuntimeHandles;
+extern uintptr_t kSkillsWizardBuildPrimarySpell;
 extern uintptr_t kStandaloneWizardEquipCtor;
 extern uintptr_t kGameNpcSetMoveGoal;
 extern uintptr_t kGameNpcSetTrackedSlotAssist;
@@ -68,6 +69,7 @@ extern uintptr_t kObjectFree;
 extern uintptr_t kGameObjectFactory;
 extern uintptr_t kGameFree;
 extern uintptr_t kGameOperatorNew;
+extern uintptr_t kCastActiveHandleCleanup;
 extern uintptr_t kPuppetManagerVtable;
 extern uintptr_t kEnemyModifierListVtable;
 
@@ -111,6 +113,7 @@ extern uintptr_t kSpellCast3ED;
 extern uintptr_t kSpellCast3EE;
 extern uintptr_t kSpellCast3EF;
 extern uintptr_t kSpellCast3F0;
+extern uintptr_t kSpellCastDispatcher;
 extern uintptr_t kGoldChanged;
 extern uintptr_t kLevelUp;
 extern uintptr_t kGoldPickupCaller;
@@ -250,5 +253,14 @@ extern std::size_t kEnemyConfigOffset;
 extern std::size_t kEnemyTypeOffset;
 extern std::size_t kSpellDirectionXOffset;
 extern std::size_t kSpellDirectionYOffset;
+extern std::size_t kActorPrimarySkillIdOffset;
+extern std::size_t kActorNoInterruptFlagOffset;
+extern std::size_t kActorActiveCastGroupByteOffset;
+extern std::size_t kActorActiveCastSlotShortOffset;
+extern std::size_t kActorAimTargetXOffset;
+extern std::size_t kActorAimTargetYOffset;
+extern std::size_t kActorAimTargetAux0Offset;
+extern std::size_t kActorAimTargetAux1Offset;
+extern std::size_t kActorCastSpreadModeByteOffset;
 
 }  // namespace sdmod

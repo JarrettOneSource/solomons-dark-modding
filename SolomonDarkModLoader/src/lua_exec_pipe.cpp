@@ -1,13 +1,7 @@
 #include "lua_exec_pipe.h"
 
 #include "logger.h"
-#include "lua_engine_bindings_internal.h"
-#include "lua_engine_internal.h"
-
-extern "C" {
-#include "lauxlib.h"
-#include "lua.h"
-}
+#include "lua_engine.h"
 
 #include <Windows.h>
 
@@ -27,6 +21,9 @@ constexpr wchar_t kPipeName[] = L"\\\\.\\pipe\\SolomonDarkModLoader_LuaExec";
 constexpr DWORD kPipeBufferSize = 64 * 1024;
 constexpr DWORD kPipeReconnectDelayMs = 250;
 constexpr size_t kMaxPipeMessageSize = 1024 * 1024;
+// Gameplay thread ticks ~every 50 ms, so a 2 s timeout gives the pump a
+// generous budget (>20 ticks) before we report back to the pipe client.
+constexpr std::uint32_t kLuaExecTimeoutMs = 2000;
 
 std::atomic<bool> g_pipe_running = false;
 std::thread g_pipe_thread;
@@ -37,28 +34,6 @@ enum class PipeReadStatus {
     ClientDisconnected,
     MessageTooLarge,
     Error,
-};
-
-struct LuaExecResponse {
-    bool ok = false;
-    std::string print_output;
-    std::vector<std::string> results;
-    std::string error;
-};
-
-class LuaPrintCaptureGuard {
-public:
-    explicit LuaPrintCaptureGuard(std::string* sink) : previous_sink_(detail::SwapLuaPrintCaptureSink(sink)) {}
-
-    LuaPrintCaptureGuard(const LuaPrintCaptureGuard&) = delete;
-    LuaPrintCaptureGuard& operator=(const LuaPrintCaptureGuard&) = delete;
-
-    ~LuaPrintCaptureGuard() {
-        detail::SwapLuaPrintCaptureSink(previous_sink_);
-    }
-
-private:
-    std::string* previous_sink_ = nullptr;
 };
 
 std::string FormatWindowsError(DWORD error) {
@@ -160,7 +135,7 @@ std::string JsonEscape(std::string_view value) {
     return escaped.str();
 }
 
-std::string SerializeResponse(const LuaExecResponse& response) {
+std::string SerializeResponse(const LuaExecResult& response) {
     std::ostringstream payload;
     payload << "{\"ok\":" << (response.ok ? "true" : "false")
             << ",\"print_output\":\"" << JsonEscape(response.print_output) << "\""
@@ -174,89 +149,6 @@ std::string SerializeResponse(const LuaExecResponse& response) {
     payload << "]"
             << ",\"error\":\"" << JsonEscape(response.error) << "\"}";
     return payload.str();
-}
-
-bool EnsureSdGlobal(lua_State* state) {
-    if (state == nullptr) {
-        return false;
-    }
-
-    lua_getglobal(state, "sd");
-    const bool has_global_sd = lua_istable(state, -1);
-    lua_pop(state, 1);
-    if (has_global_sd) {
-        return true;
-    }
-
-    lua_getfield(state, LUA_REGISTRYINDEX, detail::kLuaSdRegistryKey);
-    const bool has_registry_sd = lua_istable(state, -1);
-    if (has_registry_sd) {
-        lua_pushvalue(state, -1);
-        lua_setglobal(state, "sd");
-    }
-    lua_pop(state, 1);
-    return has_registry_sd;
-}
-
-LuaExecResponse ExecuteLuaCode(const std::string& code) {
-    LuaExecResponse response;
-    if (code.empty()) {
-        response.error = "No Lua code was provided.";
-        return response;
-    }
-
-    std::unique_lock lock(detail::LuaEngineMutex(), std::try_to_lock);
-    if (!lock.owns_lock()) {
-        response.error = "Lua engine is busy executing on another thread. Try again.";
-        return response;
-    }
-
-    if (!detail::LuaEngineInitializedFlag()) {
-        response.error = "Lua engine is not initialized.";
-        return response;
-    }
-
-    auto& mods = detail::LoadedLuaModsStorage();
-    if (mods.empty() || mods.front() == nullptr || mods.front()->state == nullptr) {
-        response.error = "No loaded Lua mod state is available.";
-        return response;
-    }
-
-    lua_State* state = mods.front()->state;
-    const int stack_top_before = lua_gettop(state);
-    if (!EnsureSdGlobal(state)) {
-        response.error = "Lua runtime binding 'sd' is unavailable.";
-        lua_settop(state, stack_top_before);
-        return response;
-    }
-    LuaPrintCaptureGuard capture_guard(&response.print_output);
-
-    const int status = luaL_dostring(state, code.c_str());
-    if (status != LUA_OK) {
-        const char* error = lua_tostring(state, -1);
-        response.error = error == nullptr ? "unknown Lua error" : error;
-        lua_settop(state, stack_top_before);
-        return response;
-    }
-
-    const int result_count = lua_gettop(state) - stack_top_before;
-    response.results.reserve(static_cast<std::size_t>(result_count));
-    for (int index = stack_top_before + 1; index <= lua_gettop(state); ++index) {
-        std::string result_text;
-        std::string stringify_error;
-        if (!detail::TryLuaValueToString(state, index, &result_text, &stringify_error)) {
-            response.error =
-                "Failed to stringify Lua result: " +
-                (stringify_error.empty() ? std::string("unknown Lua tostring failure") : stringify_error);
-            lua_settop(state, stack_top_before);
-            return response;
-        }
-        response.results.push_back(std::move(result_text));
-    }
-
-    lua_settop(state, stack_top_before);
-    response.ok = true;
-    return response;
 }
 
 PipeReadStatus ReadPipeMessage(HANDLE pipe, std::string* message) {
@@ -434,7 +326,7 @@ void PipeServerMain() {
         std::string code;
         switch (ReadPipeMessage(pipe, &code)) {
         case PipeReadStatus::Success: {
-            const LuaExecResponse response = ExecuteLuaCode(code);
+            const LuaExecResult response = QueueLuaExecRequestAndWait(code, kLuaExecTimeoutMs);
             std::string payload = SerializeResponse(response);
             if (payload.size() > kMaxPipeMessageSize) {
                 payload =

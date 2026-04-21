@@ -33,6 +33,13 @@ struct PendingBotCast {
     std::uint64_t bot_id = 0;
     BotCastKind kind = BotCastKind::Primary;
     std::int32_t secondary_slot = -1;
+    std::int32_t skill_id = 0;
+    uintptr_t target_actor_address = 0;
+    bool has_aim_target = false;
+    float aim_target_x = 0.0f;
+    float aim_target_y = 0.0f;
+    bool has_aim_angle = false;
+    float aim_angle = 0.0f;
     std::uint64_t queued_cast_count = 0;
     std::uint64_t queued_at_ms = 0;
 };

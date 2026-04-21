@@ -2,9 +2,12 @@
 #include "d3d9_end_scene_hook.h"
 #include "gameplay_seams.h"
 #include "logger.h"
+#include "lua_engine.h"
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "runtime_debug.h"
+#include "runtime_tick_service.h"
+#include "sdmod_plugin_api.h"
 #include "x86_hook.h"
 
 #include <Windows.h>
@@ -24,7 +27,9 @@
 #include <fstream>
 #include <limits>
 #include <malloc.h>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -60,6 +65,8 @@ using ActorWorldUnregisterGameplaySlotActorFn = void(__thiscall*)(void* self, in
 using WorldCellGridRebindActorFn = void(__thiscall*)(void* self, void* actor);
 using MonsterPathfindingRefreshTargetFn = void(__fastcall*)(void* self, void* unused_edx);
 using PlayerActorMoveStepFn = std::uint32_t(__thiscall*)(void* self, void* actor, float move_x, float move_y, unsigned int flags);
+using SpellCastDispatcherFn = void(__thiscall*)(void* actor);
+using CastActiveHandleCleanupFn = void(__thiscall*)(void* actor);
 using ActorGetProfileFn = void*(__thiscall*)(void* self);
 using ProfileResolveStatEntryFn = void*(__thiscall*)(void* self, int stat_index);
 using StatBookComputeValueFn = float(__thiscall*)(void* self, float base_value, int entry_idx, char apply_modifier);
@@ -71,6 +78,7 @@ using ActorAnimationAdvanceFn = void(__thiscall*)(void* self);
 using PlayerActorRefreshRuntimeHandlesFn = void(__thiscall*)(void* self);
 using ActorProgressionRefreshFn = void(__thiscall*)(void* self);
 using PlayerAppearanceApplyChoiceFn = void(__thiscall*)(void* progression, int choice_id, int ensure_assets);
+using SkillsWizardBuildPrimarySpellFn = void(__thiscall*)(void* self, float primary_entry, float combo_entry);
 using GameNpcSetMoveGoalFn = void(__thiscall*)(void* self, std::uint8_t mode, int follow_flag, float x, float y, float extra_scalar);
 using GameNpcSetTrackedSlotAssistFn = void(__thiscall*)(void* self, int slot_index, int require_callback);
 using GameplayActorAttachFn = void(__thiscall*)(void* self, void* actor);
@@ -143,6 +151,14 @@ bool CallActorWorldUnregisterGameplaySlotActorSafe(
     DWORD* exception_code);
 bool CallActorBuildRenderDescriptorFromSourceSafe(
     uintptr_t build_address,
+    uintptr_t actor_address,
+    DWORD* exception_code);
+bool CallSpellCastDispatcherSafe(
+    uintptr_t dispatcher_address,
+    uintptr_t actor_address,
+    DWORD* exception_code);
+bool CallCastActiveHandleCleanupSafe(
+    uintptr_t cleanup_address,
     uintptr_t actor_address,
     DWORD* exception_code);
 bool CallWizardCloneFromSourceActorSafe(
@@ -580,6 +596,66 @@ struct ParticipantEntityBinding {
     bool gameplay_attach_applied = false;
     bool raw_allocation = false;
     uintptr_t synthetic_source_profile_address = 0;
+    // "Currently facing" heading pinned across ticks. Sources: movement step
+    // and cast dispatch each write this when they fire. Last setter wins, and
+    // within a single tick cast is processed after movement so it takes
+    // priority. The tick hook writes this value to the actor's heading field
+    // every tick while valid, so the bot keeps facing whichever direction was
+    // last set until something explicitly changes it again.
+    float facing_heading_value = 0.0f;
+    bool facing_heading_valid = false;
+
+    // Ongoing cast state. The loader primes the cast once and, for gameplay-slot
+    // bots, keeps a stock-owned startup/watch state alive across ticks. Startup
+    // runs by letting the native PlayerActorTick see the prepared actor/progression
+    // fields while the bot is temporarily presented as local slot 0. After the
+    // stock handler latches or allocates a spell object, the loader just watches
+    // actor+0x160 (animation_drive_state), actor+0x1EC (mNoInterrupt), and the
+    // cached spell handle (actor+0x27C / +0x27E) until cleanup.
+    struct OngoingCastState {
+        bool active = false;
+        std::int32_t skill_id = 0;
+        bool have_aim_heading = false;
+        float aim_heading = 0.0f;
+        bool have_aim_target = false;
+        float aim_target_x = 0.0f;
+        float aim_target_y = 0.0f;
+        float heading_before = 0.0f;
+        float aim_x_before = 0.0f;
+        float aim_y_before = 0.0f;
+        std::uint32_t aim_aux0_before = 0;
+        std::uint32_t aim_aux1_before = 0;
+        std::uint8_t spread_before = 0;
+        uintptr_t selection_state_pointer = 0;
+        int selection_state_before = kUnknownAnimationStateId;
+        bool selection_state_override_active = false;
+        int gameplay_selection_state_before = kUnknownAnimationStateId;
+        bool gameplay_selection_state_override_active = false;
+        uintptr_t progression_runtime_address = 0;
+        std::int32_t progression_spell_id_before = 0;
+        bool progression_spell_id_override_active = false;
+        int ticks_waiting = 0;
+        int startup_ticks_waiting = 0;
+        bool saw_latch = false;
+        bool saw_activity = false;
+        bool startup_in_progress = false;
+        bool requires_local_slot_native_tick = false;
+        bool post_stock_dispatch_attempted = false;
+        static constexpr int kMaxTicksWaiting = 300;
+        static constexpr int kMaxStartupTicksWaiting = 12;
+    };
+    OngoingCastState ongoing_cast{};
+};
+
+struct LocalPlayerCastShimState {
+    bool active = false;
+    uintptr_t gameplay_address = 0;
+    uintptr_t actor_address = 0;
+    int gameplay_slot = -1;
+    std::uint8_t saved_actor_slot = 0;
+    uintptr_t saved_slot0_actor = 0;
+    uintptr_t saved_slot0_progression_handle = 0;
+    uintptr_t saved_local_player_actor = 0;
 };
 
 bool IsStandaloneWizardKind(ParticipantEntityBinding::Kind kind) {
@@ -917,12 +993,22 @@ bool CallActorProgressionRefreshSafe(
     uintptr_t refresh_address,
     uintptr_t actor_address,
     DWORD* exception_code);
+bool CallSkillsWizardBuildPrimarySpellSafe(
+    uintptr_t build_address,
+    uintptr_t progression_address,
+    float primary_entry_arg,
+    float combo_entry_arg,
+    DWORD* exception_code);
 bool CallPlayerAppearanceApplyChoiceSafe(
     uintptr_t apply_choice_address,
     uintptr_t progression_address,
     int choice_id,
     int ensure_assets,
     DWORD* exception_code);
+bool EnterLocalPlayerCastShim(
+    const ParticipantEntityBinding* binding,
+    LocalPlayerCastShimState* state);
+void LeaveLocalPlayerCastShim(const LocalPlayerCastShimState& state);
 bool CallGameNpcSetMoveGoalSafe(
     uintptr_t set_move_goal_address,
     uintptr_t npc_address,
@@ -989,6 +1075,32 @@ bool PrimeGameplaySlotBotSelectionState(
     int slot_index,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     std::string* error_message);
+bool WireGameplaySlotBotRuntimeHandles(
+    uintptr_t actor_address,
+    std::string* error_message);
+bool SeedGameplaySlotBotRenderStateFromSourceActor(
+    uintptr_t actor_address,
+    uintptr_t world_address,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
+    float x,
+    float y,
+    float heading,
+    std::string* error_message);
+bool AttachGameplaySlotBotStaffItem(
+    uintptr_t actor_address,
+    std::string* error_message);
+bool PrimeGameplaySlotBotActor(
+    uintptr_t gameplay_address,
+    uintptr_t world_address,
+    int slot_index,
+    uintptr_t actor_address,
+    uintptr_t slot_progression_address,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
+    float x,
+    float y,
+    float heading,
+    std::string* error_message);
+bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::string* error_message);
 bool CreateGameplaySlotBotActor(
     uintptr_t gameplay_address,
     uintptr_t world_address,

@@ -74,6 +74,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "actor_progression_refresh", kActorProgressionRefresh),
         SDMOD_ADDR("gameplay.hooks", "player_appearance_apply_choice", kPlayerAppearanceApplyChoice),
         SDMOD_ADDR("gameplay.hooks", "player_actor_refresh_runtime_handles", kPlayerActorRefreshRuntimeHandles),
+        SDMOD_ADDR("gameplay.hooks", "skills_wizard_build_primary_spell", kSkillsWizardBuildPrimarySpell),
         SDMOD_ADDR("gameplay.hooks", "standalone_wizard_equip_ctor", kStandaloneWizardEquipCtor),
         SDMOD_ADDR("gameplay.hooks", "gamenpc_set_move_goal", kGameNpcSetMoveGoal),
         SDMOD_ADDR("gameplay.hooks", "gamenpc_set_tracked_slot_assist", kGameNpcSetTrackedSlotAssist),
@@ -92,6 +93,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "game_object_factory", kGameObjectFactory),
         SDMOD_ADDR("gameplay.hooks", "game_free", kGameFree),
         SDMOD_ADDR("gameplay.hooks", "game_operator_new", kGameOperatorNew),
+        SDMOD_ADDR("gameplay.hooks", "cast_active_handle_cleanup", kCastActiveHandleCleanup),
 
         SDMOD_ADDR("gameplay.globals", "menu_keybinding", kMenuKeybindingGlobal),
         SDMOD_ADDR("gameplay.globals", "inventory_keybinding", kInventoryKeybindingGlobal),
@@ -143,6 +145,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_3ee", kSpellCast3EE),
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_3ef", kSpellCast3EF),
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_3f0", kSpellCast3F0),
+        SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_dispatcher", kSpellCastDispatcher),
         SDMOD_ADDR("run_lifecycle.hooks", "gold_changed", kGoldChanged),
         SDMOD_ADDR("run_lifecycle.hooks", "level_up", kLevelUp),
 
@@ -293,6 +296,15 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "enemy_type", kEnemyTypeOffset),
         SDMOD_SIZE("gameplay.offsets", "spell_direction_x", kSpellDirectionXOffset),
         SDMOD_SIZE("gameplay.offsets", "spell_direction_y", kSpellDirectionYOffset),
+        SDMOD_SIZE("gameplay.offsets", "actor_primary_skill_id", kActorPrimarySkillIdOffset),
+        SDMOD_SIZE("gameplay.offsets", "actor_no_interrupt_flag", kActorNoInterruptFlagOffset),
+        SDMOD_SIZE("gameplay.offsets", "actor_active_cast_group_byte", kActorActiveCastGroupByteOffset),
+        SDMOD_SIZE("gameplay.offsets", "actor_active_cast_slot_short", kActorActiveCastSlotShortOffset),
+        SDMOD_SIZE("gameplay.offsets", "actor_aim_target_x", kActorAimTargetXOffset),
+        SDMOD_SIZE("gameplay.offsets", "actor_aim_target_y", kActorAimTargetYOffset),
+        SDMOD_SIZE("gameplay.offsets", "actor_aim_target_aux0", kActorAimTargetAux0Offset),
+        SDMOD_SIZE("gameplay.offsets", "actor_aim_target_aux1", kActorAimTargetAux1Offset),
+        SDMOD_SIZE("gameplay.offsets", "actor_cast_spread_mode_byte", kActorCastSpreadModeByteOffset),
     };
 
     if (count != nullptr) {
@@ -386,6 +398,7 @@ uintptr_t kMonsterPathfindingRefreshTarget = 0;
 uintptr_t kActorProgressionRefresh = 0;
 uintptr_t kPlayerAppearanceApplyChoice = 0;
 uintptr_t kPlayerActorRefreshRuntimeHandles = 0;
+uintptr_t kSkillsWizardBuildPrimarySpell = 0;
 uintptr_t kStandaloneWizardEquipCtor = 0;
 uintptr_t kGameNpcSetMoveGoal = 0;
 uintptr_t kGameNpcSetTrackedSlotAssist = 0;
@@ -404,6 +417,7 @@ uintptr_t kObjectFree = 0;
 uintptr_t kGameObjectFactory = 0;
 uintptr_t kGameFree = 0;
 uintptr_t kGameOperatorNew = 0;
+uintptr_t kCastActiveHandleCleanup = 0;
 uintptr_t kPuppetManagerVtable = 0;
 uintptr_t kEnemyModifierListVtable = 0;
 
@@ -447,6 +461,7 @@ uintptr_t kSpellCast3ED = 0;
 uintptr_t kSpellCast3EE = 0;
 uintptr_t kSpellCast3EF = 0;
 uintptr_t kSpellCast3F0 = 0;
+uintptr_t kSpellCastDispatcher = 0;
 uintptr_t kGoldChanged = 0;
 uintptr_t kLevelUp = 0;
 uintptr_t kGoldPickupCaller = 0;
@@ -586,6 +601,15 @@ std::size_t kEnemyConfigOffset = 0;
 std::size_t kEnemyTypeOffset = 0;
 std::size_t kSpellDirectionXOffset = 0;
 std::size_t kSpellDirectionYOffset = 0;
+std::size_t kActorPrimarySkillIdOffset = 0;
+std::size_t kActorNoInterruptFlagOffset = 0;
+std::size_t kActorActiveCastGroupByteOffset = 0;
+std::size_t kActorActiveCastSlotShortOffset = 0;
+std::size_t kActorAimTargetXOffset = 0;
+std::size_t kActorAimTargetYOffset = 0;
+std::size_t kActorAimTargetAux0Offset = 0;
+std::size_t kActorAimTargetAux1Offset = 0;
+std::size_t kActorCastSpreadModeByteOffset = 0;
 
 bool InitializeGameplaySeams(std::string* error_message) {
     if (error_message != nullptr) {

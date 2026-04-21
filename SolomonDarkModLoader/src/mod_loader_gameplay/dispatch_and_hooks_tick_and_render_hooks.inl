@@ -7,6 +7,15 @@ void __fastcall HookMonsterPathfindingRefreshTarget(void* self, void* /*unused_e
 
     original(self, nullptr);
 
+    // The hostile-target widening path is only validated on stock wave-spawned
+    // enemies. Pre-wave/manual spawn surfaces have repeatedly shown instability
+    // when hostile AI is redirected onto gameplay-slot bots before the combat
+    // system is fully active, so keep the widening dormant until a run has
+    // actually entered wave combat.
+    if (!IsRunLifecycleActive() || GetRunLifecycleCurrentWave() <= 0) {
+        return;
+    }
+
     const auto hostile_actor_address = reinterpret_cast<uintptr_t>(self);
     if (hostile_actor_address == 0) {
         return;
@@ -136,8 +145,8 @@ void __fastcall HookMonsterPathfindingRefreshTarget(void* self, void* /*unused_e
         if (now_ms - s_last_selector_promotion_log_ms >= 250) {
             s_last_selector_promotion_log_ms = now_ms;
             Log(
-                "[hostile_ai] selector promoted gameplay-slot participant. hostile=" +
-                HexString(hostile_actor_address) +
+                std::string("[hostile_ai] selector promoted gameplay-slot participant") +
+                ". hostile=" + HexString(hostile_actor_address) +
                 " stock_target=" + HexString(current_target_actor_address) +
                 " stock_slot=" + std::to_string(current_target_slot) +
                 " stock_world_slot=" + std::to_string(current_target_world_slot) +
@@ -315,6 +324,44 @@ void ApplyStandalonePuppetCollisionPushFromActor(uintptr_t pusher_actor_address)
     }
 }
 
+// The game's scene dispatcher only ticks the player's Skills_Wizard (via a
+// global slot at DAT_0081c264+0x1654 in the shipping binary). Bots allocate
+// their own Skills_Wizard instance during WizardCloneFromSourceActor but are
+// never reached by that dispatcher, so HP/MP regen never fires for them.
+// Drive each bot's own Skills_Wizard::Tick (vtable slot 2) from our per-actor
+// tick hook so every entity maintains its own stat pool.
+void TickBotOwnedSkillsWizard(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return;
+    }
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t progression_address =
+        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0);
+    if (progression_address == 0) {
+        progression_address = ReadSmartPointerInnerObject(
+            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0));
+    }
+    if (progression_address == 0) {
+        return;
+    }
+    const auto vtable_address =
+        memory.ReadFieldOr<uintptr_t>(progression_address, 0, 0);
+    if (vtable_address == 0) {
+        return;
+    }
+    const auto tick_fn_address =
+        memory.ReadFieldOr<uintptr_t>(vtable_address, 0x8, 0);
+    if (tick_fn_address == 0) {
+        return;
+    }
+    using SkillsWizardTickFn = void(__thiscall*)(void*);
+    auto* tick_fn = reinterpret_cast<SkillsWizardTickFn>(tick_fn_address);
+    __try {
+        tick_fn(reinterpret_cast<void*>(progression_address));
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
 void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     const auto original =
         GetX86HookTrampoline<PlayerActorTickFn>(g_gameplay_keyboard_injection.player_actor_tick_hook);
@@ -332,6 +379,13 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         const auto previous_allow = g_allow_gameplay_action_pump_in_gameplay;
         g_allow_gameplay_action_pump_in_gameplay = true;
         PumpQueuedGameplayActions();
+        const SDModRuntimeTickContext lua_tick_context = {
+            sizeof(SDModRuntimeTickContext),
+            GetRuntimeTickServiceIntervalMs(),
+            0,
+            static_cast<std::uint64_t>(GetTickCount64()),
+        };
+        PumpLuaWorkOnGameplayThread(lua_tick_context);
         g_allow_gameplay_action_pump_in_gameplay = previous_allow;
     }
 
@@ -385,6 +439,212 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     }
 
     auto& memory = ProcessMemory::Instance();
+    auto RunStockTick = [&](ParticipantEntityBinding* binding, bool force_local_player_slot) {
+        if (!force_local_player_slot || binding == nullptr) {
+            original(self);
+            return;
+        }
+
+        const auto skill_before_stock =
+            memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
+        const auto previous_skill_before_stock =
+            memory.ReadFieldOr<std::int32_t>(
+                actor_address,
+                kActorPrimarySkillIdOffset + sizeof(std::int32_t),
+                0);
+        const auto cast_group_before_stock =
+            memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF);
+        const auto selection_pointer =
+            memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+        const auto selection_group_before_stock =
+            selection_pointer != 0
+                ? memory.ReadValueOr<std::uint8_t>(selection_pointer + 0x4, 0xFF)
+                : static_cast<std::uint8_t>(0xFF);
+        const auto selection_slot_before_stock =
+            selection_pointer != 0
+                ? memory.ReadValueOr<std::uint16_t>(selection_pointer + 0x6, 0xFFFF)
+                : static_cast<std::uint16_t>(0xFFFF);
+        const auto selection_timer_before_stock =
+            selection_pointer != 0
+                ? memory.ReadValueOr<std::int32_t>(selection_pointer + 0x8, 0)
+                : 0;
+
+        LocalPlayerCastShimState shim_state;
+        const bool flipped_ok = EnterLocalPlayerCastShim(binding, &shim_state);
+        uintptr_t gameplay_address = 0;
+        std::uint8_t saved_cast_intent = 0;
+        std::uint8_t saved_mouse_left = 0;
+        std::size_t live_mouse_left_offset = 0;
+        int saved_slot0_selection_state = kUnknownAnimationStateId;
+        bool synthetic_cast_intent_applied = false;
+        bool synthetic_mouse_left_applied = false;
+        bool startup_slot0_selection_applied = false;
+        if (binding->ongoing_cast.startup_in_progress &&
+            TryResolveCurrentGameplayScene(&gameplay_address) &&
+            gameplay_address != 0) {
+            const auto combat_selection_state =
+                ResolveCombatSelectionStateForSkillId(binding->ongoing_cast.skill_id);
+            if (combat_selection_state >= 0) {
+                if (!TryReadGameplayIndexStateValue(
+                        static_cast<int>(kGameplayIndexStateActorSelectionBaseIndex),
+                        &saved_slot0_selection_state)) {
+                    saved_slot0_selection_state =
+                        ReadResolvedGlobalIntOr(kPlayerSelectionState0Global, 0);
+                }
+                std::string selection_error;
+                startup_slot0_selection_applied =
+                    TryWriteGameplaySelectionStateForSlot(
+                        0,
+                        combat_selection_state,
+                        &selection_error);
+            }
+            saved_cast_intent = memory.ReadFieldOr<std::uint8_t>(
+                gameplay_address,
+                kGameplayCastIntentOffset,
+                0);
+            synthetic_cast_intent_applied =
+                memory.TryWriteField<std::uint8_t>(
+                    gameplay_address,
+                    kGameplayCastIntentOffset,
+                    static_cast<std::uint8_t>(1));
+            const auto input_buffer_index =
+                memory.ReadFieldOr<int>(gameplay_address, kGameplayInputBufferIndexOffset, -1);
+            if (input_buffer_index >= 0) {
+                live_mouse_left_offset =
+                    static_cast<std::size_t>(
+                        input_buffer_index * kGameplayInputBufferStride +
+                        kGameplayMouseLeftButtonOffset);
+                saved_mouse_left = memory.ReadFieldOr<std::uint8_t>(
+                    gameplay_address,
+                    live_mouse_left_offset,
+                    0);
+                synthetic_mouse_left_applied =
+                    memory.TryWriteField<std::uint8_t>(
+                        gameplay_address,
+                        live_mouse_left_offset,
+                        static_cast<std::uint8_t>(1));
+            } else {
+                live_mouse_left_offset = kGameplayMouseLeftButtonOffset;
+                saved_mouse_left = memory.ReadFieldOr<std::uint8_t>(
+                    gameplay_address,
+                    live_mouse_left_offset,
+                    0);
+                synthetic_mouse_left_applied =
+                    memory.TryWriteField<std::uint8_t>(
+                        gameplay_address,
+                        live_mouse_left_offset,
+                        static_cast<std::uint8_t>(1));
+            }
+        }
+
+        original(self);
+
+        const auto skill_after_stock =
+            memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
+        const auto previous_skill_after_stock =
+            memory.ReadFieldOr<std::int32_t>(
+                actor_address,
+                kActorPrimarySkillIdOffset + sizeof(std::int32_t),
+                0);
+        const auto cast_group_after_stock =
+            memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF);
+        const auto drive_after_stock =
+            memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
+        const auto no_interrupt_after_stock =
+            memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0);
+        const auto selection_group_after_stock =
+            selection_pointer != 0
+                ? memory.ReadValueOr<std::uint8_t>(selection_pointer + 0x4, 0xFF)
+                : static_cast<std::uint8_t>(0xFF);
+        const auto selection_slot_after_stock =
+            selection_pointer != 0
+                ? memory.ReadValueOr<std::uint16_t>(selection_pointer + 0x6, 0xFFFF)
+                : static_cast<std::uint16_t>(0xFFFF);
+        const auto selection_timer_after_stock =
+            selection_pointer != 0
+                ? memory.ReadValueOr<std::int32_t>(selection_pointer + 0x8, 0)
+                : 0;
+        const auto selection_cooldown_after_stock =
+            selection_pointer != 0
+                ? memory.ReadValueOr<std::int32_t>(selection_pointer + 0x10, 0)
+                : 0;
+        const auto selection_extra_after_stock =
+            selection_pointer != 0
+                ? memory.ReadValueOr<std::int32_t>(selection_pointer + 0x14, 0)
+                : 0;
+        if (binding->ongoing_cast.startup_in_progress) {
+            static std::uint64_t s_last_stock_cast_gate_diag_log_ms = 0;
+            if (native_tick_now_ms - s_last_stock_cast_gate_diag_log_ms >= 250) {
+                s_last_stock_cast_gate_diag_log_ms = native_tick_now_ms;
+                Log(
+                    "[bots] stock cast gate tick. actor=" + HexString(actor_address) +
+                    " gameplay_slot=" + std::to_string(binding->gameplay_slot) +
+                    " skill_before=" + std::to_string(skill_before_stock) +
+                    " skill_after=" + std::to_string(skill_after_stock) +
+                    " prev_before=" + std::to_string(previous_skill_before_stock) +
+                    " prev_after=" + std::to_string(previous_skill_after_stock) +
+                    " cast_group_before=" + HexString(cast_group_before_stock) +
+                    " cast_group_after=" + HexString(cast_group_after_stock) +
+                    " drive_after=" + HexString(drive_after_stock) +
+                    " no_int_after=" + HexString(no_interrupt_after_stock) +
+                    " sel_group_before=" + HexString(selection_group_before_stock) +
+                    " sel_group_after=" + HexString(selection_group_after_stock) +
+                    " sel_slot_before=" + HexString(selection_slot_before_stock) +
+                    " sel_slot_after=" + HexString(selection_slot_after_stock) +
+                    " sel_t8_before=" + std::to_string(selection_timer_before_stock) +
+                    " sel_t8_after=" + std::to_string(selection_timer_after_stock) +
+                    " sel_t10_after=" + std::to_string(selection_cooldown_after_stock) +
+                    " sel_t14_after=" + std::to_string(selection_extra_after_stock));
+            }
+        }
+
+        if (synthetic_cast_intent_applied) {
+            (void)memory.TryWriteField<std::uint8_t>(
+                gameplay_address,
+                kGameplayCastIntentOffset,
+                saved_cast_intent);
+        }
+        if (synthetic_mouse_left_applied) {
+            (void)memory.TryWriteField<std::uint8_t>(
+                gameplay_address,
+                live_mouse_left_offset,
+                saved_mouse_left);
+        }
+        if (startup_slot0_selection_applied &&
+            saved_slot0_selection_state != kUnknownAnimationStateId) {
+            std::string selection_error;
+            (void)TryWriteGameplaySelectionStateForSlot(
+                0,
+                saved_slot0_selection_state,
+                &selection_error);
+        }
+
+        LeaveLocalPlayerCastShim(shim_state);
+
+        if (!flipped_ok) {
+            static std::uint64_t s_last_slot_tick_flip_error_log_ms = 0;
+            if (native_tick_now_ms - s_last_slot_tick_flip_error_log_ms >= 1000) {
+                s_last_slot_tick_flip_error_log_ms = native_tick_now_ms;
+                Log(
+                    "[bots] gameplay-slot stock tick slot shim failed. actor=" +
+                    HexString(actor_address) +
+                    " gameplay_slot=" + std::to_string(binding->gameplay_slot));
+            }
+        } else if (synthetic_cast_intent_applied) {
+            static std::uint64_t s_last_synthetic_cast_intent_log_ms = 0;
+            if (native_tick_now_ms - s_last_synthetic_cast_intent_log_ms >= 250) {
+                s_last_synthetic_cast_intent_log_ms = native_tick_now_ms;
+                Log(
+                    "[bots] gameplay-slot synthetic cast intent. actor=" +
+                    HexString(actor_address) +
+                    " gameplay=" + HexString(gameplay_address) +
+                    " mouse_left=" + (synthetic_mouse_left_applied ? std::string("1") : std::string("0")) +
+                    " slot0_sel=" + (startup_slot0_selection_applied ? std::string("1") : std::string("0")) +
+                    " gameplay_slot=" + std::to_string(binding->gameplay_slot));
+            }
+        }
+    };
+
     if (standalone_puppet_actor) {
         static std::uint64_t s_last_native_bot_tick_log_ms = 0;
         if (native_tick_now_ms - s_last_native_bot_tick_log_ms >= 1000) {
@@ -445,67 +705,134 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             }
         }
 
-        // Stock tick code can rewrite the standalone puppet transform as an
-        // animation side effect. When the bot is following a commanded path we
-        // want deterministic motion, so snap back to the pre-tick position and
-        // let our own movement step drive the next delta. When the bot is idle
-        // we preserve the stock write so collision responses from other actors
-        // (pushes) remain visible.
-        if (tracked_actor_moving) {
-            (void)memory.TryWriteField(actor_address, kActorPositionXOffset, position_before_x);
-            (void)memory.TryWriteField(actor_address, kActorPositionYOffset, position_before_y);
-        }
+        // Standalone clone-rail actor position is loader-owned. Live probes
+        // showed stock PlayerActorTick continuing to move idle clones whenever
+        // stale +0x158/+0x15C walk accumulators were left behind, which caused
+        // the visible "sliding" regression. Always discard the stock tick's
+        // position write here, then apply only loader-owned movement and
+        // explicit collision-push logic below.
+        (void)memory.TryWriteField(actor_address, kActorPositionXOffset, position_before_x);
+        (void)memory.TryWriteField(actor_address, kActorPositionYOffset, position_before_y);
 
-        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-        if (auto* binding = FindParticipantEntityForActor(actor_address);
-            binding != nullptr && IsStandaloneWizardKind(binding->kind)) {
-            if (!ApplyWizardBotMovementStep(binding, &tracked_move_error_message) &&
-                !tracked_move_error_message.empty()) {
-                Log(
-                    "[bots] native tick movement step failed. bot_id=" + std::to_string(binding->bot_id) +
-                    " actor=" + HexString(actor_address) +
-                    " error=" + tracked_move_error_message);
-                tracked_move_error_message.clear();
+        {
+            std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+            if (auto* binding = FindParticipantEntityForActor(actor_address);
+                binding != nullptr && IsStandaloneWizardKind(binding->kind)) {
+                if (!ApplyWizardBotMovementStep(binding, &tracked_move_error_message) &&
+                    !tracked_move_error_message.empty()) {
+                    Log(
+                        "[bots] native tick movement step failed. bot_id=" + std::to_string(binding->bot_id) +
+                        " actor=" + HexString(actor_address) +
+                        " error=" + tracked_move_error_message);
+                    tracked_move_error_message.clear();
+                }
+                // Movement step contributes to facing first. Cast (below) runs
+                // after and overrides when both fire on the same tick, making
+                // attack direction take priority over movement direction.
+                if (tracked_actor_should_restore_desired_heading) {
+                    binding->facing_heading_value = tracked_actor_desired_heading;
+                    binding->facing_heading_valid = true;
+                }
+                std::string cast_error_message;
+                (void)ProcessPendingBotCast(binding, &cast_error_message);
+                (void)memory.TryWriteField(
+                    actor_address,
+                    kActorHeadingOffset,
+                    binding->facing_heading_valid ? binding->facing_heading_value : heading_before);
+                ApplyObservedBotAnimationState(binding, actor_address, binding->movement_active);
+                PublishParticipantGameplaySnapshot(*binding);
             }
-            (void)memory.TryWriteField(
-                actor_address,
-                kActorHeadingOffset,
-                tracked_actor_should_restore_desired_heading ? tracked_actor_desired_heading : heading_before);
-            ApplyObservedBotAnimationState(binding, actor_address, binding->movement_active);
-            PublishParticipantGameplaySnapshot(*binding);
         }
         NormalizeGameplaySlotBotSyntheticVisualState(actor_address);
         ApplyStandalonePuppetCollisionPushFromActor(actor_address);
+        TickBotOwnedSkillsWizard(actor_address);
         return;
     }
 
     if (gameplay_slot_wizard_actor) {
-        original(self);
+        const auto position_before_x =
+            memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
+        const auto position_before_y =
+            memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
+        auto position_after_stock_x = position_before_x;
+        auto position_after_stock_y = position_before_y;
 
         {
             std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
             if (auto* binding = FindParticipantEntityForActor(actor_address);
                 binding != nullptr && IsGameplaySlotWizardKind(binding->kind)) {
-                if (binding->movement_active) {
-                    if (!ApplyWizardBotMovementStep(binding, &tracked_move_error_message) &&
-                        !tracked_move_error_message.empty()) {
+                std::string cast_error_message;
+                if (!binding->ongoing_cast.active) {
+                    (void)PreparePendingGameplaySlotBotCast(binding, &cast_error_message);
+                    if (!cast_error_message.empty()) {
                         Log(
-                            "[bots] gameplay-slot movement step failed. bot_id=" + std::to_string(binding->bot_id) +
+                            "[bots] gameplay-slot cast prepare failed. bot_id=" +
+                            std::to_string(binding->bot_id) +
                             " actor=" + HexString(actor_address) +
-                            " error=" + tracked_move_error_message);
-                        tracked_move_error_message.clear();
+                            " error=" + cast_error_message);
+                        cast_error_message.clear();
                     }
-                    if (tracked_actor_should_restore_desired_heading) {
-                        (void)memory.TryWriteField(
-                            actor_address,
-                            kActorHeadingOffset,
-                            tracked_actor_desired_heading);
-                    }
+                }
+                RunStockTick(binding, false);
+                position_after_stock_x =
+                    memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, position_before_x);
+                position_after_stock_y =
+                    memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, position_before_y);
+                // Gameplay-slot bots still run through the stock player-family
+                // tick, but the loader owns their transform just like the
+                // standalone clone rail. Restore pre-stock position before the
+                // loader-owned path/move step reads actor coordinates.
+                (void)memory.TryWriteField(actor_address, kActorPositionXOffset, position_before_x);
+                (void)memory.TryWriteField(actor_address, kActorPositionYOffset, position_before_y);
+                if (!ApplyWizardBotMovementStep(binding, &tracked_move_error_message) &&
+                    !tracked_move_error_message.empty()) {
+                    Log(
+                        "[bots] gameplay-slot movement step failed. bot_id=" + std::to_string(binding->bot_id) +
+                        " actor=" + HexString(actor_address) +
+                        " error=" + tracked_move_error_message);
+                    tracked_move_error_message.clear();
+                }
+                if (binding->movement_active && tracked_actor_should_restore_desired_heading) {
+                    binding->facing_heading_value = tracked_actor_desired_heading;
+                    binding->facing_heading_valid = true;
+                }
+                (void)ProcessPendingBotCast(binding, &cast_error_message);
+                if (!cast_error_message.empty()) {
+                    Log(
+                        "[bots] gameplay-slot cast post-tick detail. bot_id=" +
+                        std::to_string(binding->bot_id) +
+                        " actor=" + HexString(actor_address) +
+                        " error=" + cast_error_message);
+                }
+                if (binding->facing_heading_valid) {
+                    (void)memory.TryWriteField(
+                        actor_address,
+                        kActorHeadingOffset,
+                        binding->facing_heading_value);
                 }
                 PublishParticipantGameplaySnapshot(*binding);
             }
         }
+        const auto stock_delta_x = position_after_stock_x - position_before_x;
+        const auto stock_delta_y = position_after_stock_y - position_before_y;
+        const auto stock_displacement =
+            std::sqrt((stock_delta_x * stock_delta_x) + (stock_delta_y * stock_delta_y));
+        if (stock_displacement > 0.01f) {
+            static std::uint64_t s_last_gameplay_slot_stock_position_drift_log_ms = 0;
+            if (native_tick_now_ms - s_last_gameplay_slot_stock_position_drift_log_ms >= 1000) {
+                s_last_gameplay_slot_stock_position_drift_log_ms = native_tick_now_ms;
+                Log(
+                    "[bots] gameplay-slot stock tick rewrote actor position. actor=" +
+                    HexString(actor_address) +
+                    " before=(" + std::to_string(position_before_x) + ", " +
+                        std::to_string(position_before_y) + ")" +
+                    " stock_after=(" + std::to_string(position_after_stock_x) + ", " +
+                        std::to_string(position_after_stock_y) + ")" +
+                    " moving=" + std::to_string(tracked_actor_moving ? 1 : 0));
+            }
+        }
         ApplyStandalonePuppetCollisionPushFromActor(actor_address);
+        TickBotOwnedSkillsWizard(actor_address);
         return;
     }
 

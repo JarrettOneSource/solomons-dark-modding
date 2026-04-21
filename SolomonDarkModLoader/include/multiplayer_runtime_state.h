@@ -20,9 +20,12 @@ enum class ParticipantControllerKind {
 };
 
 struct BotLoadoutInfo {
-    std::int32_t primary_skill_id = -1;
-    std::int32_t primary_combo_id = -1;
-    std::array<std::int32_t, 3> secondary_skill_ids = {-1, -1, -1};
+    // Stock Skills_Wizard primary selection is expressed as entry indices,
+    // not as a direct spell id. A primary attack is a pair of entry indices
+    // that later resolve to the concrete spell id at runtime.
+    std::int32_t primary_entry_index = -1;
+    std::int32_t primary_combo_entry_index = -1;
+    std::array<std::int32_t, 3> secondary_entry_indices = {-1, -1, -1};
 };
 
 enum class CharacterDisciplineId : std::int32_t {
@@ -69,9 +72,9 @@ struct ParticipantRuntimeInfo {
     std::int32_t mana_max = 0;
     std::int32_t experience_current = 0;
     std::int32_t experience_next = 0;
-    std::int32_t primary_skill_id = -1;
-    std::int32_t primary_combo_id = -1;
-    std::array<std::int32_t, 3> queued_secondary_ids = {-1, -1, -1};
+    std::int32_t primary_entry_index = -1;
+    std::int32_t primary_combo_entry_index = -1;
+    std::array<std::int32_t, 3> queued_secondary_entry_indices = {-1, -1, -1};
     float position_x = 0.0f;
     float position_y = 0.0f;
     float heading = 0.0f;

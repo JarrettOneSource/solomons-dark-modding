@@ -205,29 +205,41 @@ bool ReadLoadoutField(
 
     *loadout = multiplayer::BotLoadoutInfo{};
 
-    bool has_primary_skill_id = false;
-    if (!ReadOptionalIntegerField(state, lua_gettop(state), "primary_skill_id", &loadout->primary_skill_id, &has_primary_skill_id, error_message)) {
+    bool has_primary_entry_index = false;
+    if (!ReadOptionalIntegerField(
+            state,
+            lua_gettop(state),
+            "primary_entry_index",
+            &loadout->primary_entry_index,
+            &has_primary_entry_index,
+            error_message)) {
         lua_pop(state, 1);
         return false;
     }
 
-    bool has_primary_combo_id = false;
-    if (!ReadOptionalIntegerField(state, lua_gettop(state), "primary_combo_id", &loadout->primary_combo_id, &has_primary_combo_id, error_message)) {
+    bool has_primary_combo_entry_index = false;
+    if (!ReadOptionalIntegerField(
+            state,
+            lua_gettop(state),
+            "primary_combo_entry_index",
+            &loadout->primary_combo_entry_index,
+            &has_primary_combo_entry_index,
+            error_message)) {
         lua_pop(state, 1);
         return false;
     }
 
-    lua_getfield(state, -1, "secondary_skill_ids");
+    lua_getfield(state, -1, "secondary_entry_indices");
     if (!lua_isnil(state, -1)) {
         if (!lua_istable(state, -1)) {
-            *error_message = "loadout.secondary_skill_ids must be a table";
+            *error_message = "loadout.secondary_entry_indices must be a table";
             lua_pop(state, 2);
             return false;
         }
 
         const auto length = lua_rawlen(state, -1);
-        if (length > loadout->secondary_skill_ids.size()) {
-            *error_message = "loadout.secondary_skill_ids supports at most three entries";
+        if (length > loadout->secondary_entry_indices.size()) {
+            *error_message = "loadout.secondary_entry_indices supports at most three entries";
             lua_pop(state, 2);
             return false;
         }
@@ -235,12 +247,12 @@ bool ReadLoadoutField(
         for (lua_Unsigned index = 1; index <= length; ++index) {
             lua_rawgeti(state, -1, static_cast<lua_Integer>(index));
             if (!lua_isinteger(state, -1)) {
-                *error_message = "loadout.secondary_skill_ids entries must be integers";
+                *error_message = "loadout.secondary_entry_indices entries must be integers";
                 lua_pop(state, 3);
                 return false;
             }
 
-            loadout->secondary_skill_ids[static_cast<std::size_t>(index - 1)] =
+            loadout->secondary_entry_indices[static_cast<std::size_t>(index - 1)] =
                 static_cast<std::int32_t>(lua_tointeger(state, -1));
             lua_pop(state, 1);
         }
@@ -252,21 +264,21 @@ bool ReadLoadoutField(
 }
 
 void PushSecondaryLoadout(lua_State* state, const multiplayer::BotLoadoutInfo& loadout) {
-    lua_createtable(state, static_cast<int>(loadout.secondary_skill_ids.size()), 0);
-    for (std::size_t index = 0; index < loadout.secondary_skill_ids.size(); ++index) {
-        lua_pushinteger(state, static_cast<lua_Integer>(loadout.secondary_skill_ids[index]));
+    lua_createtable(state, static_cast<int>(loadout.secondary_entry_indices.size()), 0);
+    for (std::size_t index = 0; index < loadout.secondary_entry_indices.size(); ++index) {
+        lua_pushinteger(state, static_cast<lua_Integer>(loadout.secondary_entry_indices[index]));
         lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
     }
 }
 
 void PushLoadout(lua_State* state, const multiplayer::BotLoadoutInfo& loadout) {
     lua_createtable(state, 0, 3);
-    lua_pushinteger(state, static_cast<lua_Integer>(loadout.primary_skill_id));
-    lua_setfield(state, -2, "primary_skill_id");
-    lua_pushinteger(state, static_cast<lua_Integer>(loadout.primary_combo_id));
-    lua_setfield(state, -2, "primary_combo_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(loadout.primary_entry_index));
+    lua_setfield(state, -2, "primary_entry_index");
+    lua_pushinteger(state, static_cast<lua_Integer>(loadout.primary_combo_entry_index));
+    lua_setfield(state, -2, "primary_combo_entry_index");
     PushSecondaryLoadout(state, loadout);
-    lua_setfield(state, -2, "secondary_skill_ids");
+    lua_setfield(state, -2, "secondary_entry_indices");
 }
 
 bool ReadAppearanceChoicesField(

@@ -1,11 +1,19 @@
 // sd.debug.get_nav_grid([subdivisions]) -> table|nil
+// Returns the latest nav-grid snapshot produced on the gameplay thread, or nil
+// if no snapshot has been built yet. Also submits a rebuild request so the next
+// gameplay tick refreshes the snapshot. Callers should tolerate nil on the
+// first call after scene load and retry.
 int LuaDebugGetNavGrid(lua_State* state) {
     const auto subdivisions = lua_gettop(state) >= 1 ? static_cast<int>(luaL_checkinteger(state, 1)) : 1;
-    SDModGameplayNavGridState grid_state;
-    if (!TryGetGameplayNavGridState(&grid_state, subdivisions) || !grid_state.valid) {
+    RequestNavGridSnapshotRebuild(subdivisions);
+
+    auto snapshot = GetLastNavGridSnapshotShared();
+    if (snapshot == nullptr || !snapshot->valid) {
         lua_pushnil(state);
         return 1;
     }
+
+    const SDModGameplayNavGridState& grid_state = *snapshot;
 
     lua_createtable(state, 0, 10);
     lua_pushinteger(state, static_cast<lua_Integer>(grid_state.width));

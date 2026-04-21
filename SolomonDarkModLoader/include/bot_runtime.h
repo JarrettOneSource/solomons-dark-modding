@@ -53,6 +53,13 @@ struct BotCastRequest {
     std::uint64_t bot_id = 0;
     BotCastKind kind = BotCastKind::Primary;
     std::int32_t secondary_slot = -1;
+    std::int32_t skill_id = 0;
+    uintptr_t target_actor_address = 0;
+    bool has_aim_target = false;
+    float aim_target_x = 0.0f;
+    float aim_target_y = 0.0f;
+    bool has_aim_angle = false;
+    float aim_angle = 0.0f;
 };
 
 struct BotMoveToRequest {
@@ -165,6 +172,8 @@ bool StopBot(std::uint64_t bot_id);
 bool FaceBot(std::uint64_t bot_id, float heading);
 bool ReadBotMovementIntent(std::uint64_t bot_id, BotMovementIntentSnapshot* snapshot);
 bool QueueBotCast(const BotCastRequest& request);
+bool FinishBotAttack(std::uint64_t bot_id, bool desired_heading_valid, float desired_heading);
+bool ConsumePendingBotCast(std::uint64_t bot_id, BotCastRequest* request);
 std::uint32_t GetBotCount();
 bool ReadBotSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot);
 bool ReadBotSnapshotByIndex(std::uint32_t index, BotSnapshot* snapshot);

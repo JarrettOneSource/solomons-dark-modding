@@ -76,12 +76,22 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
     }
 
     if (binding->path_waypoint_index >= binding->path_waypoints.size()) {
-        binding->path_active = false;
-        binding->movement_active = false;
-        binding->direction_x = 0.0f;
-        binding->direction_y = 0.0f;
-        binding->current_waypoint_x = 0.0f;
-        binding->current_waypoint_y = 0.0f;
+        const bool arrived_at_target = target_distance <= kWizardBotPathFinalArrivalThreshold;
+        StopBotPathMotion(binding, false);
+        if (!arrived_at_target) {
+            if (now_ms - binding->last_path_debug_log_ms >= 1000) {
+                binding->last_path_debug_log_ms = now_ms;
+                Log(
+                    "[bots] path segment exhausted. bot_id=" + std::to_string(binding->bot_id) +
+                    " revision=" + std::to_string(binding->movement_intent_revision) +
+                    " actor=(" + std::to_string(actor_x) + ", " + std::to_string(actor_y) + ")" +
+                    " destination=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")" +
+                    " remaining_distance=" + std::to_string(target_distance) +
+                    " action=rebuild");
+            }
+            return true;
+        }
+
         (void)multiplayer::StopBot(binding->bot_id);
         if (now_ms - binding->last_path_debug_log_ms >= 1000) {
             binding->last_path_debug_log_ms = now_ms;

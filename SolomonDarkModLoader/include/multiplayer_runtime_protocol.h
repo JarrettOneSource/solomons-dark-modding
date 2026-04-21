@@ -50,9 +50,9 @@ struct StatePacket {
     std::int32_t mana_max;
     std::int32_t experience_current;
     std::int32_t experience_next;
-    std::int32_t primary_skill_id;
-    std::int32_t primary_combo_id;
-    std::int32_t queued_secondary_ids[3];
+    std::int32_t primary_entry_index;
+    std::int32_t primary_combo_entry_index;
+    std::int32_t queued_secondary_entry_indices[3];
     float position_x;
     float position_y;
     float heading;
@@ -72,9 +72,9 @@ struct CastPacket {
     std::uint32_t run_nonce;
     std::int32_t element_id;
     std::int32_t discipline_id;
-    std::int32_t primary_skill_id;
-    std::int32_t primary_combo_id;
-    std::int32_t queued_secondary_ids[3];
+    std::int32_t primary_entry_index;
+    std::int32_t primary_combo_entry_index;
+    std::int32_t queued_secondary_entry_indices[3];
     float position_x;
     float position_y;
     float heading;

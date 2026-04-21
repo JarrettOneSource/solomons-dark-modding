@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -263,6 +264,10 @@ bool TryGetSceneState(SDModSceneState* state);
 bool TryListSceneActors(std::vector<SDModSceneActorState>* actors);
 bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state);
 bool TryGetGameplayNavGridState(SDModGameplayNavGridState* state, int subdivisions = 1);
+void RequestNavGridSnapshotRebuild(int subdivisions);
+std::shared_ptr<const SDModGameplayNavGridState> GetLastNavGridSnapshotShared();
+void RebuildNavGridSnapshotIfRequested_GameplayThread();
+void FlushNavGridSnapshotOnSceneUnload();
 bool TryGetParticipantGameplayState(
     std::uint64_t participant_id,
     SDModParticipantGameplayState* state);

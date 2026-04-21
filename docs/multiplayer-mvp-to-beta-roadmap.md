@@ -123,9 +123,9 @@ struct MultiplayerCharacterProfile {
     std::array<int, 4> appearance_choice_ids;
     BotLoadoutInfo loadout;
     int level;
-    int primary_skill_id;
-    int primary_combo_id;
-    std::array<int, 3> secondary_skill_ids;
+    int primary_entry_index;
+    int primary_combo_entry_index;
+    std::array<int, 3> secondary_entry_indices;
     // later: inventory ids, cosmetics, naming, meta progression
 };
 ```

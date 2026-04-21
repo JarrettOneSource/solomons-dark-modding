@@ -1,3 +1,6 @@
+bool TryReadArenaWaveStartState(uintptr_t arena_address, ArenaWaveStartState* state);
+std::string DescribeArenaWaveStartState(const ArenaWaveStartState& candidate);
+
 bool TryUpdateParticipantEntity(
     uintptr_t gameplay_address,
     const PendingParticipantEntitySyncRequest& request,
@@ -39,14 +42,29 @@ bool TrySpawnRegisteredGameNpcParticipantEntity(
     const PendingParticipantEntitySyncRequest& request,
     std::string* error_message);
 
+bool TrySpawnGameplaySlotBotParticipantEntity(
+    uintptr_t gameplay_address,
+    const PendingParticipantEntitySyncRequest& request,
+    std::string* error_message);
+
+bool ShouldUseGameplaySlotBotParticipantRail(const SceneContextSnapshot& scene_context) {
+    // Arena scenes expose the gameplay player-slot array (slots 1..3) that the
+    // stock hostile pathfinder scans for targets via HookMonsterPathfindingRefreshTarget.
+    // Spawning bots through the standalone clone rail leaves them invisible to
+    // enemies (they aren't in the slot array) — see enemy_targeting_bot_slots.md.
+    // Routing arena bots through Gameplay_CreatePlayerSlot + ActorWorld_RegisterGameplaySlotActor
+    // places them in slots 1..3 so enemies actually aggro them.
+    return IsArenaSceneContext(scene_context);
+}
+
 bool ShouldUseRegisteredGameNpcParticipantRail(const SceneContextSnapshot& scene_context) {
-    // The registered-gamenpc rail is incomplete: it parks the wizard-clone SOURCE
-    // actor (0x1397) without the stock WizardCloneFromSourceActor (0x0061AA00)
-    // handoff, so the game reclaims the preview object within one scene-binding
-    // tick (vtable + all actor fields go to zero in 49 ms, observed 2026-04-18).
-    // Until that handoff is wired up, always take the standalone clone rail,
-    // even in hub scenes.
     (void)scene_context;
+    // Keep hub bots on the standalone clone rail until a true long-lived
+    // GameNpc (0x1397) publication contract is recovered. The clone-handoff
+    // path uses WizardCloneFromSourceActor, which returns a player-family actor
+    // (PlayerActorCtor writes object_type=0x1). Binding that result as
+    // RegisteredGameNpc and driving GameNpc_SetMoveGoal on it corrupted the
+    // actor's player-side state and crashed stock PlayerActorTick.
     return false;
 }
 
@@ -77,6 +95,22 @@ bool TrySpawnRegisteredGameNpcParticipantEntitySafe(
 
     __try {
         return TrySpawnRegisteredGameNpcParticipantEntity(gameplay_address, request, error_message);
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool TrySpawnGameplaySlotBotParticipantEntitySafe(
+    uintptr_t gameplay_address,
+    const PendingParticipantEntitySyncRequest& request,
+    std::string* error_message,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+
+    __try {
+        return TrySpawnGameplaySlotBotParticipantEntity(gameplay_address, request, error_message);
     } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
         return false;
     }
@@ -124,42 +158,52 @@ bool ExecuteParticipantEntitySyncNow(
         return true;
     }
 
+    const bool use_slot_bot_rail =
+        ShouldUseGameplaySlotBotParticipantRail(scene_context);
     const bool use_registered_gamenpc_rail =
-        ShouldUseRegisteredGameNpcParticipantRail(scene_context);
+        !use_slot_bot_rail && ShouldUseRegisteredGameNpcParticipantRail(scene_context);
+    const char* rail_name =
+        use_slot_bot_rail ? "gameplay_slot_bot"
+                          : (use_registered_gamenpc_rail ? "registered_gamenpc" : "standalone_clone");
     Log(
         "[bots] sync spawning actor. bot_id=" + std::to_string(request.bot_id) +
         " element_id=" + std::to_string(request.character_profile.element_id) +
-        " rail=" + std::string(use_registered_gamenpc_rail ? "registered_gamenpc" : "standalone_clone") +
+        " rail=" + std::string(rail_name) +
         " gameplay=" + HexString(gameplay_address));
     DWORD exception_code = 0;
     const bool spawned =
-        use_registered_gamenpc_rail
-            ? TrySpawnRegisteredGameNpcParticipantEntitySafe(
+        use_slot_bot_rail
+            ? TrySpawnGameplaySlotBotParticipantEntitySafe(
                   gameplay_address,
                   request,
                   error_message,
                   &exception_code)
-            : TrySpawnStandaloneRemoteWizardParticipantEntitySafe(
-                  gameplay_address,
-                  request,
-                  error_message,
-                  &exception_code);
+            : (use_registered_gamenpc_rail
+                   ? TrySpawnRegisteredGameNpcParticipantEntitySafe(
+                         gameplay_address,
+                         request,
+                         error_message,
+                         &exception_code)
+                   : TrySpawnStandaloneRemoteWizardParticipantEntitySafe(
+                         gameplay_address,
+                         request,
+                         error_message,
+                         &exception_code));
     if (spawned) {
         return true;
     }
     if (error_message != nullptr && error_message->empty()) {
+        const char* rail_fn_name =
+            use_slot_bot_rail ? "TrySpawnGameplaySlotBotParticipantEntity"
+                              : (use_registered_gamenpc_rail
+                                     ? "TrySpawnRegisteredGameNpcParticipantEntity"
+                                     : "TrySpawnStandaloneRemoteWizardParticipantEntity");
         if (exception_code != 0) {
             *error_message =
-                std::string(use_registered_gamenpc_rail
-                                ? "TrySpawnRegisteredGameNpcParticipantEntity"
-                                : "TrySpawnStandaloneRemoteWizardParticipantEntity") +
-                " threw 0x" + HexString(exception_code) + ".";
+                std::string(rail_fn_name) + " threw 0x" + HexString(exception_code) + ".";
         } else {
             *error_message =
-                std::string(use_registered_gamenpc_rail
-                                ? "TrySpawnRegisteredGameNpcParticipantEntity"
-                                : "TrySpawnStandaloneRemoteWizardParticipantEntity") +
-                " returned false without an error message.";
+                std::string(rail_fn_name) + " returned false without an error message.";
         }
     }
     return false;
@@ -179,10 +223,32 @@ bool ExecuteSpawnEnemyNow(int type_id, float x, float y, uintptr_t* out_enemy_ad
         *out_enemy_address = 0;
     }
 
+    if (type_id <= 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "spawn_enemy: invalid type_id=" + std::to_string(type_id) +
+                " (must be > 0; known-good types include 2012 and 5010).";
+        }
+        return false;
+    }
+
     uintptr_t arena_address = 0;
     if (!TryResolveArena(&arena_address) || arena_address == 0) {
         if (error_message != nullptr) {
             *error_message = "Arena is not active.";
+        }
+        return false;
+    }
+
+    ArenaWaveStartState wave_state;
+    if (TryReadArenaWaveStartState(arena_address, &wave_state) && wave_state.combat_active != 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "spawn_enemy: refusing manual spawn while arena combat is active. "
+                "Our hardcoded (anchor=nullptr, mode=0, param_5=0, param_6=0, override=0) call "
+                "shape wedges Enemy_Create's placement sweep once combat state is populated. "
+                "arena=" + HexString(arena_address) +
+                " state=" + DescribeArenaWaveStartState(wave_state);
         }
         return false;
     }
@@ -494,7 +560,7 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
     return true;
 }
 
-bool TrySpawnRegisteredGameNpcParticipantEntity(
+bool TrySpawnGameplaySlotBotParticipantEntity(
     uintptr_t gameplay_address,
     const PendingParticipantEntitySyncRequest& request,
     std::string* error_message) {
@@ -531,23 +597,190 @@ bool TrySpawnRegisteredGameNpcParticipantEntity(
         return false;
     }
 
+    int target_slot = -1;
+    for (int candidate = kFirstWizardBotSlot;
+         candidate < static_cast<int>(kGameplayPlayerSlotCount);
+         ++candidate) {
+        uintptr_t existing_actor = 0;
+        if (!TryResolvePlayerActorForSlot(gameplay_address, candidate, &existing_actor) ||
+            existing_actor == 0) {
+            target_slot = candidate;
+            break;
+        }
+    }
+    if (target_slot < 0) {
+        if (error_message != nullptr) {
+            *error_message = "All gameplay bot slots (1..3) are occupied.";
+        }
+        return false;
+    }
+
     uintptr_t actor_address = 0;
+    uintptr_t progression_address = 0;
+    auto cleanup_spawn = [&](std::string_view failure_message) {
+        std::string cleanup_error;
+        (void)DestroyGameplaySlotBotResources(
+            gameplay_address,
+            target_slot,
+            actor_address,
+            world_address,
+            0,
+            &cleanup_error);
+        actor_address = 0;
+        progression_address = 0;
+        if (error_message != nullptr) {
+            *error_message = std::string(failure_message);
+            if (!cleanup_error.empty()) {
+                *error_message += " cleanup=" + cleanup_error;
+            }
+        }
+        return false;
+    };
+
+    std::string stage_error;
+    if (!CreateGameplaySlotBotActor(
+            gameplay_address,
+            world_address,
+            target_slot,
+            request.character_profile,
+            x,
+            y,
+            heading,
+            &actor_address,
+            &progression_address,
+            &stage_error)) {
+        return cleanup_spawn(stage_error);
+    }
+
+    if (!FinalizeGameplaySlotBotRegistration(
+            gameplay_address,
+            world_address,
+            target_slot,
+            actor_address,
+            nullptr,
+            &stage_error)) {
+        return cleanup_spawn(stage_error);
+    }
+
+    RememberParticipantEntity(
+        request.bot_id,
+        request.character_profile,
+        request.scene_intent,
+        actor_address,
+        ParticipantEntityBinding::Kind::GameplaySlotWizard,
+        target_slot,
+        false);
+    {
+        std::lock_guard<std::recursive_mutex> binding_lock(g_participant_entities_mutex);
+        if (auto* binding = FindParticipantEntity(request.bot_id); binding != nullptr) {
+            binding->controller_state = multiplayer::BotControllerState::Idle;
+            binding->movement_active = false;
+            binding->has_target = false;
+            binding->desired_heading_valid = false;
+            binding->next_scene_materialize_retry_ms = 0;
+            binding->materialized_scene_address = gameplay_address;
+            binding->materialized_world_address = world_address;
+            binding->materialized_region_index = -1;
+            binding->gameplay_attach_applied = true;
+            binding->gameplay_slot = target_slot;
+            binding->raw_allocation = false;
+            binding->standalone_progression_wrapper_address = 0;
+            binding->standalone_progression_inner_address = 0;
+            binding->standalone_equip_wrapper_address = 0;
+            binding->standalone_equip_inner_address = 0;
+            binding->synthetic_source_profile_address = 0;
+            SeedStandaloneWizardAnimationDriveProfiles(binding, actor_address);
+
+            SceneContextSnapshot scene_context;
+            if (TryBuildSceneContextSnapshot(gameplay_address, &scene_context)) {
+                binding->materialized_region_index = scene_context.current_region_index;
+            }
+
+            PublishParticipantGameplaySnapshot(*binding);
+        }
+    }
+
+    Log(
+        "[bots] created gameplay-slot wizard actor. bot_id=" + std::to_string(request.bot_id) +
+        " actor=" + HexString(actor_address) +
+        " world=" + HexString(world_address) +
+        " gameplay_slot=" + std::to_string(target_slot) +
+        " actor_slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
+            actor_address,
+            kActorSlotOffset,
+            -1))) +
+        " resolved_anim_state=" + std::to_string(ResolveActorAnimationStateId(actor_address)) +
+        " progression_handle=" +
+        HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0)) +
+        " equip_handle=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipHandleOffset, 0)));
+    return true;
+}
+
+bool TrySpawnRegisteredGameNpcParticipantEntity(
+    uintptr_t gameplay_address,
+    const PendingParticipantEntitySyncRequest& request,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+
+    // Reserved for a real GameNpc (0x1397) rail. WizardCloneFromSourceActor
+    // returns a player-family clone and must stay on the standalone wizard
+    // path instead of being remembered as RegisteredGameNpc.
+
+    uintptr_t local_actor_address = 0;
+    if (!TryResolvePlayerActorForSlot(gameplay_address, 0, &local_actor_address) ||
+        local_actor_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Local slot-0 player actor is not ready.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto world_address =
+        memory.ReadFieldOr<uintptr_t>(local_actor_address, kActorOwnerOffset, 0);
+    if (world_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Local slot-0 player world is not ready.";
+        }
+        return false;
+    }
+
+    float x = 0.0f;
+    float y = 0.0f;
+    float heading = 0.0f;
+    if (!ResolveParticipantSpawnTransform(gameplay_address, request, &x, &y, &heading)) {
+        if (error_message != nullptr) {
+            *error_message = "Unable to resolve a bot transform.";
+        }
+        return false;
+    }
+
+    uintptr_t actor_address = 0;
+    uintptr_t source_actor_address = 0;
     uintptr_t source_profile_address = 0;
     auto cleanup_spawn = [&](std::string_view failure_message) {
         std::string cleanup_error;
         if (actor_address != 0) {
-            const bool destroyed = DestroyRegisteredGameNpcActor(
+            (void)DestroyRegisteredGameNpcActor(
                 actor_address,
                 memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, world_address),
                 &cleanup_error);
-            if (destroyed) {
-                actor_address = 0;
+        }
+        if (source_actor_address != 0) {
+            std::string source_cleanup_error;
+            (void)DestroyWizardCloneSourceActor(source_actor_address, &source_cleanup_error);
+            if (cleanup_error.empty() && !source_cleanup_error.empty()) {
+                cleanup_error = source_cleanup_error;
             }
         }
-        if (source_profile_address != 0 && actor_address == 0) {
+        if (source_profile_address != 0) {
             DestroySyntheticWizardSourceProfile(source_profile_address);
-            source_profile_address = 0;
         }
+        actor_address = 0;
+        source_actor_address = 0;
+        source_profile_address = 0;
         if (error_message != nullptr) {
             *error_message = std::string(failure_message);
             if (!cleanup_error.empty()) {
@@ -564,11 +797,62 @@ bool TrySpawnRegisteredGameNpcParticipantEntity(
             x,
             y,
             heading,
-            &actor_address,
+            &source_actor_address,
             &source_profile_address,
             &stage_error)) {
         return cleanup_spawn(stage_error);
     }
+
+    const auto clone_from_source_address =
+        memory.ResolveGameAddressOrZero(kWizardCloneFromSourceActor);
+    if (clone_from_source_address == 0) {
+        return cleanup_spawn("Unable to resolve WizardCloneFromSourceActor.");
+    }
+
+    DWORD clone_exception_code = 0;
+    if (!CallWizardCloneFromSourceActorSafe(
+            clone_from_source_address,
+            source_actor_address,
+            &actor_address,
+            &clone_exception_code) ||
+        actor_address == 0) {
+        return cleanup_spawn(
+            "WizardCloneFromSourceActor failed with 0x" +
+            HexString(clone_exception_code) + ".");
+    }
+
+    {
+        const auto selection_state_address =
+            memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+        if (selection_state_address != 0) {
+            (void)memory.TryWriteField<std::uint8_t>(selection_state_address, 0x24, 1);
+        }
+
+        uintptr_t progression_address =
+            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0);
+        if (progression_address == 0) {
+            progression_address = ReadSmartPointerInnerObject(
+                memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0));
+        }
+        if (progression_address != 0) {
+            constexpr float kDefaultAllyHp = 25.0f;
+            (void)memory.TryWriteField<float>(
+                progression_address,
+                kProgressionHpOffset,
+                kDefaultAllyHp);
+            (void)memory.TryWriteField<float>(
+                progression_address,
+                kProgressionMaxHpOffset,
+                kDefaultAllyHp);
+        }
+    }
+
+    if (!DestroyWizardCloneSourceActor(source_actor_address, &stage_error)) {
+        return cleanup_spawn(stage_error);
+    }
+    source_actor_address = 0;
+    DestroySyntheticWizardSourceProfile(source_profile_address);
+    source_profile_address = 0;
 
     const auto rebind_actor_address =
         memory.ResolveGameAddressOrZero(kWorldCellGridRebindActor);
@@ -618,7 +902,7 @@ bool TrySpawnRegisteredGameNpcParticipantEntity(
             binding->registered_gamenpc_following_local_slot = false;
             binding->registered_gamenpc_goal_x = 0.0f;
             binding->registered_gamenpc_goal_y = 0.0f;
-            binding->synthetic_source_profile_address = source_profile_address;
+            binding->synthetic_source_profile_address = 0;
 
             SceneContextSnapshot scene_context;
             if (TryBuildSceneContextSnapshot(gameplay_address, &scene_context)) {

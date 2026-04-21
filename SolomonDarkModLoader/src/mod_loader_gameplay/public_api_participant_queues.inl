@@ -26,11 +26,14 @@ bool QueueParticipantEntitySync(
         return false;
     }
 
-    if (g_gameplay_keyboard_injection.initialized) {
-        return QueueParticipantSyncRequest(request, error_message);
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message = "participant sync: gameplay action pump is not initialized.";
+        }
+        return false;
     }
 
-    return ExecuteParticipantEntitySyncNow(request, error_message);
+    return QueueParticipantSyncRequest(request, error_message);
 }
 
 bool QueueParticipantDestroy(std::uint64_t participant_id, std::string* error_message) {
@@ -42,11 +45,13 @@ bool QueueParticipantDestroy(std::uint64_t participant_id, std::string* error_me
         return false;
     }
 
-    if (g_gameplay_keyboard_injection.initialized) {
-        return QueueParticipantDestroyRequest(participant_id, error_message);
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message = "participant destroy: gameplay action pump is not initialized.";
+        }
+        return false;
     }
 
-    DestroyParticipantEntityNow(participant_id);
-    return true;
+    return QueueParticipantDestroyRequest(participant_id, error_message);
 }
 

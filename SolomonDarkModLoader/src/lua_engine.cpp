@@ -2,6 +2,7 @@
 
 #include "bot_runtime.h"
 #include "logger.h"
+#include "lua_engine_bindings_internal.h"
 #include "lua_engine_internal.h"
 #include "mod_loader.h"
 #include "multiplayer_foundation.h"
@@ -13,15 +14,83 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <chrono>
+#include <deque>
 #include <filesystem>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include <Windows.h>
+
 namespace sdmod {
+
+namespace lua_exec_diag {
+
+std::atomic<std::uint64_t> g_last_endscene_ms{0};
+std::atomic<std::uint64_t> g_last_pump_enter_ms{0};
+std::atomic<std::uint64_t> g_last_pump_locked_ms{0};
+std::atomic<std::uint64_t> g_last_lua_locked_ms{0};
+
+}  // namespace lua_exec_diag
+
 namespace detail {
 namespace {
+
+struct PendingLuaExecRequest {
+    std::string code;
+    std::promise<LuaExecResult> promise;
+};
+
+std::mutex& LuaExecQueueMutex() {
+    static std::mutex mutex;
+    return mutex;
+}
+
+std::deque<PendingLuaExecRequest>& LuaExecQueueStorage() {
+    static std::deque<PendingLuaExecRequest> storage;
+    return storage;
+}
+
+std::future<LuaExecResult> EnqueueLuaExecRequest(std::string code) {
+    std::promise<LuaExecResult> promise;
+    auto future = promise.get_future();
+    {
+        std::lock_guard<std::mutex> lock(LuaExecQueueMutex());
+        PendingLuaExecRequest request;
+        request.code = std::move(code);
+        request.promise = std::move(promise);
+        LuaExecQueueStorage().emplace_back(std::move(request));
+    }
+    return future;
+}
+
+std::deque<PendingLuaExecRequest> DrainLuaExecQueue() {
+    std::lock_guard<std::mutex> lock(LuaExecQueueMutex());
+    std::deque<PendingLuaExecRequest> drained;
+    std::swap(drained, LuaExecQueueStorage());
+    return drained;
+}
+
+void SetPromiseValueSafely(std::promise<LuaExecResult>& promise, LuaExecResult result) {
+    try {
+        promise.set_value(std::move(result));
+    } catch (...) {
+        // promise already satisfied or broken; the caller has long since
+        // moved on. Swallow so shutdown/drain never throws.
+    }
+}
+
+void ResolveDrainedAsError(std::deque<PendingLuaExecRequest>& drained, const char* reason) {
+    for (auto& request : drained) {
+        LuaExecResult result;
+        result.error = reason == nullptr ? "Lua engine is unavailable." : reason;
+        SetPromiseValueSafely(request.promise, std::move(result));
+    }
+}
 
 void RemoveUnsafeGlobals(lua_State* state) {
     const char* globals_to_remove[] = {
@@ -44,6 +113,83 @@ int LuaPanic(lua_State* state) {
     const auto* message = lua_tostring(state, -1);
     Log(std::string("[lua] panic: ") + (message == nullptr ? "unknown" : message));
     return 0;
+}
+
+bool EnsureSdGlobal(lua_State* state) {
+    if (state == nullptr) {
+        return false;
+    }
+
+    lua_getglobal(state, "sd");
+    const bool has_global_sd = lua_istable(state, -1);
+    lua_pop(state, 1);
+    if (has_global_sd) {
+        return true;
+    }
+
+    lua_getfield(state, LUA_REGISTRYINDEX, kLuaSdRegistryKey);
+    const bool has_registry_sd = lua_istable(state, -1);
+    if (has_registry_sd) {
+        lua_pushvalue(state, -1);
+        lua_setglobal(state, "sd");
+    }
+    lua_pop(state, 1);
+    return has_registry_sd;
+}
+
+LuaExecResult ExecuteLuaCodeOnLockedState(lua_State* state, const std::string& code) {
+    LuaExecResult response;
+    if (state == nullptr) {
+        response.error = "No loaded Lua mod state is available.";
+        return response;
+    }
+    if (code.empty()) {
+        response.error = "No Lua code was provided.";
+        return response;
+    }
+
+    const int stack_top_before = lua_gettop(state);
+    if (!EnsureSdGlobal(state)) {
+        response.error = "Lua runtime binding 'sd' is unavailable.";
+        lua_settop(state, stack_top_before);
+        return response;
+    }
+
+    // g_lua_print_capture_sink is thread_local in lua_engine_bindings.cpp,
+    // so the swap must happen on the gameplay thread (where we're
+    // executing right now — this function is only callable from the
+    // pump).
+    auto* previous_sink = SwapLuaPrintCaptureSink(&response.print_output);
+
+    const int status = luaL_dostring(state, code.c_str());
+    if (status != LUA_OK) {
+        const char* error = lua_tostring(state, -1);
+        response.error = error == nullptr ? "unknown Lua error" : error;
+        lua_settop(state, stack_top_before);
+        SwapLuaPrintCaptureSink(previous_sink);
+        return response;
+    }
+
+    const int result_count = lua_gettop(state) - stack_top_before;
+    response.results.reserve(static_cast<std::size_t>(result_count));
+    for (int index = stack_top_before + 1; index <= lua_gettop(state); ++index) {
+        std::string result_text;
+        std::string stringify_error;
+        if (!TryLuaValueToString(state, index, &result_text, &stringify_error)) {
+            response.error =
+                "Failed to stringify Lua result: " +
+                (stringify_error.empty() ? std::string("unknown Lua tostring failure") : stringify_error);
+            lua_settop(state, stack_top_before);
+            SwapLuaPrintCaptureSink(previous_sink);
+            return response;
+        }
+        response.results.push_back(std::move(result_text));
+    }
+
+    SwapLuaPrintCaptureSink(previous_sink);
+    lua_settop(state, stack_top_before);
+    response.ok = true;
+    return response;
 }
 
 bool ExecuteEntryScript(LoadedLuaMod* mod, std::string* error_message) {
@@ -261,6 +407,11 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
 }
 
 void ShutdownLuaEngine() {
+    // Drain any pending pipe-exec requests first so waiters don't
+    // deadlock behind the engine mutex while we tear down Lua states.
+    auto drained = detail::DrainLuaExecQueue();
+    detail::ResolveDrainedAsError(drained, "Lua engine is shutting down.");
+
     std::scoped_lock lock(detail::LuaEngineMutex());
     if (!detail::LuaEngineInitializedFlag()) {
         return;
@@ -274,6 +425,12 @@ void ShutdownLuaEngine() {
     detail::LuaRuntimeDirectoryStorage().clear();
     detail::LuaRuntimeBootstrapStorage() = RuntimeBootstrap{};
     detail::LuaEngineInitializedFlag() = false;
+
+    // A request could have been enqueued between the first drain and
+    // acquiring the engine mutex; flush again before returning.
+    auto late_drained = detail::DrainLuaExecQueue();
+    detail::ResolveDrainedAsError(late_drained, "Lua engine is shutting down.");
+
     Log("Lua engine shut down.");
 }
 
@@ -292,17 +449,111 @@ bool HasLuaRuntimeTickHandlers() {
     return detail::LuaEngineInitializedFlag() && detail::HasAnyLuaRuntimeTickHandlers();
 }
 
-void DispatchLuaRuntimeTick(const SDModRuntimeTickContext& context) {
-    std::unique_lock lock(detail::LuaEngineMutex(), std::try_to_lock);
-    if (!lock.owns_lock()) {
+LuaExecResult QueueLuaExecRequestAndWait(const std::string& code, std::uint32_t timeout_ms) {
+    LuaExecResult result;
+    if (code.empty()) {
+        result.error = "No Lua code was provided.";
+        return result;
+    }
+
+    // Admission check + enqueue must happen under the same engine-mutex
+    // critical section as ShutdownLuaEngine's flag flip and late drain,
+    // otherwise a request can slip in after shutdown's late drain and
+    // strand its caller until timeout (and survive into a later re-init,
+    // since the queue is static). Holding LuaEngineMutex while briefly
+    // taking LuaExecQueueMutex inside EnqueueLuaExecRequest does not
+    // invert any lock order: ProcessLuaExecQueueOnMainThread releases
+    // the queue mutex before acquiring LuaEngineMutex, so the two are
+    // never held simultaneously in the opposite direction.
+    std::future<LuaExecResult> future;
+    {
+        std::scoped_lock lock(detail::LuaEngineMutex());
+        if (!detail::LuaEngineInitializedFlag()) {
+            result.error = "Lua engine is not initialized.";
+            return result;
+        }
+        future = detail::EnqueueLuaExecRequest(code);
+    }
+    const auto wait_status = future.wait_for(std::chrono::milliseconds(timeout_ms));
+    if (wait_status != std::future_status::ready) {
+        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        const auto endscene_ms = lua_exec_diag::g_last_endscene_ms.load(std::memory_order_acquire);
+        const auto pump_enter_ms = lua_exec_diag::g_last_pump_enter_ms.load(std::memory_order_acquire);
+        const auto pump_locked_ms = lua_exec_diag::g_last_pump_locked_ms.load(std::memory_order_acquire);
+        const auto lua_locked_ms = lua_exec_diag::g_last_lua_locked_ms.load(std::memory_order_acquire);
+        Log(
+            "[lua-exec-diag] timeout. now_ms=" + std::to_string(now_ms) +
+            " endscene_ago_ms=" + std::to_string(endscene_ms == 0 ? -1LL : static_cast<std::int64_t>(now_ms - endscene_ms)) +
+            " pump_enter_ago_ms=" + std::to_string(pump_enter_ms == 0 ? -1LL : static_cast<std::int64_t>(now_ms - pump_enter_ms)) +
+            " pump_locked_ago_ms=" + std::to_string(pump_locked_ms == 0 ? -1LL : static_cast<std::int64_t>(now_ms - pump_locked_ms)) +
+            " lua_locked_ago_ms=" + std::to_string(lua_locked_ms == 0 ? -1LL : static_cast<std::int64_t>(now_ms - lua_locked_ms)));
+        result.error = "Lua exec request timed out waiting for gameplay thread.";
+        return result;
+    }
+
+    try {
+        return future.get();
+    } catch (const std::future_error& e) {
+        result.error = std::string("Lua exec promise error: ") + e.what();
+        return result;
+    } catch (...) {
+        result.error = "Lua exec failed with an unknown exception.";
+        return result;
+    }
+}
+
+namespace detail {
+namespace {
+
+// Drain the exec queue and execute every pending chunk under the
+// engine mutex. Must be called on the main thread (the same one that
+// runs HookPlayerActorTick and D3D9 EndScene), because the executed
+// Lua snippets may reach into stock gameplay state via sd.* bindings.
+// Returns immediately if nothing is queued, without taking the engine
+// mutex.
+void ProcessLuaExecQueueOnMainThread() {
+    auto drained = DrainLuaExecQueue();
+    if (drained.empty()) {
         return;
     }
 
+    std::unique_lock<std::mutex> lock(LuaEngineMutex());
+    lua_exec_diag::g_last_lua_locked_ms.store(
+        static_cast<std::uint64_t>(GetTickCount64()),
+        std::memory_order_release);
+    if (!LuaEngineInitializedFlag()) {
+        lock.unlock();
+        ResolveDrainedAsError(drained, "Lua engine is not initialized.");
+        return;
+    }
+
+    auto& mods = LoadedLuaModsStorage();
+    lua_State* shared_state =
+        (mods.empty() || mods.front() == nullptr) ? nullptr : mods.front()->state;
+
+    for (auto& request : drained) {
+        LuaExecResult result = ExecuteLuaCodeOnLockedState(shared_state, request.code);
+        SetPromiseValueSafely(request.promise, std::move(result));
+    }
+}
+
+}  // namespace
+}  // namespace detail
+
+void PumpLuaExecQueueOnMainThread() {
+    detail::ProcessLuaExecQueueOnMainThread();
+}
+
+void PumpLuaWorkOnGameplayThread(const SDModRuntimeTickContext& context) {
+    detail::ProcessLuaExecQueueOnMainThread();
+
+    std::scoped_lock lock(detail::LuaEngineMutex());
     if (!detail::LuaEngineInitializedFlag()) {
         return;
     }
-
-    detail::DispatchRuntimeTickToLuaMods(context);
+    if (detail::HasAnyLuaRuntimeTickHandlers()) {
+        detail::DispatchRuntimeTickToLuaMods(context);
+    }
 }
 
 }  // namespace sdmod

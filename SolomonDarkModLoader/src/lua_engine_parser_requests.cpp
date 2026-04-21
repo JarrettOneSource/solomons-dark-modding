@@ -205,31 +205,93 @@ bool ParseBotCastRequest(
 
     const auto cast_kind = std::string(lua_tostring(state, -1));
     lua_pop(state, 1);
+
     if (cast_kind == "primary") {
         request->kind = multiplayer::BotCastKind::Primary;
         request->secondary_slot = -1;
-        return true;
-    }
+    } else if (cast_kind == "secondary") {
+        request->kind = multiplayer::BotCastKind::Secondary;
+        lua_getfield(state, table_index, "slot");
+        if (!lua_isinteger(state, -1)) {
+            *error_message = "sd.bots.cast secondary slot is required";
+            lua_pop(state, 1);
+            return false;
+        }
 
-    if (cast_kind != "secondary") {
+        request->secondary_slot = static_cast<std::int32_t>(lua_tointeger(state, -1));
+        lua_pop(state, 1);
+        if (request->secondary_slot < 0 || request->secondary_slot > 2) {
+            *error_message = "sd.bots.cast secondary slot must be in range [0, 2]";
+            return false;
+        }
+    } else {
         *error_message = "sd.bots.cast kind must be primary or secondary";
         return false;
     }
 
-    request->kind = multiplayer::BotCastKind::Secondary;
-    lua_getfield(state, table_index, "slot");
-    if (!lua_isinteger(state, -1)) {
-        *error_message = "sd.bots.cast secondary slot is required";
+    lua_getfield(state, table_index, "skill_id");
+    if (!lua_isnil(state, -1)) {
+        if (!lua_isinteger(state, -1)) {
+            *error_message = "sd.bots.cast skill_id must be an integer";
+            lua_pop(state, 1);
+            return false;
+        }
+        request->skill_id = static_cast<std::int32_t>(lua_tointeger(state, -1));
+    }
+    lua_pop(state, 1);
+
+    lua_getfield(state, table_index, "target_actor_address");
+    if (!lua_isnil(state, -1)) {
+        if (!lua_isinteger(state, -1)) {
+            *error_message = "sd.bots.cast target_actor_address must be an integer";
+            lua_pop(state, 1);
+            return false;
+        }
+        const auto target_actor_value = static_cast<lua_Integer>(lua_tointeger(state, -1));
+        if (target_actor_value < 0) {
+            *error_message = "sd.bots.cast target_actor_address must be non-negative";
+            lua_pop(state, 1);
+            return false;
+        }
+        request->target_actor_address = static_cast<uintptr_t>(target_actor_value);
+    }
+    lua_pop(state, 1);
+
+    lua_getfield(state, table_index, "target");
+    if (!lua_isnil(state, -1)) {
+        if (!lua_istable(state, -1)) {
+            *error_message = "sd.bots.cast target must be a table {x, y}";
+            lua_pop(state, 1);
+            return false;
+        }
+
+        lua_getfield(state, -1, "x");
+        lua_getfield(state, -2, "y");
+        if (!lua_isnumber(state, -2) || !lua_isnumber(state, -1)) {
+            *error_message = "sd.bots.cast target must contain numeric x and y";
+            lua_pop(state, 3);
+            return false;
+        }
+
+        request->has_aim_target = true;
+        request->aim_target_x = static_cast<float>(lua_tonumber(state, -2));
+        request->aim_target_y = static_cast<float>(lua_tonumber(state, -1));
+        lua_pop(state, 3);
+    } else {
         lua_pop(state, 1);
-        return false;
     }
 
-    request->secondary_slot = static_cast<std::int32_t>(lua_tointeger(state, -1));
-    lua_pop(state, 1);
-    if (request->secondary_slot < 0 || request->secondary_slot > 2) {
-        *error_message = "sd.bots.cast secondary slot must be in range [0, 2]";
-        return false;
+    lua_getfield(state, table_index, "angle");
+    if (!lua_isnil(state, -1)) {
+        if (!lua_isnumber(state, -1)) {
+            *error_message = "sd.bots.cast angle must be a number";
+            lua_pop(state, 1);
+            return false;
+        }
+        request->has_aim_angle = true;
+        request->aim_angle = static_cast<float>(lua_tonumber(state, -1));
     }
+    lua_pop(state, 1);
 
     return true;
 }

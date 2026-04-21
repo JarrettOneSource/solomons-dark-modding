@@ -1,6 +1,7 @@
 #include "d3d9_end_scene_hook.h"
 
 #include "logger.h"
+#include "lua_engine.h"
 #include "memory_access.h"
 #include "mod_loader.h"
 
@@ -26,6 +27,9 @@ bool g_hook_installed = false;
 
 HRESULT STDMETHODCALLTYPE HookEndScene(IDirect3DDevice9* device) {
     g_last_seen_device = device;
+    lua_exec_diag::g_last_endscene_ms.store(
+        static_cast<std::uint64_t>(GetTickCount64()),
+        std::memory_order_release);
     const auto result = g_original_end_scene != nullptr ? g_original_end_scene(device) : D3D_OK;
     if (g_action_pump != nullptr) {
         g_action_pump();

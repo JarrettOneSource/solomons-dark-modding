@@ -109,26 +109,32 @@ bool TryGetGameplayNavGridState(SDModGameplayNavGridState* state, int subdivisio
 }
 
 bool SpawnEnemyByType(int type_id, float x, float y, std::string* error_message) {
-    if (g_gameplay_keyboard_injection.initialized) {
-        PendingEnemySpawnRequest request;
-        request.type_id = type_id;
-        request.x = x;
-        request.y = y;
-        return QueueEnemySpawnRequest(request, error_message);
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message = "spawn enemy: gameplay action pump is not initialized.";
+        }
+        return false;
     }
 
-    return ExecuteSpawnEnemyNow(type_id, x, y, nullptr, error_message);
+    PendingEnemySpawnRequest request;
+    request.type_id = type_id;
+    request.x = x;
+    request.y = y;
+    return QueueEnemySpawnRequest(request, error_message);
 }
 
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message) {
-    if (g_gameplay_keyboard_injection.initialized) {
-        PendingRewardSpawnRequest request;
-        request.kind = std::string(kind);
-        request.amount = amount;
-        request.x = x;
-        request.y = y;
-        return QueueRewardSpawnRequest(request, error_message);
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message = "spawn reward: gameplay action pump is not initialized.";
+        }
+        return false;
     }
 
-    return ExecuteSpawnRewardNow(kind, amount, x, y, error_message);
+    PendingRewardSpawnRequest request;
+    request.kind = std::string(kind);
+    request.amount = amount;
+    request.x = x;
+    request.y = y;
+    return QueueRewardSpawnRequest(request, error_message);
 }

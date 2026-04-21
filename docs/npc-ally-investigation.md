@@ -18,6 +18,12 @@ Date: 2026-04-15
     command id is `0x42D`
   - that means ally-duration semantics are not just editor text; they have a
     concrete runtime payload shape
+- fresh loader crash evidence from 2026-04-20 sharpened the `0x447` output
+  question:
+  - the shared-hub clone handoff returned an actor with live `object_type=0x1`
+  - it did **not** return a live `GameNpc (0x1397)`
+  - treating that clone as `RegisteredGameNpc` and calling
+    `GameNpc_SetMoveGoal` on it crashed stock `PlayerActorTick`
 - `UNTIL LULL` is no longer an open ownership question
   - the recovered `ScriptCmd_TripOrTry (0x004E0640)` mode-`6` branch shows it
     belongs to a generic pause/trip command family
@@ -563,6 +569,15 @@ Current recovered states:
   - which exact record family `0x006451D0` resolves for ally-converted NPCs
   - whether the late dispatch path creates direct attacks, support effects, or
     both
+
+Direct loader-side evidence now leans toward the clone/player reading:
+
+- `WizardCloneFromSourceActor` returns a `PlayerWizard`-family actor
+  (`PlayerActorCtor` writes gameplay object type `0x1`)
+- the loader's 2026-04-20 shared-hub crash came from binding that clone as
+  `RegisteredGameNpc` and then driving `GameNpc_SetMoveGoal`
+- so the current conservative model should treat clone-handoff output as
+  player/ally rail until contrary stock evidence is recovered
 
 ## Current Live Runtime Surface
 

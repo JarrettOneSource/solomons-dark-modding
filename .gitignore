@@ -15,6 +15,7 @@ tools/procdump/
 screenshot*.png
 nul
 */nul
+sandbox/
 
 SolomonDarkModLauncher/bin/
 SolomonDarkModLauncher/obj/
