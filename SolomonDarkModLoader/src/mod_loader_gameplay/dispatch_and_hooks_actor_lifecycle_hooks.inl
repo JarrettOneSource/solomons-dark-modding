@@ -16,13 +16,50 @@ void __fastcall HookPlayerActorDtor(void* self, void* /*unused_edx*/, char free_
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
-    LogStandaloneWizardActorLifecycleEvent(
-        "player_dtor enter",
-        actor_address,
-        0,
-        static_cast<int>(free_flag),
-        reinterpret_cast<uintptr_t>(_ReturnAddress()));
+    bool tracked_wizard = false;
+    std::uint64_t bot_id = 0;
+    int gameplay_slot = -1;
+    ParticipantEntityBinding::Kind tracked_kind = ParticipantEntityBinding::Kind::StandaloneWizard;
+    {
+        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+        if (const auto* binding = FindParticipantEntityForActor(actor_address);
+            binding != nullptr && IsWizardParticipantKind(binding->kind)) {
+            tracked_wizard = true;
+            bot_id = binding->bot_id;
+            gameplay_slot = binding->gameplay_slot;
+            tracked_kind = binding->kind;
+        }
+    }
+    if (tracked_wizard) {
+        auto& memory = ProcessMemory::Instance();
+        Log(
+            "[bots] player_dtor enter" +
+            std::string(" actor=") + HexString(actor_address) +
+            " bot_id=" + std::to_string(bot_id) +
+            " binding_slot=" + std::to_string(gameplay_slot) +
+            " kind=" + std::to_string(static_cast<int>(tracked_kind)) +
+            " arg=" + std::to_string(static_cast<int>(free_flag)) +
+            " caller=" + HexString(reinterpret_cast<uintptr_t>(_ReturnAddress())) +
+            " owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
+            " slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
+                actor_address,
+                kActorSlotOffset,
+                -1))) +
+            " +1FC=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipRuntimeStateOffset, 0)) +
+            " +200=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
+            " +21C=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0)));
+    } else {
+        LogStandaloneWizardActorLifecycleEvent(
+            "player_dtor enter",
+            actor_address,
+            0,
+            static_cast<int>(free_flag),
+            reinterpret_cast<uintptr_t>(_ReturnAddress()));
+    }
     original(self, free_flag);
+    if (tracked_wizard) {
+        MarkParticipantEntityWorldUnregistered(actor_address);
+    }
 }
 
 void __fastcall HookPuppetManagerDeletePuppet(void* self, void* /*unused_edx*/, void* actor) {

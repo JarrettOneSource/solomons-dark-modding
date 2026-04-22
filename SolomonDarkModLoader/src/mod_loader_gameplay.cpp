@@ -66,6 +66,7 @@ using WorldCellGridRebindActorFn = void(__thiscall*)(void* self, void* actor);
 using MonsterPathfindingRefreshTargetFn = void(__fastcall*)(void* self, void* unused_edx);
 using PlayerActorMoveStepFn = std::uint32_t(__thiscall*)(void* self, void* actor, float move_x, float move_y, unsigned int flags);
 using SpellCastDispatcherFn = void(__thiscall*)(void* actor);
+using PurePrimarySpellStartFn = void(__thiscall*)(void* actor);
 using CastActiveHandleCleanupFn = void(__thiscall*)(void* actor);
 using ActorGetProfileFn = void*(__thiscall*)(void* self);
 using ProfileResolveStatEntryFn = void*(__thiscall*)(void* self, int stat_index);
@@ -81,6 +82,10 @@ using PlayerAppearanceApplyChoiceFn = void(__thiscall*)(void* progression, int c
 using SkillsWizardBuildPrimarySpellFn = void(__thiscall*)(void* self, float primary_entry, float combo_entry);
 using GameNpcSetMoveGoalFn = void(__thiscall*)(void* self, std::uint8_t mode, int follow_flag, float x, float y, float extra_scalar);
 using GameNpcSetTrackedSlotAssistFn = void(__thiscall*)(void* self, int slot_index, int require_callback);
+using EquipAttachmentSinkGetCurrentItemFn = int(__fastcall*)(int sink);
+using SpellActionBuilderFn = void(__thiscall*)(void* self, int mode, int arg2);
+using SpellBuilderResetFn = void(__cdecl*)();
+using SpellBuilderFinalizeFn = void(__cdecl*)();
 using GameplayActorAttachFn = void(__thiscall*)(void* self, void* actor);
 using StandaloneWizardVisualLinkAttachFn = std::uint8_t(__thiscall*)(void* self, void* value);
 using ActorBuildRenderDescriptorFromSourceFn = void(__thiscall*)(void* self);
@@ -157,6 +162,10 @@ bool CallSpellCastDispatcherSafe(
     uintptr_t dispatcher_address,
     uintptr_t actor_address,
     DWORD* exception_code);
+bool CallPurePrimarySpellStartSafe(
+    uintptr_t startup_address,
+    uintptr_t actor_address,
+    DWORD* exception_code);
 bool CallCastActiveHandleCleanupSafe(
     uintptr_t cleanup_address,
     uintptr_t actor_address,
@@ -182,6 +191,18 @@ constexpr std::size_t kPlayerActorTickHookPatchSize = 6;
 constexpr std::size_t kPlayerActorEnsureProgressionHandleHookPatchSize = 7;
 constexpr std::size_t kPlayerActorDtorHookPatchSize = 6;
 constexpr std::size_t kPlayerActorVtable28HookPatchSize = 6;
+constexpr std::size_t kPlayerActorPurePrimaryGateHookMinimumPatchSize = 5;
+constexpr std::size_t kPlayerControlBrainUpdateHookMinimumPatchSize = 5;
+constexpr std::size_t kPurePrimarySpellStartHookMinimumPatchSize = 5;
+constexpr std::size_t kSpellCastDispatcherHookMinimumPatchSize = 5;
+constexpr std::size_t kEquipAttachmentSinkGetCurrentItemHookMinimumPatchSize = 5;
+// 0x0044F5F0 starts with two whole instructions:
+//   push -1           (2 bytes)
+//   push 0x76559b     (5 bytes)
+// A 5-byte hook splits the second instruction and makes the trampoline invalid.
+constexpr std::size_t kSpellActionBuilderHookMinimumPatchSize = 7;
+constexpr std::size_t kSpellBuilderResetHookMinimumPatchSize = 5;
+constexpr std::size_t kSpellBuilderFinalizeHookMinimumPatchSize = 5;
 constexpr std::size_t kGameplayHudRenderDispatchHookPatchSize = 6;
 constexpr std::size_t kPuppetManagerDeletePuppetHookPatchSize = 6;
 // 0x004024C0 starts with 5 bytes of whole instructions:
@@ -493,6 +514,14 @@ struct GameplayKeyboardInjectionState {
     X86Hook player_actor_progression_handle_hook;
     X86Hook player_actor_dtor_hook;
     X86Hook player_actor_vtable28_hook;
+    X86Hook player_actor_pure_primary_gate_hook;
+    X86Hook player_control_brain_update_hook;
+    X86Hook pure_primary_spell_start_hook;
+    X86Hook spell_cast_dispatcher_hook;
+    X86Hook equip_attachment_get_current_item_hook;
+    X86Hook spell_action_builder_hook;
+    X86Hook spell_builder_reset_hook;
+    X86Hook spell_builder_finalize_hook;
     X86Hook gameplay_hud_render_dispatch_hook;
     X86Hook actor_animation_advance_hook;
     X86Hook puppet_manager_delete_puppet_hook;
@@ -613,8 +642,16 @@ struct ParticipantEntityBinding {
     // actor+0x160 (animation_drive_state), actor+0x1EC (mNoInterrupt), and the
     // cached spell handle (actor+0x27C / +0x27E) until cleanup.
     struct OngoingCastState {
+        enum class Lane : std::uint8_t {
+            Dispatcher = 0,
+            PurePrimary = 1,
+        };
         bool active = false;
+        Lane lane = Lane::Dispatcher;
         std::int32_t skill_id = 0;
+        std::int32_t dispatcher_skill_id = 0;
+        int selection_state_target = kUnknownAnimationStateId;
+        bool uses_dispatcher_skill_id = false;
         bool have_aim_heading = false;
         float aim_heading = 0.0f;
         bool have_aim_target = false;
@@ -628,6 +665,19 @@ struct ParticipantEntityBinding {
         std::uint8_t spread_before = 0;
         uintptr_t selection_state_pointer = 0;
         int selection_state_before = kUnknownAnimationStateId;
+        bool selection_state_object_snapshot_valid = false;
+        std::array<std::uint8_t, 0x38> selection_state_object_snapshot = {};
+        std::uint8_t selection_target_group_before = 0xFF;
+        std::uint16_t selection_target_slot_before = 0xFFFF;
+        std::int32_t selection_retarget_ticks_before = 0;
+        std::int32_t selection_target_cooldown_before = 0;
+        std::int32_t selection_target_extra_before = 0;
+        std::int32_t selection_target_flags_before = 0;
+        bool selection_target_seed_active = false;
+        std::uint8_t selection_target_group_seed = 0xFF;
+        std::uint16_t selection_target_slot_seed = 0xFFFF;
+        std::int32_t selection_target_hold_ticks = 0;
+        bool selection_brain_override_active = false;
         bool selection_state_override_active = false;
         int gameplay_selection_state_before = kUnknownAnimationStateId;
         bool gameplay_selection_state_override_active = false;
@@ -649,13 +699,8 @@ struct ParticipantEntityBinding {
 
 struct LocalPlayerCastShimState {
     bool active = false;
-    uintptr_t gameplay_address = 0;
     uintptr_t actor_address = 0;
-    int gameplay_slot = -1;
     std::uint8_t saved_actor_slot = 0;
-    uintptr_t saved_slot0_actor = 0;
-    uintptr_t saved_slot0_progression_handle = 0;
-    uintptr_t saved_local_player_actor = 0;
 };
 
 bool IsStandaloneWizardKind(ParticipantEntityBinding::Kind kind) {
@@ -816,6 +861,8 @@ std::vector<ParticipantGameplaySnapshot> g_participant_gameplay_snapshots;
 std::recursive_mutex g_gameplay_action_pump_mutex;
 std::uint64_t g_last_wizard_bot_crash_summary_refresh_ms = 0;
 std::uint64_t g_last_gameplay_hud_case100_log_ms = 0;
+std::uint64_t g_gameplay_slot_hud_probe_until_ms = 0;
+uintptr_t g_gameplay_slot_hud_probe_actor = 0;
 
 ObservedActorAnimationDriveProfile g_observed_idle_animation_profile;
 ObservedActorAnimationDriveProfile g_observed_moving_animation_profile;

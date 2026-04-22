@@ -102,6 +102,7 @@ void MarkParticipantEntityWorldUnregistered(uintptr_t actor_address) {
         return;
     }
 
+    auto& memory = ProcessMemory::Instance();
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
     auto* binding = FindParticipantEntityForActor(actor_address);
     if (binding == nullptr || !IsWizardParticipantKind(binding->kind)) {
@@ -110,6 +111,28 @@ void MarkParticipantEntityWorldUnregistered(uintptr_t actor_address) {
 
     const auto bot_id = binding->bot_id;
     const auto gameplay_slot = binding->gameplay_slot;
+    const auto gameplay_address = binding->materialized_scene_address;
+    if (IsGameplaySlotWizardKind(binding->kind) &&
+        gameplay_address != 0 &&
+        gameplay_slot >= 0 &&
+        gameplay_slot < static_cast<int>(kGameplayPlayerSlotCount)) {
+        const auto actor_slot_offset =
+            kGameplayPlayerActorOffset + static_cast<std::size_t>(gameplay_slot) * kGameplayPlayerSlotStride;
+        const auto progression_slot_offset =
+            kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(gameplay_slot) * kGameplayPlayerSlotStride;
+        const auto published_actor =
+            memory.ReadFieldOr<uintptr_t>(gameplay_address, actor_slot_offset, 0);
+        if (published_actor == actor_address) {
+            (void)memory.TryWriteField<uintptr_t>(gameplay_address, actor_slot_offset, 0);
+            (void)memory.TryWriteField<uintptr_t>(gameplay_address, progression_slot_offset, 0);
+            Log(
+                "[bots] world_unregister cleared stale gameplay slot publish. bot_id=" +
+                std::to_string(bot_id) +
+                " slot=" + std::to_string(gameplay_slot) +
+                " actor=" + HexString(actor_address) +
+                " gameplay=" + HexString(gameplay_address));
+        }
+    }
     ResetParticipantEntityMaterializationState(binding);
     PublishParticipantGameplaySnapshot(*binding);
     Log(

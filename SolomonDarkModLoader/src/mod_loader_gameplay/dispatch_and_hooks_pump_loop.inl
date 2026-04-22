@@ -9,14 +9,28 @@ void PumpQueuedGameplayActions() {
         static_cast<std::uint64_t>(GetTickCount64()),
         std::memory_order_release);
 
-    // Drain pipe-exec requests on every frame pump (EndScene and
-    // HookPlayerActorTick both call us) so Lua snippets fired from the
-    // pipe resolve on the main thread in any UI context — main menu,
-    // loading screens, or live gameplay. Runtime.tick dispatch stays
-    // gated on gameplay and is owned by PumpLuaWorkOnGameplayThread.
-    PumpLuaExecQueueOnMainThread();
-
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    uintptr_t active_gameplay_address = 0;
+    const bool gameplay_active =
+        TryResolveCurrentGameplayScene(&active_gameplay_address) &&
+        active_gameplay_address != 0;
+
+    // EndScene and HookPlayerActorTick both call this pump. Always drain
+    // pipe-exec on the main thread. When gameplay is inactive, also emit
+    // runtime.tick here so front-end automation and other menu-time Lua
+    // mods can advance before a gameplay scene exists.
+    if (!gameplay_active) {
+        const SDModRuntimeTickContext lua_tick_context = {
+            sizeof(SDModRuntimeTickContext),
+            GetRuntimeTickServiceIntervalMs(),
+            0,
+            now_ms,
+        };
+        PumpLuaWorkOnMainThread(lua_tick_context);
+    } else {
+        PumpLuaExecQueueOnMainThread();
+    }
+
     const auto wizard_bot_sync_not_before_ms =
         g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.load(std::memory_order_acquire);
 
@@ -39,10 +53,7 @@ void PumpQueuedGameplayActions() {
         break;
     }
 
-    uintptr_t active_gameplay_address = 0;
-    if (!g_allow_gameplay_action_pump_in_gameplay &&
-        TryResolveCurrentGameplayScene(&active_gameplay_address) &&
-        active_gameplay_address != 0) {
+    if (!g_allow_gameplay_action_pump_in_gameplay && gameplay_active) {
         return;
     }
 
@@ -223,4 +234,3 @@ void PumpQueuedGameplayActions() {
 
     RebuildNavGridSnapshotIfRequested_GameplayThread();
 }
-

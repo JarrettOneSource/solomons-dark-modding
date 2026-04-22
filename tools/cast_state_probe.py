@@ -689,7 +689,7 @@ local best = nil
 local best_gap = math.huge
 for _, actor in ipairs(actors) do
   local obj = tonumber(actor.object_type_id) or 0
-  if obj == 2012 or obj == 5009 or obj == 5010 then
+  if obj == 5009 or obj == 5010 then
     local ax = tonumber(actor.x) or 0.0
     local ay = tonumber(actor.y) or 0.0
     local dx = ax - bx

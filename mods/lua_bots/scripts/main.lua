@@ -6,20 +6,21 @@ local LEGACY_MANAGED_BOT_NAMES = {
 }
 
 local function default_primary_entry_index_for_element(element_id)
-  -- Stock create-ready mapping recovered from live runs:
-  --   earth -> 0x08
-  --   ether -> 0x10
-  --   fire  -> 0x18
+  -- Keep the sample bot's primary loadout aligned with the stock live
+  -- selection-state mapping used by gameplay actors:
+  --   ether -> 0x08
+  --   fire  -> 0x10
+  --   air   -> 0x18
   --   water -> 0x20
-  --   air   -> 0x28
+  --   earth -> 0x28
   local map = {
-    [0] = 0x18, -- fire
+    [0] = 0x10, -- fire
     [1] = 0x20, -- water
-    [2] = 0x08, -- earth
-    [3] = 0x28, -- air
-    [4] = 0x10, -- ether
+    [2] = 0x28, -- earth
+    [3] = 0x18, -- air
+    [4] = 0x08, -- ether
   }
-  return map[tonumber(element_id) or -1] or 0x10
+  return map[tonumber(element_id) or -1] or 0x08
 end
 
 local BOT_ELEMENT_ID = 4
@@ -102,6 +103,8 @@ local SUPPORTED_PRIVATE_AREAS = {
 
 local state = {
   bot_id = nil,
+  bot_dead = false,
+  dead_bot_since_ms = 0,
   last_command_ms = 0,
   last_cast_ms = 0,
   last_attack_diag_ms = 0,
@@ -164,6 +167,15 @@ local function get_scene_state()
   return type(scene) == "table" and scene or nil
 end
 
+local function get_world_state()
+  if type(sd) ~= "table" or type(sd.world) ~= "table" or type(sd.world.get_state) ~= "function" then
+    return nil
+  end
+
+  local world = sd.world.get_state()
+  return type(world) == "table" and world or nil
+end
+
 local function get_player_state()
   if type(sd) ~= "table" or type(sd.player) ~= "table" or type(sd.player.get_state) ~= "function" then
     return nil
@@ -191,6 +203,23 @@ local function get_bot_state(bot_id)
   return type(bot) == "table" and bot or nil
 end
 
+local function is_bot_dead(bot)
+  if type(bot) ~= "table" then
+    return false
+  end
+
+  local hp = tonumber(bot.hp)
+  local max_hp = tonumber(bot.max_hp)
+  if hp == nil then
+    return false
+  end
+  if max_hp == nil or max_hp <= 0.0 then
+    return false
+  end
+
+  return hp <= 0.0
+end
+
 local function destroy_bot_by_id(bot_id)
   if bot_id == nil or type(sd) ~= "table" or type(sd.bots) ~= "table" or type(sd.bots.destroy) ~= "function" then
     return
@@ -201,6 +230,8 @@ end
 
 local function clear_follow_state()
   state.bot_id = nil
+  state.bot_dead = false
+  state.dead_bot_since_ms = 0
   state.last_command_ms = 0
   state.last_cast_ms = 0
   state.last_attack_diag_ms = 0
@@ -224,6 +255,28 @@ local function clear_follow_state()
   state.nav_grid_cache = nil
   state.nav_grid_cache_world_id = nil
   state.nav_grid_cache_at_ms = 0
+end
+
+local function mark_bot_dead(now_ms, bot)
+  if state.bot_dead then
+    return
+  end
+
+  state.bot_dead = true
+  state.dead_bot_since_ms = tonumber(now_ms) or state.last_tick_ms or 0
+  state.follow_target = nil
+  state.attack_hold_until_ms = 0
+  state.last_command_ms = 0
+  state.last_cast_ms = 0
+
+  if state.bot_id ~= nil and type(sd) == "table" and type(sd.bots) == "table" and type(sd.bots.stop) == "function" then
+    pcall(sd.bots.stop, state.bot_id)
+  end
+
+  log(string.format(
+    "managed bot dead id=%s hp=%.2f; leaving corpse inert for rest of run",
+    tostring(state.bot_id),
+    tonumber(type(bot) == "table" and bot.hp or 0.0) or 0.0))
 end
 
 local function is_managed_bot_name(bot_name)
@@ -455,19 +508,23 @@ local function ensure_bot_spawned(now_ms, player, scene_intent, anchor)
     clear_follow_state()
     return nil
   end
+  if is_bot_dead(bot) then
+    mark_bot_dead(now_ms, bot)
+    return bot
+  end
 
   return bot
 end
 
--- Actor object_type_id semantics:
+-- Actor object_type_id semantics used by the live run combat surface:
 --   1    = player/bot wizard
 --   1001 = inert placement (items/walls/drops)
---   2012 = hostile enemy
---   5009 = hostile variant
---   5010 = hostile boss/variant
--- Enemies share actor_slot=0 with players (so slot is not a discriminator),
--- and their anim_drive_state is non-zero while ticking, so we filter by type.
-local ENEMY_OBJECT_TYPE_IDS = { [2012] = true, [5009] = true, [5010] = true }
+--   5009 = hostile enemy variant
+--   5010 = hostile enemy variant / spawned probe target
+-- A previous assumption that 2012 was a valid combat hostile caused the Lua
+-- brain to lock onto a non-castable actor family because it was spatially
+-- closer than the real wave enemies.
+local ENEMY_OBJECT_TYPE_IDS = { [5009] = true, [5010] = true }
 
 local function is_enemy_actor(actor, bot)
   if type(actor) ~= "table" then
@@ -550,6 +607,17 @@ local function issue_auto_attack(now_ms, scene, bot, probe)
   -- Never force casts outside a wave/run: produces visual glitches and suspect
   -- internal state because stock code disables attacking between waves.
   if type(scene) ~= "table" or tostring(scene.name or "") ~= "testrun" then
+    return false
+  end
+  local world = get_world_state()
+  local wave = type(world) == "table" and tonumber(world.wave) or 0
+  if wave == nil or wave <= 0 then
+    if should_log_attack_diag(now_ms) then
+      log(string.format(
+        "attack_skip id=%s reason=waves_inactive wave=%s",
+        tostring(state.bot_id),
+        tostring(type(world) == "table" and world.wave or nil)))
+    end
     return false
   end
   if now_ms - state.last_cast_ms < CAST_COOLDOWN_MS then
@@ -1097,6 +1165,10 @@ sd.events.on("runtime.tick", function(event)
 
   local bot = ensure_bot_spawned(now_ms, player, desired_scene, anchor)
   if type(bot) ~= "table" or not bot.available then
+    return
+  end
+  if state.bot_dead or is_bot_dead(bot) then
+    mark_bot_dead(now_ms, bot)
     return
   end
 

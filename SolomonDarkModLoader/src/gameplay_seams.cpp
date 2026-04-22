@@ -44,6 +44,8 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "player_actor_ensure_progression_handle", kPlayerActorEnsureProgressionHandle),
         SDMOD_ADDR("gameplay.hooks", "player_actor_destructor", kPlayerActorDtor),
         SDMOD_ADDR("gameplay.hooks", "player_actor_vtable28", kPlayerActorVtable28),
+        SDMOD_ADDR("gameplay.hooks", "player_actor_pure_primary_gate", kPlayerActorPurePrimaryGate),
+        SDMOD_ADDR("gameplay.hooks", "player_control_brain_update", kPlayerControlBrainUpdate),
         SDMOD_ADDR("gameplay.hooks", "gameplay_hud_render_dispatch", kGameplayHudRenderDispatch),
         SDMOD_ADDR("gameplay.hooks", "puppet_manager_delete_puppet", kPuppetManagerDeletePuppet),
         SDMOD_ADDR("gameplay.hooks", "pointer_list_delete_batch", kPointerListDeleteBatch),
@@ -78,6 +80,10 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "standalone_wizard_equip_ctor", kStandaloneWizardEquipCtor),
         SDMOD_ADDR("gameplay.hooks", "gamenpc_set_move_goal", kGameNpcSetMoveGoal),
         SDMOD_ADDR("gameplay.hooks", "gamenpc_set_tracked_slot_assist", kGameNpcSetTrackedSlotAssist),
+        SDMOD_ADDR("gameplay.hooks", "equip_attachment_get_current_item", kEquipAttachmentSinkGetCurrentItem),
+        SDMOD_ADDR("gameplay.hooks", "spell_action_builder", kSpellActionBuilder),
+        SDMOD_ADDR("gameplay.hooks", "spell_builder_reset", kSpellBuilderReset),
+        SDMOD_ADDR("gameplay.hooks", "spell_builder_finalize", kSpellBuilderFinalize),
         SDMOD_ADDR("gameplay.hooks", "item_staff_ctor", kItemStaffCtor),
         SDMOD_ADDR("gameplay.hooks", "item_wand_ctor", kItemWandCtor),
         SDMOD_ADDR("gameplay.hooks", "arena_start_run_dispatch", kArenaStartRunDispatch),
@@ -146,6 +152,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_3ef", kSpellCast3EF),
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_3f0", kSpellCast3F0),
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_dispatcher", kSpellCastDispatcher),
+        SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_pure_primary", kSpellCastPurePrimary),
         SDMOD_ADDR("run_lifecycle.hooks", "gold_changed", kGoldChanged),
         SDMOD_ADDR("run_lifecycle.hooks", "level_up", kLevelUp),
 
@@ -368,6 +375,8 @@ uintptr_t kPlayerActorTick = 0;
 uintptr_t kPlayerActorEnsureProgressionHandle = 0;
 uintptr_t kPlayerActorDtor = 0;
 uintptr_t kPlayerActorVtable28 = 0;
+uintptr_t kPlayerActorPurePrimaryGate = 0;
+uintptr_t kPlayerControlBrainUpdate = 0;
 uintptr_t kGameplayHudRenderDispatch = 0;
 uintptr_t kPuppetManagerDeletePuppet = 0;
 uintptr_t kPointerListDeleteBatch = 0;
@@ -402,6 +411,10 @@ uintptr_t kSkillsWizardBuildPrimarySpell = 0;
 uintptr_t kStandaloneWizardEquipCtor = 0;
 uintptr_t kGameNpcSetMoveGoal = 0;
 uintptr_t kGameNpcSetTrackedSlotAssist = 0;
+uintptr_t kEquipAttachmentSinkGetCurrentItem = 0;
+uintptr_t kSpellActionBuilder = 0;
+uintptr_t kSpellBuilderReset = 0;
+uintptr_t kSpellBuilderFinalize = 0;
 uintptr_t kItemStaffCtor = 0;
 uintptr_t kItemWandCtor = 0;
 uintptr_t kArenaStartRunDispatch = 0;
@@ -462,6 +475,7 @@ uintptr_t kSpellCast3EE = 0;
 uintptr_t kSpellCast3EF = 0;
 uintptr_t kSpellCast3F0 = 0;
 uintptr_t kSpellCastDispatcher = 0;
+uintptr_t kSpellCastPurePrimary = 0;
 uintptr_t kGoldChanged = 0;
 uintptr_t kLevelUp = 0;
 uintptr_t kGoldPickupCaller = 0;

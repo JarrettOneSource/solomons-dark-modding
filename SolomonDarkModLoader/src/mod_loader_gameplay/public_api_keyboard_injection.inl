@@ -17,6 +17,22 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorEnsureProgressionHandle);
     const auto player_actor_dtor = ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorDtor);
     const auto player_actor_vtable28 = ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorVtable28);
+    const auto player_actor_pure_primary_gate =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorPurePrimaryGate);
+    const auto player_control_brain_update =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerControlBrainUpdate);
+    const auto pure_primary_spell_start =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kSpellCastPurePrimary);
+    const auto spell_cast_dispatcher =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kSpellCastDispatcher);
+    const auto equip_attachment_get_current_item =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kEquipAttachmentSinkGetCurrentItem);
+    const auto spell_action_builder =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kSpellActionBuilder);
+    const auto spell_builder_reset =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kSpellBuilderReset);
+    const auto spell_builder_finalize =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kSpellBuilderFinalize);
     const auto gameplay_hud_render_dispatch =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayHudRenderDispatch);
     const auto actor_animation_advance = ProcessMemory::Instance().ResolveGameAddressOrZero(kActorAnimationAdvance);
@@ -33,6 +49,11 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         player_actor_progression_handle == 0 ||
         player_actor_dtor == 0 ||
         player_actor_vtable28 == 0 ||
+        player_actor_pure_primary_gate == 0 ||
+        player_control_brain_update == 0 ||
+        pure_primary_spell_start == 0 ||
+        spell_cast_dispatcher == 0 ||
+        equip_attachment_get_current_item == 0 ||
         gameplay_hud_render_dispatch == 0 ||
         actor_animation_advance == 0 ||
         puppet_manager_delete_puppet == 0 ||
@@ -134,12 +155,72 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
+    if (player_actor_pure_primary_gate != spell_cast_dispatcher) {
+        if (!InstallSafeX86Hook(
+                reinterpret_cast<void*>(player_actor_pure_primary_gate),
+                reinterpret_cast<void*>(&HookPlayerActorPurePrimaryGate),
+                kPlayerActorPurePrimaryGateHookMinimumPatchSize,
+                &g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook,
+                &hook_error)) {
+            Log("Gameplay input injection: pure-primary gate hook unavailable. " + hook_error);
+            g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook = X86Hook{};
+        }
+    } else {
+        Log("Gameplay input injection: pure-primary gate hook disabled because it aliases spell_dispatcher.");
+        g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook = X86Hook{};
+    }
+
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(player_control_brain_update),
+            reinterpret_cast<void*>(&HookPlayerControlBrainUpdate),
+            kPlayerControlBrainUpdateHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.player_control_brain_update_hook,
+            &hook_error)) {
+        Log("Gameplay input injection: control-brain hook unavailable. " + hook_error);
+        g_gameplay_keyboard_injection.player_control_brain_update_hook = X86Hook{};
+    }
+
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(pure_primary_spell_start),
+            reinterpret_cast<void*>(&HookPurePrimarySpellStart),
+            kPurePrimarySpellStartHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.pure_primary_spell_start_hook,
+            &hook_error)) {
+        Log("Gameplay input injection: pure-primary spell hook unavailable. " + hook_error);
+        g_gameplay_keyboard_injection.pure_primary_spell_start_hook = X86Hook{};
+    }
+
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(spell_cast_dispatcher),
+            reinterpret_cast<void*>(&HookSpellCastDispatcher),
+            kSpellCastDispatcherHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.spell_cast_dispatcher_hook,
+            &hook_error)) {
+        Log("Gameplay input injection: spell dispatcher hook unavailable. " + hook_error);
+        g_gameplay_keyboard_injection.spell_cast_dispatcher_hook = X86Hook{};
+    }
+
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(equip_attachment_get_current_item),
+            reinterpret_cast<void*>(&HookEquipAttachmentSinkGetCurrentItem),
+            kEquipAttachmentSinkGetCurrentItemHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.equip_attachment_get_current_item_hook,
+            &hook_error)) {
+        Log("Gameplay input injection: equip-attachment accessor hook unavailable. " + hook_error);
+        g_gameplay_keyboard_injection.equip_attachment_get_current_item_hook = X86Hook{};
+    }
+
     if (!InstallX86Hook(
             reinterpret_cast<void*>(gameplay_hud_render_dispatch),
             reinterpret_cast<void*>(&HookGameplayHudRenderDispatch),
             kGameplayHudRenderDispatchHookPatchSize,
             &g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook,
             &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.equip_attachment_get_current_item_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
@@ -158,6 +239,11 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
             kActorAnimationAdvanceHookPatchSize,
             &g_gameplay_keyboard_injection.actor_animation_advance_hook,
             &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.equip_attachment_get_current_item_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
@@ -177,6 +263,11 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
             kPuppetManagerDeletePuppetHookPatchSize,
             &g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook,
             &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.equip_attachment_get_current_item_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
@@ -197,6 +288,11 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
             kPointerListDeleteBatchHookPatchSize,
             &g_gameplay_keyboard_injection.pointer_list_delete_batch_hook,
             &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.equip_attachment_get_current_item_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
@@ -218,6 +314,11 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
             kActorWorldUnregisterHookPatchSize,
             &g_gameplay_keyboard_injection.actor_world_unregister_hook,
             &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.equip_attachment_get_current_item_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
@@ -240,6 +341,11 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
             kGameplaySwitchRegionHookMinimumPatchSize,
             &g_gameplay_keyboard_injection.gameplay_switch_region_hook,
             &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.equip_attachment_get_current_item_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
@@ -263,6 +369,11 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
             kMonsterPathfindingRefreshTargetHookMinimumPatchSize,
             &g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook,
             &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.equip_attachment_get_current_item_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
@@ -309,6 +420,14 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " player_vslot04=" + HexString(player_actor_progression_handle) +
         " player_dtor=" + HexString(player_actor_dtor) +
         " player_vslot28=" + HexString(player_actor_vtable28) +
+        " pure_primary_gate=" + HexString(player_actor_pure_primary_gate) +
+        " control_brain_update=" + HexString(player_control_brain_update) +
+        " pure_primary_start=" + HexString(pure_primary_spell_start) +
+        " spell_dispatcher=" + HexString(spell_cast_dispatcher) +
+        " equip_attachment_get_current_item=" + HexString(equip_attachment_get_current_item) +
+        " spell_action_builder=" + HexString(spell_action_builder) +
+        " spell_builder_reset=" + HexString(spell_builder_reset) +
+        " spell_builder_finalize=" + HexString(spell_builder_finalize) +
         " hud_case_dispatch=" + HexString(gameplay_hud_render_dispatch) +
         " anim_advance=" + HexString(actor_animation_advance) +
         " puppet_manager_delete_puppet=" + HexString(puppet_manager_delete_puppet) +
@@ -327,6 +446,14 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.equip_attachment_get_current_item_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.spell_action_builder_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_reset_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_finalize_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);

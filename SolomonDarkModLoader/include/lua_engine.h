@@ -59,8 +59,15 @@ void PumpLuaWorkOnGameplayThread(const SDModRuntimeTickContext& context);
 // pump, which fires every frame on the main thread regardless of
 // whether gameplay is active (main menu, loading screens, etc.). This
 // lets pipe-exec snippets run in contexts where HookPlayerActorTick
-// never fires. Runtime.tick dispatch stays gated on gameplay via
-// PumpLuaWorkOnGameplayThread.
+// never fires.
 void PumpLuaExecQueueOnMainThread();
+
+// Drain pending Lua exec requests and dispatch runtime.tick from the
+// main thread while gameplay is inactive. This is specifically for
+// front-end UI automation and menu/runtime mods that are driven by
+// runtime.tick before a gameplay scene exists. Do not call this while
+// gameplay is active; gameplay-owned runtime.tick remains the contract
+// of PumpLuaWorkOnGameplayThread.
+void PumpLuaWorkOnMainThread(const SDModRuntimeTickContext& context);
 
 }  // namespace sdmod

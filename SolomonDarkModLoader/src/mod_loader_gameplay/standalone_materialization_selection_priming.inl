@@ -113,26 +113,17 @@ bool PrimeGameplaySlotBotSelectionState(
         return false;
     }
 
-    ParticipantEntityBinding temporary_binding{};
-    temporary_binding.actor_address = actor_address;
-    temporary_binding.gameplay_slot = slot_index;
-    LocalPlayerCastShimState shim_state;
-    const auto shim_active = EnterLocalPlayerCastShim(&temporary_binding, &shim_state);
-
     int resolved_primary_skill_id = -1;
     std::string loadout_error;
-    const auto loadout_ok = shim_active &&
+    const auto loadout_ok =
         ApplyProfilePrimaryLoadoutToSkillsWizard(
             progression_address,
             character_profile,
             &resolved_primary_skill_id,
             &loadout_error);
-    LeaveLocalPlayerCastShim(shim_state);
     if (!loadout_ok) {
         if (error_message != nullptr) {
-            *error_message = shim_active
-                ? std::move(loadout_error)
-                : "Gameplay-slot loadout projection could not enter the scoped local-player shim.";
+            *error_message = std::move(loadout_error);
         }
         return false;
     }
@@ -143,6 +134,22 @@ bool PrimeGameplaySlotBotSelectionState(
             static_cast<std::int32_t>(choice_ids.secondary))) {
         if (error_message != nullptr) {
             *error_message = "Failed to mirror the secondary wizard appearance id into the slot progression object.";
+        }
+        return false;
+    }
+
+    // The pure-primary builder mutates the progression runtime after the
+    // initial refresh above. Re-run the stock progression refresh so the live
+    // actor mirrors the rebuilt primary spell before any combat startup.
+    exception_code = 0;
+    if (!CallActorProgressionRefreshSafe(
+            refresh_progression_address,
+            actor_address,
+            &exception_code)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Actor progression refresh (post primary build) failed with 0x" +
+                HexString(exception_code) + ".";
         }
         return false;
     }

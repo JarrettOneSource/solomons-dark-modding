@@ -544,6 +544,18 @@ void PumpLuaExecQueueOnMainThread() {
     detail::ProcessLuaExecQueueOnMainThread();
 }
 
+void PumpLuaWorkOnMainThread(const SDModRuntimeTickContext& context) {
+    detail::ProcessLuaExecQueueOnMainThread();
+
+    std::scoped_lock lock(detail::LuaEngineMutex());
+    if (!detail::LuaEngineInitializedFlag()) {
+        return;
+    }
+    if (detail::HasAnyLuaRuntimeTickHandlers()) {
+        detail::DispatchRuntimeTickToLuaMods(context);
+    }
+}
+
 void PumpLuaWorkOnGameplayThread(const SDModRuntimeTickContext& context) {
     detail::ProcessLuaExecQueueOnMainThread();
 

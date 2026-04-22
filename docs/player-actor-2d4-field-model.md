@@ -21,7 +21,7 @@ Found via `find_writes_to_offset.py` on the decompiled game. 10 writes:
 | `0x0041cb26`| `FUN_0041c780`      | FST float              | not PlayerActor class (TODO identify) |
 | `0x0047934d`| `FUN_00479150`      | FSTP float             | `Demon` ctor — Demon.vftable at top. Sets `[0xb5]=0`. Wrong class. |
 | `0x004799f8`| `FUN_00479940`      | MOV dword              | Likely Demon method. Wrong class. |
-| `0x0047d9e0`| `FUN_0047d570`      | FSTP float             | `Demon` combat tick (taunt strings like `SAY_GETHIMBOYS`). Writes `[+0x2D4]=_DAT_007de9d0`. Wrong class. |
+| `0x0047d9e0`| `FUN_0047d570`      | FSTP float             | Solomon intro retreat/combat-prelude handler (queues `SAY_GETHIMBOYS`, seeds retreat fields, writes `[+0x2D4]`). Wrong class for PlayerActor. |
 | `0x0047e028`| `FUN_0047df30`      | MOV dword              | Likely Demon. Wrong class. |
 | `0x00485c5c`| `FUN_004857b0`      | FST float              | **PlayerActor MoveStep wrapper** — reads `[0xb5]`, uses it as scalar, then ramps `[0xb5] += _DAT_007de8a0`. |
 | `0x00487b3a`| `FUN_00487300`      | FSTP float (array)     | `[ESI + EAX*0x4 + 0x2d4]` — an array-indexed write to a struct that starts at offset 0x2D4; likely animation/channel scratch. Does not conflict with the scalar semantic above because the base struct has multiple consecutive floats at 0x2D0/0x2D4/0x2D8 treated together. |

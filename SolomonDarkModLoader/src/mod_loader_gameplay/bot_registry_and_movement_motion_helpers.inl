@@ -18,6 +18,48 @@ float ReadResolvedGameDoubleAsFloatOr(uintptr_t absolute_address, float fallback
     return static_cast<float>(memory.ReadValueOr<double>(resolved_address, static_cast<double>(fallback)));
 }
 
+bool IsActorRuntimeDead(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    uintptr_t progression_address = 0;
+    if (!TryResolveActorProgressionRuntime(actor_address, &progression_address) ||
+        progression_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto hp = memory.ReadFieldOr<float>(progression_address, kProgressionHpOffset, 0.0f);
+    const auto max_hp =
+        memory.ReadFieldOr<float>(progression_address, kProgressionMaxHpOffset, 0.0f);
+    return max_hp > 0.0f && hp <= 0.0f;
+}
+
+void QuiesceDeadWizardBinding(ParticipantEntityBinding* binding) {
+    if (binding == nullptr) {
+        return;
+    }
+
+    binding->controller_state = multiplayer::BotControllerState::Idle;
+    binding->movement_active = false;
+    binding->has_target = false;
+    binding->direction_x = 0.0f;
+    binding->direction_y = 0.0f;
+    binding->desired_heading_valid = false;
+    binding->desired_heading = 0.0f;
+    binding->target_x = 0.0f;
+    binding->target_y = 0.0f;
+    binding->distance_to_target = 0.0f;
+    binding->path_active = false;
+    binding->path_failed = false;
+    binding->path_waypoint_index = 0;
+    binding->current_waypoint_x = 0.0f;
+    binding->current_waypoint_y = 0.0f;
+    binding->path_waypoints.clear();
+    binding->facing_heading_valid = false;
+}
+
 void AdvanceStandaloneWizardWalkCycleState(
     ParticipantEntityBinding* binding,
     float displacement_distance) {
@@ -187,8 +229,36 @@ std::string DescribeGameplaySlotCastStartupWindow(uintptr_t actor_address) {
     }
 
     auto& memory = ProcessMemory::Instance();
+    const auto gameplay_global_flag_1abe =
+        memory.ReadValueOr<std::uint8_t>(
+            memory.ResolveGameAddressOrZero(0x0081C264 + 0x1ABE),
+            0);
+    const auto gameplay_global_flag_1abd =
+        memory.ReadValueOr<std::uint8_t>(
+            memory.ResolveGameAddressOrZero(0x0081C264 + 0x1ABD),
+            0);
+    const auto gameplay_global_flag_85 =
+        memory.ReadValueOr<std::uint8_t>(
+            memory.ResolveGameAddressOrZero(0x0081C264 + 0x85),
+            0);
     const auto selection_ptr =
         memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+    const auto control_brain_ptr =
+        memory.ReadFieldOr<uintptr_t>(actor_address, 0x21C, 0);
+    const auto control_brain_value =
+        control_brain_ptr != 0 && memory.IsReadableRange(control_brain_ptr, sizeof(uintptr_t))
+            ? memory.ReadValueOr<std::uint32_t>(control_brain_ptr, 0xFFFFFFFFu)
+            : 0xFFFFFFFFu;
+    const auto actor_dc_ptr =
+        memory.ReadFieldOr<uintptr_t>(actor_address, 0xDC, 0);
+    const auto actor_dc_vtable =
+        actor_dc_ptr != 0 && memory.IsReadableRange(actor_dc_ptr, sizeof(uintptr_t))
+            ? memory.ReadValueOr<uintptr_t>(actor_dc_ptr, 0)
+            : 0;
+    const auto actor_dc_callback_10 =
+        actor_dc_vtable != 0 && memory.IsReadableRange(actor_dc_vtable + 0x10, sizeof(uintptr_t))
+            ? memory.ReadValueOr<uintptr_t>(actor_dc_vtable + 0x10, 0)
+            : 0;
     std::string selection_summary = "sel_ptr=" + HexString(selection_ptr);
     if (selection_ptr != 0) {
         selection_summary +=
@@ -211,6 +281,18 @@ std::string DescribeGameplaySlotCastStartupWindow(uintptr_t actor_address) {
     return
         "skill=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0)) +
         " prev=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset + sizeof(std::int32_t), 0)) +
+        " c21c=" + HexString(control_brain_ptr) +
+        " c21c_val=" + HexString(control_brain_value) +
+        " dc=" + HexString(actor_dc_ptr) +
+        " dc_vt=" + HexString(actor_dc_vtable) +
+        " dc_cb10=" + HexString(actor_dc_callback_10) +
+        " g1abe=" + HexString(gameplay_global_flag_1abe) +
+        " g1abd=" + HexString(gameplay_global_flag_1abd) +
+        " g85=" + HexString(gameplay_global_flag_85) +
+        " e4=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, 0xE4, 0)) +
+        " e8=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, 0xE8, 0)) +
+        " a160=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x160, 0)) +
+        " a1ec=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x1EC, 0)) +
         " g27c=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF)) +
         " s27e=" + HexString(memory.ReadFieldOr<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset, 0xFFFF)) +
         " f1b8=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x1B8, 0.0f)) +
@@ -287,24 +369,73 @@ void PrimeGameplaySlotPostGateDispatchState(uintptr_t actor_address, std::int32_
         kCooldownWordSentinel);
 }
 
+void RestoreSelectionBrainAfterCast(
+    const ParticipantEntityBinding::OngoingCastState& state) {
+    if (!state.selection_brain_override_active || state.selection_state_pointer == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    (void)memory.TryWriteField<std::uint8_t>(
+        state.selection_state_pointer,
+        0x04,
+        state.selection_target_group_before);
+    (void)memory.TryWriteField<std::uint16_t>(
+        state.selection_state_pointer,
+        0x06,
+        state.selection_target_slot_before);
+    (void)memory.TryWriteField<std::int32_t>(
+        state.selection_state_pointer,
+        0x08,
+        state.selection_retarget_ticks_before);
+    (void)memory.TryWriteField<std::int32_t>(
+        state.selection_state_pointer,
+        0x0C,
+        state.selection_target_cooldown_before);
+    (void)memory.TryWriteField<std::int32_t>(
+        state.selection_state_pointer,
+        0x10,
+        state.selection_target_extra_before);
+    (void)memory.TryWriteField<std::int32_t>(
+        state.selection_state_pointer,
+        0x14,
+        state.selection_target_flags_before);
+}
+
+void RestoreSelectionStateObjectAfterCast(
+    const ParticipantEntityBinding::OngoingCastState& state) {
+    if (!state.selection_state_object_snapshot_valid || state.selection_state_pointer == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    (void)memory.TryWrite(
+        state.selection_state_pointer,
+        state.selection_state_object_snapshot.data(),
+        state.selection_state_object_snapshot.size());
+}
+
 void PrimeSelectionBrainForCastStartup(
     uintptr_t actor_address,
     uintptr_t selection_pointer,
-    uintptr_t target_actor_address) {
-    if (selection_pointer == 0) {
+    uintptr_t target_actor_address,
+    ParticipantEntityBinding::OngoingCastState* ongoing) {
+    if (selection_pointer == 0 || ongoing == nullptr) {
         return;
     }
 
     auto& memory = ProcessMemory::Instance();
     constexpr std::uint8_t kTargetHandleGroupSentinel = 0xFF;
     constexpr std::uint16_t kTargetHandleSlotSentinel = 0xFFFF;
-
     const auto actor_owner =
         memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
     const auto target_owner =
         memory.ReadFieldOr<uintptr_t>(target_actor_address, kActorOwnerOffset, 0);
     const auto target_group =
-        memory.ReadFieldOr<std::uint8_t>(target_actor_address, kActorSlotOffset, kTargetHandleGroupSentinel);
+        memory.ReadFieldOr<std::uint8_t>(
+            target_actor_address,
+            kActorSlotOffset,
+            kTargetHandleGroupSentinel);
     const auto target_slot =
         memory.ReadFieldOr<std::uint16_t>(target_actor_address, kActorWorldSlotOffset, kTargetHandleSlotSentinel);
     const bool have_explicit_target_handle =
@@ -314,21 +445,42 @@ void PrimeSelectionBrainForCastStartup(
         target_group != kTargetHandleGroupSentinel &&
         target_slot != kTargetHandleSlotSentinel;
 
+    ongoing->selection_target_group_before =
+        memory.ReadValueOr<std::uint8_t>(selection_pointer + 0x04, kTargetHandleGroupSentinel);
+    ongoing->selection_target_slot_before =
+        memory.ReadValueOr<std::uint16_t>(selection_pointer + 0x06, kTargetHandleSlotSentinel);
+    ongoing->selection_retarget_ticks_before =
+        memory.ReadValueOr<std::int32_t>(selection_pointer + 0x08, 0);
+    ongoing->selection_target_cooldown_before =
+        memory.ReadValueOr<std::int32_t>(selection_pointer + 0x0C, 0);
+    ongoing->selection_target_extra_before =
+        memory.ReadValueOr<std::int32_t>(selection_pointer + 0x10, 0);
+    ongoing->selection_target_flags_before =
+        memory.ReadValueOr<std::int32_t>(selection_pointer + 0x14, 0);
+    ongoing->selection_brain_override_active = true;
+
     // PlayerActorTick clears actor+0x270 every tick and only rebuilds it when
     // FUN_0052C910 produces a non-zero control vector. That helper drives from
-    // the actor-owned +0x21C control brain; if the cached retarget timer/handle
-    // stay stale through cast startup, cVar5 never rises and stock never
-    // re-enters FUN_00548A00. When the Lua brain already picked a concrete
-    // hostile, seed that exact stock target handle into +0x04/+0x06 and keep a
-    // short positive retarget timer so the next native tick consumes the handle
-    // immediately instead of racing a nearest-hostile refresh. If no explicit
-    // target is available, fall back to invalidating the cached handle and
-    // forcing a fresh acquisition.
+    // the actor-owned +0x21C control brain. The stock function decrements +0x08
+    // first and only keeps the cached target handle on the cooldown path; when
+    // +0x08 hits zero it re-runs candidate search and overwrites +0x04/+0x06.
+    // For pure-primary bot startup, the Lua brain has already picked the real
+    // hostile. Seed that exact stock target handle into +0x04/+0x06 and keep
+    // +0x08 positive so stock stays on the "use cached target" path instead of
+    // discarding it before the cast gate evaluates cVar5.
     if (have_explicit_target_handle) {
+        ongoing->selection_target_seed_active = true;
+        ongoing->selection_target_group_seed = target_group;
+        ongoing->selection_target_slot_seed = target_slot;
+        ongoing->selection_target_hold_ticks = 60;
         (void)memory.TryWriteField<std::uint8_t>(selection_pointer, 0x04, target_group);
         (void)memory.TryWriteField<std::uint16_t>(selection_pointer, 0x06, target_slot);
-        (void)memory.TryWriteField<std::int32_t>(selection_pointer, 0x08, 2);
+        (void)memory.TryWriteField<std::int32_t>(selection_pointer, 0x08, ongoing->selection_target_hold_ticks);
     } else {
+        ongoing->selection_target_seed_active = false;
+        ongoing->selection_target_group_seed = kTargetHandleGroupSentinel;
+        ongoing->selection_target_slot_seed = kTargetHandleSlotSentinel;
+        ongoing->selection_target_hold_ticks = 0;
         (void)memory.TryWriteField<std::uint8_t>(
             selection_pointer,
             0x04,
@@ -396,12 +548,56 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
         if (ongoing->have_aim_target) {
             (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, ongoing->aim_target_x);
             (void)memory.TryWriteField(actor_address, kActorAimTargetYOffset, ongoing->aim_target_y);
-            (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
-            (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
+            if (ongoing->lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
+                (void)memory.TryWriteField<std::uint32_t>(
+                    actor_address,
+                    kActorAimTargetAux0Offset,
+                    ongoing->aim_aux0_before);
+                (void)memory.TryWriteField<std::uint32_t>(
+                    actor_address,
+                    kActorAimTargetAux1Offset,
+                    ongoing->aim_aux1_before);
+            } else {
+                (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
+                (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
+            }
         }
         (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
-        (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, ongoing->skill_id);
+        (void)memory.TryWriteField<std::int32_t>(
+            actor_address,
+            kActorPrimarySkillIdOffset,
+            ongoing->uses_dispatcher_skill_id ? ongoing->dispatcher_skill_id : 0);
         (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPreviousSkillIdOffset, 0);
+    };
+
+    auto RollbackPreparedStartup = [&](ParticipantEntityBinding::OngoingCastState* ongoing) {
+        if (ongoing == nullptr) {
+            return;
+        }
+
+        RestoreSelectionBrainAfterCast(*ongoing);
+        if (ongoing->gameplay_selection_state_override_active &&
+            binding->gameplay_slot >= 0 &&
+            ongoing->gameplay_selection_state_before != kUnknownAnimationStateId) {
+            std::string selection_error;
+            if (ongoing->lane != ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
+                (void)TryWriteActorAnimationStateIdDirect(
+                    actor_address,
+                    ongoing->gameplay_selection_state_before);
+            }
+            (void)TryWriteGameplaySelectionStateForSlot(
+                binding->gameplay_slot,
+                ongoing->gameplay_selection_state_before,
+                &selection_error);
+        }
+        if (ongoing->progression_spell_id_override_active &&
+            ongoing->progression_runtime_address != 0) {
+            (void)memory.TryWriteField<std::int32_t>(
+                ongoing->progression_runtime_address,
+                kProgressionCurrentSpellIdOffset,
+                ongoing->progression_spell_id_before);
+        }
+        *ongoing = ParticipantEntityBinding::OngoingCastState{};
     };
 
     multiplayer::BotCastRequest request{};
@@ -409,25 +605,28 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
         return false;
     }
     int requested_skill_id = request.skill_id;
+    ResolvedPrimaryCastDescriptor primary_descriptor{};
+    bool have_primary_descriptor = false;
     if (requested_skill_id <= 0 && request.kind == multiplayer::BotCastKind::Primary) {
-        int primary_entry_index = -1;
-        int combo_entry_index = -1;
-        if (!TryResolveProfilePrimarySelectionPair(
+        if (!TryResolveProfilePrimaryCastDescriptor(
                 binding->character_profile,
-                &primary_entry_index,
-                &combo_entry_index,
-                &requested_skill_id)) {
+                &primary_descriptor)) {
             finish_attack_idle();
             if (error_message != nullptr) {
                 *error_message =
                     "primary cast has no stock loadout pair. primary=" +
-                    std::to_string(primary_entry_index) +
-                    " combo=" + std::to_string(combo_entry_index);
+                    std::to_string(primary_descriptor.primary_entry_index) +
+                    " combo=" + std::to_string(primary_descriptor.combo_entry_index);
             }
             return false;
         }
+        have_primary_descriptor = true;
+        requested_skill_id = primary_descriptor.dispatcher_skill_id;
     }
-    if (requested_skill_id <= 0) {
+    if (requested_skill_id <= 0 &&
+        (!have_primary_descriptor ||
+         primary_descriptor.lane ==
+             ParticipantEntityBinding::OngoingCastState::Lane::Dispatcher)) {
         finish_attack_idle();
         if (error_message != nullptr) {
             *error_message = "cast has no resolvable skill_id";
@@ -435,7 +634,10 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
         return false;
     }
 
-    const auto combat_selection_state = ResolveCombatSelectionStateForSkillId(requested_skill_id);
+    const auto combat_selection_state =
+        have_primary_descriptor
+            ? primary_descriptor.selection_state
+            : ResolveCombatSelectionStateForSkillId(requested_skill_id);
     if (combat_selection_state < 0) {
         finish_attack_idle();
         if (error_message != nullptr) {
@@ -476,7 +678,19 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
     auto& ongoing = binding->ongoing_cast;
     ongoing = ParticipantEntityBinding::OngoingCastState{};
     ongoing.active = true;
-    ongoing.skill_id = requested_skill_id;
+    ongoing.lane =
+        have_primary_descriptor
+            ? primary_descriptor.lane
+            : ParticipantEntityBinding::OngoingCastState::Lane::Dispatcher;
+    ongoing.skill_id =
+        have_primary_descriptor && primary_descriptor.build_skill_id > 0
+            ? primary_descriptor.build_skill_id
+            : requested_skill_id;
+    ongoing.dispatcher_skill_id = requested_skill_id;
+    ongoing.selection_state_target = combat_selection_state;
+    ongoing.uses_dispatcher_skill_id =
+        ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::Dispatcher &&
+        ongoing.dispatcher_skill_id > 0;
     ongoing.have_aim_heading = have_aim_heading;
     ongoing.aim_heading = aim_heading;
     ongoing.have_aim_target = have_aim_target;
@@ -494,15 +708,31 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
 
     ongoing.selection_state_pointer =
         memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
-    PrimeSelectionBrainForCastStartup(
-        actor_address,
-        ongoing.selection_state_pointer,
-        request.target_actor_address);
+    if (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
+        ongoing.selection_state_pointer != 0 &&
+        memory.IsReadableRange(
+            ongoing.selection_state_pointer,
+            ongoing.selection_state_object_snapshot.size()) &&
+        memory.TryRead(
+            ongoing.selection_state_pointer,
+            ongoing.selection_state_object_snapshot.data(),
+            ongoing.selection_state_object_snapshot.size())) {
+        ongoing.selection_state_object_snapshot_valid = true;
+    }
+    if (ongoing.selection_state_pointer != 0) {
+        PrimeSelectionBrainForCastStartup(
+            actor_address,
+            ongoing.selection_state_pointer,
+            request.target_actor_address,
+            &ongoing);
+    }
     ongoing.selection_state_before = ResolveActorAnimationStateId(actor_address);
     if (binding->gameplay_slot >= 0 && ongoing.selection_state_before != kUnknownAnimationStateId) {
         ongoing.gameplay_selection_state_before = ongoing.selection_state_before;
         std::string selection_error;
-        (void)TryWriteActorAnimationStateIdDirect(actor_address, combat_selection_state);
+        if (ongoing.lane != ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
+            (void)TryWriteActorAnimationStateIdDirect(actor_address, combat_selection_state);
+        }
         ongoing.gameplay_selection_state_override_active =
             TryWriteGameplaySelectionStateForSlot(
                 binding->gameplay_slot,
@@ -525,21 +755,35 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
                     binding->character_profile,
                     &resolved_primary_skill_id,
                     &loadout_error)) {
+                RollbackPreparedStartup(&ongoing);
                 finish_attack_idle();
                 if (error_message != nullptr) {
                     *error_message = std::move(loadout_error);
                 }
                 return false;
             }
-            ongoing.skill_id = resolved_primary_skill_id;
-            if (ongoing.progression_spell_id_before <= 0) {
-                ongoing.progression_spell_id_before = ongoing.skill_id;
+            const auto refresh_progression_address =
+                memory.ResolveGameAddressOrZero(kActorProgressionRefresh);
+            DWORD refresh_exception_code = 0;
+            if (refresh_progression_address == 0 ||
+                !CallActorProgressionRefreshSafe(
+                    refresh_progression_address,
+                    actor_address,
+                    &refresh_exception_code)) {
+                RollbackPreparedStartup(&ongoing);
+                finish_attack_idle();
+                if (error_message != nullptr) {
+                    *error_message =
+                        refresh_progression_address == 0
+                            ? "Unable to resolve ActorProgressionRefresh."
+                            : "Actor progression refresh (post primary build) failed with 0x" +
+                                HexString(refresh_exception_code) + ".";
+                }
+                return false;
             }
-            ongoing.progression_spell_id_override_active =
-                memory.TryWriteField<std::int32_t>(
-                    ongoing.progression_runtime_address,
-                    kProgressionCurrentSpellIdOffset,
-                    ongoing.skill_id);
+            if (resolved_primary_skill_id > 0) {
+                ongoing.skill_id = resolved_primary_skill_id;
+            }
         } else {
             ongoing.progression_spell_id_override_active =
                 memory.TryWriteField<std::int32_t>(
@@ -549,7 +793,8 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
         }
     }
     ongoing.requires_local_slot_native_tick =
-        SkillRequiresLocalSlotDuringNativeTick(ongoing.skill_id);
+        ongoing.uses_dispatcher_skill_id &&
+        SkillRequiresLocalSlotDuringNativeTick(ongoing.dispatcher_skill_id);
     ongoing.startup_in_progress = true;
     ongoing.startup_ticks_waiting = 0;
 
@@ -572,9 +817,33 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
     }
 
     ApplyPreparedState(&ongoing);
+    bool pure_primary_primer_called = false;
+    DWORD pure_primary_primer_exception = 0;
+    if (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
+        const auto pure_primary_start_address =
+            memory.ResolveGameAddressOrZero(kSpellCastPurePrimary);
+        if (pure_primary_start_address != 0) {
+            LocalPlayerCastShimState shim_state;
+            const auto shim_active = EnterLocalPlayerCastShim(binding, &shim_state);
+            pure_primary_primer_called =
+                shim_active &&
+                CallPurePrimarySpellStartSafe(
+                    pure_primary_start_address,
+                    actor_address,
+                    &pure_primary_primer_exception);
+            LeaveLocalPlayerCastShim(shim_state);
+        }
+    }
+    g_gameplay_slot_hud_probe_actor = actor_address;
+    g_gameplay_slot_hud_probe_until_ms = static_cast<std::uint64_t>(GetTickCount64()) + 400;
     Log(
         "[bots] gameplay-slot cast prepped. bot_id=" + std::to_string(binding->bot_id) +
         " skill_id=" + std::to_string(ongoing.skill_id) +
+        " dispatcher_skill_id=" + std::to_string(ongoing.dispatcher_skill_id) +
+        " lane=" +
+            (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary
+                 ? std::string("pure_primary")
+                 : std::string("dispatcher")) +
         " selection_state=" + std::to_string(combat_selection_state) +
         " progression_runtime=" + HexString(ongoing.progression_runtime_address) +
         " progression_spell_id=" + std::to_string(
@@ -584,6 +853,8 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
                       kProgressionCurrentSpellIdOffset,
                       0)
                 : 0) +
+        " pure_primary_primer=" + std::to_string(pure_primary_primer_called ? 1 : 0) +
+        " pure_primary_primer_seh=" + HexString(pure_primary_primer_exception) +
         " selection_ptr=" + HexString(ongoing.selection_state_pointer) +
         " startup={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     return true;
@@ -640,6 +911,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
     constexpr float kRadiansToDegrees = 57.2957795130823208767981548141051703f;
     constexpr std::uint8_t kActorActiveCastGroupSentinel = 0xFF;
     constexpr std::uint16_t kActorActiveCastSlotSentinel = 0xFFFF;
+    const bool actor_dead = IsActorRuntimeDead(actor_address);
     constexpr std::size_t kProgressionCurrentSpellIdOffset = 0x750;
 
     // Per-spell handler init gate (docs/spell-cast-cleanup-chain.md) is
@@ -714,6 +986,8 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         }
         (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
         RestoreAim(state);
+        RestoreSelectionStateObjectAfterCast(state);
+        RestoreSelectionBrainAfterCast(state);
         if (state.gameplay_selection_state_override_active &&
             binding->gameplay_slot >= 0 &&
             state.gameplay_selection_state_before != kUnknownAnimationStateId) {
@@ -751,39 +1025,51 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
     auto ApplyPreparedGameplaySlotState =
         [&](const ParticipantEntityBinding::OngoingCastState& state) {
             if (state.gameplay_selection_state_override_active &&
-                binding->gameplay_slot >= 0) {
-                const auto combat_selection_state =
-                    ResolveCombatSelectionStateForSkillId(state.skill_id);
-                if (combat_selection_state >= 0) {
-                    std::string selection_error;
-                    (void)TryWriteActorAnimationStateIdDirect(actor_address, combat_selection_state);
-                    (void)TryWriteGameplaySelectionStateForSlot(
-                        binding->gameplay_slot,
-                        combat_selection_state,
-                        &selection_error);
+                binding->gameplay_slot >= 0 &&
+                state.selection_state_target != kUnknownAnimationStateId) {
+                std::string selection_error;
+                if (state.lane != ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
+                    (void)TryWriteActorAnimationStateIdDirect(
+                        actor_address,
+                        state.selection_state_target);
                 }
+                (void)TryWriteGameplaySelectionStateForSlot(
+                    binding->gameplay_slot,
+                    state.selection_state_target,
+                    &selection_error);
             }
             if (state.progression_spell_id_override_active &&
                 state.progression_runtime_address != 0) {
                 (void)memory.TryWriteField<std::int32_t>(
                     state.progression_runtime_address,
                     kProgressionCurrentSpellIdOffset,
-                    state.skill_id);
+                    state.dispatcher_skill_id != 0 ? state.dispatcher_skill_id : state.skill_id);
             }
             if (state.have_aim_heading) {
                 (void)memory.TryWriteField(actor_address, kActorHeadingOffset, state.aim_heading);
             }
-            if (state.have_aim_target) {
-                (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, state.aim_target_x);
-                (void)memory.TryWriteField(actor_address, kActorAimTargetYOffset, state.aim_target_y);
+        if (state.have_aim_target) {
+            (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, state.aim_target_x);
+            (void)memory.TryWriteField(actor_address, kActorAimTargetYOffset, state.aim_target_y);
+            if (state.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
+                (void)memory.TryWriteField<std::uint32_t>(
+                    actor_address,
+                    kActorAimTargetAux0Offset,
+                    state.aim_aux0_before);
+                (void)memory.TryWriteField<std::uint32_t>(
+                    actor_address,
+                    kActorAimTargetAux1Offset,
+                    state.aim_aux1_before);
+            } else {
                 (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
                 (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
             }
+        }
             (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
             (void)memory.TryWriteField<std::int32_t>(
                 actor_address,
                 kActorPrimarySkillIdOffset,
-                state.skill_id);
+                state.uses_dispatcher_skill_id ? state.dispatcher_skill_id : 0);
         };
 
     auto LogSpellObjectDiag = [&](std::uint8_t active_group_post) {
@@ -839,6 +1125,12 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
     if (binding->ongoing_cast.active) {
         auto& ongoing = binding->ongoing_cast;
 
+        if (actor_dead) {
+            ReleaseSpellHandle(ongoing, "dead");
+            ongoing = ParticipantEntityBinding::OngoingCastState{};
+            return true;
+        }
+
         // Re-pin aim while the cast animation plays so the handler's per-tick
         // reads (projectile spawn angle, facing) see consistent state.
         if (ongoing.have_aim_heading) {
@@ -847,25 +1139,92 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         if (ongoing.have_aim_target) {
             (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, ongoing.aim_target_x);
             (void)memory.TryWriteField(actor_address, kActorAimTargetYOffset, ongoing.aim_target_y);
-            (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
-            (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
+            if (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
+                (void)memory.TryWriteField<std::uint32_t>(
+                    actor_address,
+                    kActorAimTargetAux0Offset,
+                    ongoing.aim_aux0_before);
+                (void)memory.TryWriteField<std::uint32_t>(
+                    actor_address,
+                    kActorAimTargetAux1Offset,
+                    ongoing.aim_aux1_before);
+            } else {
+                (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
+                (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
+            }
         }
         (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
         (void)memory.TryWriteField<std::int32_t>(
-            actor_address, kActorPrimarySkillIdOffset, ongoing.skill_id);
+            actor_address,
+            kActorPrimarySkillIdOffset,
+            ongoing.uses_dispatcher_skill_id ? ongoing.dispatcher_skill_id : 0);
 
         if (IsGameplaySlotWizardKind(binding->kind) &&
             ongoing.startup_in_progress &&
+            ongoing.uses_dispatcher_skill_id &&
             !ongoing.post_stock_dispatch_attempted) {
-            PrimeGameplaySlotPostGateDispatchState(actor_address, ongoing.skill_id);
+            if (ongoing.uses_dispatcher_skill_id) {
+                PrimeGameplaySlotPostGateDispatchState(actor_address, ongoing.dispatcher_skill_id);
+            }
             DWORD startup_exception_code = 0;
             bool startup_dispatched = false;
+            uintptr_t startup_gameplay_address = 0;
+            std::uint8_t saved_cast_intent = 0;
+            std::uint8_t saved_mouse_left = 0;
+            std::size_t live_mouse_left_offset = 0;
+            bool startup_cast_intent_applied = false;
+            bool startup_mouse_left_applied = false;
+            if (TryResolveCurrentGameplayScene(&startup_gameplay_address) &&
+                startup_gameplay_address != 0) {
+                saved_cast_intent = memory.ReadFieldOr<std::uint8_t>(
+                    startup_gameplay_address,
+                    kGameplayCastIntentOffset,
+                    0);
+                startup_cast_intent_applied =
+                    memory.TryWriteField<std::uint8_t>(
+                        startup_gameplay_address,
+                        kGameplayCastIntentOffset,
+                        static_cast<std::uint8_t>(1));
+                const auto input_buffer_index =
+                    memory.ReadFieldOr<int>(startup_gameplay_address, kGameplayInputBufferIndexOffset, -1);
+                if (input_buffer_index >= 0) {
+                    live_mouse_left_offset =
+                        static_cast<std::size_t>(
+                            input_buffer_index * kGameplayInputBufferStride +
+                            kGameplayMouseLeftButtonOffset);
+                } else {
+                    live_mouse_left_offset = kGameplayMouseLeftButtonOffset;
+                }
+                saved_mouse_left = memory.ReadFieldOr<std::uint8_t>(
+                    startup_gameplay_address,
+                    live_mouse_left_offset,
+                    0);
+                startup_mouse_left_applied =
+                    memory.TryWriteField<std::uint8_t>(
+                        startup_gameplay_address,
+                        live_mouse_left_offset,
+                        static_cast<std::uint8_t>(1));
+            }
             InvokeWithLocalPlayerSlot([&] {
                 startup_dispatched = CallSpellCastDispatcherSafe(
                     dispatcher_address,
                     actor_address,
                     &startup_exception_code);
             });
+            if (startup_gameplay_address != 0) {
+                if (startup_mouse_left_applied) {
+                    (void)memory.TryWriteField<std::uint8_t>(
+                        startup_gameplay_address,
+                        live_mouse_left_offset,
+                        saved_mouse_left);
+                }
+                if (startup_cast_intent_applied) {
+                    (void)memory.TryWriteField<std::uint8_t>(
+                        startup_gameplay_address,
+                        kGameplayCastIntentOffset,
+                        saved_cast_intent);
+                }
+            }
             ongoing.post_stock_dispatch_attempted = true;
             const auto drive_after_dispatch =
                 memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
@@ -876,7 +1235,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             Log(
                 "[bots] gameplay-slot post-stock dispatch. bot_id=" +
                 std::to_string(binding->bot_id) +
-                " skill_id=" + std::to_string(ongoing.skill_id) +
+                " skill_id=" + std::to_string(ongoing.dispatcher_skill_id) +
                 " ok=" + (startup_dispatched ? std::string("1") : std::string("0")) +
                 " seh=" + HexString(startup_exception_code) +
                 " group_post=" + HexString(active_group_after_dispatch) +
@@ -893,18 +1252,25 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
         const auto no_interrupt =
             memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0);
+        const auto actor_e4 =
+            memory.ReadFieldOr<std::uint32_t>(actor_address, 0xE4, 0);
+        const auto actor_e8 =
+            memory.ReadFieldOr<std::uint32_t>(actor_address, 0xE8, 0);
         const auto active_cast_group =
             memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
         const bool has_live_handle = active_cast_group != kActorActiveCastGroupSentinel;
+        const bool pure_primary_action_active =
+            ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
+            (actor_e4 != 0 || actor_e8 != 0);
 
         ongoing.ticks_waiting += 1;
         if (ongoing.startup_in_progress) {
             ongoing.startup_ticks_waiting += 1;
         }
-        if (drive_state != 0 || no_interrupt != 0) {
+        if (drive_state != 0 || no_interrupt != 0 || pure_primary_action_active) {
             ongoing.saw_latch = true;
         }
-        if (has_live_handle || drive_state != 0 || no_interrupt != 0) {
+        if (has_live_handle || drive_state != 0 || no_interrupt != 0 || pure_primary_action_active) {
             ongoing.saw_activity = true;
             ongoing.startup_in_progress = false;
         }
@@ -914,7 +1280,12 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.startup_ticks_waiting >=
                 ResolveMaxStartupTicksWaiting(ongoing.skill_id);
         const bool activity_released =
-            ongoing.saw_activity && !has_live_handle && drive_state == 0 && no_interrupt == 0;
+            ongoing.saw_activity &&
+            !has_live_handle &&
+            drive_state == 0 &&
+            no_interrupt == 0 &&
+            actor_e4 == 0 &&
+            actor_e8 == 0;
         const bool safety_cap_hit =
             ongoing.ticks_waiting >= ParticipantEntityBinding::OngoingCastState::kMaxTicksWaiting;
 
@@ -929,6 +1300,14 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing = ParticipantEntityBinding::OngoingCastState{};
         }
         return true;
+    }
+
+    if (actor_dead) {
+        (void)multiplayer::FinishBotAttack(
+            binding->bot_id,
+            true,
+            memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f));
+        return false;
     }
 
     if (IsGameplaySlotWizardKind(binding->kind)) {
