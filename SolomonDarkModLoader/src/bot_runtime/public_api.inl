@@ -287,6 +287,10 @@ bool MoveBotTo(const BotMoveToRequest& request) {
     if (participant == nullptr) {
         return false;
     }
+    if (IsParticipantRuntimeDead(*participant)) {
+        ClearDeadBotControlsLocked(*participant);
+        return false;
+    }
 
     const auto* previous_intent = FindPendingMovementIntent(request.bot_id);
     const bool have_transform = participant->runtime.transform_valid;
@@ -317,12 +321,14 @@ bool StopBot(std::uint64_t bot_id) {
         return false;
     }
 
-    bool bot_exists = false;
-    UpdateRuntimeState([&](RuntimeState& state) {
-        bot_exists = FindBot(state, bot_id) != nullptr;
-    });
-    if (!bot_exists) {
+    const RuntimeState runtime = SnapshotRuntimeState();
+    const auto* participant = FindBot(runtime, bot_id);
+    if (participant == nullptr) {
         return false;
+    }
+    if (IsParticipantRuntimeDead(*participant)) {
+        ClearDeadBotControlsLocked(*participant);
+        return true;
     }
 
     const auto* previous_intent = FindPendingMovementIntent(bot_id);
@@ -348,33 +354,93 @@ bool FaceBot(std::uint64_t bot_id, float heading) {
     if (!g_bot_runtime_initialized || bot_id == 0 || !std::isfinite(heading)) {
         return false;
     }
+    heading = NormalizeHeadingDegrees(heading);
 
-    bool bot_exists = false;
-    UpdateRuntimeState([&](RuntimeState& state) {
-        bot_exists = FindBot(state, bot_id) != nullptr;
-    });
-    if (!bot_exists) {
+    const RuntimeState runtime = SnapshotRuntimeState();
+    const auto* participant = FindBot(runtime, bot_id);
+    if (participant == nullptr) {
+        return false;
+    }
+    if (IsParticipantRuntimeDead(*participant)) {
+        ClearDeadBotControlsLocked(*participant);
+        return false;
+    }
+
+    const auto* previous_intent = FindPendingMovementIntent(bot_id);
+    const bool preserve_active_intent =
+        previous_intent != nullptr &&
+        (previous_intent->state == BotControllerState::Moving ||
+         previous_intent->state == BotControllerState::Attacking ||
+         previous_intent->has_target);
+    const bool changed =
+        previous_intent == nullptr ||
+        !previous_intent->face_heading_valid ||
+        std::fabs(previous_intent->face_heading - heading) > 0.01f;
+
+    if (!preserve_active_intent) {
+        SchedulePendingMovementIntentLocked(
+            bot_id,
+            BotControllerState::Idle,
+            false,
+            0.0f,
+            0.0f,
+            true,
+            heading);
+    }
+    SetPendingFaceHeadingLocked(bot_id, true, heading, 0);
+    SetPendingFaceTargetLocked(bot_id, 0);
+    if (changed) {
+        Log(
+            "[bots] queued face id=" + std::to_string(bot_id) +
+            " heading=" + std::to_string(heading));
+    }
+
+    return true;
+}
+
+bool FaceBotTarget(std::uint64_t bot_id, uintptr_t target_actor_address, bool fallback_heading_valid, float fallback_heading) {
+    std::scoped_lock lock(g_bot_runtime_mutex);
+    if (!g_bot_runtime_initialized || bot_id == 0) {
+        return false;
+    }
+    if (fallback_heading_valid && !std::isfinite(fallback_heading)) {
+        return false;
+    }
+    if (fallback_heading_valid) {
+        fallback_heading = NormalizeHeadingDegrees(fallback_heading);
+    }
+
+    const RuntimeState runtime = SnapshotRuntimeState();
+    const auto* participant = FindBot(runtime, bot_id);
+    if (participant == nullptr) {
+        return false;
+    }
+    if (IsParticipantRuntimeDead(*participant)) {
+        ClearDeadBotControlsLocked(*participant);
         return false;
     }
 
     const auto* previous_intent = FindPendingMovementIntent(bot_id);
     const bool changed =
         previous_intent == nullptr ||
-        previous_intent->state != BotControllerState::Idle ||
-        !previous_intent->desired_heading_valid ||
-        std::fabs(previous_intent->desired_heading - heading) > 0.01f;
-    SchedulePendingMovementIntentLocked(
-        bot_id,
-        BotControllerState::Idle,
-        false,
-        0.0f,
-        0.0f,
-        true,
-        heading);
+        previous_intent->face_target_actor_address != target_actor_address ||
+        previous_intent->face_heading_valid != fallback_heading_valid ||
+        (fallback_heading_valid &&
+         (!previous_intent->face_heading_valid ||
+          std::fabs(previous_intent->face_heading - fallback_heading) > 0.01f));
+
+    if (fallback_heading_valid) {
+        SetPendingFaceHeadingLocked(bot_id, true, fallback_heading, 0);
+    } else if (target_actor_address == 0) {
+        SetPendingFaceHeadingLocked(bot_id, false, 0.0f, 0);
+    }
+    SetPendingFaceTargetLocked(bot_id, target_actor_address);
+
     if (changed) {
         Log(
-            "[bots] queued face id=" + std::to_string(bot_id) +
-            " heading=" + std::to_string(heading));
+            "[bots] queued face_target id=" + std::to_string(bot_id) +
+            " target=" + std::to_string(static_cast<std::uintptr_t>(target_actor_address)) +
+            " fallback_valid=" + std::to_string(fallback_heading_valid ? 1 : 0));
     }
 
     return true;
@@ -393,12 +459,23 @@ bool ReadBotMovementIntent(std::uint64_t bot_id, BotMovementIntentSnapshot* snap
     }
 
     RuntimeState runtime = SnapshotRuntimeState();
-    if (FindBot(runtime, bot_id) == nullptr) {
+    const auto* participant = FindBot(runtime, bot_id);
+    if (participant == nullptr) {
         return false;
+    }
+    if (IsParticipantRuntimeDead(*participant)) {
+        snapshot->available = true;
+        return true;
     }
 
     snapshot->available = true;
-    if (const auto* pending_intent = FindPendingMovementIntent(bot_id); pending_intent != nullptr) {
+    if (auto* pending_intent = FindPendingMovementIntent(bot_id); pending_intent != nullptr) {
+        if (pending_intent->face_heading_valid &&
+            pending_intent->face_heading_expires_ms != 0 &&
+            GetTickCount64() > pending_intent->face_heading_expires_ms) {
+            pending_intent->face_heading_valid = false;
+            pending_intent->face_heading_expires_ms = 0;
+        }
         snapshot->revision = pending_intent->revision;
         snapshot->state = pending_intent->state;
         snapshot->moving = pending_intent->state == BotControllerState::Moving;
@@ -407,6 +484,9 @@ bool ReadBotMovementIntent(std::uint64_t bot_id, BotMovementIntentSnapshot* snap
         snapshot->direction_y = pending_intent->direction_y;
         snapshot->desired_heading_valid = pending_intent->desired_heading_valid;
         snapshot->desired_heading = pending_intent->desired_heading;
+        snapshot->face_heading_valid = pending_intent->face_heading_valid;
+        snapshot->face_heading = pending_intent->face_heading;
+        snapshot->face_target_actor_address = pending_intent->face_target_actor_address;
         snapshot->target_x = pending_intent->target_x;
         snapshot->target_y = pending_intent->target_y;
         snapshot->distance_to_target = pending_intent->distance_to_target;
@@ -494,6 +574,7 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
     for (const auto& pending_intent : controller_intents) {
         auto updated_intent = pending_intent;
         const auto* participant = FindBot(runtime, pending_intent.bot_id);
+        const bool participant_dead = participant != nullptr && IsParticipantRuntimeDead(*participant);
         bool have_transform = false;
         float current_x = 0.0f;
         float current_y = 0.0f;
@@ -519,7 +600,18 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
                 gameplay_state.entity_kind == kSDModParticipantGameplayKindRegisteredGameNpc;
         }
 
-        if (registered_gamenpc_native_movement &&
+        if (participant_dead) {
+            updated_intent.state = BotControllerState::Idle;
+            updated_intent.has_target = false;
+            updated_intent.target_x = current_x;
+            updated_intent.target_y = current_y;
+            updated_intent.distance_to_target = 0.0f;
+            updated_intent.direction_x = 0.0f;
+            updated_intent.direction_y = 0.0f;
+            updated_intent.desired_heading_valid = have_transform || pending_intent.desired_heading_valid;
+            updated_intent.desired_heading =
+                have_transform ? current_heading : pending_intent.desired_heading;
+        } else if (registered_gamenpc_native_movement &&
             updated_intent.state == BotControllerState::Moving &&
             gameplay_state.movement_intent_revision == pending_intent.revision &&
             !gameplay_state.moving) {
@@ -542,6 +634,9 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
         }
 
         std::scoped_lock lock(g_bot_runtime_mutex);
+        if (participant_dead) {
+            RemovePendingCast(pending_intent.bot_id);
+        }
         auto* current_pending_intent = FindPendingMovementIntent(pending_intent.bot_id);
         if (current_pending_intent != nullptr && current_pending_intent->revision == pending_intent.revision) {
             current_pending_intent->state = updated_intent.state;
@@ -566,6 +661,10 @@ bool QueueBotCast(const BotCastRequest& request) {
     const RuntimeState runtime = SnapshotRuntimeState();
     const auto* participant = FindBot(runtime, request.bot_id);
     if (participant == nullptr) {
+        return false;
+    }
+    if (IsParticipantRuntimeDead(*participant)) {
+        ClearDeadBotControlsLocked(*participant);
         return false;
     }
 
@@ -624,27 +723,27 @@ bool QueueBotCast(const BotCastRequest& request) {
         pending_cast->aim_angle = request.aim_angle;
         pending_cast->queued_cast_count = g_next_cast_sequence++;
         pending_cast->queued_at_ms = now_ms;
-        SchedulePendingMovementIntentLocked(
-            request.bot_id,
-            BotControllerState::Attacking,
-            false,
-            0.0f,
-            0.0f,
-            desired_heading_valid,
-            desired_heading);
+        SetPendingFaceTargetLocked(request.bot_id, request.target_actor_address);
+        if (desired_heading_valid) {
+            SetPendingFaceHeadingLocked(request.bot_id, true, desired_heading, 0);
+        }
         queued = true;
     });
 
     if (queued) {
         Log(
             "[bots] queued cast for bot id=" + std::to_string(request.bot_id) +
-            " state=attacking");
+            " facing_preserved=" + std::to_string(desired_heading_valid ? 1 : 0));
     }
 
     return queued;
 }
 
-bool FinishBotAttack(std::uint64_t bot_id, bool desired_heading_valid, float desired_heading) {
+bool FinishBotAttack(
+    std::uint64_t bot_id,
+    bool desired_heading_valid,
+    float desired_heading,
+    bool clear_face_target) {
     std::scoped_lock lock(g_bot_runtime_mutex);
     if (!g_bot_runtime_initialized || bot_id == 0) {
         return false;
@@ -667,6 +766,22 @@ bool FinishBotAttack(std::uint64_t bot_id, bool desired_heading_valid, float des
     }
     if (desired_heading_valid) {
         desired_heading = NormalizeHeadingDegrees(desired_heading);
+    }
+    if (clear_face_target) {
+        SetPendingFaceTargetLocked(bot_id, 0);
+    }
+
+    if (previous_intent != nullptr &&
+        previous_intent->state == BotControllerState::Moving &&
+        previous_intent->has_target) {
+        if (desired_heading_valid) {
+            SetPendingFaceHeadingLocked(bot_id, true, desired_heading, 0);
+        }
+        Log(
+            "[bots] settled attack controller id=" + std::to_string(bot_id) +
+            " movement_preserved=1 heading_valid=" + std::to_string(desired_heading_valid ? 1 : 0) +
+            (desired_heading_valid ? " heading=" + std::to_string(desired_heading) : std::string("")));
+        return true;
     }
 
     const bool changed =

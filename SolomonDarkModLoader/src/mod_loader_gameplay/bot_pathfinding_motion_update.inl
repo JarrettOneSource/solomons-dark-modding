@@ -11,6 +11,7 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
     const auto revision_changed = binding->active_path_revision != binding->movement_intent_revision;
     if (binding->path_failed && !revision_changed && now_ms < binding->next_path_retry_not_before_ms) {
         binding->movement_active = false;
+        binding->last_movement_displacement = 0.0f;
         binding->direction_x = 0.0f;
         binding->direction_y = 0.0f;
         return true;
@@ -34,6 +35,7 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
 
     if (!binding->path_active || binding->path_waypoints.empty()) {
         binding->movement_active = false;
+        binding->last_movement_displacement = 0.0f;
         binding->direction_x = 0.0f;
         binding->direction_y = 0.0f;
         if (now_ms - binding->last_path_debug_log_ms >= 1000) {
@@ -110,6 +112,7 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
     const auto distance = std::sqrt(delta_x * delta_x + delta_y * delta_y);
     if (distance <= 0.0001f) {
         binding->movement_active = false;
+        binding->last_movement_displacement = 0.0f;
         binding->direction_x = 0.0f;
         binding->direction_y = 0.0f;
         return true;

@@ -106,6 +106,7 @@ py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-u
 - `docs/ui-binary-map.md` — recovered UI seams and coverage.
 - `docs/ui-engine-system-map.md` — higher-level UI engine architecture and hook targets.
 - `docs/debug-ui-overlay.md` — debug overlay architecture and limits.
-- `docs/bot-render-re-map.md` — wizard bot render-path notes.
-- `docs/bot-and-multiplayer-plan.md` — bot and multiplayer plan.
-- `TODO.md` — current hook and API work.
+- `docs/multiplayer-mvp-to-beta-roadmap.md` — multiplayer roadmap.
+- `docs/standalone-bot-stock-tick-drift.md` — standalone bot runtime drift notes.
+- `docs/combat-casting-enable-investigation.md` — combat-casting investigation notes.
+- `docs/bugs/README.md` — active bug-investigation index.

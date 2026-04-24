@@ -75,6 +75,24 @@ void PumpQueuedGameplayActions() {
         break;
     }
 
+    pending = g_gameplay_keyboard_injection.pending_enable_combat_prelude_requests.load(std::memory_order_acquire);
+    while (pending > 0) {
+        if (!g_gameplay_keyboard_injection.pending_enable_combat_prelude_requests.compare_exchange_weak(
+                pending,
+                pending - 1,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
+            continue;
+        }
+
+        if (!TryEnableCombatPreludeOnGameThread()) {
+            g_gameplay_keyboard_injection.pending_enable_combat_prelude_requests.fetch_add(
+                1,
+                std::memory_order_acq_rel);
+        }
+        break;
+    }
+
     PendingRewardSpawnRequest reward_request;
     bool have_reward_request = false;
     PendingEnemySpawnRequest enemy_request;

@@ -18,6 +18,8 @@ float ReadResolvedGameDoubleAsFloatOr(uintptr_t absolute_address, float fallback
     return static_cast<float>(memory.ReadValueOr<double>(resolved_address, static_cast<double>(fallback)));
 }
 
+constexpr std::int32_t kSuppressedSelectionRetargetTicks = 60;
+
 bool IsActorRuntimeDead(uintptr_t actor_address) {
     if (actor_address == 0) {
         return false;
@@ -36,6 +38,300 @@ bool IsActorRuntimeDead(uintptr_t actor_address) {
     return max_hp > 0.0f && hp <= 0.0f;
 }
 
+bool TryComputeActorAimTowardTarget(
+    uintptr_t actor_address,
+    uintptr_t target_actor_address,
+    float* heading_degrees,
+    float* target_x_out,
+    float* target_y_out);
+
+bool TryComputeActorAimTowardTargetFromOrigin(
+    uintptr_t actor_address,
+    uintptr_t target_actor_address,
+    bool origin_valid,
+    float origin_x,
+    float origin_y,
+    float* heading_degrees,
+    float* target_x_out,
+    float* target_y_out);
+
+bool TryComputeActorHeadingTowardTarget(
+    uintptr_t actor_address,
+    uintptr_t target_actor_address,
+    float* heading_degrees) {
+    float ignored_target_x = 0.0f;
+    float ignored_target_y = 0.0f;
+    return TryComputeActorAimTowardTarget(
+        actor_address,
+        target_actor_address,
+        heading_degrees,
+        &ignored_target_x,
+        &ignored_target_y);
+}
+
+bool TryComputeActorAimTowardTarget(
+    uintptr_t actor_address,
+    uintptr_t target_actor_address,
+    float* heading_degrees,
+    float* target_x_out,
+    float* target_y_out) {
+    return TryComputeActorAimTowardTargetFromOrigin(
+        actor_address,
+        target_actor_address,
+        false,
+        0.0f,
+        0.0f,
+        heading_degrees,
+        target_x_out,
+        target_y_out);
+}
+
+bool TryComputeActorAimTowardTargetFromOrigin(
+    uintptr_t actor_address,
+    uintptr_t target_actor_address,
+    bool origin_valid,
+    float origin_x,
+    float origin_y,
+    float* heading_degrees,
+    float* target_x_out,
+    float* target_y_out) {
+    if (actor_address == 0 || target_actor_address == 0 || heading_degrees == nullptr) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    constexpr std::size_t kActorFacingReadSize = 0x80;
+    if (!memory.IsReadableRange(actor_address, kActorFacingReadSize) ||
+        !memory.IsReadableRange(target_actor_address, kActorFacingReadSize) ||
+        IsActorRuntimeDead(target_actor_address)) {
+        return false;
+    }
+
+    const auto actor_owner = memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+    const auto target_owner = memory.ReadFieldOr<uintptr_t>(target_actor_address, kActorOwnerOffset, 0);
+    if (actor_owner == 0 || target_owner == 0 || actor_owner != target_owner) {
+        return false;
+    }
+
+    const auto actor_x =
+        origin_valid && std::isfinite(origin_x)
+            ? origin_x
+            : memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
+    const auto actor_y =
+        origin_valid && std::isfinite(origin_y)
+            ? origin_y
+            : memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
+    const auto target_x = memory.ReadFieldOr<float>(target_actor_address, kActorPositionXOffset, 0.0f);
+    const auto target_y = memory.ReadFieldOr<float>(target_actor_address, kActorPositionYOffset, 0.0f);
+    const auto dx = target_x - actor_x;
+    const auto dy = target_y - actor_y;
+    if (!std::isfinite(dx) || !std::isfinite(dy) || ((dx * dx) + (dy * dy)) <= 0.0001f) {
+        return false;
+    }
+
+    *heading_degrees = NormalizeWizardActorHeadingForWrite(
+        static_cast<float>(std::atan2(dy, dx) * kWizardHeadingRadiansToDegrees + 90.0f));
+    if (target_x_out != nullptr) {
+        *target_x_out = target_x;
+    }
+    if (target_y_out != nullptr) {
+        *target_y_out = target_y;
+    }
+    return true;
+}
+
+bool TryGetBindingMovementInputVector(
+    const ParticipantEntityBinding& binding,
+    float* direction_x_out,
+    float* direction_y_out) {
+    if (direction_x_out == nullptr || direction_y_out == nullptr || !binding.movement_active) {
+        return false;
+    }
+
+    const auto direction_x = binding.direction_x;
+    const auto direction_y = binding.direction_y;
+    const auto magnitude_squared = (direction_x * direction_x) + (direction_y * direction_y);
+    if (!std::isfinite(magnitude_squared) || magnitude_squared <= 0.0001f) {
+        return false;
+    }
+
+    const auto inverse_magnitude = 1.0f / std::sqrt(magnitude_squared);
+    *direction_x_out = direction_x * inverse_magnitude;
+    *direction_y_out = direction_y * inverse_magnitude;
+    return std::isfinite(*direction_x_out) && std::isfinite(*direction_y_out);
+}
+
+bool RefreshWizardBindingTargetFacing(ParticipantEntityBinding* binding) {
+    if (binding == nullptr || binding->actor_address == 0 || binding->facing_target_actor_address == 0) {
+        return false;
+    }
+
+    float heading = 0.0f;
+    float target_x = 0.0f;
+    float target_y = 0.0f;
+    if (!TryComputeActorAimTowardTargetFromOrigin(
+            binding->actor_address,
+            binding->facing_target_actor_address,
+            binding->stock_tick_facing_origin_valid,
+            binding->stock_tick_facing_origin_x,
+            binding->stock_tick_facing_origin_y,
+            &heading,
+            &target_x,
+            &target_y)) {
+        binding->facing_target_actor_address = 0;
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    (void)memory.TryWriteField(binding->actor_address, kActorAimTargetXOffset, target_x);
+    (void)memory.TryWriteField(binding->actor_address, kActorAimTargetYOffset, target_y);
+    (void)memory.TryWriteField<std::uint32_t>(binding->actor_address, kActorAimTargetAux0Offset, 0);
+    (void)memory.TryWriteField<std::uint32_t>(binding->actor_address, kActorAimTargetAux1Offset, 0);
+    binding->facing_heading_value = heading;
+    binding->facing_heading_valid = true;
+    return true;
+}
+
+bool RefreshOngoingCastAimFromFacingTarget(
+    ParticipantEntityBinding* binding,
+    ParticipantEntityBinding::OngoingCastState* ongoing) {
+    if (binding == nullptr || ongoing == nullptr) {
+        return false;
+    }
+
+    auto target_actor_address =
+        binding->facing_target_actor_address != 0
+            ? binding->facing_target_actor_address
+            : ongoing->target_actor_address;
+    if (target_actor_address == 0) {
+        return false;
+    }
+
+    float heading = 0.0f;
+    float target_x = 0.0f;
+    float target_y = 0.0f;
+    if (!TryComputeActorAimTowardTargetFromOrigin(
+            binding->actor_address,
+            target_actor_address,
+            binding->stock_tick_facing_origin_valid,
+            binding->stock_tick_facing_origin_x,
+            binding->stock_tick_facing_origin_y,
+            &heading,
+            &target_x,
+            &target_y)) {
+        if (binding->facing_target_actor_address == target_actor_address) {
+            binding->facing_target_actor_address = 0;
+        }
+        if (ongoing->target_actor_address == target_actor_address) {
+            ongoing->target_actor_address = 0;
+        }
+        ongoing->selection_target_seed_active = false;
+        ongoing->have_aim_heading = false;
+        ongoing->have_aim_target = false;
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    binding->facing_target_actor_address = target_actor_address;
+    ongoing->target_actor_address = target_actor_address;
+    constexpr std::uint8_t kTargetHandleGroupSentinel = 0xFF;
+    constexpr std::uint16_t kTargetHandleSlotSentinel = 0xFFFF;
+    const auto target_group =
+        memory.ReadFieldOr<std::uint8_t>(
+            target_actor_address,
+            kActorSlotOffset,
+            kTargetHandleGroupSentinel);
+    const auto target_slot =
+        memory.ReadFieldOr<std::uint16_t>(
+            target_actor_address,
+            kActorWorldSlotOffset,
+            kTargetHandleSlotSentinel);
+    if (target_group != kTargetHandleGroupSentinel &&
+        target_slot != kTargetHandleSlotSentinel) {
+        ongoing->selection_target_seed_active = true;
+        ongoing->selection_target_group_seed = target_group;
+        ongoing->selection_target_slot_seed = target_slot;
+        ongoing->selection_target_hold_ticks = 60;
+        if (ongoing->selection_state_pointer != 0) {
+            (void)memory.TryWriteField<std::uint8_t>(
+                ongoing->selection_state_pointer,
+                0x04,
+                target_group);
+            (void)memory.TryWriteField<std::uint16_t>(
+                ongoing->selection_state_pointer,
+                0x06,
+                target_slot);
+            (void)memory.TryWriteField<std::int32_t>(
+                ongoing->selection_state_pointer,
+                0x08,
+                ongoing->selection_target_hold_ticks);
+            (void)memory.TryWriteField<std::int32_t>(ongoing->selection_state_pointer, 0x0C, 0);
+            (void)memory.TryWriteField<std::int32_t>(ongoing->selection_state_pointer, 0x10, 0);
+            (void)memory.TryWriteField<std::int32_t>(ongoing->selection_state_pointer, 0x14, 0);
+        }
+    } else {
+        ongoing->selection_target_seed_active = false;
+    }
+
+    binding->facing_heading_value = heading;
+    binding->facing_heading_valid = true;
+    ongoing->aim_heading = heading;
+    ongoing->have_aim_heading = true;
+    ongoing->aim_target_x = target_x;
+    ongoing->aim_target_y = target_y;
+    ongoing->have_aim_target = true;
+    ApplyWizardActorFacingState(binding->actor_address, heading);
+
+    if (ongoing->selection_state_pointer != 0 && ongoing->startup_in_progress) {
+        float startup_input_x = 0.0f;
+        float startup_input_y = 0.0f;
+        auto have_startup_input =
+            TryGetBindingMovementInputVector(*binding, &startup_input_x, &startup_input_y);
+        if (!have_startup_input) {
+            const auto actor_x = memory.ReadFieldOr<float>(
+                binding->actor_address,
+                kActorPositionXOffset,
+                0.0f);
+            const auto actor_y = memory.ReadFieldOr<float>(
+                binding->actor_address,
+                kActorPositionYOffset,
+                0.0f);
+            const auto dx = target_x - actor_x;
+            const auto dy = target_y - actor_y;
+            const auto distance = std::sqrt((dx * dx) + (dy * dy));
+            if (std::isfinite(distance) && distance > 0.0001f) {
+                startup_input_x = dx / distance;
+                startup_input_y = dy / distance;
+                have_startup_input = true;
+            }
+        }
+        if (have_startup_input) {
+            // Stock pure-primary startup needs a non-zero movement/control vector.
+            // Prefer the follow lane so attacking does not steer the bot away from
+            // the player; only fall back to attack-facing when the bot is idle.
+            (void)memory.TryWriteValue<float>(
+                ongoing->selection_state_pointer + kActorControlBrainMoveInputXOffset,
+                startup_input_x);
+            (void)memory.TryWriteValue<float>(
+                ongoing->selection_state_pointer + kActorControlBrainMoveInputYOffset,
+                startup_input_y);
+        }
+    }
+    return true;
+}
+
+bool RefreshAndApplyWizardBindingFacingState(ParticipantEntityBinding* binding, uintptr_t actor_address) {
+    if (binding == nullptr || actor_address == 0) {
+        return false;
+    }
+
+    if (binding->ongoing_cast.active) {
+        (void)RefreshOngoingCastAimFromFacingTarget(binding, &binding->ongoing_cast);
+    }
+    (void)RefreshWizardBindingTargetFacing(binding);
+    return ApplyWizardBindingFacingState(binding, actor_address);
+}
+
 void QuiesceDeadWizardBinding(ParticipantEntityBinding* binding) {
     if (binding == nullptr) {
         return;
@@ -43,6 +339,7 @@ void QuiesceDeadWizardBinding(ParticipantEntityBinding* binding) {
 
     binding->controller_state = multiplayer::BotControllerState::Idle;
     binding->movement_active = false;
+    binding->last_movement_displacement = 0.0f;
     binding->has_target = false;
     binding->direction_x = 0.0f;
     binding->direction_y = 0.0f;
@@ -58,6 +355,10 @@ void QuiesceDeadWizardBinding(ParticipantEntityBinding* binding) {
     binding->current_waypoint_y = 0.0f;
     binding->path_waypoints.clear();
     binding->facing_heading_valid = false;
+    binding->facing_target_actor_address = 0;
+    binding->stock_tick_facing_origin_valid = false;
+    binding->stock_tick_facing_origin_x = 0.0f;
+    binding->stock_tick_facing_origin_y = 0.0f;
 }
 
 void AdvanceStandaloneWizardWalkCycleState(
@@ -121,6 +422,12 @@ void StopWizardBotActorMotion(uintptr_t actor_address) {
     // clone even while our controller is idle.
     (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, 0.0f);
     (void)memory.TryWriteField(actor_address, kActorAnimationDriveParameterOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorWalkCyclePrimaryOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorWalkCycleSecondaryOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorRenderDriveStrideScaleOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorRenderAdvanceRateOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorRenderAdvancePhaseOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorRenderDriveMoveBlendOffset, 0.0f);
 
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
     if (auto* binding = FindParticipantEntityForActor(actor_address);
@@ -139,11 +446,51 @@ void StopWizardBotActorMotion(uintptr_t actor_address) {
     ApplyActorAnimationDriveState(actor_address, false);
 }
 
+void StopDeadWizardBotActorMotion(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    // Dead bots are deliberately moved onto the player-family alternate/corpse
+    // drive branch. That branch can look wrong for living idle bots, but it is
+    // the stable "body on the ground" pose we want after HP reaches zero.
+    // Keep the rest of the drive inputs zero so the actor remains inert.
+    (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorAnimationDriveParameterOffset, 0.0f);
+    (void)memory.TryWriteField(
+        actor_address,
+        kActorAnimationDriveStateByteOffset,
+        kDeadWizardBotCorpseDriveState);
+    (void)memory.TryWriteField(actor_address, kActorAnimationMoveDurationTicksOffset, 0);
+    (void)memory.TryWriteField(actor_address, kActorMoveStepScaleOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorWalkCyclePrimaryOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorWalkCycleSecondaryOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorRenderDriveStrideScaleOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorRenderAdvanceRateOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorRenderAdvancePhaseOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorRenderDriveMoveBlendOffset, 0.0f);
+    ResetStandaloneWizardControlBrain(actor_address);
+
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    if (auto* binding = FindParticipantEntityForActor(actor_address);
+        binding != nullptr && binding->kind == ParticipantEntityBinding::Kind::StandaloneWizard) {
+        binding->dynamic_walk_cycle_primary = 0.0f;
+        binding->dynamic_walk_cycle_secondary = 0.0f;
+        binding->dynamic_render_drive_stride = 0.0f;
+        binding->dynamic_render_advance_rate = 0.0f;
+        binding->dynamic_render_advance_phase = 0.0f;
+        binding->dynamic_render_drive_move_blend = 0.0f;
+        ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
+    }
+}
+
 void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t actor_address, bool moving) {
     if (binding == nullptr || actor_address == 0 || binding->kind != ParticipantEntityBinding::Kind::StandaloneWizard) {
         return;
     }
 
+    ClearLiveWizardActorAnimationDriveState(actor_address);
     ApplyStandaloneWizardAnimationDriveProfile(binding, actor_address, moving);
     ApplyStandaloneWizardPuppetDriveState(binding, actor_address, moving);
     ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
@@ -255,6 +602,10 @@ std::string DescribeGameplaySlotCastStartupWindow(uintptr_t actor_address) {
         actor_dc_ptr != 0 && memory.IsReadableRange(actor_dc_ptr, sizeof(uintptr_t))
             ? memory.ReadValueOr<uintptr_t>(actor_dc_ptr, 0)
             : 0;
+    const auto actor_dc_slot_10 =
+        actor_dc_ptr != 0 && memory.IsReadableRange(actor_dc_ptr + 0x10, sizeof(uintptr_t))
+            ? memory.ReadValueOr<uintptr_t>(actor_dc_ptr + 0x10, 0)
+            : 0;
     const auto actor_dc_callback_10 =
         actor_dc_vtable != 0 && memory.IsReadableRange(actor_dc_vtable + 0x10, sizeof(uintptr_t))
             ? memory.ReadValueOr<uintptr_t>(actor_dc_vtable + 0x10, 0)
@@ -285,7 +636,8 @@ std::string DescribeGameplaySlotCastStartupWindow(uintptr_t actor_address) {
         " c21c_val=" + HexString(control_brain_value) +
         " dc=" + HexString(actor_dc_ptr) +
         " dc_vt=" + HexString(actor_dc_vtable) +
-        " dc_cb10=" + HexString(actor_dc_callback_10) +
+        " dc_slot10=" + HexString(actor_dc_slot_10) +
+        " dc_vt_cb10=" + HexString(actor_dc_callback_10) +
         " g1abe=" + HexString(gameplay_global_flag_1abe) +
         " g1abd=" + HexString(gameplay_global_flag_1abd) +
         " g85=" + HexString(gameplay_global_flag_85) +
@@ -297,13 +649,17 @@ std::string DescribeGameplaySlotCastStartupWindow(uintptr_t actor_address) {
         " s27e=" + HexString(memory.ReadFieldOr<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset, 0xFFFF)) +
         " f1b8=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x1B8, 0.0f)) +
         " f278=" + std::to_string(memory.ReadFieldOr<std::uint32_t>(actor_address, 0x278, 0)) +
+        " f298=" + std::to_string(memory.ReadFieldOr<std::uint32_t>(actor_address, 0x298, 0)) +
         " f29c=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x29C, 0.0f)) +
         " f2a0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2A0, 0.0f)) +
+        " f2a4=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2A4, 0.0f)) +
         " aimx=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorAimTargetXOffset, 0.0f)) +
         " aimy=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorAimTargetYOffset, 0.0f)) +
         " aux0=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0)) +
         " aux1=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0)) +
         " spread=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0)) +
+        " f2c8=" + std::to_string(memory.ReadFieldOr<std::uint32_t>(actor_address, 0x2C8, 0)) +
+        " f2cc=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2CC, 0.0f)) +
         " f2d0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2D0, 0.0f)) +
         " f2d4=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2D4, 0.0f)) +
         " f2d8=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2D8, 0.0f)) +
@@ -312,9 +668,20 @@ std::string DescribeGameplaySlotCastStartupWindow(uintptr_t actor_address) {
 }
 
 bool SkillRequiresLocalSlotDuringNativeTick(std::int32_t skill_id) {
-    // FUN_0052BB60 (0x3EF / Iceblast) has a slot-0-only emission branch in
-    // the stock handler body, not just at init/cleanup.
-    return skill_id == 0x3EF;
+    // These stock spell families keep doing useful native work after the
+    // startup edge. Gameplay-slot bots must keep masquerading as slot 0 for
+    // that active window or projectile/cone emission can silently stop.
+    switch (skill_id) {
+    case 0x3EF:
+    case 0x3F2:
+    case 0x3F3:
+    case 0x3F4:
+    case 0x3F5:
+    case 0x3F6:
+        return true;
+    default:
+        return false;
+    }
 }
 
 int ResolveMaxStartupTicksWaiting(std::int32_t skill_id) {
@@ -400,6 +767,23 @@ void RestoreSelectionBrainAfterCast(
         state.selection_state_pointer,
         0x14,
         state.selection_target_flags_before);
+}
+
+void ClearSelectionBrainTarget(uintptr_t selection_state_pointer) {
+    if (selection_state_pointer == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    (void)memory.TryWriteField<std::uint8_t>(selection_state_pointer, 0x04, 0xFF);
+    (void)memory.TryWriteField<std::uint16_t>(selection_state_pointer, 0x06, 0xFFFF);
+    (void)memory.TryWriteField<std::int32_t>(
+        selection_state_pointer,
+        0x08,
+        kSuppressedSelectionRetargetTicks);
+    (void)memory.TryWriteField<std::int32_t>(selection_state_pointer, 0x0C, 0);
+    (void)memory.TryWriteField<std::int32_t>(selection_state_pointer, 0x10, 0);
+    (void)memory.TryWriteField<std::int32_t>(selection_state_pointer, 0x14, 0);
 }
 
 void RestoreSelectionStateObjectAfterCast(
@@ -516,7 +900,7 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
     const auto finish_attack_idle = [&]() {
         const auto heading =
             memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
-        (void)multiplayer::FinishBotAttack(binding->bot_id, true, heading);
+        (void)multiplayer::FinishBotAttack(binding->bot_id, true, heading, true);
     };
 
     auto ApplyPreparedState = [&](ParticipantEntityBinding::OngoingCastState* ongoing) {
@@ -543,24 +927,13 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
                 ongoing->skill_id);
         }
         if (ongoing->have_aim_heading) {
-            (void)memory.TryWriteField(actor_address, kActorHeadingOffset, ongoing->aim_heading);
+            ApplyWizardActorFacingState(actor_address, ongoing->aim_heading);
         }
         if (ongoing->have_aim_target) {
             (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, ongoing->aim_target_x);
             (void)memory.TryWriteField(actor_address, kActorAimTargetYOffset, ongoing->aim_target_y);
-            if (ongoing->lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
-                (void)memory.TryWriteField<std::uint32_t>(
-                    actor_address,
-                    kActorAimTargetAux0Offset,
-                    ongoing->aim_aux0_before);
-                (void)memory.TryWriteField<std::uint32_t>(
-                    actor_address,
-                    kActorAimTargetAux1Offset,
-                    ongoing->aim_aux1_before);
-            } else {
-                (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
-                (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
-            }
+            (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
+            (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
         }
         (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
         (void)memory.TryWriteField<std::int32_t>(
@@ -576,6 +949,8 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
         }
 
         RestoreSelectionBrainAfterCast(*ongoing);
+        ClearSelectionBrainTarget(ongoing->selection_state_pointer);
+        binding->facing_target_actor_address = 0;
         if (ongoing->gameplay_selection_state_override_active &&
             binding->gameplay_slot >= 0 &&
             ongoing->gameplay_selection_state_before != kUnknownAnimationStateId) {
@@ -604,6 +979,7 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
     if (!multiplayer::ConsumePendingBotCast(binding->bot_id, &request)) {
         return false;
     }
+    const auto queued_target_actor_address = request.target_actor_address;
     int requested_skill_id = request.skill_id;
     ResolvedPrimaryCastDescriptor primary_descriptor{};
     bool have_primary_descriptor = false;
@@ -674,6 +1050,43 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
         aim_heading = request.aim_angle;
         have_aim_heading = true;
     }
+    auto effective_target_actor_address =
+        queued_target_actor_address != 0
+            ? queued_target_actor_address
+            : binding->facing_target_actor_address;
+    if (effective_target_actor_address != 0) {
+        float live_target_x = 0.0f;
+        float live_target_y = 0.0f;
+        float live_target_heading = 0.0f;
+        if (TryComputeActorAimTowardTarget(
+                actor_address,
+                effective_target_actor_address,
+                &live_target_heading,
+                &live_target_x,
+                &live_target_y)) {
+            binding->facing_target_actor_address = effective_target_actor_address;
+            aim_heading = live_target_heading;
+            have_aim_heading = true;
+            aim_target_x = live_target_x;
+            aim_target_y = live_target_y;
+            have_aim_target = true;
+        } else if (effective_target_actor_address != binding->facing_target_actor_address &&
+                   binding->facing_target_actor_address != 0 &&
+                   TryComputeActorAimTowardTarget(
+                       actor_address,
+                       binding->facing_target_actor_address,
+                       &live_target_heading,
+                       &live_target_x,
+                       &live_target_y)) {
+            effective_target_actor_address = binding->facing_target_actor_address;
+            binding->facing_target_actor_address = effective_target_actor_address;
+            aim_heading = live_target_heading;
+            have_aim_heading = true;
+            aim_target_x = live_target_x;
+            aim_target_y = live_target_y;
+            have_aim_target = true;
+        }
+    }
 
     auto& ongoing = binding->ongoing_cast;
     ongoing = ParticipantEntityBinding::OngoingCastState{};
@@ -696,6 +1109,11 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
     ongoing.have_aim_target = have_aim_target;
     ongoing.aim_target_x = aim_target_x;
     ongoing.aim_target_y = aim_target_y;
+    ongoing.target_actor_address = effective_target_actor_address;
+    if (have_aim_heading) {
+        binding->facing_heading_value = aim_heading;
+        binding->facing_heading_valid = true;
+    }
     ongoing.heading_before = memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
     ongoing.aim_x_before = memory.ReadFieldOr<float>(actor_address, kActorAimTargetXOffset, 0.0f);
     ongoing.aim_y_before = memory.ReadFieldOr<float>(actor_address, kActorAimTargetYOffset, 0.0f);
@@ -723,7 +1141,7 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
         PrimeSelectionBrainForCastStartup(
             actor_address,
             ongoing.selection_state_pointer,
-            request.target_actor_address,
+            effective_target_actor_address,
             &ongoing);
     }
     ongoing.selection_state_before = ResolveActorAnimationStateId(actor_address);
@@ -792,9 +1210,12 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
                     requested_skill_id);
         }
     }
+    const auto native_tick_skill_id =
+        ongoing.uses_dispatcher_skill_id && ongoing.dispatcher_skill_id > 0
+            ? ongoing.dispatcher_skill_id
+            : ongoing.skill_id;
     ongoing.requires_local_slot_native_tick =
-        ongoing.uses_dispatcher_skill_id &&
-        SkillRequiresLocalSlotDuringNativeTick(ongoing.dispatcher_skill_id);
+        SkillRequiresLocalSlotDuringNativeTick(native_tick_skill_id);
     ongoing.startup_in_progress = true;
     ongoing.startup_ticks_waiting = 0;
 
@@ -948,7 +1369,10 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
 
     auto RestoreAim = [&](const ParticipantEntityBinding::OngoingCastState& state) {
         if (state.have_aim_heading) {
-            (void)memory.TryWriteField(actor_address, kActorHeadingOffset, state.heading_before);
+            (void)RefreshWizardBindingTargetFacing(binding);
+            if (!ApplyWizardBindingFacingState(binding, actor_address)) {
+                ApplyWizardActorFacingState(actor_address, state.heading_before);
+            }
         }
         if (state.have_aim_target) {
             (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, state.aim_x_before);
@@ -963,7 +1387,8 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
     };
 
     auto ReleaseSpellHandle = [&](const ParticipantEntityBinding::OngoingCastState& state,
-                                  const char* exit_label) {
+                                  const char* exit_label,
+                                  bool clear_facing_target) {
         const auto group_before =
             memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
         DWORD cleanup_exception_code = 0;
@@ -985,9 +1410,20 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             }
         }
         (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
+        if (state.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
+            group_before == kActorActiveCastGroupSentinel) {
+            (void)memory.TryWriteField<std::uint32_t>(actor_address, 0xE4, 0);
+            (void)memory.TryWriteField<std::uint32_t>(actor_address, 0xE8, 0);
+        }
         RestoreAim(state);
         RestoreSelectionStateObjectAfterCast(state);
         RestoreSelectionBrainAfterCast(state);
+        ClearSelectionBrainTarget(state.selection_state_pointer);
+        if (clear_facing_target) {
+            binding->facing_target_actor_address = 0;
+        } else {
+            (void)RefreshWizardBindingTargetFacing(binding);
+        }
         if (state.gameplay_selection_state_override_active &&
             binding->gameplay_slot >= 0 &&
             state.gameplay_selection_state_before != kUnknownAnimationStateId) {
@@ -1009,7 +1445,11 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
         const auto settled_heading =
             memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
-        (void)multiplayer::FinishBotAttack(binding->bot_id, true, settled_heading);
+        (void)multiplayer::FinishBotAttack(
+            binding->bot_id,
+            true,
+            settled_heading,
+            clear_facing_target);
         Log(
             std::string("[bots] cast complete (") + exit_label + "). bot_id=" +
             std::to_string(binding->bot_id) +
@@ -1046,25 +1486,14 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     state.dispatcher_skill_id != 0 ? state.dispatcher_skill_id : state.skill_id);
             }
             if (state.have_aim_heading) {
-                (void)memory.TryWriteField(actor_address, kActorHeadingOffset, state.aim_heading);
+                ApplyWizardActorFacingState(actor_address, state.aim_heading);
             }
-        if (state.have_aim_target) {
-            (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, state.aim_target_x);
-            (void)memory.TryWriteField(actor_address, kActorAimTargetYOffset, state.aim_target_y);
-            if (state.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
-                (void)memory.TryWriteField<std::uint32_t>(
-                    actor_address,
-                    kActorAimTargetAux0Offset,
-                    state.aim_aux0_before);
-                (void)memory.TryWriteField<std::uint32_t>(
-                    actor_address,
-                    kActorAimTargetAux1Offset,
-                    state.aim_aux1_before);
-            } else {
+            if (state.have_aim_target) {
+                (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, state.aim_target_x);
+                (void)memory.TryWriteField(actor_address, kActorAimTargetYOffset, state.aim_target_y);
                 (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
                 (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
             }
-        }
             (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
             (void)memory.TryWriteField<std::int32_t>(
                 actor_address,
@@ -1126,32 +1555,24 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         auto& ongoing = binding->ongoing_cast;
 
         if (actor_dead) {
-            ReleaseSpellHandle(ongoing, "dead");
+            ReleaseSpellHandle(ongoing, "dead", true);
             ongoing = ParticipantEntityBinding::OngoingCastState{};
             return true;
         }
 
         // Re-pin aim while the cast animation plays so the handler's per-tick
         // reads (projectile spawn angle, facing) see consistent state.
+        (void)RefreshOngoingCastAimFromFacingTarget(binding, &ongoing);
         if (ongoing.have_aim_heading) {
-            (void)memory.TryWriteField(actor_address, kActorHeadingOffset, ongoing.aim_heading);
+            ApplyWizardActorFacingState(actor_address, ongoing.aim_heading);
+            binding->facing_heading_value = ongoing.aim_heading;
+            binding->facing_heading_valid = true;
         }
         if (ongoing.have_aim_target) {
             (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, ongoing.aim_target_x);
             (void)memory.TryWriteField(actor_address, kActorAimTargetYOffset, ongoing.aim_target_y);
-            if (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
-                (void)memory.TryWriteField<std::uint32_t>(
-                    actor_address,
-                    kActorAimTargetAux0Offset,
-                    ongoing.aim_aux0_before);
-                (void)memory.TryWriteField<std::uint32_t>(
-                    actor_address,
-                    kActorAimTargetAux1Offset,
-                    ongoing.aim_aux1_before);
-            } else {
-                (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
-                (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
-            }
+            (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
+            (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
         }
         (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
         (void)memory.TryWriteField<std::int32_t>(
@@ -1242,7 +1663,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 " drive_post=" + HexString(drive_after_dispatch) +
                 " no_int_post=" + HexString(no_interrupt_after_dispatch));
             if (!startup_dispatched) {
-                ReleaseSpellHandle(ongoing, "dispatch_seh");
+                ReleaseSpellHandle(ongoing, "dispatch_seh", true);
                 ongoing = ParticipantEntityBinding::OngoingCastState{};
                 return true;
             }
@@ -1275,6 +1696,17 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.startup_in_progress = false;
         }
 
+        // Pure primaries may not publish a live spell-object handle, but their
+        // native emission still runs for a visible action window through
+        // actor+0xE4/0xE8. Do not clear that latch at the first short settle or
+        // the projectile path can be cut off before it spawns.
+        constexpr int kPurePrimaryNoHandleSettleTicks = 160;
+        const bool pure_primary_no_handle_settled =
+            ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
+            !ongoing.requires_local_slot_native_tick &&
+            ongoing.saw_activity &&
+            !has_live_handle &&
+            ongoing.ticks_waiting >= kPurePrimaryNoHandleSettleTicks;
         const bool startup_timeout_hit =
             ongoing.startup_in_progress &&
             ongoing.startup_ticks_waiting >=
@@ -1289,24 +1721,31 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         const bool safety_cap_hit =
             ongoing.ticks_waiting >= ParticipantEntityBinding::OngoingCastState::kMaxTicksWaiting;
 
-        if (startup_timeout_hit || activity_released || safety_cap_hit) {
+        if (pure_primary_no_handle_settled || startup_timeout_hit || activity_released || safety_cap_hit) {
             const char* exit_label = startup_timeout_hit
                 ? "startup_timeout"
-                : (activity_released ? "activity_released" : "safety_cap");
+                : (pure_primary_no_handle_settled
+                       ? "pure_primary_no_handle_settled"
+                       : (activity_released ? "activity_released" : "safety_cap"));
             if (startup_timeout_hit) {
                 LogSpellObjectDiag(active_cast_group);
             }
-            ReleaseSpellHandle(ongoing, exit_label);
+            ReleaseSpellHandle(ongoing, exit_label, false);
             ongoing = ParticipantEntityBinding::OngoingCastState{};
         }
         return true;
     }
 
     if (actor_dead) {
+        multiplayer::BotCastRequest discarded_request{};
+        while (multiplayer::ConsumePendingBotCast(binding->bot_id, &discarded_request)) {
+            discarded_request = multiplayer::BotCastRequest{};
+        }
         (void)multiplayer::FinishBotAttack(
             binding->bot_id,
             true,
-            memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f));
+            memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f),
+            true);
         return false;
     }
 
@@ -1319,12 +1758,14 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
     if (!multiplayer::ConsumePendingBotCast(binding->bot_id, &request)) {
         return false;
     }
+    const auto queued_target_actor_address = request.target_actor_address;
 
     if (request.skill_id <= 0) {
         (void)multiplayer::FinishBotAttack(
             binding->bot_id,
             true,
-            memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f));
+            memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f),
+            true);
         if (error_message != nullptr) {
             *error_message = "cast has no skill_id";
         }
@@ -1359,6 +1800,43 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         aim_heading = request.aim_angle;
         have_aim_heading = true;
     }
+    auto effective_target_actor_address =
+        queued_target_actor_address != 0
+            ? queued_target_actor_address
+            : binding->facing_target_actor_address;
+    if (effective_target_actor_address != 0) {
+        float live_target_x = 0.0f;
+        float live_target_y = 0.0f;
+        float live_target_heading = 0.0f;
+        if (TryComputeActorAimTowardTarget(
+                actor_address,
+                effective_target_actor_address,
+                &live_target_heading,
+                &live_target_x,
+                &live_target_y)) {
+            binding->facing_target_actor_address = effective_target_actor_address;
+            aim_heading = live_target_heading;
+            have_aim_heading = true;
+            aim_target_x = live_target_x;
+            aim_target_y = live_target_y;
+            have_aim_target = true;
+        } else if (effective_target_actor_address != binding->facing_target_actor_address &&
+                   binding->facing_target_actor_address != 0 &&
+                   TryComputeActorAimTowardTarget(
+                       actor_address,
+                       binding->facing_target_actor_address,
+                       &live_target_heading,
+                       &live_target_x,
+                       &live_target_y)) {
+            effective_target_actor_address = binding->facing_target_actor_address;
+            binding->facing_target_actor_address = effective_target_actor_address;
+            aim_heading = live_target_heading;
+            have_aim_heading = true;
+            aim_target_x = live_target_x;
+            aim_target_y = live_target_y;
+            have_aim_target = true;
+        }
+    }
 
     const auto heading_before =
         memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
@@ -1374,7 +1852,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         memory.ReadFieldOr<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
 
     if (have_aim_heading) {
-        (void)memory.TryWriteField(actor_address, kActorHeadingOffset, aim_heading);
+        ApplyWizardActorFacingState(actor_address, aim_heading);
     }
     if (have_aim_target) {
         (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, aim_target_x);
@@ -1483,7 +1961,8 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         (void)multiplayer::FinishBotAttack(
             binding->bot_id,
             true,
-            memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, heading_before));
+            memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, heading_before),
+            true);
 
         if (error_message != nullptr) {
             *error_message =
@@ -1509,6 +1988,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
     ongoing.have_aim_target = have_aim_target;
     ongoing.aim_target_x = aim_target_x;
     ongoing.aim_target_y = aim_target_y;
+    ongoing.target_actor_address = effective_target_actor_address;
     ongoing.heading_before = heading_before;
     ongoing.aim_x_before = aim_x_before;
     ongoing.aim_y_before = aim_y_before;
@@ -1541,7 +2021,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
          (drive_state_post == 0 && no_interrupt_post == 0))) {
         ongoing.saw_latch = (drive_state_post != 0 || no_interrupt_post != 0);
         ongoing.saw_activity = ongoing.saw_activity || ongoing.saw_latch;
-        ReleaseSpellHandle(ongoing, "instant");
+        ReleaseSpellHandle(ongoing, "instant", false);
         ongoing = ParticipantEntityBinding::OngoingCastState{};
     }
 

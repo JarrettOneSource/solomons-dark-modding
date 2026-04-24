@@ -84,11 +84,15 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "spell_action_builder", kSpellActionBuilder),
         SDMOD_ADDR("gameplay.hooks", "spell_builder_reset", kSpellBuilderReset),
         SDMOD_ADDR("gameplay.hooks", "spell_builder_finalize", kSpellBuilderFinalize),
+        SDMOD_ADDR("gameplay.hooks", "pure_primary_post_builder", kPurePrimaryPostBuilder),
         SDMOD_ADDR("gameplay.hooks", "item_staff_ctor", kItemStaffCtor),
         SDMOD_ADDR("gameplay.hooks", "item_wand_ctor", kItemWandCtor),
         SDMOD_ADDR("gameplay.hooks", "arena_start_run_dispatch", kArenaStartRunDispatch),
         SDMOD_ADDR("gameplay.hooks", "arena_create", kArenaCreate),
         SDMOD_ADDR("gameplay.hooks", "arena_start_waves", kArenaStartWaves),
+        SDMOD_ADDR("gameplay.hooks", "gameplay_combat_prelude_primary_mode", kGameplayCombatPreludePrimaryMode),
+        SDMOD_ADDR("gameplay.hooks", "gameplay_combat_prelude_secondary_mode", kGameplayCombatPreludeSecondaryMode),
+        SDMOD_ADDR("gameplay.hooks", "arena_combat_prelude_dispatch", kArenaCombatPreludeDispatch),
         SDMOD_ADDR("gameplay.hooks", "spawn_reward_gold", kSpawnRewardGold),
         SDMOD_ADDR("gameplay.hooks", "enemy_config_ctor", kEnemyConfigCtor),
         SDMOD_ADDR("gameplay.hooks", "enemy_config_destructor", kEnemyConfigDtor),
@@ -114,6 +118,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.globals", "belt_slot_8_keybinding", kBeltSlotKeybindingGlobals[7]),
         SDMOD_ADDR("gameplay.globals", "game_object", kGameObjectGlobal),
         SDMOD_ADDR("gameplay.globals", "arena", kArenaGlobal),
+        SDMOD_ADDR("gameplay.globals", "gameplay_runtime", kGameplayRuntimeGlobal),
         SDMOD_ADDR("gameplay.globals", "enemy_count", kEnemyCountGlobal),
         SDMOD_ADDR("gameplay.globals", "gold", kGoldGlobal),
         SDMOD_ADDR("gameplay.globals", "transition_target_a", kTransitionTargetAGlobal),
@@ -275,6 +280,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "arena_combat_wait_ticks", kArenaCombatWaitTicksOffset),
         SDMOD_SIZE("gameplay.offsets", "arena_combat_advance_mode", kArenaCombatAdvanceModeOffset),
         SDMOD_SIZE("gameplay.offsets", "arena_combat_advance_threshold", kArenaCombatAdvanceThresholdOffset),
+        SDMOD_SIZE("gameplay.offsets", "arena_combat_prelude_list", kArenaCombatPreludeListOffset),
         SDMOD_SIZE("gameplay.offsets", "arena_combat_started_music", kArenaCombatStartedMusicOffset),
         SDMOD_SIZE("gameplay.offsets", "arena_combat_transition_requested", kArenaCombatTransitionRequestedOffset),
         SDMOD_SIZE("gameplay.offsets", "arena_combat_wave_counter", kArenaCombatWaveCounterOffset),
@@ -415,11 +421,15 @@ uintptr_t kEquipAttachmentSinkGetCurrentItem = 0;
 uintptr_t kSpellActionBuilder = 0;
 uintptr_t kSpellBuilderReset = 0;
 uintptr_t kSpellBuilderFinalize = 0;
+uintptr_t kPurePrimaryPostBuilder = 0;
 uintptr_t kItemStaffCtor = 0;
 uintptr_t kItemWandCtor = 0;
 uintptr_t kArenaStartRunDispatch = 0;
 uintptr_t kArenaCreate = 0;
 uintptr_t kArenaStartWaves = 0;
+uintptr_t kGameplayCombatPreludePrimaryMode = 0;
+uintptr_t kGameplayCombatPreludeSecondaryMode = 0;
+uintptr_t kArenaCombatPreludeDispatch = 0;
 uintptr_t kSpawnRewardGold = 0;
 uintptr_t kEnemyConfigCtor = 0;
 uintptr_t kEnemyConfigDtor = 0;
@@ -440,6 +450,7 @@ uintptr_t kSkillsKeybindingGlobal = 0;
 std::array<uintptr_t, 8> kBeltSlotKeybindingGlobals = {};
 uintptr_t kGameObjectGlobal = 0;
 uintptr_t kArenaGlobal = 0;
+uintptr_t kGameplayRuntimeGlobal = 0;
 uintptr_t kEnemyCountGlobal = 0;
 uintptr_t kGoldGlobal = 0;
 uintptr_t kTransitionTargetAGlobal = 0;
@@ -587,6 +598,7 @@ std::size_t kArenaCombatWaveIndexOffset = 0;
 std::size_t kArenaCombatWaitTicksOffset = 0;
 std::size_t kArenaCombatAdvanceModeOffset = 0;
 std::size_t kArenaCombatAdvanceThresholdOffset = 0;
+std::size_t kArenaCombatPreludeListOffset = 0;
 std::size_t kArenaCombatStartedMusicOffset = 0;
 std::size_t kArenaCombatTransitionRequestedOffset = 0;
 std::size_t kArenaCombatWaveCounterOffset = 0;

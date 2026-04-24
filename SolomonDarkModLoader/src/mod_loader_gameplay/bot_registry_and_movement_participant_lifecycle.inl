@@ -34,6 +34,13 @@ void RememberParticipantEntity(
         binding->dynamic_render_advance_rate = 0.0f;
         binding->dynamic_render_advance_phase = 0.0f;
         binding->dynamic_render_drive_move_blend = 0.0f;
+        binding->facing_heading_valid = false;
+        binding->facing_heading_value = 0.0f;
+        binding->facing_target_actor_address = 0;
+        binding->stock_tick_facing_origin_valid = false;
+        binding->stock_tick_facing_origin_x = 0.0f;
+        binding->stock_tick_facing_origin_y = 0.0f;
+        binding->death_transition_stock_tick_seen = false;
     }
 
     binding->character_profile = character_profile;
@@ -62,6 +69,13 @@ void RememberParticipantEntity(
         binding->dynamic_render_advance_rate = 0.0f;
         binding->dynamic_render_advance_phase = 0.0f;
         binding->dynamic_render_drive_move_blend = 0.0f;
+        binding->facing_heading_valid = false;
+        binding->facing_heading_value = 0.0f;
+        binding->facing_target_actor_address = 0;
+        binding->stock_tick_facing_origin_valid = false;
+        binding->stock_tick_facing_origin_x = 0.0f;
+        binding->stock_tick_facing_origin_y = 0.0f;
+        binding->death_transition_stock_tick_seen = false;
     }
 }
 
@@ -95,6 +109,13 @@ void ResetParticipantEntityMaterializationState(ParticipantEntityBinding* bindin
     binding->dynamic_render_advance_rate = 0.0f;
     binding->dynamic_render_advance_phase = 0.0f;
     binding->dynamic_render_drive_move_blend = 0.0f;
+    binding->facing_heading_valid = false;
+    binding->facing_heading_value = 0.0f;
+    binding->facing_target_actor_address = 0;
+    binding->stock_tick_facing_origin_valid = false;
+    binding->stock_tick_facing_origin_x = 0.0f;
+    binding->stock_tick_facing_origin_y = 0.0f;
+    binding->death_transition_stock_tick_seen = false;
 }
 
 void MarkParticipantEntityWorldUnregistered(uintptr_t actor_address) {

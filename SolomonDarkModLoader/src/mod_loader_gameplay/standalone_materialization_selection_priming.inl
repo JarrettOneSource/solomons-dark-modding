@@ -75,8 +75,6 @@ bool PrimeGameplaySlotBotSelectionState(
     }
     (void)TryWriteActorAnimationStateIdDirect(actor_address, selection_state);
 
-    const auto animation_selection_state_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
     Log(
         "[bots] visual stage=selection_pre_refresh bot={" +
         BuildActorVisualDebugSummary(actor_address) +

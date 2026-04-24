@@ -22,8 +22,6 @@ bool DestroyGameplaySlotBotResources(
         kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
     const auto published_actor_address =
         memory.ReadFieldOr<uintptr_t>(gameplay_address, actor_slot_offset, 0);
-    const auto published_progression_wrapper =
-        memory.ReadFieldOr<uintptr_t>(gameplay_address, progression_slot_offset, 0);
     if (actor_address == 0) {
         actor_address = published_actor_address;
     }
@@ -244,4 +242,3 @@ bool DestroyLoaderOwnedWizardActor(
 
     return true;
 }
-

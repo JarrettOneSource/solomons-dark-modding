@@ -26,6 +26,7 @@ void StopBotPathMotion(ParticipantEntityBinding* binding, bool preserve_path) {
     }
 
     binding->movement_active = false;
+    binding->last_movement_displacement = 0.0f;
     binding->direction_x = 0.0f;
     binding->direction_y = 0.0f;
     binding->current_waypoint_x = 0.0f;
@@ -34,4 +35,3 @@ void StopBotPathMotion(ParticipantEntityBinding* binding, bool preserve_path) {
         ResetBotPathState(binding);
     }
 }
-

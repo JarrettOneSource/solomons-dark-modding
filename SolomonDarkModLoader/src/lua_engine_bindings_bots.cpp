@@ -90,6 +90,40 @@ int LuaBotsFace(lua_State* state) {
     return 1;
 }
 
+int LuaBotsFaceTarget(lua_State* state) {
+    std::uint64_t bot_id = 0;
+    std::string error_message;
+    if (!ParseBotIdArgument(state, 1, &bot_id, &error_message)) {
+        return luaL_error(state, "%s", error_message.c_str());
+    }
+    if (!lua_isinteger(state, 2) && !lua_isnumber(state, 2)) {
+        return luaL_error(state, "sd.bots.face_target expects (id, actor_address[, fallback_angle])");
+    }
+
+    const auto target_actor_value = static_cast<lua_Integer>(lua_tointeger(state, 2));
+    if (target_actor_value < 0) {
+        return luaL_error(state, "sd.bots.face_target actor_address must be non-negative");
+    }
+    const auto target_actor_address = static_cast<uintptr_t>(target_actor_value);
+    const bool fallback_heading_valid = lua_gettop(state) >= 3 && !lua_isnil(state, 3);
+    float fallback_heading = 0.0f;
+    if (fallback_heading_valid) {
+        if (!lua_isnumber(state, 3)) {
+            return luaL_error(state, "sd.bots.face_target fallback_angle must be a number");
+        }
+        fallback_heading = static_cast<float>(lua_tonumber(state, 3));
+    }
+
+    lua_pushboolean(
+        state,
+        multiplayer::FaceBotTarget(
+            bot_id,
+            target_actor_address,
+            fallback_heading_valid,
+            fallback_heading) ? 1 : 0);
+    return 1;
+}
+
 int LuaBotsCast(lua_State* state) {
     multiplayer::BotCastRequest request;
     std::string error_message;
@@ -131,7 +165,7 @@ int LuaBotsGetState(lua_State* state) {
 }  // namespace
 
 void RegisterLuaBotBindings(lua_State* state) {
-    lua_createtable(state, 0, 10);
+    lua_createtable(state, 0, 11);
     RegisterFunction(state, &LuaBotsCreate, "create");
     RegisterFunction(state, &LuaBotsDestroy, "destroy");
     RegisterFunction(state, &LuaBotsClear, "clear");
@@ -139,6 +173,7 @@ void RegisterLuaBotBindings(lua_State* state) {
     RegisterFunction(state, &LuaBotsMoveTo, "move_to");
     RegisterFunction(state, &LuaBotsStop, "stop");
     RegisterFunction(state, &LuaBotsFace, "face");
+    RegisterFunction(state, &LuaBotsFaceTarget, "face_target");
     RegisterFunction(state, &LuaBotsCast, "cast");
     RegisterFunction(state, &LuaBotsGetCount, "get_count");
     RegisterFunction(state, &LuaBotsGetState, "get_state");

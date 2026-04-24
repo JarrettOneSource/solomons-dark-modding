@@ -9,468 +9,513 @@
       <UniqueIdentifier>{93995380-89BD-4B04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
     </Filter>
+    <Filter Include="Source Files\Loader">
+      <UniqueIdentifier>{A46FB348-2CB1-4022-8322-49A1AB9BE9B0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Lua">
+      <UniqueIdentifier>{C4742CEE-C6AA-4059-9ED8-321C030D233F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Gameplay">
+      <UniqueIdentifier>{EC2D75BD-0BDF-4E07-A317-34992CB9E03A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Debug UI Overlay">
+      <UniqueIdentifier>{169A0806-2BD0-444B-ABF8-D0440789A3CC}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Runtime Debug">
+      <UniqueIdentifier>{393DE47C-6A73-47F5-8C1F-F4531762A363}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Multiplayer">
+      <UniqueIdentifier>{058B387E-839D-4BBA-B751-C0B1B09F7304}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Steam">
+      <UniqueIdentifier>{81B5CB8C-6EAF-48A0-A018-892CBF976769}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Support">
+      <UniqueIdentifier>{0B83F22A-1FF1-4EBF-A2ED-6047A978E17C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Public API">
+      <UniqueIdentifier>{88E73B94-4B52-40DF-8760-92B0273DE78D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Internal">
+      <UniqueIdentifier>{7F8CE1D0-85DA-43BD-A209-8E1D4A19E297}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Gameplay">
+      <UniqueIdentifier>{B6C5C7C1-A85A-4B53-B957-6495E348B1AA}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Debug UI Overlay">
+      <UniqueIdentifier>{9DA41629-990D-45E0-9216-6F80791109E0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Lua Debug Bindings">
+      <UniqueIdentifier>{47A4D876-D821-4F8F-8633-3B91F2681D35}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Runtime Debug">
+      <UniqueIdentifier>{9B1C3F91-7936-4812-8E64-64748A0C9BD9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Third Party">
+      <UniqueIdentifier>{7D0D30D3-27B7-45C4-85E9-46AF1C1982F9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\binary_layout.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\binary_layout_internal.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\d3d9_end_scene_hook.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\debug_ui_config.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_config_internal.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="include\debug_ui_overlay.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\logger.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\logger_internal.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_parsers_internal.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="include\lua_engine.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\memory_access.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\mod_loader.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_foundation.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_protocol.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_state.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_state.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_service_loop.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\native_mods.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\runtime_bootstrap.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\runtime_debug.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\runtime_debug_internal.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="include\runtime_flags.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\runtime_tick_service.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\sdmod_plugin_api.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\startup_status.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\steam_bootstrap.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\steam_bootstrap_internal.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\target_game.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\x86_hook.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\gameplay_seams.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_exec_pipe.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_internal.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_internal.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_field_accessors.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_hits_and_errors.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_memory_inspection.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_native_calls.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_nav_grid_and_copy.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_snapshots_and_chains.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_tracing_and_watches.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_typed_readers_and_writers.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\helpers.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\control_observers_exact_capture_helpers.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\control_observers_browser_and_settings_capture.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\control_observers_menu_and_panel_capture.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\label_resolution_helpers.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\label_resolution_surface_registry_and_frame_render.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\state_and_actions_action_state.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\state_and_actions_owner_candidate_resolution.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\state_and_actions_owner_memory_helpers.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\state_and_actions_surface_owner_resolution.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_cell_math.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_grid_setup.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_motion_update.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_nearest_traversable.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_path_building.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_state_management.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_traversability.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_actor_call_wrappers.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_motion_helpers.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_lifecycle.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_registry.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_snapshot.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_seh_and_lifecycle_calls.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_smart_pointer_helpers.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_spawn_and_modifiers.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_tick_and_movement.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_actor_lifecycle_hooks.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_execute_requests.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_gameplay_thread_dispatch.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_mouse_refresh_hook.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_pump_loop.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_request_queues.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_standalone_wizard_tracking.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_tick_and_render_hooks.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_gameplay_action_queues.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_keyboard_injection.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_participant_queues.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_state_getters.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_actor_animation_state.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_actor_runtime.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_binding_resolution.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_bot_priming_and_selection.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_drive_profiles.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_gameplay_state.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_memory_and_progression.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_scene_context.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_actor_render_state.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_debug_summaries.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_equip_visual_lanes.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_selection_priming.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_slot_bot_creation.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_slot_bot_destruction.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_clone_source.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_element_colors.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_resources.inl">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\background_focus_bypass.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\binary_layout_parser.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\binary_layout_state.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\binary_layout_validation.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\d3d9_end_scene_hook.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\debug_ui_config.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Debug UI Overlay</Filter>
     </ClCompile>
     <ClCompile Include="src\debug_ui_config_ini.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Debug UI Overlay</Filter>
     </ClCompile>
     <ClCompile Include="src\debug_ui_overlay.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Debug UI Overlay</Filter>
     </ClCompile>
     <ClCompile Include="src\dllmain.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Loader</Filter>
     </ClCompile>
     <ClCompile Include="src\gameplay_seams.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="src\logger_core.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\logger_crash_reporting.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\logger_exception_handlers.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\logger.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_bots.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_input.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_parser_helpers.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_parser_requests.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_parser_snapshots.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_runtime.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_ui.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_exec_pipe.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\memory_access_core.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\memory_access_io.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\memory_access_regions.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\mod_loader.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Loader</Filter>
     </ClCompile>
     <ClCompile Include="src\mod_loader_gameplay.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Loader</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_foundation.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_runtime_state.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_service_loop.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\native_mods.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_bootstrap.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Loader</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_debug.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Runtime Debug</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_debug_core.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Runtime Debug</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_debug_hde32.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Runtime Debug</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_debug_snapshot.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Runtime Debug</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_debug_trace.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Runtime Debug</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_debug_watch.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Runtime Debug</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_flags.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_tick_service.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\startup_status.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\steam_bootstrap_api.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Steam</Filter>
     </ClCompile>
     <ClCompile Include="src\steam_bootstrap_configuration.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Steam</Filter>
     </ClCompile>
     <ClCompile Include="src\steam_bootstrap.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Steam</Filter>
     </ClCompile>
     <ClCompile Include="src\x86_hook.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

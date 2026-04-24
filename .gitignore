@@ -27,12 +27,14 @@ SolomonDarkModLoader/*.VC.db
 SolomonDarkModLoader/*.VC.opendb
 SolomonDarkModLoader/*.user
 SolomonDarkModLoader.zip
+SolomonDarkModLoader.dll
 
 *.ilk
 *.pdb
 *.tlog
 *.lastbuildstate
 *.user
+*.log
 
 # Accidental path-literal scratch artifacts from prior local tooling runs.
 C:*
@@ -47,3 +49,7 @@ C:*
 ghidra_project/
 ghidra_projects/
 pseudocode/
+
+# One-off live reverse-engineering probes should stay local until promoted to a
+# reusable tool with a stable name and README entry.
+tools/ghidra-scripts/*_tmp.py

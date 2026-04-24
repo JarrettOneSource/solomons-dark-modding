@@ -55,49 +55,30 @@ bool TrySendHostProcessLeftClickNormalized(
     std::string* error_message) {
     constexpr DWORD kPreClickSettleDelayMs = 15;
     constexpr DWORD kHeldClickDurationMs = 35;
-
-    HWND window = nullptr;
-    if (!TryFindHostProcessWindow(&window) || window == nullptr) {
-        if (error_message != nullptr) {
-            *error_message = "Unable to find the host game window.";
-        }
-        return false;
-    }
-
-    RECT client_rect{};
-    if (!GetClientRect(window, &client_rect)) {
-        if (error_message != nullptr) {
-            *error_message = "GetClientRect failed for the host game window.";
-        }
-        return false;
-    }
-
-    const auto width = client_rect.right - client_rect.left;
-    const auto height = client_rect.bottom - client_rect.top;
-    if (width <= 0 || height <= 0) {
-        if (error_message != nullptr) {
-            *error_message = "Host game window client rect was empty.";
-        }
-        return false;
-    }
-
     normalized_x = (std::max)(0.0, (std::min)(1.0, normalized_x));
     normalized_y = (std::max)(0.0, (std::min)(1.0, normalized_y));
 
-    const auto client_x = static_cast<LONG>(normalized_x * static_cast<double>(width - 1));
-    const auto client_y = static_cast<LONG>(normalized_y * static_cast<double>(height - 1));
+    HWND window = nullptr;
+    bool have_window_click_point = false;
+    if (TryFindHostProcessWindow(&window) && window != nullptr) {
+        RECT client_rect{};
+        if (GetClientRect(window, &client_rect)) {
+            const auto width = client_rect.right - client_rect.left;
+            const auto height = client_rect.bottom - client_rect.top;
+            if (width > 0 && height > 0) {
+                const auto client_x = static_cast<LONG>(normalized_x * static_cast<double>(width - 1));
+                const auto client_y = static_cast<LONG>(normalized_y * static_cast<double>(height - 1));
 
-    POINT point{client_x, client_y};
-    if (!ClientToScreen(window, &point)) {
-        if (error_message != nullptr) {
-            *error_message = "ClientToScreen failed for the host game window.";
+                POINT point{client_x, client_y};
+                if (ClientToScreen(window, &point)) {
+                    SetForegroundWindow(window);
+                    SetCursorPos(point.x, point.y);
+                    Sleep(kPreClickSettleDelayMs);
+                    have_window_click_point = true;
+                }
+            }
         }
-        return false;
     }
-
-    SetForegroundWindow(window);
-    SetCursorPos(point.x, point.y);
-    Sleep(kPreClickSettleDelayMs);
 
     if (IsRunLifecycleActive()) {
         std::string gameplay_click_error;
@@ -105,7 +86,14 @@ bool TrySendHostProcessLeftClickNormalized(
             return true;
         }
 
-        Log("Gameplay click queue failed; falling back to SendInput: " + gameplay_click_error);
+        Log("Gameplay click queue failed; falling back to windowed SendInput: " + gameplay_click_error);
+    }
+
+    if (!have_window_click_point) {
+        if (error_message != nullptr) {
+            *error_message = "Unable to position a host game window click point.";
+        }
+        return false;
     }
 
     INPUT input{};

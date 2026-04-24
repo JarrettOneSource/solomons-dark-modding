@@ -15,6 +15,7 @@
 #include <cstring>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 namespace sdmod {
@@ -66,6 +67,8 @@ struct RunLifecycleState {
     std::atomic<uintptr_t> last_wave_spawner{0};
     std::atomic<std::uint64_t> last_consumed_spell_click_serial{0};
     std::atomic<std::uint64_t> run_start_tick_ms{0};
+    std::atomic<bool> combat_prelude_only_suppression{false};
+    std::atomic<bool> wave_start_enemy_tracking{false};
     std::mutex enemy_type_mutex;
     std::unordered_map<uintptr_t, int> enemy_types_by_address;
     bool initialized = false;
@@ -107,9 +110,82 @@ bool IsRunActive() {
     return g_state.run_active.load(std::memory_order_acquire);
 }
 
+bool IsCombatArenaActiveForEnemyTracking() {
+    if (IsRunActive()) {
+        return true;
+    }
+    if (g_state.wave_start_enemy_tracking.load(std::memory_order_acquire)) {
+        return true;
+    }
+
+    SDModGameplayCombatState combat_state;
+    if (!TryGetGameplayCombatState(&combat_state) || !combat_state.valid) {
+        return false;
+    }
+
+    return combat_state.combat_active != 0 ||
+        combat_state.combat_started_music != 0 ||
+        combat_state.combat_wave_index > 0;
+}
+
 int ReadResolvedGlobalIntOr(uintptr_t absolute_address, int fallback = 0) {
     const auto resolved = ProcessMemory::Instance().ResolveGameAddressOrZero(absolute_address);
     return ProcessMemory::Instance().ReadValueOr<int>(resolved, fallback);
+}
+
+bool IsCombatPreludeOnlyActive() {
+    if (!g_state.combat_prelude_only_suppression.load(std::memory_order_acquire)) {
+        return false;
+    }
+
+    SDModGameplayCombatState combat_state;
+    if (!TryGetGameplayCombatState(&combat_state) || !combat_state.valid) {
+        return false;
+    }
+
+    if (combat_state.combat_wave_index != 0 ||
+        combat_state.combat_wave_counter != 999999999 ||
+        combat_state.combat_transition_requested == 0 ||
+        combat_state.combat_active == 0) {
+        static std::uint64_t s_last_prelude_repin_log_ms = 0;
+        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        if (now_ms - s_last_prelude_repin_log_ms >= 1000) {
+            s_last_prelude_repin_log_ms = now_ms;
+            Log(
+                "combat_prelude: re-pinning explicit no-wave state. arena=" +
+                HexString(combat_state.arena_address) +
+                " wave=" + std::to_string(combat_state.combat_wave_index) +
+                " wave_counter=" + std::to_string(combat_state.combat_wave_counter) +
+                " transition_requested=" +
+                std::to_string(static_cast<unsigned>(combat_state.combat_transition_requested)) +
+                " combat_active=" +
+                std::to_string(static_cast<unsigned>(combat_state.combat_active)));
+        }
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    (void)memory.TryWriteField<std::int32_t>(
+        combat_state.arena_address,
+        kArenaCombatWaveIndexOffset,
+        0);
+    (void)memory.TryWriteField<std::int32_t>(
+        combat_state.arena_address,
+        kArenaCombatWaveCounterOffset,
+        999999999);
+    (void)memory.TryWriteField<std::uint8_t>(
+        combat_state.arena_address,
+        kArenaCombatTransitionRequestedOffset,
+        static_cast<std::uint8_t>(1));
+    (void)memory.TryWriteField<std::uint8_t>(
+        combat_state.arena_address,
+        kArenaCombatStartedMusicOffset,
+        static_cast<std::uint8_t>(1));
+    (void)memory.TryWriteField<std::uint8_t>(
+        combat_state.arena_address,
+        kArenaCombatActiveFlagOffset,
+        static_cast<std::uint8_t>(1));
+    g_state.current_wave.store(0, std::memory_order_release);
+    return true;
 }
 
 float BitsToFloat(std::uint32_t bits) {
@@ -238,6 +314,30 @@ void ClearRememberedEnemyTypes() {
     g_state.enemy_types_by_address.clear();
 }
 
+void ResetRunLifecycleBookkeeping() {
+    g_state.current_wave.store(0, std::memory_order_release);
+    g_state.last_wave_spawner.store(0, std::memory_order_release);
+    g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
+    g_state.run_start_tick_ms.store(0, std::memory_order_release);
+    g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
+    g_state.wave_start_enemy_tracking.store(false, std::memory_order_release);
+    ClearRememberedEnemyTypes();
+}
+
+void CompleteRunLifecycleEnd(std::string_view reason, bool dispatch_lua) {
+    ResetRunLifecycleBookkeeping();
+    multiplayer::SetAllBotSceneIntentsToSharedHub();
+    if (dispatch_lua) {
+        std::string reason_string;
+        if (reason.empty()) {
+            reason_string = "unknown";
+        } else {
+            reason_string.assign(reason.data(), reason.size());
+        }
+        DispatchLuaRunEnded(reason_string.c_str());
+    }
+}
+
 void DispatchSpellCastForSelf(uintptr_t self_address, int spell_id) {
     if (self_address == 0 || !IsRunActive()) {
         return;
@@ -318,6 +418,7 @@ void __fastcall HookCreateArena(void* self, void* unused_edx) {
     g_state.last_wave_spawner.store(0, std::memory_order_release);
     g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
     g_state.run_start_tick_ms.store(static_cast<std::uint64_t>(GetTickCount64()), std::memory_order_release);
+    g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
     ClearRememberedEnemyTypes();
     original(self, unused_edx);
     DispatchLuaRunStarted();
@@ -331,6 +432,7 @@ void __fastcall HookStartGame(void* self, void* unused_edx) {
     g_state.last_wave_spawner.store(0, std::memory_order_release);
     g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
     g_state.run_start_tick_ms.store(static_cast<std::uint64_t>(GetTickCount64()), std::memory_order_release);
+    g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
     ClearRememberedEnemyTypes();
     original(self, unused_edx);
     DispatchLuaRunStarted();
@@ -341,13 +443,7 @@ void __cdecl HookRunEnded() {
     if (original == nullptr) return;
     g_state.run_active.store(false, std::memory_order_release);
     original();
-    g_state.current_wave.store(0, std::memory_order_release);
-    g_state.last_wave_spawner.store(0, std::memory_order_release);
-    g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
-    g_state.run_start_tick_ms.store(0, std::memory_order_release);
-    ClearRememberedEnemyTypes();
-    multiplayer::SetAllBotSceneIntentsToSharedHub();
-    DispatchLuaRunEnded("death");
+    CompleteRunLifecycleEnd("death", true);
 }
 
 void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
@@ -355,6 +451,16 @@ void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
     if (original == nullptr) return;
 
     const auto self_address = reinterpret_cast<uintptr_t>(self);
+    if (IsCombatPreludeOnlyActive()) {
+        static std::uint64_t s_last_prelude_suppress_log_ms = 0;
+        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        if (now_ms - s_last_prelude_suppress_log_ms >= 1000) {
+            s_last_prelude_suppress_log_ms = now_ms;
+            Log("WaveSpawner_Tick suppressed for combat-prelude-only state. self=" + HexString(self_address));
+        }
+        return;
+    }
+
     const auto previous_self = g_state.last_wave_spawner.exchange(self_address, std::memory_order_acq_rel);
     if (self_address != 0 && previous_self != self_address) {
         uintptr_t self_vtable = 0;
@@ -396,7 +502,7 @@ void* __fastcall HookEnemySpawned(
     }
 
     auto* enemy = original(self, unused_edx, param_2, enemy_config, param_4, param_5, param_6, param_7);
-    if (enemy == nullptr || !IsRunActive()) {
+    if (enemy == nullptr || !IsCombatArenaActiveForEnemyTracking()) {
         return enemy;
     }
 
@@ -405,6 +511,13 @@ void* __fastcall HookEnemySpawned(
     const auto x = ReadFloatFieldOrZero(enemy_address, kActorPositionXOffset);
     const auto y = ReadFloatFieldOrZero(enemy_address, kActorPositionYOffset);
     RememberEnemyType(enemy_address, enemy_type);
+    Log(
+        "enemy.spawned hook invoked. enemy=" + HexString(enemy_address) +
+        " enemy_type=" + std::to_string(enemy_type) +
+        " pos=(" + std::to_string(x) + "," + std::to_string(y) + ")" +
+        " run_active=" + std::to_string(IsRunActive() ? 1 : 0) +
+        " wave_start_tracking=" +
+        std::to_string(g_state.wave_start_enemy_tracking.load(std::memory_order_acquire) ? 1 : 0));
     DispatchLuaEnemySpawned(enemy_type, x, y);
     return enemy;
 }
@@ -433,7 +546,7 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
         " run_active=" + std::to_string(IsRunActive() ? 1 : 0) +
         " result=" + std::to_string(result));
     ForgetEnemyType(self_address);
-    if (!already_handled && IsRunActive()) {
+    if (!already_handled && IsCombatArenaActiveForEnemyTracking()) {
         DispatchLuaEnemyDeath(enemy_type, x, y, kUnknownKillMethod);
     }
 
@@ -504,6 +617,15 @@ bool IsRunLifecycleActive() {
     return g_state.run_active.load(std::memory_order_acquire);
 }
 
+bool EndRunLifecycleFromExternal(std::string_view reason) {
+    if (!g_state.run_active.exchange(false, std::memory_order_acq_rel)) {
+        return false;
+    }
+
+    CompleteRunLifecycleEnd(reason, true);
+    return true;
+}
+
 int GetRunLifecycleCurrentWave() {
     return g_state.current_wave.load(std::memory_order_acquire);
 }
@@ -516,6 +638,31 @@ std::uint64_t GetRunLifecycleElapsedMilliseconds() {
 
     const auto now = static_cast<std::uint64_t>(GetTickCount64());
     return now >= started_at ? now - started_at : 0;
+}
+
+void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies) {
+    if (enemies == nullptr) {
+        return;
+    }
+
+    enemies->clear();
+    if (!IsCombatArenaActiveForEnemyTracking()) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(g_state.enemy_type_mutex);
+    enemies->reserve(g_state.enemy_types_by_address.size());
+    for (const auto& [actor_address, enemy_type] : g_state.enemy_types_by_address) {
+        enemies->push_back({actor_address, enemy_type});
+    }
+}
+
+void SetRunLifecycleCombatPreludeOnlySuppression(bool enabled) {
+    g_state.combat_prelude_only_suppression.store(enabled, std::memory_order_release);
+}
+
+void SetRunLifecycleWaveStartEnemyTracking(bool enabled) {
+    g_state.wave_start_enemy_tracking.store(enabled, std::memory_order_release);
 }
 
 bool InitializeRunLifecycleHooks(std::string* error_message) {
@@ -592,10 +739,7 @@ bool InitializeRunLifecycleHooks(std::string* error_message) {
 
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.run_active.store(false, std::memory_order_release);
-    g_state.last_wave_spawner.store(0, std::memory_order_release);
-    g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
-    g_state.run_start_tick_ms.store(0, std::memory_order_release);
-    ClearRememberedEnemyTypes();
+    ResetRunLifecycleBookkeeping();
     g_state.initialized = true;
 
     std::string log_line = "Run lifecycle hooks installed.";
@@ -610,10 +754,7 @@ void ShutdownRunLifecycleHooks() {
     RemoveHookSet(g_state.hooks, kHookCount);
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.run_active.store(false, std::memory_order_release);
-    g_state.last_wave_spawner.store(0, std::memory_order_release);
-    g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
-    g_state.run_start_tick_ms.store(0, std::memory_order_release);
-    ClearRememberedEnemyTypes();
+    ResetRunLifecycleBookkeeping();
     g_state.initialized = false;
 }
 

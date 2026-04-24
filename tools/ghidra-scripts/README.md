@@ -26,3 +26,11 @@ The wrapper:
 - releases the slot when the scan finishes
 
 Use `-RefreshReplica` after updating the source analyzed project, and `-ClearReplicaLocks` if a previous run crashed and left stale lock files behind.
+
+## Script Hygiene
+
+Keep reusable scripts in this folder with stable, descriptive names and enough
+argument handling to run them again later. One-off address probes should use a
+`*_tmp.py` suffix while they are still local scratch work; `.gitignore` excludes
+that suffix so temporary probes do not become part of the durable tool surface by
+accident.

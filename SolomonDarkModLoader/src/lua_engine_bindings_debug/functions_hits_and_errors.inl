@@ -62,6 +62,14 @@ int LuaDebugGetTraceHits(lua_State* state) {
         lua_setfield(state, -2, "arg3");
         lua_pushinteger(state, static_cast<lua_Integer>(hit.arg4));
         lua_setfield(state, -2, "arg4");
+        lua_pushinteger(state, static_cast<lua_Integer>(hit.arg5));
+        lua_setfield(state, -2, "arg5");
+        lua_pushinteger(state, static_cast<lua_Integer>(hit.arg6));
+        lua_setfield(state, -2, "arg6");
+        lua_pushinteger(state, static_cast<lua_Integer>(hit.arg7));
+        lua_setfield(state, -2, "arg7");
+        lua_pushinteger(state, static_cast<lua_Integer>(hit.arg8));
+        lua_setfield(state, -2, "arg8");
         lua_pushboolean(state, hit.arg3_words_valid ? 1 : 0);
         lua_setfield(state, -2, "arg3_words_valid");
         if (hit.arg3_words_valid) {
@@ -177,4 +185,3 @@ int LuaDebugClearWriteHits(lua_State* state) {
     RuntimeDebug_ClearWriteHits(filter);
     return 0;
 }
-

@@ -2,6 +2,7 @@
 #include "third_party/hde32.h"
 
 #include <cstring>
+#include <limits>
 #include <sstream>
 
 namespace sdmod {
@@ -36,6 +37,150 @@ std::string FormatProtectFlags(DWORD protect) {
     std::ostringstream out;
     out << "0x" << std::hex << std::uppercase << protect;
     return out.str();
+}
+
+std::string FormatAddress(std::uintptr_t address) {
+    std::ostringstream out;
+    out << "0x" << std::hex << std::uppercase << address;
+    return out.str();
+}
+
+std::uintptr_t MapOriginalTargetToTrampoline(
+    std::uintptr_t original_target,
+    const std::uint8_t* target,
+    std::uint8_t* trampoline,
+    size_t patch_size) {
+    const auto source_start = reinterpret_cast<std::uintptr_t>(target);
+    const auto source_end = source_start + patch_size;
+    if (original_target >= source_start && original_target < source_end) {
+        return reinterpret_cast<std::uintptr_t>(trampoline) + (original_target - source_start);
+    }
+    return original_target;
+}
+
+bool RelocateRelativeInstruction(
+    const std::uint8_t* source_instruction,
+    std::uint8_t* trampoline_instruction,
+    const std::uint8_t* target,
+    std::uint8_t* trampoline,
+    size_t patch_size,
+    const hde32s& decoded,
+    std::string* error_message) {
+    if ((decoded.flags & F_RELATIVE) == 0) {
+        return true;
+    }
+
+    const auto source_instruction_address = reinterpret_cast<std::uintptr_t>(source_instruction);
+    const auto trampoline_instruction_address = reinterpret_cast<std::uintptr_t>(trampoline_instruction);
+
+    if ((decoded.flags & F_IMM32) != 0) {
+        const auto relative_offset = static_cast<size_t>(decoded.len) - sizeof(std::int32_t);
+        std::int32_t original_relative = 0;
+        std::memcpy(&original_relative, source_instruction + relative_offset, sizeof(original_relative));
+
+        const auto original_target = static_cast<std::uintptr_t>(
+            static_cast<std::intptr_t>(source_instruction_address + decoded.len) + original_relative);
+        const auto relocated_target =
+            MapOriginalTargetToTrampoline(original_target, target, trampoline, patch_size);
+        const auto relocated_relative =
+            static_cast<std::intptr_t>(relocated_target) -
+            static_cast<std::intptr_t>(trampoline_instruction_address + decoded.len);
+        if (relocated_relative < (std::numeric_limits<std::int32_t>::min)() ||
+            relocated_relative > (std::numeric_limits<std::int32_t>::max)()) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Relocated 32-bit relative instruction target is out of range. source=" +
+                    FormatAddress(source_instruction_address) +
+                    " target=" + FormatAddress(relocated_target);
+            }
+            return false;
+        }
+
+        const auto patched_relative = static_cast<std::int32_t>(relocated_relative);
+        std::memcpy(trampoline_instruction + relative_offset, &patched_relative, sizeof(patched_relative));
+        return true;
+    }
+
+    if ((decoded.flags & F_IMM8) != 0) {
+        const auto relative_offset = static_cast<size_t>(decoded.len) - sizeof(std::int8_t);
+        std::int8_t original_relative = 0;
+        std::memcpy(&original_relative, source_instruction + relative_offset, sizeof(original_relative));
+
+        const auto original_target = static_cast<std::uintptr_t>(
+            static_cast<std::intptr_t>(source_instruction_address + decoded.len) + original_relative);
+        const auto relocated_target =
+            MapOriginalTargetToTrampoline(original_target, target, trampoline, patch_size);
+        const auto relocated_relative =
+            static_cast<std::intptr_t>(relocated_target) -
+            static_cast<std::intptr_t>(trampoline_instruction_address + decoded.len);
+        if (relocated_relative < (std::numeric_limits<std::int8_t>::min)() ||
+            relocated_relative > (std::numeric_limits<std::int8_t>::max)()) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Relocated 8-bit relative instruction target is out of range. source=" +
+                    FormatAddress(source_instruction_address) +
+                    " target=" + FormatAddress(relocated_target);
+            }
+            return false;
+        }
+
+        const auto patched_relative = static_cast<std::int8_t>(relocated_relative);
+        std::memcpy(trampoline_instruction + relative_offset, &patched_relative, sizeof(patched_relative));
+        return true;
+    }
+
+    if (error_message != nullptr) {
+        *error_message =
+            "Unsupported relative instruction in hook prologue at " +
+            FormatAddress(source_instruction_address) +
+            " opcode=0x" + FormatProtectFlags(decoded.opcode);
+    }
+    return false;
+}
+
+bool RelocateCopiedInstructions(
+    const std::uint8_t* target,
+    std::uint8_t* trampoline,
+    size_t patch_size,
+    std::string* error_message) {
+    size_t offset = 0;
+    while (offset < patch_size) {
+        hde32s decoded = {};
+        const auto length = static_cast<size_t>(hde32_disasm(target + offset, &decoded));
+        if (length == 0 || (decoded.flags & F_ERROR) != 0) {
+            if (error_message != nullptr) {
+                std::ostringstream out;
+                out << "Instruction decode failed while building trampoline at +0x"
+                    << std::hex << std::uppercase << offset
+                    << " flags=0x" << decoded.flags;
+                *error_message = out.str();
+            }
+            return false;
+        }
+        if (offset + length > patch_size) {
+            if (error_message != nullptr) {
+                std::ostringstream out;
+                out << "Hook patch size splits an instruction at +0x"
+                    << std::hex << std::uppercase << offset
+                    << " length=0x" << length
+                    << " patch_size=0x" << patch_size;
+                *error_message = out.str();
+            }
+            return false;
+        }
+        if (!RelocateRelativeInstruction(
+                target + offset,
+                trampoline + offset,
+                target,
+                trampoline,
+                patch_size,
+                decoded,
+                error_message)) {
+            return false;
+        }
+        offset += length;
+    }
+    return true;
 }
 
 std::string BuildVirtualProtectFailureDetail(void* target, size_t patch_size, DWORD last_error) {
@@ -98,6 +243,14 @@ bool InstallX86HookResolved(void* target, void* detour, size_t patch_size, X86Ho
     }
 
     std::memcpy(trampoline, hook->original_bytes.data(), hook->patch_size);
+    if (!RelocateCopiedInstructions(
+            static_cast<const std::uint8_t*>(target),
+            trampoline,
+            hook->patch_size,
+            error_message)) {
+        VirtualFree(trampoline, 0, MEM_RELEASE);
+        return false;
+    }
     if (!WriteRelativeJump(
             trampoline + hook->patch_size,
             static_cast<std::uint8_t*>(target) + hook->patch_size,
@@ -165,17 +318,6 @@ size_t ResolveX86HookPatchSize(void* target, size_t minimum_patch_size, std::str
             }
             return 0;
         }
-
-        if ((hs.flags & F_RELATIVE) != 0) {
-            if (error_message != nullptr) {
-                std::ostringstream out;
-                out << "Relative control-flow instruction in hook prologue at +0x"
-                    << std::hex << std::uppercase << total_size;
-                *error_message = out.str();
-            }
-            return 0;
-        }
-
         total_size += length;
         if (total_size > 16) {
             if (error_message != nullptr) {
@@ -213,10 +355,9 @@ void RemoveX86Hook(X86Hook* hook) {
         FlushInstructionCache(GetCurrentProcess(), hook->target, hook->patch_size);
     }
 
-    if (hook->trampoline != nullptr) {
-        VirtualFree(hook->trampoline, 0, MEM_RELEASE);
-    }
-
+    // Detours can still be executing while teardown restores the original
+    // prologue. Keep the trampoline executable for process lifetime so an
+    // in-flight detour can return safely after the hook record is cleared.
     *hook = X86Hook{};
 }
 

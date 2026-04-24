@@ -7,6 +7,13 @@ exist in:
 - supported private hub interiors
 - runs
 
+## Layout
+
+- `scripts/main.lua` is a small bootstrap that installs `sd.runtime.require_mod`
+  when needed and starts the app module.
+- `scripts/lib/app.lua` owns the bot policy, event subscriptions, follow logic,
+  combat targeting, and scene transition handling.
+
 The current entrance-driven hub/private policy is:
 
 - the bot does not instantly mirror private-area scene changes

@@ -110,7 +110,7 @@ void ApplyRegisteredGameNpcIdleFacing(ParticipantEntityBinding* binding) {
     }
 
     auto& memory = ProcessMemory::Instance();
-    (void)memory.TryWriteField(binding->actor_address, kActorHeadingOffset, binding->desired_heading);
+    ApplyWizardActorFacingState(binding->actor_address, binding->desired_heading);
     (void)memory.TryWriteField(binding->actor_address, kGameNpcDesiredYawOffset, binding->desired_heading);
 }
 
@@ -298,13 +298,16 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
         binding->direction_x * binding->direction_x + binding->direction_y * binding->direction_y);
 
     if (IsRegisteredGameNpcKind(binding->kind)) {
+        binding->last_movement_displacement = 0.0f;
         PublishParticipantGameplaySnapshot(*binding);
         return true;
     }
 
     if (!binding->movement_active || magnitude <= 0.0001f) {
+        binding->last_movement_displacement = 0.0f;
         ApplyObservedBotAnimationState(binding, actor_address, false);
         StopWizardBotActorMotion(binding->actor_address);
+        (void)ApplyWizardBindingFacingState(binding, actor_address);
         PublishParticipantGameplaySnapshot(*binding);
         return true;
     }
@@ -380,14 +383,17 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
         const auto delta_x = position_after_x - position_before_x;
         const auto delta_y = position_after_y - position_before_y;
         const auto displacement_distance = std::sqrt((delta_x * delta_x) + (delta_y * delta_y));
-        if (binding->desired_heading_valid) {
-            (void)memory.TryWriteField(actor_address, kActorHeadingOffset, binding->desired_heading);
+        if (!ApplyWizardBindingFacingState(binding, actor_address) && binding->desired_heading_valid) {
+            ApplyWizardActorFacingState(actor_address, binding->desired_heading);
         }
+        binding->last_movement_displacement = displacement_distance;
         if (IsStandaloneWizardKind(binding->kind)) {
             AdvanceStandaloneWizardWalkCycleState(binding, displacement_distance);
             ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
         }
         if (displacement_distance <= 0.0001f) {
+            StopWizardBotActorMotion(actor_address);
+            (void)ApplyWizardBindingFacingState(binding, actor_address);
             static std::uint64_t s_last_stuck_move_log_ms = 0;
             const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
             if (now_ms - s_last_stuck_move_log_ms >= 1000) {
@@ -430,6 +436,7 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
         *error_message = "PlayerActor_MoveStep requires a live movement controller.";
     }
 
+    binding->last_movement_displacement = 0.0f;
     PublishParticipantGameplaySnapshot(*binding);
     return true;
 }
@@ -449,6 +456,7 @@ void SyncWizardBotMovementIntent(ParticipantEntityBinding* binding) {
     binding->movement_active = intent.moving;
     binding->has_target = intent.has_target;
     if (!intent.moving) {
+        binding->last_movement_displacement = 0.0f;
         binding->direction_x = 0.0f;
         binding->direction_y = 0.0f;
     }
@@ -458,6 +466,17 @@ void SyncWizardBotMovementIntent(ParticipantEntityBinding* binding) {
     }
     binding->desired_heading_valid = intent.desired_heading_valid;
     binding->desired_heading = intent.desired_heading;
+    binding->facing_target_actor_address = intent.face_target_actor_address;
+    const bool target_face_applied = RefreshWizardBindingTargetFacing(binding);
+    if (target_face_applied) {
+        // Native target-facing wins over fallback headings because the target can move.
+    } else if (intent.face_heading_valid) {
+        binding->facing_heading_valid = true;
+        binding->facing_heading_value = intent.face_heading;
+    } else if (!binding->ongoing_cast.active) {
+        binding->facing_heading_valid = false;
+        binding->facing_heading_value = 0.0f;
+    }
     binding->target_x = intent.target_x;
     binding->target_y = intent.target_y;
     binding->distance_to_target = intent.distance_to_target;

@@ -17,6 +17,9 @@ OUTPUT_PATH = ROOT / "runtime" / "probe_bot_close_range_combat.json"
 DEFAULT_STANDOFF = 120.0
 DEFAULT_OBSERVE_SECONDS = 8.0
 SPAWN_OFFSET_X = 80.0
+ACTOR_POSITION_X_OFFSET = 0x18
+ACTOR_POSITION_Y_OFFSET = 0x1C
+ACTOR_HEADING_OFFSET = 0x6C
 
 
 class CloseRangeProbeFailure(RuntimeError):
@@ -48,6 +51,13 @@ for _, key in ipairs({
 end
 local bx = tonumber(bot.x) or 0.0
 local by = tonumber(bot.y) or 0.0
+local bot_actor = tonumber(bot.actor_address) or 0
+if bot_actor ~= 0 and sd.debug and sd.debug.read_float then
+  bx = tonumber(sd.debug.read_float(bot_actor + 0x18)) or bx
+  by = tonumber(sd.debug.read_float(bot_actor + 0x1C)) or by
+end
+emit('bot.live_x', bx)
+emit('bot.live_y', by)
 local best = nil
 local best_gap = math.huge
 if type(actors) == 'table' then
@@ -93,11 +103,60 @@ print('lua_bots_disable_tick=' .. tostring(lua_bots_disable_tick))
     )
 
 
+def clear_bots() -> dict[str, str]:
+    return csp.parse_key_values(
+        csp.run_lua(
+            """
+if sd.bots and sd.bots.clear then
+  sd.bots.clear()
+end
+local count = sd.bots and sd.bots.get_count and sd.bots.get_count() or 0
+print('ok=true')
+print('count=' .. tostring(count))
+""".strip()
+        )
+    )
+
+
 def stop_bot(bot_id: str) -> dict[str, str]:
     return csp.parse_key_values(
         csp.run_lua(
             f"""
 print('ok=' .. tostring(sd.bots.stop({bot_id})))
+""".strip()
+        )
+    )
+
+
+def force_actor_position(
+    actor_address: str | int,
+    x: float,
+    y: float,
+    *,
+    heading: float | None = None,
+) -> dict[str, str]:
+    heading_line = ""
+    if heading is not None:
+        heading_line = (
+            f"emit('heading_ok', sd.debug.write_float(actor + {ACTOR_HEADING_OFFSET}, {heading}))"
+        )
+    return csp.parse_key_values(
+        csp.run_lua(
+            f"""
+local function emit(key, value)
+  if value == nil then
+    print(key .. "=")
+  else
+    print(key .. "=" .. tostring(value))
+  end
+end
+local actor = {actor_address}
+emit('actor_address', actor)
+emit('x_ok', sd.debug.write_float(actor + {ACTOR_POSITION_X_OFFSET}, {x}))
+emit('y_ok', sd.debug.write_float(actor + {ACTOR_POSITION_Y_OFFSET}, {y}))
+{heading_line}
+emit('x', sd.debug.read_float(actor + {ACTOR_POSITION_X_OFFSET}))
+emit('y', sd.debug.read_float(actor + {ACTOR_POSITION_Y_OFFSET}))
 """.strip()
         )
     )
@@ -126,24 +185,86 @@ def filter_loader_log(lines: list[str]) -> list[str]:
         "attack ",
         "attack_skip",
         "queued cast",
+        "pure_primary_start enter",
+        "pure_primary_start exit",
+        "spell_dispatch enter",
+        "spell_dispatch exit",
         "spell_3ef hook",
         "cast prepped",
+        "cast prepare failed",
+        "cast post-tick detail",
         "synthetic cast intent",
         "cast complete",
         "cast dispatch failed",
         "spell_obj diag",
         "No traversable start cell",
+        "run.ended",
+        "destroyed lua bot",
         "gameplay-slot stock tick rewrote actor position",
     )
     filtered = [line for line in lines if any(needle in line for needle in needles)]
     return filtered[-120:]
 
 
-def start_testrun_without_waves() -> None:
+def start_testrun_without_waves() -> dict[str, str]:
+    scene = csp.query_scene_state()
+    if csp.is_settled_scene(scene, "testrun"):
+        return {"ok": "true", "already_testrun": "true"}
     values = csp.parse_key_values(csp.run_lua("print('ok='..tostring(sd.hub.start_testrun()))"))
     if values.get("ok") != "true":
         raise CloseRangeProbeFailure(f"sd.hub.start_testrun failed: {values}")
     csp.wait_for_scene("testrun", timeout_s=45.0)
+    return values
+
+
+def enable_combat_prelude() -> dict[str, str]:
+    values = csp.parse_key_values(csp.run_lua("print('ok='..tostring(sd.gameplay.enable_combat_prelude()))"))
+    if values.get("ok") != "true":
+        raise CloseRangeProbeFailure(f"sd.gameplay.enable_combat_prelude failed: {values}")
+    return values
+
+
+def query_combat_state() -> dict[str, str]:
+    return csp.parse_key_values(
+        csp.run_lua(
+            """
+local state = sd.gameplay and sd.gameplay.get_combat_state and sd.gameplay.get_combat_state()
+local function emit(key, value)
+  if value == nil then
+    print(key .. "=")
+  else
+    print(key .. "=" .. tostring(value))
+  end
+end
+if type(state) ~= 'table' then
+  emit('available', false)
+  return
+end
+emit('available', true)
+for _, key in ipairs({
+  'arena_id','section_index','wave_index','wait_ticks','advance_mode',
+  'advance_threshold','wave_counter','started_music','transition_requested','active'
+}) do
+  emit(key, state[key])
+end
+""".strip()
+        )
+    )
+
+
+def wait_for_combat_prelude_ready(timeout_s: float = 8.0) -> dict[str, str]:
+    deadline = time.time() + timeout_s
+    last: dict[str, str] = {}
+    while time.time() < deadline:
+        last = query_combat_state()
+        if last.get("available") == "true":
+            wave_index = int(last.get("wave_index") or "0", 10)
+            if wave_index > 0:
+                raise CloseRangeProbeFailure(f"Combat prelude advanced into waves: {last}")
+            if last.get("active") == "true" and last.get("transition_requested") == "true":
+                return last
+        time.sleep(0.1)
+    raise CloseRangeProbeFailure(f"Timed out waiting for combat prelude state. Last={last}")
 
 
 def promote_bot_into_run_scene(player_x: float, player_y: float) -> dict[str, str]:
@@ -216,21 +337,25 @@ def main() -> int:
         result["process_id"] = process_id
         result["navigation"].append({"step": "launch", "process_id": process_id})
 
-        csp.drive_new_game_flow(
+        hub_flow = csp.drive_hub_flow(
             process_id,
             element=csp.DEFAULT_ELEMENT,
             discipline=csp.DEFAULT_DISCIPLINE,
+            prefer_resume=True,
         )
         result["navigation"].append(
             {
-                "step": "new_game",
+                "step": "hub_ready",
+                "flow": hub_flow,
                 "element": csp.DEFAULT_ELEMENT,
                 "discipline": csp.DEFAULT_DISCIPLINE,
+                "hub_lua_tick_gate": set_lua_tick_enabled(False),
+                "hub_bot_clear": clear_bots(),
             }
         )
 
-        start_testrun_without_waves()
-        result["navigation"].append({"step": "testrun_started"})
+        testrun = start_testrun_without_waves()
+        result["navigation"].append({"step": "testrun_started", "result": testrun})
         set_lua_tick_enabled(True)
 
         bot = csp.wait_for_materialized_bot()
@@ -248,6 +373,9 @@ def main() -> int:
         time.sleep(1.0)
         bot = csp.wait_for_materialized_bot()
         stop_after_promotion = stop_bot(bot["id"])
+        # Enemy_Create's manual-spawn binding intentionally refuses to run once
+        # arena combat is populated, so seed controlled hostiles first and only
+        # then enable the no-wave combat prelude.
         spawn = spawn_hostile_near_bot(
             csp.float_value(bot, "x"),
             csp.float_value(bot, "y"),
@@ -255,6 +383,9 @@ def main() -> int:
         )
         if spawn.get("ok") != "true":
             raise CloseRangeProbeFailure(f"Spawn enemy failed: {spawn}")
+        combat = enable_combat_prelude()
+        combat_state = wait_for_combat_prelude_ready()
+        result["navigation"].append({"step": "combat_prelude_enabled", "result": combat, "state": combat_state})
         time.sleep(1.0)
         hostile = csp.wait_for_nearest_enemy(max_gap=2000.0)
         direct_cast = queue_direct_primary_cast(

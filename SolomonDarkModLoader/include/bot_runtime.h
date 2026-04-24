@@ -78,6 +78,9 @@ struct BotMovementIntentSnapshot {
     float direction_y = 0.0f;
     bool desired_heading_valid = false;
     float desired_heading = 0.0f;
+    bool face_heading_valid = false;
+    float face_heading = 0.0f;
+    uintptr_t face_target_actor_address = 0;
     float target_x = 0.0f;
     float target_y = 0.0f;
     float distance_to_target = 0.0f;
@@ -170,9 +173,14 @@ bool UpdateBot(const BotUpdateRequest& request);
 bool MoveBotTo(const BotMoveToRequest& request);
 bool StopBot(std::uint64_t bot_id);
 bool FaceBot(std::uint64_t bot_id, float heading);
+bool FaceBotTarget(std::uint64_t bot_id, uintptr_t target_actor_address, bool fallback_heading_valid, float fallback_heading);
 bool ReadBotMovementIntent(std::uint64_t bot_id, BotMovementIntentSnapshot* snapshot);
 bool QueueBotCast(const BotCastRequest& request);
-bool FinishBotAttack(std::uint64_t bot_id, bool desired_heading_valid, float desired_heading);
+bool FinishBotAttack(
+    std::uint64_t bot_id,
+    bool desired_heading_valid,
+    float desired_heading,
+    bool clear_face_target);
 bool ConsumePendingBotCast(std::uint64_t bot_id, BotCastRequest* request);
 std::uint32_t GetBotCount();
 bool ReadBotSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot);

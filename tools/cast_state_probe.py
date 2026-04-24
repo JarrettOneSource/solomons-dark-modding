@@ -38,10 +38,26 @@ CREATE_DISCIPLINE_CENTERS = {
     "body": (875, 460),
     "mind": (1025, 460),
 }
+CREATE_OWNER_ELEMENT_ENABLED_BYTE_OFFSET = 0x18C
+CREATE_OWNER_ELEMENT_SELECTED_OFFSET = 0x1A4
+CREATE_OWNER_DISCIPLINE_ENABLED_BYTE_OFFSET = 0x228
+CREATE_OWNER_DISCIPLINE_SELECTED_OFFSET = 0x22C
+ALLOW_MOUSE_UI_AUTOMATION = os.environ.get("SD_PROBE_ALLOW_MOUSE", "").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 ACTOR_RAW_OFFSETS = {
     "owner_ptr": ("ptr", 0x58),
     "runtime_profile_ptr": ("ptr", 0x200),
+    "pure_primary_e4": ("u32", 0xE4),
+    "pure_primary_e8": ("u32", 0xE8),
+    "walk_x": ("float", 0x158),
+    "walk_y": ("float", 0x15C),
     "spell_cfg_278_raw": ("u32", 0x278),
+    "pure_primary_timer_1b8": ("float", 0x1B8),
+    "pure_primary_item_sink": ("ptr", 0x1FC),
     "spell_cfg_298_raw": ("u32", 0x298),
     "spell_cfg_29c_float": ("float", 0x29C),
     "spell_cfg_2a0_float": ("float", 0x2A0),
@@ -51,7 +67,7 @@ ACTOR_RAW_OFFSETS = {
     "spell_cfg_2d0_float": ("float", 0x2D0),
     "spell_cfg_2d4_float": ("float", 0x2D4),
     "spell_cfg_2d8_float": ("float", 0x2D8),
-    "heading": ("float", 0x30),
+    "heading": ("float", 0x6C),
     "cast_drive_state": ("u8", 0x160),
     "cast_no_interrupt": ("u8", 0x1EC),
     "cast_primary_skill_id": ("u32", 0x270),
@@ -258,6 +274,12 @@ if type(snap.elements) == 'table' then
     local e = snap.elements[i]
     emit('element.' .. i .. '.label', e.label)
     emit('element.' .. i .. '.action_id', e.action_id)
+    emit('element.' .. i .. '.source_object_ptr', e.source_object_ptr)
+    emit('element.' .. i .. '.surface_object_ptr', e.surface_object_ptr)
+    emit('element.' .. i .. '.left', e.left)
+    emit('element.' .. i .. '.top', e.top)
+    emit('element.' .. i .. '.right', e.right)
+    emit('element.' .. i .. '.bottom', e.bottom)
   end
 end
 """.strip()
@@ -352,6 +374,11 @@ emit('error_message', dispatch.error_message)
 
 
 def click_create_choice(process_id: int, x: int, y: int) -> None:
+    if not ALLOW_MOUSE_UI_AUTOMATION:
+        raise ProbeFailure(
+            "Mouse UI automation is disabled. "
+            "Use semantic sd.ui.activate_action paths or set SD_PROBE_ALLOW_MOUSE=1 for a manual-click probe."
+        )
     click_script = to_windows_path(CLICK_WINDOW)
     result = run_powershell(
         f"& py -3 {json.dumps(click_script)} --pid {process_id} --x {x} --y {y} --activate",
@@ -359,6 +386,46 @@ def click_create_choice(process_id: int, x: int, y: int) -> None:
     )
     if result.returncode != 0:
         raise ProbeFailure(f"click_window failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
+
+
+def click_snapshot_action(process_id: int, snapshot: dict[str, str], action_id: str) -> bool:
+    for index in range(1, 13):
+        if snapshot.get(f"element.{index}.action_id") != action_id:
+            continue
+        try:
+            left = float(snapshot[f"element.{index}.left"])
+            top = float(snapshot[f"element.{index}.top"])
+            right = float(snapshot[f"element.{index}.right"])
+            bottom = float(snapshot[f"element.{index}.bottom"])
+        except (KeyError, TypeError, ValueError):
+            return False
+        click_create_choice(process_id, int(round((left + right) * 0.5)), int(round((top + bottom) * 0.5)))
+        return True
+    return False
+
+
+def activate_or_click_snapshot_action(
+    process_id: int,
+    snapshot: dict[str, str],
+    action_id: str,
+    surface_id: str,
+) -> None:
+    try:
+        activate_ui_action(action_id, surface_id)
+        return
+    except ProbeFailure as activation_error:
+        if ALLOW_MOUSE_UI_AUTOMATION and click_snapshot_action(process_id, snapshot, action_id):
+            return
+        raise activation_error
+
+
+def is_stale_ui_action_error(error: BaseException) -> bool:
+    message = str(error)
+    return (
+        "No live snapshot element matched target" in message
+        or "surface mismatch" in message
+        or "surface changed" in message
+    )
 
 
 def wait_for_surface(surface_id: str, timeout_s: float = 20.0) -> dict[str, str]:
@@ -388,6 +455,249 @@ def wait_for_scene(scene_name: str, timeout_s: float = 60.0) -> dict[str, str]:
     raise ProbeFailure(f"Timed out waiting for scene {scene_name}. Last scene={last}")
 
 
+def is_settled_scene(scene: dict[str, str], scene_name: str) -> bool:
+    return (
+        scene.get("available") == "true"
+        and scene.get("name") == scene_name
+        and scene.get("transitioning") == "false"
+        and scene.get("world_id") not in {"", "0", "0x0", "nil"}
+    )
+
+
+def wait_for_any_scene(scene_names: set[str], timeout_s: float = 60.0) -> dict[str, str]:
+    deadline = time.time() + timeout_s
+    last = {}
+    while time.time() < deadline:
+        last = query_scene_state()
+        for scene_name in scene_names:
+            if is_settled_scene(last, scene_name):
+                return last
+        time.sleep(0.25)
+    raise ProbeFailure(f"Timed out waiting for scenes {sorted(scene_names)}. Last scene={last}")
+
+
+def snapshot_action_ids(snapshot: dict[str, str], *, limit: int = 12) -> set[str]:
+    return {
+        action_id
+        for index in range(1, limit + 1)
+        if (action_id := snapshot.get(f"element.{index}.action_id"))
+    }
+
+
+def query_create_selection_readiness(phase: str) -> dict[str, str]:
+    if phase == "element":
+        enabled_offset = CREATE_OWNER_ELEMENT_ENABLED_BYTE_OFFSET
+        selected_offset = CREATE_OWNER_ELEMENT_SELECTED_OFFSET
+    elif phase == "discipline":
+        enabled_offset = CREATE_OWNER_DISCIPLINE_ENABLED_BYTE_OFFSET
+        selected_offset = CREATE_OWNER_DISCIPLINE_SELECTED_OFFSET
+    else:
+        raise ProbeFailure(f"Unsupported create selection phase: {phase}")
+
+    return parse_key_values(
+        run_lua(
+            f"""
+local function emit(key, value)
+  if value == nil then
+    print(key .. "=")
+  else
+    print(key .. "=" .. tostring(value))
+  end
+end
+local owner = 0
+local snap = sd.ui and sd.ui.get_snapshot and sd.ui.get_snapshot()
+if type(snap) == "table" and type(snap.elements) == "table" then
+  for _, element in ipairs(snap.elements) do
+    if tostring(element.surface_root_id or element.surface_id or "") == "create" then
+      owner = tonumber(element.surface_object_ptr) or 0
+      if owner ~= 0 then
+        break
+      end
+    end
+  end
+end
+emit("available", owner ~= nil and owner ~= 0)
+emit("owner", owner)
+if owner == nil or owner == 0 then
+  return
+end
+local enabled = sd.debug.read_u8(owner + {enabled_offset})
+local selected = sd.debug.read_u32(owner + {selected_offset})
+emit("enabled", enabled)
+emit("selected", selected)
+emit("ready", enabled ~= nil and enabled ~= 0 and (selected == nil or selected == 0xFFFFFFFF))
+""".strip()
+        )
+    )
+
+
+def wait_for_create_selection_ready(phase: str, timeout_s: float = 15.0) -> dict[str, str]:
+    deadline = time.time() + timeout_s
+    last: dict[str, str] = {}
+    while time.time() < deadline:
+        snapshot = query_ui_snapshot()
+        if snapshot.get("available") != "true" or snapshot.get("surface_id") != "create":
+            time.sleep(0.1)
+            continue
+        last = query_create_selection_readiness(phase)
+        if last.get("ready") == "true":
+            return last
+        time.sleep(0.1)
+    raise ProbeFailure(f"Timed out waiting for create {phase} selection readiness. Last={last}")
+
+
+def resolve_new_game_branch_after_activation(process_id: int, actions: list[str], timeout_s: float = 20.0) -> dict[str, str]:
+    deadline = time.time() + timeout_s
+    last_snapshot: dict[str, str] = {}
+    while time.time() < deadline:
+        scene = query_scene_state()
+        if is_settled_scene(scene, "hub") or is_settled_scene(scene, "testrun"):
+            return scene
+
+        snapshot = query_ui_snapshot()
+        last_snapshot = snapshot
+        surface_id = snapshot.get("surface_id")
+        if surface_id == "create":
+            return snapshot
+
+        if surface_id == "dialog" and "dialog.primary" in snapshot_action_ids(snapshot, limit=12):
+            try:
+                activate_or_click_snapshot_action(process_id, snapshot, "dialog.primary", "dialog")
+                actions.append("dialog.primary")
+            except ProbeFailure as exc:
+                if not is_stale_ui_action_error(exc):
+                    raise
+            time.sleep(0.5)
+            continue
+
+        time.sleep(0.1)
+
+    raise ProbeFailure(
+        "Timed out resolving NEW GAME branch after activation. "
+        f"Last scene={query_scene_state()} last_ui={last_snapshot}"
+    )
+
+
+def choose_create_options(process_id: int, *, element: str, discipline: str) -> None:
+    wait_for_create_selection_ready("element")
+    try:
+        activate_ui_action(f"create.select_element_{element}", "create")
+    except ProbeFailure:
+        if not ALLOW_MOUSE_UI_AUTOMATION:
+            raise
+        click_create_choice(process_id, *CREATE_ELEMENT_CENTERS[element])
+    wait_for_create_selection_ready("discipline")
+    try:
+        activate_ui_action(f"create.select_discipline_{discipline}", "create")
+    except ProbeFailure:
+        if not ALLOW_MOUSE_UI_AUTOMATION:
+            raise
+        click_create_choice(process_id, *CREATE_DISCIPLINE_CENTERS[discipline])
+
+
+def drive_hub_flow(
+    process_id: int,
+    *,
+    element: str,
+    discipline: str,
+    prefer_resume: bool = True,
+) -> dict[str, object]:
+    play_clicked = False
+    resume_clicked = False
+    new_game_clicked = False
+    create_selected = False
+    actions: list[str] = []
+    deadline = time.time() + 75.0
+    while time.time() < deadline:
+        scene = query_scene_state()
+        if is_settled_scene(scene, "hub") or is_settled_scene(scene, "testrun"):
+            if resume_clicked:
+                mode = "resume_last_game"
+            elif new_game_clicked:
+                mode = "new_game"
+            else:
+                mode = f"already_{scene.get('name')}"
+            return {"mode": mode, "actions": actions, "scene": scene}
+
+        snapshot = query_ui_snapshot()
+        surface_id = snapshot.get("surface_id")
+        if surface_id == "dialog" and snapshot.get("element.2.action_id") == "dialog.primary":
+            try:
+                activate_or_click_snapshot_action(process_id, snapshot, "dialog.primary", "dialog")
+                actions.append("dialog.primary")
+            except ProbeFailure as exc:
+                if not is_stale_ui_action_error(exc):
+                    raise
+            time.sleep(0.75)
+            continue
+
+        if surface_id == "main_menu":
+            action_ids = snapshot_action_ids(snapshot, limit=12)
+            if not play_clicked and "main_menu.play" in action_ids:
+                try:
+                    activate_or_click_snapshot_action(process_id, snapshot, "main_menu.play", "main_menu")
+                    actions.append("main_menu.play")
+                    play_clicked = True
+                except ProbeFailure as exc:
+                    if not is_stale_ui_action_error(exc):
+                        raise
+                time.sleep(0.75)
+                continue
+            if prefer_resume and not resume_clicked and "main_menu.resume_last_game" in action_ids:
+                try:
+                    activate_or_click_snapshot_action(process_id, snapshot, "main_menu.resume_last_game", "main_menu")
+                    actions.append("main_menu.resume_last_game")
+                    resume_clicked = True
+                except ProbeFailure as exc:
+                    if not is_stale_ui_action_error(exc):
+                        raise
+                    time.sleep(0.75)
+                    continue
+                scene = wait_for_any_scene({"hub", "testrun"}, timeout_s=60.0)
+                return {"mode": "resume_last_game", "actions": actions, "scene": scene}
+            if not new_game_clicked and "main_menu.new_game" in action_ids:
+                try:
+                    activate_or_click_snapshot_action(process_id, snapshot, "main_menu.new_game", "main_menu")
+                    actions.append("main_menu.new_game")
+                    new_game_clicked = True
+                except ProbeFailure as exc:
+                    if not is_stale_ui_action_error(exc):
+                        raise
+                    time.sleep(0.75)
+                    continue
+                branch = resolve_new_game_branch_after_activation(process_id, actions)
+                if is_settled_scene(branch, "hub") or is_settled_scene(branch, "testrun"):
+                    return {"mode": "new_game", "actions": actions, "scene": branch}
+                choose_create_options(process_id, element=element, discipline=discipline)
+                actions.extend([
+                    f"create.select_element_{element}",
+                    f"create.select_discipline_{discipline}",
+                ])
+                create_selected = True
+                scene = wait_for_scene("hub", timeout_s=60.0)
+                return {"mode": "new_game", "actions": actions, "scene": scene}
+
+        if surface_id == "create" and not create_selected:
+            choose_create_options(process_id, element=element, discipline=discipline)
+            actions.extend([
+                f"create.select_element_{element}",
+                f"create.select_discipline_{discipline}",
+            ])
+            create_selected = True
+            scene = wait_for_scene("hub", timeout_s=60.0)
+            return {"mode": "new_game", "actions": actions, "scene": scene}
+
+        time.sleep(0.25)
+
+    raise ProbeFailure(
+        "Timed out driving hub flow. "
+        f"Last scene={query_scene_state()} last_ui={query_ui_snapshot()} "
+        f"play_clicked={play_clicked} resume_clicked={resume_clicked} "
+        f"new_game_clicked={new_game_clicked} create_selected={create_selected} "
+        f"actions={actions}"
+    )
+
+
 def drive_new_game_flow(process_id: int, *, element: str, discipline: str) -> None:
     play_clicked = False
     new_game_clicked = False
@@ -401,7 +711,7 @@ def drive_new_game_flow(process_id: int, *, element: str, discipline: str) -> No
         snapshot = query_ui_snapshot()
         surface_id = snapshot.get("surface_id")
         if surface_id == "dialog" and snapshot.get("element.2.action_id") == "dialog.primary":
-            activate_ui_action("dialog.primary", "dialog")
+            activate_or_click_snapshot_action(process_id, snapshot, "dialog.primary", "dialog")
             time.sleep(0.75)
             continue
 
@@ -412,28 +722,21 @@ def drive_new_game_flow(process_id: int, *, element: str, discipline: str) -> No
                 if snapshot.get(f"element.{index}.action_id")
             }
             if not play_clicked and "main_menu.play" in action_ids:
-                activate_ui_action("main_menu.play", "main_menu")
+                activate_or_click_snapshot_action(process_id, snapshot, "main_menu.play", "main_menu")
                 play_clicked = True
                 time.sleep(0.75)
                 continue
-            if "main_menu.new_game" in action_ids:
-                activate_ui_action("main_menu.new_game", "main_menu")
+            if not new_game_clicked and "main_menu.new_game" in action_ids:
+                activate_or_click_snapshot_action(process_id, snapshot, "main_menu.new_game", "main_menu")
                 new_game_clicked = True
-                time.sleep(0.75)
-                continue
+                wait_for_surface("create", timeout_s=15.0)
+                choose_create_options(process_id, element=element, discipline=discipline)
+                create_selected = True
+                wait_for_scene("hub", timeout_s=45.0)
+                return
 
         if surface_id == "create" and not create_selected:
-            try:
-                activate_ui_action(f"create.select_element_{element}", "create")
-            except ProbeFailure:
-                pass
-            click_create_choice(process_id, *CREATE_ELEMENT_CENTERS[element])
-            time.sleep(1.0)
-            try:
-                activate_ui_action(f"create.select_discipline_{discipline}", "create")
-            except ProbeFailure:
-                pass
-            click_create_choice(process_id, *CREATE_DISCIPLINE_CENTERS[discipline])
+            choose_create_options(process_id, element=element, discipline=discipline)
             create_selected = True
             wait_for_scene("hub", timeout_s=45.0)
             return
@@ -448,10 +751,12 @@ def drive_new_game_flow(process_id: int, *, element: str, discipline: str) -> No
 
 
 def start_run_and_waves() -> None:
-    values = parse_key_values(run_lua("print('ok='..tostring(sd.hub.start_testrun()))"))
-    if values.get("ok") != "true":
-        raise ProbeFailure(f"sd.hub.start_testrun failed: {values}")
-    wait_for_scene("testrun", timeout_s=45.0)
+    scene = query_scene_state()
+    if not is_settled_scene(scene, "testrun"):
+        values = parse_key_values(run_lua("print('ok='..tostring(sd.hub.start_testrun()))"))
+        if values.get("ok") != "true":
+            raise ProbeFailure(f"sd.hub.start_testrun failed: {values}")
+        wait_for_scene("testrun", timeout_s=45.0)
     values = parse_key_values(run_lua("print('ok='..tostring(sd.gameplay.start_waves()))"))
     if values.get("ok") != "true":
         raise ProbeFailure(f"sd.gameplay.start_waves failed: {values}")
@@ -880,8 +1185,10 @@ def main() -> int:
         wait_for_lua_pipe()
         result["navigation"].append({"step": "launch", "process_id": process_id})
 
-        drive_new_game_flow(process_id, element=args.element, discipline=args.discipline)
-        result["navigation"].append({"step": "new_game", "element": args.element, "discipline": args.discipline})
+        hub_flow = drive_hub_flow(process_id, element=args.element, discipline=args.discipline, prefer_resume=True)
+        result["navigation"].append(
+            {"step": "hub_ready", "flow": hub_flow, "element": args.element, "discipline": args.discipline}
+        )
 
         start_run_and_waves()
         boost_player_survival()

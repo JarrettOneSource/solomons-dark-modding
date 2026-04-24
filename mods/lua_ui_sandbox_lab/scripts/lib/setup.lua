@@ -220,7 +220,7 @@ local function build_steps(mode, actions, active_preset)
       (selected_element ~= nil and active_preset:match("^map_create_")) then
     return testrun_steps
   end
-  return testrun_steps
+  return {}
 end
 
 local function new(ctx)

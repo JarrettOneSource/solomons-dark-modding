@@ -69,11 +69,12 @@ def main() -> int:
         process_id = step("wait_for_game_process", csp.wait_for_game_process)
         step("wait_for_lua_pipe", csp.wait_for_lua_pipe)
         step(
-            "drive_new_game_flow",
-            lambda: csp.drive_new_game_flow(
+            "drive_hub_flow",
+            lambda: csp.drive_hub_flow(
                 process_id,
                 element=csp.DEFAULT_ELEMENT,
                 discipline=csp.DEFAULT_DISCIPLINE,
+                prefer_resume=True,
             ),
         )
         step("start_testrun_without_waves", close_probe.start_testrun_without_waves)

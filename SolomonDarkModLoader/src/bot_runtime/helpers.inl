@@ -34,6 +34,10 @@ const char* BotControllerStateLabelInternal(BotControllerState state) {
     return "idle";
 }
 
+bool IsParticipantRuntimeDead(const ParticipantInfo& participant) {
+    return participant.runtime.life_max > 0 && participant.runtime.life_current <= 0;
+}
+
 PendingBotCast* FindPendingCast(std::uint64_t bot_id) {
     const auto it = std::find_if(g_pending_casts.begin(), g_pending_casts.end(), [&](const PendingBotCast& cast) {
         return cast.bot_id == bot_id;
@@ -478,6 +482,59 @@ void SchedulePendingMovementIntentLocked(
     pending_intent->direction_y = 0.0f;
     pending_intent->desired_heading_valid = desired_heading_valid;
     pending_intent->desired_heading = desired_heading;
+}
+
+void SetPendingFaceHeadingLocked(std::uint64_t bot_id, bool valid, float heading, std::uint64_t expires_ms) {
+    auto* pending_intent = FindPendingMovementIntent(bot_id);
+    if (pending_intent == nullptr) {
+        g_bot_movement_intents.push_back(PendingBotMovementIntent{});
+        pending_intent = &g_bot_movement_intents.back();
+        pending_intent->bot_id = bot_id;
+        pending_intent->revision = g_next_movement_intent_revision++;
+    }
+
+    pending_intent->face_heading_valid = valid;
+    pending_intent->face_heading = heading;
+    pending_intent->face_heading_expires_ms = expires_ms;
+}
+
+void SetPendingFaceTargetLocked(std::uint64_t bot_id, uintptr_t target_actor_address) {
+    auto* pending_intent = FindPendingMovementIntent(bot_id);
+    if (pending_intent == nullptr) {
+        g_bot_movement_intents.push_back(PendingBotMovementIntent{});
+        pending_intent = &g_bot_movement_intents.back();
+        pending_intent->bot_id = bot_id;
+        pending_intent->revision = g_next_movement_intent_revision++;
+    }
+
+    pending_intent->face_target_actor_address = target_actor_address;
+}
+
+void ClearDeadBotControlsLocked(const ParticipantInfo& participant) {
+    const auto bot_id = participant.participant_id;
+    if (bot_id == 0) {
+        return;
+    }
+
+    RemovePendingCast(bot_id);
+    const auto* previous_intent = FindPendingMovementIntent(bot_id);
+    const auto desired_heading_valid =
+        participant.runtime.transform_valid ||
+        (previous_intent != nullptr && previous_intent->desired_heading_valid);
+    const auto desired_heading =
+        participant.runtime.transform_valid
+            ? NormalizeHeadingDegrees(participant.runtime.heading)
+            : (previous_intent != nullptr ? previous_intent->desired_heading : 0.0f);
+    SchedulePendingMovementIntentLocked(
+        bot_id,
+        BotControllerState::Idle,
+        false,
+        0.0f,
+        0.0f,
+        desired_heading_valid,
+        desired_heading);
+    SetPendingFaceHeadingLocked(bot_id, false, 0.0f, 0);
+    SetPendingFaceTargetLocked(bot_id, 0);
 }
 
 void SchedulePendingDestroyLocked(std::uint64_t bot_id) {

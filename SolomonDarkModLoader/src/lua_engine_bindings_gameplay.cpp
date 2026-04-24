@@ -32,7 +32,7 @@ void PushEquipVisualLaneState(lua_State* state, const SDModEquipVisualLaneState&
 }
 
 void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
-    lua_createtable(state, 0, 13);
+    lua_createtable(state, 0, 19);
     lua_pushinteger(state, static_cast<lua_Integer>(actor.actor_address));
     lua_setfield(state, -2, "actor_address");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.vtable_address));
@@ -57,10 +57,22 @@ void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
     lua_setfield(state, -2, "anim_drive_state");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.progression_handle_address));
     lua_setfield(state, -2, "progression_handle_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.progression_runtime_address));
+    lua_setfield(state, -2, "progression_runtime_address");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.hp));
+    lua_setfield(state, -2, "hp");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.max_hp));
+    lua_setfield(state, -2, "max_hp");
+    lua_pushboolean(state, actor.dead ? 1 : 0);
+    lua_setfield(state, -2, "dead");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.equip_handle_address));
     lua_setfield(state, -2, "equip_handle_address");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.animation_state_ptr));
     lua_setfield(state, -2, "animation_state_ptr");
+    lua_pushboolean(state, actor.tracked_enemy ? 1 : 0);
+    lua_setfield(state, -2, "tracked_enemy");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.enemy_type));
+    lua_setfield(state, -2, "enemy_type");
     PushPositionTable(state, actor.x, actor.y);
     lua_setfield(state, -2, "position");
 }
@@ -72,6 +84,47 @@ int LuaGameplayStartWaves(lua_State* state) {
     }
 
     lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaGameplayEnableCombatPrelude(lua_State* state) {
+    std::string error_message;
+    if (!QueueGameplayEnableCombatPrelude(&error_message)) {
+        return luaL_error(state, "sd.gameplay.enable_combat_prelude failed: %s", error_message.c_str());
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaGameplayGetCombatState(lua_State* state) {
+    SDModGameplayCombatState combat_state;
+    if (!TryGetGameplayCombatState(&combat_state) || !combat_state.valid) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_createtable(state, 0, 10);
+    lua_pushstring(state, HexString(combat_state.arena_address).c_str());
+    lua_setfield(state, -2, "arena_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(combat_state.combat_section_index));
+    lua_setfield(state, -2, "section_index");
+    lua_pushinteger(state, static_cast<lua_Integer>(combat_state.combat_wave_index));
+    lua_setfield(state, -2, "wave_index");
+    lua_pushinteger(state, static_cast<lua_Integer>(combat_state.combat_wait_ticks));
+    lua_setfield(state, -2, "wait_ticks");
+    lua_pushinteger(state, static_cast<lua_Integer>(combat_state.combat_advance_mode));
+    lua_setfield(state, -2, "advance_mode");
+    lua_pushinteger(state, static_cast<lua_Integer>(combat_state.combat_advance_threshold));
+    lua_setfield(state, -2, "advance_threshold");
+    lua_pushinteger(state, static_cast<lua_Integer>(combat_state.combat_wave_counter));
+    lua_setfield(state, -2, "wave_counter");
+    lua_pushboolean(state, combat_state.combat_started_music != 0 ? 1 : 0);
+    lua_setfield(state, -2, "started_music");
+    lua_pushboolean(state, combat_state.combat_transition_requested != 0 ? 1 : 0);
+    lua_setfield(state, -2, "transition_requested");
+    lua_pushboolean(state, combat_state.combat_active != 0 ? 1 : 0);
+    lua_setfield(state, -2, "active");
     return 1;
 }
 
@@ -359,8 +412,10 @@ int LuaWorldSpawnReward(lua_State* state) {
 }  // namespace
 
 void RegisterLuaGameplayBindings(lua_State* state) {
-    lua_createtable(state, 0, 2);
+    lua_createtable(state, 0, 4);
     RegisterFunction(state, &LuaGameplayStartWaves, "start_waves");
+    RegisterFunction(state, &LuaGameplayEnableCombatPrelude, "enable_combat_prelude");
+    RegisterFunction(state, &LuaGameplayGetCombatState, "get_combat_state");
     RegisterFunction(state, &LuaGameplayGetSelectionDebugState, "get_selection_debug_state");
     lua_setfield(state, -2, "gameplay");
 

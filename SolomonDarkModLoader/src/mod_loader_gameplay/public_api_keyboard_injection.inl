@@ -23,6 +23,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerControlBrainUpdate);
     const auto pure_primary_spell_start =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kSpellCastPurePrimary);
+    const auto pure_primary_post_builder =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kPurePrimaryPostBuilder);
     const auto spell_cast_dispatcher =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kSpellCastDispatcher);
     const auto equip_attachment_get_current_item =
@@ -122,20 +124,25 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
-    if (!InstallX86Hook(
-            reinterpret_cast<void*>(player_actor_dtor),
-            reinterpret_cast<void*>(&HookPlayerActorDtor),
-            kPlayerActorDtorHookPatchSize,
-            &g_gameplay_keyboard_injection.player_actor_dtor_hook,
-            &hook_error)) {
-        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
-        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
-        RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
-        RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
-        if (error_message != nullptr) {
-            *error_message = "Failed to install player actor dtor hook: " + hook_error;
+    if (kEnablePlayerActorDtorHook) {
+        if (!InstallX86Hook(
+                reinterpret_cast<void*>(player_actor_dtor),
+                reinterpret_cast<void*>(&HookPlayerActorDtor),
+                kPlayerActorDtorHookPatchSize,
+                &g_gameplay_keyboard_injection.player_actor_dtor_hook,
+                &hook_error)) {
+            RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
+            RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
+            RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
+            RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
+            if (error_message != nullptr) {
+                *error_message = "Failed to install player actor dtor hook: " + hook_error;
+            }
+            return false;
         }
-        return false;
+    } else {
+        g_gameplay_keyboard_injection.player_actor_dtor_hook = X86Hook{};
+        Log("Gameplay input injection: player actor dtor hook disabled; run lifecycle hooks handle scene teardown.");
     }
 
     if (!InstallX86Hook(
@@ -392,6 +399,24 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
+    g_pure_primary_post_builder_trampoline = nullptr;
+    if (pure_primary_post_builder != 0) {
+        if (!InstallSafeX86Hook(
+                reinterpret_cast<void*>(pure_primary_post_builder),
+                reinterpret_cast<void*>(&HookPurePrimaryPostBuilder),
+                5,
+                &g_gameplay_keyboard_injection.pure_primary_post_builder_hook,
+                &hook_error)) {
+            Log("Gameplay input injection: pure-primary post-builder hook unavailable. " + hook_error);
+            g_gameplay_keyboard_injection.pure_primary_post_builder_hook = X86Hook{};
+        } else {
+            g_pure_primary_post_builder_trampoline =
+                g_gameplay_keyboard_injection.pure_primary_post_builder_hook.trampoline;
+        }
+    } else {
+        Log("Gameplay input injection: pure-primary post-builder hook unavailable; seam was unresolved.");
+    }
+
     g_gameplay_keyboard_injection.initialized = true;
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
@@ -423,6 +448,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " pure_primary_gate=" + HexString(player_actor_pure_primary_gate) +
         " control_brain_update=" + HexString(player_control_brain_update) +
         " pure_primary_start=" + HexString(pure_primary_spell_start) +
+        " pure_primary_post_builder=" + HexString(pure_primary_post_builder) +
         " spell_dispatcher=" + HexString(spell_cast_dispatcher) +
         " equip_attachment_get_current_item=" + HexString(equip_attachment_get_current_item) +
         " spell_action_builder=" + HexString(spell_action_builder) +
@@ -449,6 +475,8 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
+    g_pure_primary_post_builder_trampoline = nullptr;
     RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.equip_attachment_get_current_item_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.spell_action_builder_hook);
@@ -471,6 +499,7 @@ void ShutdownGameplayKeyboardInjection() {
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_start_waves_requests.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_enable_combat_prelude_requests.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.hub_start_testrun_cooldown_until_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.start_waves_retry_not_before_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.store(0, std::memory_order_release);

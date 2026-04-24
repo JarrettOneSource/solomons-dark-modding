@@ -154,7 +154,7 @@ bool PrimeGameplaySlotBotActor(
 
     (void)memory.TryWriteField(actor_address, kActorPositionXOffset, x);
     (void)memory.TryWriteField(actor_address, kActorPositionYOffset, y);
-    (void)memory.TryWriteField(actor_address, kActorHeadingOffset, heading);
+    ApplyWizardActorFacingState(actor_address, heading);
 
     log_prime_state("exit");
     return true;

@@ -255,9 +255,19 @@ def main() -> int:
         csp.wait_for_lua_pipe()
         result["navigation"].append({"step": "launch", "process_id": process_id})
 
-        csp.drive_new_game_flow(process_id, element=csp.DEFAULT_ELEMENT, discipline=csp.DEFAULT_DISCIPLINE)
+        hub_flow = csp.drive_hub_flow(
+            process_id,
+            element=csp.DEFAULT_ELEMENT,
+            discipline=csp.DEFAULT_DISCIPLINE,
+            prefer_resume=True,
+        )
         result["navigation"].append(
-            {"step": "new_game", "element": csp.DEFAULT_ELEMENT, "discipline": csp.DEFAULT_DISCIPLINE}
+            {
+                "step": "hub_ready",
+                "flow": hub_flow,
+                "element": csp.DEFAULT_ELEMENT,
+                "discipline": csp.DEFAULT_DISCIPLINE,
+            }
         )
 
         csp.start_run_and_waves()

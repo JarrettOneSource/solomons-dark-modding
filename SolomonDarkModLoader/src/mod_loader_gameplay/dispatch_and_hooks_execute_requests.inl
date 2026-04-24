@@ -25,7 +25,7 @@ bool TryUpdateParticipantEntity(
         return false;
     }
 
-    (void)memory.TryWriteField(binding->actor_address, kActorHeadingOffset, heading);
+    ApplyWizardActorFacingState(binding->actor_address, heading);
     binding->character_profile = request.character_profile;
     binding->scene_intent = request.scene_intent;
     PublishParticipantGameplaySnapshot(*binding);
@@ -530,7 +530,7 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
 
     const auto moved_x = memory.TryWriteField(actor_address, kActorPositionXOffset, x);
     const auto moved_y = memory.TryWriteField(actor_address, kActorPositionYOffset, y);
-    (void)memory.TryWriteField(actor_address, kActorHeadingOffset, heading);
+    ApplyWizardActorFacingState(actor_address, heading);
     if (!moved_x || !moved_y) {
         Log(
             "[bots] standalone clone transform write incomplete. actor=" +
@@ -915,7 +915,7 @@ bool TrySpawnRegisteredGameNpcParticipantEntity(
 
     const auto moved_x = memory.TryWriteField(actor_address, kActorPositionXOffset, x);
     const auto moved_y = memory.TryWriteField(actor_address, kActorPositionYOffset, y);
-    (void)memory.TryWriteField(actor_address, kActorHeadingOffset, heading);
+    ApplyWizardActorFacingState(actor_address, heading);
     if (!moved_x || !moved_y) {
         Log(
             "[bots] registered_gamenpc transform write incomplete. actor=" + HexString(actor_address) +

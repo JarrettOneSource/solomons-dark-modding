@@ -22,11 +22,15 @@ uintptr_t ResolveExecutableRuntimeAddress(uintptr_t address) {
     }
 
     auto& memory = sdmod::ProcessMemory::Instance();
+    const auto resolved = memory.ResolveGameAddressOrZero(address);
+    if (resolved != 0 && resolved != address && memory.IsExecutableRange(resolved, 1)) {
+        return resolved;
+    }
+
     if (memory.IsExecutableRange(address, 1)) {
         return address;
     }
 
-    const auto resolved = memory.ResolveGameAddressOrZero(address);
     if (resolved != 0 && memory.IsExecutableRange(resolved, 1)) {
         return resolved;
     }

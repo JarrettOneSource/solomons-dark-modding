@@ -33,10 +33,23 @@ bool ApplyActorAnimationDriveProfile(
     }
 
     auto& memory = ProcessMemory::Instance();
+    // The captured block starts at actor+0x158, but actor+0x160 is not a
+    // locomotion flag. Non-zero values there drive cast/death branches, so
+    // live movement must only replay the vector prefix before that byte.
+    const auto config_prefix_size =
+        kActorAnimationDriveStateByteOffset > kActorAnimationConfigBlockOffset
+            ? (std::min)(
+                  profile.config_bytes.size(),
+                  kActorAnimationDriveStateByteOffset - kActorAnimationConfigBlockOffset)
+            : std::size_t{0};
+    if (config_prefix_size == 0) {
+        return false;
+    }
+
     const auto config_written = memory.TryWrite(
         actor_address + kActorAnimationConfigBlockOffset,
         profile.config_bytes.data(),
-        profile.config_bytes.size());
+        config_prefix_size);
     if (!config_written) {
         return false;
     }
@@ -46,6 +59,17 @@ bool ApplyActorAnimationDriveProfile(
         kActorRenderAdvanceRateOffset,
         profile.render_advance_rate);
     return true;
+}
+
+void ClearLiveWizardActorAnimationDriveState(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return;
+    }
+
+    (void)ProcessMemory::Instance().TryWriteField<std::uint8_t>(
+        actor_address,
+        kActorAnimationDriveStateByteOffset,
+        0);
 }
 
 void CaptureObservedPlayerAnimationDriveProfile(uintptr_t actor_address, bool moving_now) {
@@ -182,10 +206,7 @@ void ApplyActorAnimationDriveState(uintptr_t actor_address, bool moving) {
     }
 
     auto& memory = ProcessMemory::Instance();
-    (void)memory.TryWriteField(
-        actor_address,
-        kActorAnimationDriveStateByteOffset,
-        static_cast<std::uint8_t>(moving ? 1 : 0));
+    ClearLiveWizardActorAnimationDriveState(actor_address);
 
     if (!moving) {
         (void)memory.TryWriteField(actor_address, kActorAnimationMoveDurationTicksOffset, 0);
@@ -202,11 +223,59 @@ void ApplyActorAnimationDriveState(uintptr_t actor_address, bool moving) {
     (void)memory.TryWriteField(actor_address, kActorAnimationMoveDurationTicksOffset, move_duration);
 }
 
+float NormalizeWizardActorHeadingForWrite(float heading_degrees) {
+    if (!std::isfinite(heading_degrees)) {
+        return 0.0f;
+    }
+
+    heading_degrees = std::fmod(heading_degrees, 360.0f);
+    if (heading_degrees < 0.0f) {
+        heading_degrees += 360.0f;
+    }
+    return heading_degrees;
+}
+
+void ApplyWizardActorFacingState(uintptr_t actor_address, float heading_degrees) {
+    if (actor_address == 0) {
+        return;
+    }
+
+    const auto heading = NormalizeWizardActorHeadingForWrite(heading_degrees);
+    auto& memory = ProcessMemory::Instance();
+    (void)memory.TryWriteField(actor_address, kActorHeadingOffset, heading);
+
+    const auto control_brain_address =
+        memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+    if (control_brain_address == 0) {
+        return;
+    }
+
+    (void)memory.TryWriteValue<float>(
+        control_brain_address + kActorControlBrainHeadingAccumulatorOffset,
+        heading);
+    (void)memory.TryWriteValue<float>(
+        control_brain_address + kActorControlBrainDesiredFacingOffset,
+        heading);
+    (void)memory.TryWriteValue<float>(
+        control_brain_address + kActorControlBrainDesiredFacingSmoothedOffset,
+        heading);
+}
+
+bool ApplyWizardBindingFacingState(const ParticipantEntityBinding* binding, uintptr_t actor_address) {
+    if (binding == nullptr || actor_address == 0 || !binding->facing_heading_valid) {
+        return false;
+    }
+
+    ApplyWizardActorFacingState(actor_address, binding->facing_heading_value);
+    return true;
+}
+
 void ResetStandaloneWizardControlBrain(uintptr_t actor_address) {
     if (actor_address == 0) {
         return;
     }
 
+    constexpr int kSuppressedSelectionRetargetTicks = 60;
     auto& memory = ProcessMemory::Instance();
     const auto control_brain_address =
         memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
@@ -218,7 +287,9 @@ void ResetStandaloneWizardControlBrain(uintptr_t actor_address) {
     (void)memory.TryWriteValue<std::uint16_t>(
         control_brain_address + kActorControlBrainTargetHandleOffset,
         static_cast<std::uint16_t>(0xFFFF));
-    (void)memory.TryWriteValue<int>(control_brain_address + kActorControlBrainRetargetTicksOffset, 0);
+    (void)memory.TryWriteValue<int>(
+        control_brain_address + kActorControlBrainRetargetTicksOffset,
+        kSuppressedSelectionRetargetTicks);
     (void)memory.TryWriteValue<int>(control_brain_address + kActorControlBrainActionCooldownTicksOffset, 0);
     (void)memory.TryWriteValue<int>(control_brain_address + kActorControlBrainActionBurstTicksOffset, 0);
     (void)memory.TryWriteValue<int>(control_brain_address + kActorControlBrainHeadingLockTicksOffset, 0);
@@ -274,9 +345,11 @@ void ApplyStandaloneWizardPuppetDriveState(
     }
 
     const auto desired_heading =
-        binding->desired_heading_valid
-            ? binding->desired_heading
-            : memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
+        binding->facing_heading_valid
+            ? binding->facing_heading_value
+            : (binding->desired_heading_valid
+                   ? binding->desired_heading
+                   : memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f));
     (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainHeadingAccumulatorOffset, desired_heading);
     (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainDesiredFacingOffset, desired_heading);
     (void)memory.TryWriteValue<float>(
@@ -285,4 +358,3 @@ void ApplyStandaloneWizardPuppetDriveState(
     (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainMoveInputXOffset, move_input_x);
     (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainMoveInputYOffset, move_input_y);
 }
-

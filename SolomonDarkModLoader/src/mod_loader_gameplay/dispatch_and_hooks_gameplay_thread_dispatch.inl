@@ -49,8 +49,6 @@ bool TryDispatchGameplaySwitchRegionOnGameThread(int region_index, std::string* 
         return false;
     }
 
-    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-
     const auto switch_region_address = ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplaySwitchRegion);
     if (switch_region_address == 0) {
         if (error_message != nullptr) {
@@ -107,6 +105,43 @@ bool CallArenaStartWavesSafe(uintptr_t start_waves_address, uintptr_t arena_addr
     }
 }
 
+bool CallGameplayCombatPreludeModeSafe(
+    uintptr_t function_address,
+    uintptr_t gameplay_runtime_address,
+    std::uint32_t arg0,
+    std::uint32_t arg1,
+    DispatchException* exception) {
+    auto* fn = reinterpret_cast<GameplayCombatPreludeModeFn>(function_address);
+    if (exception != nullptr) {
+        *exception = DispatchException{};
+    }
+
+    __try {
+        fn(reinterpret_cast<void*>(gameplay_runtime_address), arg0, arg1);
+        return true;
+    } __except (CaptureDispatchException(GetExceptionInformation(), exception)) {
+        return false;
+    }
+}
+
+bool CallArenaCombatPreludeDispatchSafe(
+    uintptr_t function_address,
+    uintptr_t prelude_list_address,
+    int mode,
+    DispatchException* exception) {
+    auto* fn = reinterpret_cast<ArenaCombatPreludeDispatchFn>(function_address);
+    if (exception != nullptr) {
+        *exception = DispatchException{};
+    }
+
+    __try {
+        fn(reinterpret_cast<void*>(prelude_list_address), mode);
+        return true;
+    } __except (CaptureDispatchException(GetExceptionInformation(), exception)) {
+        return false;
+    }
+}
+
 bool TryReadArenaWaveStartState(uintptr_t arena_address, ArenaWaveStartState* state) {
     if (state == nullptr || arena_address == 0) {
         return false;
@@ -133,6 +168,27 @@ bool TryReadArenaWaveStartState(uintptr_t arena_address, ArenaWaveStartState* st
     return true;
 }
 
+bool TryResolveGameplayRuntimeState(uintptr_t* gameplay_runtime_address) {
+    if (gameplay_runtime_address == nullptr) {
+        return false;
+    }
+
+    *gameplay_runtime_address = 0;
+    auto& memory = ProcessMemory::Instance();
+    const auto gameplay_runtime_global_address = memory.ResolveGameAddressOrZero(kGameplayRuntimeGlobal);
+    if (gameplay_runtime_global_address == 0) {
+        return false;
+    }
+
+    const auto gameplay_runtime = memory.ReadValueOr<uintptr_t>(gameplay_runtime_global_address, 0);
+    if (gameplay_runtime == 0 || !memory.IsReadableRange(gameplay_runtime, 0x230)) {
+        return false;
+    }
+
+    *gameplay_runtime_address = gameplay_runtime;
+    return true;
+}
+
 std::string DescribeArenaWaveStartState(const ArenaWaveStartState& candidate) {
     return
         "section=" + std::to_string(candidate.combat_section_index) +
@@ -144,6 +200,107 @@ std::string DescribeArenaWaveStartState(const ArenaWaveStartState& candidate) {
         " music_started=" + std::to_string(static_cast<unsigned>(candidate.combat_started_music)) +
         " transition_requested=" + std::to_string(static_cast<unsigned>(candidate.combat_transition_requested)) +
         " combat_active=" + std::to_string(static_cast<unsigned>(candidate.combat_active));
+}
+
+bool TryEnableCombatPreludeOnGameThread() {
+    auto& memory = ProcessMemory::Instance();
+
+    uintptr_t arena_address = 0;
+    if (!TryResolveArena(&arena_address) || arena_address == 0) {
+        Log("combat_prelude: arena is not active.");
+        return false;
+    }
+
+    uintptr_t gameplay_runtime_address = 0;
+    if (!TryResolveGameplayRuntimeState(&gameplay_runtime_address) || gameplay_runtime_address == 0) {
+        Log("combat_prelude: gameplay runtime root is not active.");
+        return false;
+    }
+
+    ArenaWaveStartState before;
+    const bool have_before = TryReadArenaWaveStartState(arena_address, &before);
+    const auto enemy_count = ReadResolvedGlobalIntOr(kEnemyCountGlobal);
+    if (have_before && before.combat_wave_index > 0) {
+        Log(
+            "combat_prelude: refusing because waves are already active. arena=" + HexString(arena_address) +
+            " state=" + DescribeArenaWaveStartState(before));
+        return true;
+    }
+    if (enemy_count > 0) {
+        Log(
+            "combat_prelude: continuing with existing enemies present. arena=" + HexString(arena_address) +
+            " enemy_count=" + std::to_string(enemy_count));
+    }
+
+    const auto primary_mode_address = memory.ResolveGameAddressOrZero(kGameplayCombatPreludePrimaryMode);
+    const auto secondary_mode_address = memory.ResolveGameAddressOrZero(kGameplayCombatPreludeSecondaryMode);
+    const auto prelude_dispatch_address = memory.ResolveGameAddressOrZero(kArenaCombatPreludeDispatch);
+    if (primary_mode_address == 0 || secondary_mode_address == 0 || prelude_dispatch_address == 0) {
+        Log(
+            "combat_prelude: missing stock helper(s). primary=" + HexString(primary_mode_address) +
+            " secondary=" + HexString(secondary_mode_address) +
+            " dispatch=" + HexString(prelude_dispatch_address));
+        return false;
+    }
+
+    DispatchException exception;
+    if (!CallGameplayCombatPreludeModeSafe(
+            primary_mode_address,
+            gameplay_runtime_address,
+            0,
+            0,
+            &exception)) {
+        Log(
+            "combat_prelude: primary mode helper failed. runtime=" + HexString(gameplay_runtime_address) +
+            " fn=" + HexString(primary_mode_address) +
+            " exception=" + HexString(exception.code));
+        return false;
+    }
+
+    if (!CallGameplayCombatPreludeModeSafe(
+            secondary_mode_address,
+            gameplay_runtime_address,
+            0,
+            0,
+            &exception)) {
+        Log(
+            "combat_prelude: secondary mode helper failed. runtime=" + HexString(gameplay_runtime_address) +
+            " fn=" + HexString(secondary_mode_address) +
+            " exception=" + HexString(exception.code));
+        return false;
+    }
+
+    if (!memory.TryWriteField(arena_address, kArenaCombatTransitionRequestedOffset, static_cast<std::uint8_t>(1))) {
+        Log("combat_prelude: failed to write arena transition_requested.");
+        return false;
+    }
+
+    const auto prelude_list_address = arena_address + kArenaCombatPreludeListOffset;
+    if (!CallArenaCombatPreludeDispatchSafe(
+            prelude_dispatch_address,
+            prelude_list_address,
+            0x0f,
+            &exception)) {
+        Log(
+            "combat_prelude: prelude dispatch helper failed. list=" + HexString(prelude_list_address) +
+            " fn=" + HexString(prelude_dispatch_address) +
+            " exception=" + HexString(exception.code));
+        return false;
+    }
+
+    (void)memory.TryWriteField(arena_address, kArenaCombatStartedMusicOffset, static_cast<std::uint8_t>(1));
+    (void)memory.TryWriteField(arena_address, kArenaCombatActiveFlagOffset, static_cast<std::uint8_t>(1));
+
+    ArenaWaveStartState after;
+    const bool have_after = TryReadArenaWaveStartState(arena_address, &after);
+    Log(
+        "combat_prelude: dispatched. arena=" + HexString(arena_address) +
+        " runtime=" + HexString(gameplay_runtime_address) +
+        " before=" + (have_before ? DescribeArenaWaveStartState(before) : std::string("unreadable")) +
+        " after=" + (have_after ? DescribeArenaWaveStartState(after) : std::string("unreadable")) +
+        " enemy_count=" + std::to_string(ReadResolvedGlobalIntOr(kEnemyCountGlobal)));
+    SetRunLifecycleCombatPreludeOnlySuppression(true);
+    return true;
 }
 
 bool TryStartWavesOnGameThread() {
@@ -169,11 +326,17 @@ bool TryStartWavesOnGameThread() {
             "start_waves: arena combat is already active. arena=" + HexString(arena_address) +
             " start_waves=" + HexString(start_waves_address) +
             " state=" + DescribeArenaWaveStartState(before));
+        SetRunLifecycleCombatPreludeOnlySuppression(false);
         return true;
     }
 
+    SetRunLifecycleCombatPreludeOnlySuppression(false);
+    SetRunLifecycleWaveStartEnemyTracking(true);
     DispatchException start_waves_exception;
-    if (!CallArenaStartWavesSafe(start_waves_address, arena_address, &start_waves_exception)) {
+    const bool started_waves =
+        CallArenaStartWavesSafe(start_waves_address, arena_address, &start_waves_exception);
+    SetRunLifecycleWaveStartEnemyTracking(false);
+    if (!started_waves) {
         Log(
             "start_waves: arena combat entrypoint raised an exception. arena=" + HexString(arena_address) +
             " start_waves=" + HexString(start_waves_address) +
@@ -281,4 +444,3 @@ bool TryDispatchStartWavesOnGameThread() {
     g_gameplay_keyboard_injection.start_waves_retry_not_before_ms.store(0, std::memory_order_release);
     return true;
 }
-

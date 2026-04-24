@@ -94,6 +94,20 @@ struct SDModWorldState {
     std::uint64_t time_elapsed_ms = 0;
 };
 
+struct SDModGameplayCombatState {
+    bool valid = false;
+    uintptr_t arena_address = 0;
+    std::int32_t combat_section_index = 0;
+    std::int32_t combat_wave_index = 0;
+    std::int32_t combat_wait_ticks = 0;
+    std::int32_t combat_advance_mode = 0;
+    std::int32_t combat_advance_threshold = 0;
+    std::int32_t combat_wave_counter = 0;
+    std::uint8_t combat_started_music = 0;
+    std::uint8_t combat_transition_requested = 0;
+    std::uint8_t combat_active = 0;
+};
+
 struct SDModSceneState {
     bool valid = false;
     std::string kind;
@@ -123,8 +137,19 @@ struct SDModSceneActorState {
     float y = 0.0f;
     std::uint8_t anim_drive_state = 0;
     uintptr_t progression_handle_address = 0;
+    uintptr_t progression_runtime_address = 0;
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    bool dead = false;
     uintptr_t equip_handle_address = 0;
     uintptr_t animation_state_ptr = 0;
+    bool tracked_enemy = false;
+    int enemy_type = -1;
+};
+
+struct SDModTrackedEnemyState {
+    uintptr_t actor_address = 0;
+    int enemy_type = -1;
 };
 
 struct SDModGameplaySelectionDebugState {
@@ -242,6 +267,7 @@ std::uint64_t GetGameplayMouseLeftEdgeTickMs();
 bool QueueGameplayKeyPress(std::string_view binding_name, std::string* error_message);
 bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_message);
 bool QueueGameplayStartWaves(std::string* error_message);
+bool QueueGameplayEnableCombatPrelude(std::string* error_message);
 bool QueueHubStartTestrun(std::string* error_message);
 bool QueueGameplaySwitchRegion(int region_index, std::string* error_message);
 bool QueueParticipantEntitySync(
@@ -256,10 +282,15 @@ bool QueueParticipantEntitySync(
     std::string* error_message);
 bool QueueParticipantDestroy(std::uint64_t participant_id, std::string* error_message);
 bool IsRunLifecycleActive();
+bool EndRunLifecycleFromExternal(std::string_view reason);
 int GetRunLifecycleCurrentWave();
 std::uint64_t GetRunLifecycleElapsedMilliseconds();
+void SetRunLifecycleCombatPreludeOnlySuppression(bool enabled);
+void SetRunLifecycleWaveStartEnemyTracking(bool enabled);
+void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies);
 bool TryGetPlayerState(SDModPlayerState* state);
 bool TryGetWorldState(SDModWorldState* state);
+bool TryGetGameplayCombatState(SDModGameplayCombatState* state);
 bool TryGetSceneState(SDModSceneState* state);
 bool TryListSceneActors(std::vector<SDModSceneActorState>* actors);
 bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state);

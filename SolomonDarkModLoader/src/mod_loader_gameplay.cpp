@@ -51,6 +51,8 @@ using PointerListDeleteBatchFn = void(__thiscall*)(void* self, void* list);
 using ObjectDeleteFn = void(__thiscall*)(void* self);
 using GameplaySwitchRegionFn = void(__thiscall*)(void* self, int region_index);
 using ArenaStartWavesFn = void(__thiscall*)(void* self);
+using GameplayCombatPreludeModeFn = void(__thiscall*)(void* self, std::uint32_t arg0, std::uint32_t arg1);
+using ArenaCombatPreludeDispatchFn = void(__thiscall*)(void* self, int mode);
 using GameplayCreatePlayerSlotFn = void(__thiscall*)(void* self, int slot_index);
 using WizardCloneFromSourceActorFn = void*(__fastcall*)(void* source_actor);
 using PlayerActorCtorFn = void*(__thiscall*)(void* self);
@@ -189,7 +191,8 @@ constexpr std::size_t kGameplayMouseRefreshHookPatchSize = 8;
 constexpr std::size_t kGameplayKeyboardEdgeHookPatchSize = 9;
 constexpr std::size_t kPlayerActorTickHookPatchSize = 6;
 constexpr std::size_t kPlayerActorEnsureProgressionHandleHookPatchSize = 7;
-constexpr std::size_t kPlayerActorDtorHookPatchSize = 6;
+constexpr std::size_t kPlayerActorDtorHookPatchSize = 12;
+constexpr bool kEnablePlayerActorDtorHook = false;
 constexpr std::size_t kPlayerActorVtable28HookPatchSize = 6;
 constexpr std::size_t kPlayerActorPurePrimaryGateHookMinimumPatchSize = 5;
 constexpr std::size_t kPlayerControlBrainUpdateHookMinimumPatchSize = 5;
@@ -243,6 +246,8 @@ constexpr std::size_t kGameplayIndexStateActorSelectionBaseIndex = 0x0C;
 constexpr std::size_t kActorHubVisualDescriptorBlockSize = 0x20;
 constexpr int kActorAnimationStateSlotBias = 0x0C;
 constexpr int kUnknownAnimationStateId = -1;
+constexpr std::uint8_t kDeadWizardBotCorpseDriveState = 1;
+constexpr float kWizardHeadingRadiansToDegrees = 57.2957795130823208767981548141051703f;
 constexpr std::size_t kGameplayInputBufferStride = 0x203;
 constexpr std::uint64_t kWaveStartRetryDelayMs = 250;
 constexpr std::uint64_t kWizardBotSyncRetryDelayMs = 250;
@@ -517,6 +522,7 @@ struct GameplayKeyboardInjectionState {
     X86Hook player_actor_pure_primary_gate_hook;
     X86Hook player_control_brain_update_hook;
     X86Hook pure_primary_spell_start_hook;
+    X86Hook pure_primary_post_builder_hook;
     X86Hook spell_cast_dispatcher_hook;
     X86Hook equip_attachment_get_current_item_hook;
     X86Hook spell_action_builder_hook;
@@ -538,6 +544,7 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint32_t> pending_mouse_left_frames{0};
     std::atomic<std::uint32_t> pending_hub_start_testrun_requests{0};
     std::atomic<std::uint32_t> pending_start_waves_requests{0};
+    std::atomic<std::uint32_t> pending_enable_combat_prelude_requests{0};
     std::atomic<std::uint64_t> hub_start_testrun_cooldown_until_ms{0};
     std::atomic<std::uint64_t> start_waves_retry_not_before_ms{0};
     std::atomic<std::uint64_t> wizard_bot_sync_not_before_ms{0};
@@ -584,6 +591,7 @@ struct ParticipantEntityBinding {
     multiplayer::BotControllerState controller_state = multiplayer::BotControllerState::Idle;
     std::uint64_t movement_intent_revision = 0;
     bool movement_active = false;
+    float last_movement_displacement = 0.0f;
     bool has_target = false;
     float direction_x = 0.0f;
     float direction_y = 0.0f;
@@ -633,6 +641,11 @@ struct ParticipantEntityBinding {
     // last set until something explicitly changes it again.
     float facing_heading_value = 0.0f;
     bool facing_heading_valid = false;
+    uintptr_t facing_target_actor_address = 0;
+    bool stock_tick_facing_origin_valid = false;
+    float stock_tick_facing_origin_x = 0.0f;
+    float stock_tick_facing_origin_y = 0.0f;
+    bool death_transition_stock_tick_seen = false;
 
     // Ongoing cast state. The loader primes the cast once and, for gameplay-slot
     // bots, keeps a stock-owned startup/watch state alive across ticks. Startup
@@ -657,6 +670,7 @@ struct ParticipantEntityBinding {
         bool have_aim_target = false;
         float aim_target_x = 0.0f;
         float aim_target_y = 0.0f;
+        uintptr_t target_actor_address = 0;
         float heading_before = 0.0f;
         float aim_x_before = 0.0f;
         float aim_y_before = 0.0f;
@@ -691,6 +705,7 @@ struct ParticipantEntityBinding {
         bool startup_in_progress = false;
         bool requires_local_slot_native_tick = false;
         bool post_stock_dispatch_attempted = false;
+        uintptr_t pure_primary_item_sink_fallback = 0;
         static constexpr int kMaxTicksWaiting = 300;
         static constexpr int kMaxStartupTicksWaiting = 12;
     };
@@ -1003,6 +1018,7 @@ void PumpQueuedGameplayActions();
 ParticipantEntityBinding* FindParticipantEntity(std::uint64_t participant_id);
 ParticipantEntityBinding* FindParticipantEntityForGameplaySlot(int gameplay_slot);
 void StopWizardBotActorMotion(uintptr_t actor_address);
+void StopDeadWizardBotActorMotion(uintptr_t actor_address);
 void StopRegisteredGameNpcMotion(ParticipantEntityBinding* binding);
 void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t actor_address, bool moving);
 void PublishParticipantGameplaySnapshot(const ParticipantEntityBinding& binding);

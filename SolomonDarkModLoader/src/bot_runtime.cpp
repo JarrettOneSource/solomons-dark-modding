@@ -69,6 +69,10 @@ struct PendingBotMovementIntent {
     float direction_y = 0.0f;
     bool desired_heading_valid = false;
     float desired_heading = 0.0f;
+    bool face_heading_valid = false;
+    float face_heading = 0.0f;
+    std::uint64_t face_heading_expires_ms = 0;
+    uintptr_t face_target_actor_address = 0;
 };
 
 struct PendingBotDestroy {

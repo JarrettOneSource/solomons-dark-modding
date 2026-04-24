@@ -8,6 +8,51 @@ void __fastcall HookPlayerActorEnsureProgressionHandle(void* self, void* /*unuse
     original(self);
 }
 
+bool IsLocalPlayerActorDestructorTarget(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    SDModPlayerState player_state{};
+    if (TryGetPlayerState(&player_state) && player_state.valid && player_state.actor_address == actor_address) {
+        return true;
+    }
+
+    uintptr_t global_actor_address = 0;
+    if (TryReadResolvedGamePointerAbsolute(kLocalPlayerActorGlobal, &global_actor_address) &&
+        global_actor_address == actor_address) {
+        return true;
+    }
+
+    uintptr_t gameplay_address = 0;
+    uintptr_t local_actor_address = 0;
+    if (TryResolveCurrentGameplayScene(&gameplay_address) && gameplay_address != 0 &&
+        TryResolveLocalPlayerWorldContext(gameplay_address, &local_actor_address, nullptr, nullptr) &&
+        local_actor_address == actor_address) {
+        return true;
+    }
+
+    return ProcessMemory::Instance().ReadFieldOr<std::int8_t>(actor_address, kActorSlotOffset, -1) == 0;
+}
+
+void HandleLocalPlayerActorDestructorTeardown(uintptr_t actor_address, uintptr_t caller_address) {
+    static thread_local bool s_handling_local_player_teardown = false;
+    if (s_handling_local_player_teardown || !IsLocalPlayerActorDestructorTarget(actor_address)) {
+        return;
+    }
+
+    s_handling_local_player_teardown = true;
+    const bool ended_active_run = EndRunLifecycleFromExternal("leave_game");
+    Log(
+        "[bots] local player destructor teardown" +
+        std::string(" actor=") + HexString(actor_address) +
+        " caller=" + HexString(caller_address) +
+        " ended_run=" + std::to_string(ended_active_run ? 1 : 0));
+    DematerializeAllMaterializedWizardBotsForSceneSwitch("local player destructor teardown");
+    FlushNavGridSnapshotOnSceneUnload();
+    s_handling_local_player_teardown = false;
+}
+
 void __fastcall HookPlayerActorDtor(void* self, void* /*unused_edx*/, char free_flag) {
     const auto original =
         GetX86HookTrampoline<PlayerActorDtorFn>(g_gameplay_keyboard_injection.player_actor_dtor_hook);
@@ -16,6 +61,7 @@ void __fastcall HookPlayerActorDtor(void* self, void* /*unused_edx*/, char free_
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    const auto caller_address = reinterpret_cast<uintptr_t>(_ReturnAddress());
     bool tracked_wizard = false;
     std::uint64_t bot_id = 0;
     int gameplay_slot = -1;
@@ -39,7 +85,7 @@ void __fastcall HookPlayerActorDtor(void* self, void* /*unused_edx*/, char free_
             " binding_slot=" + std::to_string(gameplay_slot) +
             " kind=" + std::to_string(static_cast<int>(tracked_kind)) +
             " arg=" + std::to_string(static_cast<int>(free_flag)) +
-            " caller=" + HexString(reinterpret_cast<uintptr_t>(_ReturnAddress())) +
+            " caller=" + HexString(caller_address) +
             " owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
             " slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
                 actor_address,
@@ -54,8 +100,9 @@ void __fastcall HookPlayerActorDtor(void* self, void* /*unused_edx*/, char free_
             actor_address,
             0,
             static_cast<int>(free_flag),
-            reinterpret_cast<uintptr_t>(_ReturnAddress()));
+            caller_address);
     }
+    HandleLocalPlayerActorDestructorTeardown(actor_address, caller_address);
     original(self, free_flag);
     if (tracked_wizard) {
         MarkParticipantEntityWorldUnregistered(actor_address);

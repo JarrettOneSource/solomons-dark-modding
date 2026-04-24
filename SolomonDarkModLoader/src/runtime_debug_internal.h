@@ -99,6 +99,10 @@ struct TraceHitRecord {
     std::uint32_t arg2 = 0;
     std::uint32_t arg3 = 0;
     std::uint32_t arg4 = 0;
+    std::uint32_t arg5 = 0;
+    std::uint32_t arg6 = 0;
+    std::uint32_t arg7 = 0;
+    std::uint32_t arg8 = 0;
     bool arg3_words_valid = false;
     std::uint32_t arg3_word0 = 0;
     std::uint32_t arg3_word1 = 0;

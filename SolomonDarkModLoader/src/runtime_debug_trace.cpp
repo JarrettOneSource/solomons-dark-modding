@@ -30,6 +30,10 @@ void LogTraceHit(FunctionTrace* trace, const TraceEntryFrame* frame) {
         hit.arg2 = stack_words[3];
         hit.arg3 = stack_words[4];
         hit.arg4 = stack_words[5];
+        hit.arg5 = stack_words[6];
+        hit.arg6 = stack_words[7];
+        hit.arg7 = stack_words[8];
+        hit.arg8 = stack_words[9];
         std::uint32_t arg3_words[4] = {};
         if (stack_words[4] != 0 &&
             sdmod::ProcessMemory::Instance().TryRead(stack_words[4], arg3_words, sizeof(arg3_words))) {
@@ -77,7 +81,11 @@ void LogTraceHit(FunctionTrace* trace, const TraceEntryFrame* frame) {
             " arg1=" << sdmod::HexString(stack_words[2]) <<
             " arg2=" << sdmod::HexString(stack_words[3]) <<
             " arg3=" << sdmod::HexString(stack_words[4]) <<
-            " arg4=" << sdmod::HexString(stack_words[5]);
+            " arg4=" << sdmod::HexString(stack_words[5]) <<
+            " arg5=" << sdmod::HexString(stack_words[6]) <<
+            " arg6=" << sdmod::HexString(stack_words[7]) <<
+            " arg7=" << sdmod::HexString(stack_words[8]) <<
+            " arg8=" << sdmod::HexString(stack_words[9]);
         AppendTracePointerInfo(&out, "ecx", frame->ecx);
         AppendTracePointerInfo(&out, "edx", frame->edx);
         AppendTracePointerInfo(&out, "arg0", stack_words[1]);
@@ -405,6 +413,10 @@ void RuntimeDebug_ListTraceHits(std::vector<RuntimeDebugTraceHitInfo>* hits, con
         info.arg2 = hit.arg2;
         info.arg3 = hit.arg3;
         info.arg4 = hit.arg4;
+        info.arg5 = hit.arg5;
+        info.arg6 = hit.arg6;
+        info.arg7 = hit.arg7;
+        info.arg8 = hit.arg8;
         info.arg3_words_valid = hit.arg3_words_valid;
         info.arg3_word0 = hit.arg3_word0;
         info.arg3_word1 = hit.arg3_word1;
