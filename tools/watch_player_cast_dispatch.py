@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 import cast_state_probe as csp
-from cast_trace_profiles import build_trace_specs, trace_profile_names
+from cast_trace_profiles import build_trace_specs, trace_profile_is_stable, trace_profile_names
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -22,7 +22,7 @@ DEFAULT_AUTO_CLICK_X = 0.5
 DEFAULT_AUTO_CLICK_Y = 0.5
 DEFAULT_AUTO_CLICK_DELAY_SECONDS = 1.0
 DEFAULT_AUTO_CLICK_INTERVAL_SECONDS = 0.35
-DEFAULT_TRACE_PROFILE = "full"
+DEFAULT_TRACE_PROFILE = "safe_entry"
 
 
 class WatchFailure(RuntimeError):
@@ -85,6 +85,7 @@ def arm_watches(player_actor: int, player_progression: int, gameplay_scene: int)
 
     addresses: dict[str, tuple[int, int]] = {
         "player_actor_270": (player_actor + 0x270, 4),
+        "player_actor_27c": (player_actor + 0x27C, 4),
         "gameplay_cast_intent": (gameplay_scene + GAMEPLAY_CAST_INTENT_OFFSET, 4),
         "gameplay_mouse_left": (gameplay_scene + GAMEPLAY_MOUSE_LEFT_FALLBACK_OFFSET, 1),
     }
@@ -268,6 +269,14 @@ def build_parser() -> argparse.ArgumentParser:
         choices=trace_profile_names(),
         help="Trace subset to arm when --trace-builder-window is set.",
     )
+    parser.add_argument(
+        "--allow-unstable-inline-traces",
+        action="store_true",
+        help=(
+            "Permit in-function trace points. These can destabilize player casts; "
+            "safe entry traces are used by default."
+        ),
+    )
     parser.add_argument("--auto-click", action="store_true")
     parser.add_argument("--click-normalized-x", type=float, default=DEFAULT_AUTO_CLICK_X)
     parser.add_argument("--click-normalized-y", type=float, default=DEFAULT_AUTO_CLICK_Y)
@@ -300,6 +309,7 @@ def main() -> int:
         "attach": args.attach,
         "trace_builder_window": args.trace_builder_window,
         "trace_profile": args.trace_profile,
+        "allow_unstable_inline_traces": args.allow_unstable_inline_traces,
         "auto_click": args.auto_click,
         "skip_write_watches": args.skip_write_watches,
     }
@@ -308,6 +318,15 @@ def main() -> int:
     try:
         if args.start_waves and args.enable_combat_prelude:
             raise WatchFailure("--start-waves and --enable-combat-prelude are mutually exclusive")
+        if (
+            args.trace_builder_window
+            and not args.allow_unstable_inline_traces
+            and not trace_profile_is_stable(args.trace_profile)
+        ):
+            raise WatchFailure(
+                f"trace profile {args.trace_profile!r} contains unstable inline trace points; "
+                "use --trace-profile safe_entry or pass --allow-unstable-inline-traces explicitly"
+            )
 
         if args.attach:
             process_id = csp.wait_for_game_process(timeout_s=10.0)
@@ -344,7 +363,7 @@ def main() -> int:
             result["navigation"].append({"step": "launch", "process_id": process_id})
 
             result["lua_tick"] = set_lua_tick_enabled(False)
-            hub_flow = csp.drive_hub_flow(process_id, element=args.element, discipline=args.discipline, prefer_resume=True)
+            hub_flow = csp.drive_hub_flow(process_id, element=args.element, discipline=args.discipline, prefer_resume=False)
             result["navigation"].append({"step": "hub_ready", "flow": hub_flow})
 
             scene_before_testrun = csp.query_scene_state()

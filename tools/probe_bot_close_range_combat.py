@@ -16,10 +16,13 @@ ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = ROOT / "runtime" / "probe_bot_close_range_combat.json"
 DEFAULT_STANDOFF = 120.0
 DEFAULT_OBSERVE_SECONDS = 8.0
+DEFAULT_TARGET_HP = 100.0
 SPAWN_OFFSET_X = 80.0
 ACTOR_POSITION_X_OFFSET = 0x18
 ACTOR_POSITION_Y_OFFSET = 0x1C
 ACTOR_HEADING_OFFSET = 0x6C
+PROGRESSION_POINTER_OFFSET = 0x200
+PROGRESSION_HANDLE_OFFSET = 0x300
 
 
 class CloseRangeProbeFailure(RuntimeError):
@@ -180,6 +183,136 @@ print('target_actor_address=' .. tostring({hostile_actor_address}))
     )
 
 
+def query_progression_for_actor(actor_address: str | int) -> dict[str, str]:
+    return csp.parse_key_values(
+        csp.run_lua(
+            f"""
+local function emit(key, value)
+  if value == nil then
+    print(key .. "=")
+  else
+    print(key .. "=" .. tostring(value))
+  end
+end
+local actor = {actor_address}
+local progression = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_POINTER_OFFSET})) or 0
+local handle = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_HANDLE_OFFSET})) or 0
+if progression == 0 and handle ~= 0 then
+  progression = tonumber(sd.debug.read_ptr(handle)) or 0
+end
+emit("actor", actor)
+emit("progression", progression)
+emit("handle", handle)
+if progression ~= 0 then
+  emit("hp", sd.debug.read_float(progression + {csp.PROGRESSION_HP_OFFSET}))
+  emit("max_hp", sd.debug.read_float(progression + {csp.PROGRESSION_MAX_HP_OFFSET}))
+end
+""".strip()
+        )
+    )
+
+
+def force_actor_vitals(actor_address: str | int, hp_value: float) -> dict[str, str]:
+    return csp.parse_key_values(
+        csp.run_lua(
+            f"""
+local function emit(key, value)
+  if value == nil then
+    print(key .. "=")
+  else
+    print(key .. "=" .. tostring(value))
+  end
+end
+local actor = {actor_address}
+local progression = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_POINTER_OFFSET})) or 0
+local handle = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_HANDLE_OFFSET})) or 0
+if progression == 0 and handle ~= 0 then
+  progression = tonumber(sd.debug.read_ptr(handle)) or 0
+end
+emit("actor", actor)
+emit("progression", progression)
+emit("handle", handle)
+if progression ~= 0 then
+  emit("max_hp_ok", sd.debug.write_float(progression + {csp.PROGRESSION_MAX_HP_OFFSET}, {hp_value}))
+  emit("hp_ok", sd.debug.write_float(progression + {csp.PROGRESSION_HP_OFFSET}, {hp_value}))
+  emit("hp", sd.debug.read_float(progression + {csp.PROGRESSION_HP_OFFSET}))
+  emit("max_hp", sd.debug.read_float(progression + {csp.PROGRESSION_MAX_HP_OFFSET}))
+end
+""".strip()
+        )
+    )
+
+
+def arm_hp_watch(name: str, actor_address: str | int) -> dict[str, str]:
+    progression = query_progression_for_actor(actor_address)
+    progression_address = csp.int_value(progression, "progression")
+    if progression_address == 0:
+        return {
+            "actor": str(actor_address),
+            "progression": "0",
+            "watch_ok": "false",
+            "watchable": "false",
+            "reason": "no_progression",
+        }
+    hp_address = progression_address + csp.PROGRESSION_HP_OFFSET
+    return csp.parse_key_values(
+        csp.run_lua(
+            f"""
+local function emit(key, value)
+  if value == nil then
+    print(key .. "=")
+  else
+    print(key .. "=" .. tostring(value))
+  end
+end
+sd.debug.unwatch({json.dumps(name)})
+sd.debug.clear_write_hits({json.dumps(name)})
+emit("actor", {actor_address})
+emit("progression", {progression_address})
+emit("hp_address", {hp_address})
+emit("watch_ok", sd.debug.watch_write({json.dumps(name)}, {hp_address}, 4))
+emit("watchable", true)
+""".strip()
+        )
+    )
+
+
+def query_write_hits(name: str) -> dict[str, str]:
+    return csp.parse_key_values(
+        csp.run_lua(
+            f"""
+local hits = sd.debug.get_write_hits({json.dumps(name)}) or {{}}
+local function emit(key, value)
+  if value == nil then
+    print(key .. "=")
+  else
+    print(key .. "=" .. tostring(value))
+  end
+end
+emit("count", #hits)
+for i = 1, math.min(#hits, 8) do
+  local hit = hits[i]
+  for _, key in ipairs({{
+    "requested_address","resolved_address","access_address","thread_id",
+    "eip","esp","ebp","eax","ecx","edx","ret","arg0","arg1","arg2"
+  }}) do
+    emit("hit." .. i .. "." .. key, hit[key])
+  end
+end
+""".strip()
+        )
+    )
+
+
+def clear_hp_watch(name: str) -> None:
+    csp.run_lua(
+        f"""
+pcall(sd.debug.unwatch, {json.dumps(name)})
+sd.debug.clear_write_hits({json.dumps(name)})
+""".strip()
+    )
+
+
 def filter_loader_log(lines: list[str]) -> list[str]:
     needles = (
         "attack ",
@@ -197,6 +330,7 @@ def filter_loader_log(lines: list[str]) -> list[str]:
         "cast complete",
         "cast dispatch failed",
         "spell_obj diag",
+        "pure_primary_damage",
         "No traversable start cell",
         "run.ended",
         "destroyed lua bot",
@@ -315,8 +449,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--standoff", type=float, default=DEFAULT_STANDOFF)
     parser.add_argument("--observe-seconds", type=float, default=DEFAULT_OBSERVE_SECONDS)
+    parser.add_argument("--hp", type=float, default=DEFAULT_TARGET_HP)
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
     parser.add_argument("--keep-running", action="store_true")
+    parser.add_argument("--skip-hp-watch", action="store_true")
     return parser
 
 
@@ -341,7 +477,7 @@ def main() -> int:
             process_id,
             element=csp.DEFAULT_ELEMENT,
             discipline=csp.DEFAULT_DISCIPLINE,
-            prefer_resume=True,
+            prefer_resume=False,
         )
         result["navigation"].append(
             {
@@ -388,9 +524,23 @@ def main() -> int:
         result["navigation"].append({"step": "combat_prelude_enabled", "result": combat, "state": combat_state})
         time.sleep(1.0)
         hostile = csp.wait_for_nearest_enemy(max_gap=2000.0)
+        hostile_address = hostile["actor_address"]
+        forced_vitals = force_actor_vitals(hostile_address, args.hp)
+        hp_watch = (
+            {
+                "actor": str(hostile_address),
+                "progression": "0",
+                "watch_ok": "false",
+                "watchable": "false",
+                "reason": "disabled_by_probe",
+            }
+            if args.skip_hp_watch
+            else arm_hp_watch("close_range_hostile_hp", hostile_address)
+        )
+        hostile_before = query_progression_for_actor(hostile_address)
         direct_cast = queue_direct_primary_cast(
             bot["id"],
-            hostile["actor_address"],
+            hostile_address,
             csp.float_value(hostile, "x"),
             csp.float_value(hostile, "y"),
         )
@@ -408,6 +558,8 @@ def main() -> int:
             "stop_after_promotion": stop_after_promotion,
             "standoff": args.standoff,
             "spawn": spawn,
+            "forced_vitals": forced_vitals,
+            "hp_watch": hp_watch,
             "direct_cast": direct_cast,
         }
 
@@ -428,7 +580,27 @@ def main() -> int:
             "bot_actor_raw": csp.query_actor_raw_fields(
                 "bot", csp.int_value(csp.query_bot_state(), "actor_address")
             ),
+            "hostile_progression": query_progression_for_actor(hostile_address),
+            "hostile_hp_write_hits": (
+                {"count": "0", "watchable": "false", "reason": "disabled_by_probe"}
+                if args.skip_hp_watch
+                else query_write_hits("close_range_hostile_hp")
+            ),
         }
+        hostile_after = result["after"]["hostile_progression"]
+        hp_before = csp.float_value(hostile_before, "hp")
+        hp_after = csp.float_value(hostile_after, "hp")
+        hp_write_hits = csp.int_value(result["after"]["hostile_hp_write_hits"], "count")
+        result["validation"] = {
+            "direct_cast_ok": direct_cast.get("ok") == "true",
+            "hp_before": hp_before,
+            "hp_after": hp_after,
+            "hp_decreased": hp_after < hp_before,
+            "hp_write_hits": hp_write_hits,
+            "hp_write_seen": hp_write_hits > 0,
+            "damage_proved": hp_after < hp_before or hp_write_hits > 0,
+        }
+        result["ok"] = bool(result["validation"]["direct_cast_ok"] and result["validation"]["damage_proved"])
         result["loader_log_tail"] = csp.tail_loader_log()
         result["loader_log_filtered"] = filter_loader_log(result["loader_log_tail"])
 
@@ -436,7 +608,7 @@ def main() -> int:
         args.output.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
         print(json.dumps(result, indent=2, sort_keys=True))
         set_lua_tick_enabled(True)
-        return 0
+        return 0 if result["ok"] else 1
     except (csp.ProbeFailure, CloseRangeProbeFailure) as exc:
         result["error"] = str(exc)
         result["loader_log_tail"] = csp.tail_loader_log()
@@ -447,9 +619,17 @@ def main() -> int:
             set_lua_tick_enabled(True)
         except csp.ProbeFailure:
             pass
+        try:
+            clear_hp_watch("close_range_hostile_hp")
+        except csp.ProbeFailure:
+            pass
         print(json.dumps(result, indent=2, sort_keys=True))
         return 1
     finally:
+        try:
+            clear_hp_watch("close_range_hostile_hp")
+        except csp.ProbeFailure:
+            pass
         if not args.keep_running:
             csp.stop_game()
 

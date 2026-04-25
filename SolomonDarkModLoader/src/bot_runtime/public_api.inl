@@ -863,6 +863,7 @@ bool ReadBotSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
     FillBotSnapshot(*participant, snapshot);
     ApplyGameplayStateToSnapshot(bot_id, snapshot);
     ApplyControllerStateToSnapshot(bot_id, snapshot);
+    DeriveBotCastReadiness(snapshot);
     return true;
 }
 
@@ -884,6 +885,7 @@ bool ReadBotSnapshotByIndex(std::uint32_t index, BotSnapshot* snapshot) {
             FillBotSnapshot(participant, snapshot);
             ApplyGameplayStateToSnapshot(participant.participant_id, snapshot);
             ApplyControllerStateToSnapshot(participant.participant_id, snapshot);
+            DeriveBotCastReadiness(snapshot);
             return true;
         }
 

@@ -259,7 +259,7 @@ def main() -> int:
             process_id,
             element=csp.DEFAULT_ELEMENT,
             discipline=csp.DEFAULT_DISCIPLINE,
-            prefer_resume=True,
+            prefer_resume=False,
         )
         result["navigation"].append(
             {

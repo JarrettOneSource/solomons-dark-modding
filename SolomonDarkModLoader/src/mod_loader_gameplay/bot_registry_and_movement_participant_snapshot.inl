@@ -66,6 +66,12 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
         memory.ReadFieldOr<std::uint32_t>(render_probe_address, kActorRenderDriveFlagsOffset, 0);
     snapshot.anim_drive_state =
         memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorAnimationDriveStateByteOffset, 0);
+    snapshot.no_interrupt =
+        memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorNoInterruptFlagOffset, 0);
+    snapshot.active_cast_group =
+        memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorActiveCastGroupByteOffset, 0xFF);
+    snapshot.active_cast_slot =
+        memory.ReadFieldOr<std::uint16_t>(render_probe_address, kActorActiveCastSlotShortOffset, 0xFFFF);
     snapshot.render_variant_primary =
         memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorRenderVariantPrimaryOffset, 0);
     snapshot.render_variant_secondary =
@@ -76,6 +82,12 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
         memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorRenderSelectionByteOffset, 0);
     snapshot.render_variant_tertiary =
         memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorRenderVariantTertiaryOffset, 0);
+    snapshot.cast_active = binding.ongoing_cast.active;
+    snapshot.cast_startup_in_progress = binding.ongoing_cast.startup_in_progress;
+    snapshot.cast_saw_activity = binding.ongoing_cast.saw_activity;
+    snapshot.cast_skill_id = binding.ongoing_cast.skill_id;
+    snapshot.cast_ticks_waiting = binding.ongoing_cast.ticks_waiting;
+    snapshot.cast_target_actor_address = binding.ongoing_cast.target_actor_address;
     snapshot.x = memory.ReadFieldOr<float>(binding.actor_address, kActorPositionXOffset, 0.0f);
     snapshot.y = memory.ReadFieldOr<float>(binding.actor_address, kActorPositionYOffset, 0.0f);
     snapshot.heading = memory.ReadFieldOr<float>(binding.actor_address, kActorHeadingOffset, 0.0f);

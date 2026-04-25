@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import time
 from pathlib import Path
@@ -26,6 +27,10 @@ DEFAULT_DISCIPLINE = "mind"
 
 PROGRESSION_POINTER_OFFSET = 0x200
 PROGRESSION_HANDLE_OFFSET = 0x300
+OBJECT_TYPE_ID_OFFSET = 0x08
+ARENA_ENEMY_OBJECT_TYPE_ID = 1001
+ARENA_ENEMY_MAX_HP_OFFSET = 0x170
+ARENA_ENEMY_HP_OFFSET = 0x174
 SPELL_DISPATCH_BODY_ADDRESS = 0x00548A03
 SPELL_3EF_BODY_ADDRESS = 0x0052BB87
 
@@ -35,6 +40,13 @@ ATTACK_RE = re.compile(
     r"target=\(([0-9.+-]+),\s*([0-9.+-]+)\).*?"
     r"gap=([0-9.]+)"
 )
+DEATH_RE = re.compile(
+    r"enemy\.death hook invoked\.\s+"
+    r"(?:enemy=0x(?P<enemy>[0-9A-Fa-f]+)\s+)?"
+    r"enemy_type=(?P<enemy_type>-?\d+).*?"
+    r"pos=\((?P<x>[0-9.+\-eE]+),\s*(?P<y>[0-9.+\-eE]+)\)"
+)
+TARGET_DEATH_POSITION_TOLERANCE = 80.0
 LAST_RESULT: dict[str, object] = {}
 
 
@@ -54,6 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hp", type=float, default=DEFAULT_HP_VALUE)
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
     parser.add_argument("--keep-running", action="store_true")
+    parser.add_argument("--skip-hp-watch", action="store_true")
     return parser
 
 
@@ -136,7 +149,7 @@ end
 local n = 0
 for _, actor in ipairs(actors) do
   local object_type_id = tonumber(actor.object_type_id) or 0
-  if object_type_id == 5009 or object_type_id == 5010 or actor.tracked_enemy == true then
+  if object_type_id == 1001 then
     n = n + 1
     local prefix = "enemy." .. tostring(n) .. "."
     for _, key in ipairs({
@@ -243,15 +256,24 @@ local function emit(key, value)
   end
 end
 local actor = {actor_address}
+local object_type_id = tonumber(sd.debug.read_u32(actor + {OBJECT_TYPE_ID_OFFSET})) or 0
 local progression = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_POINTER_OFFSET})) or 0
 local handle = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_HANDLE_OFFSET})) or 0
 if progression == 0 and handle ~= 0 then
   progression = tonumber(sd.debug.read_ptr(handle)) or 0
 end
 emit("actor", actor)
+emit("object_type_id", object_type_id)
 emit("progression", progression)
 emit("handle", handle)
-if progression ~= 0 then
+if object_type_id == {ARENA_ENEMY_OBJECT_TYPE_ID} then
+  emit("health_kind", "arena_enemy")
+  emit("hp_address", actor + {ARENA_ENEMY_HP_OFFSET})
+  emit("hp", sd.debug.read_float(actor + {ARENA_ENEMY_HP_OFFSET}))
+  emit("max_hp", sd.debug.read_float(actor + {ARENA_ENEMY_MAX_HP_OFFSET}))
+elseif progression ~= 0 then
+  emit("health_kind", "progression")
+  emit("hp_address", progression + {csp.PROGRESSION_HP_OFFSET})
   emit("hp", sd.debug.read_float(progression + {csp.PROGRESSION_HP_OFFSET}))
   emit("max_hp", sd.debug.read_float(progression + {csp.PROGRESSION_MAX_HP_OFFSET}))
 end
@@ -272,15 +294,26 @@ local function emit(key, value)
   end
 end
 local actor = {actor_address}
+local object_type_id = tonumber(sd.debug.read_u32(actor + {OBJECT_TYPE_ID_OFFSET})) or 0
 local progression = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_POINTER_OFFSET})) or 0
 local handle = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_HANDLE_OFFSET})) or 0
 if progression == 0 and handle ~= 0 then
   progression = tonumber(sd.debug.read_ptr(handle)) or 0
 end
 emit("actor", actor)
+emit("object_type_id", object_type_id)
 emit("progression", progression)
 emit("handle", handle)
-if progression ~= 0 then
+if object_type_id == {ARENA_ENEMY_OBJECT_TYPE_ID} then
+  emit("health_kind", "arena_enemy")
+  emit("hp_address", actor + {ARENA_ENEMY_HP_OFFSET})
+  emit("max_hp_ok", sd.debug.write_float(actor + {ARENA_ENEMY_MAX_HP_OFFSET}, {hp_value}))
+  emit("hp_ok", sd.debug.write_float(actor + {ARENA_ENEMY_HP_OFFSET}, {hp_value}))
+  emit("hp", sd.debug.read_float(actor + {ARENA_ENEMY_HP_OFFSET}))
+  emit("max_hp", sd.debug.read_float(actor + {ARENA_ENEMY_MAX_HP_OFFSET}))
+elseif progression ~= 0 then
+  emit("health_kind", "progression")
+  emit("hp_address", progression + {csp.PROGRESSION_HP_OFFSET})
   emit("max_hp_ok", sd.debug.write_float(progression + {csp.PROGRESSION_MAX_HP_OFFSET}, {hp_value}))
   emit("hp_ok", sd.debug.write_float(progression + {csp.PROGRESSION_HP_OFFSET}, {hp_value}))
   emit("hp", sd.debug.read_float(progression + {csp.PROGRESSION_HP_OFFSET}))
@@ -302,7 +335,8 @@ def force_enemy(actor_address: int, x: float, y: float, hp_value: float) -> dict
 def arm_hp_watch(name: str, actor_address: int) -> dict[str, str]:
     progression = query_progression_for_actor(actor_address)
     progression_address = csp.int_value(progression, "progression")
-    if progression_address == 0:
+    hp_address = csp.int_value(progression, "hp_address")
+    if progression_address == 0 and hp_address == 0:
         return {
             "actor": str(actor_address),
             "progression": "0",
@@ -310,7 +344,6 @@ def arm_hp_watch(name: str, actor_address: int) -> dict[str, str]:
             "watchable": "false",
             "reason": "no_progression",
         }
-    hp_address = progression_address + csp.PROGRESSION_HP_OFFSET
     values = csp.parse_key_values(
         csp.run_lua(
             f"""
@@ -332,6 +365,16 @@ emit("watchable", true)
         )
     )
     return values
+
+
+def disabled_hp_watch(actor_address: int) -> dict[str, str]:
+    return {
+        "actor": str(actor_address),
+        "progression": "0",
+        "watch_ok": "false",
+        "watchable": "false",
+        "reason": "disabled_by_probe",
+    }
 
 
 def place_combat_enemies(
@@ -417,6 +460,10 @@ end
     )
 
 
+def query_disabled_write_hits() -> dict[str, str]:
+    return {"count": "0", "watchable": "false", "reason": "disabled_by_probe"}
+
+
 def arm_spell_traces() -> dict[str, str]:
     return csp.parse_key_values(
         csp.run_lua(
@@ -498,6 +545,13 @@ def read_enemy_death_lines() -> list[str]:
     ]
 
 
+def _finite_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        return float("nan")
+    return parsed
+
+
 def parse_attacks(lines: list[str]) -> list[dict[str, object]]:
     attacks: list[dict[str, object]] = []
     for line in lines:
@@ -515,6 +569,75 @@ def parse_attacks(lines: list[str]) -> list[dict[str, object]]:
             "gap": float(match.group(6)),
         })
     return attacks
+
+
+def parse_enemy_deaths(lines: list[str]) -> list[dict[str, object]]:
+    deaths: list[dict[str, object]] = []
+    for line in lines:
+        match = DEATH_RE.search(line)
+        if match is None:
+            deaths.append({"line": line, "parse_error": True})
+            continue
+        enemy_hex = match.group("enemy")
+        deaths.append({
+            "line": line,
+            "enemy_hex": enemy_hex.upper() if enemy_hex else "",
+            "enemy_address": int(enemy_hex, 16) if enemy_hex else 0,
+            "enemy_type": int(match.group("enemy_type")),
+            "x": _finite_float(match.group("x")),
+            "y": _finite_float(match.group("y")),
+        })
+    return deaths
+
+
+def death_matches_attack(attack: dict[str, object], death: dict[str, object]) -> tuple[bool, str, float]:
+    attack_address = int(attack.get("enemy_address") or 0)
+    death_address = int(death.get("enemy_address") or 0)
+    if attack_address != 0 and death_address != 0:
+        return attack_address == death_address, "address", 0.0
+
+    target_x = float(attack.get("target_x") or 0.0)
+    target_y = float(attack.get("target_y") or 0.0)
+    death_x = float(death.get("x") or float("nan"))
+    death_y = float(death.get("y") or float("nan"))
+    if not math.isfinite(death_x) or not math.isfinite(death_y):
+        return False, "position", float("inf")
+    distance = ((target_x - death_x) ** 2 + (target_y - death_y) ** 2) ** 0.5
+    return distance <= TARGET_DEATH_POSITION_TOLERANCE, "position", distance
+
+
+def match_targeted_deaths(window: dict[str, object]) -> list[dict[str, object]]:
+    attacks = window.get("attacks")
+    deaths = window.get("enemy_deaths")
+    if not isinstance(attacks, list) or not isinstance(deaths, list):
+        return []
+
+    matches: list[dict[str, object]] = []
+    used_deaths: set[int] = set()
+    for attack_index, attack in enumerate(attacks):
+        if not isinstance(attack, dict):
+            continue
+        for death_index, death in enumerate(deaths):
+            if death_index in used_deaths or not isinstance(death, dict):
+                continue
+            matched, mode, distance = death_matches_attack(attack, death)
+            if not matched:
+                continue
+            used_deaths.add(death_index)
+            matches.append({
+                "attack_index": attack_index,
+                "death_index": death_index,
+                "match_mode": mode,
+                "position_distance": distance,
+                "attack_enemy_address": int(attack.get("enemy_address") or 0),
+                "death_enemy_address": int(death.get("enemy_address") or 0),
+                "attack_target_x": float(attack.get("target_x") or 0.0),
+                "attack_target_y": float(attack.get("target_y") or 0.0),
+                "death_x": float(death.get("x") or 0.0),
+                "death_y": float(death.get("y") or 0.0),
+            })
+            break
+    return matches
 
 
 def classify_attack_against_live_enemies(attack: dict[str, object]) -> dict[str, object]:
@@ -573,6 +696,7 @@ def observe_attack_window(seconds: float) -> dict[str, object]:
         "lines": lines[-20:],
         "attacks": parse_attacks(lines),
         "closest_samples": samples,
+        "enemy_deaths": parse_enemy_deaths(death_lines),
         "enemy_death_lines": death_lines[-20:],
     }
 
@@ -651,8 +775,16 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
     result["enemies_before_first_window"] = live_enemy_actors()
 
     result["spell_trace_arm"] = arm_spell_traces()
-    result["hp_watch_initial_near"] = arm_hp_watch("autonomous_initial_near_hp", first_enemy_address)
-    result["hp_watch_initial_far"] = arm_hp_watch("autonomous_initial_far_hp", second_enemy_address)
+    result["hp_watch_initial_near"] = (
+        disabled_hp_watch(first_enemy_address)
+        if args.skip_hp_watch
+        else arm_hp_watch("autonomous_initial_near_hp", first_enemy_address)
+    )
+    result["hp_watch_initial_far"] = (
+        disabled_hp_watch(second_enemy_address)
+        if args.skip_hp_watch
+        else arm_hp_watch("autonomous_initial_far_hp", second_enemy_address)
+    )
     first_before = {
         "near": query_progression_for_actor(first_enemy_address),
         "far": query_progression_for_actor(second_enemy_address),
@@ -668,12 +800,17 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         "observation": first_window,
         "after": first_after,
         "write_hits": {
-            "near": query_write_hits("autonomous_initial_near_hp"),
-            "far": query_write_hits("autonomous_initial_far_hp"),
+            "near": query_disabled_write_hits()
+            if args.skip_hp_watch
+            else query_write_hits("autonomous_initial_near_hp"),
+            "far": query_disabled_write_hits()
+            if args.skip_hp_watch
+            else query_write_hits("autonomous_initial_far_hp"),
         },
     }
-    clear_hp_watch("autonomous_initial_near_hp")
-    clear_hp_watch("autonomous_initial_far_hp")
+    if not args.skip_hp_watch:
+        clear_hp_watch("autonomous_initial_near_hp")
+        clear_hp_watch("autonomous_initial_far_hp")
 
     result["swapped_enemy_placements"] = place_combat_enemies(
         live_enemy_actors(),
@@ -688,8 +825,16 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
     result["probe_health_after_swap"] = sustain_probe_health()
     time.sleep(2.3)
     result["enemies_before_second_window"] = live_enemy_actors()
-    result["hp_watch_swapped_near"] = arm_hp_watch("autonomous_swapped_near_hp", second_enemy_address)
-    result["hp_watch_swapped_far"] = arm_hp_watch("autonomous_swapped_far_hp", first_enemy_address)
+    result["hp_watch_swapped_near"] = (
+        disabled_hp_watch(second_enemy_address)
+        if args.skip_hp_watch
+        else arm_hp_watch("autonomous_swapped_near_hp", second_enemy_address)
+    )
+    result["hp_watch_swapped_far"] = (
+        disabled_hp_watch(first_enemy_address)
+        if args.skip_hp_watch
+        else arm_hp_watch("autonomous_swapped_far_hp", first_enemy_address)
+    )
     second_before = {
         "near": query_progression_for_actor(second_enemy_address),
         "far": query_progression_for_actor(first_enemy_address),
@@ -705,18 +850,24 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         "observation": second_window,
         "after": second_after,
         "write_hits": {
-            "near": query_write_hits("autonomous_swapped_near_hp"),
-            "far": query_write_hits("autonomous_swapped_far_hp"),
+            "near": query_disabled_write_hits()
+            if args.skip_hp_watch
+            else query_write_hits("autonomous_swapped_near_hp"),
+            "far": query_disabled_write_hits()
+            if args.skip_hp_watch
+            else query_write_hits("autonomous_swapped_far_hp"),
         },
     }
-    clear_hp_watch("autonomous_swapped_near_hp")
-    clear_hp_watch("autonomous_swapped_far_hp")
+    if not args.skip_hp_watch:
+        clear_hp_watch("autonomous_swapped_near_hp")
+        clear_hp_watch("autonomous_swapped_far_hp")
 
     result["spell_trace_hits"] = {
         "dispatch_body": query_trace_hits("autonomous_spell_dispatch_body"),
         "spell_3ef_body": query_trace_hits("autonomous_spell_3ef_body"),
     }
-    result["loader_log_filtered"] = crc.filter_loader_log(csp.tail_loader_log(240))
+    loader_log_tail = csp.tail_loader_log(1200)
+    result["loader_log_filtered"] = crc.filter_loader_log(loader_log_tail)
 
     first_attacks = first_window["attacks"]
     second_attacks = second_window["attacks"]
@@ -736,7 +887,19 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
     second_targeted_closest = any_attack_targeted_closest(second_window)
     first_enemy_death_count = len(first_window.get("enemy_death_lines") or [])
     second_enemy_death_count = len(second_window.get("enemy_death_lines") or [])
-
+    first_targeted_death_matches = match_targeted_deaths(first_window)
+    second_targeted_death_matches = match_targeted_deaths(second_window)
+    first_targeted_death_seen = bool(first_targeted_death_matches)
+    second_targeted_death_seen = bool(second_targeted_death_matches)
+    hp_damage_or_write_seen = (
+        first_near_write_count > 0
+        or second_near_write_count > 0
+        or first_near_hp_after < first_near_hp_before
+        or second_near_hp_after < second_near_hp_before
+    )
+    hidden_damage_log_count = sum(
+        1 for line in loader_log_tail if "pure_primary_damage applied" in line
+    )
     result["validation"] = {
         "first_attack_seen": bool(first_attacks),
         "second_attack_seen": bool(second_attacks),
@@ -757,16 +920,18 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         "second_near_hp_write_hits": second_near_write_count,
         "first_enemy_death_count": first_enemy_death_count,
         "second_enemy_death_count": second_enemy_death_count,
+        "first_targeted_death_seen": first_targeted_death_seen,
+        "second_targeted_death_seen": second_targeted_death_seen,
+        "first_targeted_death_count": len(first_targeted_death_matches),
+        "second_targeted_death_count": len(second_targeted_death_matches),
+        "first_targeted_death_matches": first_targeted_death_matches,
+        "second_targeted_death_matches": second_targeted_death_matches,
         "spell_dispatch_hits": dispatch_hits,
         "spell_3ef_hits": spell_3ef_hits,
-        "damage_or_hp_write_seen": (
-            first_near_write_count > 0
-            or second_near_write_count > 0
-            or first_near_hp_after < first_near_hp_before
-            or second_near_hp_after < second_near_hp_before
-            or first_enemy_death_count > 0
-            or second_enemy_death_count > 0
-        ),
+        "hidden_damage_log_count": hidden_damage_log_count,
+        "hidden_damage_bridge_ok": hidden_damage_log_count == 0,
+        "hp_damage_or_write_seen": hp_damage_or_write_seen,
+        "damage_or_hp_write_seen": hp_damage_or_write_seen,
     }
     result["closest_target_ok"] = all(
         bool(result["validation"][key])
@@ -778,7 +943,11 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         )
     )
     result["damage_ok"] = bool(result["validation"]["damage_or_hp_write_seen"])
-    result["ok"] = bool(result["closest_target_ok"] and result["damage_ok"])
+    result["ok"] = bool(
+        result["closest_target_ok"] and
+        result["damage_ok"] and
+        result["validation"]["hidden_damage_bridge_ok"]
+    )
     return result
 
 

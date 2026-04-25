@@ -26,6 +26,11 @@ TRACE_LIBRARY: dict[str, tuple[int, int]] = {
 }
 
 TRACE_PROFILE_KEYS: dict[str, tuple[str, ...]] = {
+    "safe_entry": (
+        "builder_entry",
+        "builder_finalize",
+        "sink_entry",
+    ),
     "full": (
         "builder_entry",
         "builder_finalize",
@@ -77,9 +82,15 @@ TRACE_PROFILE_KEYS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+STABLE_TRACE_PROFILES: frozenset[str] = frozenset({"safe_entry"})
+
 
 def trace_profile_names() -> tuple[str, ...]:
     return tuple(TRACE_PROFILE_KEYS.keys())
+
+
+def trace_profile_is_stable(profile: str) -> bool:
+    return profile in STABLE_TRACE_PROFILES
 
 
 def build_trace_specs(prefix: str, profile: str) -> list[TraceSpec]:

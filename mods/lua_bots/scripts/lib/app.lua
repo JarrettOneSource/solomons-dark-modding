@@ -52,9 +52,9 @@ function app.start()
   local FOLLOW_TARGET_REFRESH_DISTANCE = 24.0
   local COMMAND_COOLDOWN_MS = 250
   local TICK_INTERVAL_MS = 100
-  local CAST_COOLDOWN_MS = 2000
   local ATTACK_DIAG_INTERVAL_MS = 1000
   local DEFAULT_ATTACK_RANGE = 360.0
+  local WAVE_ENEMY_OBJECT_TYPE_ID = 1001
   local SPAWN_RETRY_MS = 500
   local SCENE_UPDATE_COOLDOWN_MS = 250
   local NAV_GRID_REFRESH_MS = 3000
@@ -107,7 +107,6 @@ function app.start()
     bot_dead = false,
     dead_bot_since_ms = 0,
     last_command_ms = 0,
-    last_cast_ms = 0,
     last_attack_diag_ms = 0,
     last_spawn_attempt_ms = 0,
     last_scene_sync_ms = 0,
@@ -233,7 +232,6 @@ function app.start()
     state.bot_dead = false
     state.dead_bot_since_ms = 0
     state.last_command_ms = 0
-    state.last_cast_ms = 0
     state.last_attack_diag_ms = 0
     state.last_spawn_attempt_ms = 0
     state.last_scene_sync_ms = 0
@@ -265,7 +263,6 @@ function app.start()
     state.dead_bot_since_ms = tonumber(now_ms) or state.last_tick_ms or 0
     state.follow_target = nil
     state.last_command_ms = 0
-    state.last_cast_ms = 0
 
     if state.bot_id ~= nil and type(sd) == "table" and type(sd.bots) == "table" and type(sd.bots.stop) == "function" then
       pcall(sd.bots.stop, state.bot_id)
@@ -542,6 +539,9 @@ function app.start()
     if not tracked_enemy then
       return false
     end
+    if (tonumber(actor.object_type_id) or 0) ~= WAVE_ENEMY_OBJECT_TYPE_ID then
+      return false
+    end
     if actor.dead == true then
       return false
     end
@@ -729,14 +729,11 @@ function app.start()
       end
       return false
     end
+    local target_actor_address = tonumber(enemy.actor_address) or 0
     local target_x = tonumber(enemy.x) or 0.0
     local target_y = tonumber(enemy.y) or 0.0
-    if now_ms - state.last_cast_ms < CAST_COOLDOWN_MS then
-      face_enemy(bot, enemy, true)
-      return false
-    end
+    local attack_heading = face_enemy(bot, enemy, true)
     if gap > range then
-      face_enemy(bot, enemy, true)
       if should_log_attack_diag(now_ms) then
         log(string.format(
           "attack_skip id=%s reason=out_of_range enemy=0x%X gap=%.2f range=%.1f",
@@ -747,23 +744,24 @@ function app.start()
       end
       return false
     end
-    local attack_heading = face_enemy(bot, enemy, true)
     if attack_heading == nil then
       attack_heading = heading_towards(bot.x, bot.y, target_x, target_y)
+    end
+    if bot.cast_ready ~= true then
+      return false
     end
     local ok = sd.bots.cast({
       id = state.bot_id,
       kind = "primary",
-      target_actor_address = tonumber(enemy.actor_address) or 0,
+      target_actor_address = target_actor_address,
       target = { x = target_x, y = target_y },
       angle = attack_heading,
     })
     if ok then
-      state.last_cast_ms = now_ms
       log(string.format(
         "attack id=%s primary enemy=0x%X bot=(%.2f, %.2f) target=(%.2f, %.2f) heading=%.2f gap=%.2f range=%.1f",
         tostring(state.bot_id),
-        tonumber(enemy.actor_address) or 0,
+        target_actor_address,
         tonumber(bot.x) or 0.0,
         tonumber(bot.y) or 0.0,
         target_x,
@@ -1214,7 +1212,9 @@ function app.start()
     rawset(_G, "lua_bots_test_hooks", {
       is_enemy_actor = is_enemy_actor,
       find_nearest_enemy = find_nearest_enemy,
+      issue_auto_attack = issue_auto_attack,
       heading_towards = heading_towards,
+      state = state,
     })
   end
 

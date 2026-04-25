@@ -540,7 +540,8 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
 
     const auto result = original(self, unused_edx);
     Log(
-        "enemy.death hook invoked. enemy_type=" + std::to_string(enemy_type) +
+        "enemy.death hook invoked. enemy=" + HexString(self_address) +
+        " enemy_type=" + std::to_string(enemy_type) +
         " pos=(" + std::to_string(x) + "," + std::to_string(y) + ")" +
         " already_handled=" + std::to_string(already_handled ? 1 : 0) +
         " run_active=" + std::to_string(IsRunActive() ? 1 : 0) +

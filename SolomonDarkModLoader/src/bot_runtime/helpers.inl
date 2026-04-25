@@ -141,9 +141,25 @@ void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) 
     snapshot->position_y = participant.runtime.position_y;
     snapshot->heading = participant.runtime.heading;
     if (const auto* pending_cast = FindPendingCast(participant.participant_id); pending_cast != nullptr) {
+        snapshot->cast_pending = true;
         snapshot->queued_cast_count = pending_cast->queued_cast_count;
         snapshot->last_queued_cast_ms = pending_cast->queued_at_ms;
     }
+}
+
+void DeriveBotCastReadiness(BotSnapshot* snapshot) {
+    if (snapshot == nullptr) {
+        return;
+    }
+
+    const bool dead = snapshot->max_hp > 0.0f && snapshot->hp <= 0.0f;
+    snapshot->cast_ready =
+        snapshot->available &&
+        snapshot->entity_materialized &&
+        snapshot->actor_address != 0 &&
+        !dead &&
+        !snapshot->cast_pending &&
+        !snapshot->cast_active;
 }
 
 void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
@@ -177,11 +193,20 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
     snapshot->hub_visual_source_kind = gameplay_state.hub_visual_source_kind;
     snapshot->render_drive_flags = gameplay_state.render_drive_flags;
     snapshot->anim_drive_state = gameplay_state.anim_drive_state;
+    snapshot->no_interrupt = gameplay_state.no_interrupt;
+    snapshot->active_cast_group = gameplay_state.active_cast_group;
+    snapshot->active_cast_slot = gameplay_state.active_cast_slot;
     snapshot->render_variant_primary = gameplay_state.render_variant_primary;
     snapshot->render_variant_secondary = gameplay_state.render_variant_secondary;
     snapshot->render_weapon_type = gameplay_state.render_weapon_type;
     snapshot->render_selection_byte = gameplay_state.render_selection_byte;
     snapshot->render_variant_tertiary = gameplay_state.render_variant_tertiary;
+    snapshot->cast_active = gameplay_state.cast_active;
+    snapshot->cast_startup_in_progress = gameplay_state.cast_startup_in_progress;
+    snapshot->cast_saw_activity = gameplay_state.cast_saw_activity;
+    snapshot->cast_skill_id = gameplay_state.cast_skill_id;
+    snapshot->cast_ticks_waiting = gameplay_state.cast_ticks_waiting;
+    snapshot->cast_target_actor_address = gameplay_state.cast_target_actor_address;
     snapshot->walk_cycle_primary = gameplay_state.walk_cycle_primary;
     snapshot->walk_cycle_secondary = gameplay_state.walk_cycle_secondary;
     snapshot->render_drive_stride = gameplay_state.render_drive_stride;

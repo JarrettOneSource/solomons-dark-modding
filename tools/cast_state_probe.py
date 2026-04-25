@@ -316,6 +316,15 @@ emit('region_type_id', scene.region_type_id)
     )
 
 
+def snapshot_contains_action(snapshot: dict[str, str], action_id: str, surface_id: str) -> bool:
+    if snapshot.get("available") != "true" or snapshot.get("surface_id") != surface_id:
+        return False
+    for index in range(1, 13):
+        if snapshot.get(f"element.{index}.action_id") == action_id:
+            return True
+    return False
+
+
 def activate_ui_action(action_id: str, surface_id: str) -> None:
     values = parse_key_values(
         run_lua(
@@ -359,6 +368,13 @@ emit('error_message', dispatch.error_message)
 
         status = dispatch.get("status", "")
         if status in {"queued", "dispatching"}:
+            snapshot = query_ui_snapshot()
+            if not snapshot_contains_action(snapshot, action_id, surface_id):
+                raise ProbeFailure(
+                    f"semantic UI action stale for {surface_id}:{action_id}: "
+                    f"current_surface={snapshot.get('surface_id')} "
+                    f"generation={snapshot.get('generation')}"
+                )
             time.sleep(0.1)
             continue
         if status == "failed":
@@ -425,6 +441,8 @@ def is_stale_ui_action_error(error: BaseException) -> bool:
         "No live snapshot element matched target" in message
         or "surface mismatch" in message
         or "surface changed" in message
+        or "semantic UI action stale" in message
+        or "Timed out waiting for UI action dispatch" in message
     )
 
 

@@ -26,7 +26,7 @@ void PushBotEquipVisualLaneState(
 void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot) {
     using namespace sdmod::detail::parsers;
 
-    lua_createtable(state, 0, 53);
+    lua_createtable(state, 0, 66);
     lua_pushboolean(state, snapshot.available ? 1 : 0);
     lua_setfield(state, -2, "available");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.bot_id));
@@ -111,6 +111,12 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "render_drive_flags");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.anim_drive_state));
     lua_setfield(state, -2, "anim_drive_state");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.no_interrupt));
+    lua_setfield(state, -2, "no_interrupt");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.active_cast_group));
+    lua_setfield(state, -2, "active_cast_group");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.active_cast_slot));
+    lua_setfield(state, -2, "active_cast_slot");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.render_variant_primary));
     lua_setfield(state, -2, "render_variant_primary");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.render_variant_secondary));
@@ -121,6 +127,22 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "render_selection_byte");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.render_variant_tertiary));
     lua_setfield(state, -2, "render_variant_tertiary");
+    lua_pushboolean(state, snapshot.cast_pending ? 1 : 0);
+    lua_setfield(state, -2, "cast_pending");
+    lua_pushboolean(state, snapshot.cast_active ? 1 : 0);
+    lua_setfield(state, -2, "cast_active");
+    lua_pushboolean(state, snapshot.cast_ready ? 1 : 0);
+    lua_setfield(state, -2, "cast_ready");
+    lua_pushboolean(state, snapshot.cast_startup_in_progress ? 1 : 0);
+    lua_setfield(state, -2, "cast_startup_in_progress");
+    lua_pushboolean(state, snapshot.cast_saw_activity ? 1 : 0);
+    lua_setfield(state, -2, "cast_saw_activity");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.cast_skill_id));
+    lua_setfield(state, -2, "cast_skill_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.cast_ticks_waiting));
+    lua_setfield(state, -2, "cast_ticks_waiting");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.cast_target_actor_address));
+    lua_setfield(state, -2, "cast_target_actor_address");
     lua_pushnumber(state, snapshot.walk_cycle_primary);
     lua_setfield(state, -2, "walk_cycle_primary");
     lua_pushnumber(state, snapshot.walk_cycle_secondary);

@@ -44,11 +44,20 @@ bool TryGetParticipantGameplayState(
     state->hub_visual_source_kind = it->hub_visual_source_kind;
     state->render_drive_flags = it->render_drive_flags;
     state->anim_drive_state = it->anim_drive_state;
+    state->no_interrupt = it->no_interrupt;
+    state->active_cast_group = it->active_cast_group;
+    state->active_cast_slot = it->active_cast_slot;
     state->render_variant_primary = it->render_variant_primary;
     state->render_variant_secondary = it->render_variant_secondary;
     state->render_weapon_type = it->render_weapon_type;
     state->render_selection_byte = it->render_selection_byte;
     state->render_variant_tertiary = it->render_variant_tertiary;
+    state->cast_active = it->cast_active;
+    state->cast_startup_in_progress = it->cast_startup_in_progress;
+    state->cast_saw_activity = it->cast_saw_activity;
+    state->cast_skill_id = it->cast_skill_id;
+    state->cast_ticks_waiting = it->cast_ticks_waiting;
+    state->cast_target_actor_address = it->cast_target_actor_address;
     state->x = it->x;
     state->y = it->y;
     state->heading = it->heading;
@@ -256,10 +265,9 @@ bool TryGetGameplayCombatState(SDModGameplayCombatState* state) {
 
 bool IsArenaCombatActorType(std::uint32_t object_type_id) {
     // 1001 is the stock wave-spawned enemy actor type observed in arena runs.
-    // 5009 appears in the arena scene list during wave start, but its vitals
-    // are not a normal attackable progression block. Keep fallback tracking
-    // conservative so bots do not target arena helper actors.
-    return object_type_id == 1001 || object_type_id == 5010 || object_type_id == 2012;
+    // Solomon/NPC helper actors can look hostile while waves start, but they
+    // are not the wave combat targets the autonomous bot should attack.
+    return object_type_id == 1001;
 }
 
 bool IsArenaCombatActiveForSceneActorFallback() {
@@ -350,7 +358,14 @@ bool TryBuildSceneActorState(
     state.anim_drive_state =
         memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
     state.progression_handle_address = memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
-    if (TryResolveActorProgressionRuntime(actor_address, &state.progression_runtime_address) &&
+    ActorHealthRuntime actor_health;
+    if (IsArenaEnemyActorHealthType(state.object_type_id) &&
+        TryReadArenaEnemyActorHealth(actor_address, &actor_health)) {
+        state.progression_runtime_address = 0;
+        state.hp = actor_health.hp;
+        state.max_hp = actor_health.max_hp;
+        state.dead = state.hp <= 0.0f && state.max_hp > 0.0f;
+    } else if (TryResolveActorProgressionRuntime(actor_address, &state.progression_runtime_address) &&
         state.progression_runtime_address != 0 &&
         memory.IsReadableRange(state.progression_runtime_address + kProgressionHpOffset, sizeof(float)) &&
         memory.IsReadableRange(state.progression_runtime_address + kProgressionMaxHpOffset, sizeof(float))) {
@@ -359,6 +374,11 @@ bool TryBuildSceneActorState(
         state.dead = state.hp <= 0.0f && state.max_hp > 0.0f;
     } else {
         state.progression_runtime_address = 0;
+        if (TryReadArenaEnemyActorHealth(actor_address, &actor_health)) {
+            state.hp = actor_health.hp;
+            state.max_hp = actor_health.max_hp;
+            state.dead = state.hp <= 0.0f && state.max_hp > 0.0f;
+        }
     }
 
     const bool scene_combat_enemy = scene_combat_enemy_candidate;

@@ -19,9 +19,65 @@ float ReadResolvedGameDoubleAsFloatOr(uintptr_t absolute_address, float fallback
 }
 
 constexpr std::int32_t kSuppressedSelectionRetargetTicks = 60;
+constexpr std::size_t kArenaEnemyMaxHpOffset = 0x170;
+constexpr std::size_t kArenaEnemyCurrentHpOffset = 0x174;
+constexpr std::size_t kArenaEnemyHealthReadSize = kArenaEnemyCurrentHpOffset + sizeof(float);
 
-bool IsActorRuntimeDead(uintptr_t actor_address) {
-    if (actor_address == 0) {
+bool IsArenaEnemyActorHealthType(std::uint32_t object_type_id) {
+    return object_type_id == 1001;
+}
+
+struct ActorHealthRuntime {
+    uintptr_t base_address = 0;
+    std::size_t current_hp_offset = 0;
+    std::size_t max_hp_offset = 0;
+    uintptr_t progression_address = 0;
+    const char* kind = "unknown";
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+};
+
+bool TryReadArenaEnemyActorHealth(uintptr_t actor_address, ActorHealthRuntime* health) {
+    if (actor_address == 0 || health == nullptr) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.IsReadableRange(actor_address, kArenaEnemyHealthReadSize)) {
+        return false;
+    }
+
+    const auto object_type_id =
+        memory.ReadFieldOr<std::uint32_t>(actor_address, kGameObjectTypeIdOffset, 0);
+    if (!IsArenaEnemyActorHealthType(object_type_id)) {
+        return false;
+    }
+
+    const auto hp =
+        memory.ReadFieldOr<float>(actor_address, kArenaEnemyCurrentHpOffset, 0.0f);
+    auto max_hp = memory.ReadFieldOr<float>(actor_address, kArenaEnemyMaxHpOffset, 0.0f);
+    if (!std::isfinite(hp) || !std::isfinite(max_hp)) {
+        return false;
+    }
+    if (max_hp <= 0.0f && hp > 0.0f) {
+        max_hp = hp;
+    }
+    if (max_hp <= 0.0f) {
+        return false;
+    }
+
+    health->base_address = actor_address;
+    health->current_hp_offset = kArenaEnemyCurrentHpOffset;
+    health->max_hp_offset = kArenaEnemyMaxHpOffset;
+    health->progression_address = 0;
+    health->kind = "arena_enemy";
+    health->hp = hp;
+    health->max_hp = max_hp;
+    return true;
+}
+
+bool TryReadActorProgressionHealth(uintptr_t actor_address, ActorHealthRuntime* health) {
+    if (actor_address == 0 || health == nullptr) {
         return false;
     }
 
@@ -32,10 +88,50 @@ bool IsActorRuntimeDead(uintptr_t actor_address) {
     }
 
     auto& memory = ProcessMemory::Instance();
+    if (!memory.IsReadableRange(progression_address + kProgressionHpOffset, sizeof(float)) ||
+        !memory.IsReadableRange(progression_address + kProgressionMaxHpOffset, sizeof(float))) {
+        return false;
+    }
+
     const auto hp = memory.ReadFieldOr<float>(progression_address, kProgressionHpOffset, 0.0f);
     const auto max_hp =
         memory.ReadFieldOr<float>(progression_address, kProgressionMaxHpOffset, 0.0f);
-    return max_hp > 0.0f && hp <= 0.0f;
+    if (!std::isfinite(hp) || !std::isfinite(max_hp) || max_hp <= 0.0f) {
+        return false;
+    }
+
+    health->base_address = progression_address;
+    health->current_hp_offset = kProgressionHpOffset;
+    health->max_hp_offset = kProgressionMaxHpOffset;
+    health->progression_address = progression_address;
+    health->kind = "progression";
+    health->hp = hp;
+    health->max_hp = max_hp;
+    return true;
+}
+
+bool IsActorRuntimeDead(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    ActorHealthRuntime health;
+    auto& memory = ProcessMemory::Instance();
+    const auto object_type_id =
+        memory.ReadFieldOr<std::uint32_t>(actor_address, kGameObjectTypeIdOffset, 0);
+    if (IsArenaEnemyActorHealthType(object_type_id) &&
+        TryReadArenaEnemyActorHealth(actor_address, &health)) {
+        return health.max_hp > 0.0f && health.hp <= 0.0f;
+    }
+
+    if (TryReadActorProgressionHealth(actor_address, &health)) {
+        return health.max_hp > 0.0f && health.hp <= 0.0f;
+    }
+
+    if (memory.ReadFieldOr<std::uint8_t>(actor_address, kEnemyDeathHandledOffset, 0) != 0) {
+        return true;
+    }
+    return false;
 }
 
 bool TryComputeActorAimTowardTarget(
@@ -1561,8 +1657,11 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         }
 
         // Re-pin aim while the cast animation plays so the handler's per-tick
-        // reads (projectile spawn angle, facing) see consistent state.
-        (void)RefreshOngoingCastAimFromFacingTarget(binding, &ongoing);
+        // reads (projectile spawn angle, facing) see consistent state. Pure
+        // primaries keep using this shim after the startup pulse; dropping it
+        // while stock still emits leaves visible effects without the bot's
+        // local-slot/item context.
+        const bool target_refreshed = RefreshOngoingCastAimFromFacingTarget(binding, &ongoing);
         if (ongoing.have_aim_heading) {
             ApplyWizardActorFacingState(actor_address, ongoing.aim_heading);
             binding->facing_heading_value = ongoing.aim_heading;
@@ -1718,15 +1817,35 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             no_interrupt == 0 &&
             actor_e4 == 0 &&
             actor_e8 == 0;
+        const bool continuous_pure_primary =
+            ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
+            ongoing.requires_local_slot_native_tick;
+        const bool continuous_pure_primary_has_target =
+            continuous_pure_primary &&
+            target_refreshed &&
+            binding->facing_target_actor_address != 0 &&
+            ongoing.target_actor_address != 0;
+        const bool target_lost =
+            continuous_pure_primary &&
+            ongoing.saw_activity &&
+            !continuous_pure_primary_has_target &&
+            binding->facing_target_actor_address == 0 &&
+            ongoing.target_actor_address == 0;
+        // A live target does not prove a pure-primary handler is still making
+        // progress. Ether can leave actor+0xE4/0xE8 asserted without publishing
+        // a handle, so the safety cap must always be able to release the cast.
         const bool safety_cap_hit =
             ongoing.ticks_waiting >= ParticipantEntityBinding::OngoingCastState::kMaxTicksWaiting;
 
-        if (pure_primary_no_handle_settled || startup_timeout_hit || activity_released || safety_cap_hit) {
+        if (pure_primary_no_handle_settled || startup_timeout_hit || activity_released ||
+            target_lost || safety_cap_hit) {
             const char* exit_label = startup_timeout_hit
                 ? "startup_timeout"
                 : (pure_primary_no_handle_settled
                        ? "pure_primary_no_handle_settled"
-                       : (activity_released ? "activity_released" : "safety_cap"));
+                       : (activity_released
+                              ? "activity_released"
+                              : (target_lost ? "target_lost" : "safety_cap")));
             if (startup_timeout_hit) {
                 LogSpellObjectDiag(active_cast_group);
             }
