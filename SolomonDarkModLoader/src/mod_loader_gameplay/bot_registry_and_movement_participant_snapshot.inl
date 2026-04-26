@@ -15,6 +15,11 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
     if (binding.actor_address == 0) {
         return snapshot;
     }
+    if (!IsParticipantActorMemoryFreshReadable(binding.actor_address)) {
+        snapshot.entity_materialized = false;
+        snapshot.actor_address = 0;
+        return snapshot;
+    }
 
     auto& memory = ProcessMemory::Instance();
     const auto render_probe_address = binding.actor_address;

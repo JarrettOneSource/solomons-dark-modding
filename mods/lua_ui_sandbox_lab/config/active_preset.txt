@@ -1,1 +1,1 @@
-map_create_water_arcane
+create_probe

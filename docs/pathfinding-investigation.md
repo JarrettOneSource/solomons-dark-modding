@@ -417,7 +417,46 @@ Date: 2026-04-13
 - Traversability substrate:
   - neighbor generation comes from the recovered native scene grid
   - traversability uses the recovered native placement query wrapper
-    `MovementCollision_TestCirclePlacement (0x00523C90)`
+    `MovementCollision_TestCirclePlacement (0x00523C90)` for cell, shape, and
+    type-2 object/hazard overlap checks
+  - April 25 update:
+    - live `testrun` movement geometry exposed hundreds of small circular
+      scenery blockers with mask `0x4`
+    - these are the right bucket for run props such as trees, gravestones, and
+      pit-like blockers that are too small to be represented by whole grid-cell
+      occupancy alone
+    - the loader-owned bot planner now snapshots the movement-controller circle
+      list (`controller+0xA0/+0xAC`) and rejects A* samples that overlap mask
+      `0x4` static circles
+    - movable/push-through circle blockers are intentionally excluded so bots
+      try to walk through and push them instead of routing around them:
+      - the original broad live sample found `0x2004` circles, interpreted as
+        static collision plus a movable/physics bit
+      - the tested boneyard gate with a live bot present instead resolves as a
+        line of plain `0x4` circle blockers with object type `0xBBE`, radius
+        `10`, and vtable `0x0118CB44`; this gate family is skipped by object
+        type/radius rather than by mask alone
+    - A* cell sampling and `sd.debug.get_nav_grid` both use the same static
+      circle rejection path, so visual clutter/props affect routing instead of
+      only debug overlays
+    - the existing player-equivalent collision-mask fallback is still used for
+      cell and type-2 object/hazard overlap checks, so gameplay-slot bots do not
+      inherit the overly strict zero-mask behavior
+    - `MovementCollision_TestCirclePlacementExtended (0x005238C0)` has two
+      different mask meanings:
+      - the first mask is a raw movement-circle block mask; intersecting entries
+        block placement
+      - the second mask is an overlap allow mask for the primary/type-2 lists;
+        entries block placement when they do **not** intersect it
+      - the planner therefore passes a filtered circle mask that excludes
+        `0x4/0x2000`, while its native overlap allow mask includes those bits;
+        trees, gravestones, and holes stay blocked by the loader's explicit
+        kept-circle overlap list
+      - live gate-center samples still reported blocked through native overlap
+        state even when the only nearby circle was the skipped `0xBBE` gate, so
+        the planner now allows a native-blocked sample only when it overlaps an
+        ignored push-through circle after the kept-static-circle test has
+        already passed
 - Live validation status:
   - clean `testrun` launch with only `sample.lua.ui_sandbox_lab` enabled works
     when the bootstrap settles before `sd.hub.start_testrun()`
@@ -523,8 +562,11 @@ Date: 2026-04-13
           `context + 0x70/+0x74/+0x7C` before rebuilding
       - `MovementCollision_TestCirclePlacementExtended (0x005238C0)`
         - rebuilds overlap lists from the same movement context
-        - rejects occupied cells whose collision mask intersects the tested mask
-        - also checks type-2 hazard/object overlap
+        - first checks the raw movement-circle list at `context + 0xA0/+0xAC`
+          and rejects circles whose mask intersects the first query mask
+        - then checks occupied cells and type-2 hazard/object overlap using the
+          inverted second-mask rule: candidates block when their mask does not
+          intersect the query mask
       - is used by several placement/search helpers to find nearby valid points
     - `MovementCollision_TestCirclePlacement (0x00523C90)`
       - smaller placement query used by dynamic-object response

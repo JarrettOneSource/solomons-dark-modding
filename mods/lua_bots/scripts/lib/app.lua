@@ -1,11 +1,13 @@
 local app = {}
 
 function app.start()
-  local BOT_NAME = "Lua Patrol Bot"
   local LEGACY_MANAGED_BOT_NAMES = {
     ["Lua Patrol Bot"] = true,
     ["Lua Bot Fire"] = true,
+    ["Lua Bot Water"] = true,
     ["Lua Bot Earth"] = true,
+    ["Lua Bot Air"] = true,
+    ["Lua Bot Ether"] = true,
   }
 
   local function default_primary_entry_index_for_element(element_id)
@@ -26,29 +28,71 @@ function app.start()
     return map[tonumber(element_id) or -1] or 0x08
   end
 
-  local BOT_ELEMENT_ID = 4
-  local BOT_PRIMARY_ENTRY_INDEX = default_primary_entry_index_for_element(BOT_ELEMENT_ID)
+  local function make_bot_profile(element_id, discipline_id)
+    local primary_entry_index = default_primary_entry_index_for_element(element_id)
+    return {
+      element_id = element_id,
+      discipline_id = discipline_id,
+      level = 1,
+      experience = 0,
+      loadout = {
+        -- Keep each bot on the pure element primary by default. Mixed pairs
+        -- resolve to combo/special abilities, which is not the intended
+        -- baseline attack for this harness.
+        primary_entry_index = primary_entry_index,
+        primary_combo_entry_index = primary_entry_index,
+        secondary_entry_indices = { -1, -1, -1 },
+      },
+    }
+  end
 
-  local BOT_PROFILE = {
-    element_id = BOT_ELEMENT_ID,
-    discipline_id = 1,
-    level = 1,
-    experience = 0,
-    loadout = {
-      -- Keep the sample bot on the pure element primary by default. Mixed
-      -- pairs such as 0x10 + 0x28 resolve to a combo/special ability, which is
-      -- not the intended baseline attack for this harness bot.
-      primary_entry_index = BOT_PRIMARY_ENTRY_INDEX,
-      primary_combo_entry_index = BOT_PRIMARY_ENTRY_INDEX,
-      secondary_entry_indices = { -1, -1, -1 },
+  local BOT_CONFIGS = {
+    {
+      key = "water",
+      name = "Lua Bot Water",
+      element_id = 1,
+      discipline_id = 1,
+      spawn_offset_x = 50.0,
+      spawn_offset_y = -60.0,
+    },
+    {
+      key = "earth",
+      name = "Lua Bot Earth",
+      element_id = 2,
+      discipline_id = 1,
+      spawn_offset_x = 50.0,
+      spawn_offset_y = -20.0,
+    },
+    {
+      key = "air",
+      name = "Lua Bot Air",
+      element_id = 3,
+      discipline_id = 1,
+      spawn_offset_x = 50.0,
+      spawn_offset_y = 20.0,
+    },
+    {
+      key = "ether",
+      name = "Lua Bot Ether",
+      element_id = 4,
+      discipline_id = 1,
+      spawn_offset_x = 50.0,
+      spawn_offset_y = 60.0,
     },
   }
 
-  local SPAWN_OFFSET_X = 50.0
-  local SPAWN_OFFSET_Y = 0.0
+  local CURRENT_MANAGED_BOT_NAMES = {}
+  for _, config in ipairs(BOT_CONFIGS) do
+    config.profile = make_bot_profile(config.element_id, config.discipline_id)
+    CURRENT_MANAGED_BOT_NAMES[config.name] = true
+  end
+
+  local DEFAULT_SPAWN_OFFSET_X = 50.0
+  local DEFAULT_SPAWN_OFFSET_Y = 0.0
   local FOLLOW_STOP_DISTANCE = 50.0
-  local FOLLOW_RESUME_DISTANCE = 150.0
+  local FOLLOW_RESUME_DISTANCE = 100.0
   local ARRIVAL_DISTANCE = 8.0
+  local FOLLOW_SETTLE_DISTANCE = FOLLOW_STOP_DISTANCE + ARRIVAL_DISTANCE
   local FOLLOW_TARGET_REFRESH_DISTANCE = 24.0
   local COMMAND_COOLDOWN_MS = 250
   local TICK_INTERVAL_MS = 100
@@ -103,6 +147,8 @@ function app.start()
   }
 
   local state = {
+    bots = {},
+    bot_count = 0,
     bot_id = nil,
     bot_dead = false,
     dead_bot_since_ms = 0,
@@ -130,6 +176,91 @@ function app.start()
     nav_grid_cache_at_ms = 0,
   }
 
+  local BOT_CONTEXT_FIELDS = {
+    "bot_id",
+    "bot_dead",
+    "dead_bot_since_ms",
+    "last_command_ms",
+    "last_attack_diag_ms",
+    "last_spawn_attempt_ms",
+    "last_scene_sync_ms",
+    "follow_target",
+    "scene_key",
+    "pending_run_promotion",
+    "last_bot_sample",
+    "stuck_samples",
+  }
+
+  local function reset_bot_context(bot_state)
+    bot_state.bot_id = nil
+    bot_state.bot_dead = false
+    bot_state.dead_bot_since_ms = 0
+    bot_state.last_command_ms = 0
+    bot_state.last_attack_diag_ms = 0
+    bot_state.last_spawn_attempt_ms = 0
+    bot_state.last_scene_sync_ms = 0
+    bot_state.follow_target = nil
+    bot_state.scene_key = nil
+    bot_state.pending_run_promotion = false
+    bot_state.last_bot_sample = nil
+    bot_state.stuck_samples = 0
+  end
+
+  local function make_bot_context(config)
+    local bot_state = {
+      config = config,
+      bot_name = config.name,
+      bot_profile = config.profile,
+      spawn_offset_x = tonumber(config.spawn_offset_x) or DEFAULT_SPAWN_OFFSET_X,
+      spawn_offset_y = tonumber(config.spawn_offset_y) or DEFAULT_SPAWN_OFFSET_Y,
+    }
+    reset_bot_context(bot_state)
+    return bot_state
+  end
+
+  for _, config in ipairs(BOT_CONFIGS) do
+    table.insert(state.bots, make_bot_context(config))
+  end
+  state.bot_count = #state.bots
+
+  local function load_bot_context(bot_state)
+    if type(bot_state) ~= "table" then
+      return
+    end
+    for _, field in ipairs(BOT_CONTEXT_FIELDS) do
+      state[field] = bot_state[field]
+    end
+    state.bot_name = bot_state.bot_name
+    state.bot_profile = bot_state.bot_profile
+    state.spawn_offset_x = bot_state.spawn_offset_x
+    state.spawn_offset_y = bot_state.spawn_offset_y
+  end
+
+  local function save_bot_context(bot_state)
+    if type(bot_state) ~= "table" then
+      return
+    end
+    for _, field in ipairs(BOT_CONTEXT_FIELDS) do
+      bot_state[field] = state[field]
+    end
+  end
+
+  local function sync_legacy_state_alias()
+    local first = state.bots[1]
+    if type(first) ~= "table" then
+      return
+    end
+    for _, field in ipairs(BOT_CONTEXT_FIELDS) do
+      state[field] = first[field]
+    end
+    state.bot_name = first.bot_name
+    state.bot_profile = first.bot_profile
+    state.spawn_offset_x = first.spawn_offset_x
+    state.spawn_offset_y = first.spawn_offset_y
+  end
+
+  sync_legacy_state_alias()
+
   lua_bots_debug = state
 
   local function log(message)
@@ -155,6 +286,49 @@ function app.start()
     local dx = (ax or 0.0) - (bx or 0.0)
     local dy = (ay or 0.0) - (by or 0.0)
     return math.sqrt((dx * dx) + (dy * dy))
+  end
+
+  local function bot_formation_offset(radius)
+    local offset_x = tonumber(state.spawn_offset_x) or DEFAULT_SPAWN_OFFSET_X
+    local offset_y = tonumber(state.spawn_offset_y) or DEFAULT_SPAWN_OFFSET_Y
+    local offset_len = distance(offset_x, offset_y, 0.0, 0.0)
+    if offset_len < 0.001 then
+      return tonumber(radius) or FOLLOW_STOP_DISTANCE, 0.0
+    end
+
+    local scale = (tonumber(radius) or FOLLOW_STOP_DISTANCE) / offset_len
+    return offset_x * scale, offset_y * scale
+  end
+
+  local function add_bot_formation_offset(target, radius)
+    if type(target) ~= "table" then
+      return nil
+    end
+
+    local offset_x, offset_y = bot_formation_offset(radius)
+    return {
+      x = (tonumber(target.x) or 0.0) + offset_x,
+      y = (tonumber(target.y) or 0.0) + offset_y,
+    }
+  end
+
+  local function normalize_address_key(value)
+    if value == nil then
+      return ""
+    end
+
+    if type(value) == "number" then
+      if value == 0 then
+        return ""
+      end
+      return string.lower(string.format("0x%X", value))
+    end
+
+    local text = string.lower(tostring(value))
+    if text == "" or text == "0" or text == "0x0" or text == "nil" then
+      return ""
+    end
+    return text
   end
 
   local function get_scene_state()
@@ -227,7 +401,7 @@ function app.start()
     pcall(sd.bots.destroy, bot_id)
   end
 
-  local function clear_follow_state()
+  local function clear_current_bot_state()
     state.bot_id = nil
     state.bot_dead = false
     state.dead_bot_since_ms = 0
@@ -237,18 +411,25 @@ function app.start()
     state.last_scene_sync_ms = 0
     state.follow_target = nil
     state.scene_key = nil
+    state.pending_run_promotion = false
+    state.last_bot_sample = nil
+    state.stuck_samples = 0
+  end
+
+  local function clear_follow_state()
+    for _, bot_state in ipairs(state.bots) do
+      reset_bot_context(bot_state)
+    end
+    sync_legacy_state_alias()
     state.travel_state = "idle"
     state.target_area_name = nil
     state.active_private_area_name = nil
-    state.pending_run_promotion = false
     state.last_scene_name = nil
     state.scene_entered_ms = 0
     state.last_player_sample = nil
     state.hub_candidate_name = nil
     state.hub_candidate_since_ms = 0
     state.entrance_armed = {}
-    state.last_bot_sample = nil
-    state.stuck_samples = 0
     state.nav_grid_cache = nil
     state.nav_grid_cache_world_id = nil
     state.nav_grid_cache_at_ms = 0
@@ -279,8 +460,10 @@ function app.start()
   end
 
   local function destroy_managed_bots()
-    if state.bot_id ~= nil then
-      destroy_bot_by_id(state.bot_id)
+    for _, bot_state in ipairs(state.bots) do
+      if bot_state.bot_id ~= nil then
+        destroy_bot_by_id(bot_state.bot_id)
+      end
     end
 
     local bots = get_all_bot_states()
@@ -295,6 +478,18 @@ function app.start()
     clear_follow_state()
   end
 
+  local function has_any_managed_bot_context()
+    if state.bot_id ~= nil or state.scene_key ~= nil then
+      return true
+    end
+    for _, bot_state in ipairs(state.bots) do
+      if bot_state.bot_id ~= nil or bot_state.scene_key ~= nil then
+        return true
+      end
+    end
+    return false
+  end
+
   local function adopt_existing_managed_bot()
     local bots = get_all_bot_states()
     if type(bots) ~= "table" then
@@ -304,10 +499,11 @@ function app.start()
     local adopted = false
     for _, bot in ipairs(bots) do
       if type(bot) == "table" and bot.available and is_managed_bot_name(bot.name) then
-        if not adopted then
+        local exact_name_match = bot.name == state.bot_name
+        if exact_name_match and not adopted then
           state.bot_id = bot.id
           adopted = true
-        else
+        elseif exact_name_match or not CURRENT_MANAGED_BOT_NAMES[bot.name] then
           destroy_bot_by_id(bot.id)
         end
       end
@@ -386,17 +582,19 @@ function app.start()
     end
 
     local heading = tonumber(player.heading)
+    local offset_x = tonumber(state.spawn_offset_x) or DEFAULT_SPAWN_OFFSET_X
+    local offset_y = tonumber(state.spawn_offset_y) or DEFAULT_SPAWN_OFFSET_Y
     if type(anchor) == "table" then
       return {
-        x = tonumber(anchor.x) or 0.0,
-        y = tonumber(anchor.y) or 0.0,
+        x = (tonumber(anchor.x) or 0.0) + offset_x,
+        y = (tonumber(anchor.y) or 0.0) + offset_y,
         heading = heading,
       }
     end
 
     return {
-      x = (tonumber(player.x) or 0.0) + SPAWN_OFFSET_X,
-      y = (tonumber(player.y) or 0.0) + SPAWN_OFFSET_Y,
+      x = (tonumber(player.x) or 0.0) + offset_x,
+      y = (tonumber(player.y) or 0.0) + offset_y,
       heading = heading,
     }
   end
@@ -422,10 +620,13 @@ function app.start()
       return false
     end
     spawn = snap_spawn_transform(now_ms, spawn)
+    if type(spawn) ~= "table" then
+      return false
+    end
 
     local ok = sd.bots.update({
       id = state.bot_id,
-      profile = BOT_PROFILE,
+      profile = state.bot_profile,
       scene = scene_intent,
       position = {
         x = spawn.x,
@@ -472,6 +673,9 @@ function app.start()
       return nil
     end
     spawn = snap_spawn_transform(now_ms, spawn)
+    if type(spawn) ~= "table" then
+      return nil
+    end
 
     if state.bot_id == nil then
       if now_ms - state.last_spawn_attempt_ms < SPAWN_RETRY_MS then
@@ -484,8 +688,8 @@ function app.start()
       end
 
       local bot_id = sd.bots.create({
-        name = BOT_NAME,
-        profile = BOT_PROFILE,
+        name = state.bot_name,
+        profile = state.bot_profile,
         scene = scene_intent,
         ready = true,
         position = {
@@ -503,7 +707,7 @@ function app.start()
       state.last_scene_sync_ms = now_ms
       log(string.format(
         "spawned %s id=%s scene=%s point=(%.2f, %.2f)",
-        BOT_NAME,
+        tostring(state.bot_name),
         tostring(bot_id),
         tostring(state.scene_key),
         spawn.x,
@@ -513,7 +717,7 @@ function app.start()
 
     local bot = get_bot_state(state.bot_id)
     if bot == nil or not bot.available then
-      clear_follow_state()
+      clear_current_bot_state()
       return nil
     end
     if is_bot_dead(bot) then
@@ -846,7 +1050,7 @@ function app.start()
     end
 
     local scene = get_scene_state()
-    local world_id = type(scene) == "table" and tostring(scene.world_id or scene.id or "") or ""
+    local world_id = type(scene) == "table" and normalize_address_key(scene.world_id or scene.world_address or scene.id) or ""
     if world_id == "" then
       return nil
     end
@@ -861,6 +1065,10 @@ function app.start()
     if type(grid) ~= "table" or grid.valid == false or type(grid.cells) ~= "table" then
       return nil
     end
+    local grid_world_id = normalize_address_key(grid.world_address or grid.world_id)
+    if grid_world_id == "" or grid_world_id ~= world_id then
+      return nil
+    end
 
     state.nav_grid_cache = grid
     state.nav_grid_cache_world_id = world_id
@@ -868,21 +1076,41 @@ function app.start()
     return grid
   end
 
-  snap_target_to_nav = function(grid, target)
-    if type(grid) ~= "table" or type(grid.cells) ~= "table" or type(target) ~= "table" then
-      return target
+  local function is_outer_grid_row(grid, cell)
+    local grid_x = tonumber(type(cell) == "table" and cell.grid_x or nil)
+    local height = tonumber(type(grid) == "table" and grid.height or nil)
+    if grid_x == nil or height == nil or height <= 0 then
+      return false
     end
+    return grid_x <= 0 or grid_x >= height - 1
+  end
+
+  local function nav_sample_score(grid, cell, gap, options)
+    local score = gap
+    if options.prefer_traversable_cell and cell.traversable ~= true then
+      score = score + 100000.0
+    end
+    if options.avoid_outer_rows and is_outer_grid_row(grid, cell) then
+      score = score + 50000.0
+    end
+    return score
+  end
+
+  snap_target_to_nav = function(grid, target, options)
+    if type(grid) ~= "table" or type(grid.cells) ~= "table" or type(target) ~= "table" then
+      return nil
+    end
+    options = type(options) == "table" and options or {}
 
     local target_x = tonumber(target.x)
     local target_y = tonumber(target.y)
     if target_x == nil or target_y == nil then
-      return target
+      return nil
     end
 
     local best_sample = nil
+    local best_sample_score = nil
     local best_sample_distance = nil
-    local best_center = nil
-    local best_center_distance = nil
     for _, cell in ipairs(grid.cells) do
       if type(cell) == "table" then
         if type(cell.samples) == "table" then
@@ -890,31 +1118,25 @@ function app.start()
             if type(sample) == "table" and sample.traversable and
                 tonumber(sample.world_x) ~= nil and tonumber(sample.world_y) ~= nil then
               local gap = distance(target_x, target_y, tonumber(sample.world_x), tonumber(sample.world_y))
-              if best_sample_distance == nil or gap < best_sample_distance then
+              local score = nav_sample_score(grid, cell, gap, options)
+              if best_sample_score == nil or score < best_sample_score or
+                  (score == best_sample_score and gap < best_sample_distance) then
+                best_sample_score = score
                 best_sample_distance = gap
                 best_sample = { x = tonumber(sample.world_x), y = tonumber(sample.world_y) }
               end
             end
           end
         end
-
-        if cell.traversable and tonumber(cell.center_x) ~= nil and tonumber(cell.center_y) ~= nil then
-          local gap = distance(target_x, target_y, tonumber(cell.center_x), tonumber(cell.center_y))
-          if best_center_distance == nil or gap < best_center_distance then
-            best_center_distance = gap
-            best_center = { x = tonumber(cell.center_x), y = tonumber(cell.center_y) }
-          end
-        end
       end
     end
 
-    local best = best_sample or best_center
-    if best == nil then
-      return target
+    if best_sample == nil then
+      return nil
     end
 
-    best.gap = target.gap
-    return best
+    best_sample.gap = target.gap
+    return best_sample
   end
 
   snap_spawn_transform = function(now_ms, spawn)
@@ -922,9 +1144,12 @@ function app.start()
       return nil
     end
 
-    local snapped = snap_target_to_nav(get_nav_grid_snapshot(now_ms), spawn)
+    local snapped = snap_target_to_nav(get_nav_grid_snapshot(now_ms), spawn, {
+      prefer_traversable_cell = true,
+      avoid_outer_rows = true,
+    })
     if type(snapped) ~= "table" then
-      return spawn
+      return nil
     end
 
     return {
@@ -940,19 +1165,10 @@ function app.start()
     local bot_x = tonumber(bot.x) or 0.0
     local bot_y = tonumber(bot.y) or 0.0
     local gap = distance(bot_x, bot_y, player_x, player_y)
-    local dir_x = bot_x - player_x
-    local dir_y = bot_y - player_y
-    if gap < 0.001 then
-      dir_x = 1.0
-      dir_y = 0.0
-      gap = 1.0
-    end
-
-    local norm_x = dir_x / gap
-    local norm_y = dir_y / gap
+    local offset_x, offset_y = bot_formation_offset(FOLLOW_STOP_DISTANCE)
     return {
-      x = player_x + (norm_x * FOLLOW_STOP_DISTANCE),
-      y = player_y + (norm_y * FOLLOW_STOP_DISTANCE),
+      x = player_x + offset_x,
+      y = player_y + offset_y,
       gap = gap,
     }
   end
@@ -976,8 +1192,12 @@ function app.start()
       return
     end
 
-    local target = compute_follow_target(player, bot)
-    target = snap_target_to_nav(get_nav_grid_snapshot(now_ms), target)
+    local target = snap_target_to_nav(get_nav_grid_snapshot(now_ms), compute_follow_target(player, bot), {
+      avoid_outer_rows = true,
+    })
+    if type(target) ~= "table" then
+      return
+    end
     local gap = target.gap
     if state.follow_target ~= nil and (not bot.moving) and (not bot.has_target) then
       local settled_gap = distance(
@@ -992,11 +1212,8 @@ function app.start()
 
     local follow_active = bot.moving or bot.has_target or state.follow_target ~= nil
     if follow_active then
-      if gap <= FOLLOW_STOP_DISTANCE then
-        -- Stock GameNpc movement clears its own follow state once the current
-        -- goal settles. Forcing an extra stop here tears down the controller
-        -- state too early and leaves the world movement list in a bad shape.
-        state.follow_target = nil
+      if gap <= FOLLOW_SETTLE_DISTANCE then
+        stop_follow_move("follow_deadzone")
         return
       end
     else
@@ -1135,7 +1352,13 @@ function app.start()
       state.travel_state = "travel_to_entrance"
       if type(bot) == "table" and bot.available and (tonumber(bot.actor_address) or 0) ~= 0 then
         local wait_anchor = candidate.hub_wait_anchor or candidate.hub_anchor
-        wait_anchor = snap_target_to_nav(get_nav_grid_snapshot(now_ms), wait_anchor)
+        wait_anchor = add_bot_formation_offset(wait_anchor, FOLLOW_STOP_DISTANCE)
+        wait_anchor = snap_target_to_nav(get_nav_grid_snapshot(now_ms), wait_anchor, {
+          prefer_traversable_cell = true,
+        })
+        if type(wait_anchor) ~= "table" then
+          return
+        end
         local gap = distance(tonumber(bot.x) or 0.0, tonumber(bot.y) or 0.0, wait_anchor.x, wait_anchor.y)
         if gap > ENTRANCE_ARRIVAL_DISTANCE then
           issue_follow_move(wait_anchor, now_ms, "travel_to_" .. candidate.name)
@@ -1214,13 +1437,20 @@ function app.start()
       find_nearest_enemy = find_nearest_enemy,
       issue_auto_attack = issue_auto_attack,
       heading_towards = heading_towards,
+      snap_target_to_nav = snap_target_to_nav,
+      follow_stop_distance = FOLLOW_STOP_DISTANCE,
+      follow_resume_distance = FOLLOW_RESUME_DISTANCE,
+      follow_settle_distance = FOLLOW_SETTLE_DISTANCE,
       state = state,
     })
   end
 
   sd.events.on("run.started", function()
     log("run.started")
-    state.pending_run_promotion = true
+    for _, bot_state in ipairs(state.bots) do
+      bot_state.pending_run_promotion = true
+    end
+    sync_legacy_state_alias()
     reset_travel_candidate()
     state.travel_state = "run"
     state.active_private_area_name = nil
@@ -1247,7 +1477,7 @@ function app.start()
     local player = get_player_state()
     local desired_scene = build_scene_intent(scene)
     if type(scene) ~= "table" or type(player) ~= "table" or type(desired_scene) ~= "table" then
-      if state.bot_id ~= nil or state.scene_key ~= nil or state.last_scene_name ~= nil then
+      if has_any_managed_bot_context() or state.last_scene_name ~= nil then
         destroy_managed_bots()
       end
       return
@@ -1260,23 +1490,24 @@ function app.start()
       anchor = area ~= nil and area.interior_anchor or nil
     end
 
-    local bot = ensure_bot_spawned(now_ms, player, desired_scene, anchor)
-    if type(bot) ~= "table" or not bot.available then
-      return
-    end
-    if state.bot_dead or is_bot_dead(bot) then
-      mark_bot_dead(now_ms, bot)
-      return
-    end
-
     local scene_name = tostring(scene.name or "")
-    if scene_name == "hub" then
-      handle_hub_state(now_ms, scene, player, bot)
-    elseif scene_name == "testrun" then
-      handle_run_state(now_ms, scene, player, bot)
-    else
-      handle_private_state(now_ms, scene, player, bot)
+    for _, bot_state in ipairs(state.bots) do
+      load_bot_context(bot_state)
+      local bot = ensure_bot_spawned(now_ms, player, desired_scene, anchor)
+      if type(bot) == "table" and bot.available then
+        if state.bot_dead or is_bot_dead(bot) then
+          mark_bot_dead(now_ms, bot)
+        elseif scene_name == "hub" then
+          handle_hub_state(now_ms, scene, player, bot)
+        elseif scene_name == "testrun" then
+          handle_run_state(now_ms, scene, player, bot)
+        else
+          handle_private_state(now_ms, scene, player, bot)
+        end
+      end
+      save_bot_context(bot_state)
     end
+    sync_legacy_state_alias()
   end)
 end
 

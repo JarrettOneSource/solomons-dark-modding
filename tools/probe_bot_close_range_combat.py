@@ -21,6 +21,10 @@ SPAWN_OFFSET_X = 80.0
 ACTOR_POSITION_X_OFFSET = 0x18
 ACTOR_POSITION_Y_OFFSET = 0x1C
 ACTOR_HEADING_OFFSET = 0x6C
+OBJECT_TYPE_ID_OFFSET = 0x08
+ARENA_ENEMY_OBJECT_TYPE_ID = 1001
+ARENA_ENEMY_MAX_HP_OFFSET = 0x170
+ARENA_ENEMY_CURRENT_HP_OFFSET = 0x174
 PROGRESSION_POINTER_OFFSET = 0x200
 PROGRESSION_HANDLE_OFFSET = 0x300
 
@@ -66,7 +70,11 @@ local best_gap = math.huge
 if type(actors) == 'table' then
   for _, actor in ipairs(actors) do
     local obj = tonumber(actor.object_type_id) or 0
-    if obj == 5009 or obj == 5010 then
+    local tracked = actor.tracked_enemy == true
+    local dead = actor.dead == true
+    local hp = tonumber(actor.hp) or 0.0
+    local max_hp = tonumber(actor.max_hp) or 0.0
+    if (tracked or obj == 1001) and not dead and (max_hp <= 0.0 or hp > 0.0) then
       local ax = tonumber(actor.x) or 0.0
       local ay = tonumber(actor.y) or 0.0
       local dx = ax - bx
@@ -86,6 +94,11 @@ if type(best) == 'table' then
   emit('hostile.x', best.x)
   emit('hostile.y', best.y)
   emit('hostile.gap', best_gap)
+  emit('hostile.tracked_enemy', best.tracked_enemy)
+  emit('hostile.enemy_type', best.enemy_type)
+  emit('hostile.dead', best.dead)
+  emit('hostile.hp', best.hp)
+  emit('hostile.max_hp', best.max_hp)
 else
   emit('hostile.available', false)
 end
@@ -195,6 +208,17 @@ local function emit(key, value)
   end
 end
 local actor = {actor_address}
+local object_type_id = tonumber(sd.debug.read_u32(actor + {OBJECT_TYPE_ID_OFFSET})) or 0
+emit("object_type_id", object_type_id)
+if object_type_id == {ARENA_ENEMY_OBJECT_TYPE_ID} then
+  emit("actor", actor)
+  emit("progression", 0)
+  emit("handle", 0)
+  emit("health_kind", "arena_enemy")
+  emit("hp", sd.debug.read_float(actor + {ARENA_ENEMY_CURRENT_HP_OFFSET}))
+  emit("max_hp", sd.debug.read_float(actor + {ARENA_ENEMY_MAX_HP_OFFSET}))
+  return
+end
 local progression = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_POINTER_OFFSET})) or 0
 local handle = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_HANDLE_OFFSET})) or 0
 if progression == 0 and handle ~= 0 then
@@ -224,6 +248,19 @@ local function emit(key, value)
   end
 end
 local actor = {actor_address}
+local object_type_id = tonumber(sd.debug.read_u32(actor + {OBJECT_TYPE_ID_OFFSET})) or 0
+emit("object_type_id", object_type_id)
+if object_type_id == {ARENA_ENEMY_OBJECT_TYPE_ID} then
+  emit("actor", actor)
+  emit("progression", 0)
+  emit("handle", 0)
+  emit("health_kind", "arena_enemy")
+  emit("max_hp_ok", sd.debug.write_float(actor + {ARENA_ENEMY_MAX_HP_OFFSET}, {hp_value}))
+  emit("hp_ok", sd.debug.write_float(actor + {ARENA_ENEMY_CURRENT_HP_OFFSET}, {hp_value}))
+  emit("hp", sd.debug.read_float(actor + {ARENA_ENEMY_CURRENT_HP_OFFSET}))
+  emit("max_hp", sd.debug.read_float(actor + {ARENA_ENEMY_MAX_HP_OFFSET}))
+  return
+end
 local progression = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_POINTER_OFFSET})) or 0
 local handle = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_HANDLE_OFFSET})) or 0
 if progression == 0 and handle ~= 0 then

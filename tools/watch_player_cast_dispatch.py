@@ -23,6 +23,7 @@ DEFAULT_AUTO_CLICK_Y = 0.5
 DEFAULT_AUTO_CLICK_DELAY_SECONDS = 1.0
 DEFAULT_AUTO_CLICK_INTERVAL_SECONDS = 0.35
 DEFAULT_TRACE_PROFILE = "safe_entry"
+ARENA_ENEMY_CURRENT_HP_OFFSET = 0x174
 
 
 class WatchFailure(RuntimeError):
@@ -75,6 +76,137 @@ end
 """.strip()
         )
     )
+
+
+def clear_bots() -> dict[str, str]:
+    return csp.parse_key_values(
+        csp.run_lua(
+            """
+if sd.bots and sd.bots.clear then
+  sd.bots.clear()
+end
+local count = sd.bots and sd.bots.get_count and sd.bots.get_count() or 0
+print('ok=true')
+print('count=' .. tostring(count))
+""".strip()
+        )
+    )
+
+
+def query_watchable_enemies(limit: int) -> list[dict[str, object]]:
+    output = csp.run_lua(
+        f"""
+local actors = sd.world and sd.world.list_actors and sd.world.list_actors() or {{}}
+local player = sd.player and sd.player.get_state and sd.player.get_state() or {{}}
+local px = tonumber(player.x) or 0.0
+local py = tonumber(player.y) or 0.0
+local rows = {{}}
+for _, actor in ipairs(actors) do
+  local actor_address = tonumber(actor.actor_address) or 0
+  local tracked = actor.tracked_enemy == true
+  local dead = actor.dead == true
+  local hp = tonumber(actor.hp) or 0.0
+  local max_hp = tonumber(actor.max_hp) or 0.0
+  if actor_address ~= 0 and tracked and not dead and hp > 0.0 and max_hp > 0.0 then
+    local ax = tonumber(actor.x) or 0.0
+    local ay = tonumber(actor.y) or 0.0
+    local dx = ax - px
+    local dy = ay - py
+    rows[#rows + 1] = {{
+      actor_address = actor_address,
+      object_type_id = actor.object_type_id,
+      enemy_type = actor.enemy_type,
+      hp = hp,
+      max_hp = max_hp,
+      x = ax,
+      y = ay,
+      gap = math.sqrt(dx * dx + dy * dy),
+    }}
+  end
+end
+table.sort(rows, function(a, b) return a.gap < b.gap end)
+for i = 1, math.min(#rows, {limit}) do
+  local row = rows[i]
+  print('enemy.' .. i .. '.actor_address=' .. tostring(row.actor_address))
+  print('enemy.' .. i .. '.object_type_id=' .. tostring(row.object_type_id))
+  print('enemy.' .. i .. '.enemy_type=' .. tostring(row.enemy_type))
+  print('enemy.' .. i .. '.hp=' .. tostring(row.hp))
+  print('enemy.' .. i .. '.max_hp=' .. tostring(row.max_hp))
+  print('enemy.' .. i .. '.x=' .. tostring(row.x))
+  print('enemy.' .. i .. '.y=' .. tostring(row.y))
+  print('enemy.' .. i .. '.gap=' .. tostring(row.gap))
+end
+print('count=' .. tostring(math.min(#rows, {limit})))
+print('total=' .. tostring(#rows))
+""".strip()
+    )
+    values = csp.parse_key_values(output)
+    rows: list[dict[str, object]] = []
+    for index in range(1, parse_int(values, "count") + 1):
+        actor_address = parse_int(values, f"enemy.{index}.actor_address")
+        if actor_address == 0:
+            continue
+        rows.append(
+            {
+                "name": f"player_enemy_hp_{index}",
+                "actor_address": actor_address,
+                "hp_address": actor_address + ARENA_ENEMY_CURRENT_HP_OFFSET,
+                "object_type_id": parse_int(values, f"enemy.{index}.object_type_id"),
+                "enemy_type": values.get(f"enemy.{index}.enemy_type", ""),
+                "hp": values.get(f"enemy.{index}.hp", ""),
+                "max_hp": values.get(f"enemy.{index}.max_hp", ""),
+                "x": values.get(f"enemy.{index}.x", ""),
+                "y": values.get(f"enemy.{index}.y", ""),
+                "gap": values.get(f"enemy.{index}.gap", ""),
+            }
+        )
+    return rows
+
+
+def wait_for_watchable_enemies(limit: int, timeout_s: float) -> list[dict[str, object]]:
+    deadline = time.time() + timeout_s
+    enemies: list[dict[str, object]] = []
+    while time.time() < deadline:
+        enemies = query_watchable_enemies(limit)
+        if enemies:
+            return enemies
+        time.sleep(0.25)
+    return enemies
+
+
+def arm_enemy_hp_watches(enemies: list[dict[str, object]]) -> dict[str, dict[str, object]]:
+    if not enemies:
+        return {}
+
+    lua_lines = [
+        "local function emit(key, value)",
+        "  if value == nil then",
+        "    print(key .. '=')",
+        "  else",
+        "    print(key .. '=' .. tostring(value))",
+        "  end",
+        "end",
+    ]
+    for enemy in enemies:
+        name = str(enemy["name"])
+        lua_lines.append(f"pcall(sd.debug.unwatch, {json.dumps(name)})")
+        lua_lines.append(f"sd.debug.clear_write_hits({json.dumps(name)})")
+    for enemy in enemies:
+        name = str(enemy["name"])
+        hp_address = int(enemy["hp_address"])
+        lua_lines.append(f"emit({json.dumps(name)}, sd.debug.watch_write({json.dumps(name)}, {hp_address}, 4))")
+        lua_lines.append(f"emit({json.dumps(name)} .. '_hp_address', {hp_address})")
+    values = csp.parse_key_values(csp.run_lua("\n".join(lua_lines)))
+
+    armed: dict[str, dict[str, object]] = {}
+    for enemy in enemies:
+        name = str(enemy["name"])
+        armed[name] = {
+            **enemy,
+            "watch_ok": values.get(name, "false"),
+            "armed_hp_address": parse_int(values, f"{name}_hp_address"),
+        }
+    return armed
 
 
 def arm_watches(player_actor: int, player_progression: int, gameplay_scene: int) -> dict[str, int]:
@@ -214,6 +346,16 @@ end
     )
 
 
+def clear_enemy_hp_watches(names: list[str]) -> None:
+    if not names:
+        return
+    lua_lines = []
+    for name in names:
+        lua_lines.append(f"pcall(sd.debug.unwatch, {json.dumps(name)})")
+        lua_lines.append(f"sd.debug.clear_write_hits({json.dumps(name)})")
+    csp.run_lua("\n".join(lua_lines))
+
+
 def query_spell_window(player_actor: int, player_progression: int) -> dict[str, str]:
     return csp.parse_key_values(
         csp.run_lua(
@@ -293,6 +435,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Attach to the current live game instead of relaunching and driving menu flow.",
     )
+    parser.add_argument(
+        "--watch-enemy-hp",
+        action="store_true",
+        help="Arm write watches on the nearest live enemy HP fields before waiting for the player cast.",
+    )
+    parser.add_argument("--enemy-watch-count", type=int, default=8)
+    parser.add_argument("--enemy-watch-timeout", type=float, default=12.0)
     return parser
 
 
@@ -312,8 +461,10 @@ def main() -> int:
         "allow_unstable_inline_traces": args.allow_unstable_inline_traces,
         "auto_click": args.auto_click,
         "skip_write_watches": args.skip_write_watches,
+        "watch_enemy_hp": args.watch_enemy_hp,
     }
     traces_armed = False
+    enemy_watch_names: list[str] = []
 
     try:
         if args.start_waves and args.enable_combat_prelude:
@@ -334,6 +485,7 @@ def main() -> int:
             result["process_id"] = process_id
             result["navigation"].append({"step": "attach", "process_id": process_id})
             result["lua_tick"] = set_lua_tick_enabled(False)
+            result["clear_bots"] = clear_bots()
             scene = csp.query_scene_state()
             if scene.get("available") != "true":
                 raise WatchFailure(f"scene unavailable while attaching: {scene}")
@@ -363,6 +515,7 @@ def main() -> int:
             result["navigation"].append({"step": "launch", "process_id": process_id})
 
             result["lua_tick"] = set_lua_tick_enabled(False)
+            result["clear_bots"] = clear_bots()
             hub_flow = csp.drive_hub_flow(process_id, element=args.element, discipline=args.discipline, prefer_resume=False)
             result["navigation"].append({"step": "hub_ready", "flow": hub_flow})
 
@@ -405,6 +558,14 @@ def main() -> int:
         if args.trace_builder_window:
             result["trace_arm_results"] = arm_builder_traces(args.trace_profile)
             traces_armed = True
+        if args.watch_enemy_hp:
+            enemies = wait_for_watchable_enemies(args.enemy_watch_count, args.enemy_watch_timeout)
+            result["watched_enemies"] = enemies
+            result["enemy_hp_watches"] = arm_enemy_hp_watches(enemies)
+            enemy_watch_names = list(result["enemy_hp_watches"].keys())
+        else:
+            result["watched_enemies"] = []
+            result["enemy_hp_watches"] = {}
 
         print(
             f"Player cast watch armed. Scene ready for {args.element}/{args.discipline}. "
@@ -435,6 +596,10 @@ def main() -> int:
                 for name in result["watched_addresses"].keys()
             }
         )
+        result["enemy_hp_write_hits"] = {
+            name: query_write_hits(name)
+            for name in enemy_watch_names
+        }
         if traces_armed:
             result["trace_hits"] = {
                 spec.name: query_trace_hits(spec.name)
@@ -451,6 +616,11 @@ def main() -> int:
         if traces_armed:
             try:
                 clear_builder_traces(args.trace_profile)
+            except Exception:
+                pass
+        if enemy_watch_names:
+            try:
+                clear_enemy_hp_watches(enemy_watch_names)
             except Exception:
                 pass
         args.output.parent.mkdir(parents=True, exist_ok=True)

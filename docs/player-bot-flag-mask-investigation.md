@@ -101,13 +101,31 @@ that stock code is willing to zero on synthetic or non-primary actors.
 
 ## What The Mismatch Does For Navigation
 
-The loader-owned bot planner uses the bot actor's `+0x38` as the `mask`
-parameter when calling stock:
+The loader-owned bot planner originally used the bot actor's `+0x38` as the
+single `mask` parameter when calling stock:
 
 - `MovementCollision_TestCirclePlacement (0x00523C90)`
 
+April 25 update:
+
+- `+0x38` still feeds the cell/type-2 object collision mask, with the existing
+  player-equivalent fallback for bots whose own mask is zero
+- static scenery circles are handled separately: the planner snapshots the
+  movement-controller circle list and rejects samples overlapping mask `0x4`
+  entries, matching the live `testrun` bucket used by small run props such as
+  trees, gravestones, and pit-like blockers
+- push-through gates are excluded from that static-circle set while remaining
+  stock collision objects:
+  - circles carrying the observed movable/physics bit (`0x2000`) are skipped
+  - the tested boneyard gate with a live bot present uses plain mask `0x4`, but
+    its circle family is distinguishable by object type `0xBBE` plus radius
+    `10`; that family is skipped by the planner so bots try to push through it
+
 The native query behavior matters:
 
+- for the extended placement query's movement-circle prepass:
+  - if `((circle_mask & circle_entry_mask) != 0)`, the circle is treated as
+    blocking
 - for occupied cells:
   - if `((mask & cell_mask) == 0)`, the cell is treated as blocking
 - for type-2 object or hazard entries:
@@ -129,6 +147,16 @@ Current direct implication:
 
 - the bot's zero mask makes the loader-owned placement oracle more restrictive
   than the player's
+- the gate/static-prop split now uses two masks for
+  `MovementCollision_TestCirclePlacementExtended (0x005238C0)`:
+  - a filtered circle-block mask that excludes `0x4` and `0x2000`, because the
+    loader separately enforces kept static circles
+  - an overlap-allow mask that includes `0x4` and `0x2000`, because the native
+    primary/type-2 overlap checks block entries whose masks do **not**
+    intersect the query mask
+  - if the native query still reports blocked at a sample that overlaps an
+    ignored push-through circle, the planner allows it after the kept-static
+    tree/gravestone/hole circle test has already passed
 - this is a concrete native reason the old bot nav substrate could reject
   placements or cells that the player could still use
 
@@ -169,4 +197,3 @@ Best current model:
 - whether gameplay-slot bots should inherit a nonzero slot-bit mask for parity
   with player-style path probes, or whether the loader should instead stop using
   `+0x38` as the placement mask for bot planning
-

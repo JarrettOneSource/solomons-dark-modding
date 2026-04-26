@@ -303,10 +303,19 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
         return true;
     }
 
+    const bool cast_active = binding->ongoing_cast.active;
     if (!binding->movement_active || magnitude <= 0.0001f) {
         binding->last_movement_displacement = 0.0f;
-        ApplyObservedBotAnimationState(binding, actor_address, false);
-        StopWizardBotActorMotion(binding->actor_address);
+        if (cast_active) {
+            // Continuous casts own the attack animation/control lane while they
+            // are alive. Clear only stale locomotion inputs so the bot does not
+            // slide; do not force the broader idle animation state over the
+            // native cast pose.
+            ClearWizardBotLocomotionInputs(actor_address);
+        } else {
+            ApplyObservedBotAnimationState(binding, actor_address, false);
+            StopWizardBotActorMotion(binding->actor_address);
+        }
         (void)ApplyWizardBindingFacingState(binding, actor_address);
         PublishParticipantGameplaySnapshot(*binding);
         return true;
@@ -317,8 +326,6 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
 
     const auto position_before_x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
     const auto position_before_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
-    const auto velocity_x = direction_x;
-    const auto velocity_y = direction_y;
     const auto owner_address =
         memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
     const auto movement_controller_address =
@@ -378,21 +385,102 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
             0,
             &exception_code,
             &move_result)) {
-        const auto position_after_x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-        const auto position_after_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
-        const auto delta_x = position_after_x - position_before_x;
-        const auto delta_y = position_after_y - position_before_y;
-        const auto displacement_distance = std::sqrt((delta_x * delta_x) + (delta_y * delta_y));
+        auto position_after_x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
+        auto position_after_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
+        auto delta_x = position_after_x - position_before_x;
+        auto delta_y = position_after_y - position_before_y;
+        auto displacement_distance = std::sqrt((delta_x * delta_x) + (delta_y * delta_y));
+        auto applied_direction_x = direction_x;
+        auto applied_direction_y = direction_y;
+        auto movement_log_result = move_result != 0 ? "player_move_step_ok" : "player_move_step_blocked";
+        if ((move_result == 0 || displacement_distance <= 0.0001f) && !cast_active) {
+            const auto recovery_start_x = position_after_x;
+            const auto recovery_start_y = position_after_y;
+            const auto final_target_x = binding->target_x - recovery_start_x;
+            const auto final_target_y = binding->target_y - recovery_start_y;
+            const auto final_target_distance =
+                std::sqrt((final_target_x * final_target_x) + (final_target_y * final_target_y));
+            if (final_target_distance > 0.0001f) {
+                const auto target_direction_x = final_target_x / final_target_distance;
+                const auto target_direction_y = final_target_y / final_target_distance;
+                constexpr float kSqrtHalf = 0.70710678118f;
+                constexpr std::array<std::pair<float, float>, 7> kRecoveryRotations = {{
+                    {1.0f, 0.0f},
+                    {kSqrtHalf, kSqrtHalf},
+                    {kSqrtHalf, -kSqrtHalf},
+                    {0.0f, 1.0f},
+                    {0.0f, -1.0f},
+                    {-kSqrtHalf, kSqrtHalf},
+                    {-kSqrtHalf, -kSqrtHalf},
+                }};
+                for (const auto& rotation : kRecoveryRotations) {
+                    const auto recovery_direction_x =
+                        target_direction_x * rotation.first - target_direction_y * rotation.second;
+                    const auto recovery_direction_y =
+                        target_direction_x * rotation.second + target_direction_y * rotation.first;
+                    const auto recovery_magnitude =
+                        std::sqrt((recovery_direction_x * recovery_direction_x) + (recovery_direction_y * recovery_direction_y));
+                    if (recovery_magnitude <= 0.0001f) {
+                        continue;
+                    }
+
+                    const auto normalized_recovery_direction_x = recovery_direction_x / recovery_magnitude;
+                    const auto normalized_recovery_direction_y = recovery_direction_y / recovery_magnitude;
+                    DWORD recovery_exception_code = 0;
+                    std::uint32_t recovery_move_result = 0;
+                    if (!CallPlayerActorMoveStepSafe(
+                            move_step_address,
+                            movement_controller_address,
+                            actor_address,
+                            normalized_recovery_direction_x * move_step_scale,
+                            normalized_recovery_direction_y * move_step_scale,
+                            0,
+                            &recovery_exception_code,
+                            &recovery_move_result)) {
+                        continue;
+                    }
+
+                    const auto recovery_after_x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
+                    const auto recovery_after_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
+                    const auto recovery_delta_x = recovery_after_x - recovery_start_x;
+                    const auto recovery_delta_y = recovery_after_y - recovery_start_y;
+                    const auto recovery_displacement =
+                        std::sqrt((recovery_delta_x * recovery_delta_x) + (recovery_delta_y * recovery_delta_y));
+                    if (recovery_displacement <= 0.0001f) {
+                        continue;
+                    }
+
+                    position_after_x = recovery_after_x;
+                    position_after_y = recovery_after_y;
+                    delta_x = position_after_x - position_before_x;
+                    delta_y = position_after_y - position_before_y;
+                    displacement_distance = std::sqrt((delta_x * delta_x) + (delta_y * delta_y));
+                    move_result = recovery_move_result;
+                    applied_direction_x = normalized_recovery_direction_x;
+                    applied_direction_y = normalized_recovery_direction_y;
+                    direction_x = normalized_recovery_direction_x;
+                    direction_y = normalized_recovery_direction_y;
+                    binding->desired_heading = NormalizeGameplayHeadingDegrees(
+                        static_cast<float>(std::atan2(direction_y, direction_x) * (180.0 / 3.14159265358979323846) + 90.0));
+                    movement_log_result = "player_move_step_detour";
+                    break;
+                }
+            }
+        }
         if (!ApplyWizardBindingFacingState(binding, actor_address) && binding->desired_heading_valid) {
             ApplyWizardActorFacingState(actor_address, binding->desired_heading);
         }
         binding->last_movement_displacement = displacement_distance;
-        if (IsStandaloneWizardKind(binding->kind)) {
+        if (IsStandaloneWizardKind(binding->kind) && !cast_active) {
             AdvanceStandaloneWizardWalkCycleState(binding, displacement_distance);
             ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
         }
         if (displacement_distance <= 0.0001f) {
-            StopWizardBotActorMotion(actor_address);
+            if (cast_active) {
+                ClearWizardBotLocomotionInputs(actor_address);
+            } else {
+                StopWizardBotActorMotion(actor_address);
+            }
             (void)ApplyWizardBindingFacingState(binding, actor_address);
             static std::uint64_t s_last_stuck_move_log_ms = 0;
             const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
@@ -417,15 +505,15 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
             actor_address,
             owner_address,
             movement_controller_address,
-            direction_x,
-            direction_y,
-            velocity_x,
-            velocity_y,
+            applied_direction_x,
+            applied_direction_y,
+            applied_direction_x,
+            applied_direction_y,
             position_before_x,
             position_before_y,
             position_after_x,
             position_after_y,
-            move_result != 0 ? "player_move_step_ok" : "player_move_step_blocked");
+            movement_log_result);
         PublishParticipantGameplaySnapshot(*binding);
         return true;
     }

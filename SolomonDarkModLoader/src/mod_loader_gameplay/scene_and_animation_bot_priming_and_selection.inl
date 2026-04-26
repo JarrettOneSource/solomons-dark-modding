@@ -293,14 +293,19 @@ bool TryResolvePrimaryCastDescriptorFromSelectionPair(
         return primary_entry_index == a && combo_entry_index == b;
     };
 
-    if (Matches(0x08, 0x08) ||
-        Matches(0x10, 0x10) ||
-        Matches(0x18, 0x18) ||
-        Matches(0x20, 0x20) ||
-        Matches(0x28, 0x28)) {
+    if (Matches(0x08, 0x08) || Matches(0x10, 0x10)) {
         descriptor->lane = ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary;
         descriptor->selection_state = primary_entry_index;
         descriptor->dispatcher_skill_id = 0;
+        return true;
+    }
+    if (Matches(0x18, 0x18) || Matches(0x20, 0x20) || Matches(0x28, 0x28)) {
+        // Stock keeps actor+0x270 as the element selection state here. The
+        // runtime dispatcher handles Air/Water/Earth primaries at 0x18/0x20/0x28,
+        // while the Skills_Wizard build id is only the loadout/progression id.
+        descriptor->lane = ParticipantEntityBinding::OngoingCastState::Lane::Dispatcher;
+        descriptor->selection_state = primary_entry_index;
+        descriptor->dispatcher_skill_id = primary_entry_index;
         return true;
     }
 
@@ -357,6 +362,7 @@ bool ApplyProfilePrimaryLoadoutToSkillsWizard(
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     int* resolved_skill_id,
     std::string* error_message) {
+    constexpr bool kEnableNativeSkillsWizardPrimaryBuild = true;
     if (resolved_skill_id != nullptr) {
         *resolved_skill_id = -1;
     }
@@ -379,6 +385,20 @@ bool ApplyProfilePrimaryLoadoutToSkillsWizard(
                 " combo=" + std::to_string(descriptor.combo_entry_index);
         }
         return false;
+    }
+
+    if (resolved_skill_id != nullptr) {
+        *resolved_skill_id = descriptor.build_skill_id;
+    }
+
+    if (!kEnableNativeSkillsWizardPrimaryBuild) {
+        Log(
+            "[bots] skills_wizard_loadout native build skipped progression=" +
+            HexString(progression_address) +
+            " primary_entry=" + std::to_string(descriptor.primary_entry_index) +
+            " combo_entry=" + std::to_string(descriptor.combo_entry_index) +
+            " spell_id=" + std::to_string(descriptor.build_skill_id));
+        return true;
     }
 
     Log(
@@ -412,8 +432,5 @@ bool ApplyProfilePrimaryLoadoutToSkillsWizard(
         return false;
     }
 
-    if (resolved_skill_id != nullptr) {
-        *resolved_skill_id = descriptor.build_skill_id;
-    }
     return true;
 }

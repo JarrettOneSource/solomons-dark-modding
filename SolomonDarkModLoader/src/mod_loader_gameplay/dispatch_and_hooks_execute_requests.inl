@@ -47,14 +47,38 @@ bool TrySpawnGameplaySlotBotParticipantEntity(
     const PendingParticipantEntitySyncRequest& request,
     std::string* error_message);
 
-bool ShouldUseGameplaySlotBotParticipantRail(const SceneContextSnapshot& scene_context) {
+bool TryFindOpenGameplayBotSlot(uintptr_t gameplay_address, int* target_slot) {
+    if (target_slot != nullptr) {
+        *target_slot = -1;
+    }
+    if (gameplay_address == 0) {
+        return false;
+    }
+
+    for (int candidate = kFirstWizardBotSlot;
+         candidate < static_cast<int>(kGameplayPlayerSlotCount);
+         ++candidate) {
+        uintptr_t existing_actor = 0;
+        if (!TryResolvePlayerActorForSlot(gameplay_address, candidate, &existing_actor) ||
+            existing_actor == 0) {
+            if (target_slot != nullptr) {
+                *target_slot = candidate;
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool ShouldUseGameplaySlotBotParticipantRail(uintptr_t gameplay_address, const SceneContextSnapshot& scene_context) {
     // Arena scenes expose the gameplay player-slot array (slots 1..3) that the
     // stock hostile pathfinder scans for targets via HookMonsterPathfindingRefreshTarget.
-    // Spawning bots through the standalone clone rail leaves them invisible to
-    // enemies (they aren't in the slot array) — see enemy_targeting_bot_slots.md.
     // Routing arena bots through Gameplay_CreatePlayerSlot + ActorWorld_RegisterGameplaySlotActor
-    // places them in slots 1..3 so enemies actually aggro them.
-    return IsArenaSceneContext(scene_context);
+    // places them in slots 1..3 so enemies actually aggro them. The stock scene
+    // only has three non-local slots, so overflow arena bots intentionally use
+    // the standalone wizard rail and are added to the widened hostile selector.
+    return IsArenaSceneContext(scene_context) && TryFindOpenGameplayBotSlot(gameplay_address, nullptr);
 }
 
 bool ShouldUseRegisteredGameNpcParticipantRail(const SceneContextSnapshot& scene_context) {
@@ -159,7 +183,7 @@ bool ExecuteParticipantEntitySyncNow(
     }
 
     const bool use_slot_bot_rail =
-        ShouldUseGameplaySlotBotParticipantRail(scene_context);
+        ShouldUseGameplaySlotBotParticipantRail(gameplay_address, scene_context);
     const bool use_registered_gamenpc_rail =
         !use_slot_bot_rail && ShouldUseRegisteredGameNpcParticipantRail(scene_context);
     const char* rail_name =
@@ -598,16 +622,7 @@ bool TrySpawnGameplaySlotBotParticipantEntity(
     }
 
     int target_slot = -1;
-    for (int candidate = kFirstWizardBotSlot;
-         candidate < static_cast<int>(kGameplayPlayerSlotCount);
-         ++candidate) {
-        uintptr_t existing_actor = 0;
-        if (!TryResolvePlayerActorForSlot(gameplay_address, candidate, &existing_actor) ||
-            existing_actor == 0) {
-            target_slot = candidate;
-            break;
-        }
-    }
+    (void)TryFindOpenGameplayBotSlot(gameplay_address, &target_slot);
     if (target_slot < 0) {
         if (error_message != nullptr) {
             *error_message = "All gameplay bot slots (1..3) are occupied.";

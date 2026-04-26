@@ -53,6 +53,8 @@ int LuaDebugGetNavGrid(lua_State* state) {
         lua_setfield(state, -2, "center_y");
         lua_pushboolean(state, cell.traversable ? 1 : 0);
         lua_setfield(state, -2, "traversable");
+        lua_pushboolean(state, cell.path_traversable ? 1 : 0);
+        lua_setfield(state, -2, "path_traversable");
         lua_createtable(state, static_cast<int>(cell.samples.size()), 0);
         int sample_index = 1;
         for (const auto& sample : cell.samples) {

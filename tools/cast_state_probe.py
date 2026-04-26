@@ -1012,7 +1012,11 @@ local best = nil
 local best_gap = math.huge
 for _, actor in ipairs(actors) do
   local obj = tonumber(actor.object_type_id) or 0
-  if obj == 5009 or obj == 5010 then
+  local tracked = actor.tracked_enemy == true
+  local dead = actor.dead == true
+  local hp = tonumber(actor.hp) or 0.0
+  local max_hp = tonumber(actor.max_hp) or 0.0
+  if (tracked or obj == 1001) and not dead and (max_hp <= 0.0 or hp > 0.0) then
     local ax = tonumber(actor.x) or 0.0
     local ay = tonumber(actor.y) or 0.0
     local dx = ax - bx
@@ -1034,6 +1038,11 @@ emit('y', best.y)
 emit('gap', best_gap)
 emit('object_type_id', best.object_type_id)
 emit('actor_address', best.actor_address)
+emit('tracked_enemy', best.tracked_enemy)
+emit('enemy_type', best.enemy_type)
+emit('dead', best.dead)
+emit('hp', best.hp)
+emit('max_hp', best.max_hp)
 """.strip()
             )
         )

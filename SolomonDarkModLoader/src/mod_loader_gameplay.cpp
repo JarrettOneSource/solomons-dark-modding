@@ -75,7 +75,13 @@ using ProfileResolveStatEntryFn = void*(__thiscall*)(void* self, int stat_index)
 using StatBookComputeValueFn = float(__thiscall*)(void* self, float base_value, int entry_idx, char apply_modifier);
 using MovementCollisionTestCirclePlacementFn = std::uint32_t(__thiscall*)(void* self, float x, float y, float radius, std::uint32_t mask);
 using MovementCollisionTestCirclePlacementExtendedFn =
-    std::uint32_t(__thiscall*)(void* self, float x, float y, float radius, std::uint32_t cell_mask, std::uint32_t object_mask);
+    std::uint32_t(__thiscall*)(
+        void* self,
+        float x,
+        float y,
+        float radius,
+        std::uint32_t circle_block_mask,
+        std::uint32_t overlap_allow_mask);
 using ActorMoveByDeltaFn = void(__thiscall*)(void* self, float move_x, float move_y, int flags);
 using ActorAnimationAdvanceFn = void(__thiscall*)(void* self);
 using PlayerActorRefreshRuntimeHandlesFn = void(__thiscall*)(void* self);
@@ -275,6 +281,9 @@ constexpr int kFirstWizardBotSlot = 1;
 constexpr int kHubRegionIndex = 0;
 constexpr float kDefaultWizardBotOffsetX = 32.0f;
 constexpr float kDefaultWizardBotOffsetY = 0.0f;
+constexpr std::size_t kActorCurrentTargetActorOffset = 0x168;
+constexpr std::size_t kActorContinuousPrimaryModeOffset = 0x258;
+constexpr std::size_t kActorContinuousPrimaryActiveOffset = 0x264;
 constexpr std::size_t kHostileCurrentTargetActorOffset = 0x168;
 constexpr std::size_t kHostileTargetBucketDeltaOffset = 0x164;
 constexpr std::int32_t kActorWorldBucketStride = 0x800;
@@ -677,6 +686,8 @@ struct ParticipantEntityBinding {
         std::uint32_t aim_aux0_before = 0;
         std::uint32_t aim_aux1_before = 0;
         std::uint8_t spread_before = 0;
+        uintptr_t current_target_actor_before = 0;
+        bool current_target_actor_override_active = false;
         uintptr_t selection_state_pointer = 0;
         int selection_state_before = kUnknownAnimationStateId;
         bool selection_state_object_snapshot_valid = false;
@@ -700,6 +711,7 @@ struct ParticipantEntityBinding {
         bool progression_spell_id_override_active = false;
         int ticks_waiting = 0;
         int startup_ticks_waiting = 0;
+        int targetless_ticks_waiting = 0;
         bool saw_latch = false;
         bool saw_activity = false;
         bool startup_in_progress = false;
@@ -708,6 +720,9 @@ struct ParticipantEntityBinding {
         uintptr_t pure_primary_item_sink_fallback = 0;
         static constexpr int kMaxTicksWaiting = 300;
         static constexpr int kMaxStartupTicksWaiting = 12;
+        // Lua retargets every 100 ms. Keep a live pure-primary action through
+        // transient target handoffs instead of ending it and rearming a new cast.
+        static constexpr int kTargetlessRetargetGraceTicks = kMaxStartupTicksWaiting * 2;
     };
     OngoingCastState ongoing_cast{};
 };

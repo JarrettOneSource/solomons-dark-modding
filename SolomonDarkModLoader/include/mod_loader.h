@@ -175,6 +175,7 @@ struct SDModGameplayNavCellState {
     float center_x = 0.0f;
     float center_y = 0.0f;
     bool traversable = false;
+    bool path_traversable = false;
     std::vector<Sample> samples;
 };
 
@@ -311,6 +312,9 @@ void FlushNavGridSnapshotOnSceneUnload();
 bool TryGetParticipantGameplayState(
     std::uint64_t participant_id,
     SDModParticipantGameplayState* state);
+bool TryGetActiveGameplayHudParticipantDisplayName(
+    std::string* display_name,
+    uintptr_t* actor_address = nullptr);
 bool SpawnEnemyByType(int type_id, float x, float y, std::string* error_message);
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);
 

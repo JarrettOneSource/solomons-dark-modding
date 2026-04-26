@@ -350,14 +350,14 @@ bool TryBuildBotPath(
                         current_grid_x + offset[0],
                         current_grid_y,
                         &traversable_cache,
-                        error_message) ||
+                        nullptr) ||
                     !IsGameplayPathCellTraversable(
                         grid_snapshot,
                         binding,
                         current_grid_x,
                         current_grid_y + offset[1],
                         &traversable_cache,
-                        error_message)) {
+                        nullptr)) {
                     continue;
                 }
             }
@@ -368,7 +368,7 @@ bool TryBuildBotPath(
                     next_grid_x,
                     next_grid_y,
                     &traversable_cache,
-                    error_message)) {
+                    nullptr)) {
                 continue;
             }
 
@@ -387,7 +387,7 @@ bool TryBuildBotPath(
                     current_point_y,
                     &candidate_point_x,
                     &candidate_point_y,
-                    error_message)) {
+                    nullptr)) {
                 continue;
             }
 

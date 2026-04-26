@@ -1,4 +1,4 @@
-std::uint32_t ResolveGameplayPathPlacementMask(ParticipantEntityBinding* binding) {
+std::uint32_t ResolveGameplayPathCollisionMask(ParticipantEntityBinding* binding) {
     if (binding == nullptr || binding->actor_address == 0 || kActorPrimaryFlagMaskOffset == 0) {
         return 0;
     }
@@ -30,6 +30,47 @@ std::uint32_t ResolveGameplayPathPlacementMask(ParticipantEntityBinding* binding
     return player_mask != 0 ? player_mask : actor_mask;
 }
 
+bool DoesGameplayPathCircleOverlapObstacle(
+    const std::vector<GameplayPathCircleObstacle>& obstacles,
+    float world_x,
+    float world_y,
+    float radius) {
+    for (const auto& obstacle : obstacles) {
+        const auto combined_radius = radius + obstacle.radius;
+        const auto delta_x = world_x - obstacle.x;
+        const auto delta_y = world_y - obstacle.y;
+        if ((delta_x * delta_x) + (delta_y * delta_y) <= combined_radius * combined_radius) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool IsGameplayPathBlockedByStaticCircleObstacle(
+    const GameplayPathGridSnapshot& snapshot,
+    float world_x,
+    float world_y,
+    float radius) {
+    return DoesGameplayPathCircleOverlapObstacle(
+        snapshot.static_circle_obstacles,
+        world_x,
+        world_y,
+        radius);
+}
+
+bool IsGameplayPathOverlappingIgnoredCircleObstacle(
+    const GameplayPathGridSnapshot& snapshot,
+    float world_x,
+    float world_y,
+    float radius) {
+    return DoesGameplayPathCircleOverlapObstacle(
+        snapshot.ignored_circle_obstacles,
+        world_x,
+        world_y,
+        radius);
+}
+
 bool IsGameplayPathPlacementTraversable(
     const GameplayPathGridSnapshot& snapshot,
     ParticipantEntityBinding* binding,
@@ -59,7 +100,7 @@ bool IsGameplayPathPlacementTraversable(
 
     auto& memory = ProcessMemory::Instance();
     const auto radius = memory.ReadFieldOr<float>(binding->actor_address, kActorCollisionRadiusOffset, 0.0f);
-    const auto mask = ResolveGameplayPathPlacementMask(binding);
+    const auto collision_mask = ResolveGameplayPathCollisionMask(binding);
     if (radius <= 0.0f) {
         if (error_message != nullptr) {
             *error_message = "Bot actor has no collision radius for path placement queries.";
@@ -67,24 +108,63 @@ bool IsGameplayPathPlacementTraversable(
         return false;
     }
 
+    if (IsGameplayPathBlockedByStaticCircleObstacle(snapshot, world_x, world_y, radius)) {
+        return false;
+    }
+
     std::uint32_t blocked = 0;
     DWORD exception_code = 0;
-    if (!CallMovementCollisionTestCirclePlacementSafe(
+    const auto native_circle_block_mask =
+        collision_mask &
+        ~(kGameplayPathStaticCircleObstacleMask | kGameplayPathPushableCircleObstacleMask);
+    const auto native_overlap_allow_mask =
+        collision_mask |
+        kGameplayPathStaticCircleObstacleMask |
+        kGameplayPathPushableCircleObstacleMask;
+    const auto extended_placement_address =
+        memory.ResolveGameAddressOrZero(kMovementCollisionTestCirclePlacementExtended);
+    bool placement_ok = false;
+    if (extended_placement_address != 0) {
+        placement_ok = CallMovementCollisionTestCirclePlacementExtendedSafe(
+            extended_placement_address,
+            snapshot.controller_address,
+            world_x,
+            world_y,
+            radius,
+            native_circle_block_mask,
+            native_overlap_allow_mask,
+            &blocked,
+            &exception_code);
+    } else {
+        placement_ok = CallMovementCollisionTestCirclePlacementSafe(
             memory.ResolveGameAddressOrZero(kMovementCollisionTestCirclePlacement),
             snapshot.controller_address,
             world_x,
             world_y,
             radius,
-            mask,
+            native_overlap_allow_mask,
             &blocked,
-            &exception_code)) {
+            &exception_code);
+    }
+    if (!placement_ok) {
         if (error_message != nullptr) {
             *error_message =
                 "Native placement query failed. actor=" + HexString(binding->actor_address) +
                 " controller=" + HexString(snapshot.controller_address) +
+                " collision_mask=" + HexString(collision_mask) +
+                " native_circle_block_mask=" + HexString(native_circle_block_mask) +
+                " native_overlap_allow_mask=" + HexString(native_overlap_allow_mask) +
                 " exception=0x" + HexString(exception_code);
         }
         return false;
+    }
+
+    // Native overlap lists can still report the push-through gate as blocked
+    // after the raw circle prepass is filtered. The kept static-circle pass
+    // above has already rejected trees, gravestones, and holes.
+    if (blocked != 0 &&
+        IsGameplayPathOverlappingIgnoredCircleObstacle(snapshot, world_x, world_y, radius)) {
+        return true;
     }
 
     return blocked == 0;
@@ -120,10 +200,18 @@ bool IsGameplayPathSegmentTraversable(
     }
     const auto resolved_samples = static_cast<int>(std::ceil(distance / step_distance));
     const auto samples = resolved_samples > 1 ? resolved_samples : 1;
+    const auto start_self_clearance = radius > 0.0f ? ((radius * 2.0f) + 0.5f) : 0.0f;
+    const auto start_self_clearance_sq = start_self_clearance * start_self_clearance;
     for (int sample_index = 1; sample_index <= samples; ++sample_index) {
         const auto t = static_cast<float>(sample_index) / static_cast<float>(samples);
         const auto sample_x = from_x + delta_x * t;
         const auto sample_y = from_y + delta_y * t;
+        const auto from_sample_x = sample_x - from_x;
+        const auto from_sample_y = sample_y - from_y;
+        if (start_self_clearance > 0.0f &&
+            ((from_sample_x * from_sample_x) + (from_sample_y * from_sample_y)) <= start_self_clearance_sq) {
+            continue;
+        }
         if (!IsGameplayPathPlacementTraversable(snapshot, binding, sample_x, sample_y, error_message)) {
             return false;
         }

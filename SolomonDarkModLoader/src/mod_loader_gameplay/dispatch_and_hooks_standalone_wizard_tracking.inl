@@ -71,6 +71,20 @@ std::string CaptureStackTraceSummary(std::size_t frames_to_skip, std::size_t max
 thread_local int g_player_actor_vslot28_depth = 0;
 thread_local uintptr_t g_player_actor_vslot28_actor = 0;
 thread_local uintptr_t g_player_actor_vslot28_caller = 0;
+thread_local int g_gameplay_hud_participant_actor_depth = 0;
+thread_local uintptr_t g_gameplay_hud_participant_actor = 0;
+thread_local uintptr_t g_gameplay_hud_participant_actor_caller = 0;
+struct GameplayHudParticipantActorCandidate {
+    uintptr_t actor_address = 0;
+    uintptr_t caller_address = 0;
+    std::uint64_t observed_at_ms = 0;
+};
+thread_local std::vector<GameplayHudParticipantActorCandidate> g_gameplay_hud_participant_actor_candidates;
+thread_local std::size_t g_gameplay_hud_participant_actor_candidate_cursor = 0;
+thread_local std::uint64_t g_gameplay_hud_participant_actor_candidate_frame_ms = 0;
+thread_local uintptr_t g_gameplay_hud_recent_participant_actor = 0;
+thread_local uintptr_t g_gameplay_hud_recent_participant_actor_caller = 0;
+thread_local std::uint64_t g_gameplay_hud_recent_participant_actor_ms = 0;
 thread_local int g_gameplay_hud_case100_depth = 0;
 thread_local uintptr_t g_gameplay_hud_case100_owner = 0;
 thread_local uintptr_t g_gameplay_hud_case100_caller = 0;
@@ -286,4 +300,3 @@ bool TryCaptureTrackedStandaloneWizardBindingIdentity(
     }
     return false;
 }
-

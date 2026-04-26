@@ -288,13 +288,15 @@ end
 def force_close_range_sample(
     standoff: float,
     max_gap: float,
+    *,
+    force: bool = False,
 ) -> dict[str, object]:
     before = crc.query_combat_sample()
     if before.get("available") != "true" or before.get("hostile.available") != "true":
         return {"ok": False, "before": before, "error": "sample_unavailable"}
 
     before_gap = float(before["hostile.gap"])
-    if before_gap <= max_gap:
+    if not force and before_gap <= max_gap:
         return {"ok": True, "forced": False, "before": before, "sample": before, "final_gap": before_gap}
 
     bot_actor = before.get("bot.actor_address", "0")
@@ -380,6 +382,17 @@ end
 emit('actor_address', actor)
 if actor == 0 or not sd.debug or not sd.debug.read_ptr then
   emit('available', false)
+  return
+end
+local object_type_id = tonumber(sd.debug.read_u32(actor + 0x08)) or 0
+emit('object_type_id', object_type_id)
+if object_type_id == 1001 then
+  emit('available', true)
+  emit('health_kind', 'arena_enemy')
+  emit('progression_runtime', 0)
+  emit('progression_handle', 0)
+  emit('hp', sd.debug.read_float(actor + 0x174))
+  emit('max_hp', sd.debug.read_float(actor + 0x170))
   return
 end
 local progression = tonumber(sd.debug.read_ptr(actor + 0x200)) or 0

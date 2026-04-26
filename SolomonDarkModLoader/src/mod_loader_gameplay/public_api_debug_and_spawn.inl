@@ -65,6 +65,7 @@ bool TryGetGameplayNavGridState(SDModGameplayNavGridState* state, int subdivisio
     ParticipantEntityBinding probe_binding{};
     probe_binding.actor_address = player_state.actor_address;
     probe_binding.materialized_world_address = player_state.world_address;
+    std::vector<std::int8_t> traversable_cache(static_cast<std::size_t>(snapshot.width * snapshot.height), -1);
     for (int grid_x = 0; grid_x < snapshot.width; ++grid_x) {
         for (int grid_y = 0; grid_y < snapshot.height; ++grid_y) {
             SDModGameplayNavCellState cell_state;
@@ -78,6 +79,14 @@ bool TryGetGameplayNavGridState(SDModGameplayNavGridState* state, int subdivisio
                     &probe_binding,
                     cell_state.center_x,
                     cell_state.center_y,
+                    nullptr);
+            cell_state.path_traversable =
+                IsGameplayPathCellTraversable(
+                    snapshot,
+                    &probe_binding,
+                    grid_x,
+                    grid_y,
+                    &traversable_cache,
                     nullptr);
             cell_state.samples.reserve(static_cast<std::size_t>(state->subdivisions * state->subdivisions));
             for (int sample_x = 0; sample_x < state->subdivisions; ++sample_x) {

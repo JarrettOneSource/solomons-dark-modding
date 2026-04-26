@@ -79,6 +79,26 @@ void RememberParticipantEntity(
     }
 }
 
+bool IsParticipantActorMemoryFreshReadable(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    memory.InvalidateRange(actor_address, kPlayerActorSize);
+    return memory.IsReadableRange(actor_address, kPlayerActorSize);
+}
+
+bool IsParticipantActorMemoryFreshWritable(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    memory.InvalidateRange(actor_address, kPlayerActorSize);
+    return memory.IsWritableRange(actor_address, kPlayerActorSize);
+}
+
 void ResetParticipantEntityMaterializationState(ParticipantEntityBinding* binding) {
     if (binding == nullptr) {
         return;
@@ -197,10 +217,26 @@ void DematerializeParticipantEntityNow(std::uint64_t bot_id, bool forget_binding
     }
 
     if (binding->actor_address != 0) {
+        const auto actor_address = binding->actor_address;
+        if (!IsParticipantActorMemoryFreshReadable(actor_address)) {
+            Log(
+                "[bots] dematerialize skipped stale actor. bot_id=" + std::to_string(bot_id) +
+                " slot=" + std::to_string(binding->gameplay_slot) +
+                " kind=" + std::to_string(static_cast<int>(binding->kind)) +
+                " actor=" + HexString(actor_address) +
+                " reason=" + std::string(reason));
+            ResetParticipantEntityMaterializationState(binding);
+            PublishParticipantGameplaySnapshot(*binding);
+            if (forget_binding) {
+                ForgetParticipantEntity(bot_id);
+            }
+            return;
+        }
+
         if (IsRegisteredGameNpcKind(binding->kind)) {
             StopRegisteredGameNpcMotion(binding);
         } else {
-            StopWizardBotActorMotion(binding->actor_address);
+            StopWizardBotActorMotion(actor_address);
         }
 
         std::string destroy_error;
@@ -256,9 +292,11 @@ void DematerializeParticipantEntityNow(std::uint64_t bot_id, bool forget_binding
             binding->synthetic_source_profile_address = 0;
         }
         if (!destroyed) {
-            (void)memory.TryWriteField(binding->actor_address, kActorPositionXOffset, 100000.0f);
-            (void)memory.TryWriteField(binding->actor_address, kActorPositionYOffset, 100000.0f);
-            (void)memory.TryWriteField(binding->actor_address, kActorHeadingOffset, 0.0f);
+            if (IsParticipantActorMemoryFreshWritable(actor_address)) {
+                (void)memory.TryWriteField(actor_address, kActorPositionXOffset, 100000.0f);
+                (void)memory.TryWriteField(actor_address, kActorPositionYOffset, 100000.0f);
+                (void)memory.TryWriteField(actor_address, kActorHeadingOffset, 0.0f);
+            }
         }
         Log(
             "[bots] dematerialized bot entity. bot_id=" + std::to_string(bot_id) +

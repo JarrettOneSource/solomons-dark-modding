@@ -79,6 +79,95 @@ bool TryGetParticipantGameplayState(
     return true;
 }
 
+bool TryGetActiveGameplayHudParticipantDisplayName(
+    std::string* display_name,
+    uintptr_t* actor_address) {
+    if (display_name != nullptr) {
+        display_name->clear();
+    }
+    if (actor_address != nullptr) {
+        *actor_address = 0;
+    }
+
+    std::vector<uintptr_t> candidate_actors;
+    if (g_gameplay_hud_participant_actor_depth > 0 &&
+        g_gameplay_hud_participant_actor != 0) {
+        candidate_actors.push_back(g_gameplay_hud_participant_actor);
+    }
+
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    constexpr std::uint64_t kCandidateReuseWindowMs = 150;
+    if (g_gameplay_hud_participant_actor_candidate_frame_ms != 0 &&
+        now_ms - g_gameplay_hud_participant_actor_candidate_frame_ms <= kCandidateReuseWindowMs) {
+        while (g_gameplay_hud_participant_actor_candidate_cursor <
+               g_gameplay_hud_participant_actor_candidates.size()) {
+            const auto actor =
+                g_gameplay_hud_participant_actor_candidates[g_gameplay_hud_participant_actor_candidate_cursor++]
+                    .actor_address;
+            if (actor != 0 &&
+                std::find(candidate_actors.begin(), candidate_actors.end(), actor) == candidate_actors.end()) {
+                candidate_actors.push_back(actor);
+                break;
+            }
+        }
+    }
+
+    constexpr std::uint64_t kRecentActorReuseWindowMs = 75;
+    if (g_gameplay_hud_recent_participant_actor != 0 &&
+        now_ms - g_gameplay_hud_recent_participant_actor_ms <= kRecentActorReuseWindowMs &&
+        std::find(
+            candidate_actors.begin(),
+            candidate_actors.end(),
+            g_gameplay_hud_recent_participant_actor) == candidate_actors.end()) {
+        candidate_actors.push_back(g_gameplay_hud_recent_participant_actor);
+    }
+
+    if (candidate_actors.empty()) {
+        return false;
+    }
+
+    const auto runtime = multiplayer::SnapshotRuntimeState();
+    auto try_resolve_actor = [&](uintptr_t active_actor_address) {
+        if (active_actor_address == 0) {
+            return false;
+        }
+
+        std::uint64_t participant_id = 0;
+        {
+            std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+            const auto* binding = FindParticipantEntityForActor(active_actor_address);
+            if (binding == nullptr || !IsWizardParticipantKind(binding->kind)) {
+                return false;
+            }
+
+            participant_id = binding->bot_id;
+        }
+
+        const auto* participant = multiplayer::FindParticipant(runtime, participant_id);
+        if (participant == nullptr ||
+            !multiplayer::IsRemoteParticipant(*participant) ||
+            participant->name.empty()) {
+            return false;
+        }
+
+        if (display_name != nullptr) {
+            *display_name = participant->name;
+        }
+        if (actor_address != nullptr) {
+            *actor_address = active_actor_address;
+        }
+        return true;
+    };
+
+    for (const auto active_actor_address : candidate_actors) {
+        if (try_resolve_actor(active_actor_address)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool TryGetPlayerState(SDModPlayerState* state) {
     if (state == nullptr) {
         return false;
