@@ -47,6 +47,8 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "player_actor_pure_primary_gate", kPlayerActorPurePrimaryGate),
         SDMOD_ADDR("gameplay.hooks", "player_control_brain_update", kPlayerControlBrainUpdate),
         SDMOD_ADDR("gameplay.hooks", "gameplay_hud_render_dispatch", kGameplayHudRenderDispatch),
+        SDMOD_ADDR("gameplay.hooks", "gameplay_string_assign", kGameplayStringAssign),
+        SDMOD_ADDR("gameplay.hooks", "gameplay_exact_text_object_render", kGameplayExactTextObjectRender),
         SDMOD_ADDR("gameplay.hooks", "puppet_manager_delete_puppet", kPuppetManagerDeletePuppet),
         SDMOD_ADDR("gameplay.hooks", "pointer_list_delete_batch", kPointerListDeleteBatch),
         SDMOD_ADDR("gameplay.hooks", "object_delete", kObjectDelete),
@@ -140,6 +142,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.globals", "actor_walk_cycle_secondary_wrap_step", kActorWalkCycleSecondaryWrapStepGlobal),
         SDMOD_ADDR("gameplay.globals", "movement_direction_scale", kMovementDirectionScaleGlobal),
         SDMOD_ADDR("gameplay.globals", "movement_speed_scalar", kMovementSpeedScalarGlobal),
+        SDMOD_ADDR("gameplay.globals", "gameplay_exact_text_object", kGameplayExactTextObjectGlobal),
 
         SDMOD_ADDR("hub", "backend_dispatcher", kHubBackendDispatcher),
 
@@ -178,6 +181,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
     static const SizeBinding bindings[] = {
         SDMOD_SIZE("hub", "start_testrun_control_byte_offset", kHubStartTestrunControlByteOffset),
 
+        SDMOD_SIZE("gameplay.offsets", "gameplay_exact_text_object", kGameplayExactTextObjectOffset),
         SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_table_base", kStandaloneWizardProgressionTableBaseOffset),
         SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_table_count", kStandaloneWizardProgressionTableCountOffset),
         SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_entry_stride", kStandaloneWizardProgressionEntryStride),
@@ -384,6 +388,8 @@ uintptr_t kPlayerActorVtable28 = 0;
 uintptr_t kPlayerActorPurePrimaryGate = 0;
 uintptr_t kPlayerControlBrainUpdate = 0;
 uintptr_t kGameplayHudRenderDispatch = 0;
+uintptr_t kGameplayStringAssign = 0;
+uintptr_t kGameplayExactTextObjectRender = 0;
 uintptr_t kPuppetManagerDeletePuppet = 0;
 uintptr_t kPointerListDeleteBatch = 0;
 uintptr_t kObjectDelete = 0;
@@ -470,6 +476,7 @@ uintptr_t kActorWalkCycleStrideStepGlobal = 0;
 uintptr_t kActorWalkCycleSecondaryWrapStepGlobal = 0;
 uintptr_t kMovementDirectionScaleGlobal = 0;
 uintptr_t kMovementSpeedScalarGlobal = 0;
+uintptr_t kGameplayExactTextObjectGlobal = 0;
 uintptr_t kHubBackendDispatcher = 0;
 
 uintptr_t kStartGame = 0;
@@ -496,6 +503,7 @@ uintptr_t kGoldMirrorCaller = 0;
 uintptr_t kGoldScriptCaller = 0;
 
 std::size_t kHubStartTestrunControlByteOffset = 0;
+std::size_t kGameplayExactTextObjectOffset = 0;
 std::size_t kStandaloneWizardProgressionTableBaseOffset = 0;
 std::size_t kStandaloneWizardProgressionTableCountOffset = 0;
 std::size_t kStandaloneWizardProgressionEntryStride = 0;

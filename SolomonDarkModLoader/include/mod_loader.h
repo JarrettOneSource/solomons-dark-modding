@@ -312,9 +312,10 @@ void FlushNavGridSnapshotOnSceneUnload();
 bool TryGetParticipantGameplayState(
     std::uint64_t participant_id,
     SDModParticipantGameplayState* state);
-bool TryGetActiveGameplayHudParticipantDisplayName(
+bool TryGetGameplayHudParticipantDisplayNameForActor(
+    uintptr_t actor_address,
     std::string* display_name,
-    uintptr_t* actor_address = nullptr);
+    std::uint64_t* participant_id = nullptr);
 bool SpawnEnemyByType(int type_id, float x, float y, std::string* error_message);
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);
 

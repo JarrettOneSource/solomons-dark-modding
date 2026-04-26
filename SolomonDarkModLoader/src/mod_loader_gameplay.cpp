@@ -107,6 +107,22 @@ using EnemySpawnFn =
 using GameFreeFn = void(__cdecl*)(void* memory);
 using GameplayHudRenderDispatchFn = void(__thiscall*)(void* self, int render_case);
 
+struct NativeGameString {
+    uintptr_t vtable = 0;
+    char* text = nullptr;
+    std::uint32_t unknown_08 = 0;
+    std::int32_t* ref_count = nullptr;
+    std::uint32_t length = 0;
+    std::uint8_t flags_14 = 0;
+    std::uint8_t flags_15 = 0;
+    std::uint16_t padding_16 = 0;
+    std::uint32_t unknown_18 = 0;
+};
+static_assert(sizeof(NativeGameString) == 0x1C, "Native game string layout changed");
+
+using NativeStringAssignFn = void(__thiscall*)(void* self, char* text);
+using NativeExactTextObjectRenderFn = void(__thiscall*)(void* self, NativeGameString text, float x, float y);
+
 struct SehExceptionDetails {
     DWORD code = 0;
     uintptr_t exception_address = 0;
@@ -223,7 +239,10 @@ constexpr std::size_t kPointerListDeleteBatchHookPatchSize = 5;
 constexpr std::size_t kActorWorldUnregisterHookPatchSize = 6;
 constexpr std::size_t kGameplaySwitchRegionHookMinimumPatchSize = 5;
 constexpr int kWizardSourceActorFactoryTypeId = 0x1397;
-constexpr std::size_t kActorAnimationAdvanceHookPatchSize = 6;
+// 0x0054BA80 is PlayerActor vtable +0x1c in the current binary. It begins with
+// one 8-byte instruction followed by a 7-byte instruction, so the detour must
+// stop exactly at the 8-byte boundary.
+constexpr std::size_t kActorAnimationAdvanceHookPatchSize = 8;
 constexpr std::size_t kMonsterPathfindingRefreshTargetHookMinimumPatchSize = 5;
 constexpr int kArenaRegionIndex = 5;
 constexpr std::size_t kStandaloneWizardVisualRuntimeSize = 0x8E4;

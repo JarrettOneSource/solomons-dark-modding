@@ -23,6 +23,8 @@ extern uintptr_t kPlayerActorVtable28;
 extern uintptr_t kPlayerActorPurePrimaryGate;
 extern uintptr_t kPlayerControlBrainUpdate;
 extern uintptr_t kGameplayHudRenderDispatch;
+extern uintptr_t kGameplayStringAssign;
+extern uintptr_t kGameplayExactTextObjectRender;
 extern uintptr_t kPuppetManagerDeletePuppet;
 extern uintptr_t kPointerListDeleteBatch;
 extern uintptr_t kObjectDelete;
@@ -109,6 +111,7 @@ extern uintptr_t kActorWalkCycleStrideStepGlobal;
 extern uintptr_t kActorWalkCycleSecondaryWrapStepGlobal;
 extern uintptr_t kMovementDirectionScaleGlobal;
 extern uintptr_t kMovementSpeedScalarGlobal;
+extern uintptr_t kGameplayExactTextObjectGlobal;
 extern uintptr_t kHubBackendDispatcher;
 
 extern uintptr_t kStartGame;
@@ -135,6 +138,7 @@ extern uintptr_t kGoldMirrorCaller;
 extern uintptr_t kGoldScriptCaller;
 
 extern std::size_t kHubStartTestrunControlByteOffset;
+extern std::size_t kGameplayExactTextObjectOffset;
 extern std::size_t kStandaloneWizardProgressionTableBaseOffset;
 extern std::size_t kStandaloneWizardProgressionTableCountOffset;
 extern std::size_t kStandaloneWizardProgressionEntryStride;

@@ -469,44 +469,6 @@ void __fastcall HookTextDrawHelper(
 
     const auto original = GetX86HookTrampoline<TextDrawHelperFn>(g_debug_ui_overlay_state.text_draw_hook);
     if (original != nullptr) {
-        const auto normalized_caller_address = NormalizeObservedCodeAddress(caller_address);
-        constexpr uintptr_t kGameplayHudAllyBarTextDrawReturnAddress = 0x0060CBCE;
-        if (normalized_caller_address == kGameplayHudAllyBarTextDrawReturnAddress) {
-            const auto label = ResolveExactTextRenderLabel(render_context, nullptr);
-            std::string replacement_label;
-            uintptr_t actor_address = 0;
-            const auto string_assign =
-                GetX86HookTrampoline<StringAssignHelperFn>(g_debug_ui_overlay_state.string_assign_hook);
-            if (IsGameplayHudParticipantFallbackLabel(label) &&
-                TryGetActiveGameplayHudParticipantDisplayName(&replacement_label, &actor_address) &&
-                !replacement_label.empty() &&
-                string_assign != nullptr) {
-                string_assign(render_context, const_cast<char*>(replacement_label.c_str()));
-                original(render_context, x, y, arg3, arg4);
-                string_assign(render_context, const_cast<char*>(label.c_str()));
-
-                static int s_native_ally_label_override_logs_remaining = 8;
-                if (s_native_ally_label_override_logs_remaining > 0) {
-                    --s_native_ally_label_override_logs_remaining;
-                    Log(
-                        "[bots] native gameplay HUD ally label override. actor=" +
-                        HexString(actor_address) +
-                        " old=" + SanitizeDebugLogLabel(label) +
-                        " new=" + SanitizeDebugLogLabel(replacement_label) +
-                        " caller=" + HexString(normalized_caller_address));
-                }
-                return;
-            }
-
-            static int s_native_ally_label_skip_logs_remaining = 4;
-            if (s_native_ally_label_skip_logs_remaining > 0 && !label.empty()) {
-                --s_native_ally_label_skip_logs_remaining;
-                Log(
-                    "[bots] native gameplay HUD ally label draw left unchanged. label=" +
-                    SanitizeDebugLogLabel(label) +
-                    " caller=" + HexString(normalized_caller_address));
-            }
-        }
         original(render_context, x, y, arg3, arg4);
     }
 }

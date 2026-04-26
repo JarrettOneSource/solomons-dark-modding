@@ -602,10 +602,6 @@ uintptr_t CaptureCallerWidgetPointer() {
 #endif
 }
 
-bool IsGameplayHudParticipantFallbackLabel(std::string_view label) {
-    return label == "ALLY";
-}
-
 void __fastcall HookExactTextRender(
     void* self,
     void* /*unused_edx*/,

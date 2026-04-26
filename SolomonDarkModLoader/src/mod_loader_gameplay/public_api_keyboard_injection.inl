@@ -37,6 +37,12 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         ProcessMemory::Instance().ResolveGameAddressOrZero(kSpellBuilderFinalize);
     const auto gameplay_hud_render_dispatch =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayHudRenderDispatch);
+    const auto gameplay_string_assign =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayStringAssign);
+    const auto gameplay_exact_text_object_render =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayExactTextObjectRender);
+    const auto gameplay_exact_text_object_global =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayExactTextObjectGlobal);
     const auto actor_animation_advance = ProcessMemory::Instance().ResolveGameAddressOrZero(kActorAnimationAdvance);
     const auto puppet_manager_delete_puppet =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPuppetManagerDeletePuppet);
@@ -57,6 +63,10 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         spell_cast_dispatcher == 0 ||
         equip_attachment_get_current_item == 0 ||
         gameplay_hud_render_dispatch == 0 ||
+        gameplay_string_assign == 0 ||
+        gameplay_exact_text_object_render == 0 ||
+        gameplay_exact_text_object_global == 0 ||
+        kGameplayExactTextObjectOffset == 0 ||
         actor_animation_advance == 0 ||
         puppet_manager_delete_puppet == 0 ||
         pointer_list_delete_batch == 0 ||
@@ -64,7 +74,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         gameplay_switch_region == 0 ||
         monster_pathfinding_refresh_target == 0) {
         if (error_message != nullptr) {
-            *error_message = "Unable to resolve gameplay input, lifecycle, or tracked actor helpers.";
+            *error_message = "Unable to resolve gameplay input, lifecycle, tracked actor, or native HUD text helpers.";
         }
         return false;
     }
@@ -455,6 +465,10 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " spell_builder_reset=" + HexString(spell_builder_reset) +
         " spell_builder_finalize=" + HexString(spell_builder_finalize) +
         " hud_case_dispatch=" + HexString(gameplay_hud_render_dispatch) +
+        " gameplay_string_assign=" + HexString(gameplay_string_assign) +
+        " gameplay_exact_text_object_render=" + HexString(gameplay_exact_text_object_render) +
+        " gameplay_exact_text_object_global=" + HexString(gameplay_exact_text_object_global) +
+        " gameplay_exact_text_object_offset=" + HexString(static_cast<uintptr_t>(kGameplayExactTextObjectOffset)) +
         " anim_advance=" + HexString(actor_animation_advance) +
         " puppet_manager_delete_puppet=" + HexString(puppet_manager_delete_puppet) +
         " pointer_list_delete_batch=" + HexString(pointer_list_delete_batch) +

@@ -448,36 +448,6 @@ bool IsTrackedWizardParticipantActorForHud(uintptr_t actor_address) {
     return binding != nullptr && IsWizardParticipantKind(binding->kind);
 }
 
-void RememberGameplayHudParticipantActorCandidate(uintptr_t actor_address, uintptr_t caller_address) {
-    if (!IsTrackedWizardParticipantActorForHud(actor_address)) {
-        return;
-    }
-
-    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-    constexpr std::uint64_t kCandidateFrameWindowMs = 75;
-    if (g_gameplay_hud_participant_actor_candidate_frame_ms == 0 ||
-        now_ms - g_gameplay_hud_participant_actor_candidate_frame_ms > kCandidateFrameWindowMs) {
-        g_gameplay_hud_participant_actor_candidates.clear();
-        g_gameplay_hud_participant_actor_candidate_cursor = 0;
-        g_gameplay_hud_participant_actor_candidate_frame_ms = now_ms;
-    }
-
-    const auto duplicate = std::find_if(
-        g_gameplay_hud_participant_actor_candidates.begin(),
-        g_gameplay_hud_participant_actor_candidates.end(),
-        [&](const GameplayHudParticipantActorCandidate& candidate) {
-            return candidate.actor_address == actor_address;
-        });
-    if (duplicate == g_gameplay_hud_participant_actor_candidates.end()) {
-        g_gameplay_hud_participant_actor_candidates.push_back(
-            GameplayHudParticipantActorCandidate{actor_address, caller_address, now_ms});
-    }
-
-    g_gameplay_hud_recent_participant_actor = actor_address;
-    g_gameplay_hud_recent_participant_actor_caller = caller_address;
-    g_gameplay_hud_recent_participant_actor_ms = now_ms;
-}
-
 void __fastcall HookPlayerActorVtable28(void* self, void* /*unused_edx*/) {
     const auto original =
         GetX86HookTrampoline<PlayerActorNoArgMethodFn>(g_gameplay_keyboard_injection.player_actor_vtable28_hook);
@@ -498,7 +468,6 @@ void __fastcall HookPlayerActorVtable28(void* self, void* /*unused_edx*/) {
     ++g_gameplay_hud_participant_actor_depth;
     g_gameplay_hud_participant_actor = actor_address;
     g_gameplay_hud_participant_actor_caller = g_player_actor_vslot28_caller;
-    RememberGameplayHudParticipantActorCandidate(actor_address, g_player_actor_vslot28_caller);
     {
         static std::uint64_t s_last_overlay_callback_log_ms = 0;
         static std::uint64_t s_last_nonlocal_overlay_callback_log_ms = 0;
@@ -1436,6 +1405,92 @@ void __fastcall HookGameplayHudRenderDispatch(void* self, void* /*unused_edx*/, 
     g_gameplay_hud_case100_caller = previous_caller;
 }
 
+bool CallGameplayExactTextObjectRenderSafe(
+    uintptr_t string_assign_address,
+    uintptr_t text_object_render_address,
+    uintptr_t text_object_address,
+    const char* text,
+    float x,
+    float y,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (string_assign_address == 0 || text_object_render_address == 0 || text_object_address == 0 ||
+        text == nullptr || text[0] == '\0') {
+        return false;
+    }
+
+    auto* string_assign = reinterpret_cast<NativeStringAssignFn>(string_assign_address);
+    auto* render = reinterpret_cast<NativeExactTextObjectRenderFn>(text_object_render_address);
+    NativeGameString native_text{};
+    __try {
+        string_assign(&native_text, const_cast<char*>(text));
+        render(reinterpret_cast<void*>(text_object_address), native_text, x, y);
+        string_assign(&native_text, nullptr);
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool DrawGameplayHudParticipantName(
+    uintptr_t actor_address,
+    const std::string& display_name,
+    float* draw_x,
+    float* draw_y,
+    DWORD* exception_code) {
+    if (draw_x != nullptr) {
+        *draw_x = 0.0f;
+    }
+    if (draw_y != nullptr) {
+        *draw_y = 0.0f;
+    }
+    if (actor_address == 0 || display_name.empty()) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto string_assign_address = memory.ResolveGameAddressOrZero(kGameplayStringAssign);
+    const auto text_object_render_address = memory.ResolveGameAddressOrZero(kGameplayExactTextObjectRender);
+    const auto text_object_global_address = memory.ResolveGameAddressOrZero(kGameplayExactTextObjectGlobal);
+    if (string_assign_address == 0 ||
+        text_object_render_address == 0 ||
+        text_object_global_address == 0 ||
+        kGameplayExactTextObjectOffset == 0 ||
+        !memory.IsReadableRange(text_object_global_address, sizeof(uintptr_t))) {
+        return false;
+    }
+
+    const auto text_object_base = memory.ReadValueOr<uintptr_t>(text_object_global_address, 0);
+    if (text_object_base == 0) {
+        return false;
+    }
+
+    const auto text_object_address = text_object_base + kGameplayExactTextObjectOffset;
+    if (!memory.IsReadableRange(text_object_address, sizeof(uintptr_t))) {
+        return false;
+    }
+
+    const auto x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
+    const auto y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f) - 45.0f;
+    if (draw_x != nullptr) {
+        *draw_x = x;
+    }
+    if (draw_y != nullptr) {
+        *draw_y = y;
+    }
+
+    return CallGameplayExactTextObjectRenderSafe(
+        string_assign_address,
+        text_object_render_address,
+        text_object_address,
+        display_name.c_str(),
+        x,
+        y,
+        exception_code);
+}
+
 void __fastcall HookActorAnimationAdvance(void* self, void* /*unused_edx*/) {
     const auto original =
         GetX86HookTrampoline<ActorAnimationAdvanceFn>(g_gameplay_keyboard_injection.actor_animation_advance_hook);
@@ -1444,34 +1499,72 @@ void __fastcall HookActorAnimationAdvance(void* self, void* /*unused_edx*/) {
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
-    const bool standalone_wizard_actor =
-        TryCaptureTrackedStandaloneWizardBindingIdentity(actor_address, nullptr, nullptr);
-    bool tracked_wizard_actor = standalone_wizard_actor;
-    if (!tracked_wizard_actor && actor_address != 0) {
-        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-        const auto* binding = FindParticipantEntityForActor(actor_address);
-        tracked_wizard_actor = binding != nullptr && IsWizardParticipantKind(binding->kind);
-    }
-    if (standalone_wizard_actor) {
-        NormalizeGameplaySlotBotSyntheticVisualState(actor_address);
-    }
+    const auto previous_depth = g_player_actor_vslot1c_depth;
+    const auto previous_actor = g_player_actor_vslot1c_actor;
+    const auto previous_caller = g_player_actor_vslot1c_caller;
+    ++g_player_actor_vslot1c_depth;
+    g_player_actor_vslot1c_actor = actor_address;
+    g_player_actor_vslot1c_caller = reinterpret_cast<uintptr_t>(_ReturnAddress());
+
     const auto previous_participant_depth = g_gameplay_hud_participant_actor_depth;
     const auto previous_participant_actor = g_gameplay_hud_participant_actor;
     const auto previous_participant_caller = g_gameplay_hud_participant_actor_caller;
-    const bool enter_participant_context =
-        tracked_wizard_actor || g_gameplay_hud_case100_depth > 0;
-    if (enter_participant_context) {
-        ++g_gameplay_hud_participant_actor_depth;
-        g_gameplay_hud_participant_actor = actor_address;
-        g_gameplay_hud_participant_actor_caller = reinterpret_cast<uintptr_t>(_ReturnAddress());
-        RememberGameplayHudParticipantActorCandidate(actor_address, g_gameplay_hud_participant_actor_caller);
+    ++g_gameplay_hud_participant_actor_depth;
+    g_gameplay_hud_participant_actor = actor_address;
+    g_gameplay_hud_participant_actor_caller = g_player_actor_vslot1c_caller;
+
+    static int s_vslot1c_logs_remaining = 24;
+    if (s_vslot1c_logs_remaining > 0 && IsTrackedWizardParticipantActorForHud(actor_address)) {
+        std::string display_name;
+        std::uint64_t participant_id = 0;
+        const auto resolved =
+            TryGetGameplayHudParticipantDisplayNameForActor(actor_address, &display_name, &participant_id);
+        --s_vslot1c_logs_remaining;
+        Log(
+            "[bots] vslot1c overlay callback. actor=" + HexString(actor_address) +
+            " participant=" + std::to_string(participant_id) +
+            " resolved=" + std::string(resolved ? "1" : "0") +
+            " name=" + display_name +
+            " caller=" + HexString(g_player_actor_vslot1c_caller) +
+            " hud_case100_depth=" + std::to_string(g_gameplay_hud_case100_depth));
+    }
+
+    const bool standalone_wizard_actor =
+        TryCaptureTrackedStandaloneWizardBindingIdentity(actor_address, nullptr, nullptr);
+    if (standalone_wizard_actor) {
+        NormalizeGameplaySlotBotSyntheticVisualState(actor_address);
     }
     original(self);
-    if (enter_participant_context) {
-        g_gameplay_hud_participant_actor_depth = previous_participant_depth;
-        g_gameplay_hud_participant_actor = previous_participant_actor;
-        g_gameplay_hud_participant_actor_caller = previous_participant_caller;
+    if (IsTrackedWizardParticipantActorForHud(actor_address)) {
+        std::string display_name;
+        std::uint64_t participant_id = 0;
+        if (TryGetGameplayHudParticipantDisplayNameForActor(actor_address, &display_name, &participant_id) &&
+            !display_name.empty()) {
+            DWORD exception_code = 0;
+            float draw_x = 0.0f;
+            float draw_y = 0.0f;
+            const bool drew_label =
+                DrawGameplayHudParticipantName(actor_address, display_name, &draw_x, &draw_y, &exception_code);
+            static int s_native_hud_name_draw_logs_remaining = 24;
+            if (s_native_hud_name_draw_logs_remaining > 0) {
+                --s_native_hud_name_draw_logs_remaining;
+                Log(
+                    "[bots] native gameplay HUD participant name draw. actor=" + HexString(actor_address) +
+                    " participant=" + std::to_string(participant_id) +
+                    " name=" + display_name +
+                    " ok=" + std::string(drew_label ? "1" : "0") +
+                    " exception=" + HexString(static_cast<uintptr_t>(exception_code)) +
+                    " xy=(" + std::to_string(draw_x) + "," + std::to_string(draw_y) + ")");
+            }
+        }
     }
+
+    g_gameplay_hud_participant_actor_depth = previous_participant_depth;
+    g_gameplay_hud_participant_actor = previous_participant_actor;
+    g_gameplay_hud_participant_actor_caller = previous_participant_caller;
+    g_player_actor_vslot1c_depth = previous_depth;
+    g_player_actor_vslot1c_actor = previous_actor;
+    g_player_actor_vslot1c_caller = previous_caller;
 }
 
 // The loader-owned standalone puppet bot is not registered in the world
