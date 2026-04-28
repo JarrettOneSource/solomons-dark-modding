@@ -300,6 +300,10 @@ constexpr int kFirstWizardBotSlot = 1;
 constexpr int kHubRegionIndex = 0;
 constexpr float kDefaultWizardBotOffsetX = 32.0f;
 constexpr float kDefaultWizardBotOffsetY = 0.0f;
+constexpr std::uint8_t kTargetHandleGroupSentinel = 0xFF;
+constexpr std::uint16_t kTargetHandleSlotSentinel = 0xFFFF;
+constexpr std::size_t kActorSpellTargetGroupByteOffset = 0x164;
+constexpr std::size_t kActorSpellTargetSlotShortOffset = 0x166;
 constexpr std::size_t kActorCurrentTargetActorOffset = 0x168;
 constexpr std::size_t kActorContinuousPrimaryModeOffset = 0x258;
 constexpr std::size_t kActorContinuousPrimaryActiveOffset = 0x264;
@@ -511,6 +515,7 @@ struct ArenaWaveStartState {
 };
 
 struct PendingEnemySpawnRequest {
+    std::uint64_t request_id = 0;
     int type_id = 0;
     float x = 0.0f;
     float y = 0.0f;
@@ -578,6 +583,7 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint64_t> wizard_bot_sync_not_before_ms{0};
     std::atomic<std::uint64_t> gameplay_region_switch_not_before_ms{0};
     std::atomic<std::uint64_t> scene_churn_not_before_ms{0};
+    std::atomic<std::uint64_t> next_enemy_spawn_request_id{1};
     std::mutex pending_gameplay_world_actions_mutex;
     std::deque<PendingEnemySpawnRequest> pending_enemy_spawn_requests;
     std::deque<PendingRewardSpawnRequest> pending_reward_spawn_requests;
@@ -585,6 +591,9 @@ struct GameplayKeyboardInjectionState {
     std::deque<PendingGameplayRegionSwitchRequest> pending_gameplay_region_switch_requests;
     std::deque<std::uint64_t> pending_participant_destroy_requests;
 } g_gameplay_keyboard_injection;
+
+std::mutex g_last_enemy_spawn_result_mutex;
+SDModEnemySpawnResult g_last_enemy_spawn_result;
 
 struct ObservedActorAnimationDriveProfile {
     bool valid = false;
@@ -707,6 +716,9 @@ struct ParticipantEntityBinding {
         std::uint8_t spread_before = 0;
         uintptr_t current_target_actor_before = 0;
         bool current_target_actor_override_active = false;
+        std::uint8_t native_target_group_before = kTargetHandleGroupSentinel;
+        std::uint16_t native_target_slot_before = kTargetHandleSlotSentinel;
+        bool native_target_handle_override_active = false;
         uintptr_t selection_state_pointer = 0;
         int selection_state_before = kUnknownAnimationStateId;
         bool selection_state_object_snapshot_valid = false;
@@ -733,14 +745,17 @@ struct ParticipantEntityBinding {
         int targetless_ticks_waiting = 0;
         bool saw_latch = false;
         bool saw_activity = false;
+        bool saw_live_handle = false;
+        bool bounded_max_size_reached = false;
+        int bounded_post_release_ticks_waiting = 0;
         bool startup_in_progress = false;
         bool requires_local_slot_native_tick = false;
         bool post_stock_dispatch_attempted = false;
         uintptr_t pure_primary_item_sink_fallback = 0;
         static constexpr int kMaxTicksWaiting = 300;
         static constexpr int kMaxStartupTicksWaiting = 12;
-        // Lua retargets every 100 ms. Keep a live pure-primary action through
-        // transient target handoffs instead of ending it and rearming a new cast.
+        // Lua retargets every 100 ms. Keep continuous primaries alive through
+        // short handoffs, but release promptly when the target is really gone.
         static constexpr int kTargetlessRetargetGraceTicks = kMaxStartupTicksWaiting * 2;
     };
     OngoingCastState ongoing_cast{};
@@ -750,6 +765,12 @@ struct LocalPlayerCastShimState {
     bool active = false;
     uintptr_t actor_address = 0;
     std::uint8_t saved_actor_slot = 0;
+    uintptr_t gameplay_address = 0;
+    uintptr_t local_progression_slot_offset = 0;
+    uintptr_t saved_local_progression_handle = 0;
+    uintptr_t redirected_progression_handle = 0;
+    bool progression_slot_restore_needed = false;
+    bool progression_slot_redirected = false;
 };
 
 bool IsStandaloneWizardKind(ParticipantEntityBinding::Kind kind) {

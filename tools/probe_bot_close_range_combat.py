@@ -355,6 +355,7 @@ def filter_loader_log(lines: list[str]) -> list[str]:
         "attack ",
         "attack_skip",
         "queued cast",
+        "skills_wizard_loadout",
         "pure_primary_start enter",
         "pure_primary_start exit",
         "spell_dispatch enter",
@@ -468,13 +469,14 @@ def spawn_hostile_near_bot(bot_x: float, bot_y: float, standoff: float) -> dict[
     return csp.parse_key_values(
         csp.run_lua(
             f"""
-local ok, err = sd.world.spawn_enemy({{
+local ok, err, request_id = sd.world.spawn_enemy({{
   type_id = 5010,
   x = {bot_x + standoff},
   y = {bot_y},
 }})
 print('ok=' .. tostring(ok))
 print('err=' .. tostring(err))
+print('request_id=' .. tostring(request_id))
 """.strip()
         )
     )

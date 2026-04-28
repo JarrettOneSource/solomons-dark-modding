@@ -68,6 +68,7 @@ void RegisterLuaDebugBindings(lua_State* state) {
     RegisterFunction(state, &LuaDebugReadBytes, "read_bytes");
     RegisterFunction(state, &LuaDebugReadString, "read_string");
     RegisterFunction(state, &LuaDebugSearchBytes, "search_bytes");
+    RegisterFunction(state, &LuaDebugResolveGameAddress, "resolve_game_address");
     RegisterFunction(state, &LuaDebugQueryMemory, "query_memory");
     RegisterFunction(state, &LuaDebugDumpStruct, "dump_struct");
     RegisterFunction(state, &LuaDebugDumpVtable, "dump_vtable");

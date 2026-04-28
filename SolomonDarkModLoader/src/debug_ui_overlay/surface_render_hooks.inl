@@ -474,6 +474,21 @@ void __fastcall HookTextDrawHelper(
 }
 
 void __fastcall HookStringAssignHelper(void* string_object, void* /*unused_edx*/, char* text) {
+    const auto caller_address = reinterpret_cast<uintptr_t>(_ReturnAddress());
+
+    if (text != nullptr) {
+        static int s_ally_string_assign_probe_remaining = 64;
+        if (s_ally_string_assign_probe_remaining > 0 &&
+            (std::strcmp(text, "ALLY") == 0 || std::strcmp(text, "Golem") == 0 ||
+             std::strcmp(text, "GOLEM") == 0 || std::strcmp(text, "Ally") == 0)) {
+            --s_ally_string_assign_probe_remaining;
+            Log(
+                "ALLYTEXTPROBE string_assign caller=" + HexString(caller_address) +
+                " text=" + std::string(text) +
+                " string_object=" + HexString(reinterpret_cast<uintptr_t>(string_object)));
+        }
+    }
+
     if (text != nullptr) {
         PushRecentAssignedString(text);
     }

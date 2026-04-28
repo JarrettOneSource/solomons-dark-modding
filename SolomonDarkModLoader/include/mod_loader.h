@@ -147,6 +147,24 @@ struct SDModSceneActorState {
     int enemy_type = -1;
 };
 
+struct SDModEnemySpawnResult {
+    bool valid = false;
+    bool ok = false;
+    std::uint64_t request_id = 0;
+    int type_id = 0;
+    uintptr_t actor_address = 0;
+    float requested_x = 0.0f;
+    float requested_y = 0.0f;
+    float x = 0.0f;
+    float y = 0.0f;
+    bool wrote_x = false;
+    bool wrote_y = false;
+    bool rebind_ok = false;
+    DWORD rebind_exception_code = 0;
+    std::uint64_t completed_tick_ms = 0;
+    std::string error_message;
+};
+
 struct SDModTrackedEnemyState {
     uintptr_t actor_address = 0;
     int enemy_type = -1;
@@ -316,7 +334,14 @@ bool TryGetGameplayHudParticipantDisplayNameForActor(
     uintptr_t actor_address,
     std::string* display_name,
     std::uint64_t* participant_id = nullptr);
-bool SpawnEnemyByType(int type_id, float x, float y, std::string* error_message);
+bool SpawnEnemyByType(
+    int type_id,
+    float x,
+    float y,
+    std::string* error_message,
+    std::uint64_t* request_id = nullptr);
+bool TryGetLastEnemySpawnResult(SDModEnemySpawnResult* result, std::uint64_t request_id = 0);
+bool RebindSceneActorCell(uintptr_t actor_address, std::string* error_message);
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);
 
 }  // namespace sdmod

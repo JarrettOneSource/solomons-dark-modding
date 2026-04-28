@@ -64,6 +64,10 @@ _G.sd = {
               { world_x = 150.0, world_y = 200.0, traversable = true },
               { world_x = 150.0, world_y = 240.0, traversable = true },
               { world_x = 150.0, world_y = 280.0, traversable = true },
+              { world_x = 1006.0, world_y = 448.0, traversable = true },
+              { world_x = 1006.0, world_y = 488.0, traversable = true },
+              { world_x = 1006.0, world_y = 528.0, traversable = true },
+              { world_x = 1006.0, world_y = 568.0, traversable = true },
             },
           },
         },
@@ -189,6 +193,14 @@ assert(creates[1].name == "Lua Bot Water", "hub first create should be water bot
 assert(creates[2].name == "Lua Bot Earth", "hub second create should be earth bot")
 assert(creates[3].name == "Lua Bot Air", "hub third create should be air bot")
 assert(creates[4].name == "Lua Bot Ether", "hub fourth create should be ether bot")
+assert(math.abs(creates[1].position.x - 1006.0) < 0.001, "water hub spawn should use default hub x plus bot offset")
+assert(math.abs(creates[1].position.y - 448.0) < 0.001, "water hub spawn should use default hub y plus bot offset")
+assert(math.abs(creates[2].position.x - 1006.0) < 0.001, "earth hub spawn should use default hub x plus bot offset")
+assert(math.abs(creates[2].position.y - 488.0) < 0.001, "earth hub spawn should use default hub y plus bot offset")
+assert(math.abs(creates[3].position.x - 1006.0) < 0.001, "air hub spawn should use default hub x plus bot offset")
+assert(math.abs(creates[3].position.y - 528.0) < 0.001, "air hub spawn should use default hub y plus bot offset")
+assert(math.abs(creates[4].position.x - 1006.0) < 0.001, "ether hub spawn should use default hub x plus bot offset")
+assert(math.abs(creates[4].position.y - 568.0) < 0.001, "ether hub spawn should use default hub y plus bot offset")
 assert(hooks.state.bots[1].bot_id ~= nil, "water bot id was not tracked")
 assert(hooks.state.bots[2].bot_id ~= nil, "earth bot id was not tracked")
 assert(hooks.state.bots[3].bot_id ~= nil, "air bot id was not tracked")

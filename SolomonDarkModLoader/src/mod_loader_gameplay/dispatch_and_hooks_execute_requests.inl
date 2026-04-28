@@ -1,6 +1,36 @@
 bool TryReadArenaWaveStartState(uintptr_t arena_address, ArenaWaveStartState* state);
 std::string DescribeArenaWaveStartState(const ArenaWaveStartState& candidate);
 
+bool TryRebindActorToOwnerWorld(
+    uintptr_t actor_address,
+    uintptr_t fallback_world_address,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (actor_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto rebind_actor_address = memory.ResolveGameAddressOrZero(kWorldCellGridRebindActor);
+    if (rebind_actor_address == 0) {
+        return false;
+    }
+
+    const auto world_address =
+        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, fallback_world_address);
+    if (world_address == 0) {
+        return false;
+    }
+
+    return CallWorldCellGridRebindActorSafe(
+        rebind_actor_address,
+        world_address,
+        actor_address,
+        exception_code);
+}
+
 bool TryUpdateParticipantEntity(
     uintptr_t gameplay_address,
     const PendingParticipantEntitySyncRequest& request,
@@ -23,6 +53,17 @@ bool TryUpdateParticipantEntity(
         !memory.TryWriteField(binding->actor_address, kActorPositionYOffset, y)) {
         DematerializeParticipantEntityNow(request.bot_id, true, "update transform write failed");
         return false;
+    }
+    DWORD rebind_exception_code = 0;
+    if (!TryRebindActorToOwnerWorld(
+            binding->actor_address,
+            binding->materialized_world_address,
+            &rebind_exception_code)) {
+        Log(
+            "[bots] participant transform rebind failed. bot_id=" +
+            std::to_string(request.bot_id) +
+            " actor=" + HexString(binding->actor_address) +
+            " exception=" + HexString(rebind_exception_code));
     }
 
     ApplyWizardActorFacingState(binding->actor_address, heading);

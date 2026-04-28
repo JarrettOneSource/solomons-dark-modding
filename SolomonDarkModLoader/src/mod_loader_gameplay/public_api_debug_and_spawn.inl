@@ -117,7 +117,12 @@ bool TryGetGameplayNavGridState(SDModGameplayNavGridState* state, int subdivisio
     return true;
 }
 
-bool SpawnEnemyByType(int type_id, float x, float y, std::string* error_message) {
+bool SpawnEnemyByType(
+    int type_id,
+    float x,
+    float y,
+    std::string* error_message,
+    std::uint64_t* request_id) {
     if (!g_gameplay_keyboard_injection.initialized) {
         if (error_message != nullptr) {
             *error_message = "spawn enemy: gameplay action pump is not initialized.";
@@ -126,10 +131,48 @@ bool SpawnEnemyByType(int type_id, float x, float y, std::string* error_message)
     }
 
     PendingEnemySpawnRequest request;
+    request.request_id = g_gameplay_keyboard_injection.next_enemy_spawn_request_id.fetch_add(
+        1,
+        std::memory_order_acq_rel);
     request.type_id = type_id;
     request.x = x;
     request.y = y;
+    if (request_id != nullptr) {
+        *request_id = request.request_id;
+    }
     return QueueEnemySpawnRequest(request, error_message);
+}
+
+bool TryGetLastEnemySpawnResult(SDModEnemySpawnResult* result, std::uint64_t request_id) {
+    if (result == nullptr) {
+        return false;
+    }
+
+    std::lock_guard<std::mutex> result_lock(g_last_enemy_spawn_result_mutex);
+    if (!g_last_enemy_spawn_result.valid ||
+        (request_id != 0 && g_last_enemy_spawn_result.request_id != request_id)) {
+        *result = SDModEnemySpawnResult{};
+        return false;
+    }
+
+    *result = g_last_enemy_spawn_result;
+    return true;
+}
+
+bool RebindSceneActorCell(uintptr_t actor_address, std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    DWORD exception_code = 0;
+    if (TryRebindActorToOwnerWorld(actor_address, 0, &exception_code)) {
+        return true;
+    }
+    if (error_message != nullptr) {
+        *error_message =
+            "WorldCellGrid_RebindActor failed for actor=" + HexString(actor_address) +
+            " exception=" + HexString(exception_code);
+    }
+    return false;
 }
 
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message) {

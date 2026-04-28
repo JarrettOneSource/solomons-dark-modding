@@ -139,6 +139,7 @@ extern uintptr_t kGoldScriptCaller;
 
 extern std::size_t kHubStartTestrunControlByteOffset;
 extern std::size_t kGameplayExactTextObjectOffset;
+extern std::size_t kGameplayNameplateTextObjectOffset;
 extern std::size_t kStandaloneWizardProgressionTableBaseOffset;
 extern std::size_t kStandaloneWizardProgressionTableCountOffset;
 extern std::size_t kStandaloneWizardProgressionEntryStride;

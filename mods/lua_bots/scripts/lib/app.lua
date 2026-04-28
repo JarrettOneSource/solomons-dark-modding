@@ -89,6 +89,8 @@ function app.start()
 
   local DEFAULT_SPAWN_OFFSET_X = 50.0
   local DEFAULT_SPAWN_OFFSET_Y = 0.0
+  local DEFAULT_HUB_SPAWN_X = 956.0
+  local DEFAULT_HUB_SPAWN_Y = 508.0
   local FOLLOW_STOP_DISTANCE = 50.0
   local FOLLOW_RESUME_DISTANCE = 100.0
   local ARRIVAL_DISTANCE = 8.0
@@ -97,7 +99,16 @@ function app.start()
   local COMMAND_COOLDOWN_MS = 250
   local TICK_INTERVAL_MS = 100
   local ATTACK_DIAG_INTERVAL_MS = 1000
-  local DEFAULT_ATTACK_RANGE = 360.0
+  local DEFAULT_ATTACK_RANGE = 96.0
+  local ATTACK_RANGE_BY_ELEMENT_ID = {
+    [1] = 160.0, -- water cone still needs a reasonably close target.
+    [2] = 360.0, -- earth launches a native projectile/effect.
+    [3] = 360.0, -- air is a long continuous lightning beam.
+    [4] = 360.0, -- ether launches native projectiles.
+  }
+  local MIN_ATTACK_RANGE_BY_ELEMENT_ID = {
+    [2] = 96.0, -- earth's stock release line-check can reject point-blank boulders.
+  }
   local WAVE_ENEMY_OBJECT_TYPE_ID = 1001
   local SPAWN_RETRY_MS = 500
   local SCENE_UPDATE_COOLDOWN_MS = 250
@@ -576,7 +587,7 @@ function app.start()
     return scene_key(bot_scene) == scene_key(desired_scene)
   end
 
-  local function build_spawn_transform(player, anchor)
+  local function build_spawn_transform(player, anchor, scene_intent)
     if type(player) ~= "table" then
       return nil
     end
@@ -588,6 +599,14 @@ function app.start()
       return {
         x = (tonumber(anchor.x) or 0.0) + offset_x,
         y = (tonumber(anchor.y) or 0.0) + offset_y,
+        heading = heading,
+      }
+    end
+
+    if type(scene_intent) == "table" and normalize_scene_kind(scene_intent.kind) == "shared_hub" then
+      return {
+        x = DEFAULT_HUB_SPAWN_X + offset_x,
+        y = DEFAULT_HUB_SPAWN_Y + offset_y,
         heading = heading,
       }
     end
@@ -615,7 +634,7 @@ function app.start()
       return false
     end
 
-    local spawn = build_spawn_transform(player, anchor)
+    local spawn = build_spawn_transform(player, anchor, scene_intent)
     if type(spawn) ~= "table" then
       return false
     end
@@ -668,7 +687,7 @@ function app.start()
     end
 
     adopt_existing_managed_bot()
-    local spawn = build_spawn_transform(player, anchor)
+    local spawn = build_spawn_transform(player, anchor, scene_intent)
     if type(spawn) ~= "table" then
       return nil
     end
@@ -896,6 +915,13 @@ function app.start()
     end
   end
 
+  local function current_attack_window()
+    local profile = type(state.bot_profile) == "table" and state.bot_profile or nil
+    local element_id = profile ~= nil and tonumber(profile.element_id) or nil
+    return MIN_ATTACK_RANGE_BY_ELEMENT_ID[element_id] or 0.0,
+      ATTACK_RANGE_BY_ELEMENT_ID[element_id] or DEFAULT_ATTACK_RANGE
+  end
+
   local function issue_auto_attack(now_ms, scene, bot, probe)
     if state.bot_id == nil then
       return false
@@ -921,7 +947,7 @@ function app.start()
       end
       return false
     end
-    local range = DEFAULT_ATTACK_RANGE
+    local min_range, range = current_attack_window()
     local enemy, gap = get_attack_enemy(bot, probe)
     if enemy == nil then
       clear_face_target()
@@ -937,6 +963,18 @@ function app.start()
     local target_x = tonumber(enemy.x) or 0.0
     local target_y = tonumber(enemy.y) or 0.0
     local attack_heading = face_enemy(bot, enemy, true)
+    if gap < min_range then
+      if should_log_attack_diag(now_ms) then
+        log(string.format(
+          "attack_skip id=%s reason=too_close_for_native_release enemy=0x%X gap=%.2f min=%.1f range=%.1f",
+          tostring(state.bot_id),
+          tonumber(enemy.actor_address) or 0,
+          gap,
+          min_range,
+          range))
+      end
+      return false
+    end
     if gap > range then
       if should_log_attack_diag(now_ms) then
         log(string.format(

@@ -24,12 +24,15 @@ The current entrance-driven hub/private policy is:
   stable `testrun` tick, instead of trying to force the scene update from the
   event callback itself
 
-This runtime mod still spawns one follow bot after a run starts:
+This runtime mod currently manages one follow bot for each non-fire element:
 
-- `Lua Patrol Bot` (`profile.element_id = 0`, `profile.discipline_id = 2`)
+- `Lua Bot Water` (`profile.element_id = 1`, `profile.discipline_id = 1`)
+- `Lua Bot Earth` (`profile.element_id = 2`, `profile.discipline_id = 1`)
+- `Lua Bot Air` (`profile.element_id = 3`, `profile.discipline_id = 1`)
+- `Lua Bot Ether` (`profile.element_id = 4`, `profile.discipline_id = 1`)
 
-The bot spawns beside the player at run start, then maintains a follow band
-around the player instead of running a patrol graph.
+Each bot maintains a follow band around the player instead of running a patrol
+graph.
 
 Current spawn contract:
 
@@ -64,9 +67,17 @@ scene:
 - hub interior -> `private_region`
 - `testrun` -> `run`
 
+Current spawn behavior:
+
+- shared hub spawn point = measured hub anchor `(956, 508)` plus each bot's
+  configured per-bot spacing offset
+- anchored private/hub transitions spawn from the transition anchor plus each
+  bot's configured per-bot spacing offset
+- run and non-hub fallback spawn point = `player position` plus each bot's
+  configured per-bot spacing offset
+
 Current same-scene follow behavior:
 
-- spawn point = `player position + (50, 0)`
 - stop distance = `50` units from the player
 - resume distance = `96` units from the player
 - if the bot is already following, it keeps closing until it reaches the

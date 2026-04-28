@@ -24,6 +24,20 @@ DEFAULT_AUTO_CLICK_DELAY_SECONDS = 1.0
 DEFAULT_AUTO_CLICK_INTERVAL_SECONDS = 0.35
 DEFAULT_TRACE_PROFILE = "safe_entry"
 ARENA_ENEMY_CURRENT_HP_OFFSET = 0x174
+EARTH_NATIVE_TRACE_POINTS: dict[str, int] = {
+    "earth_primary_handler": 0x00544C60,
+    "earth_active_handle_resolve": 0x0045ADE0,
+    "earth_cast_cleanup": 0x0052F3B0,
+    "earth_release_finalize": 0x005E5450,
+    "earth_release_line_check": 0x00524D70,
+    "earth_release_secondary": 0x0060B700,
+    "earth_update": 0x0060AC40,
+    "earth_collision_damage": 0x005F1F00,
+    "earth_direct_damage": 0x005F2360,
+    "earth_splash_damage": 0x005F25B0,
+    "earth_radius_scan": 0x005F2980,
+    "earth_child_radius_damage": 0x005F3830,
+}
 
 
 class WatchFailure(RuntimeError):
@@ -307,6 +321,25 @@ def clear_builder_traces(profile: str) -> None:
         clear_trace(spec.name, spec.address)
 
 
+def arm_earth_native_traces() -> dict[str, dict[str, str]]:
+    return {
+        f"player_{key}": arm_trace(f"player_{key}", address, 0)
+        for key, address in EARTH_NATIVE_TRACE_POINTS.items()
+    }
+
+
+def clear_earth_native_traces() -> None:
+    for key, address in EARTH_NATIVE_TRACE_POINTS.items():
+        clear_trace(f"player_{key}", address)
+
+
+def query_earth_native_trace_hits() -> dict[str, dict[str, str]]:
+    return {
+        f"player_{key}": query_trace_hits(f"player_{key}")
+        for key in EARTH_NATIVE_TRACE_POINTS
+    }
+
+
 def click_normalized(normalized_x: float, normalized_y: float) -> dict[str, str]:
     return csp.parse_key_values(
         csp.run_lua(
@@ -406,6 +439,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--trace-builder-window", action="store_true")
     parser.add_argument(
+        "--trace-earth-native-path",
+        action="store_true",
+        help="Trace recovered Earth primary cleanup/release/damage functions during the manual player cast.",
+    )
+    parser.add_argument(
         "--trace-profile",
         default=DEFAULT_TRACE_PROFILE,
         choices=trace_profile_names(),
@@ -457,6 +495,7 @@ def main() -> int:
         "wait_seconds": args.wait_seconds,
         "attach": args.attach,
         "trace_builder_window": args.trace_builder_window,
+        "trace_earth_native_path": args.trace_earth_native_path,
         "trace_profile": args.trace_profile,
         "allow_unstable_inline_traces": args.allow_unstable_inline_traces,
         "auto_click": args.auto_click,
@@ -464,6 +503,7 @@ def main() -> int:
         "watch_enemy_hp": args.watch_enemy_hp,
     }
     traces_armed = False
+    earth_native_traces_armed = False
     enemy_watch_names: list[str] = []
 
     try:
@@ -558,6 +598,9 @@ def main() -> int:
         if args.trace_builder_window:
             result["trace_arm_results"] = arm_builder_traces(args.trace_profile)
             traces_armed = True
+        if args.trace_earth_native_path:
+            result["earth_native_trace_arm_results"] = arm_earth_native_traces()
+            earth_native_traces_armed = True
         if args.watch_enemy_hp:
             enemies = wait_for_watchable_enemies(args.enemy_watch_count, args.enemy_watch_timeout)
             result["watched_enemies"] = enemies
@@ -607,6 +650,9 @@ def main() -> int:
             }
         else:
             result["trace_hits"] = {}
+        result["earth_native_trace_hits"] = (
+            query_earth_native_trace_hits() if earth_native_traces_armed else {}
+        )
         result["loader_log_tail"] = tail_loader_log()
         result["status"] = "ok"
     except Exception as exc:
@@ -616,6 +662,11 @@ def main() -> int:
         if traces_armed:
             try:
                 clear_builder_traces(args.trace_profile)
+            except Exception:
+                pass
+        if earth_native_traces_armed:
+            try:
+                clear_earth_native_traces()
             except Exception:
                 pass
         if enemy_watch_names:

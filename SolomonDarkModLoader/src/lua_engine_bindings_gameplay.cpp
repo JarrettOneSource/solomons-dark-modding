@@ -77,6 +77,40 @@ void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
     lua_setfield(state, -2, "position");
 }
 
+void PushEnemySpawnResult(lua_State* state, const SDModEnemySpawnResult& result) {
+    lua_createtable(state, 0, 15);
+    lua_pushboolean(state, result.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushboolean(state, result.ok ? 1 : 0);
+    lua_setfield(state, -2, "ok");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.request_id));
+    lua_setfield(state, -2, "request_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.type_id));
+    lua_setfield(state, -2, "type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.actor_address));
+    lua_setfield(state, -2, "actor_address");
+    lua_pushnumber(state, static_cast<lua_Number>(result.requested_x));
+    lua_setfield(state, -2, "requested_x");
+    lua_pushnumber(state, static_cast<lua_Number>(result.requested_y));
+    lua_setfield(state, -2, "requested_y");
+    lua_pushnumber(state, static_cast<lua_Number>(result.x));
+    lua_setfield(state, -2, "x");
+    lua_pushnumber(state, static_cast<lua_Number>(result.y));
+    lua_setfield(state, -2, "y");
+    lua_pushboolean(state, result.wrote_x ? 1 : 0);
+    lua_setfield(state, -2, "wrote_x");
+    lua_pushboolean(state, result.wrote_y ? 1 : 0);
+    lua_setfield(state, -2, "wrote_y");
+    lua_pushboolean(state, result.rebind_ok ? 1 : 0);
+    lua_setfield(state, -2, "rebind_ok");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.rebind_exception_code));
+    lua_setfield(state, -2, "rebind_exception_code");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.completed_tick_ms));
+    lua_setfield(state, -2, "completed_tick_ms");
+    lua_pushstring(state, result.error_message.c_str());
+    lua_setfield(state, -2, "error_message");
+}
+
 int LuaGameplayStartWaves(lua_State* state) {
     std::string error_message;
     if (!QueueGameplayStartWaves(&error_message)) {
@@ -372,7 +406,39 @@ int LuaWorldSpawnEnemy(lua_State* state) {
     lua_pop(state, 1);
 
     std::string error_message;
-    if (!SpawnEnemyByType(type_id, x, y, &error_message)) {
+    std::uint64_t request_id = 0;
+    if (!SpawnEnemyByType(type_id, x, y, &error_message, &request_id)) {
+        lua_pushboolean(state, 0);
+        lua_pushstring(state, error_message.c_str());
+        return 2;
+    }
+
+    lua_pushboolean(state, 1);
+    lua_pushnil(state);
+    lua_pushinteger(state, static_cast<lua_Integer>(request_id));
+    return 3;
+}
+
+int LuaWorldGetLastSpawnedEnemy(lua_State* state) {
+    std::uint64_t request_id = 0;
+    if (lua_gettop(state) >= 1 && !lua_isnil(state, 1)) {
+        request_id = static_cast<std::uint64_t>(luaL_checkinteger(state, 1));
+    }
+
+    SDModEnemySpawnResult result;
+    if (!TryGetLastEnemySpawnResult(&result, request_id)) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    PushEnemySpawnResult(state, result);
+    return 1;
+}
+
+int LuaWorldRebindActor(lua_State* state) {
+    const auto actor_address = static_cast<uintptr_t>(luaL_checkinteger(state, 1));
+    std::string error_message;
+    if (!RebindSceneActorCell(actor_address, &error_message)) {
         lua_pushboolean(state, 0);
         lua_pushstring(state, error_message.c_str());
         return 2;
@@ -428,6 +494,8 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaWorldGetScene, "get_scene");
     RegisterFunction(state, &LuaWorldListActors, "list_actors");
     RegisterFunction(state, &LuaWorldSpawnEnemy, "spawn_enemy");
+    RegisterFunction(state, &LuaWorldGetLastSpawnedEnemy, "get_last_spawned_enemy");
+    RegisterFunction(state, &LuaWorldRebindActor, "rebind_actor");
     RegisterFunction(state, &LuaWorldSpawnReward, "spawn_reward");
     lua_setfield(state, -2, "world");
 }

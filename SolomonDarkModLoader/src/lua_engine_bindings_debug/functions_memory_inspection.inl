@@ -174,6 +174,19 @@ int LuaDebugSearchBytes(lua_State* state) {
     return 1;
 }
 
+// sd.debug.resolve_game_address(address) -> integer|nil
+int LuaDebugResolveGameAddress(lua_State* state) {
+    const auto address = CheckLuaAddress(state, 1, "address");
+    const auto resolved_address = ProcessMemory::Instance().ResolveGameAddressOrZero(address);
+    if (resolved_address == 0) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_pushinteger(state, static_cast<lua_Integer>(resolved_address));
+    return 1;
+}
+
 // sd.debug.query_memory(address) -> table|nil
 int LuaDebugQueryMemory(lua_State* state) {
     const auto address = CheckLuaAddress(state, 1, "address");
@@ -366,4 +379,3 @@ int LuaDebugDumpVtable(lua_State* state) {
     lua_setfield(state, -2, "entries");
     return 1;
 }
-

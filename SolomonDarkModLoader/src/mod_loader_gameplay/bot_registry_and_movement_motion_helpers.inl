@@ -153,6 +153,92 @@ bool TryComputeActorAimTowardTargetFromOrigin(
 
 bool SkillRequiresHeldCastInputDuringNativeTick(std::int32_t skill_id);
 
+bool SkillRequiresBoundedHeldCastInputDuringNativeTick(std::int32_t skill_id);
+
+bool SkillRequiresSyntheticCastInputDuringNativeTick(std::int32_t skill_id);
+
+bool SkillTracksLiveTargetDuringNativeTick(std::int32_t skill_id);
+
+std::int32_t ResolveOngoingNativeTickSkillId(
+    const ParticipantEntityBinding::OngoingCastState& ongoing);
+
+bool OngoingCastShouldRefreshNativeTargetState(
+    const ParticipantEntityBinding::OngoingCastState& ongoing);
+
+bool OngoingCastShouldUseLiveFacingTarget(
+    const ParticipantEntityBinding::OngoingCastState& ongoing);
+
+uintptr_t ResolveOngoingCastNativeTargetActor(
+    const ParticipantEntityBinding* binding,
+    const ParticipantEntityBinding::OngoingCastState& ongoing);
+
+bool SkillRequiresNativeActorTargetHandle(std::int32_t skill_id) {
+    // Air primary (lightning) is not projectile/collision based. The native
+    // handler resolves the victim through actor+0x164/0x166 and only runs the
+    // damage branch when that handle points at a live world actor.
+    switch (skill_id) {
+    case 0x18:
+    case 0x3F5:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool OngoingCastNeedsNativeTargetHandle(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    return SkillRequiresNativeActorTargetHandle(ongoing.skill_id) ||
+           SkillRequiresNativeActorTargetHandle(ongoing.dispatcher_skill_id);
+}
+
+bool TryResolveSameWorldTargetHandle(
+    uintptr_t actor_address,
+    uintptr_t target_actor_address,
+    std::uint8_t* group_out,
+    std::uint16_t* slot_out) {
+    if (group_out != nullptr) {
+        *group_out = kTargetHandleGroupSentinel;
+    }
+    if (slot_out != nullptr) {
+        *slot_out = kTargetHandleSlotSentinel;
+    }
+    if (actor_address == 0 || target_actor_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto actor_owner =
+        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+    const auto target_owner =
+        memory.ReadFieldOr<uintptr_t>(target_actor_address, kActorOwnerOffset, 0);
+    if (actor_owner == 0 || actor_owner != target_owner) {
+        return false;
+    }
+
+    const auto target_group =
+        memory.ReadFieldOr<std::uint8_t>(
+            target_actor_address,
+            kActorSlotOffset,
+            kTargetHandleGroupSentinel);
+    const auto target_slot =
+        memory.ReadFieldOr<std::uint16_t>(
+            target_actor_address,
+            kActorWorldSlotOffset,
+            kTargetHandleSlotSentinel);
+    if (target_group == kTargetHandleGroupSentinel ||
+        target_slot == kTargetHandleSlotSentinel) {
+        return false;
+    }
+
+    if (group_out != nullptr) {
+        *group_out = target_group;
+    }
+    if (slot_out != nullptr) {
+        *slot_out = target_slot;
+    }
+    return true;
+}
+
 bool TryComputeActorHeadingTowardTarget(
     uintptr_t actor_address,
     uintptr_t target_actor_address,
@@ -261,7 +347,25 @@ bool TryGetBindingMovementInputVector(
 
 bool OngoingCastNeedsNativeTargetActor(
     const ParticipantEntityBinding::OngoingCastState& ongoing) {
-    return ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary;
+    if (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
+        return true;
+    }
+
+    // Only live-target channel handlers consume actor+0x298 during the native
+    // tick. Earth's boulder is a world spell object; publishing a target actor
+    // there changes the native projectile collision/damage path even though
+    // aim and selection state still need to be refreshed while charging.
+    return ongoing.uses_dispatcher_skill_id &&
+           ongoing.requires_local_slot_native_tick &&
+           SkillTracksLiveTargetDuringNativeTick(ResolveOngoingNativeTickSkillId(ongoing));
+}
+
+bool OngoingCastShouldPreserveAimAfterTargetLoss(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    return ongoing.active &&
+           OngoingCastNeedsNativeTargetActor(ongoing) &&
+           ongoing.requires_local_slot_native_tick &&
+           ongoing.have_aim_target;
 }
 
 bool WriteOngoingCastNativeTargetActor(
@@ -278,35 +382,106 @@ bool WriteOngoingCastNativeTargetActor(
             memory.ReadFieldOr<uintptr_t>(actor_address, kActorCurrentTargetActorOffset, 0);
         ongoing->current_target_actor_override_active = true;
     }
-    return memory.TryWriteField<uintptr_t>(
+    const bool target_pointer_written = memory.TryWriteField<uintptr_t>(
         actor_address,
         kActorCurrentTargetActorOffset,
         target_actor_address);
+
+    if (OngoingCastNeedsNativeTargetHandle(*ongoing)) {
+        std::uint8_t target_group = kTargetHandleGroupSentinel;
+        std::uint16_t target_slot = kTargetHandleSlotSentinel;
+        if (TryResolveSameWorldTargetHandle(
+                actor_address,
+                target_actor_address,
+                &target_group,
+                &target_slot)) {
+            if (!ongoing->native_target_handle_override_active) {
+                ongoing->native_target_group_before =
+                    memory.ReadFieldOr<std::uint8_t>(
+                        actor_address,
+                        kActorSpellTargetGroupByteOffset,
+                        kTargetHandleGroupSentinel);
+                ongoing->native_target_slot_before =
+                    memory.ReadFieldOr<std::uint16_t>(
+                        actor_address,
+                        kActorSpellTargetSlotShortOffset,
+                        kTargetHandleSlotSentinel);
+                ongoing->native_target_handle_override_active = true;
+            }
+            (void)memory.TryWriteField<std::uint8_t>(
+                actor_address,
+                kActorSpellTargetGroupByteOffset,
+                target_group);
+            (void)memory.TryWriteField<std::uint16_t>(
+                actor_address,
+                kActorSpellTargetSlotShortOffset,
+                target_slot);
+        } else if (ongoing->native_target_handle_override_active) {
+            (void)memory.TryWriteField<std::uint8_t>(
+                actor_address,
+                kActorSpellTargetGroupByteOffset,
+                kTargetHandleGroupSentinel);
+            (void)memory.TryWriteField<std::uint16_t>(
+                actor_address,
+                kActorSpellTargetSlotShortOffset,
+                kTargetHandleSlotSentinel);
+        }
+    }
+
+    return target_pointer_written;
 }
 
 void ClearOngoingCastNativeTargetActor(
     uintptr_t actor_address,
     ParticipantEntityBinding::OngoingCastState* ongoing) {
     if (actor_address == 0 || ongoing == nullptr ||
-        !ongoing->current_target_actor_override_active) {
+        (!ongoing->current_target_actor_override_active &&
+         !ongoing->native_target_handle_override_active)) {
         return;
     }
-    (void)ProcessMemory::Instance().TryWriteField<uintptr_t>(
-        actor_address,
-        kActorCurrentTargetActorOffset,
-        0);
+    if (ongoing->current_target_actor_override_active) {
+        (void)ProcessMemory::Instance().TryWriteField<uintptr_t>(
+            actor_address,
+            kActorCurrentTargetActorOffset,
+            0);
+    }
+    if (OngoingCastNeedsNativeTargetHandle(*ongoing) &&
+        ongoing->native_target_handle_override_active) {
+        (void)ProcessMemory::Instance().TryWriteField<std::uint8_t>(
+            actor_address,
+            kActorSpellTargetGroupByteOffset,
+            kTargetHandleGroupSentinel);
+        (void)ProcessMemory::Instance().TryWriteField<std::uint16_t>(
+            actor_address,
+            kActorSpellTargetSlotShortOffset,
+            kTargetHandleSlotSentinel);
+    }
 }
 
 void RestoreOngoingCastNativeTargetActor(
     uintptr_t actor_address,
     const ParticipantEntityBinding::OngoingCastState& ongoing) {
-    if (actor_address == 0 || !ongoing.current_target_actor_override_active) {
+    if (actor_address == 0 ||
+        (!ongoing.current_target_actor_override_active &&
+         !ongoing.native_target_handle_override_active)) {
         return;
     }
-    (void)ProcessMemory::Instance().TryWriteField<uintptr_t>(
-        actor_address,
-        kActorCurrentTargetActorOffset,
-        ongoing.current_target_actor_before);
+    if (ongoing.current_target_actor_override_active) {
+        (void)ProcessMemory::Instance().TryWriteField<uintptr_t>(
+            actor_address,
+            kActorCurrentTargetActorOffset,
+            ongoing.current_target_actor_before);
+    }
+    if (ongoing.native_target_handle_override_active) {
+        (void)ProcessMemory::Instance().TryWriteField<std::uint8_t>(
+            actor_address,
+            kActorSpellTargetGroupByteOffset,
+            ongoing.native_target_group_before);
+        (void)ProcessMemory::Instance().TryWriteField<std::uint16_t>(
+            actor_address,
+            kActorSpellTargetSlotShortOffset,
+            ongoing.native_target_slot_before);
+    }
 }
 
 bool RefreshWizardBindingTargetFacing(ParticipantEntityBinding* binding) {
@@ -347,14 +522,13 @@ bool RefreshOngoingCastAimFromFacingTarget(
         return false;
     }
 
-    auto target_actor_address =
-        binding->facing_target_actor_address != 0
-            ? binding->facing_target_actor_address
-            : ongoing->target_actor_address;
+    auto target_actor_address = ResolveOngoingCastNativeTargetActor(binding, *ongoing);
     if (target_actor_address == 0) {
         ongoing->selection_target_seed_active = false;
-        ongoing->have_aim_heading = false;
-        ongoing->have_aim_target = false;
+        if (!OngoingCastShouldPreserveAimAfterTargetLoss(*ongoing)) {
+            ongoing->have_aim_heading = false;
+            ongoing->have_aim_target = false;
+        }
         ClearOngoingCastNativeTargetActor(binding->actor_address, ongoing);
         return false;
     }
@@ -378,8 +552,10 @@ bool RefreshOngoingCastAimFromFacingTarget(
             ongoing->target_actor_address = 0;
         }
         ongoing->selection_target_seed_active = false;
-        ongoing->have_aim_heading = false;
-        ongoing->have_aim_target = false;
+        if (!OngoingCastShouldPreserveAimAfterTargetLoss(*ongoing)) {
+            ongoing->have_aim_heading = false;
+            ongoing->have_aim_target = false;
+        }
         ClearOngoingCastNativeTargetActor(binding->actor_address, ongoing);
         return false;
     }
@@ -388,8 +564,6 @@ bool RefreshOngoingCastAimFromFacingTarget(
     ongoing->targetless_ticks_waiting = 0;
     binding->facing_target_actor_address = target_actor_address;
     ongoing->target_actor_address = target_actor_address;
-    constexpr std::uint8_t kTargetHandleGroupSentinel = 0xFF;
-    constexpr std::uint16_t kTargetHandleSlotSentinel = 0xFFFF;
     const auto target_group =
         memory.ReadFieldOr<std::uint8_t>(
             target_actor_address,
@@ -483,7 +657,8 @@ bool RefreshAndApplyWizardBindingFacingState(ParticipantEntityBinding* binding, 
         return false;
     }
 
-    if (binding->ongoing_cast.active) {
+    if (binding->ongoing_cast.active &&
+        OngoingCastShouldRefreshNativeTargetState(binding->ongoing_cast)) {
         (void)RefreshOngoingCastAimFromFacingTarget(binding, &binding->ongoing_cast);
     }
     (void)RefreshWizardBindingTargetFacing(binding);
@@ -716,6 +891,16 @@ int ResolveCombatSelectionStateForSkillId(std::int32_t skill_id) {
     case 0x20:
     case 0x28:
         return skill_id;
+    case 0x3F2:
+        return 0x08;
+    case 0x3F3:
+        return 0x10;
+    case 0x3F5:
+        return 0x18;
+    case 0x3F4:
+        return 0x20;
+    case 0x3F6:
+        return 0x28;
     case 0x3EB:
     case 0x3EC:
     case 0x3ED:
@@ -727,6 +912,48 @@ int ResolveCombatSelectionStateForSkillId(std::int32_t skill_id) {
     default:
         return -1;
     }
+}
+
+int ResolveOngoingCastSelectionState(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    if (ongoing.selection_state_target != kUnknownAnimationStateId &&
+        ongoing.selection_state_target >= 0) {
+        return ongoing.selection_state_target;
+    }
+
+    const auto active_skill_id =
+        ongoing.uses_dispatcher_skill_id && ongoing.dispatcher_skill_id > 0
+            ? ongoing.dispatcher_skill_id
+            : ongoing.skill_id;
+    return ResolveCombatSelectionStateForSkillId(active_skill_id);
+}
+
+void ReapplyOngoingCastSelectionState(
+    ParticipantEntityBinding* binding,
+    uintptr_t actor_address,
+    const ParticipantEntityBinding::OngoingCastState& ongoing,
+    bool write_actor_selection_state) {
+    if (binding == nullptr ||
+        actor_address == 0 ||
+        !ongoing.gameplay_selection_state_override_active ||
+        binding->gameplay_slot < 0) {
+        return;
+    }
+
+    const auto selection_state = ResolveOngoingCastSelectionState(ongoing);
+    if (selection_state < 0) {
+        return;
+    }
+
+    if (write_actor_selection_state) {
+        (void)TryWriteActorAnimationStateIdDirect(actor_address, selection_state);
+    }
+
+    std::string selection_error;
+    (void)TryWriteGameplaySelectionStateForSlot(
+        binding->gameplay_slot,
+        selection_state,
+        &selection_error);
 }
 
 std::string DescribeGameplaySlotCastStartupWindow(uintptr_t actor_address) {
@@ -769,6 +996,25 @@ std::string DescribeGameplaySlotCastStartupWindow(uintptr_t actor_address) {
         actor_dc_vtable != 0 && memory.IsReadableRange(actor_dc_vtable + 0x10, sizeof(uintptr_t))
             ? memory.ReadValueOr<uintptr_t>(actor_dc_vtable + 0x10, 0)
             : 0;
+    const auto progression_handle = memory.ReadFieldOr<uintptr_t>(actor_address, 0x300, 0);
+    auto progression_runtime = memory.ReadFieldOr<uintptr_t>(actor_address, 0x200, 0);
+    if (progression_runtime == 0 &&
+        progression_handle != 0 &&
+        memory.IsReadableRange(progression_handle, sizeof(uintptr_t))) {
+        progression_runtime = memory.ReadValueOr<uintptr_t>(progression_handle, 0);
+    }
+    const auto read_progression_u32 = [&](std::size_t offset) -> std::uint32_t {
+        return progression_runtime != 0 &&
+               memory.IsReadableRange(progression_runtime + offset, sizeof(std::uint32_t))
+            ? memory.ReadValueOr<std::uint32_t>(progression_runtime + offset, 0)
+            : 0;
+    };
+    const auto read_progression_float = [&](std::size_t offset) -> float {
+        return progression_runtime != 0 &&
+               memory.IsReadableRange(progression_runtime + offset, sizeof(float))
+            ? memory.ReadValueOr<float>(progression_runtime + offset, 0.0f)
+            : 0.0f;
+    };
     std::string selection_summary = "sel_ptr=" + HexString(selection_ptr);
     if (selection_ptr != 0) {
         selection_summary +=
@@ -810,8 +1056,19 @@ std::string DescribeGameplaySlotCastStartupWindow(uintptr_t actor_address) {
         " a264=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorContinuousPrimaryActiveOffset, 0)) +
         " g27c=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF)) +
         " s27e=" + HexString(memory.ReadFieldOr<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset, 0xFFFF)) +
+        " prog=" + HexString(progression_runtime) +
+        " ph=" + HexString(progression_handle) +
+        " p750=" + HexString(read_progression_u32(0x750)) +
+        " p8a8=" + std::to_string(read_progression_float(0x8A8)) +
+        " p8ac=" + std::to_string(read_progression_float(0x8AC)) +
+        " p8b0=" + std::to_string(read_progression_float(0x8B0)) +
+        " p8b4=" + std::to_string(read_progression_float(0x8B4)) +
+        " f1b4=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x1B4, 0.0f)) +
         " f1b8=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x1B8, 0.0f)) +
         " f278=" + std::to_string(memory.ReadFieldOr<std::uint32_t>(actor_address, 0x278, 0)) +
+        " f28c=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x28C, 0.0f)) +
+        " f290=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x290, 0.0f)) +
+        " f294=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x294, 0.0f)) +
         " f298=" + std::to_string(memory.ReadFieldOr<std::uint32_t>(actor_address, 0x298, 0)) +
         " f29c=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x29C, 0.0f)) +
         " f2a0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2A0, 0.0f)) +
@@ -851,22 +1108,133 @@ bool SkillRequiresLocalSlotDuringNativeTick(std::int32_t skill_id) {
 }
 
 bool SkillRequiresHeldCastInputDuringNativeTick(std::int32_t skill_id) {
-    // Continuous pure primaries apply their active hitbox while the stock cast
-    // input remains held. Slot-0 masquerading alone keeps the handler ticking,
-    // but it does not make cone/beam damage happen after the startup edge.
+    // These stock primaries keep doing native work only while the gameplay cast
+    // input is held. This is separate from live target tracking: projectile
+    // families still keep their startup target captured, while channel families
+    // keep refreshing their victim/aim lane.
     switch (skill_id) {
-    case 0x3F2: // ether pure primary
-    case 0x3F3: // fire pure primary
+    case 0x3F2: // ether pure primary projectile stream
+    case 0x3F3: // fire pure primary projectile stream
     case 0x3F4: // water pure primary
     case 0x3F5: // air pure primary
-    case 0x3F6: // earth pure primary
     case 0x18: // air primary handler
     case 0x20: // water primary handler
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool SkillTracksLiveTargetDuringNativeTick(std::int32_t skill_id) {
+    switch (skill_id) {
+    case 0x3F4: // water pure primary cone
+    case 0x3F5: // air pure primary beam
+    case 0x18: // air primary handler
+    case 0x20: // water primary handler
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool SkillRequiresBoundedHeldCastInputDuringNativeTick(std::int32_t skill_id) {
+    // Earth is a projectile/effect primary, but the stock dispatcher needs the
+    // cast input held until the native boulder object reaches its configured
+    // max size. The release path watches the live object instead of assuming a
+    // fixed gesture duration.
+    switch (skill_id) {
+    case 0x3F6: // earth pure primary build id
     case 0x28: // earth primary handler
         return true;
     default:
         return false;
     }
+}
+
+bool SkillRequiresSyntheticCastInputDuringNativeTick(std::int32_t skill_id) {
+    return SkillRequiresHeldCastInputDuringNativeTick(skill_id) ||
+           SkillRequiresBoundedHeldCastInputDuringNativeTick(skill_id);
+}
+
+bool OngoingCastShouldDriveSyntheticCastInput(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    const auto active_skill_id =
+        ongoing.uses_dispatcher_skill_id && ongoing.dispatcher_skill_id > 0
+            ? ongoing.dispatcher_skill_id
+            : ongoing.skill_id;
+    if (ongoing.startup_in_progress) {
+        return true;
+    }
+    if (SkillRequiresHeldCastInputDuringNativeTick(active_skill_id)) {
+        return true;
+    }
+    if (SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id)) {
+        return !ongoing.bounded_max_size_reached;
+    }
+    return false;
+}
+
+int ResolveBotCastGestureTicks(std::int32_t skill_id) {
+    // The bot cast request models one primary-input gesture. Stock held spells
+    // do not self-release while input is held, so the loader must release the
+    // synthetic gesture once the native active window has had time to run.
+    switch (skill_id) {
+    case 0x3EF:
+    case 0x3F2: // ether pure primary projectile
+    case 0x3F3: // fire pure primary projectile
+        return 36;
+    default:
+        return ParticipantEntityBinding::OngoingCastState::kMaxTicksWaiting;
+    }
+}
+
+int ResolveBotCastSafetyCapTicks(std::int32_t skill_id) {
+    switch (skill_id) {
+    case 0x3F6: // earth pure primary build id
+    case 0x28: // earth primary handler
+        return 1200;
+    default:
+        return ParticipantEntityBinding::OngoingCastState::kMaxTicksWaiting;
+    }
+}
+
+std::int32_t ResolveOngoingNativeTickSkillId(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    return ongoing.uses_dispatcher_skill_id && ongoing.dispatcher_skill_id > 0
+        ? ongoing.dispatcher_skill_id
+        : ongoing.skill_id;
+}
+
+bool OngoingCastShouldUseLiveFacingTarget(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    return SkillTracksLiveTargetDuringNativeTick(
+        ResolveOngoingNativeTickSkillId(ongoing));
+}
+
+bool OngoingCastShouldRefreshNativeTargetState(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    const auto active_skill_id = ResolveOngoingNativeTickSkillId(ongoing);
+    if (SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id) &&
+        ongoing.bounded_max_size_reached) {
+        return false;
+    }
+    return ongoing.startup_in_progress ||
+           SkillTracksLiveTargetDuringNativeTick(active_skill_id) ||
+           SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id);
+}
+
+uintptr_t ResolveOngoingCastNativeTargetActor(
+    const ParticipantEntityBinding* binding,
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    if (binding != nullptr &&
+        OngoingCastShouldUseLiveFacingTarget(ongoing) &&
+        binding->facing_target_actor_address != 0) {
+        return binding->facing_target_actor_address;
+    }
+    if (ongoing.target_actor_address != 0) {
+        return ongoing.target_actor_address;
+    }
+    return binding != nullptr ? binding->facing_target_actor_address : 0;
 }
 
 int ResolveMaxStartupTicksWaiting(std::int32_t skill_id) {
@@ -890,10 +1258,6 @@ void PrimeGameplaySlotPostGateDispatchState(uintptr_t actor_address, std::int32_
         kActorPrimarySkillIdOffset + sizeof(std::int32_t);
     constexpr std::size_t kActorPostGateActiveByteOffset = 0x26C;
     constexpr std::size_t kActorStartupCounterOffset = 0x278;
-    constexpr std::size_t kActorCooldownByteOffset = 0x164;
-    constexpr std::size_t kActorCooldownWordOffset = 0x166;
-    constexpr std::uint8_t kCooldownByteSentinel = 0xFF;
-    constexpr std::uint16_t kCooldownWordSentinel = 0xFFFF;
 
     (void)memory.TryWriteField<std::int32_t>(
         actor_address,
@@ -911,14 +1275,16 @@ void PrimeGameplaySlotPostGateDispatchState(uintptr_t actor_address, std::int32_
         actor_address,
         kActorStartupCounterOffset,
         0);
-    (void)memory.TryWriteField<std::uint8_t>(
-        actor_address,
-        kActorCooldownByteOffset,
-        kCooldownByteSentinel);
-    (void)memory.TryWriteField<std::uint16_t>(
-        actor_address,
-        kActorCooldownWordOffset,
-        kCooldownWordSentinel);
+    if (!SkillRequiresNativeActorTargetHandle(skill_id)) {
+        (void)memory.TryWriteField<std::uint8_t>(
+            actor_address,
+            kActorSpellTargetGroupByteOffset,
+            kTargetHandleGroupSentinel);
+        (void)memory.TryWriteField<std::uint16_t>(
+            actor_address,
+            kActorSpellTargetSlotShortOffset,
+            kTargetHandleSlotSentinel);
+    }
 }
 
 void RestoreSelectionBrainAfterCast(
@@ -1018,8 +1384,6 @@ void PrimeSelectionBrainForCastStartup(
     }
 
     auto& memory = ProcessMemory::Instance();
-    constexpr std::uint8_t kTargetHandleGroupSentinel = 0xFF;
-    constexpr std::uint16_t kTargetHandleSlotSentinel = 0xFFFF;
     const auto actor_owner =
         memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
     const auto target_owner =
@@ -1119,7 +1483,7 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
 
         if (ongoing->gameplay_selection_state_override_active &&
             binding->gameplay_slot >= 0) {
-            const auto combat_selection_state = ResolveCombatSelectionStateForSkillId(ongoing->skill_id);
+            const auto combat_selection_state = ResolveOngoingCastSelectionState(*ongoing);
             if (combat_selection_state >= 0) {
                 std::string selection_error;
                 (void)TryWriteActorAnimationStateIdDirect(actor_address, combat_selection_state);
@@ -1412,8 +1776,7 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
             if (resolved_primary_skill_id > 0) {
                 ongoing.skill_id = resolved_primary_skill_id;
             }
-            if (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
-                SkillRequiresHeldCastInputDuringNativeTick(ongoing.skill_id)) {
+            if (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
                 ongoing.progression_spell_id_override_active =
                     memory.TryWriteField<std::int32_t>(
                         ongoing.progression_runtime_address,
@@ -1464,7 +1827,11 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
     ApplyPreparedState(&ongoing);
     bool pure_primary_primer_called = false;
     DWORD pure_primary_primer_exception = 0;
-    if (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
+    const bool should_run_primary_damage_primer =
+        request.kind == multiplayer::BotCastKind::Primary &&
+        (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary ||
+         (have_primary_descriptor && ongoing.uses_dispatcher_skill_id));
+    if (should_run_primary_damage_primer) {
         const auto pure_primary_start_address =
             memory.ResolveGameAddressOrZero(kSpellCastPurePrimary);
         if (pure_primary_start_address != 0) {
@@ -1477,6 +1844,16 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
                     actor_address,
                     &pure_primary_primer_exception);
             LeaveLocalPlayerCastShim(shim_state);
+        }
+        if (pure_primary_primer_called && ongoing.uses_dispatcher_skill_id) {
+            PrimeGameplaySlotPostGateDispatchState(actor_address, ongoing.dispatcher_skill_id);
+            if (ongoing.target_actor_address != 0) {
+                (void)WriteOngoingCastNativeTargetActor(
+                    actor_address,
+                    &ongoing,
+                    ongoing.target_actor_address);
+            }
+            ReapplyOngoingCastSelectionState(binding, actor_address, ongoing, true);
         }
     }
     g_gameplay_slot_hud_probe_actor = actor_address;
@@ -1531,12 +1908,11 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
 //     via `original(self)` in the tick hook, so FUN_00548A00 keeps driving
 //     the per-spell handler natively. Our job is (a) initiate the cast by
 //     setting aim + actor+0x270 + a primer dispatch; (b) each subsequent tick
-//     watch for (actor+0x160 == 0 && actor+0x1EC == 0) — the handler's own
-//     latch-release — and then call FUN_0052F3B0 ourselves to release the
-//     cached spell-object handle (native code only triggers cleanup from the
-//     skill-transition path, which bots never hit because they don't change
-//     actor+0x270 via input). kMaxTicksWaiting is a safety cap against
-//     unexpected latch states, not a timing assumption.
+    //     keeps stock input held only for native-held primaries; (c) bounded held
+    //     primaries release the synthetic input once the native object reports its
+    //     configured max charge, then let the stock object update/release path own
+    //     collision and damage. kMaxTicksWaiting is a safety cap against unexpected
+    //     latch states, not a timing assumption.
 bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error_message) {
     if (binding == nullptr || binding->actor_address == 0 || binding->bot_id == 0) {
         return false;
@@ -1587,7 +1963,11 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             " flip_needed=" + (shim_active ? "1" : "0") +
             " flip_wr=" + (shim_active ? "1" : "0") +
             " restore_wr=" + (shim_active ? "1" : "0") +
-            " shim_slot=" + std::to_string(binding->gameplay_slot));
+            " shim_slot=" + std::to_string(binding->gameplay_slot) +
+            " prog_redirect=" + (shim_state.progression_slot_redirected ? "1" : "0") +
+            " prog_restore=" + (shim_state.progression_slot_restore_needed ? "1" : "0") +
+            " prog_saved=" + HexString(shim_state.saved_local_progression_handle) +
+            " prog_bot=" + HexString(shim_state.redirected_progression_handle));
     };
 
     auto RestoreAim = [&](const ParticipantEntityBinding::OngoingCastState& state) {
@@ -1609,23 +1989,183 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             actor_address, kActorCastSpreadModeByteOffset, state.spread_before);
     };
 
+    struct ActiveSpellObjectSnapshot {
+        std::uint8_t group = 0xFF;
+        std::uint16_t slot = 0xFFFF;
+        std::uintptr_t world = 0;
+        std::uintptr_t selection_state = 0;
+        std::uintptr_t object = 0;
+        std::uintptr_t vtable = 0;
+        std::uintptr_t update_fn = 0;
+        std::uintptr_t release_secondary_fn = 0;
+        std::uintptr_t release_finalize_fn = 0;
+        std::uint32_t object_type = 0;
+        std::uint32_t object_f74_raw = 0;
+        std::uint32_t object_f1fc_raw = 0;
+        std::uint32_t object_f22c = 0;
+        std::uint32_t object_f230 = 0;
+        float object_x = 0.0f;
+        float object_y = 0.0f;
+        float object_heading = 0.0f;
+        float object_radius = 0.0f;
+        float object_f74 = 0.0f;
+        float object_f1fc = 0.0f;
+        bool readable = false;
+        bool handle_from_selection_state = false;
+        bool boulder_max_size_reached = false;
+    };
+
+    auto ReadActiveSpellObjectSnapshot = [&](bool allow_selection_state_fallback = true) {
+        ActiveSpellObjectSnapshot snapshot{};
+        snapshot.group =
+            memory.ReadFieldOr<std::uint8_t>(
+                actor_address,
+                kActorActiveCastGroupByteOffset,
+                kActorActiveCastGroupSentinel);
+        snapshot.slot =
+            memory.ReadFieldOr<std::uint16_t>(
+                actor_address,
+                kActorActiveCastSlotShortOffset,
+                kActorActiveCastSlotSentinel);
+        snapshot.world = memory.ReadFieldOr<std::uintptr_t>(actor_address, kActorOwnerOffset, 0);
+        snapshot.selection_state =
+            memory.ReadFieldOr<std::uintptr_t>(
+                actor_address,
+                kActorAnimationSelectionStateOffset,
+                0);
+        if (allow_selection_state_fallback &&
+            (snapshot.group == kActorActiveCastGroupSentinel ||
+             snapshot.slot == kActorActiveCastSlotSentinel)) {
+            if (snapshot.selection_state != 0 &&
+                memory.IsReadableRange(snapshot.selection_state, 0x10)) {
+                const auto selection_group =
+                    memory.ReadValueOr<std::uint8_t>(
+                        snapshot.selection_state + 0x4,
+                        kActorActiveCastGroupSentinel);
+                const auto selection_slot =
+                    memory.ReadValueOr<std::uint16_t>(
+                        snapshot.selection_state + 0x6,
+                        kActorActiveCastSlotSentinel);
+                if (selection_group != kActorActiveCastGroupSentinel &&
+                    selection_slot != kActorActiveCastSlotSentinel) {
+                    snapshot.group = selection_group;
+                    snapshot.slot = selection_slot;
+                    snapshot.handle_from_selection_state = true;
+                }
+            }
+        }
+        if (snapshot.group == kActorActiveCastGroupSentinel ||
+            snapshot.slot == kActorActiveCastSlotSentinel ||
+            snapshot.world == 0) {
+            return snapshot;
+        }
+
+        const std::uintptr_t entry_address =
+            snapshot.world + kActorWorldBucketTableOffset +
+            static_cast<std::uintptr_t>(
+                static_cast<std::uint32_t>(snapshot.group) * kActorWorldBucketStride +
+                static_cast<std::uint32_t>(snapshot.slot)) *
+                sizeof(std::uintptr_t);
+        snapshot.object = memory.ReadValueOr<std::uintptr_t>(entry_address, 0);
+        if (snapshot.object == 0 || !memory.IsReadableRange(snapshot.object, 0x240)) {
+            return snapshot;
+        }
+
+        snapshot.readable = true;
+        snapshot.vtable = memory.ReadFieldOr<std::uintptr_t>(snapshot.object, 0x00, 0);
+        if (snapshot.vtable != 0 && memory.IsReadableRange(snapshot.vtable, 0x74)) {
+            snapshot.update_fn = memory.ReadValueOr<std::uintptr_t>(snapshot.vtable + 0x1C, 0);
+            snapshot.release_secondary_fn = memory.ReadValueOr<std::uintptr_t>(snapshot.vtable + 0x6C, 0);
+            snapshot.release_finalize_fn = memory.ReadValueOr<std::uintptr_t>(snapshot.vtable + 0x70, 0);
+        }
+        snapshot.object_type = memory.ReadFieldOr<std::uint32_t>(snapshot.object, 0x08, 0);
+        snapshot.object_f74 = memory.ReadFieldOr<float>(snapshot.object, 0x74, 0.0f);
+        snapshot.object_f1fc = memory.ReadFieldOr<float>(snapshot.object, 0x1FC, 0.0f);
+        snapshot.object_f74_raw = memory.ReadFieldOr<std::uint32_t>(snapshot.object, 0x74, 0);
+        snapshot.object_f1fc_raw = memory.ReadFieldOr<std::uint32_t>(snapshot.object, 0x1FC, 0);
+        snapshot.object_f22c = memory.ReadFieldOr<std::uint32_t>(snapshot.object, 0x22C, 0);
+        snapshot.object_f230 = memory.ReadFieldOr<std::uint32_t>(snapshot.object, 0x230, 0);
+        snapshot.object_x = memory.ReadFieldOr<float>(snapshot.object, 0x18, 0.0f);
+        snapshot.object_y = memory.ReadFieldOr<float>(snapshot.object, 0x1C, 0.0f);
+        snapshot.object_heading = memory.ReadFieldOr<float>(snapshot.object, 0x6C, 0.0f);
+        snapshot.object_radius = memory.ReadFieldOr<float>(snapshot.object, 0x70, 0.0f);
+        snapshot.boulder_max_size_reached =
+            std::isfinite(snapshot.object_f74) &&
+            std::isfinite(snapshot.object_f1fc) &&
+            snapshot.object_f1fc > 0.0f &&
+            snapshot.object_f74 >= snapshot.object_f1fc - 0.001f;
+        return snapshot;
+    };
+
     auto ReleaseSpellHandle = [&](const ParticipantEntityBinding::OngoingCastState& state,
                                   const char* exit_label,
-                                  bool clear_facing_target) {
-        const auto group_before =
+                                  bool clear_facing_target,
+                                  bool run_active_handle_cleanup = true) {
+        const auto release_object_snapshot = ReadActiveSpellObjectSnapshot(false);
+        const auto actor_group_before =
             memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
+        const auto actor_slot_before =
+            memory.ReadFieldOr<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset, 0);
         DWORD cleanup_exception_code = 0;
         bool cleanup_ok = true;
-        if (group_before != kActorActiveCastGroupSentinel) {
+        bool cleanup_actor_handle_live = false;
+        uintptr_t cleanup_state_entry_address = 0;
+        int cleanup_state_before = -1;
+        int cleanup_state_for_call = -1;
+        int cleanup_state_after = -1;
+        bool cleanup_state_available = false;
+        bool cleanup_state_write_ok = false;
+        bool cleanup_state_restore_ok = true;
+        cleanup_actor_handle_live =
+            actor_group_before != kActorActiveCastGroupSentinel &&
+            actor_slot_before != kActorActiveCastSlotSentinel;
+        if (!run_active_handle_cleanup) {
+            (void)memory.TryWriteField<std::uint8_t>(
+                actor_address, kActorActiveCastGroupByteOffset, kActorActiveCastGroupSentinel);
+            (void)memory.TryWriteField<std::uint16_t>(
+                actor_address, kActorActiveCastSlotShortOffset, kActorActiveCastSlotSentinel);
+        } else if (cleanup_actor_handle_live) {
+            uintptr_t cleanup_state_table_address = 0;
+            int cleanup_state_entry_count = 0;
+            if (TryResolveGameplayIndexState(
+                    &cleanup_state_table_address,
+                    &cleanup_state_entry_count) &&
+                cleanup_state_table_address != 0 &&
+                cleanup_state_entry_count > 0 &&
+                memory.TryReadValue<int>(cleanup_state_table_address, &cleanup_state_before)) {
+                constexpr int kNativeCleanupRequiredGameplayState = 5;
+                cleanup_state_entry_address = cleanup_state_table_address;
+                cleanup_state_available = true;
+                cleanup_state_for_call = cleanup_state_before;
+                if (cleanup_state_before != kNativeCleanupRequiredGameplayState) {
+                    cleanup_state_write_ok =
+                        memory.TryWriteValue<int>(
+                            cleanup_state_entry_address,
+                            kNativeCleanupRequiredGameplayState);
+                    if (cleanup_state_write_ok) {
+                        cleanup_state_for_call = kNativeCleanupRequiredGameplayState;
+                    }
+                }
+            }
             InvokeWithLocalPlayerSlot([&] {
                 cleanup_ok = CallCastActiveHandleCleanupSafe(
                     cleanup_address, actor_address, &cleanup_exception_code);
             });
+            if (cleanup_state_write_ok) {
+                cleanup_state_restore_ok =
+                    memory.TryWriteValue<int>(
+                        cleanup_state_entry_address,
+                        cleanup_state_before);
+            }
+            if (cleanup_state_available && cleanup_state_entry_address != 0) {
+                cleanup_state_after =
+                    memory.ReadValueOr<int>(cleanup_state_entry_address, -1);
+            }
             if (!cleanup_ok) {
                 // Native cleanup raised SEH. Fall back to writing the sentinels
                 // directly so the next cast's init gate passes; vtable-side
-                // effects (slot 0x6C/0x70) get skipped but the handle is
-                // released and future casts are safe.
+                // effects get skipped, but the handle is released and future
+                // casts are safe.
                 (void)memory.TryWriteField<std::uint8_t>(
                     actor_address, kActorActiveCastGroupByteOffset, kActorActiveCastGroupSentinel);
                 (void)memory.TryWriteField<std::uint16_t>(
@@ -1634,7 +2174,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         }
         (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
         if (state.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
-            group_before == kActorActiveCastGroupSentinel) {
+            actor_group_before == kActorActiveCastGroupSentinel) {
             (void)memory.TryWriteField<std::uint32_t>(actor_address, 0xE4, 0);
             (void)memory.TryWriteField<std::uint32_t>(actor_address, 0xE8, 0);
         }
@@ -1686,6 +2226,11 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
         const auto settled_heading =
             memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
+        const bool completed_boulder_at_max =
+            release_object_snapshot.boulder_max_size_reached ||
+            state.bounded_max_size_reached ||
+            (SkillRequiresBoundedHeldCastInputDuringNativeTick(ResolveOngoingNativeTickSkillId(state)) &&
+             std::strcmp(exit_label, "max_size_released") == 0);
         (void)multiplayer::FinishBotAttack(
             binding->bot_id,
             true,
@@ -1696,53 +2241,69 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             std::to_string(binding->bot_id) +
             " skill_id=" + std::to_string(state.skill_id) +
             " ticks=" + std::to_string(state.ticks_waiting) +
+            " post_release_ticks=" + std::to_string(state.bounded_post_release_ticks_waiting) +
             " saw_latch=" + (state.saw_latch ? std::string("1") : std::string("0")) +
-            " group_before=" + HexString(group_before) +
+            " group_before=" + HexString(actor_group_before) +
+            " slot_before=" + HexString(actor_slot_before) +
             " group_after=" + HexString(group_after) +
+            " cleanup_requested=" + (run_active_handle_cleanup ? std::string("1") : std::string("0")) +
+            " cleanup_actor_handle_live=" + (cleanup_actor_handle_live ? std::string("1") : std::string("0")) +
+            " cleanup_state=" + HexString(cleanup_state_entry_address) +
+            " cleanup_state_before=" + std::to_string(cleanup_state_before) +
+            " cleanup_state_for_call=" + std::to_string(cleanup_state_for_call) +
+            " cleanup_state_after=" + std::to_string(cleanup_state_after) +
+            " cleanup_state_write=" + (cleanup_state_write_ok ? std::string("1") : std::string("0")) +
+            " cleanup_state_restore=" + (cleanup_state_restore_ok ? std::string("1") : std::string("0")) +
+            " handle_source=" +
+                (release_object_snapshot.handle_from_selection_state ? std::string("selection") : std::string("actor")) +
+            " selection_state=" + HexString(release_object_snapshot.selection_state) +
+            " obj_ptr=" + HexString(release_object_snapshot.object) +
+            " obj_vt=" + HexString(release_object_snapshot.vtable) +
+            " obj_vt_1c=" + HexString(release_object_snapshot.update_fn) +
+            " obj_vt_6c=" + HexString(release_object_snapshot.release_secondary_fn) +
+            " obj_vt_70=" + HexString(release_object_snapshot.release_finalize_fn) +
+            " obj_type=" + HexString(release_object_snapshot.object_type) +
+            " obj_x=" + std::to_string(release_object_snapshot.object_x) +
+            " obj_y=" + std::to_string(release_object_snapshot.object_y) +
+            " obj_heading=" + std::to_string(release_object_snapshot.object_heading) +
+            " obj_radius=" + std::to_string(release_object_snapshot.object_radius) +
+            " obj_74=" + std::to_string(release_object_snapshot.object_f74) +
+            " obj_1fc=" + std::to_string(release_object_snapshot.object_f1fc) +
+            " obj_74_raw=" + HexString(release_object_snapshot.object_f74_raw) +
+            " obj_1fc_raw=" + HexString(release_object_snapshot.object_f1fc_raw) +
+            " boulder_max_size=" +
+                (completed_boulder_at_max ? std::string("1") : std::string("0")) +
             (cleanup_ok ? std::string("") :
                           std::string(" cleanup_seh=") + HexString(cleanup_exception_code)));
     };
 
     auto LogSpellObjectDiag = [&](std::uint8_t active_group_post) {
-        const auto group_post_diag = active_group_post;
-        const auto slot_post_diag =
-            memory.ReadFieldOr<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset, 0xFFFF);
-        const auto world_ptr_diag =
-            memory.ReadFieldOr<std::uintptr_t>(actor_address, kActorOwnerOffset, 0);
-        std::uintptr_t spell_obj_ptr = 0;
-        std::uint32_t obj_type = 0;
-        std::uint32_t obj_f74_raw = 0;
-        std::uint32_t obj_f1fc_raw = 0;
-        std::uint32_t obj_f22c = 0;
-        std::uint32_t obj_f230 = 0;
-        if (group_post_diag != kActorActiveCastGroupSentinel &&
-            slot_post_diag != kActorActiveCastSlotSentinel && world_ptr_diag != 0) {
-            const std::uintptr_t entry_address =
-                world_ptr_diag + kActorWorldBucketTableOffset +
-                static_cast<std::uintptr_t>(
-                    static_cast<std::uint32_t>(group_post_diag) * kActorWorldBucketStride +
-                    static_cast<std::uint32_t>(slot_post_diag)) *
-                    sizeof(std::uintptr_t);
-            spell_obj_ptr = memory.ReadValueOr<std::uintptr_t>(entry_address, 0);
-            if (spell_obj_ptr != 0 && memory.IsReadableRange(spell_obj_ptr, 0x240)) {
-                obj_type = memory.ReadFieldOr<std::uint32_t>(spell_obj_ptr, 0x08, 0);
-                obj_f74_raw = memory.ReadFieldOr<std::uint32_t>(spell_obj_ptr, 0x74, 0);
-                obj_f1fc_raw = memory.ReadFieldOr<std::uint32_t>(spell_obj_ptr, 0x1FC, 0);
-                obj_f22c = memory.ReadFieldOr<std::uint32_t>(spell_obj_ptr, 0x22C, 0);
-                obj_f230 = memory.ReadFieldOr<std::uint32_t>(spell_obj_ptr, 0x230, 0);
-            }
-        }
+        auto snapshot = ReadActiveSpellObjectSnapshot();
+        snapshot.group = active_group_post;
         Log(
             std::string("[bots] spell_obj diag. bot_id=") + std::to_string(binding->bot_id) +
-            " group=" + HexString(group_post_diag) +
-            " slot=" + HexString(slot_post_diag) +
-            " world=" + HexString(world_ptr_diag) +
-            " obj_ptr=" + HexString(spell_obj_ptr) +
-            " obj_type=" + HexString(obj_type) +
-            " obj_74_raw=" + HexString(obj_f74_raw) +
-            " obj_1fc_raw=" + HexString(obj_f1fc_raw) +
-            " obj_22c=" + std::to_string(obj_f22c) +
-            " obj_230=" + std::to_string(obj_f230) +
+            " group=" + HexString(snapshot.group) +
+            " slot=" + HexString(snapshot.slot) +
+            " handle_source=" + (snapshot.handle_from_selection_state ? std::string("selection") : std::string("actor")) +
+            " selection_state=" + HexString(snapshot.selection_state) +
+            " world=" + HexString(snapshot.world) +
+            " obj_ptr=" + HexString(snapshot.object) +
+            " obj_vt=" + HexString(snapshot.vtable) +
+            " obj_vt_1c=" + HexString(snapshot.update_fn) +
+            " obj_vt_6c=" + HexString(snapshot.release_secondary_fn) +
+            " obj_vt_70=" + HexString(snapshot.release_finalize_fn) +
+            " obj_type=" + HexString(snapshot.object_type) +
+            " obj_x=" + std::to_string(snapshot.object_x) +
+            " obj_y=" + std::to_string(snapshot.object_y) +
+            " obj_heading=" + std::to_string(snapshot.object_heading) +
+            " obj_radius=" + std::to_string(snapshot.object_radius) +
+            " obj_74=" + std::to_string(snapshot.object_f74) +
+            " obj_1fc=" + std::to_string(snapshot.object_f1fc) +
+            " obj_74_raw=" + HexString(snapshot.object_f74_raw) +
+            " obj_1fc_raw=" + HexString(snapshot.object_f1fc_raw) +
+            " obj_22c=" + std::to_string(snapshot.object_f22c) +
+            " obj_230=" + std::to_string(snapshot.object_f230) +
+            " boulder_max_size=" + (snapshot.boulder_max_size_reached ? std::string("1") : std::string("0")) +
             " startup={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     };
 
@@ -1762,16 +2323,24 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             return true;
         }
 
-        // Re-pin aim while the cast animation plays so the handler's per-tick
-        // reads (projectile spawn angle, facing) see consistent state. Pure
-        // primaries keep using this shim after the startup pulse; dropping it
-        // while stock still emits leaves visible effects without the bot's
-        // local-slot/item context.
-        const bool target_refreshed = RefreshOngoingCastAimFromFacingTarget(binding, &ongoing);
-        // Do not re-write the actor-owned selection/control state id after
-        // startup. Pure-primary handlers mutate that first word as their
-        // continuous action state; forcing it back to the loadout id cuts off
-        // the native damage/projectile continuation path.
+        // Keep native target/aim fresh for startup and true held primaries.
+        // Projectile-style primaries keep the target captured at startup so a
+        // later nearest-enemy swap cannot redirect an already spawned cast.
+        const auto native_active_skill_id = ResolveOngoingNativeTickSkillId(ongoing);
+        const bool refresh_ongoing_target_state =
+            OngoingCastShouldRefreshNativeTargetState(ongoing);
+        bool target_refreshed = false;
+        if (refresh_ongoing_target_state) {
+            target_refreshed = RefreshOngoingCastAimFromFacingTarget(binding, &ongoing);
+        }
+        // Do not re-write pure-primary actor selection state after startup.
+        // Those handlers mutate the first word as their continuous action
+        // state. Dispatcher primaries still need the element selection state
+        // pinned so PlayerActorTick runs the matching native stat initializer
+        // before it calls the dispatcher.
+        if (ongoing.uses_dispatcher_skill_id && refresh_ongoing_target_state) {
+            ReapplyOngoingCastSelectionState(binding, actor_address, ongoing, true);
+        }
         if (ongoing.have_aim_heading) {
             ApplyWizardActorFacingState(actor_address, ongoing.aim_heading);
             binding->facing_heading_value = ongoing.aim_heading;
@@ -1784,11 +2353,17 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
         }
         (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
+        const bool publish_ongoing_skill_id =
+            ongoing.uses_dispatcher_skill_id &&
+            !(SkillRequiresBoundedHeldCastInputDuringNativeTick(native_active_skill_id) &&
+              ongoing.bounded_max_size_reached);
         (void)memory.TryWriteField<std::int32_t>(
             actor_address,
             kActorPrimarySkillIdOffset,
-            ongoing.uses_dispatcher_skill_id ? ongoing.dispatcher_skill_id : 0);
-        RefreshSelectionBrainTargetForOngoingCast(ongoing);
+            publish_ongoing_skill_id ? ongoing.dispatcher_skill_id : 0);
+        if (refresh_ongoing_target_state) {
+            RefreshSelectionBrainTargetForOngoingCast(ongoing);
+        }
 
         if (IsGameplaySlotWizardKind(binding->kind) &&
             ongoing.startup_in_progress &&
@@ -1796,6 +2371,15 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             !ongoing.post_stock_dispatch_attempted) {
             if (ongoing.uses_dispatcher_skill_id) {
                 PrimeGameplaySlotPostGateDispatchState(actor_address, ongoing.dispatcher_skill_id);
+                const auto native_target_actor_address =
+                    ResolveOngoingCastNativeTargetActor(binding, ongoing);
+                if (native_target_actor_address != 0) {
+                    (void)WriteOngoingCastNativeTargetActor(
+                        actor_address,
+                        &ongoing,
+                        native_target_actor_address);
+                }
+                ReapplyOngoingCastSelectionState(binding, actor_address, ongoing, true);
             }
             DWORD startup_exception_code = 0;
             bool startup_dispatched = false;
@@ -1890,26 +2474,28 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         const auto active_cast_group =
             memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
         const bool has_live_handle = active_cast_group != kActorActiveCastGroupSentinel;
-        const bool pure_primary_action_active =
-            ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
+        const bool native_primary_action_active =
+            OngoingCastNeedsNativeTargetActor(ongoing) &&
             (actor_e4 != 0 || actor_e8 != 0);
 
         ongoing.ticks_waiting += 1;
         if (ongoing.startup_in_progress) {
             ongoing.startup_ticks_waiting += 1;
         }
-        if (drive_state != 0 || no_interrupt != 0 || pure_primary_action_active) {
+        if (drive_state != 0 || no_interrupt != 0 || native_primary_action_active) {
             ongoing.saw_latch = true;
         }
-        if (has_live_handle || drive_state != 0 || no_interrupt != 0 || pure_primary_action_active) {
+        if (has_live_handle || drive_state != 0 || no_interrupt != 0 || native_primary_action_active) {
             ongoing.saw_activity = true;
             ongoing.startup_in_progress = false;
         }
+        if (has_live_handle) {
+            ongoing.saw_live_handle = true;
+        }
 
-        // Pure primaries may not publish a live spell-object handle, but their
-        // native emission still runs for a visible action window through
-        // actor+0xE4/0xE8. Do not clear that latch at the first short settle or
-        // the projectile path can be cut off before it spawns.
+        // Some native primary actions do not publish a live spell-object handle,
+        // but their emission still runs through actor+0xE4/0xE8. Do not clear
+        // that latch at the first short settle or the hit path can be cut off.
         constexpr int kPurePrimaryNoHandleSettleTicks = 160;
         const bool pure_primary_no_handle_settled =
             ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
@@ -1917,59 +2503,140 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.saw_activity &&
             !has_live_handle &&
             ongoing.ticks_waiting >= kPurePrimaryNoHandleSettleTicks;
+        const bool held_native_cast =
+            SkillRequiresHeldCastInputDuringNativeTick(native_active_skill_id);
+        const bool bounded_held_native_cast =
+            SkillRequiresBoundedHeldCastInputDuringNativeTick(native_active_skill_id);
+        const auto active_spell_snapshot = ReadActiveSpellObjectSnapshot(false);
+        const auto earth_max_charge =
+            ongoing.progression_runtime_address != 0
+                ? memory.ReadFieldOr<float>(ongoing.progression_runtime_address, 0x8AC, 1.0f)
+                : 1.0f;
+        const bool earth_object_charge_reached =
+            bounded_held_native_cast &&
+            active_spell_snapshot.readable &&
+            std::isfinite(active_spell_snapshot.object_f74) &&
+            std::isfinite(earth_max_charge) &&
+            earth_max_charge > 0.0f &&
+            active_spell_snapshot.object_f74 >= earth_max_charge - 0.001f;
+        const bool bounded_held_release_ready =
+            bounded_held_native_cast &&
+            active_spell_snapshot.readable &&
+            (active_spell_snapshot.boulder_max_size_reached || earth_object_charge_reached);
+        const bool bounded_max_size_just_reached =
+            bounded_held_release_ready && !ongoing.bounded_max_size_reached;
+        if (bounded_max_size_just_reached) {
+            ongoing.bounded_max_size_reached = true;
+            ongoing.bounded_post_release_ticks_waiting = 0;
+        } else if (bounded_held_native_cast && ongoing.bounded_max_size_reached) {
+            ongoing.bounded_post_release_ticks_waiting += 1;
+        }
+        const bool bounded_held_native_released =
+            bounded_held_native_cast &&
+            ongoing.bounded_max_size_reached &&
+            ongoing.saw_live_handle &&
+            ongoing.saw_activity &&
+            !has_live_handle;
+        // The native Earth handler does not drop the active handle by itself.
+        // Once charge is full, keep input released while the live boulder gets a
+        // native world-object update window, then run the same cleanup the
+        // player's skill transition would have invoked.
+        constexpr int kBoundedHeldPostReleaseWorldUpdateTicks = 60;
+        const bool bounded_held_release_tick_processed =
+            bounded_held_native_cast &&
+            ongoing.bounded_max_size_reached &&
+            !bounded_max_size_just_reached &&
+            ongoing.saw_live_handle &&
+            ongoing.saw_activity &&
+            ongoing.bounded_post_release_ticks_waiting >=
+                kBoundedHeldPostReleaseWorldUpdateTicks;
         const bool startup_timeout_hit =
             ongoing.startup_in_progress &&
             ongoing.startup_ticks_waiting >=
-                ResolveMaxStartupTicksWaiting(ongoing.skill_id);
+                ResolveMaxStartupTicksWaiting(native_active_skill_id);
         const bool activity_released =
+            !bounded_held_native_cast &&
             ongoing.saw_activity &&
             !has_live_handle &&
             drive_state == 0 &&
             no_interrupt == 0 &&
             actor_e4 == 0 &&
             actor_e8 == 0;
-        const bool continuous_pure_primary =
-            ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
-            ongoing.requires_local_slot_native_tick;
-        const bool continuous_pure_primary_has_target =
-            continuous_pure_primary &&
-            target_refreshed &&
-            binding->facing_target_actor_address != 0 &&
-            ongoing.target_actor_address != 0;
-        const bool target_missing =
-            continuous_pure_primary &&
+        const bool gesture_window_complete =
+            !held_native_cast &&
+            !bounded_held_native_cast &&
             ongoing.saw_activity &&
-            !continuous_pure_primary_has_target &&
+            ongoing.ticks_waiting >= ResolveBotCastGestureTicks(native_active_skill_id);
+        const bool held_target_missing =
+            held_native_cast &&
+            ongoing.saw_activity &&
+            !target_refreshed &&
             binding->facing_target_actor_address == 0 &&
             ongoing.target_actor_address == 0;
-        if (continuous_pure_primary_has_target) {
+        if (held_native_cast && target_refreshed &&
+            binding->facing_target_actor_address != 0 &&
+            ongoing.target_actor_address != 0) {
             ongoing.targetless_ticks_waiting = 0;
-        } else if (target_missing) {
+        } else if (held_target_missing) {
             ongoing.targetless_ticks_waiting += 1;
         }
         const bool target_lost =
-            target_missing &&
+            held_target_missing &&
             ongoing.targetless_ticks_waiting >=
                 ParticipantEntityBinding::OngoingCastState::kTargetlessRetargetGraceTicks;
         // A live target does not prove a pure-primary handler is still making
         // progress. Ether can leave actor+0xE4/0xE8 asserted without publishing
         // a handle, so the safety cap must always be able to release the cast.
         const bool safety_cap_hit =
-            ongoing.ticks_waiting >= ParticipantEntityBinding::OngoingCastState::kMaxTicksWaiting;
+            ongoing.ticks_waiting >= ResolveBotCastSafetyCapTicks(native_active_skill_id);
+
+        if (bounded_max_size_just_reached) {
+            ongoing.startup_in_progress = false;
+            // Earth's boulder is launched by the native handler on the first tick
+            // after cast input is released. Do not call active-handle cleanup here:
+            // that tears down a fully charged but still-held boulder before native
+            // code can transition it into the flying/damaging state.
+            Log(
+                "[bots] native max-size reached; releasing held cast input for native launch. bot_id=" +
+                std::to_string(binding->bot_id) +
+                " skill_id=" + std::to_string(ongoing.skill_id) +
+                " ticks=" + std::to_string(ongoing.ticks_waiting) +
+                " group=" + HexString(active_spell_snapshot.group) +
+                " slot=" + HexString(active_spell_snapshot.slot) +
+                " handle_source=" +
+                    (active_spell_snapshot.handle_from_selection_state ? std::string("selection") : std::string("actor")) +
+                " selection_state=" + HexString(active_spell_snapshot.selection_state) +
+                " obj_ptr=" + HexString(active_spell_snapshot.object) +
+                " obj_type=" + HexString(active_spell_snapshot.object_type) +
+                " obj_vt_6c=" + HexString(active_spell_snapshot.release_secondary_fn) +
+                " obj_vt_70=" + HexString(active_spell_snapshot.release_finalize_fn) +
+                " obj_74=" + std::to_string(active_spell_snapshot.object_f74) +
+                " obj_1fc=" + std::to_string(active_spell_snapshot.object_f1fc) +
+                " max_charge=" + std::to_string(earth_max_charge));
+            return true;
+        }
 
         if (pure_primary_no_handle_settled || startup_timeout_hit || activity_released ||
-            target_lost || safety_cap_hit) {
-            const char* exit_label = startup_timeout_hit
-                ? "startup_timeout"
-                : (pure_primary_no_handle_settled
-                       ? "pure_primary_no_handle_settled"
-                       : (activity_released
-                              ? "activity_released"
-                              : (target_lost ? "target_lost" : "safety_cap")));
+            bounded_held_native_released || bounded_held_release_tick_processed ||
+            gesture_window_complete || target_lost || safety_cap_hit) {
+            const char* exit_label = "safety_cap";
+            if (startup_timeout_hit) {
+                exit_label = "startup_timeout";
+            } else if (pure_primary_no_handle_settled) {
+                exit_label = "pure_primary_no_handle_settled";
+            } else if (bounded_held_native_released || bounded_held_release_tick_processed) {
+                exit_label = "max_size_released";
+            } else if (activity_released) {
+                exit_label = "activity_released";
+            } else if (gesture_window_complete) {
+                exit_label = "gesture_window_complete";
+            } else if (target_lost) {
+                exit_label = "target_lost";
+            }
             if (startup_timeout_hit) {
                 LogSpellObjectDiag(active_cast_group);
             }
-            ReleaseSpellHandle(ongoing, exit_label, false);
+            ReleaseSpellHandle(ongoing, exit_label, target_lost);
             ongoing = ParticipantEntityBinding::OngoingCastState{};
         }
         return true;

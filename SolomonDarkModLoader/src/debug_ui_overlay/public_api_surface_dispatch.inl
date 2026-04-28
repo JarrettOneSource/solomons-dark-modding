@@ -322,4 +322,3 @@ bool TryResolveSettingsSnapshotElementDispatch(
     }
     return false;
 }
-

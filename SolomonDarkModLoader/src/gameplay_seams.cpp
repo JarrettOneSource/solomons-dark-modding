@@ -182,6 +182,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("hub", "start_testrun_control_byte_offset", kHubStartTestrunControlByteOffset),
 
         SDMOD_SIZE("gameplay.offsets", "gameplay_exact_text_object", kGameplayExactTextObjectOffset),
+        SDMOD_SIZE("gameplay.offsets", "gameplay_nameplate_text_object", kGameplayNameplateTextObjectOffset),
         SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_table_base", kStandaloneWizardProgressionTableBaseOffset),
         SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_table_count", kStandaloneWizardProgressionTableCountOffset),
         SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_entry_stride", kStandaloneWizardProgressionEntryStride),
@@ -504,6 +505,7 @@ uintptr_t kGoldScriptCaller = 0;
 
 std::size_t kHubStartTestrunControlByteOffset = 0;
 std::size_t kGameplayExactTextObjectOffset = 0;
+std::size_t kGameplayNameplateTextObjectOffset = 0;
 std::size_t kStandaloneWizardProgressionTableBaseOffset = 0;
 std::size_t kStandaloneWizardProgressionTableCountOffset = 0;
 std::size_t kStandaloneWizardProgressionEntryStride = 0;

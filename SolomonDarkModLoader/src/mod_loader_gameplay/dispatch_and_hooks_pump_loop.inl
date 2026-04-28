@@ -241,7 +241,35 @@ void PumpQueuedGameplayActions() {
 
     if (have_enemy_request) {
         std::string error_message;
-        if (!ExecuteSpawnEnemyNow(enemy_request.type_id, enemy_request.x, enemy_request.y, nullptr, &error_message)) {
+        uintptr_t enemy_address = 0;
+        const bool spawn_ok = ExecuteSpawnEnemyNow(
+            enemy_request.type_id,
+            enemy_request.x,
+            enemy_request.y,
+            &enemy_address,
+            &error_message);
+        {
+            SDModEnemySpawnResult result;
+            result.valid = true;
+            result.ok = spawn_ok;
+            result.request_id = enemy_request.request_id;
+            result.type_id = enemy_request.type_id;
+            result.actor_address = enemy_address;
+            result.requested_x = enemy_request.x;
+            result.requested_y = enemy_request.y;
+            result.completed_tick_ms = static_cast<std::uint64_t>(GetTickCount64());
+            result.error_message = error_message;
+            if (enemy_address != 0) {
+                auto& memory = ProcessMemory::Instance();
+                result.x = memory.ReadFieldOr<float>(enemy_address, kActorPositionXOffset, 0.0f);
+                result.y = memory.ReadFieldOr<float>(enemy_address, kActorPositionYOffset, 0.0f);
+                result.wrote_x = std::fabs(result.x - enemy_request.x) <= 0.01f;
+                result.wrote_y = std::fabs(result.y - enemy_request.y) <= 0.01f;
+            }
+            std::lock_guard<std::mutex> result_lock(g_last_enemy_spawn_result_mutex);
+            g_last_enemy_spawn_result = std::move(result);
+        }
+        if (!spawn_ok) {
             Log(
                 "spawn_enemy: queued request failed. type_id=" + std::to_string(enemy_request.type_id) +
                 " x=" + std::to_string(enemy_request.x) +
