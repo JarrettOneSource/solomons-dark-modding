@@ -1253,7 +1253,7 @@ bool PrimeGameplaySlotBotActor(
     float y,
     float heading,
     std::string* error_message);
-bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::string* error_message);
+bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string* error_message);
 bool CreateGameplaySlotBotActor(
     uintptr_t gameplay_address,
     uintptr_t world_address,

@@ -267,6 +267,8 @@ def parse_int_text(value: object, default: int = 0) -> int:
         text = str(value).strip()
         if text.lower().startswith("0x"):
             return int(text, 16)
+        if re.fullmatch(r"[+-]?\d+", text):
+            return int(text, 10)
         return int(float(text))
     except (TypeError, ValueError):
         return default
@@ -308,7 +310,9 @@ LOADOUT_RE = re.compile(
     r"primary_entry=(\d+) combo_entry=(\d+) spell_id=(\d+)"
 )
 CAST_PREPPED_RE = re.compile(
-    r"gameplay-slot cast prepped\. bot_id=(\d+) skill_id=(-?\d+) "
+    r"(?:gameplay-slot|wizard) cast prepped\. bot_id=(\d+) "
+    r"(?:(?:kind=([a-z_]+) gameplay_slot=(-?\d+) ))?"
+    r"skill_id=(-?\d+) "
     r"dispatcher_skill_id=(-?\d+) lane=([a-z_]+) selection_state=(-?\d+) "
     r"progression_runtime=(0x[0-9A-Fa-f]+) progression_spell_id=(-?\d+)"
 )
@@ -546,12 +550,14 @@ def build_statbook_validation(
                 {
                     "line": line,
                     "bot_id": parse_int_text(prepped_match.group(1)),
-                    "skill_id": parse_int_text(prepped_match.group(2)),
-                    "dispatcher_skill_id": parse_int_text(prepped_match.group(3)),
-                    "lane": prepped_match.group(4),
-                    "selection_state": parse_int_text(prepped_match.group(5)),
-                    "progression_runtime": parse_int_text(prepped_match.group(6)),
-                    "progression_spell_id": parse_int_text(prepped_match.group(7)),
+                    "kind": prepped_match.group(2) or "legacy_gameplay_slot",
+                    "gameplay_slot": parse_int_text(prepped_match.group(3) or "-999"),
+                    "skill_id": parse_int_text(prepped_match.group(4)),
+                    "dispatcher_skill_id": parse_int_text(prepped_match.group(5)),
+                    "lane": prepped_match.group(6),
+                    "selection_state": parse_int_text(prepped_match.group(7)),
+                    "progression_runtime": parse_int_text(prepped_match.group(8)),
+                    "progression_spell_id": parse_int_text(prepped_match.group(9)),
                     "startup_p750": parse_cast_startup_value(line, "p750"),
                 }
             )

@@ -487,15 +487,24 @@ def read_loader_log_text() -> str:
 def derive_loader_signals(log_text: str) -> dict[str, bool]:
     return {
         "queued_cast_logged": "[bots] queued cast for bot id=" in log_text,
-        "cast_prepped_logged": "[bots] gameplay-slot cast prepped." in log_text,
+        "cast_prepped_logged": (
+            "[bots] gameplay-slot cast prepped." in log_text or
+            "[bots] wizard cast prepped." in log_text
+        ),
         "cast_complete_logged": "cast complete" in log_text,
         "run_ended_logged": "[lua.bots] run.ended" in log_text,
         "pure_primary_start_entered": "[bots] pure_primary_start enter" in log_text,
         "pure_primary_start_exited": "[bots] pure_primary_start exit" in log_text,
         "spell_dispatch_entered": "[bots] spell_dispatch enter" in log_text,
         "spell_dispatch_exited": "[bots] spell_dispatch exit" in log_text,
-        "cast_prepare_failed": "[bots] gameplay-slot cast prepare failed." in log_text,
-        "cast_post_tick_detail": "[bots] gameplay-slot cast post-tick detail." in log_text,
+        "cast_prepare_failed": (
+            "[bots] gameplay-slot cast prepare failed." in log_text or
+            "[bots] standalone cast prepare failed." in log_text
+        ),
+        "cast_post_tick_detail": (
+            "[bots] gameplay-slot cast post-tick detail." in log_text or
+            "[bots] standalone cast post-tick detail." in log_text
+        ),
     }
 
 

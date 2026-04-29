@@ -532,7 +532,9 @@ void __fastcall HookPlayerActorPurePrimaryGate(void* self, void* /*unused_edx*/)
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
-            binding != nullptr && IsGameplaySlotWizardKind(binding->kind)) {
+            binding != nullptr &&
+            (IsGameplaySlotWizardKind(binding->kind) ||
+             IsStandaloneWizardKind(binding->kind))) {
             log_this = binding->ongoing_cast.startup_in_progress;
             bot_id = binding->bot_id;
             startup = binding->ongoing_cast.startup_in_progress;
@@ -598,7 +600,9 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
-            binding != nullptr && IsGameplaySlotWizardKind(binding->kind)) {
+            binding != nullptr &&
+            (IsGameplaySlotWizardKind(binding->kind) ||
+             IsStandaloneWizardKind(binding->kind))) {
             log_this = true;
             bot_id = binding->bot_id;
             startup = binding->ongoing_cast.startup_in_progress;
@@ -924,7 +928,9 @@ void __fastcall HookPlayerControlBrainUpdate(
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
-            binding != nullptr && IsGameplaySlotWizardKind(binding->kind)) {
+            binding != nullptr &&
+            (IsGameplaySlotWizardKind(binding->kind) ||
+             IsStandaloneWizardKind(binding->kind))) {
             if (binding->ongoing_cast.active &&
                 OngoingCastShouldRefreshNativeTargetState(binding->ongoing_cast)) {
                 (void)RefreshOngoingCastAimFromFacingTarget(binding, &binding->ongoing_cast);
@@ -1181,7 +1187,9 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
-            binding != nullptr && IsGameplaySlotWizardKind(binding->kind)) {
+            binding != nullptr &&
+            (IsGameplaySlotWizardKind(binding->kind) ||
+             IsStandaloneWizardKind(binding->kind))) {
             SyncWizardBotMovementIntent(binding);
             log_this = true;
             bot_id = binding->bot_id;
@@ -1217,7 +1225,9 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
         {
             std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
             if (auto* binding = FindParticipantEntityForActor(actor_address);
-                binding != nullptr && IsGameplaySlotWizardKind(binding->kind)) {
+                binding != nullptr &&
+                (IsGameplaySlotWizardKind(binding->kind) ||
+                 IsStandaloneWizardKind(binding->kind))) {
                 if (pure_primary_attachment_item != 0) {
                     binding->ongoing_cast.pure_primary_item_sink_fallback =
                         pure_primary_attachment_item;
@@ -1234,7 +1244,9 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
         pure_primary_actor_window_shim = EnterPurePrimaryLocalActorWindow(actor_address);
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
-            binding != nullptr && IsGameplaySlotWizardKind(binding->kind)) {
+            binding != nullptr &&
+            (IsGameplaySlotWizardKind(binding->kind) ||
+             IsStandaloneWizardKind(binding->kind))) {
             SyncWizardBotMovementIntent(binding);
             (void)RefreshAndApplyWizardBindingFacingState(binding, actor_address);
         }
@@ -1363,7 +1375,9 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     if (apply_local_selection_shim) {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
-            binding != nullptr && IsGameplaySlotWizardKind(binding->kind)) {
+            binding != nullptr &&
+            (IsGameplaySlotWizardKind(binding->kind) ||
+             IsStandaloneWizardKind(binding->kind))) {
             (void)RefreshAndApplyWizardBindingFacingState(binding, actor_address);
         }
     }
@@ -1961,10 +1975,14 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             if (native_tick_now_ms - s_last_synthetic_cast_intent_log_ms >= 250) {
                 s_last_synthetic_cast_intent_log_ms = native_tick_now_ms;
                 Log(
-                    "[bots] gameplay-slot synthetic cast intent. actor=" +
+                    "[bots] wizard synthetic cast intent. actor=" +
                     HexString(actor_address) +
                     " gameplay=" + HexString(gameplay_address) +
                     " mouse_left=" + (synthetic_mouse_left_applied ? std::string("1") : std::string("0")) +
+                    " kind=" +
+                        (IsGameplaySlotWizardKind(binding->kind)
+                             ? std::string("gameplay_slot")
+                             : std::string("standalone")) +
                     " gameplay_slot=" + std::to_string(binding->gameplay_slot));
             }
         }
@@ -2032,6 +2050,18 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     binding,
                     actor_address,
                     tracked_actor_moving);
+                std::string cast_error_message;
+                if (!binding->ongoing_cast.active) {
+                    (void)PreparePendingWizardBotCast(binding, &cast_error_message);
+                    if (!cast_error_message.empty()) {
+                        Log(
+                            "[bots] standalone cast prepare failed. bot_id=" +
+                            std::to_string(binding->bot_id) +
+                            " actor=" + HexString(actor_address) +
+                            " error=" + cast_error_message);
+                        cast_error_message.clear();
+                    }
+                }
                 if (!binding->ongoing_cast.active) {
                     ClearLiveWizardActorAnimationDriveState(actor_address);
                 } else {
@@ -2043,7 +2073,15 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 (void)ApplyWizardBindingFacingState(binding, actor_address);
             }
         }
-        original(self);
+        {
+            std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+            if (auto* binding = FindParticipantEntityForActor(actor_address);
+                binding != nullptr && IsStandaloneWizardKind(binding->kind)) {
+                RunStockTick(binding);
+            } else {
+                original(self);
+            }
+        }
 
         const auto position_after_stock_x =
             memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, position_before_x);
@@ -2105,6 +2143,13 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 }
                 std::string cast_error_message;
                 (void)ProcessPendingBotCast(binding, &cast_error_message);
+                if (!cast_error_message.empty()) {
+                    Log(
+                        "[bots] standalone cast post-tick detail. bot_id=" +
+                        std::to_string(binding->bot_id) +
+                        " actor=" + HexString(actor_address) +
+                        " error=" + cast_error_message);
+                }
                 (void)RefreshWizardBindingTargetFacing(binding);
                 if (!ApplyWizardBindingFacingState(binding, actor_address)) {
                     ApplyWizardActorFacingState(actor_address, heading_before);
@@ -2167,7 +2212,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     return;
                 }
                 if (!binding->ongoing_cast.active) {
-                    (void)PreparePendingGameplaySlotBotCast(binding, &cast_error_message);
+                    (void)PreparePendingWizardBotCast(binding, &cast_error_message);
                     if (!cast_error_message.empty()) {
                         Log(
                             "[bots] gameplay-slot cast prepare failed. bot_id=" +

@@ -1569,12 +1569,13 @@ void PrimeSelectionBrainForCastStartup(
     (void)memory.TryWriteField<std::int32_t>(selection_pointer, 0x14, 0);
 }
 
-bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::string* error_message) {
+bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
     }
     if (binding == nullptr || binding->actor_address == 0 || binding->bot_id == 0 ||
-        !IsGameplaySlotWizardKind(binding->kind)) {
+        (!IsGameplaySlotWizardKind(binding->kind) &&
+         !IsStandaloneWizardKind(binding->kind))) {
         return false;
     }
 
@@ -2056,7 +2057,12 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
     g_gameplay_slot_hud_probe_actor = actor_address;
     g_gameplay_slot_hud_probe_until_ms = static_cast<std::uint64_t>(GetTickCount64()) + 400;
     Log(
-        "[bots] gameplay-slot cast prepped. bot_id=" + std::to_string(binding->bot_id) +
+        "[bots] wizard cast prepped. bot_id=" + std::to_string(binding->bot_id) +
+        " kind=" +
+            (IsGameplaySlotWizardKind(binding->kind)
+                 ? std::string("gameplay_slot")
+                 : std::string("standalone")) +
+        " gameplay_slot=" + std::to_string(binding->gameplay_slot) +
         " skill_id=" + std::to_string(ongoing.skill_id) +
         " dispatcher_skill_id=" + std::to_string(ongoing.dispatcher_skill_id) +
         " lane=" +

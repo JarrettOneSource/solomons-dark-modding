@@ -129,8 +129,7 @@ bool EnterLocalPlayerCastShim(
 
     *state = LocalPlayerCastShimState{};
     if (binding == nullptr ||
-        binding->actor_address == 0 ||
-        binding->gameplay_slot <= 0) {
+        binding->actor_address == 0) {
         return false;
     }
 
@@ -140,36 +139,34 @@ bool EnterLocalPlayerCastShim(
         binding->actor_address,
         kActorSlotOffset,
         static_cast<std::uint8_t>(0));
-    if (binding->gameplay_slot > 0) {
-        uintptr_t gameplay_address = 0;
-        const auto bot_progression_handle =
+    uintptr_t gameplay_address = 0;
+    const auto bot_progression_handle =
+        memory.ReadFieldOr<uintptr_t>(
+            binding->actor_address,
+            kActorProgressionHandleOffset,
+            0);
+    if (bot_progression_handle != 0 &&
+        TryResolveCurrentGameplayScene(&gameplay_address) &&
+        gameplay_address != 0) {
+        const auto local_progression_slot_offset = kGameplayPlayerProgressionHandleOffset;
+        const auto saved_local_progression_handle =
             memory.ReadFieldOr<uintptr_t>(
-                binding->actor_address,
-                kActorProgressionHandleOffset,
+                gameplay_address,
+                local_progression_slot_offset,
                 0);
-        if (bot_progression_handle != 0 &&
-            TryResolveCurrentGameplayScene(&gameplay_address) &&
-            gameplay_address != 0) {
-            const auto local_progression_slot_offset = kGameplayPlayerProgressionHandleOffset;
-            const auto saved_local_progression_handle =
-                memory.ReadFieldOr<uintptr_t>(
-                    gameplay_address,
-                    local_progression_slot_offset,
-                    0);
-            state->gameplay_address = gameplay_address;
-            state->local_progression_slot_offset = local_progression_slot_offset;
-            state->saved_local_progression_handle = saved_local_progression_handle;
-            state->redirected_progression_handle = bot_progression_handle;
+        state->gameplay_address = gameplay_address;
+        state->local_progression_slot_offset = local_progression_slot_offset;
+        state->saved_local_progression_handle = saved_local_progression_handle;
+        state->redirected_progression_handle = bot_progression_handle;
 
-            if (saved_local_progression_handle == bot_progression_handle) {
-                state->progression_slot_redirected = true;
-            } else if (memory.TryWriteField<uintptr_t>(
-                           gameplay_address,
-                           local_progression_slot_offset,
-                           bot_progression_handle)) {
-                state->progression_slot_redirected = true;
-                state->progression_slot_restore_needed = true;
-            }
+        if (saved_local_progression_handle == bot_progression_handle) {
+            state->progression_slot_redirected = true;
+        } else if (memory.TryWriteField<uintptr_t>(
+                       gameplay_address,
+                       local_progression_slot_offset,
+                       bot_progression_handle)) {
+            state->progression_slot_redirected = true;
+            state->progression_slot_restore_needed = true;
         }
     }
 
