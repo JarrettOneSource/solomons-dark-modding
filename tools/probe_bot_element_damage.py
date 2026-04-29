@@ -321,8 +321,8 @@ PURE_PRIMARY_POST_BUILDER_RE = re.compile(
     r"pure_primary_post_builder actor=(0x[0-9A-Fa-f]+) bot_id=(\d+) "
     r"builder_result=(0x[0-9A-Fa-f]+).*"
 )
-EARTH_MAX_SIZE_REACHED_RE = re.compile(
-    r"native max-size reached; releasing held cast input for native launch\. "
+EARTH_RELEASE_RE = re.compile(
+    r"native (max-size|damage-threshold) reached; releasing held cast input for native launch\. "
     r"bot_id=(\d+) skill_id=(-?\d+).*"
 )
 
@@ -401,7 +401,7 @@ def build_native_projectile_spawn_validation(
         }
 
     expected_object_type = int(spawn_spec["object_type"])
-    matching_spawn = next(
+    matching_release = next(
         (
             item
             for item in reversed(earth_spawn_matches)
@@ -410,7 +410,47 @@ def build_native_projectile_spawn_validation(
         ),
         None,
     )
-    object_source = matching_spawn or matching_complete
+    object_source = matching_release or matching_complete
+    release_reason = str(matching_release.get("release_reason", "")) if matching_release else ""
+    max_size_fields_ok = (
+        matching_release is not None
+        and finite_float(float(matching_release.get("obj_74", 0.0)))
+        and finite_float(float(matching_release.get("obj_1fc", 0.0)))
+        and finite_float(float(matching_release.get("max_charge", 0.0)))
+        and float(matching_release.get("obj_1fc", 0.0)) > 0.0
+        and float(matching_release.get("max_charge", 0.0)) > 0.0
+        and float(matching_release.get("obj_74", 0.0)) >= float(matching_release.get("obj_1fc", 0.0)) - 0.001
+        and float(matching_release.get("obj_74", 0.0)) >= float(matching_release.get("max_charge", 0.0)) - 0.001
+    )
+    threshold_fields_ok = (
+        matching_release is not None
+        and int(matching_release.get("target_actor", 0)) != 0
+        and int(matching_release.get("target_health", 0)) != 0
+        and finite_float(float(matching_release.get("projected_damage", 0.0)))
+        and finite_float(float(matching_release.get("target_hp", 0.0)))
+        and finite_float(float(matching_release.get("base_damage", 0.0)))
+        and finite_float(float(matching_release.get("obj_74", 0.0)))
+        and float(matching_release.get("base_damage", 0.0)) > 0.0
+        and float(matching_release.get("target_hp", 0.0)) > 0.0
+        and abs(
+            float(matching_release.get("projected_damage", 0.0)) -
+            (
+                float(matching_release.get("base_damage", 0.0)) *
+                float(matching_release.get("obj_74", 0.0)) *
+                float(matching_release.get("obj_74", 0.0))
+            )
+        ) <= 0.002
+        and float(matching_release.get("projected_damage", 0.0)) >=
+            float(matching_release.get("target_hp", 0.0))
+        and int(matching_release.get("threshold_charge_write", 0)) == 1
+        and int(matching_release.get("threshold_max_write", 0)) == 1
+        and int(matching_release.get("release_charge_write", 0)) == 1
+    )
+    stock_cleanup_window_ok = (
+        matching_complete is not None
+        and int(matching_complete.get("cleanup_requested", 0)) == 1
+        and int(matching_complete.get("post_release_ticks", 0)) >= 60
+    )
     checks = {
         "native_spell_object_spawn_logged": object_source is not None
         and int(object_source.get("obj_ptr", 0)) != 0,
@@ -419,16 +459,30 @@ def build_native_projectile_spawn_validation(
         "native_spell_object_handle_present": object_source is not None
         and int(object_source.get("group", object_source.get("group_before", 0xFF))) != 0xFF
         and int(object_source.get("slot", object_source.get("slot_before", 0xFFFF))) != 0xFFFF,
-        "native_max_size_reached_before_release": matching_spawn is not None,
+        "native_release_requested_before_cleanup": matching_release is not None,
+        "native_release_uses_stock_cleanup_window": stock_cleanup_window_ok,
+        "native_max_size_fields_match_when_used": release_reason != "max_size" or max_size_fields_ok,
+        "native_damage_threshold_fields_match_when_used": (
+            release_reason != "damage_threshold" or threshold_fields_ok
+        ),
         "native_cast_completed_after_release": matching_complete is not None
-        and matching_complete.get("exit_label") in {"max_size_reached", "max_size_released"},
+        and matching_complete.get("exit_label") in {
+            "max_size_reached",
+            "max_size_released",
+            "damage_threshold_released",
+        },
     }
     return {
         "ok": all(checks.values()),
         "kind": str(spawn_spec["kind"]),
         "expected_object_type": expected_object_type,
         "checks": checks,
-        "matching_spawn": matching_spawn,
+        "matching_spawn": matching_release,
+        "matching_release": matching_release,
+        "release_reason": release_reason,
+        "max_size_fields_ok": max_size_fields_ok,
+        "threshold_fields_ok": threshold_fields_ok,
+        "stock_cleanup_window_ok": stock_cleanup_window_ok,
         "matching_complete": matching_complete,
         "spawn_log_count": len(earth_spawn_matches),
     }
@@ -525,13 +579,18 @@ def build_statbook_validation(
                     "startup_e8": parse_cast_startup_value(line, "e8"),
                 }
             )
-        earth_spawn_match = EARTH_MAX_SIZE_REACHED_RE.search(line)
-        if earth_spawn_match and parse_int_text(earth_spawn_match.group(1)) == bot_id:
+        earth_spawn_match = EARTH_RELEASE_RE.search(line)
+        if earth_spawn_match and parse_int_text(earth_spawn_match.group(2)) == bot_id:
             earth_spawn_matches.append(
                 {
                     "line": line,
-                    "bot_id": parse_int_text(earth_spawn_match.group(1)),
-                    "skill_id": parse_int_text(earth_spawn_match.group(2)),
+                    "release_reason": (
+                        "damage_threshold"
+                        if earth_spawn_match.group(1) == "damage-threshold"
+                        else "max_size"
+                    ),
+                    "bot_id": parse_int_text(earth_spawn_match.group(2)),
+                    "skill_id": parse_int_text(earth_spawn_match.group(3)),
                     "group": parse_cast_startup_value(line, "group"),
                     "slot": parse_cast_startup_value(line, "slot"),
                     "handle_source": parse_log_word(line, "handle_source"),
@@ -539,8 +598,37 @@ def build_statbook_validation(
                     "obj_ptr": parse_cast_startup_value(line, "obj_ptr"),
                     "obj_type": parse_cast_startup_value(line, "obj_type"),
                     "obj_74": parse_log_float(line, "obj_74"),
+                    "obj_1f0": parse_log_float(line, "obj_1f0"),
                     "obj_1fc": parse_log_float(line, "obj_1fc"),
+                    "obj_22c": parse_cast_startup_value(line, "obj_22c"),
+                    "obj_230": parse_cast_startup_value(line, "obj_230"),
                     "max_charge": parse_log_float(line, "max_charge"),
+                    "statbook_level": parse_cast_startup_value(line, "statbook_level"),
+                    "stat_source": parse_cast_startup_value(line, "stat_source"),
+                    "stat_vt": parse_cast_startup_value(line, "stat_vt"),
+                    "damage_getter": parse_cast_startup_value(line, "damage_getter"),
+                    "damage_getter_attempt": parse_cast_startup_value(line, "damage_getter_attempt"),
+                    "damage_getter_seh": parse_cast_startup_value(line, "damage_getter_seh"),
+                    "damage_native": parse_cast_startup_value(line, "damage_native"),
+                    "base_damage": parse_log_float(line, "base_damage"),
+                    "statbook_damage": parse_log_float(line, "statbook_damage"),
+                    "projected_damage": parse_log_float(line, "projected_damage"),
+                    "target_actor": parse_cast_startup_value(line, "target_actor"),
+                    "target_health": parse_cast_startup_value(line, "target_health"),
+                    "target_health_kind": parse_log_word(line, "target_health_kind"),
+                    "target_hp": parse_log_float(line, "target_hp"),
+                    "target_max_hp": parse_log_float(line, "target_max_hp"),
+                    "target_x": parse_log_float(line, "target_x"),
+                    "target_y": parse_log_float(line, "target_y"),
+                    "target_radius": parse_log_float(line, "target_radius"),
+                    "target_distance": parse_log_float(line, "target_distance"),
+                    "target_impact_radius": parse_log_float(line, "target_impact_radius"),
+                    "target_damage_scale": parse_log_float(line, "target_damage_scale"),
+                    "target_in_impact": parse_cast_startup_value(line, "target_in_impact"),
+                    "native_cleanup_release": parse_cast_startup_value(line, "native_cleanup_release"),
+                    "threshold_charge_write": parse_cast_startup_value(line, "threshold_charge_write"),
+                    "threshold_max_write": parse_cast_startup_value(line, "threshold_max_write"),
+                    "release_charge_write": parse_cast_startup_value(line, "release_charge_write"),
                 }
             )
         complete_match = CAST_COMPLETE_RE.search(line)
@@ -552,9 +640,12 @@ def build_statbook_validation(
                     "bot_id": parse_int_text(complete_match.group(2)),
                     "skill_id": parse_int_text(complete_match.group(3)),
                     "ticks": parse_int_text(complete_match.group(4)),
+                    "post_release_ticks": parse_cast_startup_value(line, "post_release_ticks"),
                     "group_before": parse_cast_startup_value(line, "group_before"),
                     "slot_before": parse_cast_startup_value(line, "slot_before"),
                     "group_after": parse_cast_startup_value(line, "group_after"),
+                    "cleanup_requested": parse_cast_startup_value(line, "cleanup_requested"),
+                    "cleanup_actor_handle_live": parse_cast_startup_value(line, "cleanup_actor_handle_live"),
                     "handle_source": parse_log_word(line, "handle_source"),
                     "selection_state": parse_cast_startup_value(line, "selection_state"),
                     "obj_ptr": parse_cast_startup_value(line, "obj_ptr"),
@@ -562,9 +653,14 @@ def build_statbook_validation(
                     "obj_74": re.search(r"\bobj_74=([0-9.+\-eE]+)", line).group(1)
                     if re.search(r"\bobj_74=([0-9.+\-eE]+)", line)
                     else "",
+                    "obj_1f0": re.search(r"\bobj_1f0=([0-9.+\-eE]+)", line).group(1)
+                    if re.search(r"\bobj_1f0=([0-9.+\-eE]+)", line)
+                    else "",
                     "obj_1fc": re.search(r"\bobj_1fc=([0-9.+\-eE]+)", line).group(1)
                     if re.search(r"\bobj_1fc=([0-9.+\-eE]+)", line)
                     else "",
+                    "obj_22c": parse_cast_startup_value(line, "obj_22c"),
+                    "obj_230": parse_cast_startup_value(line, "obj_230"),
                     "boulder_max_size": parse_cast_startup_value(line, "boulder_max_size"),
                 }
             )
@@ -601,13 +697,57 @@ def build_statbook_validation(
         ),
         None,
     )
-    earth_max_size_ok = True
+    earth_release_policy_ok = True
+    earth_release_base_damage_matches_statbook = True
     if spec.get("requires_max_size_release"):
-        earth_release_labels = {"max_size_reached", "max_size_released"}
-        earth_max_size_ok = bool(
+        earth_release_labels = {"max_size_reached", "max_size_released", "damage_threshold_released"}
+        matching_release = next(
+            (
+                item
+                for item in reversed(earth_spawn_matches)
+                if int(item["skill_id"]) == spec["build_skill_id"]
+            ),
+            None,
+        )
+        release_reason = str(matching_release.get("release_reason", "")) if matching_release else ""
+        release_by_max_size = (
+            matching_complete
+            and matching_complete.get("exit_label") in {"max_size_reached", "max_size_released"}
+            and int(matching_complete.get("boulder_max_size", 0)) == 1
+            and matching_release is not None
+            and int(matching_complete.get("cleanup_requested", 0)) == 1
+            and int(matching_complete.get("post_release_ticks", 0)) >= 60
+        )
+        release_by_damage_threshold = (
+            matching_complete
+            and matching_complete.get("exit_label") == "damage_threshold_released"
+            and matching_release is not None
+            and release_reason == "damage_threshold"
+            and int(matching_release.get("target_actor", 0)) != 0
+            and int(matching_release.get("target_health", 0)) != 0
+            and int(matching_complete.get("cleanup_requested", 0)) == 1
+            and int(matching_complete.get("post_release_ticks", 0)) >= 60
+            and float(matching_release.get("projected_damage", 0.0)) >=
+                float(matching_release.get("target_hp", 0.0))
+        )
+        earth_release_policy_ok = bool(
             matching_complete
             and matching_complete.get("exit_label") in earth_release_labels
-            and int(matching_complete.get("boulder_max_size", 0)) == 1
+            and (release_by_max_size or release_by_damage_threshold)
+        )
+        expected_base_damage = float(statbook.get("level_damage", 0.0))
+        release_statbook_damage = (
+            float(matching_release.get("statbook_damage", 0.0))
+            if matching_release is not None and finite_float(float(matching_release.get("statbook_damage", 0.0)))
+            else float(matching_release.get("base_damage", 0.0))
+            if matching_release is not None
+            else 0.0
+        )
+        earth_release_base_damage_matches_statbook = bool(
+            matching_release is not None
+            and int(matching_release.get("statbook_level", -1)) == int(statbook.get("level", -2))
+            and finite_float(release_statbook_damage)
+            and abs(release_statbook_damage - expected_base_damage) <= 0.001
         )
     native_projectile_spawn_validation = build_native_projectile_spawn_validation(
         element,
@@ -629,7 +769,8 @@ def build_statbook_validation(
         "skills_wizard_loadout_logged": matching_loadout is not None,
         "cast_prepped_logged": matching_prepped is not None,
         "cast_completed_logged": matching_complete is not None,
-        "earth_released_at_native_max_size": earth_max_size_ok,
+        "earth_release_policy_satisfied": earth_release_policy_ok,
+        "earth_release_base_damage_matches_statbook": earth_release_base_damage_matches_statbook,
         "native_projectile_or_effect_spawn_logged": native_projectile_spawn_validation.get("ok") is True,
     }
     return {
@@ -1392,6 +1533,11 @@ emit('target_x', hx)
 emit('target_y', hy)
 emit('hostile_x_ok', sd.debug.write_float(hostile + 0x18, hx))
 emit('hostile_y_ok', sd.debug.write_float(hostile + 0x1C, hy))
+emit('hostile_move_speed_ok', sd.debug.write_float(hostile + 0x74, 0.0))
+emit('hostile_speed_mult_ok', sd.debug.write_float(hostile + 0x120, 0.0))
+emit('hostile_move_input_x_ok', sd.debug.write_float(hostile + 0x158, 0.0))
+emit('hostile_move_input_y_ok', sd.debug.write_float(hostile + 0x15C, 0.0))
+emit('hostile_move_step_ok', sd.debug.write_float(hostile + 0x218, 0.0))
 emit('bot_x_ok', sd.debug.write_float(bot + 0x18, bx))
 emit('bot_y_ok', sd.debug.write_float(bot + 0x1C, by))
 emit('bot_heading_ok', sd.debug.write_float(bot + 0x6C, {heading}))
@@ -2322,6 +2468,37 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
             bot_id,
             full_loader_log_tail,
         )
+        native_spawn_validation = statbook_validation.get("native_projectile_spawn_validation")
+        native_release = (
+            native_spawn_validation.get("matching_release")
+            if isinstance(native_spawn_validation, dict)
+            else None
+        )
+        before_was_available = before_for_validation.get("available", "true") == "true"
+        native_release_removed_target = (
+            isinstance(native_release, dict)
+            and before_was_available
+            and after.get("available") != "true"
+            and int(native_release.get("target_actor", 0)) == hostile_actor
+            and str(native_release.get("release_reason", "")) in {"max_size", "damage_threshold"}
+        )
+        if native_release_removed_target and not any(victim.get("target") is True for victim in victims):
+            victims.append(
+                {
+                    "actor_address": hostile_actor,
+                    "watch_name": target_watch_name,
+                    "target": True,
+                    "hp_before": hp_before,
+                    "hp_after": None,
+                    "hp_write_count": hp_write_count,
+                    "removed_after_write": False,
+                    "removed_after_native_release": True,
+                    "enemy_type": before_for_validation.get("enemy_type", ""),
+                    "object_type_id": before_for_validation.get("object_type_id", 0),
+                }
+            )
+        target_removed_after_damage = target_removed_after_damage or native_release_removed_target
+        hp_decreased = hp_decreased or native_release_removed_target
         result.update(
             {
                 "player": player,

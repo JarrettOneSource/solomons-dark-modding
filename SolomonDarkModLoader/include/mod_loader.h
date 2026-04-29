@@ -290,6 +290,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message);
 void ShutdownGameplayKeyboardInjection();
 bool IsGameplayKeyboardInjectionInitialized();
 bool QueueGameplayMouseLeftClick(std::string* error_message);
+bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_message);
 std::uint64_t GetGameplayMouseLeftEdgeSerial();
 std::uint64_t GetGameplayMouseLeftEdgeTickMs();
 bool QueueGameplayKeyPress(std::string_view binding_name, std::string* error_message);

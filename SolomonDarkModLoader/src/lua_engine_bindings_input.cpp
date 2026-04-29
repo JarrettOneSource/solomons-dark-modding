@@ -166,13 +166,26 @@ int LuaInputPressScancode(lua_State* state) {
     return 1;
 }
 
+int LuaInputHoldMouseLeftFrames(lua_State* state) {
+    const auto raw = luaL_checkinteger(state, 1);
+    std::string error_message;
+    if (raw <= 0 || raw > 3600 ||
+        !QueueGameplayMouseLeftHoldFrames(static_cast<std::uint32_t>(raw), &error_message)) {
+        return luaL_error(state, "sd.input.hold_mouse_left_frames failed: %s", error_message.c_str());
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 }  // namespace
 
 void RegisterLuaInputBindings(lua_State* state) {
-    lua_createtable(state, 0, 3);
+    lua_createtable(state, 0, 4);
     RegisterFunction(state, &LuaInputPressKey, "press_key");
     RegisterFunction(state, &LuaInputPressScancode, "press_scancode");
     RegisterFunction(state, &LuaInputClickNormalized, "click_normalized");
+    RegisterFunction(state, &LuaInputHoldMouseLeftFrames, "hold_mouse_left_frames");
     lua_setfield(state, -2, "input");
 }
 

@@ -535,6 +535,32 @@ bool CallCastActiveHandleCleanupSafe(
     }
 }
 
+bool CallNativeTwoFloatGetterSafe(
+    uintptr_t getter_address,
+    uintptr_t object_address,
+    float x,
+    float y,
+    float* result,
+    DWORD* exception_code) {
+    auto* getter = reinterpret_cast<NativeTwoFloatGetterFn>(getter_address);
+    if (result != nullptr) {
+        *result = 0.0f;
+    }
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (getter == nullptr || object_address == 0 || result == nullptr) {
+        return false;
+    }
+
+    __try {
+        *result = getter(reinterpret_cast<void*>(object_address), x, y);
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
 bool CallActorWorldUnregisterSafe(
     uintptr_t actor_world_unregister_address,
     uintptr_t world_address,

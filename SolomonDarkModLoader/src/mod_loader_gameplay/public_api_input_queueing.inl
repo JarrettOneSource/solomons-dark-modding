@@ -11,12 +11,22 @@ std::uint64_t GetGameplayMouseLeftEdgeTickMs() {
 }
 
 bool QueueGameplayMouseLeftClick(std::string* error_message) {
+    return QueueGameplayMouseLeftHoldFrames(kInjectedGameplayMouseClickFrames, error_message);
+}
+
+bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
     }
     if (!g_gameplay_keyboard_injection.initialized) {
         if (error_message != nullptr) {
             *error_message = "Gameplay input injection is not initialized.";
+        }
+        return false;
+    }
+    if (frames == 0 || frames > 3600) {
+        if (error_message != nullptr) {
+            *error_message = "Mouse-left hold frames must be in the range 1..3600.";
         }
         return false;
     }
@@ -30,10 +40,11 @@ bool QueueGameplayMouseLeftClick(std::string* error_message) {
     }
 
     g_gameplay_keyboard_injection.pending_mouse_left_frames.fetch_add(
-        kInjectedGameplayMouseClickFrames,
+        frames,
         std::memory_order_acq_rel);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.fetch_add(1, std::memory_order_acq_rel);
-    Log("Queued gameplay mouse-left click. gameplay=" + HexString(scene_address));
+    Log("Queued gameplay mouse-left hold. gameplay=" + HexString(scene_address) +
+        " frames=" + std::to_string(frames));
     return true;
 }
 
@@ -90,4 +101,3 @@ bool QueueGameplayKeyPress(std::string_view binding_name, std::string* error_mes
 
     return QueueGameplayScancodePress(raw_binding_code, error_message);
 }
-

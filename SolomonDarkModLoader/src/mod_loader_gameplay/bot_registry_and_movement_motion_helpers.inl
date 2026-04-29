@@ -110,6 +110,50 @@ bool TryReadActorProgressionHealth(uintptr_t actor_address, ActorHealthRuntime* 
     return true;
 }
 
+bool TryReadActorHealthRuntime(uintptr_t actor_address, ActorHealthRuntime* health) {
+    if (actor_address == 0 || health == nullptr) {
+        return false;
+    }
+    if (TryReadArenaEnemyActorHealth(actor_address, health)) {
+        return true;
+    }
+    return TryReadActorProgressionHealth(actor_address, health);
+}
+
+constexpr std::array<float, 26> kEarthBoulderBaseDamageByLevel = {
+    0.0f,   10.0f,  30.0f,  50.0f,  75.0f,  100.0f, 120.0f, 140.0f, 160.0f,
+    180.0f, 200.0f, 220.0f, 240.0f, 260.0f, 280.0f, 300.0f, 320.0f, 340.0f,
+    360.0f, 380.0f, 400.0f, 420.0f, 440.0f, 460.0f, 480.0f, 500.0f,
+};
+
+int ResolveEarthBoulderStatbookLevel(
+    const ParticipantEntityBinding* binding,
+    uintptr_t progression_runtime_address) {
+    int level = binding != nullptr ? binding->character_profile.level : 1;
+    auto& memory = ProcessMemory::Instance();
+    if (progression_runtime_address != 0 &&
+        kProgressionLevelOffset != 0 &&
+        memory.IsReadableRange(progression_runtime_address + kProgressionLevelOffset, sizeof(int))) {
+        level = memory.ReadFieldOr<int>(progression_runtime_address, kProgressionLevelOffset, level);
+    }
+    if (level < 1) {
+        return 1;
+    }
+    const auto max_level = static_cast<int>(kEarthBoulderBaseDamageByLevel.size()) - 1;
+    return level > max_level ? max_level : level;
+}
+
+float ResolveEarthBoulderBaseDamage(
+    const ParticipantEntityBinding* binding,
+    uintptr_t progression_runtime_address,
+    int* resolved_level) {
+    const auto level = ResolveEarthBoulderStatbookLevel(binding, progression_runtime_address);
+    if (resolved_level != nullptr) {
+        *resolved_level = level;
+    }
+    return kEarthBoulderBaseDamageByLevel[static_cast<std::size_t>(level)];
+}
+
 bool IsActorRuntimeDead(uintptr_t actor_address) {
     if (actor_address == 0) {
         return false;
@@ -1169,7 +1213,7 @@ bool OngoingCastShouldDriveSyntheticCastInput(
         return true;
     }
     if (SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id)) {
-        return !ongoing.bounded_max_size_reached;
+        return !ongoing.bounded_release_requested;
     }
     return false;
 }
@@ -1215,7 +1259,7 @@ bool OngoingCastShouldRefreshNativeTargetState(
     const ParticipantEntityBinding::OngoingCastState& ongoing) {
     const auto active_skill_id = ResolveOngoingNativeTickSkillId(ongoing);
     if (SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id) &&
-        ongoing.bounded_max_size_reached) {
+        ongoing.bounded_release_requested) {
         return false;
     }
     return ongoing.startup_in_progress ||
@@ -1827,10 +1871,14 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
     ApplyPreparedState(&ongoing);
     bool pure_primary_primer_called = false;
     DWORD pure_primary_primer_exception = 0;
+    const bool dispatcher_primary_uses_primer =
+        have_primary_descriptor &&
+        ongoing.uses_dispatcher_skill_id &&
+        !SkillRequiresBoundedHeldCastInputDuringNativeTick(ongoing.dispatcher_skill_id);
     const bool should_run_primary_damage_primer =
         request.kind == multiplayer::BotCastKind::Primary &&
         (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary ||
-         (have_primary_descriptor && ongoing.uses_dispatcher_skill_id));
+         dispatcher_primary_uses_primer);
     if (should_run_primary_damage_primer) {
         const auto pure_primary_start_address =
             memory.ResolveGameAddressOrZero(kSpellCastPurePrimary);
@@ -1909,10 +1957,11 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
 //     the per-spell handler natively. Our job is (a) initiate the cast by
 //     setting aim + actor+0x270 + a primer dispatch; (b) each subsequent tick
     //     keeps stock input held only for native-held primaries; (c) bounded held
-    //     primaries release the synthetic input once the native object reports its
-    //     configured max charge, then let the stock object update/release path own
-    //     collision and damage. kMaxTicksWaiting is a safety cap against unexpected
-    //     latch states, not a timing assumption.
+    //     primaries release synthetic input when native charge reaches the chosen
+    //     release point, let the live world object update, then invoke the stock
+    //     active-handle cleanup so native damage/effect code remains authoritative.
+    //     kMaxTicksWaiting is a safety cap against unexpected latch states, not a
+    //     timing assumption.
 bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error_message) {
     if (binding == nullptr || binding->actor_address == 0 || binding->bot_id == 0) {
         return false;
@@ -2001,6 +2050,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         std::uintptr_t release_finalize_fn = 0;
         std::uint32_t object_type = 0;
         std::uint32_t object_f74_raw = 0;
+        std::uint32_t object_f1f0_raw = 0;
         std::uint32_t object_f1fc_raw = 0;
         std::uint32_t object_f22c = 0;
         std::uint32_t object_f230 = 0;
@@ -2009,6 +2059,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         float object_heading = 0.0f;
         float object_radius = 0.0f;
         float object_f74 = 0.0f;
+        float object_f1f0 = 0.0f;
         float object_f1fc = 0.0f;
         bool readable = false;
         bool handle_from_selection_state = false;
@@ -2080,8 +2131,10 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         }
         snapshot.object_type = memory.ReadFieldOr<std::uint32_t>(snapshot.object, 0x08, 0);
         snapshot.object_f74 = memory.ReadFieldOr<float>(snapshot.object, 0x74, 0.0f);
+        snapshot.object_f1f0 = memory.ReadFieldOr<float>(snapshot.object, 0x1F0, 0.0f);
         snapshot.object_f1fc = memory.ReadFieldOr<float>(snapshot.object, 0x1FC, 0.0f);
         snapshot.object_f74_raw = memory.ReadFieldOr<std::uint32_t>(snapshot.object, 0x74, 0);
+        snapshot.object_f1f0_raw = memory.ReadFieldOr<std::uint32_t>(snapshot.object, 0x1F0, 0);
         snapshot.object_f1fc_raw = memory.ReadFieldOr<std::uint32_t>(snapshot.object, 0x1FC, 0);
         snapshot.object_f22c = memory.ReadFieldOr<std::uint32_t>(snapshot.object, 0x22C, 0);
         snapshot.object_f230 = memory.ReadFieldOr<std::uint32_t>(snapshot.object, 0x230, 0);
@@ -2097,11 +2150,193 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         return snapshot;
     };
 
+    struct BoulderDamageProjectionSnapshot {
+        bool readable = false;
+        uintptr_t target_actor = 0;
+        uintptr_t target_health_base = 0;
+        uintptr_t stat_source = 0;
+        uintptr_t stat_vtable = 0;
+        uintptr_t damage_getter = 0;
+        const char* target_health_kind = "unknown";
+        int statbook_level = 1;
+        float target_hp = 0.0f;
+        float target_max_hp = 0.0f;
+        float target_x = 0.0f;
+        float target_y = 0.0f;
+        float target_radius = 0.0f;
+        float target_distance = 0.0f;
+        float target_impact_radius = 0.0f;
+        float target_damage_scale = 0.0f;
+        float charge = 0.0f;
+        float base_damage = 0.0f;
+        float statbook_damage = 0.0f;
+        float projected_damage = 0.0f;
+        DWORD damage_getter_seh = 0;
+        bool damage_getter_attempted = false;
+        bool native_damage_scale_available = false;
+        bool target_position_readable = false;
+        bool target_in_impact = false;
+    };
+
+    auto ReadBoulderDamageProjectionSnapshot =
+        [&](const ActiveSpellObjectSnapshot& active_spell_snapshot) {
+            BoulderDamageProjectionSnapshot snapshot{};
+            if (!active_spell_snapshot.readable || active_spell_snapshot.object == 0) {
+                return snapshot;
+            }
+
+            snapshot.target_actor = ResolveOngoingCastNativeTargetActor(
+                binding,
+                binding->ongoing_cast);
+            ActorHealthRuntime target_health{};
+            if (!TryReadActorHealthRuntime(snapshot.target_actor, &target_health) ||
+                target_health.hp <= 0.0f) {
+                return snapshot;
+            }
+
+            int statbook_level = 1;
+            const auto resolved_statbook_damage = ResolveEarthBoulderBaseDamage(
+                binding,
+                binding->ongoing_cast.progression_runtime_address,
+                &statbook_level);
+            if (!std::isfinite(resolved_statbook_damage) ||
+                resolved_statbook_damage <= 0.0f) {
+                return snapshot;
+            }
+            const float release_charge =
+                std::isfinite(active_spell_snapshot.object_f74) &&
+                        active_spell_snapshot.object_f74 > 0.0f
+                    ? active_spell_snapshot.object_f74
+                    : 0.0f;
+            if (release_charge <= 0.0f) {
+                return snapshot;
+            }
+
+            snapshot.target_health_base = target_health.base_address;
+            snapshot.target_health_kind = target_health.kind;
+            snapshot.statbook_level = statbook_level;
+            snapshot.target_hp = target_health.hp;
+            snapshot.target_max_hp = target_health.max_hp;
+            if (kActorPositionXOffset != 0 &&
+                kActorPositionYOffset != 0 &&
+                memory.IsReadableRange(
+                    snapshot.target_actor + kActorPositionXOffset,
+                    sizeof(float)) &&
+                memory.IsReadableRange(
+                    snapshot.target_actor + kActorPositionYOffset,
+                    sizeof(float))) {
+                snapshot.target_x =
+                    memory.ReadFieldOr<float>(
+                        snapshot.target_actor,
+                        kActorPositionXOffset,
+                        0.0f);
+                snapshot.target_y =
+                    memory.ReadFieldOr<float>(
+                        snapshot.target_actor,
+                        kActorPositionYOffset,
+                        0.0f);
+                snapshot.target_position_readable =
+                    std::isfinite(snapshot.target_x) &&
+                    std::isfinite(snapshot.target_y);
+            }
+            if (kActorCollisionRadiusOffset != 0 &&
+                memory.IsReadableRange(
+                    snapshot.target_actor + kActorCollisionRadiusOffset,
+                    sizeof(float))) {
+                snapshot.target_radius =
+                    memory.ReadFieldOr<float>(
+                        snapshot.target_actor,
+                        kActorCollisionRadiusOffset,
+                        0.0f);
+                if (!std::isfinite(snapshot.target_radius) ||
+                    snapshot.target_radius < 0.0f ||
+                    snapshot.target_radius > 128.0f) {
+                    snapshot.target_radius = 0.0f;
+                }
+            }
+            if (snapshot.target_position_readable &&
+                std::isfinite(active_spell_snapshot.object_x) &&
+                std::isfinite(active_spell_snapshot.object_y)) {
+                const auto target_dx = snapshot.target_x - active_spell_snapshot.object_x;
+                const auto target_dy = snapshot.target_y - active_spell_snapshot.object_y;
+                snapshot.target_distance =
+                    std::sqrt((target_dx * target_dx) + (target_dy * target_dy));
+                const float object_radius =
+                    std::isfinite(active_spell_snapshot.object_radius) &&
+                            active_spell_snapshot.object_radius > 0.0f &&
+                            active_spell_snapshot.object_radius <= 128.0f
+                        ? active_spell_snapshot.object_radius
+                        : 0.0f;
+                snapshot.target_impact_radius = object_radius + snapshot.target_radius;
+                if (object_radius <= 0.0f ||
+                    !std::isfinite(snapshot.target_impact_radius) ||
+                    snapshot.target_impact_radius <= 0.0f ||
+                    snapshot.target_impact_radius > 256.0f) {
+                    snapshot.target_impact_radius = 0.0f;
+                }
+                snapshot.target_in_impact =
+                    snapshot.target_impact_radius > 0.0f &&
+                    std::isfinite(snapshot.target_distance) &&
+                    snapshot.target_distance <= snapshot.target_impact_radius + 0.001f;
+            }
+            snapshot.charge = release_charge;
+            snapshot.statbook_damage = resolved_statbook_damage;
+            snapshot.base_damage = resolved_statbook_damage;
+            snapshot.projected_damage =
+                snapshot.base_damage * snapshot.charge * snapshot.charge;
+            snapshot.readable =
+                std::isfinite(snapshot.projected_damage) &&
+                snapshot.projected_damage > 0.0f;
+            if (!snapshot.readable) {
+                return snapshot;
+            }
+
+            DWORD damage_getter_exception_code = 0;
+            snapshot.stat_source =
+                memory.ReadFieldOr<std::uintptr_t>(active_spell_snapshot.object, 0x58, 0);
+            if (snapshot.stat_source != 0 &&
+                memory.IsReadableRange(snapshot.stat_source, sizeof(std::uintptr_t))) {
+                snapshot.stat_vtable =
+                    memory.ReadValueOr<std::uintptr_t>(snapshot.stat_source, 0);
+                if (snapshot.stat_vtable != 0 &&
+                    memory.IsReadableRange(snapshot.stat_vtable + 0x100, sizeof(std::uintptr_t))) {
+                    snapshot.damage_getter =
+                        memory.ReadValueOr<std::uintptr_t>(snapshot.stat_vtable + 0x100, 0);
+                }
+            }
+            if (snapshot.damage_getter != 0 &&
+                memory.IsExecutableRange(snapshot.damage_getter, 1)) {
+                snapshot.damage_getter_attempted = true;
+                snapshot.native_damage_scale_available =
+                    CallNativeTwoFloatGetterSafe(
+                        snapshot.damage_getter,
+                        snapshot.stat_source,
+                        snapshot.target_x,
+                        snapshot.target_y,
+                        &snapshot.target_damage_scale,
+                        &damage_getter_exception_code) &&
+                    snapshot.target_position_readable &&
+                    std::isfinite(snapshot.target_damage_scale) &&
+                    snapshot.target_damage_scale > 0.0f;
+                snapshot.damage_getter_seh = damage_getter_exception_code;
+            }
+
+            // The vtable getter is useful as a native reachability diagnostic,
+            // but damage magnitude follows the statbook "damage x size^2"
+            // formula recovered from the Earth release path and confirmed
+            // against live HP deltas.
+            return snapshot;
+        };
+
     auto ReleaseSpellHandle = [&](const ParticipantEntityBinding::OngoingCastState& state,
                                   const char* exit_label,
                                   bool clear_facing_target,
-                                  bool run_active_handle_cleanup = true) {
-        const auto release_object_snapshot = ReadActiveSpellObjectSnapshot(false);
+                                  bool run_active_handle_cleanup = true,
+                                  const ActiveSpellObjectSnapshot* known_release_object_snapshot = nullptr) {
+        const auto release_object_snapshot =
+            known_release_object_snapshot != nullptr
+                ? *known_release_object_snapshot
+                : ReadActiveSpellObjectSnapshot(false);
         const auto actor_group_before =
             memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
         const auto actor_slot_before =
@@ -2172,9 +2407,19 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     actor_address, kActorActiveCastSlotShortOffset, kActorActiveCastSlotSentinel);
             }
         }
-        (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
-        if (state.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
-            actor_group_before == kActorActiveCastGroupSentinel) {
+        const bool defer_bounded_latch_clear =
+            state.bounded_release_requested &&
+            state.bounded_release_at_damage_threshold &&
+            !state.bounded_release_at_max_size;
+        if (!defer_bounded_latch_clear) {
+            (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
+        }
+        const bool should_clear_cast_latch =
+            !defer_bounded_latch_clear &&
+            state.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
+            (actor_group_before == kActorActiveCastGroupSentinel ||
+             state.bounded_release_requested);
+        if (should_clear_cast_latch) {
             (void)memory.TryWriteField<std::uint32_t>(actor_address, 0xE4, 0);
             (void)memory.TryWriteField<std::uint32_t>(actor_address, 0xE8, 0);
         }
@@ -2228,9 +2473,26 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
         const bool completed_boulder_at_max =
             release_object_snapshot.boulder_max_size_reached ||
-            state.bounded_max_size_reached ||
+            state.bounded_release_at_max_size ||
             (SkillRequiresBoundedHeldCastInputDuringNativeTick(ResolveOngoingNativeTickSkillId(state)) &&
              std::strcmp(exit_label, "max_size_released") == 0);
+        const std::string bounded_release_summary =
+            state.bounded_release_requested
+                ? std::string(" release_reason=") +
+                      (state.bounded_release_at_damage_threshold
+                           ? std::string("damage_threshold")
+                           : (state.bounded_release_at_max_size ? std::string("max_size") : std::string("unknown"))) +
+                      " release_charge=" + std::to_string(state.bounded_release_charge) +
+                      " release_base_damage=" + std::to_string(state.bounded_release_base_damage) +
+                      " release_statbook_damage=" +
+                          std::to_string(state.bounded_release_statbook_damage) +
+                      " release_projected_damage=" +
+                          std::to_string(state.bounded_release_projected_damage) +
+                      " release_target_hp=" + std::to_string(state.bounded_release_target_hp) +
+                      " release_target_actor=" + HexString(state.bounded_release_target_actor) +
+                      " release_damage_native=" +
+                          (state.bounded_release_damage_native ? std::string("1") : std::string("0"))
+                : std::string("");
         (void)multiplayer::FinishBotAttack(
             binding->bot_id,
             true,
@@ -2268,14 +2530,55 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             " obj_heading=" + std::to_string(release_object_snapshot.object_heading) +
             " obj_radius=" + std::to_string(release_object_snapshot.object_radius) +
             " obj_74=" + std::to_string(release_object_snapshot.object_f74) +
+            " obj_1f0=" + std::to_string(release_object_snapshot.object_f1f0) +
             " obj_1fc=" + std::to_string(release_object_snapshot.object_f1fc) +
+            " obj_22c=" + HexString(release_object_snapshot.object_f22c) +
+            " obj_230=" + HexString(release_object_snapshot.object_f230) +
             " obj_74_raw=" + HexString(release_object_snapshot.object_f74_raw) +
+            " obj_1f0_raw=" + HexString(release_object_snapshot.object_f1f0_raw) +
             " obj_1fc_raw=" + HexString(release_object_snapshot.object_f1fc_raw) +
             " boulder_max_size=" +
                 (completed_boulder_at_max ? std::string("1") : std::string("0")) +
+            bounded_release_summary +
             (cleanup_ok ? std::string("") :
                           std::string(" cleanup_seh=") + HexString(cleanup_exception_code)));
     };
+
+    auto ScheduleBoundedReleaseLatchClear =
+        [&](ParticipantEntityBinding::OngoingCastState& state) {
+            constexpr std::uint64_t kBoundedCleanupLatchClearDelayMs = 100;
+            state.bounded_cleanup_completed = true;
+            state.bounded_cleanup_clear_after_ms =
+                static_cast<std::uint64_t>(GetTickCount64()) +
+                kBoundedCleanupLatchClearDelayMs;
+        };
+
+    auto ClearBoundedReleaseCastLatch =
+        [&](ParticipantEntityBinding::OngoingCastState& state, const char* reason) {
+            const auto actor_e4_before =
+                memory.ReadFieldOr<std::uint32_t>(actor_address, 0xE4, 0);
+            const auto actor_e8_before =
+                memory.ReadFieldOr<std::uint32_t>(actor_address, 0xE8, 0);
+            const bool primary_clear_ok =
+                memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
+            const bool e4_clear_ok =
+                memory.TryWriteField<std::uint32_t>(actor_address, 0xE4, 0);
+            const bool e8_clear_ok =
+                memory.TryWriteField<std::uint32_t>(actor_address, 0xE8, 0);
+            Log(
+                "[bots] bounded release latch cleared. bot_id=" +
+                std::to_string(binding->bot_id) +
+                " skill_id=" + std::to_string(state.skill_id) +
+                " reason=" + (reason != nullptr ? std::string(reason) : std::string("unknown")) +
+                " ticks=" + std::to_string(state.ticks_waiting) +
+                " clear_after_ms=" + std::to_string(state.bounded_cleanup_clear_after_ms) +
+                " e4_before=" + HexString(actor_e4_before) +
+                " e8_before=" + HexString(actor_e8_before) +
+                " primary_clear=" + (primary_clear_ok ? std::string("1") : std::string("0")) +
+                " e4_clear=" + (e4_clear_ok ? std::string("1") : std::string("0")) +
+                " e8_clear=" + (e8_clear_ok ? std::string("1") : std::string("0")));
+            state = ParticipantEntityBinding::OngoingCastState{};
+        };
 
     auto LogSpellObjectDiag = [&](std::uint8_t active_group_post) {
         auto snapshot = ReadActiveSpellObjectSnapshot();
@@ -2298,8 +2601,10 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             " obj_heading=" + std::to_string(snapshot.object_heading) +
             " obj_radius=" + std::to_string(snapshot.object_radius) +
             " obj_74=" + std::to_string(snapshot.object_f74) +
+            " obj_1f0=" + std::to_string(snapshot.object_f1f0) +
             " obj_1fc=" + std::to_string(snapshot.object_f1fc) +
             " obj_74_raw=" + HexString(snapshot.object_f74_raw) +
+            " obj_1f0_raw=" + HexString(snapshot.object_f1f0_raw) +
             " obj_1fc_raw=" + HexString(snapshot.object_f1fc_raw) +
             " obj_22c=" + std::to_string(snapshot.object_f22c) +
             " obj_230=" + std::to_string(snapshot.object_f230) +
@@ -2320,6 +2625,15 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         if (actor_dead) {
             ReleaseSpellHandle(ongoing, "dead", true);
             ongoing = ParticipantEntityBinding::OngoingCastState{};
+            return true;
+        }
+
+        if (ongoing.bounded_cleanup_completed) {
+            const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+            if (ongoing.bounded_cleanup_clear_after_ms == 0 ||
+                now_ms >= ongoing.bounded_cleanup_clear_after_ms) {
+                ClearBoundedReleaseCastLatch(ongoing, "post_cleanup_delay");
+            }
             return true;
         }
 
@@ -2356,7 +2670,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         const bool publish_ongoing_skill_id =
             ongoing.uses_dispatcher_skill_id &&
             !(SkillRequiresBoundedHeldCastInputDuringNativeTick(native_active_skill_id) &&
-              ongoing.bounded_max_size_reached);
+              ongoing.bounded_release_requested);
         (void)memory.TryWriteField<std::int32_t>(
             actor_address,
             kActorPrimarySkillIdOffset,
@@ -2512,6 +2826,10 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.progression_runtime_address != 0
                 ? memory.ReadFieldOr<float>(ongoing.progression_runtime_address, 0x8AC, 1.0f)
                 : 1.0f;
+        const auto earth_damage_projection =
+            bounded_held_native_cast
+                ? ReadBoulderDamageProjectionSnapshot(active_spell_snapshot)
+                : BoulderDamageProjectionSnapshot{};
         const bool earth_object_charge_reached =
             bounded_held_native_cast &&
             active_spell_snapshot.readable &&
@@ -2519,33 +2837,82 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             std::isfinite(earth_max_charge) &&
             earth_max_charge > 0.0f &&
             active_spell_snapshot.object_f74 >= earth_max_charge - 0.001f;
-        const bool bounded_held_release_ready =
+        const bool earth_max_size_reached =
             bounded_held_native_cast &&
             active_spell_snapshot.readable &&
             (active_spell_snapshot.boulder_max_size_reached || earth_object_charge_reached);
-        const bool bounded_max_size_just_reached =
-            bounded_held_release_ready && !ongoing.bounded_max_size_reached;
-        if (bounded_max_size_just_reached) {
-            ongoing.bounded_max_size_reached = true;
+        const bool earth_damage_threshold_reached =
+            bounded_held_native_cast &&
+            earth_damage_projection.readable &&
+            earth_damage_projection.target_hp > 0.0f &&
+            earth_damage_projection.projected_damage >= earth_damage_projection.target_hp;
+        const bool bounded_held_release_ready =
+            bounded_held_native_cast &&
+            active_spell_snapshot.readable &&
+            (earth_max_size_reached || earth_damage_threshold_reached);
+        const bool bounded_release_just_requested =
+            bounded_held_release_ready && !ongoing.bounded_release_requested;
+        if (bounded_release_just_requested) {
+            float release_charge = earth_damage_projection.charge;
+            float release_base_damage = earth_damage_projection.base_damage;
+            float release_statbook_damage = earth_damage_projection.statbook_damage;
+            float release_projected_damage = earth_damage_projection.projected_damage;
+            if ((!std::isfinite(release_charge) || release_charge <= 0.0f) &&
+                active_spell_snapshot.readable &&
+                std::isfinite(active_spell_snapshot.object_f74) &&
+                active_spell_snapshot.object_f74 > 0.0f) {
+                release_charge = active_spell_snapshot.object_f74;
+            }
+            if (!std::isfinite(release_base_damage) || release_base_damage <= 0.0f) {
+                release_base_damage =
+                    ResolveEarthBoulderBaseDamage(
+                        binding,
+                        ongoing.progression_runtime_address,
+                        nullptr);
+            }
+            if (!std::isfinite(release_statbook_damage) || release_statbook_damage <= 0.0f) {
+                release_statbook_damage = release_base_damage;
+            }
+            if (std::isfinite(release_base_damage) &&
+                release_base_damage > 0.0f &&
+                std::isfinite(release_charge) &&
+                release_charge > 0.0f) {
+                release_projected_damage = release_base_damage * release_charge * release_charge;
+            }
+            ongoing.bounded_release_requested = true;
+            ongoing.bounded_max_size_reached = earth_max_size_reached;
+            ongoing.bounded_release_at_max_size = earth_max_size_reached;
+            ongoing.bounded_release_at_damage_threshold =
+                earth_damage_threshold_reached && !earth_max_size_reached;
+            ongoing.bounded_release_charge = release_charge;
+            ongoing.bounded_release_base_damage = release_base_damage;
+            ongoing.bounded_release_statbook_damage =
+                release_statbook_damage;
+            ongoing.bounded_release_projected_damage =
+                release_projected_damage;
+            ongoing.bounded_release_target_hp = earth_damage_projection.target_hp;
+            ongoing.bounded_release_target_actor = earth_damage_projection.target_actor;
+            ongoing.bounded_release_damage_native =
+                earth_damage_projection.native_damage_scale_available;
             ongoing.bounded_post_release_ticks_waiting = 0;
-        } else if (bounded_held_native_cast && ongoing.bounded_max_size_reached) {
+        } else if (bounded_held_native_cast && ongoing.bounded_release_requested) {
             ongoing.bounded_post_release_ticks_waiting += 1;
         }
         const bool bounded_held_native_released =
             bounded_held_native_cast &&
-            ongoing.bounded_max_size_reached &&
+            ongoing.bounded_release_requested &&
             ongoing.saw_live_handle &&
             ongoing.saw_activity &&
             !has_live_handle;
         // The native Earth handler does not drop the active handle by itself.
-        // Once charge is full, keep input released while the live boulder gets a
-        // native world-object update window, then run the same cleanup the
-        // player's skill transition would have invoked.
+        // Once release is requested, keep input released while the live boulder
+        // gets a native world-object update window, then run the same cleanup
+        // the player's skill transition would have invoked.
         constexpr int kBoundedHeldPostReleaseWorldUpdateTicks = 60;
         const bool bounded_held_release_tick_processed =
             bounded_held_native_cast &&
-            ongoing.bounded_max_size_reached &&
-            !bounded_max_size_just_reached &&
+            ongoing.bounded_release_requested &&
+            !bounded_release_just_requested &&
             ongoing.saw_live_handle &&
             ongoing.saw_activity &&
             ongoing.bounded_post_release_ticks_waiting >=
@@ -2590,14 +2957,49 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         const bool safety_cap_hit =
             ongoing.ticks_waiting >= ResolveBotCastSafetyCapTicks(native_active_skill_id);
 
-        if (bounded_max_size_just_reached) {
+        if (bounded_release_just_requested) {
             ongoing.startup_in_progress = false;
-            // Earth's boulder is launched by the native handler on the first tick
-            // after cast input is released. Do not call active-handle cleanup here:
-            // that tears down a fully charged but still-held boulder before native
-            // code can transition it into the flying/damaging state.
+            const bool release_for_damage =
+                ongoing.bounded_release_at_damage_threshold &&
+                !ongoing.bounded_release_at_max_size;
+            bool threshold_charge_write_ok = !release_for_damage;
+            bool threshold_max_write_ok = !release_for_damage;
+            bool release_charge_write_ok = false;
+            const float finalized_release_charge =
+                std::isfinite(ongoing.bounded_release_charge) &&
+                        ongoing.bounded_release_charge > 0.0f
+                    ? ongoing.bounded_release_charge
+                    : active_spell_snapshot.object_f74;
+            if (active_spell_snapshot.object != 0 &&
+                std::isfinite(finalized_release_charge) &&
+                finalized_release_charge > 0.0f) {
+                // Stock cleanup's secondary release consumes object+0x1F0.
+                // Keep it synchronized to the chosen release charge before the
+                // native world-update window begins.
+                release_charge_write_ok =
+                    memory.TryWriteField<float>(
+                        active_spell_snapshot.object,
+                        0x1F0,
+                        finalized_release_charge);
+            }
+            if (active_spell_snapshot.object != 0 &&
+                std::isfinite(finalized_release_charge) &&
+                finalized_release_charge > 0.0f) {
+                if (release_for_damage) {
+                    threshold_charge_write_ok = release_charge_write_ok;
+                }
+                // Finalize copies object+0x74 into object+0x1FC. Set 0x1FC
+                // too so pre-finalize readers use the finalized damage size.
+                threshold_max_write_ok =
+                    memory.TryWriteField<float>(
+                        active_spell_snapshot.object,
+                        0x1FC,
+                        finalized_release_charge);
+            }
             Log(
-                "[bots] native max-size reached; releasing held cast input for native launch. bot_id=" +
+                std::string("[bots] native ") +
+                (release_for_damage ? "damage-threshold" : "max-size") +
+                " reached; releasing held cast input for native launch. bot_id=" +
                 std::to_string(binding->bot_id) +
                 " skill_id=" + std::to_string(ongoing.skill_id) +
                 " ticks=" + std::to_string(ongoing.ticks_waiting) +
@@ -2611,8 +3013,46 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 " obj_vt_6c=" + HexString(active_spell_snapshot.release_secondary_fn) +
                 " obj_vt_70=" + HexString(active_spell_snapshot.release_finalize_fn) +
                 " obj_74=" + std::to_string(active_spell_snapshot.object_f74) +
+                " obj_1f0=" + std::to_string(active_spell_snapshot.object_f1f0) +
                 " obj_1fc=" + std::to_string(active_spell_snapshot.object_f1fc) +
-                " max_charge=" + std::to_string(earth_max_charge));
+                " obj_22c=" + HexString(active_spell_snapshot.object_f22c) +
+                " obj_230=" + HexString(active_spell_snapshot.object_f230) +
+                " max_charge=" + std::to_string(earth_max_charge) +
+                " statbook_level=" + std::to_string(earth_damage_projection.statbook_level) +
+                " stat_source=" + HexString(earth_damage_projection.stat_source) +
+                " stat_vt=" + HexString(earth_damage_projection.stat_vtable) +
+                " damage_getter=" + HexString(earth_damage_projection.damage_getter) +
+                " damage_getter_attempt=" +
+                    (earth_damage_projection.damage_getter_attempted ? std::string("1") : std::string("0")) +
+                " damage_getter_seh=" + HexString(earth_damage_projection.damage_getter_seh) +
+                " damage_native=" +
+                    (earth_damage_projection.native_damage_scale_available ? std::string("1") : std::string("0")) +
+                " base_damage=" + std::to_string(earth_damage_projection.base_damage) +
+                " statbook_damage=" + std::to_string(earth_damage_projection.statbook_damage) +
+                " projected_damage=" +
+                    std::to_string(earth_damage_projection.projected_damage) +
+                " target_actor=" + HexString(earth_damage_projection.target_actor) +
+                " target_health=" + HexString(earth_damage_projection.target_health_base) +
+                " target_health_kind=" + earth_damage_projection.target_health_kind +
+                " target_hp=" + std::to_string(earth_damage_projection.target_hp) +
+                " target_max_hp=" + std::to_string(earth_damage_projection.target_max_hp) +
+                " target_x=" + std::to_string(earth_damage_projection.target_x) +
+                " target_y=" + std::to_string(earth_damage_projection.target_y) +
+                " target_radius=" + std::to_string(earth_damage_projection.target_radius) +
+                " target_distance=" + std::to_string(earth_damage_projection.target_distance) +
+                " target_impact_radius=" +
+                    std::to_string(earth_damage_projection.target_impact_radius) +
+                " target_damage_scale=" +
+                    std::to_string(earth_damage_projection.target_damage_scale) +
+                " target_in_impact=" +
+                    (earth_damage_projection.target_in_impact ? std::string("1") : std::string("0")) +
+                " native_cleanup_release=" + (release_for_damage ? std::string("1") : std::string("0")) +
+                " threshold_charge_write=" +
+                    (threshold_charge_write_ok ? std::string("1") : std::string("0")) +
+                " threshold_max_write=" +
+                    (threshold_max_write_ok ? std::string("1") : std::string("0")) +
+                " release_charge_write=" +
+                    (release_charge_write_ok ? std::string("1") : std::string("0")));
             return true;
         }
 
@@ -2625,7 +3065,10 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             } else if (pure_primary_no_handle_settled) {
                 exit_label = "pure_primary_no_handle_settled";
             } else if (bounded_held_native_released || bounded_held_release_tick_processed) {
-                exit_label = "max_size_released";
+                exit_label = ongoing.bounded_release_at_damage_threshold &&
+                                     !ongoing.bounded_release_at_max_size
+                                 ? "damage_threshold_released"
+                                 : "max_size_released";
             } else if (activity_released) {
                 exit_label = "activity_released";
             } else if (gesture_window_complete) {
@@ -2636,8 +3079,17 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             if (startup_timeout_hit) {
                 LogSpellObjectDiag(active_cast_group);
             }
+            const bool completed_bounded_release =
+                bounded_held_native_released || bounded_held_release_tick_processed;
             ReleaseSpellHandle(ongoing, exit_label, target_lost);
-            ongoing = ParticipantEntityBinding::OngoingCastState{};
+            if (completed_bounded_release &&
+                ongoing.bounded_release_requested &&
+                ongoing.bounded_release_at_damage_threshold &&
+                !ongoing.bounded_release_at_max_size) {
+                ScheduleBoundedReleaseLatchClear(ongoing);
+            } else {
+                ongoing = ParticipantEntityBinding::OngoingCastState{};
+            }
         }
         return true;
     }
