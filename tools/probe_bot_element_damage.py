@@ -314,6 +314,9 @@ CAST_PREPPED_RE = re.compile(
 CAST_COMPLETE_RE = re.compile(
     r"cast complete \(([^)]+)\)\. bot_id=(\d+) skill_id=(-?\d+) ticks=(\d+).*"
 )
+SPELL_DISPATCH_ENTER_RE = re.compile(
+    r"spell_dispatch enter actor=(0x[0-9A-Fa-f]+) bot_id=(\d+).*"
+)
 PURE_PRIMARY_START_RE = re.compile(
     r"pure_primary_start enter actor=(0x[0-9A-Fa-f]+) bot_id=(\d+).*"
 )
@@ -510,6 +513,7 @@ def build_statbook_validation(
     loadout_matches: list[dict[str, object]] = []
     prepped_matches: list[dict[str, object]] = []
     complete_matches: list[dict[str, object]] = []
+    dispatch_matches: list[dict[str, object]] = []
     pure_primary_start_matches: list[dict[str, object]] = []
     pure_primary_builder_matches: list[dict[str, object]] = []
     earth_spawn_matches: list[dict[str, object]] = []
@@ -538,6 +542,21 @@ def build_statbook_validation(
                     "progression_runtime": parse_int_text(prepped_match.group(6)),
                     "progression_spell_id": parse_int_text(prepped_match.group(7)),
                     "startup_p750": parse_cast_startup_value(line, "p750"),
+                }
+            )
+        dispatch_match = SPELL_DISPATCH_ENTER_RE.search(line)
+        if dispatch_match and parse_int_text(dispatch_match.group(2)) == bot_id:
+            dispatch_matches.append(
+                {
+                    "line": line,
+                    "actor": parse_int_text(dispatch_match.group(1)),
+                    "bot_id": parse_int_text(dispatch_match.group(2)),
+                    "chosen_runtime": parse_cast_startup_value(line, "chosen_runtime"),
+                    "skill": parse_cast_startup_value(line, "skill"),
+                    "previous_skill": parse_cast_startup_value(line, "prev"),
+                    "progression_runtime": parse_cast_startup_value(line, "prog"),
+                    "selection_state": parse_cast_startup_value(line, "sel_id"),
+                    "native_range": parse_cast_startup_value(line, "f278"),
                 }
             )
         pure_primary_start_match = PURE_PRIMARY_START_RE.search(line)
@@ -697,6 +716,19 @@ def build_statbook_validation(
         ),
         None,
     )
+    matching_dispatch = next(
+        (
+            item
+            for item in reversed(dispatch_matches)
+            if int(item["skill"]) == config["primary_entry_index"]
+            and int(item["selection_state"]) == spec["selection_state"]
+            and int(item["progression_runtime"]) == progression_runtime
+        ),
+        None,
+    )
+    continuous_dispatch_logged = bool(
+        spec.get("unit") == "per_second" and matching_dispatch is not None
+    )
     earth_release_policy_ok = True
     earth_release_base_damage_matches_statbook = True
     if spec.get("requires_max_size_release"):
@@ -767,8 +799,8 @@ def build_statbook_validation(
         "progression_runtime_nonzero": progression_runtime != 0,
         "statbook_loaded": bool(statbook.get("path")),
         "skills_wizard_loadout_logged": matching_loadout is not None,
-        "cast_prepped_logged": matching_prepped is not None,
-        "cast_completed_logged": matching_complete is not None,
+        "cast_prepped_logged": matching_prepped is not None or continuous_dispatch_logged,
+        "cast_completed_logged": matching_complete is not None or continuous_dispatch_logged,
         "earth_release_policy_satisfied": earth_release_policy_ok,
         "earth_release_base_damage_matches_statbook": earth_release_base_damage_matches_statbook,
         "native_projectile_or_effect_spawn_logged": native_projectile_spawn_validation.get("ok") is True,
@@ -791,10 +823,12 @@ def build_statbook_validation(
         "matching_loadout": matching_loadout,
         "matching_prepped": matching_prepped,
         "matching_complete": matching_complete,
+        "matching_dispatch": matching_dispatch,
         "native_projectile_spawn_validation": native_projectile_spawn_validation,
         "loadout_log_count": len(loadout_matches),
         "prepped_log_count": len(prepped_matches),
         "complete_log_count": len(complete_matches),
+        "dispatch_log_count": len(dispatch_matches),
         "pure_primary_start_log_count": len(pure_primary_start_matches),
         "pure_primary_builder_log_count": len(pure_primary_builder_matches),
         "earth_spawn_log_count": len(earth_spawn_matches),

@@ -279,3 +279,16 @@ Current external CLI fallback already installed:
       - gameplay selection-state writes
       - bot appearance-choice id writes
       - stock progression color validation through `FUN_00660760`
+
+  - April 29, 2026 frost-jet cone recovery:
+    - water primary dispatches through `FUN_00543860`, then calls the shared
+      cone query `FUN_00641B10`
+    - live traces observed `cone=30.0`, `range=205.0`, `mask=0x1082`, and
+      `self=<water bot actor>` as the query inputs for level-1 water
+    - the cone query applies `cone * 0.5` around the actor heading, so level-1
+      water is approximately a `30` degree total wedge (`+/-15` degrees)
+    - the range input is derived as `205 + 4 * actor[0x290]`; level-1 water had
+      `actor[0x290] = 0.0`, and the same field appears to drive upgraded wider
+      frost behavior
+    - `frost_jet.cfg` carries damage/mana only (`mDamage[1]=2.5`,
+      `mManaCost[1]=12.5` per second), not geometry

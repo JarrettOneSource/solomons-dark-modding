@@ -24,12 +24,13 @@ The current entrance-driven hub/private policy is:
   stable `testrun` tick, instead of trying to force the scene update from the
   event callback itself
 
-This runtime mod currently manages one follow bot for each non-fire element:
+This runtime mod currently manages one follow bot for each element:
 
 - `Lua Bot Water` (`profile.element_id = 1`, `profile.discipline_id = 1`)
 - `Lua Bot Earth` (`profile.element_id = 2`, `profile.discipline_id = 1`)
 - `Lua Bot Air` (`profile.element_id = 3`, `profile.discipline_id = 1`)
 - `Lua Bot Ether` (`profile.element_id = 4`, `profile.discipline_id = 1`)
+- `Lua Bot Fire` (`profile.element_id = 0`, `profile.discipline_id = 1`)
 
 Each bot maintains a follow band around the player instead of running a patrol
 graph.
@@ -78,17 +79,27 @@ Current spawn behavior:
 
 Current same-scene follow behavior:
 
-- stop distance = `50` units from the player
-- resume distance = `96` units from the player
-- if the bot is already following, it keeps closing until it reaches the
-  `50`-unit stop band
+- stop distance = `100` units from the player
+- resume distance = `250` units from the player
+- if the bot is already following, it keeps closing until it reaches its chosen
+  follow point inside the roomy follow band
 - once stopped, it stays put until the player gets farther than `250` units away
 - if the player walks into the bot, it does not try to back away
-- beyond `96` units, the bot issues a `move_to` toward the nearest point on
-  the `50`-unit stand-off ring around the player
-- same-scene follow now snaps that ring target to the nearest traversable
+- beyond `250` units, the bot chooses a random traversable point between
+  `100` and `250` units from the player and issues a `move_to`
+- same-scene follow now snaps that chosen target to the nearest traversable
   nav-grid sample before issuing the move, instead of trusting coarse cell
   centers or a raw point inside a blocked follow cell
+
+Current primary attack range behavior:
+
+- fire, earth, air, and ether use the squad primary gate of `360` units
+- water uses the recovered native frost-cone range instead of the squad gate
+- level-1 water has `actor[0x290] = 0`, so the native cone range is
+  `205 + 4 * actor[0x290]`, with the bot using a `5`-unit safety margin
+- level-1 water passes a `30` degree cone input to the native query, which uses
+  it as roughly `+/-15` degrees around the actor heading
+- the same native field drives upgraded wider frost behavior when it is present
 
 Current spawn/materialization behavior:
 

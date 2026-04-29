@@ -1,6 +1,17 @@
 local app = {}
 
 function app.start()
+  pcall(function()
+    local seed = 1
+    if type(os) == "table" and type(os.time) == "function" then
+      seed = os.time()
+    end
+    math.randomseed(seed)
+    math.random()
+    math.random()
+    math.random()
+  end)
+
   local LEGACY_MANAGED_BOT_NAMES = {
     ["Lua Patrol Bot"] = true,
     ["Lua Bot Fire"] = true,
@@ -79,6 +90,14 @@ function app.start()
       spawn_offset_x = 50.0,
       spawn_offset_y = 60.0,
     },
+    {
+      key = "fire",
+      name = "Lua Bot Fire",
+      element_id = 0,
+      discipline_id = 1,
+      spawn_offset_x = 50.0,
+      spawn_offset_y = 100.0,
+    },
   }
 
   local CURRENT_MANAGED_BOT_NAMES = {}
@@ -91,17 +110,22 @@ function app.start()
   local DEFAULT_SPAWN_OFFSET_Y = 0.0
   local DEFAULT_HUB_SPAWN_X = 956.0
   local DEFAULT_HUB_SPAWN_Y = 508.0
-  local FOLLOW_STOP_DISTANCE = 50.0
-  local FOLLOW_RESUME_DISTANCE = 100.0
-  local ARRIVAL_DISTANCE = 8.0
-  local FOLLOW_SETTLE_DISTANCE = FOLLOW_STOP_DISTANCE + ARRIVAL_DISTANCE
+  local FOLLOW_STOP_DISTANCE = 100.0
+  local FOLLOW_RESUME_DISTANCE = 250.0
+  local FOLLOW_TARGET_ARRIVAL_DISTANCE = 32.0
   local FOLLOW_TARGET_REFRESH_DISTANCE = 24.0
+  local FOLLOW_TARGET_SAMPLE_ATTEMPTS = 8
+  local FOLLOW_MOVE_TIMEOUT_MS = 30000
   local COMMAND_COOLDOWN_MS = 250
   local TICK_INTERVAL_MS = 100
   local ATTACK_DIAG_INTERVAL_MS = 1000
   local DEFAULT_ATTACK_RANGE = 96.0
+  local WATER_BASE_CONE_RANGE = 205.0
+  local WATER_RANGE_PER_SHAPE_UNIT = 4.0
+  local WATER_RANGE_SAFETY_MARGIN = 5.0
   local ATTACK_RANGE_BY_ELEMENT_ID = {
-    [1] = 160.0, -- water cone still needs a reasonably close target.
+    [0] = 360.0, -- fire launches a native projectile stream.
+    [1] = WATER_BASE_CONE_RANGE - WATER_RANGE_SAFETY_MARGIN,
     [2] = 360.0, -- earth launches a native projectile/effect.
     [3] = 360.0, -- air is a long continuous lightning beam.
     [4] = 360.0, -- ether launches native projectiles.
@@ -566,6 +590,28 @@ function app.start()
     }
   end
 
+  local function normalize_scene_intent(scene)
+    if type(scene) ~= "table" then
+      return nil
+    end
+
+    local kind = normalize_scene_kind(scene.kind)
+    if kind == "run" then
+      return { kind = "run" }
+    end
+    if kind == "shared_hub" then
+      return { kind = "shared_hub" }
+    end
+    if kind == "private_region" then
+      return {
+        kind = "private_region",
+        region_index = tonumber(scene.region_index) or -1,
+        region_type_id = tonumber(scene.region_type_id) or -1,
+      }
+    end
+    return nil
+  end
+
   local function scene_key(scene_intent)
     if type(scene_intent) ~= "table" then
       return nil
@@ -915,11 +961,48 @@ function app.start()
     end
   end
 
-  local function current_attack_window()
+  local function read_actor_float(actor_address, offset)
+    if type(sd) ~= "table" or type(sd.debug) ~= "table" or type(sd.debug.read_float) ~= "function" then
+      return nil
+    end
+
+    actor_address = tonumber(actor_address)
+    if actor_address == nil or actor_address == 0 then
+      return nil
+    end
+
+    local ok, value = pcall(sd.debug.read_float, actor_address + offset)
+    if not ok then
+      return nil
+    end
+
+    value = tonumber(value)
+    if value == nil or value ~= value then
+      return nil
+    end
+    return value
+  end
+
+  local function water_attack_range(bot, fallback_range)
+    local shape = read_actor_float(type(bot) == "table" and bot.actor_address or nil, 0x290)
+    if shape == nil then
+      return fallback_range
+    end
+
+    -- Native frost handler feeds FUN_00641B10 with range = 205 + 4 * actor[0x290].
+    local native_range = WATER_BASE_CONE_RANGE + (shape * WATER_RANGE_PER_SHAPE_UNIT)
+    return math.max(DEFAULT_ATTACK_RANGE, native_range - WATER_RANGE_SAFETY_MARGIN)
+  end
+
+  local function current_attack_window(bot)
     local profile = type(state.bot_profile) == "table" and state.bot_profile or nil
     local element_id = profile ~= nil and tonumber(profile.element_id) or nil
+    local range = ATTACK_RANGE_BY_ELEMENT_ID[element_id] or DEFAULT_ATTACK_RANGE
+    if element_id == 1 then
+      range = water_attack_range(bot, range)
+    end
     return MIN_ATTACK_RANGE_BY_ELEMENT_ID[element_id] or 0.0,
-      ATTACK_RANGE_BY_ELEMENT_ID[element_id] or DEFAULT_ATTACK_RANGE
+      range
   end
 
   local function issue_auto_attack(now_ms, scene, bot, probe)
@@ -947,7 +1030,7 @@ function app.start()
       end
       return false
     end
-    local min_range, range = current_attack_window()
+    local min_range, range = current_attack_window(bot)
     local enemy, gap = get_attack_enemy(bot, probe)
     if enemy == nil then
       clear_face_target()
@@ -1043,6 +1126,117 @@ function app.start()
     state.travel_state = "idle"
   end
 
+  local function same_follow_point(a, b)
+    if type(a) ~= "table" or type(b) ~= "table" then
+      return false
+    end
+
+    return distance(
+      tonumber(a.x) or 0.0,
+      tonumber(a.y) or 0.0,
+      tonumber(b.x) or 0.0,
+      tonumber(b.y) or 0.0) <= 0.001
+  end
+
+  local function teleport_to_follow_target(now_ms, scene, bot, reason)
+    if state.bot_id == nil or type(state.follow_target) ~= "table" then
+      return false
+    end
+    if type(sd) ~= "table" or type(sd.bots) ~= "table" or type(sd.bots.update) ~= "function" then
+      return false
+    end
+
+    local target_x = tonumber(state.follow_target.x)
+    local target_y = tonumber(state.follow_target.y)
+    if target_x == nil or target_y == nil then
+      return false
+    end
+
+    if type(sd.bots.stop) == "function" then
+      pcall(sd.bots.stop, state.bot_id)
+    end
+
+    local scene_intent = build_scene_intent(scene)
+    if scene_intent == nil and type(bot) == "table" then
+      scene_intent = normalize_scene_intent(bot.scene)
+    end
+
+    local update = {
+      id = state.bot_id,
+      position = {
+        x = target_x,
+        y = target_y,
+      },
+    }
+    if scene_intent ~= nil then
+      update.scene = scene_intent
+    end
+    if type(bot) == "table" and tonumber(bot.heading) ~= nil then
+      update.position.heading = tonumber(bot.heading)
+    end
+
+    local call_ok, update_result = pcall(sd.bots.update, update)
+    local ok = call_ok and update_result
+    if not call_ok then
+      log(string.format(
+        "follow_teleport update rejected id=%s reason=%s error=%s",
+        tostring(state.bot_id),
+        tostring(reason),
+        tostring(update_result)))
+    end
+    if ok then
+      log(string.format(
+        "follow_teleport id=%s reason=%s point=(%.2f, %.2f)",
+        tostring(state.bot_id),
+        tostring(reason),
+        target_x,
+        target_y))
+      state.follow_target = nil
+      state.last_command_ms = tonumber(now_ms) or state.last_tick_ms or 0
+    else
+      log(string.format(
+        "follow_teleport failed id=%s reason=%s point=(%.2f, %.2f)",
+        tostring(state.bot_id),
+        tostring(reason),
+        target_x,
+        target_y))
+    end
+    return ok
+  end
+
+  local function expire_follow_move_if_needed(now_ms, scene, bot)
+    if type(state.follow_target) ~= "table" then
+      return false
+    end
+    local started_ms = tonumber(state.follow_target.move_started_ms)
+    if started_ms == nil or tonumber(now_ms) == nil then
+      return false
+    end
+    if now_ms - started_ms < FOLLOW_MOVE_TIMEOUT_MS then
+      return false
+    end
+
+    local current_target = nil
+    if type(bot) == "table" and bot.target_x ~= nil and bot.target_y ~= nil then
+      current_target = { x = bot.target_x, y = bot.target_y }
+    end
+    if current_target ~= nil and not same_follow_point(current_target, state.follow_target) then
+      state.follow_target = nil
+      return true
+    end
+
+    local arrival_gap = distance(
+      tonumber(type(bot) == "table" and bot.x or 0.0) or 0.0,
+      tonumber(type(bot) == "table" and bot.y or 0.0) or 0.0,
+      tonumber(state.follow_target.x) or 0.0,
+      tonumber(state.follow_target.y) or 0.0)
+    if arrival_gap <= FOLLOW_TARGET_ARRIVAL_DISTANCE then
+      return false
+    end
+
+    return teleport_to_follow_target(now_ms, scene, bot, "follow_timeout")
+  end
+
   local function issue_follow_move(target, now_ms, reason)
     if not ENABLE_FOLLOW_MOVEMENT then
       return false
@@ -1059,10 +1253,19 @@ function app.start()
 
     local ok = sd.bots.move_to(state.bot_id, target.x, target.y)
     if ok then
+      local previous_target = state.follow_target
+      local move_started_ms = now_ms
+      if same_follow_point(previous_target, target) and tonumber(previous_target.move_started_ms) ~= nil then
+        move_started_ms = previous_target.move_started_ms
+      end
       state.follow_target = {
         x = target.x,
         y = target.y,
         reason = reason,
+        player_x = target.player_x,
+        player_y = target.player_y,
+        player_gap = target.player_gap,
+        move_started_ms = move_started_ms,
       }
       state.last_command_ms = now_ms
       log(string.format(
@@ -1203,12 +1406,95 @@ function app.start()
     local bot_x = tonumber(bot.x) or 0.0
     local bot_y = tonumber(bot.y) or 0.0
     local gap = distance(bot_x, bot_y, player_x, player_y)
-    local offset_x, offset_y = bot_formation_offset(FOLLOW_STOP_DISTANCE)
+    local radius = FOLLOW_STOP_DISTANCE + (math.random() * (FOLLOW_RESUME_DISTANCE - FOLLOW_STOP_DISTANCE))
+    local angle = math.random() * math.pi * 2.0
     return {
-      x = player_x + offset_x,
-      y = player_y + offset_y,
+      x = player_x + (math.cos(angle) * radius),
+      y = player_y + (math.sin(angle) * radius),
       gap = gap,
+      player_x = player_x,
+      player_y = player_y,
+      radius = radius,
     }
+  end
+
+  local function follow_target_player_gap(player, target)
+    if type(player) ~= "table" or type(target) ~= "table" then
+      return nil
+    end
+
+    return distance(
+      tonumber(player.x) or 0.0,
+      tonumber(player.y) or 0.0,
+      tonumber(target.x) or 0.0,
+      tonumber(target.y) or 0.0)
+  end
+
+  local function follow_target_band_penalty(player, target)
+    local gap = follow_target_player_gap(player, target)
+    if gap == nil then
+      return nil
+    end
+    if gap < FOLLOW_STOP_DISTANCE then
+      return FOLLOW_STOP_DISTANCE - gap
+    end
+    if gap > FOLLOW_RESUME_DISTANCE then
+      return gap - FOLLOW_RESUME_DISTANCE
+    end
+    return 0.0
+  end
+
+  local function should_refresh_follow_target(player, bot_gap, target)
+    if type(player) ~= "table" or type(target) ~= "table" then
+      return true
+    end
+    if (tonumber(bot_gap) or 0.0) <= FOLLOW_RESUME_DISTANCE then
+      return false
+    end
+
+    return distance(
+      tonumber(player.x) or 0.0,
+      tonumber(player.y) or 0.0,
+      tonumber(target.player_x) or 0.0,
+      tonumber(target.player_y) or 0.0) > FOLLOW_TARGET_REFRESH_DISTANCE
+  end
+
+  local function annotate_follow_target(target, source, player)
+    if type(target) ~= "table" then
+      return nil
+    end
+    local player_x = tonumber(type(source) == "table" and source.player_x or nil) or tonumber(player.x) or 0.0
+    local player_y = tonumber(type(source) == "table" and source.player_y or nil) or tonumber(player.y) or 0.0
+    target.player_x = player_x
+    target.player_y = player_y
+    target.player_gap = distance(player_x, player_y, target.x, target.y)
+    return target
+  end
+
+  local function choose_follow_target(now_ms, player, bot)
+    local nav_grid = get_nav_grid_snapshot(now_ms)
+    local best_target = nil
+    local best_penalty = nil
+
+    for _ = 1, FOLLOW_TARGET_SAMPLE_ATTEMPTS do
+      local candidate = compute_follow_target(player, bot)
+      local snapped = snap_target_to_nav(nav_grid, candidate, {
+        avoid_outer_rows = true,
+      })
+      if type(snapped) == "table" then
+        annotate_follow_target(snapped, candidate, player)
+        local penalty = follow_target_band_penalty(player, snapped) or 1000000.0
+        if best_penalty == nil or penalty < best_penalty then
+          best_target = snapped
+          best_penalty = penalty
+        end
+        if penalty <= 0.0 then
+          return snapped
+        end
+      end
+    end
+
+    return best_target
   end
 
   local function update_same_scene_follow(now_ms, scene, player, bot)
@@ -1230,48 +1516,83 @@ function app.start()
       return
     end
 
-    local target = snap_target_to_nav(get_nav_grid_snapshot(now_ms), compute_follow_target(player, bot), {
-      avoid_outer_rows = true,
-    })
-    if type(target) ~= "table" then
-      return
-    end
-    local gap = target.gap
-    if state.follow_target ~= nil and (not bot.moving) and (not bot.has_target) then
-      local settled_gap = distance(
+    local gap = distance(
+      tonumber(bot.x) or 0.0,
+      tonumber(bot.y) or 0.0,
+      tonumber(player.x) or 0.0,
+      tonumber(player.y) or 0.0)
+
+    if state.follow_target ~= nil then
+      if expire_follow_move_if_needed(now_ms, scene, bot) then
+        return
+      end
+
+      local arrival_gap = distance(
         tonumber(bot.x) or 0.0,
         tonumber(bot.y) or 0.0,
         tonumber(state.follow_target.x) or 0.0,
         tonumber(state.follow_target.y) or 0.0)
-      if settled_gap <= ARRIVAL_DISTANCE then
-        state.follow_target = nil
-      end
-    end
-
-    local follow_active = bot.moving or bot.has_target or state.follow_target ~= nil
-    if follow_active then
-      if gap <= FOLLOW_SETTLE_DISTANCE then
-        stop_follow_move("follow_deadzone")
+      if arrival_gap <= FOLLOW_TARGET_ARRIVAL_DISTANCE then
+        stop_follow_move("follow_arrival")
         return
       end
-    else
-      if gap <= FOLLOW_RESUME_DISTANCE then
+
+      if should_refresh_follow_target(player, gap, state.follow_target) then
+        local target = choose_follow_target(now_ms, player, bot)
+        if type(target) == "table" then
+          issue_follow_move(target, now_ms, "follow_refresh")
+        end
         return
       end
-    end
 
-    if (not bot.moving) or (not bot.has_target) then
-      issue_follow_move(target, now_ms, "follow")
+      if (not bot.moving) or (not bot.has_target) then
+        if gap <= FOLLOW_RESUME_DISTANCE then
+          state.follow_target = nil
+          return
+        end
+        issue_follow_move(state.follow_target, now_ms, "follow_resume")
+        return
+      end
+
+      if bot.target_x == nil or bot.target_y == nil then
+        issue_follow_move(state.follow_target, now_ms, "follow_reissue")
+        return
+      end
+
+      local target_gap = distance(bot.target_x, bot.target_y, state.follow_target.x, state.follow_target.y)
+      if target_gap > FOLLOW_TARGET_REFRESH_DISTANCE then
+        issue_follow_move(state.follow_target, now_ms, "follow_reissue")
+      end
       return
     end
 
-    if bot.target_x == nil or bot.target_y == nil then
-      issue_follow_move(target, now_ms, "follow")
+    if bot.moving or bot.has_target then
+      if bot.target_x ~= nil and bot.target_y ~= nil then
+        local native_arrival_gap = distance(
+          tonumber(bot.x) or 0.0,
+          tonumber(bot.y) or 0.0,
+          tonumber(bot.target_x) or 0.0,
+          tonumber(bot.target_y) or 0.0)
+        if native_arrival_gap <= FOLLOW_TARGET_ARRIVAL_DISTANCE then
+          stop_follow_move("follow_arrival")
+        elseif gap > FOLLOW_RESUME_DISTANCE then
+          local target = choose_follow_target(now_ms, player, bot)
+          if type(target) == "table" then
+            issue_follow_move(target, now_ms, "follow")
+          end
+        end
+      elseif gap <= FOLLOW_RESUME_DISTANCE then
+        stop_follow_move("follow_no_target")
+      end
       return
     end
 
-    local target_gap = distance(bot.target_x, bot.target_y, target.x, target.y)
-    if target_gap > FOLLOW_TARGET_REFRESH_DISTANCE then
+    if gap <= FOLLOW_RESUME_DISTANCE then
+      return
+    end
+
+    local target = choose_follow_target(now_ms, player, bot)
+    if type(target) == "table" then
       issue_follow_move(target, now_ms, "follow")
     end
   end
@@ -1476,9 +1797,14 @@ function app.start()
       issue_auto_attack = issue_auto_attack,
       heading_towards = heading_towards,
       snap_target_to_nav = snap_target_to_nav,
+      compute_follow_target = compute_follow_target,
+      choose_follow_target = choose_follow_target,
+      should_refresh_follow_target = should_refresh_follow_target,
+      update_same_scene_follow = update_same_scene_follow,
       follow_stop_distance = FOLLOW_STOP_DISTANCE,
       follow_resume_distance = FOLLOW_RESUME_DISTANCE,
-      follow_settle_distance = FOLLOW_SETTLE_DISTANCE,
+      follow_target_arrival_distance = FOLLOW_TARGET_ARRIVAL_DISTANCE,
+      follow_move_timeout_ms = FOLLOW_MOVE_TIMEOUT_MS,
       state = state,
     })
   end
