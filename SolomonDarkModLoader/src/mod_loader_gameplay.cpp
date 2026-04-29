@@ -88,7 +88,14 @@ using ActorAnimationAdvanceFn = void(__thiscall*)(void* self);
 using PlayerActorRefreshRuntimeHandlesFn = void(__thiscall*)(void* self);
 using ActorProgressionRefreshFn = void(__thiscall*)(void* self);
 using PlayerAppearanceApplyChoiceFn = void(__thiscall*)(void* progression, int choice_id, int ensure_assets);
-using SkillsWizardBuildPrimarySpellFn = void(__thiscall*)(void* self, float primary_entry, float combo_entry);
+using SkillsWizardBuildPrimarySpellFn = void(__thiscall*)(
+    void* self,
+    std::uint32_t primary_entry,
+    std::uint32_t combo_entry,
+    std::uint32_t reserved0,
+    std::uint32_t reserved1,
+    std::uint32_t reserved2,
+    std::uint32_t reserved3);
 using GameNpcSetMoveGoalFn = void(__thiscall*)(void* self, std::uint8_t mode, int follow_flag, float x, float y, float extra_scalar);
 using GameNpcSetTrackedSlotAssistFn = void(__thiscall*)(void* self, int slot_index, int require_callback);
 using EquipAttachmentSinkGetCurrentItemFn = int(__fastcall*)(int sink);
@@ -765,6 +772,12 @@ struct ParticipantEntityBinding {
         bool requires_local_slot_native_tick = false;
         bool post_stock_dispatch_attempted = false;
         uintptr_t pure_primary_item_sink_fallback = 0;
+        multiplayer::BotManaChargeKind mana_charge_kind =
+            multiplayer::BotManaChargeKind::None;
+        float mana_cost = 0.0f;
+        float mana_spent_total = 0.0f;
+        std::int32_t mana_statbook_level = 1;
+        std::uint64_t mana_last_charge_ms = 0;
         static constexpr int kMaxTicksWaiting = 300;
         static constexpr int kMaxStartupTicksWaiting = 12;
         // Lua retargets every 100 ms. Keep continuous primaries alive through
@@ -1136,8 +1149,8 @@ bool CallActorProgressionRefreshSafe(
 bool CallSkillsWizardBuildPrimarySpellSafe(
     uintptr_t build_address,
     uintptr_t progression_address,
-    float primary_entry_arg,
-    float combo_entry_arg,
+    std::uint32_t primary_entry_arg,
+    std::uint32_t combo_entry_arg,
     DWORD* exception_code);
 bool CallPlayerAppearanceApplyChoiceSafe(
     uintptr_t apply_choice_address,

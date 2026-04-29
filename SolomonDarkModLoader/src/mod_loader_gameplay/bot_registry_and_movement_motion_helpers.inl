@@ -120,6 +120,78 @@ bool TryReadActorHealthRuntime(uintptr_t actor_address, ActorHealthRuntime* heal
     return TryReadActorProgressionHealth(actor_address, health);
 }
 
+struct ManaSpendResult {
+    bool readable = false;
+    bool spent = false;
+    float before = 0.0f;
+    float after = 0.0f;
+    float requested = 0.0f;
+    float actual = 0.0f;
+};
+
+bool TryReadProgressionMana(uintptr_t progression_address, float* mp, float* max_mp) {
+    if (progression_address == 0 || mp == nullptr || max_mp == nullptr) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.IsReadableRange(progression_address + kProgressionMpOffset, sizeof(float)) ||
+        !memory.IsReadableRange(progression_address + kProgressionMaxMpOffset, sizeof(float))) {
+        return false;
+    }
+    const auto current = memory.ReadFieldOr<float>(progression_address, kProgressionMpOffset, 0.0f);
+    const auto maximum =
+        memory.ReadFieldOr<float>(progression_address, kProgressionMaxMpOffset, 0.0f);
+    if (!std::isfinite(current) || !std::isfinite(maximum) || maximum <= 0.0f) {
+        return false;
+    }
+    *mp = current;
+    *max_mp = maximum;
+    return true;
+}
+
+ManaSpendResult TrySpendProgressionMana(
+    uintptr_t progression_address,
+    float requested_amount,
+    bool allow_partial) {
+    ManaSpendResult result{};
+    result.requested = requested_amount;
+    if (!std::isfinite(requested_amount) || requested_amount <= 0.0f) {
+        result.spent = true;
+        return result;
+    }
+
+    float before = 0.0f;
+    float max_mp = 0.0f;
+    if (!TryReadProgressionMana(progression_address, &before, &max_mp)) {
+        return result;
+    }
+    result.readable = true;
+    result.before = before;
+    if (before <= 0.0f) {
+        result.after = before;
+        return result;
+    }
+
+    const float actual_amount =
+        allow_partial && before < requested_amount ? before : requested_amount;
+    if (before + 0.001f < requested_amount && !allow_partial) {
+        result.after = before;
+        return result;
+    }
+    const float after = before > actual_amount ? before - actual_amount : 0.0f;
+    auto& memory = ProcessMemory::Instance();
+    result.spent =
+        memory.TryWriteField<float>(progression_address, kProgressionMpOffset, after);
+    if (result.spent) {
+        result.after = after;
+        result.actual = actual_amount;
+    } else {
+        result.after = before;
+    }
+    return result;
+}
+
 constexpr std::array<float, 26> kEarthBoulderBaseDamageByLevel = {
     0.0f,   10.0f,  30.0f,  50.0f,  75.0f,  100.0f, 120.0f, 140.0f, 160.0f,
     180.0f, 200.0f, 220.0f, 240.0f, 260.0f, 280.0f, 300.0f, 320.0f, 340.0f,
@@ -1841,6 +1913,83 @@ bool PreparePendingGameplaySlotBotCast(ParticipantEntityBinding* binding, std::s
             : ongoing.skill_id;
     ongoing.requires_local_slot_native_tick =
         SkillRequiresLocalSlotDuringNativeTick(native_tick_skill_id);
+    const auto cast_mana =
+        multiplayer::ResolveBotCastManaCost(
+            binding->character_profile,
+            request.kind,
+            request.secondary_slot,
+            ongoing.skill_id);
+    if (!cast_mana.resolved) {
+        Log(
+            "[bots] mana rejected. bot_id=" + std::to_string(binding->bot_id) +
+            " skill_id=" + std::to_string(ongoing.skill_id) +
+            " kind=" + (request.kind == multiplayer::BotCastKind::Primary ? std::string("primary") : std::string("secondary")) +
+            " slot=" + std::to_string(request.secondary_slot) +
+            " mode=unknown");
+        RollbackPreparedStartup(&ongoing);
+        finish_attack_idle();
+        if (error_message != nullptr) {
+            *error_message = "unknown mana cost for bot cast";
+        }
+        return false;
+    }
+    ongoing.mana_charge_kind = cast_mana.kind;
+    ongoing.mana_cost = cast_mana.cost;
+    ongoing.mana_statbook_level = cast_mana.statbook_level;
+    ongoing.mana_last_charge_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (cast_mana.kind != multiplayer::BotManaChargeKind::None) {
+        if (ongoing.progression_runtime_address == 0) {
+            RollbackPreparedStartup(&ongoing);
+            finish_attack_idle();
+            if (error_message != nullptr) {
+                *error_message = "bot cast requires mana but has no progression runtime";
+            }
+            return false;
+        }
+
+        if (cast_mana.kind == multiplayer::BotManaChargeKind::PerCast) {
+            float current_mp = 0.0f;
+            float max_mp = 0.0f;
+            if (!TryReadProgressionMana(ongoing.progression_runtime_address, &current_mp, &max_mp) ||
+                current_mp + 0.001f < cast_mana.cost) {
+                Log(
+                    "[bots] mana rejected. bot_id=" + std::to_string(binding->bot_id) +
+                    " skill_id=" + std::to_string(ongoing.skill_id) +
+                    " kind=" + (request.kind == multiplayer::BotCastKind::Primary ? std::string("primary") : std::string("secondary")) +
+                    " slot=" + std::to_string(request.secondary_slot) +
+                    " mode=per_cast cost=" + std::to_string(cast_mana.cost) +
+                    " before=" + std::to_string(current_mp));
+                RollbackPreparedStartup(&ongoing);
+                finish_attack_idle();
+                if (error_message != nullptr) {
+                    *error_message = "insufficient mana for bot cast";
+                }
+                return false;
+            }
+        } else {
+            float current_mp = 0.0f;
+            float max_mp = 0.0f;
+            const float required_mana =
+                multiplayer::ResolveBotManaRequiredToStart(cast_mana);
+            if (!TryReadProgressionMana(ongoing.progression_runtime_address, &current_mp, &max_mp) ||
+                current_mp + 0.001f < required_mana) {
+                Log(
+                    "[bots] mana rejected. bot_id=" + std::to_string(binding->bot_id) +
+                    " skill_id=" + std::to_string(ongoing.skill_id) +
+                    " kind=" + (request.kind == multiplayer::BotCastKind::Primary ? std::string("primary") : std::string("secondary")) +
+                    " slot=" + std::to_string(request.secondary_slot) +
+                    " mode=per_second rate=" + std::to_string(cast_mana.cost) +
+                    " required=" + std::to_string(required_mana) +
+                    " before=" + std::to_string(current_mp));
+                RollbackPreparedStartup(&ongoing);
+                finish_attack_idle();
+                if (error_message != nullptr) {
+                    *error_message = "insufficient mana for held bot cast";
+                }
+                return false;
+            }
+        }
+    }
     ongoing.startup_in_progress = true;
     ongoing.startup_ticks_waiting = 0;
     if (ongoing.target_actor_address != 0) {
@@ -2176,6 +2325,11 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         bool native_damage_scale_available = false;
         bool target_position_readable = false;
         bool target_in_impact = false;
+        bool impact_context_write_attempted = false;
+        bool impact_context_write_ok = false;
+        float impact_context_x = 0.0f;
+        float impact_context_y = 0.0f;
+        float impact_context_radius = 0.0f;
     };
 
     auto ReadBoulderDamageProjectionSnapshot =
@@ -2302,6 +2456,51 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     memory.IsReadableRange(snapshot.stat_vtable + 0x100, sizeof(std::uintptr_t))) {
                     snapshot.damage_getter =
                         memory.ReadValueOr<std::uintptr_t>(snapshot.stat_vtable + 0x100, 0);
+                }
+            }
+            if (snapshot.stat_source != 0 &&
+                snapshot.target_in_impact &&
+                snapshot.target_position_readable &&
+                std::isfinite(active_spell_snapshot.object_x) &&
+                std::isfinite(active_spell_snapshot.object_y) &&
+                std::isfinite(snapshot.target_impact_radius) &&
+                snapshot.target_impact_radius > 0.0f) {
+                const float object_radius =
+                    std::isfinite(active_spell_snapshot.object_radius) &&
+                            active_spell_snapshot.object_radius > 0.0f
+                        ? active_spell_snapshot.object_radius
+                        : 0.0f;
+                const float context_radius =
+                    object_radius > snapshot.target_impact_radius
+                        ? object_radius
+                        : snapshot.target_impact_radius;
+                if (std::isfinite(context_radius) && context_radius > 0.0f) {
+                    snapshot.impact_context_write_attempted = true;
+                    snapshot.impact_context_x = active_spell_snapshot.object_x - context_radius;
+                    snapshot.impact_context_y = active_spell_snapshot.object_y;
+                    snapshot.impact_context_radius = context_radius;
+                    const bool write_x =
+                        memory.TryWriteField<float>(
+                            snapshot.stat_source,
+                            0x8BCC,
+                            snapshot.impact_context_x);
+                    const bool write_y =
+                        memory.TryWriteField<float>(
+                            snapshot.stat_source,
+                            0x8BD0,
+                            snapshot.impact_context_y);
+                    const bool write_radius =
+                        memory.TryWriteField<float>(
+                            snapshot.stat_source,
+                            0x8BD4,
+                            snapshot.impact_context_radius);
+                    const bool write_y_extent =
+                        memory.TryWriteField<float>(
+                            snapshot.stat_source,
+                            0x8BD8,
+                            0.0f);
+                    snapshot.impact_context_write_ok =
+                        write_x && write_y && write_radius && write_y_extent;
                 }
             }
             if (snapshot.damage_getter != 0 &&
@@ -2806,6 +3005,77 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         if (has_live_handle) {
             ongoing.saw_live_handle = true;
         }
+        bool mana_depleted = false;
+        if (ongoing.mana_charge_kind == multiplayer::BotManaChargeKind::PerCast &&
+            ongoing.progression_runtime_address != 0 &&
+            ongoing.saw_activity &&
+            ongoing.mana_cost > 0.0f &&
+            ongoing.mana_spent_total <= 0.0f) {
+            const auto mana_spend =
+                TrySpendProgressionMana(ongoing.progression_runtime_address, ongoing.mana_cost, false);
+            if (mana_spend.spent) {
+                ongoing.mana_spent_total += mana_spend.actual;
+                Log(
+                    "[bots] mana spent. bot_id=" + std::to_string(binding->bot_id) +
+                    " skill_id=" + std::to_string(ongoing.skill_id) +
+                    " mode=per_cast statbook_level=" +
+                        std::to_string(ongoing.mana_statbook_level) +
+                    " cost=" + std::to_string(ongoing.mana_cost) +
+                    " before=" + std::to_string(mana_spend.before) +
+                    " after=" + std::to_string(mana_spend.after) +
+                    " total=" + std::to_string(ongoing.mana_spent_total));
+            } else {
+                mana_depleted = true;
+                Log(
+                    "[bots] mana rejected. bot_id=" + std::to_string(binding->bot_id) +
+                    " skill_id=" + std::to_string(ongoing.skill_id) +
+                    " mode=per_cast cost=" + std::to_string(ongoing.mana_cost) +
+                    " before=" + std::to_string(mana_spend.before) +
+                    " readable=" + (mana_spend.readable ? std::string("1") : std::string("0")));
+            }
+        }
+        if (ongoing.mana_charge_kind == multiplayer::BotManaChargeKind::PerSecond &&
+            ongoing.progression_runtime_address != 0 &&
+            ongoing.saw_activity &&
+            !ongoing.bounded_release_requested &&
+            ongoing.mana_cost > 0.0f) {
+            const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+            if (ongoing.mana_last_charge_ms == 0) {
+                ongoing.mana_last_charge_ms = now_ms;
+            }
+            const auto elapsed_ms =
+                now_ms > ongoing.mana_last_charge_ms ? now_ms - ongoing.mana_last_charge_ms : 0;
+            if (elapsed_ms > 0) {
+                const float requested_mana =
+                    ongoing.mana_cost * (static_cast<float>(elapsed_ms) / 1000.0f);
+                const auto mana_spend =
+                    TrySpendProgressionMana(ongoing.progression_runtime_address, requested_mana, true);
+                ongoing.mana_last_charge_ms = now_ms;
+                if (mana_spend.spent) {
+                    ongoing.mana_spent_total += mana_spend.actual;
+                    Log(
+                        "[bots] mana spent. bot_id=" + std::to_string(binding->bot_id) +
+                        " skill_id=" + std::to_string(ongoing.skill_id) +
+                        " mode=per_second statbook_level=" +
+                            std::to_string(ongoing.mana_statbook_level) +
+                        " rate=" + std::to_string(ongoing.mana_cost) +
+                        " cost=" + std::to_string(requested_mana) +
+                        " before=" + std::to_string(mana_spend.before) +
+                        " after=" + std::to_string(mana_spend.after) +
+                        " total=" + std::to_string(ongoing.mana_spent_total));
+                }
+                if (!mana_spend.spent || mana_spend.actual + 0.001f < requested_mana) {
+                    mana_depleted = true;
+                    Log(
+                        "[bots] mana depleted. bot_id=" + std::to_string(binding->bot_id) +
+                        " skill_id=" + std::to_string(ongoing.skill_id) +
+                        " mode=per_second requested=" + std::to_string(requested_mana) +
+                        " actual=" + std::to_string(mana_spend.actual) +
+                        " before=" + std::to_string(mana_spend.before) +
+                        " after=" + std::to_string(mana_spend.after));
+                }
+            }
+        }
 
         // Some native primary actions do not publish a live spell-object handle,
         // but their emission still runs through actor+0xE4/0xE8. Do not clear
@@ -2957,6 +3227,12 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         const bool safety_cap_hit =
             ongoing.ticks_waiting >= ResolveBotCastSafetyCapTicks(native_active_skill_id);
 
+        if (mana_depleted) {
+            ReleaseSpellHandle(ongoing, "mana_depleted", true);
+            ongoing = ParticipantEntityBinding::OngoingCastState{};
+            return true;
+        }
+
         if (bounded_release_just_requested) {
             ongoing.startup_in_progress = false;
             const bool release_for_damage =
@@ -3027,6 +3303,14 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 " damage_getter_seh=" + HexString(earth_damage_projection.damage_getter_seh) +
                 " damage_native=" +
                     (earth_damage_projection.native_damage_scale_available ? std::string("1") : std::string("0")) +
+                " impact_context_write=" +
+                    (earth_damage_projection.impact_context_write_ok ? std::string("1") : std::string("0")) +
+                " impact_context_x=" +
+                    std::to_string(earth_damage_projection.impact_context_x) +
+                " impact_context_y=" +
+                    std::to_string(earth_damage_projection.impact_context_y) +
+                " impact_context_radius=" +
+                    std::to_string(earth_damage_projection.impact_context_radius) +
                 " base_damage=" + std::to_string(earth_damage_projection.base_damage) +
                 " statbook_damage=" + std::to_string(earth_damage_projection.statbook_damage) +
                 " projected_damage=" +

@@ -18,6 +18,7 @@ import probe_bot_primary_wave_cast as wave
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = ROOT / "runtime" / "probe_bot_element_damage.json"
+RUNTIME_BINARY_LAYOUT_PATH = ROOT / "runtime" / "stage" / ".sdmod" / "config" / "binary-layout.ini"
 
 ELEMENTS = {
     "fire": {"element_id": 0, "primary_entry_index": 0x10},
@@ -314,6 +315,14 @@ CAST_PREPPED_RE = re.compile(
 CAST_COMPLETE_RE = re.compile(
     r"cast complete \(([^)]+)\)\. bot_id=(\d+) skill_id=(-?\d+) ticks=(\d+).*"
 )
+MANA_SPENT_RE = re.compile(
+    r"mana spent\. bot_id=(\d+) skill_id=(-?\d+) mode=([a-z_]+) "
+    r"statbook_level=(\d+) .*?(?:rate=([0-9.+\\-eE]+) )?cost=([0-9.+\\-eE]+) "
+    r"before=([0-9.+\\-eE]+) after=([0-9.+\\-eE]+) total=([0-9.+\\-eE]+)"
+)
+MANA_REJECTED_RE = re.compile(
+    r"(?:cast rejected for mana|mana rejected)\. bot_id=(\d+) skill_id=(-?\d+) .*?mode=([a-z_]+) .*"
+)
 SPELL_DISPATCH_ENTER_RE = re.compile(
     r"spell_dispatch enter actor=(0x[0-9A-Fa-f]+) bot_id=(\d+).*"
 )
@@ -517,6 +526,8 @@ def build_statbook_validation(
     pure_primary_start_matches: list[dict[str, object]] = []
     pure_primary_builder_matches: list[dict[str, object]] = []
     earth_spawn_matches: list[dict[str, object]] = []
+    mana_spent_matches: list[dict[str, object]] = []
+    mana_rejected_matches: list[dict[str, object]] = []
     for line in log_lines:
         loadout_match = LOADOUT_RE.search(line)
         if loadout_match:
@@ -683,6 +694,34 @@ def build_statbook_validation(
                     "boulder_max_size": parse_cast_startup_value(line, "boulder_max_size"),
                 }
             )
+        mana_spent_match = MANA_SPENT_RE.search(line)
+        if mana_spent_match and parse_int_text(mana_spent_match.group(1)) == bot_id:
+            mana_spent_matches.append(
+                {
+                    "line": line,
+                    "bot_id": parse_int_text(mana_spent_match.group(1)),
+                    "skill_id": parse_int_text(mana_spent_match.group(2)),
+                    "mode": mana_spent_match.group(3),
+                    "statbook_level": parse_int_text(mana_spent_match.group(4)),
+                    "rate": float(mana_spent_match.group(5))
+                    if mana_spent_match.group(5) is not None
+                    else None,
+                    "cost": float(mana_spent_match.group(6)),
+                    "before": float(mana_spent_match.group(7)),
+                    "after": float(mana_spent_match.group(8)),
+                    "total": float(mana_spent_match.group(9)),
+                }
+            )
+        mana_rejected_match = MANA_REJECTED_RE.search(line)
+        if mana_rejected_match and parse_int_text(mana_rejected_match.group(1)) == bot_id:
+            mana_rejected_matches.append(
+                {
+                    "line": line,
+                    "bot_id": parse_int_text(mana_rejected_match.group(1)),
+                    "skill_id": parse_int_text(mana_rejected_match.group(2)),
+                    "mode": mana_rejected_match.group(3),
+                }
+            )
 
     matching_loadout = next(
         (
@@ -789,6 +828,37 @@ def build_statbook_validation(
         pure_primary_builder_matches=pure_primary_builder_matches,
         earth_spawn_matches=earth_spawn_matches,
     )
+    native_spawn_logged = native_projectile_spawn_validation.get("ok") is True
+    pure_primary_spawn_logged = bool(spec.get("lane") == "pure_primary" and native_spawn_logged)
+    cast_lifecycle_logged = bool(
+        matching_complete is not None
+        or continuous_dispatch_logged
+        or pure_primary_spawn_logged
+    )
+    expected_mana_mode = "per_cast" if spec.get("unit") == "per_cast" else "per_second"
+    matching_mana_spend = next(
+        (
+            item
+            for item in reversed(mana_spent_matches)
+            if int(item["skill_id"]) == spec["build_skill_id"]
+            and item["mode"] == expected_mana_mode
+            and int(item["statbook_level"]) == int(statbook.get("level", -1))
+            and (
+                (
+                    expected_mana_mode == "per_cast"
+                    and abs(float(item["cost"]) - float(statbook.get("level_mana", 0.0))) <= 0.001
+                )
+                or (
+                    expected_mana_mode == "per_second"
+                    and item.get("rate") is not None
+                    and abs(float(item["rate"]) - float(statbook.get("level_mana", 0.0))) <= 0.001
+                    and float(item["cost"]) > 0.0
+                )
+            )
+            and float(item["after"]) < float(item["before"])
+        ),
+        None,
+    )
 
     checks = {
         "profile_element_matches": profile["element_id"] == config["element_id"],
@@ -800,10 +870,11 @@ def build_statbook_validation(
         "statbook_loaded": bool(statbook.get("path")),
         "skills_wizard_loadout_logged": matching_loadout is not None,
         "cast_prepped_logged": matching_prepped is not None or continuous_dispatch_logged,
-        "cast_completed_logged": matching_complete is not None or continuous_dispatch_logged,
+        "cast_lifecycle_logged": cast_lifecycle_logged,
+        "mana_spent_from_statbook": matching_mana_spend is not None,
         "earth_release_policy_satisfied": earth_release_policy_ok,
         "earth_release_base_damage_matches_statbook": earth_release_base_damage_matches_statbook,
-        "native_projectile_or_effect_spawn_logged": native_projectile_spawn_validation.get("ok") is True,
+        "native_projectile_or_effect_spawn_logged": native_spawn_logged,
     }
     return {
         "ok": all(checks.values()),
@@ -824,6 +895,7 @@ def build_statbook_validation(
         "matching_prepped": matching_prepped,
         "matching_complete": matching_complete,
         "matching_dispatch": matching_dispatch,
+        "matching_mana_spend": matching_mana_spend,
         "native_projectile_spawn_validation": native_projectile_spawn_validation,
         "loadout_log_count": len(loadout_matches),
         "prepped_log_count": len(prepped_matches),
@@ -832,6 +904,8 @@ def build_statbook_validation(
         "pure_primary_start_log_count": len(pure_primary_start_matches),
         "pure_primary_builder_log_count": len(pure_primary_builder_matches),
         "earth_spawn_log_count": len(earth_spawn_matches),
+        "mana_spent_log_count": len(mana_spent_matches),
+        "mana_rejected_log_count": len(mana_rejected_matches),
     }
 
 
@@ -936,6 +1010,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--trace-native-hit-path",
         action="store_true",
         help="Diagnostic: trace the recovered native target query/collision/damage path.",
+    )
+    parser.add_argument(
+        "--bot-starting-mp",
+        type=float,
+        default=None,
+        help="Diagnostic: force the bot progression MP before casting.",
+    )
+    parser.add_argument(
+        "--expect-mana-rejected",
+        action="store_true",
+        help="Validate that the queued cast is rejected for insufficient mana.",
     )
     return parser
 
@@ -1078,6 +1163,63 @@ print('bot_id=' .. tostring(id))
     if bot_id == 0:
         raise ElementDamageProbeFailure(f"sd.bots.create returned no id for {element}: {result}")
     return bot_id
+
+
+def read_runtime_layout_offset(name: str) -> int:
+    text = RUNTIME_BINARY_LAYOUT_PATH.read_text(encoding="utf-8")
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", ";")) or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        if key.strip() == name:
+            return int(value.strip(), 0)
+    raise ElementDamageProbeFailure(
+        f"Unable to find {name!r} in {RUNTIME_BINARY_LAYOUT_PATH}"
+    )
+
+
+def force_bot_progression_mp(bot_id: int, mp: float) -> dict[str, str]:
+    mp_offset = read_runtime_layout_offset("progression_mp")
+    return csp.parse_key_values(
+        csp.run_lua(
+            f"""
+local bot_id = {bot_id}
+local requested_mp = {mp}
+local mp_offset = {mp_offset}
+local function emit(key, value)
+  if value == nil then
+    print(key .. "=")
+  else
+    print(key .. "=" .. tostring(value))
+  end
+end
+local bot = sd.bots.get_state(bot_id)
+if type(bot) ~= 'table' then
+  emit('ok', false)
+  emit('error', 'bot_not_found')
+  return
+end
+local progression = tonumber(bot.progression_runtime_state_address) or 0
+if progression == 0 then
+  emit('ok', false)
+  emit('error', 'missing_progression_runtime')
+  return
+end
+emit('before', bot.mp)
+local mp_address = progression + mp_offset
+emit('write_ok', sd.debug.write_float(mp_address, requested_mp))
+emit('raw_after', sd.debug.read_float(mp_address))
+local refreshed = sd.bots.get_state(bot_id) or {{}}
+emit('snapshot_after', refreshed.mp)
+emit('max_mp', refreshed.max_mp)
+emit('progression_runtime', progression)
+emit('mp_offset', mp_offset)
+emit('mp_address', mp_address)
+emit('ok', refreshed.mp ~= nil)
+""".strip()
+        )
+    )
 
 
 def query_scene_actor_by_address(actor_address: int) -> dict[str, str]:
@@ -2388,10 +2530,19 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
                     ),
                     None,
                 )
-                if target_baseline is None:
+            if target_baseline is None:
+                raise ElementDamageProbeFailure(
+                    f"Unable to capture clean {element} pre-cast baseline for target {hostile_actor:x}"
+                )
+
+            if cast_index == 0 and args.bot_starting_mp is not None:
+                forced_bot_mana = force_bot_progression_mp(bot_id, args.bot_starting_mp)
+                result["forced_bot_mana"] = forced_bot_mana
+                if forced_bot_mana.get("ok") != "true" or forced_bot_mana.get("write_ok") != "true":
                     raise ElementDamageProbeFailure(
-                        f"Unable to capture clean {element} pre-cast baseline for target {hostile_actor:x}"
+                        f"Unable to force bot MP before {element} cast: {forced_bot_mana}"
                     )
+                bot = query_bot_by_id(bot_id)
 
             current_by_actor = {
                 int(hostile.get("actor_address", 0)): hostile
@@ -2533,6 +2684,21 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
             )
         target_removed_after_damage = target_removed_after_damage or native_release_removed_target
         hp_decreased = hp_decreased or native_release_removed_target
+        mana_rejected_logged = int(statbook_validation.get("mana_rejected_log_count", 0)) > 0
+        mana_rejection_validation = {
+            "expected": bool(args.expect_mana_rejected),
+            "mana_rejected_logged": mana_rejected_logged,
+            "any_cast_queued": any_cast_queued,
+            "any_hostile_damaged": bool(victims),
+            "hp_decreased": hp_decreased,
+            "ok": bool(
+                args.expect_mana_rejected
+                and mana_rejected_logged
+                and not any_cast_queued
+                and not victims
+                and not hp_decreased
+            ),
+        }
         result.update(
             {
                 "player": player,
@@ -2556,9 +2722,13 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
                     "after_by_actor": after_by_actor,
                 },
                 "statbook_validation": statbook_validation,
+                "mana_rejection_validation": mana_rejection_validation,
             }
         )
-        result["ok"] = bool(victims and any_cast_queued and statbook_validation.get("ok") is True)
+        if args.expect_mana_rejected:
+            result["ok"] = mana_rejection_validation["ok"]
+        else:
+            result["ok"] = bool(victims and any_cast_queued and statbook_validation.get("ok") is True)
     except (csp.ProbeFailure, crc.CloseRangeProbeFailure, ElementDamageProbeFailure) as exc:
         result["error"] = str(exc)
     finally:

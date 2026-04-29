@@ -19,6 +19,20 @@ enum class BotControllerState {
     Attacking,
 };
 
+enum class BotManaChargeKind {
+    None,
+    PerCast,
+    PerSecond,
+};
+
+struct BotManaCost {
+    bool resolved = false;
+    BotManaChargeKind kind = BotManaChargeKind::None;
+    float cost = 0.0f;
+    std::int32_t statbook_level = 1;
+    std::int32_t skill_id = 0;
+};
+
 struct BotCreateRequest {
     std::string display_name;
     MultiplayerCharacterProfile character_profile;
@@ -187,6 +201,13 @@ bool FaceBot(std::uint64_t bot_id, float heading);
 bool FaceBotTarget(std::uint64_t bot_id, uintptr_t target_actor_address, bool fallback_heading_valid, float fallback_heading);
 bool ReadBotMovementIntent(std::uint64_t bot_id, BotMovementIntentSnapshot* snapshot);
 bool QueueBotCast(const BotCastRequest& request);
+BotManaCost ResolveBotCastManaCost(
+    const MultiplayerCharacterProfile& character_profile,
+    BotCastKind kind,
+    std::int32_t secondary_slot,
+    std::int32_t skill_id);
+float ResolveBotManaRequiredToStart(const BotManaCost& cost);
+const char* BotManaChargeKindLabel(BotManaChargeKind kind);
 bool FinishBotAttack(
     std::uint64_t bot_id,
     bool desired_heading_valid,

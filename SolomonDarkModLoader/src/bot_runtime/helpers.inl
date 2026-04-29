@@ -153,11 +153,23 @@ void DeriveBotCastReadiness(BotSnapshot* snapshot) {
     }
 
     const bool dead = snapshot->max_hp > 0.0f && snapshot->hp <= 0.0f;
+    const auto cast_mana = ResolveBotCastManaCost(
+        snapshot->character_profile,
+        BotCastKind::Primary,
+        -1,
+        0);
+    const float required_mana = ResolveBotManaRequiredToStart(cast_mana);
+    const bool mana_ready =
+        cast_mana.resolved &&
+        (cast_mana.kind == BotManaChargeKind::None ||
+         snapshot->max_mp <= 0.0f ||
+         snapshot->mp + 0.001f >= required_mana);
     snapshot->cast_ready =
         snapshot->available &&
         snapshot->entity_materialized &&
         snapshot->actor_address != 0 &&
         !dead &&
+        mana_ready &&
         !snapshot->cast_pending &&
         !snapshot->cast_active;
 }

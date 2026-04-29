@@ -71,8 +71,8 @@ bool CallActorProgressionRefreshSafe(
 bool CallSkillsWizardBuildPrimarySpellSafe(
     uintptr_t build_address,
     uintptr_t progression_address,
-    float primary_entry_arg,
-    float combo_entry_arg,
+    std::uint32_t primary_entry_arg,
+    std::uint32_t combo_entry_arg,
     DWORD* exception_code) {
     auto* build_primary_spell =
         reinterpret_cast<SkillsWizardBuildPrimarySpellFn>(build_address);
@@ -87,7 +87,11 @@ bool CallSkillsWizardBuildPrimarySpellSafe(
         build_primary_spell(
             reinterpret_cast<void*>(progression_address),
             primary_entry_arg,
-            combo_entry_arg);
+            combo_entry_arg,
+            0,
+            0,
+            0,
+            0);
         return true;
     } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
         return false;

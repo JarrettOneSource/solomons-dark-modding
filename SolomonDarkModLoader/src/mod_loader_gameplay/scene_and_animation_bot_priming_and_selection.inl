@@ -205,11 +205,8 @@ int ResolveProfileSelectionState(const multiplayer::MultiplayerCharacterProfile&
     return ResolveStandaloneWizardSelectionState(ResolveProfileElementId(character_profile));
 }
 
-float EncodeSkillsWizardSelectionArg(int selection_value) {
-    std::uint32_t bits = static_cast<std::uint32_t>(selection_value);
-    float encoded = 0.0f;
-    std::memcpy(&encoded, &bits, sizeof(encoded));
-    return encoded;
+std::uint32_t EncodeSkillsWizardSelectionArg(int selection_value) {
+    return static_cast<std::uint32_t>(selection_value);
 }
 
 struct ResolvedPrimaryCastDescriptor {
