@@ -109,7 +109,8 @@ py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-u
 - `docs/ui-engine-system-map.md` — higher-level UI engine architecture and hook targets.
 - `docs/ui-automation-inventory.md` — semantic `sd.ui` surface coverage and cutover map.
 - `docs/debug-ui-overlay.md` — debug overlay architecture and limits.
-- `docs/standalone-bot-stock-tick-drift.md` — standalone bot runtime drift notes.
+- `docs/pathfinding-investigation.md` — native scene grid, placement, and bot pathing implementation.
+- `docs/spell-cast-cleanup-chain.md` — player/bot spell-cast state, cleanup, and pure-primary seams.
 - `docs/combat-casting-enable-investigation.md` — combat-casting investigation notes.
 - `docs/inventory-item-investigation.md` — inventory, item, drop, and equip system notes.
 - `docs/bugs/README.md` — active bug-investigation index.

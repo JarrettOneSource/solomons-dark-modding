@@ -13,6 +13,17 @@ Three addresses matter:
 | `FUN_00548A00` | `0x00548A00` | Spell-cast dispatcher (`__thiscall`). Routes on `actor+0x270`. |
 | `FUN_0052F3B0` | `0x0052F3B0` | Cast-active-handle cleanup (`__thiscall`). Releases the cached spell object. |
 
+The pure-primary startup path also matters for fire, ether, and other
+staff-driven primary effects:
+
+- `0x0052DA80` is the live pure-primary allocator/startup path.
+- It resolves the current staff item through the equip sink, selecting mode `3`
+  for item type `0x1B5C`.
+- The builder call site is `0x0052DB04 -> 0x0044F5F0`.
+- `0x0044F5F0` starts with a two-instruction prologue (`push -1`, then
+  `push 0x76559B`), so any detour there must cover `7` bytes. A `5`-byte
+  patch splits the second instruction and corrupts the trampoline.
+
 ## Actor offsets the cast state lives in
 
 | Offset | Name | Purpose |
@@ -70,6 +81,29 @@ restore to the saved slot. The flip lives entirely inside the synchronous
 true slot on every other access. The spell object itself is initialized from
 the allocator's own `spell_obj+0x5C/+0x5E` (not actor identity), so it still
 carries a valid group/slot after the bot's slot is restored.
+
+### Control-brain vector contract for primary startup
+
+`PlayerActor_UpdateControlBrainTargeting (0x0052C910)` receives two separate
+two-float output vectors, not two scalar outputs:
+
+- `param_2` is `movementVecOut[2]`
+- `param_3` is `facingVecOut[2]`
+
+`PlayerActorTick (0x00548B00)` consumes those lanes differently. The movement
+vector feeds actor movement accumulators such as `actor + 0x158/+0x15C`; the
+facing vector is magnitude-tested for attack/facing intent and drives the
+visual/aim lane.
+
+Bot casting must keep those lanes separate:
+
+- never write attack facing into `movementVecOut`
+- when a bot has an active pure-primary target, write the normalized target
+  direction to both floats of `facingVecOut`
+- keep `actor + 0x2A8/+0x2AC` aim-target fields refreshed alongside the
+  selection target seed
+- when movement and attack happen on the same tick, target-facing beats fallback
+  movement heading, while movement direction stays on the movement lane
 
 ## Player cleanup path
 
@@ -212,6 +246,18 @@ Typedef + wrapper:
 using CastActiveHandleCleanupFn = void(__thiscall*)(void* actor);
 bool CallCastActiveHandleCleanupSafe(uintptr_t fn, uintptr_t actor, DWORD* seh);
 ```
+
+## Instrumentation caution
+
+The builder/sink trace stack around `0x0044F5F0`, `0x0044FF03`, `0x00624610`,
+and `0x00624652` is invasive. It proved the pure-primary path reaches builder
+entry, callback-load, sink entry, and sink inner dispatch, but fully arming that
+trace stack also reproduced a downstream crash family on both gameplay-slot bot
+casts and local-player Ether casts.
+
+Treat that crash family as trace-induced until proven otherwise. Prefer lighter
+seams or tightly windowed traces around the explicit cast request when debugging
+pure-primary startup.
 
 ## Live verification (2026-04-20)
 

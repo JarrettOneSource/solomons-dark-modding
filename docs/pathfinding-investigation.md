@@ -419,6 +419,13 @@ Date: 2026-04-13
   - traversability uses the recovered native placement query wrapper
     `MovementCollision_TestCirclePlacement (0x00523C90)` for cell, shape, and
     type-2 object/hazard overlap checks
+  - actor `+0x38/+0x3C` are stock slot-bit / actor-role masks, not collision
+    radius fields
+    - `PlayerActor_EnsureProgressionHandleFromGameplaySlot (0x0052B900)` only
+      writes them for the slot-0 actor at `gameplay + 0x1358`
+    - gameplay-slot bots can legitimately keep zero masks at those offsets
+    - the planner uses a player-equivalent mask fallback for placement queries
+      instead of mutating the bot's live actor identity fields
   - April 25 update:
     - live `testrun` movement geometry exposed hundreds of small circular
       scenery blockers with mask `0x4`
@@ -487,6 +494,22 @@ Date: 2026-04-13
       constant
     - the bot tick now reads `actor + 0x218` and applies movement once per
       native bot actor tick instead of once per 50 ms scene-binding heartbeat
+    - do not use `actor + 0x2D4` as a bot speed seed; stock `PlayerActorTick`
+      only refreshes that field for the local-player template path, and an idle
+      player can legitimately have `+0x2D4 == 0`
+  - fixed path-segment exhaustion:
+    - `path_waypoints` are steering work, not proof of final arrival
+    - waypoint exhaustion only stops the bot when `distance(actor, final_target)`
+      is within `kWizardBotPathFinalArrivalThreshold`
+    - otherwise the current segment is cleared and rebuilt while the high-level
+      movement intent remains active
+  - fixed idle stock-tick drift:
+    - player-family bot rails that use loader-owned movement restore pre-stock
+      tick position after `original(self)`
+    - `StopWizardBotActorMotion()` clears stock walk accumulators at
+      `actor + 0x158/+0x15C`
+    - intentional bot motion now comes from loader-issued movement steps or
+      explicit loader collision-push logic, not leaked stock tick writes
 
 ## Scene Grid Semantics For Loader-Owned Pathing
 
