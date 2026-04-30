@@ -127,6 +127,6 @@ Enable it with:
 
 Current measured entrance targets are documented in:
 
-- [participant-entrance-follow-plan.md](/mnt/c/Users/User/Documents/GitHub/SB%20Modding/Solomon%20Dark/Mod%20Loader/docs/participant-entrance-follow-plan.md)
+- [participant-entrance-follow.md](../../docs/participant-entrance-follow.md)
 
 The mod cleans up its named bots on `run.ended`.

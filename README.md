@@ -13,7 +13,7 @@ The repository excludes original game files, staged runtime output, and local ed
 - `mods/` — sample mods (overlay, Lua, native, and hybrid).
 - `scripts/` — build, reset, verification, window capture, and Lua-exec helpers.
 - `tools/ghidra-scripts/` — Ghidra automation for reverse engineering.
-- `docs/` — design notes, binary maps, and investigation write-ups.
+- `docs/` — system design notes, binary maps, and implementation investigations.
 
 ## Mod types
 
@@ -101,12 +101,15 @@ py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-u
 
 ## Documentation
 
-- `docs/sd-framework-rebuild-roadmap.md` — framework planning.
-- `docs/expansion-guide.md` — module ownership and extension rules.
+- `docs/multiplayer-participant-model.md` — shared participant/profile/scene model for bots and future remote players.
+- `docs/networking/README.md` — target networking architecture and current implementation boundary.
+- `docs/participant-entrance-follow.md` — hub/private/run follow semantics for participant bots.
+- `docs/lua-memory-tooling.md` — live Lua memory and reverse-engineering helpers.
 - `docs/ui-binary-map.md` — recovered UI seams and coverage.
 - `docs/ui-engine-system-map.md` — higher-level UI engine architecture and hook targets.
+- `docs/ui-automation-inventory.md` — semantic `sd.ui` surface coverage and cutover map.
 - `docs/debug-ui-overlay.md` — debug overlay architecture and limits.
-- `docs/multiplayer-mvp-to-beta-roadmap.md` — multiplayer roadmap.
 - `docs/standalone-bot-stock-tick-drift.md` — standalone bot runtime drift notes.
 - `docs/combat-casting-enable-investigation.md` — combat-casting investigation notes.
+- `docs/inventory-item-investigation.md` — inventory, item, drop, and equip system notes.
 - `docs/bugs/README.md` — active bug-investigation index.

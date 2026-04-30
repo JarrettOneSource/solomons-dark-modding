@@ -69,7 +69,7 @@ start-waves dispatcher:
 
 Focused live probe:
 
-- [`tools/probe_combat_state_transition.py`](</mnt/c/Users/User/Documents/GitHub/SB Modding/Solomon Dark/Mod Loader/tools/probe_combat_state_transition.py>)
+- [`tools/probe_combat_state_transition.py`](../tools/probe_combat_state_transition.py)
 
 What it does:
 

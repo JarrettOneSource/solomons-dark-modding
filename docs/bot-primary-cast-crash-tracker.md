@@ -32,7 +32,7 @@ These points are confirmed on the current stable base:
 
 Focused probe:
 
-- [`tools/probe_bot_dead_inert.py`](</mnt/c/Users/User/Documents/GitHub/SB Modding/Solomon Dark/Mod Loader/tools/probe_bot_dead_inert.py>)
+- [`tools/probe_bot_dead_inert.py`](../tools/probe_bot_dead_inert.py)
 
 Latest artifact:
 

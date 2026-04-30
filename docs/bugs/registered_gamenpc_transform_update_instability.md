@@ -124,8 +124,8 @@ Relevant code:
 
 - [`snapshot_builders.inl:1`](../../SolomonDarkModLoader/src/bot_runtime/helpers/snapshot_builders.inl)
 - [`snapshot_builders.inl:28`](../../SolomonDarkModLoader/src/bot_runtime/helpers/snapshot_builders.inl)
-- [`snapshot_builders.inl:55`](../../SolomonDarkModLoader/src/bot_runtime/helpers/snapshot_builders.inl)
-- [`lua_engine_parsers.cpp:804`](../../SolomonDarkModLoader/src/lua_engine_parsers.cpp)
+- [`snapshot_builders.inl:63`](../../SolomonDarkModLoader/src/bot_runtime/helpers/snapshot_builders.inl)
+- [`snapshots_api.inl:22`](../../SolomonDarkModLoader/src/bot_runtime/public_api/snapshots_api.inl)
 
 This means a transform update can be accepted at runtime while `get_state()`
 still reports the old gameplay snapshot until that snapshot is refreshed.

@@ -1,8 +1,7 @@
 # Spell cast cleanup chain (player vs. bot)
 
 Investigation that led to the watch-based bot cast handle release.
-Supersedes the 180-frame pump workaround documented in commits that
-landed task #27.
+Supersedes the older 180-frame pump workaround.
 
 ## The native cast pipeline
 
@@ -55,7 +54,7 @@ The `(actor+0x5C == 0)` clause bakes in a "local player only" assumption.
   (player's slot) when `WizardCloneFromSourceActor` at `0x0061AA00` copies
   player state into the clone, so the gate passes and the April-20 verification
   observed spell effects spawning cleanly.
-- **Gameplay-slot bots** (task #18, routed through
+- **Gameplay-slot bots** (routed through
   `Gameplay_CreatePlayerSlot` + `ActorWorld_RegisterGameplaySlotActor`) keep
   their real slot in `actor+0x5C` (1/2/3) so enemies can target them. With that
   slot value the dispatcher still runs but the handler bails on the first gate

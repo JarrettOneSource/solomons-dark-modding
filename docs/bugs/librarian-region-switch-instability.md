@@ -97,7 +97,7 @@ it is tracked separately here.
 
 ## Related Docs
 
-- [participant-entrance-follow-plan.md](../participant-entrance-follow-plan.md)
+- [participant-entrance-follow.md](../participant-entrance-follow.md)
 
 See especially:
 

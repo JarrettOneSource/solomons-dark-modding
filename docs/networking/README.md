@@ -1,12 +1,33 @@
-# Networking — Final Netcode Plan
+# Networking Architecture
 
-**Date:** 2026-04-19
-**Status:** Committed. Supersedes earlier drafts in `history/`.
-**Context:** Solomon's Dark is a single-player retail ARPG. This plan adds 4-player co-op as a DLL-level mod. Not an FPS, not competitive, not persistent-world. Launch scope is 4 players; the architecture should avoid hardcoding 4 where practical so 8-10 player private sessions remain a later stretch target, not a ship promise.
+Solomon's Dark is a single-player retail ARPG. The networking design adds
+4-player co-op as a DLL-level mod: trusted-host Steam sessions, not competitive
+anti-cheat, not persistent-world infrastructure. Launch scope is 4 players, but
+protocol and roster code should avoid hardcoding 4 where practical so 8-10
+player private sessions can remain a later stretch target instead of a launch
+promise.
 
 ## TL;DR
 
 One player hosts a normal Solomon's Dark session and becomes the authoritative world. Every other player sends movement and gameplay intents to the host; the host broadcasts authoritative player / enemy / drop / run state at ~20 Hz plus reliable gameplay events (cast, damage, pickup, wave transition). Clients render their own input immediately for responsiveness and hard-snap when the host disagrees. Multiplayer mode disables the dev/debug mutation backdoors and refuses mismatched mod sets so peers cannot silently diverge. No rollback, no serious anti-cheat, no dedicated server, no persistent-world machinery in the first ship — just one trusted-host Steam session that keeps everyone in the same fight and the same run.
+
+## Implementation boundary
+
+The current source has the multiplayer foundation and participant rail, not a
+finished peer networking layer.
+
+- `multiplayer_runtime_state.h` defines the shared `ParticipantInfo`,
+  `MultiplayerCharacterProfile`, `ParticipantSceneIntent`, and runtime snapshot
+  model used by Lua bots and future remote participants.
+- `multiplayer_service_loop.cpp` pumps Steam bootstrap/callback state every
+  50 ms and mirrors readiness into runtime state. It does not yet own peer
+  sessions, packet IO, or replication.
+- `multiplayer_runtime_protocol.h` is a fixed-packet scaffold with
+  `State`, `Launch`, `Cast`, and `Progression` packets. The packet families
+  below describe the target co-op protocol, not what the current header fully
+  implements.
+- `docs/multiplayer-participant-model.md` is the implementation-facing model
+  for profiles, scene intent, Lua bots, and future remote players.
 
 ## Committed decisions
 
@@ -122,7 +143,11 @@ For a non-host client on a typical Steam SDR connection (50–100ms RTT):
 
 Host feels none of this; their sim is local.
 
-This is how Terraria, Magicka, V Rising, and Divinity: Original Sin actually play. Movement feels native; action-confirmation has a small delay most players don't consciously notice under 100ms ping. Above ~150ms it starts being perceptible; above ~250ms it gets spongy. If hard-snaps become visibly disruptive in playtest, Phase 2 adds soft reconciliation (day of work, not architectural).
+The intended feel is native local movement with delayed authoritative
+confirmation for hits, pickups, and other host-owned outcomes. Under normal
+latency the correction path should be rare; if hard-snaps become visibly
+disruptive in playtest, Phase 2 adds soft reconciliation by interpolating toward
+host position over a short window.
 
 ## What we are explicitly NOT doing in v1
 
@@ -158,27 +183,3 @@ Minimal fields sent at join:
 - started-at tick
 
 No backup / restore / migration / save-transfer in v1.
-
-## How we got here
-
-The plan above is round 3's committed landing after two Codex critique rounds, a separate web-research pass, and a reference-repo analysis. Full artifacts live in [`history/`](history/):
-
-| # | File | What it is |
-|---|---|---|
-| 01 | [`01-brainstorm-v1.md`](history/01-brainstorm-v1.md) | Initial plan scoped against the existing participant rail |
-| 02 | [`02-critique-round-1.md`](history/02-critique-round-1.md) | Codex round-1 refute (miscalibrated to a stricter threat model than needed) |
-| 03 | [`03-research-2025-2026.md`](history/03-research-2025-2026.md) | Field scan: Diablo 4, PoE 2, Last Epoch, V Rising, Valheim, Enshrouded, Palworld |
-| 04 | [`04-plan-v2.md`](history/04-plan-v2.md) | Post-round-1 revision with defaulted decisions |
-| 05 | [`05-critique-round-2.md`](history/05-critique-round-2.md) | Codex round-2 critique + next-action shortlist |
-| 06 | [`06-shooter-repo-analysis.md`](history/06-shooter-repo-analysis.md) | Analysis of `tigerabrodi/shooter` reference repo |
-| 07 | [`07-plan-v3.md`](history/07-plan-v3.md) | Lightweight revision after user reframed scope (simpler, drop anti-cheat if complex) |
-| 08 | [`08-final-consolidation.md`](history/08-final-consolidation.md) | Codex consolidation pass — sharpened v3 to what landed here |
-
-Codex prompts for each round are in [`history/prompts/`](history/prompts/).
-
-Rounds 1–2 were calibrated against a stricter threat model (Diablo-class competitive, untrusted clients, server-validated hits). That was miscalibrated for this project — the user's framing is co-op mod with trusted friends, accept host can cheat. The Terraria / Magicka / Divinity: Original Sin lineage is the honest reference. Everything in this README reflects that.
-
-Two places the final plan held the line against "simpler is fine":
-
-1. **Strict manifest match, not tolerant.** Tolerant is more code, not less — the real failure mode here is accidental divergence, not hostile actors. Strict is both simpler and safer.
-2. **`last_processed_input_seq` in snapshots.** Costs 4 bytes per snapshot. Buys a stable correction baseline so hard-snaps don't chatter. Worth it.
