@@ -199,6 +199,9 @@ std::string DescribeLocalPlayerCastProbeState(
 }
 
 void MaybeArmLocalPlayerCastProbe(uintptr_t gameplay_address, uintptr_t actor_address) {
+    if constexpr (!kEnableLocalPlayerCastProbeDiagnostics) {
+        return;
+    }
     if (gameplay_address == 0 || actor_address == 0) {
         return;
     }
@@ -224,6 +227,9 @@ void MaybeArmLocalPlayerCastProbe(uintptr_t gameplay_address, uintptr_t actor_ad
 }
 
 void MaybeLogLocalPlayerCastProbe(uintptr_t gameplay_address, uintptr_t actor_address, bool post_tick) {
+    if constexpr (!kEnableLocalPlayerCastProbeDiagnostics) {
+        return;
+    }
     if (g_local_player_cast_probe.ticks_remaining <= 0 ||
         gameplay_address == 0 ||
         actor_address == 0) {

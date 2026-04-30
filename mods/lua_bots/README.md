@@ -39,6 +39,12 @@ harness:
 - `Lua Bot Ether` (`profile.element_id = 4`, `profile.discipline_id = 1`)
 - `Lua Bot Fire` (`profile.element_id = 0`, `profile.discipline_id = 1`)
 
+Automation can override the file for one launch by setting
+`SDMOD_LUA_BOTS_ACTIVE`. [`scripts/Replay-UiSandbox.ps1`](../../scripts/Replay-UiSandbox.ps1)
+does this through `-BotSet`; use `-BotSet default` for the Fire/Earth pair,
+`-BotSet all` for the five-element harness, or a comma-separated subset such
+as `water,air`.
+
 Each bot maintains a follow band around the player instead of running a patrol
 graph.
 
@@ -46,10 +52,10 @@ Current spawn contract:
 
 ```lua
 local bot_id = sd.bots.create({
-  name = "Lua Patrol Bot",
+  name = "Lua Bot Fire",
   profile = {
     element_id = 0,
-    discipline_id = 2,
+    discipline_id = 1,
   },
   scene = {
     kind = "run",

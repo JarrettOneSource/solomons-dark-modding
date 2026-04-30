@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "dist" / "launcher" / "SolomonDarkModLauncher.exe"
 LUA_EXEC = ROOT / "tools" / "lua-exec.py"
-BOT_NAME = "Lua Patrol Bot"
+BOT_NAME = "Lua Bot Fire"
 
 
 class ProofFailure(RuntimeError):

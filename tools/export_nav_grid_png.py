@@ -257,7 +257,7 @@ end
 local bots = sd.bots.get_state()
 if type(bots) == 'table' then
   for _, bot in ipairs(bots) do
-    if type(bot) == 'table' and tostring(bot.name) == 'Lua Patrol Bot' then
+    if type(bot) == 'table' and tostring(bot.name or ''):match('^Lua Bot ') ~= nil then
       print(string.format('bot=%.3f,%.3f', tonumber(bot.x) or 0.0, tonumber(bot.y) or 0.0))
       break
     end
@@ -304,7 +304,7 @@ end
 local bots = sd.bots.get_state()
 if type(bots) == 'table' then
   for _, bot in ipairs(bots) do
-    if type(bot) == 'table' and tostring(bot.name) == 'Lua Patrol Bot' then
+    if type(bot) == 'table' and tostring(bot.name or ''):match('^Lua Bot ') ~= nil then
       print(string.format('bot=%.3f,%.3f', tonumber(bot.x) or 0.0, tonumber(bot.y) or 0.0))
       break
     end

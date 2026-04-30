@@ -22,6 +22,9 @@ local current_player = {
   heading = 180.0,
 }
 local current_nav_grid = nil
+local environment_variables = {
+  SDMOD_LUA_BOTS_ACTIVE = "all",
+}
 
 local function distance(ax, ay, bx, by)
   local dx = (ax or 0.0) - (bx or 0.0)
@@ -30,8 +33,18 @@ local function distance(ax, ay, bx, by)
 end
 
 _G.lua_bots_enable_test_hooks = true
-_G.lua_bots_enable_all_elements = true
 _G.sd = {
+  runtime = {
+    get_environment_variable = function(name)
+      return environment_variables[name]
+    end,
+    get_mod_text_file = function(path)
+      local file = assert(io.open("mods/lua_bots/" .. tostring(path), "rb"))
+      local contents = file:read("*a")
+      file:close()
+      return contents
+    end,
+  },
   events = {
     on = function(name, callback)
       event_handlers[name] = callback
@@ -269,6 +282,8 @@ local seen_run_spawn_y = {}
 for _, bot_context in ipairs(hooks.state.bots) do
   local bot = bot_store[bot_context.bot_id]
   assert(bot.scene.kind == "run", bot_context.bot_name .. " should be promoted into run scene")
+  assert(bot_context.scene_key == "run:-1:-1", bot_context.bot_name .. " should save run scene bookkeeping")
+  assert(bot_context.pending_run_promotion == false, bot_context.bot_name .. " should clear pending run promotion")
   assert(seen_run_spawn_y[bot.y] ~= true, "run promotion spawn offsets should not overlap")
   seen_run_spawn_y[bot.y] = true
 end

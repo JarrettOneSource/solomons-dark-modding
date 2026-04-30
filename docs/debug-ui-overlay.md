@@ -56,6 +56,15 @@ The overlay is intentionally structured to keep the hot path light when enabled:
 
 This keeps resource setup and draw submission out of the text helper path and leaves the loader with one render pass per frame instead of many immediate draws.
 
+## Diagnostic logging policy
+
+Runtime automation logs should stay quiet enough for live play and frame-rate
+testing. High-frequency bot movement, path-follow, HUD callback, and local
+player cast-probe diagnostics are compiled out by default through the gameplay
+diagnostic constants in `src/mod_loader_gameplay/core/gameplay_constants.inl`.
+Enable those constants only for a focused investigation, then rebuild and
+restore them before normal verification.
+
 ## Verification
 
 Default-off workspace verification:

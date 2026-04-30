@@ -12,8 +12,7 @@ function app.start()
     math.random()
   end)
 
-  local LEGACY_MANAGED_BOT_NAMES = {
-    ["Lua Patrol Bot"] = true,
+  local MANAGED_BOT_NAMES = {
     ["Lua Bot Fire"] = true,
     ["Lua Bot Water"] = true,
     ["Lua Bot Earth"] = true,
@@ -101,6 +100,7 @@ function app.start()
   }
 
   local DEFAULT_ACTIVE_BOT_KEYS = { "fire", "earth" }
+  local ACTIVE_BOTS_ENV_VAR = "SDMOD_LUA_BOTS_ACTIVE"
 
   local function parse_active_bot_keys(source)
     local keys = {}
@@ -138,15 +138,19 @@ function app.start()
   end
 
   local function load_active_bot_keys()
-    if rawget(_G, "lua_bots_enable_all_elements") == true then
-      return nil, true
-    end
-
-    local explicit = rawget(_G, "lua_bots_active_keys")
-    if type(explicit) == "string" or type(explicit) == "table" then
-      local keys, all_requested = parse_active_bot_keys(explicit)
-      if all_requested or #keys > 0 then
-        return keys, all_requested
+    if type(sd) == "table" and type(sd.runtime) == "table" and
+        type(sd.runtime.get_environment_variable) == "function" then
+      local active_bots = sd.runtime.get_environment_variable(ACTIVE_BOTS_ENV_VAR)
+      if type(active_bots) == "string" and active_bots ~= "" then
+        local normalized = active_bots:match("^%s*(.-)%s*$"):lower()
+        if normalized == "default" then
+          return DEFAULT_ACTIVE_BOT_KEYS, false
+        end
+        local keys, all_requested = parse_active_bot_keys(active_bots)
+        if all_requested or #keys > 0 then
+          return keys, all_requested
+        end
+        return DEFAULT_ACTIVE_BOT_KEYS, false
       end
     end
 
@@ -596,7 +600,7 @@ function app.start()
   end
 
   local function is_managed_bot_name(bot_name)
-    return type(bot_name) == "string" and LEGACY_MANAGED_BOT_NAMES[bot_name] == true
+    return type(bot_name) == "string" and MANAGED_BOT_NAMES[bot_name] == true
   end
 
   local function destroy_managed_bots()
@@ -1884,11 +1888,15 @@ function app.start()
   local function handle_run_state(now_ms, scene, player, bot)
     reset_travel_candidate()
     state.target_area_name = nil
-    if state.pending_run_promotion and not scene_matches(bot.scene, { kind = "run" }) then
-      if issue_scene_update(now_ms, { kind = "run" }, player, "run_started", nil, true) then
+    local run_scene = { kind = "run" }
+    if state.pending_run_promotion and not scene_matches(bot.scene, run_scene) then
+      if issue_scene_update(now_ms, run_scene, player, "run_started", nil, true) then
         state.pending_run_promotion = false
       end
       return
+    end
+    if scene_matches(bot.scene, run_scene) then
+      state.scene_key = scene_key(run_scene)
     end
     state.pending_run_promotion = false
     state.travel_state = "run"

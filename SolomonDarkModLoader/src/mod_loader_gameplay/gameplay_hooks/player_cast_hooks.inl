@@ -117,14 +117,16 @@ void __fastcall HookPlayerActorPurePrimaryGate(void* self, void* /*unused_edx*/)
             aim_target_y = binding->ongoing_cast.aim_target_y;
         }
     }
-    if (!log_this) {
-        uintptr_t gameplay_address = 0;
-        uintptr_t local_actor_address = 0;
-        if (TryResolveCurrentGameplayScene(&gameplay_address) &&
-            gameplay_address != 0 &&
-            TryResolvePlayerActorForSlot(gameplay_address, 0, &local_actor_address) &&
-            local_actor_address == actor_address) {
-            log_this = true;
+    if constexpr (kEnableLocalPlayerCastProbeDiagnostics) {
+        if (!log_this) {
+            uintptr_t gameplay_address = 0;
+            uintptr_t local_actor_address = 0;
+            if (TryResolveCurrentGameplayScene(&gameplay_address) &&
+                gameplay_address != 0 &&
+                TryResolvePlayerActorForSlot(gameplay_address, 0, &local_actor_address) &&
+                local_actor_address == actor_address) {
+                log_this = true;
+            }
         }
     }
 
@@ -193,16 +195,18 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
             }
         }
     }
-    if (!log_this) {
-        uintptr_t gameplay_address = 0;
-        uintptr_t local_actor_address = 0;
-        if (TryResolveCurrentGameplayScene(&gameplay_address) &&
-            gameplay_address != 0 &&
-            TryResolvePlayerActorForSlot(gameplay_address, 0, &local_actor_address) &&
-            local_actor_address == actor_address &&
-            g_local_player_cast_probe.ticks_remaining > 0) {
-            log_this = true;
-            local_player = true;
+    if constexpr (kEnableLocalPlayerCastProbeDiagnostics) {
+        if (!log_this) {
+            uintptr_t gameplay_address = 0;
+            uintptr_t local_actor_address = 0;
+            if (TryResolveCurrentGameplayScene(&gameplay_address) &&
+                gameplay_address != 0 &&
+                TryResolvePlayerActorForSlot(gameplay_address, 0, &local_actor_address) &&
+                local_actor_address == actor_address &&
+                g_local_player_cast_probe.ticks_remaining > 0) {
+                log_this = true;
+                local_player = true;
+            }
         }
     }
 
@@ -265,11 +269,13 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
             " chosen_vt68=" + HexString(chosen_vt68) +
             " chosen_spell_id=" + std::to_string(chosen_spell_id) +
             " startup_state={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
-        if (local_player) {
-            uintptr_t gameplay_address = 0;
-            TryResolveCurrentGameplayScene(&gameplay_address);
-            Log("[player-cast-probe] dispatch enter. " +
-                DescribeLocalPlayerCastProbeState(gameplay_address, actor_address, "dispatch-enter"));
+        if constexpr (kEnableLocalPlayerCastProbeDiagnostics) {
+            if (local_player) {
+                uintptr_t gameplay_address = 0;
+                TryResolveCurrentGameplayScene(&gameplay_address);
+                Log("[player-cast-probe] dispatch enter. " +
+                    DescribeLocalPlayerCastProbeState(gameplay_address, actor_address, "dispatch-enter"));
+            }
         }
     }
 

@@ -68,6 +68,7 @@ constexpr std::uint64_t kWizardBotSyncRetryDelayMs = 250;
 constexpr std::uint64_t kWizardBotSyncDispatchSpacingMs = 500;
 constexpr std::uint64_t kWizardBotSceneBindingTickIntervalMs = 50;
 constexpr bool kEnableWizardBotHotPathDiagnostics = false;
+constexpr bool kEnableLocalPlayerCastProbeDiagnostics = false;
 constexpr float kWizardBotPathWaypointArrivalThreshold = 12.0f;
 constexpr float kWizardBotPathFinalArrivalThreshold = 8.0f;
 constexpr std::uint64_t kWizardBotPathRetryDelayMs = 500;

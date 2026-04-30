@@ -586,18 +586,20 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         const auto stock_delta_y = position_after_stock_y - position_before_y;
         const auto stock_displacement =
             std::sqrt((stock_delta_x * stock_delta_x) + (stock_delta_y * stock_delta_y));
-        if (stock_displacement > 0.01f) {
-            static std::uint64_t s_last_gameplay_slot_stock_position_drift_log_ms = 0;
-            if (native_tick_now_ms - s_last_gameplay_slot_stock_position_drift_log_ms >= 1000) {
-                s_last_gameplay_slot_stock_position_drift_log_ms = native_tick_now_ms;
-                Log(
-                    "[bots] gameplay-slot stock tick rewrote actor position. actor=" +
-                    HexString(actor_address) +
-                    " before=(" + std::to_string(position_before_x) + ", " +
-                        std::to_string(position_before_y) + ")" +
-                    " stock_after=(" + std::to_string(position_after_stock_x) + ", " +
-                        std::to_string(position_after_stock_y) + ")" +
-                    " moving=" + std::to_string(tracked_actor_moving ? 1 : 0));
+        if constexpr (kEnableWizardBotHotPathDiagnostics) {
+            if (stock_displacement > 0.01f) {
+                static std::uint64_t s_last_gameplay_slot_stock_position_drift_log_ms = 0;
+                if (native_tick_now_ms - s_last_gameplay_slot_stock_position_drift_log_ms >= 1000) {
+                    s_last_gameplay_slot_stock_position_drift_log_ms = native_tick_now_ms;
+                    Log(
+                        "[bots] gameplay-slot stock tick rewrote actor position. actor=" +
+                        HexString(actor_address) +
+                        " before=(" + std::to_string(position_before_x) + ", " +
+                            std::to_string(position_before_y) + ")" +
+                        " stock_after=(" + std::to_string(position_after_stock_x) + ", " +
+                            std::to_string(position_after_stock_y) + ")" +
+                        " moving=" + std::to_string(tracked_actor_moving ? 1 : 0));
+                }
             }
         }
         ApplyStandalonePuppetCollisionPushFromActor(actor_address);
