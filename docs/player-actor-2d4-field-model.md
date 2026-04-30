@@ -183,8 +183,8 @@ is a cumulative `(counter/3 * 0.1)` integrator.
    If not, we now know which template class the bot is and what its
    own equivalent speed field is (e.g. 0x298 for 0x3EE).
 3. **Does `FUN_004857b0` vs direct `FUN_00525800` matter for our
-   hook?** The mod-loader currently calls `FUN_00525800` directly at
-   `bot_registry_and_movement_tick_and_movement.inl:371`. If we
+   hook?** The mod-loader currently calls `FUN_00525800` directly through
+   `bot_movement_tick/wizard_bot_movement_step.inl`. If we
    switched to calling `FUN_004857b0`, the ramp would happen, but we
    would still need to seed `[bot+0x2D4]` to a non-zero value first
    since the ramp starts from whatever is there.
@@ -206,6 +206,6 @@ rule.
 
 ## File references
 
-- `Mod Loader/SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_motion_helpers.inl:137-163`
+- `Mod Loader/SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/locomotion_and_animation.inl`
 - `Mod Loader/tools/ghidra-scripts/find_writes_to_offset.py`
 - `Mod Loader/tools/ghidra-scripts/decompile_targets.py`

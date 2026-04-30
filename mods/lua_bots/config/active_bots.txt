@@ -1,0 +1,4 @@
+# Default runtime companions.
+# Use "all" for the full element coverage harness.
+fire
+earth

@@ -65,14 +65,14 @@ The April 20 crash adds a second, separate invariant:
 ### 1. Runtime update accepts the request
 
 `UpdateBot(...)` in
-`SolomonDarkModLoader/src/bot_runtime/public_api.inl`:
+`SolomonDarkModLoader/src/bot_runtime/public_api/update_api.inl`:
 
 - updates runtime transform state
 - dispatches an entity sync when `has_transform`
 
 Relevant code:
 
-- [`public_api.inl:176`](../../SolomonDarkModLoader/src/bot_runtime/public_api.inl)
+- [`update_api.inl:1`](../../SolomonDarkModLoader/src/bot_runtime/public_api/update_api.inl)
 
 ### 2. Gameplay sync reports success
 
@@ -84,8 +84,8 @@ Relevant code:
 
 Relevant code:
 
-- [`dispatch_and_hooks_execute_requests.inl:1`](../../SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_execute_requests.inl)
-- [`dispatch_and_hooks_execute_requests.inl:78`](../../SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_execute_requests.inl)
+- [`participant_entity_sync.inl:1`](../../SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/participant_entity_sync.inl)
+- [`entity_update_and_rail_selection.inl:34`](../../SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/entity_update_and_rail_selection.inl)
 
 ### 3. The gameplay update path only writes transform fields
 
@@ -107,7 +107,7 @@ It does **not**:
 
 Relevant code:
 
-- [`dispatch_and_hooks_execute_requests.inl:1`](../../SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_execute_requests.inl)
+- [`entity_update_and_rail_selection.inl:34`](../../SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/entity_update_and_rail_selection.inl)
 
 ### 4. Bot snapshot composition can expose stale position
 
@@ -122,9 +122,9 @@ from the cached gameplay snapshot whenever the bot is materialized.
 
 Relevant code:
 
-- [`helpers.inl:119`](../../SolomonDarkModLoader/src/bot_runtime/helpers.inl)
-- [`helpers.inl:145`](../../SolomonDarkModLoader/src/bot_runtime/helpers.inl)
-- [`helpers.inl:209`](../../SolomonDarkModLoader/src/bot_runtime/helpers.inl)
+- [`snapshot_builders.inl:1`](../../SolomonDarkModLoader/src/bot_runtime/helpers/snapshot_builders.inl)
+- [`snapshot_builders.inl:28`](../../SolomonDarkModLoader/src/bot_runtime/helpers/snapshot_builders.inl)
+- [`snapshot_builders.inl:55`](../../SolomonDarkModLoader/src/bot_runtime/helpers/snapshot_builders.inl)
 - [`lua_engine_parsers.cpp:804`](../../SolomonDarkModLoader/src/lua_engine_parsers.cpp)
 
 This means a transform update can be accepted at runtime while `get_state()`
@@ -287,7 +287,7 @@ It does **not** mean:
 
 Relevant code:
 
-- `SolomonDarkModLoader/src/bot_runtime/public_api.inl`
+- `SolomonDarkModLoader/src/bot_runtime/public_api/update_api.inl`
 
 ### Gameplay-side existing-entity sync contract
 
@@ -310,7 +310,7 @@ It does **not**:
 
 Relevant code:
 
-- `SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_execute_requests.inl`
+- `SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/entity_update_and_rail_selection.inl`
 
 ### Snapshot composition contract
 
@@ -328,7 +328,7 @@ That means:
 
 Relevant code:
 
-- `SolomonDarkModLoader/src/bot_runtime/helpers.inl`
+- `SolomonDarkModLoader/src/bot_runtime/helpers/snapshot_builders.inl`
 - `SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_snapshot.inl`
 
 Current interpretation:

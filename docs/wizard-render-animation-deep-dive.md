@@ -22,7 +22,8 @@ Those three pipelines share data, but they are not interchangeable.
 - `Mod Loader/runtime/ghidra-bot-animation-focus.txt`
 - `Mod Loader/runtime/ghidra-player-descriptor-candidates.txt`
 - `Mod Loader/runtime/equip-analysis-summary.md`
-- `Mod Loader/SolomonDarkModLoader/src/mod_loader_gameplay.cpp`
+- `Mod Loader/SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization*.inl`
+- `Mod Loader/SolomonDarkModLoader/src/mod_loader_gameplay/core/synthetic_wizard_source_profiles.inl`
 
 ## Executive summary
 
@@ -535,14 +536,15 @@ To make a new standalone wizard actor behave like stock clone, the required orde
 
 ## 6.1 The loader mixes incompatible stock paths
 
-Current bot code in `mod_loader_gameplay.cpp` still mixes:
+Current bot materialization code in `src/mod_loader_gameplay/standalone_materialization*.inl` still bridges:
 
 - source-profile builder logic (`0x005E3080`)
 - player-start helper construction logic
 - clone-from-source logic
 - until the residual fix, a non-stock raw allocation path using `_aligned_malloc` plus direct constructor invocation
 
-The key mixed section is `PrimeStandaloneWizardBotActor`, which:
+The key bridge is `SeedGameplaySlotBotRenderStateFromSourceActor`, plus
+`CreateWizardCloneSourceActor`, which:
 
 - synthesizes a source profile
 - calls `ActorBuildRenderDescriptorFromSource`
@@ -550,7 +552,9 @@ The key mixed section is `PrimeStandaloneWizardBotActor`, which:
 
 Relevant loader sections:
 
-- `PrimeStandaloneWizardBotActor` around `2233`
+- `standalone_materialization_slot_bot_creation.inl`
+- `standalone_materialization_wizard_clone_source.inl`
+- `core/synthetic_wizard_source_profiles.inl`
 
 That is not the stock clone design.
 
@@ -581,7 +585,8 @@ An earlier loader revision forced the idle bot onto the alternate animation bran
 
 See:
 
-- `mod_loader_gameplay.cpp` around `1299`
+- `scene_and_animation_drive_profiles.inl`, `ClearLiveWizardActorAnimationDriveState`
+- `bot_movement/locomotion_and_animation.inl`, `StopWizardBotActorMotion`
 
 That directly conflicts with the recovered `0x0054BA80` behavior:
 

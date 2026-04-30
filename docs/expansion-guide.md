@@ -89,6 +89,24 @@ When adding new SD mod functionality, follow this order:
 - Do not expose raw addresses or offsets directly to Lua mods.
 - Do not add fallback paths for multiple runtime models unless you intentionally decide to support them.
 
+## Loader `.inl` organization
+
+The loader uses `.inl` files as translation-unit fragments for hook-heavy code
+that needs access to anonymous-namespace state in a parent `.cpp`. Treat those
+files as a compatibility tool, not as a substitute for normal module design.
+
+Rules:
+
+- Keep parent `.inl` files as thin aggregators when an area grows beyond a few cohesive functions.
+- Put grouped fragments in a named folder that describes the feature area, such as `bot_runtime/public_api/`, `mod_loader_gameplay/core/`, `mod_loader_gameplay/gameplay_hooks/`, or `mod_loader_gameplay/bot_casting/`.
+- Split only on real declarations or complete function boundaries. Do not hide sections of one large function behind nested `#include` directives.
+- If one function grows into a monolith, extract named helpers or a small context object before splitting files; do not hide pieces of one oversized function behind nested textual includes.
+- Add every new fragment to `SolomonDarkModLoader.vcxproj` and `SolomonDarkModLoader.vcxproj.filters` so Visual Studio mirrors the source layout.
+- Prefer a real `.cpp` and header when a subsystem no longer needs parent anonymous-namespace access.
+
+The enforceable source layout policy is in `docs/source-organization.md`.
+Run `scripts/Check-SourceOrganization.ps1` before adding new loader fragments.
+
 ## Near-term extension points
 
 The next clean additions are:

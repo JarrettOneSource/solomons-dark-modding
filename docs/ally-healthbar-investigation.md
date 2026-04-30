@@ -40,7 +40,7 @@ display name. User clarified that the same widget shows "Golem" when a Golem
 is spawned — so the text is **per-entity dynamic**, not a static label.
 
 The existing world-space nameplate path (`DrawGameplayHudParticipantName` in
-`dispatch_and_hooks_tick_and_render_hooks.inl` lines 1437–1490) already does
+`src/mod_loader_gameplay/gameplay_hooks/gameplay_hud_hooks.inl`) already does
 this for floating actor names. We need the same substitution applied to the
 top-center stacked-bar text source.
 

@@ -57,7 +57,7 @@ function app.start()
     }
   end
 
-  local BOT_CONFIGS = {
+  local ALL_BOT_CONFIGS = {
     {
       key = "water",
       name = "Lua Bot Water",
@@ -100,6 +100,105 @@ function app.start()
     },
   }
 
+  local DEFAULT_ACTIVE_BOT_KEYS = { "fire", "earth" }
+
+  local function parse_active_bot_keys(source)
+    local keys = {}
+    local seen = {}
+    local all_requested = false
+
+    if type(source) == "table" then
+      for _, value in ipairs(source) do
+        local key = tostring(value or ""):lower()
+        if key == "all" or key == "*" then
+          all_requested = true
+        elseif key ~= "" and not seen[key] then
+          seen[key] = true
+          table.insert(keys, key)
+        end
+      end
+      return keys, all_requested
+    end
+
+    source = tostring(source or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
+    for line in (source .. "\n"):gmatch("([^\n]*)\n") do
+      line = line:gsub("#.*", "")
+      for token in line:gmatch("[^,%s]+") do
+        local key = token:lower()
+        if key == "all" or key == "*" then
+          all_requested = true
+        elseif key ~= "" and not seen[key] then
+          seen[key] = true
+          table.insert(keys, key)
+        end
+      end
+    end
+
+    return keys, all_requested
+  end
+
+  local function load_active_bot_keys()
+    if rawget(_G, "lua_bots_enable_all_elements") == true then
+      return nil, true
+    end
+
+    local explicit = rawget(_G, "lua_bots_active_keys")
+    if type(explicit) == "string" or type(explicit) == "table" then
+      local keys, all_requested = parse_active_bot_keys(explicit)
+      if all_requested or #keys > 0 then
+        return keys, all_requested
+      end
+    end
+
+    if type(sd) == "table" and type(sd.runtime) == "table" and
+        type(sd.runtime.get_mod_text_file) == "function" then
+      local ok, text = pcall(sd.runtime.get_mod_text_file, "config/active_bots.txt")
+      if ok and type(text) == "string" then
+        local keys, all_requested = parse_active_bot_keys(text)
+        if all_requested or #keys > 0 then
+          return keys, all_requested
+        end
+      end
+    end
+
+    return DEFAULT_ACTIVE_BOT_KEYS, false
+  end
+
+  local function select_bot_configs()
+    local keys, all_requested = load_active_bot_keys()
+    if all_requested then
+      return ALL_BOT_CONFIGS
+    end
+
+    local requested = {}
+    for _, key in ipairs(keys or DEFAULT_ACTIVE_BOT_KEYS) do
+      requested[tostring(key):lower()] = true
+    end
+
+    local selected = {}
+    for _, config in ipairs(ALL_BOT_CONFIGS) do
+      if requested[config.key] then
+        table.insert(selected, config)
+      end
+    end
+
+    if #selected > 0 then
+      return selected
+    end
+
+    requested = {}
+    for _, key in ipairs(DEFAULT_ACTIVE_BOT_KEYS) do
+      requested[key] = true
+    end
+    for _, config in ipairs(ALL_BOT_CONFIGS) do
+      if requested[config.key] then
+        table.insert(selected, config)
+      end
+    end
+    return selected
+  end
+
+  local BOT_CONFIGS = select_bot_configs()
   local CURRENT_MANAGED_BOT_NAMES = {}
   for _, config in ipairs(BOT_CONFIGS) do
     config.profile = make_bot_profile(config.element_id, config.discipline_id)
@@ -300,6 +399,12 @@ function app.start()
 
   local function log(message)
     print("[lua.bots] " .. tostring(message))
+  end
+
+  local function log_diag(message)
+    if rawget(_G, "lua_bots_enable_diagnostic_logs") == true then
+      log(message)
+    end
   end
 
   local function get_probe_state()
@@ -1021,7 +1126,7 @@ function app.start()
       if should_log_attack_diag(now_ms) then
         local world = get_world_state()
         local combat = get_combat_state()
-        log(string.format(
+        log_diag(string.format(
           "attack_skip id=%s reason=%s wave=%s combat_active=%s",
           tostring(state.bot_id),
           tostring(attack_scene_reason),
@@ -1035,7 +1140,7 @@ function app.start()
     if enemy == nil then
       clear_face_target()
       if should_log_attack_diag(now_ms) then
-        log(string.format(
+        log_diag(string.format(
           "attack_skip id=%s reason=%s",
           tostring(state.bot_id),
           "no_enemy_in_scene"))
@@ -1048,7 +1153,7 @@ function app.start()
     local attack_heading = face_enemy(bot, enemy, true)
     if gap < min_range then
       if should_log_attack_diag(now_ms) then
-        log(string.format(
+        log_diag(string.format(
           "attack_skip id=%s reason=too_close_for_native_release enemy=0x%X gap=%.2f min=%.1f range=%.1f",
           tostring(state.bot_id),
           tonumber(enemy.actor_address) or 0,
@@ -1060,7 +1165,7 @@ function app.start()
     end
     if gap > range then
       if should_log_attack_diag(now_ms) then
-        log(string.format(
+        log_diag(string.format(
           "attack_skip id=%s reason=out_of_range enemy=0x%X gap=%.2f range=%.1f",
           tostring(state.bot_id),
           tonumber(enemy.actor_address) or 0,
@@ -1083,7 +1188,7 @@ function app.start()
       angle = attack_heading,
     })
     if ok then
-      log(string.format(
+      log_diag(string.format(
         "attack id=%s primary enemy=0x%X bot=(%.2f, %.2f) target=(%.2f, %.2f) heading=%.2f gap=%.2f range=%.1f",
         tostring(state.bot_id),
         target_actor_address,
@@ -1095,7 +1200,7 @@ function app.start()
         gap,
         range))
     else
-      log(string.format(
+      log_diag(string.format(
         "attack failed id=%s primary",
         tostring(state.bot_id)))
     end
@@ -1113,9 +1218,9 @@ function app.start()
     local ok = sd.bots.stop(state.bot_id)
     if ok then
       state.follow_target = nil
-      log(string.format("follow_stop id=%s reason=%s", tostring(state.bot_id), tostring(reason)))
+      log_diag(string.format("follow_stop id=%s reason=%s", tostring(state.bot_id), tostring(reason)))
     else
-      log(string.format("follow_stop failed id=%s reason=%s", tostring(state.bot_id), tostring(reason)))
+      log_diag(string.format("follow_stop failed id=%s reason=%s", tostring(state.bot_id), tostring(reason)))
     end
   end
 
@@ -1178,14 +1283,14 @@ function app.start()
     local call_ok, update_result = pcall(sd.bots.update, update)
     local ok = call_ok and update_result
     if not call_ok then
-      log(string.format(
+      log_diag(string.format(
         "follow_teleport update rejected id=%s reason=%s error=%s",
         tostring(state.bot_id),
         tostring(reason),
         tostring(update_result)))
     end
     if ok then
-      log(string.format(
+      log_diag(string.format(
         "follow_teleport id=%s reason=%s point=(%.2f, %.2f)",
         tostring(state.bot_id),
         tostring(reason),
@@ -1194,7 +1299,7 @@ function app.start()
       state.follow_target = nil
       state.last_command_ms = tonumber(now_ms) or state.last_tick_ms or 0
     else
-      log(string.format(
+      log_diag(string.format(
         "follow_teleport failed id=%s reason=%s point=(%.2f, %.2f)",
         tostring(state.bot_id),
         tostring(reason),
@@ -1268,14 +1373,14 @@ function app.start()
         move_started_ms = move_started_ms,
       }
       state.last_command_ms = now_ms
-      log(string.format(
+      log_diag(string.format(
         "follow_move id=%s reason=%s point=(%.2f, %.2f)",
         tostring(state.bot_id),
         tostring(reason),
         target.x,
         target.y))
     else
-      log(string.format(
+      log_diag(string.format(
         "follow_move failed id=%s reason=%s point=(%.2f, %.2f)",
         tostring(state.bot_id),
         tostring(reason),

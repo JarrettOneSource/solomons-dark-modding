@@ -38,13 +38,15 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
         binding->last_movement_displacement = 0.0f;
         binding->direction_x = 0.0f;
         binding->direction_y = 0.0f;
-        if (now_ms - binding->last_path_debug_log_ms >= 1000) {
-            binding->last_path_debug_log_ms = now_ms;
-            Log(
-                "[bots] path inactive. bot_id=" + std::to_string(binding->bot_id) +
-                " revision=" + std::to_string(binding->movement_intent_revision) +
-                " path_active=" + std::to_string(binding->path_active ? 1 : 0) +
-                " waypoint_count=" + std::to_string(binding->path_waypoints.size()));
+        if constexpr (kEnableWizardBotHotPathDiagnostics) {
+            if (now_ms - binding->last_path_debug_log_ms >= 1000) {
+                binding->last_path_debug_log_ms = now_ms;
+                Log(
+                    "[bots] path inactive. bot_id=" + std::to_string(binding->bot_id) +
+                    " revision=" + std::to_string(binding->movement_intent_revision) +
+                    " path_active=" + std::to_string(binding->path_active ? 1 : 0) +
+                    " waypoint_count=" + std::to_string(binding->path_waypoints.size()));
+            }
         }
         return true;
     }
@@ -81,27 +83,31 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
         const bool arrived_at_target = target_distance <= kWizardBotPathFinalArrivalThreshold;
         StopBotPathMotion(binding, false);
         if (!arrived_at_target) {
-            if (now_ms - binding->last_path_debug_log_ms >= 1000) {
-                binding->last_path_debug_log_ms = now_ms;
-                Log(
-                    "[bots] path segment exhausted. bot_id=" + std::to_string(binding->bot_id) +
-                    " revision=" + std::to_string(binding->movement_intent_revision) +
-                    " actor=(" + std::to_string(actor_x) + ", " + std::to_string(actor_y) + ")" +
-                    " destination=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")" +
-                    " remaining_distance=" + std::to_string(target_distance) +
-                    " action=rebuild");
+            if constexpr (kEnableWizardBotHotPathDiagnostics) {
+                if (now_ms - binding->last_path_debug_log_ms >= 1000) {
+                    binding->last_path_debug_log_ms = now_ms;
+                    Log(
+                        "[bots] path segment exhausted. bot_id=" + std::to_string(binding->bot_id) +
+                        " revision=" + std::to_string(binding->movement_intent_revision) +
+                        " actor=(" + std::to_string(actor_x) + ", " + std::to_string(actor_y) + ")" +
+                        " destination=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")" +
+                        " remaining_distance=" + std::to_string(target_distance) +
+                        " action=rebuild");
+                }
             }
             return true;
         }
 
         (void)multiplayer::StopBot(binding->bot_id);
-        if (now_ms - binding->last_path_debug_log_ms >= 1000) {
-            binding->last_path_debug_log_ms = now_ms;
-            Log(
-                "[bots] path complete. bot_id=" + std::to_string(binding->bot_id) +
-                " revision=" + std::to_string(binding->movement_intent_revision) +
-                " actor=(" + std::to_string(actor_x) + ", " + std::to_string(actor_y) + ")" +
-                " destination=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")");
+        if constexpr (kEnableWizardBotHotPathDiagnostics) {
+            if (now_ms - binding->last_path_debug_log_ms >= 1000) {
+                binding->last_path_debug_log_ms = now_ms;
+                Log(
+                    "[bots] path complete. bot_id=" + std::to_string(binding->bot_id) +
+                    " revision=" + std::to_string(binding->movement_intent_revision) +
+                    " actor=(" + std::to_string(actor_x) + ", " + std::to_string(actor_y) + ")" +
+                    " destination=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")");
+            }
         }
         return true;
     }
@@ -126,17 +132,19 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
         static_cast<float>(std::atan2(binding->direction_y, binding->direction_x) * (180.0 / 3.14159265358979323846) + 90.0));
     binding->current_waypoint_x = waypoint.x;
     binding->current_waypoint_y = waypoint.y;
-    if (now_ms - binding->last_path_debug_log_ms >= 1000) {
-        binding->last_path_debug_log_ms = now_ms;
-        Log(
-            "[bots] path follow tick. bot_id=" + std::to_string(binding->bot_id) +
-            " revision=" + std::to_string(binding->movement_intent_revision) +
-            " actor=(" + std::to_string(actor_x) + ", " + std::to_string(actor_y) + ")" +
-            " waypoint_index=" + std::to_string(binding->path_waypoint_index) +
-            "/" + std::to_string(binding->path_waypoints.size()) +
-            " waypoint=(" + std::to_string(binding->current_waypoint_x) + ", " + std::to_string(binding->current_waypoint_y) + ")" +
-            " dir=(" + std::to_string(binding->direction_x) + ", " + std::to_string(binding->direction_y) + ")" +
-            " distance=" + std::to_string(distance));
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        if (now_ms - binding->last_path_debug_log_ms >= 1000) {
+            binding->last_path_debug_log_ms = now_ms;
+            Log(
+                "[bots] path follow tick. bot_id=" + std::to_string(binding->bot_id) +
+                " revision=" + std::to_string(binding->movement_intent_revision) +
+                " actor=(" + std::to_string(actor_x) + ", " + std::to_string(actor_y) + ")" +
+                " waypoint_index=" + std::to_string(binding->path_waypoint_index) +
+                "/" + std::to_string(binding->path_waypoints.size()) +
+                " waypoint=(" + std::to_string(binding->current_waypoint_x) + ", " + std::to_string(binding->current_waypoint_y) + ")" +
+                " dir=(" + std::to_string(binding->direction_x) + ", " + std::to_string(binding->direction_y) + ")" +
+                " distance=" + std::to_string(distance));
+        }
     }
     return true;
 }

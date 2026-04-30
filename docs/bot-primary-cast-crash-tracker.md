@@ -482,8 +482,8 @@ Current source-file mapping:
   - line-table neighborhood: around lines `71..76`
   - role: Lua engine startup/teardown path in the same startup crash family
 - `0x000BE73C`
-  - source file: `src/mod_loader_gameplay/bot_registry_and_movement_motion_helpers.inl`
-  - line-table neighborhood: immediately after line `839`, i.e. the
+  - source file: `src/mod_loader_gameplay/bot_casting/pending_cast_preparation.inl`
+  - line-table neighborhood: near the
     `"[bots] gameplay-slot cast prepped..."` block
   - role: gameplay-slot cast startup / prep path
 

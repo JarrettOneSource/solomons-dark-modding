@@ -15,6 +15,9 @@
     <Filter Include="Source Files\Lua">
       <UniqueIdentifier>{C4742CEE-C6AA-4059-9ED8-321C030D233F}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Bot Runtime">
+      <UniqueIdentifier>{D0988E78-A11F-4D18-A154-62D40C4C24B8}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source Files\Gameplay">
       <UniqueIdentifier>{EC2D75BD-0BDF-4E07-A317-34992CB9E03A}</UniqueIdentifier>
     </Filter>
@@ -39,17 +42,68 @@
     <Filter Include="Header Files\Internal">
       <UniqueIdentifier>{7F8CE1D0-85DA-43BD-A209-8E1D4A19E297}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\Gameplay Seams">
+      <UniqueIdentifier>{30CC3474-20D3-4D4B-821A-CB3261116673}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Bot Runtime">
+      <UniqueIdentifier>{D9949C48-13ED-4820-B275-785113E9DBD7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Bot Runtime\Helpers">
+      <UniqueIdentifier>{9B4D3E35-138B-4443-A5AE-9B3D2BB9AA11}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Bot Runtime\Public API">
+      <UniqueIdentifier>{679721B8-9944-4479-A45F-1BF3136C8593}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Header Files\Gameplay">
       <UniqueIdentifier>{B6C5C7C1-A85A-4B53-B957-6495E348B1AA}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\Gameplay\Core">
+      <UniqueIdentifier>{72EE5556-9DA5-4EBA-8D03-7E79D2A991DF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Gameplay\Bot Casting">
+      <UniqueIdentifier>{63087922-4B5D-4F10-90EA-46D67A9AB550}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Gameplay\Bot Movement">
+      <UniqueIdentifier>{BD4C292D-FEC2-47D3-8D5D-10ED8C02C24C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Gameplay\Bot Actor Calls">
+      <UniqueIdentifier>{9E447830-78BF-4478-9174-5CFA41822CC7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Gameplay\Bot Movement Tick">
+      <UniqueIdentifier>{2ED3130A-77C7-4107-8B20-5FA5ACF6E9B0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Gameplay\Gameplay Hooks">
+      <UniqueIdentifier>{A4974B0B-FE97-44EA-AC1E-73E22B4C4A7D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Gameplay\Gameplay Hooks\Actor Tick">
+      <UniqueIdentifier>{34E70AF6-9DB2-4EBD-AF7D-214BB6810B17}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Gameplay\Execute Requests">
+      <UniqueIdentifier>{C311FB01-D257-44C1-9A19-07856F60441A}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Header Files\Debug UI Overlay">
       <UniqueIdentifier>{9DA41629-990D-45E0-9216-6F80791109E0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Debug UI Overlay\Exact Text Capture">
+      <UniqueIdentifier>{06CF0356-3D36-4096-89EF-21E37E1E99AC}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Debug UI Overlay\Exact Widget Resolution">
+      <UniqueIdentifier>{3483AF49-A794-4479-9833-D52B7E88E82C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Debug UI Overlay\State Actions Activation">
+      <UniqueIdentifier>{16917D36-5887-43B6-8C04-D44151B5BC3D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Debug UI Overlay\State Actions Dispatch">
+      <UniqueIdentifier>{61596174-0C82-4893-A29D-D091288F5F50}</UniqueIdentifier>
     </Filter>
     <Filter Include="Header Files\Lua Debug Bindings">
       <UniqueIdentifier>{47A4D876-D821-4F8F-8633-3B91F2681D35}</UniqueIdentifier>
     </Filter>
     <Filter Include="Header Files\Runtime Debug">
       <UniqueIdentifier>{9B1C3F91-7936-4812-8E64-64748A0C9BD9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Run Lifecycle">
+      <UniqueIdentifier>{74A709F8-C808-440D-BE5C-BF52092AFB09}</UniqueIdentifier>
     </Filter>
     <Filter Include="Header Files\Third Party">
       <UniqueIdentifier>{7D0D30D3-27B7-45C4-85E9-46AF1C1982F9}</UniqueIdentifier>
@@ -60,6 +114,9 @@
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\binary_layout_internal.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\bot_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\d3d9_end_scene_hook.h">
@@ -74,6 +131,9 @@
     <ClInclude Include="include\debug_ui_overlay.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\ui_navigation.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\logger.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -84,6 +144,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="include\lua_engine.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\lua_engine_events.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\memory_access.h">
@@ -140,11 +203,35 @@
     <ClInclude Include="include\target_game.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\third_party\hde32.h">
+      <Filter>Header Files\Third Party</Filter>
+    </ClInclude>
+    <ClInclude Include="include\third_party\pstdint.h">
+      <Filter>Header Files\Third Party</Filter>
+    </ClInclude>
+    <ClInclude Include="include\third_party\table32.h">
+      <Filter>Header Files\Third Party</Filter>
+    </ClInclude>
     <ClInclude Include="include\x86_hook.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\gameplay_seams.h">
       <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gameplay_seams\address_storage.inl">
+      <Filter>Header Files\Gameplay Seams</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gameplay_seams\loading_helpers.inl">
+      <Filter>Header Files\Gameplay Seams</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gameplay_seams\public_api.inl">
+      <Filter>Header Files\Gameplay Seams</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gameplay_seams\size_bindings.inl">
+      <Filter>Header Files\Gameplay Seams</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gameplay_seams\state_and_address_bindings.inl">
+      <Filter>Header Files\Gameplay Seams</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_exec_pipe.h">
       <Filter>Header Files\Internal</Filter>
@@ -152,8 +239,59 @@
     <ClInclude Include="src\lua_engine_bindings_internal.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\lua_engine_internal.h">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_internal.h">
       <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\helpers.inl">
+      <Filter>Header Files\Bot Runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\helpers\controller_motion.inl">
+      <Filter>Header Files\Bot Runtime\Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\helpers\defaults_and_lookup.inl">
+      <Filter>Header Files\Bot Runtime\Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\helpers\dispatch_queues.inl">
+      <Filter>Header Files\Bot Runtime\Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\helpers\pending_scheduling.inl">
+      <Filter>Header Files\Bot Runtime\Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\helpers\request_validation.inl">
+      <Filter>Header Files\Bot Runtime\Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\helpers\snapshot_builders.inl">
+      <Filter>Header Files\Bot Runtime\Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\helpers\state_mutation.inl">
+      <Filter>Header Files\Bot Runtime\Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api.inl">
+      <Filter>Header Files\Bot Runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\casting_api.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\lifecycle_api.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\movement_api.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\scene_intents_api.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\snapshots_api.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\tick_service_api.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\update_api.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions.inl">
       <Filter>Header Files\Lua Debug Bindings</Filter>
@@ -185,6 +323,15 @@
     <ClInclude Include="src\lua_engine_bindings_debug\helpers.inl">
       <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\control_observers.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\control_observers_ownership_helpers.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\control_observers_surface_capture.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\control_observers_exact_capture_helpers.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
@@ -194,13 +341,127 @@
     <ClInclude Include="src\debug_ui_overlay\control_observers_menu_and_panel_capture.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\dialog_tracking_and_snapshots.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\dialog_tracking_and_snapshots_observation.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\dialog_tracking_and_snapshots_snapshot_render.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\dialog_tracking_and_snapshots_tracking.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\exact_text_capture_and_hooks.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\exact_text_capture\capture_lifecycle.inl">
+      <Filter>Header Files\Debug UI Overlay\Exact Text Capture</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\exact_text_capture\capture_session.inl">
+      <Filter>Header Files\Debug UI Overlay\Exact Text Capture</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\exact_text_capture\glyph_observation.inl">
+      <Filter>Header Files\Debug UI Overlay\Exact Text Capture</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\exact_text_capture\render_hooks.inl">
+      <Filter>Header Files\Debug UI Overlay\Exact Text Capture</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution\label_cache_and_rollout_controls.inl">
+      <Filter>Header Files\Debug UI Overlay\Exact Widget Resolution</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution\owned_text_rects.inl">
+      <Filter>Header Files\Debug UI Overlay\Exact Widget Resolution</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution\public_rect_resolution.inl">
+      <Filter>Header Files\Debug UI Overlay\Exact Widget Resolution</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution\recorded_control_rects.inl">
+      <Filter>Header Files\Debug UI Overlay\Exact Widget Resolution</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\font_atlas_rendering.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\install_hooks.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\label_resolution_and_frame_render.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\label_resolution_helpers.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\label_resolution_surface_registry_and_frame_render.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\modal_surface_render_builders.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_misc_surfaces.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_settings_helpers.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_settings_surfaces.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\public_api.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\public_api_actions.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\public_api_initialization.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\public_api_surface_dispatch.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_and_actions.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\state_and_actions_action_state.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_and_actions_activation_and_snapshot.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_actions_activation\action_control_resolution.inl">
+      <Filter>Header Files\Debug UI Overlay\State Actions Activation</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_actions_activation\main_menu_compatibility.inl">
+      <Filter>Header Files\Debug UI Overlay\State Actions Activation</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_actions_activation\resolved_action_activation.inl">
+      <Filter>Header Files\Debug UI Overlay\State Actions Activation</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_actions_activation\snapshot_dispatch_ready.inl">
+      <Filter>Header Files\Debug UI Overlay\State Actions Activation</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_and_actions_dispatch_invocation.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_actions_dispatch\owner_action_calls.inl">
+      <Filter>Header Files\Debug UI Overlay\State Actions Dispatch</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_actions_dispatch\owner_context_binding.inl">
+      <Filter>Header Files\Debug UI Overlay\State Actions Dispatch</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_actions_dispatch\owner_control_invocation.inl">
+      <Filter>Header Files\Debug UI Overlay\State Actions Dispatch</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_actions_dispatch\owner_no_arg_and_point_invocation.inl">
+      <Filter>Header Files\Debug UI Overlay\State Actions Dispatch</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_and_actions_helpers.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\state_and_actions_owner_candidate_resolution.inl">
@@ -209,7 +470,31 @@
     <ClInclude Include="src\debug_ui_overlay\state_and_actions_owner_memory_helpers.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_and_actions_owner_resolution.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\state_and_actions_requests_and_reset.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\state_and_actions_surface_owner_resolution.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\string_and_memory_readers.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\surface_render_hooks.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\tracked_surfaces_and_main_menu.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\ui_navigation_element_builders.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\ui_navigation_public.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\widget_geometry_readers.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding.inl">
@@ -227,6 +512,9 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_nearest_traversable.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\nav_grid_snapshot_service.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_pathfinding_path_building.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -242,8 +530,71 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_actor_call_wrappers.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_actor_calls\actor_world_and_visual_calls.inl">
+      <Filter>Header Files\Gameplay\Bot Actor Calls</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_actor_calls\game_npc_calls.inl">
+      <Filter>Header Files\Gameplay\Bot Actor Calls</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_actor_calls\lifecycle_and_stat_calls.inl">
+      <Filter>Header Files\Gameplay\Bot Actor Calls</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_actor_calls\local_player_cast_shim.inl">
+      <Filter>Header Files\Gameplay\Bot Actor Calls</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_actor_calls\player_runtime_and_progression_calls.inl">
+      <Filter>Header Files\Gameplay\Bot Actor Calls</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_actor_calls\spell_cast_calls.inl">
+      <Filter>Header Files\Gameplay\Bot Actor Calls</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_motion_helpers.inl">
       <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\active_spell_snapshot.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\boulder_damage_projection.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\new_request_startup.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\pending_cast_preparation.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\pending_cast_processing.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\processing_context.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\release_and_latch_helpers.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\resource_state.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\skill_selection_rules.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\targeting_and_facing.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\local_player_animation_probe.inl">
+      <Filter>Header Files\Gameplay\Bot Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\locomotion_and_animation.inl">
+      <Filter>Header Files\Gameplay\Bot Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\participant_scene_binding_ticks.inl">
+      <Filter>Header Files\Gameplay\Bot Movement Tick</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\registered_gamenpc_movement.inl">
+      <Filter>Header Files\Gameplay\Bot Movement Tick</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\wizard_bot_movement_step.inl">
+      <Filter>Header Files\Gameplay\Bot Movement Tick</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_lifecycle.inl">
       <Filter>Header Files\Gameplay</Filter>
@@ -266,6 +617,42 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_tick_and_movement.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\crash_summary_builders.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\gameplay_constants.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\gameplay_state_globals.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\internal_forward_declarations.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\native_function_types.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\participant_entity_state.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\participant_kind_helpers.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\participant_snapshot_types.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\runtime_request_state.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\seh_safe_call_declarations.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\standalone_owner_repair.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\synthetic_wizard_source_profiles.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -274,6 +661,30 @@
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_execute_requests.inl">
       <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\execute_requests\entity_update_and_rail_selection.inl">
+      <Filter>Header Files\Gameplay\Execute Requests</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\execute_requests\participant_entity_sync.inl">
+      <Filter>Header Files\Gameplay\Execute Requests</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_enemy.inl">
+      <Filter>Header Files\Gameplay\Execute Requests</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_gameplay_slot_bot.inl">
+      <Filter>Header Files\Gameplay\Execute Requests</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_registered_gamenpc.inl">
+      <Filter>Header Files\Gameplay\Execute Requests</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_reward.inl">
+      <Filter>Header Files\Gameplay\Execute Requests</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_safe_wrappers.inl">
+      <Filter>Header Files\Gameplay\Execute Requests</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_standalone_wizard.inl">
+      <Filter>Header Files\Gameplay\Execute Requests</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_gameplay_thread_dispatch.inl">
       <Filter>Header Files\Gameplay</Filter>
@@ -292,6 +703,42 @@
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_tick_and_render_hooks.inl">
       <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick_hooks.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\animation_advance_hook.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\bot_owned_skills_tick.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\player_actor_tick_hook.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\standalone_puppet_collision.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\cast_probe_state.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\equip_attachment_hook.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\gameplay_hud_hooks.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\input_hooks.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\monster_pathfinding_hook.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_control_hooks.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api.inl">
       <Filter>Header Files\Gameplay</Filter>
@@ -371,6 +818,27 @@
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_resources.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\runtime_debug\hde32_impl.inl">
+      <Filter>Header Files\Runtime Debug</Filter>
+    </ClInclude>
+    <ClInclude Include="src\run_lifecycle\combat_prelude_and_sources.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\run_lifecycle\enemy_tracking_and_reset.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\run_lifecycle\public_api_and_install.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\run_lifecycle\spell_cast_hooks.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\run_lifecycle\state_and_targets.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\background_focus_bypass.cpp">
@@ -384,6 +852,9 @@
     </ClCompile>
     <ClCompile Include="src\binary_layout_validation.cpp">
       <Filter>Source Files\Support</Filter>
+    </ClCompile>
+    <ClCompile Include="src\bot_runtime.cpp">
+      <Filter>Source Files\Bot Runtime</Filter>
     </ClCompile>
     <ClCompile Include="src\d3d9_end_scene_hook.cpp">
       <Filter>Source Files\Support</Filter>
@@ -418,6 +889,12 @@
     <ClCompile Include="src\lua_engine_bindings.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_debug.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_gameplay.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_bots.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
@@ -440,6 +917,9 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_events.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_exec_pipe.cpp">
@@ -494,6 +974,15 @@
       <Filter>Source Files\Runtime Debug</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_debug_watch.cpp">
+      <Filter>Source Files\Runtime Debug</Filter>
+    </ClCompile>
+    <ClCompile Include="src\runtime_debug_watch_helpers.cpp">
+      <Filter>Source Files\Runtime Debug</Filter>
+    </ClCompile>
+    <ClCompile Include="src\runtime_debug_watch_management.cpp">
+      <Filter>Source Files\Runtime Debug</Filter>
+    </ClCompile>
+    <ClCompile Include="src\runtime_debug_watch_registration.cpp">
       <Filter>Source Files\Runtime Debug</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_flags.cpp">

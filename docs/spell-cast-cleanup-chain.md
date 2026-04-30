@@ -64,7 +64,7 @@ The `(actor+0x5C == 0)` clause bakes in a "local player only" assumption.
   cone ever rendered.
 
 Fix: `InvokeWithLocalPlayerSlot` in `ProcessPendingBotCast`
-(`bot_registry_and_movement_motion_helpers.inl`) wraps each native
+(`src/mod_loader_gameplay/bot_casting/pending_cast_processing.inl`) wraps each native
 dispatcher/cleanup call with a transient `actor+0x5C = 0` write and an immediate
 restore to the saved slot. The flip lives entirely inside the synchronous
 `__thiscall` into the game, so hostile AI / HUD / rendering observe the bot's
@@ -117,11 +117,11 @@ until an unrelated FPU loop trips on NaN and hangs the gameplay thread.
 ## Loader fix: primer-dispatch + watch + explicit cleanup
 
 Location: `ProcessPendingBotCast` in
-`src/mod_loader_gameplay/bot_registry_and_movement_motion_helpers.inl`.
+`src/mod_loader_gameplay/bot_casting/pending_cast_processing.inl`.
 
 The per-tick flow for a bot actor is:
 
-1. Tick hook at line ~468/540 in `dispatch_and_hooks_tick_and_render_hooks.inl`
+1. `HookPlayerActorTick` in `src/mod_loader_gameplay/gameplay_hooks/actor_tick_hooks.inl`
    calls `original(self)` first. The native `PlayerActorTick` runs
    `FUN_00548A00` for the bot actor, which in turn runs the per-spell
    handler if `actor+0x270` is set — driving the cast naturally each tick.
@@ -203,8 +203,11 @@ Exposed C++ symbols (`src/gameplay_seams.{h,cpp}`):
 - `kActorAimTargetAux0Offset`, `kActorAimTargetAux1Offset`
 - `kActorCastSpreadModeByteOffset`
 
-Typedef + wrapper (`src/mod_loader_gameplay.cpp`,
-`bot_registry_and_movement_actor_call_wrappers.inl`):
+Typedef + wrapper:
+
+- `CastActiveHandleCleanupFn` in `src/mod_loader_gameplay/core/native_function_types.inl`
+- safe-call declaration in `src/mod_loader_gameplay/core/seh_safe_call_declarations.inl`
+- wrapper body in `src/mod_loader_gameplay/bot_actor_calls/spell_cast_calls.inl`
 
 ```cpp
 using CastActiveHandleCleanupFn = void(__thiscall*)(void* actor);

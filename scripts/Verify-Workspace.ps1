@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $buildScript = Join-Path $PSScriptRoot "Build-All.ps1"
+$sourceOrganizationScript = Join-Path $PSScriptRoot "Check-SourceOrganization.ps1"
 $resetScript = Join-Path $PSScriptRoot "Reset-LocalRuntimeState.ps1"
 $launcher = Join-Path $root "dist/launcher/SolomonDarkModLauncher.exe"
 $stageBinaryLayout = Join-Path $root "runtime/stage/.sdmod/config/binary-layout.ini"
@@ -93,6 +94,8 @@ function Stop-SolomonDarkProcess {
 }
 
 & $resetScript -KeepAppData
+
+& $sourceOrganizationScript
 
 & $buildScript -Configuration $Configuration
 

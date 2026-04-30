@@ -30,6 +30,7 @@ local function distance(ax, ay, bx, by)
 end
 
 _G.lua_bots_enable_test_hooks = true
+_G.lua_bots_enable_all_elements = true
 _G.sd = {
   events = {
     on = function(name, callback)

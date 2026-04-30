@@ -254,21 +254,23 @@ bool TryBuildBotPath(
         binding->current_waypoint_x = direct_goal_x;
         binding->current_waypoint_y = direct_goal_y;
 
-        Log(
-            "[bots] built path. bot_id=" + std::to_string(binding->bot_id) +
-            " revision=" + std::to_string(binding->movement_intent_revision) +
-            " start=(" + std::to_string(start_grid_x) + ", " + std::to_string(start_grid_y) + ")" +
-            " goal=(" + std::to_string(goal_grid_x) + ", " + std::to_string(goal_grid_y) + ")" +
-            " waypoint_count=" + std::to_string(binding->path_waypoints.size()) +
-            (binding->path_waypoints.empty()
-                 ? std::string()
-                 : " first_waypoint=(" + std::to_string(binding->path_waypoints.front().x) + ", " +
-                       std::to_string(binding->path_waypoints.front().y) + ")" +
-                       " last_waypoint=(" + std::to_string(binding->path_waypoints.back().x) + ", " +
-                       std::to_string(binding->path_waypoints.back().y) + ")") +
-            " target=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")" +
-            " resolved_target=(" + std::to_string(path_target_x) + ", " + std::to_string(path_target_y) + ")" +
-            " built_at_ms=" + std::to_string(now_ms));
+        if constexpr (kEnableWizardBotHotPathDiagnostics) {
+            Log(
+                "[bots] built path. bot_id=" + std::to_string(binding->bot_id) +
+                " revision=" + std::to_string(binding->movement_intent_revision) +
+                " start=(" + std::to_string(start_grid_x) + ", " + std::to_string(start_grid_y) + ")" +
+                " goal=(" + std::to_string(goal_grid_x) + ", " + std::to_string(goal_grid_y) + ")" +
+                " waypoint_count=" + std::to_string(binding->path_waypoints.size()) +
+                (binding->path_waypoints.empty()
+                     ? std::string()
+                     : " first_waypoint=(" + std::to_string(binding->path_waypoints.front().x) + ", " +
+                           std::to_string(binding->path_waypoints.front().y) + ")" +
+                           " last_waypoint=(" + std::to_string(binding->path_waypoints.back().x) + ", " +
+                           std::to_string(binding->path_waypoints.back().y) + ")") +
+                " target=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")" +
+                " resolved_target=(" + std::to_string(path_target_x) + ", " + std::to_string(path_target_y) + ")" +
+                " built_at_ms=" + std::to_string(now_ms));
+        }
         return true;
     }
 
@@ -440,12 +442,14 @@ bool TryBuildBotPath(
                 binding->next_path_retry_not_before_ms = 0;
                 binding->current_waypoint_x = start_anchor_x;
                 binding->current_waypoint_y = start_anchor_y;
-                Log(
-                    "[bots] path fallback start-anchor. bot_id=" + std::to_string(binding->bot_id) +
-                    " revision=" + std::to_string(binding->movement_intent_revision) +
-                    " start=(" + std::to_string(start_grid_x) + ", " + std::to_string(start_grid_y) + ")" +
-                    " anchor=(" + std::to_string(start_anchor_x) + ", " + std::to_string(start_anchor_y) + ")" +
-                    " actor=(" + std::to_string(current_x) + ", " + std::to_string(current_y) + ")");
+                if constexpr (kEnableWizardBotHotPathDiagnostics) {
+                    Log(
+                        "[bots] path fallback start-anchor. bot_id=" + std::to_string(binding->bot_id) +
+                        " revision=" + std::to_string(binding->movement_intent_revision) +
+                        " start=(" + std::to_string(start_grid_x) + ", " + std::to_string(start_grid_y) + ")" +
+                        " anchor=(" + std::to_string(start_anchor_x) + ", " + std::to_string(start_anchor_y) + ")" +
+                        " actor=(" + std::to_string(current_x) + ", " + std::to_string(current_y) + ")");
+                }
                 return true;
             }
             if (error_message != nullptr && error_message->empty()) {
@@ -459,12 +463,14 @@ bool TryBuildBotPath(
         resolved_goal_index = best_reachable_index;
         resolved_goal_grid_x = resolved_goal_index / grid_snapshot.height;
         resolved_goal_grid_y = resolved_goal_index % grid_snapshot.height;
-        Log(
-            "[bots] path fallback reachable-goal. bot_id=" + std::to_string(binding->bot_id) +
-            " revision=" + std::to_string(binding->movement_intent_revision) +
-            " requested_goal=(" + std::to_string(goal_grid_x) + ", " + std::to_string(goal_grid_y) + ")" +
-            " fallback_goal=(" + std::to_string(resolved_goal_grid_x) + ", " + std::to_string(resolved_goal_grid_y) + ")" +
-            " heuristic=" + std::to_string(best_reachable_heuristic));
+        if constexpr (kEnableWizardBotHotPathDiagnostics) {
+            Log(
+                "[bots] path fallback reachable-goal. bot_id=" + std::to_string(binding->bot_id) +
+                " revision=" + std::to_string(binding->movement_intent_revision) +
+                " requested_goal=(" + std::to_string(goal_grid_x) + ", " + std::to_string(goal_grid_y) + ")" +
+                " fallback_goal=(" + std::to_string(resolved_goal_grid_x) + ", " + std::to_string(resolved_goal_grid_y) + ")" +
+                " heuristic=" + std::to_string(best_reachable_heuristic));
+        }
     }
 
     std::vector<int> reversed_indices;
@@ -545,20 +551,22 @@ bool TryBuildBotPath(
         binding->current_waypoint_y = path_target_y;
     }
 
-    Log(
-        "[bots] built path. bot_id=" + std::to_string(binding->bot_id) +
-        " revision=" + std::to_string(binding->movement_intent_revision) +
-        " start=(" + std::to_string(start_grid_x) + ", " + std::to_string(start_grid_y) + ")" +
-        " goal=(" + std::to_string(resolved_goal_grid_x) + ", " + std::to_string(resolved_goal_grid_y) + ")" +
-        " waypoint_count=" + std::to_string(binding->path_waypoints.size()) +
-        (binding->path_waypoints.empty()
-             ? std::string()
-             : " first_waypoint=(" + std::to_string(binding->path_waypoints.front().x) + ", " +
-                   std::to_string(binding->path_waypoints.front().y) + ")" +
-                   " last_waypoint=(" + std::to_string(binding->path_waypoints.back().x) + ", " +
-                   std::to_string(binding->path_waypoints.back().y) + ")") +
-        " target=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")" +
-        " resolved_target=(" + std::to_string(path_target_x) + ", " + std::to_string(path_target_y) + ")" +
-        " built_at_ms=" + std::to_string(now_ms));
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        Log(
+            "[bots] built path. bot_id=" + std::to_string(binding->bot_id) +
+            " revision=" + std::to_string(binding->movement_intent_revision) +
+            " start=(" + std::to_string(start_grid_x) + ", " + std::to_string(start_grid_y) + ")" +
+            " goal=(" + std::to_string(resolved_goal_grid_x) + ", " + std::to_string(resolved_goal_grid_y) + ")" +
+            " waypoint_count=" + std::to_string(binding->path_waypoints.size()) +
+            (binding->path_waypoints.empty()
+                 ? std::string()
+                 : " first_waypoint=(" + std::to_string(binding->path_waypoints.front().x) + ", " +
+                       std::to_string(binding->path_waypoints.front().y) + ")" +
+                       " last_waypoint=(" + std::to_string(binding->path_waypoints.back().x) + ", " +
+                       std::to_string(binding->path_waypoints.back().y) + ")") +
+            " target=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")" +
+            " resolved_target=(" + std::to_string(path_target_x) + ", " + std::to_string(path_target_y) + ")" +
+            " built_at_ms=" + std::to_string(now_ms));
+    }
     return true;
 }

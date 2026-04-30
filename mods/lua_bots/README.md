@@ -24,7 +24,14 @@ The current entrance-driven hub/private policy is:
   stable `testrun` tick, instead of trying to force the scene update from the
   event callback itself
 
-This runtime mod currently manages one follow bot for each element:
+By default this runtime mod manages the current companion test pair:
+
+- `Lua Bot Fire` (`profile.element_id = 0`, `profile.discipline_id = 1`)
+- `Lua Bot Earth` (`profile.element_id = 2`, `profile.discipline_id = 1`)
+
+[`config/active_bots.txt`](config/active_bots.txt) controls the active sample
+set. Use `all` there when you intentionally want the full element coverage
+harness:
 
 - `Lua Bot Water` (`profile.element_id = 1`, `profile.discipline_id = 1`)
 - `Lua Bot Earth` (`profile.element_id = 2`, `profile.discipline_id = 1`)
