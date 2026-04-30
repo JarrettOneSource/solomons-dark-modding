@@ -309,6 +309,7 @@ function app.start()
     entrance_armed = {},
     last_bot_sample = nil,
     stuck_samples = 0,
+    last_skill_choice_generation = 0,
     nav_grid_cache = nil,
     nav_grid_cache_world_id = nil,
     nav_grid_cache_at_ms = 0,
@@ -327,6 +328,7 @@ function app.start()
     "pending_run_promotion",
     "last_bot_sample",
     "stuck_samples",
+    "last_skill_choice_generation",
   }
 
   local function reset_bot_context(bot_state)
@@ -342,6 +344,7 @@ function app.start()
     bot_state.pending_run_promotion = false
     bot_state.last_bot_sample = nil
     bot_state.stuck_samples = 0
+    bot_state.last_skill_choice_generation = 0
   end
 
   local function make_bot_context(config)
@@ -520,6 +523,58 @@ function app.start()
     return type(bot) == "table" and bot or nil
   end
 
+  local function handle_pending_skill_choice()
+    if state.bot_id == nil or type(sd) ~= "table" or type(sd.bots) ~= "table" then
+      return false
+    end
+    if type(sd.bots.get_skill_choices) ~= "function" or type(sd.bots.choose_skill) ~= "function" then
+      return false
+    end
+
+    local ok, choices = pcall(sd.bots.get_skill_choices, state.bot_id)
+    if not ok or type(choices) ~= "table" or choices.pending ~= true or type(choices.options) ~= "table" then
+      return false
+    end
+    if #choices.options <= 0 then
+      return false
+    end
+
+    local generation = tonumber(choices.generation) or 0
+    if generation ~= 0 and generation == tonumber(state.last_skill_choice_generation) then
+      return false
+    end
+
+    local option_index = math.random(1, #choices.options)
+    local selected = choices.options[option_index]
+    local apply_ok, apply_result = pcall(sd.bots.choose_skill, state.bot_id, option_index, generation)
+    if apply_ok and apply_result then
+      state.last_skill_choice_generation = generation
+      if type(state.bot_profile) == "table" then
+        if tonumber(choices.level) ~= nil then
+          state.bot_profile.level = tonumber(choices.level)
+        end
+        if tonumber(choices.experience) ~= nil then
+          state.bot_profile.experience = tonumber(choices.experience)
+        end
+      end
+      log(string.format(
+        "skill_choice id=%s generation=%s option_index=%d option_id=%s option_count=%d",
+        tostring(state.bot_id),
+        tostring(generation),
+        option_index,
+        tostring(type(selected) == "table" and selected.id or nil),
+        #choices.options))
+      return true
+    end
+
+    log(string.format(
+      "skill_choice failed id=%s generation=%s error=%s",
+      tostring(state.bot_id),
+      tostring(generation),
+      tostring(apply_result)))
+    return false
+  end
+
   local function is_bot_dead(bot)
     if type(bot) ~= "table" then
       return false
@@ -558,6 +613,7 @@ function app.start()
     state.pending_run_promotion = false
     state.last_bot_sample = nil
     state.stuck_samples = 0
+    state.last_skill_choice_generation = 0
   end
 
   local function clear_follow_state()
@@ -1914,6 +1970,7 @@ function app.start()
       choose_follow_target = choose_follow_target,
       should_refresh_follow_target = should_refresh_follow_target,
       update_same_scene_follow = update_same_scene_follow,
+      handle_pending_skill_choice = handle_pending_skill_choice,
       follow_stop_distance = FOLLOW_STOP_DISTANCE,
       follow_resume_distance = FOLLOW_RESUME_DISTANCE,
       follow_target_arrival_distance = FOLLOW_TARGET_ARRIVAL_DISTANCE,
@@ -1972,6 +2029,7 @@ function app.start()
       load_bot_context(bot_state)
       local bot = ensure_bot_spawned(now_ms, player, desired_scene, anchor)
       if type(bot) == "table" and bot.available then
+        handle_pending_skill_choice()
         if state.bot_dead or is_bot_dead(bot) then
           mark_bot_dead(now_ms, bot)
         elseif scene_name == "hub" then

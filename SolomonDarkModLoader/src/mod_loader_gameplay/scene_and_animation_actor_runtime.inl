@@ -66,10 +66,10 @@ bool TryResolveLocalPlayerWorldContext(
         *world_address = resolved_world_address;
     }
     if (progression_address != nullptr) {
-        if (!TryResolvePlayerProgressionForSlot(gameplay_address, 0, progression_address) ||
+        if (!TryResolveActorProgressionRuntime(resolved_actor_address, progression_address) ||
             *progression_address == 0) {
-            if (!TryResolveActorProgressionRuntime(resolved_actor_address, progression_address)) {
-                *progression_address = 0;
+            if (!TryResolvePlayerProgressionForSlot(gameplay_address, 0, progression_address) ||
+                *progression_address == 0) {
                 return false;
             }
         }
@@ -99,4 +99,3 @@ bool ReserveRemoteParticipantGameplaySlot(std::uint64_t participant_id, int* slo
 
     return false;
 }
-

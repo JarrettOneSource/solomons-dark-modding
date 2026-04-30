@@ -1,6 +1,8 @@
 #include "bot_runtime.h"
 
+#include "gameplay_seams.h"
 #include "logger.h"
+#include "memory_access.h"
 #include "mod_loader.h"
 
 #include <Windows.h>
@@ -8,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <utility>
 #include <vector>
 
 // Bot runtime architecture (2026-04-07)
@@ -80,6 +83,14 @@ struct PendingBotDestroy {
     std::uint64_t generation = 0;
 };
 
+struct PendingBotSkillChoice {
+    std::uint64_t bot_id = 0;
+    std::uint64_t generation = 0;
+    std::int32_t level = 0;
+    std::int32_t experience = 0;
+    std::vector<BotSkillChoiceOption> options;
+};
+
 std::mutex g_bot_runtime_mutex;
 bool g_bot_runtime_initialized = false;
 std::uint64_t g_next_bot_id = kFirstLuaControlledParticipantId;
@@ -87,10 +98,12 @@ std::uint64_t g_next_cast_sequence = 1;
 std::uint64_t g_next_entity_sync_generation = 1;
 std::uint64_t g_next_movement_intent_revision = 1;
 std::uint64_t g_next_destroy_generation = 1;
+std::uint64_t g_next_skill_choice_generation = 1;
 std::vector<PendingBotCast> g_pending_casts;
 std::vector<PendingBotEntitySync> g_pending_entity_syncs;
 std::vector<PendingBotMovementIntent> g_bot_movement_intents;
 std::vector<PendingBotDestroy> g_pending_destroys;
+std::vector<PendingBotSkillChoice> g_pending_skill_choices;
 
 constexpr float kBotArrivalThreshold = 0.5f;
 

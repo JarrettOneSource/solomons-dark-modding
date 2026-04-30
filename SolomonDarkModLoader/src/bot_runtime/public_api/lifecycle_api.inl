@@ -134,6 +134,7 @@ bool DestroyBot(std::uint64_t bot_id) {
         RemovePendingCast(bot_id);
         RemovePendingEntitySync(bot_id);
         RemovePendingMovementIntent(bot_id);
+        RemovePendingSkillChoice(bot_id);
         std::string destroy_error_message;
         if (!TryDispatchDestroy(bot_id, &destroy_error_message)) {
             SchedulePendingDestroyLocked(bot_id);
@@ -167,8 +168,10 @@ void DestroyAllBots() {
     g_pending_casts.clear();
     g_pending_entity_syncs.clear();
     g_bot_movement_intents.clear();
+    g_pending_skill_choices.clear();
     g_next_cast_sequence = 1;
     g_next_entity_sync_generation = 1;
     g_next_movement_intent_revision = 1;
     g_next_destroy_generation = 1;
+    g_next_skill_choice_generation = 1;
 }

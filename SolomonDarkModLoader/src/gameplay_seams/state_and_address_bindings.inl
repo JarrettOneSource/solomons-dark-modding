@@ -95,6 +95,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "game_object_factory", kGameObjectFactory),
         SDMOD_ADDR("gameplay.hooks", "game_free", kGameFree),
         SDMOD_ADDR("gameplay.hooks", "game_operator_new", kGameOperatorNew),
+        SDMOD_ADDR("gameplay.hooks", "native_int_array_clear", kNativeIntArrayClear),
         SDMOD_ADDR("gameplay.hooks", "cast_active_handle_cleanup", kCastActiveHandleCleanup),
 
         SDMOD_ADDR("gameplay.globals", "menu_keybinding", kMenuKeybindingGlobal),
@@ -122,6 +123,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.globals", "player_selection_state_0", kPlayerSelectionState0Global),
         SDMOD_ADDR("gameplay.globals", "player_selection_state_1", kPlayerSelectionState1Global),
         SDMOD_ADDR("gameplay.globals", "local_player_actor", kLocalPlayerActorGlobal),
+        SDMOD_ADDR("gameplay.globals", "native_int_array_vtable", kNativeIntArrayVtable),
         SDMOD_ADDR("gameplay.globals", "puppet_manager_vtable", kPuppetManagerVtable),
         SDMOD_ADDR("gameplay.globals", "enemy_modifier_list_vtable", kEnemyModifierListVtable),
         SDMOD_ADDR("gameplay.globals", "actor_walk_cycle_primary_divisor", kActorWalkCyclePrimaryDivisorGlobal),

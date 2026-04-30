@@ -109,3 +109,113 @@ int ReadResolvedGlobalIntOr(uintptr_t absolute_address, int fallback = 0) {
     const auto resolved = ProcessMemory::Instance().ResolveGameAddressOrZero(absolute_address);
     return ProcessMemory::Instance().ReadValueOr<int>(resolved, fallback);
 }
+
+uintptr_t ReadSmartPointerInnerObjectForRunLifecycle(uintptr_t wrapper_address) {
+    if (wrapper_address == 0) {
+        return 0;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto direct_inner = memory.ReadValueOr<uintptr_t>(wrapper_address, 0);
+    if (direct_inner != 0 && memory.IsReadableRange(direct_inner, 1)) {
+        return direct_inner;
+    }
+
+    const auto gameplay_inner = memory.ReadValueOr<uintptr_t>(wrapper_address + 0x0C, 0);
+    if (gameplay_inner != 0 && memory.IsReadableRange(gameplay_inner, 1)) {
+        return gameplay_inner;
+    }
+
+    return 0;
+}
+
+uintptr_t ResolveActorProgressionRuntimeForRunLifecycle(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return 0;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto direct_progression =
+        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0);
+    if (direct_progression != 0 && memory.IsReadableRange(direct_progression, 1)) {
+        return direct_progression;
+    }
+
+    const auto progression_handle =
+        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
+    return ReadSmartPointerInnerObjectForRunLifecycle(progression_handle);
+}
+
+uintptr_t ResolveLocalPlayerActorForRunLifecycle() {
+    auto& memory = ProcessMemory::Instance();
+    SDModSceneState scene_state;
+    if (TryGetSceneState(&scene_state) && scene_state.valid && scene_state.gameplay_scene_address != 0) {
+        const auto slot_actor =
+            memory.ReadFieldOr<uintptr_t>(scene_state.gameplay_scene_address, kGameplayPlayerActorOffset, 0);
+        if (slot_actor != 0 && memory.IsReadableRange(slot_actor, 1)) {
+            return slot_actor;
+        }
+    }
+
+    const auto local_actor_global = memory.ResolveGameAddressOrZero(kLocalPlayerActorGlobal);
+    const auto local_actor = memory.ReadValueOr<uintptr_t>(local_actor_global, 0);
+    if (local_actor != 0 && memory.IsReadableRange(local_actor, 1)) {
+        return local_actor;
+    }
+
+    SDModPlayerState player_state;
+    if (TryGetPlayerState(&player_state) && player_state.valid) {
+        return player_state.actor_address;
+    }
+
+    return 0;
+}
+
+uintptr_t ResolveLocalPlayerProgressionForRunLifecycle() {
+    return ResolveActorProgressionRuntimeForRunLifecycle(ResolveLocalPlayerActorForRunLifecycle());
+}
+
+bool IsLocalPlayerProgressionForRunLifecycle(uintptr_t progression_address) {
+    if (progression_address == 0) {
+        return false;
+    }
+
+    const auto local_progression = ResolveLocalPlayerProgressionForRunLifecycle();
+    return local_progression != 0 && local_progression == progression_address;
+}
+
+int ReadPendingLevelKindOrZero() {
+    return ReadResolvedGlobalIntOr(kPendingLevelKindGlobal, 0);
+}
+
+bool TryWritePendingLevelKind(int pending_level_kind) {
+    const auto resolved = ProcessMemory::Instance().ResolveGameAddressOrZero(kPendingLevelKindGlobal);
+    return resolved != 0 && ProcessMemory::Instance().TryWriteValue<int>(resolved, pending_level_kind);
+}
+
+void RestoreNonLocalPendingLevelKind(
+    uintptr_t progression_address,
+    int pending_before,
+    int level_after,
+    int xp_after) {
+    const auto pending_after = ReadPendingLevelKindOrZero();
+    if (pending_after == pending_before) {
+        return;
+    }
+
+    if (TryWritePendingLevelKind(pending_before)) {
+        Log(
+            "level.up restored non-local picker delta. progression=" + HexString(progression_address) +
+            " level=" + std::to_string(level_after) +
+            " xp=" + std::to_string(xp_after) +
+            " pending_before=" + std::to_string(pending_before) +
+            " pending_after=" + std::to_string(pending_after));
+    } else {
+        Log(
+            "level.up failed to restore non-local picker delta. progression=" + HexString(progression_address) +
+            " level=" + std::to_string(level_after) +
+            " xp=" + std::to_string(xp_after) +
+            " pending_before=" + std::to_string(pending_before) +
+            " pending_after=" + std::to_string(pending_after));
+    }
+}

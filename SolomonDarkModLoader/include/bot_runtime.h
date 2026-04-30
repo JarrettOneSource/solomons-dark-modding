@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace sdmod::multiplayer {
 
@@ -80,6 +81,27 @@ struct BotMoveToRequest {
     std::uint64_t bot_id = 0;
     float target_x = 0.0f;
     float target_y = 0.0f;
+};
+
+struct BotSkillChoiceOption {
+    std::int32_t option_id = -1;
+    std::int32_t apply_count = 1;
+};
+
+struct BotSkillChoiceSnapshot {
+    bool pending = false;
+    std::uint64_t bot_id = 0;
+    std::uint64_t generation = 0;
+    std::int32_t level = 0;
+    std::int32_t experience = 0;
+    std::vector<BotSkillChoiceOption> options;
+};
+
+struct BotSkillChoiceRequest {
+    std::uint64_t bot_id = 0;
+    std::uint64_t generation = 0;
+    std::int32_t option_index = -1;
+    std::int32_t option_id = -1;
 };
 
 struct BotMovementIntentSnapshot {
@@ -184,6 +206,11 @@ struct BotSnapshot {
     float distance_to_target = 0.0f;
     std::uint64_t queued_cast_count = 0;
     std::uint64_t last_queued_cast_ms = 0;
+    bool skill_choice_pending = false;
+    std::uint64_t skill_choice_generation = 0;
+    std::int32_t skill_choice_level = 0;
+    std::int32_t skill_choice_experience = 0;
+    std::vector<BotSkillChoiceOption> skill_choice_options;
 };
 
 bool InitializeBotRuntime();
@@ -217,6 +244,9 @@ bool ConsumePendingBotCast(std::uint64_t bot_id, BotCastRequest* request);
 std::uint32_t GetBotCount();
 bool ReadBotSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot);
 bool ReadBotSnapshotByIndex(std::uint32_t index, BotSnapshot* snapshot);
+void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintptr_t source_progression_address = 0);
+bool ReadBotSkillChoices(std::uint64_t bot_id, BotSkillChoiceSnapshot* snapshot);
+bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_message);
 std::size_t GetPendingBotCastCount();
 void SetAllBotSceneIntentsToRun();
 void SetAllBotSceneIntentsToSharedHub();

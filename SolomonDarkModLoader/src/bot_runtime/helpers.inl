@@ -3,5 +3,6 @@
 #include "helpers/controller_motion.inl"
 #include "helpers/request_validation.inl"
 #include "helpers/state_mutation.inl"
+#include "helpers/skill_choices.inl"
 #include "helpers/pending_scheduling.inl"
 #include "helpers/dispatch_queues.inl"

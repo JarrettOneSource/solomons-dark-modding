@@ -7,6 +7,9 @@ local face_targets = {}
 local moves = {}
 local creates = {}
 local updates = {}
+local skill_choices = {}
+local chosen_skills = {}
+local choose_skill_should_fail = false
 local event_handlers = {}
 local bot_store = {}
 local next_bot_id = 1000
@@ -204,6 +207,26 @@ _G.sd = {
       })
       return true
     end,
+    get_skill_choices = function(bot_id)
+      return skill_choices[bot_id] or {
+        pending = false,
+        generation = 0,
+        level = 0,
+        experience = 0,
+        options = {},
+      }
+    end,
+    choose_skill = function(bot_id, option_index, generation)
+      table.insert(chosen_skills, {
+        id = bot_id,
+        option_index = option_index,
+        generation = generation,
+      })
+      if choose_skill_should_fail then
+        return false
+      end
+      return true
+    end,
   },
 }
 
@@ -224,6 +247,7 @@ assert(hooks.state.bots[5].bot_name == "Lua Bot Fire", "fifth managed bot should
 assert(type(hooks.choose_follow_target) == "function", "choose_follow_target hook missing")
 assert(type(hooks.should_refresh_follow_target) == "function", "should_refresh_follow_target hook missing")
 assert(type(hooks.update_same_scene_follow) == "function", "update_same_scene_follow hook missing")
+assert(type(hooks.handle_pending_skill_choice) == "function", "handle_pending_skill_choice hook missing")
 assert(hooks.follow_stop_distance == 100.0, "follow stop distance should use the roomy 100-unit inner radius")
 assert(hooks.follow_resume_distance == 250.0, "follow resume distance should use the roomy 250-unit outer radius")
 assert(hooks.follow_target_arrival_distance == 32.0, "follow target arrival should tolerate native endpoint oscillation")
@@ -263,6 +287,54 @@ for _, bot_context in ipairs(hooks.state.bots) do
   assert(seen_spawn_y[bot.y] ~= true, "bot spawn offsets should not overlap")
   seen_spawn_y[bot.y] = true
 end
+
+local skill_bot = hooks.state.bots[1]
+hooks.state.bot_id = skill_bot.bot_id
+hooks.state.bot_profile = skill_bot.bot_profile
+skill_choices[skill_bot.bot_id] = {
+  pending = true,
+  generation = 77,
+  level = 2,
+  experience = 125,
+  options = {
+    { id = 0x10, apply_count = 1 },
+    { id = 0x11, apply_count = 1 },
+    { id = 0x12, apply_count = 1 },
+  },
+}
+local original_math_random = math.random
+local random_calls = 0
+math.random = function(min_value, max_value)
+  random_calls = random_calls + 1
+  assert(min_value == 1, "bot skill picker random range should start at the first rolled option")
+  assert(max_value == 3, "bot skill picker random range should end at the last rolled option")
+  return 2
+end
+assert(hooks.handle_pending_skill_choice() == true, "pending bot skill choice should be auto-selected")
+math.random = original_math_random
+assert(random_calls == 1, "bot skill picker should choose through math.random exactly once")
+assert(#chosen_skills == 1, "bot skill picker should issue exactly one native choose call")
+assert(chosen_skills[1].id == skill_bot.bot_id, "bot skill choose should target the current bot")
+assert(chosen_skills[1].generation == 77, "bot skill choose should preserve native generation")
+assert(chosen_skills[1].option_index == 2, "bot skill choose index should come from the random rolled-option picker")
+assert(skill_bot.bot_profile.level == 2, "bot profile level should mirror the shared level-up payload")
+assert(skill_bot.bot_profile.experience == 125, "bot profile xp should mirror the shared level-up payload")
+assert(hooks.handle_pending_skill_choice() == false, "same skill-choice generation should not be selected twice")
+assert(#chosen_skills == 1, "same skill-choice generation should not issue a second choose call")
+skill_choices[skill_bot.bot_id].generation = 78
+skill_choices[skill_bot.bot_id].level = 3
+assert(hooks.handle_pending_skill_choice() == true, "new skill-choice generation should be selectable")
+assert(#chosen_skills == 2, "new skill-choice generation should issue a new choose call")
+skill_choices[skill_bot.bot_id].generation = 79
+choose_skill_should_fail = true
+assert(hooks.handle_pending_skill_choice() == false, "failed native skill apply should be reported")
+assert(#chosen_skills == 3, "failed native skill apply should still issue a choose call")
+assert(hooks.handle_pending_skill_choice() == false, "failed skill-choice generation should remain retryable")
+assert(#chosen_skills == 4, "failed skill-choice generation should not be marked handled")
+choose_skill_should_fail = false
+assert(hooks.handle_pending_skill_choice() == true, "retryable skill-choice generation should eventually apply")
+assert(#chosen_skills == 5, "retryable skill-choice generation should issue a successful choose call")
+skill_choices[skill_bot.bot_id].pending = false
 
 event_handlers["run.started"]()
 current_scene = {

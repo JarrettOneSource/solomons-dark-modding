@@ -110,6 +110,37 @@ void RemovePendingDestroy(std::uint64_t bot_id) {
         g_pending_destroys.end());
 }
 
+PendingBotSkillChoice* FindPendingSkillChoice(std::uint64_t bot_id) {
+    const auto it = std::find_if(
+        g_pending_skill_choices.begin(),
+        g_pending_skill_choices.end(),
+        [&](const PendingBotSkillChoice& pending_choice) {
+            return pending_choice.bot_id == bot_id;
+        });
+    return it == g_pending_skill_choices.end() ? nullptr : &(*it);
+}
+
+const PendingBotSkillChoice* FindPendingSkillChoiceConst(std::uint64_t bot_id) {
+    const auto it = std::find_if(
+        g_pending_skill_choices.begin(),
+        g_pending_skill_choices.end(),
+        [&](const PendingBotSkillChoice& pending_choice) {
+            return pending_choice.bot_id == bot_id;
+        });
+    return it == g_pending_skill_choices.end() ? nullptr : &(*it);
+}
+
+void RemovePendingSkillChoice(std::uint64_t bot_id) {
+    g_pending_skill_choices.erase(
+        std::remove_if(
+            g_pending_skill_choices.begin(),
+            g_pending_skill_choices.end(),
+            [&](const PendingBotSkillChoice& pending_choice) {
+                return pending_choice.bot_id == bot_id;
+            }),
+        g_pending_skill_choices.end());
+}
+
 ParticipantInfo* FindBot(RuntimeState& state, std::uint64_t bot_id) {
     auto* participant = FindParticipant(state, bot_id);
     return participant != nullptr && IsLuaControlledParticipant(*participant) ? participant : nullptr;

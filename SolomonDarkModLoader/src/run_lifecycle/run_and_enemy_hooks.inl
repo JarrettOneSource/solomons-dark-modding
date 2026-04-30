@@ -186,6 +186,8 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
     const auto progression_address = reinterpret_cast<uintptr_t>(self);
     const auto level_before =
         ProcessMemory::Instance().ReadFieldOr<int>(progression_address, kProgressionLevelOffset, 0);
+    const auto pending_before = ReadPendingLevelKindOrZero();
+    const auto local_player_level_up = IsLocalPlayerProgressionForRunLifecycle(progression_address);
     original(self, unused_edx);
     if (!IsRunActive()) {
         return;
@@ -197,5 +199,12 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
         return;
     }
 
-    DispatchLuaLevelUp(level_after, ReadRoundedXpOrUnknown(progression_address));
+    const auto xp_after = ReadRoundedXpOrUnknown(progression_address);
+    if (!local_player_level_up) {
+        RestoreNonLocalPendingLevelKind(progression_address, pending_before, level_after, xp_after);
+        return;
+    }
+
+    multiplayer::SyncBotsToSharedLevelUp(level_after, xp_after, progression_address);
+    DispatchLuaLevelUp(level_after, xp_after);
 }

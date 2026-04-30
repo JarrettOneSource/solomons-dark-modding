@@ -26,7 +26,7 @@ void PushBotEquipVisualLaneState(
 void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot) {
     using namespace sdmod::detail::parsers;
 
-    lua_createtable(state, 0, 66);
+    lua_createtable(state, 0, 71);
     lua_pushboolean(state, snapshot.available ? 1 : 0);
     lua_setfield(state, -2, "available");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.bot_id));
@@ -188,6 +188,25 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "queued_cast_count");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.last_queued_cast_ms));
     lua_setfield(state, -2, "last_queued_cast_ms");
+    lua_pushboolean(state, snapshot.skill_choice_pending ? 1 : 0);
+    lua_setfield(state, -2, "skill_choice_pending");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.skill_choice_generation));
+    lua_setfield(state, -2, "skill_choice_generation");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.skill_choice_level));
+    lua_setfield(state, -2, "skill_choice_level");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.skill_choice_experience));
+    lua_setfield(state, -2, "skill_choice_experience");
+    lua_createtable(state, static_cast<int>(snapshot.skill_choice_options.size()), 0);
+    for (std::size_t index = 0; index < snapshot.skill_choice_options.size(); ++index) {
+        const auto& option = snapshot.skill_choice_options[index];
+        lua_createtable(state, 0, 2);
+        lua_pushinteger(state, static_cast<lua_Integer>(option.option_id));
+        lua_setfield(state, -2, "id");
+        lua_pushinteger(state, static_cast<lua_Integer>(option.apply_count));
+        lua_setfield(state, -2, "apply_count");
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+    lua_setfield(state, -2, "skill_choice_options");
 }
 
 void PushBotSnapshotArray(lua_State* state) {

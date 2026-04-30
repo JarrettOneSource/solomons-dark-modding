@@ -23,6 +23,14 @@ void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) 
         snapshot->queued_cast_count = pending_cast->queued_cast_count;
         snapshot->last_queued_cast_ms = pending_cast->queued_at_ms;
     }
+    if (const auto* pending_choice = FindPendingSkillChoiceConst(participant.participant_id);
+        pending_choice != nullptr) {
+        snapshot->skill_choice_pending = true;
+        snapshot->skill_choice_generation = pending_choice->generation;
+        snapshot->skill_choice_level = pending_choice->level;
+        snapshot->skill_choice_experience = pending_choice->experience;
+        snapshot->skill_choice_options = pending_choice->options;
+    }
 }
 
 void DeriveBotCastReadiness(BotSnapshot* snapshot) {
