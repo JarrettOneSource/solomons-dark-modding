@@ -22,6 +22,8 @@ void QuiesceDeadWizardBinding(ParticipantEntityBinding* binding) {
     binding->has_target = false;
     binding->direction_x = 0.0f;
     binding->direction_y = 0.0f;
+    binding->native_movement_accumulator_x = 0.0f;
+    binding->native_movement_accumulator_y = 0.0f;
     binding->desired_heading_valid = false;
     binding->desired_heading = 0.0f;
     binding->target_x = 0.0f;
@@ -84,8 +86,17 @@ void AdvanceStandaloneWizardWalkCycleState(
     binding->dynamic_walk_cycle_secondary = secondary;
     binding->dynamic_render_drive_stride = stride_step;
     binding->dynamic_render_advance_rate = displacement_distance;
-    binding->dynamic_render_drive_move_blend = 1.0f;
     binding->dynamic_render_advance_phase = primary;
+}
+
+void ClearWizardBotMovementVectorInputs(uintptr_t actor_address) {
+    if (!IsParticipantActorMemoryFreshWritable(actor_address)) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorAnimationDriveParameterOffset, 0.0f);
 }
 
 void ClearWizardBotLocomotionInputs(uintptr_t actor_address) {
@@ -94,14 +105,12 @@ void ClearWizardBotLocomotionInputs(uintptr_t actor_address) {
     }
 
     auto& memory = ProcessMemory::Instance();
-    (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, 0.0f);
-    (void)memory.TryWriteField(actor_address, kActorAnimationDriveParameterOffset, 0.0f);
+    ClearWizardBotMovementVectorInputs(actor_address);
     (void)memory.TryWriteField(actor_address, kActorWalkCyclePrimaryOffset, 0.0f);
     (void)memory.TryWriteField(actor_address, kActorWalkCycleSecondaryOffset, 0.0f);
     (void)memory.TryWriteField(actor_address, kActorRenderDriveStrideScaleOffset, 0.0f);
     (void)memory.TryWriteField(actor_address, kActorRenderAdvanceRateOffset, 0.0f);
     (void)memory.TryWriteField(actor_address, kActorRenderAdvancePhaseOffset, 0.0f);
-    (void)memory.TryWriteField(actor_address, kActorRenderDriveMoveBlendOffset, 0.0f);
 }
 
 void StopWizardBotActorMotion(uintptr_t actor_address) {
@@ -119,13 +128,14 @@ void StopWizardBotActorMotion(uintptr_t actor_address) {
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
     if (auto* binding = FindParticipantEntityForActor(actor_address);
         binding != nullptr && binding->kind == ParticipantEntityBinding::Kind::StandaloneWizard) {
+        binding->native_movement_accumulator_x = 0.0f;
+        binding->native_movement_accumulator_y = 0.0f;
         ApplyObservedBotAnimationState(binding, actor_address, false);
         binding->dynamic_walk_cycle_primary = 0.0f;
         binding->dynamic_walk_cycle_secondary = 0.0f;
         binding->dynamic_render_drive_stride = 0.0f;
         binding->dynamic_render_advance_rate = 0.0f;
         binding->dynamic_render_advance_phase = 0.0f;
-        binding->dynamic_render_drive_move_blend = 0.0f;
         ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
         return;
     }
@@ -155,12 +165,13 @@ void StopDeadWizardBotActorMotion(uintptr_t actor_address) {
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
     if (auto* binding = FindParticipantEntityForActor(actor_address);
         binding != nullptr && binding->kind == ParticipantEntityBinding::Kind::StandaloneWizard) {
+        binding->native_movement_accumulator_x = 0.0f;
+        binding->native_movement_accumulator_y = 0.0f;
         binding->dynamic_walk_cycle_primary = 0.0f;
         binding->dynamic_walk_cycle_secondary = 0.0f;
         binding->dynamic_render_drive_stride = 0.0f;
         binding->dynamic_render_advance_rate = 0.0f;
         binding->dynamic_render_advance_phase = 0.0f;
-        binding->dynamic_render_drive_move_blend = 0.0f;
         ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
     }
 }
@@ -170,10 +181,26 @@ void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t
         return;
     }
 
+    auto& memory = ProcessMemory::Instance();
+    const auto movement_vector_x = memory.ReadFieldOr<float>(
+        actor_address,
+        kActorAnimationConfigBlockOffset,
+        0.0f);
+    const auto movement_vector_y = memory.ReadFieldOr<float>(
+        actor_address,
+        kActorAnimationDriveParameterOffset,
+        0.0f);
+
     ClearLiveWizardActorAnimationDriveState(actor_address);
     ApplyStandaloneWizardAnimationDriveProfile(binding, actor_address, moving);
     ApplyStandaloneWizardPuppetDriveState(binding, actor_address, moving);
     ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
+    if (moving) {
+        // Standalone profiles are captured from the local player and include
+        // its live +0x158/+0x15C vector. Keep the bot's own vector after replay.
+        (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, movement_vector_x);
+        (void)memory.TryWriteField(actor_address, kActorAnimationDriveParameterOffset, movement_vector_y);
+    }
 
     const auto desired_state_id = ResolveProfileSelectionState(binding->character_profile);
     if (TryWriteActorAnimationStateIdDirect(actor_address, desired_state_id)) {

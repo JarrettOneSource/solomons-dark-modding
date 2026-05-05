@@ -74,7 +74,7 @@ def main() -> int:
                 process_id,
                 element=csp.DEFAULT_ELEMENT,
                 discipline=csp.DEFAULT_DISCIPLINE,
-                prefer_resume=True,
+                prefer_resume=False,
             ),
         )
         step("start_testrun_without_waves", close_probe.start_testrun_without_waves)

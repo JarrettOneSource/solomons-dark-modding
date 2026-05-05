@@ -19,7 +19,6 @@ struct ParticipantEntityBinding {
         PlaceholderEnemy = 0,
         StandaloneWizard = 1,
         GameplaySlotWizard = 2,
-        RegisteredGameNpc = 3,
     };
 
     std::uint64_t bot_id = 0;
@@ -35,6 +34,8 @@ struct ParticipantEntityBinding {
     bool has_target = false;
     float direction_x = 0.0f;
     float direction_y = 0.0f;
+    float native_movement_accumulator_x = 0.0f;
+    float native_movement_accumulator_y = 0.0f;
     bool desired_heading_valid = false;
     float desired_heading = 0.0f;
     float target_x = 0.0f;
@@ -61,18 +62,12 @@ struct ParticipantEntityBinding {
     float dynamic_render_drive_stride = 0.0f;
     float dynamic_render_advance_rate = 0.0f;
     float dynamic_render_advance_phase = 0.0f;
-    float dynamic_render_drive_move_blend = 0.0f;
     uintptr_t standalone_progression_wrapper_address = 0;
     uintptr_t standalone_progression_inner_address = 0;
     uintptr_t standalone_equip_wrapper_address = 0;
     uintptr_t standalone_equip_inner_address = 0;
-    bool registered_gamenpc_goal_active = false;
-    bool registered_gamenpc_following_local_slot = false;
-    float registered_gamenpc_goal_x = 0.0f;
-    float registered_gamenpc_goal_y = 0.0f;
     bool gameplay_attach_applied = false;
     bool raw_allocation = false;
-    uintptr_t synthetic_source_profile_address = 0;
     // "Currently facing" heading pinned across ticks. Sources: movement step
     // and cast dispatch each write this when they fire. Last setter wins, and
     // within a single tick cast is processed after movement so it takes
@@ -87,13 +82,10 @@ struct ParticipantEntityBinding {
     float stock_tick_facing_origin_y = 0.0f;
     bool death_transition_stock_tick_seen = false;
 
-    // Ongoing cast state. The loader primes the cast once and, for gameplay-slot
-    // bots, keeps a stock-owned startup/watch state alive across ticks. Startup
-    // runs by letting the native PlayerActorTick see the prepared actor/progression
-    // fields while the bot is temporarily presented as local slot 0. After the
-    // stock handler latches or allocates a spell object, the loader just watches
-    // actor+0x160 (animation_drive_state), actor+0x1EC (mNoInterrupt), and the
-    // cached spell handle (actor+0x27C / +0x27E) until cleanup.
+    // Ongoing cast state. The loader primes the cast once and keeps a stock-owned
+    // startup/watch state alive across ticks. Native slot gates are unlocked at
+    // their recovered branch sites, so gameplay-slot bots keep their real slot
+    // and progression handles while PlayerActorTick and the spell handlers run.
     struct OngoingCastState {
         enum class Lane : std::uint8_t {
             Dispatcher = 0,
@@ -117,6 +109,11 @@ struct ParticipantEntityBinding {
         std::uint32_t aim_aux0_before = 0;
         std::uint32_t aim_aux1_before = 0;
         std::uint8_t spread_before = 0;
+        std::int32_t primary_skill_id_before = 0;
+        std::int32_t previous_skill_id_before = 0;
+        std::uint32_t primary_action_latch_e4_before = 0;
+        std::uint32_t primary_action_latch_e8_before = 0;
+        std::uint8_t post_gate_active_before = 0;
         uintptr_t current_target_actor_before = 0;
         bool current_target_actor_override_active = false;
         std::uint8_t native_target_group_before = kTargetHandleGroupSentinel;
@@ -151,27 +148,28 @@ struct ParticipantEntityBinding {
         bool saw_live_handle = false;
         bool bounded_release_requested = false;
         bool bounded_release_at_max_size = false;
-        bool bounded_release_at_damage_threshold = false;
+        bool bounded_release_target_lethal = false;
         float bounded_release_charge = 0.0f;
         float bounded_release_base_damage = 0.0f;
-        float bounded_release_statbook_damage = 0.0f;
         float bounded_release_projected_damage = 0.0f;
+        float bounded_release_damage_output_scale = 0.0f;
+        float bounded_release_damage_scale = 0.0f;
+        float bounded_release_damage_floor = 0.0f;
+        float bounded_release_damage_cap_scale = 0.0f;
+        float bounded_release_projected_release_damage = 0.0f;
+        float bounded_release_projected_hp_damage = 0.0f;
         float bounded_release_target_hp = 0.0f;
         uintptr_t bounded_release_target_actor = 0;
-        bool bounded_release_damage_native = false;
         bool bounded_max_size_reached = false;
         int bounded_post_release_ticks_waiting = 0;
-        bool bounded_cleanup_completed = false;
-        std::uint64_t bounded_cleanup_clear_after_ms = 0;
         bool startup_in_progress = false;
-        bool requires_local_slot_native_tick = false;
         bool post_stock_dispatch_attempted = false;
         uintptr_t pure_primary_item_sink_fallback = 0;
         multiplayer::BotManaChargeKind mana_charge_kind =
             multiplayer::BotManaChargeKind::None;
         float mana_cost = 0.0f;
         float mana_spent_total = 0.0f;
-        std::int32_t mana_statbook_level = 1;
+        std::int32_t mana_progression_level = 1;
         std::uint64_t mana_last_charge_ms = 0;
         static constexpr int kMaxTicksWaiting = 300;
         static constexpr int kMaxStartupTicksWaiting = 12;
@@ -180,16 +178,4 @@ struct ParticipantEntityBinding {
         static constexpr int kTargetlessRetargetGraceTicks = kMaxStartupTicksWaiting * 2;
     };
     OngoingCastState ongoing_cast{};
-};
-
-struct LocalPlayerCastShimState {
-    bool active = false;
-    uintptr_t actor_address = 0;
-    std::uint8_t saved_actor_slot = 0;
-    uintptr_t gameplay_address = 0;
-    uintptr_t local_progression_slot_offset = 0;
-    uintptr_t saved_local_progression_handle = 0;
-    uintptr_t redirected_progression_handle = 0;
-    bool progression_slot_restore_needed = false;
-    bool progression_slot_redirected = false;
 };

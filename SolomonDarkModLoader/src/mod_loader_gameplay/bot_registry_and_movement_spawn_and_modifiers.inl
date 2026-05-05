@@ -1,6 +1,7 @@
 bool ResolveParticipantSpawnTransform(
     uintptr_t gameplay_address,
     const PendingParticipantEntitySyncRequest& request,
+    bool validate_placement,
     float* out_x,
     float* out_y,
     float* out_heading) {
@@ -54,13 +55,17 @@ bool ResolveParticipantSpawnTransform(
         }
     }
 
-    uintptr_t placement_probe_actor_address = local_actor_address;
-    if (request.bot_id != 0) {
-        if (const auto* binding = FindParticipantEntity(request.bot_id);
-            binding != nullptr && binding->actor_address != 0) {
-            placement_probe_actor_address = binding->actor_address;
-        }
+    if (request.has_transform && !validate_placement) {
+        *out_x = x;
+        *out_y = y;
+        *out_heading = heading;
+        return true;
     }
+
+    // Transform updates are scene/teleport syncs, not path requests. Use the
+    // local player as the placement probe so a far-away bot does not force the
+    // native placement resolver to pick a point reachable from its stale cell.
+    uintptr_t placement_probe_actor_address = local_actor_address;
 
     std::string placement_error;
     float resolved_x = x;
@@ -86,33 +91,3 @@ bool ResolveParticipantSpawnTransform(
     *out_heading = heading;
     return true;
 }
-
-void ResetEnemyModifierList(EnemyModifierList* modifier_list) {
-    if (modifier_list == nullptr) {
-        return;
-    }
-
-    modifier_list->vtable =
-        ProcessMemory::Instance().ResolveGameAddressOrZero(kEnemyModifierListVtable);
-    modifier_list->items = nullptr;
-    modifier_list->count = 0;
-    modifier_list->capacity = 0;
-    modifier_list->reserved = 0;
-}
-
-void CleanupEnemyModifierList(EnemyModifierList* modifier_list) {
-    if (modifier_list == nullptr) {
-        return;
-    }
-
-    const auto free_address = ProcessMemory::Instance().ResolveGameAddressOrZero(kGameFree);
-    auto* items = modifier_list->items;
-    ResetEnemyModifierList(modifier_list);
-    if (items == nullptr || free_address == 0) {
-        return;
-    }
-
-    auto free_memory = reinterpret_cast<GameFreeFn>(free_address);
-    free_memory(items);
-}
-

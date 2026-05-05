@@ -23,6 +23,9 @@ DEFAULT_FAR_STANDOFF = 260.0
 DEFAULT_HP_VALUE = 100.0
 DEFAULT_ELEMENT = "ether"
 DEFAULT_DISCIPLINE = "mind"
+ACTOR_POSITION_X_OFFSET = csp.read_runtime_layout_offset("actor_position_x")
+ACTOR_POSITION_Y_OFFSET = csp.read_runtime_layout_offset("actor_position_y")
+ACTOR_HEADING_OFFSET = csp.read_runtime_layout_offset("actor_heading")
 
 
 class MovingAttackDamageProbeFailure(RuntimeError):
@@ -67,7 +70,7 @@ print('heading=' .. tostring({heading}))
 def query_motion_sample() -> dict[str, str]:
     return csp.parse_key_values(
         csp.run_lua(
-            """
+            f"""
 local function emit(key, value)
   if value == nil then
     print(key .. "=")
@@ -93,9 +96,9 @@ end
 
 local actor = tonumber(bot.actor_address) or 0
 if actor ~= 0 and sd.debug then
-  emit('bot.raw_x', sd.debug.read_float(actor + 0x18))
-  emit('bot.raw_y', sd.debug.read_float(actor + 0x1C))
-  emit('bot.heading', sd.debug.read_float(actor + 0x6C))
+  emit('bot.raw_x', sd.debug.read_float(actor + {ACTOR_POSITION_X_OFFSET}))
+  emit('bot.raw_y', sd.debug.read_float(actor + {ACTOR_POSITION_Y_OFFSET}))
+  emit('bot.heading', sd.debug.read_float(actor + {ACTOR_HEADING_OFFSET}))
 end
 
 local player = sd.player and sd.player.get_state and sd.player.get_state()

@@ -111,10 +111,20 @@ bool PrimeGameplaySlotBotActor(
     }
 
     {
+        uintptr_t native_visual_actor_address = 0;
+        if (!TryResolvePlayerActorForSlot(gameplay_address, 0, &native_visual_actor_address) ||
+            native_visual_actor_address == 0) {
+            if (error_message != nullptr) {
+                *error_message = "Unable to resolve slot-0 native visual source actor.";
+            }
+            return false;
+        }
+
         std::string stage_error;
         if (!SeedGameplaySlotBotRenderStateFromSourceActor(
                 actor_address,
                 world_address,
+                native_visual_actor_address,
                 character_profile,
                 x,
                 y,
@@ -155,6 +165,13 @@ bool PrimeGameplaySlotBotActor(
     (void)memory.TryWriteField(actor_address, kActorPositionXOffset, x);
     (void)memory.TryWriteField(actor_address, kActorPositionYOffset, y);
     ApplyWizardActorFacingState(actor_address, heading);
+
+    if (!EnsureBotOwnedProgressionMode(slot_progression_address, "gameplay_slot_prime")) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay-slot bot progression could not be marked as bot-owned non-local mode.";
+        }
+        return false;
+    }
 
     log_prime_state("exit");
     return true;
@@ -202,11 +219,7 @@ int ResolveStandaloneWizardSelectionState(int wizard_id) {
 }
 
 int ResolveProfileSelectionState(const multiplayer::MultiplayerCharacterProfile& character_profile) {
-    return ResolveStandaloneWizardSelectionState(ResolveProfileElementId(character_profile));
-}
-
-std::uint32_t EncodeSkillsWizardSelectionArg(int selection_value) {
-    return static_cast<std::uint32_t>(selection_value);
+    return ResolveStandaloneWizardSelectionState(character_profile.element_id);
 }
 
 struct ResolvedPrimaryCastDescriptor {
@@ -227,44 +240,10 @@ bool TryResolvePrimaryBuildSpellIdFromSelectionPair(
         return false;
     }
 
-    *skill_id = -1;
-    auto Matches = [&](int a, int b) {
-        return primary_entry_index == a && combo_entry_index == b;
-    };
-
-    if (Matches(0x08, 0x10) || Matches(0x10, 0x08)) {
-        *skill_id = 1000;
-    } else if (Matches(0x08, 0x18) || Matches(0x18, 0x08)) {
-        *skill_id = 0x3EA;
-    } else if (Matches(0x08, 0x20) || Matches(0x20, 0x08)) {
-        *skill_id = 0x3E9;
-    } else if (Matches(0x08, 0x28) || Matches(0x28, 0x08)) {
-        *skill_id = 0x3EE;
-    } else if (Matches(0x10, 0x18) || Matches(0x18, 0x10)) {
-        *skill_id = 0x3EB;
-    } else if (Matches(0x10, 0x20) || Matches(0x20, 0x10)) {
-        *skill_id = 0x3ED;
-    } else if (Matches(0x10, 0x28) || Matches(0x28, 0x10)) {
-        *skill_id = 0x3EF;
-    } else if (Matches(0x18, 0x20) || Matches(0x20, 0x18)) {
-        *skill_id = 0x3EC;
-    } else if (Matches(0x18, 0x28) || Matches(0x28, 0x18)) {
-        *skill_id = 0x3F1;
-    } else if (Matches(0x20, 0x28) || Matches(0x28, 0x20)) {
-        *skill_id = 0x3F0;
-    } else if (Matches(0x08, 0x08)) {
-        *skill_id = 0x3F2;
-    } else if (Matches(0x10, 0x10)) {
-        *skill_id = 0x3F3;
-    } else if (Matches(0x18, 0x18)) {
-        *skill_id = 0x3F5;
-    } else if (Matches(0x20, 0x20)) {
-        *skill_id = 0x3F4;
-    } else if (Matches(0x28, 0x28)) {
-        *skill_id = 0x3F6;
-    }
-
-    return *skill_id > 0;
+    return TryResolveNativePrimaryBuildSkillId(
+        primary_entry_index,
+        combo_entry_index,
+        skill_id);
 }
 
 bool TryResolvePrimaryCastDescriptorFromSelectionPair(
@@ -331,6 +310,20 @@ bool TryResolvePrimaryCastDescriptorFromSelectionPair(
     }
 }
 
+bool TryResolvePrimaryCastDescriptorFromSkillId(
+    int skill_id,
+    ResolvedPrimaryCastDescriptor* descriptor) {
+    NativePrimarySpellSelection selection{};
+    if (!TryResolveNativePrimarySelectionFromSkillId(skill_id, &selection)) {
+        return false;
+    }
+
+    return TryResolvePrimaryCastDescriptorFromSelectionPair(
+        selection.primary_entry_index,
+        selection.combo_entry_index,
+        descriptor);
+}
+
 bool TryResolveProfilePrimaryCastDescriptor(
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     ResolvedPrimaryCastDescriptor* descriptor) {
@@ -338,7 +331,8 @@ bool TryResolveProfilePrimaryCastDescriptor(
         return false;
     }
 
-    const auto default_entry_index = ResolveProfileSelectionState(character_profile);
+    const auto default_entry_index =
+        ResolveNativePrimaryEntryForElement(character_profile.element_id);
     const auto requested_primary =
         character_profile.loadout.primary_entry_index >= 0
             ? character_profile.loadout.primary_entry_index

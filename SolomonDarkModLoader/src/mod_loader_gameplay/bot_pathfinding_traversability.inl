@@ -114,13 +114,15 @@ bool IsGameplayPathPlacementTraversable(
 
     std::uint32_t blocked = 0;
     DWORD exception_code = 0;
+    const auto static_circle_obstacle_mask = GameplayPathStaticCircleObstacleMask();
+    const auto pushable_circle_obstacle_mask = GameplayPathPushableCircleObstacleMask();
     const auto native_circle_block_mask =
         collision_mask &
-        ~(kGameplayPathStaticCircleObstacleMask | kGameplayPathPushableCircleObstacleMask);
+        ~(static_circle_obstacle_mask | pushable_circle_obstacle_mask);
     const auto native_overlap_allow_mask =
         collision_mask |
-        kGameplayPathStaticCircleObstacleMask |
-        kGameplayPathPushableCircleObstacleMask;
+        static_circle_obstacle_mask |
+        pushable_circle_obstacle_mask;
     const auto extended_placement_address =
         memory.ResolveGameAddressOrZero(kMovementCollisionTestCirclePlacementExtended);
     bool placement_ok = false;

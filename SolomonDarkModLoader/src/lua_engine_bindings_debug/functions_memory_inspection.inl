@@ -187,6 +187,20 @@ int LuaDebugResolveGameAddress(lua_State* state) {
     return 1;
 }
 
+// sd.debug.layout_offset(key[, section="gameplay.offsets"]) -> integer|nil
+int LuaDebugLayoutOffset(lua_State* state) {
+    const char* key = luaL_checkstring(state, 1);
+    const char* section = luaL_optstring(state, 2, "gameplay.offsets");
+    uintptr_t value = 0;
+    if (!TryGetBinaryLayoutNumericValue(section, key, &value)) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_pushinteger(state, static_cast<lua_Integer>(value));
+    return 1;
+}
+
 // sd.debug.query_memory(address) -> table|nil
 int LuaDebugQueryMemory(lua_State* state) {
     const auto address = CheckLuaAddress(state, 1, "address");

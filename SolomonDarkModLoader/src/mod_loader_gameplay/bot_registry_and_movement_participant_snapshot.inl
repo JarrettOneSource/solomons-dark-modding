@@ -1,3 +1,56 @@
+void FillParticipantActiveSpellObjectSnapshot(ParticipantGameplaySnapshot* snapshot) {
+    if (snapshot == nullptr ||
+        snapshot->world_address == 0 ||
+        snapshot->active_cast_group == 0xFF ||
+        snapshot->active_cast_slot == 0xFFFF) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto lookup_address = memory.ResolveGameAddressOrZero(kActorWorldLookupObjectByHandle);
+    uintptr_t object_address = 0;
+    DWORD lookup_exception = 0;
+    if (lookup_address == 0 ||
+        !CallActorWorldLookupObjectByHandleSafe(
+            lookup_address,
+            snapshot->world_address,
+            snapshot->active_cast_group,
+            snapshot->active_cast_slot,
+            &object_address,
+            &lookup_exception) ||
+        object_address == 0 ||
+        !memory.IsReadableRange(object_address, 0x80)) {
+        return;
+    }
+
+    const auto object_x =
+        memory.ReadFieldOr<float>(object_address, kObjectPositionXOffset, 0.0f);
+    const auto object_y =
+        memory.ReadFieldOr<float>(object_address, kObjectPositionYOffset, 0.0f);
+    const auto object_radius =
+        memory.ReadFieldOr<float>(object_address, kObjectCollisionRadiusOffset, 0.0f);
+    const auto object_charge =
+        memory.ReadFieldOr<float>(object_address, kSpellObjectChargeOffset, 0.0f);
+    if (!std::isfinite(object_x) ||
+        !std::isfinite(object_y) ||
+        !std::isfinite(object_radius) ||
+        object_radius < 0.0f ||
+        object_radius > 128.0f ||
+        !std::isfinite(object_charge) ||
+        object_charge < 0.0f) {
+        return;
+    }
+
+    snapshot->active_spell_object_readable = true;
+    snapshot->active_spell_object_address = object_address;
+    snapshot->active_spell_object_type =
+        memory.ReadFieldOr<std::uint32_t>(object_address, kGameObjectTypeIdOffset, 0);
+    snapshot->active_spell_object_x = object_x;
+    snapshot->active_spell_object_y = object_y;
+    snapshot->active_spell_object_radius = object_radius;
+    snapshot->active_spell_object_charge = object_charge;
+}
+
 ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEntityBinding& binding) {
     ParticipantGameplaySnapshot snapshot;
     snapshot.bot_id = binding.bot_id;
@@ -37,33 +90,31 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
     snapshot.hub_visual_descriptor_signature = HashMemoryBlockFNV1a32(
         render_probe_address + kActorHubVisualDescriptorBlockOffset,
         kActorHubVisualDescriptorBlockSize);
-    if (!IsRegisteredGameNpcKind(binding.kind)) {
-        snapshot.progression_handle_address =
-            memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorProgressionHandleOffset, 0);
-        snapshot.equip_handle_address =
-            memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorEquipHandleOffset, 0);
+    snapshot.progression_handle_address =
+        memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorProgressionHandleOffset, 0);
+    snapshot.equip_handle_address =
+        memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorEquipHandleOffset, 0);
+    snapshot.progression_runtime_state_address =
+        memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorProgressionRuntimeStateOffset, 0);
+    snapshot.equip_runtime_state_address =
+        memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorEquipRuntimeStateOffset, 0);
+    if (snapshot.progression_runtime_state_address == 0 && snapshot.progression_handle_address != 0) {
         snapshot.progression_runtime_state_address =
-            memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorProgressionRuntimeStateOffset, 0);
-        snapshot.equip_runtime_state_address =
-            memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorEquipRuntimeStateOffset, 0);
-        if (snapshot.progression_runtime_state_address == 0 && snapshot.progression_handle_address != 0) {
-            snapshot.progression_runtime_state_address =
-                ReadSmartPointerInnerObject(snapshot.progression_handle_address);
-        }
-        if (snapshot.equip_runtime_state_address == 0 && snapshot.equip_handle_address != 0) {
-            snapshot.equip_runtime_state_address =
-                ReadSmartPointerInnerObject(snapshot.equip_handle_address);
-        }
-        snapshot.primary_visual_lane = ReadEquipVisualLaneState(
-            snapshot.equip_runtime_state_address,
-            kActorEquipRuntimeVisualLinkPrimaryOffset);
-        snapshot.secondary_visual_lane = ReadEquipVisualLaneState(
-            snapshot.equip_runtime_state_address,
-            kActorEquipRuntimeVisualLinkSecondaryOffset);
-        snapshot.attachment_visual_lane = ReadEquipVisualLaneState(
-            snapshot.equip_runtime_state_address,
-            kActorEquipRuntimeVisualLinkAttachmentOffset);
+            ReadSmartPointerInnerObject(snapshot.progression_handle_address);
     }
+    if (snapshot.equip_runtime_state_address == 0 && snapshot.equip_handle_address != 0) {
+        snapshot.equip_runtime_state_address =
+            ReadSmartPointerInnerObject(snapshot.equip_handle_address);
+    }
+    snapshot.primary_visual_lane = ReadEquipVisualLaneState(
+        snapshot.equip_runtime_state_address,
+        kActorEquipRuntimeVisualLinkPrimaryOffset);
+    snapshot.secondary_visual_lane = ReadEquipVisualLaneState(
+        snapshot.equip_runtime_state_address,
+        kActorEquipRuntimeVisualLinkSecondaryOffset);
+    snapshot.attachment_visual_lane = ReadEquipVisualLaneState(
+        snapshot.equip_runtime_state_address,
+        kActorEquipRuntimeVisualLinkAttachmentOffset);
     snapshot.resolved_animation_state_id = ResolveActorAnimationStateId(render_probe_address);
     snapshot.hub_visual_source_kind =
         memory.ReadFieldOr<std::int32_t>(render_probe_address, kActorHubVisualSourceKindOffset, 0);
@@ -93,6 +144,7 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
     snapshot.cast_skill_id = binding.ongoing_cast.skill_id;
     snapshot.cast_ticks_waiting = binding.ongoing_cast.ticks_waiting;
     snapshot.cast_target_actor_address = binding.ongoing_cast.target_actor_address;
+    FillParticipantActiveSpellObjectSnapshot(&snapshot);
     snapshot.x = memory.ReadFieldOr<float>(binding.actor_address, kActorPositionXOffset, 0.0f);
     snapshot.y = memory.ReadFieldOr<float>(binding.actor_address, kActorPositionYOffset, 0.0f);
     snapshot.heading = memory.ReadFieldOr<float>(binding.actor_address, kActorHeadingOffset, 0.0f);
@@ -111,18 +163,16 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
     snapshot.render_drive_move_blend =
         memory.ReadFieldOr<float>(render_probe_address, kActorRenderDriveMoveBlendOffset, 0.0f);
 
-    if (!IsRegisteredGameNpcKind(binding.kind)) {
-        auto progression_address =
-            memory.ReadFieldOr<uintptr_t>(binding.actor_address, kActorProgressionRuntimeStateOffset, 0);
-        if (progression_address == 0 && snapshot.progression_handle_address != 0) {
-            progression_address = ReadSmartPointerInnerObject(snapshot.progression_handle_address);
-        }
-        if (progression_address != 0) {
-            snapshot.hp = memory.ReadFieldOr<float>(progression_address, kProgressionHpOffset, 0.0f);
-            snapshot.max_hp = memory.ReadFieldOr<float>(progression_address, kProgressionMaxHpOffset, 0.0f);
-            snapshot.mp = memory.ReadFieldOr<float>(progression_address, kProgressionMpOffset, 0.0f);
-            snapshot.max_mp = memory.ReadFieldOr<float>(progression_address, kProgressionMaxMpOffset, 0.0f);
-        }
+    auto progression_address =
+        memory.ReadFieldOr<uintptr_t>(binding.actor_address, kActorProgressionRuntimeStateOffset, 0);
+    if (progression_address == 0 && snapshot.progression_handle_address != 0) {
+        progression_address = ReadSmartPointerInnerObject(snapshot.progression_handle_address);
+    }
+    if (progression_address != 0) {
+        snapshot.hp = memory.ReadFieldOr<float>(progression_address, kProgressionHpOffset, 0.0f);
+        snapshot.max_hp = memory.ReadFieldOr<float>(progression_address, kProgressionMaxHpOffset, 0.0f);
+        snapshot.mp = memory.ReadFieldOr<float>(progression_address, kProgressionMpOffset, 0.0f);
+        snapshot.max_mp = memory.ReadFieldOr<float>(progression_address, kProgressionMaxMpOffset, 0.0f);
     }
 
     return snapshot;

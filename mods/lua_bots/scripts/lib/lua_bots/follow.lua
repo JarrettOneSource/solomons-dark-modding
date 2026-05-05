@@ -288,7 +288,6 @@ function follow.install(ctx)
 
     local snapped = snap_target_to_nav(get_nav_grid_snapshot(now_ms), spawn, {
       prefer_traversable_cell = true,
-      avoid_outer_rows = true,
     })
     if type(snapped) ~= "table" then
       return nil

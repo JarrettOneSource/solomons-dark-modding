@@ -28,7 +28,7 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
     float x = 0.0f;
     float y = 0.0f;
     float heading = 0.0f;
-    if (!ResolveParticipantSpawnTransform(gameplay_address, request, &x, &y, &heading)) {
+    if (!ResolveParticipantSpawnTransform(gameplay_address, request, true, &x, &y, &heading)) {
         if (error_message != nullptr) {
             *error_message = "Unable to resolve a bot transform.";
         }
@@ -37,7 +37,6 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
 
     uintptr_t actor_address = 0;
     uintptr_t source_actor_address = 0;
-    uintptr_t source_profile_address = 0;
     auto cleanup_spawn = [&](std::string_view failure_message) {
         std::string cleanup_error;
         if (actor_address != 0) {
@@ -54,12 +53,8 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
                 cleanup_error = source_cleanup_error;
             }
         }
-        if (source_profile_address != 0) {
-            DestroySyntheticWizardSourceProfile(source_profile_address);
-        }
         actor_address = 0;
         source_actor_address = 0;
-        source_profile_address = 0;
         if (error_message != nullptr) {
             *error_message = std::string(failure_message);
             if (!cleanup_error.empty()) {
@@ -72,12 +67,12 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
     std::string stage_error;
     if (!CreateWizardCloneSourceActor(
             world_address,
+            local_actor_address,
             request.character_profile,
             x,
             y,
             heading,
             &source_actor_address,
-            &source_profile_address,
             &stage_error)) {
         return cleanup_spawn(stage_error);
     }
@@ -105,29 +100,23 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
             HexString(clone_exception_code) + ".");
     }
 
+    uintptr_t progression_address = 0;
+    if (!TryResolveActorProgressionRuntime(actor_address, &progression_address) ||
+        progression_address == 0 ||
+        !EnsureBotOwnedProgressionMode(progression_address, "standalone_clone_spawn")) {
+        return cleanup_spawn(
+            "Standalone clone progression could not be marked as bot-owned non-local mode. progression=" +
+            HexString(progression_address));
+    }
+
     {
         const auto selection_state_address =
             memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
         if (selection_state_address != 0) {
-            (void)memory.TryWriteField<std::uint8_t>(selection_state_address, 0x24, 1);
-        }
-
-        uintptr_t progression_address =
-            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0);
-        if (progression_address == 0) {
-            progression_address = ReadSmartPointerInnerObject(
-                memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0));
-        }
-        if (progression_address != 0) {
-            constexpr float kDefaultAllyHp = 25.0f;
-            (void)memory.TryWriteField<float>(
-                progression_address,
-                kProgressionHpOffset,
-                kDefaultAllyHp);
-            (void)memory.TryWriteField<float>(
-                progression_address,
-                kProgressionMaxHpOffset,
-                kDefaultAllyHp);
+            (void)memory.TryWriteField<std::uint8_t>(
+                selection_state_address,
+                kActorControlBrainFollowLeaderOffset,
+                1);
         }
     }
 
@@ -135,8 +124,10 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
         return cleanup_spawn(stage_error);
     }
     source_actor_address = 0;
-    DestroySyntheticWizardSourceProfile(source_profile_address);
-    source_profile_address = 0;
+
+    if (!AttachGameplaySlotBotStaffItem(actor_address, &stage_error)) {
+        return cleanup_spawn(stage_error);
+    }
 
     const auto rebind_actor_address =
         memory.ResolveGameAddressOrZero(kWorldCellGridRebindActor);
@@ -187,7 +178,6 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
                 memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipHandleOffset, 0);
             binding->standalone_equip_inner_address =
                 ReadSmartPointerInnerObject(binding->standalone_equip_wrapper_address);
-            binding->synthetic_source_profile_address = 0;
             SeedStandaloneWizardAnimationDriveProfiles(binding, actor_address);
 
             SceneContextSnapshot scene_context;

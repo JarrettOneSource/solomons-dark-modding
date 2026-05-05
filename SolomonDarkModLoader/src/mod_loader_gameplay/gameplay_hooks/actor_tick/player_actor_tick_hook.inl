@@ -143,14 +143,25 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             return;
         }
 
+        // Clear stale loader movement input before every stock bot tick.
+        // Clear the previous frame's vector before stock can use it.
+        // active casts receive target/control input through selection state, and
+        // loader-owned movement runs once after stock tick through the recovered
+        // native MoveStep path. Leaving +0x158/+0x15C populated here lets stock
+        // consume the previous frame's vector and then our movement step
+        // consumes the new vector again.
+        const bool stock_tick_may_consume_stale_loader_vector =
+            binding->movement_active || binding->last_movement_displacement > 0.0001f;
+        if (stock_tick_may_consume_stale_loader_vector) {
+            ClearWizardBotMovementVectorInputs(actor_address);
+        }
+
         uintptr_t gameplay_address = 0;
         std::uint8_t saved_cast_intent = 0;
         std::uint8_t saved_mouse_left = 0;
         std::size_t live_mouse_left_offset = 0;
         bool synthetic_cast_intent_applied = false;
         bool synthetic_mouse_left_applied = false;
-        LocalPlayerCastShimState stock_tick_shim_state;
-        bool stock_tick_shim_active = false;
         std::uint8_t saved_global_1abe_for_stock_tick = 0;
         bool global_1abe_zeroed_for_stock_tick = false;
         PurePrimaryLocalActorWindowShim pure_primary_actor_window_shim{};
@@ -161,15 +172,11 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         const bool drive_stock_cast_input =
             binding->ongoing_cast.active &&
             OngoingCastShouldDriveSyntheticCastInput(binding->ongoing_cast);
-        const bool apply_local_slot_for_native_tick =
-            binding->ongoing_cast.active &&
-            (binding->ongoing_cast.startup_in_progress ||
-             binding->ongoing_cast.requires_local_slot_native_tick);
         const bool pure_primary_stock_shim =
-            apply_local_slot_for_native_tick &&
+            binding->ongoing_cast.active &&
             binding->ongoing_cast.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary;
         const bool refresh_selection_target_for_stock_tick =
-            apply_local_slot_for_native_tick &&
+            binding->ongoing_cast.active &&
             OngoingCastShouldRefreshNativeTargetState(binding->ongoing_cast) &&
             binding->ongoing_cast.selection_target_seed_active;
         if (drive_stock_cast_input &&
@@ -213,22 +220,19 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                         static_cast<std::uint8_t>(1));
             }
         }
-        if (apply_local_slot_for_native_tick) {
-            stock_tick_shim_active = EnterLocalPlayerCastShim(binding, &stock_tick_shim_state);
-            if (pure_primary_stock_shim) {
-                const auto global_1abe_address =
-                    memory.ResolveGameAddressOrZero(0x0081C264 + 0x1ABE);
-                saved_global_1abe_for_stock_tick =
-                    memory.ReadValueOr<std::uint8_t>(global_1abe_address, 0);
-                if (global_1abe_address != 0 && saved_global_1abe_for_stock_tick != 0) {
-                    global_1abe_zeroed_for_stock_tick =
-                        memory.TryWriteValue<std::uint8_t>(
-                            global_1abe_address,
-                            0);
-                }
-                pure_primary_actor_window_shim =
-                    EnterPurePrimaryLocalActorWindow(actor_address);
+        if (pure_primary_stock_shim) {
+            const auto global_1abe_address =
+                memory.ResolveGameAddressOrZero(kGameObjectGlobal + kGameplayPrimaryGateBlockFlagOffset);
+            saved_global_1abe_for_stock_tick =
+                memory.ReadValueOr<std::uint8_t>(global_1abe_address, 0);
+            if (global_1abe_address != 0 && saved_global_1abe_for_stock_tick != 0) {
+                global_1abe_zeroed_for_stock_tick =
+                    memory.TryWriteValue<std::uint8_t>(
+                        global_1abe_address,
+                        0);
             }
+            pure_primary_actor_window_shim =
+                EnterPurePrimaryLocalActorWindow(actor_address);
         }
         if (refresh_selection_target_for_stock_tick) {
             RefreshSelectionBrainTargetForOngoingCast(binding->ongoing_cast);
@@ -245,13 +249,9 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         }
         if (global_1abe_zeroed_for_stock_tick) {
             (void)memory.TryWriteValue<std::uint8_t>(
-                memory.ResolveGameAddressOrZero(0x0081C264 + 0x1ABE),
+                memory.ResolveGameAddressOrZero(kGameObjectGlobal + kGameplayPrimaryGateBlockFlagOffset),
                 saved_global_1abe_for_stock_tick);
         }
-        if (stock_tick_shim_active) {
-            LeaveLocalPlayerCastShim(stock_tick_shim_state);
-        }
-
         if (synthetic_cast_intent_applied) {
             (void)memory.TryWriteField<std::uint8_t>(
                 gameplay_address,
@@ -293,10 +293,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     " desired_heading=" + std::to_string(tracked_actor_desired_heading));
             }
         }
-        const auto position_before_x =
-            memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-        const auto position_before_y =
-            memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
         const auto heading_before =
             memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
 
@@ -317,8 +313,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             }
             if (run_stock_death_transition) {
                 original(self);
-                (void)memory.TryWriteField(actor_address, kActorPositionXOffset, position_before_x);
-                (void)memory.TryWriteField(actor_address, kActorPositionYOffset, position_before_y);
                 StopDeadWizardBotActorMotion(actor_address);
                 std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
                 if (auto* binding = FindParticipantEntityForActor(actor_address);
@@ -379,38 +373,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             }
         }
 
-        const auto position_after_stock_x =
-            memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, position_before_x);
-        const auto position_after_stock_y =
-            memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, position_before_y);
-        const auto stock_delta_x = position_after_stock_x - position_before_x;
-        const auto stock_delta_y = position_after_stock_y - position_before_y;
-        const auto stock_displacement =
-            std::sqrt((stock_delta_x * stock_delta_x) + (stock_delta_y * stock_delta_y));
-        if (stock_displacement > 0.01f) {
-            static std::uint64_t s_last_stock_position_drift_log_ms = 0;
-            if (native_tick_now_ms - s_last_stock_position_drift_log_ms >= 1000) {
-                s_last_stock_position_drift_log_ms = native_tick_now_ms;
-                Log(
-                    "[bots] standalone stock tick rewrote actor position. actor=" +
-                    HexString(actor_address) +
-                    " before=(" + std::to_string(position_before_x) + ", " +
-                        std::to_string(position_before_y) + ")" +
-                    " stock_after=(" + std::to_string(position_after_stock_x) + ", " +
-                        std::to_string(position_after_stock_y) + ")" +
-                    " moving=" + std::to_string(tracked_actor_moving ? 1 : 0));
-            }
-        }
-
-        // Standalone clone-rail actor position is loader-owned. Live probes
-        // showed stock PlayerActorTick continuing to move idle clones whenever
-        // stale +0x158/+0x15C walk accumulators were left behind, which caused
-        // the visible "sliding" regression. Always discard the stock tick's
-        // position write here, then apply only loader-owned movement and
-        // explicit collision-push logic below.
-        (void)memory.TryWriteField(actor_address, kActorPositionXOffset, position_before_x);
-        (void)memory.TryWriteField(actor_address, kActorPositionYOffset, position_before_y);
-
         {
             std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
             if (auto* binding = FindParticipantEntityForActor(actor_address);
@@ -464,7 +426,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             }
         }
         NormalizeGameplaySlotBotSyntheticVisualState(actor_address);
-        ApplyStandalonePuppetCollisionPushFromActor(actor_address);
         TickBotOwnedSkillsWizard(actor_address);
         return;
     }
@@ -474,8 +435,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
         const auto position_before_y =
             memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
-        auto position_after_stock_x = position_before_x;
-        auto position_after_stock_y = position_before_y;
 
         {
             std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
@@ -493,8 +452,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     binding->death_transition_stock_tick_seen = true;
                     if (run_stock_death_transition) {
                         RunStockTick(binding);
-                        (void)memory.TryWriteField(actor_address, kActorPositionXOffset, position_before_x);
-                        (void)memory.TryWriteField(actor_address, kActorPositionYOffset, position_before_y);
                         StopDeadWizardBotActorMotion(actor_address);
                     }
                     if (!cast_error_message.empty()) {
@@ -528,16 +485,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 (void)RefreshWizardBindingTargetFacing(binding);
                 (void)ApplyWizardBindingFacingState(binding, actor_address);
                 RunStockTick(binding);
-                position_after_stock_x =
-                    memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, position_before_x);
-                position_after_stock_y =
-                    memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, position_before_y);
-                // Gameplay-slot bots still run through the stock player-family
-                // tick, but the loader owns their transform just like the
-                // standalone clone rail. Restore pre-stock position before the
-                // loader-owned path/move step reads actor coordinates.
-                (void)memory.TryWriteField(actor_address, kActorPositionXOffset, position_before_x);
-                (void)memory.TryWriteField(actor_address, kActorPositionYOffset, position_before_y);
                 if (!ApplyWizardBotMovementStep(binding, &tracked_move_error_message) &&
                     !tracked_move_error_message.empty()) {
                     Log(
@@ -582,27 +529,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 PublishParticipantGameplaySnapshot(*binding);
             }
         }
-        const auto stock_delta_x = position_after_stock_x - position_before_x;
-        const auto stock_delta_y = position_after_stock_y - position_before_y;
-        const auto stock_displacement =
-            std::sqrt((stock_delta_x * stock_delta_x) + (stock_delta_y * stock_delta_y));
-        if constexpr (kEnableWizardBotHotPathDiagnostics) {
-            if (stock_displacement > 0.01f) {
-                static std::uint64_t s_last_gameplay_slot_stock_position_drift_log_ms = 0;
-                if (native_tick_now_ms - s_last_gameplay_slot_stock_position_drift_log_ms >= 1000) {
-                    s_last_gameplay_slot_stock_position_drift_log_ms = native_tick_now_ms;
-                    Log(
-                        "[bots] gameplay-slot stock tick rewrote actor position. actor=" +
-                        HexString(actor_address) +
-                        " before=(" + std::to_string(position_before_x) + ", " +
-                            std::to_string(position_before_y) + ")" +
-                        " stock_after=(" + std::to_string(position_after_stock_x) + ", " +
-                            std::to_string(position_after_stock_y) + ")" +
-                        " moving=" + std::to_string(tracked_actor_moving ? 1 : 0));
-                }
-            }
-        }
-        ApplyStandalonePuppetCollisionPushFromActor(actor_address);
         TickBotOwnedSkillsWizard(actor_address);
         return;
     }
@@ -614,7 +540,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     if (local_player_actor) {
         MaybeLogLocalPlayerCastProbe(gameplay_address_for_pump, actor_address, true);
     }
-    ApplyStandalonePuppetCollisionPushFromActor(actor_address);
     if (memory.ReadFieldOr<std::int8_t>(actor_address, kActorSlotOffset, static_cast<std::int8_t>(-1)) == 0) {
         TickParticipantSceneBindingsIfActive();
     }

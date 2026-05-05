@@ -193,8 +193,6 @@ function config.create()
 
   result.DEFAULT_SPAWN_OFFSET_X = 50.0
   result.DEFAULT_SPAWN_OFFSET_Y = 0.0
-  result.DEFAULT_HUB_SPAWN_X = 956.0
-  result.DEFAULT_HUB_SPAWN_Y = 508.0
   result.FOLLOW_STOP_DISTANCE = 100.0
   result.FOLLOW_RESUME_DISTANCE = 250.0
   result.FOLLOW_TARGET_ARRIVAL_DISTANCE = 32.0
@@ -205,12 +203,12 @@ function config.create()
   result.TICK_INTERVAL_MS = 100
   result.ATTACK_DIAG_INTERVAL_MS = 1000
   result.DEFAULT_ATTACK_RANGE = 96.0
-  result.WATER_BASE_CONE_RANGE = 205.0
+  result.WATER_NATIVE_CONE_BASE_RANGE = 205.0
   result.WATER_RANGE_PER_SHAPE_UNIT = 4.0
   result.WATER_RANGE_SAFETY_MARGIN = 5.0
   result.ATTACK_RANGE_BY_ELEMENT_ID = {
     [0] = 360.0,
-    [1] = result.WATER_BASE_CONE_RANGE - result.WATER_RANGE_SAFETY_MARGIN,
+    [1] = result.WATER_NATIVE_CONE_BASE_RANGE - result.WATER_RANGE_SAFETY_MARGIN,
     [2] = 360.0,
     [3] = 360.0,
     [4] = 360.0,
@@ -218,7 +216,6 @@ function config.create()
   result.MIN_ATTACK_RANGE_BY_ELEMENT_ID = {
     [2] = 96.0,
   }
-  result.WAVE_ENEMY_OBJECT_TYPE_ID = 1001
   result.SPAWN_RETRY_MS = 500
   result.SCENE_UPDATE_COOLDOWN_MS = 250
   result.NAV_GRID_REFRESH_MS = 3000
@@ -231,7 +228,7 @@ function config.create()
   result.PLAYER_MOVEMENT_ARM_DISTANCE = 12.0
   result.STUCK_SAMPLE_THRESHOLD = 8
   result.STUCK_POSITION_EPSILON = 1.0
-  result.SUPPORTED_PRIVATE_AREAS = {
+  result.PRIVATE_AREA_TRAVEL_DESCRIPTORS = {
     memorator = {
       name = "memorator",
       region_index = 1,

@@ -19,12 +19,9 @@ float ReadResolvedGameDoubleAsFloatOr(uintptr_t absolute_address, float fallback
 }
 
 constexpr std::int32_t kSuppressedSelectionRetargetTicks = 60;
-constexpr std::size_t kArenaEnemyMaxHpOffset = 0x170;
-constexpr std::size_t kArenaEnemyCurrentHpOffset = 0x174;
-constexpr std::size_t kArenaEnemyHealthReadSize = kArenaEnemyCurrentHpOffset + sizeof(float);
 
 bool IsArenaEnemyActorHealthType(std::uint32_t object_type_id) {
-    return object_type_id == 1001;
+    return IsArenaCombatActorTypeInternal(object_type_id);
 }
 
 struct ActorHealthRuntime {
@@ -43,7 +40,8 @@ bool TryReadArenaEnemyActorHealth(uintptr_t actor_address, ActorHealthRuntime* h
     }
 
     auto& memory = ProcessMemory::Instance();
-    if (!memory.IsReadableRange(actor_address, kArenaEnemyHealthReadSize)) {
+    if (!memory.IsReadableRange(actor_address + kEnemyCurrentHpOffset, sizeof(float)) ||
+        !memory.IsReadableRange(actor_address + kEnemyMaxHpOffset, sizeof(float))) {
         return false;
     }
 
@@ -54,8 +52,8 @@ bool TryReadArenaEnemyActorHealth(uintptr_t actor_address, ActorHealthRuntime* h
     }
 
     const auto hp =
-        memory.ReadFieldOr<float>(actor_address, kArenaEnemyCurrentHpOffset, 0.0f);
-    auto max_hp = memory.ReadFieldOr<float>(actor_address, kArenaEnemyMaxHpOffset, 0.0f);
+        memory.ReadFieldOr<float>(actor_address, kEnemyCurrentHpOffset, 0.0f);
+    auto max_hp = memory.ReadFieldOr<float>(actor_address, kEnemyMaxHpOffset, 0.0f);
     if (!std::isfinite(hp) || !std::isfinite(max_hp)) {
         return false;
     }
@@ -67,8 +65,8 @@ bool TryReadArenaEnemyActorHealth(uintptr_t actor_address, ActorHealthRuntime* h
     }
 
     health->base_address = actor_address;
-    health->current_hp_offset = kArenaEnemyCurrentHpOffset;
-    health->max_hp_offset = kArenaEnemyMaxHpOffset;
+    health->current_hp_offset = kEnemyCurrentHpOffset;
+    health->max_hp_offset = kEnemyMaxHpOffset;
     health->progression_address = 0;
     health->kind = "arena_enemy";
     health->hp = hp;
@@ -123,10 +121,22 @@ bool TryReadActorHealthRuntime(uintptr_t actor_address, ActorHealthRuntime* heal
 struct ManaSpendResult {
     bool readable = false;
     bool spent = false;
+    bool native_call_attempted = false;
+    bool native_call_succeeded = false;
     float before = 0.0f;
     float after = 0.0f;
     float requested = 0.0f;
     float actual = 0.0f;
+    std::uint32_t native_result = 0;
+    DWORD native_exception_code = 0;
+};
+
+struct NativeBotManaDeltaShim {
+    bool active = false;
+    uintptr_t gameplay_address = 0;
+    std::size_t local_actor_slot_offset = 0;
+    uintptr_t saved_local_actor = 0;
+    bool local_actor_slot_restore_needed = false;
 };
 
 bool TryReadProgressionMana(uintptr_t progression_address, float* mp, float* max_mp) {
@@ -150,7 +160,151 @@ bool TryReadProgressionMana(uintptr_t progression_address, float* mp, float* max
     return true;
 }
 
-ManaSpendResult TrySpendProgressionMana(
+bool EnterNativeBotManaDeltaShim(
+    const ParticipantEntityBinding* binding,
+    NativeBotManaDeltaShim* state) {
+    if (state == nullptr) {
+        return false;
+    }
+
+    *state = NativeBotManaDeltaShim{};
+    if (binding == nullptr || binding->actor_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t gameplay_address = 0;
+    if (!TryResolveCurrentGameplayScene(&gameplay_address) || gameplay_address == 0) {
+        *state = NativeBotManaDeltaShim{};
+        return false;
+    }
+
+    // Native 0x0052B150 gates the mana-delta body on the local player actor
+    // pointer at gameplay+0x1358 before mutating this actor's progression.
+    const auto local_actor_slot_offset = kGameplayPlayerActorOffset;
+    const auto saved_local_actor =
+        memory.ReadFieldOr<uintptr_t>(gameplay_address, local_actor_slot_offset, 0);
+    if (saved_local_actor != binding->actor_address &&
+        !memory.TryWriteField<uintptr_t>(
+            gameplay_address,
+            local_actor_slot_offset,
+            binding->actor_address)) {
+        *state = NativeBotManaDeltaShim{};
+        return false;
+    }
+
+    state->active = true;
+    state->gameplay_address = gameplay_address;
+    state->local_actor_slot_offset = local_actor_slot_offset;
+    state->saved_local_actor = saved_local_actor;
+    state->local_actor_slot_restore_needed = saved_local_actor != binding->actor_address;
+    return true;
+}
+
+void LeaveNativeBotManaDeltaShim(const NativeBotManaDeltaShim& state) {
+    if (!state.active) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (state.local_actor_slot_restore_needed &&
+        state.gameplay_address != 0 &&
+        state.local_actor_slot_offset != 0) {
+        (void)memory.TryWriteField<uintptr_t>(
+            state.gameplay_address,
+            state.local_actor_slot_offset,
+            state.saved_local_actor);
+    }
+}
+
+ManaSpendResult TryApplyNativeBotManaDelta(
+    const ParticipantEntityBinding* binding,
+    uintptr_t progression_address,
+    float actual_amount) {
+    ManaSpendResult result{};
+    result.requested = actual_amount;
+    if (binding == nullptr || binding->actor_address == 0 ||
+        !std::isfinite(actual_amount) || actual_amount < 0.0f) {
+        return result;
+    }
+
+    float before = 0.0f;
+    float max_mp = 0.0f;
+    if (!TryReadProgressionMana(progression_address, &before, &max_mp)) {
+        return result;
+    }
+
+    result.readable = true;
+    result.before = before;
+    result.after = before;
+    if (actual_amount <= 0.0f) {
+        result.spent = true;
+        return result;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto actor_progression_handle =
+        memory.ReadFieldOr<uintptr_t>(binding->actor_address, kActorProgressionHandleOffset, 0);
+    const auto actor_progression_runtime =
+        actor_progression_handle != 0 ? ReadSmartPointerInnerObject(actor_progression_handle) : 0;
+    if (actor_progression_runtime != progression_address) {
+        Log(
+            "[bots] native mana delta skipped; actor progression mismatch. actor=" +
+            HexString(binding->actor_address) +
+            " actor_progression=" + HexString(actor_progression_runtime) +
+            " requested_progression=" + HexString(progression_address));
+        return result;
+    }
+
+    const auto apply_mana_delta_address =
+        memory.ResolveGameAddressOrZero(kPlayerActorApplyManaDelta);
+    if (apply_mana_delta_address == 0) {
+        return result;
+    }
+
+    NativeBotManaDeltaShim shim;
+    if (!EnterNativeBotManaDeltaShim(binding, &shim)) {
+        return result;
+    }
+
+    result.native_call_attempted = true;
+    result.native_call_succeeded =
+        CallPlayerActorApplyManaDeltaSafe(
+            apply_mana_delta_address,
+            binding->actor_address,
+            -actual_amount,
+            1,
+            &result.native_result,
+            &result.native_exception_code);
+    LeaveNativeBotManaDeltaShim(shim);
+
+    if (!result.native_call_succeeded) {
+        return result;
+    }
+
+    float after = before;
+    float after_max_mp = 0.0f;
+    if (!TryReadProgressionMana(progression_address, &after, &after_max_mp)) {
+        return result;
+    }
+
+    result.after = after;
+    const auto spent_amount = before - after;
+    if (spent_amount <= 0.0f) {
+        return result;
+    }
+
+    const auto expected_after = before > actual_amount ? before - actual_amount : 0.0f;
+    constexpr float kManaSpendEpsilon = 0.01f;
+    result.actual = spent_amount;
+    result.spent =
+        std::fabs(after - expected_after) <= kManaSpendEpsilon ||
+        spent_amount + kManaSpendEpsilon >= actual_amount;
+    return result;
+}
+
+ManaSpendResult TrySpendBotMana(
+    const ParticipantEntityBinding* binding,
     uintptr_t progression_address,
     float requested_amount,
     bool allow_partial) {
@@ -168,37 +322,26 @@ ManaSpendResult TrySpendProgressionMana(
     }
     result.readable = true;
     result.before = before;
+    result.after = before;
     if (before <= 0.0f) {
-        result.after = before;
+        return result;
+    }
+
+    if (before + 0.001f < requested_amount && !allow_partial) {
         return result;
     }
 
     const float actual_amount =
-        allow_partial && before < requested_amount ? before : requested_amount;
-    if (before + 0.001f < requested_amount && !allow_partial) {
-        result.after = before;
-        return result;
-    }
-    const float after = before > actual_amount ? before - actual_amount : 0.0f;
-    auto& memory = ProcessMemory::Instance();
-    result.spent =
-        memory.TryWriteField<float>(progression_address, kProgressionMpOffset, after);
-    if (result.spent) {
-        result.after = after;
-        result.actual = actual_amount;
-    } else {
-        result.after = before;
-    }
-    return result;
+        (allow_partial || before < requested_amount)
+            ? (before < requested_amount ? before : requested_amount)
+            : requested_amount;
+    auto result_from_native =
+        TryApplyNativeBotManaDelta(binding, progression_address, actual_amount);
+    result_from_native.requested = requested_amount;
+    return result_from_native;
 }
 
-constexpr std::array<float, 26> kEarthBoulderBaseDamageByLevel = {
-    0.0f,   10.0f,  30.0f,  50.0f,  75.0f,  100.0f, 120.0f, 140.0f, 160.0f,
-    180.0f, 200.0f, 220.0f, 240.0f, 260.0f, 280.0f, 300.0f, 320.0f, 340.0f,
-    360.0f, 380.0f, 400.0f, 420.0f, 440.0f, 460.0f, 480.0f, 500.0f,
-};
-
-int ResolveEarthBoulderStatbookLevel(
+int ReadEarthBoulderProgressionLevel(
     const ParticipantEntityBinding* binding,
     uintptr_t progression_runtime_address) {
     int level = binding != nullptr ? binding->character_profile.level : 1;
@@ -208,22 +351,91 @@ int ResolveEarthBoulderStatbookLevel(
         memory.IsReadableRange(progression_runtime_address + kProgressionLevelOffset, sizeof(int))) {
         level = memory.ReadFieldOr<int>(progression_runtime_address, kProgressionLevelOffset, level);
     }
-    if (level < 1) {
-        return 1;
-    }
-    const auto max_level = static_cast<int>(kEarthBoulderBaseDamageByLevel.size()) - 1;
-    return level > max_level ? max_level : level;
+    return level;
 }
 
 float ResolveEarthBoulderBaseDamage(
     const ParticipantEntityBinding* binding,
     uintptr_t progression_runtime_address,
     int* resolved_level) {
-    const auto level = ResolveEarthBoulderStatbookLevel(binding, progression_runtime_address);
-    if (resolved_level != nullptr) {
-        *resolved_level = level;
+    const auto progression_level =
+        ReadEarthBoulderProgressionLevel(binding, progression_runtime_address);
+    NativePrimarySpellSelection selection{};
+    if (!TryResolveNativePrimarySelectionFromSkillId(0x3F6, &selection)) {
+        Log("[bots] failed to resolve native Earth boulder selection.");
+        if (resolved_level != nullptr) {
+            *resolved_level = progression_level;
+        }
+        return 0.0f;
     }
-    return kEarthBoulderBaseDamageByLevel[static_cast<std::size_t>(level)];
+
+    NativePrimarySpellStats stats{};
+    std::string error_message;
+    if (!TryResolveNativePrimarySpellStats(
+            progression_runtime_address,
+            selection,
+            &stats,
+            &error_message)) {
+        Log(
+            "[bots] failed to resolve native Earth boulder damage. progression=" +
+            HexString(progression_runtime_address) +
+            " progression_level=" + std::to_string(progression_level) +
+            " error=" + error_message);
+        if (resolved_level != nullptr) {
+            *resolved_level = progression_level;
+        }
+        return 0.0f;
+    }
+
+    if (resolved_level != nullptr) {
+        *resolved_level = stats.progression_level;
+    }
+    return stats.damage;
+}
+
+float ResolveEarthBoulderDamageOutputScale() {
+    const auto scale =
+        ReadResolvedGameDoubleAsFloatOr(kEarthBoulderDamageOutputScaleGlobal, 0.0f);
+    if (!std::isfinite(scale) || scale <= 0.0f) {
+        return 0.0f;
+    }
+    return scale;
+}
+
+float ResolveEarthBoulderReleaseDamageScale() {
+    const auto scale =
+        ReadResolvedGameDoubleAsFloatOr(kEarthBoulderReleaseDamageScaleGlobal, 0.0f);
+    if (!std::isfinite(scale) || scale <= 0.0f) {
+        return 0.0f;
+    }
+    return scale;
+}
+
+float ResolveEarthBoulderReleaseDamageFloor() {
+    const auto floor =
+        ReadResolvedGameDoubleAsFloatOr(kEarthBoulderReleaseDamageFloorGlobal, 0.0f);
+    if (!std::isfinite(floor) || floor < 0.0f) {
+        return 0.0f;
+    }
+    return floor;
+}
+
+float ResolveEarthBoulderReleaseDamageCapScale() {
+    const auto scale =
+        ReadResolvedGameDoubleAsFloatOr(kEarthBoulderReleaseDamageCapScaleGlobal, 0.0f);
+    if (!std::isfinite(scale) || scale <= 0.0f) {
+        return 0.0f;
+    }
+    return scale;
+}
+
+float ResolveEarthBoulderReleaseGrowthStopMinCharge() {
+    const auto charge =
+        ReadResolvedGameFloatOr(kEarthBoulderReleaseGrowthStopMinChargeGlobal, 0.0f);
+    if (!std::isfinite(charge) || charge < 0.0f) {
+        return 0.0f;
+    }
+    return charge;
 }
 
 bool IsActorRuntimeDead(uintptr_t actor_address) {

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
 import random
 import re
@@ -17,26 +18,31 @@ import cast_state_probe as csp
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = ROOT / "runtime" / "probe_bot_skill_choice_stress.json"
 SKILL_CONFIG_DIR = ROOT / "runtime" / "stage" / "data" / "wizardskills"
-PROGRESSION_TABLE_BASE_OFFSET = 0x20
-PROGRESSION_TABLE_COUNT_OFFSET = 0x24
-PROGRESSION_ENTRY_STRIDE = 0x70
-PROGRESSION_LEVEL_OFFSET = 0x30
-PROGRESSION_XP_OFFSET = 0x34
-PROGRESSION_PREVIOUS_XP_THRESHOLD_OFFSET = 0x38
-PROGRESSION_NEXT_XP_THRESHOLD_OFFSET = 0x3C
-PROGRESSION_HP_OFFSET = 0x70
-PROGRESSION_MAX_HP_OFFSET = 0x74
-PROGRESSION_MP_OFFSET = 0x7C
-PROGRESSION_MAX_MP_OFFSET = 0x80
-PROGRESSION_MOVE_SPEED_OFFSET = 0x90
-PROGRESSION_ENTRY_INTERNAL_ID_OFFSET = 0x1C
-PROGRESSION_ENTRY_ACTIVE_OFFSET = 0x20
-PROGRESSION_ENTRY_VISIBLE_OFFSET = 0x22
-PROGRESSION_ENTRY_CATEGORY_OFFSET = 0x26
-PROGRESSION_ENTRY_STATBOOK_OFFSET = 0x6C
-STATBOOK_NAME_STRING_OFFSET = 0x1C
-STATBOOK_MAX_LEVEL_OFFSET = 0x5C
-BONUS_CHOICE_COUNT_SKILL_ID = 0x3F
+ACTIVE_BOTS_CONFIG_PATH = ROOT / "mods/lua_bots/config/active_bots.txt"
+PROGRESSION_TABLE_BASE_OFFSET = csp.read_runtime_layout_offset("standalone_wizard_progression_table_base")
+PROGRESSION_TABLE_COUNT_OFFSET = csp.read_runtime_layout_offset("standalone_wizard_progression_table_count")
+PROGRESSION_ENTRY_STRIDE = csp.read_runtime_layout_offset("standalone_wizard_progression_entry_stride")
+PROGRESSION_LEVEL_OFFSET = csp.read_runtime_layout_offset("progression_level")
+PROGRESSION_XP_OFFSET = csp.read_runtime_layout_offset("progression_xp")
+PROGRESSION_PREVIOUS_XP_THRESHOLD_OFFSET = csp.read_runtime_layout_offset("progression_previous_xp_threshold")
+PROGRESSION_NEXT_XP_THRESHOLD_OFFSET = csp.read_runtime_layout_offset("progression_next_xp_threshold")
+PROGRESSION_NONLOCAL_MODE_OFFSET = csp.read_runtime_layout_offset("progression_nonlocal_mode_flag")
+PROGRESSION_HP_OFFSET = csp.read_runtime_layout_offset("progression_hp")
+PROGRESSION_MAX_HP_OFFSET = csp.read_runtime_layout_offset("progression_max_hp")
+PROGRESSION_MP_OFFSET = csp.read_runtime_layout_offset("progression_mp")
+PROGRESSION_MAX_MP_OFFSET = csp.read_runtime_layout_offset("progression_max_mp")
+PROGRESSION_MOVE_SPEED_OFFSET = csp.read_runtime_layout_offset("progression_move_speed")
+PROGRESSION_LOCAL_SKILL_PICKER_SCREEN_OFFSET = csp.read_runtime_layout_offset("progression_local_skill_picker_screen")
+PROGRESSION_ENTRY_INTERNAL_ID_OFFSET = csp.read_runtime_layout_offset("standalone_wizard_progression_entry_internal_id")
+PROGRESSION_ENTRY_ACTIVE_OFFSET = csp.read_runtime_layout_offset("standalone_wizard_progression_active_flag")
+PROGRESSION_ENTRY_VISIBLE_OFFSET = csp.read_runtime_layout_offset("standalone_wizard_progression_visible_flag")
+PROGRESSION_ENTRY_CATEGORY_OFFSET = csp.read_runtime_layout_offset("standalone_wizard_progression_entry_category")
+PROGRESSION_ENTRY_STATBOOK_OFFSET = csp.read_runtime_layout_offset("standalone_wizard_progression_entry_statbook")
+STATBOOK_NAME_STRING_OFFSET = csp.read_runtime_layout_offset("statbook_name_string")
+STATBOOK_MAX_LEVEL_OFFSET = csp.read_runtime_layout_offset("statbook_max_level")
+NATIVE_STRING_DATA_OFFSET = csp.read_runtime_layout_offset("native_string_data")
+NATIVE_STRING_LENGTH_OFFSET = csp.read_runtime_layout_offset("native_string_length")
+BONUS_CHOICE_COUNT_SKILL_ID = csp.read_runtime_layout_offset("bonus_choice_count_skill_id")
 
 
 class SkillChoiceStressFailure(RuntimeError):
@@ -78,6 +84,27 @@ def load_skill_metadata_catalog() -> dict[str, dict[str, str]]:
 
 
 SKILL_METADATA_CATALOG = load_skill_metadata_catalog()
+
+
+@contextmanager
+def temporary_active_bots_config(active_bot_keys: str):
+    """Select Lua bot profiles through the mod-local startup config."""
+    with csp.temporary_required_lua_mods(csp.LUA_BOT_MOD_ID):
+        if not active_bot_keys or active_bot_keys == "default":
+            yield
+            return
+
+        existed = ACTIVE_BOTS_CONFIG_PATH.exists()
+        original_text = ACTIVE_BOTS_CONFIG_PATH.read_text(encoding="utf-8") if existed else None
+        ACTIVE_BOTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        ACTIVE_BOTS_CONFIG_PATH.write_text(f"{active_bot_keys}\n", encoding="utf-8")
+        try:
+            yield
+        finally:
+            if existed and original_text is not None:
+                ACTIVE_BOTS_CONFIG_PATH.write_text(original_text, encoding="utf-8")
+            else:
+                ACTIVE_BOTS_CONFIG_PATH.unlink(missing_ok=True)
 
 
 def resolve_skill_metadata(native_text: object, option_id: int) -> dict[str, str]:
@@ -264,6 +291,8 @@ if progression ~= 0 then
   emit('xp', sd.debug.read_float(progression + {PROGRESSION_XP_OFFSET}))
   emit('previous_xp_threshold', sd.debug.read_float(progression + {PROGRESSION_PREVIOUS_XP_THRESHOLD_OFFSET}))
   emit('next_xp_threshold', sd.debug.read_float(progression + {PROGRESSION_NEXT_XP_THRESHOLD_OFFSET}))
+  emit('nonlocal_mode', sd.debug.read_u8(progression + {PROGRESSION_NONLOCAL_MODE_OFFSET}))
+  emit('local_skill_picker_screen', sd.debug.read_u32(progression + {PROGRESSION_LOCAL_SKILL_PICKER_SCREEN_OFFSET}))
   emit('hp', sd.debug.read_float(progression + {PROGRESSION_HP_OFFSET}))
   emit('max_hp', sd.debug.read_float(progression + {PROGRESSION_MAX_HP_OFFSET}))
   emit('mp', sd.debug.read_float(progression + {PROGRESSION_MP_OFFSET}))
@@ -279,12 +308,23 @@ end
         "xp": float_value(values, "xp"),
         "previous_xp_threshold": float_value(values, "previous_xp_threshold"),
         "next_xp_threshold": float_value(values, "next_xp_threshold"),
+        "nonlocal_mode": int_value(values, "nonlocal_mode"),
+        "local_skill_picker_screen": int_value(values, "local_skill_picker_screen"),
         "hp": float_value(values, "hp"),
         "max_hp": float_value(values, "max_hp"),
         "mp": float_value(values, "mp"),
         "max_mp": float_value(values, "max_mp"),
         "move_speed": float_value(values, "move_speed"),
     }
+
+
+def assert_bot_owned_progression_mode(bot_id: int, stats: dict[str, object], context: str) -> None:
+    if not stats.get("available"):
+        raise SkillChoiceStressFailure(f"{context}: bot {bot_id} progression stats unavailable: {stats}")
+    if int(stats.get("nonlocal_mode", 0)) == 0:
+        raise SkillChoiceStressFailure(f"{context}: bot {bot_id} progression is still local-player mode: {stats}")
+    if int(stats.get("local_skill_picker_screen", 0)) != 0:
+        raise SkillChoiceStressFailure(f"{context}: bot {bot_id} has a native local picker screen object: {stats}")
 
 
 def wait_for_materialized_bots(timeout_s: float = 30.0) -> dict[str, str]:
@@ -391,8 +431,8 @@ local function read_native_string_object(address)
   if address == 0 then
     return ''
   end
-  local data = tonumber(sd.debug.read_u32(address + 4)) or 0
-  local length = tonumber(sd.debug.read_i32(address + 0x10)) or 0
+  local data = tonumber(sd.debug.read_u32(address + {NATIVE_STRING_DATA_OFFSET})) or 0
+  local length = tonumber(sd.debug.read_i32(address + {NATIVE_STRING_LENGTH_OFFSET})) or 0
   if data == 0 or length <= 0 or length > 256 then
     return ''
   end
@@ -566,7 +606,7 @@ def run_bonus_choice_count_probe(bot_id: int, level: int, experience: int, sourc
 
     if choices["count"] < 4:
         raise SkillChoiceStressFailure(
-            f"bonus choice-count probe expected at least 4 choices after entry 0x3F became visible: {choices}"
+            f"bonus choice-count probe expected at least 4 choices after the bonus entry became visible: {choices}"
         )
     choices["options_enriched"] = enrich_choice_options(bot_id, choices)
     return {
@@ -576,11 +616,12 @@ def run_bonus_choice_count_probe(bot_id: int, level: int, experience: int, sourc
     }
 
 
-def run_stress(iterations: int, seed: int) -> dict[str, object]:
+def run_stress(iterations: int, seed: int, active_bots: str = "default") -> dict[str, object]:
     rng = random.Random(seed)
     result: dict[str, object] = {
         "iterations_requested": iterations,
         "seed": seed,
+        "active_bots": active_bots,
         "bot_summary_before": None,
         "bonus_choice_count_probe": None,
         "iterations": [],
@@ -591,18 +632,19 @@ def run_stress(iterations: int, seed: int) -> dict[str, object]:
     csp.stop_game()
     csp.clear_loader_log()
     result["fresh_bundle"] = csp.ensure_launcher_bundle_fresh()
-    csp.launch_game()
-    pid = csp.wait_for_game_process()
-    result["pid"] = pid
-    csp.wait_for_lua_pipe(timeout_s=60.0)
-    csp.drive_new_game_flow(pid, element="ether", discipline="mind")
-    values = lua_values("print('ok='..tostring(sd.hub.start_testrun()))")
-    if not lua_bool(values.get("ok")):
-        raise SkillChoiceStressFailure(f"sd.hub.start_testrun failed: {values}")
-    csp.wait_for_scene("testrun", timeout_s=45.0)
-    time.sleep(2.0)
+    with temporary_active_bots_config(active_bots):
+        csp.launch_game()
+        pid = csp.wait_for_game_process()
+        result["pid"] = pid
+        csp.wait_for_lua_pipe(timeout_s=60.0)
+        csp.drive_new_game_flow(pid, element="ether", discipline="mind")
+        values = lua_values("print('ok='..tostring(sd.hub.start_testrun()))")
+        if not lua_bool(values.get("ok")):
+            raise SkillChoiceStressFailure(f"sd.hub.start_testrun failed: {values}")
+        csp.wait_for_scene("testrun", timeout_s=45.0)
+        time.sleep(2.0)
 
-    summary = wait_for_materialized_bots()
+        summary = wait_for_materialized_bots()
     result["bot_summary_before"] = summary
     set_lua_bot_tick_enabled(False)
 
@@ -611,20 +653,20 @@ def run_stress(iterations: int, seed: int) -> dict[str, object]:
     bot_ids = [int_value(summary, f"bot.{index}.id") for index in range(1, bot_count + 1)]
     if not bot_ids:
         raise SkillChoiceStressFailure("no materialized bots found for stress test")
-
-    result["bonus_choice_count_probe"] = run_bonus_choice_count_probe(
-        bot_ids[0],
-        1000,
-        100000,
-        source_progression,
-    )
+    materialized_progressions: dict[str, object] = {}
+    for bot_id in bot_ids:
+        stats = query_progression_stats(bot_id)
+        assert_bot_owned_progression_mode(bot_id, stats, "after_materialization")
+        materialized_progressions[str(bot_id)] = stats
+    result["bot_progressions_after_materialization"] = materialized_progressions
 
     pool_signatures: dict[int, list[tuple[int, ...]]] = {bot_id: [] for bot_id in bot_ids}
     iteration_records: list[dict[str, object]] = []
 
     for iteration in range(1, iterations + 1):
-        level = iteration + 1
-        experience = 100 + (iteration * 10)
+        sync_stats = query_progression_stats(bot_ids[0])
+        level = int(sync_stats["level"]) + 1
+        experience = int(float(sync_stats["next_xp_threshold"]) + 10.0)
         debug_sync_level_up(level, experience, source_progression)
         record: dict[str, object] = {
             "iteration": iteration,
@@ -633,6 +675,8 @@ def run_stress(iterations: int, seed: int) -> dict[str, object]:
             "bots": [],
         }
         for bot_id in bot_ids:
+            synced_stats = query_progression_stats(bot_id)
+            assert_bot_owned_progression_mode(bot_id, synced_stats, f"after_sync_iteration_{iteration}")
             choices = query_choices(bot_id)
             if not choices["pending"] or choices["count"] <= 0:
                 raise SkillChoiceStressFailure(
@@ -647,10 +691,12 @@ def run_stress(iterations: int, seed: int) -> dict[str, object]:
             selected_enriched = enriched_options[option_index - 1]
             before = query_entry_state(bot_id, option_id)
             stats_before = query_progression_stats(bot_id)
+            assert_bot_owned_progression_mode(bot_id, stats_before, f"before_apply_iteration_{iteration}")
             loadout_before = query_bot_loadout(bot_id)
             choose_skill(bot_id, option_index, int(choices["generation"]))
             after = query_entry_state(bot_id, option_id)
             stats_after = query_progression_stats(bot_id)
+            assert_bot_owned_progression_mode(bot_id, stats_after, f"after_apply_iteration_{iteration}")
             loadout_after = query_bot_loadout(bot_id)
             profile_after = query_bot_profile(bot_id)
             entry_changed = before.get("bytes") != after.get("bytes")
@@ -718,6 +764,16 @@ def run_stress(iterations: int, seed: int) -> dict[str, object]:
                 raise SkillChoiceStressFailure(
                     f"bot {bot_id} did not show evolving skill pools over {iterations} iterations"
                 )
+
+    final_bot_stats = query_progression_stats(bot_ids[0])
+    bonus_target_level = int(final_bot_stats["level"]) + 1
+    bonus_target_xp = int(float(final_bot_stats["next_xp_threshold"]) + 10.0)
+    result["bonus_choice_count_probe"] = run_bonus_choice_count_probe(
+        bot_ids[0],
+        bonus_target_level,
+        bonus_target_xp,
+        source_progression,
+    )
     return result
 
 
@@ -725,6 +781,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--iterations", type=int, default=20)
     parser.add_argument("--seed", type=int, default=1337)
+    parser.add_argument("--active-bots", default="default")
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
     parser.add_argument("--keep-running", action="store_true")
     args = parser.parse_args()
@@ -734,7 +791,7 @@ def main() -> int:
 
     result: dict[str, object] | None = None
     try:
-        result = run_stress(args.iterations, args.seed)
+        result = run_stress(args.iterations, args.seed, args.active_bots)
         result["ok"] = True
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")

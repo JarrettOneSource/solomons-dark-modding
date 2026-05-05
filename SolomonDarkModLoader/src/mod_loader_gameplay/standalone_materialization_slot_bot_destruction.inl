@@ -3,7 +3,6 @@ bool DestroyGameplaySlotBotResources(
     int slot_index,
     uintptr_t actor_address,
     uintptr_t world_address,
-    uintptr_t synthetic_source_profile_address,
     std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
@@ -68,8 +67,6 @@ bool DestroyGameplaySlotBotResources(
     (void)memory.TryWriteField<uintptr_t>(gameplay_address, actor_slot_offset, 0);
     (void)memory.TryWriteField<uintptr_t>(gameplay_address, progression_slot_offset, 0);
 
-    (void)synthetic_source_profile_address;
-
     return true;
 }
 
@@ -130,7 +127,8 @@ bool DestroyLoaderOwnedWizardActor(
         const std::uint32_t e_vt_s0 = om_e0_vt ? read_u32(om_e0_vt + 0x00) : 0;
         const std::uint32_t e_vt_s4 = om_e0_vt ? read_u32(om_e0_vt + 0x04) : 0;
         const std::uint32_t e_vt_s8 = om_e0_vt ? read_u32(om_e0_vt + 0x08) : 0;
-        const std::uint32_t dat_81c264 = read_u32(0x00C0C264u);
+        const auto dat_81c264_global = memory.ResolveGameAddressOrZero(kGameplayRuntimeGlobal);
+        const std::uint32_t dat_81c264 = dat_81c264_global ? read_u32(dat_81c264_global) : 0;
         const std::uint32_t dat_1388 = dat_81c264 ? read_u32(dat_81c264 + 0x1388) : 0;
         const std::uint32_t dat_1388_1c = dat_1388 ? read_u32(dat_1388 + 0x1C) : 0;
         std::ostringstream out;

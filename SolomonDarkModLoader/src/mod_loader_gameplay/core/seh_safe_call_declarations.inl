@@ -38,6 +38,13 @@ bool CallPlayerActorEnsureProgressionHandleSafe(
     uintptr_t ensure_progression_handle_address,
     uintptr_t actor_address,
     DWORD* exception_code);
+bool CallPlayerActorApplyManaDeltaSafe(
+    uintptr_t apply_mana_delta_address,
+    uintptr_t actor_address,
+    float delta,
+    char out_of_mana_flag,
+    std::uint32_t* native_result,
+    DWORD* exception_code);
 bool CallActorWorldRegisterGameplaySlotActorSafe(
     uintptr_t register_address,
     uintptr_t world_address,
@@ -52,6 +59,13 @@ bool CallActorWorldUnregisterGameplaySlotActorSafe(
     uintptr_t unregister_address,
     uintptr_t world_address,
     int slot_index,
+    DWORD* exception_code);
+bool CallActorWorldLookupObjectByHandleSafe(
+    uintptr_t lookup_address,
+    uintptr_t world_address,
+    std::uint8_t group,
+    std::uint16_t slot,
+    uintptr_t* object_address,
     DWORD* exception_code);
 bool CallActorBuildRenderDescriptorFromSourceSafe(
     uintptr_t build_address,

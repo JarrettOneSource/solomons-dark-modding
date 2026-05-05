@@ -15,11 +15,7 @@ function combat.install(ctx)
     if type(bot) == "table" and address == (tonumber(bot.actor_address) or 0) then
       return false
     end
-    local tracked_enemy = actor.tracked_enemy == true
-    if not tracked_enemy then
-      return false
-    end
-    if (tonumber(actor.object_type_id) or 0) ~= config.WAVE_ENEMY_OBJECT_TYPE_ID then
+    if actor.tracked_enemy ~= true then
       return false
     end
     if actor.dead == true then
@@ -58,6 +54,87 @@ function combat.install(ctx)
       return nil, nil
     end
     return best, best_gap
+  end
+
+  local function is_earth_bot(bot)
+    local profile = type(bot) == "table" and type(bot.profile) == "table" and bot.profile or state.bot_profile
+    return type(profile) == "table" and tonumber(profile.element_id) == 2
+  end
+
+  local function earth_boulder_impact_center(bot)
+    if type(bot) ~= "table" or not is_earth_bot(bot) then
+      return nil
+    end
+    if bot.cast_active ~= true or bot.active_spell_object_readable ~= true then
+      return nil
+    end
+
+    local object_x = tonumber(bot.active_spell_object_x)
+    local object_y = tonumber(bot.active_spell_object_y)
+    local object_radius = tonumber(bot.active_spell_object_radius)
+    local charge = tonumber(bot.active_spell_object_charge)
+    if object_x == nil or object_y == nil or object_radius == nil or charge == nil then
+      return nil
+    end
+    if object_x ~= object_x or object_y ~= object_y or object_radius ~= object_radius or charge ~= charge then
+      return nil
+    end
+    if object_radius <= 0.0 or charge <= 0.0 then
+      return nil
+    end
+
+    return {
+      x = object_x,
+      y = object_y,
+      radius = object_radius * charge * 2.0,
+      object_radius = object_radius,
+      charge = charge,
+      object_address = tonumber(bot.active_spell_object_address) or 0,
+    }
+  end
+
+  local function target_in_native_boulder_impact(enemy, impact)
+    if type(enemy) ~= "table" or type(impact) ~= "table" then
+      return false, math.huge
+    end
+    local impact_radius = tonumber(impact.radius) or 0.0
+    if impact_radius <= 0.0 then
+      return false, math.huge
+    end
+
+    local enemy_x = tonumber(enemy.x)
+    local enemy_y = tonumber(enemy.y)
+    if enemy_x == nil or enemy_y == nil or enemy_x ~= enemy_x or enemy_y ~= enemy_y then
+      return false, math.huge
+    end
+
+    local enemy_radius = tonumber(enemy.radius) or 0.0
+    if enemy_radius ~= enemy_radius or enemy_radius < 0.0 then
+      enemy_radius = 0.0
+    end
+
+    local native_overlap_radius = math.sqrt((impact_radius * impact_radius) + (enemy_radius * enemy_radius))
+    local gap = ctx.distance(impact.x, impact.y, enemy_x, enemy_y)
+    return gap < native_overlap_radius, gap
+  end
+
+  local function find_earth_boulder_enemy(bot, actors)
+    local impact = earth_boulder_impact_center(bot)
+    if impact == nil or type(actors) ~= "table" then
+      return nil, nil, impact
+    end
+
+    local best, best_gap = nil, math.huge
+    for _, actor in ipairs(actors) do
+      if is_enemy_actor(actor, bot) then
+        local in_impact, impact_gap = target_in_native_boulder_impact(actor, impact)
+        if in_impact and impact_gap < best_gap then
+          best = actor
+          best_gap = impact_gap
+        end
+      end
+    end
+    return best, best_gap, impact
   end
 
   local function should_log_attack_diag(now_ms)
@@ -102,6 +179,15 @@ function combat.install(ctx)
   local function get_attack_enemy(bot, probe)
     if type(bot) ~= "table" then
       return nil, nil
+    end
+    if type(sd.world) == "table" and type(sd.world.list_actors) == "function" then
+      local actors = sd.world.list_actors()
+      if type(actors) == "table" then
+        local earth_enemy, earth_gap, impact = find_earth_boulder_enemy(bot, actors)
+        if impact ~= nil then
+          return earth_enemy, earth_gap, impact
+        end
+      end
     end
     return find_nearest_enemy(bot)
   end
@@ -194,14 +280,31 @@ function combat.install(ctx)
     return value
   end
 
+  local function layout_offset(name)
+    if type(sd) ~= "table" or type(sd.debug) ~= "table" or type(sd.debug.layout_offset) ~= "function" then
+      return nil
+    end
+
+    local ok, offset = pcall(sd.debug.layout_offset, name)
+    if not ok then
+      return nil
+    end
+    return tonumber(offset)
+  end
+
   local function water_attack_range(bot, fallback_range)
-    local shape = read_actor_float(type(bot) == "table" and bot.actor_address or nil, 0x290)
+    local shape_offset = layout_offset("actor_spell_config_290")
+    if shape_offset == nil then
+      return fallback_range
+    end
+
+    local shape = read_actor_float(type(bot) == "table" and bot.actor_address or nil, shape_offset)
     if shape == nil then
       return fallback_range
     end
 
-    -- Native frost handler feeds FUN_00641B10 with range = 205 + 4 * actor[0x290].
-    local native_range = config.WATER_BASE_CONE_RANGE + (shape * config.WATER_RANGE_PER_SHAPE_UNIT)
+    -- Native frost handler feeds FUN_00641B10 from the actor spell-config range scalar.
+    local native_range = config.WATER_NATIVE_CONE_BASE_RANGE + (shape * config.WATER_RANGE_PER_SHAPE_UNIT)
     return math.max(config.DEFAULT_ATTACK_RANGE, native_range - config.WATER_RANGE_SAFETY_MARGIN)
   end
 
@@ -242,14 +345,27 @@ function combat.install(ctx)
       return false
     end
     local min_range, range = current_attack_window(bot)
-    local enemy, gap = get_attack_enemy(bot, probe)
+    local enemy, gap, earth_boulder_impact = get_attack_enemy(bot, probe)
     if enemy == nil then
-      clear_face_target()
+      if earth_boulder_impact == nil then
+        clear_face_target()
+      end
       if should_log_attack_diag(now_ms) then
-        ctx.log_diag(string.format(
-          "attack_skip id=%s reason=%s",
-          tostring(state.bot_id),
-          "no_enemy_in_scene"))
+        if earth_boulder_impact ~= nil then
+          ctx.log_diag(string.format(
+            "attack_skip id=%s reason=earth_boulder_no_impact_target object=0x%X center=(%.2f, %.2f) radius=%.2f charge=%.3f",
+            tostring(state.bot_id),
+            tonumber(earth_boulder_impact.object_address) or 0,
+            tonumber(earth_boulder_impact.x) or 0.0,
+            tonumber(earth_boulder_impact.y) or 0.0,
+            tonumber(earth_boulder_impact.radius) or 0.0,
+            tonumber(earth_boulder_impact.charge) or 0.0))
+        else
+          ctx.log_diag(string.format(
+            "attack_skip id=%s reason=%s",
+            tostring(state.bot_id),
+            "no_enemy_in_scene"))
+        end
       end
       return false
     end
@@ -318,6 +434,9 @@ function combat.install(ctx)
   ctx.should_log_attack_diag = should_log_attack_diag
   ctx.get_combat_state = get_combat_state
   ctx.can_attack_in_scene = can_attack_in_scene
+  ctx.earth_boulder_impact_center = earth_boulder_impact_center
+  ctx.target_in_native_boulder_impact = target_in_native_boulder_impact
+  ctx.find_earth_boulder_enemy = find_earth_boulder_enemy
   ctx.get_attack_enemy = get_attack_enemy
   ctx.heading_towards = heading_towards
   ctx.face_enemy = face_enemy

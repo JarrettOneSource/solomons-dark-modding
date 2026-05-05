@@ -9,15 +9,17 @@ import sys
 import time
 from pathlib import Path
 
+import cast_state_probe as csp
+
 
 ROOT = Path(__file__).resolve().parent.parent
 LUA_EXEC = ROOT / "tools" / "lua-exec.py"
 OUTPUT_PATH = ROOT / "runtime" / "startup_attachment_trace.json"
 
-TRACE_FINALIZE = 0x005CFA80
-TRACE_ATTACH = 0x005758D2
-TRACE_RICH_ITEM_BUILD = 0x004645B0
-TRACE_RICH_ITEM_CLONE = 0x004699B0
+TRACE_FINALIZE = csp.read_runtime_layout_offset("startup_finalize_player_start")
+TRACE_ATTACH = csp.read_runtime_layout_offset("startup_equip_attachment_sink_attach")
+TRACE_RICH_ITEM_BUILD = csp.read_runtime_layout_offset("startup_rich_item_build")
+TRACE_RICH_ITEM_CLONE = csp.read_runtime_layout_offset("startup_rich_item_clone")
 LUA_BUSY_RETRY_COUNT = 20
 LUA_BUSY_RETRY_DELAY_SECONDS = 0.25
 

@@ -30,7 +30,9 @@ struct BotManaCost {
     bool resolved = false;
     BotManaChargeKind kind = BotManaChargeKind::None;
     float cost = 0.0f;
-    std::int32_t statbook_level = 1;
+    float native_stat_cost = 0.0f;
+    float native_output_scale = 1.0f;
+    std::int32_t progression_level = 1;
     std::int32_t skill_id = 0;
 };
 
@@ -187,6 +189,13 @@ struct BotSnapshot {
     std::int32_t cast_skill_id = 0;
     int cast_ticks_waiting = 0;
     uintptr_t cast_target_actor_address = 0;
+    bool active_spell_object_readable = false;
+    uintptr_t active_spell_object_address = 0;
+    std::uint32_t active_spell_object_type = 0;
+    float active_spell_object_x = 0.0f;
+    float active_spell_object_y = 0.0f;
+    float active_spell_object_radius = 0.0f;
+    float active_spell_object_charge = 0.0f;
     float walk_cycle_primary = 0.0f;
     float walk_cycle_secondary = 0.0f;
     float render_drive_stride = 0.0f;
@@ -230,10 +239,12 @@ bool ReadBotMovementIntent(std::uint64_t bot_id, BotMovementIntentSnapshot* snap
 bool QueueBotCast(const BotCastRequest& request);
 BotManaCost ResolveBotCastManaCost(
     const MultiplayerCharacterProfile& character_profile,
+    uintptr_t progression_runtime_address,
     BotCastKind kind,
     std::int32_t secondary_slot,
     std::int32_t skill_id);
 float ResolveBotManaRequiredToStart(const BotManaCost& cost);
+bool CanBotManaStartCast(const BotManaCost& cost, float current_mp, float max_mp);
 const char* BotManaChargeKindLabel(BotManaChargeKind kind);
 bool FinishBotAttack(
     std::uint64_t bot_id,

@@ -1,26 +1,3 @@
-struct EnemyModifierList {
-    uintptr_t vtable = 0;
-    void* items = nullptr;
-    int count = 0;
-    std::uint16_t capacity = 0;
-    std::uint16_t reserved = 0;
-};
-
-static_assert(sizeof(EnemyModifierList) == 16, "EnemyModifierList layout must match the in-game Array<int>.");
-
-struct SpawnEnemyCallContext {
-    uintptr_t arena_address = 0;
-    EnemyConfigCtorFn config_ctor = nullptr;
-    EnemyConfigDtorFn config_dtor = nullptr;
-    EnemyConfigBuildFn build_config = nullptr;
-    EnemySpawnFn spawn_enemy = nullptr;
-    EnemyModifierList* modifiers = nullptr;
-    void* config_wrapper = nullptr;
-    void* config_buffer = nullptr;
-    int type_id = 0;
-    void* enemy = nullptr;
-};
-
 struct ArenaWaveStartState {
     std::int32_t combat_section_index = 0;
     std::int32_t combat_wave_index = 0;
@@ -31,13 +8,6 @@ struct ArenaWaveStartState {
     std::uint8_t combat_started_music = 0;
     std::uint8_t combat_transition_requested = 0;
     std::uint8_t combat_active = 0;
-};
-
-struct PendingEnemySpawnRequest {
-    std::uint64_t request_id = 0;
-    int type_id = 0;
-    float x = 0.0f;
-    float y = 0.0f;
 };
 
 struct PendingRewardSpawnRequest {
@@ -102,14 +72,9 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint64_t> wizard_bot_sync_not_before_ms{0};
     std::atomic<std::uint64_t> gameplay_region_switch_not_before_ms{0};
     std::atomic<std::uint64_t> scene_churn_not_before_ms{0};
-    std::atomic<std::uint64_t> next_enemy_spawn_request_id{1};
     std::mutex pending_gameplay_world_actions_mutex;
-    std::deque<PendingEnemySpawnRequest> pending_enemy_spawn_requests;
     std::deque<PendingRewardSpawnRequest> pending_reward_spawn_requests;
     std::deque<PendingParticipantEntitySyncRequest> pending_participant_sync_requests;
     std::deque<PendingGameplayRegionSwitchRequest> pending_gameplay_region_switch_requests;
     std::deque<std::uint64_t> pending_participant_destroy_requests;
 } g_gameplay_keyboard_injection;
-
-std::mutex g_last_enemy_spawn_result_mutex;
-SDModEnemySpawnResult g_last_enemy_spawn_result;

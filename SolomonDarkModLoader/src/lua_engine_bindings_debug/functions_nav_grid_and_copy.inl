@@ -83,31 +83,17 @@ int LuaDebugGetGameNpcMotion(lua_State* state) {
     const auto requested_actor_address = CheckLuaAddress(state, 1, "actor_address");
 
     auto& memory = ProcessMemory::Instance();
-    const auto actor_address = ResolveReadableLuaAddress(memory, requested_actor_address, 0x1C4 + sizeof(std::uint32_t));
+    const auto actor_address = ResolveReadableLuaAddress(
+        memory,
+        requested_actor_address,
+        kGameNpcLateTimerOffset + sizeof(std::uint32_t));
     if (actor_address == 0) {
         lua_pushnil(state);
         return 1;
     }
 
-    constexpr std::size_t kActorXOffset = 0x18;
-    constexpr std::size_t kActorYOffset = 0x1C;
-    constexpr std::size_t kActorHeadingOffset = 0x6C;
-    constexpr std::size_t kGameNpcDesiredYawOffset = 0x188;
-    constexpr std::size_t kGameNpcMoveFlagOffset = 0x198;
-    constexpr std::size_t kGameNpcGoalXOffset = 0x19C;
-    constexpr std::size_t kGameNpcGoalYOffset = 0x1A0;
-    constexpr std::size_t kGameNpcGoalStartXOffset = 0x1A4;
-    constexpr std::size_t kGameNpcGoalStartYOffset = 0x1A8;
-    constexpr std::size_t kGameNpcModeOffset = 0x1AC;
-    constexpr std::size_t kGameNpcRepathTimerOffset = 0x1B0;
-    constexpr std::size_t kGameNpcSpeedScalarOffset = 0x1B4;
-    constexpr std::size_t kGameNpcStartupCadenceOffset = 0x1B8;
-    constexpr std::size_t kGameNpcTrackedSlotOffset = 0x1C2;
-    constexpr std::size_t kGameNpcCallbackOffset = 0x1C3;
-    constexpr std::size_t kGameNpcLateTimerOffset = 0x1C4;
-
-    const auto actor_x = memory.ReadFieldOr<float>(actor_address, kActorXOffset, 0.0f);
-    const auto actor_y = memory.ReadFieldOr<float>(actor_address, kActorYOffset, 0.0f);
+    const auto actor_x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
+    const auto actor_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
     const auto goal_x = memory.ReadFieldOr<float>(actor_address, kGameNpcGoalXOffset, 0.0f);
     const auto goal_y = memory.ReadFieldOr<float>(actor_address, kGameNpcGoalYOffset, 0.0f);
     const auto goal_dx = goal_x - actor_x;
@@ -152,7 +138,7 @@ int LuaDebugGetGameNpcMotion(lua_State* state) {
     lua_setfield(state, -2, "startup_cadence");
     lua_pushinteger(state, static_cast<lua_Integer>(memory.ReadFieldOr<std::int8_t>(actor_address, kGameNpcTrackedSlotOffset, -1)));
     lua_setfield(state, -2, "tracked_slot");
-    lua_pushinteger(state, static_cast<lua_Integer>(memory.ReadFieldOr<std::uint8_t>(actor_address, kGameNpcCallbackOffset, 0)));
+    lua_pushinteger(state, static_cast<lua_Integer>(memory.ReadFieldOr<std::uint8_t>(actor_address, kGameNpcTrackedSlotCallbackOffset, 0)));
     lua_setfield(state, -2, "callback");
     lua_pushinteger(state, static_cast<lua_Integer>(memory.ReadFieldOr<std::int32_t>(actor_address, kGameNpcLateTimerOffset, 0)));
     lua_setfield(state, -2, "late_timer");
@@ -171,35 +157,17 @@ int LuaDebugGetWorldMovementGeometry(lua_State* state) {
             ? static_cast<int>(CheckLuaUnsignedInteger<std::uint32_t>(state, 3, "max_points"))
             : 16;
 
-    constexpr std::size_t kWorldMovementControllerOffset = 0x378;
     if (world_address == 0) {
         lua_pushnil(state);
         return 1;
     }
 
-    constexpr std::size_t kMovementPrimaryCountOffset = 0x40;
-    constexpr std::size_t kMovementPrimaryListOffset = 0x4C;
-    constexpr std::size_t kMovementSecondaryCountOffset = 0x70;
-    constexpr std::size_t kMovementSecondaryListOffset = 0x7C;
-    constexpr std::size_t kMovementShapeCountOffset = 0x28;
-    constexpr std::size_t kMovementShapeListOffset = 0x34;
-    constexpr std::size_t kMovementCircleCountOffset = 0xA0;
-    constexpr std::size_t kMovementCircleListOffset = 0xAC;
-    constexpr std::size_t kShapePointsOffset = 0x00;
-    constexpr std::size_t kShapeCachedPointsOffset = 0x04;
-    constexpr std::size_t kShapeBoundsXOffset = 0x08;
-    constexpr std::size_t kShapeBoundsYOffset = 0x0C;
-    constexpr std::size_t kShapeBoundsWOffset = 0x10;
-    constexpr std::size_t kShapeBoundsHOffset = 0x14;
-    constexpr std::size_t kShapePointCountOffset = 0x38;
-    constexpr std::size_t kCircleMaskOffset = 0x14;
-    constexpr std::size_t kCircleXOffset = 0x18;
-    constexpr std::size_t kCircleYOffset = 0x1C;
-    constexpr std::size_t kCircleRadiusOffset = 0x30;
-
     auto& memory = ProcessMemory::Instance();
-    const auto controller_address = world_address + kWorldMovementControllerOffset;
-    const auto resolved_controller = ResolveReadableLuaAddress(memory, controller_address, 0xB4);
+    const auto controller_address = world_address + kActorOwnerMovementControllerOffset;
+    const auto resolved_controller = ResolveReadableLuaAddress(
+        memory,
+        controller_address,
+        kMovementControllerCellHeightOffset + sizeof(float));
     if (resolved_controller == 0) {
         lua_pushnil(state);
         return 1;
@@ -244,11 +212,11 @@ int LuaDebugGetWorldMovementGeometry(lua_State* state) {
                 lua_pushinteger(state, static_cast<lua_Integer>(entry_address));
                 lua_setfield(state, -2, "address");
                 if (include_type_mask && entry_address != 0) {
-                    lua_pushinteger(state, static_cast<lua_Integer>(memory.ReadFieldOr<std::int32_t>(entry_address, 0x0C, 0)));
+                    lua_pushinteger(state, static_cast<lua_Integer>(memory.ReadFieldOr<std::int32_t>(entry_address, kMovementOverlapEntryTypeOffset, 0)));
                     lua_setfield(state, -2, "type");
-                    lua_pushinteger(state, static_cast<lua_Integer>(memory.ReadFieldOr<std::uint32_t>(entry_address, 0x10, 0)));
+                    lua_pushinteger(state, static_cast<lua_Integer>(memory.ReadFieldOr<std::uint32_t>(entry_address, kMovementOverlapEntryMaskOffset, 0)));
                     lua_setfield(state, -2, "mask");
-                    lua_pushinteger(state, static_cast<lua_Integer>(memory.ReadFieldOr<std::uint32_t>(entry_address, 0x14, 0)));
+                    lua_pushinteger(state, static_cast<lua_Integer>(memory.ReadFieldOr<std::uint32_t>(entry_address, kMovementOverlapEntryAuxOffset, 0)));
                     lua_setfield(state, -2, "aux");
                 }
                 lua_rawseti(state, -2, index + 1);
@@ -257,11 +225,11 @@ int LuaDebugGetWorldMovementGeometry(lua_State* state) {
             lua_setfield(state, -2, field_name);
         };
 
-    push_entry_list("primary", kMovementPrimaryCountOffset, kMovementPrimaryListOffset, true);
-    push_entry_list("secondary", kMovementSecondaryCountOffset, kMovementSecondaryListOffset, true);
+    push_entry_list("primary", kMovementControllerPrimaryCountOffset, kMovementControllerPrimaryListOffset, true);
+    push_entry_list("secondary", kMovementControllerSecondaryCountOffset, kMovementControllerSecondaryListOffset, true);
 
-    const auto shape_count = memory.ReadFieldOr<std::int32_t>(resolved_controller, kMovementShapeCountOffset, 0);
-    const auto shape_list_address = memory.ReadFieldOr<uintptr_t>(resolved_controller, kMovementShapeListOffset, 0);
+    const auto shape_count = memory.ReadFieldOr<std::int32_t>(resolved_controller, kMovementControllerShapeCountOffset, 0);
+    const auto shape_list_address = memory.ReadFieldOr<uintptr_t>(resolved_controller, kMovementControllerShapeListOffset, 0);
     lua_createtable(state, 0, 3);
     lua_pushinteger(state, static_cast<lua_Integer>(shape_count));
     lua_setfield(state, -2, "count");
@@ -278,22 +246,22 @@ int LuaDebugGetWorldMovementGeometry(lua_State* state) {
         lua_pushinteger(state, static_cast<lua_Integer>(shape_address));
         lua_setfield(state, -2, "address");
         if (shape_address != 0) {
-            const auto points_address = memory.ReadFieldOr<uintptr_t>(shape_address, kShapePointsOffset, 0);
-            const auto cached_points_address = memory.ReadFieldOr<uintptr_t>(shape_address, kShapeCachedPointsOffset, 0);
-            const auto point_count = memory.ReadFieldOr<std::int32_t>(shape_address, kShapePointCountOffset, 0);
+            const auto points_address = memory.ReadFieldOr<uintptr_t>(shape_address, kMovementShapePointsOffset, 0);
+            const auto cached_points_address = memory.ReadFieldOr<uintptr_t>(shape_address, kMovementShapeCachedPointsOffset, 0);
+            const auto point_count = memory.ReadFieldOr<std::int32_t>(shape_address, kMovementShapePointCountOffset, 0);
             lua_pushinteger(state, static_cast<lua_Integer>(points_address));
             lua_setfield(state, -2, "points_address");
             lua_pushinteger(state, static_cast<lua_Integer>(cached_points_address));
             lua_setfield(state, -2, "cached_points_address");
             lua_pushinteger(state, static_cast<lua_Integer>(point_count));
             lua_setfield(state, -2, "point_count");
-            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(shape_address, kShapeBoundsXOffset, 0.0f)));
+            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(shape_address, kMovementShapeBoundsXOffset, 0.0f)));
             lua_setfield(state, -2, "bounds_x");
-            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(shape_address, kShapeBoundsYOffset, 0.0f)));
+            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(shape_address, kMovementShapeBoundsYOffset, 0.0f)));
             lua_setfield(state, -2, "bounds_y");
-            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(shape_address, kShapeBoundsWOffset, 0.0f)));
+            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(shape_address, kMovementShapeBoundsWOffset, 0.0f)));
             lua_setfield(state, -2, "bounds_w");
-            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(shape_address, kShapeBoundsHOffset, 0.0f)));
+            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(shape_address, kMovementShapeBoundsHOffset, 0.0f)));
             lua_setfield(state, -2, "bounds_h");
             const auto active_points_address = points_address != 0 ? points_address : cached_points_address;
             lua_createtable(state, point_limit, 0);
@@ -316,8 +284,8 @@ int LuaDebugGetWorldMovementGeometry(lua_State* state) {
     lua_setfield(state, -2, "entries");
     lua_setfield(state, -2, "shapes");
 
-    const auto circle_count = memory.ReadFieldOr<std::int32_t>(resolved_controller, kMovementCircleCountOffset, 0);
-    const auto circle_list_address = memory.ReadFieldOr<uintptr_t>(resolved_controller, kMovementCircleListOffset, 0);
+    const auto circle_count = memory.ReadFieldOr<std::int32_t>(resolved_controller, kMovementControllerCircleCountOffset, 0);
+    const auto circle_list_address = memory.ReadFieldOr<uintptr_t>(resolved_controller, kMovementControllerCircleListOffset, 0);
     lua_createtable(state, 0, 3);
     lua_pushinteger(state, static_cast<lua_Integer>(circle_count));
     lua_setfield(state, -2, "count");
@@ -334,13 +302,13 @@ int LuaDebugGetWorldMovementGeometry(lua_State* state) {
         lua_pushinteger(state, static_cast<lua_Integer>(circle_address));
         lua_setfield(state, -2, "address");
         if (circle_address != 0) {
-            lua_pushinteger(state, static_cast<lua_Integer>(memory.ReadFieldOr<std::uint32_t>(circle_address, kCircleMaskOffset, 0)));
+            lua_pushinteger(state, static_cast<lua_Integer>(memory.ReadFieldOr<std::uint32_t>(circle_address, kMovementCircleMaskOffset, 0)));
             lua_setfield(state, -2, "mask");
-            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(circle_address, kCircleXOffset, 0.0f)));
+            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(circle_address, kMovementCircleXOffset, 0.0f)));
             lua_setfield(state, -2, "x");
-            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(circle_address, kCircleYOffset, 0.0f)));
+            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(circle_address, kMovementCircleYOffset, 0.0f)));
             lua_setfield(state, -2, "y");
-            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(circle_address, kCircleRadiusOffset, 0.0f)));
+            lua_pushnumber(state, static_cast<lua_Number>(memory.ReadFieldOr<float>(circle_address, kMovementCircleRadiusOffset, 0.0f)));
             lua_setfield(state, -2, "radius");
         }
         lua_rawseti(state, -2, index + 1);

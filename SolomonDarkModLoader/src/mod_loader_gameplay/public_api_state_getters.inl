@@ -58,6 +58,13 @@ bool TryGetParticipantGameplayState(
     state->cast_skill_id = it->cast_skill_id;
     state->cast_ticks_waiting = it->cast_ticks_waiting;
     state->cast_target_actor_address = it->cast_target_actor_address;
+    state->active_spell_object_readable = it->active_spell_object_readable;
+    state->active_spell_object_address = it->active_spell_object_address;
+    state->active_spell_object_type = it->active_spell_object_type;
+    state->active_spell_object_x = it->active_spell_object_x;
+    state->active_spell_object_y = it->active_spell_object_y;
+    state->active_spell_object_radius = it->active_spell_object_radius;
+    state->active_spell_object_charge = it->active_spell_object_charge;
     state->x = it->x;
     state->y = it->y;
     state->heading = it->heading;
@@ -77,6 +84,18 @@ bool TryGetParticipantGameplayState(
     state->secondary_visual_lane = it->secondary_visual_lane;
     state->attachment_visual_lane = it->attachment_visual_lane;
     return true;
+}
+
+bool TryRefreshParticipantGameplayState(
+    std::uint64_t participant_id,
+    SDModParticipantGameplayState* state) {
+    auto* binding = FindParticipantEntity(participant_id);
+    if (binding == nullptr || binding->actor_address == 0) {
+        return TryGetParticipantGameplayState(participant_id, state);
+    }
+
+    PublishParticipantGameplaySnapshot(*binding);
+    return TryGetParticipantGameplayState(participant_id, state);
 }
 
 bool TryGetGameplayHudParticipantDisplayNameForActor(
@@ -306,10 +325,7 @@ bool TryGetGameplayCombatState(SDModGameplayCombatState* state) {
 }
 
 bool IsArenaCombatActorType(std::uint32_t object_type_id) {
-    // 1001 is the stock wave-spawned enemy actor type observed in arena runs.
-    // Solomon/NPC helper actors can look hostile while waves start, but they
-    // are not the wave combat targets the autonomous bot should attack.
-    return object_type_id == 1001;
+    return IsArenaCombatActorTypeInternal(object_type_id);
 }
 
 bool IsArenaCombatActiveForSceneActorFallback() {
@@ -371,7 +387,10 @@ bool TryBuildSceneActorState(
     state.tracked_enemy = tracked_enemy;
     state.enemy_type = enemy_type;
     const bool hook_tracked_enemy = tracked_enemy;
-    state.vtable_address = memory.ReadFieldOr<uintptr_t>(actor_address, 0x00, 0);
+    state.vtable_address = memory.ReadFieldOr<uintptr_t>(
+        actor_address,
+        kObjectVtableOffset,
+        0);
     if (state.vtable_address == 0 || !memory.IsReadableRange(state.vtable_address, sizeof(uintptr_t))) {
         return false;
     }
@@ -388,6 +407,9 @@ bool TryBuildSceneActorState(
 
     state.valid = true;
     state.object_type_id = memory.ReadFieldOr<std::uint32_t>(actor_address, kGameObjectTypeIdOffset, 0);
+    if (tracked_enemy && !IsArenaCombatActorType(state.object_type_id)) {
+        return false;
+    }
     const bool scene_combat_enemy_candidate =
         !tracked_enemy &&
         IsArenaCombatActorType(state.object_type_id) &&
@@ -397,6 +419,10 @@ bool TryBuildSceneActorState(
     state.world_slot = static_cast<int>(memory.ReadFieldOr<std::int16_t>(actor_address, kActorWorldSlotOffset, -1));
     state.x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
     state.y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
+    state.radius = memory.ReadFieldOr<float>(actor_address, kActorCollisionRadiusOffset, 0.0f);
+    if (!std::isfinite(state.radius) || state.radius < 0.0f || state.radius > 256.0f) {
+        state.radius = 0.0f;
+    }
     state.anim_drive_state =
         memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
     state.progression_handle_address = memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
@@ -435,9 +461,10 @@ bool TryBuildSceneActorState(
             const bool death_handled = memory.ReadFieldOr<std::uint8_t>(actor_address, kEnemyDeathHandledOffset, 0) != 0;
             state.dead = state.dead || death_handled;
         }
-        if (!state.dead && state.max_hp <= 0.0f) {
-            state.hp = 1.0f;
-            state.max_hp = 1.0f;
+        if (!std::isfinite(state.hp) ||
+            !std::isfinite(state.max_hp) ||
+            state.max_hp <= 0.0f) {
+            return false;
         }
     }
 

@@ -50,6 +50,7 @@ bool WireGameplaySlotBotRuntimeHandles(
 bool SeedGameplaySlotBotRenderStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t world_address,
+    uintptr_t native_visual_actor_address,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
@@ -58,10 +59,10 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
     if (error_message != nullptr) {
         error_message->clear();
     }
-    if (actor_address == 0 || world_address == 0) {
+    if (actor_address == 0 || world_address == 0 || native_visual_actor_address == 0) {
         if (error_message != nullptr) {
             *error_message =
-                "Gameplay-slot render seeding requires a live actor and world.";
+                "Gameplay-slot render seeding requires a live actor, world, and native visual source.";
         }
         return false;
     }
@@ -82,16 +83,15 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
     }
 
     uintptr_t source_actor_address = 0;
-    uintptr_t source_profile_address = 0;
     std::string stage_error;
     if (!CreateWizardCloneSourceActor(
             world_address,
+            native_visual_actor_address,
             character_profile,
             x,
             y,
             heading,
             &source_actor_address,
-            &source_profile_address,
             &stage_error)) {
         if (error_message != nullptr) {
             *error_message = std::move(stage_error);
@@ -103,9 +103,6 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
         std::string cleanup_error;
         if (source_actor_address != 0) {
             (void)DestroyWizardCloneSourceActor(source_actor_address, &cleanup_error);
-        }
-        if (source_profile_address != 0) {
-            DestroySyntheticWizardSourceProfile(source_profile_address);
         }
         if (!cleanup_error.empty()) {
             Log("[bots] source actor cleanup detail: " + cleanup_error);

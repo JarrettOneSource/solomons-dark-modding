@@ -15,28 +15,33 @@ from cast_trace_profiles import build_trace_specs, trace_profile_is_stable, trac
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = ROOT / "runtime" / "watch_player_cast_dispatch.json"
 
-GAMEPLAY_CAST_INTENT_OFFSET = 0x1E4
-GAMEPLAY_MOUSE_LEFT_FALLBACK_OFFSET = 0x279
-PROGRESSION_CURRENT_SPELL_ID_OFFSET = 0x750
+GAMEPLAY_CAST_INTENT_OFFSET = csp.read_runtime_layout_offset("gameplay_cast_intent")
+GAMEPLAY_MOUSE_LEFT_FALLBACK_OFFSET = csp.read_runtime_layout_offset("gameplay_mouse_left_button")
+PROGRESSION_CURRENT_SPELL_ID_OFFSET = csp.read_runtime_layout_offset("progression_current_spell_id")
+ACTOR_ANIMATION_DRIVE_STATE_OFFSET = csp.read_runtime_layout_offset("actor_animation_drive_state_byte")
+ACTOR_NO_INTERRUPT_FLAG_OFFSET = csp.read_runtime_layout_offset("actor_no_interrupt_flag")
+ACTOR_PRIMARY_SKILL_ID_OFFSET = csp.read_runtime_layout_offset("actor_primary_skill_id")
+ACTOR_ACTIVE_CAST_GROUP_OFFSET = csp.read_runtime_layout_offset("actor_active_cast_group_byte")
+ACTOR_ACTIVE_CAST_SLOT_OFFSET = csp.read_runtime_layout_offset("actor_active_cast_slot_short")
 DEFAULT_AUTO_CLICK_X = 0.5
 DEFAULT_AUTO_CLICK_Y = 0.5
 DEFAULT_AUTO_CLICK_DELAY_SECONDS = 1.0
 DEFAULT_AUTO_CLICK_INTERVAL_SECONDS = 0.35
 DEFAULT_TRACE_PROFILE = "safe_entry"
-ARENA_ENEMY_CURRENT_HP_OFFSET = 0x174
+ARENA_ENEMY_CURRENT_HP_OFFSET = csp.read_runtime_layout_offset("enemy_current_hp")
 EARTH_NATIVE_TRACE_POINTS: dict[str, int] = {
-    "earth_primary_handler": 0x00544C60,
-    "earth_active_handle_resolve": 0x0045ADE0,
-    "earth_cast_cleanup": 0x0052F3B0,
-    "earth_release_finalize": 0x005E5450,
-    "earth_release_line_check": 0x00524D70,
-    "earth_release_secondary": 0x0060B700,
-    "earth_update": 0x0060AC40,
-    "earth_collision_damage": 0x005F1F00,
-    "earth_direct_damage": 0x005F2360,
-    "earth_splash_damage": 0x005F25B0,
-    "earth_radius_scan": 0x005F2980,
-    "earth_child_radius_damage": 0x005F3830,
+    "earth_primary_handler": csp.read_runtime_layout_offset("spell_cast_028"),
+    "earth_active_handle_resolve": csp.read_runtime_layout_offset("earth_active_handle_resolve"),
+    "earth_cast_cleanup": csp.read_runtime_layout_offset("cast_active_handle_cleanup"),
+    "earth_release_finalize": csp.read_runtime_layout_offset("earth_release_finalize"),
+    "earth_release_line_check": csp.read_runtime_layout_offset("native_line_check"),
+    "earth_release_secondary": csp.read_runtime_layout_offset("earth_release_secondary"),
+    "earth_update": csp.read_runtime_layout_offset("earth_update"),
+    "earth_collision_damage": csp.read_runtime_layout_offset("earth_collision_damage"),
+    "earth_direct_damage": csp.read_runtime_layout_offset("earth_direct_damage"),
+    "earth_splash_damage": csp.read_runtime_layout_offset("earth_splash_damage"),
+    "earth_radius_scan": csp.read_runtime_layout_offset("earth_radius_scan"),
+    "earth_child_radius_damage": csp.read_runtime_layout_offset("earth_child_radius_damage"),
 }
 
 
@@ -230,8 +235,8 @@ def arm_watches(player_actor: int, player_progression: int, gameplay_scene: int)
         )
 
     addresses: dict[str, tuple[int, int]] = {
-        "player_actor_270": (player_actor + 0x270, 4),
-        "player_actor_27c": (player_actor + 0x27C, 4),
+        "player_primary_skill_id": (player_actor + ACTOR_PRIMARY_SKILL_ID_OFFSET, 4),
+        "player_active_cast_handle": (player_actor + ACTOR_ACTIVE_CAST_GROUP_OFFSET, 4),
         "gameplay_cast_intent": (gameplay_scene + GAMEPLAY_CAST_INTENT_OFFSET, 4),
         "gameplay_mouse_left": (gameplay_scene + GAMEPLAY_MOUSE_LEFT_FALLBACK_OFFSET, 1),
     }
@@ -352,6 +357,17 @@ print('y=' .. tostring({normalized_y}))
     )
 
 
+def hold_mouse_left_frames(frames: int) -> dict[str, str]:
+    return csp.parse_key_values(
+        csp.run_lua(
+            f"""
+print('ok=' .. tostring(sd.input.hold_mouse_left_frames({frames})))
+print('frames=' .. tostring({frames}))
+""".strip()
+        )
+    )
+
+
 def query_write_hits(name: str) -> dict[str, str]:
     return csp.parse_key_values(
         csp.run_lua(
@@ -402,11 +418,11 @@ local function emit(key, value)
 end
 local actor = {player_actor}
 local progression = {player_progression}
-emit('actor_160', sd.debug.read_u8(actor + 0x160))
-emit('actor_1ec', sd.debug.read_u8(actor + 0x1EC))
-emit('actor_270', sd.debug.read_u32(actor + 0x270))
-emit('actor_27c', sd.debug.read_u8(actor + 0x27C))
-emit('actor_27e', sd.debug.read_u16(actor + 0x27E))
+emit('actor_drive_state', sd.debug.read_u8(actor + {ACTOR_ANIMATION_DRIVE_STATE_OFFSET}))
+emit('actor_no_interrupt', sd.debug.read_u8(actor + {ACTOR_NO_INTERRUPT_FLAG_OFFSET}))
+emit('actor_primary_skill_id', sd.debug.read_u32(actor + {ACTOR_PRIMARY_SKILL_ID_OFFSET}))
+emit('actor_active_cast_group', sd.debug.read_u8(actor + {ACTOR_ACTIVE_CAST_GROUP_OFFSET}))
+emit('actor_active_cast_slot', sd.debug.read_u16(actor + {ACTOR_ACTIVE_CAST_SLOT_OFFSET}))
 emit('prog_750', sd.debug.read_u32(progression + {PROGRESSION_CURRENT_SPELL_ID_OFFSET}))
 """.strip()
         )
@@ -463,6 +479,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--auto-click-delay", type=float, default=DEFAULT_AUTO_CLICK_DELAY_SECONDS)
     parser.add_argument("--auto-click-interval", type=float, default=DEFAULT_AUTO_CLICK_INTERVAL_SECONDS)
     parser.add_argument("--auto-click-count", type=int, default=1)
+    parser.add_argument(
+        "--auto-hold-frames",
+        type=int,
+        default=0,
+        help="After positioning/clicking, queue an additional gameplay mouse-left hold for charged primaries.",
+    )
     parser.add_argument(
         "--skip-write-watches",
         action="store_true",
@@ -626,6 +648,8 @@ def main() -> int:
                 if index + 1 < args.auto_click_count and args.auto_click_interval > 0:
                     time.sleep(args.auto_click_interval)
             result["auto_click_results"] = clicks
+            if args.auto_hold_frames > 0:
+                result["auto_hold_result"] = hold_mouse_left_frames(args.auto_hold_frames)
         remaining_wait = args.wait_seconds - (time.time() - started_wait)
         if remaining_wait > 0:
             time.sleep(remaining_wait)

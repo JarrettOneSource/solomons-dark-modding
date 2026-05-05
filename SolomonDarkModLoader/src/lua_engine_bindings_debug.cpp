@@ -1,4 +1,6 @@
 #include "lua_engine_bindings_internal.h"
+#include "binary_layout.h"
+#include "gameplay_seams.h"
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "runtime_debug.h"
@@ -39,7 +41,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 60);
+    lua_createtable(state, 0, 61);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -69,6 +71,7 @@ void RegisterLuaDebugBindings(lua_State* state) {
     RegisterFunction(state, &LuaDebugReadString, "read_string");
     RegisterFunction(state, &LuaDebugSearchBytes, "search_bytes");
     RegisterFunction(state, &LuaDebugResolveGameAddress, "resolve_game_address");
+    RegisterFunction(state, &LuaDebugLayoutOffset, "layout_offset");
     RegisterFunction(state, &LuaDebugQueryMemory, "query_memory");
     RegisterFunction(state, &LuaDebugDumpStruct, "dump_struct");
     RegisterFunction(state, &LuaDebugDumpVtable, "dump_vtable");

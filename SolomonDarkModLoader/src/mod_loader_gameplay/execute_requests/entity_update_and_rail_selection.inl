@@ -44,7 +44,16 @@ bool TryUpdateParticipantEntity(
     float x = 0.0f;
     float y = 0.0f;
     float heading = 0.0f;
-    if (!ResolveParticipantSpawnTransform(gameplay_address, request, &x, &y, &heading)) {
+    const bool validate_transform_placement =
+        !request.has_transform ||
+        request.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::SharedHub;
+    if (!ResolveParticipantSpawnTransform(
+            gameplay_address,
+            request,
+            validate_transform_placement,
+            &x,
+            &y,
+            &heading)) {
         return false;
     }
 
@@ -74,11 +83,6 @@ bool TryUpdateParticipantEntity(
 }
 
 bool TrySpawnStandaloneRemoteWizardParticipantEntity(
-    uintptr_t gameplay_address,
-    const PendingParticipantEntitySyncRequest& request,
-    std::string* error_message);
-
-bool TrySpawnRegisteredGameNpcParticipantEntity(
     uintptr_t gameplay_address,
     const PendingParticipantEntitySyncRequest& request,
     std::string* error_message);
@@ -120,15 +124,4 @@ bool ShouldUseGameplaySlotBotParticipantRail(uintptr_t gameplay_address, const S
     // only has three non-local slots, so overflow arena bots intentionally use
     // the standalone wizard rail and are added to the widened hostile selector.
     return IsArenaSceneContext(scene_context) && TryFindOpenGameplayBotSlot(gameplay_address, nullptr);
-}
-
-bool ShouldUseRegisteredGameNpcParticipantRail(const SceneContextSnapshot& scene_context) {
-    (void)scene_context;
-    // Keep hub bots on the standalone clone rail until a true long-lived
-    // GameNpc (0x1397) publication contract is recovered. The clone-handoff
-    // path uses WizardCloneFromSourceActor, which returns a player-family actor
-    // (PlayerActorCtor writes object_type=0x1). Binding that result as
-    // RegisteredGameNpc and driving GameNpc_SetMoveGoal on it corrupted the
-    // actor's player-side state and crashed stock PlayerActorTick.
-    return false;
 }

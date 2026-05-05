@@ -9,6 +9,8 @@ import sys
 import time
 from pathlib import Path
 
+import cast_state_probe as csp
+
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "dist" / "launcher" / "SolomonDarkModLauncher.exe"
@@ -36,6 +38,63 @@ KNOWN_TYPES = {
     GAME_NPC_TYPE: "gamenpc",
     **VENDOR_TYPES,
 }
+ACTOR_GRID_CELL_PTR_OFFSET = csp.read_runtime_layout_offset("actor_grid_cell_ptr")
+ACTOR_OWNER_OFFSET = csp.read_runtime_layout_offset("actor_owner")
+ACTOR_SLOT_OFFSET = csp.read_runtime_layout_offset("actor_slot")
+ACTOR_COLLISION_RADIUS_OFFSET = csp.read_runtime_layout_offset("actor_collision_radius")
+ACTOR_PRIMARY_FLAG_MASK_OFFSET = csp.read_runtime_layout_offset("actor_primary_flag_mask")
+ACTOR_SECONDARY_FLAG_MASK_OFFSET = csp.read_runtime_layout_offset("actor_secondary_flag_mask")
+ACTOR_HUB_VISUAL_SOURCE_KIND_OFFSET = csp.read_runtime_layout_offset("actor_hub_visual_source_kind")
+ACTOR_HUB_VISUAL_SOURCE_PROFILE_OFFSET = csp.read_runtime_layout_offset("actor_hub_visual_source_profile")
+ACTOR_HUB_VISUAL_SOURCE_AUX_POINTER_OFFSET = csp.read_runtime_layout_offset(
+    "actor_hub_visual_source_aux_pointer"
+)
+ACTOR_HUB_VISUAL_ATTACHMENT_PTR_OFFSET = csp.read_runtime_layout_offset(
+    "actor_hub_visual_attachment_ptr"
+)
+ACTOR_OWNER_MOVEMENT_CONTROLLER_OFFSET = csp.read_runtime_layout_offset(
+    "actor_owner_movement_controller"
+)
+MOVEMENT_CONTROLLER_PRIMARY_COUNT_OFFSET = csp.read_runtime_layout_offset(
+    "movement_controller_primary_count"
+)
+MOVEMENT_CONTROLLER_PRIMARY_LIST_OFFSET = csp.read_runtime_layout_offset(
+    "movement_controller_primary_list"
+)
+MOVEMENT_CONTROLLER_SECONDARY_COUNT_OFFSET = csp.read_runtime_layout_offset(
+    "movement_controller_secondary_count"
+)
+MOVEMENT_CONTROLLER_SECONDARY_LIST_OFFSET = csp.read_runtime_layout_offset(
+    "movement_controller_secondary_list"
+)
+MOVEMENT_OVERLAP_ENTRY_TYPE_OFFSET = csp.read_runtime_layout_offset("movement_overlap_entry_type")
+MOVEMENT_OVERLAP_ENTRY_MASK_OFFSET = csp.read_runtime_layout_offset("movement_overlap_entry_mask")
+MOVEMENT_OVERLAP_ENTRY_AUX_OFFSET = csp.read_runtime_layout_offset("movement_overlap_entry_aux")
+MOVEMENT_CONTROLLER_CALLBACK_OFFSETS = (
+    csp.read_runtime_layout_offset("movement_controller_callback_a"),
+    csp.read_runtime_layout_offset("movement_controller_callback_b"),
+    csp.read_runtime_layout_offset("movement_controller_callback_c"),
+)
+POINTER_SIZE = 4
+GAMENPC_ACTIVE_STATE_OFFSET = csp.read_runtime_layout_offset("gamenpc_active_state")
+GAMENPC_BRANCH_STATE_OFFSET = csp.read_runtime_layout_offset("gamenpc_branch_state")
+GAMENPC_DESIRED_YAW_OFFSET = csp.read_runtime_layout_offset("gamenpc_desired_yaw")
+GAMENPC_TICK_COUNTER_OFFSET = csp.read_runtime_layout_offset("gamenpc_tick_counter")
+GAMENPC_SOURCE_PROFILE_74_MIRROR_OFFSET = csp.read_runtime_layout_offset(
+    "gamenpc_source_profile_74_mirror"
+)
+GAMENPC_MOVE_FLAG_OFFSET = csp.read_runtime_layout_offset("gamenpc_move_flag")
+GAMENPC_GOAL_X_OFFSET = csp.read_runtime_layout_offset("gamenpc_goal_x")
+GAMENPC_GOAL_Y_OFFSET = csp.read_runtime_layout_offset("gamenpc_goal_y")
+GAMENPC_SPEED_SCALAR_OFFSET = csp.read_runtime_layout_offset("gamenpc_speed_scalar")
+GAMENPC_SOURCE_PROFILE_56_MIRROR_OFFSET = csp.read_runtime_layout_offset(
+    "gamenpc_source_profile_56_mirror"
+)
+GAMENPC_TRACKED_SLOT_OFFSET = csp.read_runtime_layout_offset("gamenpc_tracked_slot")
+GAMENPC_TRACKED_SLOT_CALLBACK_OFFSET = csp.read_runtime_layout_offset(
+    "gamenpc_tracked_slot_callback"
+)
+GAMENPC_LATE_TIMER_OFFSET = csp.read_runtime_layout_offset("gamenpc_late_timer")
 
 
 class ProbeFailure(RuntimeError):
@@ -415,7 +474,7 @@ local function dump_actor(prefix, actor)
   end
 
   local actor_addr = tonumber(actor.actor_address) or 0
-  local packed_slot_word = read_u32(actor_addr, 0x5C)
+  local packed_slot_word = read_u32(actor_addr, {ACTOR_SLOT_OFFSET})
   emit(prefix .. '.actor_address', actor.actor_address)
   emit(prefix .. '.vtable_address', actor.vtable_address)
   emit(prefix .. '.first_method_address', actor.first_method_address)
@@ -430,39 +489,39 @@ local function dump_actor(prefix, actor)
   emit(prefix .. '.progression_handle_address', actor.progression_handle_address)
   emit(prefix .. '.equip_handle_address', actor.equip_handle_address)
   emit(prefix .. '.animation_state_ptr', actor.animation_state_ptr)
-  emit(prefix .. '.raw.radius', read_f32(actor_addr, 0x30))
-  emit(prefix .. '.raw.mask', read_u32(actor_addr, 0x38))
-  emit(prefix .. '.raw.mask2', read_u32(actor_addr, 0x3C))
-  emit(prefix .. '.raw.cell', read_u32(actor_addr, 0x54))
-  emit(prefix .. '.raw.owner_field', read_u32(actor_addr, 0x58))
-  emit(prefix .. '.raw.slot_byte', read_u8(actor_addr, 0x5C))
+  emit(prefix .. '.raw.radius', read_f32(actor_addr, {ACTOR_COLLISION_RADIUS_OFFSET}))
+  emit(prefix .. '.raw.mask', read_u32(actor_addr, {ACTOR_PRIMARY_FLAG_MASK_OFFSET}))
+  emit(prefix .. '.raw.mask2', read_u32(actor_addr, {ACTOR_SECONDARY_FLAG_MASK_OFFSET}))
+  emit(prefix .. '.raw.cell', read_u32(actor_addr, {ACTOR_GRID_CELL_PTR_OFFSET}))
+  emit(prefix .. '.raw.owner_field', read_u32(actor_addr, {ACTOR_OWNER_OFFSET}))
+  emit(prefix .. '.raw.slot_byte', read_u8(actor_addr, {ACTOR_SLOT_OFFSET}))
   emit(prefix .. '.raw.packed_slot_word', packed_slot_word)
   emit(
     prefix .. '.raw.world_slot_derived',
     packed_slot_word ~= nil and (math.floor(packed_slot_word / 65536) % 65536) or nil
   )
-  emit(prefix .. '.raw.source_kind', read_u32(actor_addr, 0x174))
-  emit(prefix .. '.raw.source_profile', read_u32(actor_addr, 0x178))
-  emit(prefix .. '.raw.source_aux', read_u32(actor_addr, 0x17C))
-  emit(prefix .. '.raw.source_profile_74_mirror', read_u32(actor_addr, 0x194))
-  emit(prefix .. '.raw.source_profile_56_mirror', read_u32(actor_addr, 0x1C0))
-  emit(prefix .. '.raw.attachment_ptr', read_u32(actor_addr, 0x264))
+  emit(prefix .. '.raw.source_kind', read_u32(actor_addr, {ACTOR_HUB_VISUAL_SOURCE_KIND_OFFSET}))
+  emit(prefix .. '.raw.source_profile', read_u32(actor_addr, {ACTOR_HUB_VISUAL_SOURCE_PROFILE_OFFSET}))
+  emit(prefix .. '.raw.source_aux', read_u32(actor_addr, {ACTOR_HUB_VISUAL_SOURCE_AUX_POINTER_OFFSET}))
+  emit(prefix .. '.raw.source_profile_74_mirror', read_u32(actor_addr, {GAMENPC_SOURCE_PROFILE_74_MIRROR_OFFSET}))
+  emit(prefix .. '.raw.source_profile_56_mirror', read_u32(actor_addr, {GAMENPC_SOURCE_PROFILE_56_MIRROR_OFFSET}))
+  emit(prefix .. '.raw.attachment_ptr', read_u32(actor_addr, {ACTOR_HUB_VISUAL_ATTACHMENT_PTR_OFFSET}))
 
   if (tonumber(actor.object_type_id) or 0) == {GAME_NPC_TYPE} then
-    emit(prefix .. '.gamenpc.mode', read_u32(actor_addr, 0x174))
-    emit(prefix .. '.gamenpc.record_id', read_u32(actor_addr, 0x17C))
-    emit(prefix .. '.gamenpc.active', read_u8(actor_addr, 0x180))
-    emit(prefix .. '.gamenpc.branch', read_u8(actor_addr, 0x181))
-    emit(prefix .. '.gamenpc.desired_yaw', read_f32(actor_addr, 0x188))
-    emit(prefix .. '.gamenpc.tick_counter', read_u32(actor_addr, 0x18C))
-    emit(prefix .. '.gamenpc.move_flag', read_u8(actor_addr, 0x198))
-    emit(prefix .. '.gamenpc.goal_x', read_f32(actor_addr, 0x19C))
-    emit(prefix .. '.gamenpc.goal_y', read_f32(actor_addr, 0x1A0))
-    emit(prefix .. '.gamenpc.move_speed', read_f32(actor_addr, 0x1B4))
-    emit(prefix .. '.gamenpc.tracked_mode', read_u32(actor_addr, 0x1C0))
-    emit(prefix .. '.gamenpc.tracked_slot', read_u8(actor_addr, 0x1C2))
-    emit(prefix .. '.gamenpc.callback', read_u8(actor_addr, 0x1C3))
-    emit(prefix .. '.gamenpc.late_timer', read_u32(actor_addr, 0x1C4))
+    emit(prefix .. '.gamenpc.mode', read_u32(actor_addr, {ACTOR_HUB_VISUAL_SOURCE_KIND_OFFSET}))
+    emit(prefix .. '.gamenpc.record_id', read_u32(actor_addr, {ACTOR_HUB_VISUAL_SOURCE_AUX_POINTER_OFFSET}))
+    emit(prefix .. '.gamenpc.active', read_u8(actor_addr, {GAMENPC_ACTIVE_STATE_OFFSET}))
+    emit(prefix .. '.gamenpc.branch', read_u8(actor_addr, {GAMENPC_BRANCH_STATE_OFFSET}))
+    emit(prefix .. '.gamenpc.desired_yaw', read_f32(actor_addr, {GAMENPC_DESIRED_YAW_OFFSET}))
+    emit(prefix .. '.gamenpc.tick_counter', read_u32(actor_addr, {GAMENPC_TICK_COUNTER_OFFSET}))
+    emit(prefix .. '.gamenpc.move_flag', read_u8(actor_addr, {GAMENPC_MOVE_FLAG_OFFSET}))
+    emit(prefix .. '.gamenpc.goal_x', read_f32(actor_addr, {GAMENPC_GOAL_X_OFFSET}))
+    emit(prefix .. '.gamenpc.goal_y', read_f32(actor_addr, {GAMENPC_GOAL_Y_OFFSET}))
+    emit(prefix .. '.gamenpc.move_speed', read_f32(actor_addr, {GAMENPC_SPEED_SCALAR_OFFSET}))
+    emit(prefix .. '.gamenpc.tracked_mode', read_u32(actor_addr, {GAMENPC_SOURCE_PROFILE_56_MIRROR_OFFSET}))
+    emit(prefix .. '.gamenpc.tracked_slot', read_u8(actor_addr, {GAMENPC_TRACKED_SLOT_OFFSET}))
+    emit(prefix .. '.gamenpc.callback', read_u8(actor_addr, {GAMENPC_TRACKED_SLOT_CALLBACK_OFFSET}))
+    emit(prefix .. '.gamenpc.late_timer', read_u32(actor_addr, {GAMENPC_LATE_TIMER_OFFSET}))
   end
 end
 
@@ -475,20 +534,20 @@ local world_addr =
   (type(bot) == 'table' and tonumber(bot.world_address)) or
   (type(player) == 'table' and tonumber(player.world_address)) or
   0
-local movement_ctx = world_addr ~= 0 and (world_addr + 0x378) or 0
+local movement_ctx = world_addr ~= 0 and (world_addr + {ACTOR_OWNER_MOVEMENT_CONTROLLER_OFFSET}) or 0
 emit('movement.available', movement_ctx ~= 0)
 emit('movement.world_address', world_addr)
 emit('movement.ctx', movement_ctx)
-emit('movement.primary_count', read_u32(movement_ctx, 0x40))
-emit('movement.primary_list', read_u32(movement_ctx, 0x4C))
-local primary_list = read_u32(movement_ctx, 0x4C) or 0
-emit('movement.primary0', read_u32(primary_list, 0x0))
-emit('movement.primary1', read_u32(primary_list, 0x4))
-emit('movement.secondary_count', read_u32(movement_ctx, 0x70))
-emit('movement.secondary_list', read_u32(movement_ctx, 0x7C))
-local secondary_list = read_u32(movement_ctx, 0x7C) or 0
-emit('movement.secondary0', read_u32(secondary_list, 0x0))
-emit('movement.secondary1', read_u32(secondary_list, 0x4))
+emit('movement.primary_count', read_u32(movement_ctx, {MOVEMENT_CONTROLLER_PRIMARY_COUNT_OFFSET}))
+emit('movement.primary_list', read_u32(movement_ctx, {MOVEMENT_CONTROLLER_PRIMARY_LIST_OFFSET}))
+local primary_list = read_u32(movement_ctx, {MOVEMENT_CONTROLLER_PRIMARY_LIST_OFFSET}) or 0
+emit('movement.primary0', read_u32(primary_list, 0))
+emit('movement.primary1', read_u32(primary_list, {POINTER_SIZE}))
+emit('movement.secondary_count', read_u32(movement_ctx, {MOVEMENT_CONTROLLER_SECONDARY_COUNT_OFFSET}))
+emit('movement.secondary_list', read_u32(movement_ctx, {MOVEMENT_CONTROLLER_SECONDARY_LIST_OFFSET}))
+local secondary_list = read_u32(movement_ctx, {MOVEMENT_CONTROLLER_SECONDARY_LIST_OFFSET}) or 0
+emit('movement.secondary0', read_u32(secondary_list, 0))
+emit('movement.secondary1', read_u32(secondary_list, {POINTER_SIZE}))
 """.strip()
     return build_nested(parse_key_values(run_lua(code, timeout=30.0)))
 
@@ -553,26 +612,26 @@ local function read_f32(address)
   return sd.debug.read_float(address)
 end
 
-emit('actor.owner_field', read_u32(actor + 0x58))
-emit('actor.cell', read_u32(actor + 0x54))
-emit('actor.mask', read_u32(actor + 0x38))
-emit('actor.mask2', read_u32(actor + 0x3C))
-emit('actor.slot_word', read_u32(actor + 0x5C))
-emit('actor.radius', read_f32(actor + 0x30))
-emit('actor.source_kind_field', read_u32(actor + 0x174))
-emit('actor.source_profile_field', read_u32(actor + 0x178))
-emit('actor.source_aux_field', read_u32(actor + 0x17C))
-emit('actor.source_profile_74_mirror', read_u32(actor + 0x194))
-emit('actor.source_profile_56_mirror', read_u32(actor + 0x1C0))
-emit('actor.attachment_field', read_u32(actor + 0x264))
-emit('gamenpc.source_kind', read_u32(actor + 0x174))
-emit('gamenpc.active', read_u8(actor + 0x180))
-emit('gamenpc.branch', read_u8(actor + 0x181))
-emit('gamenpc.desired_yaw', read_f32(actor + 0x188))
-emit('gamenpc.move_flag', read_u8(actor + 0x198))
-emit('gamenpc.goal_x', read_f32(actor + 0x19C))
-emit('gamenpc.goal_y', read_f32(actor + 0x1A0))
-emit('gamenpc.move_speed', read_f32(actor + 0x1B4))
+emit('actor.owner_field', read_u32(actor + {ACTOR_OWNER_OFFSET}))
+emit('actor.cell', read_u32(actor + {ACTOR_GRID_CELL_PTR_OFFSET}))
+emit('actor.mask', read_u32(actor + {ACTOR_PRIMARY_FLAG_MASK_OFFSET}))
+emit('actor.mask2', read_u32(actor + {ACTOR_SECONDARY_FLAG_MASK_OFFSET}))
+emit('actor.slot_word', read_u32(actor + {ACTOR_SLOT_OFFSET}))
+emit('actor.radius', read_f32(actor + {ACTOR_COLLISION_RADIUS_OFFSET}))
+emit('actor.source_kind_field', read_u32(actor + {ACTOR_HUB_VISUAL_SOURCE_KIND_OFFSET}))
+emit('actor.source_profile_field', read_u32(actor + {ACTOR_HUB_VISUAL_SOURCE_PROFILE_OFFSET}))
+emit('actor.source_aux_field', read_u32(actor + {ACTOR_HUB_VISUAL_SOURCE_AUX_POINTER_OFFSET}))
+emit('actor.source_profile_74_mirror', read_u32(actor + {GAMENPC_SOURCE_PROFILE_74_MIRROR_OFFSET}))
+emit('actor.source_profile_56_mirror', read_u32(actor + {GAMENPC_SOURCE_PROFILE_56_MIRROR_OFFSET}))
+emit('actor.attachment_field', read_u32(actor + {ACTOR_HUB_VISUAL_ATTACHMENT_PTR_OFFSET}))
+emit('gamenpc.source_kind', read_u32(actor + {ACTOR_HUB_VISUAL_SOURCE_KIND_OFFSET}))
+emit('gamenpc.active', read_u8(actor + {GAMENPC_ACTIVE_STATE_OFFSET}))
+emit('gamenpc.branch', read_u8(actor + {GAMENPC_BRANCH_STATE_OFFSET}))
+emit('gamenpc.desired_yaw', read_f32(actor + {GAMENPC_DESIRED_YAW_OFFSET}))
+emit('gamenpc.move_flag', read_u8(actor + {GAMENPC_MOVE_FLAG_OFFSET}))
+emit('gamenpc.goal_x', read_f32(actor + {GAMENPC_GOAL_X_OFFSET}))
+emit('gamenpc.goal_y', read_f32(actor + {GAMENPC_GOAL_Y_OFFSET}))
+emit('gamenpc.move_speed', read_f32(actor + {GAMENPC_SPEED_SCALAR_OFFSET}))
 
 local listed = false
 for _, scene_actor in ipairs(sd.world.list_actors() or {{}}) do
@@ -585,47 +644,47 @@ for _, scene_actor in ipairs(sd.world.list_actors() or {{}}) do
 end
 emit('listed.available', listed)
 
-local world = tonumber(bot.world_address) or read_u32(actor + 0x58) or 0
+local world = tonumber(bot.world_address) or read_u32(actor + {ACTOR_OWNER_OFFSET}) or 0
 emit('movement.world', world)
 if world == 0 then
   return
 end
 
-local ctx = world + 0x378
-local primary_list = read_u32(ctx + 0x4C) or 0
-local secondary_list = read_u32(ctx + 0x7C) or 0
+local ctx = world + {ACTOR_OWNER_MOVEMENT_CONTROLLER_OFFSET}
+local primary_list = read_u32(ctx + {MOVEMENT_CONTROLLER_PRIMARY_LIST_OFFSET}) or 0
+local secondary_list = read_u32(ctx + {MOVEMENT_CONTROLLER_SECONDARY_LIST_OFFSET}) or 0
 emit('movement.ctx', ctx)
-emit('movement.primary_count', read_u32(ctx + 0x40))
+emit('movement.primary_count', read_u32(ctx + {MOVEMENT_CONTROLLER_PRIMARY_COUNT_OFFSET}))
 emit('movement.primary_list', primary_list)
-emit('movement.primary0', read_u32(primary_list + 0x0))
-emit('movement.primary1', read_u32(primary_list + 0x4))
-local primary0 = read_u32(primary_list + 0x0) or 0
-local primary1 = read_u32(primary_list + 0x4) or 0
-emit('movement.primary0_deref_0c', read_u32(primary0 + 0x0C))
-emit('movement.primary0_deref_10', read_u32(primary0 + 0x10))
-emit('movement.primary0_deref_14', read_u32(primary0 + 0x14))
-emit('movement.primary1_deref_0c', read_u32(primary1 + 0x0C))
-emit('movement.primary1_deref_10', read_u32(primary1 + 0x10))
-emit('movement.primary1_deref_14', read_u32(primary1 + 0x14))
-emit('movement.secondary_count', read_u32(ctx + 0x70))
+emit('movement.primary0', read_u32(primary_list))
+emit('movement.primary1', read_u32(primary_list + {POINTER_SIZE}))
+local primary0 = read_u32(primary_list) or 0
+local primary1 = read_u32(primary_list + {POINTER_SIZE}) or 0
+emit('movement.primary0_deref_0c', read_u32(primary0 + {MOVEMENT_OVERLAP_ENTRY_TYPE_OFFSET}))
+emit('movement.primary0_deref_10', read_u32(primary0 + {MOVEMENT_OVERLAP_ENTRY_MASK_OFFSET}))
+emit('movement.primary0_deref_14', read_u32(primary0 + {MOVEMENT_OVERLAP_ENTRY_AUX_OFFSET}))
+emit('movement.primary1_deref_0c', read_u32(primary1 + {MOVEMENT_OVERLAP_ENTRY_TYPE_OFFSET}))
+emit('movement.primary1_deref_10', read_u32(primary1 + {MOVEMENT_OVERLAP_ENTRY_MASK_OFFSET}))
+emit('movement.primary1_deref_14', read_u32(primary1 + {MOVEMENT_OVERLAP_ENTRY_AUX_OFFSET}))
+emit('movement.secondary_count', read_u32(ctx + {MOVEMENT_CONTROLLER_SECONDARY_COUNT_OFFSET}))
 emit('movement.secondary_list', secondary_list)
-emit('movement.secondary0', read_u32(secondary_list + 0x0))
-emit('movement.secondary1', read_u32(secondary_list + 0x4))
-local secondary0 = read_u32(secondary_list + 0x0) or 0
-local secondary1 = read_u32(secondary_list + 0x4) or 0
-emit('movement.secondary0_deref_0c', read_u32(secondary0 + 0x0C))
-emit('movement.secondary0_deref_10', read_u32(secondary0 + 0x10))
-emit('movement.secondary0_deref_14', read_u32(secondary0 + 0x14))
-emit('movement.secondary1_deref_0c', read_u32(secondary1 + 0x0C))
-emit('movement.secondary1_deref_10', read_u32(secondary1 + 0x10))
-emit('movement.secondary1_deref_14', read_u32(secondary1 + 0x14))
-for _, callback_offset in ipairs({{0x38, 0x50, 0x68}}) do
+emit('movement.secondary0', read_u32(secondary_list))
+emit('movement.secondary1', read_u32(secondary_list + {POINTER_SIZE}))
+local secondary0 = read_u32(secondary_list) or 0
+local secondary1 = read_u32(secondary_list + {POINTER_SIZE}) or 0
+emit('movement.secondary0_deref_0c', read_u32(secondary0 + {MOVEMENT_OVERLAP_ENTRY_TYPE_OFFSET}))
+emit('movement.secondary0_deref_10', read_u32(secondary0 + {MOVEMENT_OVERLAP_ENTRY_MASK_OFFSET}))
+emit('movement.secondary0_deref_14', read_u32(secondary0 + {MOVEMENT_OVERLAP_ENTRY_AUX_OFFSET}))
+emit('movement.secondary1_deref_0c', read_u32(secondary1 + {MOVEMENT_OVERLAP_ENTRY_TYPE_OFFSET}))
+emit('movement.secondary1_deref_10', read_u32(secondary1 + {MOVEMENT_OVERLAP_ENTRY_MASK_OFFSET}))
+emit('movement.secondary1_deref_14', read_u32(secondary1 + {MOVEMENT_OVERLAP_ENTRY_AUX_OFFSET}))
+for _, callback_offset in ipairs({{{", ".join(str(offset) for offset in MOVEMENT_CONTROLLER_CALLBACK_OFFSETS)}}}) do
   local callback_ptr = read_u32(ctx + callback_offset) or 0
   local callback_key = string.format('movement.callback_%02X', callback_offset)
   emit(callback_key, callback_ptr)
   if callback_ptr ~= 0 then
     for i = 0, 5 do
-      emit(string.format('%s_%d', callback_key, i), read_u32(callback_ptr + i * 4))
+      emit(string.format('%s_%d', callback_key, i), read_u32(callback_ptr + i * {POINTER_SIZE}))
     end
   end
 end

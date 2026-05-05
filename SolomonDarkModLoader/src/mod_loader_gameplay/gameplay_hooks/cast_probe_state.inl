@@ -42,7 +42,7 @@ PurePrimaryLocalActorWindowShim EnterPurePrimaryLocalActorWindow(uintptr_t actor
 
     state.active = true;
     state.fields = {{
-        {0x1FC, 0, false},
+        {kActorEquipRuntimeStateOffset, 0, false},
     }};
 
     auto& memory = ProcessMemory::Instance();
@@ -93,12 +93,22 @@ void __cdecl OnPurePrimaryPostBuilder(uintptr_t builder_result) {
             ? memory.ReadFieldOr<std::uint32_t>(builder_result, kGameObjectTypeIdOffset, 0)
             : 0;
     const auto result_field34 =
-        builder_result != 0 && memory.IsReadableRange(builder_result + 0x34, sizeof(float))
-            ? memory.ReadValueOr<float>(builder_result + 0x34, 0.0f)
+        builder_result != 0 &&
+                memory.IsReadableRange(
+                    builder_result + kSpellBuilderResultParamAOffset,
+                    sizeof(float))
+            ? memory.ReadValueOr<float>(
+                  builder_result + kSpellBuilderResultParamAOffset,
+                  0.0f)
             : 0.0f;
     const auto result_field38 =
-        builder_result != 0 && memory.IsReadableRange(builder_result + 0x38, sizeof(float))
-            ? memory.ReadValueOr<float>(builder_result + 0x38, 0.0f)
+        builder_result != 0 &&
+                memory.IsReadableRange(
+                    builder_result + kSpellBuilderResultParamBOffset,
+                    sizeof(float))
+            ? memory.ReadValueOr<float>(
+                  builder_result + kSpellBuilderResultParamBOffset,
+                  0.0f)
             : 0.0f;
     const auto active_cast_group =
         memory.ReadFieldOr<std::uint8_t>(probe.actor_address, kActorActiveCastGroupByteOffset, 0xFF);
@@ -181,10 +191,16 @@ std::string DescribeLocalPlayerCastProbeState(
         " click_serial=" + std::to_string(click_serial) +
         " click_age_ms=" + std::to_string(click_age_ms) +
         " actor=" + HexString(actor_address) +
-        " actor200=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x200, 0)) +
-        " actor21c=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x21C, 0)) +
+        " progression_runtime=" + HexString(memory.ReadFieldOr<uintptr_t>(
+            actor_address,
+            kActorProgressionRuntimeStateOffset,
+            0)) +
+        " animation_selection=" + HexString(memory.ReadFieldOr<uintptr_t>(
+            actor_address,
+            kActorAnimationSelectionStateOffset,
+            0)) +
         " skill=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0)) +
-        " prev=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset + sizeof(std::int32_t), 0)) +
+        " prev=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPreviousSkillIdOffset, 0)) +
         " drive=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0)) +
         " no_int=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0)) +
         " group=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF)) +
@@ -195,7 +211,7 @@ std::string DescribeLocalPlayerCastProbeState(
         " selection_ptr=" + HexString(selection_pointer) +
         " progression_handle=" + HexString(progression_handle) +
         " progression_runtime=" + HexString(progression_runtime) +
-        " prog750=" + std::to_string(memory.ReadValueOr<std::uint32_t>(progression_runtime + 0x750, 0));
+        " prog750=" + std::to_string(memory.ReadValueOr<std::uint32_t>(progression_runtime + kProgressionCurrentSpellIdOffset, 0));
 }
 
 void MaybeArmLocalPlayerCastProbe(uintptr_t gameplay_address, uintptr_t actor_address) {

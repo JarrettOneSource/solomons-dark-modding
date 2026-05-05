@@ -2,36 +2,34 @@ void SimplifyBotPathWaypoints(
     const GameplayPathGridSnapshot& snapshot,
     ParticipantEntityBinding* binding,
     std::vector<BotPathWaypoint>* waypoints) {
-    if (waypoints == nullptr || waypoints->size() < 3) {
+    if (binding == nullptr || waypoints == nullptr || waypoints->size() < 3) {
         return;
     }
 
     std::vector<BotPathWaypoint> simplified;
     simplified.reserve(waypoints->size());
     simplified.push_back((*waypoints)[0]);
-    for (std::size_t index = 1; index + 1 < waypoints->size(); ++index) {
-        const auto& previous = simplified.back();
-        const auto& current = (*waypoints)[index];
-        const auto& next = (*waypoints)[index + 1];
-        const auto previous_dx = current.grid_x - previous.grid_x;
-        const auto previous_dy = current.grid_y - previous.grid_y;
-        const auto next_dx = next.grid_x - current.grid_x;
-        const auto next_dy = next.grid_y - current.grid_y;
-        if (previous_dx == next_dx && previous_dy == next_dy &&
-            binding != nullptr &&
-            IsGameplayPathSegmentTraversable(
-                snapshot,
-                binding,
-                previous.x,
-                previous.y,
-                next.x,
-                next.y,
-                nullptr)) {
-            continue;
+    std::size_t cursor = 0;
+    while (cursor + 1 < waypoints->size()) {
+        auto furthest_reachable = cursor + 1;
+        const auto& previous = (*waypoints)[cursor];
+        for (auto candidate = waypoints->size() - 1; candidate > cursor + 1; --candidate) {
+            const auto& next = (*waypoints)[candidate];
+            if (IsGameplayPathSegmentTraversable(
+                    snapshot,
+                    binding,
+                    previous.x,
+                    previous.y,
+                    next.x,
+                    next.y,
+                    nullptr)) {
+                furthest_reachable = candidate;
+                break;
+            }
         }
-        simplified.push_back(current);
+        simplified.push_back((*waypoints)[furthest_reachable]);
+        cursor = furthest_reachable;
     }
-    simplified.push_back(waypoints->back());
     *waypoints = std::move(simplified);
 }
 
@@ -283,18 +281,13 @@ bool TryBuildBotPath(
     std::vector<std::uint8_t> node_point_valid(node_count, 0);
     std::vector<int> open_set;
     open_set.reserve(node_count);
-    auto best_reachable_index = start_index;
-    auto best_reachable_heuristic =
-        EstimateGameplayPathHeuristic(start_grid_x, start_grid_y, goal_grid_x, goal_grid_y);
     g_score[static_cast<std::size_t>(start_index)] = 0.0f;
     f_score[static_cast<std::size_t>(start_index)] =
         EstimateGameplayPathHeuristic(start_grid_x, start_grid_y, goal_grid_x, goal_grid_y);
     state[static_cast<std::size_t>(start_index)] = 1;
-    node_point_x[static_cast<std::size_t>(start_index)] = current_x;
-    node_point_y[static_cast<std::size_t>(start_index)] = current_y;
-    node_point_valid[static_cast<std::size_t>(start_index)] = 1;
     node_point_x[static_cast<std::size_t>(start_index)] = start_anchor_x;
     node_point_y[static_cast<std::size_t>(start_index)] = start_anchor_y;
+    node_point_valid[static_cast<std::size_t>(start_index)] = 1;
     open_set.push_back(start_index);
 
     const int neighbor_offsets[8][2] = {
@@ -320,12 +313,6 @@ bool TryBuildBotPath(
 
         const auto current_grid_x = current_index / grid_snapshot.height;
         const auto current_grid_y = current_index % grid_snapshot.height;
-        const auto current_heuristic =
-            EstimateGameplayPathHeuristic(current_grid_x, current_grid_y, goal_grid_x, goal_grid_y);
-        if (current_heuristic < best_reachable_heuristic) {
-            best_reachable_heuristic = current_heuristic;
-            best_reachable_index = current_index;
-        }
         const auto current_point_x =
             node_point_valid[static_cast<std::size_t>(current_index)] != 0
                 ? node_point_x[static_cast<std::size_t>(current_index)]
@@ -383,8 +370,8 @@ bool TryBuildBotPath(
                     next_grid_y,
                     GameplayPathCellCenterX(grid_snapshot, next_grid_y),
                     GameplayPathCellCenterY(grid_snapshot, next_grid_x),
-                    true,
-                    true,
+                    false,
+                    false,
                     current_point_x,
                     current_point_y,
                     &candidate_point_x,
@@ -418,61 +405,47 @@ bool TryBuildBotPath(
         }
     }
 
-    auto resolved_goal_index = goal_index;
     auto resolved_goal_grid_x = goal_grid_x;
     auto resolved_goal_grid_y = goal_grid_y;
     if (!found_path) {
-        if (best_reachable_index == start_index) {
-            const auto actor_to_start_anchor_x = start_anchor_x - current_x;
-            const auto actor_to_start_anchor_y = start_anchor_y - current_y;
-            const auto actor_to_start_anchor_gap =
-                std::sqrt(actor_to_start_anchor_x * actor_to_start_anchor_x + actor_to_start_anchor_y * actor_to_start_anchor_y);
-            if (start_relocated && actor_to_start_anchor_gap > kWizardBotPathFinalArrivalThreshold) {
-                binding->path_waypoints.clear();
-                binding->path_waypoints.push_back(BotPathWaypoint{
-                    start_grid_x,
-                    start_grid_y,
-                    start_anchor_x,
-                    start_anchor_y,
-                });
-                binding->path_waypoint_index = 0;
-                binding->path_active = true;
-                binding->path_failed = false;
-                binding->active_path_revision = binding->movement_intent_revision;
-                binding->next_path_retry_not_before_ms = 0;
-                binding->current_waypoint_x = start_anchor_x;
-                binding->current_waypoint_y = start_anchor_y;
-                if constexpr (kEnableWizardBotHotPathDiagnostics) {
-                    Log(
-                        "[bots] path fallback start-anchor. bot_id=" + std::to_string(binding->bot_id) +
-                        " revision=" + std::to_string(binding->movement_intent_revision) +
-                        " start=(" + std::to_string(start_grid_x) + ", " + std::to_string(start_grid_y) + ")" +
-                        " anchor=(" + std::to_string(start_anchor_x) + ", " + std::to_string(start_anchor_y) + ")" +
-                        " actor=(" + std::to_string(current_x) + ", " + std::to_string(current_y) + ")");
-                }
-                return true;
+        const auto actor_to_start_anchor_x = start_anchor_x - current_x;
+        const auto actor_to_start_anchor_y = start_anchor_y - current_y;
+        const auto actor_to_start_anchor_gap =
+            std::sqrt(actor_to_start_anchor_x * actor_to_start_anchor_x + actor_to_start_anchor_y * actor_to_start_anchor_y);
+        if (start_relocated && actor_to_start_anchor_gap > kWizardBotPathFinalArrivalThreshold) {
+            binding->path_waypoints.clear();
+            binding->path_waypoints.push_back(BotPathWaypoint{
+                start_grid_x,
+                start_grid_y,
+                start_anchor_x,
+                start_anchor_y,
+            });
+            binding->path_waypoint_index = 0;
+            binding->path_active = true;
+            binding->path_failed = false;
+            binding->active_path_revision = binding->movement_intent_revision;
+            binding->next_path_retry_not_before_ms = 0;
+            binding->current_waypoint_x = start_anchor_x;
+            binding->current_waypoint_y = start_anchor_y;
+            if constexpr (kEnableWizardBotHotPathDiagnostics) {
+                Log(
+                    "[bots] path fallback start-anchor. bot_id=" + std::to_string(binding->bot_id) +
+                    " revision=" + std::to_string(binding->movement_intent_revision) +
+                    " start=(" + std::to_string(start_grid_x) + ", " + std::to_string(start_grid_y) + ")" +
+                    " anchor=(" + std::to_string(start_anchor_x) + ", " + std::to_string(start_anchor_y) + ")" +
+                    " actor=(" + std::to_string(current_x) + ", " + std::to_string(current_y) + ")");
             }
-            if (error_message != nullptr && error_message->empty()) {
-                *error_message =
-                    "A* search found no path. start=(" + std::to_string(start_grid_x) + ", " + std::to_string(start_grid_y) +
-                    ") goal=(" + std::to_string(goal_grid_x) + ", " + std::to_string(goal_grid_y) + ")";
-            }
-            return false;
+            return true;
         }
-
-        resolved_goal_index = best_reachable_index;
-        resolved_goal_grid_x = resolved_goal_index / grid_snapshot.height;
-        resolved_goal_grid_y = resolved_goal_index % grid_snapshot.height;
-        if constexpr (kEnableWizardBotHotPathDiagnostics) {
-            Log(
-                "[bots] path fallback reachable-goal. bot_id=" + std::to_string(binding->bot_id) +
-                " revision=" + std::to_string(binding->movement_intent_revision) +
-                " requested_goal=(" + std::to_string(goal_grid_x) + ", " + std::to_string(goal_grid_y) + ")" +
-                " fallback_goal=(" + std::to_string(resolved_goal_grid_x) + ", " + std::to_string(resolved_goal_grid_y) + ")" +
-                " heuristic=" + std::to_string(best_reachable_heuristic));
+        if (error_message != nullptr && error_message->empty()) {
+            *error_message =
+                "A* search found no path. start=(" + std::to_string(start_grid_x) + ", " + std::to_string(start_grid_y) +
+                ") goal=(" + std::to_string(goal_grid_x) + ", " + std::to_string(goal_grid_y) + ")";
         }
+        return false;
     }
 
+    auto resolved_goal_index = goal_index;
     std::vector<int> reversed_indices;
     for (int cursor = resolved_goal_index; cursor != -1; cursor = parent[static_cast<std::size_t>(cursor)]) {
         reversed_indices.push_back(cursor);

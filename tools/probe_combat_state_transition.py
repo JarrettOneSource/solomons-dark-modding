@@ -23,7 +23,7 @@ class CombatProbeFailure(RuntimeError):
 def query_combat_snapshot() -> dict[str, str]:
     return csp.parse_key_values(
         csp.run_lua(
-            """
+            f"""
 local function emit(key, value)
   if value == nil then
     print(key .. "=")
@@ -35,7 +35,9 @@ end
 local scene = sd.world and sd.world.get_scene and sd.world.get_scene()
 local world = sd.world and sd.world.get_state and sd.world.get_state()
 local combat = sd.gameplay and sd.gameplay.get_combat_state and sd.gameplay.get_combat_state()
-local gameplay_global = sd.debug and sd.debug.read_ptr and sd.debug.read_ptr(0x0081C264) or 0
+local gameplay_global = sd.debug and sd.debug.read_ptr and sd.debug.read_ptr({csp.read_runtime_layout_offset("game_object")}) or 0
+local gameplay_primary_gate_block_flag = {csp.read_runtime_layout_offset("gameplay_primary_gate_block_flag")}
+local gameplay_wave_text_value = {csp.read_runtime_layout_offset("gameplay_wave_text_value")}
 
 emit("scene.available", type(scene) == "table")
 if type(scene) == "table" then
@@ -56,7 +58,7 @@ end
 
 emit("combat.available", type(combat) == "table")
 if type(combat) == "table" then
-  for _, key in ipairs({
+  for _, key in ipairs({{
     "arena_id",
     "section_index",
     "wave_index",
@@ -67,15 +69,15 @@ if type(combat) == "table" then
     "started_music",
     "transition_requested",
     "active"
-  }) do
+  }}) do
     emit("combat." .. key, combat[key])
   end
 end
 
 emit("raw.gameplay_global", gameplay_global)
 if gameplay_global ~= nil and gameplay_global ~= 0 then
-  emit("raw.gameplay_global_1abe", sd.debug.read_u8(gameplay_global + 0x1ABE))
-  emit("raw.gameplay_global_1c30", sd.debug.read_u16(gameplay_global + 0x1C30))
+  emit("raw.gameplay_global_1abe", sd.debug.read_u8(gameplay_global + gameplay_primary_gate_block_flag))
+  emit("raw.gameplay_global_1c30", sd.debug.read_u16(gameplay_global + gameplay_wave_text_value))
 end
 """.strip()
         )
@@ -127,7 +129,7 @@ def launch_clean_testrun(element: str, discipline: str) -> list[dict[str, object
     csp.wait_for_lua_pipe()
     pid = current_game_pid()
     navigation.append({"step": "game_started", "pid": pid})
-    hub_flow = csp.drive_hub_flow(pid, element=element, discipline=discipline, prefer_resume=True)
+    hub_flow = csp.drive_hub_flow(pid, element=element, discipline=discipline, prefer_resume=False)
     navigation.append({"step": "hub_ready", "flow": hub_flow, "scene": csp.query_scene_state()})
     navigation.append({"step": "testrun_ready", "scene": start_testrun_without_waves()})
     return navigation

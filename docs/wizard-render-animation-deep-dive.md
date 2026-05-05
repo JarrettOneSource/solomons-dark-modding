@@ -23,7 +23,7 @@ Those three pipelines share data, but they are not interchangeable.
 - `Mod Loader/runtime/ghidra-player-descriptor-candidates.txt`
 - `Mod Loader/runtime/equip-analysis-summary.md`
 - `Mod Loader/SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization*.inl`
-- `Mod Loader/SolomonDarkModLoader/src/mod_loader_gameplay/core/synthetic_wizard_source_profiles.inl`
+- `Mod Loader/docs/native-source-profile-re.md`
 
 ## Executive summary
 
@@ -206,7 +206,7 @@ So `Gameplay_FinalizePlayerStart` is a reference for helper-item construction or
 | `+0x240` | `render_variant_tertiary` | tertiary variant selector |
 | `+0x244..+0x263` | `render_descriptor` | packed cloth + trim color data used by body render |
 | `+0x264` | `hub_visual_attachment` | source-side attachment item pointer |
-| `+0x268` | `render_drive_move_blend` | movement blend scalar |
+| `+0x268` | `render_overlay_effect_phase` | native-owned overlay/effect phase gate; historically exposed as `render_drive_move_blend`, but loader movement must not write it |
 | `+0x300` | `progression_handle` | wrapper pointer, not the inner runtime |
 | `+0x304` | `equip_handle` | wrapper pointer, not the inner runtime |
 
@@ -546,15 +546,15 @@ Current bot materialization code in `src/mod_loader_gameplay/standalone_material
 The key bridge is `SeedGameplaySlotBotRenderStateFromSourceActor`, plus
 `CreateWizardCloneSourceActor`, which:
 
-- synthesizes a source profile
-- calls `ActorBuildRenderDescriptorFromSource`
+- now seeds the temporary source actor from a live native visual snapshot
+- calls `WizardCloneFromSourceActor` without a loader-owned source-profile buffer
 - then, before the April 10, 2026 fix, copied donor-owned animation state back over the bot anyway
 
 Relevant loader sections:
 
 - `standalone_materialization_slot_bot_creation.inl`
 - `standalone_materialization_wizard_clone_source.inl`
-- `core/synthetic_wizard_source_profiles.inl`
+- `docs/native-source-profile-re.md`
 
 That is not the stock clone design.
 
@@ -595,7 +595,32 @@ That directly conflicts with the recovered `0x0054BA80` behavior:
 
 The current helper no longer does that. Idle writes `+0x160 = 0`, which keeps the bot on the main `0x0054BA80` branch.
 
-## 6.4 Pre-fix staff ownership diverged from stock
+## 6.4 May 1 Staff Orb Scale Regression
+
+Live all-bots testing exposed a movement-only visual corruption: when a bot
+walked, the staff orb/light effect expanded to a huge persistent glow while robe
+colors stayed correct. A screenshot was captured at
+`runtime/screenshots/staff_orb_window.png`.
+
+Runtime state showed the active moving bot had `actor +0x268 = 1.0f` because the
+loader had started treating that field as a writable movement blend. The
+recovered animation artifacts say something more specific:
+
+- `0x0054BA80` / `ActorAnimation_Advance` reads `actor +0x268` while dispatching
+  overlay/effect helper draws.
+- `refs_dat819978.log` shows the native path incrementing `+0x260/+0x264/+0x268/
+  +0x26C/+0x270` by a native frame step and wrapping them against a native
+  threshold.
+- `0x00538B80` / `ActorAnimation_MainPath` gates extra overlay/helper draws from
+  `actor +0x238/+0x248/+0x268`.
+
+The corrected contract is that loader-driven walking may update the walk-cycle
+and frame-phase fields it owns (`+0x220/+0x224/+0x228/+0x234/+0x238`), but it
+must leave `+0x268` native-owned. The `render_drive_move_blend` API name remains
+as a legacy diagnostic exposure for now; it should be treated as read-only
+overlay/effect phase evidence, not a movement-control input.
+
+## 6.5 Pre-fix staff ownership diverged from stock
 
 Before the April 10, 2026 fix, bot finalization created robe/hat visuals but left the stock-built attachment parked on actor `+0x264` instead of transferring it into the equip sink.
 
@@ -624,7 +649,7 @@ Live validation from the April 11 build:
 - equip `+0x30` still holds a non-null attachment object
 - the staff orb still renders, which confirms the orb comes from the attachment path rather than actor-side `+0x23E`
 
-## 6.5 World registration order differs from stock
+## 6.6 World registration order differs from stock
 
 Stock clone registers the new actor immediately after construction, before progression/equip/link priming.
 
@@ -640,7 +665,7 @@ See:
 
 This may not be the root visual bug, but it is a real sequencing difference from stock.
 
-## 6.6 The loader still needs non-stock scene/render hacks
+## 6.7 The loader still needs non-stock scene/render hacks
 
 Before the residual fix, the loader:
 
@@ -656,7 +681,7 @@ That was strong evidence that the bot did not own its own clean render/scene att
 
 In stock clone, those writes are not part of the recovered sequence.
 
-## 6.7 Pre-fix finalization and per-tick repair reapplied donor animation state
+## 6.8 Pre-fix finalization and per-tick repair reapplied donor animation state
 
 Before the fix, the loader:
 
@@ -697,7 +722,10 @@ The safest stock-aligned model is:
 - treat robe/hat helper items and equip sink `+0x30` as the standalone-clone equipment state
 - treat `+0x23F` as input and `+0x21C` as the concrete live selection state
 - treat `+0x160` as an animation-branch selector that must not be hard-forced incorrectly
-- treat `+0x22C/+0x234/+0x238/+0x220/+0x224/+0x228/+0x268` as the motion/frame-driving state that must remain coherent
+- treat `+0x22C/+0x234/+0x238/+0x220/+0x224/+0x228` as the loader-owned
+  motion/frame-driving state that must remain coherent
+- treat `+0x268` as native-owned overlay/effect phase state; observe it, but do
+  not write it from loader movement
 
 If the bot path reintroduces donor `+0x21C` writes or donor copies of `+0x220..+0x263`, fixes will remain fragile.
 
@@ -708,7 +736,7 @@ If the bot path reintroduces donor `+0x21C` writes or donor copies of `+0x220..+
 3. `actor +0x264` is a source-side attachment slot. Stock standalone clones transfer that object into equip sink `+0x30`.
 4. `actor +0x21C` is a required `0x38` live selection/control object, not just an optional cached int.
 5. `actor +0x23F` is not the final active animation state. Stock clone maps it into concrete `+0x21C` ids.
-6. The key animation desync bugs came from donor-clobbering bot-owned `+0x21C` and `+0x220..+0x263` state after runtime initialization, and later from per-tick reuse of the player's live observed drive profile. The current loader fix removes that overwrite, caches bot-owned drive profiles, and restores stock staff transfer.
+6. The key animation desync bugs came from donor-clobbering bot-owned `+0x21C` and `+0x220..+0x263` state after runtime initialization, and later from per-tick reuse of the player's live observed drive profile. The current loader fix removes that overwrite, caches bot-owned drive profiles, restores stock staff transfer, and leaves the `+0x268` overlay/effect phase under native ownership.
 
 ## 9. Remaining uncertainty
 

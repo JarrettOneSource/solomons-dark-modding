@@ -18,35 +18,51 @@ struct GameplayPathGridSnapshot {
     std::vector<GameplayPathCircleObstacle> ignored_circle_obstacles;
 };
 
-constexpr int kGameplayPathCellPlacementSampleResolution = 5;
-constexpr std::uint32_t kGameplayPathStaticCircleObstacleMask = 0x00000004;
-constexpr std::uint32_t kGameplayPathPushableCircleObstacleMask = 0x00002000;
-constexpr std::uint32_t kGameplayPathPushThroughGateCircleObjectType = 0x00000BBE;
-constexpr float kGameplayPathPushThroughGateCircleRadius = 10.0f;
-constexpr float kGameplayPathCircleRadiusEpsilon = 0.01f;
-constexpr std::size_t kGameplayPathMaxStaticCircleObstacles = 8192;
-constexpr std::size_t kMovementCircleCountOffset = 0xA0;
-constexpr std::size_t kMovementCircleListOffset = 0xAC;
-constexpr std::size_t kMovementCircleObjectTypeOffset = 0x08;
-constexpr std::size_t kMovementCircleMaskOffset = 0x14;
-constexpr std::size_t kMovementCircleXOffset = 0x18;
-constexpr std::size_t kMovementCircleYOffset = 0x1C;
-constexpr std::size_t kMovementCircleRadiusOffset = 0x30;
+int GameplayPathCellPlacementSampleResolution() {
+    const auto value = static_cast<int>(kGameplayPathCellPlacementSampleResolution);
+    return value > 0 ? value : 1;
+}
+
+int GameplayPathCellLineSampleResolution() {
+    const auto value = static_cast<int>(kGameplayPathCellLineSampleResolution);
+    return value > 0 ? value : 1;
+}
+
+std::uint32_t GameplayPathStaticCircleObstacleMask() {
+    return static_cast<std::uint32_t>(kGameplayPathStaticCircleObstacleMask);
+}
+
+std::uint32_t GameplayPathPushableCircleObstacleMask() {
+    return static_cast<std::uint32_t>(kGameplayPathPushableCircleObstacleMask);
+}
+
+std::uint32_t GameplayPathPushThroughGateCircleObjectType() {
+    return static_cast<std::uint32_t>(kGameplayPathPushThroughGateCircleObjectType);
+}
+
+float GameplayPathPushThroughGateCircleRadius() {
+    return static_cast<float>(kGameplayPathPushThroughGateCircleRadius);
+}
+
+float GameplayPathPushThroughGateRadiusEpsilon() {
+    return static_cast<float>(kGameplayPathPushThroughGateRadiusEpsilonMilliunits) / 1000.0f;
+}
 
 bool IsGameplayPathIgnoredStaticCircleObstacle(
     std::uint32_t mask,
     std::uint32_t object_type,
     float radius) {
-    if ((mask & kGameplayPathPushableCircleObstacleMask) != 0) {
+    if ((mask & GameplayPathPushableCircleObstacleMask()) != 0) {
         return true;
     }
 
+    const auto push_through_gate_radius = GameplayPathPushThroughGateCircleRadius();
     const auto radius_delta =
-        radius > kGameplayPathPushThroughGateCircleRadius
-            ? radius - kGameplayPathPushThroughGateCircleRadius
-            : kGameplayPathPushThroughGateCircleRadius - radius;
-    return object_type == kGameplayPathPushThroughGateCircleObjectType &&
-           radius_delta <= kGameplayPathCircleRadiusEpsilon;
+        radius > push_through_gate_radius
+            ? radius - push_through_gate_radius
+            : push_through_gate_radius - radius;
+    return object_type == GameplayPathPushThroughGateCircleObjectType() &&
+           radius_delta <= GameplayPathPushThroughGateRadiusEpsilon();
 }
 
 float NormalizeGameplayHeadingDegrees(float heading_degrees) {
@@ -151,11 +167,16 @@ bool TryBuildGameplayPathGridSnapshot(
 
     auto& memory = ProcessMemory::Instance();
     const auto controller_address = world_address + kActorOwnerMovementControllerOffset;
-    const auto cells_address = memory.ReadFieldOr<uintptr_t>(controller_address, 0xB4, 0);
-    const auto grid_height = static_cast<int>(memory.ReadFieldOr<std::uint32_t>(controller_address, 0xD8, 0));
-    const auto grid_width = static_cast<int>(memory.ReadFieldOr<std::uint32_t>(controller_address, 0xDC, 0));
-    const auto cell_width = memory.ReadFieldOr<float>(controller_address, 0xE0, 0.0f);
-    const auto cell_height = memory.ReadFieldOr<float>(controller_address, 0xE4, 0.0f);
+    const auto cells_address =
+        memory.ReadFieldOr<uintptr_t>(controller_address, kMovementControllerCellsOffset, 0);
+    const auto grid_height = static_cast<int>(
+        memory.ReadFieldOr<std::uint32_t>(controller_address, kMovementControllerGridHeightOffset, 0));
+    const auto grid_width = static_cast<int>(
+        memory.ReadFieldOr<std::uint32_t>(controller_address, kMovementControllerGridWidthOffset, 0));
+    const auto cell_width =
+        memory.ReadFieldOr<float>(controller_address, kMovementControllerCellWidthOffset, 0.0f);
+    const auto cell_height =
+        memory.ReadFieldOr<float>(controller_address, kMovementControllerCellHeightOffset, 0.0f);
     if (cells_address == 0 || grid_width <= 0 || grid_height <= 0 || cell_width <= 0.0f || cell_height <= 0.0f) {
         if (error_message != nullptr) {
             *error_message =
@@ -177,11 +198,11 @@ bool TryBuildGameplayPathGridSnapshot(
 
     const auto circle_count = memory.ReadFieldOr<std::int32_t>(
         controller_address,
-        kMovementCircleCountOffset,
+        kMovementControllerCircleCountOffset,
         0);
     const auto circle_list_address = memory.ReadFieldOr<uintptr_t>(
         controller_address,
-        kMovementCircleListOffset,
+        kMovementControllerCircleListOffset,
         0);
     if (circle_count > 0 && circle_list_address != 0) {
         const auto clamped_count =
@@ -203,7 +224,7 @@ bool TryBuildGameplayPathGridSnapshot(
                 circle_address,
                 kMovementCircleMaskOffset,
                 0);
-            if ((mask & kGameplayPathStaticCircleObstacleMask) == 0) {
+            if ((mask & GameplayPathStaticCircleObstacleMask()) == 0) {
                 continue;
             }
 

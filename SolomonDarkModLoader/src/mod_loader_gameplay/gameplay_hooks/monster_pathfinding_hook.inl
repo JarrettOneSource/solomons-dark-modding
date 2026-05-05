@@ -69,7 +69,7 @@ void __fastcall HookMonsterPathfindingRefreshTarget(void* self, void* /*unused_e
     auto best_distance = (std::numeric_limits<float>::max)();
     uintptr_t best_actor_address = 0;
     const auto current_target_actor_address =
-        memory.ReadFieldOr<uintptr_t>(hostile_actor_address, kHostileCurrentTargetActorOffset, 0);
+        memory.ReadFieldOr<uintptr_t>(hostile_actor_address, kActorCurrentTargetActorOffset, 0);
     bool current_target_is_dead_bot = false;
     if (!compute_distance_to(current_target_actor_address, &best_distance) &&
         current_target_actor_address != 0 &&
@@ -116,7 +116,7 @@ void __fastcall HookMonsterPathfindingRefreshTarget(void* self, void* /*unused_e
         if (current_target_is_dead_bot) {
             (void)memory.TryWriteField<uintptr_t>(
                 hostile_actor_address,
-                kHostileCurrentTargetActorOffset,
+                kActorCurrentTargetActorOffset,
                 0);
             (void)memory.TryWriteField<std::int32_t>(
                 hostile_actor_address,
@@ -171,7 +171,7 @@ void __fastcall HookMonsterPathfindingRefreshTarget(void* self, void* /*unused_e
         best_actor_slot * kActorWorldBucketStride + best_world_slot -
         hostile_actor_slot * kActorWorldBucketStride;
 
-    (void)memory.TryWriteField(hostile_actor_address, kHostileCurrentTargetActorOffset, best_actor_address);
+    (void)memory.TryWriteField(hostile_actor_address, kActorCurrentTargetActorOffset, best_actor_address);
     (void)memory.TryWriteField(hostile_actor_address, kHostileTargetBucketDeltaOffset, best_bucket_delta);
 
     if (best_actor_address != current_target_actor_address) {

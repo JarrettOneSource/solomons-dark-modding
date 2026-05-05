@@ -199,23 +199,6 @@ void __fastcall HookActorWorldUnregister(
     }
 
     if (actor_address != 0 && remove_from_container == 1) {
-        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-        if (const auto* binding = FindParticipantEntityForActor(actor_address);
-            binding != nullptr && IsRegisteredGameNpcKind(binding->kind)) {
-            Log(
-                "[bots] world_unregister observed for registered GameNpc. bot_id=" +
-                std::to_string(binding->bot_id) +
-                " actor=" + HexString(actor_address) +
-                " world_self=" + HexString(world_address) +
-                " actor_owner=" + HexString(ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
-                    actor_address,
-                    kActorOwnerOffset,
-                    0)) +
-                " remove_from_container=" + std::to_string(static_cast<int>(remove_from_container)));
-        }
-    }
-
-    if (actor_address != 0 && remove_from_container == 1) {
         const auto actor_owner =
             ProcessMemory::Instance().ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
         if (actor_owner != 0 && actor_owner != world_address) {

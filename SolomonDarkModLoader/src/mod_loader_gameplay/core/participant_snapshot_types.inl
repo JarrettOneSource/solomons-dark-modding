@@ -64,6 +64,13 @@ struct ParticipantGameplaySnapshot {
     std::int32_t cast_skill_id = 0;
     int cast_ticks_waiting = 0;
     uintptr_t cast_target_actor_address = 0;
+    bool active_spell_object_readable = false;
+    uintptr_t active_spell_object_address = 0;
+    std::uint32_t active_spell_object_type = 0;
+    float active_spell_object_x = 0.0f;
+    float active_spell_object_y = 0.0f;
+    float active_spell_object_radius = 0.0f;
+    float active_spell_object_charge = 0.0f;
     float x = 0.0f;
     float y = 0.0f;
     float heading = 0.0f;

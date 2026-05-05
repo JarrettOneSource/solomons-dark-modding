@@ -12,10 +12,6 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     const auto actor_address = binding->actor_address;
     constexpr float kRadiansToDegrees = 57.2957795130823208767981548141051703f;
     constexpr std::uint8_t kActorActiveCastGroupSentinel = 0xFF;
-    constexpr std::uint16_t kActorActiveCastSlotSentinel = 0xFFFF;
-    const auto kActorPreviousSkillIdOffset =
-        kActorPrimarySkillIdOffset + sizeof(std::int32_t);
-    constexpr std::size_t kProgressionCurrentSpellIdOffset = 0x750;
     const auto finish_attack_idle = [&]() {
         const auto heading =
             memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
@@ -67,9 +63,50 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
             return;
         }
 
+        RestoreSelectionStateObjectAfterCast(*ongoing);
         RestoreSelectionBrainAfterCast(*ongoing);
         ClearSelectionBrainTarget(ongoing->selection_state_pointer);
         RestoreOngoingCastNativeTargetActor(actor_address, *ongoing);
+        (void)memory.TryWriteField<float>(
+            actor_address,
+            kActorAimTargetXOffset,
+            ongoing->aim_x_before);
+        (void)memory.TryWriteField<float>(
+            actor_address,
+            kActorAimTargetYOffset,
+            ongoing->aim_y_before);
+        (void)memory.TryWriteField<std::uint32_t>(
+            actor_address,
+            kActorAimTargetAux0Offset,
+            ongoing->aim_aux0_before);
+        (void)memory.TryWriteField<std::uint32_t>(
+            actor_address,
+            kActorAimTargetAux1Offset,
+            ongoing->aim_aux1_before);
+        (void)memory.TryWriteField<std::uint8_t>(
+            actor_address,
+            kActorCastSpreadModeByteOffset,
+            ongoing->spread_before);
+        (void)memory.TryWriteField<std::int32_t>(
+            actor_address,
+            kActorPrimarySkillIdOffset,
+            ongoing->primary_skill_id_before);
+        (void)memory.TryWriteField<std::int32_t>(
+            actor_address,
+            kActorPreviousSkillIdOffset,
+            ongoing->previous_skill_id_before);
+        (void)memory.TryWriteField<std::uint32_t>(
+            actor_address,
+            kActorPrimaryActionLatchE4Offset,
+            ongoing->primary_action_latch_e4_before);
+        (void)memory.TryWriteField<std::uint32_t>(
+            actor_address,
+            kActorPrimaryActionLatchE8Offset,
+            ongoing->primary_action_latch_e8_before);
+        (void)memory.TryWriteField<std::uint8_t>(
+            actor_address,
+            kActorPostGateActiveByteOffset,
+            ongoing->post_gate_active_before);
         binding->facing_target_actor_address = 0;
         if (ongoing->gameplay_selection_state_override_active &&
             binding->gameplay_slot >= 0 &&
@@ -103,21 +140,34 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     int requested_skill_id = request.skill_id;
     ResolvedPrimaryCastDescriptor primary_descriptor{};
     bool have_primary_descriptor = false;
-    if (requested_skill_id <= 0 && request.kind == multiplayer::BotCastKind::Primary) {
-        if (!TryResolveProfilePrimaryCastDescriptor(
-                binding->character_profile,
-                &primary_descriptor)) {
-            finish_attack_idle();
-            if (error_message != nullptr) {
-                *error_message =
-                    "primary cast has no stock loadout pair. primary=" +
-                    std::to_string(primary_descriptor.primary_entry_index) +
-                    " combo=" + std::to_string(primary_descriptor.combo_entry_index);
+    if (request.kind == multiplayer::BotCastKind::Primary) {
+        if (requested_skill_id <= 0) {
+            if (!TryResolveProfilePrimaryCastDescriptor(
+                    binding->character_profile,
+                    &primary_descriptor)) {
+                finish_attack_idle();
+                if (error_message != nullptr) {
+                    *error_message =
+                        "primary cast has no stock loadout pair. primary=" +
+                        std::to_string(primary_descriptor.primary_entry_index) +
+                        " combo=" + std::to_string(primary_descriptor.combo_entry_index);
+                }
+                return false;
             }
-            return false;
+            have_primary_descriptor = true;
+            requested_skill_id =
+                primary_descriptor.dispatcher_skill_id > 0
+                    ? primary_descriptor.dispatcher_skill_id
+                    : primary_descriptor.build_skill_id;
+        } else if (TryResolvePrimaryCastDescriptorFromSkillId(
+                       requested_skill_id,
+                       &primary_descriptor)) {
+            have_primary_descriptor = true;
+            requested_skill_id =
+                primary_descriptor.dispatcher_skill_id > 0
+                    ? primary_descriptor.dispatcher_skill_id
+                    : primary_descriptor.build_skill_id;
         }
-        have_primary_descriptor = true;
-        requested_skill_id = primary_descriptor.dispatcher_skill_id;
     }
     if (requested_skill_id <= 0 &&
         (!have_primary_descriptor ||
@@ -129,11 +179,8 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         }
         return false;
     }
-
     const auto combat_selection_state =
-        have_primary_descriptor
-            ? primary_descriptor.selection_state
-            : ResolveCombatSelectionStateForSkillId(requested_skill_id);
+        have_primary_descriptor ? primary_descriptor.selection_state : -1;
     if (combat_selection_state < 0) {
         finish_attack_idle();
         if (error_message != nullptr) {
@@ -243,6 +290,16 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
     ongoing.spread_before =
         memory.ReadFieldOr<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
+    ongoing.primary_skill_id_before =
+        memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
+    ongoing.previous_skill_id_before =
+        memory.ReadFieldOr<std::int32_t>(actor_address, kActorPreviousSkillIdOffset, 0);
+    ongoing.primary_action_latch_e4_before =
+        memory.ReadFieldOr<std::uint32_t>(actor_address, kActorPrimaryActionLatchE4Offset, 0);
+    ongoing.primary_action_latch_e8_before =
+        memory.ReadFieldOr<std::uint32_t>(actor_address, kActorPrimaryActionLatchE8Offset, 0);
+    ongoing.post_gate_active_before =
+        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorPostGateActiveByteOffset, 0);
 
     ongoing.selection_state_pointer =
         memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
@@ -303,11 +360,13 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
             const auto refresh_progression_address =
                 memory.ResolveGameAddressOrZero(kActorProgressionRefresh);
             DWORD refresh_exception_code = 0;
-            if (refresh_progression_address == 0 ||
-                !CallActorProgressionRefreshSafe(
+            const bool refresh_succeeded =
+                refresh_progression_address != 0 &&
+                CallActorProgressionRefreshSafe(
                     refresh_progression_address,
                     actor_address,
-                    &refresh_exception_code)) {
+                    &refresh_exception_code);
+            if (!refresh_succeeded) {
                 RollbackPreparedStartup(&ongoing);
                 finish_attack_idle();
                 if (error_message != nullptr) {
@@ -337,18 +396,13 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
                     requested_skill_id);
         }
     }
-    const auto native_tick_skill_id =
-        ongoing.uses_dispatcher_skill_id && ongoing.dispatcher_skill_id > 0
-            ? ongoing.dispatcher_skill_id
-            : ongoing.skill_id;
-    ongoing.requires_local_slot_native_tick =
-        SkillRequiresLocalSlotDuringNativeTick(native_tick_skill_id);
     const auto cast_mana =
         multiplayer::ResolveBotCastManaCost(
             binding->character_profile,
+            ongoing.progression_runtime_address,
             request.kind,
             request.secondary_slot,
-            ongoing.skill_id);
+            request.skill_id);
     if (!cast_mana.resolved) {
         Log(
             "[bots] mana rejected. bot_id=" + std::to_string(binding->bot_id) +
@@ -365,8 +419,17 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     }
     ongoing.mana_charge_kind = cast_mana.kind;
     ongoing.mana_cost = cast_mana.cost;
-    ongoing.mana_statbook_level = cast_mana.statbook_level;
+    ongoing.mana_progression_level = cast_mana.progression_level;
     ongoing.mana_last_charge_ms = static_cast<std::uint64_t>(GetTickCount64());
+    Log(
+        "[bots] mana prepared. bot_id=" + std::to_string(binding->bot_id) +
+        " skill_id=" + std::to_string(ongoing.skill_id) +
+        " kind=" + multiplayer::BotManaChargeKindLabel(cast_mana.kind) +
+        " progression_level=" + std::to_string(cast_mana.progression_level) +
+        " cost=" + std::to_string(cast_mana.cost) +
+        " native_stat_cost=" + std::to_string(cast_mana.native_stat_cost) +
+        " native_output_scale=" + std::to_string(cast_mana.native_output_scale) +
+        " progression_runtime=" + HexString(ongoing.progression_runtime_address));
     if (cast_mana.kind != multiplayer::BotManaChargeKind::None) {
         if (ongoing.progression_runtime_address == 0) {
             RollbackPreparedStartup(&ongoing);
@@ -381,7 +444,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
             float current_mp = 0.0f;
             float max_mp = 0.0f;
             if (!TryReadProgressionMana(ongoing.progression_runtime_address, &current_mp, &max_mp) ||
-                current_mp + 0.001f < cast_mana.cost) {
+                !multiplayer::CanBotManaStartCast(cast_mana, current_mp, max_mp)) {
                 Log(
                     "[bots] mana rejected. bot_id=" + std::to_string(binding->bot_id) +
                     " skill_id=" + std::to_string(ongoing.skill_id) +
@@ -402,7 +465,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
             const float required_mana =
                 multiplayer::ResolveBotManaRequiredToStart(cast_mana);
             if (!TryReadProgressionMana(ongoing.progression_runtime_address, &current_mp, &max_mp) ||
-                current_mp + 0.001f < required_mana) {
+                !multiplayer::CanBotManaStartCast(cast_mana, current_mp, max_mp)) {
                 Log(
                     "[bots] mana rejected. bot_id=" + std::to_string(binding->bot_id) +
                     " skill_id=" + std::to_string(ongoing.skill_id) +
@@ -433,17 +496,18 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     const auto active_cast_group_before =
         memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
     if (cleanup_address != 0 && active_cast_group_before != kActorActiveCastGroupSentinel) {
-        LocalPlayerCastShimState shim_state;
-        const auto shim_active = EnterLocalPlayerCastShim(binding, &shim_state);
         DWORD cleanup_exception_code = 0;
-        const auto cleanup_ok = shim_active &&
+        const auto cleanup_ok =
             CallCastActiveHandleCleanupSafe(cleanup_address, actor_address, &cleanup_exception_code);
-        LeaveLocalPlayerCastShim(shim_state);
         if (!cleanup_ok) {
-            (void)memory.TryWriteField<std::uint8_t>(
-                actor_address, kActorActiveCastGroupByteOffset, kActorActiveCastGroupSentinel);
-            (void)memory.TryWriteField<std::uint16_t>(
-                actor_address, kActorActiveCastSlotShortOffset, kActorActiveCastSlotSentinel);
+            RollbackPreparedStartup(&ongoing);
+            finish_attack_idle();
+            if (error_message != nullptr) {
+                *error_message =
+                    "prior native active-handle cleanup failed with " +
+                    HexString(cleanup_exception_code);
+            }
+            return false;
         }
     }
 
@@ -462,15 +526,11 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         const auto pure_primary_start_address =
             memory.ResolveGameAddressOrZero(kSpellCastPurePrimary);
         if (pure_primary_start_address != 0) {
-            LocalPlayerCastShimState shim_state;
-            const auto shim_active = EnterLocalPlayerCastShim(binding, &shim_state);
             pure_primary_primer_called =
-                shim_active &&
                 CallPurePrimarySpellStartSafe(
                     pure_primary_start_address,
                     actor_address,
                     &pure_primary_primer_exception);
-            LeaveLocalPlayerCastShim(shim_state);
         }
         if (pure_primary_primer_called && ongoing.uses_dispatcher_skill_id) {
             PrimeGameplaySlotPostGateDispatchState(actor_address, ongoing.dispatcher_skill_id);
@@ -531,10 +591,9 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
 //     FUN_0052F3B0 cleanup shares the slot==0 early-out. Standalone clone-rail
 //     bots inherit slot 0 from the source player actor so the gate passes
 //     naturally; gameplay-slot bots carry their true slot (1/2/3) in
-//     actor+0x5C, so without a temp-flip the dispatcher runs but the handler
-//     bails before allocating the spell object and no visual effect renders.
-//     InvokeWithLocalPlayerSlot below wraps each native dispatcher/cleanup
-//     call with a transient actor+0x5C = 0 write and an immediate restore.
+    //     actor+0x5C. The loader now unlocks the recovered native branch gates,
+    //     so the handlers keep actor+0x5C pointed at the real gameplay slot and
+    //     read that slot's live progression handle.
 //
 //   * Bot flow (this function): PlayerActorTick still runs for the bot actor
 //     via `original(self)` in the tick hook, so FUN_00548A00 keeps driving

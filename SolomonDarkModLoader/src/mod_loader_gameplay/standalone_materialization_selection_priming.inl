@@ -16,7 +16,7 @@ bool PrimeGameplaySlotBotSelectionState(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto choice_ids = ResolveProfileAppearanceChoiceIds(character_profile);
+    const auto& choice_ids = character_profile.appearance.choice_ids;
     const auto selection_state = ResolveProfileSelectionState(character_profile);
     uintptr_t gameplay_address = 0;
     uintptr_t slot_progression_wrapper = 0;
@@ -42,32 +42,32 @@ bool PrimeGameplaySlotBotSelectionState(
         " slot_prog_inner=" + HexString(slot_progression_inner));
 
     // Gameplay_CreatePlayerSlot allocates a fresh PlayerProgression, but the
-    // stock "new character" flow (FUN_005D0290) is what actually grows the
-    // appearance table vector at progression+0x20 before calling
-    // PlayerAppearance_ApplyChoice. For arena bots we skip ApplyChoice — the
-    // slot's appearance vector is empty, so ApplyChoice(choice_id >= table_count)
-    // access-violates inside the grow path. Direct writes to the choice-id
-    // fields plus ActorProgressionRefresh downstream give us the same observable
-    // progression state, and the actor's visuals come from the cloned source
-    // descriptor seeded by SeedGameplaySlotBotRenderStateFromSourceActor, which
-    // does not require ApplyChoice to have run.
-    if (!memory.TryWriteField(
-            progression_address,
-            kPlayerProgressionAppearancePrimaryAOffset,
-            static_cast<std::int32_t>(choice_ids.primary_a)) ||
-        !memory.TryWriteField(
-            progression_address,
-            kPlayerProgressionAppearancePrimaryBOffset,
-            static_cast<std::int32_t>(choice_ids.primary_b)) ||
-        !memory.TryWriteField(
-            progression_address,
-            kPlayerProgressionAppearancePrimaryCOffset,
-            static_cast<std::int32_t>(choice_ids.primary_c))) {
-        if (error_message != nullptr) {
-            *error_message =
-                "Failed to mirror the primary wizard appearance ids into the slot progression object.";
+    // stock "new character" flow (FUN_005D0290) is what grows the appearance
+    // table vector at progression+0x20 before PlayerAppearance_ApplyChoice.
+    // Slot bot visuals are therefore seeded from the native visual snapshot
+    // path; only mirror explicit profile choices when the profile already owns
+    // them, and never invent synthetic appearance ids here.
+    const bool has_primary_choice_ids =
+        choice_ids[0] >= 0 && choice_ids[1] >= 0 && choice_ids[2] >= 0;
+    if (has_primary_choice_ids) {
+        if (!memory.TryWriteField<std::int32_t>(
+                progression_address,
+                kPlayerProgressionAppearancePrimaryAOffset,
+                choice_ids[0]) ||
+            !memory.TryWriteField<std::int32_t>(
+                progression_address,
+                kPlayerProgressionAppearancePrimaryBOffset,
+                choice_ids[1]) ||
+            !memory.TryWriteField<std::int32_t>(
+                progression_address,
+                kPlayerProgressionAppearancePrimaryCOffset,
+                choice_ids[2])) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Failed to mirror explicit primary wizard appearance ids into the slot progression object.";
+            }
+            return false;
         }
-        return false;
     }
 
     if (!TryWriteGameplaySelectionStateForSlot(slot_index, selection_state, error_message)) {
@@ -79,10 +79,10 @@ bool PrimeGameplaySlotBotSelectionState(
         "[bots] visual stage=selection_pre_refresh bot={" +
         BuildActorVisualDebugSummary(actor_address) +
         "} progression=" + HexString(progression_address) +
-        " choice_ids=" + std::to_string(choice_ids.primary_a) + "/" +
-        std::to_string(choice_ids.primary_b) + "/" +
-        std::to_string(choice_ids.primary_c) + "/" +
-        std::to_string(choice_ids.secondary));
+        " choice_ids=" + std::to_string(choice_ids[0]) + "/" +
+        std::to_string(choice_ids[1]) + "/" +
+        std::to_string(choice_ids[2]) + "/" +
+        std::to_string(choice_ids[3]));
 
     if (!PrimeStandaloneWizardProgressionSelectionState(
             progression_address,
@@ -126,14 +126,17 @@ bool PrimeGameplaySlotBotSelectionState(
         return false;
     }
 
-    if (!memory.TryWriteField(
-            progression_address,
-            kPlayerProgressionAppearanceSecondaryOffset,
-            static_cast<std::int32_t>(choice_ids.secondary))) {
-        if (error_message != nullptr) {
-            *error_message = "Failed to mirror the secondary wizard appearance id into the slot progression object.";
+    if (choice_ids[3] >= 0) {
+        if (!memory.TryWriteField<std::int32_t>(
+                progression_address,
+                kPlayerProgressionAppearanceSecondaryOffset,
+                choice_ids[3])) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Failed to mirror explicit secondary wizard appearance id into the slot progression object.";
+            }
+            return false;
         }
-        return false;
     }
 
     // The pure-primary builder mutates the progression runtime after the

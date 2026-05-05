@@ -13,34 +13,34 @@ bool QueueBotCast(const BotCastRequest& request) {
         ClearDeadBotControlsLocked(*participant);
         return false;
     }
-    const auto mana_cost =
-        ResolveBotCastManaCost(
-            participant->character_profile,
-            request.kind,
-            request.secondary_slot,
-            request.skill_id);
-    if (!mana_cost.resolved) {
-        Log(
-            "[bots] cast rejected for unknown mana cost. bot_id=" + std::to_string(request.bot_id) +
-            " requested_skill_id=" + std::to_string(request.skill_id) +
-            " kind=" + (request.kind == BotCastKind::Primary ? std::string("primary") : std::string("secondary")) +
-            " slot=" + std::to_string(request.secondary_slot));
-        return false;
-    }
-    if (participant->runtime.mana_max > 0) {
-        const float required_mana = ResolveBotManaRequiredToStart(mana_cost);
-        if (required_mana > 0.0f &&
-            static_cast<float>(participant->runtime.mana_current) + 0.001f < required_mana) {
-            Log(
-                "[bots] cast rejected for mana. bot_id=" + std::to_string(request.bot_id) +
-                " skill_id=" + std::to_string(mana_cost.skill_id) +
-                " kind=" + (request.kind == BotCastKind::Primary ? std::string("primary") : std::string("secondary")) +
-                " slot=" + std::to_string(request.secondary_slot) +
-                " mode=" + BotManaChargeKindLabel(mana_cost.kind) +
-                " required=" + std::to_string(required_mana) +
-                " current=" + std::to_string(participant->runtime.mana_current));
-            return false;
+
+    SDModParticipantGameplayState refreshed_gameplay_state{};
+    (void)TryRefreshParticipantGameplayState(request.bot_id, &refreshed_gameplay_state);
+    BotSnapshot live_snapshot{};
+    FillBotSnapshot(*participant, &live_snapshot);
+    ApplyGameplayStateToSnapshot(request.bot_id, &live_snapshot);
+    const bool live_progression_available =
+        live_snapshot.progression_runtime_state_address != 0;
+    if (live_snapshot.entity_materialized &&
+        (live_snapshot.max_mp > 0.0f || live_progression_available) &&
+        live_snapshot.mp <= kBotManaReadinessEpsilon) {
+        std::int32_t rejected_skill_id = request.skill_id;
+        if (request.kind == BotCastKind::Primary && rejected_skill_id <= 0) {
+            NativePrimarySpellSelection selection{};
+            if (TryResolveNativePrimarySelectionForProfile(
+                    participant->character_profile,
+                    &selection)) {
+                rejected_skill_id = selection.build_skill_id;
+            }
         }
+        Log(
+            "[bots] cast rejected for mana. bot_id=" + std::to_string(request.bot_id) +
+            " skill_id=" + std::to_string(rejected_skill_id) +
+            " kind=" + (request.kind == BotCastKind::Primary ? std::string("primary") : std::string("secondary")) +
+            " slot=" + std::to_string(request.secondary_slot) +
+            " mode=unavailable before=" + std::to_string(live_snapshot.mp) +
+            " max=" + std::to_string(live_snapshot.max_mp));
+        return false;
     }
 
     const auto* previous_intent = FindPendingMovementIntent(request.bot_id);
@@ -116,215 +116,90 @@ bool QueueBotCast(const BotCastRequest& request) {
 
 BotManaCost ResolveBotCastManaCost(
     const MultiplayerCharacterProfile& character_profile,
+    uintptr_t progression_runtime_address,
     BotCastKind kind,
     std::int32_t secondary_slot,
     std::int32_t skill_id) {
-    constexpr float kFireMana[] = {
-        0.0f, 12.0f, 15.0f, 18.0f, 19.0f, 20.0f, 21.0f, 22.0f, 24.0f,
-        25.0f, 26.0f, 28.0f, 30.0f, 32.0f, 36.0f, 40.0f, 44.0f, 48.0f,
-        50.0f, 53.0f, 56.0f, 59.0f, 72.0f, 75.0f, 77.0f, 80.0f,
-    };
-    constexpr float kWaterMana[] = {
-        0.0f, 12.5f, 17.5f, 18.5f, 20.0f, 21.0f, 22.5f, 25.0f, 27.5f,
-        30.0f, 32.5f, 35.0f, 37.5f, 42.5f, 45.0f, 47.5f, 50.0f, 52.5f,
-        55.0f, 57.5f, 60.0f, 62.5f, 64.5f, 66.5f, 68.5f, 70.5f,
-    };
-    constexpr float kEarthMana[] = {
-        0.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f, 19.0f,
-        20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f, 26.0f, 27.0f, 28.0f,
-        29.0f, 30.0f, 31.0f, 32.0f, 33.0f, 34.0f, 35.0f, 36.0f,
-    };
-    constexpr float kAirMana[] = {
-        0.0f, 12.0f, 14.0f, 18.0f, 20.0f, 21.0f, 22.0f, 25.0f, 27.0f,
-        30.0f, 32.0f, 35.0f, 37.0f, 42.0f, 45.0f, 47.0f, 50.0f, 52.0f,
-        55.0f, 57.0f, 62.0f, 67.0f, 72.0f, 77.0f, 82.0f, 87.0f,
-    };
-    constexpr float kEtherMana[] = {
-        0.0f, 6.0f, 9.0f, 12.0f, 15.0f, 18.0f, 21.0f, 24.0f, 27.0f,
-        30.0f, 33.0f, 36.0f, 39.0f, 42.0f, 45.0f, 48.0f, 51.0f, 54.0f,
-        57.0f, 60.0f, 63.0f, 65.0f, 67.0f, 68.0f, 69.0f, 70.0f,
-    };
-
-    struct PrimaryEntryManaTable {
-        std::int32_t entry_index;
-        std::int32_t skill_id;
-        BotManaChargeKind kind;
-        const float* values;
-        std::size_t count;
-    };
-
-    const PrimaryEntryManaTable kPrimaryManaTables[] = {
-        {0x10, 0x3F3, BotManaChargeKind::PerCast, kFireMana, sizeof(kFireMana) / sizeof(kFireMana[0])},
-        {0x20, 0x3F4, BotManaChargeKind::PerSecond, kWaterMana, sizeof(kWaterMana) / sizeof(kWaterMana[0])},
-        {0x28, 0x3F6, BotManaChargeKind::PerSecond, kEarthMana, sizeof(kEarthMana) / sizeof(kEarthMana[0])},
-        {0x18, 0x3F5, BotManaChargeKind::PerSecond, kAirMana, sizeof(kAirMana) / sizeof(kAirMana[0])},
-        {0x08, 0x3F2, BotManaChargeKind::PerCast, kEtherMana, sizeof(kEtherMana) / sizeof(kEtherMana[0])},
-    };
-
-    const auto clamp_level = [](std::int32_t requested_level, std::size_t count) {
-        if (requested_level < 1) {
-            return 1;
-        }
-        const auto max_level = static_cast<std::int32_t>(count) - 1;
-        return requested_level > max_level ? max_level : requested_level;
-    };
-    auto resolve_from_table = [&](const PrimaryEntryManaTable& table) {
-        BotManaCost cost{};
-        cost.resolved = true;
-        cost.kind = table.kind;
-        cost.statbook_level = clamp_level(character_profile.level, table.count);
-        cost.cost = table.values[cost.statbook_level];
-        cost.skill_id = table.skill_id;
-        return cost;
-    };
-    auto find_primary_table_by_entry = [&](std::int32_t entry_index) -> const PrimaryEntryManaTable* {
-        for (const auto& table : kPrimaryManaTables) {
-            if (table.entry_index == entry_index) {
-                return &table;
-            }
-        }
-        return nullptr;
-    };
-    auto find_primary_table_by_skill = [&](std::int32_t value) -> const PrimaryEntryManaTable* {
-        for (const auto& table : kPrimaryManaTables) {
-            if (table.skill_id == value || table.entry_index == value) {
-                return &table;
-            }
-        }
-        return nullptr;
-    };
-    auto resolve_default_primary_entry = [&]() {
-        switch (character_profile.element_id) {
-        case 0:
-            return 0x10;
-        case 1:
-            return 0x20;
-        case 2:
-            return 0x28;
-        case 3:
-            return 0x18;
-        case 4:
-            return 0x08;
-        default:
-            return -1;
-        }
-    };
-    auto resolve_primary_build_skill_id = [](std::int32_t primary_entry, std::int32_t combo_entry) {
-        const auto matches = [&](std::int32_t a, std::int32_t b) {
-            return primary_entry == a && combo_entry == b;
-        };
-        if (matches(0x08, 0x10) || matches(0x10, 0x08)) {
-            return 1000;
-        }
-        if (matches(0x08, 0x18) || matches(0x18, 0x08)) {
-            return 0x3EA;
-        }
-        if (matches(0x08, 0x20) || matches(0x20, 0x08)) {
-            return 0x3E9;
-        }
-        if (matches(0x08, 0x28) || matches(0x28, 0x08)) {
-            return 0x3EE;
-        }
-        if (matches(0x10, 0x18) || matches(0x18, 0x10)) {
-            return 0x3EB;
-        }
-        if (matches(0x10, 0x20) || matches(0x20, 0x10)) {
-            return 0x3ED;
-        }
-        if (matches(0x10, 0x28) || matches(0x28, 0x10)) {
-            return 0x3EF;
-        }
-        if (matches(0x18, 0x20) || matches(0x20, 0x18)) {
-            return 0x3EC;
-        }
-        if (matches(0x18, 0x28) || matches(0x28, 0x18)) {
-            return 0x3F1;
-        }
-        if (matches(0x20, 0x28) || matches(0x28, 0x20)) {
-            return 0x3F0;
-        }
-        if (matches(0x08, 0x08)) {
-            return 0x3F2;
-        }
-        if (matches(0x10, 0x10)) {
-            return 0x3F3;
-        }
-        if (matches(0x18, 0x18)) {
-            return 0x3F5;
-        }
-        if (matches(0x20, 0x20)) {
-            return 0x3F4;
-        }
-        if (matches(0x28, 0x28)) {
-            return 0x3F6;
-        }
-        return -1;
-    };
-    auto resolve_primary_loadout = [&]() {
-        auto primary_entry = character_profile.loadout.primary_entry_index;
-        if (primary_entry < 0) {
-            primary_entry = resolve_default_primary_entry();
-        }
-        auto combo_entry = character_profile.loadout.primary_combo_entry_index;
-        if (combo_entry < 0) {
-            combo_entry = primary_entry;
-        }
-        const auto build_skill_id = resolve_primary_build_skill_id(primary_entry, combo_entry);
-        if (build_skill_id <= 0) {
-            return BotManaCost{};
-        }
-        const auto* primary_table = find_primary_table_by_entry(primary_entry);
-        const auto* combo_table = find_primary_table_by_entry(combo_entry);
-        if (primary_table == nullptr || combo_table == nullptr) {
-            return BotManaCost{};
-        }
-        if (primary_entry == combo_entry) {
-            auto cost = resolve_from_table(*primary_table);
-            cost.skill_id = build_skill_id;
-            return cost;
-        }
-
-        const auto primary_cost = resolve_from_table(*primary_table);
-        const auto combo_cost = resolve_from_table(*combo_table);
-        BotManaCost cost{};
-        cost.resolved = true;
-        cost.kind =
-            (primary_cost.kind == BotManaChargeKind::PerSecond ||
-             combo_cost.kind == BotManaChargeKind::PerSecond)
-                ? BotManaChargeKind::PerSecond
-                : BotManaChargeKind::PerCast;
-        cost.statbook_level = primary_cost.statbook_level;
-        cost.cost = primary_cost.cost + combo_cost.cost;
-        cost.skill_id = build_skill_id;
-        return cost;
-    };
+    NativePrimarySpellSelection selection{};
+    bool selection_resolved = false;
 
     if (kind == BotCastKind::Primary) {
-        if (const auto* direct_table = find_primary_table_by_skill(skill_id); direct_table != nullptr) {
-            return resolve_from_table(*direct_table);
+        if (skill_id > 0) {
+            selection_resolved =
+                TryResolveNativePrimarySelectionFromSkillId(skill_id, &selection);
+        } else {
+            selection_resolved =
+                TryResolveNativePrimarySelectionForProfile(character_profile, &selection);
         }
-        const auto loadout_cost = resolve_primary_loadout();
-        if (skill_id <= 0 || loadout_cost.skill_id == skill_id) {
-            return loadout_cost;
+    } else {
+        const auto resolved_secondary_skill_id =
+            skill_id > 0
+                ? skill_id
+                : (secondary_slot >= 0 &&
+                           secondary_slot <
+                               static_cast<std::int32_t>(
+                                   character_profile.loadout.secondary_entry_indices.size())
+                       ? character_profile.loadout.secondary_entry_indices[
+                             static_cast<std::size_t>(secondary_slot)]
+                       : -1);
+        if (resolved_secondary_skill_id > 0) {
+            selection_resolved =
+                TryResolveNativePrimarySelectionFromSkillId(
+                    resolved_secondary_skill_id,
+                    &selection);
         }
+    }
+
+    if (!selection_resolved) {
+        Log(
+            "[bots] cast mana unresolved; spell selection is not a native primary. requested_skill_id=" +
+            std::to_string(skill_id) +
+            " kind=" + (kind == BotCastKind::Primary ? std::string("primary") : std::string("secondary")) +
+            " slot=" + std::to_string(secondary_slot));
         return BotManaCost{};
     }
 
-    const auto resolved_secondary_skill_id =
-        skill_id > 0
-            ? skill_id
-            : (secondary_slot >= 0 &&
-                       secondary_slot <
-                           static_cast<std::int32_t>(
-                               character_profile.loadout.secondary_entry_indices.size())
-                   ? character_profile.loadout.secondary_entry_indices[
-                         static_cast<std::size_t>(secondary_slot)]
-                   : -1);
-    if (const auto* direct_table = find_primary_table_by_skill(resolved_secondary_skill_id);
-        direct_table != nullptr) {
-        return resolve_from_table(*direct_table);
+    NativePrimarySpellStats stats{};
+    std::string error_message;
+    if (!TryResolveNativePrimarySpellStats(
+            progression_runtime_address,
+            selection,
+            &stats,
+            &error_message) ||
+        !stats.mana_cost_available ||
+        !stats.mana_spend_cost_available) {
+        Log(
+            "[bots] failed to resolve native spell mana. progression=" +
+            HexString(progression_runtime_address) +
+            " skill_id=" + std::to_string(selection.build_skill_id) +
+            " primary_entry=" + std::to_string(selection.primary_entry_index) +
+            " combo_entry=" + std::to_string(selection.combo_entry_index) +
+            " error=" + error_message);
+        return BotManaCost{};
     }
-    return BotManaCost{};
+    if (!std::isfinite(stats.mana_spend_cost) || stats.mana_spend_cost <= 0.0f) {
+        Log(
+            "[bots] failed to resolve native spell mana. progression=" +
+            HexString(progression_runtime_address) +
+            " skill_id=" + std::to_string(selection.build_skill_id) +
+            " primary_entry=" + std::to_string(selection.primary_entry_index) +
+            " combo_entry=" + std::to_string(selection.combo_entry_index) +
+            " error=native mana spend cost is not positive; spell is unavailable or unlevelled" +
+            " native_stat_cost=" + std::to_string(stats.mana_cost) +
+            " native_output_scale=" + std::to_string(stats.mana_output_scale));
+        return BotManaCost{};
+    }
+
+    BotManaCost cost{};
+    cost.resolved = true;
+    cost.kind =
+        selection.per_second_mana ? BotManaChargeKind::PerSecond : BotManaChargeKind::PerCast;
+    cost.cost = stats.mana_spend_cost;
+    cost.native_stat_cost = stats.mana_cost;
+    cost.native_output_scale = stats.mana_output_scale;
+    cost.progression_level = stats.progression_level;
+    cost.skill_id = stats.current_spell_id > 0 ? stats.current_spell_id : selection.build_skill_id;
+    return cost;
 }
 
 float ResolveBotManaRequiredToStart(const BotManaCost& cost) {
@@ -336,6 +211,25 @@ float ResolveBotManaRequiredToStart(const BotManaCost& cost) {
     case BotManaChargeKind::None:
     default:
         return 0.0f;
+    }
+}
+
+bool CanBotManaStartCast(const BotManaCost& cost, float current_mp, float max_mp) {
+    if (cost.kind == BotManaChargeKind::None) {
+        return true;
+    }
+    if (!std::isfinite(current_mp) || !std::isfinite(max_mp) || max_mp <= 0.0f) {
+        return false;
+    }
+
+    switch (cost.kind) {
+    case BotManaChargeKind::PerCast:
+    case BotManaChargeKind::PerSecond:
+        return current_mp + kBotManaReadinessEpsilon >=
+               ResolveBotManaRequiredToStart(cost);
+    case BotManaChargeKind::None:
+    default:
+        return true;
     }
 }
 

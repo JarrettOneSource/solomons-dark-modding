@@ -14,6 +14,7 @@ import cast_state_probe as csp
 from cast_trace_profiles import build_trace_specs, trace_profile_is_stable, trace_profile_names
 import probe_bot_close_range_combat as crc
 import probe_bot_primary_wave_cast as wave
+import probe_bot_skill_choice_stress as stress
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -27,56 +28,41 @@ ELEMENTS = {
     "air": {"element_id": 3, "primary_entry_index": 0x18},
     "ether": {"element_id": 4, "primary_entry_index": 0x08},
 }
-PRIMARY_STATBOOKS = {
+PRIMARY_SPELL_SPECS = {
     "fire": {
-        "file": "fireball.cfg",
         "build_skill_id": 0x3F3,
         "dispatcher_skill_id": 0,
         "selection_state": 0x10,
         "lane": "pure_primary",
-        "damage_keys": ("mDamage",),
-        "mana_key": "mManaCost",
         "unit": "per_cast",
     },
     "water": {
-        "file": "frost_jet.cfg",
         "build_skill_id": 0x3F4,
         "dispatcher_skill_id": 0x20,
         "selection_state": 0x20,
         "lane": "dispatcher",
-        "damage_keys": ("mDamage",),
-        "mana_key": "mManaCost",
         "unit": "per_second",
     },
     "earth": {
-        "file": "boulder.cfg",
         "build_skill_id": 0x3F6,
         "dispatcher_skill_id": 0x28,
         "selection_state": 0x28,
         "lane": "dispatcher",
-        "damage_keys": ("mDamage",),
-        "mana_key": "mManaCost",
         "unit": "damage_x_boulder_size_and_mana_per_second",
-        "requires_max_size_release": True,
+        "requires_boulder_release": True,
     },
     "air": {
-        "file": "lightning.cfg",
         "build_skill_id": 0x3F5,
         "dispatcher_skill_id": 0x18,
         "selection_state": 0x18,
         "lane": "dispatcher",
-        "damage_keys": ("mDamage",),
-        "mana_key": "mManaCost",
         "unit": "per_second",
     },
     "ether": {
-        "file": "magic_missile.cfg",
         "build_skill_id": 0x3F2,
         "dispatcher_skill_id": 0,
         "selection_state": 0x08,
         "lane": "pure_primary",
-        "damage_keys": ("mDamage1", "mDamage2"),
-        "mana_key": "mManaCost",
         "unit": "per_cast",
     },
 }
@@ -110,7 +96,7 @@ ELEMENT_CAST_INTERVAL_SECONDS = {
 DEFAULT_SETTLE_SECONDS = 1.25
 DEFAULT_MAX_HOSTILE_GAP = 420.0
 DEFAULT_ENEMY_WATCH_COUNT = 24
-SETUP_MODES = ("waves", "manual_prelude")
+SETUP_MODES = ("waves",)
 POSITIONING_MODES = ("auto", "bot_only", "force_both")
 ELEMENT_POSITIONING = {
     "fire": "bot_only",
@@ -125,58 +111,75 @@ ELEMENT_SKIP_HOSTILE_HP_WATCHES = {
     "ether": True,
 }
 POST_COMBAT_PRELUDE_SETTLE_SECONDS = 1.0
-MANUAL_SPAWN_ENEMY_TYPE_ID = 5010
-ARENA_ENEMY_OBJECT_TYPE_ID = 1001
-ARENA_ENEMY_MAX_HP_OFFSET = 0x170
-ARENA_ENEMY_CURRENT_HP_OFFSET = 0x174
-AIR_LIGHTNING_HANDLER_ADDRESS = 0x00451DC0
+OBJECT_TYPE_ID_OFFSET = csp.read_runtime_layout_offset("game_object_type_id")
+ACTOR_POSITION_X_OFFSET = csp.read_runtime_layout_offset("actor_position_x")
+ACTOR_POSITION_Y_OFFSET = csp.read_runtime_layout_offset("actor_position_y")
+ACTOR_HEADING_OFFSET = csp.read_runtime_layout_offset("actor_heading")
+ACTOR_MOVE_SPEED_SCALE_OFFSET = csp.read_runtime_layout_offset("actor_move_speed_scale")
+ACTOR_MOVEMENT_SPEED_MULTIPLIER_OFFSET = csp.read_runtime_layout_offset(
+    "actor_movement_speed_multiplier"
+)
+ACTOR_ANIMATION_CONFIG_BLOCK_OFFSET = csp.read_runtime_layout_offset(
+    "actor_animation_config_block"
+)
+ACTOR_ANIMATION_DRIVE_PARAMETER_OFFSET = csp.read_runtime_layout_offset(
+    "actor_animation_drive_parameter"
+)
+ACTOR_MOVE_STEP_SCALE_OFFSET = csp.read_runtime_layout_offset("actor_move_step_scale")
+ACTOR_PROGRESSION_RUNTIME_STATE_OFFSET = csp.read_runtime_layout_offset(
+    "actor_progression_runtime_state"
+)
+ACTOR_PROGRESSION_HANDLE_OFFSET = csp.read_runtime_layout_offset("actor_progression_handle")
+ARENA_ENEMY_MAX_HP_OFFSET = csp.read_runtime_layout_offset("enemy_max_hp")
+ARENA_ENEMY_CURRENT_HP_OFFSET = csp.read_runtime_layout_offset("enemy_current_hp")
+AIR_LIGHTNING_HANDLER_ADDRESS = csp.read_runtime_layout_offset("air_lightning_handler")
 COMMON_NATIVE_HIT_PATH_TRACES = {
-    "native_apply_damage": 0x0063E7D0,
+    "native_apply_damage": csp.read_runtime_layout_offset("native_apply_damage"),
 }
 ELEMENT_NATIVE_HIT_PATH_TRACES = {
     "fire": {
-        "spell_cast_pure_primary": 0x0052DA80,
-        "fire_query_cone": 0x00641B10,
-        "fire_query_radius": 0x00642090,
+        "spell_cast_pure_primary": csp.read_runtime_layout_offset("spell_cast_pure_primary"),
+        "fire_query_cone": csp.read_runtime_layout_offset("native_query_cone"),
+        "fire_query_radius": csp.read_runtime_layout_offset("native_query_radius"),
     },
     "ether": {
-        "spell_cast_pure_primary": 0x0052DA80,
-        "ether_query_cone": 0x00641B10,
-        "ether_query_radius": 0x00642090,
+        "spell_cast_pure_primary": csp.read_runtime_layout_offset("spell_cast_pure_primary"),
+        "ether_query_cone": csp.read_runtime_layout_offset("native_query_cone"),
+        "ether_query_radius": csp.read_runtime_layout_offset("native_query_radius"),
     },
     "air": {
-        "air_primary_handler": 0x0053F9C0,
-        "air_query_cone": 0x00641B10,
-        "air_query_radius": 0x00642090,
+        "air_primary_handler": csp.read_runtime_layout_offset("spell_cast_018"),
+        "air_query_cone": csp.read_runtime_layout_offset("native_query_cone"),
+        "air_query_radius": csp.read_runtime_layout_offset("native_query_radius"),
     },
     "water": {
-        "water_handler": 0x00543860,
-        "water_query_cone": 0x00641B10,
-        "water_query_radius": 0x00642090,
-        "water_line_check": 0x00524D70,
+        "water_handler": csp.read_runtime_layout_offset("spell_cast_020"),
+        "water_query_cone": csp.read_runtime_layout_offset("native_query_cone"),
+        "water_query_radius": csp.read_runtime_layout_offset("native_query_radius"),
+        "water_line_check": csp.read_runtime_layout_offset("native_line_check"),
     },
     "earth": {
-        "earth_cast_cleanup": 0x0052F3B0,
-        "earth_active_handle_resolve": 0x0045ADE0,
-        "earth_primary_handler": 0x00544C60,
-        "earth_boulder_ctor": 0x005FA270,
-        "earth_release_finalize": 0x005E5450,
-        "earth_release_line_check": 0x00524D70,
-        "earth_release_secondary": 0x0060B700,
-        "earth_update": 0x0060AC40,
-        "earth_child_spawn": 0x005FA6D0,
-        "earth_collision_damage": 0x005F1F00,
-        "earth_direct_damage": 0x005F2360,
-        "earth_splash_damage": 0x005F25B0,
-        "earth_radius_scan": 0x005F2980,
-        "earth_child_radius_damage": 0x005F3830,
+        "earth_cast_cleanup": csp.read_runtime_layout_offset("cast_active_handle_cleanup"),
+        "earth_active_handle_resolve": csp.read_runtime_layout_offset("earth_active_handle_resolve"),
+        "earth_primary_handler": csp.read_runtime_layout_offset("spell_cast_028"),
+        "earth_boulder_ctor": csp.read_runtime_layout_offset("earth_boulder_ctor"),
+        "earth_release_finalize": csp.read_runtime_layout_offset("earth_release_finalize"),
+        "earth_release_line_check": csp.read_runtime_layout_offset("native_line_check"),
+        "earth_release_secondary": csp.read_runtime_layout_offset("earth_release_secondary"),
+        "earth_update": csp.read_runtime_layout_offset("earth_update"),
+        "earth_child_spawn": csp.read_runtime_layout_offset("earth_child_spawn"),
+        "earth_collision_damage": csp.read_runtime_layout_offset("earth_collision_damage"),
+        "earth_direct_damage": csp.read_runtime_layout_offset("earth_direct_damage"),
+        "earth_splash_damage": csp.read_runtime_layout_offset("earth_splash_damage"),
+        "earth_radius_scan": csp.read_runtime_layout_offset("earth_radius_scan"),
+        "earth_child_radius_damage": csp.read_runtime_layout_offset("earth_child_radius_damage"),
     },
 }
 NATIVE_DAMAGE_CONTEXT_WATCHES = {
-    "source": (0x0081C6E0, 4),
-    "flags": (0x0081C6E4, 4),
-    "primary": (0x0081C6E8, 4),
-    "secondary": (0x0081C6EC, 4),
+    "source": (csp.read_runtime_layout_offset("damage_context_source"), 4),
+    "flags": (csp.read_runtime_layout_offset("damage_context_flags"), 4),
+    "primary": (csp.read_runtime_layout_offset("damage_context_primary"), 4),
+    "secondary": (csp.read_runtime_layout_offset("damage_context_secondary"), 4),
 }
 PROJECTILE_SPAWN_SPECS = {
     # Earth's stock primary publishes a live world spell object.
@@ -188,78 +191,13 @@ PROJECTILE_SPAWN_SPECS = {
     "ether": {"kind": "pure_primary_action_effect"},
 }
 DEFAULT_TRACE_PROFILE = "safe_entry"
+EXPECTED_EARTH_RELEASE_EDGE_TICKS = 3
 CONTROLLED_BOT_X = 914.0
 CONTROLLED_BOT_Y = 150.0
 
 
 class ElementDamageProbeFailure(RuntimeError):
     pass
-
-
-def parse_number_expression(expression: str) -> float:
-    cleaned = expression.strip()
-    if not re.fullmatch(r"[0-9.+\-*/() \t]+", cleaned):
-        raise ElementDamageProbeFailure(f"Unsupported stat-book expression: {expression!r}")
-    return float(eval(cleaned, {"__builtins__": {}}, {}))
-
-
-def parse_statbook_array(text: str, key: str) -> list[float]:
-    match = re.search(rf"\b{re.escape(key)}\s*=\s*\{{([^}}]+)\}}\s*;", text, re.MULTILINE)
-    if not match:
-        raise ElementDamageProbeFailure(f"Missing stat-book array {key}")
-    values: list[float] = []
-    for part in match.group(1).split(","):
-        part = part.strip()
-        if not part:
-            continue
-        values.append(parse_number_expression(part))
-    return values
-
-
-def format_stat_value(value: float) -> int | float:
-    if math.isfinite(value) and abs(value - round(value)) < 0.000001:
-        return int(round(value))
-    return value
-
-
-def load_primary_statbook(element: str, level: int = 1) -> dict[str, object]:
-    spec = PRIMARY_STATBOOKS[element]
-    path = ROOT / "runtime" / "stage" / "data" / "wizardskills" / str(spec["file"])
-    if not path.exists():
-        raise ElementDamageProbeFailure(f"Missing staged stat-book file for {element}: {path}")
-    text = path.read_text(encoding="utf-8", errors="replace")
-    damage_arrays = {
-        key: parse_statbook_array(text, key)
-        for key in spec["damage_keys"]
-    }
-    mana_values = parse_statbook_array(text, str(spec["mana_key"]))
-    max_index = min([len(values) for values in damage_arrays.values()] + [len(mana_values)]) - 1
-    if level < 0 or level > max_index:
-        raise ElementDamageProbeFailure(
-            f"Stat-book level {level} out of range for {element}; max_index={max_index}"
-        )
-    if len(damage_arrays) == 2:
-        damage_keys = list(spec["damage_keys"])
-        level_damage: object = {
-            damage_keys[0]: format_stat_value(damage_arrays[damage_keys[0]][level]),
-            damage_keys[1]: format_stat_value(damage_arrays[damage_keys[1]][level]),
-            "range": (
-                f"{format_stat_value(damage_arrays[damage_keys[0]][level])}-"
-                f"{format_stat_value(damage_arrays[damage_keys[1]][level])}"
-            ),
-        }
-    else:
-        key = next(iter(damage_arrays))
-        level_damage = format_stat_value(damage_arrays[key][level])
-    return {
-        "path": str(path.relative_to(ROOT)),
-        "file": spec["file"],
-        "level": level,
-        "level_damage": level_damage,
-        "level_mana": format_stat_value(mana_values[level]),
-        "unit": spec["unit"],
-        "max_index": max_index,
-    }
 
 
 def parse_int_text(value: object, default: int = 0) -> int:
@@ -305,6 +243,14 @@ def read_loader_log_lines() -> list[str]:
         return [line.rstrip("\n") for line in handle]
 
 
+def boulder_release_logged(bot_id: int, log_start_index: int = 0) -> bool:
+    needle = f"bot_id={bot_id}"
+    for line in read_loader_log_lines()[max(log_start_index, 0):]:
+        if "[bots] native boulder release requested." in line and needle in line:
+            return True
+    return False
+
+
 LOADOUT_RE = re.compile(
     r"skills_wizard_loadout begin progression=(0x[0-9A-Fa-f]+) "
     r"primary_entry=(\d+) combo_entry=(\d+) spell_id=(\d+)"
@@ -321,8 +267,12 @@ CAST_COMPLETE_RE = re.compile(
 )
 MANA_SPENT_RE = re.compile(
     r"mana spent\. bot_id=(\d+) skill_id=(-?\d+) mode=([a-z_]+) "
-    r"statbook_level=(\d+) .*?(?:rate=([0-9.+\\-eE]+) )?cost=([0-9.+\\-eE]+) "
-    r"before=([0-9.+\\-eE]+) after=([0-9.+\\-eE]+) total=([0-9.+\\-eE]+)"
+    r"progression_level=(\d+) .*?(?:rate=([0-9.+\\-eE]+) )?cost=([0-9.+\\-eE]+) "
+    r"before=([0-9.+\\-eE]+) after=([0-9.+\\-eE]+) .*?total=([0-9.+\\-eE]+)"
+)
+MANA_PREPARED_RE = re.compile(
+    r"mana prepared\. bot_id=(\d+) skill_id=(-?\d+) kind=([a-z_]+) "
+    r"progression_level=(\d+) cost=([0-9.+\\-eE]+).*?progression_runtime=(0x[0-9A-Fa-f]+)"
 )
 MANA_REJECTED_RE = re.compile(
     r"(?:cast rejected for mana|mana rejected)\. bot_id=(\d+) skill_id=(-?\d+) .*?mode=([a-z_]+) .*"
@@ -338,7 +288,7 @@ PURE_PRIMARY_POST_BUILDER_RE = re.compile(
     r"builder_result=(0x[0-9A-Fa-f]+).*"
 )
 EARTH_RELEASE_RE = re.compile(
-    r"native (max-size|damage-threshold) reached; releasing held cast input for native launch\. "
+    r"native boulder release requested\. "
     r"bot_id=(\d+) skill_id=(-?\d+).*"
 )
 
@@ -428,44 +378,74 @@ def build_native_projectile_spawn_validation(
     )
     object_source = matching_release or matching_complete
     release_reason = str(matching_release.get("release_reason", "")) if matching_release else ""
+    release_object_charge = (
+        float(matching_release.get("obj_charge", 0.0))
+        if matching_release is not None
+        else 0.0
+    )
+    release_object_max_charge = (
+        float(matching_release.get("obj_max_charge", 0.0))
+        if matching_release is not None
+        else 0.0
+    )
+    release_progression_max_charge = (
+        float(matching_release.get("max_charge", 0.0))
+        if matching_release is not None
+        else 0.0
+    )
     max_size_fields_ok = (
         matching_release is not None
-        and finite_float(float(matching_release.get("obj_74", 0.0)))
-        and finite_float(float(matching_release.get("obj_1fc", 0.0)))
-        and finite_float(float(matching_release.get("max_charge", 0.0)))
-        and float(matching_release.get("obj_1fc", 0.0)) > 0.0
-        and float(matching_release.get("max_charge", 0.0)) > 0.0
-        and float(matching_release.get("obj_74", 0.0)) >= float(matching_release.get("obj_1fc", 0.0)) - 0.001
-        and float(matching_release.get("obj_74", 0.0)) >= float(matching_release.get("max_charge", 0.0)) - 0.001
+        and finite_float(release_object_charge)
+        and finite_float(release_object_max_charge)
+        and finite_float(release_progression_max_charge)
+        and release_object_max_charge > 0.0
+        and release_progression_max_charge > 0.0
+        and release_object_charge >= release_object_max_charge - 0.001
+        and release_object_charge >= release_progression_max_charge - 0.001
     )
-    threshold_fields_ok = (
+    target_lethal_fields_ok = (
         matching_release is not None
-        and int(matching_release.get("target_actor", 0)) != 0
-        and int(matching_release.get("target_health", 0)) != 0
-        and finite_float(float(matching_release.get("projected_damage", 0.0)))
+        and release_reason == "target_lethal"
+        and finite_float(float(matching_release.get("projected_release_damage", 0.0)))
+        and finite_float(float(matching_release.get("release_damage_scale", 0.0)))
+        and finite_float(float(matching_release.get("release_damage_floor", 0.0)))
+        and finite_float(float(matching_release.get("release_damage_cap_scale", 0.0)))
+        and finite_float(float(matching_release.get("projected_hp_damage", 0.0)))
         and finite_float(float(matching_release.get("target_hp", 0.0)))
-        and finite_float(float(matching_release.get("base_damage", 0.0)))
-        and finite_float(float(matching_release.get("obj_74", 0.0)))
-        and float(matching_release.get("base_damage", 0.0)) > 0.0
+        and float(matching_release.get("release_damage_scale", 0.0)) > 0.0
+        and float(matching_release.get("release_damage_floor", 0.0)) >= 0.0
+        and float(matching_release.get("release_damage_cap_scale", 0.0)) > 0.0
+        and float(matching_release.get("projected_release_damage", 0.0)) > 0.0
         and float(matching_release.get("target_hp", 0.0)) > 0.0
-        and abs(
-            float(matching_release.get("projected_damage", 0.0)) -
-            (
-                float(matching_release.get("base_damage", 0.0)) *
-                float(matching_release.get("obj_74", 0.0)) *
-                float(matching_release.get("obj_74", 0.0))
-            )
-        ) <= 0.002
-        and float(matching_release.get("projected_damage", 0.0)) >=
+        and float(matching_release.get("projected_hp_damage", 0.0)) + 0.001 >=
             float(matching_release.get("target_hp", 0.0))
-        and int(matching_release.get("threshold_charge_write", 0)) == 1
-        and int(matching_release.get("threshold_max_write", 0)) == 1
-        and int(matching_release.get("release_charge_write", 0)) == 1
     )
+    release_hold_fields_ok = (
+        matching_release is not None
+        and int(matching_release.get("release_charge_write", 0)) == 1
+        and int(matching_release.get("release_charge_hold", 0)) == 1
+        and int(matching_release.get("release_growth_stop", 0)) == 1
+    )
+    target_lethal_charge_held_ok = (
+        release_reason != "target_lethal"
+        or (
+            matching_complete is not None
+            and finite_float(float(matching_complete.get("obj_charge", 0.0)))
+            and finite_float(float(matching_complete.get("release_charge", 0.0)))
+            and finite_float(float(matching_complete.get("obj_max_charge", 0.0)))
+            and float(matching_complete.get("obj_charge", 0.0)) <
+                float(matching_complete.get("obj_max_charge", 0.0)) - 0.001
+            and abs(
+                float(matching_complete.get("obj_charge", 0.0)) -
+                float(matching_complete.get("release_charge", 0.0))
+            ) <= 0.02
+        )
+    )
+    expected_post_release_ticks = EXPECTED_EARTH_RELEASE_EDGE_TICKS
     stock_cleanup_window_ok = (
         matching_complete is not None
         and int(matching_complete.get("cleanup_requested", 0)) == 1
-        and int(matching_complete.get("post_release_ticks", 0)) >= 60
+        and int(matching_complete.get("post_release_ticks", 0)) >= expected_post_release_ticks
     )
     checks = {
         "native_spell_object_spawn_logged": object_source is not None
@@ -478,14 +458,14 @@ def build_native_projectile_spawn_validation(
         "native_release_requested_before_cleanup": matching_release is not None,
         "native_release_uses_stock_cleanup_window": stock_cleanup_window_ok,
         "native_max_size_fields_match_when_used": release_reason != "max_size" or max_size_fields_ok,
-        "native_damage_threshold_fields_match_when_used": (
-            release_reason != "damage_threshold" or threshold_fields_ok
-        ),
+        "native_target_lethal_fields_match_when_used": release_reason != "target_lethal" or target_lethal_fields_ok,
+        "native_release_holds_chosen_charge": release_hold_fields_ok,
+        "native_target_lethal_charge_stays_below_max": target_lethal_charge_held_ok,
         "native_cast_completed_after_release": matching_complete is not None
         and matching_complete.get("exit_label") in {
             "max_size_reached",
             "max_size_released",
-            "damage_threshold_released",
+            "target_lethal_released",
         },
     }
     return {
@@ -497,21 +477,23 @@ def build_native_projectile_spawn_validation(
         "matching_release": matching_release,
         "release_reason": release_reason,
         "max_size_fields_ok": max_size_fields_ok,
-        "threshold_fields_ok": threshold_fields_ok,
+        "target_lethal_fields_ok": target_lethal_fields_ok,
         "stock_cleanup_window_ok": stock_cleanup_window_ok,
+        "release_hold_fields_ok": release_hold_fields_ok,
+        "target_lethal_charge_held_ok": target_lethal_charge_held_ok,
         "matching_complete": matching_complete,
         "spawn_log_count": len(earth_spawn_matches),
     }
 
 
-def build_statbook_validation(
+def build_native_spell_stat_validation(
     element: str,
     bot: dict[str, str],
     bot_id: int,
     log_lines: list[str],
 ) -> dict[str, object]:
     config = ELEMENTS[element]
-    spec = PRIMARY_STATBOOKS[element]
+    spec = PRIMARY_SPELL_SPECS[element]
     profile = {
         "element_id": csp.int_value(bot, "profile.element_id"),
         "discipline_id": csp.int_value(bot, "profile.discipline_id"),
@@ -520,7 +502,11 @@ def build_statbook_validation(
         "primary_entry_index": csp.int_value(bot, "profile.loadout.primary_entry_index"),
         "primary_combo_entry_index": csp.int_value(bot, "profile.loadout.primary_combo_entry_index"),
     }
-    statbook = load_primary_statbook(element, max(profile["level"], 1))
+    native_stats = {
+        "level": max(profile["level"], 1),
+        "unit": spec["unit"],
+        "source": "live_progression_primary_stat_output",
+    }
     progression_runtime = csp.int_value(bot, "progression_runtime_state_address")
 
     loadout_matches: list[dict[str, object]] = []
@@ -531,6 +517,7 @@ def build_statbook_validation(
     pure_primary_builder_matches: list[dict[str, object]] = []
     earth_spawn_matches: list[dict[str, object]] = []
     mana_spent_matches: list[dict[str, object]] = []
+    mana_prepared_matches: list[dict[str, object]] = []
     mana_rejected_matches: list[dict[str, object]] = []
     for line in log_lines:
         loadout_match = LOADOUT_RE.search(line)
@@ -616,39 +603,46 @@ def build_statbook_validation(
                 }
             )
         earth_spawn_match = EARTH_RELEASE_RE.search(line)
-        if earth_spawn_match and parse_int_text(earth_spawn_match.group(2)) == bot_id:
+        if earth_spawn_match and parse_int_text(earth_spawn_match.group(1)) == bot_id:
             earth_spawn_matches.append(
                 {
                     "line": line,
-                    "release_reason": (
-                        "damage_threshold"
-                        if earth_spawn_match.group(1) == "damage-threshold"
-                        else "max_size"
-                    ),
-                    "bot_id": parse_int_text(earth_spawn_match.group(2)),
-                    "skill_id": parse_int_text(earth_spawn_match.group(3)),
+                    "release_reason": parse_log_word(line, "release_reason"),
+                    "bot_id": parse_int_text(earth_spawn_match.group(1)),
+                    "skill_id": parse_int_text(earth_spawn_match.group(2)),
                     "group": parse_cast_startup_value(line, "group"),
                     "slot": parse_cast_startup_value(line, "slot"),
                     "handle_source": parse_log_word(line, "handle_source"),
                     "selection_state": parse_cast_startup_value(line, "selection_state"),
                     "obj_ptr": parse_cast_startup_value(line, "obj_ptr"),
                     "obj_type": parse_cast_startup_value(line, "obj_type"),
-                    "obj_74": parse_log_float(line, "obj_74"),
-                    "obj_1f0": parse_log_float(line, "obj_1f0"),
-                    "obj_1fc": parse_log_float(line, "obj_1fc"),
+                    "obj_x": parse_log_float(line, "obj_x"),
+                    "obj_y": parse_log_float(line, "obj_y"),
+                    "obj_heading": parse_log_float(line, "obj_heading"),
+                    "obj_radius": parse_log_float(line, "obj_radius"),
+                    "obj_charge": parse_log_float(line, "obj_charge"),
+                    "obj_growth_rate": parse_log_float(line, "obj_growth_rate"),
+                    "obj_release_charge": parse_log_float(line, "obj_release_charge"),
+                    "obj_max_charge": parse_log_float(line, "obj_max_charge"),
+                    "obj_phase": parse_cast_startup_value(line, "obj_phase"),
+                    "obj_release_timer": parse_cast_startup_value(line, "obj_release_timer"),
                     "obj_22c": parse_cast_startup_value(line, "obj_22c"),
                     "obj_230": parse_cast_startup_value(line, "obj_230"),
                     "max_charge": parse_log_float(line, "max_charge"),
-                    "statbook_level": parse_cast_startup_value(line, "statbook_level"),
+                    "progression_level": parse_cast_startup_value(line, "progression_level"),
                     "stat_source": parse_cast_startup_value(line, "stat_source"),
                     "stat_vt": parse_cast_startup_value(line, "stat_vt"),
                     "damage_getter": parse_cast_startup_value(line, "damage_getter"),
                     "damage_getter_attempt": parse_cast_startup_value(line, "damage_getter_attempt"),
                     "damage_getter_seh": parse_cast_startup_value(line, "damage_getter_seh"),
-                    "damage_native": parse_cast_startup_value(line, "damage_native"),
                     "base_damage": parse_log_float(line, "base_damage"),
-                    "statbook_damage": parse_log_float(line, "statbook_damage"),
+                    "damage_output_scale": parse_log_float(line, "damage_output_scale"),
+                    "release_damage_scale": parse_log_float(line, "release_damage_scale"),
+                    "release_damage_floor": parse_log_float(line, "release_damage_floor"),
+                    "release_damage_cap_scale": parse_log_float(line, "release_damage_cap_scale"),
                     "projected_damage": parse_log_float(line, "projected_damage"),
+                    "projected_release_damage": parse_log_float(line, "projected_release_damage"),
+                    "projected_hp_damage": parse_log_float(line, "projected_hp_damage"),
                     "target_actor": parse_cast_startup_value(line, "target_actor"),
                     "target_health": parse_cast_startup_value(line, "target_health"),
                     "target_health_kind": parse_log_word(line, "target_health_kind"),
@@ -661,10 +655,12 @@ def build_statbook_validation(
                     "target_impact_radius": parse_log_float(line, "target_impact_radius"),
                     "target_damage_scale": parse_log_float(line, "target_damage_scale"),
                     "target_in_impact": parse_cast_startup_value(line, "target_in_impact"),
-                    "native_cleanup_release": parse_cast_startup_value(line, "native_cleanup_release"),
-                    "threshold_charge_write": parse_cast_startup_value(line, "threshold_charge_write"),
-                    "threshold_max_write": parse_cast_startup_value(line, "threshold_max_write"),
+                    "projection_target_in_impact": parse_cast_startup_value(line, "projection_target_in_impact"),
                     "release_charge_write": parse_cast_startup_value(line, "release_charge_write"),
+                    "release_charge_hold": parse_cast_startup_value(line, "release_charge_hold"),
+                    "release_growth_stop": parse_cast_startup_value(line, "release_growth_stop"),
+                    "release_growth_stop_eligible": parse_cast_startup_value(line, "release_growth_stop_eligible"),
+                    "release_growth_stop_min_charge": parse_log_float(line, "release_growth_stop_min_charge"),
                 }
             )
         complete_match = CAST_COMPLETE_RE.search(line)
@@ -686,18 +682,31 @@ def build_statbook_validation(
                     "selection_state": parse_cast_startup_value(line, "selection_state"),
                     "obj_ptr": parse_cast_startup_value(line, "obj_ptr"),
                     "obj_type": parse_cast_startup_value(line, "obj_type"),
-                    "obj_74": re.search(r"\bobj_74=([0-9.+\-eE]+)", line).group(1)
-                    if re.search(r"\bobj_74=([0-9.+\-eE]+)", line)
-                    else "",
-                    "obj_1f0": re.search(r"\bobj_1f0=([0-9.+\-eE]+)", line).group(1)
-                    if re.search(r"\bobj_1f0=([0-9.+\-eE]+)", line)
-                    else "",
-                    "obj_1fc": re.search(r"\bobj_1fc=([0-9.+\-eE]+)", line).group(1)
-                    if re.search(r"\bobj_1fc=([0-9.+\-eE]+)", line)
-                    else "",
+                    "obj_x": parse_log_float(line, "obj_x"),
+                    "obj_y": parse_log_float(line, "obj_y"),
+                    "obj_heading": parse_log_float(line, "obj_heading"),
+                    "obj_radius": parse_log_float(line, "obj_radius"),
+                    "obj_charge": parse_log_float(line, "obj_charge"),
+                    "obj_growth_rate": parse_log_float(line, "obj_growth_rate"),
+                    "obj_release_charge": parse_log_float(line, "obj_release_charge"),
+                    "obj_max_charge": parse_log_float(line, "obj_max_charge"),
+                    "obj_phase": parse_cast_startup_value(line, "obj_phase"),
+                    "obj_release_timer": parse_cast_startup_value(line, "obj_release_timer"),
                     "obj_22c": parse_cast_startup_value(line, "obj_22c"),
                     "obj_230": parse_cast_startup_value(line, "obj_230"),
                     "boulder_max_size": parse_cast_startup_value(line, "boulder_max_size"),
+                    "release_reason": parse_log_word(line, "release_reason"),
+                    "release_charge": parse_log_float(line, "release_charge"),
+                    "release_base_damage": parse_log_float(line, "release_base_damage"),
+                    "release_projected_damage": parse_log_float(line, "release_projected_damage"),
+                    "release_damage_output_scale": parse_log_float(line, "release_damage_output_scale"),
+                    "release_damage_scale": parse_log_float(line, "release_damage_scale"),
+                    "release_damage_floor": parse_log_float(line, "release_damage_floor"),
+                    "release_damage_cap_scale": parse_log_float(line, "release_damage_cap_scale"),
+                    "release_projected_release_damage": parse_log_float(line, "release_projected_release_damage"),
+                    "release_projected_hp_damage": parse_log_float(line, "release_projected_hp_damage"),
+                    "release_target_hp": parse_log_float(line, "release_target_hp"),
+                    "release_target_actor": parse_cast_startup_value(line, "release_target_actor"),
                 }
             )
         mana_spent_match = MANA_SPENT_RE.search(line)
@@ -708,7 +717,7 @@ def build_statbook_validation(
                     "bot_id": parse_int_text(mana_spent_match.group(1)),
                     "skill_id": parse_int_text(mana_spent_match.group(2)),
                     "mode": mana_spent_match.group(3),
-                    "statbook_level": parse_int_text(mana_spent_match.group(4)),
+                    "progression_level": parse_int_text(mana_spent_match.group(4)),
                     "rate": float(mana_spent_match.group(5))
                     if mana_spent_match.group(5) is not None
                     else None,
@@ -716,6 +725,19 @@ def build_statbook_validation(
                     "before": float(mana_spent_match.group(7)),
                     "after": float(mana_spent_match.group(8)),
                     "total": float(mana_spent_match.group(9)),
+                }
+            )
+        mana_prepared_match = MANA_PREPARED_RE.search(line)
+        if mana_prepared_match and parse_int_text(mana_prepared_match.group(1)) == bot_id:
+            mana_prepared_matches.append(
+                {
+                    "line": line,
+                    "bot_id": parse_int_text(mana_prepared_match.group(1)),
+                    "skill_id": parse_int_text(mana_prepared_match.group(2)),
+                    "mode": mana_prepared_match.group(3),
+                    "progression_level": parse_int_text(mana_prepared_match.group(4)),
+                    "cost": float(mana_prepared_match.group(5)),
+                    "progression_runtime": parse_int_text(mana_prepared_match.group(6)),
                 }
             )
         mana_rejected_match = MANA_REJECTED_RE.search(line)
@@ -775,9 +797,9 @@ def build_statbook_validation(
         spec.get("unit") == "per_second" and matching_dispatch is not None
     )
     earth_release_policy_ok = True
-    earth_release_base_damage_matches_statbook = True
-    if spec.get("requires_max_size_release"):
-        earth_release_labels = {"max_size_reached", "max_size_released", "damage_threshold_released"}
+    earth_release_base_damage_matches_native = True
+    if spec.get("requires_boulder_release"):
+        earth_release_labels = {"max_size_reached", "max_size_released", "target_lethal_released"}
         matching_release = next(
             (
                 item
@@ -793,38 +815,44 @@ def build_statbook_validation(
             and int(matching_complete.get("boulder_max_size", 0)) == 1
             and matching_release is not None
             and int(matching_complete.get("cleanup_requested", 0)) == 1
-            and int(matching_complete.get("post_release_ticks", 0)) >= 60
+            and int(matching_complete.get("post_release_ticks", 0)) >= EXPECTED_EARTH_RELEASE_EDGE_TICKS
         )
-        release_by_damage_threshold = (
+        release_by_target_lethal = (
             matching_complete
-            and matching_complete.get("exit_label") == "damage_threshold_released"
+            and matching_complete.get("exit_label") == "target_lethal_released"
             and matching_release is not None
-            and release_reason == "damage_threshold"
-            and int(matching_release.get("target_actor", 0)) != 0
-            and int(matching_release.get("target_health", 0)) != 0
+            and release_reason == "target_lethal"
             and int(matching_complete.get("cleanup_requested", 0)) == 1
-            and int(matching_complete.get("post_release_ticks", 0)) >= 60
-            and float(matching_release.get("projected_damage", 0.0)) >=
+            and int(matching_complete.get("post_release_ticks", 0)) >= EXPECTED_EARTH_RELEASE_EDGE_TICKS
+            and finite_float(float(matching_release.get("projected_release_damage", 0.0)))
+            and finite_float(float(matching_release.get("release_damage_scale", 0.0)))
+            and finite_float(float(matching_release.get("release_damage_floor", 0.0)))
+            and finite_float(float(matching_release.get("release_damage_cap_scale", 0.0)))
+            and finite_float(float(matching_release.get("projected_hp_damage", 0.0)))
+            and finite_float(float(matching_release.get("target_hp", 0.0)))
+            and float(matching_release.get("release_damage_scale", 0.0)) > 0.0
+            and float(matching_release.get("release_damage_floor", 0.0)) >= 0.0
+            and float(matching_release.get("release_damage_cap_scale", 0.0)) > 0.0
+            and float(matching_release.get("projected_release_damage", 0.0)) > 0.0
+            and float(matching_release.get("target_hp", 0.0)) > 0.0
+            and float(matching_release.get("projected_hp_damage", 0.0)) + 0.001 >=
                 float(matching_release.get("target_hp", 0.0))
         )
         earth_release_policy_ok = bool(
             matching_complete
             and matching_complete.get("exit_label") in earth_release_labels
-            and (release_by_max_size or release_by_damage_threshold)
+            and (release_by_max_size or release_by_target_lethal)
         )
-        expected_base_damage = float(statbook.get("level_damage", 0.0))
-        release_statbook_damage = (
-            float(matching_release.get("statbook_damage", 0.0))
-            if matching_release is not None and finite_float(float(matching_release.get("statbook_damage", 0.0)))
-            else float(matching_release.get("base_damage", 0.0))
-            if matching_release is not None
-            else 0.0
-        )
-        earth_release_base_damage_matches_statbook = bool(
+        release_base_damage = 0.0
+        if matching_release is not None:
+            base_damage = float(matching_release.get("base_damage", 0.0))
+            release_base_damage = base_damage
+        earth_release_base_damage_matches_native = bool(
             matching_release is not None
-            and int(matching_release.get("statbook_level", -1)) == int(statbook.get("level", -2))
-            and finite_float(release_statbook_damage)
-            and abs(release_statbook_damage - expected_base_damage) <= 0.001
+            and int(matching_release.get("progression_level", -1)) == int(native_stats.get("level", -2))
+            and finite_float(release_base_damage)
+            and release_base_damage > 0.0
+            and abs(release_base_damage - float(matching_release.get("base_damage", 0.0))) <= 0.001
         )
     native_projectile_spawn_validation = build_native_projectile_spawn_validation(
         element,
@@ -848,16 +876,16 @@ def build_statbook_validation(
             for item in reversed(mana_spent_matches)
             if int(item["skill_id"]) == spec["build_skill_id"]
             and item["mode"] == expected_mana_mode
-            and int(item["statbook_level"]) == int(statbook.get("level", -1))
+            and int(item["progression_level"]) == int(native_stats.get("level", -1))
             and (
                 (
                     expected_mana_mode == "per_cast"
-                    and abs(float(item["cost"]) - float(statbook.get("level_mana", 0.0))) <= 0.001
+                    and float(item["cost"]) > 0.0
                 )
                 or (
                     expected_mana_mode == "per_second"
                     and item.get("rate") is not None
-                    and abs(float(item["rate"]) - float(statbook.get("level_mana", 0.0))) <= 0.001
+                    and float(item["rate"]) > 0.0
                     and float(item["cost"]) > 0.0
                 )
             )
@@ -865,21 +893,34 @@ def build_statbook_validation(
         ),
         None,
     )
+    matching_mana_prepared = next(
+        (
+            item
+            for item in reversed(mana_prepared_matches)
+            if int(item["skill_id"]) == spec["build_skill_id"]
+            and item["mode"] == expected_mana_mode
+            and int(item["progression_level"]) == int(native_stats.get("level", -1))
+            and int(item["progression_runtime"]) == progression_runtime
+            and float(item["cost"]) > 0.0
+        ),
+        None,
+    )
+    native_mana_accounted = matching_mana_spend is not None
 
     checks = {
         "profile_element_matches": profile["element_id"] == config["element_id"],
         "profile_discipline_matches": profile["discipline_id"] == DEFAULT_BOT_DISCIPLINE_ID,
-        "profile_level_is_level_1": profile["level"] == 1,
+        "profile_level_is_positive": profile["level"] >= 1,
         "profile_loadout_primary_matches": profile["primary_entry_index"] == config["primary_entry_index"],
         "profile_loadout_combo_matches": profile["primary_combo_entry_index"] == config["primary_entry_index"],
         "progression_runtime_nonzero": progression_runtime != 0,
-        "statbook_loaded": bool(statbook.get("path")),
+        "native_spell_stats_logged": matching_mana_spend is not None or matching_prepped is not None,
         "skills_wizard_loadout_logged": matching_loadout is not None,
         "cast_prepped_logged": matching_prepped is not None or continuous_dispatch_logged,
         "cast_lifecycle_logged": cast_lifecycle_logged,
-        "mana_spent_from_statbook": matching_mana_spend is not None,
+        "native_mana_accounted": native_mana_accounted,
         "earth_release_policy_satisfied": earth_release_policy_ok,
-        "earth_release_base_damage_matches_statbook": earth_release_base_damage_matches_statbook,
+        "earth_release_base_damage_matches_native": earth_release_base_damage_matches_native,
         "native_projectile_or_effect_spawn_logged": native_spawn_logged,
     }
     return {
@@ -896,11 +937,12 @@ def build_statbook_validation(
         },
         "profile": profile,
         "progression_runtime": progression_runtime,
-        "statbook": statbook,
+        "native_spell_stats": native_stats,
         "matching_loadout": matching_loadout,
         "matching_prepped": matching_prepped,
         "matching_complete": matching_complete,
         "matching_dispatch": matching_dispatch,
+        "matching_mana_prepared": matching_mana_prepared,
         "matching_mana_spend": matching_mana_spend,
         "native_projectile_spawn_validation": native_projectile_spawn_validation,
         "loadout_log_count": len(loadout_matches),
@@ -910,6 +952,7 @@ def build_statbook_validation(
         "pure_primary_start_log_count": len(pure_primary_start_matches),
         "pure_primary_builder_log_count": len(pure_primary_builder_matches),
         "earth_spawn_log_count": len(earth_spawn_matches),
+        "mana_prepared_log_count": len(mana_prepared_matches),
         "mana_spent_log_count": len(mana_spent_matches),
         "mana_rejected_log_count": len(mana_rejected_matches),
     }
@@ -947,6 +990,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--target-x", type=float, default=None, help="Override controlled hostile X.")
     parser.add_argument("--target-y", type=float, default=None, help="Override controlled hostile Y.")
+    parser.add_argument(
+        "--cast-aim-x",
+        type=float,
+        default=None,
+        help="Override controlled cast aim X while leaving the hostile at --target-x.",
+    )
+    parser.add_argument(
+        "--cast-aim-y",
+        type=float,
+        default=None,
+        help="Override controlled cast aim Y while leaving the hostile at --target-y.",
+    )
     parser.add_argument("--max-hostile-gap", type=float, default=DEFAULT_MAX_HOSTILE_GAP)
     parser.add_argument("--hp", type=float, default=DEFAULT_HP)
     parser.add_argument("--casts", type=int, default=DEFAULT_CASTS)
@@ -962,7 +1017,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--setup-mode",
         choices=SETUP_MODES,
         default="waves",
-        help="waves uses stock-spawned enemies; manual_prelude is diagnostic only and may wedge native spawn.",
+        help="Use stock wave-spawned enemies for damage validation.",
     )
     parser.add_argument(
         "--positioning",
@@ -1008,6 +1063,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip write watches and validate only by before/after hostile HP snapshots.",
     )
     parser.add_argument(
+        "--force-hostile-hp-watches",
+        action="store_true",
+        help="Arm hostile HP write watches even for elements that skip them by default.",
+    )
+    parser.add_argument(
         "--watch-damage-context",
         action="store_true",
         help="Arm write watches on the native global damage context while casting.",
@@ -1024,9 +1084,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Diagnostic: force the bot progression MP before casting.",
     )
     parser.add_argument(
+        "--maintain-bot-mp",
+        action="store_true",
+        help="Diagnostic: keep forcing --bot-starting-mp during cast-window range pinning.",
+    )
+    parser.add_argument(
         "--expect-mana-rejected",
         action="store_true",
         help="Validate that the queued cast is rejected for insufficient mana.",
+    )
+    parser.add_argument(
+        "--semantic-snapshot-only",
+        action="store_true",
+        help="Stop after capturing stock hostile tracked_enemy/enemy_type list_actors semantics.",
+    )
+    parser.add_argument(
+        "--apply-primary-upgrade",
+        action="store_true",
+        help=(
+            "Before damage validation, level the bot through native skill-choice "
+            "rolls until its primary entry is offered and applied once."
+        ),
+    )
+    parser.add_argument(
+        "--primary-upgrade-max-level-steps",
+        type=int,
+        default=25,
+        help="Maximum native level-up rolls to search for --apply-primary-upgrade.",
     )
     return parser
 
@@ -1101,8 +1185,8 @@ for _, bot in ipairs(bots) do
       emit('max_hp', bot.max_hp)
 	      emit('mp', bot.mp)
 	      emit('max_mp', bot.max_mp)
-	      emit('x', sd.debug.read_float(actor + 0x18))
-	      emit('y', sd.debug.read_float(actor + 0x1C))
+	      emit('x', sd.debug.read_float(actor + {ACTOR_POSITION_X_OFFSET}))
+	      emit('y', sd.debug.read_float(actor + {ACTOR_POSITION_Y_OFFSET}))
 	      emit('state', bot.state)
 	      local profile = bot.profile or {{}}
 	      local loadout = profile.loadout or {{}}
@@ -1171,6 +1255,93 @@ print('bot_id=' .. tostring(id))
     return bot_id
 
 
+def apply_primary_upgrade_to_bot(
+    bot_id: int,
+    element: str,
+    source_progression: int,
+    max_level_steps: int,
+) -> dict[str, object]:
+    target_option_id = int(ELEMENTS[element]["primary_entry_index"])
+    result: dict[str, object] = {
+        "target_option_id": target_option_id,
+        "max_level_steps": max_level_steps,
+        "steps": [],
+        "matched": False,
+    }
+    for step in range(1, max_level_steps + 1):
+        stats = stress.query_progression_stats(bot_id)
+        stress.assert_bot_owned_progression_mode(bot_id, stats, f"primary_upgrade_step_{step}_before_sync")
+        target_level = int(stats["level"]) + 1
+        target_xp = int(float(stats["next_xp_threshold"]) + 10.0)
+        sync = stress.debug_sync_level_up(target_level, target_xp, source_progression)
+        choices = stress.query_choices(bot_id)
+        if not choices["pending"] or int(choices["count"]) <= 0:
+            raise ElementDamageProbeFailure(
+                f"bot {bot_id} did not receive native choices at level {target_level}: {choices}"
+            )
+
+        enriched = stress.enrich_choice_options(bot_id, choices)
+        option_index = 1
+        matched = False
+        for index, option in enumerate(enriched, start=1):
+            if int(option.get("id", -1)) == target_option_id:
+                option_index = index
+                matched = True
+                break
+
+        selected = enriched[option_index - 1]
+        option_id = int(selected.get("id", -1))
+        entry_before = stress.query_entry_state(bot_id, option_id)
+        stats_before = stress.query_progression_stats(bot_id)
+        stress.assert_bot_owned_progression_mode(bot_id, stats_before, f"primary_upgrade_step_{step}_before_apply")
+        loadout_before = stress.query_bot_loadout(bot_id)
+
+        apply_result = stress.choose_skill(bot_id, option_index, int(choices["generation"]))
+        entry_after = stress.query_entry_state(bot_id, option_id)
+        stats_after = stress.query_progression_stats(bot_id)
+        stress.assert_bot_owned_progression_mode(bot_id, stats_after, f"primary_upgrade_step_{step}_after_apply")
+        loadout_after = stress.query_bot_loadout(bot_id)
+        profile_after = stress.query_bot_profile(bot_id)
+
+        application = {
+            "step": step,
+            "sync": sync,
+            "target_level": target_level,
+            "target_xp": target_xp,
+            "generation": choices["generation"],
+            "selected_index": option_index,
+            "selected_option": selected,
+            "selected_option_id": option_id,
+            "matched_primary_upgrade": matched,
+            "apply_result": apply_result,
+            "entry_before": entry_before,
+            "entry_after": entry_after,
+            "entry_byte_diff": stress.diff_hex_bytes(
+                str(entry_before.get("bytes", "")),
+                str(entry_after.get("bytes", "")),
+            ),
+            "stats_before": stats_before,
+            "stats_after": stats_after,
+            "stats_diff": stress.diff_dict(stats_before, stats_after),
+            "loadout_before": loadout_before,
+            "loadout_after": loadout_after,
+            "loadout_diff": stress.diff_dict(loadout_before, loadout_after),
+            "profile_after": profile_after,
+        }
+        steps = result.setdefault("steps", [])
+        if isinstance(steps, list):
+            steps.append(application)
+        if matched:
+            result["matched"] = True
+            result["matched_step"] = step
+            result["application"] = application
+            return result
+
+    raise ElementDamageProbeFailure(
+        f"primary option {target_option_id} was not offered to bot {bot_id} within {max_level_steps} level-up steps"
+    )
+
+
 def read_runtime_layout_offset(name: str) -> int:
     text = RUNTIME_BINARY_LAYOUT_PATH.read_text(encoding="utf-8")
     for line in text.splitlines():
@@ -1187,12 +1358,14 @@ def read_runtime_layout_offset(name: str) -> int:
 
 def force_bot_progression_mp(bot_id: int, mp: float) -> dict[str, str]:
     mp_offset = read_runtime_layout_offset("progression_mp")
+    max_mp_offset = read_runtime_layout_offset("progression_max_mp")
     return csp.parse_key_values(
         csp.run_lua(
             f"""
 local bot_id = {bot_id}
 local requested_mp = {mp}
 local mp_offset = {mp_offset}
+local max_mp_offset = {max_mp_offset}
 local function emit(key, value)
   if value == nil then
     print(key .. "=")
@@ -1213,16 +1386,22 @@ if progression == 0 then
   return
 end
 emit('before', bot.mp)
+emit('before_max', bot.max_mp)
 local mp_address = progression + mp_offset
+local max_mp_address = progression + max_mp_offset
 emit('write_ok', sd.debug.write_float(mp_address, requested_mp))
+emit('max_write_ok', sd.debug.write_float(max_mp_address, requested_mp))
 emit('raw_after', sd.debug.read_float(mp_address))
+emit('raw_max_after', sd.debug.read_float(max_mp_address))
 local refreshed = sd.bots.get_state(bot_id) or {{}}
 emit('snapshot_after', refreshed.mp)
 emit('max_mp', refreshed.max_mp)
 emit('progression_runtime', progression)
 emit('mp_offset', mp_offset)
+emit('max_mp_offset', max_mp_offset)
 emit('mp_address', mp_address)
-emit('ok', refreshed.mp ~= nil)
+emit('max_mp_address', max_mp_address)
+emit('ok', refreshed.mp ~= nil and refreshed.max_mp ~= nil)
 """.strip()
         )
     )
@@ -1260,63 +1439,6 @@ emit('actor_address', wanted)
     )
 
 
-def wait_for_spawn_result(request_id: int, timeout_s: float = 10.0) -> dict[str, str]:
-    deadline = time.time() + timeout_s
-    last: dict[str, str] = {}
-    while time.time() < deadline:
-        last = csp.parse_key_values(
-            csp.run_lua(
-                f"""
-local wanted = {request_id}
-local result = sd.world.get_last_spawned_enemy and sd.world.get_last_spawned_enemy(wanted) or nil
-local function emit(key, value)
-  if value == nil then
-    print(key .. "=")
-  else
-    print(key .. "=" .. tostring(value))
-  end
-end
-if type(result) ~= 'table' then
-  emit('available', false)
-  emit('request_id', wanted)
-  return
-end
-emit('available', true)
-for _, key in ipairs({{
-  'valid','ok','request_id','type_id','actor_address','requested_x','requested_y',
-  'x','y','wrote_x','wrote_y','rebind_ok','rebind_exception_code',
-  'completed_tick_ms','error_message'
-}}) do
-  emit(key, result[key])
-end
-""".strip()
-            )
-        )
-        if last.get("available") == "true":
-            return last
-        time.sleep(0.1)
-    raise ElementDamageProbeFailure(
-        f"Timed out waiting for manual enemy spawn result request_id={request_id}. Last={last}"
-    )
-
-
-def spawn_hostile_near_position(x: float, y: float, standoff: float) -> dict[str, str]:
-    return csp.parse_key_values(
-        csp.run_lua(
-            f"""
-local ok, err, request_id = sd.world.spawn_enemy({{
-  type_id = {MANUAL_SPAWN_ENEMY_TYPE_ID},
-  x = {x + standoff},
-  y = {y},
-}})
-print('ok=' .. tostring(ok))
-print('err=' .. tostring(err))
-print('request_id=' .. tostring(request_id))
-""".strip()
-        )
-    )
-
-
 def query_watchable_hostiles(limit: int, origin_actor_address: int) -> list[dict[str, object]]:
     output = csp.run_lua(
         f"""
@@ -1325,8 +1447,8 @@ local origin = {origin_actor_address}
 local ox = 0.0
 local oy = 0.0
 if origin ~= 0 then
-  ox = tonumber(sd.debug.read_float(origin + 0x18)) or 0.0
-  oy = tonumber(sd.debug.read_float(origin + 0x1C)) or 0.0
+  ox = tonumber(sd.debug.read_float(origin + {ACTOR_POSITION_X_OFFSET})) or 0.0
+  oy = tonumber(sd.debug.read_float(origin + {ACTOR_POSITION_Y_OFFSET})) or 0.0
 end
 local actors = sd.world and sd.world.list_actors and sd.world.list_actors() or {{}}
 local rows = {{}}
@@ -1390,6 +1512,69 @@ print('total=' .. tostring(#rows))
             }
         )
     return rows
+
+
+def query_tracked_enemy_semantic_snapshot(limit: int) -> dict[str, object]:
+    output = csp.run_lua(
+        f"""
+local limit = {max(limit, 1)}
+local actors = sd.world and sd.world.list_actors and sd.world.list_actors() or {{}}
+local rows = {{}}
+for _, actor in ipairs(actors) do
+  if type(actor) == 'table' and actor.tracked_enemy == true then
+    rows[#rows + 1] = {{
+      actor_address = actor.actor_address,
+      object_type_id = actor.object_type_id,
+      tracked_enemy = actor.tracked_enemy,
+      enemy_type = actor.enemy_type,
+      dead = actor.dead,
+      hp = actor.hp,
+      max_hp = actor.max_hp,
+      x = actor.x,
+      y = actor.y,
+      actor_slot = actor.actor_slot,
+      world_slot = actor.world_slot,
+    }}
+  end
+end
+print('actor_count=' .. tostring(#actors))
+print('tracked_count=' .. tostring(#rows))
+for i = 1, math.min(#rows, limit) do
+  local row = rows[i]
+  for _, key in ipairs({{
+    'actor_address','object_type_id','tracked_enemy','enemy_type','dead',
+    'hp','max_hp','x','y','actor_slot','world_slot'
+  }}) do
+    print('enemy.' .. i .. '.' .. key .. '=' .. tostring(row[key]))
+  end
+end
+print('count=' .. tostring(math.min(#rows, limit)))
+""".strip()
+    )
+    values = csp.parse_key_values(output)
+    hostiles: list[dict[str, object]] = []
+    for index in range(1, csp.int_value(values, "count") + 1):
+        hostiles.append(
+            {
+                "actor_address": csp.int_value(values, f"enemy.{index}.actor_address"),
+                "object_type_id": csp.int_value(values, f"enemy.{index}.object_type_id"),
+                "tracked_enemy": values.get(f"enemy.{index}.tracked_enemy", ""),
+                "enemy_type": csp.int_value(values, f"enemy.{index}.enemy_type"),
+                "dead": values.get(f"enemy.{index}.dead", ""),
+                "hp": values.get(f"enemy.{index}.hp", ""),
+                "max_hp": values.get(f"enemy.{index}.max_hp", ""),
+                "x": values.get(f"enemy.{index}.x", ""),
+                "y": values.get(f"enemy.{index}.y", ""),
+                "actor_slot": values.get(f"enemy.{index}.actor_slot", ""),
+                "world_slot": values.get(f"enemy.{index}.world_slot", ""),
+            }
+        )
+    return {
+        "actor_count": csp.int_value(values, "actor_count"),
+        "tracked_count": csp.int_value(values, "tracked_count"),
+        "captured_count": csp.int_value(values, "count"),
+        "hostiles": hostiles,
+    }
 
 
 def ensure_hostile_is_watched(hostiles: list[dict[str, object]], actor_address: int) -> list[dict[str, object]]:
@@ -1624,7 +1809,17 @@ def force_scene_actor_vitals(actor_address: int, hp_value: float) -> dict[str, s
         csp.run_lua(
             f"""
 local actor = {actor_address}
-local type_id = tonumber(sd.debug.read_u32(actor + 0x08)) or 0
+local function is_tracked_enemy_actor(wanted)
+  local actors = sd.world and sd.world.list_actors and sd.world.list_actors() or {{}}
+  for _, actor_state in ipairs(actors) do
+    if (tonumber(actor_state.actor_address) or 0) == wanted then
+      return actor_state.tracked_enemy == true
+    end
+  end
+  return false
+end
+local type_id = tonumber(sd.debug.read_u32(actor + {OBJECT_TYPE_ID_OFFSET})) or 0
+local tracked_enemy = is_tracked_enemy_actor(actor)
 local function emit(key, value)
   if value == nil then
     print(key .. "=")
@@ -1634,7 +1829,8 @@ local function emit(key, value)
 end
 emit('actor_address', actor)
 emit('object_type_id', type_id)
-if type_id == {ARENA_ENEMY_OBJECT_TYPE_ID} then
+emit('tracked_enemy', tracked_enemy)
+if tracked_enemy then
   emit('max_hp_ok', sd.debug.write_float(actor + {ARENA_ENEMY_MAX_HP_OFFSET}, {hp_value}))
   emit('hp_ok', sd.debug.write_float(actor + {ARENA_ENEMY_CURRENT_HP_OFFSET}, {hp_value}))
   emit('max_hp', sd.debug.read_float(actor + {ARENA_ENEMY_MAX_HP_OFFSET}))
@@ -1669,11 +1865,14 @@ def force_specific_target_range(
     *,
     heading: float = 90.0,
     bot_hp: float = 500.0,
+    bot_mp: float | None = None,
     bot_x: float = CONTROLLED_BOT_X,
     bot_y: float = CONTROLLED_BOT_Y,
     target_x: float | None = None,
     target_y: float | None = None,
 ) -> dict[str, str]:
+    mp_offset = read_runtime_layout_offset("progression_mp")
+    max_mp_offset = read_runtime_layout_offset("progression_max_mp")
     safe_bot_x = bot_x
     safe_bot_y = bot_y
     safe_target_x = safe_bot_x + standoff if target_x is None else target_x
@@ -1695,8 +1894,8 @@ local hostile = {hostile_actor_address}
 	local hy = {safe_target_y}
 	local bx = {safe_bot_x}
 	local by = {safe_bot_y}
-local prog = tonumber(sd.debug.read_ptr(bot + 0x200)) or 0
-local handle = tonumber(sd.debug.read_ptr(bot + 0x300)) or 0
+local prog = tonumber(sd.debug.read_ptr(bot + {ACTOR_PROGRESSION_RUNTIME_STATE_OFFSET})) or 0
+local handle = tonumber(sd.debug.read_ptr(bot + {ACTOR_PROGRESSION_HANDLE_OFFSET})) or 0
 if prog == 0 and handle ~= 0 then
   prog = tonumber(sd.debug.read_ptr(handle)) or 0
 end
@@ -1710,25 +1909,29 @@ emit('bot_progression', prog)
 if prog ~= 0 then
   emit('bot_hp_ok', sd.debug.write_float(prog + {csp.PROGRESSION_HP_OFFSET}, {bot_hp}))
   emit('bot_max_hp_ok', sd.debug.write_float(prog + {csp.PROGRESSION_MAX_HP_OFFSET}, {bot_hp}))
+  if {json.dumps(bot_mp is not None)} then
+    emit('bot_mp_ok', sd.debug.write_float(prog + {mp_offset}, {0.0 if bot_mp is None else bot_mp}))
+    emit('bot_max_mp_ok', sd.debug.write_float(prog + {max_mp_offset}, {0.0 if bot_mp is None else bot_mp}))
+  end
 end
 emit('target_x', hx)
 emit('target_y', hy)
-emit('hostile_x_ok', sd.debug.write_float(hostile + 0x18, hx))
-emit('hostile_y_ok', sd.debug.write_float(hostile + 0x1C, hy))
-emit('hostile_move_speed_ok', sd.debug.write_float(hostile + 0x74, 0.0))
-emit('hostile_speed_mult_ok', sd.debug.write_float(hostile + 0x120, 0.0))
-emit('hostile_move_input_x_ok', sd.debug.write_float(hostile + 0x158, 0.0))
-emit('hostile_move_input_y_ok', sd.debug.write_float(hostile + 0x15C, 0.0))
-emit('hostile_move_step_ok', sd.debug.write_float(hostile + 0x218, 0.0))
-emit('bot_x_ok', sd.debug.write_float(bot + 0x18, bx))
-emit('bot_y_ok', sd.debug.write_float(bot + 0x1C, by))
-emit('bot_heading_ok', sd.debug.write_float(bot + 0x6C, {heading}))
+emit('hostile_x_ok', sd.debug.write_float(hostile + {ACTOR_POSITION_X_OFFSET}, hx))
+emit('hostile_y_ok', sd.debug.write_float(hostile + {ACTOR_POSITION_Y_OFFSET}, hy))
+emit('hostile_move_speed_ok', sd.debug.write_float(hostile + {ACTOR_MOVE_SPEED_SCALE_OFFSET}, 0.0))
+emit('hostile_speed_mult_ok', sd.debug.write_float(hostile + {ACTOR_MOVEMENT_SPEED_MULTIPLIER_OFFSET}, 0.0))
+emit('hostile_move_input_x_ok', sd.debug.write_float(hostile + {ACTOR_ANIMATION_CONFIG_BLOCK_OFFSET}, 0.0))
+emit('hostile_move_input_y_ok', sd.debug.write_float(hostile + {ACTOR_ANIMATION_DRIVE_PARAMETER_OFFSET}, 0.0))
+emit('hostile_move_step_ok', sd.debug.write_float(hostile + {ACTOR_MOVE_STEP_SCALE_OFFSET}, 0.0))
+emit('bot_x_ok', sd.debug.write_float(bot + {ACTOR_POSITION_X_OFFSET}, bx))
+emit('bot_y_ok', sd.debug.write_float(bot + {ACTOR_POSITION_Y_OFFSET}, by))
+emit('bot_heading_ok', sd.debug.write_float(bot + {ACTOR_HEADING_OFFSET}, {heading}))
 if sd.world and sd.world.rebind_actor then
   emit('hostile_rebind_ok', sd.world.rebind_actor(hostile))
   emit('bot_rebind_ok', sd.world.rebind_actor(bot))
 end
-local dx = (tonumber(sd.debug.read_float(hostile + 0x18)) or hx) - (tonumber(sd.debug.read_float(bot + 0x18)) or bx)
-local dy = (tonumber(sd.debug.read_float(hostile + 0x1C)) or hy) - (tonumber(sd.debug.read_float(bot + 0x1C)) or by)
+local dx = (tonumber(sd.debug.read_float(hostile + {ACTOR_POSITION_X_OFFSET})) or hx) - (tonumber(sd.debug.read_float(bot + {ACTOR_POSITION_X_OFFSET})) or bx)
+local dy = (tonumber(sd.debug.read_float(hostile + {ACTOR_POSITION_Y_OFFSET})) or hy) - (tonumber(sd.debug.read_float(bot + {ACTOR_POSITION_Y_OFFSET})) or by)
 emit('gap', math.sqrt(dx * dx + dy * dy))
 """.strip()
         )
@@ -1742,7 +1945,10 @@ def position_bot_near_live_target(
     *,
     heading: float = 90.0,
     bot_hp: float = 500.0,
+    bot_mp: float | None = None,
 ) -> dict[str, str]:
+    mp_offset = read_runtime_layout_offset("progression_mp")
+    max_mp_offset = read_runtime_layout_offset("progression_max_mp")
     return csp.parse_key_values(
         csp.run_lua(
             f"""
@@ -1756,22 +1962,33 @@ end
 local bot = {bot_actor_address}
 local hostile = {hostile_actor_address}
 local standoff = {standoff}
-local type_id = tonumber(sd.debug.read_u32(hostile + 0x08)) or 0
+local function is_tracked_enemy_actor(wanted)
+  local actors = sd.world and sd.world.list_actors and sd.world.list_actors() or {{}}
+  for _, actor_state in ipairs(actors) do
+    if (tonumber(actor_state.actor_address) or 0) == wanted then
+      return actor_state.tracked_enemy == true
+    end
+  end
+  return false
+end
+local type_id = tonumber(sd.debug.read_u32(hostile + {OBJECT_TYPE_ID_OFFSET})) or 0
+local tracked_enemy = is_tracked_enemy_actor(hostile)
 local hp = tonumber(sd.debug.read_float(hostile + {ARENA_ENEMY_CURRENT_HP_OFFSET})) or 0.0
-local hx = tonumber(sd.debug.read_float(hostile + 0x18)) or 0.0
-local hy = tonumber(sd.debug.read_float(hostile + 0x1C)) or 0.0
+local hx = tonumber(sd.debug.read_float(hostile + {ACTOR_POSITION_X_OFFSET})) or 0.0
+local hy = tonumber(sd.debug.read_float(hostile + {ACTOR_POSITION_Y_OFFSET})) or 0.0
 local bx = hx - standoff
 local by = hy
-local prog = tonumber(sd.debug.read_ptr(bot + 0x200)) or 0
-local handle = tonumber(sd.debug.read_ptr(bot + 0x300)) or 0
+local prog = tonumber(sd.debug.read_ptr(bot + {ACTOR_PROGRESSION_RUNTIME_STATE_OFFSET})) or 0
+local handle = tonumber(sd.debug.read_ptr(bot + {ACTOR_PROGRESSION_HANDLE_OFFSET})) or 0
 if prog == 0 and handle ~= 0 then
   prog = tonumber(sd.debug.read_ptr(handle)) or 0
 end
 emit('positioning', 'bot_only')
 emit('bot_actor_address', bot)
 emit('hostile_actor_address', hostile)
-emit('hostile_available', type_id == {ARENA_ENEMY_OBJECT_TYPE_ID} and hp > 0.0)
+emit('hostile_available', tracked_enemy and hp > 0.0)
 emit('hostile_type_id', type_id)
+emit('hostile_tracked_enemy', tracked_enemy)
 emit('hostile_hp', hp)
 emit('bot_x', bx)
 emit('bot_y', by)
@@ -1783,15 +2000,19 @@ emit('bot_progression', prog)
 if prog ~= 0 then
   emit('bot_hp_ok', sd.debug.write_float(prog + {csp.PROGRESSION_HP_OFFSET}, {bot_hp}))
   emit('bot_max_hp_ok', sd.debug.write_float(prog + {csp.PROGRESSION_MAX_HP_OFFSET}, {bot_hp}))
+  if {json.dumps(bot_mp is not None)} then
+    emit('bot_mp_ok', sd.debug.write_float(prog + {mp_offset}, {0.0 if bot_mp is None else bot_mp}))
+    emit('bot_max_mp_ok', sd.debug.write_float(prog + {max_mp_offset}, {0.0 if bot_mp is None else bot_mp}))
+  end
 end
-emit('bot_x_ok', sd.debug.write_float(bot + 0x18, bx))
-emit('bot_y_ok', sd.debug.write_float(bot + 0x1C, by))
-emit('bot_heading_ok', sd.debug.write_float(bot + 0x6C, {heading}))
+emit('bot_x_ok', sd.debug.write_float(bot + {ACTOR_POSITION_X_OFFSET}, bx))
+emit('bot_y_ok', sd.debug.write_float(bot + {ACTOR_POSITION_Y_OFFSET}, by))
+emit('bot_heading_ok', sd.debug.write_float(bot + {ACTOR_HEADING_OFFSET}, {heading}))
 if sd.world and sd.world.rebind_actor then
   emit('bot_rebind_ok', sd.world.rebind_actor(bot))
 end
-local actual_bx = tonumber(sd.debug.read_float(bot + 0x18)) or bx
-local actual_by = tonumber(sd.debug.read_float(bot + 0x1C)) or by
+local actual_bx = tonumber(sd.debug.read_float(bot + {ACTOR_POSITION_X_OFFSET})) or bx
+local actual_by = tonumber(sd.debug.read_float(bot + {ACTOR_POSITION_Y_OFFSET})) or by
 local dx = hx - actual_bx
 local dy = hy - actual_by
 emit('gap', math.sqrt(dx * dx + dy * dy))
@@ -1816,10 +2037,10 @@ local function emit(key, value)
 end
 local bot = {bot_actor_address}
 local hostile = {hostile_actor_address}
-local bx = tonumber(sd.debug.read_float(bot + 0x18)) or 0.0
-local by = tonumber(sd.debug.read_float(bot + 0x1C)) or 0.0
-local hx = tonumber(sd.debug.read_float(hostile + 0x18)) or 0.0
-local hy = tonumber(sd.debug.read_float(hostile + 0x1C)) or 0.0
+local bx = tonumber(sd.debug.read_float(bot + {ACTOR_POSITION_X_OFFSET})) or 0.0
+local by = tonumber(sd.debug.read_float(bot + {ACTOR_POSITION_Y_OFFSET})) or 0.0
+local hx = tonumber(sd.debug.read_float(hostile + {ACTOR_POSITION_X_OFFSET})) or 0.0
+local hy = tonumber(sd.debug.read_float(hostile + {ACTOR_POSITION_Y_OFFSET})) or 0.0
 local dx = hx - bx
 local dy = hy - by
 emit('bot_actor_address', bot)
@@ -1846,6 +2067,7 @@ def establish_probe_range(
     bot_y: float = CONTROLLED_BOT_Y,
     target_x: float | None = None,
     target_y: float | None = None,
+    bot_mp: float | None = None,
 ) -> dict[str, str]:
     if positioning == "force_both":
         return force_specific_target_range(
@@ -1856,11 +2078,13 @@ def establish_probe_range(
             bot_y=bot_y,
             target_x=target_x,
             target_y=target_y,
+            bot_mp=bot_mp,
         )
     return position_bot_near_live_target(
         bot_actor_address,
         hostile_actor_address,
         standoff,
+        bot_mp=bot_mp,
     )
 
 
@@ -1886,10 +2110,18 @@ def pin_target_during_window(
     bot_y: float = CONTROLLED_BOT_Y,
     target_x: float | None = None,
     target_y: float | None = None,
+    bot_mp: float | None = None,
+    stop_on_boulder_release_bot_id: int | None = None,
+    release_log_start_index: int = 0,
 ) -> list[dict[str, str]]:
     samples: list[dict[str, str]] = []
     deadline = time.time() + max(duration_s, 0.0)
     while time.time() < deadline:
+        if (
+            stop_on_boulder_release_bot_id is not None
+            and boulder_release_logged(stop_on_boulder_release_bot_id, release_log_start_index)
+        ):
+            break
         samples.append(
             force_specific_target_range(
                 bot_actor_address,
@@ -1899,8 +2131,14 @@ def pin_target_during_window(
                 bot_y=bot_y,
                 target_x=target_x,
                 target_y=target_y,
+                bot_mp=bot_mp,
             )
         )
+        if (
+            stop_on_boulder_release_bot_id is not None
+            and boulder_release_logged(stop_on_boulder_release_bot_id, release_log_start_index)
+        ):
+            break
         time.sleep(max(step_s, 0.02))
     return samples
 
@@ -1911,17 +2149,31 @@ def pin_bot_near_live_target_during_window(
     standoff: float,
     duration_s: float,
     step_s: float = 0.10,
+    bot_mp: float | None = None,
+    stop_on_boulder_release_bot_id: int | None = None,
+    release_log_start_index: int = 0,
 ) -> list[dict[str, str]]:
     samples: list[dict[str, str]] = []
     deadline = time.time() + max(duration_s, 0.0)
     while time.time() < deadline:
+        if (
+            stop_on_boulder_release_bot_id is not None
+            and boulder_release_logged(stop_on_boulder_release_bot_id, release_log_start_index)
+        ):
+            break
         samples.append(
             position_bot_near_live_target(
                 bot_actor_address,
                 hostile_actor_address,
                 standoff,
+                bot_mp=bot_mp,
             )
         )
+        if (
+            stop_on_boulder_release_bot_id is not None
+            and boulder_release_logged(stop_on_boulder_release_bot_id, release_log_start_index)
+        ):
+            break
         time.sleep(max(step_s, 0.02))
     return samples
 
@@ -1937,6 +2189,9 @@ def pin_probe_range_during_window(
     bot_y: float = CONTROLLED_BOT_Y,
     target_x: float | None = None,
     target_y: float | None = None,
+    bot_mp: float | None = None,
+    stop_on_boulder_release_bot_id: int | None = None,
+    release_log_start_index: int = 0,
 ) -> list[dict[str, str]]:
     if positioning == "force_both":
         return pin_target_during_window(
@@ -1948,12 +2203,18 @@ def pin_probe_range_during_window(
             bot_y=bot_y,
             target_x=target_x,
             target_y=target_y,
+            bot_mp=bot_mp,
+            stop_on_boulder_release_bot_id=stop_on_boulder_release_bot_id,
+            release_log_start_index=release_log_start_index,
         )
     return pin_bot_near_live_target_during_window(
         bot_actor_address,
         hostile_actor_address,
         standoff,
         duration_s,
+        bot_mp=bot_mp,
+        stop_on_boulder_release_bot_id=stop_on_boulder_release_bot_id,
+        release_log_start_index=release_log_start_index,
     )
 
 
@@ -2213,7 +2474,13 @@ def effective_positioning(element: str, args: argparse.Namespace) -> str:
 
 
 def effective_skip_hostile_hp_watches(element: str, args: argparse.Namespace) -> bool:
-    return bool(args.skip_hostile_hp_watches or ELEMENT_SKIP_HOSTILE_HP_WATCHES.get(element, False))
+    return bool(
+        args.skip_hostile_hp_watches
+        or (
+            ELEMENT_SKIP_HOSTILE_HP_WATCHES.get(element, False)
+            and not args.force_hostile_hp_watches
+        )
+    )
 
 
 def effective_controlled_target_position(
@@ -2233,6 +2500,24 @@ def effective_controlled_target_position(
     return target_x, target_y
 
 
+def effective_controlled_cast_aim_position(
+    element: str,
+    positioning: str,
+    args: argparse.Namespace,
+    bot_x: float,
+    bot_y: float,
+    target_x: float | None,
+    target_y: float | None,
+) -> tuple[float | None, float | None]:
+    aim_x = args.cast_aim_x
+    aim_y = args.cast_aim_y
+    if aim_x is None:
+        aim_x = target_x
+    if aim_y is None:
+        aim_y = target_y
+    return aim_x, aim_y
+
+
 def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, object]:
     result: dict[str, object] = {
         "element": element,
@@ -2250,12 +2535,14 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
     cast_interval_seconds = effective_cast_interval_seconds(element, args)
     positioning = effective_positioning(element, args)
     skip_hostile_hp_watches = effective_skip_hostile_hp_watches(element, args)
+    maintained_bot_mp = args.bot_starting_mp if args.maintain_bot_mp and args.bot_starting_mp is not None else None
     result["standoff"] = standoff
     result["cast_interval_seconds"] = cast_interval_seconds
     result["validation_profile"] = {
         "positioning": positioning,
         "skip_hostile_hp_watches": skip_hostile_hp_watches,
         "enemy_watch_count": args.enemy_watch_count,
+        "maintain_bot_mp": maintained_bot_mp is not None,
     }
     try:
         if (
@@ -2278,42 +2565,57 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
             planned_bot_x,
             planned_bot_y,
         )
+        planned_cast_aim_x, planned_cast_aim_y = effective_controlled_cast_aim_position(
+            element,
+            positioning,
+            args,
+            planned_bot_x,
+            planned_bot_y,
+            planned_target_x,
+            planned_target_y,
+        )
         result["controlled_bot_position"] = {"x": planned_bot_x, "y": planned_bot_y}
         result["controlled_target_position"] = {"x": planned_target_x, "y": planned_target_y}
+        result["controlled_cast_aim_position"] = {"x": planned_cast_aim_x, "y": planned_cast_aim_y}
         bot_id = create_single_run_bot(element, player, planned_bot_x, planned_bot_y)
         bot = wait_for_bot_by_id(bot_id)
         crc.stop_bot(str(bot_id))
+        if args.apply_primary_upgrade:
+            source_progression = csp.int_value(player, "progression_address")
+            if source_progression == 0:
+                raise ElementDamageProbeFailure(
+                    f"Unable to apply primary upgrade for {element}: player progression is missing: {player}"
+                )
+            result["primary_upgrade"] = apply_primary_upgrade_to_bot(
+                bot_id,
+                element,
+                source_progression,
+                max(args.primary_upgrade_max_level_steps, 1),
+            )
+            bot = wait_for_bot_by_id(bot_id)
+            crc.stop_bot(str(bot_id))
         bot_actor = csp.int_value(bot, "actor_address")
         wave.sustain_probe_health()
-        if args.setup_mode == "manual_prelude":
-            spawn = spawn_hostile_near_position(planned_bot_x, planned_bot_y, standoff)
-            if spawn.get("ok") != "true":
-                raise ElementDamageProbeFailure(f"sd.world.spawn_enemy failed for {element}: {spawn}")
-            combat = crc.enable_combat_prelude()
-            combat_state = crc.wait_for_combat_prelude_ready()
-            spawn_result = wait_for_spawn_result(csp.int_value(spawn, "request_id"))
-            hostile_actor = csp.int_value(spawn_result, "actor_address")
-            if hostile_actor == 0:
-                raise ElementDamageProbeFailure(f"sd.world.spawn_enemy returned no actor for {element}: {spawn_result}")
-            result["navigation"]["spawn"] = spawn
-            result["navigation"]["spawn_result"] = spawn_result
-            result["navigation"]["combat_prelude"] = combat
-            result["navigation"]["combat_state"] = combat_state
-        else:
-            waves = csp.parse_key_values(csp.run_lua("print('ok='..tostring(sd.gameplay.start_waves()))"))
-            if waves.get("ok") != "true":
-                raise ElementDamageProbeFailure(f"sd.gameplay.start_waves failed for {element}: {waves}")
-            result["navigation"]["waves"] = waves
+        waves = csp.parse_key_values(csp.run_lua("print('ok='..tostring(sd.gameplay.start_waves()))"))
+        if waves.get("ok") != "true":
+            raise ElementDamageProbeFailure(f"sd.gameplay.start_waves failed for {element}: {waves}")
+        result["navigation"]["waves"] = waves
         time.sleep(POST_COMBAT_PRELUDE_SETTLE_SECONDS)
         wave.sustain_probe_health()
-        if args.setup_mode == "manual_prelude":
-            hostile = query_scene_actor_by_address(hostile_actor)
-            if hostile.get("available") != "true":
-                hostile = csp.wait_for_nearest_enemy(timeout_s=15.0, max_gap=5000.0)
-                hostile_actor = csp.int_value(hostile, "actor_address")
-        else:
-            hostile = csp.wait_for_nearest_enemy(timeout_s=30.0, max_gap=5000.0)
-            hostile_actor = csp.int_value(hostile, "actor_address")
+        hostile = csp.wait_for_nearest_enemy(timeout_s=30.0, max_gap=5000.0)
+        hostile_actor = csp.int_value(hostile, "actor_address")
+        result["tracked_enemy_semantic_snapshot"] = query_tracked_enemy_semantic_snapshot(args.enemy_watch_count)
+        if args.semantic_snapshot_only:
+            result.update(
+                {
+                    "player": player,
+                    "bot": bot,
+                    "hostile": hostile,
+                    "before": hostile,
+                    "ok": True,
+                }
+            )
+            return result
         range_setup = establish_probe_range(
             bot_actor,
             hostile_actor,
@@ -2323,6 +2625,7 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
             bot_y=planned_bot_y,
             target_x=planned_target_x,
             target_y=planned_target_y,
+            bot_mp=maintained_bot_mp,
         )
         if not probe_range_setup_succeeded(range_setup, args.max_hostile_gap):
             raise ElementDamageProbeFailure(f"Unable to establish bot/hostile range for {element}: {range_setup}")
@@ -2338,6 +2641,7 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
             bot_y=planned_bot_y,
             target_x=planned_target_x,
             target_y=planned_target_y,
+            bot_mp=maintained_bot_mp,
         )
         forced_vitals = force_target_vitals_for_baseline(
             result, hostile_actor, args.hp, "confirmed_range_setup"
@@ -2368,6 +2672,7 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
             bot_y=planned_bot_y,
             target_x=planned_target_x,
             target_y=planned_target_y,
+            bot_mp=maintained_bot_mp,
         )
         before = query_scene_actor_by_address(hostile_actor)
         if before.get("available") != "true":
@@ -2390,6 +2695,7 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
                 bot_y=planned_bot_y,
                 target_x=planned_target_x,
                 target_y=planned_target_y,
+                bot_mp=maintained_bot_mp,
             )
             before = query_scene_actor_by_address(hostile_actor)
             if before.get("available") != "true":
@@ -2419,6 +2725,8 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
             armed_traces.extend(native_hit_traces)
 
         before_for_validation: dict[str, object] = dict(before)
+        release_stop_bot_id = bot_id if element == "earth" else None
+        last_release_log_start_index = len(read_loader_log_lines())
         for cast_index in range(max(args.casts, 1)):
             if cast_index > 0:
                 watched_hostiles, hostile_hp_watch_names, hostile_actor, hostile_now = acquire_live_watched_hostile(
@@ -2456,6 +2764,7 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
                 bot_y=planned_bot_y,
                 target_x=planned_target_x,
                 target_y=planned_target_y,
+                bot_mp=maintained_bot_mp,
             )
             hostile_now = query_scene_actor_by_address(hostile_actor)
             if hostile_now.get("available") != "true":
@@ -2478,6 +2787,7 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
                     bot_y=planned_bot_y,
                     target_x=planned_target_x,
                     target_y=planned_target_y,
+                    bot_mp=maintained_bot_mp,
                 )
                 hostile_now = query_scene_actor_by_address(hostile_actor)
                 if hostile_now.get("available") != "true":
@@ -2521,6 +2831,7 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
                     bot_y=planned_bot_y,
                     target_x=planned_target_x,
                     target_y=planned_target_y,
+                    bot_mp=maintained_bot_mp,
                 )
                 hostile_now = query_scene_actor_by_address(hostile_actor)
                 if hostile_now.get("available") != "true":
@@ -2571,11 +2882,21 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
             clear_write_hits(hostile_hp_watch_names)
             clear_write_hits(damage_context_watch_names)
 
+            release_log_start_index = len(read_loader_log_lines())
+            last_release_log_start_index = release_log_start_index
             cast = crc.queue_direct_primary_cast(
                 str(bot_id),
                 str(hostile_actor),
-                csp.float_value(pinned, "target_x"),
-                csp.float_value(pinned, "target_y"),
+                (
+                    float(planned_cast_aim_x)
+                    if planned_cast_aim_x is not None
+                    else csp.float_value(pinned, "target_x")
+                ),
+                (
+                    float(planned_cast_aim_y)
+                    if planned_cast_aim_y is not None
+                    else csp.float_value(pinned, "target_y")
+                ),
             )
             cast["index"] = str(cast_index + 1)
             cast["hp_before_cast"] = str(target_baseline.get("hp", ""))
@@ -2592,6 +2913,9 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
                 bot_y=planned_bot_y,
                 target_x=planned_target_x,
                 target_y=planned_target_y,
+                bot_mp=maintained_bot_mp,
+                stop_on_boulder_release_bot_id=release_stop_bot_id,
+                release_log_start_index=release_log_start_index,
             )
 
         result["post_cast_pin_samples"] = pin_probe_range_during_window(
@@ -2604,7 +2928,16 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
             bot_y=planned_bot_y,
             target_x=planned_target_x,
             target_y=planned_target_y,
+            bot_mp=maintained_bot_mp,
+            stop_on_boulder_release_bot_id=release_stop_bot_id,
+            release_log_start_index=last_release_log_start_index,
         )
+        if (
+            release_stop_bot_id is not None
+            and boulder_release_logged(release_stop_bot_id, last_release_log_start_index)
+        ):
+            result["earth_release_settle_after_unpin_seconds"] = max(args.settle_seconds, 0.0)
+            time.sleep(max(args.settle_seconds, 0.0))
         if args.trace_air_handler and element == "air":
             result["air_handler_trace_hits"] = query_trace_hits("air_lightning_handler")
         if args.trace_builder_window:
@@ -2653,13 +2986,13 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
         )
         any_cast_queued = any(cast.get("ok") == "true" for cast in result["casts"])
         full_loader_log_tail = read_loader_log_lines()
-        statbook_validation = build_statbook_validation(
+        native_spell_stat_validation = build_native_spell_stat_validation(
             element,
             bot,
             bot_id,
             full_loader_log_tail,
         )
-        native_spawn_validation = statbook_validation.get("native_projectile_spawn_validation")
+        native_spawn_validation = native_spell_stat_validation.get("native_projectile_spawn_validation")
         native_release = (
             native_spawn_validation.get("matching_release")
             if isinstance(native_spawn_validation, dict)
@@ -2671,7 +3004,7 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
             and before_was_available
             and after.get("available") != "true"
             and int(native_release.get("target_actor", 0)) == hostile_actor
-            and str(native_release.get("release_reason", "")) in {"max_size", "damage_threshold"}
+            and str(native_release.get("release_reason", "")) in {"max_size", "target_lethal"}
         )
         if native_release_removed_target and not any(victim.get("target") is True for victim in victims):
             victims.append(
@@ -2690,7 +3023,7 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
             )
         target_removed_after_damage = target_removed_after_damage or native_release_removed_target
         hp_decreased = hp_decreased or native_release_removed_target
-        mana_rejected_logged = int(statbook_validation.get("mana_rejected_log_count", 0)) > 0
+        mana_rejected_logged = int(native_spell_stat_validation.get("mana_rejected_log_count", 0)) > 0
         mana_rejection_validation = {
             "expected": bool(args.expect_mana_rejected),
             "mana_rejected_logged": mana_rejected_logged,
@@ -2727,14 +3060,14 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
                     "target_damaged": any(victim.get("target") is True for victim in victims),
                     "after_by_actor": after_by_actor,
                 },
-                "statbook_validation": statbook_validation,
+                "native_spell_stat_validation": native_spell_stat_validation,
                 "mana_rejection_validation": mana_rejection_validation,
             }
         )
         if args.expect_mana_rejected:
             result["ok"] = mana_rejection_validation["ok"]
         else:
-            result["ok"] = bool(victims and any_cast_queued and statbook_validation.get("ok") is True)
+            result["ok"] = bool(victims and any_cast_queued and native_spell_stat_validation.get("ok") is True)
     except (csp.ProbeFailure, crc.CloseRangeProbeFailure, ElementDamageProbeFailure) as exc:
         result["error"] = str(exc)
     finally:

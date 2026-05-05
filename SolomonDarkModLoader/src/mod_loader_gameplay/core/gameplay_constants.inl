@@ -77,31 +77,23 @@ constexpr std::uint64_t kGameplayRegionSwitchDispatchSpacingMs = 500;
 constexpr std::uint64_t kGameplaySceneChurnDelayMs = 1500;
 constexpr DWORD kHubStartTestrunDispatchCooldownMs = 5000;
 constexpr std::uint32_t kInjectedGameplayMouseClickFrames = 2;
-constexpr std::size_t kEnemyConfigBufferSize = 216;
-constexpr std::size_t kEnemyConfigWrapperSize = 4 + kEnemyConfigBufferSize;
+
+bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id) {
+    // 1001 is the stock wave-spawned enemy actor type observed in arena runs.
+    // Solomon/NPC helper actors can look hostile while waves start, but they
+    // are not the wave combat targets the autonomous bot should attack.
+    return object_type_id == 1001;
+}
 constexpr std::size_t kQueuedGameplayWorldActionLimit = 64;
 constexpr int kSpawnRewardDefaultLifetime = 0;
 constexpr int kUnknownXpSentinel = -1;
-constexpr int kSpawnEnemyVariantDefault = 0;
-constexpr int kSpawnEnemyModeDefault = 0;
-constexpr int kSpawnEnemyParam5Default = 0;
-constexpr int kSpawnEnemyParam6Default = 0;
-constexpr char kSpawnEnemyAllowOverrideDefault = 0;
 constexpr int kFirstWizardBotSlot = 1;
 constexpr int kHubRegionIndex = 0;
 constexpr float kDefaultWizardBotOffsetX = 32.0f;
 constexpr float kDefaultWizardBotOffsetY = 0.0f;
 constexpr std::uint8_t kTargetHandleGroupSentinel = 0xFF;
 constexpr std::uint16_t kTargetHandleSlotSentinel = 0xFFFF;
-constexpr std::size_t kActorSpellTargetGroupByteOffset = 0x164;
-constexpr std::size_t kActorSpellTargetSlotShortOffset = 0x166;
-constexpr std::size_t kActorCurrentTargetActorOffset = 0x168;
-constexpr std::size_t kActorContinuousPrimaryModeOffset = 0x258;
-constexpr std::size_t kActorContinuousPrimaryActiveOffset = 0x264;
-constexpr std::size_t kHostileCurrentTargetActorOffset = 0x168;
 constexpr std::size_t kHostileTargetBucketDeltaOffset = 0x164;
-constexpr std::int32_t kActorWorldBucketStride = 0x800;
-constexpr std::size_t kActorWorldBucketTableOffset = 0x500;
 constexpr std::size_t kSceneActorBucketScanCount = 0x2000;
 constexpr int kSceneTypeHub = 0xFA1;
 constexpr int kSceneTypeMemorator = 0xFA2;
@@ -110,9 +102,9 @@ constexpr int kSceneTypeLibrarian = 0xFA4;
 constexpr int kSceneTypePolisherArch = 0xFA5;
 constexpr int kSceneTypeArena = 0xFA6;
 
-// ---- Synthetic wizard source profile for independent bot visuals ----
-// FUN_005E3080 reads these offsets from the source profile at actor+0x178.
-// We allocate a small buffer with these fields set so the engine builds
-// the bot's descriptor block, variant bytes, and weapon attachment natively.
-constexpr std::size_t kSyntheticSourceProfileSize = 0x100;
-constexpr std::int32_t kStandaloneWizardVisualSourceKind = 3;
+// ---- Wizard clone-source actor contract ----
+// FUN_0061AA00 accepts stock-prepared source actors whose actor+0x174 kind is 3.
+// The loader fills a transient source profile only from native Skills_Wizard
+// color output, then lets FUN_005E3080 build the stock descriptor window.
+constexpr std::int32_t kWizardCloneSourceActorKind = 3;
+constexpr std::size_t kNativeDerivedSourceProfileSize = 0x100;

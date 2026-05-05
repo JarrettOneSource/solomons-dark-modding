@@ -88,7 +88,7 @@ local function register_events(ctx)
 
     local anchor = nil
     if desired_scene.kind == "private_region" then
-      local area = ctx.config.SUPPORTED_PRIVATE_AREAS[tostring(scene.name or "")]
+      local area = ctx.config.PRIVATE_AREA_TRAVEL_DESCRIPTORS[tostring(scene.name or "")]
       anchor = area ~= nil and area.interior_anchor or nil
     end
 

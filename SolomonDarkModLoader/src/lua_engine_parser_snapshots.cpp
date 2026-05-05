@@ -26,7 +26,7 @@ void PushBotEquipVisualLaneState(
 void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot) {
     using namespace sdmod::detail::parsers;
 
-    lua_createtable(state, 0, 71);
+    lua_createtable(state, 0, 78);
     lua_pushboolean(state, snapshot.available ? 1 : 0);
     lua_setfield(state, -2, "available");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.bot_id));
@@ -143,6 +143,20 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "cast_ticks_waiting");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.cast_target_actor_address));
     lua_setfield(state, -2, "cast_target_actor_address");
+    lua_pushboolean(state, snapshot.active_spell_object_readable ? 1 : 0);
+    lua_setfield(state, -2, "active_spell_object_readable");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.active_spell_object_address));
+    lua_setfield(state, -2, "active_spell_object_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.active_spell_object_type));
+    lua_setfield(state, -2, "active_spell_object_type");
+    lua_pushnumber(state, snapshot.active_spell_object_x);
+    lua_setfield(state, -2, "active_spell_object_x");
+    lua_pushnumber(state, snapshot.active_spell_object_y);
+    lua_setfield(state, -2, "active_spell_object_y");
+    lua_pushnumber(state, snapshot.active_spell_object_radius);
+    lua_setfield(state, -2, "active_spell_object_radius");
+    lua_pushnumber(state, snapshot.active_spell_object_charge);
+    lua_setfield(state, -2, "active_spell_object_charge");
     lua_pushnumber(state, snapshot.walk_cycle_primary);
     lua_setfield(state, -2, "walk_cycle_primary");
     lua_pushnumber(state, snapshot.walk_cycle_secondary);

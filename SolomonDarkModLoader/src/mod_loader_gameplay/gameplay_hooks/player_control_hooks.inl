@@ -172,11 +172,23 @@ void __fastcall HookPlayerControlBrainUpdate(
             " native_target_control=" + std::to_string(native_target_control_active ? 1 : 0) +
             " sel_ptr=" + HexString(selection_pointer) +
             " sel_group=" +
-                HexString(selection_pointer != 0 ? memory.ReadValueOr<std::uint8_t>(selection_pointer + 0x4, 0xFF) : 0xFF) +
+                HexString(selection_pointer != 0
+                              ? memory.ReadValueOr<std::uint8_t>(
+                                    selection_pointer + kActorControlBrainTargetSlotOffset,
+                                    0xFF)
+                              : 0xFF) +
             " sel_slot=" +
-                HexString(selection_pointer != 0 ? memory.ReadValueOr<std::uint16_t>(selection_pointer + 0x6, 0xFFFF) : 0xFFFF) +
+                HexString(selection_pointer != 0
+                              ? memory.ReadValueOr<std::uint16_t>(
+                                    selection_pointer + kActorControlBrainTargetHandleOffset,
+                                    0xFFFF)
+                              : 0xFFFF) +
             " sel_t8=" +
-                std::to_string(selection_pointer != 0 ? memory.ReadValueOr<std::int32_t>(selection_pointer + 0x8, 0) : 0) +
+                std::to_string(selection_pointer != 0
+                                   ? memory.ReadValueOr<std::int32_t>(
+                                         selection_pointer + kActorControlBrainRetargetTicksOffset,
+                                         0)
+                                   : 0) +
             " move_before=(" + std::to_string(move_x_before) + "," + std::to_string(move_y_before) + ")" +
             " face_before=(" + std::to_string(face_x_before) + "," + std::to_string(face_y_before) + ")" +
             " startup_state={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
@@ -188,19 +200,28 @@ void __fastcall HookPlayerControlBrainUpdate(
         }
         (void)memory.TryWriteField<std::uint8_t>(
             selection_pointer,
-            0x04,
+            kActorControlBrainTargetSlotOffset,
             selection_target_group_seed);
         (void)memory.TryWriteField<std::uint16_t>(
             selection_pointer,
-            0x06,
+            kActorControlBrainTargetHandleOffset,
             selection_target_slot_seed);
         (void)memory.TryWriteField<std::int32_t>(
             selection_pointer,
-            0x08,
+            kActorControlBrainRetargetTicksOffset,
             selection_target_hold_ticks);
-        (void)memory.TryWriteField<std::int32_t>(selection_pointer, 0x0C, 0);
-        (void)memory.TryWriteField<std::int32_t>(selection_pointer, 0x10, 0);
-        (void)memory.TryWriteField<std::int32_t>(selection_pointer, 0x14, 0);
+        (void)memory.TryWriteField<std::int32_t>(
+            selection_pointer,
+            kActorControlBrainTargetCooldownTicksOffset,
+            0);
+        (void)memory.TryWriteField<std::int32_t>(
+            selection_pointer,
+            kActorControlBrainActionCooldownTicksOffset,
+            0);
+        (void)memory.TryWriteField<std::int32_t>(
+            selection_pointer,
+            kActorControlBrainActionBurstTicksOffset,
+            0);
     };
 
     const auto apply_face_control = [&]() {
@@ -363,16 +384,20 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
 
     if (apply_local_selection_shim) {
         const auto gameplay_global = memory.ReadValueOr<uintptr_t>(
-            memory.ResolveGameAddressOrZero(0x0081c264),
+            memory.ResolveGameAddressOrZero(kGameObjectGlobal),
             0);
         const auto shim_slot_obj =
             gameplay_global != 0
-                ? gameplay_global + 0x1410
+                ? gameplay_global + kGameplayVisualSinkSlotBaseOffset
                 : 0;
         const auto fallback_slot_obj30 =
             shim_slot_obj != 0 &&
-                    memory.IsReadableRange(shim_slot_obj + 0x30, sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(shim_slot_obj + 0x30, 0)
+                    memory.IsReadableRange(
+                        shim_slot_obj + kGameplayVisualSinkSlotAttachmentOffset,
+                        sizeof(uintptr_t))
+                ? memory.ReadValueOr<uintptr_t>(
+                      shim_slot_obj + kGameplayVisualSinkSlotAttachmentOffset,
+                      0)
                 : 0;
         pure_primary_slot_sink_inner =
             fallback_slot_obj30 != 0 &&
@@ -381,34 +406,54 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
                 : 0;
         if (pure_primary_attachment_item != 0 &&
             pure_primary_slot_sink_inner != 0 &&
-            memory.IsReadableRange(pure_primary_slot_sink_inner + 4, sizeof(std::uint32_t))) {
+            memory.IsReadableRange(
+                pure_primary_slot_sink_inner + kVisualLaneHolderCurrentObjectOffset,
+                sizeof(std::uint32_t))) {
             pure_primary_saved_slot_item =
-                memory.ReadValueOr<std::uint32_t>(pure_primary_slot_sink_inner + 4, 0);
+                memory.ReadValueOr<std::uint32_t>(
+                    pure_primary_slot_sink_inner + kVisualLaneHolderCurrentObjectOffset,
+                    0);
             pure_primary_slot_item_shim_applied =
                 memory.TryWriteValue<std::uint32_t>(
-                    pure_primary_slot_sink_inner + 4,
+                    pure_primary_slot_sink_inner + kVisualLaneHolderCurrentObjectOffset,
                     static_cast<std::uint32_t>(pure_primary_attachment_item));
         }
     }
 
     if (log_this) {
-        const auto actor_1fc = memory.ReadFieldOr<std::uint32_t>(actor_address, 0x1FC, 0);
+        const auto actor_1fc =
+            memory.ReadFieldOr<std::uint32_t>(actor_address, kActorEquipRuntimeStateOffset, 0);
         const auto actor_1fc_ptr = static_cast<uintptr_t>(actor_1fc);
         const auto actor_1fc_obj30 =
-            actor_1fc_ptr != 0 && memory.IsReadableRange(actor_1fc_ptr + 0x30, sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(actor_1fc_ptr + 0x30, 0)
+            actor_1fc_ptr != 0 &&
+                    memory.IsReadableRange(
+                        actor_1fc_ptr + kActorEquipRuntimeVisualLinkAttachmentOffset,
+                        sizeof(uintptr_t))
+                ? memory.ReadValueOr<uintptr_t>(
+                      actor_1fc_ptr + kActorEquipRuntimeVisualLinkAttachmentOffset,
+                      0)
                 : 0;
         const auto actor_1fc_inner =
             actor_1fc_obj30 != 0 && memory.IsReadableRange(actor_1fc_obj30, sizeof(uintptr_t))
                 ? memory.ReadValueOr<uintptr_t>(actor_1fc_obj30, 0)
                 : 0;
         const auto actor_1fc_plus4 =
-            actor_1fc_inner != 0 && memory.IsReadableRange(actor_1fc_inner + 4, sizeof(std::uint32_t))
-                ? memory.ReadValueOr<std::uint32_t>(actor_1fc_inner + 4, 0)
+            actor_1fc_inner != 0 &&
+                    memory.IsReadableRange(
+                        actor_1fc_inner + kVisualLaneHolderCurrentObjectOffset,
+                        sizeof(std::uint32_t))
+                ? memory.ReadValueOr<std::uint32_t>(
+                      actor_1fc_inner + kVisualLaneHolderCurrentObjectOffset,
+                      0)
                 : 0;
         const auto actor_1fc_plus4_type =
-            actor_1fc_plus4 != 0 && memory.IsReadableRange(static_cast<uintptr_t>(actor_1fc_plus4) + 8, sizeof(std::uint32_t))
-                ? memory.ReadValueOr<std::uint32_t>(static_cast<uintptr_t>(actor_1fc_plus4) + 8, 0)
+            actor_1fc_plus4 != 0 &&
+                    memory.IsReadableRange(
+                        static_cast<uintptr_t>(actor_1fc_plus4) + kGameObjectTypeIdOffset,
+                        sizeof(std::uint32_t))
+                ? memory.ReadValueOr<std::uint32_t>(
+                      static_cast<uintptr_t>(actor_1fc_plus4) + kGameObjectTypeIdOffset,
+                      0)
                 : 0;
         std::uint8_t effective_slot_byte =
             memory.ReadFieldOr<std::uint8_t>(actor_address, kActorSlotOffset, 0xFF);
@@ -417,29 +462,45 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
         }
         const auto gameplay_global =
             ProcessMemory::Instance().ReadValueOr<uintptr_t>(
-                ProcessMemory::Instance().ResolveGameAddressOrZero(0x0081c264),
+                ProcessMemory::Instance().ResolveGameAddressOrZero(kGameObjectGlobal),
                 0);
         fallback_slot_obj =
             gameplay_global != 0
                 ? gameplay_global +
-                    static_cast<std::size_t>(effective_slot_byte) * 0x64 +
-                    0x1410
+                    static_cast<std::size_t>(effective_slot_byte) *
+                        kGameplayVisualSinkSlotStride +
+                    kGameplayVisualSinkSlotBaseOffset
                 : 0;
         const auto fallback_slot_obj30 =
-            fallback_slot_obj != 0 && memory.IsReadableRange(fallback_slot_obj + 0x30, sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(fallback_slot_obj + 0x30, 0)
+            fallback_slot_obj != 0 &&
+                    memory.IsReadableRange(
+                        fallback_slot_obj + kGameplayVisualSinkSlotAttachmentOffset,
+                        sizeof(uintptr_t))
+                ? memory.ReadValueOr<uintptr_t>(
+                      fallback_slot_obj + kGameplayVisualSinkSlotAttachmentOffset,
+                      0)
                 : 0;
         const auto fallback_slot_inner =
             fallback_slot_obj30 != 0 && memory.IsReadableRange(fallback_slot_obj30, sizeof(uintptr_t))
                 ? memory.ReadValueOr<uintptr_t>(fallback_slot_obj30, 0)
                 : 0;
         const auto fallback_slot_plus4 =
-            fallback_slot_inner != 0 && memory.IsReadableRange(fallback_slot_inner + 4, sizeof(std::uint32_t))
-                ? memory.ReadValueOr<std::uint32_t>(fallback_slot_inner + 4, 0)
+            fallback_slot_inner != 0 &&
+                    memory.IsReadableRange(
+                        fallback_slot_inner + kVisualLaneHolderCurrentObjectOffset,
+                        sizeof(std::uint32_t))
+                ? memory.ReadValueOr<std::uint32_t>(
+                      fallback_slot_inner + kVisualLaneHolderCurrentObjectOffset,
+                      0)
                 : 0;
         const auto fallback_slot_plus4_type =
-            fallback_slot_plus4 != 0 && memory.IsReadableRange(static_cast<uintptr_t>(fallback_slot_plus4) + 8, sizeof(std::uint32_t))
-                ? memory.ReadValueOr<std::uint32_t>(static_cast<uintptr_t>(fallback_slot_plus4) + 8, 0)
+            fallback_slot_plus4 != 0 &&
+                    memory.IsReadableRange(
+                        static_cast<uintptr_t>(fallback_slot_plus4) + kGameObjectTypeIdOffset,
+                        sizeof(std::uint32_t))
+                ? memory.ReadValueOr<std::uint32_t>(
+                      static_cast<uintptr_t>(fallback_slot_plus4) + kGameObjectTypeIdOffset,
+                      0)
                 : 0;
         Log(
             "[bots] pure_primary_start enter actor=" + HexString(actor_address) +
@@ -477,7 +538,7 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     original(self);
     if (pure_primary_slot_item_shim_applied) {
         (void)memory.TryWriteValue<std::uint32_t>(
-            pure_primary_slot_sink_inner + 4,
+            pure_primary_slot_sink_inner + kVisualLaneHolderCurrentObjectOffset,
             pure_primary_saved_slot_item);
     }
     g_spell_dispatch_probe = saved_probe;

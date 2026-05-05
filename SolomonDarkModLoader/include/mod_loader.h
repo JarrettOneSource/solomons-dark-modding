@@ -17,7 +17,6 @@ constexpr int kSDModParticipantGameplayKindUnknown = -1;
 constexpr int kSDModParticipantGameplayKindPlaceholderEnemy = 0;
 constexpr int kSDModParticipantGameplayKindStandaloneWizard = 1;
 constexpr int kSDModParticipantGameplayKindGameplaySlotWizard = 2;
-constexpr int kSDModParticipantGameplayKindRegisteredGameNpc = 3;
 
 struct SDModEquipVisualLaneState {
     uintptr_t wrapper_address = 0;
@@ -135,6 +134,7 @@ struct SDModSceneActorState {
     int world_slot = -1;
     float x = 0.0f;
     float y = 0.0f;
+    float radius = 0.0f;
     std::uint8_t anim_drive_state = 0;
     uintptr_t progression_handle_address = 0;
     uintptr_t progression_runtime_address = 0;
@@ -145,24 +145,6 @@ struct SDModSceneActorState {
     uintptr_t animation_state_ptr = 0;
     bool tracked_enemy = false;
     int enemy_type = -1;
-};
-
-struct SDModEnemySpawnResult {
-    bool valid = false;
-    bool ok = false;
-    std::uint64_t request_id = 0;
-    int type_id = 0;
-    uintptr_t actor_address = 0;
-    float requested_x = 0.0f;
-    float requested_y = 0.0f;
-    float x = 0.0f;
-    float y = 0.0f;
-    bool wrote_x = false;
-    bool wrote_y = false;
-    bool rebind_ok = false;
-    DWORD rebind_exception_code = 0;
-    std::uint64_t completed_tick_ms = 0;
-    std::string error_message;
 };
 
 struct SDModTrackedEnemyState {
@@ -255,6 +237,13 @@ struct SDModParticipantGameplayState {
     std::int32_t cast_skill_id = 0;
     int cast_ticks_waiting = 0;
     uintptr_t cast_target_actor_address = 0;
+    bool active_spell_object_readable = false;
+    uintptr_t active_spell_object_address = 0;
+    std::uint32_t active_spell_object_type = 0;
+    float active_spell_object_x = 0.0f;
+    float active_spell_object_y = 0.0f;
+    float active_spell_object_radius = 0.0f;
+    float active_spell_object_charge = 0.0f;
     float x = 0.0f;
     float y = 0.0f;
     float heading = 0.0f;
@@ -331,17 +320,13 @@ void FlushNavGridSnapshotOnSceneUnload();
 bool TryGetParticipantGameplayState(
     std::uint64_t participant_id,
     SDModParticipantGameplayState* state);
+bool TryRefreshParticipantGameplayState(
+    std::uint64_t participant_id,
+    SDModParticipantGameplayState* state);
 bool TryGetGameplayHudParticipantDisplayNameForActor(
     uintptr_t actor_address,
     std::string* display_name,
     std::uint64_t* participant_id = nullptr);
-bool SpawnEnemyByType(
-    int type_id,
-    float x,
-    float y,
-    std::string* error_message,
-    std::uint64_t* request_id = nullptr);
-bool TryGetLastEnemySpawnResult(SDModEnemySpawnResult* result, std::uint64_t request_id = 0);
 bool RebindSceneActorCell(uintptr_t actor_address, std::string* error_message);
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);
 

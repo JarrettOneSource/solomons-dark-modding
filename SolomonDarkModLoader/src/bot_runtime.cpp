@@ -4,12 +4,14 @@
 #include "logger.h"
 #include "memory_access.h"
 #include "mod_loader.h"
+#include "native_spell_stats.h"
 
 #include <Windows.h>
 
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -106,6 +108,7 @@ std::vector<PendingBotDestroy> g_pending_destroys;
 std::vector<PendingBotSkillChoice> g_pending_skill_choices;
 
 constexpr float kBotArrivalThreshold = 0.5f;
+constexpr float kBotManaReadinessEpsilon = 0.001f;
 
 #include "bot_runtime/helpers.inl"
 

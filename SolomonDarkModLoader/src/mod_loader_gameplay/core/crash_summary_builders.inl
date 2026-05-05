@@ -5,10 +5,14 @@ void AppendMovementControllerSummary(std::ostringstream* out, uintptr_t world_ad
 
     auto& memory = ProcessMemory::Instance();
     const auto movement_controller_address = world_address + kActorOwnerMovementControllerOffset;
-    const auto primary_count = memory.ReadFieldOr<std::int32_t>(movement_controller_address, 0x40, 0);
-    const auto primary_list = memory.ReadFieldOr<uintptr_t>(movement_controller_address, 0x4C, 0);
-    const auto secondary_count = memory.ReadFieldOr<std::int32_t>(movement_controller_address, 0x70, 0);
-    const auto secondary_list = memory.ReadFieldOr<uintptr_t>(movement_controller_address, 0x7C, 0);
+    const auto primary_count =
+        memory.ReadFieldOr<std::int32_t>(movement_controller_address, kMovementControllerPrimaryCountOffset, 0);
+    const auto primary_list =
+        memory.ReadFieldOr<uintptr_t>(movement_controller_address, kMovementControllerPrimaryListOffset, 0);
+    const auto secondary_count =
+        memory.ReadFieldOr<std::int32_t>(movement_controller_address, kMovementControllerSecondaryCountOffset, 0);
+    const auto secondary_list =
+        memory.ReadFieldOr<uintptr_t>(movement_controller_address, kMovementControllerSecondaryListOffset, 0);
 
     *out << " movement{ctx=" << HexString(movement_controller_address)
          << " primary_count=" << primary_count
@@ -36,8 +40,14 @@ void AppendActorCoreStateSummary(std::ostringstream* out, uintptr_t actor_addres
     }
 
     auto& memory = ProcessMemory::Instance();
-    *out << " actor_core{cell=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x54, 0))
-         << " owner_field=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x58, 0))
+    *out << " actor_core{cell=" << HexString(memory.ReadFieldOr<uintptr_t>(
+                actor_address,
+                kActorGridCellPtrOffset,
+                0))
+         << " owner_field=" << HexString(memory.ReadFieldOr<uintptr_t>(
+                actor_address,
+                kActorOwnerOffset,
+                0))
          << " slot=" << std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
                 actor_address,
                 kActorSlotOffset,
@@ -64,22 +74,70 @@ void AppendGameNpcStateSummary(std::ostringstream* out, uintptr_t actor_address)
     }
 
     auto& memory = ProcessMemory::Instance();
-    *out << " gamenpc{source_kind=" << std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, 0x174, 0))
-         << " source_profile=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x178, 0))
-         << " source_aux=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x17C, 0))
-         << " branch=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x181, 0))
-         << " active=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x180, 0))
-         << " desired_yaw=" << std::to_string(memory.ReadFieldOr<float>(actor_address, 0x188, 0.0f))
-         << " source_profile_74_mirror=" << HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, 0x194, 0))
-         << " tick_counter=" << std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, 0x18C, 0))
-         << " goal_x=" << std::to_string(memory.ReadFieldOr<float>(actor_address, 0x19C, 0.0f))
-         << " goal_y=" << std::to_string(memory.ReadFieldOr<float>(actor_address, 0x1A0, 0.0f))
-         << " move_flag=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x198, 0))
-         << " move_speed=" << std::to_string(memory.ReadFieldOr<float>(actor_address, 0x1B4, 0.0f))
-         << " source_profile_56_mirror=" << HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, 0x1C0, 0))
-         << " tracked_slot=" << std::to_string(memory.ReadFieldOr<std::int8_t>(actor_address, 0x1C2, -1))
-         << " callback=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x1C3, 0))
-         << " render_drive_effect_timer=" << std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, 0x1C4, 0))
+    *out << " gamenpc{source_kind=" << std::to_string(memory.ReadFieldOr<std::int32_t>(
+                actor_address,
+                kActorHubVisualSourceKindOffset,
+                0))
+         << " source_profile=" << HexString(memory.ReadFieldOr<uintptr_t>(
+                actor_address,
+                kActorHubVisualSourceProfileOffset,
+                0))
+         << " source_aux=" << HexString(memory.ReadFieldOr<uintptr_t>(
+                actor_address,
+                kActorHubVisualSourceAuxPointerOffset,
+                0))
+         << " branch=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(
+                actor_address,
+                kGameNpcBranchStateOffset,
+                0))
+         << " active=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(
+                actor_address,
+                kGameNpcActiveStateOffset,
+                0))
+         << " desired_yaw=" << std::to_string(memory.ReadFieldOr<float>(
+                actor_address,
+                kGameNpcDesiredYawOffset,
+                0.0f))
+         << " source_profile_74_mirror=" << HexString(memory.ReadFieldOr<std::uint32_t>(
+                actor_address,
+                kGameNpcSourceProfile74MirrorOffset,
+                0))
+         << " tick_counter=" << std::to_string(memory.ReadFieldOr<std::int32_t>(
+                actor_address,
+                kGameNpcTickCounterOffset,
+                0))
+         << " goal_x=" << std::to_string(memory.ReadFieldOr<float>(
+                actor_address,
+                kGameNpcGoalXOffset,
+                0.0f))
+         << " goal_y=" << std::to_string(memory.ReadFieldOr<float>(
+                actor_address,
+                kGameNpcGoalYOffset,
+                0.0f))
+         << " move_flag=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(
+                actor_address,
+                kGameNpcMoveFlagOffset,
+                0))
+         << " move_speed=" << std::to_string(memory.ReadFieldOr<float>(
+                actor_address,
+                kGameNpcSpeedScalarOffset,
+                0.0f))
+         << " source_profile_56_mirror=" << HexString(memory.ReadFieldOr<std::uint32_t>(
+                actor_address,
+                kGameNpcSourceProfile56MirrorOffset,
+                0))
+         << " tracked_slot=" << std::to_string(memory.ReadFieldOr<std::int8_t>(
+                actor_address,
+                kGameNpcTrackedSlotOffset,
+                -1))
+         << " callback=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(
+                actor_address,
+                kGameNpcTrackedSlotCallbackOffset,
+                0))
+         << " render_drive_effect_timer=" << std::to_string(memory.ReadFieldOr<std::int32_t>(
+                actor_address,
+                kGameNpcLateTimerOffset,
+                0))
          << "}";
 }
 

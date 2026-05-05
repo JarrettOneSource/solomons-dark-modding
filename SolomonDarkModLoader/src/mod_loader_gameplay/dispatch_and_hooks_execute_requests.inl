@@ -1,8 +1,6 @@
 #include "execute_requests/entity_update_and_rail_selection.inl"
 #include "execute_requests/spawn_safe_wrappers.inl"
 #include "execute_requests/participant_entity_sync.inl"
-#include "execute_requests/spawn_enemy.inl"
 #include "execute_requests/spawn_standalone_wizard.inl"
 #include "execute_requests/spawn_gameplay_slot_bot.inl"
-#include "execute_requests/spawn_registered_gamenpc.inl"
 #include "execute_requests/spawn_reward.inl"

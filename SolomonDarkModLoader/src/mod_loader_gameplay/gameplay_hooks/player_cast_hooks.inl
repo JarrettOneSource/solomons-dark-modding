@@ -218,11 +218,12 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
     const auto actor200_inner = ReadSmartPointerInnerObject(actor200_wrapper);
     const auto gameplay_global =
         memory.ReadValueOr<uintptr_t>(
-            memory.ResolveGameAddressOrZero(0x0081C264),
+            memory.ResolveGameAddressOrZero(kGameObjectGlobal),
             0);
     const auto slot_wrapper_entry =
         gameplay_global != 0
-            ? gameplay_global + 0x1654 + static_cast<std::size_t>(actor_slot) * sizeof(uintptr_t)
+            ? gameplay_global + kGameplayPlayerProgressionHandleOffset +
+                  static_cast<std::size_t>(actor_slot) * sizeof(uintptr_t)
             : 0;
     const auto slot_wrapper =
         slot_wrapper_entry != 0 && memory.IsReadableRange(slot_wrapper_entry, sizeof(uintptr_t))
@@ -232,15 +233,23 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
     const auto chosen_runtime = actor200_inner != 0 ? actor200_inner : slot_inner;
     const auto chosen_vtable =
         chosen_runtime != 0 && memory.IsReadableRange(chosen_runtime, sizeof(uintptr_t))
-            ? memory.ReadValueOr<uintptr_t>(chosen_runtime, 0)
+            ? memory.ReadValueOr<uintptr_t>(chosen_runtime + kObjectVtableOffset, 0)
             : 0;
     const auto chosen_vt68 =
-        chosen_vtable != 0 && memory.IsReadableRange(chosen_vtable + 0x68, sizeof(uintptr_t))
-            ? memory.ReadValueOr<uintptr_t>(chosen_vtable + 0x68, 0)
+        chosen_vtable != 0 &&
+                memory.IsReadableRange(
+                    chosen_vtable + kSkillsWizardProbeVfuncOffset,
+                    sizeof(uintptr_t))
+            ? memory.ReadValueOr<uintptr_t>(chosen_vtable + kSkillsWizardProbeVfuncOffset, 0)
             : 0;
     const auto chosen_spell_id =
-        chosen_runtime != 0 && memory.IsReadableRange(chosen_runtime + 0x750, sizeof(std::int32_t))
-            ? memory.ReadValueOr<std::int32_t>(chosen_runtime + 0x750, 0)
+        chosen_runtime != 0 &&
+                memory.IsReadableRange(
+                    chosen_runtime + kProgressionCurrentSpellIdOffset,
+                    sizeof(std::int32_t))
+            ? memory.ReadValueOr<std::int32_t>(
+                  chosen_runtime + kProgressionCurrentSpellIdOffset,
+                  0)
             : 0;
 
     SpellDispatchProbeState saved_probe = g_spell_dispatch_probe;

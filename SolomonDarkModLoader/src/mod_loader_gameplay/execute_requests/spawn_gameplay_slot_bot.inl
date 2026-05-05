@@ -28,7 +28,7 @@ bool TrySpawnGameplaySlotBotParticipantEntity(
     float x = 0.0f;
     float y = 0.0f;
     float heading = 0.0f;
-    if (!ResolveParticipantSpawnTransform(gameplay_address, request, &x, &y, &heading)) {
+    if (!ResolveParticipantSpawnTransform(gameplay_address, request, true, &x, &y, &heading)) {
         if (error_message != nullptr) {
             *error_message = "Unable to resolve a bot transform.";
         }
@@ -53,7 +53,6 @@ bool TrySpawnGameplaySlotBotParticipantEntity(
             target_slot,
             actor_address,
             world_address,
-            0,
             &cleanup_error);
         actor_address = 0;
         progression_address = 0;
@@ -117,7 +116,6 @@ bool TrySpawnGameplaySlotBotParticipantEntity(
             binding->standalone_progression_inner_address = 0;
             binding->standalone_equip_wrapper_address = 0;
             binding->standalone_equip_inner_address = 0;
-            binding->synthetic_source_profile_address = 0;
             SeedStandaloneWizardAnimationDriveProfiles(binding, actor_address);
 
             SceneContextSnapshot scene_context;

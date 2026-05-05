@@ -279,7 +279,7 @@ Current interpretation:
   - `MovementCollision_ResolveDynamicObjects` is too broad to claim as the pickup transfer path
   - we still need the specific drop-actor callback / collision branch that leads into `Inventory_InsertOrStackItem`
 
-## Current Best Next Targets
+## Current Best Next Targets (April 15 Snapshot)
 
 - static:
   - follow the parse-layer handoff from `ItemRecipe_Parse (0x00573570)` into the runtime item factory that produces live `SdItemBase`-derived objects
@@ -290,3 +290,272 @@ Current interpretation:
   - verify current player potion objects and placeholder-item removal path
   - trace `Inventory_InsertOrStackItem` during reward pickup / equip swap flows
   - confirm the sack (`0x1B60`) inner item-list layout directly at runtime
+
+## Follow-Up Findings
+
+Date: 2026-04-30
+
+Focus: participant-owned inventory prep, with native pickup seams for item loot,
+gold, orbs, and powerup bonuses.
+
+### Core ownership model
+
+- the stock local inventory root is the embedded `SdItemListRoot` at
+  `DAT_0081C264 + 0x13B8`
+- `Inventory_InsertOrStackItem (0x0055FF20)` already accepts a caller-supplied
+  `SdItemListRoot`-compatible root
+- `InventoryScreen + 0x88` / `InventoryScreen_GetCurrentInventoryRoot
+  (0x00570C10)` is the UI browse root, not a separate ownership container
+- stock gold is still a global scalar at `DAT_0081A388`
+- `Gold_ChangeGlobal (0x005A7C60)` changes that global scalar and has no
+  actor / participant context
+
+Current interpretation:
+
+- participant-owned inventories should be represented as per-participant
+  `SdItemListRoot`-compatible roots
+- the existing insertion primitive can probably be reused after the pickup seam
+  chooses the participant root
+- global gold cannot become participant-owned by only patching
+  `Gold_ChangeGlobal`, because the participant identity is already lost by then
+
+### Item loot pickup seam
+
+- `0x005E6B50` -> `ItemDropActor_TickPickup`
+  - vtable slot `+0x08` on the world item-drop carrier vtable `0x0079C98C`
+  - world actor type `0x7DD`
+  - the decompiler labels the vtable area near this actor as `Sack::vftable`,
+    but the tick path is the walk-over world pickup carrier, not the inventory
+    sack container item
+- stock pickup hard-codes local gameplay slot 0:
+  - actor: `DAT_0081C264 + 0x1358`
+  - progression handle: `DAT_0081C264 + 0x1654`
+- when pickup succeeds:
+  - unregisters / destroys the drop actor
+  - shows pickup text
+  - inserts `drop + 0x148` into `DAT_0081C264 + 0x13B8`
+  - sets the inventory dirty byte at `DAT_0081C264 + 0x7C`
+  - clears `drop + 0x148`
+
+Key instruction proof:
+
+```asm
+005e6d7a  MOV ECX,dword ptr [ESI + 0x148]
+005e6d80  PUSH 0x1
+005e6d82  PUSH 0x1
+005e6d84  PUSH ECX
+005e6d85  MOV ECX,dword ptr [0x0081c264]
+005e6d8b  ADD ECX,0x13b8
+005e6d91  CALL 0x0055ff20
+005e6d96  MOV EDX,dword ptr [0x0081c264]
+005e6d9c  MOV byte ptr [EDX + 0x7c],0x1
+005e6da0  MOV dword ptr [ESI + 0x148],0x0
+```
+
+Participant inventory seam:
+
+- this is the best first hook for item loot ownership
+- replace the local slot-0 pickup decision with a participant resolver
+- route `drop->held_item` into that participant's inventory root via
+  `Inventory_InsertOrStackItem`
+- dirty / refresh the selected participant inventory view if the UI is browsing
+  that same root
+
+### Gold pickup seam
+
+- `0x005E66B0` -> `GoldActor_TickPickup`
+  - vtable slot `+0x08` at `0x0079C924`
+  - world actor type `0x7DC`
+  - fields:
+    - `+0x13C` amount tier byte
+    - `+0x140` amount
+    - `+0x144` lifetime
+    - `+0x148` active flag
+- stock pickup also hard-codes local gameplay slot 0:
+  - actor: `DAT_0081C264 + 0x1358`
+  - progression handle: `DAT_0081C264 + 0x1654`
+- on pickup, stock code calls `Gold_ChangeGlobal(gold->amount, 0)`
+
+Recovered global-gold helper:
+
+```c
+int Gold_ChangeGlobal(int delta, char allow_negative) {
+  if (!allow_negative && DAT_0081A388 + delta < 0) {
+    return 0;
+  }
+  DAT_0081A388 += delta;
+  if (DAT_0081A388 < 0) {
+    DAT_0081A388 = 0;
+  }
+  return 1;
+}
+```
+
+Participant inventory seam:
+
+- hook `GoldActor_TickPickup`, not only `Gold_ChangeGlobal`
+- choose the participant before crediting the amount
+- credit a participant-owned gold bucket instead of the global scalar
+- leave `Gold_ChangeGlobal` available for stock UI / legacy paths until shops
+  and traders are deliberately rerouted
+
+### Orb and powerup pickup seams
+
+- enemy reward selection now resolves to
+  `EnemyDeath_SelectAndSpawnRewards (0x0047C070)`
+- monster definition drop flags are read from:
+  - `+0xCC` `DROP ORBS`
+  - `+0xCD` `DROP POWERUPS`
+  - `+0xCE` `DROP ITEMS`
+  - `+0xCF` `DROP GOLD`
+  - `+0xD0` `DROP SPECIFIC ITEMS`
+  - `+0xD1` `DROP POTIONS`
+- orb rewards:
+  - actor type `0x7DB`
+  - ctor `Orb_Ctor (0x005E1150)`
+  - reset/value helper `Orb_ResetPullAndValue (0x005E1220)`
+  - pickup tick `Orb_TickPickup (0x005E62E0)`
+  - the tick scans native slots `0..3` for attraction / pickup range
+  - the recovered health / mana reward branch is gated to `slot == 0`
+- powerup bonuses:
+  - actor type `0x7F6`
+  - ctor `Bonus_Ctor (0x005E2D90)`
+  - pickup tick `Bonus_TickPickup (0x006039C0)`
+  - this path checks and credits only local slot 0
+
+Current interpretation:
+
+- orbs are not inventory items; they are resource reward actors
+- powerups are also reward actors, not inventory roots
+- if participants need individual health / mana / powerup credit, hook these
+  tick paths separately from the item inventory hook
+- the orb tick is close to participant-aware for pull targeting, but not yet for
+  reward application
+
+### Drop selector and factory paths
+
+- `Drop_Spawn (0x0046AA90)` remains the verified gold factory path
+- item, potion, orb, and powerup reward selection lives one layer higher in
+  `EnemyDeath_SelectAndSpawnRewards (0x0047C070)`
+- the selector builds a random candidate list from the monster definition flags
+  and dispatches to separate creation paths:
+  - orbs create type `0x7DB`
+  - gold routes through the owner-side gold drop method / `Drop_Spawn`
+  - item drops route through an owner-side vtable method at `+0x140`
+  - powerups create type `0x7F6`
+  - potion drops route through an owner-side vtable method at `+0x148`
+
+### Participant-owned inventory implementation sketch
+
+```c
+struct ParticipantInventoryState {
+  SdItemListRoot inventory_root;
+  int gold;
+  SdEquipAttachmentSink hat_sink;
+  SdEquipAttachmentSink robe_sink;
+  SdEquipAttachmentSink staff_sink;
+  bool inventory_dirty;
+};
+
+Participant *ResolvePickupParticipant(SdActorEntity *drop_actor, float radius) {
+  Participant *best = 0;
+  float best_dist_sq = radius * radius;
+
+  for each participant with a live actor {
+    float dist_sq = DistanceSquared(participant.actor, drop_actor);
+    if (dist_sq < best_dist_sq) {
+      best = participant;
+      best_dist_sq = dist_sq;
+    }
+  }
+
+  return best;
+}
+
+void HookedItemDropPickup(SdItemDropActor *drop) {
+  Participant *participant = ResolvePickupParticipant(drop, item_pickup_radius);
+  if (!participant || !drop->held_item) {
+    return;
+  }
+
+  Actor_UnregisterOrDestroy(drop);
+  Inventory_InsertOrStackItem(&participant->inventory.inventory_root,
+                              drop->held_item,
+                              1);
+  participant->inventory.inventory_dirty = true;
+  drop->held_item = 0;
+}
+
+void HookedGoldPickup(SdGoldDropActor *gold) {
+  Participant *participant = ResolvePickupParticipant(gold, gold_pickup_radius);
+  if (!participant) {
+    return;
+  }
+
+  Actor_UnregisterOrDestroy(gold);
+  participant->inventory.gold += gold->amount;
+}
+
+void BindInventoryScreenToParticipant(InventoryScreen *screen,
+                                      Participant *participant) {
+  screen->current_inventory_root = &participant->inventory.inventory_root;
+  InventoryScreen_ResetCategoryCaches(screen);
+}
+```
+
+### Why not hook lower-level helpers first
+
+- `Inventory_InsertOrStackItem` is a useful primitive but a poor policy hook
+  because it is shared by starter inventory, UI moves, equip changes, shop /
+  trader flows, scripts, and nested container operations
+- `Gold_ChangeGlobal` is too late to infer the pickup owner and is also used by
+  non-pickup economy flows
+- `InventoryScreen + 0x88` is the right UI browse seam, but changing it alone
+  does not make walk-over pickup participant-owned
+
+### Live Lua sanity check
+
+The staged loader was launched with:
+
+```text
+dist/launcher/SolomonDarkModLauncher.exe launch --json
+```
+
+Startup reached `startup-complete`, then a read-only Lua probe confirmed the
+same root offsets were readable in the live scene:
+
+```text
+scene=transition base=0x14050678 gold=nil inv_root=0x14051A30 item_count=0 items=0x0 actor0=0x1405C738 prog0=0x14154538
+```
+
+This was an offset sanity check in a transition scene, not a gameplay pickup
+proof. The older live gameplay inventory probe remains the stronger proof for
+the initial two-potion inventory state.
+
+### Remaining gaps after pickup pass
+
+- exact item materialization behind the owner vtable method at `+0x140` remains
+  unresolved
+- exact potion drop factory behind the owner vtable method at `+0x148` remains
+  unresolved
+- participant inventory implementation still needs a storage / lifetime contract
+  for per-participant `SdItemListRoot` instances and equip sinks
+- shop / trader purchase paths still need a separate economy ownership pass;
+  `0x0056BF70` is already visible as a likely future seam because it spends
+  global gold through `Gold_ChangeGlobal(-price, 0)` and inserts into the active
+  inventory root
+
+## Current Best Next Targets (April 30)
+
+- implement a loader-side participant inventory state object with an
+  `SdItemListRoot`-compatible root and per-participant gold
+- hook `ItemDropActor_TickPickup (0x005E6B50)` first, because it preserves both
+  the world drop actor and the held item pointer before ownership is lost
+- hook `GoldActor_TickPickup (0x005E66B0)` second, because it preserves the gold
+  actor and amount before global currency mutation
+- decide whether orbs and powerups should be participant-owned rewards; if yes,
+  hook `Orb_TickPickup (0x005E62E0)` and `Bonus_TickPickup (0x006039C0)`
+- switch `InventoryScreen + 0x88` to the selected participant root when opening
+  or changing the controlled participant inventory
+- only after pickup ownership works, spiderweb into shops / traders, where the
+  global-gold and active-root assumptions are separate from walk-over loot

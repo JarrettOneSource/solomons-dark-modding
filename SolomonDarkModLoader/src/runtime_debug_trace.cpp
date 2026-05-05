@@ -281,6 +281,17 @@ extern "C" bool RuntimeDebug_TraceFunctionEx(uintptr_t address, size_t patch_siz
         delete trace;
         return false;
     }
+    uintptr_t overlapping_patch_start = 0;
+    if (rt::OverlapsRelativeJumpPatch(resolved_address, trace->patch_size, &overlapping_patch_start)) {
+        const auto message =
+            "TRACE: refusing to patch " + trace->name + " at " + sdmod::HexString(address) +
+            " because the trace window overlaps an existing relative jump patch at " +
+            sdmod::HexString(overlapping_patch_start) + ".";
+        rt::SetRuntimeDebugLastError(message);
+        sdmod::Log(message);
+        delete trace;
+        return false;
+    }
 
     std::string error_message;
     if (!rt::BuildTraceStub(trace, &error_message)) {
@@ -329,7 +340,7 @@ extern "C" bool RuntimeDebug_TraceFunctionEx(uintptr_t address, size_t patch_siz
 extern "C" void RuntimeDebug_UntraceFunction(uintptr_t address) {
     namespace rt = sdmod::detail::runtime_debug;
 
-    const auto resolved_address = rt::ResolveRuntimeAddress(address);
+    const auto resolved_address = rt::ResolveExecutableRuntimeAddress(address);
     rt::FunctionTrace* trace = nullptr;
 
     {

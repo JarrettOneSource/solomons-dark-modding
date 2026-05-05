@@ -83,11 +83,11 @@ scene:
 
 Current spawn behavior:
 
-- shared hub spawn point = measured hub anchor `(956, 508)` plus each bot's
-  configured per-bot spacing offset
+- shared hub spawn point = `player position` plus each bot's configured
+  per-bot spacing offset
 - anchored private/hub transitions spawn from the transition anchor plus each
   bot's configured per-bot spacing offset
-- run and non-hub fallback spawn point = `player position` plus each bot's
+- run and fallback spawn point = `player position` plus each bot's
   configured per-bot spacing offset
 
 Current same-scene follow behavior:

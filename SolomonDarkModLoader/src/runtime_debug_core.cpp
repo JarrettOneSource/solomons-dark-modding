@@ -183,7 +183,7 @@ bool TryReadStackWords(uintptr_t esp, std::uint32_t* stack_words, size_t word_co
 }
 
 bool LooksLikeExistingJumpPatch(uintptr_t address, size_t patch_size) {
-    if (address == 0 || patch_size < 7) {
+    if (address == 0 || patch_size < 5) {
         return false;
     }
 
@@ -203,6 +203,40 @@ bool LooksLikeExistingJumpPatch(uintptr_t address, size_t patch_size) {
     }
 
     return true;
+}
+
+bool OverlapsRelativeJumpPatch(uintptr_t address, size_t patch_size, uintptr_t* patch_start) {
+    if (patch_start != nullptr) {
+        *patch_start = 0;
+    }
+    if (address == 0 || patch_size == 0) {
+        return false;
+    }
+
+    auto& memory = sdmod::ProcessMemory::Instance();
+    const auto scan_back = (std::min)(address, static_cast<uintptr_t>(4));
+    const auto scan_start = address - scan_back;
+    const auto patch_end = address + patch_size;
+
+    for (uintptr_t candidate = scan_start; candidate <= address; ++candidate) {
+        const bool overlaps_trace_window = candidate + 5 > address && candidate < patch_end;
+        if (!overlaps_trace_window) {
+            continue;
+        }
+
+        std::uint8_t bytes[5] = {};
+        if (!memory.TryRead(candidate, bytes, sizeof(bytes))) {
+            continue;
+        }
+        if (bytes[0] == 0xE9) {
+            if (patch_start != nullptr) {
+                *patch_start = candidate;
+            }
+            return true;
+        }
+    }
+
+    return false;
 }
 
 size_t ResolveInstructionBoundaryPatchSize(uintptr_t address, size_t minimum_size, std::string* error_message) {

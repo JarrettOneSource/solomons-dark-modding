@@ -39,17 +39,9 @@ void DeriveBotCastReadiness(BotSnapshot* snapshot) {
     }
 
     const bool dead = snapshot->max_hp > 0.0f && snapshot->hp <= 0.0f;
-    const auto cast_mana = ResolveBotCastManaCost(
-        snapshot->character_profile,
-        BotCastKind::Primary,
-        -1,
-        0);
-    const float required_mana = ResolveBotManaRequiredToStart(cast_mana);
     const bool mana_ready =
-        cast_mana.resolved &&
-        (cast_mana.kind == BotManaChargeKind::None ||
-         snapshot->max_mp <= 0.0f ||
-         snapshot->mp + 0.001f >= required_mana);
+        snapshot->max_mp <= 0.0f ||
+        snapshot->mp > kBotManaReadinessEpsilon;
     snapshot->cast_ready =
         snapshot->available &&
         snapshot->entity_materialized &&
@@ -105,6 +97,13 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
     snapshot->cast_skill_id = gameplay_state.cast_skill_id;
     snapshot->cast_ticks_waiting = gameplay_state.cast_ticks_waiting;
     snapshot->cast_target_actor_address = gameplay_state.cast_target_actor_address;
+    snapshot->active_spell_object_readable = gameplay_state.active_spell_object_readable;
+    snapshot->active_spell_object_address = gameplay_state.active_spell_object_address;
+    snapshot->active_spell_object_type = gameplay_state.active_spell_object_type;
+    snapshot->active_spell_object_x = gameplay_state.active_spell_object_x;
+    snapshot->active_spell_object_y = gameplay_state.active_spell_object_y;
+    snapshot->active_spell_object_radius = gameplay_state.active_spell_object_radius;
+    snapshot->active_spell_object_charge = gameplay_state.active_spell_object_charge;
     snapshot->walk_cycle_primary = gameplay_state.walk_cycle_primary;
     snapshot->walk_cycle_secondary = gameplay_state.walk_cycle_secondary;
     snapshot->render_drive_stride = gameplay_state.render_drive_stride;

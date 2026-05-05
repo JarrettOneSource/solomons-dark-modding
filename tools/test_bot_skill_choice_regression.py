@@ -89,11 +89,15 @@ def validate_result(result: dict[str, Any], *, min_bots: int, min_iterations: in
             failures.append(f"iteration {iteration_index} is not an object")
             continue
         bots = iteration.get("bots")
-        if not isinstance(bots, list) or len(bots) < min_bots:
+        if not isinstance(bots, list):
             failures.append(
-                f"iteration {iteration_index} expected at least {min_bots} bot records, got {len(bots) if isinstance(bots, list) else 0}"
+                f"iteration {iteration_index} expected at least {min_bots} bot records, got 0"
             )
             continue
+        if len(bots) < min_bots:
+            failures.append(
+                f"iteration {iteration_index} expected at least {min_bots} bot records, got {len(bots)}"
+            )
 
         for bot_record_index, bot_record in enumerate(bots, start=1):
             if not isinstance(bot_record, dict):
@@ -129,6 +133,19 @@ def validate_result(result: dict[str, Any], *, min_bots: int, min_iterations: in
 
             entry_changed = bool(bot_record.get("progression_entry_byte_diff"))
             stat_changed = bool(bot_record.get("progression_stat_diff"))
+            for stats_key in ("progression_stat_before", "progression_stat_after"):
+                stats = bot_record.get(stats_key)
+                if not isinstance(stats, dict):
+                    failures.append(f"iteration {iteration_index} bot {bot_record.get('bot_id')} missing {stats_key}")
+                    continue
+                if as_int(stats.get("nonlocal_mode"), 0) == 0:
+                    failures.append(
+                        f"iteration {iteration_index} bot {bot_record.get('bot_id')} has local-player progression mode in {stats_key}"
+                    )
+                if as_int(stats.get("local_skill_picker_screen"), 0) != 0:
+                    failures.append(
+                        f"iteration {iteration_index} bot {bot_record.get('bot_id')} has native local picker screen in {stats_key}"
+                    )
             if entry_changed or stat_changed:
                 changed_application_count += 1
             elif is_expected_native_noop(bot_record):
@@ -203,6 +220,7 @@ def main() -> int:
     parser.add_argument("--iterations", type=int, default=20)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--min-bots", type=int, default=1)
+    parser.add_argument("--active-bots", default="default")
     parser.add_argument("--from-report", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
     parser.add_argument("--keep-running", action="store_true")
@@ -220,7 +238,7 @@ def main() -> int:
             if "stress_result" in result and isinstance(result["stress_result"], dict):
                 result = result["stress_result"]
         else:
-            result = stress.run_stress(args.iterations, args.seed)
+            result = stress.run_stress(args.iterations, args.seed, args.active_bots)
             result["ok"] = True
 
         summary = validate_result(result, min_bots=args.min_bots, min_iterations=args.iterations)

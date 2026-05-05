@@ -19,12 +19,12 @@ void TickBotOwnedSkillsWizard(uintptr_t actor_address) {
         return;
     }
     const auto vtable_address =
-        memory.ReadFieldOr<uintptr_t>(progression_address, 0, 0);
+        memory.ReadFieldOr<uintptr_t>(progression_address, kObjectVtableOffset, 0);
     if (vtable_address == 0) {
         return;
     }
     const auto tick_fn_address =
-        memory.ReadFieldOr<uintptr_t>(vtable_address, 0x8, 0);
+        memory.ReadFieldOr<uintptr_t>(vtable_address, kSkillsWizardTickVfuncOffset, 0);
     if (tick_fn_address == 0) {
         return;
     }

@@ -4,20 +4,6 @@ bool UpdateBot(const BotUpdateRequest& request) {
         return false;
     }
 
-    if (request.has_transform && !request.has_scene_intent) {
-        SDModParticipantGameplayState gameplay_state;
-        if (TryGetParticipantGameplayState(request.bot_id, &gameplay_state) &&
-            gameplay_state.available &&
-            gameplay_state.entity_materialized &&
-            gameplay_state.entity_kind == kSDModParticipantGameplayKindRegisteredGameNpc) {
-            Log(
-                "[bots] rejecting transform-only update for materialized registered_gamenpc. bot_id=" +
-                std::to_string(request.bot_id) +
-                " actor=" + HexString(gameplay_state.actor_address));
-            return false;
-        }
-    }
-
     bool updated = false;
     MultiplayerCharacterProfile sync_character_profile = DefaultCharacterProfile();
     ParticipantSceneIntent sync_scene_intent = DefaultParticipantSceneIntent();

@@ -23,17 +23,13 @@ void RememberParticipantEntity(
         binding->standalone_progression_inner_address = 0;
         binding->standalone_equip_wrapper_address = 0;
         binding->standalone_equip_inner_address = 0;
-        binding->registered_gamenpc_goal_active = false;
-        binding->registered_gamenpc_following_local_slot = false;
-        binding->registered_gamenpc_goal_x = 0.0f;
-        binding->registered_gamenpc_goal_y = 0.0f;
-        binding->synthetic_source_profile_address = 0;
         binding->dynamic_walk_cycle_primary = 0.0f;
         binding->dynamic_walk_cycle_secondary = 0.0f;
         binding->dynamic_render_drive_stride = 0.0f;
         binding->dynamic_render_advance_rate = 0.0f;
         binding->dynamic_render_advance_phase = 0.0f;
-        binding->dynamic_render_drive_move_blend = 0.0f;
+        binding->native_movement_accumulator_x = 0.0f;
+        binding->native_movement_accumulator_y = 0.0f;
         binding->facing_heading_valid = false;
         binding->facing_heading_value = 0.0f;
         binding->facing_target_actor_address = 0;
@@ -57,18 +53,14 @@ void RememberParticipantEntity(
         binding->standalone_progression_inner_address = 0;
         binding->standalone_equip_wrapper_address = 0;
         binding->standalone_equip_inner_address = 0;
-        binding->registered_gamenpc_goal_active = false;
-        binding->registered_gamenpc_following_local_slot = false;
-        binding->registered_gamenpc_goal_x = 0.0f;
-        binding->registered_gamenpc_goal_y = 0.0f;
-        binding->synthetic_source_profile_address = 0;
         binding->raw_allocation = false;
         binding->dynamic_walk_cycle_primary = 0.0f;
         binding->dynamic_walk_cycle_secondary = 0.0f;
         binding->dynamic_render_drive_stride = 0.0f;
         binding->dynamic_render_advance_rate = 0.0f;
         binding->dynamic_render_advance_phase = 0.0f;
-        binding->dynamic_render_drive_move_blend = 0.0f;
+        binding->native_movement_accumulator_x = 0.0f;
+        binding->native_movement_accumulator_y = 0.0f;
         binding->facing_heading_valid = false;
         binding->facing_heading_value = 0.0f;
         binding->facing_target_actor_address = 0;
@@ -116,19 +108,15 @@ void ResetParticipantEntityMaterializationState(ParticipantEntityBinding* bindin
     binding->standalone_progression_inner_address = 0;
     binding->standalone_equip_wrapper_address = 0;
     binding->standalone_equip_inner_address = 0;
-    binding->registered_gamenpc_goal_active = false;
-    binding->registered_gamenpc_following_local_slot = false;
-    binding->registered_gamenpc_goal_x = 0.0f;
-    binding->registered_gamenpc_goal_y = 0.0f;
     binding->gameplay_attach_applied = false;
     binding->raw_allocation = false;
-    binding->synthetic_source_profile_address = 0;
     binding->dynamic_walk_cycle_primary = 0.0f;
     binding->dynamic_walk_cycle_secondary = 0.0f;
     binding->dynamic_render_drive_stride = 0.0f;
     binding->dynamic_render_advance_rate = 0.0f;
     binding->dynamic_render_advance_phase = 0.0f;
-    binding->dynamic_render_drive_move_blend = 0.0f;
+    binding->native_movement_accumulator_x = 0.0f;
+    binding->native_movement_accumulator_y = 0.0f;
     binding->facing_heading_valid = false;
     binding->facing_heading_value = 0.0f;
     binding->facing_target_actor_address = 0;
@@ -233,11 +221,7 @@ void DematerializeParticipantEntityNow(std::uint64_t bot_id, bool forget_binding
             return;
         }
 
-        if (IsRegisteredGameNpcKind(binding->kind)) {
-            StopRegisteredGameNpcMotion(binding);
-        } else {
-            StopWizardBotActorMotion(actor_address);
-        }
+        StopWizardBotActorMotion(actor_address);
 
         std::string destroy_error;
         bool destroyed = false;
@@ -254,16 +238,10 @@ void DematerializeParticipantEntityNow(std::uint64_t bot_id, bool forget_binding
                     binding->gameplay_slot,
                     binding->actor_address,
                     binding->materialized_world_address,
-                    binding->synthetic_source_profile_address,
                     &destroy_error);
             } else {
                 destroy_error = "Gameplay slot cleanup could not resolve a gameplay scene.";
             }
-        } else if (IsRegisteredGameNpcKind(binding->kind)) {
-            destroyed = DestroyRegisteredGameNpcActor(
-                binding->actor_address,
-                binding->materialized_world_address,
-                &destroy_error);
         } else {
             if (IsStandaloneWizardKind(binding->kind) &&
                 (binding->standalone_progression_wrapper_address != 0 ||
@@ -286,10 +264,6 @@ void DematerializeParticipantEntityNow(std::uint64_t bot_id, bool forget_binding
                 binding->materialized_world_address,
                 binding->raw_allocation,
                 &destroy_error);
-        }
-        if (destroyed) {
-            DestroySyntheticWizardSourceProfile(binding->synthetic_source_profile_address);
-            binding->synthetic_source_profile_address = 0;
         }
         if (!destroyed) {
             if (IsParticipantActorMemoryFreshWritable(actor_address)) {

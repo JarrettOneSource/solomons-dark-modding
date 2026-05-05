@@ -3,7 +3,7 @@ ParticipantEntityBinding* FindParticipantEntity(std::uint64_t participant_id);
 ParticipantEntityBinding* FindParticipantEntityForGameplaySlot(int gameplay_slot);
 void StopWizardBotActorMotion(uintptr_t actor_address);
 void StopDeadWizardBotActorMotion(uintptr_t actor_address);
-void StopRegisteredGameNpcMotion(ParticipantEntityBinding* binding);
+bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id);
 void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t actor_address, bool moving);
 void PublishParticipantGameplaySnapshot(const ParticipantEntityBinding& binding);
 void RememberParticipantEntity(
@@ -32,6 +32,13 @@ bool CallPlayerActorEnsureProgressionHandleSafe(
     uintptr_t ensure_progression_handle_address,
     uintptr_t actor_address,
     DWORD* exception_code);
+bool CallPlayerActorApplyManaDeltaSafe(
+    uintptr_t apply_mana_delta_address,
+    uintptr_t actor_address,
+    float delta,
+    char out_of_mana_flag,
+    std::uint32_t* native_result,
+    DWORD* exception_code);
 bool CallPlayerActorRefreshRuntimeHandlesSafe(
     uintptr_t refresh_address,
     uintptr_t actor_address,
@@ -46,33 +53,18 @@ bool CallSkillsWizardBuildPrimarySpellSafe(
     std::uint32_t primary_entry_arg,
     std::uint32_t combo_entry_arg,
     DWORD* exception_code);
+bool CallSkillsWizardGetPrimaryColorSafe(
+    uintptr_t color_address,
+    uintptr_t progression_address,
+    std::uint32_t primary_entry_arg,
+    float out_color[4],
+    DWORD* exception_code);
 bool CallPlayerAppearanceApplyChoiceSafe(
     uintptr_t apply_choice_address,
     uintptr_t progression_address,
     int choice_id,
     int ensure_assets,
     DWORD* exception_code);
-bool EnterLocalPlayerCastShim(
-    const ParticipantEntityBinding* binding,
-    LocalPlayerCastShimState* state);
-void LeaveLocalPlayerCastShim(const LocalPlayerCastShimState& state);
-bool CallGameNpcSetMoveGoalSafe(
-    uintptr_t set_move_goal_address,
-    uintptr_t npc_address,
-    std::uint8_t mode,
-    int follow_flag,
-    float x,
-    float y,
-    float extra_scalar,
-    DWORD* exception_code,
-    SehExceptionDetails* exception_details);
-bool CallGameNpcSetTrackedSlotAssistSafe(
-    uintptr_t set_tracked_slot_assist_address,
-    uintptr_t npc_address,
-    int slot_index,
-    int require_callback,
-    DWORD* exception_code,
-    SehExceptionDetails* exception_details);
 bool CallGameplayActorAttachSafe(
     uintptr_t gameplay_address,
     uintptr_t actor_address,
@@ -128,6 +120,7 @@ bool WireGameplaySlotBotRuntimeHandles(
 bool SeedGameplaySlotBotRenderStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t world_address,
+    uintptr_t native_visual_actor_address,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
@@ -170,9 +163,5 @@ bool DestroyLoaderOwnedWizardActor(
     uintptr_t actor_address,
     uintptr_t world_address,
     bool raw_allocation,
-    std::string* error_message);
-bool DestroyRegisteredGameNpcActor(
-    uintptr_t actor_address,
-    uintptr_t world_address,
     std::string* error_message);
 void DestroyParticipantEntityNow(std::uint64_t participant_id);

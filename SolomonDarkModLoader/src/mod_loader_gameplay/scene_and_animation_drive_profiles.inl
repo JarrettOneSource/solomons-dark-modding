@@ -200,12 +200,28 @@ void ApplyActorAnimationDriveState(uintptr_t actor_address, bool moving) {
         return;
     }
 
+    auto& memory = ProcessMemory::Instance();
+    const auto movement_vector_x = memory.ReadFieldOr<float>(
+        actor_address,
+        kActorAnimationConfigBlockOffset,
+        0.0f);
+    const auto movement_vector_y = memory.ReadFieldOr<float>(
+        actor_address,
+        kActorAnimationDriveParameterOffset,
+        0.0f);
+
     if (const auto* observed_profile = SelectObservedAnimationDriveProfile(moving);
         observed_profile != nullptr) {
         (void)ApplyActorAnimationDriveProfile(actor_address, *observed_profile);
     }
+    if (moving) {
+        // Observed profiles carry the local player's +0x158/+0x15C vector.
+        // Restore the bot's own vector after applying the profile so the stock
+        // render path does not drive staff/robe orientation from the player.
+        (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, movement_vector_x);
+        (void)memory.TryWriteField(actor_address, kActorAnimationDriveParameterOffset, movement_vector_y);
+    }
 
-    auto& memory = ProcessMemory::Instance();
     ClearLiveWizardActorAnimationDriveState(actor_address);
 
     if (!moving) {

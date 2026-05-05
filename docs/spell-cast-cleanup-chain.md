@@ -37,8 +37,119 @@ staff-driven primary effects:
 | `+0x2B0/+0x2B4` | `aim_aux0/1` (u32) | Aux fields the projectile spawn path reads. |
 | `+0x2DC` | `cast_spread_mode_byte` (u8) | `0` = use aim_target fields verbatim; non-zero adds spread. |
 
-`world + 0x500 + (group * 0x800 + slot) * 4` is the cached-handle dereference used
-by both `FUN_00548A00` (phase 2, after init) and `FUN_0052F3B0` (on cleanup).
+`0x0045ADE0` is the native cached-handle lookup used by cast cleanup and
+selection paths. It dereferences `world + 0x500 + (group * 0x800 + slot) * 4`
+internally, so runtime code calls that seam instead of duplicating the bucket
+math.
+
+## April 30 cast-state RE refresh
+
+The current cast cleanup work is backed by these durable artifacts:
+
+- `runtime/ghidra_stock_tick_slot_shim_cast_paths.txt`
+- `runtime/ghidra_cast_state_offsets.txt`
+- `runtime/ghidra_cast_spell_object_handlers.txt`
+- `tests/re/run_live_cast_shim_snapshot_probe.py`
+- `runtime/live_cast_shim_snapshot_probe.json`
+
+Ghidra confirms `0x00548B00` owns the per-tick stock driver,
+`0x00548A00` dispatches through the local progression slot selected from
+`DAT_0081c264 + 0x1654 + actor+0x5C * 4`, and `0x0052F3B0` is the stock
+active-handle cleanup path. `0x0052C910` owns the control-brain target fields
+used while stock targeting is refreshed.
+
+The handle lookup is now understood as a real native object seam:
+`0x0052DA40` resolves the selection state for the actor, and `0x0045ADE0`
+dereferences `world + 0x500 + (group * 0x800 + slot) * 4`. The Earth/boulder
+handler at `0x00545360` proves the spell-object phase and release-timer fields
+that gate the live boulder launch. Runtime code now names those fields through
+`config/binary-layout.ini` rather than owning local numeric offsets.
+
+The former slot shim blocker was the native init predicate:
+`actor+0x5C == 0`. The current runtime removes the local-slot/progression
+redirect and installs byte-checked native cast gate patches instead. These
+patches unlock the exact non-zero-slot branches while leaving
+`actor+0x5C` pointed at the bot's real gameplay slot, so stock progression
+lookups use the bot's live slot data.
+
+## May 1 slot-0 dispatch xref pass
+
+The follow-up pass added two focused artifacts:
+
+- `runtime/ghidra_cast_slot0_dispatch_xrefs.txt`
+- `runtime/ghidra_cast_slot0_gate_offset_accesses.txt`
+
+`0x00548A00` still has only one direct code caller, `PlayerActorTick`
+at `0x00548B00`. The spell handlers checked from that dispatcher
+(`0x00544C60`, `0x00541870`, `0x00545360`) still route through the same
+local-slot actor gate and the same slot-indexed progression lookup:
+`DAT_0081c264 + 0x1654 + actor+0x5C * 4`.
+
+`0x0052F3B0` remains the cleanup method and is reached from
+`PlayerActorTick` plus the boulder handler path, but it also checks
+`actor+0x5C == 0` before touching the active handle. `0x0052DA40` likewise
+uses `actor+0x5C` to select local progression state. The expanded offset scan
+keeps the hot cast functions tied to `+0x5C`, `+0x270`, `+0x27C/+0x27E`, and
+target handle `+0x164/+0x166`; the production fix is therefore a narrow native
+cast gate patch set at `0x0052F3B9`, `0x00544C92`, `0x00545393`, and
+`0x00545C2C`.
+
+`tests/re/run_live_cast_shim_snapshot_probe.py --json --timeout 180` now validates this
+contract without starting arena waves. The April 30 run wrote
+`runtime/live_cast_shim_snapshot_probe.json`, captured a live Earth spell
+object (`object_type=2005`, group `0`, slot `5`) through the native world
+bucket, confirmed the native active-object lookup, and checked
+`gameplay_player_actor`, `gameplay_player_progression_handle`,
+`bot_actor_slot`, and `bot_actor_progression_handle` after cast completion.
+
+The May 1 rerun uses the same Earth primary because Fire/Ether PerCast primaries
+finish too quickly to leave a stable world-bucket handle for Lua inspection.
+In the no-wave harness Earth currently completes through the documented
+`safety_cap` cleanup path, so the live probe default timeout is `60s` and the
+artifact asserts restoration rather than assuming a max-size impact release.
+
+## May 1 selection and active-handle lifecycle pass
+
+The selection/latch pass added focused artifacts:
+
+- `runtime/ghidra_selection_lifecycle_xrefs.txt`
+- `runtime/ghidra_selection_and_cleanup_targets.txt`
+- `runtime/ghidra_selection_brain_offset_accesses.txt`
+- `runtime/ghidra_active_spell_lifecycle_xrefs.txt`
+- `runtime/ghidra_cast_latch_offset_accesses.txt`
+- `runtime/ghidra_boulder_spell_object_vtable_slots.txt`
+
+`0x0052C910` remains the stock control-brain selection updater and has one
+direct caller in the current static xref pass: `PlayerActorTick` at
+`0x00548B00`. It owns selection-state target group/slot clearing, retarget
+tick maintenance, facing/movement vector production, and the native target
+sentinels at `actor+0x164/+0x166`, but it is not a standalone setter/clearer
+API for bot-owned casts.
+
+The globals at `0x00819EC4/0x00819EC8` are not a recovered bot selection API.
+Their direct refs are UI/render setup paths and global selection-state array
+maintenance (`FUN_005BC8E0`, `FUN_005D2380`, `FUN_0064AA80`,
+`FUN_00652D90`). The bot runtime therefore still keeps its explicit
+layout-backed selection-state priming/restoration until a real native owner
+lifecycle is found.
+
+Active-handle cleanup is still the stock `0x0052F3B0` chain. The xref pass ties
+it to `0x0045ADE0` for world-bucket object lookup and `0x00524D70` for the
+post-finalize collision/availability test; it calls the active object's
+function-table entries at `+0x70` and then `+0x6C`, then writes
+`actor+0x27C = 0xFF` and `actor+0x27E = 0xFFFF`.
+
+The live Earth boulder handle resolves a runtime function table at `0x00A6E014`,
+but the static image contains zero data and no references at that address. The
+table is built or relocated at runtime, so it is useful as a live diagnostic but
+not a static ownership seam. The live probe now also asserts that after cleanup
+the active group/slot/object are sentinels, the cast skill ids are zeroed, and
+the native idle latch state is bounded before the artifact is accepted.
+
+Result: no native replacement setter/clearer or bot release/cancel transition
+was recovered in this pass. The current explicit selection restore,
+active-handle snapshot, and bounded latch cleanup remain documented blockers
+rather than final native-clean code.
 
 ## Per-spell handler gate
 
@@ -179,7 +290,7 @@ The per-tick flow for a bot actor is:
 
 ### Watch continuation path
 
-When `ongoing_cast.active`, we do NOT re-dispatch — native `PlayerActorTick`
+When `ongoing_cast.active`, we do NOT re-dispatch; native `PlayerActorTick`
 is driving the handler. We just:
 
 - Re-pin `actor+0x270` and aim fields (so the handler's per-tick reads see
@@ -191,8 +302,9 @@ is driving the handler. We just:
   OR `ticks_waiting >= 300` → "safety_cap" (≈3s at 100Hz, well above any
   observed cast duration).
 - On exit, call `CallCastActiveHandleCleanupSafe` (which wraps `FUN_0052F3B0`
-  with SEH; on SEH fall back to writing the 0xFF/0xFFFF sentinels directly),
-  clear `actor+0x270`, restore aim backups.
+  with SEH), clear `actor+0x270`, and restore aim backups. Cleanup failures
+  are logged as native failures; active code no longer writes the cached-handle
+  bytes directly as a fallback.
 
 ### Why a watch and not another pump?
 

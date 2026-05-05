@@ -427,6 +427,37 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         Log("Gameplay input injection: pure-primary post-builder hook unavailable; seam was unresolved.");
     }
 
+    std::string cast_gate_patch_error;
+    if (!InstallNativeCastGatePatches(&cast_gate_patch_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
+        g_pure_primary_post_builder_trampoline = nullptr;
+        RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_finalize_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_reset_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_action_builder_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.equip_attachment_get_current_item_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
+        if (error_message != nullptr) {
+            *error_message = "Failed to install native cast gate patches: " + cast_gate_patch_error;
+        }
+        return false;
+    }
+
     g_gameplay_keyboard_injection.initialized = true;
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
@@ -503,6 +534,7 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+    RestoreNativeCastGatePatches();
     for (auto& pending : g_gameplay_keyboard_injection.pending_scancodes) {
         pending.store(0, std::memory_order_release);
     }
@@ -521,7 +553,6 @@ void ShutdownGameplayKeyboardInjection() {
     g_gameplay_keyboard_injection.scene_churn_not_before_ms.store(0, std::memory_order_release);
     {
         std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
-        g_gameplay_keyboard_injection.pending_enemy_spawn_requests.clear();
         g_gameplay_keyboard_injection.pending_reward_spawn_requests.clear();
         g_gameplay_keyboard_injection.pending_gameplay_region_switch_requests.clear();
         g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();

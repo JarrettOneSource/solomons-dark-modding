@@ -1,19 +1,19 @@
-void ReleaseBotSpellHandle(
+void FinishBotCastNativeLifecycle(
     const BotCastProcessingContext& context,
     const ParticipantEntityBinding::OngoingCastState& state,
     const char* exit_label,
     bool clear_facing_target,
     bool run_active_handle_cleanup = true,
-    const BotActiveSpellObjectSnapshot* known_release_object_snapshot = nullptr) {
+    const BotNativeActiveSpellObjectState* known_release_object_state = nullptr) {
     auto* binding = context.binding;
     auto& memory = *context.memory;
     const auto actor_address = context.actor_address;
     const auto cleanup_address = context.cleanup_address;
 
-    const auto release_object_snapshot =
-        known_release_object_snapshot != nullptr
-            ? *known_release_object_snapshot
-            : ReadBotActiveSpellObjectSnapshot(context, false);
+    const auto release_object_state =
+        known_release_object_state != nullptr
+            ? *known_release_object_state
+            : ReadBotNativeActiveSpellObjectState(context, false);
     const auto actor_group_before =
         memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
     const auto actor_slot_before =
@@ -31,12 +31,7 @@ void ReleaseBotSpellHandle(
     cleanup_actor_handle_live =
         actor_group_before != kBotCastActorActiveCastGroupSentinel &&
         actor_slot_before != kBotCastActorActiveCastSlotSentinel;
-    if (!run_active_handle_cleanup) {
-        (void)memory.TryWriteField<std::uint8_t>(
-            actor_address, kActorActiveCastGroupByteOffset, kBotCastActorActiveCastGroupSentinel);
-        (void)memory.TryWriteField<std::uint16_t>(
-            actor_address, kActorActiveCastSlotShortOffset, kBotCastActorActiveCastSlotSentinel);
-    } else if (cleanup_actor_handle_live) {
+    if (run_active_handle_cleanup && cleanup_actor_handle_live) {
         uintptr_t cleanup_state_table_address = 0;
         int cleanup_state_entry_count = 0;
         if (TryResolveGameplayIndexState(
@@ -59,7 +54,7 @@ void ReleaseBotSpellHandle(
                 }
             }
         }
-        InvokeBotCastWithLocalPlayerSlot(context, [&] {
+        InvokeBotCastWithNativeActorSlot(context, [&] {
             cleanup_ok = CallCastActiveHandleCleanupSafe(
                 cleanup_address, actor_address, &cleanup_exception_code);
         });
@@ -73,32 +68,17 @@ void ReleaseBotSpellHandle(
             cleanup_state_after =
                 memory.ReadValueOr<int>(cleanup_state_entry_address, -1);
         }
-        if (!cleanup_ok) {
-            // Native cleanup raised SEH. Fall back to writing the sentinels
-            // directly so the next cast's init gate passes; vtable-side
-            // effects get skipped, but the handle is released and future
-            // casts are safe.
-            (void)memory.TryWriteField<std::uint8_t>(
-                actor_address, kActorActiveCastGroupByteOffset, kBotCastActorActiveCastGroupSentinel);
-            (void)memory.TryWriteField<std::uint16_t>(
-                actor_address, kActorActiveCastSlotShortOffset, kBotCastActorActiveCastSlotSentinel);
-        }
     }
-    const bool defer_bounded_latch_clear =
-        state.bounded_release_requested &&
-        state.bounded_release_at_damage_threshold &&
-        !state.bounded_release_at_max_size;
-    if (!defer_bounded_latch_clear) {
-        (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
-    }
+    (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
+    (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPreviousSkillIdOffset, 0);
     const bool should_clear_cast_latch =
-        !defer_bounded_latch_clear &&
-        state.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
-        (actor_group_before == kBotCastActorActiveCastGroupSentinel ||
-         state.bounded_release_requested);
+        state.bounded_release_requested ||
+        (state.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
+         actor_group_before == kBotCastActorActiveCastGroupSentinel);
     if (should_clear_cast_latch) {
-        (void)memory.TryWriteField<std::uint32_t>(actor_address, 0xE4, 0);
-        (void)memory.TryWriteField<std::uint32_t>(actor_address, 0xE8, 0);
+        (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorPrimaryActionLatchE4Offset, 0);
+        (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorPrimaryActionLatchE8Offset, 0);
+        (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorPostGateActiveByteOffset, 0);
     }
     RestoreBotCastAim(context, state);
     if (state.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
@@ -140,7 +120,7 @@ void ReleaseBotSpellHandle(
     if (state.progression_spell_id_override_active && state.progression_runtime_address != 0) {
         (void)memory.TryWriteField<std::int32_t>(
             state.progression_runtime_address,
-            0x750,
+            kProgressionCurrentSpellIdOffset,
             state.progression_spell_id_before);
     }
 
@@ -149,26 +129,36 @@ void ReleaseBotSpellHandle(
     const auto settled_heading =
         memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
     const bool completed_boulder_at_max =
-        release_object_snapshot.boulder_max_size_reached ||
+        release_object_state.boulder_max_size_reached ||
         state.bounded_release_at_max_size ||
         (SkillRequiresBoundedHeldCastInputDuringNativeTick(ResolveOngoingNativeTickSkillId(state)) &&
          std::strcmp(exit_label, "max_size_released") == 0);
     const std::string bounded_release_summary =
         state.bounded_release_requested
             ? std::string(" release_reason=") +
-                  (state.bounded_release_at_damage_threshold
-                       ? std::string("damage_threshold")
-                       : (state.bounded_release_at_max_size ? std::string("max_size") : std::string("unknown"))) +
+                  (state.bounded_release_at_max_size
+                       ? std::string("max_size")
+                       : state.bounded_release_target_lethal
+                           ? std::string("target_lethal")
+                           : std::string("native")) +
                   " release_charge=" + std::to_string(state.bounded_release_charge) +
                   " release_base_damage=" + std::to_string(state.bounded_release_base_damage) +
-                  " release_statbook_damage=" +
-                      std::to_string(state.bounded_release_statbook_damage) +
                   " release_projected_damage=" +
                       std::to_string(state.bounded_release_projected_damage) +
+                  " release_damage_output_scale=" +
+                      std::to_string(state.bounded_release_damage_output_scale) +
+                  " release_damage_scale=" +
+                      std::to_string(state.bounded_release_damage_scale) +
+                  " release_damage_floor=" +
+                      std::to_string(state.bounded_release_damage_floor) +
+                  " release_damage_cap_scale=" +
+                      std::to_string(state.bounded_release_damage_cap_scale) +
+                  " release_projected_release_damage=" +
+                      std::to_string(state.bounded_release_projected_release_damage) +
+                  " release_projected_hp_damage=" +
+                      std::to_string(state.bounded_release_projected_hp_damage) +
                   " release_target_hp=" + std::to_string(state.bounded_release_target_hp) +
-                  " release_target_actor=" + HexString(state.bounded_release_target_actor) +
-                  " release_damage_native=" +
-                      (state.bounded_release_damage_native ? std::string("1") : std::string("0"))
+                  " release_target_actor=" + HexString(state.bounded_release_target_actor)
             : std::string("");
     (void)multiplayer::FinishBotAttack(
         binding->bot_id,
@@ -194,73 +184,30 @@ void ReleaseBotSpellHandle(
         " cleanup_state_write=" + (cleanup_state_write_ok ? std::string("1") : std::string("0")) +
         " cleanup_state_restore=" + (cleanup_state_restore_ok ? std::string("1") : std::string("0")) +
         " handle_source=" +
-            (release_object_snapshot.handle_from_selection_state ? std::string("selection") : std::string("actor")) +
-        " selection_state=" + HexString(release_object_snapshot.selection_state) +
-        " obj_ptr=" + HexString(release_object_snapshot.object) +
-        " obj_vt=" + HexString(release_object_snapshot.vtable) +
-        " obj_vt_1c=" + HexString(release_object_snapshot.update_fn) +
-        " obj_vt_6c=" + HexString(release_object_snapshot.release_secondary_fn) +
-        " obj_vt_70=" + HexString(release_object_snapshot.release_finalize_fn) +
-        " obj_type=" + HexString(release_object_snapshot.object_type) +
-        " obj_x=" + std::to_string(release_object_snapshot.object_x) +
-        " obj_y=" + std::to_string(release_object_snapshot.object_y) +
-        " obj_heading=" + std::to_string(release_object_snapshot.object_heading) +
-        " obj_radius=" + std::to_string(release_object_snapshot.object_radius) +
-        " obj_74=" + std::to_string(release_object_snapshot.object_f74) +
-        " obj_1f0=" + std::to_string(release_object_snapshot.object_f1f0) +
-        " obj_1fc=" + std::to_string(release_object_snapshot.object_f1fc) +
-        " obj_22c=" + HexString(release_object_snapshot.object_f22c) +
-        " obj_230=" + HexString(release_object_snapshot.object_f230) +
-        " obj_74_raw=" + HexString(release_object_snapshot.object_f74_raw) +
-        " obj_1f0_raw=" + HexString(release_object_snapshot.object_f1f0_raw) +
-        " obj_1fc_raw=" + HexString(release_object_snapshot.object_f1fc_raw) +
+            (release_object_state.handle_from_selection_state ? std::string("selection") : std::string("actor")) +
+        " selection_state=" + HexString(release_object_state.selection_state) +
+        " native_lookup=" + (release_object_state.lookup_attempted ? std::string("1") : std::string("0")) +
+        " native_lookup_ok=" + (release_object_state.lookup_succeeded ? std::string("1") : std::string("0")) +
+        " native_lookup_seh=" + HexString(release_object_state.lookup_exception) +
+        " obj_ptr=" + HexString(release_object_state.object) +
+        " obj_type=" + HexString(release_object_state.object_type) +
+        " obj_x=" + std::to_string(release_object_state.object_x) +
+        " obj_y=" + std::to_string(release_object_state.object_y) +
+        " obj_heading=" + std::to_string(release_object_state.object_heading) +
+        " obj_radius=" + std::to_string(release_object_state.object_radius) +
+        " obj_charge=" + std::to_string(release_object_state.charge) +
+        " obj_growth_rate=" + std::to_string(release_object_state.growth_rate) +
+        " obj_release_charge=" + std::to_string(release_object_state.release_charge) +
+        " obj_release_damage=" + std::to_string(release_object_state.release_damage) +
+        " obj_release_base_damage=" + std::to_string(release_object_state.release_base_damage) +
+        " obj_max_charge=" + std::to_string(release_object_state.max_charge) +
+        " obj_phase=" + HexString(release_object_state.phase) +
+        " obj_release_timer=" + HexString(release_object_state.release_timer) +
         " boulder_max_size=" +
             (completed_boulder_at_max ? std::string("1") : std::string("0")) +
         bounded_release_summary +
         (cleanup_ok ? std::string("") :
                       std::string(" cleanup_seh=") + HexString(cleanup_exception_code)));
-}
-
-void ScheduleBotBoundedReleaseLatchClear(
-    ParticipantEntityBinding::OngoingCastState& state) {
-    constexpr std::uint64_t kBoundedCleanupLatchClearDelayMs = 100;
-    state.bounded_cleanup_completed = true;
-    state.bounded_cleanup_clear_after_ms =
-        static_cast<std::uint64_t>(GetTickCount64()) +
-        kBoundedCleanupLatchClearDelayMs;
-}
-
-void ClearBotBoundedReleaseCastLatch(
-    const BotCastProcessingContext& context,
-    ParticipantEntityBinding::OngoingCastState& state,
-    const char* reason) {
-    auto* binding = context.binding;
-    auto& memory = *context.memory;
-    const auto actor_address = context.actor_address;
-
-    const auto actor_e4_before =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, 0xE4, 0);
-    const auto actor_e8_before =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, 0xE8, 0);
-    const bool primary_clear_ok =
-        memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
-    const bool e4_clear_ok =
-        memory.TryWriteField<std::uint32_t>(actor_address, 0xE4, 0);
-    const bool e8_clear_ok =
-        memory.TryWriteField<std::uint32_t>(actor_address, 0xE8, 0);
-    Log(
-        "[bots] bounded release latch cleared. bot_id=" +
-        std::to_string(binding->bot_id) +
-        " skill_id=" + std::to_string(state.skill_id) +
-        " reason=" + (reason != nullptr ? std::string(reason) : std::string("unknown")) +
-        " ticks=" + std::to_string(state.ticks_waiting) +
-        " clear_after_ms=" + std::to_string(state.bounded_cleanup_clear_after_ms) +
-        " e4_before=" + HexString(actor_e4_before) +
-        " e8_before=" + HexString(actor_e8_before) +
-        " primary_clear=" + (primary_clear_ok ? std::string("1") : std::string("0")) +
-        " e4_clear=" + (e4_clear_ok ? std::string("1") : std::string("0")) +
-        " e8_clear=" + (e8_clear_ok ? std::string("1") : std::string("0")));
-    state = ParticipantEntityBinding::OngoingCastState{};
 }
 
 void LogBotSpellObjectDiag(
@@ -269,33 +216,30 @@ void LogBotSpellObjectDiag(
     auto* binding = context.binding;
     const auto actor_address = context.actor_address;
 
-    auto snapshot = ReadBotActiveSpellObjectSnapshot(context);
-    snapshot.group = active_group_post;
+    auto state = ReadBotNativeActiveSpellObjectState(context);
+    state.group = active_group_post;
     Log(
         std::string("[bots] spell_obj diag. bot_id=") + std::to_string(binding->bot_id) +
-        " group=" + HexString(snapshot.group) +
-        " slot=" + HexString(snapshot.slot) +
-        " handle_source=" + (snapshot.handle_from_selection_state ? std::string("selection") : std::string("actor")) +
-        " selection_state=" + HexString(snapshot.selection_state) +
-        " world=" + HexString(snapshot.world) +
-        " obj_ptr=" + HexString(snapshot.object) +
-        " obj_vt=" + HexString(snapshot.vtable) +
-        " obj_vt_1c=" + HexString(snapshot.update_fn) +
-        " obj_vt_6c=" + HexString(snapshot.release_secondary_fn) +
-        " obj_vt_70=" + HexString(snapshot.release_finalize_fn) +
-        " obj_type=" + HexString(snapshot.object_type) +
-        " obj_x=" + std::to_string(snapshot.object_x) +
-        " obj_y=" + std::to_string(snapshot.object_y) +
-        " obj_heading=" + std::to_string(snapshot.object_heading) +
-        " obj_radius=" + std::to_string(snapshot.object_radius) +
-        " obj_74=" + std::to_string(snapshot.object_f74) +
-        " obj_1f0=" + std::to_string(snapshot.object_f1f0) +
-        " obj_1fc=" + std::to_string(snapshot.object_f1fc) +
-        " obj_74_raw=" + HexString(snapshot.object_f74_raw) +
-        " obj_1f0_raw=" + HexString(snapshot.object_f1f0_raw) +
-        " obj_1fc_raw=" + HexString(snapshot.object_f1fc_raw) +
-        " obj_22c=" + std::to_string(snapshot.object_f22c) +
-        " obj_230=" + std::to_string(snapshot.object_f230) +
-        " boulder_max_size=" + (snapshot.boulder_max_size_reached ? std::string("1") : std::string("0")) +
+        " group=" + HexString(state.group) +
+        " slot=" + HexString(state.slot) +
+        " handle_source=" + (state.handle_from_selection_state ? std::string("selection") : std::string("actor")) +
+        " selection_state=" + HexString(state.selection_state) +
+        " world=" + HexString(state.world) +
+        " native_lookup=" + (state.lookup_attempted ? std::string("1") : std::string("0")) +
+        " native_lookup_ok=" + (state.lookup_succeeded ? std::string("1") : std::string("0")) +
+        " native_lookup_seh=" + HexString(state.lookup_exception) +
+        " obj_ptr=" + HexString(state.object) +
+        " obj_type=" + HexString(state.object_type) +
+        " obj_x=" + std::to_string(state.object_x) +
+        " obj_y=" + std::to_string(state.object_y) +
+        " obj_heading=" + std::to_string(state.object_heading) +
+        " obj_radius=" + std::to_string(state.object_radius) +
+        " obj_charge=" + std::to_string(state.charge) +
+        " obj_growth_rate=" + std::to_string(state.growth_rate) +
+        " obj_release_charge=" + std::to_string(state.release_charge) +
+        " obj_max_charge=" + std::to_string(state.max_charge) +
+        " obj_phase=" + std::to_string(state.phase) +
+        " obj_release_timer=" + std::to_string(state.release_timer) +
+        " boulder_max_size=" + (state.boulder_max_size_reached ? std::string("1") : std::string("0")) +
         " startup={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
 }

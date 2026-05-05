@@ -131,21 +131,46 @@ bool StartPendingBotCastRequest(
     if (active_cast_group_before != kBotCastActorActiveCastGroupSentinel) {
         DWORD prior_cleanup_seh = 0;
         bool prior_cleanup_ok = false;
-        InvokeBotCastWithLocalPlayerSlot(cast_context, [&] {
+        InvokeBotCastWithNativeActorSlot(cast_context, [&] {
             prior_cleanup_ok = CallCastActiveHandleCleanupSafe(
                 cleanup_address, actor_address, &prior_cleanup_seh);
         });
         if (!prior_cleanup_ok) {
-            (void)memory.TryWriteField<std::uint8_t>(
-                actor_address, kActorActiveCastGroupByteOffset, kBotCastActorActiveCastGroupSentinel);
-            (void)memory.TryWriteField<std::uint16_t>(
-                actor_address, kActorActiveCastSlotShortOffset, kBotCastActorActiveCastSlotSentinel);
+            ParticipantEntityBinding::OngoingCastState rollback{};
+            rollback.have_aim_heading = have_aim_heading;
+            rollback.have_aim_target = have_aim_target;
+            rollback.heading_before = heading_before;
+            rollback.aim_x_before = aim_x_before;
+            rollback.aim_y_before = aim_y_before;
+            rollback.aim_aux0_before = aim_aux0_before;
+            rollback.aim_aux1_before = aim_aux1_before;
+            rollback.spread_before = spread_before;
+            (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
+            RestoreBotCastAim(cast_context, rollback);
+            (void)multiplayer::FinishBotAttack(
+                binding->bot_id,
+                true,
+                memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, heading_before),
+                true);
+            if (error_message != nullptr) {
+                *error_message =
+                    "prior native active-handle cleanup failed with " +
+                    HexString(prior_cleanup_seh);
+            }
+            Log(
+                "[bots] prior native active-handle cleanup failed. bot_id=" +
+                std::to_string(binding->bot_id) +
+                " skill_id=" + std::to_string(request.skill_id) +
+                " group_before=" + HexString(active_cast_group_before) +
+                " slot_before=" + HexString(active_cast_slot_before) +
+                " seh=" + HexString(prior_cleanup_seh));
+            return false;
         }
     }
 
     DWORD exception_code = 0;
     bool dispatched = false;
-    InvokeBotCastWithLocalPlayerSlot(cast_context, [&] {
+    InvokeBotCastWithNativeActorSlot(cast_context, [&] {
         dispatched = CallSpellCastDispatcherSafe(
             dispatcher_address, actor_address, &exception_code);
     });
@@ -154,50 +179,24 @@ bool StartPendingBotCastRequest(
         memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
 
     // Diagnostic: immediately after dispatcher returns and before any cleanup,
-    // snapshot the spell_obj registered at (world+0x500, group*0x800+slot)*4 so
-    // we can see what the handler actually produced. Fragment-spawn gate at
-    // FUN_00545360:215 requires spell_obj[0x22C] > 1. FUN_0052B150 can collapse
-    // it to 1 in init, which silently kills the spawn loop.
+    // ask the native world lookup for the active spell object so we can see
+    // what the handler actually produced.
     {
-        const auto group_post_diag = active_group_post;
-        const auto slot_post_diag =
-            memory.ReadFieldOr<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset, 0xFFFF);
-        const auto world_ptr_diag =
-            memory.ReadFieldOr<std::uintptr_t>(actor_address, kActorOwnerOffset, 0);
-        std::uintptr_t spell_obj_ptr = 0;
-        std::uint32_t obj_type = 0;
-        std::uint32_t obj_f74_raw = 0;
-        std::uint32_t obj_f1fc_raw = 0;
-        std::uint32_t obj_f22c = 0;
-        std::uint32_t obj_f230 = 0;
-        if (group_post_diag != kBotCastActorActiveCastGroupSentinel &&
-            slot_post_diag != kBotCastActorActiveCastSlotSentinel && world_ptr_diag != 0) {
-            const std::uintptr_t entry_address =
-                world_ptr_diag + kActorWorldBucketTableOffset +
-                static_cast<std::uintptr_t>(
-                    static_cast<std::uint32_t>(group_post_diag) * kActorWorldBucketStride +
-                    static_cast<std::uint32_t>(slot_post_diag)) *
-                    sizeof(std::uintptr_t);
-            spell_obj_ptr = memory.ReadValueOr<std::uintptr_t>(entry_address, 0);
-            if (spell_obj_ptr != 0 && memory.IsReadableRange(spell_obj_ptr, 0x240)) {
-                obj_type = memory.ReadFieldOr<std::uint32_t>(spell_obj_ptr, 0x08, 0);
-                obj_f74_raw = memory.ReadFieldOr<std::uint32_t>(spell_obj_ptr, 0x74, 0);
-                obj_f1fc_raw = memory.ReadFieldOr<std::uint32_t>(spell_obj_ptr, 0x1FC, 0);
-                obj_f22c = memory.ReadFieldOr<std::uint32_t>(spell_obj_ptr, 0x22C, 0);
-                obj_f230 = memory.ReadFieldOr<std::uint32_t>(spell_obj_ptr, 0x230, 0);
-            }
-        }
+        const auto spell_state = ReadBotNativeActiveSpellObjectState(cast_context, false);
         Log(
             std::string("[bots] spell_obj diag. bot_id=") + std::to_string(binding->bot_id) +
-            " group=" + HexString(group_post_diag) +
-            " slot=" + HexString(slot_post_diag) +
-            " world=" + HexString(world_ptr_diag) +
-            " obj_ptr=" + HexString(spell_obj_ptr) +
-            " obj_type=" + HexString(obj_type) +
-            " obj_74_raw=" + HexString(obj_f74_raw) +
-            " obj_1fc_raw=" + HexString(obj_f1fc_raw) +
-            " obj_22c=" + std::to_string(obj_f22c) +
-            " obj_230=" + std::to_string(obj_f230));
+            " group=" + HexString(spell_state.group) +
+            " slot=" + HexString(spell_state.slot) +
+            " world=" + HexString(spell_state.world) +
+            " native_lookup=" + (spell_state.lookup_attempted ? std::string("1") : std::string("0")) +
+            " native_lookup_ok=" + (spell_state.lookup_succeeded ? std::string("1") : std::string("0")) +
+            " native_lookup_seh=" + HexString(spell_state.lookup_exception) +
+            " obj_ptr=" + HexString(spell_state.object) +
+            " obj_type=" + HexString(spell_state.object_type) +
+            " obj_charge=" + std::to_string(spell_state.charge) +
+            " obj_max_charge=" + std::to_string(spell_state.max_charge) +
+            " obj_phase=" + std::to_string(spell_state.phase) +
+            " obj_release_timer=" + std::to_string(spell_state.release_timer));
     }
 
     if (!dispatched) {
@@ -252,16 +251,12 @@ bool StartPendingBotCastRequest(
     ongoing.ticks_waiting = 0;
     ongoing.saw_latch = false;
     ongoing.saw_activity = false;
-    ongoing.requires_local_slot_native_tick =
-        SkillRequiresLocalSlotDuringNativeTick(request.skill_id);
-
     // Instant-hit spells (e.g. many melees) may complete inside this primer
-    // dispatch: the handler allocates, fires, and drops back to the sentinel
+    // dispatch: the handler allocates, fires, and drops back to an empty handle
     // all in one call. Detect and release immediately so we don't spin in
     // the watch loop waiting for a latch that already came and went. 0x3EF is
     // intentionally excluded: the stock family can return from the primer with
-    // no live handle or latch, then emit on a later native tick only while the
-    // gameplay-slot bot is temporarily masquerading as slot 0.
+    // no live handle or latch, then emit on a later native tick.
     const auto drive_state_post =
         memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
     const auto no_interrupt_post =
@@ -270,12 +265,11 @@ bool StartPendingBotCastRequest(
         active_group_post != kBotCastActorActiveCastGroupSentinel ||
         drive_state_post != 0 ||
         no_interrupt_post != 0;
-    if (!ongoing.requires_local_slot_native_tick &&
-        (active_group_post == kBotCastActorActiveCastGroupSentinel ||
-         (drive_state_post == 0 && no_interrupt_post == 0))) {
+    if (active_group_post == kBotCastActorActiveCastGroupSentinel ||
+        (drive_state_post == 0 && no_interrupt_post == 0)) {
         ongoing.saw_latch = (drive_state_post != 0 || no_interrupt_post != 0);
         ongoing.saw_activity = ongoing.saw_activity || ongoing.saw_latch;
-        ReleaseBotSpellHandle(cast_context, ongoing, "instant", false);
+        FinishBotCastNativeLifecycle(cast_context, ongoing, "instant", false);
         ongoing = ParticipantEntityBinding::OngoingCastState{};
     }
 
@@ -289,8 +283,11 @@ bool StartPendingBotCastRequest(
         " group_post=" + HexString(active_group_post) +
         " drive_post=" + HexString(drive_state_post) +
         " no_int_post=" + HexString(no_interrupt_post) +
-        " native_slot0_tick=" +
-        (binding->ongoing_cast.requires_local_slot_native_tick ? std::string("1") : std::string("0")) +
+        " native_actor_slot=" +
+        std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
+            actor_address,
+            kActorSlotOffset,
+            -1))) +
         " watch_armed=" + (binding->ongoing_cast.active ? std::string("1") : std::string("0")));
     return true;
 }

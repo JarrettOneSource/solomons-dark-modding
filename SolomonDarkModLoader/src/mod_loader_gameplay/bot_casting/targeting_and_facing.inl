@@ -220,16 +220,26 @@ bool OngoingCastNeedsNativeTargetActor(
     // there changes the native projectile collision/damage path even though
     // aim and selection state still need to be refreshed while charging.
     return ongoing.uses_dispatcher_skill_id &&
-           ongoing.requires_local_slot_native_tick &&
            SkillTracksLiveTargetDuringNativeTick(ResolveOngoingNativeTickSkillId(ongoing));
 }
 
 bool OngoingCastShouldPreserveAimAfterTargetLoss(
     const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    const auto active_skill_id = ResolveOngoingNativeTickSkillId(ongoing);
     return ongoing.active &&
-           OngoingCastNeedsNativeTargetActor(ongoing) &&
-           ongoing.requires_local_slot_native_tick &&
+           (OngoingCastNeedsNativeTargetActor(ongoing) ||
+            (SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id) &&
+             !ongoing.bounded_release_requested)) &&
            ongoing.have_aim_target;
+}
+
+bool OngoingCastShouldPreserveProjectionTargetAfterAimMiss(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    const auto active_skill_id = ResolveOngoingNativeTickSkillId(ongoing);
+    return ongoing.active &&
+           SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id) &&
+           !ongoing.bounded_release_requested &&
+           ongoing.target_actor_address != 0;
 }
 
 bool WriteOngoingCastNativeTargetActor(
@@ -412,7 +422,8 @@ bool RefreshOngoingCastAimFromFacingTarget(
         if (binding->facing_target_actor_address == target_actor_address) {
             binding->facing_target_actor_address = 0;
         }
-        if (ongoing->target_actor_address == target_actor_address) {
+        if (ongoing->target_actor_address == target_actor_address &&
+            !OngoingCastShouldPreserveProjectionTargetAfterAimMiss(*ongoing)) {
             ongoing->target_actor_address = 0;
         }
         ongoing->selection_target_seed_active = false;
@@ -447,19 +458,28 @@ bool RefreshOngoingCastAimFromFacingTarget(
         if (ongoing->selection_state_pointer != 0) {
             (void)memory.TryWriteField<std::uint8_t>(
                 ongoing->selection_state_pointer,
-                0x04,
+                kActorControlBrainTargetSlotOffset,
                 target_group);
             (void)memory.TryWriteField<std::uint16_t>(
                 ongoing->selection_state_pointer,
-                0x06,
+                kActorControlBrainTargetHandleOffset,
                 target_slot);
             (void)memory.TryWriteField<std::int32_t>(
                 ongoing->selection_state_pointer,
-                0x08,
+                kActorControlBrainRetargetTicksOffset,
                 ongoing->selection_target_hold_ticks);
-            (void)memory.TryWriteField<std::int32_t>(ongoing->selection_state_pointer, 0x0C, 0);
-            (void)memory.TryWriteField<std::int32_t>(ongoing->selection_state_pointer, 0x10, 0);
-            (void)memory.TryWriteField<std::int32_t>(ongoing->selection_state_pointer, 0x14, 0);
+            (void)memory.TryWriteField<std::int32_t>(
+                ongoing->selection_state_pointer,
+                kActorControlBrainTargetCooldownTicksOffset,
+                0);
+            (void)memory.TryWriteField<std::int32_t>(
+                ongoing->selection_state_pointer,
+                kActorControlBrainActionCooldownTicksOffset,
+                0);
+            (void)memory.TryWriteField<std::int32_t>(
+                ongoing->selection_state_pointer,
+                kActorControlBrainActionBurstTicksOffset,
+                0);
         }
     } else {
         ongoing->selection_target_seed_active = false;

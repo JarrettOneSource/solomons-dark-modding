@@ -19,6 +19,37 @@ bool CallPlayerActorEnsureProgressionHandleSafe(
     }
 }
 
+bool CallPlayerActorApplyManaDeltaSafe(
+    uintptr_t apply_mana_delta_address,
+    uintptr_t actor_address,
+    float delta,
+    char out_of_mana_flag,
+    std::uint32_t* native_result,
+    DWORD* exception_code) {
+    auto* apply_mana_delta =
+        reinterpret_cast<PlayerActorApplyManaDeltaFn>(apply_mana_delta_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (native_result != nullptr) {
+        *native_result = 0;
+    }
+    if (apply_mana_delta == nullptr || actor_address == 0 || !std::isfinite(delta)) {
+        return false;
+    }
+
+    __try {
+        const auto result =
+            apply_mana_delta(reinterpret_cast<void*>(actor_address), delta, out_of_mana_flag);
+        if (native_result != nullptr) {
+            *native_result = result;
+        }
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
 bool CallPlayerActorRefreshRuntimeHandlesSafe(
     uintptr_t refresh_address,
     uintptr_t actor_address,
@@ -92,6 +123,37 @@ bool CallSkillsWizardBuildPrimarySpellSafe(
             0,
             0,
             0);
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool CallSkillsWizardGetPrimaryColorSafe(
+    uintptr_t color_address,
+    uintptr_t progression_address,
+    std::uint32_t primary_entry_arg,
+    float out_color[4],
+    DWORD* exception_code) {
+    auto* get_primary_color = reinterpret_cast<SkillsWizardGetPrimaryColorFn>(color_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (out_color != nullptr) {
+        out_color[0] = 0.0f;
+        out_color[1] = 0.0f;
+        out_color[2] = 0.0f;
+        out_color[3] = 0.0f;
+    }
+    if (get_primary_color == nullptr || progression_address == 0 || out_color == nullptr) {
+        return false;
+    }
+
+    __try {
+        get_primary_color(
+            reinterpret_cast<void*>(progression_address),
+            out_color,
+            primary_entry_arg);
         return true;
     } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
         return false;

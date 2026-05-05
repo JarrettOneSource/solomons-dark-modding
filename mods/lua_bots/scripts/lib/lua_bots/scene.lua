@@ -37,7 +37,7 @@ function scene_module.install(ctx)
       return { kind = "run" }
     end
 
-    local area = config.SUPPORTED_PRIVATE_AREAS[scene_name]
+    local area = config.PRIVATE_AREA_TRAVEL_DESCRIPTORS[scene_name]
     if area == nil then
       return nil
     end
@@ -105,14 +105,7 @@ function scene_module.install(ctx)
         x = (tonumber(anchor.x) or 0.0) + offset_x,
         y = (tonumber(anchor.y) or 0.0) + offset_y,
         heading = heading,
-      }
-    end
-
-    if type(scene_intent) == "table" and normalize_scene_kind(scene_intent.kind) == "shared_hub" then
-      return {
-        x = config.DEFAULT_HUB_SPAWN_X + offset_x,
-        y = config.DEFAULT_HUB_SPAWN_Y + offset_y,
-        heading = heading,
+        snap_to_nav = true,
       }
     end
 
@@ -120,6 +113,7 @@ function scene_module.install(ctx)
       x = (tonumber(player.x) or 0.0) + offset_x,
       y = (tonumber(player.y) or 0.0) + offset_y,
       heading = heading,
+      snap_to_nav = false,
     }
   end
 
@@ -139,9 +133,11 @@ function scene_module.install(ctx)
     if type(spawn) ~= "table" then
       return false
     end
-    spawn = ctx.snap_spawn_transform(now_ms, spawn)
-    if type(spawn) ~= "table" then
-      return false
+    if spawn.snap_to_nav ~= false then
+      spawn = ctx.snap_spawn_transform(now_ms, spawn)
+      if type(spawn) ~= "table" then
+        return false
+      end
     end
 
     local ok = sd.bots.update({
@@ -192,9 +188,11 @@ function scene_module.install(ctx)
     if type(spawn) ~= "table" then
       return nil
     end
-    spawn = ctx.snap_spawn_transform(now_ms, spawn)
-    if type(spawn) ~= "table" then
-      return nil
+    if spawn.snap_to_nav ~= false then
+      spawn = ctx.snap_spawn_transform(now_ms, spawn)
+      if type(spawn) ~= "table" then
+        return nil
+      end
     end
 
     if state.bot_id == nil then

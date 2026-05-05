@@ -262,16 +262,16 @@ assert(creates[2].name == "Lua Bot Earth", "hub second create should be earth bo
 assert(creates[3].name == "Lua Bot Air", "hub third create should be air bot")
 assert(creates[4].name == "Lua Bot Ether", "hub fourth create should be ether bot")
 assert(creates[5].name == "Lua Bot Fire", "hub fifth create should be fire bot")
-assert(math.abs(creates[1].position.x - 1006.0) < 0.001, "water hub spawn should use default hub x plus bot offset")
-assert(math.abs(creates[1].position.y - 448.0) < 0.001, "water hub spawn should use default hub y plus bot offset")
-assert(math.abs(creates[2].position.x - 1006.0) < 0.001, "earth hub spawn should use default hub x plus bot offset")
-assert(math.abs(creates[2].position.y - 488.0) < 0.001, "earth hub spawn should use default hub y plus bot offset")
-assert(math.abs(creates[3].position.x - 1006.0) < 0.001, "air hub spawn should use default hub x plus bot offset")
-assert(math.abs(creates[3].position.y - 528.0) < 0.001, "air hub spawn should use default hub y plus bot offset")
-assert(math.abs(creates[4].position.x - 1006.0) < 0.001, "ether hub spawn should use default hub x plus bot offset")
-assert(math.abs(creates[4].position.y - 568.0) < 0.001, "ether hub spawn should use default hub y plus bot offset")
-assert(math.abs(creates[5].position.x - 1006.0) < 0.001, "fire hub spawn should use default hub x plus bot offset")
-assert(math.abs(creates[5].position.y - 608.0) < 0.001, "fire hub spawn should use default hub y plus bot offset")
+assert(math.abs(creates[1].position.x - 150.0) < 0.001, "water hub spawn should use player x plus bot offset")
+assert(math.abs(creates[1].position.y - 40.0) < 0.001, "water hub spawn should use player y plus bot offset")
+assert(math.abs(creates[2].position.x - 150.0) < 0.001, "earth hub spawn should use player x plus bot offset")
+assert(math.abs(creates[2].position.y - 80.0) < 0.001, "earth hub spawn should use player y plus bot offset")
+assert(math.abs(creates[3].position.x - 150.0) < 0.001, "air hub spawn should use player x plus bot offset")
+assert(math.abs(creates[3].position.y - 120.0) < 0.001, "air hub spawn should use player y plus bot offset")
+assert(math.abs(creates[4].position.x - 150.0) < 0.001, "ether hub spawn should use player x plus bot offset")
+assert(math.abs(creates[4].position.y - 160.0) < 0.001, "ether hub spawn should use player y plus bot offset")
+assert(math.abs(creates[5].position.x - 150.0) < 0.001, "fire hub spawn should use player x plus bot offset")
+assert(math.abs(creates[5].position.y - 200.0) < 0.001, "fire hub spawn should use player y plus bot offset")
 assert(hooks.state.bots[1].bot_id ~= nil, "water bot id was not tracked")
 assert(hooks.state.bots[2].bot_id ~= nil, "earth bot id was not tracked")
 assert(hooks.state.bots[3].bot_id ~= nil, "air bot id was not tracked")
@@ -666,7 +666,7 @@ current_actors = {
   {
     actor_address = 250,
     object_type_id = 5010,
-    tracked_enemy = true,
+    tracked_enemy = false,
     dead = false,
     hp = 100.0,
     max_hp = 100.0,

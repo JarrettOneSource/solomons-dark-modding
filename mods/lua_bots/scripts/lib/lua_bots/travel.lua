@@ -13,7 +13,7 @@ function travel.install(ctx)
     local player_y = tonumber(player.y) or 0.0
     local best = nil
     local best_distance = nil
-    for _, area in pairs(config.SUPPORTED_PRIVATE_AREAS) do
+    for _, area in pairs(config.PRIVATE_AREA_TRAVEL_DESCRIPTORS) do
       local anchor = area.hub_anchor
       local gap = ctx.distance(player_x, player_y, anchor.x, anchor.y)
       if gap <= config.ENTRANCE_TRIGGER_DISTANCE and (best_distance == nil or gap < best_distance) then
@@ -65,7 +65,7 @@ function travel.install(ctx)
     if now_ms - state.scene_entered_ms >= config.HUB_ENTRANCE_ARM_DELAY_MS then
       local player_x = tonumber(player.x) or 0.0
       local player_y = tonumber(player.y) or 0.0
-      for _, area in pairs(config.SUPPORTED_PRIVATE_AREAS) do
+      for _, area in pairs(config.PRIVATE_AREA_TRAVEL_DESCRIPTORS) do
         local gap = ctx.distance(player_x, player_y, area.hub_anchor.x, area.hub_anchor.y)
         if gap > config.ENTRANCE_TRIGGER_DISTANCE then
           state.entrance_armed[area.name] = true
@@ -84,7 +84,7 @@ function travel.install(ctx)
     end
 
     local candidate = state.hub_candidate_name ~= nil and
-      config.SUPPORTED_PRIVATE_AREAS[state.hub_candidate_name] or nil
+      config.PRIVATE_AREA_TRAVEL_DESCRIPTORS[state.hub_candidate_name] or nil
     if candidate ~= nil and now_ms - state.hub_candidate_since_ms >= config.HUB_ENTRANCE_DWELL_MS then
       state.target_area_name = candidate.name
       state.travel_state = "travel_to_entrance"
@@ -113,7 +113,7 @@ function travel.install(ctx)
     end
 
     if state.active_private_area_name ~= nil then
-      local previous_area = config.SUPPORTED_PRIVATE_AREAS[state.active_private_area_name]
+      local previous_area = config.PRIVATE_AREA_TRAVEL_DESCRIPTORS[state.active_private_area_name]
       if previous_area ~= nil and type(bot) == "table" and
           not ctx.scene_matches(bot.scene, { kind = "shared_hub" }) then
         ctx.issue_scene_update(
@@ -133,7 +133,7 @@ function travel.install(ctx)
   end
 
   local function handle_private_state(now_ms, scene, player, bot)
-    local area = config.SUPPORTED_PRIVATE_AREAS[tostring(scene.name or "")]
+    local area = config.PRIVATE_AREA_TRAVEL_DESCRIPTORS[tostring(scene.name or "")]
     if area == nil then
       state.travel_state = "idle"
       state.target_area_name = nil
@@ -161,7 +161,7 @@ function travel.install(ctx)
     ctx.reset_travel_candidate()
     state.target_area_name = nil
     local run_scene = { kind = "run" }
-    if state.pending_run_promotion and not ctx.scene_matches(bot.scene, run_scene) then
+    if state.pending_run_promotion then
       if ctx.issue_scene_update(now_ms, run_scene, player, "run_started", nil, true) then
         state.pending_run_promotion = false
       end

@@ -52,6 +52,41 @@ int ReadRoundedXpOrUnknown(uintptr_t progression_address) {
     return static_cast<int>(std::lround(xp));
 }
 
+bool EnsureBotOwnedProgressionMode(uintptr_t progression_address, const char* stage) {
+    if (progression_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t previous_mode = kProgressionLocalPlayerModeValue;
+    const bool read_previous = memory.TryReadField<std::uint8_t>(
+        progression_address,
+        kProgressionNonLocalModeFlagOffset,
+        &previous_mode);
+    if (read_previous && previous_mode == kProgressionNonLocalModeValue) {
+        return true;
+    }
+
+    if (!memory.TryWriteField<std::uint8_t>(
+            progression_address,
+            kProgressionNonLocalModeFlagOffset,
+            kProgressionNonLocalModeValue)) {
+        Log(
+            "[bots] bot-owned progression mode failed. stage=" +
+            std::string(stage != nullptr ? stage : "unknown") +
+            " progression=" + HexString(progression_address));
+        return false;
+    }
+
+    Log(
+        "[bots] bot-owned progression mode set. stage=" +
+        std::string(stage != nullptr ? stage : "unknown") +
+        " progression=" + HexString(progression_address) +
+        " previous_mode=" + (read_previous ? std::to_string(previous_mode) : "unreadable") +
+        " mode=" + std::to_string(kProgressionNonLocalModeValue));
+    return true;
+}
+
 bool TryResolvePlayerActorForSlot(uintptr_t gameplay_address, int slot_index, uintptr_t* actor_address) {
     if (actor_address == nullptr || slot_index < 0 || slot_index >= static_cast<int>(kGameplayPlayerSlotCount)) {
         return false;
@@ -192,4 +227,3 @@ void CopyPlayerProgressionVitals(uintptr_t source_progression_address, uintptr_t
         kProgressionMaxMpOffset,
         memory.ReadFieldOr<float>(source_progression_address, kProgressionMaxMpOffset, 0.0f));
 }
-

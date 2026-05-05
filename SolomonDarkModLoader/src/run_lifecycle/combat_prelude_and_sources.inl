@@ -106,7 +106,7 @@ std::string DescribeSpellCastHookActorState(uintptr_t actor_address) {
         " slot=" + std::to_string(memory.ReadFieldOr<int>(actor_address, kActorSlotOffset, -1)) +
         " world_slot=" + std::to_string(memory.ReadFieldOr<int>(actor_address, kActorWorldSlotOffset, -1)) +
         " skill=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0)) +
-        " prev=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset + sizeof(std::int32_t), 0)) +
+        " prev=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPreviousSkillIdOffset, 0)) +
         " drive=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0)) +
         " no_int=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0)) +
         " group=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF)) +
@@ -116,12 +116,12 @@ std::string DescribeSpellCastHookActorState(uintptr_t actor_address) {
         " aimy=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorAimTargetYOffset, 0.0f)) +
         " aux0=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0)) +
         " aux1=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0)) +
-        " f278=" + std::to_string(memory.ReadFieldOr<std::uint32_t>(actor_address, 0x278, 0)) +
-        " f29c=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x29C, 0.0f)) +
-        " f2a0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2A0, 0.0f)) +
-        " f2d0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2D0, 0.0f)) +
-        " f2d4=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2D4, 0.0f)) +
-        " f2d8=" + std::to_string(memory.ReadFieldOr<float>(actor_address, 0x2D8, 0.0f)) +
+        " f278=" + std::to_string(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorStartupCounterOffset, 0)) +
+        " f29c=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig29cOffset, 0.0f)) +
+        " f2a0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2a0Offset, 0.0f)) +
+        " f2d0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2d0Offset, 0.0f)) +
+        " f2d4=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2d4Offset, 0.0f)) +
+        " f2d8=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2d8Offset, 0.0f)) +
         " selection_ptr=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0)) +
         " progression_runtime=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
         " progression_handle=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0));

@@ -167,6 +167,9 @@
     <ClInclude Include="include\multiplayer_runtime_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\native_spell_stats.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\multiplayer_service_loop.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -263,6 +266,9 @@
     <ClInclude Include="src\bot_runtime\helpers\request_validation.inl">
       <Filter>Header Files\Bot Runtime\Helpers</Filter>
     </ClInclude>
+    <ClInclude Include="src\bot_runtime\helpers\skill_choices.inl">
+      <Filter>Header Files\Bot Runtime\Helpers</Filter>
+    </ClInclude>
     <ClInclude Include="src\bot_runtime\helpers\snapshot_builders.inl">
       <Filter>Header Files\Bot Runtime\Helpers</Filter>
     </ClInclude>
@@ -282,6 +288,9 @@
       <Filter>Header Files\Bot Runtime\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\bot_runtime\public_api\scene_intents_api.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\skill_choices_api.inl">
       <Filter>Header Files\Bot Runtime\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\bot_runtime\public_api\snapshots_api.inl">
@@ -533,13 +542,7 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_actor_calls\actor_world_and_visual_calls.inl">
       <Filter>Header Files\Gameplay\Bot Actor Calls</Filter>
     </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\bot_actor_calls\game_npc_calls.inl">
-      <Filter>Header Files\Gameplay\Bot Actor Calls</Filter>
-    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_actor_calls\lifecycle_and_stat_calls.inl">
-      <Filter>Header Files\Gameplay\Bot Actor Calls</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\bot_actor_calls\local_player_cast_shim.inl">
       <Filter>Header Files\Gameplay\Bot Actor Calls</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_actor_calls\player_runtime_and_progression_calls.inl">
@@ -551,10 +554,13 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_motion_helpers.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\bot_casting\active_spell_snapshot.inl">
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\boulder_damage_projection.inl">
       <Filter>Header Files\Gameplay\Bot Casting</Filter>
     </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\bot_casting\boulder_damage_projection.inl">
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\native_active_spell_object_state.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\native_cast_gate_patches.inl">
       <Filter>Header Files\Gameplay\Bot Casting</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\new_request_startup.inl">
@@ -588,9 +594,6 @@
       <Filter>Header Files\Gameplay\Bot Movement</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\participant_scene_binding_ticks.inl">
-      <Filter>Header Files\Gameplay\Bot Movement Tick</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\registered_gamenpc_movement.inl">
       <Filter>Header Files\Gameplay\Bot Movement Tick</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\wizard_bot_movement_step.inl">
@@ -650,9 +653,6 @@
     <ClInclude Include="src\mod_loader_gameplay\core\standalone_owner_repair.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\core\synthetic_wizard_source_profiles.inl">
-      <Filter>Header Files\Gameplay\Core</Filter>
-    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -668,13 +668,7 @@
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\participant_entity_sync.inl">
       <Filter>Header Files\Gameplay\Execute Requests</Filter>
     </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_enemy.inl">
-      <Filter>Header Files\Gameplay\Execute Requests</Filter>
-    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_gameplay_slot_bot.inl">
-      <Filter>Header Files\Gameplay\Execute Requests</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_registered_gamenpc.inl">
       <Filter>Header Files\Gameplay\Execute Requests</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_reward.inl">
@@ -714,9 +708,6 @@
       <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\player_actor_tick_hook.inl">
-      <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\standalone_puppet_collision.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\cast_probe_state.inl">
@@ -810,9 +801,6 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_clone_source.inl">
-      <Filter>Header Files\Gameplay</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_element_colors.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_resources.inl">
@@ -951,6 +939,9 @@
     </ClCompile>
     <ClCompile Include="src\multiplayer_service_loop.cpp">
       <Filter>Source Files\Multiplayer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\native_spell_stats.cpp">
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\native_mods.cpp">
       <Filter>Source Files\Support</Filter>

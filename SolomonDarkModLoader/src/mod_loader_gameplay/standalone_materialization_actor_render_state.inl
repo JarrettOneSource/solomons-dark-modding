@@ -22,9 +22,9 @@ ActorRenderBuildSnapshot CaptureActorRenderBuildSnapshot(uintptr_t actor_address
         snapshot.descriptor.data(),
         snapshot.descriptor.size());
     snapshot.source_profile_unknown74_mirror =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, 0x194, 0);
+        memory.ReadFieldOr<std::uint32_t>(actor_address, kGameNpcSourceProfile74MirrorOffset, 0);
     snapshot.source_profile_unknown56_mirror =
-        memory.ReadFieldOr<std::uint16_t>(actor_address, 0x1C0, 0);
+        memory.ReadFieldOr<std::uint16_t>(actor_address, kGameNpcSourceProfile56MirrorOffset, 0);
     snapshot.variant_primary =
         memory.ReadFieldOr<std::uint8_t>(actor_address, kActorRenderVariantPrimaryOffset, 0);
     snapshot.variant_secondary =
@@ -76,10 +76,10 @@ bool RestoreActorRenderBuildSnapshot(
             kActorRenderVariantTertiaryOffset,
             snapshot.variant_tertiary) ||
         !memory.TryWriteValue(
-            actor_address + 0x194,
+            actor_address + kGameNpcSourceProfile74MirrorOffset,
             snapshot.source_profile_unknown74_mirror) ||
         !memory.TryWriteValue(
-            actor_address + 0x1C0,
+            actor_address + kGameNpcSourceProfile56MirrorOffset,
             snapshot.source_profile_unknown56_mirror) ||
         !memory.TryWrite(
             actor_address + kActorHubVisualDescriptorBlockOffset,
@@ -138,4 +138,3 @@ void ClearActorLiveDescriptorBlock(uintptr_t actor_address) {
 void NormalizeGameplaySlotBotSyntheticVisualState(uintptr_t actor_address) {
     ClearActorSyntheticVisualSourceState(actor_address);
 }
-

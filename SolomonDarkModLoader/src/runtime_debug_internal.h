@@ -200,6 +200,7 @@ bool IsExecutableProtection(DWORD protect);
 bool TrySetPageProtection(uintptr_t page_base, DWORD protect);
 bool TryReadStackWords(uintptr_t esp, std::uint32_t* stack_words, size_t word_count);
 bool LooksLikeExistingJumpPatch(uintptr_t address, size_t patch_size);
+bool OverlapsRelativeJumpPatch(uintptr_t address, size_t patch_size, uintptr_t* patch_start);
 size_t ResolveInstructionBoundaryPatchSize(uintptr_t address, size_t minimum_size, std::string* error_message);
 void AppendTracePointerInfo(std::ostringstream* out, const char* label, uintptr_t value);
 

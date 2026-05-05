@@ -32,7 +32,10 @@ void LogStandaloneWizardActorLifecycleEvent(
         " binding_slot=" + std::to_string(gameplay_slot) +
         " arg=" + std::to_string(free_flag_or_slot) +
         " caller=" + HexString(caller_address) +
-        " vtable=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x00, 0)) +
+        " vtable=" + HexString(memory.ReadFieldOr<uintptr_t>(
+            actor_address,
+            kObjectVtableOffset,
+            0)) +
         " +04=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kObjectHeaderWordOffset, 0)) +
         " owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
         " world_self=" + HexString(world_address) +
@@ -178,7 +181,10 @@ bool LogTrackedStandaloneWizardPuppetManagerDeleteBatchEvent(
         list_address,
         kPointerListOwnsStorageFlagOffset,
         0));
-    const auto self_vtable = memory.ReadFieldOr<uintptr_t>(self_address, 0x00, 0);
+    const auto self_vtable = memory.ReadFieldOr<uintptr_t>(
+        self_address,
+        kObjectVtableOffset,
+        0);
     const auto owner_region = memory.ReadFieldOr<uintptr_t>(self_address, kPuppetManagerOwnerRegionOffset, 0);
     const auto expected_manager =
         owner_region == 0 ? 0 : owner_region + kRegionPuppetManagerOffset;
@@ -242,12 +248,18 @@ void LogStandaloneWizardRegionDeleteEvent(
         " binding_slot=" + std::to_string(gameplay_slot) +
         " caller=" + HexString(caller_address) +
         " deleter_self=" + HexString(deleter_address) +
-        " deleter_vtable=" + HexString(memory.ReadFieldOr<uintptr_t>(deleter_address, 0x00, 0)) +
+        " deleter_vtable=" + HexString(memory.ReadFieldOr<uintptr_t>(
+            deleter_address,
+            kObjectVtableOffset,
+            0)) +
         " deleter_world=" + HexString(memory.ReadFieldOr<uintptr_t>(
             deleter_address,
             kPuppetManagerOwnerRegionOffset,
             0)) +
-        " actor_vtable=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x00, 0)) +
+        " actor_vtable=" + HexString(memory.ReadFieldOr<uintptr_t>(
+            actor_address,
+            kObjectVtableOffset,
+            0)) +
         " actor_owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
         " actor_slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
             actor_address,

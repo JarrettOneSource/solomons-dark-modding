@@ -1,3 +1,46 @@
+struct BotBoulderReleaseHoldWrites {
+    bool charge = false;
+    bool release_charge = false;
+    bool growth_rate = false;
+    bool growth_stop_eligible = false;
+    float growth_stop_min_charge = 0.0f;
+};
+
+BotBoulderReleaseHoldWrites HoldBotBoulderAtReleaseCharge(
+    ProcessMemory& memory,
+    const BotNativeActiveSpellObjectState& active_spell_state,
+    float release_charge) {
+    BotBoulderReleaseHoldWrites writes{};
+    if (active_spell_state.object == 0 ||
+        !std::isfinite(release_charge) ||
+        release_charge <= 0.0f) {
+        return writes;
+    }
+
+    writes.charge =
+        memory.TryWriteField<float>(
+            active_spell_state.object,
+            kSpellObjectChargeOffset,
+            release_charge);
+    writes.release_charge =
+        memory.TryWriteField<float>(
+            active_spell_state.object,
+            kSpellObjectReleaseChargeOffset,
+            release_charge);
+    writes.growth_stop_min_charge =
+        ResolveEarthBoulderReleaseGrowthStopMinCharge();
+    writes.growth_stop_eligible =
+        release_charge > writes.growth_stop_min_charge;
+    if (writes.growth_stop_eligible) {
+        writes.growth_rate =
+            memory.TryWriteField<float>(
+                active_spell_state.object,
+                kSpellObjectGrowthRateOffset,
+                0.0f);
+    }
+    return writes;
+}
+
 bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error_message) {
     if (binding == nullptr || binding->actor_address == 0 || binding->bot_id == 0) {
         return false;
@@ -20,31 +63,23 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
     // --- Watch continuation path ---------------------------------------------
     // Gameplay-slot bots keep stock movement/render ownership, but their cast
     // startup cannot rely on the local-player input gate inside
-    // PlayerActorTick: stock clears actor+0x270 every frame before it ever
-    // reaches FUN_00548A00. Re-pin the prepared fields here and, if stock never
-    // preserved the skill id, perform a single post-stock startup dispatch
-    // under the same slot-0 shim the native handler expects.
+    // PlayerActorTick: stock clears actor+0x270 every frame before it reaches
+    // FUN_00548A00. Re-pin the prepared fields here and, if stock never
+    // preserved the skill id, perform a single post-stock startup dispatch with
+    // the actor still carrying its real gameplay slot.
     if (binding->ongoing_cast.active) {
         auto& ongoing = binding->ongoing_cast;
 
         if (actor_dead) {
-            ReleaseBotSpellHandle(cast_context, ongoing, "dead", true);
+            FinishBotCastNativeLifecycle(cast_context, ongoing, "dead", true);
             ongoing = ParticipantEntityBinding::OngoingCastState{};
             return true;
         }
 
-        if (ongoing.bounded_cleanup_completed) {
-            const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-            if (ongoing.bounded_cleanup_clear_after_ms == 0 ||
-                now_ms >= ongoing.bounded_cleanup_clear_after_ms) {
-                ClearBotBoundedReleaseCastLatch(cast_context, ongoing, "post_cleanup_delay");
-            }
-            return true;
-        }
-
-        // Keep native target/aim fresh for startup and true held primaries.
-        // Projectile-style primaries keep the target captured at startup so a
-        // later nearest-enemy swap cannot redirect an already spawned cast.
+        // Keep native target/aim fresh for startup and native held primaries.
+        // Bounded held Earth follows the bot's live target while the boulder is
+        // charging; once release is requested, target refresh stops so damage
+        // projection and release cleanup stay tied to the same victim.
         const auto native_active_skill_id = ResolveOngoingNativeTickSkillId(ongoing);
         const bool refresh_ongoing_target_state =
             OngoingCastShouldRefreshNativeTargetState(ongoing);
@@ -72,14 +107,39 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
         }
         (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
+        constexpr int kBoundedHeldNativeReleaseEdgeTicks = 3;
+        const bool preserve_bounded_release_edge =
+            ongoing.bounded_release_requested &&
+            ongoing.bounded_post_release_ticks_waiting < kBoundedHeldNativeReleaseEdgeTicks;
         const bool publish_ongoing_skill_id =
             ongoing.uses_dispatcher_skill_id &&
             !(SkillRequiresBoundedHeldCastInputDuringNativeTick(native_active_skill_id) &&
-              ongoing.bounded_release_requested);
+              ongoing.bounded_release_requested &&
+              !preserve_bounded_release_edge);
         (void)memory.TryWriteField<std::int32_t>(
             actor_address,
             kActorPrimarySkillIdOffset,
             publish_ongoing_skill_id ? ongoing.dispatcher_skill_id : 0);
+        if (ongoing.bounded_release_requested) {
+            (void)memory.TryWriteField<std::int32_t>(
+                actor_address,
+                kActorPreviousSkillIdOffset,
+                preserve_bounded_release_edge ? native_active_skill_id : 0);
+            if (!preserve_bounded_release_edge) {
+                (void)memory.TryWriteField<std::uint32_t>(
+                    actor_address,
+                    kActorPrimaryActionLatchE4Offset,
+                    0);
+                (void)memory.TryWriteField<std::uint32_t>(
+                    actor_address,
+                    kActorPrimaryActionLatchE8Offset,
+                    0);
+                (void)memory.TryWriteField<std::uint8_t>(
+                    actor_address,
+                    kActorPostGateActiveByteOffset,
+                    0);
+            }
+        }
         if (refresh_ongoing_target_state) {
             RefreshSelectionBrainTargetForOngoingCast(ongoing);
         }
@@ -139,7 +199,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                         live_mouse_left_offset,
                         static_cast<std::uint8_t>(1));
             }
-            InvokeBotCastWithLocalPlayerSlot(cast_context, [&] {
+            InvokeBotCastWithNativeActorSlot(cast_context, [&] {
                 startup_dispatched = CallSpellCastDispatcherSafe(
                     dispatcher_address,
                     actor_address,
@@ -176,7 +236,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 " drive_post=" + HexString(drive_after_dispatch) +
                 " no_int_post=" + HexString(no_interrupt_after_dispatch));
             if (!startup_dispatched) {
-                ReleaseBotSpellHandle(cast_context, ongoing, "dispatch_seh", true);
+                FinishBotCastNativeLifecycle(cast_context, ongoing, "dispatch_seh", true);
                 ongoing = ParticipantEntityBinding::OngoingCastState{};
                 return true;
             }
@@ -187,9 +247,9 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         const auto no_interrupt =
             memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0);
         const auto actor_e4 =
-            memory.ReadFieldOr<std::uint32_t>(actor_address, 0xE4, 0);
+            memory.ReadFieldOr<std::uint32_t>(actor_address, kActorPrimaryActionLatchE4Offset, 0);
         const auto actor_e8 =
-            memory.ReadFieldOr<std::uint32_t>(actor_address, 0xE8, 0);
+            memory.ReadFieldOr<std::uint32_t>(actor_address, kActorPrimaryActionLatchE8Offset, 0);
         const auto active_cast_group =
             memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
         const bool has_live_handle = active_cast_group != kBotCastActorActiveCastGroupSentinel;
@@ -218,17 +278,19 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.mana_cost > 0.0f &&
             ongoing.mana_spent_total <= 0.0f) {
             const auto mana_spend =
-                TrySpendProgressionMana(ongoing.progression_runtime_address, ongoing.mana_cost, false);
+                TrySpendBotMana(binding, ongoing.progression_runtime_address, ongoing.mana_cost, false);
             if (mana_spend.spent) {
                 ongoing.mana_spent_total += mana_spend.actual;
                 Log(
                     "[bots] mana spent. bot_id=" + std::to_string(binding->bot_id) +
                     " skill_id=" + std::to_string(ongoing.skill_id) +
-                    " mode=per_cast statbook_level=" +
-                        std::to_string(ongoing.mana_statbook_level) +
+                    " mode=per_cast progression_level=" +
+                        std::to_string(ongoing.mana_progression_level) +
                     " cost=" + std::to_string(ongoing.mana_cost) +
                     " before=" + std::to_string(mana_spend.before) +
                     " after=" + std::to_string(mana_spend.after) +
+                    " native=1 native_result=" + std::to_string(mana_spend.native_result) +
+                    " seh=" + HexString(mana_spend.native_exception_code) +
                     " total=" + std::to_string(ongoing.mana_spent_total));
             } else {
                 mana_depleted = true;
@@ -237,6 +299,12 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     " skill_id=" + std::to_string(ongoing.skill_id) +
                     " mode=per_cast cost=" + std::to_string(ongoing.mana_cost) +
                     " before=" + std::to_string(mana_spend.before) +
+                    " native_attempted=" +
+                        (mana_spend.native_call_attempted ? std::string("1") : std::string("0")) +
+                    " native_ok=" +
+                        (mana_spend.native_call_succeeded ? std::string("1") : std::string("0")) +
+                    " native_result=" + std::to_string(mana_spend.native_result) +
+                    " seh=" + HexString(mana_spend.native_exception_code) +
                     " readable=" + (mana_spend.readable ? std::string("1") : std::string("0")));
             }
         }
@@ -249,25 +317,32 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             if (ongoing.mana_last_charge_ms == 0) {
                 ongoing.mana_last_charge_ms = now_ms;
             }
-            const auto elapsed_ms =
+            auto elapsed_ms =
                 now_ms > ongoing.mana_last_charge_ms ? now_ms - ongoing.mana_last_charge_ms : 0;
+            if (elapsed_ms == 0 &&
+                ongoing.mana_spent_total <= 0.0f &&
+                (has_live_handle || native_primary_action_active)) {
+                elapsed_ms = 1;
+            }
             if (elapsed_ms > 0) {
                 const float requested_mana =
                     ongoing.mana_cost * (static_cast<float>(elapsed_ms) / 1000.0f);
                 const auto mana_spend =
-                    TrySpendProgressionMana(ongoing.progression_runtime_address, requested_mana, true);
+                    TrySpendBotMana(binding, ongoing.progression_runtime_address, requested_mana, true);
                 ongoing.mana_last_charge_ms = now_ms;
                 if (mana_spend.spent) {
                     ongoing.mana_spent_total += mana_spend.actual;
                     Log(
                         "[bots] mana spent. bot_id=" + std::to_string(binding->bot_id) +
                         " skill_id=" + std::to_string(ongoing.skill_id) +
-                        " mode=per_second statbook_level=" +
-                            std::to_string(ongoing.mana_statbook_level) +
+                        " mode=per_second progression_level=" +
+                            std::to_string(ongoing.mana_progression_level) +
                         " rate=" + std::to_string(ongoing.mana_cost) +
                         " cost=" + std::to_string(requested_mana) +
                         " before=" + std::to_string(mana_spend.before) +
                         " after=" + std::to_string(mana_spend.after) +
+                        " native=1 native_result=" + std::to_string(mana_spend.native_result) +
+                        " seh=" + HexString(mana_spend.native_exception_code) +
                         " total=" + std::to_string(ongoing.mana_spent_total));
                 }
                 if (!mana_spend.spent || mana_spend.actual + 0.001f < requested_mana) {
@@ -278,7 +353,13 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                         " mode=per_second requested=" + std::to_string(requested_mana) +
                         " actual=" + std::to_string(mana_spend.actual) +
                         " before=" + std::to_string(mana_spend.before) +
-                        " after=" + std::to_string(mana_spend.after));
+                        " after=" + std::to_string(mana_spend.after) +
+                        " native_attempted=" +
+                            (mana_spend.native_call_attempted ? std::string("1") : std::string("0")) +
+                        " native_ok=" +
+                            (mana_spend.native_call_succeeded ? std::string("1") : std::string("0")) +
+                        " native_result=" + std::to_string(mana_spend.native_result) +
+                        " seh=" + HexString(mana_spend.native_exception_code));
                 }
             }
         }
@@ -289,7 +370,6 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         constexpr int kPurePrimaryNoHandleSettleTicks = 160;
         const bool pure_primary_no_handle_settled =
             ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
-            !ongoing.requires_local_slot_native_tick &&
             ongoing.saw_activity &&
             !has_live_handle &&
             ongoing.ticks_waiting >= kPurePrimaryNoHandleSettleTicks;
@@ -297,79 +377,121 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             SkillRequiresHeldCastInputDuringNativeTick(native_active_skill_id);
         const bool bounded_held_native_cast =
             SkillRequiresBoundedHeldCastInputDuringNativeTick(native_active_skill_id);
-        const auto active_spell_snapshot = ReadBotActiveSpellObjectSnapshot(cast_context, false);
+        const auto active_spell_state = ReadBotNativeActiveSpellObjectState(cast_context, false);
         const auto earth_max_charge =
             ongoing.progression_runtime_address != 0
-                ? memory.ReadFieldOr<float>(ongoing.progression_runtime_address, 0x8AC, 1.0f)
+                ? memory.ReadFieldOr<float>(
+                      ongoing.progression_runtime_address,
+                      kProgressionEarthChargeCapOffset,
+                      1.0f)
                 : 1.0f;
         const auto earth_damage_projection =
             bounded_held_native_cast
-                ? ReadBotBoulderDamageProjectionSnapshot(cast_context, active_spell_snapshot)
+                ? ReadBotBoulderDamageProjectionSnapshot(cast_context, active_spell_state)
                 : BotBoulderDamageProjectionSnapshot{};
         const bool earth_object_charge_reached =
             bounded_held_native_cast &&
-            active_spell_snapshot.readable &&
-            std::isfinite(active_spell_snapshot.object_f74) &&
+            active_spell_state.readable &&
+            std::isfinite(active_spell_state.charge) &&
             std::isfinite(earth_max_charge) &&
             earth_max_charge > 0.0f &&
-            active_spell_snapshot.object_f74 >= earth_max_charge - 0.001f;
+            active_spell_state.charge >= earth_max_charge - 0.001f;
         const bool earth_max_size_reached =
             bounded_held_native_cast &&
-            active_spell_snapshot.readable &&
-            (active_spell_snapshot.boulder_max_size_reached || earth_object_charge_reached);
-        const bool earth_damage_threshold_reached =
+            active_spell_state.readable &&
+            (active_spell_state.boulder_max_size_reached || earth_object_charge_reached);
+        const bool earth_target_lethal_release_ready =
             bounded_held_native_cast &&
             earth_damage_projection.readable &&
+            earth_damage_projection.target_actor != 0 &&
+            std::isfinite(earth_damage_projection.target_hp) &&
             earth_damage_projection.target_hp > 0.0f &&
-            earth_damage_projection.projected_damage >= earth_damage_projection.target_hp;
+            std::isfinite(earth_damage_projection.projected_hp_damage) &&
+            earth_damage_projection.projected_hp_damage + 0.001f >= earth_damage_projection.target_hp;
         const bool bounded_held_release_ready =
             bounded_held_native_cast &&
-            active_spell_snapshot.readable &&
-            (earth_max_size_reached || earth_damage_threshold_reached);
+            active_spell_state.readable &&
+            (earth_max_size_reached || earth_target_lethal_release_ready);
         const bool bounded_release_just_requested =
             bounded_held_release_ready && !ongoing.bounded_release_requested;
         if (bounded_release_just_requested) {
             float release_charge = earth_damage_projection.charge;
             float release_base_damage = earth_damage_projection.base_damage;
-            float release_statbook_damage = earth_damage_projection.statbook_damage;
             float release_projected_damage = earth_damage_projection.projected_damage;
+            float release_damage_output_scale =
+                earth_damage_projection.damage_output_scale;
+            float release_damage_scale =
+                earth_damage_projection.release_damage_scale;
+            float release_damage_floor =
+                earth_damage_projection.release_damage_floor;
+            float release_damage_cap_scale =
+                earth_damage_projection.release_damage_cap_scale;
+            float release_projected_release_damage =
+                earth_damage_projection.projected_release_damage;
+            float release_projected_hp_damage =
+                earth_damage_projection.projected_hp_damage;
             if ((!std::isfinite(release_charge) || release_charge <= 0.0f) &&
-                active_spell_snapshot.readable &&
-                std::isfinite(active_spell_snapshot.object_f74) &&
-                active_spell_snapshot.object_f74 > 0.0f) {
-                release_charge = active_spell_snapshot.object_f74;
+                active_spell_state.readable &&
+                std::isfinite(active_spell_state.charge) &&
+                active_spell_state.charge > 0.0f) {
+                release_charge = active_spell_state.charge;
             }
             if (!std::isfinite(release_base_damage) || release_base_damage <= 0.0f) {
-                release_base_damage =
-                    ResolveEarthBoulderBaseDamage(
-                        binding,
-                        ongoing.progression_runtime_address,
-                        nullptr);
+                release_base_damage = active_spell_state.release_base_damage;
             }
-            if (!std::isfinite(release_statbook_damage) || release_statbook_damage <= 0.0f) {
-                release_statbook_damage = release_base_damage;
+            if (!std::isfinite(release_damage_output_scale) ||
+                release_damage_output_scale <= 0.0f) {
+                release_damage_output_scale = ResolveEarthBoulderDamageOutputScale();
+            }
+            if (!std::isfinite(release_damage_scale) ||
+                release_damage_scale <= 0.0f) {
+                release_damage_scale = ResolveEarthBoulderReleaseDamageScale();
+            }
+            if (!std::isfinite(release_damage_floor) ||
+                release_damage_floor < 0.0f) {
+                release_damage_floor = ResolveEarthBoulderReleaseDamageFloor();
+            }
+            if (!std::isfinite(release_damage_cap_scale) ||
+                release_damage_cap_scale <= 0.0f) {
+                release_damage_cap_scale = ResolveEarthBoulderReleaseDamageCapScale();
             }
             if (std::isfinite(release_base_damage) &&
                 release_base_damage > 0.0f &&
                 std::isfinite(release_charge) &&
                 release_charge > 0.0f) {
                 release_projected_damage = release_base_damage * release_charge * release_charge;
+                release_projected_release_damage =
+                    ProjectEarthBoulderReleaseDamage(
+                        release_base_damage,
+                        release_charge,
+                        release_damage_scale,
+                        release_damage_floor,
+                        release_damage_cap_scale);
+                release_projected_hp_damage = release_projected_release_damage;
             }
             ongoing.bounded_release_requested = true;
             ongoing.bounded_max_size_reached = earth_max_size_reached;
             ongoing.bounded_release_at_max_size = earth_max_size_reached;
-            ongoing.bounded_release_at_damage_threshold =
-                earth_damage_threshold_reached && !earth_max_size_reached;
+            ongoing.bounded_release_target_lethal =
+                !earth_max_size_reached && earth_target_lethal_release_ready;
             ongoing.bounded_release_charge = release_charge;
             ongoing.bounded_release_base_damage = release_base_damage;
-            ongoing.bounded_release_statbook_damage =
-                release_statbook_damage;
             ongoing.bounded_release_projected_damage =
                 release_projected_damage;
+            ongoing.bounded_release_damage_output_scale =
+                release_damage_output_scale;
+            ongoing.bounded_release_damage_scale =
+                release_damage_scale;
+            ongoing.bounded_release_damage_floor =
+                release_damage_floor;
+            ongoing.bounded_release_damage_cap_scale =
+                release_damage_cap_scale;
+            ongoing.bounded_release_projected_release_damage =
+                release_projected_release_damage;
+            ongoing.bounded_release_projected_hp_damage =
+                release_projected_hp_damage;
             ongoing.bounded_release_target_hp = earth_damage_projection.target_hp;
             ongoing.bounded_release_target_actor = earth_damage_projection.target_actor;
-            ongoing.bounded_release_damage_native =
-                earth_damage_projection.native_damage_scale_available;
             ongoing.bounded_post_release_ticks_waiting = 0;
         } else if (bounded_held_native_cast && ongoing.bounded_release_requested) {
             ongoing.bounded_post_release_ticks_waiting += 1;
@@ -380,11 +502,12 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.saw_live_handle &&
             ongoing.saw_activity &&
             !has_live_handle;
-        // The native Earth handler does not drop the active handle by itself.
-        // Once release is requested, keep input released while the live boulder
-        // gets a native world-object update window, then run the same cleanup
-        // the player's skill transition would have invoked.
-        constexpr int kBoundedHeldPostReleaseWorldUpdateTicks = 60;
+        // Once release is requested, keep only a stock-sized native release
+        // window. The Earth handler gets a few frames with the chosen charge
+        // and stopped growth-rate field, then the fallback cleanup below
+        // finalizes the active handle before the visual can continue toward
+        // max size.
+        constexpr int kBoundedHeldPostReleaseWorldUpdateTicks = kBoundedHeldNativeReleaseEdgeTicks;
         const bool bounded_held_release_tick_processed =
             bounded_held_native_cast &&
             ongoing.bounded_release_requested &&
@@ -393,6 +516,15 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.saw_activity &&
             ongoing.bounded_post_release_ticks_waiting >=
                 kBoundedHeldPostReleaseWorldUpdateTicks;
+        if (bounded_held_native_cast &&
+            ongoing.bounded_release_requested &&
+            !bounded_release_just_requested &&
+            active_spell_state.object != 0) {
+            (void)HoldBotBoulderAtReleaseCharge(
+                memory,
+                active_spell_state,
+                ongoing.bounded_release_charge);
+        }
         const bool startup_timeout_hit =
             ongoing.startup_in_progress &&
             ongoing.startup_ticks_waiting >=
@@ -434,93 +566,93 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.ticks_waiting >= ResolveBotCastSafetyCapTicks(native_active_skill_id);
 
         if (mana_depleted) {
-            ReleaseBotSpellHandle(cast_context, ongoing, "mana_depleted", true);
+            FinishBotCastNativeLifecycle(cast_context, ongoing, "mana_depleted", true);
             ongoing = ParticipantEntityBinding::OngoingCastState{};
             return true;
         }
 
         if (bounded_release_just_requested) {
             ongoing.startup_in_progress = false;
-            const bool release_for_damage =
-                ongoing.bounded_release_at_damage_threshold &&
-                !ongoing.bounded_release_at_max_size;
-            bool threshold_charge_write_ok = !release_for_damage;
-            bool threshold_max_write_ok = !release_for_damage;
-            bool release_charge_write_ok = false;
             const float finalized_release_charge =
                 std::isfinite(ongoing.bounded_release_charge) &&
                         ongoing.bounded_release_charge > 0.0f
                     ? ongoing.bounded_release_charge
-                    : active_spell_snapshot.object_f74;
-            if (active_spell_snapshot.object != 0 &&
-                std::isfinite(finalized_release_charge) &&
-                finalized_release_charge > 0.0f) {
-                // Stock cleanup's secondary release consumes object+0x1F0.
-                // Keep it synchronized to the chosen release charge before the
-                // native world-update window begins.
-                release_charge_write_ok =
-                    memory.TryWriteField<float>(
-                        active_spell_snapshot.object,
-                        0x1F0,
-                        finalized_release_charge);
-            }
-            if (active_spell_snapshot.object != 0 &&
-                std::isfinite(finalized_release_charge) &&
-                finalized_release_charge > 0.0f) {
-                if (release_for_damage) {
-                    threshold_charge_write_ok = release_charge_write_ok;
-                }
-                // Finalize copies object+0x74 into object+0x1FC. Set 0x1FC
-                // too so pre-finalize readers use the finalized damage size.
-                threshold_max_write_ok =
-                    memory.TryWriteField<float>(
-                        active_spell_snapshot.object,
-                        0x1FC,
-                        finalized_release_charge);
-            }
+                    : active_spell_state.charge;
+            const auto release_hold_writes =
+                HoldBotBoulderAtReleaseCharge(
+                    memory,
+                    active_spell_state,
+                    finalized_release_charge);
+            (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
+            (void)memory.TryWriteField<std::int32_t>(
+                actor_address,
+                kActorPreviousSkillIdOffset,
+                native_active_skill_id);
+            const std::string release_reason =
+                ongoing.bounded_release_at_max_size
+                    ? std::string("max_size")
+                    : ongoing.bounded_release_target_lethal
+                        ? std::string("target_lethal")
+                        : std::string("native");
             Log(
-                std::string("[bots] native ") +
-                (release_for_damage ? "damage-threshold" : "max-size") +
-                " reached; releasing held cast input for native launch. bot_id=" +
+                std::string("[bots] native boulder release requested. bot_id=") +
                 std::to_string(binding->bot_id) +
                 " skill_id=" + std::to_string(ongoing.skill_id) +
+                " release_reason=" + release_reason +
                 " ticks=" + std::to_string(ongoing.ticks_waiting) +
-                " group=" + HexString(active_spell_snapshot.group) +
-                " slot=" + HexString(active_spell_snapshot.slot) +
+                " group=" + HexString(active_spell_state.group) +
+                " slot=" + HexString(active_spell_state.slot) +
                 " handle_source=" +
-                    (active_spell_snapshot.handle_from_selection_state ? std::string("selection") : std::string("actor")) +
-                " selection_state=" + HexString(active_spell_snapshot.selection_state) +
-                " obj_ptr=" + HexString(active_spell_snapshot.object) +
-                " obj_type=" + HexString(active_spell_snapshot.object_type) +
-                " obj_vt_6c=" + HexString(active_spell_snapshot.release_secondary_fn) +
-                " obj_vt_70=" + HexString(active_spell_snapshot.release_finalize_fn) +
-                " obj_74=" + std::to_string(active_spell_snapshot.object_f74) +
-                " obj_1f0=" + std::to_string(active_spell_snapshot.object_f1f0) +
-                " obj_1fc=" + std::to_string(active_spell_snapshot.object_f1fc) +
-                " obj_22c=" + HexString(active_spell_snapshot.object_f22c) +
-                " obj_230=" + HexString(active_spell_snapshot.object_f230) +
+                    (active_spell_state.handle_from_selection_state ? std::string("selection") : std::string("actor")) +
+                " selection_state=" + HexString(active_spell_state.selection_state) +
+                " native_lookup=" + (active_spell_state.lookup_attempted ? std::string("1") : std::string("0")) +
+                " native_lookup_ok=" + (active_spell_state.lookup_succeeded ? std::string("1") : std::string("0")) +
+                " native_lookup_seh=" + HexString(active_spell_state.lookup_exception) +
+                " obj_ptr=" + HexString(active_spell_state.object) +
+                " obj_type=" + HexString(active_spell_state.object_type) +
+                " obj_x=" + std::to_string(active_spell_state.object_x) +
+                " obj_y=" + std::to_string(active_spell_state.object_y) +
+                " obj_heading=" + std::to_string(active_spell_state.object_heading) +
+                " obj_radius=" + std::to_string(active_spell_state.object_radius) +
+                " obj_charge=" + std::to_string(active_spell_state.charge) +
+                " obj_growth_rate=" + std::to_string(active_spell_state.growth_rate) +
+                " obj_release_charge=" + std::to_string(active_spell_state.release_charge) +
+                " obj_release_damage=" + std::to_string(active_spell_state.release_damage) +
+                " obj_release_base_damage=" + std::to_string(active_spell_state.release_base_damage) +
+                " obj_max_charge=" + std::to_string(active_spell_state.max_charge) +
+                " obj_phase=" + HexString(active_spell_state.phase) +
+                " obj_release_timer=" + HexString(active_spell_state.release_timer) +
                 " max_charge=" + std::to_string(earth_max_charge) +
-                " statbook_level=" + std::to_string(earth_damage_projection.statbook_level) +
-                " stat_source=" + HexString(earth_damage_projection.stat_source) +
-                " stat_vt=" + HexString(earth_damage_projection.stat_vtable) +
-                " damage_getter=" + HexString(earth_damage_projection.damage_getter) +
-                " damage_getter_attempt=" +
-                    (earth_damage_projection.damage_getter_attempted ? std::string("1") : std::string("0")) +
-                " damage_getter_seh=" + HexString(earth_damage_projection.damage_getter_seh) +
-                " damage_native=" +
-                    (earth_damage_projection.native_damage_scale_available ? std::string("1") : std::string("0")) +
-                " impact_context_write=" +
-                    (earth_damage_projection.impact_context_write_ok ? std::string("1") : std::string("0")) +
-                " impact_context_x=" +
-                    std::to_string(earth_damage_projection.impact_context_x) +
-                " impact_context_y=" +
-                    std::to_string(earth_damage_projection.impact_context_y) +
-                " impact_context_radius=" +
-                    std::to_string(earth_damage_projection.impact_context_radius) +
+                " progression_level=" + std::to_string(earth_damage_projection.progression_level) +
                 " base_damage=" + std::to_string(earth_damage_projection.base_damage) +
-                " statbook_damage=" + std::to_string(earth_damage_projection.statbook_damage) +
+                " damage_output_scale=" +
+                    std::to_string(earth_damage_projection.damage_output_scale) +
+                " release_damage_scale=" +
+                    std::to_string(earth_damage_projection.release_damage_scale) +
+                " release_damage_floor=" +
+                    std::to_string(earth_damage_projection.release_damage_floor) +
+                " release_damage_cap_scale=" +
+                    std::to_string(earth_damage_projection.release_damage_cap_scale) +
                 " projected_damage=" +
                     std::to_string(earth_damage_projection.projected_damage) +
+                " projected_release_damage=" +
+                    std::to_string(earth_damage_projection.projected_release_damage) +
+                " projected_hp_damage=" +
+                    std::to_string(earth_damage_projection.projected_hp_damage) +
+                " binding_face_target=" + HexString(binding->facing_target_actor_address) +
+                " ongoing_target=" + HexString(ongoing.target_actor_address) +
+                " requested_target_actor=" +
+                    HexString(earth_damage_projection.requested_target_actor) +
+                " requested_target_health=" +
+                    HexString(earth_damage_projection.requested_target_health_base) +
+                " requested_target_health_kind=" +
+                    earth_damage_projection.requested_target_health_kind +
+                " requested_target_health_readable=" +
+                    (earth_damage_projection.requested_target_health_readable ? std::string("1") : std::string("0")) +
+                " requested_target_hp=" +
+                    std::to_string(earth_damage_projection.requested_target_hp) +
+                " requested_target_max_hp=" +
+                    std::to_string(earth_damage_projection.requested_target_max_hp) +
                 " target_actor=" + HexString(earth_damage_projection.target_actor) +
                 " target_health=" + HexString(earth_damage_projection.target_health_base) +
                 " target_health_kind=" + earth_damage_projection.target_health_kind +
@@ -532,17 +664,20 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 " target_distance=" + std::to_string(earth_damage_projection.target_distance) +
                 " target_impact_radius=" +
                     std::to_string(earth_damage_projection.target_impact_radius) +
-                " target_damage_scale=" +
-                    std::to_string(earth_damage_projection.target_damage_scale) +
                 " target_in_impact=" +
                     (earth_damage_projection.target_in_impact ? std::string("1") : std::string("0")) +
-                " native_cleanup_release=" + (release_for_damage ? std::string("1") : std::string("0")) +
-                " threshold_charge_write=" +
-                    (threshold_charge_write_ok ? std::string("1") : std::string("0")) +
-                " threshold_max_write=" +
-                    (threshold_max_write_ok ? std::string("1") : std::string("0")) +
+                " projection_target_in_impact=" +
+                    (earth_damage_projection.native_radius_damage_eligible ? std::string("1") : std::string("0")) +
                 " release_charge_write=" +
-                    (release_charge_write_ok ? std::string("1") : std::string("0")));
+                    (release_hold_writes.release_charge ? std::string("1") : std::string("0")) +
+                " release_charge_hold=" +
+                    (release_hold_writes.charge ? std::string("1") : std::string("0")) +
+                " release_growth_stop=" +
+                    (release_hold_writes.growth_rate ? std::string("1") : std::string("0")) +
+                " release_growth_stop_eligible=" +
+                    (release_hold_writes.growth_stop_eligible ? std::string("1") : std::string("0")) +
+                " release_growth_stop_min_charge=" +
+                    std::to_string(release_hold_writes.growth_stop_min_charge));
             return true;
         }
 
@@ -555,10 +690,9 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             } else if (pure_primary_no_handle_settled) {
                 exit_label = "pure_primary_no_handle_settled";
             } else if (bounded_held_native_released || bounded_held_release_tick_processed) {
-                exit_label = ongoing.bounded_release_at_damage_threshold &&
-                                     !ongoing.bounded_release_at_max_size
-                                 ? "damage_threshold_released"
-                                 : "max_size_released";
+                exit_label = ongoing.bounded_release_target_lethal
+                    ? "target_lethal_released"
+                    : "max_size_released";
             } else if (activity_released) {
                 exit_label = "activity_released";
             } else if (gesture_window_complete) {
@@ -571,15 +705,9 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             }
             const bool completed_bounded_release =
                 bounded_held_native_released || bounded_held_release_tick_processed;
-            ReleaseBotSpellHandle(cast_context, ongoing, exit_label, target_lost);
-            if (completed_bounded_release &&
-                ongoing.bounded_release_requested &&
-                ongoing.bounded_release_at_damage_threshold &&
-                !ongoing.bounded_release_at_max_size) {
-                ScheduleBotBoundedReleaseLatchClear(ongoing);
-            } else {
-                ongoing = ParticipantEntityBinding::OngoingCastState{};
-            }
+            FinishBotCastNativeLifecycle(cast_context, ongoing, exit_label, target_lost);
+            (void)completed_bounded_release;
+            ongoing = ParticipantEntityBinding::OngoingCastState{};
         }
         return true;
     }
