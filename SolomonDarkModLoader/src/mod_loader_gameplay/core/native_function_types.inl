@@ -2,7 +2,6 @@ using GameplayKeyboardEdgeFn = std::uint8_t(__thiscall*)(void* self, std::uint32
 using GameplayMouseRefreshFn = void(__fastcall*)(void* self, void* unused_edx);
 using PlayerActorTickFn = void(__thiscall*)(void* self);
 using PlayerActorNoArgMethodFn = void(__thiscall*)(void* self);
-using PlayerActorApplyManaDeltaFn = std::uint32_t(__thiscall*)(void* self, float delta, char out_of_mana_flag);
 using PlayerActorDtorFn = void(__thiscall*)(void* self, char free_flag);
 using PuppetManagerDeletePuppetFn = void(__thiscall*)(void* self, void* actor);
 using PointerListDeleteBatchFn = void(__thiscall*)(void* self, void* list);

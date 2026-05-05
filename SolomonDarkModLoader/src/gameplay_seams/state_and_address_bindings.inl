@@ -101,6 +101,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "game_operator_new", kGameOperatorNew),
         SDMOD_ADDR("gameplay.hooks", "native_int_array_clear", kNativeIntArrayClear),
         SDMOD_ADDR("gameplay.hooks", "cast_active_handle_cleanup", kCastActiveHandleCleanup),
+        SDMOD_ADDR("gameplay.cast_gate_patches", "player_actor_apply_mana_delta_local_actor_gate_branch", kPlayerActorApplyManaDeltaLocalActorGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "cast_active_handle_cleanup_slot_gate_branch", kCastCleanupSlotGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_028_slot_gate_branch", kSpellCast028SlotGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_3ee_slot_gate_branch", kSpellCast3EESlotGateBranch),

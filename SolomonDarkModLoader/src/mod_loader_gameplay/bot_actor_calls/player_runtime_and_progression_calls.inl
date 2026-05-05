@@ -19,37 +19,6 @@ bool CallPlayerActorEnsureProgressionHandleSafe(
     }
 }
 
-bool CallPlayerActorApplyManaDeltaSafe(
-    uintptr_t apply_mana_delta_address,
-    uintptr_t actor_address,
-    float delta,
-    char out_of_mana_flag,
-    std::uint32_t* native_result,
-    DWORD* exception_code) {
-    auto* apply_mana_delta =
-        reinterpret_cast<PlayerActorApplyManaDeltaFn>(apply_mana_delta_address);
-    if (exception_code != nullptr) {
-        *exception_code = 0;
-    }
-    if (native_result != nullptr) {
-        *native_result = 0;
-    }
-    if (apply_mana_delta == nullptr || actor_address == 0 || !std::isfinite(delta)) {
-        return false;
-    }
-
-    __try {
-        const auto result =
-            apply_mana_delta(reinterpret_cast<void*>(actor_address), delta, out_of_mana_flag);
-        if (native_result != nullptr) {
-            *native_result = result;
-        }
-        return true;
-    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
-        return false;
-    }
-}
-
 bool CallPlayerActorRefreshRuntimeHandlesSafe(
     uintptr_t refresh_address,
     uintptr_t actor_address,

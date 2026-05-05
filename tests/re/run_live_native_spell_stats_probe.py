@@ -204,7 +204,19 @@ emit('ok', true)
     )
 
 
-def queue_skill(bot_id: int, skill_id: int, target_x: float, target_y: float) -> dict[str, str]:
+def queue_skill(
+    bot_id: int,
+    skill_id: int,
+    target_x: float,
+    target_y: float,
+    *,
+    target_actor_address: int = 0,
+) -> dict[str, str]:
+    target_actor_line = (
+        f"  target_actor_address = {target_actor_address},\n"
+        if target_actor_address
+        else ""
+    )
     return csp.parse_key_values(
         csp.run_lua(
             f"""
@@ -219,7 +231,7 @@ emit('ok', sd.bots.cast({{
   id = {bot_id},
   kind = 'primary',
   skill_id = {skill_id},
-  target = {{ x = {target_x}, y = {target_y} }},
+{target_actor_line}  target = {{ x = {target_x}, y = {target_y} }},
 }}))
 """.strip()
         )

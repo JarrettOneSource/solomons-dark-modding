@@ -24,6 +24,7 @@ Live RE checks also live in `tests/re/`:
 
 ```bash
 python3 tests/re/run_live_native_spell_stats_probe.py
+python3 tests/re/run_live_bot_mana_writer_probe.py
 python3 tests/re/run_live_bot_native_mana_spend_probe.py
 python3 tests/re/run_live_pure_primary_startup_probe.py --json
 python3 tests/re/run_live_boulder_impact_projection_probe.py
@@ -37,13 +38,20 @@ The static tests now enforce that the old primary mana arrays and Earth boulder
 damage table stay removed. The live probe launches the staged game, drives to a
 testrun, uses the Lua memory bridge, and queues all five primary skills through
 `sd.bots.cast`; the run fails if the loader cannot resolve live native spell
-stats from the bot progression object. The native mana-spend probe then forces bot MP, queues an Earth
-primary, and fails unless the PerSecond spend log reports the recovered native
-delta seam with no SEH, a real MP decrease, and restored local-player shim
-fields.
+stats from the bot progression object. The bot mana-writer probe traces
+`0x0052B150` during bot casts. It first queues coordinate-only Earth startup in
+a no-wave run and fails if stale `actor+0x2D0` data causes a bot MP drain; it
+then targets a real native wave enemy and requires bot-actor negative native
+delta hits, a plausible per-update delta relative to the native-resolved spend
+rate, and a real MP decrease on the bot's live progression state. The native
+mana-spend probe then isolates the Earth bot, forces bot MP, queues an Earth
+primary against a real wave enemy, and fails unless stock spell-handler
+execution spends bot MP without changing the gameplay local-player actor
+pointer.
 `tests/re/run_live_pure_primary_startup_probe.py --json` covers the PerCast
-side: Fire and Ether pure-primary casts must emit `mode=per_cast`, `native=1`,
-`seh=0x0`, and a real MP delta before the probe passes.
+side: Fire and Ether pure-primary casts must leave startup through the native
+lifecycle, trace stock bot-owned `0x0052B150` mana deltas, and reduce bot MP
+before the probe passes.
 
 ## Completed This Pass
 
@@ -77,18 +85,33 @@ side: Fire and Ether pure-primary casts must emit `mode=per_cast`, `native=1`,
   exposes the Lua bridge, enters a testrun, materializes a bot, and queues
   Fire, Water, Earth, Air, and Ether primary casts without staged resolver
   failures.
-- Ghidra and Lua write-watch evidence identified `0x0052B150` as the native
-  local-player mana delta function. Bot mana spend now calls that native seam
-  inside the narrow local-player actor/progression window instead of writing
-  progression MP directly.
-- `tests/re/run_live_bot_native_mana_spend_probe.py` validated the bot path in
-  the staged runtime: an Earth PerSecond spend used `native=1`, `seh=0x0`,
-  logged a real MP decrease at the unscaled native `mManaCost` rate, and
-  restored the local gameplay actor/progression fields after the native call.
-- `tests/re/run_live_pure_primary_startup_probe.py --json` validated the
-  Fire/Ether PerCast branch in the staged runtime: both pure-primary casts used
-  the same native `0x0052B150` delta seam (`native=1`, `seh=0x0`) and reduced
-  bot MP by the native spell-stat cost.
+- Ghidra and Lua trace evidence identified `0x0052B150` as the stock mana
+  delta function and `0x0052B171` as its local-actor gate. The loader now
+  byte-checks that branch and patches it once with the other native cast gates,
+  so stock spell handlers own bot MP mutation through their existing
+  `0x0052B150` calls. The loader no longer writes progression MP directly,
+  calls a manual `TrySpendBotMana` path, or swaps `gameplay+0x1358` around a
+  synthetic local-player mana window.
+- Ghidra and live traces also showed Earth primary's native mana path spends
+  from `actor+0x2D0`, which `PlayerActorTick (0x00548B00)` rebuilds only after
+  `PlayerControlBrain_Update (0x0052C910)` produces a real facing/control
+  vector. Coordinate-only bot startup in a no-wave run can leave that field
+  stale, so cast preparation invalidates the per-second native rate field and
+  manual post-stock dispatch is gated until the field has been repopulated to a
+  finite value within the native-resolved spend-rate envelope. The loader never
+  populates `actor+0x2D0` from its own mana value; it only rejects stale native
+  config before dispatch.
+- `runtime/ghidra_mana_delta_instructions.txt` records the gate
+  (`CMP ESI,[gameplay+0x1358]` / `JNZ 0x0052B496`) and the native MP stores.
+  `runtime/ghidra_mana_delta_callers.txt` records the stock spell-handler
+  callers, including Earth primary.
+- `tests/re/run_live_bot_native_mana_spend_probe.py` validates the bot path in
+  the staged runtime: an Earth PerSecond cast traces a negative bot-actor
+  native mana delta, reduces the bot's live MP, and leaves the gameplay
+  local-player actor pointer unchanged.
+- `tests/re/run_live_pure_primary_startup_probe.py --json` validates the
+  Fire/Ether PerCast branch in the staged runtime: both pure-primary casts must
+  trace stock bot-owned native mana deltas and reduce bot MP.
 - Earth boulder release/damage was deepened with Ghidra and live evidence:
   - `0x00544C60`: Earth primary handler creates/updates boulder object `0x7D5`.
   - `0x005E5450`: native finalizer computes released damage from the live
@@ -230,7 +253,7 @@ native cast/mana evidence, and HP damage, and leaves no fresh crash artifact.
 | --- | --- | --- | --- |
 | Primary mana costs | `bot_runtime/public_api/casting_api.inl`, `native_spell_stats.cpp`, `pending_cast_preparation.inl` | done: `0x00666020` live progression stat builder and `+0x774/+0x778` output array; `runtime/ghidra_primary_spell_builder_resource_paths.txt` shows pure Ether/Water/Air/Earth outputs multiply `mManaCost` by the native double at `0x007DE810`, while `0x0065F9A0` preserves current resource ratios when recomputing max values | done: mana cost resolves from live native Skills_Wizard output, spend cost normalizes display-scaled pure-primary outputs through the live native scalar, held casts require the native per-second rate to start, and there is no staged wizard-skill file reader or loader-owned HP/MP snapshot restore around native stat/refresh calls |
 | Primary build-skill mapping | `scene_and_animation_bot_priming_and_selection.inl` | native skills-wizard/selection builder mapping | partial: bot mana resolver no longer duplicates it; cast selection still needs native lifecycle seam |
-| Manual mana spend | `bot_casting/resource_state.inl`, `pending_cast_processing.inl` | done: player MP writer watch and `0x0052B150` native delta function | done: bot spend calls recovered native delta seam with scoped actor/progression shim |
+| Manual mana spend | `bot_casting/resource_state.inl`, `pending_cast_processing.inl`, `native_cast_gate_patches.inl` | done: player MP writer watch, `0x0052B150` native delta function, `0x0052B171` local-actor gate bytes, stock spell-handler callers in `runtime/ghidra_mana_delta_callers.txt`, and live bot-actor negative delta traces | done: native local-actor gate is byte-checked and patched once; stock spell handlers own bot MP mutation, while loader code only performs live MP admission/depletion observation and never swaps `gameplay+0x1358` or manually spends MP |
 | Earth boulder damage | `resource_state.inl`, `boulder_damage_projection.inl`, `native_spell_stats.cpp` | done: Earth primary native stat output, active Boulder object release-base field `0x1F8`, damage output diagnostic scale `0x007A03F0`, finalizer floor/cap globals `0x007DE8F0`/`0x00784740`, native victim-scan radius predicate, and live victim/removal probe | done: held-cast base damage resolves from the live Boulder object's `spell_object_release_base_damage=0x1F8` field and is projected through the native release/finalizer floor and cap globals; no guessed query-context writes and no mid-charge Skills_Wizard stat rebuild; Boulder releases at native max size or once live projected release damage is enough to kill the targeted enemy; held charging follows the live bot target, freezes that target at release, preserves the stock input falling edge for native cleanup, and pins charge/release-charge plus the recovered native growth-stop field so cleanup does not keep charging toward max |
 | Synthetic source profiles | removed hardcoded profile buffer and element-color table | done for active code: native consumer `0x005E3080`, clone path `0x0061AA00`, source actor ctor `0x005E9A90`, stock new-character choice path `0x005D0290`, and native `Skills_Wizard` color seam `0x00660760` are documented; live probes verify finalized actors keep `actor+0x178 == 0` | done: active runtime stages a transient native-derived source profile from `0x00660760`, lets `0x005E3080` build the descriptor, clears the staging pointer before clone publication, and has no hardcoded element color table |
 | Default ally HP | `spawn_standalone_wizard.inl` | done: `0x0061AA00` clone path calls `0x00674EE0` progression ctor and `0x0065F9A0` stat recompute; ctor globals are 50 HP and 100 MP | done: loader HP overwrite removed; standalone clone rail preserves native progression defaults |

@@ -164,13 +164,13 @@ struct ParticipantEntityBinding {
         int bounded_post_release_ticks_waiting = 0;
         bool startup_in_progress = false;
         bool post_stock_dispatch_attempted = false;
+        bool native_mana_rate_config_invalidated = false;
+        bool native_mana_rate_config_pending_logged = false;
         uintptr_t pure_primary_item_sink_fallback = 0;
         multiplayer::BotManaChargeKind mana_charge_kind =
             multiplayer::BotManaChargeKind::None;
         float mana_cost = 0.0f;
-        float mana_spent_total = 0.0f;
         std::int32_t mana_progression_level = 1;
-        std::uint64_t mana_last_charge_ms = 0;
         static constexpr int kMaxTicksWaiting = 300;
         static constexpr int kMaxStartupTicksWaiting = 12;
         // Lua retargets every 100 ms. Keep continuous primaries alive through

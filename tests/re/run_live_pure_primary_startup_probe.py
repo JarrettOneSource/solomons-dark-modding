@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Live baseline for pure-primary startup/latch and PerCast mana behavior.
+"""Live validation for pure-primary startup/latch and PerCast mana behavior.
 
-This probe intentionally records the current Fire/Ether gap instead of
-asserting the desired final behavior. It fails only when it cannot materialize
-a bot, queue the casts, or observe a terminal cast event.
+Fire and Ether pure-primary casts must leave startup through the native
+lifecycle and spend bot MP through stock native mana-delta calls.
 """
 
 from __future__ import annotations
@@ -23,6 +22,15 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import cast_state_probe as csp  # noqa: E402
+from bot_mana_trace_helpers import (  # noqa: E402
+    arm_native_mana_delta_trace,
+    assert_gameplay_player_actor_unchanged,
+    capture_gameplay_player_actor,
+    clear_native_mana_delta_trace,
+    read_loader_log_lines,
+    stop_bot,
+    wait_for_bot_native_mana_delta,
+)
 from run_live_native_spell_stats_probe import (  # noqa: E402
     drive_to_materialized_bots,
     find_bot_for_element,
@@ -32,10 +40,10 @@ from run_live_native_spell_stats_probe import (  # noqa: E402
     read_runtime_layout_offset,
     tail_loader_log,
 )
-from run_live_bot_native_mana_spend_probe import read_loader_log_lines, stop_bot  # noqa: E402
 
 
 OUTPUT_PATH = ROOT / "runtime" / "live_pure_primary_startup_probe.json"
+TRACE_NAME = "pure_primary_native_mana_delta"
 FORCED_MANA = 250.0
 PURE_PRIMARY_CASTS = (
     {"name": "fire", "element_id": 0, "skill_id": 0x3F3},
@@ -45,14 +53,6 @@ PURE_PRIMARY_CASTS = (
 CAST_COMPLETE_RE = re.compile(
     r"cast complete \((?P<label>[^)]+)\)\. bot_id=(?P<bot_id>\d+) "
     r"skill_id=(?P<skill_id>-?\d+) ticks=(?P<ticks>\d+).*"
-)
-MANA_SPENT_RE = re.compile(
-    r"mana spent\. bot_id=(?P<bot_id>\d+) skill_id=(?P<skill_id>-?\d+) "
-    r"mode=(?P<mode>[a-z_]+) progression_level=(?P<level>\d+) "
-    r".*?cost=(?P<cost>[0-9.+\-eE]+) "
-    r"before=(?P<before>[0-9.+\-eE]+) after=(?P<after>[0-9.+\-eE]+) "
-    r"native=(?P<native>\d+) native_result=(?P<native_result>\d+) "
-    r"seh=(?P<seh>0x[0-9A-Fa-f]+) total=(?P<total>[0-9.+\-eE]+)"
 )
 SPELL_DIAG_RE = re.compile(r"spell_obj diag\. bot_id=(?P<bot_id>\d+).*")
 NATIVE_LATCH_EVENT_TOKENS = (
@@ -127,22 +127,6 @@ def parse_completion(match: re.Match[str], line: str) -> dict[str, Any]:
     }
 
 
-def parse_mana(match: re.Match[str], line: str) -> dict[str, Any]:
-    return {
-        "line": line,
-        "bot_id": int(match.group("bot_id")),
-        "skill_id": int(match.group("skill_id")),
-        "mode": match.group("mode"),
-        "cost": float(match.group("cost")),
-        "before": float(match.group("before")),
-        "after": float(match.group("after")),
-        "native": int(match.group("native")),
-        "native_result": int(match.group("native_result")),
-        "seh": match.group("seh"),
-        "total": float(match.group("total")),
-    }
-
-
 def wait_for_terminal_cast(
     bot_id: int,
     skill_id: int,
@@ -150,7 +134,6 @@ def wait_for_terminal_cast(
     timeout_s: float,
 ) -> dict[str, Any]:
     deadline = time.time() + timeout_s
-    observed_mana: list[dict[str, Any]] = []
     observed_diags: list[str] = []
     observed_native_events: list[str] = []
     last_tail: list[str] = []
@@ -161,11 +144,6 @@ def wait_for_terminal_cast(
             if f"bot_id={bot_id}" in line and any(token in line for token in NATIVE_LATCH_EVENT_TOKENS):
                 if line not in observed_native_events:
                     observed_native_events.append(line)
-            mana_match = MANA_SPENT_RE.search(line)
-            if mana_match and int(mana_match.group("bot_id")) == bot_id and int(mana_match.group("skill_id")) == skill_id:
-                parsed = parse_mana(mana_match, line)
-                if parsed not in observed_mana:
-                    observed_mana.append(parsed)
             diag_match = SPELL_DIAG_RE.search(line)
             if diag_match and int(diag_match.group("bot_id")) == bot_id and line not in observed_diags:
                 observed_diags.append(line)
@@ -178,7 +156,6 @@ def wait_for_terminal_cast(
                 completion = parse_completion(complete_match, line)
                 return {
                     "completion": completion,
-                    "mana_spent": observed_mana,
                     "spell_diags": observed_diags,
                     "native_latch_events": observed_native_events,
                 }
@@ -203,14 +180,42 @@ def run_single_cast(
         raise LivePurePrimaryStartupProbeFailure(f"failed to force bot mana for {skill_id}: {mana_write}")
 
     before_snapshot = capture_actor_cast_snapshot(bot_id)
+    actor_address = csp.int_value(before_snapshot, "actor")
     start_line_count = len(read_loader_log_lines())
-    cast_result = queue_skill(bot_id, skill_id, target_x, target_y)
-    if cast_result.get("ok") != "true":
-        raise LivePurePrimaryStartupProbeFailure(f"sd.bots.cast rejected skill {skill_id}: {cast_result}")
-
-    terminal = wait_for_terminal_cast(bot_id, skill_id, start_line_count, timeout_s)
-    after_snapshot = capture_actor_cast_snapshot(bot_id)
     before_mp = float_or_none(before_snapshot.get("progression_mp"))
+    if actor_address == 0 or before_mp is None or before_mp != before_mp:
+        raise LivePurePrimaryStartupProbeFailure(
+            f"invalid pure-primary actor/mana snapshot for {skill_id}: {before_snapshot}"
+        )
+
+    gameplay_actor_before = capture_gameplay_player_actor()
+    trace = arm_native_mana_delta_trace(TRACE_NAME)
+    if trace.get("trace_ok") != "true":
+        raise LivePurePrimaryStartupProbeFailure(f"failed to arm native mana delta trace: {trace}")
+
+    try:
+        cast_result = queue_skill(bot_id, skill_id, target_x, target_y)
+        if cast_result.get("ok") != "true":
+            raise LivePurePrimaryStartupProbeFailure(f"sd.bots.cast rejected skill {skill_id}: {cast_result}")
+
+        terminal = wait_for_terminal_cast(bot_id, skill_id, start_line_count, timeout_s)
+        mana_delta = wait_for_bot_native_mana_delta(
+            bot_id,
+            actor_address,
+            before_mp,
+            TRACE_NAME,
+            2.0,
+        )
+    finally:
+        clear_native_mana_delta_trace(TRACE_NAME)
+
+    after_snapshot = capture_actor_cast_snapshot(bot_id)
+    gameplay_actor_after = capture_gameplay_player_actor()
+    assert_gameplay_player_actor_unchanged(
+        gameplay_actor_before,
+        gameplay_actor_after,
+        str(skill_id),
+    )
     after_mp = float_or_none(after_snapshot.get("progression_mp"))
     return {
         "stop_result": stop_result,
@@ -219,6 +224,10 @@ def run_single_cast(
         "snapshot_before": before_snapshot,
         "snapshot_after": after_snapshot,
         "mp_delta": None if before_mp is None or after_mp is None else before_mp - after_mp,
+        "gameplay_player_actor_before": gameplay_actor_before,
+        "gameplay_player_actor_after": gameplay_actor_after,
+        "trace": trace,
+        "stock_native_mana_delta": mana_delta,
         **terminal,
     }
 
@@ -264,22 +273,15 @@ def assert_native_percast_behavior(result: dict[str, Any]) -> None:
         name = entry.get("name", "<unknown>")
         completion = entry.get("completion", {})
         label = completion.get("label")
-        mana_events = entry.get("mana_spent", [])
-        per_cast_events = [
-            event for event in mana_events
-            if (
-                event.get("mode") == "per_cast"
-                and event.get("native") == 1
-                and str(event.get("seh", "")).lower() == "0x0"
-                and event.get("cost", 0.0) > 0.0
-                and event.get("before", 0.0) > event.get("after", 0.0)
-                and event.get("before", 0.0) - event.get("after", 0.0) + 0.01 >= event.get("cost", 0.0)
-            )
-        ]
+        mana_delta = entry.get("stock_native_mana_delta", {})
+        trace_summary = mana_delta.get("trace_hit_summary", {})
         if label == "startup_timeout":
             failures.append(f"{name}: still exits via startup_timeout")
-        if not per_cast_events:
-            failures.append(f"{name}: no native PerCast mana spend event with native=1/seh=0 and a real MP delta")
+        mp_delta = mana_delta.get("mp_delta")
+        if not isinstance(mp_delta, (int, float)) or mp_delta <= 0.0:
+            failures.append(f"{name}: no stock native mana-delta MP decrease")
+        if not trace_summary.get("negative_bot_actor_hits"):
+            failures.append(f"{name}: no negative native mana-delta trace hit for the bot actor")
     if failures:
         raise LivePurePrimaryStartupProbeFailure("; ".join(failures))
 
@@ -292,19 +294,13 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
     parser.add_argument("--json", action="store_true", help="Only print structured JSON.")
     parser.add_argument("--keep-running", action="store_true", help="Leave the game process running after the probe.")
-    parser.add_argument(
-        "--allow-startup-timeout-baseline",
-        action="store_true",
-        help="Record the old gap without failing; default enforces the fixed native PerCast behavior.",
-    )
     args = parser.parse_args()
 
     exit_code = 0
     try:
         result = run_probe(args.element, args.discipline, args.timeout)
-        result["native_percast_required"] = not args.allow_startup_timeout_baseline
-        if not args.allow_startup_timeout_baseline:
-            assert_native_percast_behavior(result)
+        result["native_percast_required"] = True
+        assert_native_percast_behavior(result)
         result["passed"] = True
     except Exception as exc:  # noqa: BLE001 - preserve live diagnostics in JSON.
         result = {
@@ -326,8 +322,9 @@ def main() -> int:
         summaries = []
         for entry in result["pure_primary_casts"]:
             completion = entry["completion"]
+            mana_delta = entry.get("stock_native_mana_delta", {})
             summaries.append(
-                f"{entry['name']}={completion['label']}/ticks{completion['ticks']}/mana_events{len(entry['mana_spent'])}"
+                f"{entry['name']}={completion['label']}/ticks{completion['ticks']}/mp_delta{mana_delta.get('mp_delta', 0.0):.3f}"
             )
         print("PASS: live pure-primary startup baseline " + " ".join(summaries))
         print(f"Wrote {args.output}")

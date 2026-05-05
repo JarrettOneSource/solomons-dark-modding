@@ -90,6 +90,7 @@ extern uintptr_t kGameFree;
 extern uintptr_t kGameOperatorNew;
 extern uintptr_t kNativeIntArrayClear;
 extern uintptr_t kCastActiveHandleCleanup;
+extern uintptr_t kPlayerActorApplyManaDeltaLocalActorGateBranch;
 extern uintptr_t kCastCleanupSlotGateBranch;
 extern uintptr_t kSpellCast028SlotGateBranch;
 extern uintptr_t kSpellCast3EESlotGateBranch;

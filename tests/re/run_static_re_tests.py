@@ -77,6 +77,9 @@ SOURCE_PROFILE_WRITE_SITES_EXPANDED_GHIDRA = ROOT / "runtime/ghidra_source_profi
 SOURCE_PROFILE_NEGATIVE_LIVE_PROBE = ROOT / "tests/re/run_live_source_profile_negative_probe.py"
 SOURCE_PROFILE_WRITER_LIVE_PROBE = ROOT / "tests/re/run_live_source_profile_writer_probe.py"
 PURE_PRIMARY_STARTUP_LIVE_PROBE = ROOT / "tests/re/run_live_pure_primary_startup_probe.py"
+BOT_MANA_TRACE_HELPERS = ROOT / "tests/re/bot_mana_trace_helpers.py"
+BOT_MANA_WRITER_LIVE_PROBE = ROOT / "tests/re/run_live_bot_mana_writer_probe.py"
+BOT_NATIVE_MANA_SPEND_LIVE_PROBE = ROOT / "tests/re/run_live_bot_native_mana_spend_probe.py"
 BOT_SKILL_UPGRADE_COMBAT_FLOW_LIVE_PROBE = (
     ROOT / "tests/re/run_live_bot_skill_upgrade_combat_flow_probe.py"
 )
@@ -225,7 +228,7 @@ CORRECTED_SMELL_GUARDS = {
 INVESTIGATION_REGISTER_COVERAGE = {
     "Primary mana costs": ("test:primary mana resolver uses native live spell stats",),
     "Primary build-skill mapping": ("test:primary build skill mapping has single runtime owner",),
-    "Manual mana spend": ("test:manual mana spend uses native delta seam",),
+    "Manual mana spend": ("test:bot mana spend is stock-owned through native gate patch",),
     "Earth boulder damage": (
         "test:Earth boulder damage uses native live spell stats",
         "test:Earth boulder projection stays read-only and drives target-lethal release",
@@ -769,54 +772,115 @@ def test_active_cast_movement_clears_stale_vector_before_stock_tick() -> str:
     return "active casts clear stale loader movement before stock tick and move once through the native step"
 
 
-def test_manual_mana_spend_uses_native_delta_seam() -> str:
+def test_bot_mana_spend_is_stock_owned_through_native_gate_patch() -> str:
     layout_text = read_text(BINARY_LAYOUT)
     plan_text = read_text(NATIVE_SEAM_PLAN)
     resource_text = read_text(RESOURCE_STATE)
     processing_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/pending_cast_processing.inl"
     )
+    patch_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/native_cast_gate_patches.inl"
+    )
+    helper_text = read_text(BOT_MANA_TRACE_HELPERS)
+    writer_probe_text = read_text(BOT_MANA_WRITER_LIVE_PROBE)
+    native_spend_probe_text = read_text(BOT_NATIVE_MANA_SPEND_LIVE_PROBE)
     pure_primary_probe_text = read_text(PURE_PRIMARY_STARTUP_LIVE_PROBE)
     required_tokens = {
         "binary layout": "player_actor_apply_mana_delta=0x0052B150",
-        "resource state": "TryApplyNativeBotManaDelta",
-        "safe native call": "CallPlayerActorApplyManaDeltaSafe",
-        "processing call": "TrySpendBotMana",
+        "gate branch layout": "player_actor_apply_mana_delta_local_actor_gate_branch=0x0052B171",
+        "gate patch name": "player_actor_apply_mana_delta_local_actor_gate",
+        "gate patch binding": "kPlayerActorApplyManaDeltaLocalActorGateBranch",
+        "gate expected bytes": "{0x0F, 0x85, 0x1F, 0x03, 0x00, 0x00}",
+        "processing live depletion": "native mana depleted",
+        "processing live read": "TryReadProgressionMana",
+        "native rate validator": "ValidateNativeManaRateConfigForOngoingCast",
+        "native rate invalidation": "ClearNativeManaRateConfigForOngoingCast",
+        "native rate pending log": "native mana rate config pending",
+        "trace helper": "wait_for_bot_native_mana_delta",
+        "trace rate plausibility": "assert_native_mana_delta_matches_prepared_rate",
+        "writer stale guard": "coordinate_only_stale_config_guard",
+        "writer target actor": "target_actor_address=target_actor_address",
+        "writer probe": "stock_native_mana_delta",
+        "writer trace summary": "negative_bot_actor_hits",
+        "pure primary trace": "stock_native_mana_delta",
     }
     missing: list[str] = []
     if required_tokens["binary layout"] not in layout_text:
         missing.append(required_tokens["binary layout"])
+    if required_tokens["gate branch layout"] not in layout_text:
+        missing.append(required_tokens["gate branch layout"])
     for label, token in (
-        ("resource state", required_tokens["resource state"]),
-        ("safe native call", required_tokens["safe native call"]),
+        ("gate patch name", required_tokens["gate patch name"]),
+        ("gate patch binding", required_tokens["gate patch binding"]),
+        ("gate expected bytes", required_tokens["gate expected bytes"]),
+    ):
+        if token not in patch_text:
+            missing.append(f"{label}:{token}")
+    for label, token in (
+        ("processing live depletion", required_tokens["processing live depletion"]),
+        ("processing live read", required_tokens["processing live read"]),
+        ("native rate pending log", required_tokens["native rate pending log"]),
+    ):
+        if token not in processing_text:
+            missing.append(f"{label}:{token}")
+    for label, token in (
+        ("native rate validator", required_tokens["native rate validator"]),
+        ("native rate invalidation", required_tokens["native rate invalidation"]),
     ):
         if token not in resource_text:
             missing.append(f"{label}:{token}")
-    if required_tokens["processing call"] not in processing_text:
-        missing.append(f"processing:{required_tokens['processing call']}")
+    for label, text, token in (
+        ("trace helper", helper_text, required_tokens["trace helper"]),
+        ("trace rate plausibility", helper_text, required_tokens["trace rate plausibility"]),
+        ("writer stale guard", writer_probe_text, required_tokens["writer stale guard"]),
+        ("writer target actor", writer_probe_text, required_tokens["writer target actor"]),
+        ("writer probe", writer_probe_text, required_tokens["writer probe"]),
+        ("writer trace summary", writer_probe_text + helper_text, required_tokens["writer trace summary"]),
+        ("native spend probe", native_spend_probe_text, required_tokens["writer probe"]),
+        ("pure primary trace", pure_primary_probe_text, required_tokens["pure primary trace"]),
+    ):
+        if token not in text:
+            missing.append(f"{label}:{token}")
     if re.search(r"TryWriteField\s*<\s*float\s*>\s*\([^;]*kProgressionMpOffset", resource_text, re.S):
         missing.append("direct progression MP write still present")
-    required_pure_probe_tokens = (
-        "live_pure_primary_startup_probe.json",
-        "native=1",
-        "native_result",
-        "seh",
-        "per_cast",
-        "no native PerCast mana spend event with native=1/seh=0",
+    if re.search(
+        r"TryWriteField\s*<\s*float\s*>\s*\([^;]*kActorSpellConfig2d0Offset[^;]*ongoing\.mana_cost",
+        "\n".join((resource_text, processing_text)),
+        re.S,
+    ):
+        missing.append("actor+0x2D0 is being populated from loader-owned mana cost")
+    forbidden_active_tokens = (
+        "TryApplyNativeBotManaDelta",
+        "TrySpendBotMana",
+        "NativeBotManaDeltaShim",
+        "CallPlayerActorApplyManaDeltaSafe",
+        "[bots] mana spent.",
     )
-    missing_pure_probe = [token for token in required_pure_probe_tokens if token not in pure_primary_probe_text]
-    if missing_pure_probe:
-        missing.append("pure primary probe:" + ",".join(missing_pure_probe))
+    active_text = "\n".join((resource_text, processing_text, patch_text))
+    stale_active = [token for token in forbidden_active_tokens if token in active_text]
+    if stale_active:
+        missing.append("active code still contains manual mana tokens:" + ",".join(stale_active))
+    stale_probe_text = "\n".join((writer_probe_text, native_spend_probe_text, pure_primary_probe_text))
+    stale_probe_tokens = [
+        token for token in ("assert_shim_fields_restored", "capture_shim_fields", "wait_for_native_mana_spend")
+        if token in stale_probe_text
+    ]
+    if stale_probe_tokens:
+        missing.append("live probes still assert shim/log path:" + ",".join(stale_probe_tokens))
     stale_plan_tokens = (
         "PerCast spend branch is still not live-proven",
         "current Fire/Ether pure-primary bot casts can complete with `startup_timeout`",
+        "scoped actor/progression shim",
     )
     for token in stale_plan_tokens:
         if token in plan_text:
             missing.append(f"stale native seam plan token:{token}")
     if missing:
-        raise StaticReTestFailure("manual mana spend is not native-seam backed: " + ", ".join(missing))
-    return "manual bot mana spend goes through recovered native player_actor_apply_mana_delta seam"
+        raise StaticReTestFailure(
+            "bot mana spend is not stock-owned through native gate patch: " + ", ".join(missing)
+        )
+    return "bot mana spend is stock-owned through the native mana-delta gate patch"
 
 
 def test_bot_cast_admission_refreshes_live_mana_before_queue() -> str:
@@ -4103,7 +4167,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Earth boulder live retarget probe is documented", test_boulder_live_retarget_probe_is_documented),
     ("Lua Earth retargeting uses live Boulder impact anchor", test_lua_earth_retargeting_uses_live_boulder_impact_anchor),
     ("Active-cast movement clears stale vector before stock tick", test_active_cast_movement_clears_stale_vector_before_stock_tick),
-    ("manual mana spend uses native delta seam", test_manual_mana_spend_uses_native_delta_seam),
+    (
+        "bot mana spend is stock-owned through native gate patch",
+        test_bot_mana_spend_is_stock_owned_through_native_gate_patch,
+    ),
     ("bot cast admission refreshes live mana before queue", test_bot_cast_admission_refreshes_live_mana_before_queue),
     ("bot out-of-mana probe checks pre-execution rejection", test_bot_out_of_mana_probe_checks_pre_execution_rejection),
     ("held primary mana uses native spend scale and start rate", test_held_primary_mana_uses_native_spend_scale_and_start_rate),

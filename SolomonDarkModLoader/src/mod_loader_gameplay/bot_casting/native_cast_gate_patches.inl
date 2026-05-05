@@ -8,7 +8,7 @@ struct NativeCastGatePatch {
     bool restore_needed = false;
 };
 
-std::array<NativeCastGatePatch, 4> g_native_cast_gate_patches = {};
+std::array<NativeCastGatePatch, 5> g_native_cast_gate_patches = {};
 
 bool BytesEqual(
     const std::array<std::uint8_t, 6>& left,
@@ -122,6 +122,13 @@ bool InstallNativeCastGatePatches(std::string* error_message) {
     const std::array<std::uint8_t, 6> nops = {0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
     g_native_cast_gate_patches = {{
         {
+            "player_actor_apply_mana_delta_local_actor_gate",
+            kPlayerActorApplyManaDeltaLocalActorGateBranch,
+            0,
+            {0x0F, 0x85, 0x1F, 0x03, 0x00, 0x00},
+            nops,
+        },
+        {
             "cast_active_handle_cleanup_slot_gate",
             kCastCleanupSlotGateBranch,
             0,
@@ -163,7 +170,9 @@ bool InstallNativeCastGatePatches(std::string* error_message) {
     }
 
     Log(
-        "Gameplay input injection: native cast slot gates unlocked. cleanup=" +
+        "Gameplay input injection: native actor cast/mana gates unlocked. mana_delta=" +
+        HexString(kPlayerActorApplyManaDeltaLocalActorGateBranch) +
+        " cleanup=" +
         HexString(kCastCleanupSlotGateBranch) +
         " spell_028=" + HexString(kSpellCast028SlotGateBranch) +
         " spell_3ee=" + HexString(kSpellCast3EESlotGateBranch) +

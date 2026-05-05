@@ -120,23 +120,40 @@ That probe watches the local player's progression MP field during a stock
 player cast and records the actual native writer EIP/return data in
 `runtime/live_player_mana_writer_probe.json`.
 
+Run the bot mana writer probe when changing bot mana spend ownership:
+
+```bash
+python3 tests/re/run_live_bot_mana_writer_probe.py
+```
+
+That probe traces the stock native mana-delta function during bot casts. It
+first verifies coordinate-only Earth startup in a no-wave run does not spend
+from stale `actor+0x2D0` state, then targets a real native wave enemy and
+requires both plausible bot-actor negative delta hits and a real MP decrease on
+the bot's live progression state. It writes
+`runtime/live_bot_mana_writer_probe.json`.
+
 Run the focused bot native mana spend probe after the native seam is wired:
 
 ```bash
 python3 tests/re/run_live_bot_native_mana_spend_probe.py
 ```
 
-That probe launches the staged game, materializes a bot, forces both current
-and max MP through the Lua memory bridge, queues an Earth primary cast, and
-asserts the PerSecond spend log reports `native=1`, no SEH, a real MP delta,
-the unscaled native Earth `mManaCost` rate, and restored local-player shim
-fields.
+That probe launches the staged game, materializes only the Earth bot, disables
+autonomous Lua bot ticks, forces both current and max MP through the Lua memory
+bridge, queues an Earth primary cast against a real wave enemy, and asserts
+stock spell-handler execution traces a bot-owned native mana delta, reduces
+live bot MP, and leaves the gameplay local-player actor pointer unchanged.
 
 Pure-primary PerCast mana is covered separately:
 
 ```bash
 python3 tests/re/run_live_pure_primary_startup_probe.py --json
 ```
+
+That probe queues Fire and Ether pure-primary casts, requires them to leave the
+startup lifecycle normally, and verifies each cast traces a bot-owned stock
+native mana delta with a real live MP decrease.
 
 Run the focused out-of-mana rejection probe after touching bot cast admission
 or mana readiness checks:

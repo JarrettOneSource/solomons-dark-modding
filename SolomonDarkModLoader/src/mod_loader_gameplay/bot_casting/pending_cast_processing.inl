@@ -148,7 +148,32 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.startup_in_progress &&
             ongoing.uses_dispatcher_skill_id &&
             !ongoing.post_stock_dispatch_attempted) {
-            if (ongoing.uses_dispatcher_skill_id) {
+            const auto native_mana_rate_config =
+                ValidateNativeManaRateConfigForOngoingCast(actor_address, ongoing);
+            if (native_mana_rate_config.required &&
+                !native_mana_rate_config.plausible) {
+                if (!ongoing.native_mana_rate_config_pending_logged) {
+                    ongoing.native_mana_rate_config_pending_logged = true;
+                    Log(
+                        "[bots] native mana rate config pending. bot_id=" +
+                        std::to_string(binding->bot_id) +
+                        " skill_id=" + std::to_string(ongoing.skill_id) +
+                        " dispatcher_skill_id=" +
+                            std::to_string(ongoing.dispatcher_skill_id) +
+                        " reason=" + native_mana_rate_config.reason +
+                        " invalidated=" +
+                            std::to_string(native_mana_rate_config.invalidated ? 1 : 0) +
+                        " readable=" +
+                            std::to_string(native_mana_rate_config.readable ? 1 : 0) +
+                        " native_rate=" +
+                            std::to_string(native_mana_rate_config.native_rate) +
+                        " expected_rate=" +
+                            std::to_string(native_mana_rate_config.expected_rate) +
+                        " max_allowed_rate=" +
+                            std::to_string(native_mana_rate_config.max_allowed_rate) +
+                        " ticks=" + std::to_string(ongoing.startup_ticks_waiting));
+                }
+            } else if (ongoing.uses_dispatcher_skill_id) {
                 PrimeGameplaySlotPostGateDispatchState(actor_address, ongoing.dispatcher_skill_id);
                 const auto native_target_actor_address =
                     ResolveOngoingCastNativeTargetActor(binding, ongoing);
@@ -160,85 +185,90 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 }
                 ReapplyOngoingCastSelectionState(binding, actor_address, ongoing, true);
             }
-            DWORD startup_exception_code = 0;
-            bool startup_dispatched = false;
-            uintptr_t startup_gameplay_address = 0;
-            std::uint8_t saved_cast_intent = 0;
-            std::uint8_t saved_mouse_left = 0;
-            std::size_t live_mouse_left_offset = 0;
-            bool startup_cast_intent_applied = false;
-            bool startup_mouse_left_applied = false;
-            if (TryResolveCurrentGameplayScene(&startup_gameplay_address) &&
-                startup_gameplay_address != 0) {
-                saved_cast_intent = memory.ReadFieldOr<std::uint8_t>(
-                    startup_gameplay_address,
-                    kGameplayCastIntentOffset,
-                    0);
-                startup_cast_intent_applied =
-                    memory.TryWriteField<std::uint8_t>(
+            if (!native_mana_rate_config.required ||
+                native_mana_rate_config.plausible) {
+                DWORD startup_exception_code = 0;
+                bool startup_dispatched = false;
+                uintptr_t startup_gameplay_address = 0;
+                std::uint8_t saved_cast_intent = 0;
+                std::uint8_t saved_mouse_left = 0;
+                std::size_t live_mouse_left_offset = 0;
+                bool startup_cast_intent_applied = false;
+                bool startup_mouse_left_applied = false;
+                if (TryResolveCurrentGameplayScene(&startup_gameplay_address) &&
+                    startup_gameplay_address != 0) {
+                    saved_cast_intent = memory.ReadFieldOr<std::uint8_t>(
                         startup_gameplay_address,
                         kGameplayCastIntentOffset,
-                        static_cast<std::uint8_t>(1));
-                const auto input_buffer_index =
-                    memory.ReadFieldOr<int>(startup_gameplay_address, kGameplayInputBufferIndexOffset, -1);
-                if (input_buffer_index >= 0) {
-                    live_mouse_left_offset =
-                        static_cast<std::size_t>(
-                            input_buffer_index * kGameplayInputBufferStride +
-                            kGameplayMouseLeftButtonOffset);
-                } else {
-                    live_mouse_left_offset = kGameplayMouseLeftButtonOffset;
-                }
-                saved_mouse_left = memory.ReadFieldOr<std::uint8_t>(
-                    startup_gameplay_address,
-                    live_mouse_left_offset,
-                    0);
-                startup_mouse_left_applied =
-                    memory.TryWriteField<std::uint8_t>(
+                        0);
+                    startup_cast_intent_applied =
+                        memory.TryWriteField<std::uint8_t>(
+                            startup_gameplay_address,
+                            kGameplayCastIntentOffset,
+                            static_cast<std::uint8_t>(1));
+                    const auto input_buffer_index =
+                        memory.ReadFieldOr<int>(startup_gameplay_address, kGameplayInputBufferIndexOffset, -1);
+                    if (input_buffer_index >= 0) {
+                        live_mouse_left_offset =
+                            static_cast<std::size_t>(
+                                input_buffer_index * kGameplayInputBufferStride +
+                                kGameplayMouseLeftButtonOffset);
+                    } else {
+                        live_mouse_left_offset = kGameplayMouseLeftButtonOffset;
+                    }
+                    saved_mouse_left = memory.ReadFieldOr<std::uint8_t>(
                         startup_gameplay_address,
                         live_mouse_left_offset,
-                        static_cast<std::uint8_t>(1));
-            }
-            InvokeBotCastWithNativeActorSlot(cast_context, [&] {
-                startup_dispatched = CallSpellCastDispatcherSafe(
-                    dispatcher_address,
-                    actor_address,
-                    &startup_exception_code);
-            });
-            if (startup_gameplay_address != 0) {
-                if (startup_mouse_left_applied) {
-                    (void)memory.TryWriteField<std::uint8_t>(
-                        startup_gameplay_address,
-                        live_mouse_left_offset,
-                        saved_mouse_left);
+                        0);
+                    startup_mouse_left_applied =
+                        memory.TryWriteField<std::uint8_t>(
+                            startup_gameplay_address,
+                            live_mouse_left_offset,
+                            static_cast<std::uint8_t>(1));
                 }
-                if (startup_cast_intent_applied) {
-                    (void)memory.TryWriteField<std::uint8_t>(
-                        startup_gameplay_address,
-                        kGameplayCastIntentOffset,
-                        saved_cast_intent);
+                InvokeBotCastWithNativeActorSlot(cast_context, [&] {
+                    startup_dispatched = CallSpellCastDispatcherSafe(
+                        dispatcher_address,
+                        actor_address,
+                        &startup_exception_code);
+                });
+                if (startup_gameplay_address != 0) {
+                    if (startup_mouse_left_applied) {
+                        (void)memory.TryWriteField<std::uint8_t>(
+                            startup_gameplay_address,
+                            live_mouse_left_offset,
+                            saved_mouse_left);
+                    }
+                    if (startup_cast_intent_applied) {
+                        (void)memory.TryWriteField<std::uint8_t>(
+                            startup_gameplay_address,
+                            kGameplayCastIntentOffset,
+                            saved_cast_intent);
+                    }
                 }
-            }
-            ongoing.post_stock_dispatch_attempted = true;
-            const auto drive_after_dispatch =
-                memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
-            const auto no_interrupt_after_dispatch =
-                memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0);
-            const auto active_group_after_dispatch =
-                memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF);
-            Log(
-                "[bots] gameplay-slot post-stock dispatch. bot_id=" +
-                std::to_string(binding->bot_id) +
-                " skill_id=" + std::to_string(ongoing.dispatcher_skill_id) +
-                " ok=" + (startup_dispatched ? std::string("1") : std::string("0")) +
-                " seh=" + HexString(startup_exception_code) +
-                " group_post=" + HexString(active_group_after_dispatch) +
-                " drive_post=" + HexString(drive_after_dispatch) +
-                " no_int_post=" + HexString(no_interrupt_after_dispatch));
-            if (!startup_dispatched) {
-                FinishBotCastNativeLifecycle(cast_context, ongoing, "dispatch_seh", true);
-                ongoing = ParticipantEntityBinding::OngoingCastState{};
-                return true;
+                ongoing.post_stock_dispatch_attempted = true;
+                const auto drive_after_dispatch =
+                    memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
+                const auto no_interrupt_after_dispatch =
+                    memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0);
+                const auto active_group_after_dispatch =
+                    memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF);
+                Log(
+                    "[bots] gameplay-slot post-stock dispatch. bot_id=" +
+                    std::to_string(binding->bot_id) +
+                    " skill_id=" + std::to_string(ongoing.dispatcher_skill_id) +
+                    " ok=" + (startup_dispatched ? std::string("1") : std::string("0")) +
+                    " seh=" + HexString(startup_exception_code) +
+                    " group_post=" + HexString(active_group_after_dispatch) +
+                    " drive_post=" + HexString(drive_after_dispatch) +
+                    " no_int_post=" + HexString(no_interrupt_after_dispatch) +
+                    " mana_rate=" +
+                        std::to_string(native_mana_rate_config.native_rate));
+                if (!startup_dispatched) {
+                    FinishBotCastNativeLifecycle(cast_context, ongoing, "dispatch_seh", true);
+                    ongoing = ParticipantEntityBinding::OngoingCastState{};
+                    return true;
+                }
             }
         }
 
@@ -272,95 +302,24 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.saw_live_handle = true;
         }
         bool mana_depleted = false;
-        if (ongoing.mana_charge_kind == multiplayer::BotManaChargeKind::PerCast &&
-            ongoing.progression_runtime_address != 0 &&
-            ongoing.saw_activity &&
-            ongoing.mana_cost > 0.0f &&
-            ongoing.mana_spent_total <= 0.0f) {
-            const auto mana_spend =
-                TrySpendBotMana(binding, ongoing.progression_runtime_address, ongoing.mana_cost, false);
-            if (mana_spend.spent) {
-                ongoing.mana_spent_total += mana_spend.actual;
-                Log(
-                    "[bots] mana spent. bot_id=" + std::to_string(binding->bot_id) +
-                    " skill_id=" + std::to_string(ongoing.skill_id) +
-                    " mode=per_cast progression_level=" +
-                        std::to_string(ongoing.mana_progression_level) +
-                    " cost=" + std::to_string(ongoing.mana_cost) +
-                    " before=" + std::to_string(mana_spend.before) +
-                    " after=" + std::to_string(mana_spend.after) +
-                    " native=1 native_result=" + std::to_string(mana_spend.native_result) +
-                    " seh=" + HexString(mana_spend.native_exception_code) +
-                    " total=" + std::to_string(ongoing.mana_spent_total));
-            } else {
-                mana_depleted = true;
-                Log(
-                    "[bots] mana rejected. bot_id=" + std::to_string(binding->bot_id) +
-                    " skill_id=" + std::to_string(ongoing.skill_id) +
-                    " mode=per_cast cost=" + std::to_string(ongoing.mana_cost) +
-                    " before=" + std::to_string(mana_spend.before) +
-                    " native_attempted=" +
-                        (mana_spend.native_call_attempted ? std::string("1") : std::string("0")) +
-                    " native_ok=" +
-                        (mana_spend.native_call_succeeded ? std::string("1") : std::string("0")) +
-                    " native_result=" + std::to_string(mana_spend.native_result) +
-                    " seh=" + HexString(mana_spend.native_exception_code) +
-                    " readable=" + (mana_spend.readable ? std::string("1") : std::string("0")));
-            }
-        }
         if (ongoing.mana_charge_kind == multiplayer::BotManaChargeKind::PerSecond &&
             ongoing.progression_runtime_address != 0 &&
             ongoing.saw_activity &&
             !ongoing.bounded_release_requested &&
             ongoing.mana_cost > 0.0f) {
-            const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-            if (ongoing.mana_last_charge_ms == 0) {
-                ongoing.mana_last_charge_ms = now_ms;
-            }
-            auto elapsed_ms =
-                now_ms > ongoing.mana_last_charge_ms ? now_ms - ongoing.mana_last_charge_ms : 0;
-            if (elapsed_ms == 0 &&
-                ongoing.mana_spent_total <= 0.0f &&
-                (has_live_handle || native_primary_action_active)) {
-                elapsed_ms = 1;
-            }
-            if (elapsed_ms > 0) {
-                const float requested_mana =
-                    ongoing.mana_cost * (static_cast<float>(elapsed_ms) / 1000.0f);
-                const auto mana_spend =
-                    TrySpendBotMana(binding, ongoing.progression_runtime_address, requested_mana, true);
-                ongoing.mana_last_charge_ms = now_ms;
-                if (mana_spend.spent) {
-                    ongoing.mana_spent_total += mana_spend.actual;
-                    Log(
-                        "[bots] mana spent. bot_id=" + std::to_string(binding->bot_id) +
-                        " skill_id=" + std::to_string(ongoing.skill_id) +
-                        " mode=per_second progression_level=" +
-                            std::to_string(ongoing.mana_progression_level) +
-                        " rate=" + std::to_string(ongoing.mana_cost) +
-                        " cost=" + std::to_string(requested_mana) +
-                        " before=" + std::to_string(mana_spend.before) +
-                        " after=" + std::to_string(mana_spend.after) +
-                        " native=1 native_result=" + std::to_string(mana_spend.native_result) +
-                        " seh=" + HexString(mana_spend.native_exception_code) +
-                        " total=" + std::to_string(ongoing.mana_spent_total));
-                }
-                if (!mana_spend.spent || mana_spend.actual + 0.001f < requested_mana) {
-                    mana_depleted = true;
-                    Log(
-                        "[bots] mana depleted. bot_id=" + std::to_string(binding->bot_id) +
-                        " skill_id=" + std::to_string(ongoing.skill_id) +
-                        " mode=per_second requested=" + std::to_string(requested_mana) +
-                        " actual=" + std::to_string(mana_spend.actual) +
-                        " before=" + std::to_string(mana_spend.before) +
-                        " after=" + std::to_string(mana_spend.after) +
-                        " native_attempted=" +
-                            (mana_spend.native_call_attempted ? std::string("1") : std::string("0")) +
-                        " native_ok=" +
-                            (mana_spend.native_call_succeeded ? std::string("1") : std::string("0")) +
-                        " native_result=" + std::to_string(mana_spend.native_result) +
-                        " seh=" + HexString(mana_spend.native_exception_code));
-                }
+            float current_mp = 0.0f;
+            float max_mp = 0.0f;
+            constexpr float kNativeManaDepletedEpsilon = 0.001f;
+            if (TryReadProgressionMana(ongoing.progression_runtime_address, &current_mp, &max_mp) &&
+                current_mp <= kNativeManaDepletedEpsilon) {
+                mana_depleted = true;
+                Log(
+                    "[bots] native mana depleted. bot_id=" + std::to_string(binding->bot_id) +
+                    " skill_id=" + std::to_string(ongoing.skill_id) +
+                    " mode=per_second progression_level=" +
+                        std::to_string(ongoing.mana_progression_level) +
+                    " mp=" + std::to_string(current_mp) +
+                    " max_mp=" + std::to_string(max_mp));
             }
         }
 

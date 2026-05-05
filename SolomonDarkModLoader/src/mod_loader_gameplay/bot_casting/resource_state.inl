@@ -118,27 +118,6 @@ bool TryReadActorHealthRuntime(uintptr_t actor_address, ActorHealthRuntime* heal
     return TryReadActorProgressionHealth(actor_address, health);
 }
 
-struct ManaSpendResult {
-    bool readable = false;
-    bool spent = false;
-    bool native_call_attempted = false;
-    bool native_call_succeeded = false;
-    float before = 0.0f;
-    float after = 0.0f;
-    float requested = 0.0f;
-    float actual = 0.0f;
-    std::uint32_t native_result = 0;
-    DWORD native_exception_code = 0;
-};
-
-struct NativeBotManaDeltaShim {
-    bool active = false;
-    uintptr_t gameplay_address = 0;
-    std::size_t local_actor_slot_offset = 0;
-    uintptr_t saved_local_actor = 0;
-    bool local_actor_slot_restore_needed = false;
-};
-
 bool TryReadProgressionMana(uintptr_t progression_address, float* mp, float* max_mp) {
     if (progression_address == 0 || mp == nullptr || max_mp == nullptr) {
         return false;
@@ -160,185 +139,86 @@ bool TryReadProgressionMana(uintptr_t progression_address, float* mp, float* max
     return true;
 }
 
-bool EnterNativeBotManaDeltaShim(
-    const ParticipantEntityBinding* binding,
-    NativeBotManaDeltaShim* state) {
-    if (state == nullptr) {
-        return false;
-    }
+struct NativeManaRateConfigValidation {
+    bool required = false;
+    bool invalidated = false;
+    bool readable = false;
+    bool plausible = true;
+    float native_rate = 0.0f;
+    float expected_rate = 0.0f;
+    float max_allowed_rate = 0.0f;
+    const char* reason = "not_required";
+};
 
-    *state = NativeBotManaDeltaShim{};
-    if (binding == nullptr || binding->actor_address == 0) {
+bool NativeManaRateConfigRequiredForOngoingCast(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    return ongoing.active &&
+           ongoing.uses_dispatcher_skill_id &&
+           ongoing.mana_charge_kind == multiplayer::BotManaChargeKind::PerSecond &&
+           std::isfinite(ongoing.mana_cost) &&
+           ongoing.mana_cost > 0.0f;
+}
+
+bool ClearNativeManaRateConfigForOngoingCast(
+    uintptr_t actor_address,
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    if (actor_address == 0 || !NativeManaRateConfigRequiredForOngoingCast(ongoing)) {
         return false;
     }
 
     auto& memory = ProcessMemory::Instance();
-    uintptr_t gameplay_address = 0;
-    if (!TryResolveCurrentGameplayScene(&gameplay_address) || gameplay_address == 0) {
-        *state = NativeBotManaDeltaShim{};
+    if (kActorSpellConfig2d0Offset == 0 ||
+        !memory.IsReadableRange(actor_address + kActorSpellConfig2d0Offset, sizeof(float))) {
         return false;
     }
-
-    // Native 0x0052B150 gates the mana-delta body on the local player actor
-    // pointer at gameplay+0x1358 before mutating this actor's progression.
-    const auto local_actor_slot_offset = kGameplayPlayerActorOffset;
-    const auto saved_local_actor =
-        memory.ReadFieldOr<uintptr_t>(gameplay_address, local_actor_slot_offset, 0);
-    if (saved_local_actor != binding->actor_address &&
-        !memory.TryWriteField<uintptr_t>(
-            gameplay_address,
-            local_actor_slot_offset,
-            binding->actor_address)) {
-        *state = NativeBotManaDeltaShim{};
-        return false;
-    }
-
-    state->active = true;
-    state->gameplay_address = gameplay_address;
-    state->local_actor_slot_offset = local_actor_slot_offset;
-    state->saved_local_actor = saved_local_actor;
-    state->local_actor_slot_restore_needed = saved_local_actor != binding->actor_address;
-    return true;
+    return memory.TryWriteField<float>(actor_address, kActorSpellConfig2d0Offset, 0.0f);
 }
 
-void LeaveNativeBotManaDeltaShim(const NativeBotManaDeltaShim& state) {
-    if (!state.active) {
-        return;
+NativeManaRateConfigValidation ValidateNativeManaRateConfigForOngoingCast(
+    uintptr_t actor_address,
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    NativeManaRateConfigValidation validation{};
+    validation.required = NativeManaRateConfigRequiredForOngoingCast(ongoing);
+    validation.invalidated = ongoing.native_mana_rate_config_invalidated;
+    validation.expected_rate = ongoing.mana_cost;
+    if (!validation.required) {
+        return validation;
+    }
+
+    validation.plausible = false;
+    const auto rate_ceiling = std::fabs(validation.expected_rate) * 4.0f;
+    validation.max_allowed_rate = rate_ceiling > 0.01f ? rate_ceiling : 0.01f;
+    if (!validation.invalidated) {
+        validation.reason = "not_invalidated";
+        return validation;
+    }
+    if (actor_address == 0 || kActorSpellConfig2d0Offset == 0) {
+        validation.reason = "address_unavailable";
+        return validation;
     }
 
     auto& memory = ProcessMemory::Instance();
-    if (state.local_actor_slot_restore_needed &&
-        state.gameplay_address != 0 &&
-        state.local_actor_slot_offset != 0) {
-        (void)memory.TryWriteField<uintptr_t>(
-            state.gameplay_address,
-            state.local_actor_slot_offset,
-            state.saved_local_actor);
-    }
-}
-
-ManaSpendResult TryApplyNativeBotManaDelta(
-    const ParticipantEntityBinding* binding,
-    uintptr_t progression_address,
-    float actual_amount) {
-    ManaSpendResult result{};
-    result.requested = actual_amount;
-    if (binding == nullptr || binding->actor_address == 0 ||
-        !std::isfinite(actual_amount) || actual_amount < 0.0f) {
-        return result;
+    if (!memory.IsReadableRange(actor_address + kActorSpellConfig2d0Offset, sizeof(float))) {
+        validation.reason = "unreadable";
+        return validation;
     }
 
-    float before = 0.0f;
-    float max_mp = 0.0f;
-    if (!TryReadProgressionMana(progression_address, &before, &max_mp)) {
-        return result;
+    validation.readable = true;
+    validation.native_rate =
+        memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2d0Offset, 0.0f);
+    if (!std::isfinite(validation.native_rate) || validation.native_rate <= 0.0f) {
+        validation.reason = "pending";
+        return validation;
     }
 
-    result.readable = true;
-    result.before = before;
-    result.after = before;
-    if (actual_amount <= 0.0f) {
-        result.spent = true;
-        return result;
+    if (validation.native_rate > validation.max_allowed_rate) {
+        validation.reason = "mismatch";
+        return validation;
     }
 
-    auto& memory = ProcessMemory::Instance();
-    const auto actor_progression_handle =
-        memory.ReadFieldOr<uintptr_t>(binding->actor_address, kActorProgressionHandleOffset, 0);
-    const auto actor_progression_runtime =
-        actor_progression_handle != 0 ? ReadSmartPointerInnerObject(actor_progression_handle) : 0;
-    if (actor_progression_runtime != progression_address) {
-        Log(
-            "[bots] native mana delta skipped; actor progression mismatch. actor=" +
-            HexString(binding->actor_address) +
-            " actor_progression=" + HexString(actor_progression_runtime) +
-            " requested_progression=" + HexString(progression_address));
-        return result;
-    }
-
-    const auto apply_mana_delta_address =
-        memory.ResolveGameAddressOrZero(kPlayerActorApplyManaDelta);
-    if (apply_mana_delta_address == 0) {
-        return result;
-    }
-
-    NativeBotManaDeltaShim shim;
-    if (!EnterNativeBotManaDeltaShim(binding, &shim)) {
-        return result;
-    }
-
-    result.native_call_attempted = true;
-    result.native_call_succeeded =
-        CallPlayerActorApplyManaDeltaSafe(
-            apply_mana_delta_address,
-            binding->actor_address,
-            -actual_amount,
-            1,
-            &result.native_result,
-            &result.native_exception_code);
-    LeaveNativeBotManaDeltaShim(shim);
-
-    if (!result.native_call_succeeded) {
-        return result;
-    }
-
-    float after = before;
-    float after_max_mp = 0.0f;
-    if (!TryReadProgressionMana(progression_address, &after, &after_max_mp)) {
-        return result;
-    }
-
-    result.after = after;
-    const auto spent_amount = before - after;
-    if (spent_amount <= 0.0f) {
-        return result;
-    }
-
-    const auto expected_after = before > actual_amount ? before - actual_amount : 0.0f;
-    constexpr float kManaSpendEpsilon = 0.01f;
-    result.actual = spent_amount;
-    result.spent =
-        std::fabs(after - expected_after) <= kManaSpendEpsilon ||
-        spent_amount + kManaSpendEpsilon >= actual_amount;
-    return result;
-}
-
-ManaSpendResult TrySpendBotMana(
-    const ParticipantEntityBinding* binding,
-    uintptr_t progression_address,
-    float requested_amount,
-    bool allow_partial) {
-    ManaSpendResult result{};
-    result.requested = requested_amount;
-    if (!std::isfinite(requested_amount) || requested_amount <= 0.0f) {
-        result.spent = true;
-        return result;
-    }
-
-    float before = 0.0f;
-    float max_mp = 0.0f;
-    if (!TryReadProgressionMana(progression_address, &before, &max_mp)) {
-        return result;
-    }
-    result.readable = true;
-    result.before = before;
-    result.after = before;
-    if (before <= 0.0f) {
-        return result;
-    }
-
-    if (before + 0.001f < requested_amount && !allow_partial) {
-        return result;
-    }
-
-    const float actual_amount =
-        (allow_partial || before < requested_amount)
-            ? (before < requested_amount ? before : requested_amount)
-            : requested_amount;
-    auto result_from_native =
-        TryApplyNativeBotManaDelta(binding, progression_address, actual_amount);
-    result_from_native.requested = requested_amount;
-    return result_from_native;
+    validation.plausible = true;
+    validation.reason = "ready";
+    return validation;
 }
 
 int ReadEarthBoulderProgressionLevel(

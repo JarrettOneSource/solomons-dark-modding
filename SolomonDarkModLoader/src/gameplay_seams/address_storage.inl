@@ -73,6 +73,7 @@ uintptr_t kGameFree = 0;
 uintptr_t kGameOperatorNew = 0;
 uintptr_t kNativeIntArrayClear = 0;
 uintptr_t kCastActiveHandleCleanup = 0;
+uintptr_t kPlayerActorApplyManaDeltaLocalActorGateBranch = 0;
 uintptr_t kCastCleanupSlotGateBranch = 0;
 uintptr_t kSpellCast028SlotGateBranch = 0;
 uintptr_t kSpellCast3EESlotGateBranch = 0;

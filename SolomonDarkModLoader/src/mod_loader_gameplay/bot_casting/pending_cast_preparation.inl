@@ -420,7 +420,10 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     ongoing.mana_charge_kind = cast_mana.kind;
     ongoing.mana_cost = cast_mana.cost;
     ongoing.mana_progression_level = cast_mana.progression_level;
-    ongoing.mana_last_charge_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (NativeManaRateConfigRequiredForOngoingCast(ongoing)) {
+        ongoing.native_mana_rate_config_invalidated =
+            ClearNativeManaRateConfigForOngoingCast(actor_address, ongoing);
+    }
     Log(
         "[bots] mana prepared. bot_id=" + std::to_string(binding->bot_id) +
         " skill_id=" + std::to_string(ongoing.skill_id) +
@@ -429,6 +432,8 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         " cost=" + std::to_string(cast_mana.cost) +
         " native_stat_cost=" + std::to_string(cast_mana.native_stat_cost) +
         " native_output_scale=" + std::to_string(cast_mana.native_output_scale) +
+        " native_rate_config_invalidated=" +
+            std::to_string(ongoing.native_mana_rate_config_invalidated ? 1 : 0) +
         " progression_runtime=" + HexString(ongoing.progression_runtime_address));
     if (cast_mana.kind != multiplayer::BotManaChargeKind::None) {
         if (ongoing.progression_runtime_address == 0) {
