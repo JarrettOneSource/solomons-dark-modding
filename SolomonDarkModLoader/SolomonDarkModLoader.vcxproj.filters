@@ -713,9 +713,6 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\cast_probe_state.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\equip_attachment_hook.inl">
-      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
-    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\gameplay_hud_hooks.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>

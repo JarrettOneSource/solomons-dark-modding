@@ -77,6 +77,7 @@ SOURCE_PROFILE_WRITE_SITES_EXPANDED_GHIDRA = ROOT / "runtime/ghidra_source_profi
 SOURCE_PROFILE_NEGATIVE_LIVE_PROBE = ROOT / "tests/re/run_live_source_profile_negative_probe.py"
 SOURCE_PROFILE_WRITER_LIVE_PROBE = ROOT / "tests/re/run_live_source_profile_writer_probe.py"
 PURE_PRIMARY_STARTUP_LIVE_PROBE = ROOT / "tests/re/run_live_pure_primary_startup_probe.py"
+PURE_PRIMARY_EQUIP_SINK_GHIDRA = ROOT / "runtime/ghidra_pure_primary_equip_sink_paths.txt"
 BOT_MANA_TRACE_HELPERS = ROOT / "tests/re/bot_mana_trace_helpers.py"
 BOT_MANA_WRITER_LIVE_PROBE = ROOT / "tests/re/run_live_bot_mana_writer_probe.py"
 BOT_NATIVE_MANA_SPEND_LIVE_PROBE = ROOT / "tests/re/run_live_bot_native_mana_spend_probe.py"
@@ -222,6 +223,23 @@ CORRECTED_SMELL_GUARDS = {
             "SUPPORTED_PRIVATE_AREAS",
         ),
     ),
+    "pure-primary local equip sink shim": (
+        (),
+        (
+            "PurePrimaryLocalActorWindowShim",
+            "EnterPurePrimaryLocalActorWindow",
+            "LeavePurePrimaryLocalActorWindow",
+            "apply_local_selection_shim",
+            "pure_primary_slot_item_shim",
+            "pure_primary_item_sink_fallback",
+            "local_sel_shim",
+            "local_window_shim",
+            "slot_item_shim",
+            "HookEquipAttachmentSinkGetCurrentItem",
+            "equip_attachment_get_current_item_hook",
+            "fallback_result",
+        ),
+    ),
 }
 
 
@@ -260,6 +278,9 @@ INVESTIGATION_REGISTER_COVERAGE = {
         "test:Player/GameNpc movement seed layout is named and documented",
     ),
     "Slot-0 cast shim": (
+        "test:Cast-state native contracts are documented and layout-backed",
+    ),
+    "Pure-primary equip sink": (
         "test:Cast-state native contracts are documented and layout-backed",
     ),
     "Skill selection state": (
@@ -2718,6 +2739,7 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
     active_spell_lifecycle_text = read_text(CAST_ACTIVE_SPELL_LIFECYCLE_XREFS_GHIDRA)
     latch_offsets_text = read_text(CAST_LATCH_OFFSET_ACCESS_GHIDRA)
     boulder_vtable_text = read_text(CAST_BOULDER_VTABLE_GHIDRA)
+    pure_primary_equip_sink_text = read_text(PURE_PRIMARY_EQUIP_SINK_GHIDRA)
     native_active_object_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/native_active_spell_object_state.inl"
     )
@@ -2768,6 +2790,7 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
     autonomous_probe_text = read_text(ROOT / "tools/probe_bot_autonomous_combat_validation.py")
     element_damage_probe_text = read_text(ROOT / "tools/probe_bot_element_damage.py")
     primary_wave_probe_text = read_text(ROOT / "tools/probe_bot_primary_wave_cast.py")
+    pure_primary_probe_text = read_text(PURE_PRIMARY_STARTUP_LIVE_PROBE)
     lua_combat_text = read_text(ROOT / "mods/lua_bots/scripts/lib/lua_bots/combat.lua")
     live_probe_text = read_text(ROOT / "tests/re/run_live_cast_shim_snapshot_probe.py")
 
@@ -2783,6 +2806,7 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
         "runtime/ghidra_active_spell_lifecycle_xrefs.txt",
         "runtime/ghidra_cast_latch_offset_accesses.txt",
         "runtime/ghidra_boulder_spell_object_vtable_slots.txt",
+        "runtime/ghidra_pure_primary_equip_sink_paths.txt",
         "tests/re/run_live_cast_shim_snapshot_probe.py",
         "runtime/live_cast_shim_snapshot_probe.json",
         "0x00548B00",
@@ -2790,8 +2814,11 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
         "0x0052F3B0",
         "0x0052C910",
         "0x0052DA40",
+        "0x0052DA80",
+        "0x00570D80",
         "0x0045ADE0",
         "0x00545360",
+        "actor+0x1FC",
         "native cast gate patches",
         "0x00544C92",
         "0x00545393",
@@ -3028,6 +3055,27 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
             "boulder dynamic vtable artifact is missing token(s): " +
             ", ".join(missing_boulder_vtable))
 
+    required_pure_primary_equip_sink_tokens = (
+        "FUNCTION FUN_0052da80 @ 0052da80",
+        "FUNCTION FUN_00570d80 @ 00570d80",
+        "0052dac3 MOV EAX,dword ptr [EDI + 0x1fc]",
+        "0052dae0 MOV ECX,dword ptr [EAX + 0x30]",
+        "0052dae3 MOV ECX,dword ptr [ECX]",
+        "0052dae5 CALL 0x00570d80",
+        "00570d80 MOV EAX,dword ptr [ECX + 0x4]",
+        "if (*(int **)(param_1 + 0x21c) == (int *)0x0)",
+        "iVar1 = FUN_00570d80();",
+        "FUN_0044f5f0(param_1,uVar5,0);",
+    )
+    missing_pure_primary_equip_sink = [
+        token for token in required_pure_primary_equip_sink_tokens
+        if token not in pure_primary_equip_sink_text
+    ]
+    if missing_pure_primary_equip_sink:
+        raise StaticReTestFailure(
+            "pure-primary equip-sink Ghidra artifact is missing token(s): " +
+            ", ".join(missing_pure_primary_equip_sink))
+
     required_layout_tokens = (
         "gameplay_primary_gate_block_flag=0x1ABE",
         "gameplay_cast_ui_block_flag=0x1ABD",
@@ -3097,7 +3145,8 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
         (cast_probe_state_text, "cast_probe_state", "kSpellBuilderResultParamAOffset"),
         (cast_probe_state_text, "cast_probe_state", "kActorProgressionRuntimeStateOffset"),
         (player_cast_hook_text, "player_cast_hook", "kGameplayPlayerProgressionHandleOffset"),
-        (player_control_hook_text, "player_control_hook", "kGameplayVisualSinkSlotBaseOffset"),
+        (player_control_hook_text, "player_control_hook", "kActorEquipRuntimeStateOffset"),
+        (player_control_hook_text, "player_control_hook", "kActorEquipRuntimeVisualLinkAttachmentOffset"),
         (resource_state_text, "resource_state", "kEnemyCurrentHpOffset"),
         (resource_state_text, "resource_state", "kEnemyMaxHpOffset"),
         (combat_prelude_text, "combat_prelude", "kActorStartupCounterOffset"),
@@ -3180,6 +3229,23 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
         raise StaticReTestFailure(
             "cast shim/snapshot live probe is missing token(s): " +
             ", ".join(missing_probe))
+
+    required_pure_primary_probe_tokens = (
+        "assert_direct_actor_equip_startup",
+        "actor1fc_plus4_type=0x1B5C",
+        "forbidden_shim_tokens",
+        "local_sel_shim=1",
+        "local_window_shim=1",
+        "slot_item_shim=1",
+    )
+    missing_pure_primary_probe = [
+        token for token in required_pure_primary_probe_tokens
+        if token not in pure_primary_probe_text
+    ]
+    if missing_pure_primary_probe:
+        raise StaticReTestFailure(
+            "pure-primary startup live probe is missing direct equip-sink assertion token(s): " +
+            ", ".join(missing_pure_primary_probe))
 
     if not re.search(
         r"\| Slot-0 cast shim \|[^\n]+\|[^\n]*0x0052F3B9[^\n]*0x00544C92[^\n]*0x00545393[^\n]*0x00545C2C[^\n]*\|[^\n]*done:",
@@ -3855,6 +3921,9 @@ def test_autonomous_probe_uses_bot_scoped_diagnostics_and_native_damage_evidence
         "native_cast_lines",
         "mana_spend_log_count",
         "targeted_damage_or_write_seen",
+        "controlled_damage_or_write_seen",
+        "first_target_health",
+        "second_target_health",
         "first_targeted_death_seen",
         "second_targeted_death_seen",
         "wait_for_materialized_bots",

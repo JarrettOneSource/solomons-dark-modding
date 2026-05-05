@@ -11,7 +11,6 @@ struct SpellDispatchProbeState {
     int depth = 0;
     uintptr_t actor_address = 0;
     std::uint64_t bot_id = 0;
-    uintptr_t pure_primary_item_sink_fallback = 0;
     bool startup = false;
     bool pure_primary_startup = false;
     bool local_player = false;
@@ -22,61 +21,6 @@ std::int32_t g_spell_action_builder_global_log_budget = 16;
 std::int32_t g_pure_primary_control_log_budget = 32;
 std::int32_t g_pure_primary_post_builder_log_budget = 64;
 void* g_pure_primary_post_builder_trampoline = nullptr;
-
-struct PurePrimaryLocalActorWindowShim {
-    struct Field {
-        std::size_t offset = 0;
-        std::uint32_t before = 0;
-        bool restored = false;
-    };
-
-    bool active = false;
-    std::array<Field, 1> fields{};
-};
-
-PurePrimaryLocalActorWindowShim EnterPurePrimaryLocalActorWindow(uintptr_t actor_address) {
-    PurePrimaryLocalActorWindowShim state{};
-    if (actor_address == 0) {
-        return state;
-    }
-
-    state.active = true;
-    state.fields = {{
-        {kActorEquipRuntimeStateOffset, 0, false},
-    }};
-
-    auto& memory = ProcessMemory::Instance();
-    for (auto& field : state.fields) {
-        if (field.offset == 0) {
-            continue;
-        }
-        field.before = memory.ReadFieldOr<std::uint32_t>(actor_address, field.offset, 0);
-        if (field.before != 0 &&
-            memory.TryWriteField<std::uint32_t>(actor_address, field.offset, 0)) {
-            field.restored = true;
-        }
-    }
-    return state;
-}
-
-void LeavePurePrimaryLocalActorWindow(
-    uintptr_t actor_address,
-    const PurePrimaryLocalActorWindowShim& state) {
-    if (!state.active || actor_address == 0) {
-        return;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    for (auto it = state.fields.rbegin(); it != state.fields.rend(); ++it) {
-        if (!it->restored || it->offset == 0) {
-            continue;
-        }
-        (void)memory.TryWriteField<std::uint32_t>(
-            actor_address,
-            it->offset,
-            it->before);
-    }
-}
 
 void __cdecl OnPurePrimaryPostBuilder(uintptr_t builder_result) {
     const auto probe = g_spell_dispatch_probe;

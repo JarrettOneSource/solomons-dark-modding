@@ -68,7 +68,6 @@ extern uintptr_t kSkillsWizardGetPrimaryColor;
 extern uintptr_t kStandaloneWizardEquipCtor;
 extern uintptr_t kGameNpcSetMoveGoal;
 extern uintptr_t kGameNpcSetTrackedSlotAssist;
-extern uintptr_t kEquipAttachmentSinkGetCurrentItem;
 extern uintptr_t kSpellActionBuilder;
 extern uintptr_t kSpellBuilderReset;
 extern uintptr_t kSpellBuilderFinalize;

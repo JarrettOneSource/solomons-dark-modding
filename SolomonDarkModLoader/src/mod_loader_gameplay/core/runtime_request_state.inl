@@ -46,7 +46,6 @@ struct GameplayKeyboardInjectionState {
     X86Hook pure_primary_spell_start_hook;
     X86Hook pure_primary_post_builder_hook;
     X86Hook spell_cast_dispatcher_hook;
-    X86Hook equip_attachment_get_current_item_hook;
     X86Hook spell_action_builder_hook;
     X86Hook spell_builder_reset_hook;
     X86Hook spell_builder_finalize_hook;

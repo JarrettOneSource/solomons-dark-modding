@@ -51,7 +51,9 @@ pointer.
 `tests/re/run_live_pure_primary_startup_probe.py --json` covers the PerCast
 side: Fire and Ether pure-primary casts must leave startup through the native
 lifecycle, trace stock bot-owned `0x0052B150` mana deltas, and reduce bot MP
-before the probe passes.
+before the probe passes. It also asserts the pure-primary startup log shows a
+real actor-owned equip runtime (`actor1fc_plus4_type=0x1B5C`) and none of the
+former local slot/window shim markers.
 
 ## Completed This Pass
 
@@ -111,7 +113,14 @@ before the probe passes.
   local-player actor pointer unchanged.
 - `tests/re/run_live_pure_primary_startup_probe.py --json` validates the
   Fire/Ether PerCast branch in the staged runtime: both pure-primary casts must
-  trace stock bot-owned native mana deltas and reduce bot MP.
+  trace stock bot-owned native mana deltas, reduce bot MP, and start from the
+  bot actor's direct equip runtime instead of a local-slot sink fallback.
+- `runtime/ghidra_pure_primary_equip_sink_paths.txt` proves
+  `0x0052DA80` checks `actor+0x1FC` before falling back to
+  `DAT_0081C264 + actor_slot * 0x64 + 0x1410`, then calls `0x00570D80` on the
+  actor-owned sink and reads the current item from `sink+0x4`. The loader no
+  longer hooks the sink accessor or swaps local slot state around pure-primary
+  startup.
 - Earth boulder release/damage was deepened with Ghidra and live evidence:
   - `0x00544C60`: Earth primary handler creates/updates boulder object `0x7D5`.
   - `0x005E5450`: native finalizer computes released damage from the live
@@ -154,9 +163,10 @@ before the probe passes.
     victim is in the native damage scan, not just a forced-position actor.
   - `tests/re/run_live_boulder_retarget_probe.py` validates the target swap
     contract against two live wave enemies: the held Boulder follows the bot's
-    live facing target while charging, freezes that retargeted actor at release,
-    removes that actor through native damage, and leaves the original target
-    alive after it has been moved outside the impact radius.
+    live facing target while charging, swaps early in the held-charge window,
+    freezes that retargeted actor at release, removes that actor through native
+    damage, and leaves the original target alive after it has been moved outside
+    the impact radius.
 - Synthetic source-profile RE is documented in
   `docs/native-source-profile-re.md`. Ghidra verifies the native consumer
   (`0x005E3080`) and clone-from-source actor path (`0x0061AA00`), but no safe
@@ -209,7 +219,9 @@ before the probe passes.
 This pass did not claim the entire bot casting path is native-clean. The
 remaining rows below still need their own Ghidra and Lua evidence before
 runtime cleanup. Actor source profiles, creation defaults, movement/collision
-ownership, selection state, and cast shims remain tracked smell sources.
+ownership, and selection state remain tracked smell sources. The prior
+local-slot cast shim and pure-primary equip-sink shim are removed from active
+runtime code.
 
 The PerCast spend branch is now live-proven for Fire and Ether, but the
 pure-primary driver still terminates the current test casts through
@@ -264,6 +276,7 @@ native cast/mana evidence, and HP damage, and leaves no fresh crash artifact.
 | Standalone collision | removed loader-owned collision push bridge | done for active code: `0x0061AA00`/`0x0063F6D0`/`0x005217B0` prove native clone registration and grid-cell binding; `0x00521B80`/`0x00522500`/`0x00522C00`/`0x00522B20` prove the stock overlap-response context; `runtime/ghidra_standalone_collision_ownership_xrefs.txt` and `runtime/ghidra_standalone_collision_field_writes.txt` confirm `0x00622D90`/`0x005217B0` are position-rebind/cell-repair seams and that `0x00525800` owns the direct overlap-response calls, while `tests/re/run_live_standalone_collision_probe.py` and `runtime/live_standalone_collision_probe.json` preserve the historical live evidence for the removed bridge | done: active tick code no longer runs a loader-owned circle push or writes bot positions for collision separation; recover a native dynamic overlap-response lifecycle before adding standalone actor pushback again |
 | Stock tick position restore | `player_actor_tick_hook.inl` | done for active code: `runtime/ghidra_stock_tick_restore_paths.txt` refreshes `0x00548B00`, `0x00525800`, `0x0052C910`, and `0x0052A500`; `runtime/ghidra_stock_tick_ownership_xrefs.txt` shows `0x00548B00` is only a vtable target, `0x0052C910`/`0x00548A00` are only reached from `PlayerActorTick`, and `0x00525800` is a shared executor rather than a bot ownership handoff; `runtime/ghidra_stock_tick_input_offset_accesses.txt` keeps `+0x158/+0x15C`, `+0x218`, `+0x21C`, and control-brain `+0x30/+0x34` tied to the PlayerActor tick/control-brain path; `tests/re/run_live_stock_tick_restore_probe.py` and `runtime/live_stock_tick_restore_probe.json` remain the regression evidence for the removed restore | done: active tick code no longer snapshots and rewrites bot X/Y around stock `PlayerActorTick`; stale inputs are cleared before stock tick and movement is applied through the native move-step executor |
 | Slot-0 cast shim | removed `local_player_cast_shim.inl`; added `native_cast_gate_patches.inl` | done: `runtime/ghidra_cast_slot0_dispatch_xrefs.txt` and `runtime/ghidra_cast_slot0_gate_offset_accesses.txt` identify the exact slot gates; `0x0052F3B9`, `0x00544C92`, `0x00545393`, and `0x00545C2C` are now byte-checked native cast gate patches, so gameplay-slot bots keep their real `actor+0x5C` and live progression slot | done: no local-slot/progression redirect remains in active code; failed patch bytes abort input injection instead of silently falling back |
+| Pure-primary equip sink | removed `equip_attachment_hook.inl` and local pure-primary actor/window slot fallback state | done: `runtime/ghidra_pure_primary_equip_sink_paths.txt` proves `0x0052DA80` uses the actor-owned equip runtime at `actor+0x1FC`, dereferences its visual sink at `+0x30`, calls `0x00570D80`, and reads the current staff item from `sink+0x4`; the fallback slot path is only for missing actor equip state | done: bots must carry the real actor-owned equip runtime; active startup logs require `actor1fc_plus4_type=0x1B5C`, and there is no sink accessor hook, local slot item swap, or local actor window shim in active runtime code |
 | Skill selection state | `skill_selection_rules.inl` | done: `0x0052C910` proves selection-brain target slot/handle/tick fields and those offsets are now `binary-layout.ini` seams; `runtime/ghidra_selection_lifecycle_xrefs.txt`, `runtime/ghidra_selection_and_cleanup_targets.txt`, and `runtime/ghidra_selection_brain_offset_accesses.txt` remain the selection lifecycle evidence | done: active casts require the native primary descriptor's selection state and no longer own a skill-id-to-selection fallback table |
 | Active spell object lookup | `native_active_spell_object_state.inl` | done: `0x0045ADE0` is now called through `actor_world_lookup_object_by_handle` instead of duplicating `world+0x500` bucket math; `0x00545360` still proves the boulder spell-object phase/release fields used for diagnostics, target-lethal release checks, and max-size release checks | done: active code uses the native lookup seam and no longer reads spell-object vtable slots as a release authority |
 | Cast latch cleanup | `release_and_latch_helpers.inl` | done: `0x0052F3B0` proves native active-handle cleanup and `runtime/ghidra_cast_latch_offset_accesses.txt` keeps the cast latch fields tied to the stock `PlayerActorTick` transition | done: direct active-handle sentinel fallback writes and damage-threshold spell-object charge mutation are removed; cleanup failures are logged and left visible |

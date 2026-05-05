@@ -57,7 +57,6 @@ using SkillsWizardGetPrimaryColorFn = void(__thiscall*)(
     void* self,
     float* out_color,
     std::uint32_t primary_entry);
-using EquipAttachmentSinkGetCurrentItemFn = int(__fastcall*)(int sink);
 using SpellActionBuilderFn = void(__thiscall*)(void* self, int mode, int arg2);
 using SpellBuilderResetFn = void(__cdecl*)();
 using SpellBuilderFinalizeFn = void(__cdecl*)();

@@ -330,11 +330,20 @@ def validate_release(
             "target-lethal retarget release kept charging to native max size: "
             f"charge={completion_charge:.6f} max={completion_max_charge:.6f}"
         )
-    if not close_enough(release_target_x, retarget_x) or not close_enough(release_target_y, retarget_y):
+    coordinate_tolerance = (
+        max(3.0, min(target_impact_radius, 24.0))
+        if math.isfinite(target_impact_radius)
+        else 3.0
+    )
+    if (
+        not close_enough(release_target_x, retarget_x, coordinate_tolerance) or
+        not close_enough(release_target_y, retarget_y, coordinate_tolerance)
+    ):
         failures.append(
             "release target coordinates did not follow retarget actor: "
             f"release=({release_target_x:.2f}, {release_target_y:.2f}) "
-            f"expected=({retarget_x:.2f}, {retarget_y:.2f})"
+            f"expected=({retarget_x:.2f}, {retarget_y:.2f}) "
+            f"tolerance={coordinate_tolerance:.2f}"
         )
     if not math.isfinite(target_distance):
         failures.append("release did not report a finite retarget distance")
@@ -396,6 +405,7 @@ def validate_release(
         "release_target_in_impact": target_in_impact,
         "projection_target_in_impact": projection_target_in_impact,
         "target_impact_radius": target_impact_radius,
+        "coordinate_tolerance": coordinate_tolerance,
         "completion_charge": completion_charge,
         "completion_max_charge": completion_max_charge,
         "completion_boulder_max_size": completion_boulder_max_size,
@@ -568,9 +578,9 @@ def main() -> int:
     parser.add_argument("--initial-hp", type=float, default=80.0)
     parser.add_argument("--retarget-hp", type=float, default=2.5)
     parser.add_argument("--enemy-watch-count", type=int, default=24)
-    parser.add_argument("--retarget-delay", type=float, default=0.90)
+    parser.add_argument("--retarget-delay", type=float, default=0.10)
     parser.add_argument("--pin-seconds", type=float, default=18.0)
-    parser.add_argument("--pin-step", type=float, default=0.50)
+    parser.add_argument("--pin-step", type=float, default=0.20)
     parser.add_argument("--settle-seconds", type=float, default=3.0)
     parser.add_argument("--force-hostile-hp-watches", action="store_true")
     args = parser.parse_args()

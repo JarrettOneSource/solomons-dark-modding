@@ -17,8 +17,11 @@ The pure-primary startup path also matters for fire, ether, and other
 staff-driven primary effects:
 
 - `0x0052DA80` is the live pure-primary allocator/startup path.
-- It resolves the current staff item through the equip sink, selecting mode `3`
-  for item type `0x1B5C`.
+- `runtime/ghidra_pure_primary_equip_sink_paths.txt` proves that startup first
+  reads `actor+0x1FC`; when that actor-owned equip runtime exists, the path uses
+  its visual sink at `+0x30` and calls `0x00570D80`, which returns the sink's
+  current item from `sink+0x4`.
+- It selects mode `3` for item type `0x1B5C`.
 - The builder call site is `0x0052DB04 -> 0x0044F5F0`.
 - `0x0044F5F0` starts with a two-instruction prologue (`push -1`, then
   `push 0x76559B`), so any detour there must cover `7` bytes. A `5`-byte
@@ -49,6 +52,7 @@ The current cast cleanup work is backed by these durable artifacts:
 - `runtime/ghidra_stock_tick_slot_shim_cast_paths.txt`
 - `runtime/ghidra_cast_state_offsets.txt`
 - `runtime/ghidra_cast_spell_object_handlers.txt`
+- `runtime/ghidra_pure_primary_equip_sink_paths.txt`
 - `tests/re/run_live_cast_shim_snapshot_probe.py`
 - `runtime/live_cast_shim_snapshot_probe.json`
 
@@ -71,6 +75,12 @@ redirect and installs byte-checked native cast gate patches instead. These
 patches unlock the exact non-zero-slot branches while leaving
 `actor+0x5C` pointed at the bot's real gameplay slot, so stock progression
 lookups use the bot's live slot data.
+
+The former pure-primary local equip sink shim was separate from that slot gate.
+`0x0052DA80` already has a native actor-owned path through `actor+0x1FC`; the
+loader now requires bots to carry that real equip runtime and no longer hooks
+`0x00570D80`, swaps the local slot sink, or opens a local actor window around
+pure-primary startup.
 
 ## May 1 slot-0 dispatch xref pass
 
@@ -184,14 +194,12 @@ The `(actor+0x5C == 0)` clause bakes in a "local player only" assumption.
   (`ticks=0 saw_latch=0 group_post=0xFF drive_post=0x0`) yet no projectile or
   cone ever rendered.
 
-Fix: `InvokeWithLocalPlayerSlot` in `ProcessPendingBotCast`
-(`src/mod_loader_gameplay/bot_casting/pending_cast_processing.inl`) wraps each native
-dispatcher/cleanup call with a transient `actor+0x5C = 0` write and an immediate
-restore to the saved slot. The flip lives entirely inside the synchronous
-`__thiscall` into the game, so hostile AI / HUD / rendering observe the bot's
-true slot on every other access. The spell object itself is initialized from
-the allocator's own `spell_obj+0x5C/+0x5E` (not actor identity), so it still
-carries a valid group/slot after the bot's slot is restored.
+Fix: `native_cast_gate_patches.inl` byte-checks and patches the exact stock
+slot gates at `0x0052F3B9`, `0x00544C92`, `0x00545393`, and `0x00545C2C`.
+Bots keep their real gameplay slot in `actor+0x5C`; stock progression lookups
+and targeting therefore continue to observe the bot-owned slot. The spell
+object itself is initialized from the allocator's own `spell_obj+0x5C/+0x5E`
+(not actor identity), so it carries a valid group/slot through cleanup.
 
 ### Control-brain vector contract for primary startup
 

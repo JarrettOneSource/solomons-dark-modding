@@ -51,7 +51,6 @@ uintptr_t kSkillsWizardGetPrimaryColor = 0;
 uintptr_t kStandaloneWizardEquipCtor = 0;
 uintptr_t kGameNpcSetMoveGoal = 0;
 uintptr_t kGameNpcSetTrackedSlotAssist = 0;
-uintptr_t kEquipAttachmentSinkGetCurrentItem = 0;
 uintptr_t kSpellActionBuilder = 0;
 uintptr_t kSpellBuilderReset = 0;
 uintptr_t kSpellBuilderFinalize = 0;

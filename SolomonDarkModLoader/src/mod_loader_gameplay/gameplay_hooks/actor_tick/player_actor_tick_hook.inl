@@ -160,11 +160,10 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         std::uint8_t saved_cast_intent = 0;
         std::uint8_t saved_mouse_left = 0;
         std::size_t live_mouse_left_offset = 0;
-        bool synthetic_cast_intent_applied = false;
-        bool synthetic_mouse_left_applied = false;
+        bool stock_cast_intent_applied = false;
+        bool stock_mouse_left_applied = false;
         std::uint8_t saved_global_1abe_for_stock_tick = 0;
         bool global_1abe_zeroed_for_stock_tick = false;
-        PurePrimaryLocalActorWindowShim pure_primary_actor_window_shim{};
         // Press the stock cast gate for startup, and keep it held for continuous
         // pure primaries whose damage hitbox only runs while input is down.
         // Aim is refreshed before stock tick, so held input does not freeze the
@@ -172,7 +171,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         const bool drive_stock_cast_input =
             binding->ongoing_cast.active &&
             OngoingCastShouldDriveSyntheticCastInput(binding->ongoing_cast);
-        const bool pure_primary_stock_shim =
+        const bool pure_primary_needs_primary_gate_open =
             binding->ongoing_cast.active &&
             binding->ongoing_cast.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary;
         const bool refresh_selection_target_for_stock_tick =
@@ -186,7 +185,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 gameplay_address,
                 kGameplayCastIntentOffset,
                 0);
-            synthetic_cast_intent_applied =
+            stock_cast_intent_applied =
                 memory.TryWriteField<std::uint8_t>(
                     gameplay_address,
                     kGameplayCastIntentOffset,
@@ -202,7 +201,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     gameplay_address,
                     live_mouse_left_offset,
                     0);
-                synthetic_mouse_left_applied =
+                stock_mouse_left_applied =
                     memory.TryWriteField<std::uint8_t>(
                         gameplay_address,
                         live_mouse_left_offset,
@@ -213,14 +212,14 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     gameplay_address,
                     live_mouse_left_offset,
                     0);
-                synthetic_mouse_left_applied =
+                stock_mouse_left_applied =
                     memory.TryWriteField<std::uint8_t>(
                         gameplay_address,
                         live_mouse_left_offset,
                         static_cast<std::uint8_t>(1));
             }
         }
-        if (pure_primary_stock_shim) {
+        if (pure_primary_needs_primary_gate_open) {
             const auto global_1abe_address =
                 memory.ResolveGameAddressOrZero(kGameObjectGlobal + kGameplayPrimaryGateBlockFlagOffset);
             saved_global_1abe_for_stock_tick =
@@ -231,8 +230,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                         global_1abe_address,
                         0);
             }
-            pure_primary_actor_window_shim =
-                EnterPurePrimaryLocalActorWindow(actor_address);
         }
         if (refresh_selection_target_for_stock_tick) {
             RefreshSelectionBrainTargetForOngoingCast(binding->ongoing_cast);
@@ -243,7 +240,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             ReapplyOngoingCastSelectionState(binding, actor_address, binding->ongoing_cast, true);
         }
         original(self);
-        LeavePurePrimaryLocalActorWindow(actor_address, pure_primary_actor_window_shim);
         if (refresh_selection_target_for_stock_tick) {
             RefreshSelectionBrainTargetForOngoingCast(binding->ongoing_cast);
         }
@@ -252,27 +248,27 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 memory.ResolveGameAddressOrZero(kGameObjectGlobal + kGameplayPrimaryGateBlockFlagOffset),
                 saved_global_1abe_for_stock_tick);
         }
-        if (synthetic_cast_intent_applied) {
+        if (stock_cast_intent_applied) {
             (void)memory.TryWriteField<std::uint8_t>(
                 gameplay_address,
                 kGameplayCastIntentOffset,
                 saved_cast_intent);
         }
-        if (synthetic_mouse_left_applied) {
+        if (stock_mouse_left_applied) {
             (void)memory.TryWriteField<std::uint8_t>(
                 gameplay_address,
                 live_mouse_left_offset,
                 saved_mouse_left);
         }
-        if (synthetic_cast_intent_applied) {
-            static std::uint64_t s_last_synthetic_cast_intent_log_ms = 0;
-            if (native_tick_now_ms - s_last_synthetic_cast_intent_log_ms >= 250) {
-                s_last_synthetic_cast_intent_log_ms = native_tick_now_ms;
+        if (stock_cast_intent_applied) {
+            static std::uint64_t s_last_stock_cast_input_log_ms = 0;
+            if (native_tick_now_ms - s_last_stock_cast_input_log_ms >= 250) {
+                s_last_stock_cast_input_log_ms = native_tick_now_ms;
                 Log(
-                    "[bots] wizard synthetic cast intent. actor=" +
+                    "[bots] wizard stock cast input. actor=" +
                     HexString(actor_address) +
                     " gameplay=" + HexString(gameplay_address) +
-                    " mouse_left=" + (synthetic_mouse_left_applied ? std::string("1") : std::string("0")) +
+                    " mouse_left=" + (stock_mouse_left_applied ? std::string("1") : std::string("0")) +
                     " kind=" +
                         (IsGameplaySlotWizardKind(binding->kind)
                              ? std::string("gameplay_slot")

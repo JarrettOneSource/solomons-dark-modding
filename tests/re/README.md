@@ -152,8 +152,9 @@ python3 tests/re/run_live_pure_primary_startup_probe.py --json
 ```
 
 That probe queues Fire and Ether pure-primary casts, requires them to leave the
-startup lifecycle normally, and verifies each cast traces a bot-owned stock
-native mana delta with a real live MP decrease.
+startup lifecycle normally, verifies each cast traces a bot-owned stock native
+mana delta with a real live MP decrease, and asserts the startup path used the
+bot actor's direct equip runtime instead of a local slot/window fallback.
 
 Run the focused out-of-mana rejection probe after touching bot cast admission
 or mana readiness checks:
@@ -235,7 +236,9 @@ That probe charges Boulder on one real wave enemy, retargets the bot to a second
 real wave enemy during the held native tick, moves the original target out of
 the impact radius, then asserts the native release target is the retargeted
 enemy, the frozen release target is removed by native damage, and the original
-target remains alive.
+target remains alive. The default retarget delay is intentionally early so the
+swap happens during the held-charge window rather than after the original target
+has already completed the cast path.
 
 Run the native ally HP/default-resource probe around the clone HP cleanup:
 
@@ -330,23 +333,23 @@ supporting Ghidra artifacts current before changing that bridge:
 `runtime/ghidra_standalone_collision_ownership_xrefs.txt`, and
 `runtime/ghidra_standalone_collision_field_writes.txt`.
 
-Run the cast shim/snapshot probe before removing slot-0 cast shims, stock tick
-windows, or active spell object snapshot code:
+Run the cast lifecycle snapshot probe before changing native cast gate patches,
+stock tick windows, or active spell object snapshot code:
 
 ```bash
 python3 tests/re/run_live_cast_shim_snapshot_probe.py --json --timeout 180
 ```
 
 That probe launches the staged game, queues an Earth primary bot cast, captures
-the layout-backed cast fields before/active/after, verifies the local-player
-slot/progression shim state is restored, verifies selection fields, active
-handle sentinels, skill ids, and latch state after cleanup, and writes
+the layout-backed cast fields before/active/after, verifies the bot keeps its
+real gameplay slot/progression state, verifies selection fields, active handle
+sentinels, skill ids, and latch state after cleanup, and writes
 `runtime/live_cast_shim_snapshot_probe.json`. Earth is intentional here: its
 boulder object stays in the world-bucket table long enough for Lua to snapshot,
 while faster PerCast primaries can complete before the poll observes a handle.
 Keep `runtime/ghidra_cast_slot0_dispatch_xrefs.txt` and
 `runtime/ghidra_cast_slot0_gate_offset_accesses.txt` current before changing
-the slot shim. Keep the selection/latch artifacts current before touching
+the native gate patches. Keep the selection/latch artifacts current before touching
 selection-state restore, active spell snapshots, or release cleanup:
 `runtime/ghidra_selection_lifecycle_xrefs.txt`,
 `runtime/ghidra_selection_and_cleanup_targets.txt`,

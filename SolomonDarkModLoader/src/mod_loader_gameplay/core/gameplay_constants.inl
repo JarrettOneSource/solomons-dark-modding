@@ -9,7 +9,6 @@ constexpr std::size_t kPlayerActorPurePrimaryGateHookMinimumPatchSize = 5;
 constexpr std::size_t kPlayerControlBrainUpdateHookMinimumPatchSize = 5;
 constexpr std::size_t kPurePrimarySpellStartHookMinimumPatchSize = 5;
 constexpr std::size_t kSpellCastDispatcherHookMinimumPatchSize = 5;
-constexpr std::size_t kEquipAttachmentSinkGetCurrentItemHookMinimumPatchSize = 5;
 // 0x0044F5F0 starts with two whole instructions:
 //   push -1           (2 bytes)
 //   push 0x76559b     (5 bytes)

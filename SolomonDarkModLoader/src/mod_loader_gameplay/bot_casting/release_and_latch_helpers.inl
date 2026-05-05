@@ -81,23 +81,6 @@ void FinishBotCastNativeLifecycle(
         (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorPostGateActiveByteOffset, 0);
     }
     RestoreBotCastAim(context, state);
-    if (state.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
-        state.pure_primary_item_sink_fallback != 0) {
-        std::string lane_error;
-        if (!SetEquipVisualLaneObject(
-                actor_address,
-                kActorEquipRuntimeVisualLinkAttachmentOffset,
-                state.pure_primary_item_sink_fallback,
-                "attachment",
-                &lane_error) &&
-            !lane_error.empty()) {
-            Log(
-                "[bots] pure-primary attachment restore failed. bot_id=" +
-                std::to_string(binding->bot_id) +
-                " actor=" + HexString(actor_address) +
-                " error=" + lane_error);
-        }
-    }
     RestoreSelectionStateObjectAfterCast(state);
     RestoreSelectionBrainAfterCast(state);
     ClearSelectionBrainTarget(state.selection_state_pointer);

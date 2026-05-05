@@ -79,7 +79,6 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "standalone_wizard_equip_ctor", kStandaloneWizardEquipCtor),
         SDMOD_ADDR("gameplay.hooks", "gamenpc_set_move_goal", kGameNpcSetMoveGoal),
         SDMOD_ADDR("gameplay.hooks", "gamenpc_set_tracked_slot_assist", kGameNpcSetTrackedSlotAssist),
-        SDMOD_ADDR("gameplay.hooks", "equip_attachment_get_current_item", kEquipAttachmentSinkGetCurrentItem),
         SDMOD_ADDR("gameplay.hooks", "spell_action_builder", kSpellActionBuilder),
         SDMOD_ADDR("gameplay.hooks", "spell_builder_reset", kSpellBuilderReset),
         SDMOD_ADDR("gameplay.hooks", "spell_builder_finalize", kSpellBuilderFinalize),

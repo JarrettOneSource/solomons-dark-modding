@@ -167,6 +167,46 @@ def wait_for_terminal_cast(
     )
 
 
+def assert_direct_actor_equip_startup(bot_id: int, native_latch_events: list[str]) -> dict[str, Any]:
+    forbidden_shim_tokens = (
+        "local_sel_shim=1",
+        "local_window_shim=1",
+        "slot_item_shim=1",
+    )
+    startup_lines = [
+        line for line in native_latch_events
+        if f"bot_id={bot_id}" in line and "pure_primary_start enter" in line
+    ]
+    if not startup_lines:
+        raise LivePurePrimaryStartupProbeFailure(
+            f"bot {bot_id}: no pure-primary startup log captured")
+    shimmed_lines = [
+        line for line in startup_lines
+        if any(token in line for token in forbidden_shim_tokens)
+    ]
+    if shimmed_lines:
+        raise LivePurePrimaryStartupProbeFailure(
+            f"bot {bot_id}: pure-primary startup still used local equip sink shim: "
+            f"{json.dumps(shimmed_lines[-5:], indent=2)}")
+    direct_lines = [
+        line for line in startup_lines
+        if (
+            "actor1fc=0x0" not in line and
+            "actor1fc_plus4_type=0x1B5C" in line
+        )
+    ]
+    if not direct_lines:
+        raise LivePurePrimaryStartupProbeFailure(
+            f"bot {bot_id}: no direct actor equip sink startup line with "
+            f"actor1fc_plus4_type=0x1B5C; lines={json.dumps(startup_lines[-8:], indent=2)}")
+    return {
+        "direct_actor_equip_startup": True,
+        "direct_actor_equip_line": direct_lines[-1],
+        "startup_line_count": len(startup_lines),
+        "forbidden_shim_tokens": list(forbidden_shim_tokens),
+    }
+
+
 def run_single_cast(
     bot_id: int,
     skill_id: int,
@@ -199,6 +239,10 @@ def run_single_cast(
             raise LivePurePrimaryStartupProbeFailure(f"sd.bots.cast rejected skill {skill_id}: {cast_result}")
 
         terminal = wait_for_terminal_cast(bot_id, skill_id, start_line_count, timeout_s)
+        direct_equip = assert_direct_actor_equip_startup(
+            bot_id,
+            terminal["native_latch_events"],
+        )
         mana_delta = wait_for_bot_native_mana_delta(
             bot_id,
             actor_address,
@@ -228,6 +272,7 @@ def run_single_cast(
         "gameplay_player_actor_after": gameplay_actor_after,
         "trace": trace,
         "stock_native_mana_delta": mana_delta,
+        "direct_actor_equip_startup": direct_equip,
         **terminal,
     }
 

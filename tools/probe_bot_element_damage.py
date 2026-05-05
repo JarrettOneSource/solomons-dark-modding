@@ -319,7 +319,8 @@ def build_native_projectile_spawn_validation(
                 for item in reversed(pure_primary_start_matches)
                 if int(item["startup_p750"]) == expected_build_skill_id
                 and int(item["startup_sel_id"]) == expected_selection_state
-                and int(item["local_sel_shim"]) == 1
+                and int(item["direct_actor_equip"]) == 1
+                and int(item["actor1fc_plus4_type"]) == 0x1B5C
             ),
             None,
         )
@@ -339,12 +340,12 @@ def build_native_projectile_spawn_validation(
             and int(matching_start["startup_sel_id"]) == expected_selection_state,
             "pure_primary_build_skill_matches": matching_start is not None
             and int(matching_start["startup_p750"]) == expected_build_skill_id,
-            "pure_primary_local_selection_shim_active": matching_start is not None
-            and int(matching_start["local_sel_shim"]) == 1,
-            "pure_primary_slot_item_shim_active": matching_start is not None
-            and int(matching_start["slot_item_shim"]) == 1,
-            "pure_primary_attachment_item_present": matching_start is not None
-            and int(matching_start["attachment_item"]) != 0,
+            "pure_primary_direct_actor_equip": matching_start is not None
+            and int(matching_start["direct_actor_equip"]) == 1,
+            "pure_primary_actor_equip_item_present": matching_start is not None
+            and int(matching_start["actor1fc_plus4"]) != 0,
+            "pure_primary_actor_equip_item_type": matching_start is not None
+            and int(matching_start["actor1fc_plus4_type"]) == 0x1B5C,
             "pure_primary_builder_logged": matching_builder is not None,
             "pure_primary_builder_result_nonzero": matching_builder is not None
             and int(matching_builder["builder_result"]) != 0,
@@ -571,12 +572,10 @@ def build_native_spell_stat_validation(
                     "actor": parse_int_text(pure_primary_start_match.group(1)),
                     "bot_id": parse_int_text(pure_primary_start_match.group(2)),
                     "startup": parse_cast_startup_value(line, "startup"),
-                    "local_sel_shim": parse_cast_startup_value(line, "local_sel_shim"),
-                    "local_window_shim": parse_cast_startup_value(line, "local_window_shim"),
-                    "slot_item_shim": parse_cast_startup_value(line, "slot_item_shim"),
-                    "attachment_item": parse_cast_startup_value(line, "attachment_item"),
-                    "fallback_slot_plus4": parse_cast_startup_value(line, "fallback_slot_plus4"),
-                    "fallback_slot_plus4_type": parse_cast_startup_value(line, "fallback_slot_plus4_type"),
+                    "direct_actor_equip": parse_cast_startup_value(line, "direct_actor_equip"),
+                    "actor1fc": parse_cast_startup_value(line, "actor1fc"),
+                    "actor1fc_plus4": parse_cast_startup_value(line, "actor1fc_plus4"),
+                    "actor1fc_plus4_type": parse_cast_startup_value(line, "actor1fc_plus4_type"),
                     "startup_p750": parse_cast_startup_value(line, "p750"),
                     "startup_sel_id": parse_cast_startup_value(line, "sel_id"),
                     "startup_e4": parse_cast_startup_value(line, "e4"),

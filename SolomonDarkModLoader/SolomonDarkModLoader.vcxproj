@@ -283,7 +283,6 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\bot_owned_skills_tick.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\player_actor_tick_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\cast_probe_state.inl" />
-    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\equip_attachment_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\gameplay_hud_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\input_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\monster_pathfinding_hook.inl" />

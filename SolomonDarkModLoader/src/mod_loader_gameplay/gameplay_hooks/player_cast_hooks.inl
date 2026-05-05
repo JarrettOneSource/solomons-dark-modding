@@ -160,7 +160,6 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
     std::uint64_t bot_id = 0;
     bool startup = false;
     bool pure_primary_startup = false;
-    uintptr_t pure_primary_item_sink_fallback = 0;
     bool local_player = false;
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
@@ -176,11 +175,6 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
                 !binding->ongoing_cast.uses_dispatcher_skill_id;
             if (binding->ongoing_cast.active &&
                 OngoingCastNeedsNativeTargetActor(binding->ongoing_cast)) {
-                if (binding->ongoing_cast.lane ==
-                    ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
-                    pure_primary_item_sink_fallback =
-                        binding->ongoing_cast.pure_primary_item_sink_fallback;
-                }
                 if (OngoingCastShouldRefreshNativeTargetState(binding->ongoing_cast)) {
                     (void)RefreshOngoingCastAimFromFacingTarget(binding, &binding->ongoing_cast);
                 }
@@ -259,8 +253,6 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
         g_spell_dispatch_probe.bot_id = bot_id;
         g_spell_dispatch_probe.startup = startup;
         g_spell_dispatch_probe.pure_primary_startup = pure_primary_startup;
-        g_spell_dispatch_probe.pure_primary_item_sink_fallback =
-            pure_primary_item_sink_fallback;
         g_spell_dispatch_probe.local_player = local_player;
         Log(
             "[bots] spell_dispatch enter actor=" + HexString(actor_address) +

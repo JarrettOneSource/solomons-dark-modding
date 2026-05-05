@@ -166,7 +166,6 @@ struct ParticipantEntityBinding {
         bool post_stock_dispatch_attempted = false;
         bool native_mana_rate_config_invalidated = false;
         bool native_mana_rate_config_pending_logged = false;
-        uintptr_t pure_primary_item_sink_fallback = 0;
         multiplayer::BotManaChargeKind mana_charge_kind =
             multiplayer::BotManaChargeKind::None;
         float mana_cost = 0.0f;

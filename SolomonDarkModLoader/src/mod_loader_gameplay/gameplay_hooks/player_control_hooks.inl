@@ -311,9 +311,8 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     bool log_this = false;
     std::uint64_t bot_id = 0;
     bool startup = false;
-    bool apply_local_selection_shim = false;
+    bool active_pure_primary_cast = false;
     bool local_player = false;
-    uintptr_t fallback_slot_obj = 0;
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
@@ -324,11 +323,11 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
             log_this = true;
             bot_id = binding->bot_id;
             startup = binding->ongoing_cast.startup_in_progress;
-            apply_local_selection_shim =
+            active_pure_primary_cast =
                 binding->ongoing_cast.active &&
                 binding->ongoing_cast.lane ==
                     ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary;
-            if (apply_local_selection_shim) {
+            if (active_pure_primary_cast) {
                 (void)RefreshAndApplyWizardBindingFacingState(binding, actor_address);
             }
         }
@@ -346,80 +345,6 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     }
 
     auto& memory = ProcessMemory::Instance();
-    uintptr_t pure_primary_slot_sink_inner = 0;
-    uintptr_t pure_primary_attachment_item = 0;
-    std::uint32_t pure_primary_saved_slot_item = 0;
-    bool pure_primary_slot_item_shim_applied = false;
-    if (apply_local_selection_shim) {
-        pure_primary_attachment_item = ResolveActorAttachmentLaneItem(actor_address);
-        {
-            std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-            if (auto* binding = FindParticipantEntityForActor(actor_address);
-                binding != nullptr &&
-                (IsGameplaySlotWizardKind(binding->kind) ||
-                 IsStandaloneWizardKind(binding->kind))) {
-                if (pure_primary_attachment_item != 0) {
-                    binding->ongoing_cast.pure_primary_item_sink_fallback =
-                        pure_primary_attachment_item;
-                } else {
-                    pure_primary_attachment_item =
-                        binding->ongoing_cast.pure_primary_item_sink_fallback;
-                }
-            }
-        }
-    }
-
-    PurePrimaryLocalActorWindowShim pure_primary_actor_window_shim{};
-    if (apply_local_selection_shim) {
-        pure_primary_actor_window_shim = EnterPurePrimaryLocalActorWindow(actor_address);
-        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-        if (auto* binding = FindParticipantEntityForActor(actor_address);
-            binding != nullptr &&
-            (IsGameplaySlotWizardKind(binding->kind) ||
-             IsStandaloneWizardKind(binding->kind))) {
-            SyncWizardBotMovementIntent(binding);
-            (void)RefreshAndApplyWizardBindingFacingState(binding, actor_address);
-        }
-    }
-
-    if (apply_local_selection_shim) {
-        const auto gameplay_global = memory.ReadValueOr<uintptr_t>(
-            memory.ResolveGameAddressOrZero(kGameObjectGlobal),
-            0);
-        const auto shim_slot_obj =
-            gameplay_global != 0
-                ? gameplay_global + kGameplayVisualSinkSlotBaseOffset
-                : 0;
-        const auto fallback_slot_obj30 =
-            shim_slot_obj != 0 &&
-                    memory.IsReadableRange(
-                        shim_slot_obj + kGameplayVisualSinkSlotAttachmentOffset,
-                        sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(
-                      shim_slot_obj + kGameplayVisualSinkSlotAttachmentOffset,
-                      0)
-                : 0;
-        pure_primary_slot_sink_inner =
-            fallback_slot_obj30 != 0 &&
-                    memory.IsReadableRange(fallback_slot_obj30, sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(fallback_slot_obj30, 0)
-                : 0;
-        if (pure_primary_attachment_item != 0 &&
-            pure_primary_slot_sink_inner != 0 &&
-            memory.IsReadableRange(
-                pure_primary_slot_sink_inner + kVisualLaneHolderCurrentObjectOffset,
-                sizeof(std::uint32_t))) {
-            pure_primary_saved_slot_item =
-                memory.ReadValueOr<std::uint32_t>(
-                    pure_primary_slot_sink_inner + kVisualLaneHolderCurrentObjectOffset,
-                    0);
-            pure_primary_slot_item_shim_applied =
-                memory.TryWriteValue<std::uint32_t>(
-                    pure_primary_slot_sink_inner + kVisualLaneHolderCurrentObjectOffset,
-                    static_cast<std::uint32_t>(pure_primary_attachment_item));
-        }
-    }
-
     if (log_this) {
         const auto actor_1fc =
             memory.ReadFieldOr<std::uint32_t>(actor_address, kActorEquipRuntimeStateOffset, 0);
@@ -455,73 +380,16 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
                       static_cast<uintptr_t>(actor_1fc_plus4) + kGameObjectTypeIdOffset,
                       0)
                 : 0;
-        std::uint8_t effective_slot_byte =
-            memory.ReadFieldOr<std::uint8_t>(actor_address, kActorSlotOffset, 0xFF);
-        if (apply_local_selection_shim) {
-            effective_slot_byte = 0;
-        }
-        const auto gameplay_global =
-            ProcessMemory::Instance().ReadValueOr<uintptr_t>(
-                ProcessMemory::Instance().ResolveGameAddressOrZero(kGameObjectGlobal),
-                0);
-        fallback_slot_obj =
-            gameplay_global != 0
-                ? gameplay_global +
-                    static_cast<std::size_t>(effective_slot_byte) *
-                        kGameplayVisualSinkSlotStride +
-                    kGameplayVisualSinkSlotBaseOffset
-                : 0;
-        const auto fallback_slot_obj30 =
-            fallback_slot_obj != 0 &&
-                    memory.IsReadableRange(
-                        fallback_slot_obj + kGameplayVisualSinkSlotAttachmentOffset,
-                        sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(
-                      fallback_slot_obj + kGameplayVisualSinkSlotAttachmentOffset,
-                      0)
-                : 0;
-        const auto fallback_slot_inner =
-            fallback_slot_obj30 != 0 && memory.IsReadableRange(fallback_slot_obj30, sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(fallback_slot_obj30, 0)
-                : 0;
-        const auto fallback_slot_plus4 =
-            fallback_slot_inner != 0 &&
-                    memory.IsReadableRange(
-                        fallback_slot_inner + kVisualLaneHolderCurrentObjectOffset,
-                        sizeof(std::uint32_t))
-                ? memory.ReadValueOr<std::uint32_t>(
-                      fallback_slot_inner + kVisualLaneHolderCurrentObjectOffset,
-                      0)
-                : 0;
-        const auto fallback_slot_plus4_type =
-            fallback_slot_plus4 != 0 &&
-                    memory.IsReadableRange(
-                        static_cast<uintptr_t>(fallback_slot_plus4) + kGameObjectTypeIdOffset,
-                        sizeof(std::uint32_t))
-                ? memory.ReadValueOr<std::uint32_t>(
-                      static_cast<uintptr_t>(fallback_slot_plus4) + kGameObjectTypeIdOffset,
-                      0)
-                : 0;
         Log(
             "[bots] pure_primary_start enter actor=" + HexString(actor_address) +
             " bot_id=" + std::to_string(bot_id) +
             " startup=" + std::to_string(startup ? 1 : 0) +
-            " local_sel_shim=" + std::to_string(apply_local_selection_shim ? 1 : 0) +
-            " local_window_shim=" + std::to_string(pure_primary_actor_window_shim.active ? 1 : 0) +
+            " direct_actor_equip=" + std::to_string(actor_1fc_ptr != 0 ? 1 : 0) +
             " actor1fc=" + HexString(actor_1fc_ptr) +
             " actor1fc30=" + HexString(actor_1fc_obj30) +
             " actor1fc_inner=" + HexString(actor_1fc_inner) +
             " actor1fc_plus4=" + HexString(actor_1fc_plus4) +
             " actor1fc_plus4_type=" + HexString(actor_1fc_plus4_type) +
-            " fallback_slot_byte=" + HexString(effective_slot_byte) +
-            " fallback_slot_obj=" + HexString(fallback_slot_obj) +
-            " fallback_slot_obj30=" + HexString(fallback_slot_obj30) +
-            " fallback_slot_inner=" + HexString(fallback_slot_inner) +
-            " fallback_slot_plus4=" + HexString(fallback_slot_plus4) +
-            " fallback_slot_plus4_type=" + HexString(fallback_slot_plus4_type) +
-            " slot_item_shim=" + std::to_string(pure_primary_slot_item_shim_applied ? 1 : 0) +
-            " slot_item_saved=" + HexString(pure_primary_saved_slot_item) +
-            " attachment_item=" + HexString(pure_primary_attachment_item) +
             " startup={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     }
     SpellDispatchProbeState saved_probe = g_spell_dispatch_probe;
@@ -529,20 +397,13 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
         g_spell_dispatch_probe.depth = saved_probe.depth + 1;
         g_spell_dispatch_probe.actor_address = actor_address;
         g_spell_dispatch_probe.bot_id = bot_id;
-        g_spell_dispatch_probe.pure_primary_item_sink_fallback =
-            pure_primary_attachment_item;
         g_spell_dispatch_probe.startup = startup;
-        g_spell_dispatch_probe.pure_primary_startup = apply_local_selection_shim;
+        g_spell_dispatch_probe.pure_primary_startup = active_pure_primary_cast;
         g_spell_dispatch_probe.local_player = local_player;
     }
     original(self);
-    if (pure_primary_slot_item_shim_applied) {
-        (void)memory.TryWriteValue<std::uint32_t>(
-            pure_primary_slot_sink_inner + kVisualLaneHolderCurrentObjectOffset,
-            pure_primary_saved_slot_item);
-    }
     g_spell_dispatch_probe = saved_probe;
-    if (apply_local_selection_shim) {
+    if (active_pure_primary_cast) {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
             binding != nullptr &&
@@ -557,5 +418,4 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
             " bot_id=" + std::to_string(bot_id) +
             " startup={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     }
-    LeavePurePrimaryLocalActorWindow(actor_address, pure_primary_actor_window_shim);
 }

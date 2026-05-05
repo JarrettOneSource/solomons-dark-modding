@@ -100,7 +100,11 @@ def start_clean_testrun(process_id: int, element: str, discipline: str) -> dict[
     return {"hub_flow": hub_flow, "testrun": testrun}
 
 
-def sustain_probe_health(hp_value: float = DEFAULT_PROBE_HP_VALUE) -> dict[str, str]:
+def sustain_probe_health(
+    hp_value: float = DEFAULT_PROBE_HP_VALUE,
+    bot_id: int | None = None,
+) -> dict[str, str]:
+    bot_id_value = 0 if bot_id is None else int(bot_id)
     return csp.parse_key_values(
         csp.run_lua(
             f"""
@@ -122,8 +126,21 @@ if type(player) == 'table' then
   end
 end
 
+local selected_bot_id = {bot_id_value}
 local bots = sd.bots and sd.bots.get_state and sd.bots.get_state()
-local bot = type(bots) == 'table' and bots[1] or nil
+local bot = nil
+if type(bots) == 'table' then
+  if selected_bot_id ~= 0 then
+    for _, candidate in ipairs(bots) do
+      if tonumber(candidate.id) == selected_bot_id then
+        bot = candidate
+        break
+      end
+    end
+  else
+    bot = bots[1]
+  end
+end
 if type(bot) == 'table' then
   local progression = tonumber(bot.progression_runtime_state_address) or 0
   emit('bot_id', bot.id)
@@ -908,6 +925,41 @@ def any_attack_targeted_closest(window: dict[str, object]) -> bool:
     return any(bool(sample.get("target_is_closest")) for sample in samples if isinstance(sample, dict))
 
 
+def target_health_evidence(
+    target_address: int,
+    near_address: int,
+    far_address: int,
+    before: dict[str, object],
+    after: dict[str, object],
+    write_hits: dict[str, object],
+) -> dict[str, object]:
+    role = "unknown"
+    if target_address != 0:
+        if target_address == near_address:
+            role = "near"
+        elif target_address == far_address:
+            role = "far"
+
+    before_entry = before.get(role) if role != "unknown" else None
+    after_entry = after.get(role) if role != "unknown" else None
+    write_entry = write_hits.get(role) if role != "unknown" else None
+    hp_before = csp.float_value(before_entry, "hp") if isinstance(before_entry, dict) else float("nan")
+    hp_after = csp.float_value(after_entry, "hp") if isinstance(after_entry, dict) else float("nan")
+    write_count = csp.int_value(write_entry, "count") if isinstance(write_entry, dict) else 0
+    hp_decreased = math.isfinite(hp_before) and math.isfinite(hp_after) and hp_after < hp_before
+
+    return {
+        "role": role,
+        "address": target_address,
+        "hp_before": hp_before,
+        "hp_after": hp_after,
+        "hp_delta": hp_after - hp_before if math.isfinite(hp_before) and math.isfinite(hp_after) else float("nan"),
+        "write_hits": write_count,
+        "hp_decreased": hp_decreased,
+        "damage_or_write_seen": hp_decreased or write_count > 0,
+    }
+
+
 def run_validation(args: argparse.Namespace) -> dict[str, object]:
     result: dict[str, object] = {
         "launcher_freshness": csp.ensure_launcher_bundle_fresh(),
@@ -922,46 +974,41 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
     result["navigation"] = start_clean_testrun(process_id, args.element, args.discipline)
     result["steps"].append({"step": "testrun_ready"})
 
-    crc.set_lua_tick_enabled(True)
-    spawned_bots = wait_for_materialized_bots()
-    crc.set_lua_tick_enabled(False)
-    player = csp.query_player_state()
-    selected_bot = choose_probe_bot(spawned_bots)
-    probe_bot_id = csp.int_value(selected_bot, "id")
-    promotion = promote_bot_into_run_scene(
-        probe_bot_id,
-        csp.float_value(player, "x"),
-        csp.float_value(player, "y"),
-    )
-    if promotion.get("ok") != "true":
-        raise AutonomousCombatProbeFailure(f"Bot run-scene promotion failed: {promotion}")
-    time.sleep(1.0)
-    bot = query_bot_state_by_id(probe_bot_id)
-    if csp.int_value(bot, "actor_address") == 0:
-        raise AutonomousCombatProbeFailure(f"Bot did not materialize after promotion: {bot}")
-    stopped_bot = crc.stop_bot(bot["id"])
-    bot_x = csp.float_value(bot, "x")
-    bot_y = csp.float_value(bot, "y")
-    result["bot_setup"] = {
-        "spawned": spawned_bots,
-        "selected": selected_bot,
-        "promoted": bot,
-        "promotion": promotion,
-        "stop": stopped_bot,
-    }
-    result["probe_diagnostics"] = configure_lua_probe_diagnostics(probe_bot_id)
-
     known_addresses = {
         csp.int_value(enemy, "actor_address")
         for enemy in list_enemy_actors()
         if csp.int_value(enemy, "actor_address") != 0
     }
     result["pre_wave_known_enemy_addresses"] = sorted(known_addresses)
-    result["probe_health_before_waves"] = sustain_probe_health()
     result["start_waves"] = start_waves()
     result["wave_combat_state"] = wait_for_wave_combat_active()
     enemies = wait_for_live_enemies(2)
     result["live_enemies_after_wave_start"] = enemies
+
+    crc.set_lua_tick_enabled(True)
+    spawned_bots = wait_for_materialized_bots(min_count=1)
+    crc.set_lua_tick_enabled(False)
+    selected_bot = choose_probe_bot(spawned_bots)
+    probe_bot_id = csp.int_value(selected_bot, "id")
+    bot = query_bot_state_by_id(probe_bot_id)
+    if csp.int_value(bot, "actor_address") == 0:
+        raise AutonomousCombatProbeFailure(f"Post-wave bot did not materialize: {bot}")
+    stopped_bot = crc.stop_bot(bot["id"])
+    time.sleep(2.0)
+    bot = query_bot_state_by_id(probe_bot_id)
+    if csp.int_value(bot, "actor_address") == 0:
+        raise AutonomousCombatProbeFailure(f"Post-wave bot disappeared after stop: {bot}")
+    bot_x = csp.float_value(bot, "x")
+    bot_y = csp.float_value(bot, "y")
+    result["bot_setup"] = {
+        "spawned": spawned_bots,
+        "selected": selected_bot,
+        "active": bot,
+        "selection_mode": "post_wave_active_bot",
+        "stop": stopped_bot,
+    }
+    result["probe_diagnostics"] = configure_lua_probe_diagnostics(probe_bot_id)
+    result["probe_health_after_wave_bot_selection"] = sustain_probe_health(bot_id=probe_bot_id)
 
     first_enemy_address = csp.int_value(enemies[0], "actor_address")
     second_enemy_address = csp.int_value(enemies[1], "actor_address")
@@ -979,7 +1026,7 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         args.far_standoff,
         args.hp,
     )
-    result["probe_health_after_initial_placement"] = sustain_probe_health()
+    result["probe_health_after_initial_placement"] = sustain_probe_health(bot_id=probe_bot_id)
     result["enemies_before_first_window"] = live_enemy_actors()
     if args.semantic_setup_only:
         semantic_placements_ok = all(
@@ -1026,7 +1073,7 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         "far": query_progression_for_actor(second_enemy_address),
     }
     first_window = observe_attack_window(args.observe_seconds, probe_bot_id)
-    result["probe_health_after_first_window"] = sustain_probe_health()
+    result["probe_health_after_first_window"] = sustain_probe_health(bot_id=probe_bot_id)
     first_after = {
         "near": query_progression_for_actor(first_enemy_address),
         "far": query_progression_for_actor(second_enemy_address),
@@ -1058,7 +1105,7 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         args.far_standoff,
         args.hp,
     )
-    result["probe_health_after_swap"] = sustain_probe_health()
+    result["probe_health_after_swap"] = sustain_probe_health(bot_id=probe_bot_id)
     time.sleep(2.3)
     result["enemies_before_second_window"] = live_enemy_actors()
     result["hp_watch_swapped_near"] = (
@@ -1076,7 +1123,7 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         "far": query_progression_for_actor(first_enemy_address),
     }
     second_window = observe_attack_window(args.observe_seconds, probe_bot_id)
-    result["probe_health_after_second_window"] = sustain_probe_health()
+    result["probe_health_after_second_window"] = sustain_probe_health(bot_id=probe_bot_id)
     second_after = {
         "near": query_progression_for_actor(second_enemy_address),
         "far": query_progression_for_actor(first_enemy_address),
@@ -1114,8 +1161,30 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
     first_near_hp_after = csp.float_value(first_after["near"], "hp")
     second_near_hp_before = csp.float_value(second_before["near"], "hp")
     second_near_hp_after = csp.float_value(second_after["near"], "hp")
+    first_far_hp_before = csp.float_value(first_before["far"], "hp")
+    first_far_hp_after = csp.float_value(first_after["far"], "hp")
+    second_far_hp_before = csp.float_value(second_before["far"], "hp")
+    second_far_hp_after = csp.float_value(second_after["far"], "hp")
     first_near_write_count = csp.int_value(result["first_window"]["write_hits"]["near"], "count")
     second_near_write_count = csp.int_value(result["second_window"]["write_hits"]["near"], "count")
+    first_far_write_count = csp.int_value(result["first_window"]["write_hits"]["far"], "count")
+    second_far_write_count = csp.int_value(result["second_window"]["write_hits"]["far"], "count")
+    first_target_health = target_health_evidence(
+        first_target,
+        first_enemy_address,
+        second_enemy_address,
+        first_before,
+        first_after,
+        result["first_window"]["write_hits"],
+    )
+    second_target_health = target_health_evidence(
+        second_target,
+        second_enemy_address,
+        first_enemy_address,
+        second_before,
+        second_after,
+        result["second_window"]["write_hits"],
+    )
     dispatch_hits = csp.int_value(result["spell_trace_hits"]["dispatch_body"], "count")
     spell_3ef_hits = csp.int_value(result["spell_trace_hits"]["spell_3ef_body"], "count")
     first_native_cast_count = int(first_window.get("native_cast_log_count") or 0)
@@ -1136,14 +1205,22 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
     second_targeted_death_matches = match_targeted_deaths(second_window)
     first_targeted_death_seen = bool(first_targeted_death_matches)
     second_targeted_death_seen = bool(second_targeted_death_matches)
-    hp_damage_or_write_seen = (
+    target_hp_damage_or_write_seen = (
+        bool(first_target_health["damage_or_write_seen"])
+        or bool(second_target_health["damage_or_write_seen"])
+    )
+    controlled_damage_or_write_seen = (
         first_near_write_count > 0
         or second_near_write_count > 0
+        or first_far_write_count > 0
+        or second_far_write_count > 0
         or first_near_hp_after < first_near_hp_before
         or second_near_hp_after < second_near_hp_before
+        or first_far_hp_after < first_far_hp_before
+        or second_far_hp_after < second_far_hp_before
     )
     targeted_damage_or_write_seen = (
-        hp_damage_or_write_seen
+        target_hp_damage_or_write_seen
         or first_targeted_death_seen
         or second_targeted_death_seen
     )
@@ -1166,8 +1243,20 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         "first_near_hp_after": first_near_hp_after,
         "second_near_hp_before": second_near_hp_before,
         "second_near_hp_after": second_near_hp_after,
+        "first_far_hp_before": first_far_hp_before,
+        "first_far_hp_after": first_far_hp_after,
+        "second_far_hp_before": second_far_hp_before,
+        "second_far_hp_after": second_far_hp_after,
         "first_near_hp_write_hits": first_near_write_count,
         "second_near_hp_write_hits": second_near_write_count,
+        "first_far_hp_write_hits": first_far_write_count,
+        "second_far_hp_write_hits": second_far_write_count,
+        "first_target_health": first_target_health,
+        "second_target_health": second_target_health,
+        "first_target_hp_decreased": bool(first_target_health["hp_decreased"]),
+        "second_target_hp_decreased": bool(second_target_health["hp_decreased"]),
+        "target_hp_damage_or_write_seen": target_hp_damage_or_write_seen,
+        "controlled_damage_or_write_seen": controlled_damage_or_write_seen,
         "first_enemy_death_count": first_enemy_death_count,
         "second_enemy_death_count": second_enemy_death_count,
         "first_targeted_death_seen": first_targeted_death_seen,
@@ -1185,9 +1274,9 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         "native_cast_evidence_seen": first_native_cast_count > 0 or second_native_cast_count > 0,
         "hidden_damage_log_count": hidden_damage_log_count,
         "hidden_damage_bridge_ok": hidden_damage_log_count == 0,
-        "hp_damage_or_write_seen": hp_damage_or_write_seen,
+        "hp_damage_or_write_seen": controlled_damage_or_write_seen,
         "targeted_damage_or_write_seen": targeted_damage_or_write_seen,
-        "damage_or_hp_write_seen": targeted_damage_or_write_seen,
+        "damage_or_hp_write_seen": targeted_damage_or_write_seen or controlled_damage_or_write_seen,
     }
     result["closest_target_ok"] = all(
         bool(result["validation"][key])

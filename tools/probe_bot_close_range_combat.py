@@ -387,7 +387,7 @@ def filter_loader_log(lines: list[str]) -> list[str]:
         "cast prepped",
         "cast prepare failed",
         "cast post-tick detail",
-        "synthetic cast intent",
+        "stock cast input",
         "cast complete",
         "cast dispatch failed",
         "spell_obj diag",
