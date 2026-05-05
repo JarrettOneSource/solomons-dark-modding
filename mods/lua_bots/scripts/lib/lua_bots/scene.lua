@@ -37,15 +37,16 @@ function scene_module.install(ctx)
       return { kind = "run" }
     end
 
-    local area = config.PRIVATE_AREA_TRAVEL_DESCRIPTORS[scene_name]
-    if area == nil then
+    local region_index = tonumber(scene.region_index)
+    local region_type_id = tonumber(scene.region_type_id)
+    if region_index == nil and region_type_id == nil then
       return nil
     end
 
     return {
       kind = "private_region",
-      region_index = area.region_index,
-      region_type_id = area.region_type_id,
+      region_index = region_index or -1,
+      region_type_id = region_type_id or -1,
     }
   end
 

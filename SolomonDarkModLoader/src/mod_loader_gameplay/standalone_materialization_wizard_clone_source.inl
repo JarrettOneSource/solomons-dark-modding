@@ -103,31 +103,69 @@ bool ResolveNativeVisualProgressionRuntime(uintptr_t native_visual_actor_address
     return false;
 }
 
-bool RecoverSourceProfileColorFromNativeHelperColor(const float native_color[4], float out_source_color[4]) {
-    if (native_color == nullptr || out_source_color == nullptr) {
+constexpr std::size_t kDescriptorColorComponentCount = 4;
+constexpr std::size_t kDescriptorColorByteSize =
+    sizeof(float) * kDescriptorColorComponentCount;
+constexpr std::size_t kDescriptorAccentColorRelativeOffset =
+    kDescriptorColorByteSize;
+static_assert(
+    kDescriptorColorByteSize * 2 == kActorHubVisualDescriptorBlockSize,
+    "wizard descriptor block must hold two float4 color payloads");
+
+bool IsFiniteColorPayload(const float color[4]) {
+    if (color == nullptr) {
         return false;
     }
     for (int index = 0; index < 4; ++index) {
-        if (!std::isfinite(native_color[index])) {
+        if (!std::isfinite(color[index])) {
             return false;
         }
     }
+    return true;
+}
 
-    constexpr float kLumaR = 0.3086f;
-    constexpr float kLumaG = 0.6094f;
-    constexpr float kLumaB = 0.0820f;
-    constexpr float kNativeSourceMix = 0.2f;
-    constexpr float kNativeLumaMix = 0.8f;
-    const auto grayscale =
-        (native_color[0] * kLumaR) + (native_color[1] * kLumaG) + (native_color[2] * kLumaB);
-    out_source_color[0] = (native_color[0] - (kNativeLumaMix * grayscale)) / kNativeSourceMix;
-    out_source_color[1] = (native_color[1] - (kNativeLumaMix * grayscale)) / kNativeSourceMix;
-    out_source_color[2] = (native_color[2] - (kNativeLumaMix * grayscale)) / kNativeSourceMix;
-    out_source_color[3] = native_color[3];
-    return std::isfinite(out_source_color[0]) &&
-        std::isfinite(out_source_color[1]) &&
-        std::isfinite(out_source_color[2]) &&
-        std::isfinite(out_source_color[3]);
+void CopyColorPayload(const float source[4], float destination[4]) {
+    if (source == nullptr || destination == nullptr) {
+        return;
+    }
+    for (int index = 0; index < 4; ++index) {
+        destination[index] = source[index];
+    }
+}
+
+bool TryReadActorDescriptorColor(
+    uintptr_t actor_address,
+    std::size_t relative_offset,
+    float out_color[4]) {
+    if (actor_address == 0 ||
+        out_color == nullptr ||
+        relative_offset + kDescriptorColorByteSize >
+            kActorHubVisualDescriptorBlockSize) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.TryRead(
+            actor_address + kActorHubVisualDescriptorBlockOffset + relative_offset,
+            out_color,
+            kDescriptorColorByteSize)) {
+        return false;
+    }
+    return IsFiniteColorPayload(out_color) && out_color[3] > 0.0f;
+}
+
+bool TryWriteSourceProfileColor(
+    std::uint8_t* buffer,
+    std::size_t offset,
+    const float color[4]) {
+    if (buffer == nullptr || !IsFiniteColorPayload(color)) {
+        return false;
+    }
+    for (int index = 0; index < 4; ++index) {
+        *reinterpret_cast<float*>(
+            buffer + offset + sizeof(float) * index) = color[index];
+    }
+    return true;
 }
 
 bool BuildNativeDerivedWizardSourceProfile(
@@ -192,12 +230,19 @@ bool BuildNativeDerivedWizardSourceProfile(
         return false;
     }
 
-    float source_color[4] = {};
-    if (!RecoverSourceProfileColorFromNativeHelperColor(native_color, source_color)) {
+    if (!IsFiniteColorPayload(native_color)) {
         if (error_message != nullptr) {
             *error_message = "Native primary color output was not finite.";
         }
         return false;
+    }
+
+    float accent_color[4] = {};
+    if (!TryReadActorDescriptorColor(
+            native_visual_actor_address,
+            kDescriptorAccentColorRelativeOffset,
+            accent_color)) {
+        CopyColorPayload(native_color, accent_color);
     }
 
     auto* buffer = static_cast<std::uint8_t*>(
@@ -219,15 +264,14 @@ bool BuildNativeDerivedWizardSourceProfile(
     *reinterpret_cast<std::int8_t*>(buffer + kSourceProfileWeaponTypeOffset) = 1;
     *reinterpret_cast<std::uint8_t*>(buffer + kSourceProfileVariantTertiaryOffset) = 0;
 
-    auto write_color = [&](std::size_t offset, const float color[4]) {
-        *reinterpret_cast<float*>(buffer + offset + 0x00) = color[0];
-        *reinterpret_cast<float*>(buffer + offset + 0x04) = color[1];
-        *reinterpret_cast<float*>(buffer + offset + 0x08) = color[2];
-        *reinterpret_cast<float*>(buffer + offset + 0x0C) = color[3];
-    };
-    write_color(kSourceProfileClothColorOffset, source_color);
-    const float trim_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-    write_color(kSourceProfileTrimColorOffset, trim_color);
+    if (!TryWriteSourceProfileColor(buffer, kSourceProfileClothColorOffset, native_color) ||
+        !TryWriteSourceProfileColor(buffer, kSourceProfileTrimColorOffset, accent_color)) {
+        _aligned_free(buffer);
+        if (error_message != nullptr) {
+            *error_message = "Native-derived source profile color payload was not finite.";
+        }
+        return false;
+    }
 
     *source_profile_address = reinterpret_cast<uintptr_t>(buffer);
     Log(
@@ -236,8 +280,8 @@ bool BuildNativeDerivedWizardSourceProfile(
         " primary_entry=" + std::to_string(primary_entry) +
         " native_color=(" + std::to_string(native_color[0]) + ", " +
             std::to_string(native_color[1]) + ", " + std::to_string(native_color[2]) + ")" +
-        " source_color=(" + std::to_string(source_color[0]) + ", " +
-            std::to_string(source_color[1]) + ", " + std::to_string(source_color[2]) + ")");
+        " descriptor_accent=(" + std::to_string(accent_color[0]) + ", " +
+            std::to_string(accent_color[1]) + ", " + std::to_string(accent_color[2]) + ")");
     return true;
 }
 

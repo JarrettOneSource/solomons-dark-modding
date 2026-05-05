@@ -258,65 +258,25 @@ function combat.install(ctx)
     end
   end
 
-  local function read_actor_float(actor_address, offset)
-    if type(sd) ~= "table" or type(sd.debug) ~= "table" or type(sd.debug.read_float) ~= "function" then
-      return nil
-    end
-
-    actor_address = tonumber(actor_address)
-    if actor_address == nil or actor_address == 0 then
-      return nil
-    end
-
-    local ok, value = pcall(sd.debug.read_float, actor_address + offset)
-    if not ok then
-      return nil
-    end
-
-    value = tonumber(value)
-    if value == nil or value ~= value then
-      return nil
-    end
-    return value
-  end
-
-  local function layout_offset(name)
-    if type(sd) ~= "table" or type(sd.debug) ~= "table" or type(sd.debug.layout_offset) ~= "function" then
-      return nil
-    end
-
-    local ok, offset = pcall(sd.debug.layout_offset, name)
-    if not ok then
-      return nil
-    end
-    return tonumber(offset)
-  end
-
-  local function water_attack_range(bot, fallback_range)
-    local shape_offset = layout_offset("actor_spell_config_290")
-    if shape_offset == nil then
-      return fallback_range
-    end
-
-    local shape = read_actor_float(type(bot) == "table" and bot.actor_address or nil, shape_offset)
-    if shape == nil then
-      return fallback_range
-    end
-
-    -- Native frost handler feeds FUN_00641B10 from the actor spell-config range scalar.
-    local native_range = config.WATER_NATIVE_CONE_BASE_RANGE + (shape * config.WATER_RANGE_PER_SHAPE_UNIT)
-    return math.max(config.DEFAULT_ATTACK_RANGE, native_range - config.WATER_RANGE_SAFETY_MARGIN)
-  end
-
   local function current_attack_window(bot)
     local profile = type(state.bot_profile) == "table" and state.bot_profile or nil
     local element_id = profile ~= nil and tonumber(profile.element_id) or nil
-    local range = config.ATTACK_RANGE_BY_ELEMENT_ID[element_id] or config.DEFAULT_ATTACK_RANGE
-    if element_id == 1 then
-      range = water_attack_range(bot, range)
+    if state.bot_id == nil or type(sd) ~= "table" or type(sd.bots) ~= "table" or
+        type(sd.bots.get_primary_attack_window) ~= "function" then
+      return nil, nil
     end
-    return config.MIN_ATTACK_RANGE_BY_ELEMENT_ID[element_id] or 0.0,
-      range
+
+    local ok, window = pcall(sd.bots.get_primary_attack_window, state.bot_id, element_id)
+    if not ok or type(window) ~= "table" then
+      return nil, nil
+    end
+
+    local min_range = tonumber(window.min_range) or 0.0
+    local max_range = tonumber(window.max_range)
+    if max_range == nil or max_range ~= max_range or max_range <= 0.0 then
+      return nil, nil
+    end
+    return min_range, max_range, window
   end
 
   local function issue_auto_attack(now_ms, scene, bot, probe)
@@ -345,6 +305,14 @@ function combat.install(ctx)
       return false
     end
     local min_range, range = current_attack_window(bot)
+    if min_range == nil or range == nil then
+      if should_log_attack_diag(now_ms) then
+        ctx.log_diag(string.format(
+          "attack_skip id=%s reason=attack_window_unavailable",
+          tostring(state.bot_id)))
+      end
+      return false
+    end
     local enemy, gap, earth_boulder_impact = get_attack_enemy(bot, probe)
     if enemy == nil then
       if earth_boulder_impact == nil then
@@ -441,8 +409,6 @@ function combat.install(ctx)
   ctx.heading_towards = heading_towards
   ctx.face_enemy = face_enemy
   ctx.clear_face_target = clear_face_target
-  ctx.read_actor_float = read_actor_float
-  ctx.water_attack_range = water_attack_range
   ctx.current_attack_window = current_attack_window
   ctx.issue_auto_attack = issue_auto_attack
 end

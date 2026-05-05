@@ -38,9 +38,12 @@ cleared before clone publication; finalized player and bot actors still keep
   path.
 - `0x00660760` is the native `Skills_Wizard` primary-color seam. The loader
   calls it through `CallSkillsWizardGetPrimaryColorSafe` using the profile's
-  recovered native primary entry, then inverts the stock grayscale mix in
-  `RecoverSourceProfileColorFromNativeHelperColor` so `0x005E3080` receives the
-  pre-transform cloth color it expects.
+  recovered native primary entry and feeds that native color directly into the
+  transient source profile. `TryReadActorDescriptorColor` reads the live native
+  visual actor's second descriptor color when available; otherwise the native
+  primary color is reused for both descriptor color payloads. The old C++
+  inverse luma/mix reconstruction is gone because those scalars were not
+  recovered as native operands.
 
 Evidence artifacts:
 
@@ -61,8 +64,9 @@ The production replacement is native-derived source-profile staging:
 - `CreateWizardCloneSourceActor` receives the live slot-0 visual actor and the
   bot character profile.
 - `BuildNativeDerivedWizardSourceProfile` resolves the live progression runtime
-  from the visual actor, calls `0x00660760`, and fills only the staging fields
-  consumed by `0x005E3080`.
+  from the visual actor, calls `0x00660760`, reads the live descriptor accent
+  color when available, and fills only the staging fields consumed by
+  `0x005E3080`.
 - `SeedWizardCloneSourceActorFromNativeDerivedProfile` stages that transient
   buffer at source actor `+0x178`, calls `ActorBuildRenderDescriptorFromSource`,
   then clears `+0x178/+0x17C` before cloning.

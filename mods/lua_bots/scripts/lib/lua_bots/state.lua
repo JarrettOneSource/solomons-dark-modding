@@ -35,11 +35,6 @@ function state_module.create(config)
     active_private_area_name = nil,
     pending_run_promotion = false,
     last_scene_name = nil,
-    scene_entered_ms = 0,
-    last_player_sample = nil,
-    hub_candidate_name = nil,
-    hub_candidate_since_ms = 0,
-    entrance_armed = {},
     last_bot_sample = nil,
     stuck_samples = 0,
     last_skill_choice_generation = 0,
@@ -146,11 +141,6 @@ function state_module.create(config)
     state.target_area_name = nil
     state.active_private_area_name = nil
     state.last_scene_name = nil
-    state.scene_entered_ms = 0
-    state.last_player_sample = nil
-    state.hub_candidate_name = nil
-    state.hub_candidate_since_ms = 0
-    state.entrance_armed = {}
     state.nav_grid_cache = nil
     state.nav_grid_cache_world_id = nil
     state.nav_grid_cache_at_ms = 0

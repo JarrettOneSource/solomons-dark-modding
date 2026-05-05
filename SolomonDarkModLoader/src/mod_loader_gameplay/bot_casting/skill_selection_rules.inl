@@ -286,30 +286,6 @@ bool OngoingCastShouldDriveSyntheticCastInput(
     return false;
 }
 
-int ResolveBotCastGestureTicks(std::int32_t skill_id) {
-    // The bot cast request models one primary-input gesture. Stock held spells
-    // do not self-release while input is held, so the loader must release the
-    // synthetic gesture once the native active window has had time to run.
-    switch (skill_id) {
-    case 0x3EF:
-    case 0x3F2: // ether pure primary projectile
-    case 0x3F3: // fire pure primary projectile
-        return 36;
-    default:
-        return ParticipantEntityBinding::OngoingCastState::kMaxTicksWaiting;
-    }
-}
-
-int ResolveBotCastSafetyCapTicks(std::int32_t skill_id) {
-    switch (skill_id) {
-    case 0x3F6: // earth pure primary build id
-    case 0x28: // earth primary handler
-        return 1200;
-    default:
-        return ParticipantEntityBinding::OngoingCastState::kMaxTicksWaiting;
-    }
-}
-
 std::int32_t ResolveOngoingNativeTickSkillId(
     const ParticipantEntityBinding::OngoingCastState& ongoing) {
     return ongoing.uses_dispatcher_skill_id && ongoing.dispatcher_skill_id > 0

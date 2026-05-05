@@ -1,7 +1,71 @@
 #include "lua_engine_bindings_internal.h"
+#include "gameplay_seams.h"
+#include "memory_access.h"
+#include "native_spell_stats.h"
+
+#include <algorithm>
+#include <cmath>
 
 namespace sdmod::detail {
 namespace {
+
+struct PrimaryAttackWindow {
+    bool resolved = false;
+    bool native_backed = false;
+    float min_range = 0.0f;
+    float max_range = 0.0f;
+    const char* source = "unresolved";
+};
+
+float ReadWaterPrimaryShapeOrZero(uintptr_t actor_address) {
+    if (actor_address == 0 || kActorSpellConfig290Offset == 0) {
+        return 0.0f;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.IsReadableRange(actor_address + kActorSpellConfig290Offset, sizeof(float))) {
+        return 0.0f;
+    }
+
+    const auto shape = memory.ReadFieldOr<float>(actor_address, kActorSpellConfig290Offset, 0.0f);
+    return std::isfinite(shape) && shape > 0.0f ? shape : 0.0f;
+}
+
+PrimaryAttackWindow ResolvePrimaryAttackWindow(int element_id, uintptr_t actor_address) {
+    constexpr float kProjectilePrimaryEngagementRange = 360.0f;
+    constexpr float kBoulderPrimaryReleaseMinimumRange = 96.0f;
+    constexpr float kWaterConeBaseRange = 205.0f;
+    constexpr float kWaterConeRangePerShapeUnit = 4.0f;
+    constexpr float kPrimaryEngagementSafetyMargin = 5.0f;
+
+    PrimaryAttackWindow window{};
+    window.resolved = true;
+    window.max_range = kProjectilePrimaryEngagementRange;
+    window.source = "projectile_primary_engagement";
+
+    switch (element_id) {
+    case 1: {
+        const auto shape = ReadWaterPrimaryShapeOrZero(actor_address);
+        window.native_backed = true;
+        window.max_range =
+            (std::max)(kBoulderPrimaryReleaseMinimumRange,
+                kWaterConeBaseRange + (shape * kWaterConeRangePerShapeUnit) -
+                    kPrimaryEngagementSafetyMargin);
+        window.source = shape > 0.0f ? "water_primary_live_actor_cone" : "water_primary_native_base_cone";
+        return window;
+    }
+    case 2:
+        window.min_range = kBoulderPrimaryReleaseMinimumRange;
+        window.source = "earth_boulder_release_window";
+        return window;
+    case 0:
+    case 3:
+    case 4:
+        return window;
+    default:
+        return PrimaryAttackWindow{};
+    }
+}
 
 int LuaBotsCreate(lua_State* state) {
     multiplayer::BotCreateRequest request;
@@ -325,10 +389,68 @@ int LuaBotsDebugSyncLevelUp(lua_State* state) {
     return 1;
 }
 
+int LuaBotsResolvePrimaryEntry(lua_State* state) {
+    if (!lua_isinteger(state, 1) && !lua_isnumber(state, 1)) {
+        return luaL_error(state, "sd.bots.resolve_primary_entry expects (element_id)");
+    }
+
+    const auto element_id = static_cast<int>(lua_tointeger(state, 1));
+    const auto primary_entry = ResolveNativePrimaryEntryForElement(element_id);
+    if (primary_entry < 0) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_pushinteger(state, static_cast<lua_Integer>(primary_entry));
+    return 1;
+}
+
+int LuaBotsGetPrimaryAttackWindow(lua_State* state) {
+    std::uint64_t bot_id = 0;
+    std::string error_message;
+    if (!ParseBotIdArgument(state, 1, &bot_id, &error_message)) {
+        return luaL_error(state, "%s", error_message.c_str());
+    }
+
+    int element_id = -1;
+    if (lua_gettop(state) >= 2 && !lua_isnil(state, 2)) {
+        if (!lua_isinteger(state, 2) && !lua_isnumber(state, 2)) {
+            return luaL_error(state, "sd.bots.get_primary_attack_window element_id must be an integer");
+        }
+        element_id = static_cast<int>(lua_tointeger(state, 2));
+    }
+
+    uintptr_t actor_address = 0;
+    multiplayer::BotSnapshot snapshot;
+    if (multiplayer::ReadBotSnapshot(bot_id, &snapshot) && snapshot.available) {
+        if (element_id < 0) {
+            element_id = snapshot.character_profile.element_id;
+        }
+        actor_address = snapshot.actor_address;
+    }
+
+    const auto window = ResolvePrimaryAttackWindow(element_id, actor_address);
+    if (!window.resolved) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_createtable(state, 0, 4);
+    lua_pushnumber(state, static_cast<lua_Number>(window.min_range));
+    lua_setfield(state, -2, "min_range");
+    lua_pushnumber(state, static_cast<lua_Number>(window.max_range));
+    lua_setfield(state, -2, "max_range");
+    lua_pushboolean(state, window.native_backed ? 1 : 0);
+    lua_setfield(state, -2, "native_backed");
+    lua_pushstring(state, window.source);
+    lua_setfield(state, -2, "source");
+    return 1;
+}
+
 }  // namespace
 
 void RegisterLuaBotBindings(lua_State* state) {
-    lua_createtable(state, 0, 14);
+    lua_createtable(state, 0, 16);
     RegisterFunction(state, &LuaBotsCreate, "create");
     RegisterFunction(state, &LuaBotsDestroy, "destroy");
     RegisterFunction(state, &LuaBotsClear, "clear");
@@ -343,6 +465,8 @@ void RegisterLuaBotBindings(lua_State* state) {
     RegisterFunction(state, &LuaBotsGetSkillChoices, "get_skill_choices");
     RegisterFunction(state, &LuaBotsChooseSkill, "choose_skill");
     RegisterFunction(state, &LuaBotsDebugSyncLevelUp, "debug_sync_level_up");
+    RegisterFunction(state, &LuaBotsResolvePrimaryEntry, "resolve_primary_entry");
+    RegisterFunction(state, &LuaBotsGetPrimaryAttackWindow, "get_primary_attack_window");
     lua_setfield(state, -2, "bots");
 }
 

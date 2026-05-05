@@ -496,11 +496,6 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             no_interrupt == 0 &&
             actor_e4 == 0 &&
             actor_e8 == 0;
-        const bool gesture_window_complete =
-            !held_native_cast &&
-            !bounded_held_native_cast &&
-            ongoing.saw_activity &&
-            ongoing.ticks_waiting >= ResolveBotCastGestureTicks(native_active_skill_id);
         const bool held_target_missing =
             held_native_cast &&
             ongoing.saw_activity &&
@@ -519,10 +514,17 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.targetless_ticks_waiting >=
                 ParticipantEntityBinding::OngoingCastState::kTargetlessRetargetGraceTicks;
         // A live target does not prove a pure-primary handler is still making
-        // progress. Ether can leave actor+0xE4/0xE8 asserted without publishing
-        // a handle, so the safety cap must always be able to release the cast.
+        // progress. Keep the final cap generic, but do not cut off an observable
+        // bounded native object that is still charging toward its live release
+        // condition.
+        const bool bounded_native_charge_observable =
+            bounded_held_native_cast &&
+            active_spell_state.readable &&
+            !ongoing.bounded_release_requested;
         const bool safety_cap_hit =
-            ongoing.ticks_waiting >= ResolveBotCastSafetyCapTicks(native_active_skill_id);
+            !bounded_native_charge_observable &&
+            ongoing.ticks_waiting >=
+                ParticipantEntityBinding::OngoingCastState::kMaxTicksWaiting;
 
         if (mana_depleted) {
             FinishBotCastNativeLifecycle(cast_context, ongoing, "mana_depleted", true);
@@ -642,7 +644,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
 
         if (pure_primary_no_handle_settled || startup_timeout_hit || activity_released ||
             bounded_held_native_released || bounded_held_release_tick_processed ||
-            gesture_window_complete || target_lost || safety_cap_hit) {
+            target_lost || safety_cap_hit) {
             const char* exit_label = "safety_cap";
             if (startup_timeout_hit) {
                 exit_label = "startup_timeout";
@@ -654,8 +656,6 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     : "max_size_released";
             } else if (activity_released) {
                 exit_label = "activity_released";
-            } else if (gesture_window_complete) {
-                exit_label = "gesture_window_complete";
             } else if (target_lost) {
                 exit_label = "target_lost";
             }

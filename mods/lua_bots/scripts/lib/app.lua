@@ -86,16 +86,10 @@ local function register_events(ctx)
     end
     ctx.track_scene_entry(now_ms, scene)
 
-    local anchor = nil
-    if desired_scene.kind == "private_region" then
-      local area = ctx.config.PRIVATE_AREA_TRAVEL_DESCRIPTORS[tostring(scene.name or "")]
-      anchor = area ~= nil and area.interior_anchor or nil
-    end
-
     local scene_name = tostring(scene.name or "")
     for _, bot_state in ipairs(state.bots) do
       ctx.load_bot_context(bot_state)
-      local bot = ctx.ensure_bot_spawned(now_ms, player, desired_scene, anchor)
+      local bot = ctx.ensure_bot_spawned(now_ms, player, desired_scene, nil)
       if type(bot) == "table" and bot.available then
         ctx.handle_pending_skill_choice()
         if state.bot_dead or ctx.is_bot_dead(bot) then

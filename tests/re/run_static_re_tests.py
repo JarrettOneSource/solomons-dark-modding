@@ -30,6 +30,12 @@ RESOURCE_STATE = ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_castin
 PENDING_CAST_PREPARATION = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/pending_cast_preparation.inl"
 )
+PENDING_CAST_PROCESSING = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/pending_cast_processing.inl"
+)
+SKILL_SELECTION_RULES = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/skill_selection_rules.inl"
+)
 BOULDER_PROJECTION = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/boulder_damage_projection.inl"
 )
@@ -154,8 +160,11 @@ CAST_BOULDER_VTABLE_GHIDRA = ROOT / "runtime/ghidra_boulder_spell_object_vtable_
 LUA_BOT_CONFIG = ROOT / "mods/lua_bots/scripts/lib/lua_bots/config.lua"
 LUA_BOT_COMBAT = ROOT / "mods/lua_bots/scripts/lib/lua_bots/combat.lua"
 LUA_BOT_FOLLOW = ROOT / "mods/lua_bots/scripts/lib/lua_bots/follow.lua"
+LUA_BOT_STATE = ROOT / "mods/lua_bots/scripts/lib/lua_bots/state.lua"
+LUA_BOT_TRAVEL = ROOT / "mods/lua_bots/scripts/lib/lua_bots/travel.lua"
 LUA_BOT_CONSTANTS_RE_DOC = ROOT / "docs/lua-bot-constants-re.md"
 LUA_BOT_ENEMY_SEMANTIC_LIVE_PROBE = ROOT / "tests/re/run_live_lua_bot_enemy_semantic_probe.py"
+PROVE_LUA_FOLLOW = ROOT / "tools/prove_lua_follow.py"
 NATIVE_WIZARD_DEFAULT_HP_GLOBAL_KEY = "wizard_default_hp"
 NATIVE_WIZARD_DEFAULT_MP_GLOBAL_KEY = "wizard_default_mp"
 
@@ -1418,7 +1427,7 @@ def test_synthetic_source_profile_blocker_is_documented() -> str:
         "runtime/live_source_profile_writer_probe.json",
         "BuildNativeDerivedWizardSourceProfile",
         "SeedWizardCloneSourceActorFromNativeDerivedProfile",
-        "RecoverSourceProfileColorFromNativeHelperColor",
+        "TryReadActorDescriptorColor",
         "CallSkillsWizardGetPrimaryColorSafe",
         "kWizardCloneSourceActorKind == 3",
     )
@@ -1559,7 +1568,7 @@ def test_synthetic_source_profile_blocker_is_documented() -> str:
     ]
     required_runtime_tokens = (
         "BuildNativeDerivedWizardSourceProfile",
-        "RecoverSourceProfileColorFromNativeHelperColor",
+        "TryReadActorDescriptorColor",
         "CallSkillsWizardGetPrimaryColorSafe",
         "ResolveNativePrimaryEntryForElement",
         "SeedWizardCloneSourceActorFromNativeDerivedProfile",
@@ -2792,6 +2801,7 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
     primary_wave_probe_text = read_text(ROOT / "tools/probe_bot_primary_wave_cast.py")
     pure_primary_probe_text = read_text(PURE_PRIMARY_STARTUP_LIVE_PROBE)
     lua_combat_text = read_text(ROOT / "mods/lua_bots/scripts/lib/lua_bots/combat.lua")
+    lua_bots_binding_text = read_text(ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_bots.cpp")
     live_probe_text = read_text(ROOT / "tests/re/run_live_cast_shim_snapshot_probe.py")
 
     required_doc_tokens = (
@@ -3153,7 +3163,8 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
         (combat_prelude_text, "combat_prelude", "kActorSpellConfig29cOffset"),
         (lua_debug_text, "lua_debug", "LuaDebugLayoutOffset"),
         (lua_debug_text, "lua_debug", "layout_offset"),
-        (lua_combat_text, "lua_combat", "layout_offset(\"actor_spell_config_290\")"),
+        (lua_bots_binding_text, "lua_bots", "get_primary_attack_window"),
+        (lua_bots_binding_text, "lua_bots", "kActorSpellConfig290Offset"),
         (cast_state_probe_text, "cast_state_probe", "read_runtime_layout_offset(\"actor_spell_config_298\")"),
         (player_watch_text, "player_watch", "ACTOR_ACTIVE_CAST_GROUP_OFFSET"),
         (slot_watch_text, "slot_watch", "ACTOR_ANIMATION_SELECTION_STATE_OFFSET"),
@@ -3290,17 +3301,15 @@ def test_lua_bot_constants_are_semantic_or_documented() -> str:
         "Lua no longer owns a wave enemy object type constant",
         "actor.tracked_enemy",
         "IsArenaCombatActorType",
-        "0x08",
-        "0x10",
-        "0x18",
-        "0x20",
-        "0x28",
-        "FUN_00543860",
+        "sd.bots.resolve_primary_entry",
+        "sd.bots.get_primary_attack_window",
+        "runtime/ghidra_primary_attack_window_dispatcher.txt",
+        "runtime/ghidra_bot_attack_window_scalar_scan.txt",
+        "FUN_00548B00",
         "FUN_00641B10",
-        "range = 205 + 4 * actor[0x290]",
-        "sd.debug.layout_offset(\"actor_spell_config_290\")",
+        "kActorSpellConfig290Offset",
         "Policy Values",
-        "Private-area travel anchors and region ids are still manually observed",
+        "Private-area travel no longer owns fixed entrance descriptors",
     )
     missing_doc = [token for token in required_doc_tokens if token not in doc_text]
     if missing_doc:
@@ -3334,8 +3343,8 @@ def test_lua_bot_constants_are_semantic_or_documented() -> str:
 
     required_combat_tokens = (
         "actor.tracked_enemy ~= true",
-        "layout_offset(\"actor_spell_config_290\")",
-        "config.WATER_NATIVE_CONE_BASE_RANGE + (shape * config.WATER_RANGE_PER_SHAPE_UNIT)",
+        "sd.bots.get_primary_attack_window",
+        "attack_window_unavailable",
     )
     missing_combat = [token for token in required_combat_tokens if token not in combat_text]
     if missing_combat:
@@ -3456,6 +3465,99 @@ def test_lua_bot_constants_are_semantic_or_documented() -> str:
             "native seam plan does not classify Lua bot constants as semantic/policy split")
 
     return "Lua bot combat consumes semantic enemy state and documents remaining policy/native-derived constants"
+
+
+def test_remaining_active_hardcode_sources_are_removed() -> str:
+    active_sources = {
+        "Lua bot config": read_text(LUA_BOT_CONFIG),
+        "Lua bot combat": read_text(LUA_BOT_COMBAT),
+        "Lua bot follow": read_text(LUA_BOT_FOLLOW),
+        "Lua bot state": read_text(LUA_BOT_STATE),
+        "Lua bot travel": read_text(LUA_BOT_TRAVEL),
+        "bot element damage probe": read_text(BOT_ELEMENT_DAMAGE_PROBE),
+        "Lua follow proof tool": read_text(PROVE_LUA_FOLLOW),
+        "cast skill selection rules": read_text(SKILL_SELECTION_RULES),
+        "pending cast processing": read_text(PENDING_CAST_PROCESSING),
+        "wizard clone source": read_text(STANDALONE_CLONE_SOURCE),
+    }
+    forbidden_tokens = {
+        "Lua bot config": (
+            "default_primary_entry_index_for_element",
+            "WATER_NATIVE_CONE_BASE_RANGE",
+            "WATER_RANGE_PER_SHAPE_UNIT",
+            "ATTACK_RANGE_BY_ELEMENT_ID",
+            "MIN_ATTACK_RANGE_BY_ELEMENT_ID",
+            "PRIVATE_AREA_TRAVEL_DESCRIPTORS",
+            "ENTRANCE_TRIGGER_DISTANCE",
+            "ENTRANCE_ARRIVAL_DISTANCE",
+            "HUB_ENTRANCE_ARM_DELAY_MS",
+            "HUB_ENTRANCE_DWELL_MS",
+            "PLAYER_MOVEMENT_ARM_DISTANCE",
+        ),
+        "Lua bot combat": (
+            "config.WATER_NATIVE_CONE_BASE_RANGE",
+            "config.WATER_RANGE_PER_SHAPE_UNIT",
+            "config.ATTACK_RANGE_BY_ELEMENT_ID",
+            "config.MIN_ATTACK_RANGE_BY_ELEMENT_ID",
+        ),
+        "Lua bot follow": (
+            "hub_candidate_name",
+            "hub_candidate_since_ms",
+        ),
+        "Lua bot state": (
+            "last_player_sample",
+            "hub_candidate_name",
+            "hub_candidate_since_ms",
+            "entrance_armed",
+            "scene_entered_ms",
+        ),
+        "Lua bot travel": (
+            "player_moved_recently",
+            "last_player_sample",
+            "hub_candidate_name",
+            "hub_candidate_since_ms",
+            "entrance_armed",
+            "scene_entered_ms",
+            "PLAYER_MOVEMENT_ARM_DISTANCE",
+        ),
+        "bot element damage probe": (
+            '"fire": 0x10',
+            '"water": 0x20',
+            '"earth": 0x28',
+            '"air": 0x18',
+            '"ether": 0x08',
+        ),
+        "Lua follow proof tool": (
+            "hub_candidate_name",
+            "hub_candidate_since_ms",
+            "scene_entered_ms",
+        ),
+        "cast skill selection rules": (
+            "ResolveBotCastGestureTicks",
+            "ResolveBotCastSafetyCapTicks",
+        ),
+        "pending cast processing": (
+            "ResolveBotCastGestureTicks",
+            "ResolveBotCastSafetyCapTicks",
+        ),
+        "wizard clone source": (
+            "kLumaR",
+            "kLumaG",
+            "kLumaB",
+            "kNativeSourceMix",
+            "kNativeLumaMix",
+            "trim_color",
+        ),
+    }
+    regressions = [
+        f"{source_name}: active code still contains {token}"
+        for source_name, tokens in forbidden_tokens.items()
+        for token in tokens
+        if token in active_sources[source_name]
+    ]
+    if regressions:
+        raise StaticReTestFailure("; ".join(regressions))
+    return "remaining active hardcode smell sources are removed from production and probe code"
 
 
 def test_smell_source_inventory_is_current() -> str:
@@ -4007,7 +4109,7 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
         "SkillsWizardGetPrimaryColorFn",
         "CallSkillsWizardGetPrimaryColorSafe",
         "BuildNativeDerivedWizardSourceProfile",
-        "RecoverSourceProfileColorFromNativeHelperColor",
+        "TryReadActorDescriptorColor",
         "ResolveNativePrimaryEntryForElement",
         "kNativeDerivedSourceProfileSize",
         "native-derived source profile",
@@ -4260,6 +4362,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Standalone collision blocker is documented and live-probed", test_standalone_collision_blocker_is_documented_and_live_probed),
     ("Cast-state native contracts are documented and layout-backed", test_cast_state_native_contracts_are_documented_and_layout_backed),
     ("Lua bot constants are semantic or documented", test_lua_bot_constants_are_semantic_or_documented),
+    ("remaining active hardcode sources are removed", test_remaining_active_hardcode_sources_are_removed),
     ("smell source inventory is current", test_smell_source_inventory_is_current),
     ("investigation register has static coverage", test_investigation_register_has_static_coverage),
     ("staged binary matches analysis binary", test_staged_binary_matches_analysis_binary),

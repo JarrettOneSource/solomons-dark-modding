@@ -22,11 +22,11 @@ OUTPUT_PATH = ROOT / "runtime" / "probe_bot_element_damage.json"
 RUNTIME_BINARY_LAYOUT_PATH = ROOT / "runtime" / "stage" / ".sdmod" / "config" / "binary-layout.ini"
 
 ELEMENTS = {
-    "fire": {"element_id": 0, "primary_entry_index": 0x10},
-    "water": {"element_id": 1, "primary_entry_index": 0x20},
-    "earth": {"element_id": 2, "primary_entry_index": 0x28},
-    "air": {"element_id": 3, "primary_entry_index": 0x18},
-    "ether": {"element_id": 4, "primary_entry_index": 0x08},
+    "fire": {"element_id": 0},
+    "water": {"element_id": 1},
+    "earth": {"element_id": 2},
+    "air": {"element_id": 3},
+    "ether": {"element_id": 4},
 }
 PRIMARY_SPELL_SPECS = {
     "fire": {
@@ -210,6 +210,35 @@ def parse_int_text(value: object, default: int = 0) -> int:
         return int(float(text))
     except (TypeError, ValueError):
         return default
+
+
+def resolve_native_primary_entry_index(element: str) -> int:
+    element_id = int(ELEMENTS[element]["element_id"])
+    result = csp.parse_key_values(
+        csp.run_lua(
+            f"""
+local entry = sd.bots.resolve_primary_entry({element_id})
+print('ok=' .. tostring(entry ~= nil))
+print('primary_entry_index=' .. tostring(entry))
+""".strip()
+        )
+    )
+    if result.get("ok") != "true":
+        raise ElementDamageProbeFailure(
+            f"sd.bots.resolve_primary_entry failed for {element}: {result}"
+        )
+    primary_entry_index = csp.int_value(result, "primary_entry_index", -1)
+    if primary_entry_index < 0:
+        raise ElementDamageProbeFailure(
+            f"sd.bots.resolve_primary_entry returned no entry for {element}: {result}"
+        )
+    return primary_entry_index
+
+
+def element_config(element: str) -> dict[str, int]:
+    config = dict(ELEMENTS[element])
+    config["primary_entry_index"] = resolve_native_primary_entry_index(element)
+    return config
 
 
 def parse_cast_startup_value(line: str, field: str) -> int:
@@ -493,7 +522,7 @@ def build_native_spell_stat_validation(
     bot_id: int,
     log_lines: list[str],
 ) -> dict[str, object]:
-    config = ELEMENTS[element]
+    config = element_config(element)
     spec = PRIMARY_SPELL_SPECS[element]
     profile = {
         "element_id": csp.int_value(bot, "profile.element_id"),
@@ -1219,7 +1248,7 @@ def wait_for_bot_by_id(bot_id: int, timeout_s: float = 30.0) -> dict[str, str]:
 
 
 def create_single_run_bot(element: str, player: dict[str, str], x: float, y: float) -> int:
-    config = ELEMENTS[element]
+    config = element_config(element)
     bot_name = f"Damage Probe {element.title()}"
     result = csp.parse_key_values(
         csp.run_lua(
@@ -1260,7 +1289,7 @@ def apply_primary_upgrade_to_bot(
     source_progression: int,
     max_level_steps: int,
 ) -> dict[str, object]:
-    target_option_id = int(ELEMENTS[element]["primary_entry_index"])
+    target_option_id = int(element_config(element)["primary_entry_index"])
     result: dict[str, object] = {
         "target_option_id": target_option_id,
         "max_level_steps": max_level_steps,
@@ -2518,9 +2547,10 @@ def effective_controlled_cast_aim_position(
 
 
 def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, object]:
+    config = element_config(element)
     result: dict[str, object] = {
         "element": element,
-        "element_config": ELEMENTS[element],
+        "element_config": config,
         "ok": False,
         "navigation": {},
         "casts": [],

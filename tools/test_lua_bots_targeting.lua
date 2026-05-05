@@ -110,6 +110,26 @@ _G.sd = {
     end,
   },
   bots = {
+    resolve_primary_entry = function(element_id)
+      local map = {
+        [0] = 0x10,
+        [1] = 0x20,
+        [2] = 0x28,
+        [3] = 0x18,
+        [4] = 0x08,
+      }
+      return map[tonumber(element_id) or -1]
+    end,
+    get_primary_attack_window = function(bot_id, element_id)
+      local id = tonumber(element_id) or 0
+      if id == 1 then
+        return { min_range = 0.0, max_range = 205.0, native_backed = true }
+      end
+      if id == 2 then
+        return { min_range = 96.0, max_range = 360.0 }
+      end
+      return { min_range = 0.0, max_range = 360.0 }
+    end,
     create = function(request)
       next_bot_id = next_bot_id + 1
       local bot = {

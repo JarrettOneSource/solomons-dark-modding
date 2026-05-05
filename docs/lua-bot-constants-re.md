@@ -36,34 +36,29 @@ repositions the tracked actor instead of seeding a manual enemy identity.
 
 ### Primary loadout entry indices
 
-The primary entry-index map in
-`mods/lua_bots/scripts/lib/lua_bots/config.lua` is native-derived selection
-state data, not behavior tuning:
+Lua no longer owns the primary entry-index map. Bot profiles call
+`sd.bots.resolve_primary_entry(element_id)`, which is backed by the shared
+native primary selection owner in `native_spell_stats.cpp`. That keeps Lua bot
+loadouts aligned with the same native selection helper used by cast admission,
+mana resolution, visual seeding, and skill-upgrade flow.
 
-- ether: `0x08`
-- fire: `0x10`
-- air: `0x18`
-- water: `0x20`
-- earth: `0x28`
+### Primary attack window
 
-`docs/lua-memory-tooling.md` records the live selection-state observations
-behind this map.
+Lua no longer computes attack ranges or the water cone formula. Autonomous
+combat asks `sd.bots.get_primary_attack_window(bot_id, element_id)` and treats a
+missing native/semantic window as "do not cast yet".
 
-### Water primary range
-
-Water auto-attack range is native-derived but still computed in Lua because the
-autonomous combat controller needs a conservative range window before queuing a
-cast. Ghidra/live notes in `docs/lua-memory-tooling.md` identify the water
-primary handler (`FUN_00543860`) calling the shared cone query
-`FUN_00641B10` with:
-
-```text
-range = 205 + 4 * actor[0x290]
-```
-
-Runtime Lua does not hardcode the actor offset. It reads the field via
-`sd.debug.layout_offset("actor_spell_config_290")` and falls back to the
-policy range if that layout seam is unavailable.
+The C++ semantic producer owns the recovered water primary reach. Ghidra
+artifacts `runtime/ghidra_primary_attack_window_dispatcher.txt` and
+`runtime/ghidra_actor_spell_config_writer_context.txt` show the primary
+dispatcher (`FUN_00548B00`) filling the live actor spell-config block before the
+water handler feeds the native cone query `FUN_00641B10`; the live shape input
+is read through the layout-backed `kActorSpellConfig290Offset` seam. The
+general projectile engagement and Earth minimum-release windows are now central
+bot-autonomy policy behind that same semantic API instead of duplicated Lua
+tables. `runtime/ghidra_bot_attack_window_scalar_scan.txt` records that the old
+Lua policy window values were not found as direct binary float scalars, so they
+are not claimed as native data.
 
 ## Policy Values
 
@@ -75,7 +70,6 @@ claimed as native game data:
 - tick, command, spawn retry, scene update, and diagnostics intervals;
 - bot spawn formation offsets relative to the live player and default active
   bot set;
-- autonomous attack windows outside the native water range formula;
 - stuck detection thresholds.
 
 Spawn placement intentionally applies a compact formation offset directly to
@@ -95,9 +89,11 @@ in hub layouts.
 Keep these values in Lua config until there is a native behavior source to
 replace them.
 
-## Remaining Blockers
+### Private-area travel
 
-Private-area travel anchors and region ids are still manually observed scene
-automation constants. They should eventually be replaced by a semantic
-hub/region entrance API, but no native entrance list producer is currently
-recovered.
+Private-area travel no longer owns fixed entrance descriptors, hub anchors, or
+manually observed interior coordinates. When the player is already inside a
+stable private scene, Lua builds the bot scene intent from the live
+`scene.region_index` and `scene.region_type_id` values and lets the semantic
+scene-update path place the bot near the player. Returning to hub similarly
+requests the shared-hub scene intent without descriptor coordinates.

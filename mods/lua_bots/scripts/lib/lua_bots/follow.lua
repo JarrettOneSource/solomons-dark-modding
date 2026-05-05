@@ -22,8 +22,6 @@ function follow.install(ctx)
   end
 
   local function reset_travel_candidate()
-    state.hub_candidate_name = nil
-    state.hub_candidate_since_ms = 0
     state.target_area_name = nil
     state.travel_state = "idle"
   end
