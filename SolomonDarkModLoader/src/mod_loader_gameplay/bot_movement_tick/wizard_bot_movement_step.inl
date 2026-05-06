@@ -51,15 +51,17 @@ bool TryResolveWizardBotNativeMovementEnvelope(
         }
     }
 
-    const auto speed_scalar =
-        ReadResolvedGameDoubleAsFloatOr(kMovementSpeedScalarGlobal, 0.0f);
-    const auto acceleration_divisor =
-        ReadResolvedGameDoubleAsFloatOr(kMovementInputAccelerationDivisorGlobal, 0.0f);
-    const auto damping =
-        ReadResolvedGameDoubleAsFloatOr(kMovementVelocityDampingGlobal, 0.0f);
+    float speed_scalar = 0.0f;
+    float acceleration_divisor = 0.0f;
+    float damping = 0.0f;
+    const bool have_native_movement_globals =
+        TryReadResolvedGameDoubleAsFloat(kMovementSpeedScalarGlobal, &speed_scalar) &&
+        TryReadResolvedGameDoubleAsFloat(kMovementInputAccelerationDivisorGlobal, &acceleration_divisor) &&
+        TryReadResolvedGameDoubleAsFloat(kMovementVelocityDampingGlobal, &damping);
     if (!std::isfinite(speed_scalar) ||
         !std::isfinite(acceleration_divisor) ||
         !std::isfinite(damping) ||
+        !have_native_movement_globals ||
         speed_scalar < 0.0f ||
         acceleration_divisor <= 0.0f ||
         damping < 0.0f) {

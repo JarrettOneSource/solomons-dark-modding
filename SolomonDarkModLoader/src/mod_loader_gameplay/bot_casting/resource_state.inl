@@ -1,21 +1,35 @@
-float ReadResolvedGameFloatOr(uintptr_t absolute_address, float fallback) {
+bool TryReadResolvedGameFloat(uintptr_t absolute_address, float* value) {
+    if (value == nullptr) {
+        return false;
+    }
+
     auto& memory = ProcessMemory::Instance();
     const auto resolved_address = memory.ResolveGameAddressOrZero(absolute_address);
     if (resolved_address == 0) {
-        return fallback;
+        return false;
     }
 
-    return memory.ReadValueOr<float>(resolved_address, fallback);
+    return memory.TryReadValue(resolved_address, value);
 }
 
-float ReadResolvedGameDoubleAsFloatOr(uintptr_t absolute_address, float fallback) {
+bool TryReadResolvedGameDoubleAsFloat(uintptr_t absolute_address, float* value) {
+    if (value == nullptr) {
+        return false;
+    }
+
     auto& memory = ProcessMemory::Instance();
     const auto resolved_address = memory.ResolveGameAddressOrZero(absolute_address);
     if (resolved_address == 0) {
-        return fallback;
+        return false;
     }
 
-    return static_cast<float>(memory.ReadValueOr<double>(resolved_address, static_cast<double>(fallback)));
+    double native_value = 0.0;
+    if (!memory.TryReadValue(resolved_address, &native_value)) {
+        return false;
+    }
+
+    *value = static_cast<float>(native_value);
+    return true;
 }
 
 constexpr std::int32_t kSuppressedSelectionRetargetTicks = 60;
@@ -281,8 +295,10 @@ float ResolveEarthBoulderBaseDamage(
 }
 
 float ResolveEarthBoulderDamageOutputScale() {
-    const auto scale =
-        ReadResolvedGameDoubleAsFloatOr(kEarthBoulderDamageOutputScaleGlobal, 0.0f);
+    float scale = 0.0f;
+    if (!TryReadResolvedGameDoubleAsFloat(kEarthBoulderDamageOutputScaleGlobal, &scale)) {
+        return 0.0f;
+    }
     if (!std::isfinite(scale) || scale <= 0.0f) {
         return 0.0f;
     }
@@ -290,8 +306,10 @@ float ResolveEarthBoulderDamageOutputScale() {
 }
 
 float ResolveEarthBoulderReleaseDamageScale() {
-    const auto scale =
-        ReadResolvedGameDoubleAsFloatOr(kEarthBoulderReleaseDamageScaleGlobal, 0.0f);
+    float scale = 0.0f;
+    if (!TryReadResolvedGameDoubleAsFloat(kEarthBoulderReleaseDamageScaleGlobal, &scale)) {
+        return 0.0f;
+    }
     if (!std::isfinite(scale) || scale <= 0.0f) {
         return 0.0f;
     }
@@ -299,8 +317,10 @@ float ResolveEarthBoulderReleaseDamageScale() {
 }
 
 float ResolveEarthBoulderReleaseDamageFloor() {
-    const auto floor =
-        ReadResolvedGameDoubleAsFloatOr(kEarthBoulderReleaseDamageFloorGlobal, 0.0f);
+    float floor = 0.0f;
+    if (!TryReadResolvedGameDoubleAsFloat(kEarthBoulderReleaseDamageFloorGlobal, &floor)) {
+        return 0.0f;
+    }
     if (!std::isfinite(floor) || floor < 0.0f) {
         return 0.0f;
     }
@@ -308,8 +328,10 @@ float ResolveEarthBoulderReleaseDamageFloor() {
 }
 
 float ResolveEarthBoulderReleaseDamageCapScale() {
-    const auto scale =
-        ReadResolvedGameDoubleAsFloatOr(kEarthBoulderReleaseDamageCapScaleGlobal, 0.0f);
+    float scale = 0.0f;
+    if (!TryReadResolvedGameDoubleAsFloat(kEarthBoulderReleaseDamageCapScaleGlobal, &scale)) {
+        return 0.0f;
+    }
     if (!std::isfinite(scale) || scale <= 0.0f) {
         return 0.0f;
     }
@@ -317,8 +339,10 @@ float ResolveEarthBoulderReleaseDamageCapScale() {
 }
 
 float ResolveEarthBoulderReleaseGrowthStopMinCharge() {
-    const auto charge =
-        ReadResolvedGameFloatOr(kEarthBoulderReleaseGrowthStopMinChargeGlobal, 0.0f);
+    float charge = 0.0f;
+    if (!TryReadResolvedGameFloat(kEarthBoulderReleaseGrowthStopMinChargeGlobal, &charge)) {
+        return 0.0f;
+    }
     if (!std::isfinite(charge) || charge < 0.0f) {
         return 0.0f;
     }

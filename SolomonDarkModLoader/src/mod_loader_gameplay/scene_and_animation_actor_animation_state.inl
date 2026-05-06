@@ -22,7 +22,10 @@ bool TryResolveActorAnimationStateSlotAddress(uintptr_t actor_address, uintptr_t
         return false;
     }
 
-    const auto entry_count = ReadResolvedGlobalIntOr(kGameplayIndexStateCountGlobal, 0);
+    int entry_count = 0;
+    if (!TryReadResolvedGlobalInt(kGameplayIndexStateCountGlobal, &entry_count)) {
+        return false;
+    }
     if (entry_count <= slot_index) {
         return false;
     }
@@ -80,4 +83,3 @@ bool TryWriteActorAnimationStateIdDirect(uintptr_t actor_address, int state_id) 
     const auto state_pointer = memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
     return state_pointer != 0 && memory.TryWriteValue<int>(state_pointer, state_id);
 }
-

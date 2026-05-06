@@ -105,9 +105,14 @@ bool IsCombatArenaActiveForEnemyTracking() {
         combat_state.combat_wave_index > 0;
 }
 
-int ReadResolvedGlobalIntOr(uintptr_t absolute_address, int fallback = 0) {
+bool TryReadResolvedGlobalInt(uintptr_t absolute_address, int* value) {
+    if (value == nullptr) {
+        return false;
+    }
+
+    *value = 0;
     const auto resolved = ProcessMemory::Instance().ResolveGameAddressOrZero(absolute_address);
-    return ProcessMemory::Instance().ReadValueOr<int>(resolved, fallback);
+    return resolved != 0 && ProcessMemory::Instance().TryReadValue(resolved, value);
 }
 
 uintptr_t ReadSmartPointerInnerObjectForRunLifecycle(uintptr_t wrapper_address) {
@@ -184,8 +189,8 @@ bool IsLocalPlayerProgressionForRunLifecycle(uintptr_t progression_address) {
     return local_progression != 0 && local_progression == progression_address;
 }
 
-int ReadPendingLevelKindOrZero() {
-    return ReadResolvedGlobalIntOr(kPendingLevelKindGlobal, 0);
+bool TryReadPendingLevelKind(int* pending_level_kind) {
+    return TryReadResolvedGlobalInt(kPendingLevelKindGlobal, pending_level_kind);
 }
 
 bool TryWritePendingLevelKind(int pending_level_kind) {
@@ -198,7 +203,15 @@ void RestoreNonLocalPendingLevelKind(
     int pending_before,
     int level_after,
     int xp_after) {
-    const auto pending_after = ReadPendingLevelKindOrZero();
+    int pending_after = 0;
+    if (!TryReadPendingLevelKind(&pending_after)) {
+        Log(
+            "level.up pending-level-kind global unavailable after native level-up. progression=" +
+            HexString(progression_address) +
+            " level=" + std::to_string(level_after) +
+            " xp=" + std::to_string(xp_after));
+        return;
+    }
     if (pending_after == pending_before) {
         return;
     }

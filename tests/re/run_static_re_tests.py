@@ -4320,6 +4320,89 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
     return "bot movement clears stale stock-tick inputs, writes only standalone walk-cycle fields, and leaves render phase/blend native-owned"
 
 
+def test_native_global_reads_do_not_use_loader_fallbacks() -> str:
+    resource_text = read_text(RESOURCE_STATE)
+    movement_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/wizard_bot_movement_step.inl"
+    )
+    locomotion_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/locomotion_and_animation.inl"
+    )
+    gameplay_state_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_gameplay_state.inl"
+    )
+    actor_animation_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_actor_animation_state.inl"
+    )
+    public_debug_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_debug_and_spawn.inl"
+    )
+    public_state_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"
+    )
+    dispatch_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_gameplay_thread_dispatch.inl"
+    )
+    cast_probe_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/cast_probe_state.inl"
+    )
+    entity_update_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/entity_update_and_rail_selection.inl"
+    )
+    run_lifecycle_state_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/run_lifecycle/state_and_targets.inl"
+    )
+    run_lifecycle_hooks_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks.inl"
+    )
+    combined_text = "\n".join((
+        resource_text,
+        movement_text,
+        locomotion_text,
+        gameplay_state_text,
+        actor_animation_text,
+        public_debug_text,
+        public_state_text,
+        dispatch_text,
+        cast_probe_text,
+        entity_update_text,
+        run_lifecycle_state_text,
+        run_lifecycle_hooks_text,
+    ))
+
+    forbidden_tokens = (
+        "ReadResolvedGameFloatOr",
+        "ReadResolvedGameDoubleAsFloatOr",
+        "ReadResolvedGlobalIntOr",
+        "fallback_world_address",
+    )
+    present = [token for token in forbidden_tokens if token in combined_text]
+    if present:
+        raise StaticReTestFailure(
+            "active native-global readers still allow loader fallback values: " +
+            ", ".join(present))
+
+    required_tokens = (
+        "TryReadResolvedGameFloat",
+        "TryReadResolvedGameDoubleAsFloat",
+        "TryReadResolvedGlobalInt",
+        "have_native_movement_globals",
+        "have_native_walk_cycle_globals",
+        "native walk-cycle globals unavailable",
+        "native enemy-count global unavailable",
+        "gold.changed native gold global unavailable",
+        "pending-level-kind global unavailable",
+        "memory.TryReadField(actor_address, kActorOwnerOffset, &world_address)",
+    )
+    missing = [token for token in required_tokens if token not in combined_text]
+    if missing:
+        raise StaticReTestFailure(
+            "strict native-global read guard is missing token(s): " +
+            ", ".join(missing))
+
+    return "active movement/combat native globals fail visibly instead of using loader fallback values"
+
+
 def test_path_builder_does_not_walk_to_unrequested_fallback_goals() -> str:
     path_text = read_text(BOT_PATHFINDING_PATH_BUILDING)
 
@@ -4468,6 +4551,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Lua follow preserves legacy timeout teleport", test_lua_follow_preserves_legacy_timeout_teleport),
     ("Wizard visuals use native-derived source data", test_native_derived_wizard_visuals_are_layout_backed),
     ("Standalone animation drive applies dynamic fields", test_standalone_animation_drive_applies_dynamic_fields),
+    ("Native global reads reject loader fallbacks", test_native_global_reads_do_not_use_loader_fallbacks),
     ("Path builder rejects unrequested fallback goals", test_path_builder_does_not_walk_to_unrequested_fallback_goals),
     ("Path builder expands cells before LOS smoothing", test_path_builder_expands_cells_before_los_smoothing),
 ]

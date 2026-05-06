@@ -152,7 +152,14 @@ int __stdcall HookGoldChanged(int delta, char allow_negative) {
     const auto* source = ClassifyGoldChangeSource(return_address, delta);
     const auto result = original(delta, allow_negative);
     if (result != 0) {
-        DispatchLuaGoldChanged(ReadResolvedGlobalIntOr(kGoldGlobal), delta, source);
+        int gold = 0;
+        if (TryReadResolvedGlobalInt(kGoldGlobal, &gold)) {
+            DispatchLuaGoldChanged(gold, delta, source);
+        } else {
+            Log(
+                "gold.changed native gold global unavailable. delta=" + std::to_string(delta) +
+                " source=" + std::string(source));
+        }
     }
     return result;
 }
@@ -186,7 +193,8 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
     const auto progression_address = reinterpret_cast<uintptr_t>(self);
     const auto level_before =
         ProcessMemory::Instance().ReadFieldOr<int>(progression_address, kProgressionLevelOffset, 0);
-    const auto pending_before = ReadPendingLevelKindOrZero();
+    int pending_before = 0;
+    const bool have_pending_before = TryReadPendingLevelKind(&pending_before);
     const auto local_player_level_up = IsLocalPlayerProgressionForRunLifecycle(progression_address);
     original(self, unused_edx);
     if (!IsRunActive()) {
@@ -201,7 +209,15 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
 
     const auto xp_after = ReadRoundedXpOrUnknown(progression_address);
     if (!local_player_level_up) {
-        RestoreNonLocalPendingLevelKind(progression_address, pending_before, level_after, xp_after);
+        if (have_pending_before) {
+            RestoreNonLocalPendingLevelKind(progression_address, pending_before, level_after, xp_after);
+        } else {
+            Log(
+                "level.up pending-level-kind global unavailable before native level-up; restore skipped. progression=" +
+                HexString(progression_address) +
+                " level=" + std::to_string(level_after) +
+                " xp=" + std::to_string(xp_after));
+        }
         return;
     }
 

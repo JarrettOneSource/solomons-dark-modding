@@ -49,17 +49,38 @@ void AdvanceStandaloneWizardWalkCycleState(
         return;
     }
 
-    const auto primary_divisor =
-        (std::max)(0.0001f, ReadResolvedGameDoubleAsFloatOr(kActorWalkCyclePrimaryDivisorGlobal, 1.0f));
-    const auto secondary_divisor =
-        (std::max)(0.0001f, ReadResolvedGameDoubleAsFloatOr(kActorWalkCycleSecondaryDivisorGlobal, 1.0f));
-    const auto primary_wrap_threshold =
-        (std::max)(0.0001f, ReadResolvedGameFloatOr(kActorWalkCyclePrimaryWrapThresholdGlobal, 1.0f));
-    const auto secondary_wrap_threshold =
-        (std::max)(0.0001f, ReadResolvedGameFloatOr(kActorWalkCycleSecondaryWrapThresholdGlobal, 1.0f));
-    const auto secondary_wrap_step =
-        (std::max)(0.0001f, ReadResolvedGameDoubleAsFloatOr(kActorWalkCycleSecondaryWrapStepGlobal, secondary_wrap_threshold));
-    const auto stride_step = ReadResolvedGameDoubleAsFloatOr(kActorWalkCycleStrideStepGlobal, 1.0f);
+    float primary_divisor = 0.0f;
+    float secondary_divisor = 0.0f;
+    float primary_wrap_threshold = 0.0f;
+    float secondary_wrap_threshold = 0.0f;
+    float secondary_wrap_step = 0.0f;
+    float stride_step = 0.0f;
+    const bool have_native_walk_cycle_globals =
+        TryReadResolvedGameDoubleAsFloat(kActorWalkCyclePrimaryDivisorGlobal, &primary_divisor) &&
+        TryReadResolvedGameDoubleAsFloat(kActorWalkCycleSecondaryDivisorGlobal, &secondary_divisor) &&
+        TryReadResolvedGameFloat(kActorWalkCyclePrimaryWrapThresholdGlobal, &primary_wrap_threshold) &&
+        TryReadResolvedGameFloat(kActorWalkCycleSecondaryWrapThresholdGlobal, &secondary_wrap_threshold) &&
+        TryReadResolvedGameDoubleAsFloat(kActorWalkCycleSecondaryWrapStepGlobal, &secondary_wrap_step) &&
+        TryReadResolvedGameDoubleAsFloat(kActorWalkCycleStrideStepGlobal, &stride_step);
+    if (!have_native_walk_cycle_globals ||
+        !std::isfinite(primary_divisor) ||
+        !std::isfinite(secondary_divisor) ||
+        !std::isfinite(primary_wrap_threshold) ||
+        !std::isfinite(secondary_wrap_threshold) ||
+        !std::isfinite(secondary_wrap_step) ||
+        !std::isfinite(stride_step) ||
+        primary_divisor <= 0.0001f ||
+        secondary_divisor <= 0.0001f ||
+        primary_wrap_threshold <= 0.0001f ||
+        secondary_wrap_threshold <= 0.0001f ||
+        secondary_wrap_step <= 0.0001f) {
+        static bool s_logged_missing_native_walk_cycle_globals = false;
+        if (!s_logged_missing_native_walk_cycle_globals) {
+            s_logged_missing_native_walk_cycle_globals = true;
+            Log("[bots] native walk-cycle globals unavailable; dynamic standalone walk-cycle update skipped.");
+        }
+        return;
+    }
 
     auto primary = binding->dynamic_walk_cycle_primary;
     auto secondary = binding->dynamic_walk_cycle_secondary;

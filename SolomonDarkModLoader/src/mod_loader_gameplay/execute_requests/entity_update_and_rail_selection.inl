@@ -3,7 +3,6 @@ std::string DescribeArenaWaveStartState(const ArenaWaveStartState& candidate);
 
 bool TryRebindActorToOwnerWorld(
     uintptr_t actor_address,
-    uintptr_t fallback_world_address,
     DWORD* exception_code) {
     if (exception_code != nullptr) {
         *exception_code = 0;
@@ -18,8 +17,10 @@ bool TryRebindActorToOwnerWorld(
         return false;
     }
 
-    const auto world_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, fallback_world_address);
+    uintptr_t world_address = 0;
+    if (!memory.TryReadField(actor_address, kActorOwnerOffset, &world_address)) {
+        return false;
+    }
     if (world_address == 0) {
         return false;
     }
@@ -66,7 +67,6 @@ bool TryUpdateParticipantEntity(
     DWORD rebind_exception_code = 0;
     if (!TryRebindActorToOwnerWorld(
             binding->actor_address,
-            binding->materialized_world_address,
             &rebind_exception_code)) {
         Log(
             "[bots] participant transform rebind failed. bot_id=" +

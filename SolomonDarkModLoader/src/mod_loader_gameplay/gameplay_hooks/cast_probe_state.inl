@@ -119,7 +119,8 @@ std::string DescribeLocalPlayerCastProbeState(
     (void)TryReadGameplayIndexStateValue(
         static_cast<int>(kGameplayIndexStateActorSelectionBaseIndex),
         &slot0_selection_state);
-    const auto slot0_selection_global = ReadResolvedGlobalIntOr(kPlayerSelectionState0Global, 0);
+    int slot0_selection_global = kUnknownAnimationStateId;
+    (void)TryReadResolvedGlobalInt(kPlayerSelectionState0Global, &slot0_selection_global);
     const auto actor_selection_state = ResolveActorAnimationStateId(actor_address);
     const auto selection_pointer =
         memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);

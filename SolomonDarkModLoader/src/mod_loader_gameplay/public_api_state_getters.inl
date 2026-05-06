@@ -173,6 +173,11 @@ bool TryGetPlayerState(SDModPlayerState* state) {
         }
     }
 
+    int gold = 0;
+    if (!TryReadResolvedGlobalInt(kGoldGlobal, &gold)) {
+        return false;
+    }
+
     auto& memory = ProcessMemory::Instance();
     state->valid = true;
     state->hp = memory.ReadFieldOr<float>(progression_address, kProgressionHpOffset, 0.0f);
@@ -183,7 +188,7 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     state->level = memory.ReadFieldOr<int>(progression_address, kProgressionLevelOffset, 0);
     state->x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
     state->y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
-    state->gold = ReadResolvedGlobalIntOr(kGoldGlobal);
+    state->gold = gold;
     state->actor_address = actor_address;
     state->render_subject_address = actor_address;
     state->world_address = world_address;
@@ -283,12 +288,17 @@ bool TryGetWorldState(SDModWorldState* state) {
         return false;
     }
 
+    int enemy_count = 0;
+    if (!TryReadResolvedGlobalInt(kEnemyCountGlobal, &enemy_count)) {
+        return false;
+    }
+
     state->valid = true;
     state->wave = GetRunLifecycleCurrentWave();
     if (state->wave <= 0) {
         state->wave = ProcessMemory::Instance().ReadFieldOr<int>(arena_address, kArenaCombatWaveIndexOffset, 0);
     }
-    state->enemy_count = ReadResolvedGlobalIntOr(kEnemyCountGlobal);
+    state->enemy_count = enemy_count;
     state->time_elapsed_ms = GetRunLifecycleElapsedMilliseconds();
     return true;
 }
@@ -351,6 +361,15 @@ bool TryGetSceneState(SDModSceneState* state) {
 
     SceneContextSnapshot scene_context;
     (void)TryBuildSceneContextSnapshot(gameplay_scene_address, &scene_context);
+    int pending_level_kind = 0;
+    int transition_target_a = 0;
+    int transition_target_b = 0;
+    if (!TryReadResolvedGlobalInt(kPendingLevelKindGlobal, &pending_level_kind) ||
+        !TryReadResolvedGlobalInt(kTransitionTargetAGlobal, &transition_target_a) ||
+        !TryReadResolvedGlobalInt(kTransitionTargetBGlobal, &transition_target_b)) {
+        return false;
+    }
+
     state->valid = true;
     state->kind = DescribeSceneKind(scene_context);
     state->name = DescribeSceneName(scene_context);
@@ -360,9 +379,9 @@ bool TryGetSceneState(SDModSceneState* state) {
     state->region_state_address = scene_context.region_state_address;
     state->current_region_index = scene_context.current_region_index;
     state->region_type_id = scene_context.region_type_id;
-    state->pending_level_kind = ReadResolvedGlobalIntOr(kPendingLevelKindGlobal);
-    state->transition_target_a = ReadResolvedGlobalIntOr(kTransitionTargetAGlobal);
-    state->transition_target_b = ReadResolvedGlobalIntOr(kTransitionTargetBGlobal);
+    state->pending_level_kind = pending_level_kind;
+    state->transition_target_a = transition_target_a;
+    state->transition_target_b = transition_target_b;
     return true;
 }
 

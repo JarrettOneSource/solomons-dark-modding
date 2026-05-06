@@ -219,7 +219,11 @@ bool TryEnableCombatPreludeOnGameThread() {
 
     ArenaWaveStartState before;
     const bool have_before = TryReadArenaWaveStartState(arena_address, &before);
-    const auto enemy_count = ReadResolvedGlobalIntOr(kEnemyCountGlobal);
+    int enemy_count = 0;
+    if (!TryReadResolvedGlobalInt(kEnemyCountGlobal, &enemy_count)) {
+        Log("combat_prelude: native enemy-count global unavailable.");
+        return false;
+    }
     if (have_before && before.combat_wave_index > 0) {
         Log(
             "combat_prelude: refusing because waves are already active. arena=" + HexString(arena_address) +
@@ -293,12 +297,14 @@ bool TryEnableCombatPreludeOnGameThread() {
 
     ArenaWaveStartState after;
     const bool have_after = TryReadArenaWaveStartState(arena_address, &after);
+    int enemy_count_after = 0;
+    const bool have_enemy_count_after = TryReadResolvedGlobalInt(kEnemyCountGlobal, &enemy_count_after);
     Log(
         "combat_prelude: dispatched. arena=" + HexString(arena_address) +
         " runtime=" + HexString(gameplay_runtime_address) +
         " before=" + (have_before ? DescribeArenaWaveStartState(before) : std::string("unreadable")) +
         " after=" + (have_after ? DescribeArenaWaveStartState(after) : std::string("unreadable")) +
-        " enemy_count=" + std::to_string(ReadResolvedGlobalIntOr(kEnemyCountGlobal)));
+        " enemy_count=" + (have_enemy_count_after ? std::to_string(enemy_count_after) : std::string("unreadable")));
     SetRunLifecycleCombatPreludeOnlySuppression(true);
     return true;
 }

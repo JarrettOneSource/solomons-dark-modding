@@ -14,6 +14,7 @@ import argparse
 from contextlib import contextmanager
 import json
 import math
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -37,6 +38,7 @@ from run_live_native_spell_stats_probe import (  # noqa: E402
 
 
 OUTPUT_PATH = ROOT / "runtime" / "live_all_bots_hub_run_probe.json"
+REPLAY_SCRIPT = ROOT / "scripts" / "Replay-UiSandbox.ps1"
 UI_SANDBOX_PRESET_PATH = ROOT / "mods" / "lua_ui_sandbox_lab" / "config" / "active_preset.txt"
 EXPECTED_ELEMENT_IDS = sorted(int(spec["element_id"]) for spec in PRIMARY_SKILLS)
 
@@ -146,6 +148,70 @@ def capture_snapshot(label: str) -> dict[str, Any]:
     }
 
 
+def parse_replay_output(output: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in output.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def launch_hub_with_replay(element: str, discipline: str, timeout_s: float) -> dict[str, Any]:
+    preset = f"map_create_{element}_{discipline}_hub"
+    args = [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        csp.to_windows_path(REPLAY_SCRIPT),
+        "-Preset",
+        preset,
+        "-BotSet",
+        "all",
+        "-KeepRunning",
+        "-CompletionTimeoutSeconds",
+        str(int(timeout_s)),
+    ]
+    timed_out = False
+    replay_output_timeout_s = min(timeout_s + 45.0, 60.0)
+    try:
+        result = csp.run_command(args, timeout=replay_output_timeout_s)
+        returncode: int | None = result.returncode
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        returncode = None
+        stdout = exc.stdout or ""
+        stderr = exc.stderr or ""
+        if isinstance(stdout, bytes):
+            stdout = stdout.decode("utf-8", errors="replace")
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode("utf-8", errors="replace")
+    output = stdout + stderr
+    values = parse_replay_output(output)
+    if (
+        returncode not in (0, None) or
+        values.get("OUTCOME") != "complete" or
+        values.get("PROCESS_ALIVE") != "True"
+    ):
+        raise LiveAllBotsHubRunProbeFailure(
+            "Replay harness failed to leave a live all-bot hub session. "
+            f"returncode={returncode} timed_out={timed_out} values={values} output={output}"
+        )
+    return {
+        "preset": preset,
+        "returncode": returncode,
+        "timed_out_after_success": timed_out,
+        "values": values,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
+
+
 def wait_for_valid_snapshot(
     label: str,
     *,
@@ -170,6 +236,20 @@ def wait_for_valid_snapshot(
     )
 
 
+def start_testrun_without_waves() -> dict[str, Any]:
+    scene = csp.query_scene_state()
+    if csp.is_settled_scene(scene, "testrun"):
+        return {"ok": "true", "already_testrun": "true", "scene": scene}
+
+    values = csp.parse_key_values(
+        csp.run_lua("print('ok='..tostring(sd.hub.start_testrun()))")
+    )
+    if values.get("ok") != "true":
+        raise LiveAllBotsHubRunProbeFailure(f"sd.hub.start_testrun failed: {values}")
+    scene = csp.wait_for_scene("testrun", timeout_s=45.0)
+    return {"ok": "true", "scene": scene}
+
+
 def run_probe(element: str, discipline: str, max_distance: float, timeout_s: float) -> dict[str, Any]:
     result: dict[str, Any] = {
         "launcher_freshness": csp.ensure_launcher_bundle_fresh(),
@@ -181,19 +261,12 @@ def run_probe(element: str, discipline: str, max_distance: float, timeout_s: flo
     csp.stop_game()
     csp.clear_loader_log()
     with temporary_active_bots_config("all"), temporary_ui_sandbox_preset("idle"):
-        csp.launch_game()
-        process_id = csp.wait_for_game_process()
+        replay = launch_hub_with_replay(element, discipline, timeout_s)
+        result["replay"] = replay
+        process_id = int(replay["values"].get("PROCESS_ID", "0"))
         result["process_id"] = process_id
         csp.wait_for_lua_pipe()
-        result["navigation"].append({"step": "launch", "process_id": process_id})
-
-        hub_flow = csp.drive_hub_flow(
-            process_id,
-            element=element,
-            discipline=discipline,
-            prefer_resume=False,
-        )
-        result["navigation"].append({"step": "hub_ready", "flow": hub_flow})
+        result["navigation"].append({"step": "hub_ready", "replay": replay["values"]})
         result["hub"] = wait_for_valid_snapshot(
             "hub",
             scene_name="hub",
@@ -201,9 +274,8 @@ def run_probe(element: str, discipline: str, max_distance: float, timeout_s: flo
             timeout_s=timeout_s,
         )
 
-        csp.start_run_and_waves()
-        csp.boost_player_survival()
-        result["navigation"].append({"step": "testrun_started"})
+        testrun = start_testrun_without_waves()
+        result["navigation"].append({"step": "testrun_started_without_waves", "result": testrun})
         result["run"] = wait_for_valid_snapshot(
             "run",
             scene_name="testrun",
@@ -219,7 +291,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--element", default="fire", choices=sorted(csp.CREATE_ELEMENT_CENTERS))
     parser.add_argument("--discipline", default="mind", choices=sorted(csp.CREATE_DISCIPLINE_CENTERS))
-    parser.add_argument("--max-distance", type=float, default=100.0)
+    parser.add_argument("--max-distance", type=float, default=240.0)
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
     parser.add_argument("--json", action="store_true", help="Only print structured JSON.")

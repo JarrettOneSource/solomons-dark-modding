@@ -10,6 +10,13 @@ bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state) 
         return false;
     }
 
+    int player_selection_state_0 = 0;
+    int player_selection_state_1 = 0;
+    if (!TryReadResolvedGlobalInt(kPlayerSelectionState0Global, &player_selection_state_0) ||
+        !TryReadResolvedGlobalInt(kPlayerSelectionState1Global, &player_selection_state_1)) {
+        return false;
+    }
+
     state->valid = true;
     state->table_address = table_address;
     state->entry_count = entry_count;
@@ -21,11 +28,8 @@ bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state) 
         }
         state->slot_selection_entries[slot_index] = static_cast<std::int32_t>(value);
     }
-
-    state->player_selection_state_0 =
-        static_cast<std::int32_t>(ReadResolvedGlobalIntOr(kPlayerSelectionState0Global, 0));
-    state->player_selection_state_1 =
-        static_cast<std::int32_t>(ReadResolvedGlobalIntOr(kPlayerSelectionState1Global, 0));
+    state->player_selection_state_0 = static_cast<std::int32_t>(player_selection_state_0);
+    state->player_selection_state_1 = static_cast<std::int32_t>(player_selection_state_1);
     return true;
 }
 
@@ -122,7 +126,7 @@ bool RebindSceneActorCell(uintptr_t actor_address, std::string* error_message) {
         error_message->clear();
     }
     DWORD exception_code = 0;
-    if (TryRebindActorToOwnerWorld(actor_address, 0, &exception_code)) {
+    if (TryRebindActorToOwnerWorld(actor_address, &exception_code)) {
         return true;
     }
     if (error_message != nullptr) {
