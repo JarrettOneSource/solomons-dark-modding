@@ -995,7 +995,7 @@ def test_held_primary_mana_uses_native_spend_scale_and_start_rate() -> str:
         "mana_spend_cost_available",
         "NativePrimaryManaOutputUsesDisplayScale",
         "kActorWalkCyclePrimaryDivisorGlobal",
-        "ReadValueOr<double>",
+        "TryReadValue(scale_address",
         "cost.cost = stats.mana_spend_cost",
         "cost.native_stat_cost = stats.mana_cost",
         "cost.native_output_scale = stats.mana_output_scale",
@@ -4403,6 +4403,64 @@ def test_native_global_reads_do_not_use_loader_fallbacks() -> str:
     return "active movement/combat native globals fail visibly instead of using loader fallback values"
 
 
+def test_repo_wide_native_reads_do_not_publish_substitute_state() -> str:
+    run_lifecycle_text = "\n".join((
+        read_text(ROOT / "SolomonDarkModLoader/src/run_lifecycle/combat_prelude_and_sources.inl"),
+        read_text(ROOT / "SolomonDarkModLoader/src/run_lifecycle/enemy_tracking_and_reset.inl"),
+        read_text(ROOT / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks.inl"),
+        read_text(ROOT / "SolomonDarkModLoader/src/run_lifecycle/spell_cast_hooks.inl"),
+    ))
+    skill_choice_text = "\n".join((
+        read_text(ROOT / "SolomonDarkModLoader/src/bot_runtime/helpers/skill_choices.inl"),
+        read_text(ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/skill_choices_api.inl"),
+    ))
+    native_stats_text = read_text(NATIVE_SPELL_STATS_CPP)
+    player_state_text = "\n".join((
+        read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_memory_and_progression.inl"),
+        read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"),
+    ))
+    combined_text = "\n".join((run_lifecycle_text, skill_choice_text, native_stats_text, player_state_text))
+
+    forbidden_tokens = (
+        "ReadFloatFieldOrZero",
+        "fallback_config_address",
+        "ReadProgressionRoundedXpOrFallback",
+        "ReadProgressionNextXpOrZero",
+        "ReadValueOr<double>(scale_address",
+        "ReadValueOr<float>(output_values_address",
+        "ReadRoundedXpOrUnknown",
+        "ReadFieldOr<std::uint8_t>(self_address, kEnemyDeathHandledOffset",
+        "ReadFieldOr<int>(progression_address, kProgressionLevelOffset",
+    )
+    present = [token for token in forbidden_tokens if token in combined_text]
+    if present:
+        raise StaticReTestFailure(
+            "repo-wide native reads still publish substitute state: " +
+            ", ".join(present))
+
+    required_tokens = (
+        "TryReadActorPosition",
+        "spell.cast native event fields unavailable",
+        "enemy.spawned native position unavailable",
+        "enemy.death native type unavailable",
+        "enemy.death native handled flag unavailable",
+        "level.up native xp unavailable",
+        "TryReadPlayerRoundedXp",
+        "TryReadFiniteFloatField(progression_address, kProgressionHpOffset",
+        "TryReadProgressionRoundedXp",
+        "native bot skill choice xp read failed",
+        "native primary mana output read failed",
+        "native primary damage output read failed",
+    )
+    missing = [token for token in required_tokens if token not in combined_text]
+    if missing:
+        raise StaticReTestFailure(
+            "repo-wide strict native read cleanup is missing token(s): " +
+            ", ".join(missing))
+
+    return "run-lifecycle, skill-choice, and native spell stat reads fail visibly instead of publishing substitutes"
+
+
 def test_path_builder_does_not_walk_to_unrequested_fallback_goals() -> str:
     path_text = read_text(BOT_PATHFINDING_PATH_BUILDING)
 
@@ -4552,6 +4610,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Wizard visuals use native-derived source data", test_native_derived_wizard_visuals_are_layout_backed),
     ("Standalone animation drive applies dynamic fields", test_standalone_animation_drive_applies_dynamic_fields),
     ("Native global reads reject loader fallbacks", test_native_global_reads_do_not_use_loader_fallbacks),
+    ("Repo-wide native reads reject substitute state", test_repo_wide_native_reads_do_not_publish_substitute_state),
     ("Path builder rejects unrequested fallback goals", test_path_builder_does_not_walk_to_unrequested_fallback_goals),
     ("Path builder expands cells before LOS smoothing", test_path_builder_expands_cells_before_los_smoothing),
 ]

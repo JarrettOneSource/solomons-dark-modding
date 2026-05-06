@@ -85,8 +85,23 @@ const char* ClassifyGoldChangeSource(uintptr_t return_address, int delta) {
     return kGoldSourceUnknown;
 }
 
-float ReadFloatFieldOrZero(uintptr_t address, size_t offset) {
-    return ProcessMemory::Instance().ReadFieldOr<float>(address, offset, 0.0f);
+bool TryReadFloatField(uintptr_t address, size_t offset, float* value) {
+    if (value == nullptr) {
+        return false;
+    }
+
+    *value = 0.0f;
+    if (address == 0) {
+        return false;
+    }
+
+    return ProcessMemory::Instance().TryReadField(address, offset, value) &&
+           std::isfinite(*value);
+}
+
+bool TryReadActorPosition(uintptr_t actor_address, float* x, float* y) {
+    return TryReadFloatField(actor_address, kActorPositionXOffset, x) &&
+           TryReadFloatField(actor_address, kActorPositionYOffset, y);
 }
 
 std::string DescribeSpellCastHookActorState(uintptr_t actor_address) {

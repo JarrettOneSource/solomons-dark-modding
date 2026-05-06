@@ -167,7 +167,9 @@ bool TryGetPlayerState(SDModPlayerState* state) {
         }
 
         auto& memory = ProcessMemory::Instance();
-        world_address = memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+        if (!memory.TryReadField(actor_address, kActorOwnerOffset, &world_address)) {
+            return false;
+        }
         if (world_address == 0 || !TryResolveActorProgressionRuntime(actor_address, &progression_address)) {
             return false;
         }
@@ -179,15 +181,34 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     }
 
     auto& memory = ProcessMemory::Instance();
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    float mp = 0.0f;
+    float max_mp = 0.0f;
+    int xp = 0;
+    int level = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    if (!TryReadFiniteFloatField(progression_address, kProgressionHpOffset, &hp) ||
+        !TryReadFiniteFloatField(progression_address, kProgressionMaxHpOffset, &max_hp) ||
+        !TryReadFiniteFloatField(progression_address, kProgressionMpOffset, &mp) ||
+        !TryReadFiniteFloatField(progression_address, kProgressionMaxMpOffset, &max_mp) ||
+        !TryReadPlayerRoundedXp(progression_address, &xp) ||
+        !memory.TryReadField(progression_address, kProgressionLevelOffset, &level) ||
+        !TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &x) ||
+        !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &y)) {
+        return false;
+    }
+
     state->valid = true;
-    state->hp = memory.ReadFieldOr<float>(progression_address, kProgressionHpOffset, 0.0f);
-    state->max_hp = memory.ReadFieldOr<float>(progression_address, kProgressionMaxHpOffset, 0.0f);
-    state->mp = memory.ReadFieldOr<float>(progression_address, kProgressionMpOffset, 0.0f);
-    state->max_mp = memory.ReadFieldOr<float>(progression_address, kProgressionMaxMpOffset, 0.0f);
-    state->xp = ReadRoundedXpOrUnknown(progression_address);
-    state->level = memory.ReadFieldOr<int>(progression_address, kProgressionLevelOffset, 0);
-    state->x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-    state->y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
+    state->hp = hp;
+    state->max_hp = max_hp;
+    state->mp = mp;
+    state->max_mp = max_mp;
+    state->xp = xp;
+    state->level = level;
+    state->x = x;
+    state->y = y;
     state->gold = gold;
     state->actor_address = actor_address;
     state->render_subject_address = actor_address;

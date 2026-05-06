@@ -1,20 +1,52 @@
-int ReadRoundedXpOrUnknown(uintptr_t address) {
-    if (address == 0) {
-        return -1;
+bool TryReadEnemyTypeFromConfig(uintptr_t config_address, int* enemy_type) {
+    if (enemy_type == nullptr) {
+        return false;
     }
 
-    const auto xp = ProcessMemory::Instance().ReadFieldOr<float>(address, kProgressionXpOffset, -1.0f);
-    if (xp < 0.0f) {
-        return -1;
+    *enemy_type = -1;
+    if (config_address == 0) {
+        return false;
     }
 
-    return static_cast<int>(std::lround(xp));
+    auto& memory = ProcessMemory::Instance();
+    return memory.TryReadField(config_address, kEnemyTypeOffset, enemy_type) && *enemy_type >= 0;
 }
 
-int ReadEnemyType(uintptr_t enemy_address, uintptr_t fallback_config_address = 0) {
+bool TryReadEnemyTypeFromActor(uintptr_t enemy_address, int* enemy_type) {
+    if (enemy_type == nullptr) {
+        return false;
+    }
+
+    *enemy_type = -1;
+    if (enemy_address == 0) {
+        return false;
+    }
+
     auto& memory = ProcessMemory::Instance();
-    const auto config_address = memory.ReadFieldOr<uintptr_t>(enemy_address, kEnemyConfigOffset, fallback_config_address);
-    return memory.ReadFieldOr<int>(config_address, kEnemyTypeOffset, -1);
+    uintptr_t config_address = 0;
+    return memory.TryReadField(enemy_address, kEnemyConfigOffset, &config_address) &&
+           TryReadEnemyTypeFromConfig(config_address, enemy_type);
+}
+
+bool TryReadRunLifecycleRoundedXp(uintptr_t progression_address, int* experience) {
+    if (experience == nullptr) {
+        return false;
+    }
+
+    *experience = 0;
+    if (progression_address == 0) {
+        return false;
+    }
+
+    float xp = 0.0f;
+    if (!ProcessMemory::Instance().TryReadField(progression_address, kProgressionXpOffset, &xp) ||
+        !std::isfinite(xp) ||
+        xp < 0.0f) {
+        return false;
+    }
+
+    *experience = static_cast<int>(std::lround(xp));
+    return true;
 }
 
 void RememberEnemyType(uintptr_t enemy_address, int enemy_type) {

@@ -416,32 +416,49 @@ bool ApplyNativeSkillChoiceToProgression(
     return true;
 }
 
-int ReadProgressionRoundedXpOrFallback(uintptr_t progression_address, int fallback) {
+bool TryReadProgressionRoundedXp(uintptr_t progression_address, int* experience) {
+    if (experience == nullptr) {
+        return false;
+    }
+
+    *experience = -1;
     if (progression_address == 0) {
-        return fallback;
+        return false;
     }
-    const auto xp = ProcessMemory::Instance().ReadFieldOr<float>(
-        progression_address,
-        kProgressionXpOffset,
-        static_cast<float>(fallback));
-    if (xp < 0.0f || xp != xp) {
-        return fallback;
+
+    float xp = 0.0f;
+    if (!ProcessMemory::Instance().TryReadField(progression_address, kProgressionXpOffset, &xp) ||
+        !std::isfinite(xp) ||
+        xp < 0.0f) {
+        return false;
     }
-    return static_cast<int>(std::lround(xp));
+
+    *experience = static_cast<int>(std::lround(xp));
+    return true;
 }
 
-int ReadProgressionNextXpOrZero(uintptr_t progression_address) {
+bool TryReadProgressionNextXp(uintptr_t progression_address, int* next_experience) {
+    if (next_experience == nullptr) {
+        return false;
+    }
+
+    *next_experience = 0;
     if (progression_address == 0) {
-        return 0;
+        return false;
     }
-    const auto next_xp = ProcessMemory::Instance().ReadFieldOr<float>(
-        progression_address,
-        kProgressionNextXpThresholdOffset,
-        0.0f);
-    if (next_xp < 0.0f || next_xp != next_xp) {
-        return 0;
+
+    float next_xp = 0.0f;
+    if (!ProcessMemory::Instance().TryReadField(
+            progression_address,
+            kProgressionNextXpThresholdOffset,
+            &next_xp) ||
+        !std::isfinite(next_xp) ||
+        next_xp < 0.0f) {
+        return false;
     }
-    return static_cast<int>(std::lround(next_xp));
+
+    *next_experience = static_cast<int>(std::lround(next_xp));
+    return true;
 }
 
 void UpdateBotLevelProfileState(
@@ -482,18 +499,22 @@ bool SyncNativeBotProgressionLevel(
         return false;
     }
 
-    const auto level_before =
-        memory.ReadFieldOr<std::int32_t>(progression_address, kProgressionLevelOffset, 0);
-    const auto xp_before =
-        memory.ReadFieldOr<float>(progression_address, kProgressionXpOffset, 0.0f);
+    std::int32_t level_before = 0;
+    float xp_before = 0.0f;
+    if (!memory.TryReadField(progression_address, kProgressionLevelOffset, &level_before) ||
+        !memory.TryReadField(progression_address, kProgressionXpOffset, &xp_before) ||
+        !std::isfinite(xp_before)) {
+        return false;
+    }
 
     float target_xp = static_cast<float>(experience);
     if (source_progression_address != 0) {
-        const auto source_xp = memory.ReadFieldOr<float>(
-            source_progression_address,
-            kProgressionXpOffset,
-            target_xp);
-        if (source_xp > target_xp) {
+        float source_xp = 0.0f;
+        if (!memory.TryReadField(source_progression_address, kProgressionXpOffset, &source_xp) ||
+            !std::isfinite(source_xp)) {
+            return false;
+        }
+        if (source_xp >= 0.0f && source_xp > target_xp) {
             target_xp = source_xp;
         }
     }
@@ -523,19 +544,25 @@ bool SyncNativeBotProgressionLevel(
         }
 
         ++calls;
-        level_after =
-            memory.ReadFieldOr<std::int32_t>(progression_address, kProgressionLevelOffset, previous_level);
+        if (!memory.TryReadField(progression_address, kProgressionLevelOffset, &level_after)) {
+            return false;
+        }
         if (level_after <= previous_level) {
             break;
         }
     }
 
-    const auto xp_after =
-        memory.ReadFieldOr<float>(progression_address, kProgressionXpOffset, target_xp);
-    const auto previous_threshold =
-        memory.ReadFieldOr<float>(progression_address, kProgressionPreviousXpThresholdOffset, 0.0f);
-    const auto next_threshold =
-        memory.ReadFieldOr<float>(progression_address, kProgressionNextXpThresholdOffset, 0.0f);
+    float xp_after = 0.0f;
+    float previous_threshold = 0.0f;
+    float next_threshold = 0.0f;
+    if (!memory.TryReadField(progression_address, kProgressionXpOffset, &xp_after) ||
+        !memory.TryReadField(progression_address, kProgressionPreviousXpThresholdOffset, &previous_threshold) ||
+        !memory.TryReadField(progression_address, kProgressionNextXpThresholdOffset, &next_threshold) ||
+        !std::isfinite(xp_after) ||
+        !std::isfinite(previous_threshold) ||
+        !std::isfinite(next_threshold)) {
+        return false;
+    }
     const bool synced = level_after >= level;
     Log(
         "[bots] native level_up sync. progression=" + HexString(progression_address) +

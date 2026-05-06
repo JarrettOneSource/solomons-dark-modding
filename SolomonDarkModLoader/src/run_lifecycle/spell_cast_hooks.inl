@@ -20,10 +20,18 @@ void DispatchSpellCastForSelf(uintptr_t self_address, int spell_id) {
     }
     g_state.last_consumed_spell_click_serial.store(click_serial, std::memory_order_release);
 
-    const auto x = ReadFloatFieldOrZero(self_address, kActorPositionXOffset);
-    const auto y = ReadFloatFieldOrZero(self_address, kActorPositionYOffset);
-    const auto direction_x = ReadFloatFieldOrZero(self_address, kSpellDirectionXOffset);
-    const auto direction_y = ReadFloatFieldOrZero(self_address, kSpellDirectionYOffset);
+    float x = 0.0f;
+    float y = 0.0f;
+    float direction_x = 0.0f;
+    float direction_y = 0.0f;
+    if (!TryReadActorPosition(self_address, &x, &y) ||
+        !TryReadFloatField(self_address, kSpellDirectionXOffset, &direction_x) ||
+        !TryReadFloatField(self_address, kSpellDirectionYOffset, &direction_y)) {
+        Log(
+            "spell.cast native event fields unavailable. spell_id=" + std::to_string(spell_id) +
+            " actor=" + HexString(self_address));
+        return;
+    }
 
     Log(
         "spell.cast hook invoked. spell_id=" + std::to_string(spell_id) +

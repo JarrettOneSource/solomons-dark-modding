@@ -95,9 +95,18 @@ void* __fastcall HookEnemySpawned(
     }
 
     const auto enemy_address = reinterpret_cast<uintptr_t>(enemy);
-    const auto enemy_type = ReadEnemyType(enemy_address, static_cast<uintptr_t>(enemy_config));
-    const auto x = ReadFloatFieldOrZero(enemy_address, kActorPositionXOffset);
-    const auto y = ReadFloatFieldOrZero(enemy_address, kActorPositionYOffset);
+    int enemy_type = -1;
+    if (!TryReadEnemyTypeFromActor(enemy_address, &enemy_type) &&
+        !TryReadEnemyTypeFromConfig(static_cast<uintptr_t>(enemy_config), &enemy_type)) {
+        Log("enemy.spawned native type unavailable. enemy=" + HexString(enemy_address));
+        return enemy;
+    }
+    float x = 0.0f;
+    float y = 0.0f;
+    if (!TryReadActorPosition(enemy_address, &x, &y)) {
+        Log("enemy.spawned native position unavailable. enemy=" + HexString(enemy_address));
+        return enemy;
+    }
     RememberEnemyType(enemy_address, enemy_type);
     Log(
         "enemy.spawned hook invoked. enemy=" + HexString(enemy_address) +
@@ -118,15 +127,32 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
 
     const auto self_address = reinterpret_cast<uintptr_t>(self);
     auto& memory = ProcessMemory::Instance();
-    const bool already_handled = memory.ReadFieldOr<std::uint8_t>(self_address, kEnemyDeathHandledOffset, 0) != 0;
-    auto enemy_type = LookupRememberedEnemyType(self_address);
-    if (enemy_type < 0) {
-        enemy_type = ReadEnemyType(self_address);
-    }
-    const auto x = ReadFloatFieldOrZero(self_address, kActorPositionXOffset);
-    const auto y = ReadFloatFieldOrZero(self_address, kActorPositionYOffset);
+    std::uint8_t already_handled_byte = 0;
+    const bool have_already_handled =
+        memory.TryReadField(self_address, kEnemyDeathHandledOffset, &already_handled_byte);
+    int enemy_type = LookupRememberedEnemyType(self_address);
+    const bool have_enemy_type = enemy_type >= 0 || TryReadEnemyTypeFromActor(self_address, &enemy_type);
+    float x = 0.0f;
+    float y = 0.0f;
+    const bool have_position = TryReadActorPosition(self_address, &x, &y);
 
     const auto result = original(self, unused_edx);
+    if (!have_enemy_type) {
+        Log("enemy.death native type unavailable. enemy=" + HexString(self_address));
+        ForgetEnemyType(self_address);
+        return result;
+    }
+    if (!have_position) {
+        Log("enemy.death native position unavailable. enemy=" + HexString(self_address));
+        ForgetEnemyType(self_address);
+        return result;
+    }
+    if (!have_already_handled) {
+        Log("enemy.death native handled flag unavailable. enemy=" + HexString(self_address));
+        ForgetEnemyType(self_address);
+        return result;
+    }
+    const bool already_handled = already_handled_byte != 0;
     Log(
         "enemy.death hook invoked. enemy=" + HexString(self_address) +
         " enemy_type=" + std::to_string(enemy_type) +
@@ -191,8 +217,10 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
     }
 
     const auto progression_address = reinterpret_cast<uintptr_t>(self);
-    const auto level_before =
-        ProcessMemory::Instance().ReadFieldOr<int>(progression_address, kProgressionLevelOffset, 0);
+    auto& memory = ProcessMemory::Instance();
+    int level_before = 0;
+    const bool have_level_before =
+        memory.TryReadField(progression_address, kProgressionLevelOffset, &level_before);
     int pending_before = 0;
     const bool have_pending_before = TryReadPendingLevelKind(&pending_before);
     const auto local_player_level_up = IsLocalPlayerProgressionForRunLifecycle(progression_address);
@@ -201,13 +229,34 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
         return;
     }
 
-    const auto level_after =
-        ProcessMemory::Instance().ReadFieldOr<int>(progression_address, kProgressionLevelOffset, level_before);
+    if (!have_level_before) {
+        Log(
+            "level.up native level-before unavailable. progression=" +
+            HexString(progression_address));
+        return;
+    }
+
+    int level_after = 0;
+    if (!memory.TryReadField(progression_address, kProgressionLevelOffset, &level_after)) {
+        Log(
+            "level.up native level-after unavailable. progression=" +
+            HexString(progression_address) +
+            " level_before=" + std::to_string(level_before));
+        return;
+    }
     if (level_after <= level_before) {
         return;
     }
 
-    const auto xp_after = ReadRoundedXpOrUnknown(progression_address);
+    int xp_after = 0;
+    if (!TryReadRunLifecycleRoundedXp(progression_address, &xp_after)) {
+        Log(
+            "level.up native xp unavailable. progression=" +
+            HexString(progression_address) +
+            " level_before=" + std::to_string(level_before) +
+            " level_after=" + std::to_string(level_after));
+        return;
+    }
     if (!local_player_level_up) {
         if (have_pending_before) {
             RestoreNonLocalPendingLevelKind(progression_address, pending_before, level_after, xp_after);

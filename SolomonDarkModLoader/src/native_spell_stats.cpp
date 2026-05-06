@@ -171,7 +171,13 @@ bool TryReadNativePrimaryManaOutputScale(float* output_scale, std::string* error
         return false;
     }
 
-    const auto scale = memory.ReadValueOr<double>(scale_address, 0.0);
+    double scale = 0.0;
+    if (!memory.TryReadValue(scale_address, &scale)) {
+        if (error_message != nullptr) {
+            *error_message = "native primary mana output scale read failed";
+        }
+        return false;
+    }
     if (!std::isfinite(scale) || scale <= 0.0) {
         if (error_message != nullptr) {
             *error_message =
@@ -609,16 +615,29 @@ bool TryResolveNativePrimarySpellStats(
 
     stats->output_values_address = output_values_address;
     stats->output_count = output_count;
-    stats->damage = memory.ReadValueOr<float>(output_values_address, 0.0f);
+    if (!memory.TryReadValue(output_values_address, &stats->damage)) {
+        if (error_message != nullptr) {
+            *error_message = "native primary damage output read failed";
+        }
+        return false;
+    }
     if (!selection.pure_primary && output_count > 1) {
-        stats->secondary_damage = memory.ReadValueOr<float>(
-            output_values_address + sizeof(float),
-            0.0f);
+        if (!memory.TryReadValue(output_values_address + sizeof(float), &stats->secondary_damage)) {
+            if (error_message != nullptr) {
+                *error_message = "native primary secondary damage output read failed";
+            }
+            return false;
+        }
         stats->secondary_damage_available = true;
     }
-    stats->mana_cost = memory.ReadValueOr<float>(
-        output_values_address + static_cast<std::size_t>(mana_output_index) * sizeof(float),
-        0.0f);
+    if (!memory.TryReadValue(
+            output_values_address + static_cast<std::size_t>(mana_output_index) * sizeof(float),
+            &stats->mana_cost)) {
+        if (error_message != nullptr) {
+            *error_message = "native primary mana output read failed";
+        }
+        return false;
+    }
     stats->mana_cost_available = true;
     stats->mana_spend_cost = stats->mana_cost;
     stats->mana_spend_cost_available = true;

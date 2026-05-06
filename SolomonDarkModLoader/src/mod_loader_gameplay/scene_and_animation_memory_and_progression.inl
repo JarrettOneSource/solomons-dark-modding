@@ -36,20 +36,31 @@ std::uint32_t FloatToBits(float value) {
     return bits;
 }
 
-int ReadRoundedXpOrUnknown(uintptr_t progression_address) {
-    if (progression_address == 0) {
-        return kUnknownXpSentinel;
+bool TryReadFiniteFloatField(uintptr_t address, std::size_t offset, float* value) {
+    if (value == nullptr) {
+        return false;
     }
 
-    const auto xp = ProcessMemory::Instance().ReadFieldOr<float>(
-        progression_address,
-        kProgressionXpOffset,
-        static_cast<float>(kUnknownXpSentinel));
-    if (xp < 0.0f) {
-        return kUnknownXpSentinel;
+    *value = 0.0f;
+    return address != 0 &&
+           ProcessMemory::Instance().TryReadField(address, offset, value) &&
+           std::isfinite(*value);
+}
+
+bool TryReadPlayerRoundedXp(uintptr_t progression_address, int* experience) {
+    if (experience == nullptr) {
+        return false;
     }
 
-    return static_cast<int>(std::lround(xp));
+    *experience = 0;
+    float xp = 0.0f;
+    if (!TryReadFiniteFloatField(progression_address, kProgressionXpOffset, &xp) ||
+        xp < 0.0f) {
+        return false;
+    }
+
+    *experience = static_cast<int>(std::lround(xp));
+    return true;
 }
 
 bool EnsureBotOwnedProgressionMode(uintptr_t progression_address, const char* stage) {
