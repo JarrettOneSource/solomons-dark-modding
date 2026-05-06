@@ -27,7 +27,7 @@ struct BotNativeActiveSpellObjectState {
 
 BotNativeActiveSpellObjectState ReadBotNativeActiveSpellObjectState(
     const BotCastProcessingContext& context,
-    bool allow_selection_state_fallback = true) {
+    bool allow_selection_state_handle = true) {
     auto& memory = *context.memory;
     const auto actor_address = context.actor_address;
 
@@ -48,7 +48,7 @@ BotNativeActiveSpellObjectState ReadBotNativeActiveSpellObjectState(
             actor_address,
             kActorAnimationSelectionStateOffset,
             0);
-    if (allow_selection_state_fallback &&
+    if (allow_selection_state_handle &&
         (state.group == kBotCastActorActiveCastGroupSentinel ||
          state.slot == kBotCastActorActiveCastSlotSentinel)) {
         if (state.selection_state != 0 &&

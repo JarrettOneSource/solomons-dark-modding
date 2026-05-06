@@ -107,6 +107,7 @@ uintptr_t kActorWalkCycleSecondaryWrapStepGlobal = 0;
 uintptr_t kMovementInputAccelerationDivisorGlobal = 0;
 uintptr_t kMovementSpeedScalarGlobal = 0;
 uintptr_t kMovementVelocityDampingGlobal = 0;
+uintptr_t kWaterPrimaryControlBrainRangeGlobal = 0;
 uintptr_t kEarthBoulderDamageOutputScaleGlobal = 0;
 uintptr_t kEarthBoulderReleaseDamageScaleGlobal = 0;
 uintptr_t kEarthBoulderReleaseDamageFloorGlobal = 0;

@@ -71,8 +71,11 @@ that gate the live boulder launch. Runtime code now names those fields through
 
 The former slot shim blocker was the native init predicate:
 `actor+0x5C == 0`. The current runtime removes the local-slot/progression
-redirect and installs byte-checked native cast gate patches instead. These
-patches unlock the exact non-zero-slot branches while leaving
+redirect and installs layout-backed native cast gate patches instead. These
+patches validate the live instruction as the expected `jnz rel32` gate and
+capture the original bytes for restoration rather than carrying copied
+per-site byte payloads in source. They unlock the exact non-zero-slot branches
+while leaving
 `actor+0x5C` pointed at the bot's real gameplay slot, so stock progression
 lookups use the bot's live slot data.
 

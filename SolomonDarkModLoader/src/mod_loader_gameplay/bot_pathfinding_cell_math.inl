@@ -81,7 +81,7 @@ bool TryFindGameplayPathCellSample(
     float preferred_x,
     float preferred_y,
     bool require_direct_reachability,
-    bool allow_anchor_fallback,
+    bool allow_current_anchor_sample,
     float anchor_x,
     float anchor_y,
     float* resolved_x,
@@ -163,11 +163,11 @@ bool TryFindGameplayPathCellSample(
         }
     };
 
-    if (allow_anchor_fallback && anchor_in_cell) {
+    if (allow_current_anchor_sample && anchor_in_cell) {
         // The actor is already occupying this point. Native placement queries
         // can reject that sample because the actor overlaps itself, but for the
         // path planner the current anchor is a valid start sample by definition.
-        // Goal sampling must be able to suppress this fallback, otherwise a
+        // Goal sampling must be able to suppress this current-anchor sample, otherwise a
         // same-cell destination can degenerate into "stay where you already are"
         // and the caller loops forever on an empty path.
         accept_sample_without_query(anchor_x, anchor_y);

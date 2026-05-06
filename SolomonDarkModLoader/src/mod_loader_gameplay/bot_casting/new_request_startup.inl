@@ -254,9 +254,9 @@ bool StartPendingBotCastRequest(
     // Instant-hit spells (e.g. many melees) may complete inside this primer
     // dispatch: the handler allocates, fires, and drops back to an empty handle
     // all in one call. Detect and release immediately so we don't spin in
-    // the watch loop waiting for a latch that already came and went. 0x3EF is
-    // intentionally excluded: the stock family can return from the primer with
-    // no live handle or latch, then emit on a later native tick.
+    // the watch loop waiting for a latch that already came and went. Combo
+    // dispatcher primaries arm through the gameplay-slot startup path instead
+    // of this direct one so late native emission stays visible there.
     const auto drive_state_post =
         memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
     const auto no_interrupt_post =

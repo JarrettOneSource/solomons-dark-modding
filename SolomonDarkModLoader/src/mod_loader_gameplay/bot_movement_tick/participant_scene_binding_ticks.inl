@@ -31,7 +31,7 @@ void SyncWizardBotMovementIntent(ParticipantEntityBinding* binding) {
     }
     const bool target_face_applied = RefreshWizardBindingTargetFacing(binding);
     if (target_face_applied) {
-        // Native target-facing wins over fallback headings because the target can move.
+        // Native target-facing wins over default headings because the target can move.
     } else if (intent.face_heading_valid) {
         binding->facing_heading_valid = true;
         binding->facing_heading_value = intent.face_heading;

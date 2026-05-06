@@ -17,6 +17,10 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
             memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
         (void)multiplayer::FinishBotAttack(binding->bot_id, true, heading, true);
     };
+    uintptr_t resolved_progression_runtime_address = 0;
+    (void)TryResolveActorProgressionRuntime(
+        actor_address,
+        &resolved_progression_runtime_address);
 
     auto ApplyPreparedState = [&](ParticipantEntityBinding::OngoingCastState* ongoing) {
         if (ongoing == nullptr) {
@@ -144,6 +148,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         if (requested_skill_id <= 0) {
             if (!TryResolveProfilePrimaryCastDescriptor(
                     binding->character_profile,
+                    resolved_progression_runtime_address,
                     &primary_descriptor)) {
                 finish_attack_idle();
                 if (error_message != nullptr) {
@@ -160,6 +165,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
                     ? primary_descriptor.dispatcher_skill_id
                     : primary_descriptor.build_skill_id;
         } else if (TryResolvePrimaryCastDescriptorFromSkillId(
+                       resolved_progression_runtime_address,
                        requested_skill_id,
                        &primary_descriptor)) {
             have_primary_descriptor = true;
@@ -335,7 +341,9 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
                 &selection_error);
     }
 
-    if (TryResolveActorProgressionRuntime(actor_address, &ongoing.progression_runtime_address) &&
+    ongoing.progression_runtime_address = resolved_progression_runtime_address;
+    if ((ongoing.progression_runtime_address != 0 ||
+         TryResolveActorProgressionRuntime(actor_address, &ongoing.progression_runtime_address)) &&
         ongoing.progression_runtime_address != 0) {
         ongoing.progression_spell_id_before =
             memory.ReadFieldOr<std::int32_t>(
@@ -522,7 +530,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     const bool dispatcher_primary_uses_primer =
         have_primary_descriptor &&
         ongoing.uses_dispatcher_skill_id &&
-        !SkillRequiresBoundedHeldCastInputDuringNativeTick(ongoing.dispatcher_skill_id);
+        !OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing);
     const bool should_run_primary_damage_primer =
         request.kind == multiplayer::BotCastKind::Primary &&
         (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary ||
@@ -538,7 +546,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
                     &pure_primary_primer_exception);
         }
         if (pure_primary_primer_called && ongoing.uses_dispatcher_skill_id) {
-            PrimeGameplaySlotPostGateDispatchState(actor_address, ongoing.dispatcher_skill_id);
+            PrimeGameplaySlotPostGateDispatchState(actor_address, ongoing);
             if (ongoing.target_actor_address != 0) {
                 (void)WriteOngoingCastNativeTargetActor(
                     actor_address,
@@ -583,7 +591,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
 //
 //   * Player flow: input sets actor+0x270 (primary skill id); PlayerActorTick
 //     (0x00548B00) calls FUN_00548A00 every gameplay tick; FUN_00548A00 routes
-//     by actor+0x270 to the per-spell handler (e.g. FUN_00545360 for 0x3EE).
+//     by actor+0x270 to the selected per-spell handler.
 //     The handler owns a cached spell-object handle stored at actor+0x27C
 //     (group byte) + actor+0x27E (world slot short). It latches cast-active
 //     state via actor+0x160 (animation_drive_state) and actor+0x1EC

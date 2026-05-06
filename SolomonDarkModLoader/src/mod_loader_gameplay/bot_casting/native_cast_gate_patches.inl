@@ -2,7 +2,7 @@ struct NativeCastGatePatch {
     const char* name = "";
     uintptr_t address = 0;
     uintptr_t resolved_address = 0;
-    std::array<std::uint8_t, 6> expected = {};
+    std::array<std::uint8_t, 6> original = {};
     std::array<std::uint8_t, 6> replacement = {};
     bool installed = false;
     bool restore_needed = false;
@@ -25,6 +25,16 @@ std::string FormatPatchBytes(const std::array<std::uint8_t, 6>& bytes) {
         out << HexString(static_cast<std::uint32_t>(bytes[index]));
     }
     return out.str();
+}
+
+std::array<std::uint8_t, 6> MakeNativeGateReplacementBytes() {
+    std::array<std::uint8_t, 6> bytes = {};
+    bytes.fill(0x90);
+    return bytes;
+}
+
+bool LooksLikeNativeNearJnzGate(const std::array<std::uint8_t, 6>& bytes) {
+    return bytes[0] == 0x0F && bytes[1] == 0x85;
 }
 
 bool ApplyNativeCastGatePatch(NativeCastGatePatch* patch, std::string* error_message) {
@@ -63,18 +73,18 @@ bool ApplyNativeCastGatePatch(NativeCastGatePatch* patch, std::string* error_mes
         return true;
     }
 
-    if (!BytesEqual(current, patch->expected)) {
+    if (!LooksLikeNativeNearJnzGate(current)) {
         if (error_message != nullptr) {
             *error_message =
-                std::string("native cast gate patch target bytes changed for ") +
+                std::string("native cast gate patch target is not a jnz rel32 gate for ") +
                 patch->name + " at " + HexString(patch->address) +
                 " resolved=" + HexString(patch->resolved_address) +
-                " expected=" + FormatPatchBytes(patch->expected) +
                 " actual=" + FormatPatchBytes(current);
         }
         return false;
     }
 
+    patch->original = current;
     if (!memory.TryWrite(patch->resolved_address, patch->replacement.data(), patch->replacement.size())) {
         if (error_message != nullptr) {
             *error_message =
@@ -103,13 +113,17 @@ void RestoreNativeCastGatePatch(NativeCastGatePatch* patch) {
     if (target_address == 0) {
         return;
     }
+    if (patch->original == std::array<std::uint8_t, 6>{}) {
+        return;
+    }
     (void)ProcessMemory::Instance().TryWrite(
         target_address,
-        patch->expected.data(),
-        patch->expected.size());
+        patch->original.data(),
+        patch->original.size());
     patch->installed = false;
     patch->restore_needed = false;
     patch->resolved_address = 0;
+    patch->original = {};
 }
 
 void RestoreNativeCastGatePatches() {
@@ -119,41 +133,41 @@ void RestoreNativeCastGatePatches() {
 }
 
 bool InstallNativeCastGatePatches(std::string* error_message) {
-    const std::array<std::uint8_t, 6> nops = {0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
+    const auto nops = MakeNativeGateReplacementBytes();
     g_native_cast_gate_patches = {{
         {
             "player_actor_apply_mana_delta_local_actor_gate",
             kPlayerActorApplyManaDeltaLocalActorGateBranch,
             0,
-            {0x0F, 0x85, 0x1F, 0x03, 0x00, 0x00},
+            {},
             nops,
         },
         {
             "cast_active_handle_cleanup_slot_gate",
             kCastCleanupSlotGateBranch,
             0,
-            {0x0F, 0x85, 0xA3, 0x00, 0x00, 0x00},
+            {},
             nops,
         },
         {
             "spell_cast_028_slot_gate",
             kSpellCast028SlotGateBranch,
             0,
-            {0x0F, 0x85, 0x15, 0x03, 0x00, 0x00},
+            {},
             nops,
         },
         {
             "spell_cast_3ee_slot_gate",
             kSpellCast3EESlotGateBranch,
             0,
-            {0x0F, 0x85, 0xA9, 0x01, 0x00, 0x00},
+            {},
             nops,
         },
         {
             "spell_cast_3f0_slot_gate",
             kSpellCast3F0SlotGateBranch,
             0,
-            {0x0F, 0x85, 0x1F, 0x01, 0x00, 0x00},
+            {},
             nops,
         },
     }};

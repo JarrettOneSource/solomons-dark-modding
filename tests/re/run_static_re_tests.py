@@ -41,6 +41,7 @@ BOULDER_PROJECTION = (
 )
 NATIVE_SPELL_STATS_HEADER = ROOT / "SolomonDarkModLoader/include/native_spell_stats.h"
 NATIVE_SPELL_STATS_CPP = ROOT / "SolomonDarkModLoader/src/native_spell_stats.cpp"
+LUA_ENGINE_BOTS_BINDING = ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_bots.cpp"
 NATIVE_STATBOOKS_HEADER = ROOT / "SolomonDarkModLoader/include/native_statbooks.h"
 NATIVE_STATBOOKS_CPP = ROOT / "SolomonDarkModLoader/src/native_statbooks.cpp"
 MOD_LOADER_PROJECT = ROOT / "SolomonDarkModLoader/SolomonDarkModLoader.vcxproj"
@@ -168,24 +169,6 @@ PROVE_LUA_FOLLOW = ROOT / "tools/prove_lua_follow.py"
 NATIVE_WIZARD_DEFAULT_HP_GLOBAL_KEY = "wizard_default_hp"
 NATIVE_WIZARD_DEFAULT_MP_GLOBAL_KEY = "wizard_default_mp"
 
-
-PRIMARY_BUILD_SKILL_IDS = {
-    (0x08, 0x10): 1000,
-    (0x08, 0x18): 0x3EA,
-    (0x08, 0x20): 0x3E9,
-    (0x08, 0x28): 0x3EE,
-    (0x10, 0x18): 0x3EB,
-    (0x10, 0x20): 0x3ED,
-    (0x10, 0x28): 0x3EF,
-    (0x18, 0x20): 0x3EC,
-    (0x18, 0x28): 0x3F1,
-    (0x20, 0x28): 0x3F0,
-    (0x08, 0x08): 0x3F2,
-    (0x10, 0x10): 0x3F3,
-    (0x18, 0x18): 0x3F5,
-    (0x20, 0x20): 0x3F4,
-    (0x28, 0x28): 0x3F6,
-}
 
 SMELL_SOURCES = {}
 
@@ -503,9 +486,9 @@ def test_earth_boulder_damage_uses_native_live_spell_stats() -> str:
     required_tokens = (
         "ResolveEarthBoulderBaseDamage",
         "NativePrimarySpellSelection",
-        "TryResolveNativePrimarySelectionFromSkillId",
+        "TryResolveNativePrimarySelectionFromLiveProgression",
+        "ResolveNativePrimaryEntryForElement",
         "TryResolveNativePrimarySpellStats",
-        "0x3F6",
         "ReadBotNativeActiveSpellObjectState",
         "kSpellObjectReleaseDamageOffset",
         "kSpellObjectReleaseBaseDamageOffset",
@@ -631,9 +614,8 @@ def test_boulder_held_charge_tracks_live_target_until_release() -> str:
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/targeting_and_facing.inl"
     )
     required_skill_tokens = (
-        "const auto active_skill_id = ResolveOngoingNativeTickSkillId(ongoing);",
-        "SkillTracksLiveTargetDuringNativeTick(active_skill_id)",
-        "SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id) &&",
+        "OngoingCastTracksLiveTargetDuringNativeTick(ongoing)",
+        "OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing) &&",
         "!ongoing.bounded_release_requested",
         "OngoingCastShouldUseLiveFacingTarget(ongoing)",
         "binding->facing_target_actor_address",
@@ -661,7 +643,7 @@ def test_boulder_held_charge_tracks_live_target_until_release() -> str:
     )
     required_targeting_tokens = (
         "OngoingCastShouldPreserveProjectionTargetAfterAimMiss",
-        "SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id)",
+        "OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing)",
         "!ongoing.bounded_release_requested",
     )
     missing = [token for token in required_skill_tokens if token not in skill_text]
@@ -821,7 +803,8 @@ def test_bot_mana_spend_is_stock_owned_through_native_gate_patch() -> str:
         "gate branch layout": "player_actor_apply_mana_delta_local_actor_gate_branch=0x0052B171",
         "gate patch name": "player_actor_apply_mana_delta_local_actor_gate",
         "gate patch binding": "kPlayerActorApplyManaDeltaLocalActorGateBranch",
-        "gate expected bytes": "{0x0F, 0x85, 0x1F, 0x03, 0x00, 0x00}",
+        "gate opcode validator": "LooksLikeNativeNearJnzGate",
+        "gate runtime restore": "patch->original = current",
         "processing live depletion": "native mana depleted",
         "processing live read": "TryReadProgressionMana",
         "native rate validator": "ValidateNativeManaRateConfigForOngoingCast",
@@ -843,7 +826,8 @@ def test_bot_mana_spend_is_stock_owned_through_native_gate_patch() -> str:
     for label, token in (
         ("gate patch name", required_tokens["gate patch name"]),
         ("gate patch binding", required_tokens["gate patch binding"]),
-        ("gate expected bytes", required_tokens["gate expected bytes"]),
+        ("gate opcode validator", required_tokens["gate opcode validator"]),
+        ("gate runtime restore", required_tokens["gate runtime restore"]),
     ):
         if token not in patch_text:
             missing.append(f"{label}:{token}")
@@ -1073,19 +1057,121 @@ def test_primary_build_skill_mapping_has_single_runtime_owner() -> str:
         raise StaticReTestFailure("scene selection does not resolve explicit primary build ids")
     if "TryResolvePrimaryCastDescriptorFromSkillId" not in preparation_text:
         raise StaticReTestFailure("cast preparation does not use explicit primary descriptors")
-    if "TryResolveNativePrimaryBuildSkillId" not in scene_text:
-        raise StaticReTestFailure("scene selection does not delegate build-id mapping to native spell stats")
-
-    missing_mapping_entries: list[str] = []
-    for (left, right), skill_id in PRIMARY_BUILD_SKILL_IDS.items():
-        values = (f"0x{left:02X}", f"0x{right:02X}", "1000" if skill_id == 1000 else f"0x{skill_id:X}")
-        if not all(value in native_spell_stats_text for value in values):
-            missing_mapping_entries.append(f"native spell stats {values}")
-    if missing_mapping_entries:
+    if "TryResolveNativePrimaryBuildSkillId" in scene_text or "TryResolveNativePrimaryBuildSkillId" in native_spell_stats_text:
         raise StaticReTestFailure(
-            "missing primary mapping entries from the shared native spell-stat owner: " +
-            "; ".join(missing_mapping_entries))
-    return "primary combo build-skill mapping is centralized in native spell stat helpers"
+            "primary combo build-skill mapping still uses a static helper instead of Skills_Wizard output")
+    if re.search(r"case\s+(?:1000|0x3E[0-9A-F]|0x3F[0-9A-F])", native_spell_stats_text):
+        raise StaticReTestFailure("native spell stats still reverse-map primary build ids with a switch")
+    if re.search(r"case\s+(?:1000|0x3E[0-9A-F]|0x3F[0-9A-F])", scene_text):
+        raise StaticReTestFailure("scene selection still classifies primary build ids with a switch")
+
+    required_tokens = (
+        "CallSkillsWizardBuildPrimarySpellSafe",
+        "TryResolveNativePrimarySelectionFromLiveProgression",
+        "TryResolveNativePrimarySelectionFromSkillId",
+        "kSkillsWizardBuildPrimarySpell",
+        "RestoreProgressionCurrentSpellIdIfNeeded",
+    )
+    missing_tokens = [
+        token for token in required_tokens
+        if token not in native_spell_stats_text and token not in scene_text
+    ]
+    if missing_tokens:
+        raise StaticReTestFailure(
+            "primary combo build-skill mapping is missing native builder token(s): " +
+            ", ".join(missing_tokens))
+    return "primary combo build-skill mapping is resolved from live Skills_Wizard output"
+
+
+def test_primary_selection_mapping_is_native_backed_not_static_table() -> str:
+    native_spell_stats_text = read_text(NATIVE_SPELL_STATS_CPP)
+    native_spell_stats_header_text = read_text(NATIVE_SPELL_STATS_HEADER)
+    scene_text = read_text(SCENE_SELECTION)
+    config_text = read_text(LUA_BOT_CONFIG)
+    targeting_test_text = read_text(ROOT / "tools/test_lua_bots_targeting.lua")
+    combined_text = "\n".join((
+        native_spell_stats_text,
+        native_spell_stats_header_text,
+        scene_text,
+        config_text,
+        targeting_test_text,
+    ))
+
+    forbidden_tokens = (
+        "NativePrimarySkillPair",
+        "kNativePrimarySkillPairs",
+        "PRIMARY_BUILD_SKILL_IDS",
+        "[0] = 0x10",
+        "[1] = 0x20",
+        "[2] = 0x28",
+        "[3] = 0x18",
+        "[4] = 0x08",
+    )
+    present = [token for token in forbidden_tokens if token in combined_text]
+    if present:
+        raise StaticReTestFailure(
+            "primary selection mapping still uses static hardcoded table token(s): " +
+            ", ".join(present))
+
+    required_tokens = (
+        "TryResolveNativePrimaryEntryForElement",
+        "TryResolveNativePrimarySelectionFromLiveProgression",
+        "TryResolveNativePrimarySelectionFromSkillId",
+        "kSkillsWizardBuildPrimarySpell",
+        "kProgressionCurrentSpellIdOffset",
+    )
+    missing = [token for token in required_tokens if token not in combined_text]
+    if missing:
+        raise StaticReTestFailure(
+            "primary selection mapping is missing native-backed resolver token(s): " +
+            ", ".join(missing))
+
+    return "primary selection mapping is backed by live Skills_Wizard output instead of a static table"
+
+
+def test_primary_attack_window_uses_live_native_selection_range() -> str:
+    lua_bots_binding_text = read_text(LUA_ENGINE_BOTS_BINDING)
+    doc_text = read_text(LUA_BOT_CONSTANTS_RE_DOC)
+    plan_text = read_text(NATIVE_SEAM_PLAN)
+    targeting_test_text = read_text(ROOT / "tools/test_lua_bots_targeting.lua")
+
+    forbidden_tokens = (
+        "kProjectilePrimaryEngagementRange",
+        "kBoulderPrimaryReleaseMinimumRange",
+        "kWaterConeBaseRange",
+        "kWaterConeRangePerShapeUnit",
+        "kPrimaryEngagementSafetyMargin",
+        "water_primary_native_base_cone",
+        "water_primary_live_actor_cone",
+        "projectile_primary_engagement",
+        "earth_boulder_release_window",
+        "max_range = 360.0",
+        "max_range = 205.0",
+        "min_range = 96.0",
+    )
+    combined_text = "\n".join((lua_bots_binding_text, targeting_test_text))
+    present = [token for token in forbidden_tokens if token in combined_text]
+    if present:
+        raise StaticReTestFailure(
+            "primary attack window still carries fixed engagement scalar token(s): " +
+            ", ".join(present))
+
+    required_tokens = (
+        "ReadNativePrimarySelectionPursuitRange",
+        "kActorAnimationSelectionStateOffset",
+        "kActorControlBrainPursuitRangeOffset",
+        "native_selection_pursuit_range",
+        "FUN_0052C910",
+        "actor_control_brain_pursuit_range",
+    )
+    evidence_text = "\n".join((lua_bots_binding_text, doc_text, plan_text))
+    missing = [token for token in required_tokens if token not in evidence_text]
+    if missing:
+        raise StaticReTestFailure(
+            "primary attack window is missing live native selection-range token(s): " +
+            ", ".join(missing))
+
+    return "primary attack window reads the live native selection pursuit range"
 
 
 def test_bot_level_sync_uses_native_level_up() -> str:
@@ -3164,7 +3250,9 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
         (lua_debug_text, "lua_debug", "LuaDebugLayoutOffset"),
         (lua_debug_text, "lua_debug", "layout_offset"),
         (lua_bots_binding_text, "lua_bots", "get_primary_attack_window"),
-        (lua_bots_binding_text, "lua_bots", "kActorSpellConfig290Offset"),
+        (lua_bots_binding_text, "lua_bots", "kActorAnimationSelectionStateOffset"),
+        (lua_bots_binding_text, "lua_bots", "kActorControlBrainPursuitRangeOffset"),
+        (lua_bots_binding_text, "lua_bots", "kWaterPrimaryControlBrainRangeGlobal"),
         (cast_state_probe_text, "cast_state_probe", "read_runtime_layout_offset(\"actor_spell_config_298\")"),
         (player_watch_text, "player_watch", "ACTOR_ACTIVE_CAST_GROUP_OFFSET"),
         (slot_watch_text, "slot_watch", "ACTOR_ANIMATION_SELECTION_STATE_OFFSET"),
@@ -3304,11 +3392,14 @@ def test_lua_bot_constants_are_semantic_or_documented() -> str:
         "sd.bots.resolve_primary_entry",
         "sd.bots.get_primary_attack_window",
         "runtime/ghidra_primary_attack_window_dispatcher.txt",
-        "runtime/ghidra_bot_attack_window_scalar_scan.txt",
+        "FUN_0052C910",
         "FUN_00548B00",
         "FUN_00641B10",
-        "kActorSpellConfig290Offset",
-        "Policy Values",
+        "kActorControlBrainPursuitRangeOffset",
+        "actor_control_brain_pursuit_range",
+        "water_primary_control_brain_range=0x00786CE8",
+        "native_selection_pursuit_range",
+        "native_water_control_brain_range",
         "Private-area travel no longer owns fixed entrance descriptors",
     )
     missing_doc = [token for token in required_doc_tokens if token not in doc_text]
@@ -4346,6 +4437,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("bot out-of-mana probe checks pre-execution rejection", test_bot_out_of_mana_probe_checks_pre_execution_rejection),
     ("held primary mana uses native spend scale and start rate", test_held_primary_mana_uses_native_spend_scale_and_start_rate),
     ("primary build skill mapping has single runtime owner", test_primary_build_skill_mapping_has_single_runtime_owner),
+    ("primary selection mapping is native-backed", test_primary_selection_mapping_is_native_backed_not_static_table),
+    ("primary attack window uses live native selection range", test_primary_attack_window_uses_live_native_selection_range),
     ("bot level sync uses native level_up", test_bot_level_sync_uses_native_level_up),
     ("native stat refresh preserves live vitals", test_native_stat_refresh_preserves_live_vitals),
     ("bot skill-upgrade combat probe checks native damage and mana", test_bot_skill_upgrade_combat_probe_checks_native_damage_and_mana),

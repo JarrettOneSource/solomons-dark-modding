@@ -234,7 +234,7 @@ bool UpdateBot(const BotUpdateRequest& request);
 bool MoveBotTo(const BotMoveToRequest& request);
 bool StopBot(std::uint64_t bot_id);
 bool FaceBot(std::uint64_t bot_id, float heading);
-bool FaceBotTarget(std::uint64_t bot_id, uintptr_t target_actor_address, bool fallback_heading_valid, float fallback_heading);
+bool FaceBotTarget(std::uint64_t bot_id, uintptr_t target_actor_address, bool default_heading_valid, float default_heading);
 bool ReadBotMovementIntent(std::uint64_t bot_id, BotMovementIntentSnapshot* snapshot);
 bool QueueBotCast(const BotCastRequest& request);
 BotManaCost ResolveBotCastManaCost(

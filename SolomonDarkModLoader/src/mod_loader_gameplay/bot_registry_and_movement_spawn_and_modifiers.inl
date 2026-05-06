@@ -24,17 +24,17 @@ bool ResolveParticipantSpawnTransform(
         return false;
     }
 
-    bool allow_local_anchor_fallback = false;
+    bool allow_local_spawn_anchor = false;
     if (request.bot_id != 0) {
         const auto runtime_state = multiplayer::SnapshotRuntimeState();
         if (const auto* participant = multiplayer::FindParticipant(runtime_state, request.bot_id);
             participant != nullptr && multiplayer::IsLuaControlledParticipant(*participant)) {
-            allow_local_anchor_fallback = true;
+            allow_local_spawn_anchor = true;
         }
     }
 
     if (!request.has_transform) {
-        if (!allow_local_anchor_fallback) {
+        if (!allow_local_spawn_anchor) {
             return false;
         }
         x = memory.ReadFieldOr<float>(local_actor_address, kActorPositionXOffset, 0.0f) + kDefaultWizardBotOffsetX;

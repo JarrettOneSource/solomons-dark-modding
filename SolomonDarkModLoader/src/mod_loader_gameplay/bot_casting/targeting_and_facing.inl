@@ -15,13 +15,14 @@ bool TryComputeActorAimTowardTargetFromOrigin(
     float* target_x_out,
     float* target_y_out);
 
-bool SkillRequiresHeldCastInputDuringNativeTick(std::int32_t skill_id);
+bool OngoingCastRequiresHeldCastInputDuringNativeTick(
+    const ParticipantEntityBinding::OngoingCastState& ongoing);
 
-bool SkillRequiresBoundedHeldCastInputDuringNativeTick(std::int32_t skill_id);
+bool OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(
+    const ParticipantEntityBinding::OngoingCastState& ongoing);
 
-bool SkillRequiresSyntheticCastInputDuringNativeTick(std::int32_t skill_id);
-
-bool SkillTracksLiveTargetDuringNativeTick(std::int32_t skill_id);
+bool OngoingCastTracksLiveTargetDuringNativeTick(
+    const ParticipantEntityBinding::OngoingCastState& ongoing);
 
 std::int32_t ResolveOngoingNativeTickSkillId(
     const ParticipantEntityBinding::OngoingCastState& ongoing);
@@ -36,23 +37,12 @@ uintptr_t ResolveOngoingCastNativeTargetActor(
     const ParticipantEntityBinding* binding,
     const ParticipantEntityBinding::OngoingCastState& ongoing);
 
-bool SkillRequiresNativeActorTargetHandle(std::int32_t skill_id) {
+bool OngoingCastNeedsNativeTargetHandle(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
     // Air primary (lightning) is not projectile/collision based. The native
     // handler resolves the victim through actor+0x164/0x166 and only runs the
     // damage branch when that handle points at a live world actor.
-    switch (skill_id) {
-    case 0x18:
-    case 0x3F5:
-        return true;
-    default:
-        return false;
-    }
-}
-
-bool OngoingCastNeedsNativeTargetHandle(
-    const ParticipantEntityBinding::OngoingCastState& ongoing) {
-    return SkillRequiresNativeActorTargetHandle(ongoing.skill_id) ||
-           SkillRequiresNativeActorTargetHandle(ongoing.dispatcher_skill_id);
+    return ongoing.selection_state_target == 0x18;
 }
 
 bool TryResolveSameWorldTargetHandle(
@@ -220,24 +210,22 @@ bool OngoingCastNeedsNativeTargetActor(
     // there changes the native projectile collision/damage path even though
     // aim and selection state still need to be refreshed while charging.
     return ongoing.uses_dispatcher_skill_id &&
-           SkillTracksLiveTargetDuringNativeTick(ResolveOngoingNativeTickSkillId(ongoing));
+           OngoingCastTracksLiveTargetDuringNativeTick(ongoing);
 }
 
 bool OngoingCastShouldPreserveAimAfterTargetLoss(
     const ParticipantEntityBinding::OngoingCastState& ongoing) {
-    const auto active_skill_id = ResolveOngoingNativeTickSkillId(ongoing);
     return ongoing.active &&
            (OngoingCastNeedsNativeTargetActor(ongoing) ||
-            (SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id) &&
+            (OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing) &&
              !ongoing.bounded_release_requested)) &&
            ongoing.have_aim_target;
 }
 
 bool OngoingCastShouldPreserveProjectionTargetAfterAimMiss(
     const ParticipantEntityBinding::OngoingCastState& ongoing) {
-    const auto active_skill_id = ResolveOngoingNativeTickSkillId(ongoing);
     return ongoing.active &&
-           SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id) &&
+           OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing) &&
            !ongoing.bounded_release_requested &&
            ongoing.target_actor_address != 0;
 }

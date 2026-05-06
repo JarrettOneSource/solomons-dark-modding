@@ -142,6 +142,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.globals", "movement_input_acceleration_divisor", kMovementInputAccelerationDivisorGlobal),
         SDMOD_ADDR("gameplay.globals", "movement_speed_scalar", kMovementSpeedScalarGlobal),
         SDMOD_ADDR("gameplay.globals", "movement_velocity_damping", kMovementVelocityDampingGlobal),
+        SDMOD_ADDR("gameplay.globals", "water_primary_control_brain_range", kWaterPrimaryControlBrainRangeGlobal),
         SDMOD_ADDR("gameplay.globals", "earth_boulder_damage_output_scale", kEarthBoulderDamageOutputScaleGlobal),
         SDMOD_ADDR("gameplay.globals", "earth_boulder_release_damage_scale", kEarthBoulderReleaseDamageScaleGlobal),
         SDMOD_ADDR("gameplay.globals", "earth_boulder_release_damage_floor", kEarthBoulderReleaseDamageFloorGlobal),

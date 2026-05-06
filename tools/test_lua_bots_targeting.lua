@@ -111,24 +111,16 @@ _G.sd = {
   },
   bots = {
     resolve_primary_entry = function(element_id)
-      local map = {
-        [0] = 0x10,
-        [1] = 0x20,
-        [2] = 0x28,
-        [3] = 0x18,
-        [4] = 0x08,
-      }
-      return map[tonumber(element_id) or -1]
+      local entries = { 0x10, 0x20, 0x28, 0x18, 0x08 }
+      local index = (tonumber(element_id) or -1) + 1
+      return entries[index]
     end,
     get_primary_attack_window = function(bot_id, element_id)
       local id = tonumber(element_id) or 0
       if id == 1 then
-        return { min_range = 0.0, max_range = 205.0, native_backed = true }
+        return { min_range = 0.0, max_range = 170.0, native_backed = true, source = "native_water_control_brain_range" }
       end
-      if id == 2 then
-        return { min_range = 96.0, max_range = 360.0 }
-      end
-      return { min_range = 0.0, max_range = 360.0 }
+      return { min_range = 0.0, max_range = 300.0, native_backed = true, source = "native_selection_pursuit_range" }
     end,
     create = function(request)
       next_bot_id = next_bot_id + 1
@@ -219,11 +211,11 @@ _G.sd = {
       table.insert(faces, { id = bot_id, heading = heading })
       return true
     end,
-    face_target = function(bot_id, actor_address, fallback_heading)
+    face_target = function(bot_id, actor_address, default_heading)
       table.insert(face_targets, {
         id = bot_id,
         actor_address = actor_address,
-        fallback_heading = fallback_heading,
+        default_heading = default_heading,
       })
       return true
     end,
@@ -754,7 +746,7 @@ faces = {}
 face_targets = {}
 enemy_a.dead = false
 enemy_a.hp = 100.0
-enemy_a.x = 200.0
+enemy_a.x = 160.0
 enemy_b.hp = 0.0
 bot.cast_ready = true
 hooks.state.bot_profile = { element_id = 1 }
@@ -766,7 +758,7 @@ assert(casts[1].target_actor_address == enemy_a.actor_address, "water-range atta
 casts = {}
 faces = {}
 face_targets = {}
-enemy_a.x = 240.0
+enemy_a.x = 190.0
 enemy_a.hp = 100.0
 bot.cast_ready = true
 hooks.state.bot_profile = { element_id = 1 }

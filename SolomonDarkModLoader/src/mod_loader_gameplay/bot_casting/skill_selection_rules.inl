@@ -219,16 +219,14 @@ std::string DescribeGameplaySlotCastStartupWindow(uintptr_t actor_address) {
         " " + selection_summary;
 }
 
-bool SkillRequiresHeldCastInputDuringNativeTick(std::int32_t skill_id) {
+bool SelectionStateRequiresHeldCastInputDuringNativeTick(int selection_state) {
     // These stock primaries keep doing native work only while the gameplay cast
     // input is held. This is separate from live target tracking: projectile
     // families still keep their startup target captured, while channel families
     // keep refreshing their victim/aim lane.
-    switch (skill_id) {
-    case 0x3F2: // ether pure primary projectile stream
-    case 0x3F3: // fire pure primary projectile stream
-    case 0x3F4: // water pure primary
-    case 0x3F5: // air pure primary
+    switch (selection_state) {
+    case 0x08: // ether pure primary projectile stream
+    case 0x10: // fire pure primary projectile stream
     case 0x18: // air primary handler
     case 0x20: // water primary handler
         return true;
@@ -237,10 +235,8 @@ bool SkillRequiresHeldCastInputDuringNativeTick(std::int32_t skill_id) {
     }
 }
 
-bool SkillTracksLiveTargetDuringNativeTick(std::int32_t skill_id) {
-    switch (skill_id) {
-    case 0x3F4: // water pure primary cone
-    case 0x3F5: // air pure primary beam
+bool SelectionStateTracksLiveTargetDuringNativeTick(int selection_state) {
+    switch (selection_state) {
     case 0x18: // air primary handler
     case 0x20: // water primary handler
         return true;
@@ -249,13 +245,12 @@ bool SkillTracksLiveTargetDuringNativeTick(std::int32_t skill_id) {
     }
 }
 
-bool SkillRequiresBoundedHeldCastInputDuringNativeTick(std::int32_t skill_id) {
+bool SelectionStateRequiresBoundedHeldCastInputDuringNativeTick(int selection_state) {
     // Earth is a projectile/effect primary, but the stock dispatcher needs the
     // cast input held until the native boulder object reaches its configured
     // max size. The release path watches the live object instead of assuming a
     // fixed gesture duration.
-    switch (skill_id) {
-    case 0x3F6: // earth pure primary build id
+    switch (selection_state) {
     case 0x28: // earth primary handler
         return true;
     default:
@@ -263,24 +258,30 @@ bool SkillRequiresBoundedHeldCastInputDuringNativeTick(std::int32_t skill_id) {
     }
 }
 
-bool SkillRequiresSyntheticCastInputDuringNativeTick(std::int32_t skill_id) {
-    return SkillRequiresHeldCastInputDuringNativeTick(skill_id) ||
-           SkillRequiresBoundedHeldCastInputDuringNativeTick(skill_id);
+bool OngoingCastRequiresHeldCastInputDuringNativeTick(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    return SelectionStateRequiresHeldCastInputDuringNativeTick(ongoing.selection_state_target);
+}
+
+bool OngoingCastTracksLiveTargetDuringNativeTick(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    return SelectionStateTracksLiveTargetDuringNativeTick(ongoing.selection_state_target);
+}
+
+bool OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    return SelectionStateRequiresBoundedHeldCastInputDuringNativeTick(ongoing.selection_state_target);
 }
 
 bool OngoingCastShouldDriveSyntheticCastInput(
     const ParticipantEntityBinding::OngoingCastState& ongoing) {
-    const auto active_skill_id =
-        ongoing.uses_dispatcher_skill_id && ongoing.dispatcher_skill_id > 0
-            ? ongoing.dispatcher_skill_id
-            : ongoing.skill_id;
     if (ongoing.startup_in_progress) {
         return true;
     }
-    if (SkillRequiresHeldCastInputDuringNativeTick(active_skill_id)) {
+    if (OngoingCastRequiresHeldCastInputDuringNativeTick(ongoing)) {
         return true;
     }
-    if (SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id)) {
+    if (OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing)) {
         return !ongoing.bounded_release_requested;
     }
     return false;
@@ -295,24 +296,22 @@ std::int32_t ResolveOngoingNativeTickSkillId(
 
 bool OngoingCastShouldUseLiveFacingTarget(
     const ParticipantEntityBinding::OngoingCastState& ongoing) {
-    const auto active_skill_id = ResolveOngoingNativeTickSkillId(ongoing);
-    if (SkillTracksLiveTargetDuringNativeTick(active_skill_id)) {
+    if (OngoingCastTracksLiveTargetDuringNativeTick(ongoing)) {
         return true;
     }
-    return SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id) &&
+    return OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing) &&
            !ongoing.bounded_release_requested;
 }
 
 bool OngoingCastShouldRefreshNativeTargetState(
     const ParticipantEntityBinding::OngoingCastState& ongoing) {
-    const auto active_skill_id = ResolveOngoingNativeTickSkillId(ongoing);
-    if (SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id) &&
+    if (OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing) &&
         ongoing.bounded_release_requested) {
         return false;
     }
     return ongoing.startup_in_progress ||
-           SkillTracksLiveTargetDuringNativeTick(active_skill_id) ||
-           SkillRequiresBoundedHeldCastInputDuringNativeTick(active_skill_id);
+           OngoingCastTracksLiveTargetDuringNativeTick(ongoing) ||
+           OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing);
 }
 
 uintptr_t ResolveOngoingCastNativeTargetActor(
@@ -329,19 +328,22 @@ uintptr_t ResolveOngoingCastNativeTargetActor(
     return binding != nullptr ? binding->facing_target_actor_address : 0;
 }
 
-int ResolveMaxStartupTicksWaiting(std::int32_t skill_id) {
-    if (skill_id == 0x3EF) {
-        // Iceblast advances the actor startup counter and can legitimately
-        // defer projectile allocation past the generic 12-tick
-        // window. Cutting it off early produces the exact "animation only,
-        // nothing emitted" symptom we were seeing in live runs.
+int ResolveMaxStartupTicksWaiting(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    if (ongoing.selection_state_target == kPrimaryComboDispatcherSelectionState) {
+        // Combo-dispatch primaries can advance the actor startup counter and
+        // legitimately defer projectile allocation past the generic 12-tick
+        // window. Cutting that off early produces the "animation only, nothing
+        // emitted" symptom observed in live runs.
         return 90;
     }
     return ParticipantEntityBinding::OngoingCastState::kMaxStartupTicksWaiting;
 }
 
-void PrimeGameplaySlotPostGateDispatchState(uintptr_t actor_address, std::int32_t skill_id) {
-    if (actor_address == 0) {
+void PrimeGameplaySlotPostGateDispatchState(
+    uintptr_t actor_address,
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    if (actor_address == 0 || ongoing.dispatcher_skill_id <= 0) {
         return;
     }
 
@@ -349,7 +351,7 @@ void PrimeGameplaySlotPostGateDispatchState(uintptr_t actor_address, std::int32_
     (void)memory.TryWriteField<std::int32_t>(
         actor_address,
         kActorPrimarySkillIdOffset,
-        skill_id);
+        ongoing.dispatcher_skill_id);
     (void)memory.TryWriteField<std::int32_t>(
         actor_address,
         kActorPreviousSkillIdOffset,
@@ -362,7 +364,7 @@ void PrimeGameplaySlotPostGateDispatchState(uintptr_t actor_address, std::int32_
         actor_address,
         kActorStartupCounterOffset,
         0);
-    if (!SkillRequiresNativeActorTargetHandle(skill_id)) {
+    if (!OngoingCastNeedsNativeTargetHandle(ongoing)) {
         (void)memory.TryWriteField<std::uint8_t>(
             actor_address,
             kActorSpellTargetGroupByteOffset,

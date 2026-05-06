@@ -17,54 +17,108 @@ struct PrimaryAttackWindow {
     const char* source = "unresolved";
 };
 
-float ReadWaterPrimaryShapeOrZero(uintptr_t actor_address) {
-    if (actor_address == 0 || kActorSpellConfig290Offset == 0) {
-        return 0.0f;
+bool TryReadResolvedGameFloat(uintptr_t absolute_address, float* value) {
+    if (value != nullptr) {
+        *value = 0.0f;
+    }
+    if (absolute_address == 0) {
+        return false;
     }
 
     auto& memory = ProcessMemory::Instance();
-    if (!memory.IsReadableRange(actor_address + kActorSpellConfig290Offset, sizeof(float))) {
-        return 0.0f;
+    const auto resolved_address = memory.ResolveGameAddressOrZero(absolute_address);
+    if (resolved_address == 0 ||
+        !memory.IsReadableRange(resolved_address, sizeof(float))) {
+        return false;
     }
 
-    const auto shape = memory.ReadFieldOr<float>(actor_address, kActorSpellConfig290Offset, 0.0f);
-    return std::isfinite(shape) && shape > 0.0f ? shape : 0.0f;
+    const auto candidate = memory.ReadValueOr<float>(resolved_address, 0.0f);
+    if (!std::isfinite(candidate) || candidate <= 0.0f) {
+        return false;
+    }
+
+    if (value != nullptr) {
+        *value = candidate;
+    }
+    return true;
+}
+
+bool ReadNativePrimarySelectionPursuitRange(
+    uintptr_t actor_address,
+    int element_id,
+    float* range,
+    const char** source) {
+    if (range != nullptr) {
+        *range = 0.0f;
+    }
+    if (source != nullptr) {
+        *source = "unresolved";
+    }
+
+    if (element_id == 1) {
+        float water_range = 0.0f;
+        if (TryReadResolvedGameFloat(kWaterPrimaryControlBrainRangeGlobal, &water_range)) {
+            if (range != nullptr) {
+                *range = water_range;
+            }
+            if (source != nullptr) {
+                *source = "native_water_control_brain_range";
+            }
+            return true;
+        }
+    }
+
+    if (actor_address == 0 ||
+        kActorAnimationSelectionStateOffset == 0 ||
+        kActorControlBrainPursuitRangeOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.IsReadableRange(actor_address + kActorAnimationSelectionStateOffset, sizeof(uintptr_t))) {
+        return false;
+    }
+
+    const auto selection_state =
+        memory.ReadFieldOr<uintptr_t>(
+            actor_address,
+            kActorAnimationSelectionStateOffset,
+            0);
+    if (selection_state == 0 ||
+        !memory.IsReadableRange(selection_state + kActorControlBrainPursuitRangeOffset, sizeof(float))) {
+        return false;
+    }
+
+    const auto pursuit_range =
+        memory.ReadValueOr<float>(
+            selection_state + kActorControlBrainPursuitRangeOffset,
+            0.0f);
+    if (!std::isfinite(pursuit_range) || pursuit_range <= 0.0f) {
+        return false;
+    }
+
+    if (range != nullptr) {
+        *range = pursuit_range;
+    }
+    if (source != nullptr) {
+        *source = "native_selection_pursuit_range";
+    }
+    return true;
 }
 
 PrimaryAttackWindow ResolvePrimaryAttackWindow(int element_id, uintptr_t actor_address) {
-    constexpr float kProjectilePrimaryEngagementRange = 360.0f;
-    constexpr float kBoulderPrimaryReleaseMinimumRange = 96.0f;
-    constexpr float kWaterConeBaseRange = 205.0f;
-    constexpr float kWaterConeRangePerShapeUnit = 4.0f;
-    constexpr float kPrimaryEngagementSafetyMargin = 5.0f;
-
     PrimaryAttackWindow window{};
-    window.resolved = true;
-    window.max_range = kProjectilePrimaryEngagementRange;
-    window.source = "projectile_primary_engagement";
+    float max_range = 0.0f;
+    const char* source = "unresolved";
+    if (!ReadNativePrimarySelectionPursuitRange(actor_address, element_id, &max_range, &source)) {
+        return window;
+    }
 
-    switch (element_id) {
-    case 1: {
-        const auto shape = ReadWaterPrimaryShapeOrZero(actor_address);
-        window.native_backed = true;
-        window.max_range =
-            (std::max)(kBoulderPrimaryReleaseMinimumRange,
-                kWaterConeBaseRange + (shape * kWaterConeRangePerShapeUnit) -
-                    kPrimaryEngagementSafetyMargin);
-        window.source = shape > 0.0f ? "water_primary_live_actor_cone" : "water_primary_native_base_cone";
-        return window;
-    }
-    case 2:
-        window.min_range = kBoulderPrimaryReleaseMinimumRange;
-        window.source = "earth_boulder_release_window";
-        return window;
-    case 0:
-    case 3:
-    case 4:
-        return window;
-    default:
-        return PrimaryAttackWindow{};
-    }
+    window.resolved = true;
+    window.native_backed = true;
+    window.max_range = max_range;
+    window.source = source;
+    return window;
 }
 
 int LuaBotsCreate(lua_State* state) {
@@ -161,7 +215,7 @@ int LuaBotsFaceTarget(lua_State* state) {
         return luaL_error(state, "%s", error_message.c_str());
     }
     if (!lua_isinteger(state, 2) && !lua_isnumber(state, 2)) {
-        return luaL_error(state, "sd.bots.face_target expects (id, actor_address[, fallback_angle])");
+        return luaL_error(state, "sd.bots.face_target expects (id, actor_address[, default_angle])");
     }
 
     const auto target_actor_value = static_cast<lua_Integer>(lua_tointeger(state, 2));
@@ -169,13 +223,13 @@ int LuaBotsFaceTarget(lua_State* state) {
         return luaL_error(state, "sd.bots.face_target actor_address must be non-negative");
     }
     const auto target_actor_address = static_cast<uintptr_t>(target_actor_value);
-    const bool fallback_heading_valid = lua_gettop(state) >= 3 && !lua_isnil(state, 3);
-    float fallback_heading = 0.0f;
-    if (fallback_heading_valid) {
+    const bool default_heading_valid = lua_gettop(state) >= 3 && !lua_isnil(state, 3);
+    float default_heading = 0.0f;
+    if (default_heading_valid) {
         if (!lua_isnumber(state, 3)) {
-            return luaL_error(state, "sd.bots.face_target fallback_angle must be a number");
+            return luaL_error(state, "sd.bots.face_target default_angle must be a number");
         }
-        fallback_heading = static_cast<float>(lua_tonumber(state, 3));
+        default_heading = static_cast<float>(lua_tonumber(state, 3));
     }
 
     lua_pushboolean(
@@ -183,8 +237,8 @@ int LuaBotsFaceTarget(lua_State* state) {
         multiplayer::FaceBotTarget(
             bot_id,
             target_actor_address,
-            fallback_heading_valid,
-            fallback_heading) ? 1 : 0);
+            default_heading_valid,
+            default_heading) ? 1 : 0);
     return 1;
 }
 

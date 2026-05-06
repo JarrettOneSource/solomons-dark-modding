@@ -114,7 +114,7 @@ void FinishBotCastNativeLifecycle(
     const bool completed_boulder_at_max =
         release_object_state.boulder_max_size_reached ||
         state.bounded_release_at_max_size ||
-        (SkillRequiresBoundedHeldCastInputDuringNativeTick(ResolveOngoingNativeTickSkillId(state)) &&
+        (OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(state) &&
          std::strcmp(exit_label, "max_size_released") == 0);
     const std::string bounded_release_summary =
         state.bounded_release_requested

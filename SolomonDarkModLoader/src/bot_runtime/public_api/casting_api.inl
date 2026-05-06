@@ -27,7 +27,24 @@ bool QueueBotCast(const BotCastRequest& request) {
         std::int32_t rejected_skill_id = request.skill_id;
         if (request.kind == BotCastKind::Primary && rejected_skill_id <= 0) {
             NativePrimarySpellSelection selection{};
-            if (TryResolveNativePrimarySelectionForProfile(
+            const auto default_entry =
+                ResolveNativePrimaryEntryForElement(participant->character_profile.element_id);
+            const auto primary_entry =
+                participant->character_profile.loadout.primary_entry_index >= 0
+                    ? participant->character_profile.loadout.primary_entry_index
+                    : default_entry;
+            const auto combo_entry =
+                participant->character_profile.loadout.primary_combo_entry_index >= 0
+                    ? participant->character_profile.loadout.primary_combo_entry_index
+                    : primary_entry;
+            std::string selection_error;
+            if (TryResolveNativePrimarySelectionFromLiveProgression(
+                    live_snapshot.progression_runtime_state_address,
+                    primary_entry,
+                    combo_entry,
+                    &selection,
+                    &selection_error) ||
+                TryResolveNativePrimarySelectionForProfile(
                     participant->character_profile,
                     &selection)) {
                 rejected_skill_id = selection.build_skill_id;
@@ -126,9 +143,29 @@ BotManaCost ResolveBotCastManaCost(
     if (kind == BotCastKind::Primary) {
         if (skill_id > 0) {
             selection_resolved =
-                TryResolveNativePrimarySelectionFromSkillId(skill_id, &selection);
+                TryResolveNativePrimarySelectionFromSkillId(
+                    progression_runtime_address,
+                    skill_id,
+                    &selection);
         } else {
+            const auto default_entry =
+                ResolveNativePrimaryEntryForElement(character_profile.element_id);
+            const auto primary_entry =
+                character_profile.loadout.primary_entry_index >= 0
+                    ? character_profile.loadout.primary_entry_index
+                    : default_entry;
+            const auto combo_entry =
+                character_profile.loadout.primary_combo_entry_index >= 0
+                    ? character_profile.loadout.primary_combo_entry_index
+                    : primary_entry;
+            std::string selection_error;
             selection_resolved =
+                TryResolveNativePrimarySelectionFromLiveProgression(
+                    progression_runtime_address,
+                    primary_entry,
+                    combo_entry,
+                    &selection,
+                    &selection_error) ||
                 TryResolveNativePrimarySelectionForProfile(character_profile, &selection);
         }
     } else {
@@ -145,6 +182,7 @@ BotManaCost ResolveBotCastManaCost(
         if (resolved_secondary_skill_id > 0) {
             selection_resolved =
                 TryResolveNativePrimarySelectionFromSkillId(
+                    progression_runtime_address,
                     resolved_secondary_skill_id,
                     &selection);
         }

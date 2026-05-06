@@ -92,6 +92,7 @@ constexpr float kDefaultWizardBotOffsetX = 32.0f;
 constexpr float kDefaultWizardBotOffsetY = 0.0f;
 constexpr std::uint8_t kTargetHandleGroupSentinel = 0xFF;
 constexpr std::uint16_t kTargetHandleSlotSentinel = 0xFFFF;
+constexpr int kPrimaryComboDispatcherSelectionState = 0x34;
 constexpr std::size_t kHostileTargetBucketDeltaOffset = 0x164;
 constexpr std::size_t kSceneActorBucketScanCount = 0x2000;
 constexpr int kSceneTypeHub = 0xFA1;

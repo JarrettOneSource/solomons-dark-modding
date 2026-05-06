@@ -241,8 +241,15 @@ float ResolveEarthBoulderBaseDamage(
     const auto progression_level =
         ReadEarthBoulderProgressionLevel(binding, progression_runtime_address);
     NativePrimarySpellSelection selection{};
-    if (!TryResolveNativePrimarySelectionFromSkillId(0x3F6, &selection)) {
-        Log("[bots] failed to resolve native Earth boulder selection.");
+    const auto earth_primary_entry = ResolveNativePrimaryEntryForElement(2);
+    std::string selection_error;
+    if (!TryResolveNativePrimarySelectionFromLiveProgression(
+            progression_runtime_address,
+            earth_primary_entry,
+            earth_primary_entry,
+            &selection,
+            &selection_error)) {
+        Log("[bots] failed to resolve native Earth boulder selection. error=" + selection_error);
         if (resolved_level != nullptr) {
             *resolved_level = progression_level;
         }

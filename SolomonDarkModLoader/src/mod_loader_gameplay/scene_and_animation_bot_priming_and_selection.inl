@@ -199,23 +199,8 @@ int ResolveStandaloneWizardRenderSelectionIndex(int wizard_id) {
 }
 
 int ResolveStandaloneWizardSelectionState(int wizard_id) {
-    // Convert the coarse selector byte back through the stock clone mapping so
-    // source-profile staging and concrete actor selection stay on the same
-    // element branch.
-    switch (ResolveStandaloneWizardRenderSelectionIndex(wizard_id)) {
-    case 0:
-        return 0x08;
-    case 1:
-        return 0x10;
-    case 2:
-        return 0x18;
-    case 3:
-        return 0x20;
-    case 4:
-        return 0x28;
-    default:
-        return kStandaloneWizardHiddenSelectionState;
-    }
+    const auto primary_entry = ResolveNativePrimaryEntryForElement(wizard_id);
+    return primary_entry >= 0 ? primary_entry : kStandaloneWizardHiddenSelectionState;
 }
 
 int ResolveProfileSelectionState(const multiplayer::MultiplayerCharacterProfile& character_profile) {
@@ -232,38 +217,27 @@ struct ResolvedPrimaryCastDescriptor {
     int selection_state = kUnknownAnimationStateId;
 };
 
-bool TryResolvePrimaryBuildSpellIdFromSelectionPair(
-    int primary_entry_index,
-    int combo_entry_index,
-    int* skill_id) {
-    if (skill_id == nullptr) {
-        return false;
-    }
-
-    return TryResolveNativePrimaryBuildSkillId(
-        primary_entry_index,
-        combo_entry_index,
-        skill_id);
-}
-
 bool TryResolvePrimaryCastDescriptorFromSelectionPair(
     int primary_entry_index,
     int combo_entry_index,
+    int build_skill_id,
     ResolvedPrimaryCastDescriptor* descriptor) {
     if (descriptor == nullptr) {
+        return false;
+    }
+
+    NativePrimarySpellSelection selection{};
+    if (!TryResolveNativePrimarySelectionFromPair(
+            primary_entry_index,
+            combo_entry_index,
+            &selection)) {
         return false;
     }
 
     *descriptor = ResolvedPrimaryCastDescriptor{};
     descriptor->primary_entry_index = primary_entry_index;
     descriptor->combo_entry_index = combo_entry_index;
-
-    if (!TryResolvePrimaryBuildSpellIdFromSelectionPair(
-            primary_entry_index,
-            combo_entry_index,
-            &descriptor->build_skill_id)) {
-        return false;
-    }
+    descriptor->build_skill_id = build_skill_id;
 
     auto Matches = [&](int a, int b) {
         return primary_entry_index == a && combo_entry_index == b;
@@ -286,46 +260,38 @@ bool TryResolvePrimaryCastDescriptorFromSelectionPair(
     }
 
     descriptor->lane = ParticipantEntityBinding::OngoingCastState::Lane::Dispatcher;
-    descriptor->dispatcher_skill_id = descriptor->build_skill_id;
-    switch (descriptor->dispatcher_skill_id) {
-    case 0x18:
-    case 0x20:
-    case 0x28:
-        descriptor->selection_state = descriptor->dispatcher_skill_id;
-        return true;
-    case 1000:
-    case 0x3E9:
-    case 0x3EA:
-    case 0x3EB:
-    case 0x3EC:
-    case 0x3ED:
-    case 0x3EE:
-    case 0x3EF:
-    case 0x3F0:
-    case 0x3F1:
-        descriptor->selection_state = 0x34;
-        return true;
-    default:
+    if (build_skill_id <= 0) {
         return false;
     }
+    descriptor->dispatcher_skill_id = build_skill_id;
+    descriptor->selection_state = kPrimaryComboDispatcherSelectionState;
+    return true;
 }
 
 bool TryResolvePrimaryCastDescriptorFromSkillId(
+    uintptr_t progression_runtime_address,
     int skill_id,
     ResolvedPrimaryCastDescriptor* descriptor) {
     NativePrimarySpellSelection selection{};
-    if (!TryResolveNativePrimarySelectionFromSkillId(skill_id, &selection)) {
+    std::string selection_error;
+    if (!TryResolveNativePrimarySelectionFromSkillId(
+            progression_runtime_address,
+            skill_id,
+            &selection,
+            &selection_error)) {
         return false;
     }
 
     return TryResolvePrimaryCastDescriptorFromSelectionPair(
         selection.primary_entry_index,
         selection.combo_entry_index,
+        selection.build_skill_id,
         descriptor);
 }
 
 bool TryResolveProfilePrimaryCastDescriptor(
     const multiplayer::MultiplayerCharacterProfile& character_profile,
+    uintptr_t progression_runtime_address,
     ResolvedPrimaryCastDescriptor* descriptor) {
     if (descriptor == nullptr) {
         return false;
@@ -342,9 +308,23 @@ bool TryResolveProfilePrimaryCastDescriptor(
             ? character_profile.loadout.primary_combo_entry_index
             : requested_primary;
 
+    int build_skill_id = -1;
+    NativePrimarySpellSelection live_selection{};
+    std::string selection_error;
+    if (progression_runtime_address != 0 &&
+        TryResolveNativePrimarySelectionFromLiveProgression(
+            progression_runtime_address,
+            requested_primary,
+            requested_combo,
+            &live_selection,
+            &selection_error)) {
+        build_skill_id = live_selection.build_skill_id;
+    }
+
     return TryResolvePrimaryCastDescriptorFromSelectionPair(
         requested_primary,
         requested_combo,
+        build_skill_id,
         descriptor);
 }
 
@@ -368,7 +348,7 @@ bool ApplyProfilePrimaryLoadoutToSkillsWizard(
     }
 
     ResolvedPrimaryCastDescriptor descriptor{};
-    if (!TryResolveProfilePrimaryCastDescriptor(character_profile, &descriptor)) {
+    if (!TryResolveProfilePrimaryCastDescriptor(character_profile, progression_address, &descriptor)) {
         if (error_message != nullptr) {
             *error_message =
                 "Profile primary loadout does not resolve to a stock spell pair. primary=" +
@@ -408,12 +388,14 @@ bool ApplyProfilePrimaryLoadoutToSkillsWizard(
         return false;
     }
 
+    std::uint32_t native_spell_id = 0;
     DWORD exception_code = 0;
     if (!CallSkillsWizardBuildPrimarySpellSafe(
             build_primary_spell_address,
             progression_address,
             EncodeSkillsWizardSelectionArg(descriptor.primary_entry_index),
             EncodeSkillsWizardSelectionArg(descriptor.combo_entry_index),
+            &native_spell_id,
             &exception_code)) {
         if (error_message != nullptr) {
             *error_message =
@@ -421,6 +403,9 @@ bool ApplyProfilePrimaryLoadoutToSkillsWizard(
                 HexString(exception_code) + ".";
         }
         return false;
+    }
+    if (resolved_skill_id != nullptr && native_spell_id > 0) {
+        *resolved_skill_id = static_cast<int>(native_spell_id);
     }
 
     return true;

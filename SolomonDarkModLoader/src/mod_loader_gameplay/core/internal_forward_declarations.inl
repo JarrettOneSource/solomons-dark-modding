@@ -45,6 +45,7 @@ bool CallSkillsWizardBuildPrimarySpellSafe(
     uintptr_t progression_address,
     std::uint32_t primary_entry_arg,
     std::uint32_t combo_entry_arg,
+    std::uint32_t* output_spell_id,
     DWORD* exception_code);
 bool CallSkillsWizardGetPrimaryColorSafe(
     uintptr_t color_address,

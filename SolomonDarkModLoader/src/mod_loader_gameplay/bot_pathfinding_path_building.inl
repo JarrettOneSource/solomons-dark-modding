@@ -429,7 +429,7 @@ bool TryBuildBotPath(
             binding->current_waypoint_y = start_anchor_y;
             if constexpr (kEnableWizardBotHotPathDiagnostics) {
                 Log(
-                    "[bots] path fallback start-anchor. bot_id=" + std::to_string(binding->bot_id) +
+                    "[bots] path start-anchor relocation. bot_id=" + std::to_string(binding->bot_id) +
                     " revision=" + std::to_string(binding->movement_intent_revision) +
                     " start=(" + std::to_string(start_grid_x) + ", " + std::to_string(start_grid_y) + ")" +
                     " anchor=(" + std::to_string(start_anchor_x) + ", " + std::to_string(start_anchor_y) + ")" +

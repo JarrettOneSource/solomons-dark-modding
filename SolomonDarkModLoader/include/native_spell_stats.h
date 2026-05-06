@@ -35,19 +35,24 @@ struct NativePrimarySpellStats {
     std::uint32_t builder_seh_code = 0;
 };
 
+bool TryResolveNativePrimaryEntryForElement(int element_id, int* primary_entry);
 int ResolveNativePrimaryEntryForElement(int element_id);
 std::uint32_t EncodeSkillsWizardSelectionArg(int selection_value);
-bool TryResolveNativePrimaryBuildSkillId(
-    int primary_entry_index,
-    int combo_entry_index,
-    int* skill_id);
 bool TryResolveNativePrimarySelectionFromPair(
     int primary_entry_index,
     int combo_entry_index,
     NativePrimarySpellSelection* selection);
 bool TryResolveNativePrimarySelectionFromSkillId(
+    uintptr_t progression_runtime_address,
     int skill_id,
-    NativePrimarySpellSelection* selection);
+    NativePrimarySpellSelection* selection,
+    std::string* error_message = nullptr);
+bool TryResolveNativePrimarySelectionFromLiveProgression(
+    uintptr_t progression_runtime_address,
+    int primary_entry_index,
+    int combo_entry_index,
+    NativePrimarySpellSelection* selection,
+    std::string* error_message = nullptr);
 bool TryResolveNativePrimarySelectionForProfile(
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     NativePrimarySpellSelection* selection);

@@ -48,17 +48,18 @@ Lua no longer computes attack ranges or the water cone formula. Autonomous
 combat asks `sd.bots.get_primary_attack_window(bot_id, element_id)` and treats a
 missing native/semantic window as "do not cast yet".
 
-The C++ semantic producer owns the recovered water primary reach. Ghidra
-artifacts `runtime/ghidra_primary_attack_window_dispatcher.txt` and
+The C++ semantic producer now reads the live native target-selection range
+instead of owning fixed attack windows. Ghidra artifacts
+`runtime/ghidra_primary_attack_window_dispatcher.txt` and
 `runtime/ghidra_actor_spell_config_writer_context.txt` show the primary
 dispatcher (`FUN_00548B00`) filling the live actor spell-config block before the
-water handler feeds the native cone query `FUN_00641B10`; the live shape input
-is read through the layout-backed `kActorSpellConfig290Offset` seam. The
-general projectile engagement and Earth minimum-release windows are now central
-bot-autonomy policy behind that same semantic API instead of duplicated Lua
-tables. `runtime/ghidra_bot_attack_window_scalar_scan.txt` records that the old
-Lua policy window values were not found as direct binary float scalars, so they
-are not claimed as native data.
+water handler feeds the native cone query `FUN_00641B10`. The stock control-brain
+target selector `FUN_0052C910` owns `actor_control_brain_pursuit_range` at the
+layout-backed `kActorControlBrainPursuitRangeOffset` seam and applies the native
+Water special-case global `water_primary_control_brain_range=0x00786CE8` for the
+`0x20` selection state. `sd.bots.get_primary_attack_window(...)` exposes those
+native sources as `native_selection_pursuit_range` or
+`native_water_control_brain_range`.
 
 ## Policy Values
 

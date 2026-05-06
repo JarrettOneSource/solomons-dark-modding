@@ -1,5 +1,5 @@
 void DispatchSpellCastForSelf(uintptr_t self_address, int spell_id) {
-    if (self_address == 0 || !IsRunActive()) {
+    if (self_address == 0 || spell_id <= 0 || !IsRunActive()) {
         return;
     }
 
@@ -33,25 +33,37 @@ void DispatchSpellCastForSelf(uintptr_t self_address, int spell_id) {
     DispatchLuaSpellCast(spell_id, x, y, direction_x, direction_y);
 }
 
-#define SDMOD_DEFINE_SPELL_CAST_HOOK(name, hook_index, spell_id_value)               \
+int ReadSpellCastHookSkillId(uintptr_t self_address) {
+    if (self_address == 0 || kActorPrimarySkillIdOffset == 0) {
+        return 0;
+    }
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.IsReadableRange(self_address + kActorPrimarySkillIdOffset, sizeof(std::int32_t))) {
+        return 0;
+    }
+    return memory.ReadFieldOr<std::int32_t>(self_address, kActorPrimarySkillIdOffset, 0);
+}
+
+#define SDMOD_DEFINE_SPELL_CAST_HOOK(name, hook_index)                              \
     void __fastcall HookSpellCast_##name(void* self, void* unused_edx) {             \
         const auto original = GetX86HookTrampoline<SpellCastFn>(g_state.hooks[hook_index]); \
         if (original == nullptr) {                                                   \
             return;                                                                  \
         }                                                                            \
         const auto self_address = reinterpret_cast<uintptr_t>(self);                 \
+        const auto spell_id = ReadSpellCastHookSkillId(self_address);                \
         original(self, unused_edx);                                                  \
-        DispatchSpellCastForSelf(self_address, spell_id_value);                      \
+        DispatchSpellCastForSelf(self_address, spell_id);                            \
     }
 
-SDMOD_DEFINE_SPELL_CAST_HOOK(3EB, kHookSpellCast3EB, 0x3EB)
-SDMOD_DEFINE_SPELL_CAST_HOOK(018, kHookSpellCast018, 0x18)
-SDMOD_DEFINE_SPELL_CAST_HOOK(020, kHookSpellCast020, 0x20)
-SDMOD_DEFINE_SPELL_CAST_HOOK(028, kHookSpellCast028, 0x28)
-SDMOD_DEFINE_SPELL_CAST_HOOK(3EC, kHookSpellCast3EC, 0x3EC)
-SDMOD_DEFINE_SPELL_CAST_HOOK(3ED, kHookSpellCast3ED, 0x3ED)
-SDMOD_DEFINE_SPELL_CAST_HOOK(3EE, kHookSpellCast3EE, 0x3EE)
-SDMOD_DEFINE_SPELL_CAST_HOOK(3F0, kHookSpellCast3F0, 0x3F0)
+SDMOD_DEFINE_SPELL_CAST_HOOK(3EB, kHookSpellCast3EB)
+SDMOD_DEFINE_SPELL_CAST_HOOK(018, kHookSpellCast018)
+SDMOD_DEFINE_SPELL_CAST_HOOK(020, kHookSpellCast020)
+SDMOD_DEFINE_SPELL_CAST_HOOK(028, kHookSpellCast028)
+SDMOD_DEFINE_SPELL_CAST_HOOK(3EC, kHookSpellCast3EC)
+SDMOD_DEFINE_SPELL_CAST_HOOK(3ED, kHookSpellCast3ED)
+SDMOD_DEFINE_SPELL_CAST_HOOK(3EE, kHookSpellCast3EE)
+SDMOD_DEFINE_SPELL_CAST_HOOK(3F0, kHookSpellCast3F0)
 
 void __fastcall HookSpellCast_3EF(void* self, void* unused_edx) {
     const auto original = GetX86HookTrampoline<SpellCastFn>(g_state.hooks[kHookSpellCast3EF]);
@@ -60,10 +72,11 @@ void __fastcall HookSpellCast_3EF(void* self, void* unused_edx) {
     }
 
     const auto self_address = reinterpret_cast<uintptr_t>(self);
+    const auto spell_id = ReadSpellCastHookSkillId(self_address);
     Log("[bots] spell_3ef hook enter. " + DescribeSpellCastHookActorState(self_address));
     original(self, unused_edx);
     Log("[bots] spell_3ef hook exit. " + DescribeSpellCastHookActorState(self_address));
-    DispatchSpellCastForSelf(self_address, 0x3EF);
+    DispatchSpellCastForSelf(self_address, spell_id);
 }
 
 #undef SDMOD_DEFINE_SPELL_CAST_HOOK

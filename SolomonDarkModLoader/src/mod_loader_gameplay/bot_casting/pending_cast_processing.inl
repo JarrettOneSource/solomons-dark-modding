@@ -113,7 +113,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.bounded_post_release_ticks_waiting < kBoundedHeldNativeReleaseEdgeTicks;
         const bool publish_ongoing_skill_id =
             ongoing.uses_dispatcher_skill_id &&
-            !(SkillRequiresBoundedHeldCastInputDuringNativeTick(native_active_skill_id) &&
+            !(OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing) &&
               ongoing.bounded_release_requested &&
               !preserve_bounded_release_edge);
         (void)memory.TryWriteField<std::int32_t>(
@@ -174,7 +174,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                         " ticks=" + std::to_string(ongoing.startup_ticks_waiting));
                 }
             } else if (ongoing.uses_dispatcher_skill_id) {
-                PrimeGameplaySlotPostGateDispatchState(actor_address, ongoing.dispatcher_skill_id);
+                PrimeGameplaySlotPostGateDispatchState(actor_address, ongoing);
                 const auto native_target_actor_address =
                     ResolveOngoingCastNativeTargetActor(binding, ongoing);
                 if (native_target_actor_address != 0) {
@@ -333,9 +333,9 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             !has_live_handle &&
             ongoing.ticks_waiting >= kPurePrimaryNoHandleSettleTicks;
         const bool held_native_cast =
-            SkillRequiresHeldCastInputDuringNativeTick(native_active_skill_id);
+            OngoingCastRequiresHeldCastInputDuringNativeTick(ongoing);
         const bool bounded_held_native_cast =
-            SkillRequiresBoundedHeldCastInputDuringNativeTick(native_active_skill_id);
+            OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing);
         const auto active_spell_state = ReadBotNativeActiveSpellObjectState(cast_context, false);
         const auto earth_max_charge =
             ongoing.progression_runtime_address != 0
@@ -463,7 +463,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             !has_live_handle;
         // Once release is requested, keep only a stock-sized native release
         // window. The Earth handler gets a few frames with the chosen charge
-        // and stopped growth-rate field, then the fallback cleanup below
+        // and stopped growth-rate field, then the bounded cleanup below
         // finalizes the active handle before the visual can continue toward
         // max size.
         constexpr int kBoundedHeldPostReleaseWorldUpdateTicks = kBoundedHeldNativeReleaseEdgeTicks;
@@ -487,7 +487,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         const bool startup_timeout_hit =
             ongoing.startup_in_progress &&
             ongoing.startup_ticks_waiting >=
-                ResolveMaxStartupTicksWaiting(native_active_skill_id);
+                ResolveMaxStartupTicksWaiting(ongoing);
         const bool activity_released =
             !bounded_held_native_cast &&
             ongoing.saw_activity &&
