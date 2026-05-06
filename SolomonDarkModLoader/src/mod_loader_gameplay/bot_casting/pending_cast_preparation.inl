@@ -13,9 +13,14 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     constexpr float kRadiansToDegrees = 57.2957795130823208767981548141051703f;
     constexpr std::uint8_t kActorActiveCastGroupSentinel = 0xFF;
     const auto finish_attack_idle = [&]() {
-        const auto heading =
-            memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
-        (void)multiplayer::FinishBotAttack(binding->bot_id, true, heading, true);
+        float heading = 0.0f;
+        const bool heading_readable =
+            TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &heading);
+        (void)multiplayer::FinishBotAttack(
+            binding->bot_id,
+            heading_readable,
+            heading,
+            true);
     };
     uintptr_t resolved_progression_runtime_address = 0;
     (void)TryResolveActorProgressionRuntime(
@@ -201,10 +206,16 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     float aim_target_y = 0.0f;
     bool have_aim_target = false;
     if (request.has_aim_target) {
-        const auto actor_x =
-            memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-        const auto actor_y =
-            memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
+        float actor_x = 0.0f;
+        float actor_y = 0.0f;
+        if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &actor_x) ||
+            !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &actor_y)) {
+            finish_attack_idle();
+            if (error_message != nullptr) {
+                *error_message = "actor position unreadable for bot cast aim";
+            }
+            return false;
+        }
         const auto dx = request.aim_target_x - actor_x;
         const auto dy = request.aim_target_y - actor_y;
         if ((dx * dx) + (dy * dy) > 0.0001f) {
@@ -287,28 +298,25 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         binding->facing_heading_value = aim_heading;
         binding->facing_heading_valid = true;
     }
-    ongoing.heading_before = memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
-    ongoing.aim_x_before = memory.ReadFieldOr<float>(actor_address, kActorAimTargetXOffset, 0.0f);
-    ongoing.aim_y_before = memory.ReadFieldOr<float>(actor_address, kActorAimTargetYOffset, 0.0f);
-    ongoing.aim_aux0_before =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
-    ongoing.aim_aux1_before =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
-    ongoing.spread_before =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
-    ongoing.primary_skill_id_before =
-        memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
-    ongoing.previous_skill_id_before =
-        memory.ReadFieldOr<std::int32_t>(actor_address, kActorPreviousSkillIdOffset, 0);
-    ongoing.primary_action_latch_e4_before =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, kActorPrimaryActionLatchE4Offset, 0);
-    ongoing.primary_action_latch_e8_before =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, kActorPrimaryActionLatchE8Offset, 0);
-    ongoing.post_gate_active_before =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorPostGateActiveByteOffset, 0);
-
-    ongoing.selection_state_pointer =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+    if (!TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &ongoing.heading_before) ||
+        !TryReadFiniteFloatField(actor_address, kActorAimTargetXOffset, &ongoing.aim_x_before) ||
+        !TryReadFiniteFloatField(actor_address, kActorAimTargetYOffset, &ongoing.aim_y_before) ||
+        !memory.TryReadField(actor_address, kActorAimTargetAux0Offset, &ongoing.aim_aux0_before) ||
+        !memory.TryReadField(actor_address, kActorAimTargetAux1Offset, &ongoing.aim_aux1_before) ||
+        !memory.TryReadField(actor_address, kActorCastSpreadModeByteOffset, &ongoing.spread_before) ||
+        !memory.TryReadField(actor_address, kActorPrimarySkillIdOffset, &ongoing.primary_skill_id_before) ||
+        !memory.TryReadField(actor_address, kActorPreviousSkillIdOffset, &ongoing.previous_skill_id_before) ||
+        !memory.TryReadField(actor_address, kActorPrimaryActionLatchE4Offset, &ongoing.primary_action_latch_e4_before) ||
+        !memory.TryReadField(actor_address, kActorPrimaryActionLatchE8Offset, &ongoing.primary_action_latch_e8_before) ||
+        !memory.TryReadField(actor_address, kActorPostGateActiveByteOffset, &ongoing.post_gate_active_before) ||
+        !memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &ongoing.selection_state_pointer)) {
+        ongoing = ParticipantEntityBinding::OngoingCastState{};
+        finish_attack_idle();
+        if (error_message != nullptr) {
+            *error_message = "actor cast startup state unreadable";
+        }
+        return false;
+    }
     if (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
         ongoing.selection_state_pointer != 0 &&
         memory.IsReadableRange(
@@ -345,11 +353,17 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     if ((ongoing.progression_runtime_address != 0 ||
          TryResolveActorProgressionRuntime(actor_address, &ongoing.progression_runtime_address)) &&
         ongoing.progression_runtime_address != 0) {
-        ongoing.progression_spell_id_before =
-            memory.ReadFieldOr<std::int32_t>(
+        if (!memory.TryReadField(
                 ongoing.progression_runtime_address,
                 kProgressionCurrentSpellIdOffset,
-                0);
+                &ongoing.progression_spell_id_before)) {
+            RollbackPreparedStartup(&ongoing);
+            finish_attack_idle();
+            if (error_message != nullptr) {
+                *error_message = "progression spell id unreadable before bot cast";
+            }
+            return false;
+        }
         if (request.kind == multiplayer::BotCastKind::Primary && request.skill_id <= 0) {
             int resolved_primary_skill_id = -1;
             std::string loadout_error;
@@ -506,8 +520,15 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     }
 
     const auto cleanup_address = memory.ResolveGameAddressOrZero(kCastActiveHandleCleanup);
-    const auto active_cast_group_before =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
+    std::uint8_t active_cast_group_before = kActorActiveCastGroupSentinel;
+    if (!memory.TryReadField(actor_address, kActorActiveCastGroupByteOffset, &active_cast_group_before)) {
+        RollbackPreparedStartup(&ongoing);
+        finish_attack_idle();
+        if (error_message != nullptr) {
+            *error_message = "native active-cast group unreadable before bot cast";
+        }
+        return false;
+    }
     if (cleanup_address != 0 && active_cast_group_before != kActorActiveCastGroupSentinel) {
         DWORD cleanup_exception_code = 0;
         const auto cleanup_ok =
@@ -558,6 +579,15 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     }
     g_gameplay_slot_hud_probe_actor = actor_address;
     g_gameplay_slot_hud_probe_until_ms = static_cast<std::uint64_t>(GetTickCount64()) + 400;
+    std::int32_t progression_spell_id_for_log = 0;
+    const auto progression_spell_id_text =
+        ongoing.progression_runtime_address != 0 &&
+                memory.TryReadField(
+                    ongoing.progression_runtime_address,
+                    kProgressionCurrentSpellIdOffset,
+                    &progression_spell_id_for_log)
+            ? std::to_string(progression_spell_id_for_log)
+            : std::string("unreadable");
     Log(
         "[bots] wizard cast prepped. bot_id=" + std::to_string(binding->bot_id) +
         " kind=" +
@@ -573,13 +603,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
                  : std::string("dispatcher")) +
         " selection_state=" + std::to_string(combat_selection_state) +
         " progression_runtime=" + HexString(ongoing.progression_runtime_address) +
-        " progression_spell_id=" + std::to_string(
-            ongoing.progression_runtime_address != 0
-                ? memory.ReadFieldOr<std::int32_t>(
-                      ongoing.progression_runtime_address,
-                      kProgressionCurrentSpellIdOffset,
-                      0)
-                : 0) +
+        " progression_spell_id=" + progression_spell_id_text +
         " pure_primary_primer=" + std::to_string(pure_primary_primer_called ? 1 : 0) +
         " pure_primary_primer_seh=" + HexString(pure_primary_primer_exception) +
         " selection_ptr=" + HexString(ongoing.selection_state_pointer) +

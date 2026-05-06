@@ -1,6 +1,6 @@
 bool TryResolveLiveUiSurfaceOwner(
     std::string_view surface_root_id,
-    uintptr_t fallback_owner_address,
+    uintptr_t snapshot_owner_address,
     uintptr_t* owner_address) {
     if (owner_address == nullptr) {
         return false;
@@ -74,8 +74,8 @@ bool TryResolveLiveUiSurfaceOwner(
         }
     }
 
-    if (fallback_owner_address != 0) {
-        *owner_address = fallback_owner_address;
+    if (snapshot_owner_address != 0) {
+        *owner_address = snapshot_owner_address;
         return true;
     }
 

@@ -16,8 +16,13 @@ bool TrySpawnGameplaySlotBotParticipantEntity(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto world_address =
-        memory.ReadFieldOr<uintptr_t>(local_actor_address, kActorOwnerOffset, 0);
+    uintptr_t world_address = 0;
+    if (!memory.TryReadField(local_actor_address, kActorOwnerOffset, &world_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Local slot-0 player world is unreadable.";
+        }
+        return false;
+    }
     if (world_address == 0) {
         if (error_message != nullptr) {
             *error_message = "Local slot-0 player world is not ready.";
@@ -127,18 +132,29 @@ bool TrySpawnGameplaySlotBotParticipantEntity(
         }
     }
 
+    std::int8_t actor_slot = -1;
+    uintptr_t progression_handle = 0;
+    uintptr_t equip_handle = 0;
+    const auto actor_slot_text =
+        memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot)
+            ? std::to_string(static_cast<int>(actor_slot))
+            : std::string("unreadable");
+    const auto progression_handle_text =
+        memory.TryReadField(actor_address, kActorProgressionHandleOffset, &progression_handle)
+            ? HexString(progression_handle)
+            : std::string("unreadable");
+    const auto equip_handle_text =
+        memory.TryReadField(actor_address, kActorEquipHandleOffset, &equip_handle)
+            ? HexString(equip_handle)
+            : std::string("unreadable");
     Log(
         "[bots] created gameplay-slot wizard actor. bot_id=" + std::to_string(request.bot_id) +
         " actor=" + HexString(actor_address) +
         " world=" + HexString(world_address) +
         " gameplay_slot=" + std::to_string(target_slot) +
-        " actor_slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
-            actor_address,
-            kActorSlotOffset,
-            -1))) +
+        " actor_slot=" + actor_slot_text +
         " resolved_anim_state=" + std::to_string(ResolveActorAnimationStateId(actor_address)) +
-        " progression_handle=" +
-        HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0)) +
-        " equip_handle=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipHandleOffset, 0)));
+        " progression_handle=" + progression_handle_text +
+        " equip_handle=" + equip_handle_text);
     return true;
 }

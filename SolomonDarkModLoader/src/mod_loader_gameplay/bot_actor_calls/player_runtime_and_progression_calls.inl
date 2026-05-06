@@ -53,8 +53,10 @@ bool CallActorProgressionRefreshSafe(
 
     __try {
         auto& memory = ProcessMemory::Instance();
-        const auto progression_handle =
-            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
+        uintptr_t progression_handle = 0;
+        if (!memory.TryReadField(actor_address, kActorProgressionHandleOffset, &progression_handle)) {
+            return false;
+        }
         const auto progression_runtime =
             progression_handle != 0 ? ReadSmartPointerInnerObject(progression_handle) : 0;
         if (progression_runtime == 0) {

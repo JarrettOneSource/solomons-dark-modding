@@ -3412,7 +3412,7 @@ def test_lua_bot_constants_are_semantic_or_documented() -> str:
         "IsArenaCombatActorType",
         "state.tracked_enemy = true",
         "state.enemy_type = state.object_type_id",
-        "IsArenaCombatActiveForSceneActorFallback",
+        "IsArenaCombatActiveForUntrackedSceneActor",
         "tracked_enemy && !IsArenaCombatActorType(state.object_type_id)",
         "state.max_hp <= 0.0f",
         "return false",
@@ -3674,6 +3674,95 @@ def test_smell_source_inventory_is_current() -> str:
     if regressions:
         raise StaticReTestFailure("; ".join(regressions))
     return "0 smell source entries still point at active code"
+
+
+def test_active_sources_reject_read_or_and_stale_path_language() -> str:
+    active_roots = (
+        ROOT / "SolomonDarkModLoader/src",
+        ROOT / "SolomonDarkModLoader/include",
+        ROOT / "mods/lua_bots/scripts",
+    )
+    active_paths = [
+        path
+        for root in active_roots
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower() in {".cpp", ".h", ".hpp", ".inl", ".lua"}
+    ]
+    active_paths.extend((
+        ROOT / "config/binary-layout.ini",
+        ROOT / "tools/test_lua_bots_targeting.lua",
+        ROOT / "tools/probe_bot_element_damage.py",
+    ))
+
+    forbidden_tokens = (
+        "ReadValueOr",
+        "ReadFieldOr",
+        "sync_legacy_state_alias",
+        "DEFAULT_SPAWN_OFFSET",
+        "kDefaultWizardBotOffset",
+        "gameplay_player_fallback_position",
+        "main_menu_compatibility",
+        "ALLYPROBE",
+        "ALLYTEXTPROBE",
+        "monotonic_milliseconds) or 0",
+        "tonumber(choices.generation) or 0",
+        "region_index or -1",
+        "region_type_id or -1",
+        "now_ms) or state.last_tick_ms or 0",
+    )
+    stale_path_word = re.compile(r"\b(?:fallback|legacy|backward|compatibility|compatible)\b", re.I)
+    regressions: list[str] = []
+    for path in active_paths:
+        text = read_text(path)
+        for token in forbidden_tokens:
+            if token in text:
+                regressions.append(f"{path.relative_to(ROOT)} contains {token}")
+        if stale_path_word.search(text):
+            regressions.append(f"{path.relative_to(ROOT)} contains stale path language")
+
+    if regressions:
+        raise StaticReTestFailure("; ".join(regressions))
+    return "active C++/Lua/layout/probe sources contain no Read*Or API, default bot offsets, or stale path wording"
+
+
+def test_player_state_exports_native_heading_for_bot_spawn() -> str:
+    header_text = read_text(ROOT / "SolomonDarkModLoader/include/mod_loader.h")
+    state_getters_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"
+    )
+    lua_binding_text = read_text(ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp")
+    lua_scene_text = read_text(ROOT / "mods/lua_bots/scripts/lib/lua_bots/scene.lua")
+    lua_follow_text = read_text(ROOT / "mods/lua_bots/scripts/lib/lua_bots/follow.lua")
+
+    required_tokens = {
+        "player state struct": (header_text, "float heading = 0.0f;"),
+        "native heading read": (
+            state_getters_text,
+            "TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &heading)",
+        ),
+        "player heading assignment": (state_getters_text, "state->heading = heading;"),
+        "Lua player heading publish": (lua_binding_text, "player_state.heading"),
+        "Lua player heading field": (lua_binding_text, '"heading"'),
+        "Lua bot spawn requires heading": (lua_scene_text, "local heading = tonumber(player.heading)"),
+        "Lua bot request top-level heading": (lua_scene_text, "heading = spawn.heading,\n        position = {"),
+        "Lua follow request top-level heading": (lua_follow_text, "update.heading = tonumber(bot.heading)"),
+    }
+    missing = [
+        label
+        for label, (text, token) in required_tokens.items()
+        if token not in text
+    ]
+    if missing:
+        raise StaticReTestFailure("player heading live-state coverage missing: " + ", ".join(missing))
+
+    if "local heading = tonumber(player.heading) or" in lua_scene_text:
+        raise StaticReTestFailure("Lua bot spawn heading reintroduced a default instead of requiring live player heading")
+    if re.search(r"position\s*=\s*\{[^}]*\bheading\b", lua_scene_text, re.S):
+        raise StaticReTestFailure("Lua bot spawn/update nested heading inside position instead of using request heading")
+    if "update.position.heading" in lua_follow_text:
+        raise StaticReTestFailure("Lua follow nested heading inside position instead of using request heading")
+
+    return "bot spawn heading comes from live actor state and is sent through the native request heading field"
 
 
 def test_investigation_register_has_static_coverage() -> str:
@@ -4142,13 +4231,13 @@ def test_autonomous_probe_uses_bot_scoped_diagnostics_and_native_damage_evidence
     ]
     if present_forbidden:
         raise StaticReTestFailure(
-            "autonomous combat probe still relies on unscoped legacy evidence: " +
+            "autonomous combat probe still relies on unscoped stale evidence: " +
             ", ".join(present_forbidden))
 
     return "autonomous probe captures bot-scoped Lua diagnostics and native damage evidence"
 
 
-def test_lua_follow_preserves_legacy_timeout_teleport() -> str:
+def test_lua_follow_preserves_timeout_teleport() -> str:
     follow_text = read_text(LUA_BOT_FOLLOW)
     targeting_test_text = read_text(ROOT / "tools/test_lua_bots_targeting.lua")
 
@@ -4165,7 +4254,7 @@ def test_lua_follow_preserves_legacy_timeout_teleport() -> str:
     missing = [token for token in required_tokens if token not in combined_text]
     if missing:
         raise StaticReTestFailure(
-            "legacy follow timeout teleport coverage is missing token(s): " +
+            "follow timeout teleport coverage is missing token(s): " +
             ", ".join(missing))
 
     forbidden_tokens = (
@@ -4176,10 +4265,10 @@ def test_lua_follow_preserves_legacy_timeout_teleport() -> str:
     present = [token for token in forbidden_tokens if token in combined_text]
     if present:
         raise StaticReTestFailure(
-            "legacy follow revert left walking-only token(s): " +
+            "follow timeout coverage left walking-only token(s): " +
             ", ".join(present))
 
-    return "legacy follow uses timeout teleport recovery and the 100/250 band"
+    return "follow uses timeout teleport recovery and the 100/250 band"
 
 
 def test_native_derived_wizard_visuals_are_layout_backed() -> str:
@@ -4320,7 +4409,7 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
     return "bot movement clears stale stock-tick inputs, writes only standalone walk-cycle fields, and leaves render phase/blend native-owned"
 
 
-def test_native_global_reads_do_not_use_loader_fallbacks() -> str:
+def test_native_global_reads_do_not_use_loader_substitutes() -> str:
     resource_text = read_text(RESOURCE_STATE)
     movement_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/wizard_bot_movement_step.inl"
@@ -4379,7 +4468,7 @@ def test_native_global_reads_do_not_use_loader_fallbacks() -> str:
     present = [token for token in forbidden_tokens if token in combined_text]
     if present:
         raise StaticReTestFailure(
-            "active native-global readers still allow loader fallback values: " +
+            "active native-global readers still allow loader substitute values: " +
             ", ".join(present))
 
     required_tokens = (
@@ -4392,7 +4481,7 @@ def test_native_global_reads_do_not_use_loader_fallbacks() -> str:
         "native enemy-count global unavailable",
         "gold.changed native gold global unavailable",
         "pending-level-kind global unavailable",
-        "memory.TryReadField(actor_address, kActorOwnerOffset, &world_address)",
+        "TryResolveLocalPlayerWorldContext(",
     )
     missing = [token for token in required_tokens if token not in combined_text]
     if missing:
@@ -4400,7 +4489,7 @@ def test_native_global_reads_do_not_use_loader_fallbacks() -> str:
             "strict native-global read guard is missing token(s): " +
             ", ".join(missing))
 
-    return "active movement/combat native globals fail visibly instead of using loader fallback values"
+    return "active movement/combat native globals fail visibly instead of using loader substitute values"
 
 
 def test_repo_wide_native_reads_do_not_publish_substitute_state() -> str:
@@ -4461,7 +4550,7 @@ def test_repo_wide_native_reads_do_not_publish_substitute_state() -> str:
     return "run-lifecycle, skill-choice, and native spell stat reads fail visibly instead of publishing substitutes"
 
 
-def test_path_builder_does_not_walk_to_unrequested_fallback_goals() -> str:
+def test_path_builder_does_not_walk_to_unrequested_alternate_goals() -> str:
     path_text = read_text(BOT_PATHFINDING_PATH_BUILDING)
 
     forbidden_tokens = (
@@ -4473,7 +4562,7 @@ def test_path_builder_does_not_walk_to_unrequested_fallback_goals() -> str:
     present = [token for token in forbidden_tokens if token in path_text]
     if present:
         raise StaticReTestFailure(
-            "path builder can still walk toward an unrequested reachable-goal fallback: " +
+            "path builder can still walk toward an unrequested reachable-goal substitute: " +
             ", ".join(present))
 
     required_tokens = (
@@ -4488,7 +4577,7 @@ def test_path_builder_does_not_walk_to_unrequested_fallback_goals() -> str:
             "path failure guard is missing expected stop/failure token(s): " +
             ", ".join(missing))
 
-    return "unreachable movement targets fail cleanly instead of walking to hidden fallback goals"
+    return "unreachable movement targets fail cleanly instead of walking to hidden alternate goals"
 
 
 def test_path_builder_expands_cells_before_los_smoothing() -> str:
@@ -4598,6 +4687,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Lua bot constants are semantic or documented", test_lua_bot_constants_are_semantic_or_documented),
     ("remaining active hardcode sources are removed", test_remaining_active_hardcode_sources_are_removed),
     ("smell source inventory is current", test_smell_source_inventory_is_current),
+    ("active sources reject substitute read APIs and stale path language", test_active_sources_reject_read_or_and_stale_path_language),
+    ("player state exports native heading for bot spawn", test_player_state_exports_native_heading_for_bot_spawn),
     ("investigation register has static coverage", test_investigation_register_has_static_coverage),
     ("staged binary matches analysis binary", test_staged_binary_matches_analysis_binary),
     ("binary layout identity is staged", test_binary_layout_matches_staged_layout_identity),
@@ -4606,12 +4697,12 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Remaining native addresses and probe offsets are layout-backed", test_remaining_native_addresses_and_probe_offsets_are_layout_backed),
     ("Runtime debug trace rejects overlapping detours", test_runtime_debug_trace_rejects_overlapping_detours_and_untraces_rebased_addresses),
     ("Autonomous probe uses bot-scoped diagnostics", test_autonomous_probe_uses_bot_scoped_diagnostics_and_native_damage_evidence),
-    ("Lua follow preserves legacy timeout teleport", test_lua_follow_preserves_legacy_timeout_teleport),
+    ("Lua follow preserves timeout teleport", test_lua_follow_preserves_timeout_teleport),
     ("Wizard visuals use native-derived source data", test_native_derived_wizard_visuals_are_layout_backed),
     ("Standalone animation drive applies dynamic fields", test_standalone_animation_drive_applies_dynamic_fields),
-    ("Native global reads reject loader fallbacks", test_native_global_reads_do_not_use_loader_fallbacks),
+    ("Native global reads reject loader substitutes", test_native_global_reads_do_not_use_loader_substitutes),
     ("Repo-wide native reads reject substitute state", test_repo_wide_native_reads_do_not_publish_substitute_state),
-    ("Path builder rejects unrequested fallback goals", test_path_builder_does_not_walk_to_unrequested_fallback_goals),
+    ("Path builder rejects unrequested alternate goals", test_path_builder_does_not_walk_to_unrequested_alternate_goals),
     ("Path builder expands cells before LOS smoothing", test_path_builder_expands_cells_before_los_smoothing),
 ]
 

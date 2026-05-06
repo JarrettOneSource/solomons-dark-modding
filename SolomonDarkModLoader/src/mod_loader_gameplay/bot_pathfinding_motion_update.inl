@@ -52,8 +52,17 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto actor_x = memory.ReadFieldOr<float>(binding->actor_address, kActorPositionXOffset, 0.0f);
-    const auto actor_y = memory.ReadFieldOr<float>(binding->actor_address, kActorPositionYOffset, 0.0f);
+    (void)memory;
+    float actor_x = 0.0f;
+    float actor_y = 0.0f;
+    if (!TryReadFiniteFloatField(binding->actor_address, kActorPositionXOffset, &actor_x) ||
+        !TryReadFiniteFloatField(binding->actor_address, kActorPositionYOffset, &actor_y)) {
+        StopBotPathMotion(binding, false);
+        if (error_message != nullptr) {
+            *error_message = "Bot actor position is unreadable during path motion.";
+        }
+        return false;
+    }
     const auto target_delta_x = binding->target_x - actor_x;
     const auto target_delta_y = binding->target_y - actor_y;
     const auto target_distance =

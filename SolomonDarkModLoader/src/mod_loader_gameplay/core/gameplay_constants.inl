@@ -49,13 +49,12 @@ constexpr int kWizardProgressionFactoryTypeId = 0x0BBB;
 constexpr std::size_t kPlayerActorSize = 0x398;
 constexpr std::size_t kStandaloneWizardEquipSize = 100;
 constexpr std::size_t kStandaloneWizardAttachmentItemSize = 0x88;
-constexpr std::size_t kGameplayPlayerFallbackPositionStride = 8;
 // Object_Ctor treats +0x04..+0x07 as object-header state, not an actor-owned
 // render-context pointer. Keep the raw word available for dumps and probes, but
 // do not treat it as a transferable render node.
 constexpr std::size_t kActorAnimationConfigBlockSize = 0x0C;
 constexpr std::size_t kGameplayIndexStateActorSelectionBaseIndex = 0x0C;
-// Legacy name: +0x22C is a packed discrete frame offset/countdown field, not a pointer.
+// Stock symbol note: +0x22C is a packed discrete frame offset/countdown field, not a pointer.
 constexpr std::size_t kActorHubVisualDescriptorBlockSize = 0x20;
 constexpr int kActorAnimationStateSlotBias = 0x0C;
 constexpr int kUnknownAnimationStateId = -1;
@@ -88,8 +87,6 @@ constexpr int kSpawnRewardDefaultLifetime = 0;
 constexpr int kUnknownXpSentinel = -1;
 constexpr int kFirstWizardBotSlot = 1;
 constexpr int kHubRegionIndex = 0;
-constexpr float kDefaultWizardBotOffsetX = 32.0f;
-constexpr float kDefaultWizardBotOffsetY = 0.0f;
 constexpr std::uint8_t kTargetHandleGroupSentinel = 0xFF;
 constexpr std::uint16_t kTargetHandleSlotSentinel = 0xFFFF;
 constexpr int kPrimaryComboDispatcherSelectionState = 0x34;

@@ -95,7 +95,14 @@ bool TryFindGameplayPathCellSample(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto radius = memory.ReadFieldOr<float>(binding->actor_address, kActorCollisionRadiusOffset, 0.0f);
+    (void)memory;
+    float radius = 0.0f;
+    if (!TryReadFiniteFloatField(binding->actor_address, kActorCollisionRadiusOffset, &radius)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor collision radius is unreadable for path cell sampling.";
+        }
+        return false;
+    }
     const auto preferred_margin = radius > 8.0f ? radius : 8.0f;
     const auto cell_min_x = static_cast<float>(grid_y) * snapshot.cell_width;
     const auto cell_max_x = cell_min_x + snapshot.cell_width;

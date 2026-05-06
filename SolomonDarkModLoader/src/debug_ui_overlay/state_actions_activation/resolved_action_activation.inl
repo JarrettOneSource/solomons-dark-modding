@@ -40,7 +40,7 @@ bool TryActivateResolvedUiAction(
     }
 
     if (surface_root_id == "main_menu" && action_id == "main_menu.new_game") {
-        if (!TryPrepareMainMenuNewGameCompatibility(resolved_owner_address, error_message)) {
+        if (!TryPrepareMainMenuNewGameSaveReset(resolved_owner_address, error_message)) {
             return false;
         }
     }

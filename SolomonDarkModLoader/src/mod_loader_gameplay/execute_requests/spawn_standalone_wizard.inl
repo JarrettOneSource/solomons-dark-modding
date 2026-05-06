@@ -16,8 +16,13 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto world_address =
-        memory.ReadFieldOr<uintptr_t>(local_actor_address, kActorOwnerOffset, 0);
+    uintptr_t world_address = 0;
+    if (!memory.TryReadField(local_actor_address, kActorOwnerOffset, &world_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Local slot-0 player world is unreadable.";
+        }
+        return false;
+    }
     if (world_address == 0) {
         if (error_message != nullptr) {
             *error_message = "Local slot-0 player world is not ready.";
@@ -40,9 +45,13 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
     auto cleanup_spawn = [&](std::string_view failure_message) {
         std::string cleanup_error;
         if (actor_address != 0) {
+            uintptr_t cleanup_world_address = 0;
+            if (!memory.TryReadField(actor_address, kActorOwnerOffset, &cleanup_world_address)) {
+                cleanup_error = "actor owner unreadable during cleanup";
+            }
             (void)DestroyLoaderOwnedWizardActor(
                 actor_address,
-                memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, world_address),
+                cleanup_world_address,
                 false,
                 &cleanup_error);
         }
@@ -110,8 +119,10 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
     }
 
     {
-        const auto selection_state_address =
-            memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+        uintptr_t selection_state_address = 0;
+        if (!memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &selection_state_address)) {
+            return cleanup_spawn("Standalone clone selection state pointer is unreadable.");
+        }
         if (selection_state_address != 0) {
             (void)memory.TryWriteField<std::uint8_t>(
                 selection_state_address,
@@ -136,9 +147,13 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
     }
 
     DWORD rebind_exception_code = 0;
+    uintptr_t rebind_world_address = 0;
+    if (!memory.TryReadField(actor_address, kActorOwnerOffset, &rebind_world_address)) {
+        return cleanup_spawn("Standalone clone world owner is unreadable before rebind.");
+    }
     if (!CallWorldCellGridRebindActorSafe(
             rebind_actor_address,
-            memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, world_address),
+            rebind_world_address,
             actor_address,
             &rebind_exception_code)) {
         return cleanup_spawn(
@@ -164,18 +179,26 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
             binding->desired_heading_valid = false;
             binding->next_scene_materialize_retry_ms = 0;
             binding->materialized_scene_address = gameplay_address;
-            binding->materialized_world_address =
-                memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, world_address);
+            if (!memory.TryReadField(
+                    actor_address,
+                    kActorOwnerOffset,
+                    &binding->materialized_world_address)) {
+                binding->materialized_world_address = 0;
+            }
             binding->materialized_region_index = -1;
             binding->gameplay_attach_applied = true;
             binding->gameplay_slot = -1;
             binding->raw_allocation = false;
-            binding->standalone_progression_wrapper_address =
-                memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
+            (void)memory.TryReadField(
+                actor_address,
+                kActorProgressionHandleOffset,
+                &binding->standalone_progression_wrapper_address);
             binding->standalone_progression_inner_address =
                 ReadSmartPointerInnerObject(binding->standalone_progression_wrapper_address);
-            binding->standalone_equip_wrapper_address =
-                memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipHandleOffset, 0);
+            (void)memory.TryReadField(
+                actor_address,
+                kActorEquipHandleOffset,
+                &binding->standalone_equip_wrapper_address);
             binding->standalone_equip_inner_address =
                 ReadSmartPointerInnerObject(binding->standalone_equip_wrapper_address);
             SeedStandaloneWizardAnimationDriveProfiles(binding, actor_address);
@@ -205,23 +228,41 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
             " wrote_y=" + std::to_string(moved_y ? 1 : 0));
     }
 
+    uintptr_t final_world_address = 0;
+    std::int8_t actor_slot = -1;
+    uintptr_t progression_handle = 0;
+    uintptr_t equip_handle = 0;
+    uintptr_t attachment = 0;
+    const auto final_world_text =
+        memory.TryReadField(actor_address, kActorOwnerOffset, &final_world_address)
+            ? HexString(final_world_address)
+            : std::string("unreadable");
+    const auto actor_slot_text =
+        memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot)
+            ? std::to_string(static_cast<int>(actor_slot))
+            : std::string("unreadable");
+    const auto progression_handle_text =
+        memory.TryReadField(actor_address, kActorProgressionHandleOffset, &progression_handle)
+            ? HexString(progression_handle)
+            : std::string("unreadable");
+    const auto equip_handle_text =
+        memory.TryReadField(actor_address, kActorEquipHandleOffset, &equip_handle)
+            ? HexString(equip_handle)
+            : std::string("unreadable");
+    const auto attachment_text =
+        memory.TryReadField(actor_address, kActorHubVisualAttachmentPtrOffset, &attachment)
+            ? HexString(attachment)
+            : std::string("unreadable");
     Log(
         "[bots] created standalone clone wizard actor. bot_id=" + std::to_string(request.bot_id) +
         " actor=" + HexString(actor_address) +
-        " world=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, world_address)) +
+        " world=" + final_world_text +
         " gameplay_slot=-1" +
-        " actor_slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
-            actor_address,
-            kActorSlotOffset,
-            -1))) +
+        " actor_slot=" + actor_slot_text +
         " slot_anim_state=" + std::to_string(ResolveActorAnimationStateSlotIndex(actor_address)) +
         " resolved_anim_state=" + std::to_string(ResolveActorAnimationStateId(actor_address)) +
-        " progression_handle=" +
-        HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0)) +
-        " equip_handle=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipHandleOffset, 0)) +
-        " attachment=" + HexString(memory.ReadFieldOr<uintptr_t>(
-            actor_address,
-            kActorHubVisualAttachmentPtrOffset,
-            0)));
+        " progression_handle=" + progression_handle_text +
+        " equip_handle=" + equip_handle_text +
+        " attachment=" + attachment_text);
     return true;
 }

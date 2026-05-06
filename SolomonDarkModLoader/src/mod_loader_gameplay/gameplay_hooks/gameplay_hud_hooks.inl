@@ -86,7 +86,10 @@ bool DrawGameplayHudParticipantName(
         return false;
     }
 
-    const auto text_object_base = memory.ReadValueOr<uintptr_t>(text_object_global_address, 0);
+    uintptr_t text_object_base = 0;
+    if (!memory.TryReadValue(text_object_global_address, &text_object_base)) {
+        return false;
+    }
     if (text_object_base == 0) {
         return false;
     }
@@ -96,8 +99,13 @@ bool DrawGameplayHudParticipantName(
         return false;
     }
 
-    const auto x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-    const auto y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f) - 45.0f;
+    float x = 0.0f;
+    float y = 0.0f;
+    if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &x) ||
+        !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &y)) {
+        return false;
+    }
+    y -= 45.0f;
     if (draw_x != nullptr) {
         *draw_x = x;
     }

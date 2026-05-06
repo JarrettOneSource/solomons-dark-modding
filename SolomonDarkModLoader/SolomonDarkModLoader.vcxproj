@@ -160,7 +160,7 @@
     <ClInclude Include="src\debug_ui_overlay\state_and_actions_action_state.inl" />
     <ClInclude Include="src\debug_ui_overlay\state_and_actions_activation_and_snapshot.inl" />
     <ClInclude Include="src\debug_ui_overlay\state_actions_activation\action_control_resolution.inl" />
-    <ClInclude Include="src\debug_ui_overlay\state_actions_activation\main_menu_compatibility.inl" />
+    <ClInclude Include="src\debug_ui_overlay\state_actions_activation\main_menu_save_reset.inl" />
     <ClInclude Include="src\debug_ui_overlay\state_actions_activation\resolved_action_activation.inl" />
     <ClInclude Include="src\debug_ui_overlay\state_actions_activation\snapshot_dispatch_ready.inl" />
     <ClInclude Include="src\debug_ui_overlay\state_and_actions_dispatch_invocation.inl" />

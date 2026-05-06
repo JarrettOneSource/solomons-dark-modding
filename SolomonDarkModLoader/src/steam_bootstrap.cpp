@@ -84,8 +84,8 @@ bool InitializeSteamBootstrap() {
     auto* networking = g_steam.steam_networking_v006();
     auto* user = g_steam.steam_user_v023();
     if (friends == nullptr || matchmaking == nullptr || networking == nullptr || user == nullptr) {
-        Log("Steam bootstrap: Steam initialized, but the legacy friends, matchmaking, networking, or user interfaces were not available.");
-        g_steam.snapshot.error_text = "Legacy Steam transport interfaces were not available.";
+        Log("Steam bootstrap: Steam initialized, but friends, matchmaking, networking, or user interfaces were not available.");
+        g_steam.snapshot.error_text = "Steam transport interfaces were not available.";
         g_steam.snapshot.status_text = "Steam transport interfaces unavailable.";
         ResetAfterFailedInitialization();
         return false;

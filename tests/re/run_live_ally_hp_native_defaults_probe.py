@@ -111,10 +111,10 @@ local id = sd.bots.create({{
   }},
   scene = {{ kind = 'shared_hub' }},
   ready = true,
+  heading = 90.0,
   position = {{
     x = (tonumber(player.x) or 0.0) + 96.0,
     y = tonumber(player.y) or 0.0,
-    heading = 90.0,
   }},
 }})
 emit('ok', id ~= nil)
@@ -221,8 +221,6 @@ def validate_sample(
     label: str,
     sample: dict[str, str],
     defaults: dict[str, float],
-    *,
-    allow_hardcoded_baseline: bool,
 ) -> None:
     if sample.get("available") != "true":
         raise LiveAllyHpProbeFailure(f"{label}: bot state unavailable: {sample}")
@@ -233,9 +231,8 @@ def validate_sample(
     if csp.int_value(sample, "gameplay_slot") != -1:
         raise LiveAllyHpProbeFailure(f"{label}: expected standalone gameplay_slot=-1, got {sample}")
 
-    expected_hp = 25.0 if allow_hardcoded_baseline else defaults["hp"]
     for field in ("hp", "max_hp", "raw.hp", "raw.max_hp"):
-        require_close(f"{label}.{field}", sample_float(sample, field), expected_hp)
+        require_close(f"{label}.{field}", sample_float(sample, field), defaults["hp"])
     for field in ("mp", "max_mp", "raw.mp", "raw.max_mp"):
         require_close(f"{label}.{field}", sample_float(sample, field), defaults["mp"])
 
@@ -261,12 +258,11 @@ def validate_loader_log(log_tail: list[str]) -> None:
         raise LiveAllyHpProbeFailure("shared-hub ally HP probe unexpectedly used gameplay_slot_bot rail")
 
 
-def run_probe(allow_hardcoded_baseline: bool) -> dict[str, Any]:
+def run_probe() -> dict[str, Any]:
     defaults = native_defaults()
     result: dict[str, Any] = {
         "launcher_freshness": csp.ensure_launcher_bundle_fresh(),
         "native_defaults": defaults,
-        "allow_hardcoded_baseline": allow_hardcoded_baseline,
         "navigation": [],
     }
 
@@ -292,13 +288,11 @@ def run_probe(allow_hardcoded_baseline: bool) -> dict[str, Any]:
         "first",
         first_sample,
         defaults,
-        allow_hardcoded_baseline=allow_hardcoded_baseline,
     )
     validate_sample(
         "settled",
         settled_sample,
         defaults,
-        allow_hardcoded_baseline=allow_hardcoded_baseline,
     )
     validate_loader_log(log_tail)
 
@@ -312,23 +306,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
     parser.add_argument("--json", action="store_true", help="Only print structured JSON.")
-    parser.add_argument(
-        "--allow-hardcoded-baseline",
-        action="store_true",
-        help="Accept the pre-cleanup 25.0 HP overwrite while still proving the standalone native clone rail.",
-    )
     parser.add_argument("--keep-running", action="store_true")
     args = parser.parse_args()
 
     exit_code = 0
     try:
-        result = run_probe(args.allow_hardcoded_baseline)
+        result = run_probe()
         result["passed"] = True
     except Exception as exc:  # noqa: BLE001 - probe preserves diagnostics in JSON.
         result = {
             "passed": False,
             "error": str(exc),
-            "allow_hardcoded_baseline": args.allow_hardcoded_baseline,
             "loader_log_tail": csp.tail_loader_log(240),
         }
         exit_code = 1
@@ -341,8 +329,7 @@ def main() -> int:
     if args.json:
         print(json.dumps(result, indent=2, sort_keys=True))
     elif result.get("passed"):
-        mode = "hardcoded baseline" if args.allow_hardcoded_baseline else "native defaults"
-        print(f"PASS: live ally HP probe validated {mode}")
+        print("PASS: live ally HP probe validated native defaults")
         print(f"Wrote {args.output}")
     else:
         print(f"FAIL: live ally HP probe: {result.get('error')}")

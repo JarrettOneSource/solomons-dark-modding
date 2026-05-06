@@ -32,35 +32,32 @@ BotNativeActiveSpellObjectState ReadBotNativeActiveSpellObjectState(
     const auto actor_address = context.actor_address;
 
     BotNativeActiveSpellObjectState state{};
-    state.group =
-        memory.ReadFieldOr<std::uint8_t>(
-            actor_address,
-            kActorActiveCastGroupByteOffset,
-            kBotCastActorActiveCastGroupSentinel);
-    state.slot =
-        memory.ReadFieldOr<std::uint16_t>(
-            actor_address,
-            kActorActiveCastSlotShortOffset,
-            kBotCastActorActiveCastSlotSentinel);
-    state.world = memory.ReadFieldOr<std::uintptr_t>(actor_address, kActorOwnerOffset, 0);
-    state.selection_state =
-        memory.ReadFieldOr<std::uintptr_t>(
-            actor_address,
-            kActorAnimationSelectionStateOffset,
-            0);
+    if (!memory.TryReadField(actor_address, kActorActiveCastGroupByteOffset, &state.group) ||
+        !memory.TryReadField(actor_address, kActorActiveCastSlotShortOffset, &state.slot) ||
+        !memory.TryReadField(actor_address, kActorOwnerOffset, &state.world) ||
+        !memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &state.selection_state)) {
+        state.group = kBotCastActorActiveCastGroupSentinel;
+        state.slot = kBotCastActorActiveCastSlotSentinel;
+        state.world = 0;
+        state.selection_state = 0;
+        return state;
+    }
     if (allow_selection_state_handle &&
         (state.group == kBotCastActorActiveCastGroupSentinel ||
          state.slot == kBotCastActorActiveCastSlotSentinel)) {
         if (state.selection_state != 0 &&
             memory.IsReadableRange(state.selection_state, 0x10)) {
-            const auto selection_group =
-                memory.ReadValueOr<std::uint8_t>(
+            std::uint8_t selection_group = kBotCastActorActiveCastGroupSentinel;
+            std::uint16_t selection_slot = kBotCastActorActiveCastSlotSentinel;
+            if (!memory.TryReadValue(
                     state.selection_state + kActorControlBrainTargetSlotOffset,
-                    kBotCastActorActiveCastGroupSentinel);
-            const auto selection_slot =
-                memory.ReadValueOr<std::uint16_t>(
+                    &selection_group) ||
+                !memory.TryReadValue(
                     state.selection_state + kActorControlBrainTargetHandleOffset,
-                    kBotCastActorActiveCastSlotSentinel);
+                    &selection_slot)) {
+                selection_group = kBotCastActorActiveCastGroupSentinel;
+                selection_slot = kBotCastActorActiveCastSlotSentinel;
+            }
             if (selection_group != kBotCastActorActiveCastGroupSentinel &&
                 selection_slot != kBotCastActorActiveCastSlotSentinel) {
                 state.group = selection_group;
@@ -92,31 +89,22 @@ BotNativeActiveSpellObjectState ReadBotNativeActiveSpellObjectState(
         return state;
     }
 
+    if (!memory.TryReadField(state.object, kGameObjectTypeIdOffset, &state.object_type) ||
+        !TryReadFiniteFloatField(state.object, kSpellObjectChargeOffset, &state.charge) ||
+        !TryReadFiniteFloatField(state.object, kSpellObjectGrowthRateOffset, &state.growth_rate) ||
+        !TryReadFiniteFloatField(state.object, kSpellObjectReleaseChargeOffset, &state.release_charge) ||
+        !TryReadFiniteFloatField(state.object, kSpellObjectReleaseDamageOffset, &state.release_damage) ||
+        !TryReadFiniteFloatField(state.object, kSpellObjectReleaseBaseDamageOffset, &state.release_base_damage) ||
+        !TryReadFiniteFloatField(state.object, kSpellObjectMaxChargeOffset, &state.max_charge) ||
+        !memory.TryReadField(state.object, kSpellObjectPhaseOffset, &state.phase) ||
+        !memory.TryReadField(state.object, kSpellObjectReleaseTimerOffset, &state.release_timer) ||
+        !TryReadFiniteFloatField(state.object, kObjectPositionXOffset, &state.object_x) ||
+        !TryReadFiniteFloatField(state.object, kObjectPositionYOffset, &state.object_y) ||
+        !TryReadFiniteFloatField(state.object, kObjectHeadingOffset, &state.object_heading) ||
+        !TryReadFiniteFloatField(state.object, kObjectCollisionRadiusOffset, &state.object_radius)) {
+        return state;
+    }
     state.readable = true;
-    state.object_type =
-        memory.ReadFieldOr<std::uint32_t>(state.object, kGameObjectTypeIdOffset, 0);
-    state.charge =
-        memory.ReadFieldOr<float>(state.object, kSpellObjectChargeOffset, 0.0f);
-    state.growth_rate =
-        memory.ReadFieldOr<float>(state.object, kSpellObjectGrowthRateOffset, 0.0f);
-    state.release_charge =
-        memory.ReadFieldOr<float>(state.object, kSpellObjectReleaseChargeOffset, 0.0f);
-    state.release_damage =
-        memory.ReadFieldOr<float>(state.object, kSpellObjectReleaseDamageOffset, 0.0f);
-    state.release_base_damage =
-        memory.ReadFieldOr<float>(state.object, kSpellObjectReleaseBaseDamageOffset, 0.0f);
-    state.max_charge =
-        memory.ReadFieldOr<float>(state.object, kSpellObjectMaxChargeOffset, 0.0f);
-    state.phase =
-        memory.ReadFieldOr<std::uint32_t>(state.object, kSpellObjectPhaseOffset, 0);
-    state.release_timer =
-        memory.ReadFieldOr<std::uint32_t>(state.object, kSpellObjectReleaseTimerOffset, 0);
-    state.object_x = memory.ReadFieldOr<float>(state.object, kObjectPositionXOffset, 0.0f);
-    state.object_y = memory.ReadFieldOr<float>(state.object, kObjectPositionYOffset, 0.0f);
-    state.object_heading =
-        memory.ReadFieldOr<float>(state.object, kObjectHeadingOffset, 0.0f);
-    state.object_radius =
-        memory.ReadFieldOr<float>(state.object, kObjectCollisionRadiusOffset, 0.0f);
     state.boulder_max_size_reached =
         std::isfinite(state.charge) &&
         std::isfinite(state.max_charge) &&

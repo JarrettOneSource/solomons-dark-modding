@@ -32,8 +32,10 @@ bool TryReadResolvedGameFloat(uintptr_t absolute_address, float* value) {
         return false;
     }
 
-    const auto candidate = memory.ReadValueOr<float>(resolved_address, 0.0f);
-    if (!std::isfinite(candidate) || candidate <= 0.0f) {
+    float candidate = 0.0f;
+    if (!memory.TryReadValue(resolved_address, &candidate) ||
+        !std::isfinite(candidate) ||
+        candidate <= 0.0f) {
         return false;
     }
 
@@ -79,21 +81,19 @@ bool ReadNativePrimarySelectionPursuitRange(
         return false;
     }
 
-    const auto selection_state =
-        memory.ReadFieldOr<uintptr_t>(
-            actor_address,
-            kActorAnimationSelectionStateOffset,
-            0);
+    uintptr_t selection_state = 0;
+    if (!memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &selection_state)) {
+        return false;
+    }
     if (selection_state == 0 ||
         !memory.IsReadableRange(selection_state + kActorControlBrainPursuitRangeOffset, sizeof(float))) {
         return false;
     }
 
-    const auto pursuit_range =
-        memory.ReadValueOr<float>(
-            selection_state + kActorControlBrainPursuitRangeOffset,
-            0.0f);
-    if (!std::isfinite(pursuit_range) || pursuit_range <= 0.0f) {
+    float pursuit_range = 0.0f;
+    if (!memory.TryReadValue(selection_state + kActorControlBrainPursuitRangeOffset, &pursuit_range) ||
+        !std::isfinite(pursuit_range) ||
+        pursuit_range <= 0.0f) {
         return false;
     }
 

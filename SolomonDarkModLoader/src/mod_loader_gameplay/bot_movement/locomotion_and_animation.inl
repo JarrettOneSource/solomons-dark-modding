@@ -203,20 +203,17 @@ void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto movement_vector_x = memory.ReadFieldOr<float>(
-        actor_address,
-        kActorAnimationConfigBlockOffset,
-        0.0f);
-    const auto movement_vector_y = memory.ReadFieldOr<float>(
-        actor_address,
-        kActorAnimationDriveParameterOffset,
-        0.0f);
+    float movement_vector_x = 0.0f;
+    float movement_vector_y = 0.0f;
+    const bool movement_vector_readable =
+        TryReadFiniteFloatField(actor_address, kActorAnimationConfigBlockOffset, &movement_vector_x) &&
+        TryReadFiniteFloatField(actor_address, kActorAnimationDriveParameterOffset, &movement_vector_y);
 
     ClearLiveWizardActorAnimationDriveState(actor_address);
     ApplyStandaloneWizardAnimationDriveProfile(binding, actor_address, moving);
     ApplyStandaloneWizardPuppetDriveState(binding, actor_address, moving);
     ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
-    if (moving) {
+    if (moving && movement_vector_readable) {
         // Standalone profiles are captured from the local player and include
         // its live +0x158/+0x15C vector. Keep the bot's own vector after replay.
         (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, movement_vector_x);
@@ -258,26 +255,24 @@ void LogWizardBotMovementFrame(
     }
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
     (void)now_ms;
-    auto& memory = ProcessMemory::Instance();
     const auto delta_x = position_after_x - position_before_x;
     const auto delta_y = position_after_y - position_before_y;
     const auto d = std::sqrt(delta_x * delta_x + delta_y * delta_y);
-    const auto scale_0x74 = memory.ReadFieldOr<float>(actor_address, kActorMoveSpeedScaleOffset, 0.0f);
-    const auto move_step_scale_0x218 =
-        memory.ReadFieldOr<float>(actor_address, kActorMoveStepScaleOffset, 0.0f);
-    const auto dir_x_0x158 =
-        memory.ReadFieldOr<float>(actor_address, kActorAnimationConfigBlockOffset, 0.0f);
-    const auto dir_y_0x15C =
-        memory.ReadFieldOr<float>(actor_address, kActorAnimationDriveParameterOffset, 0.0f);
+    const auto read_float_text = [&](std::size_t offset) -> std::string {
+        float value = 0.0f;
+        return TryReadFiniteFloatField(actor_address, offset, &value)
+            ? std::to_string(value)
+            : std::string("unreadable");
+    };
     Log(
         "[bots] standalone_mv bot=" + std::to_string(binding->bot_id) +
         " before=(" + std::to_string(position_before_x) + "," + std::to_string(position_before_y) + ")" +
         " after=(" + std::to_string(position_after_x) + "," + std::to_string(position_after_y) + ")" +
         " d=" + std::to_string(d) +
         " dir=(" + std::to_string(direction_x) + "," + std::to_string(direction_y) + ")" +
-        " 0x74=" + std::to_string(scale_0x74) +
-        " 0x218=" + std::to_string(move_step_scale_0x218) +
-        " 0x158=" + std::to_string(dir_x_0x158) +
-        " 0x15C=" + std::to_string(dir_y_0x15C) +
+        " 0x74=" + read_float_text(kActorMoveSpeedScaleOffset) +
+        " 0x218=" + read_float_text(kActorMoveStepScaleOffset) +
+        " 0x158=" + read_float_text(kActorAnimationConfigBlockOffset) +
+        " 0x15C=" + read_float_text(kActorAnimationDriveParameterOffset) +
         " path=" + std::string(path_label != nullptr ? path_label : ""));
 }

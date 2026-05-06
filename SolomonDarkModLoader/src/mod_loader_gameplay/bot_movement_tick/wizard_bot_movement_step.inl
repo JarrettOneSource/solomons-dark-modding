@@ -16,10 +16,15 @@ bool TryResolveWizardBotNativeMovementEnvelope(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto actor_movement_speed_multiplier =
-        memory.ReadFieldOr<float>(actor_address, kActorMovementSpeedMultiplierOffset, 0.0f);
-    const auto actor_move_speed_scale =
-        memory.ReadFieldOr<float>(actor_address, kActorMoveSpeedScaleOffset, 0.0f);
+    float actor_movement_speed_multiplier = 0.0f;
+    float actor_move_speed_scale = 0.0f;
+    if (!TryReadFiniteFloatField(actor_address, kActorMovementSpeedMultiplierOffset, &actor_movement_speed_multiplier) ||
+        !TryReadFiniteFloatField(actor_address, kActorMoveSpeedScaleOffset, &actor_move_speed_scale)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor native movement scalar fields are unreadable.";
+        }
+        return false;
+    }
     if (!std::isfinite(actor_movement_speed_multiplier) ||
         !std::isfinite(actor_move_speed_scale) ||
         actor_movement_speed_multiplier < 0.0f ||
@@ -41,8 +46,15 @@ bool TryResolveWizardBotNativeMovementEnvelope(
             }
             return false;
         }
-        progression_move_speed =
-            memory.ReadFieldOr<float>(progression_address, kProgressionMoveSpeedOffset, 0.0f);
+        if (!TryReadFiniteFloatField(
+                progression_address,
+                kProgressionMoveSpeedOffset,
+                &progression_move_speed)) {
+            if (error_message != nullptr) {
+                *error_message = "Bot progression native move speed is unreadable.";
+            }
+            return false;
+        }
         if (!std::isfinite(progression_move_speed) || progression_move_speed < 0.0f) {
             if (error_message != nullptr) {
                 *error_message = "Bot progression has invalid native move speed.";
@@ -97,8 +109,13 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
 
     auto& memory = ProcessMemory::Instance();
     const auto actor_address = binding->actor_address;
-    const auto live_world_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, binding->materialized_world_address);
+    uintptr_t live_world_address = 0;
+    if (!memory.TryReadField(actor_address, kActorOwnerOffset, &live_world_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor world owner is unreadable.";
+        }
+        return false;
+    }
     if (live_world_address != 0 && binding->materialized_world_address != live_world_address) {
         binding->materialized_world_address = live_world_address;
     }
@@ -135,10 +152,22 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
     float direction_x = binding->direction_x / magnitude;
     float direction_y = binding->direction_y / magnitude;
 
-    const auto position_before_x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-    const auto position_before_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
-    const auto owner_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+    float position_before_x = 0.0f;
+    float position_before_y = 0.0f;
+    if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &position_before_x) ||
+        !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &position_before_y)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor position is unreadable before movement.";
+        }
+        return false;
+    }
+    uintptr_t owner_address = 0;
+    if (!memory.TryReadField(actor_address, kActorOwnerOffset, &owner_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor world owner is unreadable before movement.";
+        }
+        return false;
+    }
     const auto movement_controller_address =
         live_world_address != 0 ? (live_world_address + kActorOwnerMovementControllerOffset) : 0;
     const auto move_step_address =
@@ -184,10 +213,15 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
         PublishParticipantGameplaySnapshot(*binding);
         return false;
     }
-    float move_step_scale = memory.ReadFieldOr<float>(actor_address, kActorMoveStepScaleOffset, 0.0f);
-    if (!(move_step_scale > 0.0f)) {
-        move_step_scale = 1.0f;
-        (void)memory.TryWriteField(actor_address, kActorMoveStepScaleOffset, move_step_scale);
+    float move_step_scale = 0.0f;
+    if (!TryReadFiniteFloatField(actor_address, kActorMoveStepScaleOffset, &move_step_scale) ||
+        !(move_step_scale > 0.0f)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor native move-step scale is unreadable or invalid.";
+        }
+        binding->last_movement_displacement = 0.0f;
+        PublishParticipantGameplaySnapshot(*binding);
+        return false;
     }
     if (!std::isfinite(binding->native_movement_accumulator_x)) {
         binding->native_movement_accumulator_x = 0.0f;
@@ -230,8 +264,17 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
             0,
             &exception_code,
             &move_result)) {
-        const auto position_after_x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-        const auto position_after_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
+        float position_after_x = 0.0f;
+        float position_after_y = 0.0f;
+        if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &position_after_x) ||
+            !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &position_after_y)) {
+            if (error_message != nullptr) {
+                *error_message = "Bot actor position is unreadable after movement.";
+            }
+            binding->last_movement_displacement = 0.0f;
+            PublishParticipantGameplaySnapshot(*binding);
+            return false;
+        }
         const auto delta_x = position_after_x - position_before_x;
         const auto delta_y = position_after_y - position_before_y;
         const auto displacement_distance = std::sqrt((delta_x * delta_x) + (delta_y * delta_y));

@@ -446,7 +446,7 @@
     <ClInclude Include="src\debug_ui_overlay\state_actions_activation\action_control_resolution.inl">
       <Filter>Header Files\Debug UI Overlay\State Actions Activation</Filter>
     </ClInclude>
-    <ClInclude Include="src\debug_ui_overlay\state_actions_activation\main_menu_compatibility.inl">
+    <ClInclude Include="src\debug_ui_overlay\state_actions_activation\main_menu_save_reset.inl">
       <Filter>Header Files\Debug UI Overlay\State Actions Activation</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\state_actions_activation\resolved_action_activation.inl">

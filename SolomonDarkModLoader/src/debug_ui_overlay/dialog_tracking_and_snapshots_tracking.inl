@@ -361,16 +361,18 @@ void TrackDialogLine(void* dialog_object, uintptr_t caller_address) {
     const auto has_geometry = TryReadMsgBoxGeometry(dialog_object, g_debug_ui_overlay_state.config, &geometry);
     const auto dialog_address = reinterpret_cast<uintptr_t>(dialog_object);
     const auto line_list_address = dialog_address + g_debug_ui_overlay_state.config.msgbox_line_list_offset;
-    const auto line_count =
-        ProcessMemory::Instance().ReadFieldOr<int>(
+    int line_count = 0;
+    const bool have_line_count =
+        ProcessMemory::Instance().TryReadField(
             line_list_address,
             g_debug_ui_overlay_state.config.msgbox_line_list_count_offset,
-            0);
-    const auto line_entries =
-        ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
+            &line_count);
+    uintptr_t line_entries = 0;
+    const bool have_line_entries =
+        ProcessMemory::Instance().TryReadField(
             line_list_address,
             g_debug_ui_overlay_state.config.msgbox_line_list_entries_offset,
-            0);
+            &line_entries);
 
     std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
     auto& tracked_dialog = g_debug_ui_overlay_state.tracked_dialog;
@@ -415,8 +417,9 @@ void TrackDialogLine(void* dialog_object, uintptr_t caller_address) {
         Log(
             "Debug UI overlay intercepted its first dialog line builder call. line=" + line +
             " object=" + HexString(dialog_address) + " caller=" + HexString(caller_address) +
-            " line_list=" + HexString(line_list_address) + " line_entries=" + HexString(line_entries) +
-            " line_count=" + std::to_string(line_count));
+            " line_list=" + HexString(line_list_address) +
+            " line_entries=" + (have_line_entries ? HexString(line_entries) : std::string("unreadable")) +
+            " line_count=" + (have_line_count ? std::to_string(line_count) : std::string("unreadable")));
     }
 }
 
@@ -514,4 +517,3 @@ void ObserveDialogFinalize(void* object_ptr, uintptr_t caller_address) {
             std::to_string(geometry.bottom - geometry.top) + " caller=" + HexString(caller_address));
     }
 }
-

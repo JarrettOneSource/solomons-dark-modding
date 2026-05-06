@@ -5,52 +5,29 @@ void AppendSourceProfileDebugSummary(
         return;
     }
 
-    auto& memory = ProcessMemory::Instance();
     *out << " source_profile=" << HexString(source_profile_address)
          << " src_selectors="
-         << std::to_string(memory.ReadValueOr<std::uint8_t>(
-                source_profile_address + kSourceProfileVariantPrimaryOffset,
-                0xFF))
+         << ReadU8ValueText(source_profile_address + kSourceProfileVariantPrimaryOffset)
          << "/"
-         << std::to_string(memory.ReadValueOr<std::uint8_t>(
-                source_profile_address + kSourceProfileVariantSecondaryOffset,
-                0xFF))
+         << ReadU8ValueText(source_profile_address + kSourceProfileVariantSecondaryOffset)
          << "/"
-         << std::to_string(memory.ReadValueOr<std::uint8_t>(
-                source_profile_address + kSourceProfileWeaponTypeOffset,
-                0xFF))
+         << ReadU8ValueText(source_profile_address + kSourceProfileWeaponTypeOffset)
          << "/"
-         << std::to_string(memory.ReadValueOr<std::uint8_t>(
-                source_profile_address + kSourceProfileVariantTertiaryOffset,
-                0xFF))
+         << ReadU8ValueText(source_profile_address + kSourceProfileVariantTertiaryOffset)
          << "/"
-         << std::to_string(memory.ReadValueOr<std::uint8_t>(
-                source_profile_address + kSourceProfileRenderSelectionOffset,
-                0xFF))
+         << ReadU8ValueText(source_profile_address + kSourceProfileRenderSelectionOffset)
          << " cloth="
-         << std::to_string(memory.ReadValueOr<float>(
-                source_profile_address + kSourceProfileClothColorOffset + 0x00,
-                0.0f))
+         << ReadFloatValueText(source_profile_address + kSourceProfileClothColorOffset + 0x00)
          << ","
-         << std::to_string(memory.ReadValueOr<float>(
-                source_profile_address + kSourceProfileClothColorOffset + 0x04,
-                0.0f))
+         << ReadFloatValueText(source_profile_address + kSourceProfileClothColorOffset + 0x04)
          << ","
-         << std::to_string(memory.ReadValueOr<float>(
-                source_profile_address + kSourceProfileClothColorOffset + 0x08,
-                0.0f))
+         << ReadFloatValueText(source_profile_address + kSourceProfileClothColorOffset + 0x08)
          << " trim="
-         << std::to_string(memory.ReadValueOr<float>(
-                source_profile_address + kSourceProfileTrimColorOffset + 0x00,
-                0.0f))
+         << ReadFloatValueText(source_profile_address + kSourceProfileTrimColorOffset + 0x00)
          << ","
-         << std::to_string(memory.ReadValueOr<float>(
-                source_profile_address + kSourceProfileTrimColorOffset + 0x04,
-                0.0f))
+         << ReadFloatValueText(source_profile_address + kSourceProfileTrimColorOffset + 0x04)
          << ","
-         << std::to_string(memory.ReadValueOr<float>(
-                source_profile_address + kSourceProfileTrimColorOffset + 0x08,
-                0.0f));
+         << ReadFloatValueText(source_profile_address + kSourceProfileTrimColorOffset + 0x08);
 }
 
 std::string FormatDebugBytes(const std::uint8_t* bytes, size_t size) {
@@ -80,15 +57,12 @@ void AppendAttachmentObjectDebugSummary(
     auto& memory = ProcessMemory::Instance();
     std::uint8_t bytes[64] = {};
     const bool have_bytes = memory.TryRead(object_address, bytes, sizeof(bytes));
-    const auto field_04 = memory.ReadFieldOr<std::uint32_t>(object_address, 0x04, 0);
-    const auto field_0c = memory.ReadFieldOr<std::uint32_t>(object_address, 0x0C, 0);
-    const auto field_14 = memory.ReadFieldOr<std::uint32_t>(object_address, 0x14, 0);
 
     *out << " " << label
          << "{addr=" << HexString(object_address)
-         << " +04=0x" << HexString(static_cast<uintptr_t>(field_04))
-         << " +0C=0x" << HexString(static_cast<uintptr_t>(field_0c))
-         << " +14=0x" << HexString(static_cast<uintptr_t>(field_14));
+         << " +04=" << ReadU32FieldHexText(object_address, 0x04)
+         << " +0C=" << ReadU32FieldHexText(object_address, 0x0C)
+         << " +14=" << ReadU32FieldHexText(object_address, 0x14);
     if (have_bytes) {
         *out << " head=" << FormatDebugBytes(bytes, sizeof(bytes));
     }
@@ -103,58 +77,42 @@ std::string BuildActorVisualDebugSummary(uintptr_t actor_address) {
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto equip_runtime_state_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipRuntimeStateOffset, 0);
-    const auto source_profile_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorHubVisualSourceProfileOffset, 0);
+    uintptr_t equip_runtime_state_address = 0;
+    const bool have_equip_runtime_state = memory.TryReadField(
+        actor_address,
+        kActorEquipRuntimeStateOffset,
+        &equip_runtime_state_address);
+    uintptr_t source_profile_address = 0;
+    const bool have_source_profile = memory.TryReadField(
+        actor_address,
+        kActorHubVisualSourceProfileOffset,
+        &source_profile_address);
 
-    out << " ctx=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x04, 0))
-        << " world=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0))
-        << " slot=" << std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
-               actor_address,
-               kActorSlotOffset,
-               -1)))
+    out << " ctx=" << ReadPointerFieldText(actor_address, 0x04)
+        << " world=" << ReadPointerFieldText(actor_address, kActorOwnerOffset)
+        << " slot=" << ReadI8FieldText(actor_address, kActorSlotOffset)
         << " actor_selectors="
-        << std::to_string(memory.ReadFieldOr<std::uint8_t>(
-               actor_address,
-               kActorRenderVariantPrimaryOffset,
-               0xFF))
+        << ReadU8FieldText(actor_address, kActorRenderVariantPrimaryOffset)
         << "/"
-        << std::to_string(memory.ReadFieldOr<std::uint8_t>(
-               actor_address,
-               kActorRenderVariantSecondaryOffset,
-               0xFF))
+        << ReadU8FieldText(actor_address, kActorRenderVariantSecondaryOffset)
         << "/"
-        << std::to_string(memory.ReadFieldOr<std::uint8_t>(
-               actor_address,
-               kActorRenderWeaponTypeOffset,
-               0xFF))
+        << ReadU8FieldText(actor_address, kActorRenderWeaponTypeOffset)
         << "/"
-        << std::to_string(memory.ReadFieldOr<std::uint8_t>(
-               actor_address,
-               kActorRenderVariantTertiaryOffset,
-               0xFF))
+        << ReadU8FieldText(actor_address, kActorRenderVariantTertiaryOffset)
         << "/"
-        << std::to_string(memory.ReadFieldOr<std::uint8_t>(
-               actor_address,
-               kActorRenderSelectionByteOffset,
-               0xFF))
+        << ReadU8FieldText(actor_address, kActorRenderSelectionByteOffset)
         << " anim=" << std::to_string(ResolveActorAnimationStateId(actor_address))
-        << " attach=" << HexString(memory.ReadFieldOr<uintptr_t>(
-               actor_address,
-               kActorHubVisualAttachmentPtrOffset,
-               0))
-        << " equip=" << HexString(equip_runtime_state_address)
+        << " attach=" << ReadPointerFieldText(actor_address, kActorHubVisualAttachmentPtrOffset)
+        << " equip=" << (have_equip_runtime_state ? HexString(equip_runtime_state_address) : UnreadableMemoryFieldText())
         << " desc=0x" << HexString(HashMemoryBlockFNV1a32(
                actor_address + kActorHubVisualDescriptorBlockOffset,
                kActorHubVisualDescriptorBlockSize))
-        << " source_kind=" << std::to_string(memory.ReadFieldOr<std::int32_t>(
-               actor_address,
-               kActorHubVisualSourceKindOffset,
-               0));
-    AppendSourceProfileDebugSummary(&out, source_profile_address);
+        << " source_kind=" << ReadI32FieldText(actor_address, kActorHubVisualSourceKindOffset);
+    if (have_source_profile) {
+        AppendSourceProfileDebugSummary(&out, source_profile_address);
+    }
 
-    if (equip_runtime_state_address != 0) {
+    if (have_equip_runtime_state && equip_runtime_state_address != 0) {
         AppendEquipVisualLaneSummary(
             &out,
             "primary",
@@ -190,12 +148,12 @@ void LogBotVisualDebugStage(
     }
     if (bot_actor_address != 0) {
         out << " bot={" << BuildActorVisualDebugSummary(bot_actor_address) << "}";
-        const auto bot_equip_runtime =
-            ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
+        uintptr_t bot_equip_runtime = 0;
+        if (ProcessMemory::Instance().TryReadField(
                 bot_actor_address,
                 kActorEquipRuntimeStateOffset,
-                0);
-        if (bot_equip_runtime != 0) {
+                &bot_equip_runtime) &&
+            bot_equip_runtime != 0) {
             AppendAttachmentObjectDebugSummary(
                 &out,
                 "bot_attachment_object",
@@ -206,13 +164,13 @@ void LogBotVisualDebugStage(
     }
     if (visual_source_actor_address != 0) {
         out << " source={" << BuildActorVisualDebugSummary(visual_source_actor_address) << "}";
-        AppendAttachmentObjectDebugSummary(
-            &out,
-            "source_attachment_object",
-            ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
+        uintptr_t attachment_ptr = 0;
+        if (ProcessMemory::Instance().TryReadField(
                 visual_source_actor_address,
                 kActorHubVisualAttachmentPtrOffset,
-                0));
+                &attachment_ptr)) {
+            AppendAttachmentObjectDebugSummary(&out, "source_attachment_object", attachment_ptr);
+        }
     }
     Log(out.str());
 }
@@ -229,13 +187,13 @@ void LogWizardCloneSourceCreationStage(
         << " profile=" << HexString(source_profile_address);
     if (source_actor_address != 0) {
         out << " actor_summary={" << BuildActorVisualDebugSummary(source_actor_address) << "}";
-        AppendAttachmentObjectDebugSummary(
-            &out,
-            "source_attachment_object",
-            ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
+        uintptr_t attachment_ptr = 0;
+        if (ProcessMemory::Instance().TryReadField(
                 source_actor_address,
                 kActorHubVisualAttachmentPtrOffset,
-                0));
+                &attachment_ptr)) {
+            AppendAttachmentObjectDebugSummary(&out, "source_attachment_object", attachment_ptr);
+        }
     }
     if (source_profile_address != 0) {
         out << " profile{";
@@ -244,4 +202,3 @@ void LogWizardCloneSourceCreationStage(
     }
     Log(out.str());
 }
-

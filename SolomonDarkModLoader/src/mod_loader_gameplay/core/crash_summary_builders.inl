@@ -1,34 +1,151 @@
+std::string UnreadableMemoryFieldText() {
+    return "unreadable";
+}
+
+template <typename T, typename Formatter>
+std::string ReadFieldDiagnosticText(uintptr_t base_address, size_t offset, Formatter&& formatter) {
+    T value{};
+    if (!ProcessMemory::Instance().TryReadField(base_address, offset, &value)) {
+        return UnreadableMemoryFieldText();
+    }
+    return formatter(value);
+}
+
+template <typename T, typename Formatter>
+std::string ReadValueDiagnosticText(uintptr_t address, Formatter&& formatter) {
+    T value{};
+    if (!ProcessMemory::Instance().TryReadValue(address, &value)) {
+        return UnreadableMemoryFieldText();
+    }
+    return formatter(value);
+}
+
+std::string ReadPointerFieldText(uintptr_t base_address, size_t offset) {
+    return ReadFieldDiagnosticText<uintptr_t>(
+        base_address,
+        offset,
+        [](uintptr_t value) { return HexString(value); });
+}
+
+std::string ReadPointerValueText(uintptr_t address) {
+    return ReadValueDiagnosticText<uintptr_t>(
+        address,
+        [](uintptr_t value) { return HexString(value); });
+}
+
+std::string ReadU32FieldHexText(uintptr_t base_address, size_t offset) {
+    return ReadFieldDiagnosticText<std::uint32_t>(
+        base_address,
+        offset,
+        [](std::uint32_t value) { return HexString(static_cast<uintptr_t>(value)); });
+}
+
+std::string ReadU8FieldHexText(uintptr_t base_address, size_t offset) {
+    return ReadFieldDiagnosticText<std::uint8_t>(
+        base_address,
+        offset,
+        [](std::uint8_t value) { return HexString(static_cast<uintptr_t>(value)); });
+}
+
+std::string ReadU16FieldHexText(uintptr_t base_address, size_t offset) {
+    return ReadFieldDiagnosticText<std::uint16_t>(
+        base_address,
+        offset,
+        [](std::uint16_t value) { return HexString(static_cast<uintptr_t>(value)); });
+}
+
+std::string ReadU32FieldText(uintptr_t base_address, size_t offset) {
+    return ReadFieldDiagnosticText<std::uint32_t>(
+        base_address,
+        offset,
+        [](std::uint32_t value) { return std::to_string(value); });
+}
+
+std::string ReadU8FieldText(uintptr_t base_address, size_t offset) {
+    return ReadFieldDiagnosticText<std::uint8_t>(
+        base_address,
+        offset,
+        [](std::uint8_t value) { return std::to_string(static_cast<unsigned>(value)); });
+}
+
+std::string ReadI8FieldText(uintptr_t base_address, size_t offset) {
+    return ReadFieldDiagnosticText<std::int8_t>(
+        base_address,
+        offset,
+        [](std::int8_t value) { return std::to_string(static_cast<int>(value)); });
+}
+
+std::string ReadI16FieldText(uintptr_t base_address, size_t offset) {
+    return ReadFieldDiagnosticText<std::int16_t>(
+        base_address,
+        offset,
+        [](std::int16_t value) { return std::to_string(static_cast<int>(value)); });
+}
+
+std::string ReadI32FieldText(uintptr_t base_address, size_t offset) {
+    return ReadFieldDiagnosticText<std::int32_t>(
+        base_address,
+        offset,
+        [](std::int32_t value) { return std::to_string(value); });
+}
+
+std::string ReadFloatFieldText(uintptr_t base_address, size_t offset) {
+    return ReadFieldDiagnosticText<float>(
+        base_address,
+        offset,
+        [](float value) { return std::to_string(value); });
+}
+
+std::string ReadU8ValueText(uintptr_t address) {
+    return ReadValueDiagnosticText<std::uint8_t>(
+        address,
+        [](std::uint8_t value) { return std::to_string(static_cast<unsigned>(value)); });
+}
+
+std::string ReadU32ValueHexText(uintptr_t address) {
+    return ReadValueDiagnosticText<std::uint32_t>(
+        address,
+        [](std::uint32_t value) { return HexString(static_cast<uintptr_t>(value)); });
+}
+
+std::string ReadFloatValueText(uintptr_t address) {
+    return ReadValueDiagnosticText<float>(
+        address,
+        [](float value) { return std::to_string(value); });
+}
+
 void AppendMovementControllerSummary(std::ostringstream* out, uintptr_t world_address) {
     if (out == nullptr || world_address == 0) {
         return;
     }
 
-    auto& memory = ProcessMemory::Instance();
     const auto movement_controller_address = world_address + kActorOwnerMovementControllerOffset;
-    const auto primary_count =
-        memory.ReadFieldOr<std::int32_t>(movement_controller_address, kMovementControllerPrimaryCountOffset, 0);
-    const auto primary_list =
-        memory.ReadFieldOr<uintptr_t>(movement_controller_address, kMovementControllerPrimaryListOffset, 0);
-    const auto secondary_count =
-        memory.ReadFieldOr<std::int32_t>(movement_controller_address, kMovementControllerSecondaryCountOffset, 0);
-    const auto secondary_list =
-        memory.ReadFieldOr<uintptr_t>(movement_controller_address, kMovementControllerSecondaryListOffset, 0);
+    uintptr_t primary_list = 0;
+    const bool have_primary_list = ProcessMemory::Instance().TryReadField(
+        movement_controller_address,
+        kMovementControllerPrimaryListOffset,
+        &primary_list);
+    uintptr_t secondary_list = 0;
+    const bool have_secondary_list = ProcessMemory::Instance().TryReadField(
+        movement_controller_address,
+        kMovementControllerSecondaryListOffset,
+        &secondary_list);
 
     *out << " movement{ctx=" << HexString(movement_controller_address)
-         << " primary_count=" << primary_count
-         << " primary_list=" << HexString(primary_list);
+         << " primary_count=" << ReadI32FieldText(movement_controller_address, kMovementControllerPrimaryCountOffset)
+         << " primary_list=" << (have_primary_list ? HexString(primary_list) : UnreadableMemoryFieldText());
 
-    if (primary_list != 0) {
-        *out << " primary0=" << HexString(memory.ReadFieldOr<uintptr_t>(primary_list, 0x0, 0))
-             << " primary1=" << HexString(memory.ReadFieldOr<uintptr_t>(primary_list, 0x4, 0));
+    if (have_primary_list && primary_list != 0) {
+        *out << " primary0=" << ReadPointerFieldText(primary_list, 0x0)
+             << " primary1=" << ReadPointerFieldText(primary_list, 0x4);
     }
 
-    *out << " secondary_count=" << secondary_count
-         << " secondary_list=" << HexString(secondary_list);
+    *out << " secondary_count=" << ReadI32FieldText(movement_controller_address, kMovementControllerSecondaryCountOffset)
+         << " secondary_list=" << (have_secondary_list ? HexString(secondary_list) : UnreadableMemoryFieldText());
 
-    if (secondary_list != 0) {
-        *out << " secondary0=" << HexString(memory.ReadFieldOr<uintptr_t>(secondary_list, 0x0, 0))
-             << " secondary1=" << HexString(memory.ReadFieldOr<uintptr_t>(secondary_list, 0x4, 0));
+    if (have_secondary_list && secondary_list != 0) {
+        *out << " secondary0=" << ReadPointerFieldText(secondary_list, 0x0)
+             << " secondary1=" << ReadPointerFieldText(secondary_list, 0x4);
     }
 
     *out << "}";
@@ -39,32 +156,13 @@ void AppendActorCoreStateSummary(std::ostringstream* out, uintptr_t actor_addres
         return;
     }
 
-    auto& memory = ProcessMemory::Instance();
-    *out << " actor_core{cell=" << HexString(memory.ReadFieldOr<uintptr_t>(
-                actor_address,
-                kActorGridCellPtrOffset,
-                0))
-         << " owner_field=" << HexString(memory.ReadFieldOr<uintptr_t>(
-                actor_address,
-                kActorOwnerOffset,
-                0))
-         << " slot=" << std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
-                actor_address,
-                kActorSlotOffset,
-                -1)))
-         << " world_slot=" << std::to_string(static_cast<int>(memory.ReadFieldOr<std::int16_t>(
-                actor_address,
-                kActorWorldSlotOffset,
-                static_cast<std::int16_t>(-1))))
-         << " radius=" << std::to_string(memory.ReadFieldOr<float>(actor_address, kActorCollisionRadiusOffset, 0.0f))
-         << " mask=" << HexString(static_cast<uintptr_t>(memory.ReadFieldOr<std::uint32_t>(
-                actor_address,
-                kActorPrimaryFlagMaskOffset,
-                0)))
-         << " mask2=" << HexString(static_cast<uintptr_t>(memory.ReadFieldOr<std::uint32_t>(
-                actor_address,
-                kActorSecondaryFlagMaskOffset,
-                0)))
+    *out << " actor_core{cell=" << ReadPointerFieldText(actor_address, kActorGridCellPtrOffset)
+         << " owner_field=" << ReadPointerFieldText(actor_address, kActorOwnerOffset)
+         << " slot=" << ReadI8FieldText(actor_address, kActorSlotOffset)
+         << " world_slot=" << ReadI16FieldText(actor_address, kActorWorldSlotOffset)
+         << " radius=" << ReadFloatFieldText(actor_address, kActorCollisionRadiusOffset)
+         << " mask=" << ReadU32FieldHexText(actor_address, kActorPrimaryFlagMaskOffset)
+         << " mask2=" << ReadU32FieldHexText(actor_address, kActorSecondaryFlagMaskOffset)
          << "}";
 }
 
@@ -73,71 +171,22 @@ void AppendGameNpcStateSummary(std::ostringstream* out, uintptr_t actor_address)
         return;
     }
 
-    auto& memory = ProcessMemory::Instance();
-    *out << " gamenpc{source_kind=" << std::to_string(memory.ReadFieldOr<std::int32_t>(
-                actor_address,
-                kActorHubVisualSourceKindOffset,
-                0))
-         << " source_profile=" << HexString(memory.ReadFieldOr<uintptr_t>(
-                actor_address,
-                kActorHubVisualSourceProfileOffset,
-                0))
-         << " source_aux=" << HexString(memory.ReadFieldOr<uintptr_t>(
-                actor_address,
-                kActorHubVisualSourceAuxPointerOffset,
-                0))
-         << " branch=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(
-                actor_address,
-                kGameNpcBranchStateOffset,
-                0))
-         << " active=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(
-                actor_address,
-                kGameNpcActiveStateOffset,
-                0))
-         << " desired_yaw=" << std::to_string(memory.ReadFieldOr<float>(
-                actor_address,
-                kGameNpcDesiredYawOffset,
-                0.0f))
-         << " source_profile_74_mirror=" << HexString(memory.ReadFieldOr<std::uint32_t>(
-                actor_address,
-                kGameNpcSourceProfile74MirrorOffset,
-                0))
-         << " tick_counter=" << std::to_string(memory.ReadFieldOr<std::int32_t>(
-                actor_address,
-                kGameNpcTickCounterOffset,
-                0))
-         << " goal_x=" << std::to_string(memory.ReadFieldOr<float>(
-                actor_address,
-                kGameNpcGoalXOffset,
-                0.0f))
-         << " goal_y=" << std::to_string(memory.ReadFieldOr<float>(
-                actor_address,
-                kGameNpcGoalYOffset,
-                0.0f))
-         << " move_flag=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(
-                actor_address,
-                kGameNpcMoveFlagOffset,
-                0))
-         << " move_speed=" << std::to_string(memory.ReadFieldOr<float>(
-                actor_address,
-                kGameNpcSpeedScalarOffset,
-                0.0f))
-         << " source_profile_56_mirror=" << HexString(memory.ReadFieldOr<std::uint32_t>(
-                actor_address,
-                kGameNpcSourceProfile56MirrorOffset,
-                0))
-         << " tracked_slot=" << std::to_string(memory.ReadFieldOr<std::int8_t>(
-                actor_address,
-                kGameNpcTrackedSlotOffset,
-                -1))
-         << " callback=" << std::to_string(memory.ReadFieldOr<std::uint8_t>(
-                actor_address,
-                kGameNpcTrackedSlotCallbackOffset,
-                0))
-         << " render_drive_effect_timer=" << std::to_string(memory.ReadFieldOr<std::int32_t>(
-                actor_address,
-                kGameNpcLateTimerOffset,
-                0))
+    *out << " gamenpc{source_kind=" << ReadI32FieldText(actor_address, kActorHubVisualSourceKindOffset)
+         << " source_profile=" << ReadPointerFieldText(actor_address, kActorHubVisualSourceProfileOffset)
+         << " source_aux=" << ReadPointerFieldText(actor_address, kActorHubVisualSourceAuxPointerOffset)
+         << " branch=" << ReadU8FieldText(actor_address, kGameNpcBranchStateOffset)
+         << " active=" << ReadU8FieldText(actor_address, kGameNpcActiveStateOffset)
+         << " desired_yaw=" << ReadFloatFieldText(actor_address, kGameNpcDesiredYawOffset)
+         << " source_profile_74_mirror=" << ReadU32FieldHexText(actor_address, kGameNpcSourceProfile74MirrorOffset)
+         << " tick_counter=" << ReadI32FieldText(actor_address, kGameNpcTickCounterOffset)
+         << " goal_x=" << ReadFloatFieldText(actor_address, kGameNpcGoalXOffset)
+         << " goal_y=" << ReadFloatFieldText(actor_address, kGameNpcGoalYOffset)
+         << " move_flag=" << ReadU8FieldText(actor_address, kGameNpcMoveFlagOffset)
+         << " move_speed=" << ReadFloatFieldText(actor_address, kGameNpcSpeedScalarOffset)
+         << " source_profile_56_mirror=" << ReadU32FieldHexText(actor_address, kGameNpcSourceProfile56MirrorOffset)
+         << " tracked_slot=" << ReadI8FieldText(actor_address, kGameNpcTrackedSlotOffset)
+         << " callback=" << ReadU8FieldText(actor_address, kGameNpcTrackedSlotCallbackOffset)
+         << " render_drive_effect_timer=" << ReadI32FieldText(actor_address, kGameNpcLateTimerOffset)
          << "}";
 }
 

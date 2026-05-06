@@ -215,7 +215,8 @@ local id = sd.bots.create({{
   }},
   scene = {{ kind = {json.dumps(scene_kind)} }},
   ready = true,
-  position = {{ x = {x}, y = {y}, heading = 90.0 }},
+  heading = 90.0,
+  position = {{ x = {x}, y = {y} }},
 }})
 emit('ok', id ~= nil)
 emit('bot_id', id)

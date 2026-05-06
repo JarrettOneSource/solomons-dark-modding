@@ -8,11 +8,12 @@ function combat.install(ctx)
     if type(actor) ~= "table" then
       return false
     end
-    local address = tonumber(actor.actor_address) or 0
-    if address == 0 then
-      return false
+    local address = ctx.strict_number(actor.actor_address)
+    if address == nil or address == 0 then
+        return false
     end
-    if type(bot) == "table" and address == (tonumber(bot.actor_address) or 0) then
+    local bot_address = type(bot) == "table" and ctx.strict_number(bot.actor_address) or nil
+    if bot_address ~= nil and address == bot_address then
       return false
     end
     if actor.tracked_enemy ~= true then
@@ -21,9 +22,9 @@ function combat.install(ctx)
     if actor.dead == true then
       return false
     end
-    local max_hp = tonumber(actor.max_hp) or 0.0
-    local hp = tonumber(actor.hp) or 0.0
-    if max_hp <= 0.0 or hp <= 0.0 then
+    local max_hp = ctx.strict_number(actor.max_hp)
+    local hp = ctx.strict_number(actor.hp)
+    if max_hp == nil or hp == nil or max_hp <= 0.0 or hp <= 0.0 then
       return false
     end
     return true
@@ -37,14 +38,17 @@ function combat.install(ctx)
     if type(actors) ~= "table" then
       return nil, nil
     end
-    local bot_x = tonumber(bot.x) or 0.0
-    local bot_y = tonumber(bot.y) or 0.0
+    local bot_x = ctx.strict_number(bot.x)
+    local bot_y = ctx.strict_number(bot.y)
+    if bot_x == nil or bot_y == nil then
+      return nil, nil
+    end
 
     local best, best_gap = nil, math.huge
     for _, actor in ipairs(actors) do
       if is_enemy_actor(actor, bot) then
-        local gap = ctx.distance(bot_x, bot_y, tonumber(actor.x) or 0.0, tonumber(actor.y) or 0.0)
-        if gap < best_gap then
+        local gap = ctx.distance(bot_x, bot_y, actor.x, actor.y)
+        if gap ~= nil and gap < best_gap then
           best = actor
           best_gap = gap
         end
@@ -73,10 +77,11 @@ function combat.install(ctx)
     local object_y = tonumber(bot.active_spell_object_y)
     local object_radius = tonumber(bot.active_spell_object_radius)
     local charge = tonumber(bot.active_spell_object_charge)
-    if object_x == nil or object_y == nil or object_radius == nil or charge == nil then
+    local object_address = ctx.strict_number(bot.active_spell_object_address)
+    if object_x == nil or object_y == nil or object_radius == nil or charge == nil or object_address == nil then
       return nil
     end
-    if object_x ~= object_x or object_y ~= object_y or object_radius ~= object_radius or charge ~= charge then
+    if object_x ~= object_x or object_y ~= object_y or object_radius ~= object_radius or charge ~= charge or object_address ~= object_address then
       return nil
     end
     if object_radius <= 0.0 or charge <= 0.0 then
@@ -89,7 +94,7 @@ function combat.install(ctx)
       radius = object_radius * charge * 2.0,
       object_radius = object_radius,
       charge = charge,
-      object_address = tonumber(bot.active_spell_object_address) or 0,
+      object_address = object_address,
     }
   end
 
@@ -97,24 +102,27 @@ function combat.install(ctx)
     if type(enemy) ~= "table" or type(impact) ~= "table" then
       return false, math.huge
     end
-    local impact_radius = tonumber(impact.radius) or 0.0
-    if impact_radius <= 0.0 then
+    local impact_radius = ctx.strict_number(impact.radius)
+    if impact_radius == nil or impact_radius <= 0.0 then
       return false, math.huge
     end
 
-    local enemy_x = tonumber(enemy.x)
-    local enemy_y = tonumber(enemy.y)
-    if enemy_x == nil or enemy_y == nil or enemy_x ~= enemy_x or enemy_y ~= enemy_y then
+    local enemy_x = ctx.strict_number(enemy.x)
+    local enemy_y = ctx.strict_number(enemy.y)
+    if enemy_x == nil or enemy_y == nil then
       return false, math.huge
     end
 
-    local enemy_radius = tonumber(enemy.radius) or 0.0
-    if enemy_radius ~= enemy_radius or enemy_radius < 0.0 then
-      enemy_radius = 0.0
+    local enemy_radius = ctx.strict_number(enemy.radius)
+    if enemy_radius == nil or enemy_radius < 0.0 then
+      return false, math.huge
     end
 
     local native_overlap_radius = math.sqrt((impact_radius * impact_radius) + (enemy_radius * enemy_radius))
     local gap = ctx.distance(impact.x, impact.y, enemy_x, enemy_y)
+    if gap == nil then
+      return false, math.huge
+    end
     return gap < native_overlap_radius, gap
   end
 
@@ -138,8 +146,11 @@ function combat.install(ctx)
   end
 
   local function should_log_attack_diag(now_ms)
-    now_ms = tonumber(now_ms) or 0
-    local last_ms = tonumber(state.last_attack_diag_ms) or 0
+    now_ms = ctx.strict_number(now_ms)
+    local last_ms = ctx.strict_number(state.last_attack_diag_ms)
+    if now_ms == nil or last_ms == nil then
+      return false
+    end
     if now_ms - last_ms < config.ATTACK_DIAG_INTERVAL_MS then
       return false
     end
@@ -164,7 +175,7 @@ function combat.install(ctx)
       return false, "scene_inactive"
     end
     local world = ctx.get_world_state()
-    local wave = type(world) == "table" and tonumber(world.wave) or 0
+    local wave = type(world) == "table" and ctx.strict_number(world.wave) or nil
     if wave ~= nil and wave > 0 then
       return true, nil
     end
@@ -193,8 +204,16 @@ function combat.install(ctx)
   end
 
   local function heading_towards(from_x, from_y, to_x, to_y)
-    local dx = (tonumber(to_x) or 0.0) - (tonumber(from_x) or 0.0)
-    local dy = (tonumber(to_y) or 0.0) - (tonumber(from_y) or 0.0)
+    from_x = ctx.strict_number(from_x)
+    from_y = ctx.strict_number(from_y)
+    to_x = ctx.strict_number(to_x)
+    to_y = ctx.strict_number(to_y)
+    if from_x == nil or from_y == nil or to_x == nil or to_y == nil then
+      return nil
+    end
+
+    local dx = to_x - from_x
+    local dy = to_y - from_y
     if dx * dx + dy * dy <= 0.0001 then
       return nil
     end
@@ -234,14 +253,17 @@ function combat.install(ctx)
     local heading = heading_towards(
       bot.x,
       bot.y,
-      tonumber(enemy.x) or 0.0,
-      tonumber(enemy.y) or 0.0)
+      enemy.x,
+      enemy.y)
     if heading == nil then
       return nil
     end
 
-    local target_actor_address = tonumber(enemy.actor_address) or 0
-    if use_actor_target and target_actor_address ~= 0 and type(sd.bots.face_target) == "function" then
+    local target_actor_address = ctx.strict_number(enemy.actor_address)
+    if target_actor_address == nil or target_actor_address == 0 then
+      return nil
+    end
+    if use_actor_target and type(sd.bots.face_target) == "function" then
       pcall(sd.bots.face_target, state.bot_id, target_actor_address, heading)
     else
       pcall(sd.bots.face, state.bot_id, heading)
@@ -271,9 +293,9 @@ function combat.install(ctx)
       return nil, nil
     end
 
-    local min_range = tonumber(window.min_range) or 0.0
-    local max_range = tonumber(window.max_range)
-    if max_range == nil or max_range ~= max_range or max_range <= 0.0 then
+    local min_range = ctx.strict_number(window.min_range)
+    local max_range = ctx.strict_number(window.max_range)
+    if min_range == nil or min_range < 0.0 or max_range == nil or max_range <= 0.0 then
       return nil, nil
     end
     return min_range, max_range, window
@@ -286,7 +308,8 @@ function combat.install(ctx)
     if type(sd.bots) ~= "table" or type(sd.bots.cast) ~= "function" then
       return false
     end
-    if type(bot) ~= "table" or not bot.available or (tonumber(bot.actor_address) or 0) == 0 or not bot.transform_valid then
+    local bot_actor_address = type(bot) == "table" and ctx.strict_number(bot.actor_address) or nil
+    if type(bot) ~= "table" or not bot.available or bot_actor_address == nil or bot_actor_address == 0 or not bot.transform_valid then
       return false
     end
     local attack_scene_ok, attack_scene_reason = can_attack_in_scene(scene)
@@ -323,11 +346,11 @@ function combat.install(ctx)
           ctx.log_diag(string.format(
             "attack_skip id=%s reason=earth_boulder_no_impact_target object=0x%X center=(%.2f, %.2f) radius=%.2f charge=%.3f",
             tostring(state.bot_id),
-            tonumber(earth_boulder_impact.object_address) or 0,
-            tonumber(earth_boulder_impact.x) or 0.0,
-            tonumber(earth_boulder_impact.y) or 0.0,
-            tonumber(earth_boulder_impact.radius) or 0.0,
-            tonumber(earth_boulder_impact.charge) or 0.0))
+            earth_boulder_impact.object_address,
+            earth_boulder_impact.x,
+            earth_boulder_impact.y,
+            earth_boulder_impact.radius,
+            earth_boulder_impact.charge))
         else
           ctx.log_diag(string.format(
             "attack_skip id=%s reason=%s",
@@ -337,16 +360,19 @@ function combat.install(ctx)
       end
       return false
     end
-    local target_actor_address = tonumber(enemy.actor_address) or 0
-    local target_x = tonumber(enemy.x) or 0.0
-    local target_y = tonumber(enemy.y) or 0.0
+    local target_actor_address = ctx.strict_number(enemy.actor_address)
+    local target_x = ctx.strict_number(enemy.x)
+    local target_y = ctx.strict_number(enemy.y)
+    if target_actor_address == nil or target_actor_address == 0 or target_x == nil or target_y == nil then
+      return false
+    end
     local attack_heading = face_enemy(bot, enemy, true)
     if gap < min_range then
       if should_log_attack_diag(now_ms) then
         ctx.log_diag(string.format(
           "attack_skip id=%s reason=too_close_for_native_release enemy=0x%X gap=%.2f min=%.1f range=%.1f",
           tostring(state.bot_id),
-          tonumber(enemy.actor_address) or 0,
+          target_actor_address,
           gap,
           min_range,
           range))
@@ -358,7 +384,7 @@ function combat.install(ctx)
         ctx.log_diag(string.format(
           "attack_skip id=%s reason=out_of_range enemy=0x%X gap=%.2f range=%.1f",
           tostring(state.bot_id),
-          tonumber(enemy.actor_address) or 0,
+          target_actor_address,
           gap,
           range))
       end
@@ -382,11 +408,11 @@ function combat.install(ctx)
         "attack id=%s primary enemy=0x%X bot=(%.2f, %.2f) target=(%.2f, %.2f) heading=%.2f gap=%.2f range=%.1f",
         tostring(state.bot_id),
         target_actor_address,
-        tonumber(bot.x) or 0.0,
-        tonumber(bot.y) or 0.0,
+        bot.x,
+        bot.y,
         target_x,
         target_y,
-        tonumber(attack_heading) or -1.0,
+        attack_heading,
         gap,
         range))
     else

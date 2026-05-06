@@ -29,7 +29,7 @@ bool CollectUiActionOwnerCandidateAddresses(
     std::string_view,
     const UiActionDefinition* action_definition,
     const UiSurfaceDefinition* surface_definition,
-    uintptr_t fallback_owner_address,
+    uintptr_t snapshot_owner_address,
     uintptr_t live_control_address,
     std::vector<std::pair<std::string, uintptr_t>>* candidates) {
     if (candidates == nullptr) {
@@ -56,8 +56,8 @@ bool CollectUiActionOwnerCandidateAddresses(
 
     if (action_definition != nullptr) {
         const auto owner_offset = GetDefinitionAddress(action_definition->addresses, "owner_offset");
-        if (owner_offset != 0 && fallback_owner_address != 0) {
-            append_candidate("snapshot_plus_owner_offset", fallback_owner_address + owner_offset);
+        if (owner_offset != 0 && snapshot_owner_address != 0) {
+            append_candidate("snapshot_plus_owner_offset", snapshot_owner_address + owner_offset);
         }
     }
 
@@ -122,7 +122,7 @@ bool CollectUiActionOwnerCandidateAddresses(
     if (prefer_live_control_owner) {
         if (surface_definition != nullptr && surface_definition->id == "settings" && live_control_address != 0) {
             const auto* config = TryGetDebugUiOverlayConfig();
-            uintptr_t settings_address = fallback_owner_address;
+            uintptr_t settings_address = snapshot_owner_address;
             if (settings_address == 0) {
                 (void)TryGetActiveSettingsRender(&settings_address);
             }
@@ -155,11 +155,11 @@ bool CollectUiActionOwnerCandidateAddresses(
     }
 
     if (prefer_surface_owner) {
-        append_candidate("snapshot", fallback_owner_address);
+        append_candidate("snapshot", snapshot_owner_address);
     }
 
     if (!prefer_surface_owner) {
-        append_candidate("snapshot", fallback_owner_address);
+        append_candidate("snapshot", snapshot_owner_address);
     }
 
     return !candidates->empty();
@@ -229,7 +229,7 @@ bool IsUiActionOwnerCandidateSane(
 
 bool TryResolvePreferredUiActionOwnerAddress(
     std::string_view surface_root_id,
-    uintptr_t fallback_owner_address,
+    uintptr_t snapshot_owner_address,
     uintptr_t live_control_address,
     std::string_view action_id,
     uintptr_t* owner_address,
@@ -248,7 +248,7 @@ bool TryResolvePreferredUiActionOwnerAddress(
             surface_root_id,
             action_definition,
             surface_definition,
-            fallback_owner_address,
+            snapshot_owner_address,
             live_control_address,
             &candidates)) {
         if (error_message != nullptr) {
@@ -430,7 +430,7 @@ bool TryResolvePreferredUiActionOwnerAddress(
             Log(
                 "Debug UI overlay resolved a preferred owner candidate for action '" +
                 std::string(action_id) + "'. source=" + source + " owner=" + HexString(candidate_address) +
-                " fallback=" + HexString(fallback_owner_address));
+                " snapshot_owner=" + HexString(snapshot_owner_address));
         }
         return true;
     }

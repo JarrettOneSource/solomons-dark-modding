@@ -32,13 +32,11 @@ void __fastcall HookPlayerActorVtable28(void* self, void* /*unused_edx*/) {
         static std::uint64_t s_last_overlay_callback_log_ms = 0;
         static std::uint64_t s_last_nonlocal_overlay_callback_log_ms = 0;
         const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-        const auto slot =
-            ProcessMemory::Instance().ReadFieldOr<std::int8_t>(
-                actor_address,
-                kActorSlotOffset,
-                static_cast<std::int8_t>(-1));
+        std::int8_t slot = -1;
+        const bool have_slot =
+            ProcessMemory::Instance().TryReadField(actor_address, kActorSlotOffset, &slot);
         if constexpr (kEnableWizardBotHotPathDiagnostics) {
-            if (slot > 0) {
+            if (have_slot && slot > 0) {
                 if (now_ms - s_last_nonlocal_overlay_callback_log_ms >= 1000) {
                     s_last_nonlocal_overlay_callback_log_ms = now_ms;
                     Log(
@@ -46,14 +44,15 @@ void __fastcall HookPlayerActorVtable28(void* self, void* /*unused_edx*/) {
                         " slot=" + std::to_string(static_cast<int>(slot)) +
                         " hud_case100_depth=" + std::to_string(g_gameplay_hud_case100_depth));
                 }
-            } else if (slot == 0 && now_ms - s_last_overlay_callback_log_ms >= 1000) {
+            } else if (have_slot && slot == 0 && now_ms - s_last_overlay_callback_log_ms >= 1000) {
                 s_last_overlay_callback_log_ms = now_ms;
                 Log(
                     "[bots] slot overlay callback. actor=" + HexString(actor_address) +
                     " slot=0 hud_case100_depth=" + std::to_string(g_gameplay_hud_case100_depth));
             }
         }
-        if (slot > 0 &&
+        if (have_slot &&
+            slot > 0 &&
             now_ms <= g_gameplay_slot_hud_probe_until_ms &&
             actor_address == g_gameplay_slot_hud_probe_actor) {
             Log(
@@ -205,46 +204,40 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto actor_slot =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorSlotOffset, 0xFF);
-    const auto actor200_wrapper =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
-    const auto actor200_inner = ReadSmartPointerInnerObject(actor200_wrapper);
-    const auto gameplay_global =
-        memory.ReadValueOr<uintptr_t>(
-            memory.ResolveGameAddressOrZero(kGameObjectGlobal),
-            0);
+    std::uint8_t actor_slot = 0xFF;
+    const bool have_actor_slot =
+        memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot);
+    uintptr_t actor200_wrapper = 0;
+    const bool have_actor200_wrapper =
+        memory.TryReadField(actor_address, kActorProgressionHandleOffset, &actor200_wrapper);
+    const auto actor200_inner =
+        have_actor200_wrapper ? ReadSmartPointerInnerObject(actor200_wrapper) : 0;
+    uintptr_t gameplay_global = 0;
+    const bool have_gameplay_global =
+        TryReadResolvedGamePointerAbsolute(kGameObjectGlobal, &gameplay_global);
     const auto slot_wrapper_entry =
-        gameplay_global != 0
+        have_gameplay_global && gameplay_global != 0 && have_actor_slot
             ? gameplay_global + kGameplayPlayerProgressionHandleOffset +
                   static_cast<std::size_t>(actor_slot) * sizeof(uintptr_t)
             : 0;
-    const auto slot_wrapper =
-        slot_wrapper_entry != 0 && memory.IsReadableRange(slot_wrapper_entry, sizeof(uintptr_t))
-            ? memory.ReadValueOr<uintptr_t>(slot_wrapper_entry, 0)
-            : 0;
-    const auto slot_inner = ReadSmartPointerInnerObject(slot_wrapper);
-    const auto chosen_runtime = actor200_inner != 0 ? actor200_inner : slot_inner;
-    const auto chosen_vtable =
-        chosen_runtime != 0 && memory.IsReadableRange(chosen_runtime, sizeof(uintptr_t))
-            ? memory.ReadValueOr<uintptr_t>(chosen_runtime + kObjectVtableOffset, 0)
-            : 0;
-    const auto chosen_vt68 =
-        chosen_vtable != 0 &&
-                memory.IsReadableRange(
-                    chosen_vtable + kSkillsWizardProbeVfuncOffset,
-                    sizeof(uintptr_t))
-            ? memory.ReadValueOr<uintptr_t>(chosen_vtable + kSkillsWizardProbeVfuncOffset, 0)
-            : 0;
-    const auto chosen_spell_id =
-        chosen_runtime != 0 &&
-                memory.IsReadableRange(
-                    chosen_runtime + kProgressionCurrentSpellIdOffset,
-                    sizeof(std::int32_t))
-            ? memory.ReadValueOr<std::int32_t>(
-                  chosen_runtime + kProgressionCurrentSpellIdOffset,
-                  0)
-            : 0;
+    uintptr_t slot_wrapper = 0;
+    const bool have_slot_wrapper =
+        slot_wrapper_entry != 0 &&
+        memory.TryReadValue(slot_wrapper_entry, &slot_wrapper);
+    const auto slot_inner = have_slot_wrapper ? ReadSmartPointerInnerObject(slot_wrapper) : 0;
+    uintptr_t actor_runtime_vtable = 0;
+    const bool have_actor_runtime_vtable =
+        actor200_inner != 0 &&
+        memory.TryReadValue(actor200_inner + kObjectVtableOffset, &actor_runtime_vtable);
+    uintptr_t actor_runtime_probe_vfunc = 0;
+    const bool have_actor_runtime_probe_vfunc =
+        have_actor_runtime_vtable &&
+        actor_runtime_vtable != 0 &&
+        memory.TryReadValue(actor_runtime_vtable + kSkillsWizardProbeVfuncOffset, &actor_runtime_probe_vfunc);
+    std::int32_t actor_runtime_spell_id = 0;
+    const bool have_actor_runtime_spell_id =
+        actor200_inner != 0 &&
+        memory.TryReadValue(actor200_inner + kProgressionCurrentSpellIdOffset, &actor_runtime_spell_id);
 
     SpellDispatchProbeState saved_probe = g_spell_dispatch_probe;
     if (log_this) {
@@ -259,16 +252,21 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
             " bot_id=" + std::to_string(bot_id) +
             " startup=" + std::to_string(startup ? 1 : 0) +
             " local_player=" + std::to_string(local_player ? 1 : 0) +
-            " slot=" + HexString(actor_slot) +
-            " actor200_wrapper=" + HexString(actor200_wrapper) +
+            " slot=" + (have_actor_slot ? HexString(actor_slot) : UnreadableMemoryFieldText()) +
+            " actor200_wrapper=" + (have_actor200_wrapper ? HexString(actor200_wrapper) : UnreadableMemoryFieldText()) +
             " actor200_inner=" + HexString(actor200_inner) +
-            " slot_wrapper_entry=" + HexString(slot_wrapper_entry) +
-            " slot_wrapper=" + HexString(slot_wrapper) +
+            " slot_wrapper_entry=" + (slot_wrapper_entry != 0 ? HexString(slot_wrapper_entry) : UnreadableMemoryFieldText()) +
+            " slot_wrapper=" + (have_slot_wrapper ? HexString(slot_wrapper) : UnreadableMemoryFieldText()) +
             " slot_inner=" + HexString(slot_inner) +
-            " chosen_runtime=" + HexString(chosen_runtime) +
-            " chosen_vtable=" + HexString(chosen_vtable) +
-            " chosen_vt68=" + HexString(chosen_vt68) +
-            " chosen_spell_id=" + std::to_string(chosen_spell_id) +
+            " actor_runtime_vtable=" + (have_actor_runtime_vtable
+                ? HexString(actor_runtime_vtable)
+                : UnreadableMemoryFieldText()) +
+            " actor_runtime_probe_vfunc=" + (have_actor_runtime_probe_vfunc
+                ? HexString(actor_runtime_probe_vfunc)
+                : UnreadableMemoryFieldText()) +
+            " actor_runtime_spell_id=" + (have_actor_runtime_spell_id
+                ? std::to_string(actor_runtime_spell_id)
+                : UnreadableMemoryFieldText()) +
             " startup_state={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
         if constexpr (kEnableLocalPlayerCastProbeDiagnostics) {
             if (local_player) {

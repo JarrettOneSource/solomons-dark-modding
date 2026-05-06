@@ -159,7 +159,6 @@ std::size_t kGameplayCastUiBlockFlagOffset = 0;
 std::size_t kGameplayInputGateFlagOffset = 0;
 std::size_t kGameplayRegionTableOffset = 0;
 std::size_t kGameplayPlayerActorOffset = 0;
-std::size_t kGameplayPlayerFallbackPositionOffset = 0;
 std::size_t kGameplayPlayerProgressionHandleOffset = 0;
 std::size_t kGameplayInputBufferIndexOffset = 0;
 std::size_t kGameplayActorAttachSubobjectOffset = 0;

@@ -28,27 +28,44 @@ bool PrimeGameplaySlotBotActor(
             kGameplayPlayerActorOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
         const auto progression_slot_offset =
             kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
-        const auto slot_actor =
-            memory.ReadFieldOr<uintptr_t>(gameplay_address, actor_slot_offset, 0);
-        const auto slot_progression_wrapper =
-            memory.ReadFieldOr<uintptr_t>(gameplay_address, progression_slot_offset, 0);
-        const auto slot_progression_inner =
-            ReadSmartPointerInnerObject(slot_progression_wrapper);
+        const auto unreadable = []() { return std::string("unreadable"); };
+        const auto field_ptr = [&](uintptr_t base, std::size_t offset, uintptr_t* value) -> std::string {
+            *value = 0;
+            return memory.TryReadField(base, offset, value)
+                ? HexString(*value)
+                : unreadable();
+        };
+        uintptr_t slot_actor = 0;
+        uintptr_t slot_progression_wrapper = 0;
+        uintptr_t actor_progression_handle = 0;
+        uintptr_t actor_progression_runtime = 0;
+        uintptr_t actor_equip_handle = 0;
+        uintptr_t actor_selection = 0;
+        const auto slot_actor_text = field_ptr(gameplay_address, actor_slot_offset, &slot_actor);
+        const auto slot_progression_wrapper_text =
+            field_ptr(gameplay_address, progression_slot_offset, &slot_progression_wrapper);
+        const auto slot_progression_inner = ReadSmartPointerInnerObject(slot_progression_wrapper);
+        const auto actor_progression_handle_text =
+            field_ptr(actor_address, kActorProgressionHandleOffset, &actor_progression_handle);
+        const auto actor_progression_runtime_text =
+            field_ptr(actor_address, kActorProgressionRuntimeStateOffset, &actor_progression_runtime);
+        const auto actor_equip_handle_text =
+            field_ptr(actor_address, kActorEquipHandleOffset, &actor_equip_handle);
+        const auto actor_selection_text =
+            field_ptr(actor_address, kActorAnimationSelectionStateOffset, &actor_selection);
         Log(
             "[bots] prime_slot_actor " + std::string(label) +
             " gameplay=" + HexString(gameplay_address) +
             " slot=" + std::to_string(slot_index) +
             " param_prog=" + HexString(slot_progression_address) +
-            " slot_actor=" + HexString(slot_actor) +
-            " slot_prog=" + HexString(slot_progression_wrapper) +
+            " slot_actor=" + slot_actor_text +
+            " slot_prog=" + slot_progression_wrapper_text +
             " slot_prog_inner=" + HexString(slot_progression_inner) +
-            " actor_prog_handle=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0)) +
-            " actor_prog_inner=" + HexString(ReadSmartPointerInnerObject(
-                memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0))) +
-            " actor_prog_runtime=" + HexString(
-                memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
-            " actor_equip_handle=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipHandleOffset, 0)) +
-            " actor_selection=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0)));
+            " actor_prog_handle=" + actor_progression_handle_text +
+            " actor_prog_inner=" + HexString(ReadSmartPointerInnerObject(actor_progression_handle)) +
+            " actor_prog_runtime=" + actor_progression_runtime_text +
+            " actor_equip_handle=" + actor_equip_handle_text +
+            " actor_selection=" + actor_selection_text);
     };
     log_prime_state("enter");
 
@@ -98,8 +115,13 @@ bool PrimeGameplaySlotBotActor(
         }
     }
 
-    const auto equip_handle_after_refresh =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipHandleOffset, 0);
+    uintptr_t equip_handle_after_refresh = 0;
+    if (!memory.TryReadField(actor_address, kActorEquipHandleOffset, &equip_handle_after_refresh)) {
+        if (error_message != nullptr) {
+            *error_message = "Actor equip handle unreadable after runtime handle refresh.";
+        }
+        return false;
+    }
     if (equip_handle_after_refresh == 0) {
         std::string stage_error;
         if (!WireGameplaySlotBotRuntimeHandles(actor_address, &stage_error)) {

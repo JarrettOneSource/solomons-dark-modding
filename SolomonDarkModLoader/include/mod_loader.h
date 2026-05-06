@@ -37,6 +37,7 @@ struct SDModPlayerState {
     int level = 0;
     float x = 0.0f;
     float y = 0.0f;
+    float heading = 0.0f;
     int gold = 0;
     uintptr_t actor_address = 0;
     uintptr_t render_subject_address = 0;

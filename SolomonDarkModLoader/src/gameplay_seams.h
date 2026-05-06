@@ -176,7 +176,6 @@ extern std::size_t kGameplayCastUiBlockFlagOffset;
 extern std::size_t kGameplayInputGateFlagOffset;
 extern std::size_t kGameplayRegionTableOffset;
 extern std::size_t kGameplayPlayerActorOffset;
-extern std::size_t kGameplayPlayerFallbackPositionOffset;
 extern std::size_t kGameplayPlayerProgressionHandleOffset;
 extern std::size_t kGameplayInputBufferIndexOffset;
 extern std::size_t kGameplayActorAttachSubobjectOffset;

@@ -104,12 +104,40 @@ bool TryReadActorPosition(uintptr_t actor_address, float* x, float* y) {
            TryReadFloatField(actor_address, kActorPositionYOffset, y);
 }
 
+template <typename T>
+std::string FormatReadableNativeField(uintptr_t base_address, size_t offset) {
+    T value{};
+    if (!ProcessMemory::Instance().TryReadField(base_address, offset, &value)) {
+        return "unreadable";
+    }
+
+    return std::to_string(value);
+}
+
+template <typename T>
+std::string FormatReadableNativeFieldHex(uintptr_t base_address, size_t offset) {
+    T value{};
+    if (!ProcessMemory::Instance().TryReadField(base_address, offset, &value)) {
+        return "unreadable";
+    }
+
+    return HexString(static_cast<uintptr_t>(value));
+}
+
+std::string FormatReadableNativeFloatField(uintptr_t base_address, size_t offset) {
+    float value = 0.0f;
+    if (!TryReadFloatField(base_address, offset, &value)) {
+        return "unreadable";
+    }
+
+    return std::to_string(value);
+}
+
 std::string DescribeSpellCastHookActorState(uintptr_t actor_address) {
     if (actor_address == 0) {
         return "actor=0x0";
     }
 
-    auto& memory = ProcessMemory::Instance();
     SDModPlayerState player_state{};
     const bool have_player_state = TryGetPlayerState(&player_state) && player_state.valid;
     const bool is_local_actor = have_player_state && player_state.actor_address == actor_address;
@@ -117,27 +145,27 @@ std::string DescribeSpellCastHookActorState(uintptr_t actor_address) {
     return
         "actor=" + HexString(actor_address) +
         " local=" + std::to_string(is_local_actor ? 1 : 0) +
-        " owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
-        " slot=" + std::to_string(memory.ReadFieldOr<int>(actor_address, kActorSlotOffset, -1)) +
-        " world_slot=" + std::to_string(memory.ReadFieldOr<int>(actor_address, kActorWorldSlotOffset, -1)) +
-        " skill=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0)) +
-        " prev=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPreviousSkillIdOffset, 0)) +
-        " drive=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0)) +
-        " no_int=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0)) +
-        " group=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF)) +
-        " cast_slot=" + HexString(memory.ReadFieldOr<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset, 0xFFFF)) +
-        " heading=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f)) +
-        " aimx=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorAimTargetXOffset, 0.0f)) +
-        " aimy=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorAimTargetYOffset, 0.0f)) +
-        " aux0=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0)) +
-        " aux1=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0)) +
-        " f278=" + std::to_string(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorStartupCounterOffset, 0)) +
-        " f29c=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig29cOffset, 0.0f)) +
-        " f2a0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2a0Offset, 0.0f)) +
-        " f2d0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2d0Offset, 0.0f)) +
-        " f2d4=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2d4Offset, 0.0f)) +
-        " f2d8=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2d8Offset, 0.0f)) +
-        " selection_ptr=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0)) +
-        " progression_runtime=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
-        " progression_handle=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0));
+        " owner=" + FormatReadableNativeFieldHex<uintptr_t>(actor_address, kActorOwnerOffset) +
+        " slot=" + FormatReadableNativeField<int>(actor_address, kActorSlotOffset) +
+        " world_slot=" + FormatReadableNativeField<int>(actor_address, kActorWorldSlotOffset) +
+        " skill=" + FormatReadableNativeField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset) +
+        " prev=" + FormatReadableNativeField<std::int32_t>(actor_address, kActorPreviousSkillIdOffset) +
+        " drive=" + FormatReadableNativeFieldHex<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset) +
+        " no_int=" + FormatReadableNativeFieldHex<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset) +
+        " group=" + FormatReadableNativeFieldHex<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset) +
+        " cast_slot=" + FormatReadableNativeFieldHex<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset) +
+        " heading=" + FormatReadableNativeFloatField(actor_address, kActorHeadingOffset) +
+        " aimx=" + FormatReadableNativeFloatField(actor_address, kActorAimTargetXOffset) +
+        " aimy=" + FormatReadableNativeFloatField(actor_address, kActorAimTargetYOffset) +
+        " aux0=" + FormatReadableNativeFieldHex<std::uint32_t>(actor_address, kActorAimTargetAux0Offset) +
+        " aux1=" + FormatReadableNativeFieldHex<std::uint32_t>(actor_address, kActorAimTargetAux1Offset) +
+        " f278=" + FormatReadableNativeField<std::uint32_t>(actor_address, kActorStartupCounterOffset) +
+        " f29c=" + FormatReadableNativeFloatField(actor_address, kActorSpellConfig29cOffset) +
+        " f2a0=" + FormatReadableNativeFloatField(actor_address, kActorSpellConfig2a0Offset) +
+        " f2d0=" + FormatReadableNativeFloatField(actor_address, kActorSpellConfig2d0Offset) +
+        " f2d4=" + FormatReadableNativeFloatField(actor_address, kActorSpellConfig2d4Offset) +
+        " f2d8=" + FormatReadableNativeFloatField(actor_address, kActorSpellConfig2d8Offset) +
+        " selection_ptr=" + FormatReadableNativeFieldHex<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset) +
+        " progression_runtime=" + FormatReadableNativeFieldHex<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset) +
+        " progression_handle=" + FormatReadableNativeFieldHex<uintptr_t>(actor_address, kActorProgressionHandleOffset);
 }

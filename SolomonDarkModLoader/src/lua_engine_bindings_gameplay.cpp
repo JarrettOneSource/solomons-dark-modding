@@ -137,7 +137,7 @@ int LuaPlayerGetState(lua_State* state) {
         return 1;
     }
 
-    lua_createtable(state, 0, 55);
+    lua_createtable(state, 0, 56);
     lua_pushnumber(state, static_cast<lua_Number>(player_state.hp));
     lua_setfield(state, -2, "hp");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.max_hp));
@@ -156,6 +156,8 @@ int LuaPlayerGetState(lua_State* state) {
     lua_setfield(state, -2, "x");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.y));
     lua_setfield(state, -2, "y");
+    lua_pushnumber(state, static_cast<lua_Number>(player_state.heading));
+    lua_setfield(state, -2, "heading");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.actor_address));
     lua_setfield(state, -2, "actor_address");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.render_subject_address));

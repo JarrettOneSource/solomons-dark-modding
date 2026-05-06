@@ -21,22 +21,20 @@ ActorRenderBuildSnapshot CaptureActorRenderBuildSnapshot(uintptr_t actor_address
         actor_address + kActorHubVisualDescriptorBlockOffset,
         snapshot.descriptor.data(),
         snapshot.descriptor.size());
-    snapshot.source_profile_unknown74_mirror =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, kGameNpcSourceProfile74MirrorOffset, 0);
-    snapshot.source_profile_unknown56_mirror =
-        memory.ReadFieldOr<std::uint16_t>(actor_address, kGameNpcSourceProfile56MirrorOffset, 0);
-    snapshot.variant_primary =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorRenderVariantPrimaryOffset, 0);
-    snapshot.variant_secondary =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorRenderVariantSecondaryOffset, 0);
-    snapshot.weapon_type =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorRenderWeaponTypeOffset, 0);
-    snapshot.render_selection =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorRenderSelectionByteOffset, 0);
-    snapshot.variant_tertiary =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorRenderVariantTertiaryOffset, 0);
-    snapshot.attachment_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorHubVisualAttachmentPtrOffset, 0);
+    (void)memory.TryReadField(
+        actor_address,
+        kGameNpcSourceProfile74MirrorOffset,
+        &snapshot.source_profile_unknown74_mirror);
+    (void)memory.TryReadField(
+        actor_address,
+        kGameNpcSourceProfile56MirrorOffset,
+        &snapshot.source_profile_unknown56_mirror);
+    (void)memory.TryReadField(actor_address, kActorRenderVariantPrimaryOffset, &snapshot.variant_primary);
+    (void)memory.TryReadField(actor_address, kActorRenderVariantSecondaryOffset, &snapshot.variant_secondary);
+    (void)memory.TryReadField(actor_address, kActorRenderWeaponTypeOffset, &snapshot.weapon_type);
+    (void)memory.TryReadField(actor_address, kActorRenderSelectionByteOffset, &snapshot.render_selection);
+    (void)memory.TryReadField(actor_address, kActorRenderVariantTertiaryOffset, &snapshot.variant_tertiary);
+    (void)memory.TryReadField(actor_address, kActorHubVisualAttachmentPtrOffset, &snapshot.attachment_address);
     return snapshot;
 }
 

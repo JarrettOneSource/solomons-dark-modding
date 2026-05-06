@@ -4,30 +4,11 @@ std::uint32_t ResolveGameplayPathCollisionMask(ParticipantEntityBinding* binding
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto actor_mask =
-        memory.ReadFieldOr<std::uint32_t>(binding->actor_address, kActorPrimaryFlagMaskOffset, 0);
-    if (actor_mask != 0) {
-        return actor_mask;
+    std::uint32_t actor_mask = 0;
+    if (!memory.TryReadField(binding->actor_address, kActorPrimaryFlagMaskOffset, &actor_mask)) {
+        return 0;
     }
-
-    // Stock only seeds +0x38/+0x3C through the slot-0 actor path, so
-    // gameplay-slot bots can legitimately keep zero masks. For path planning we
-    // want player-equivalent placement semantics without mutating the bot's live
-    // actor identity fields.
-    uintptr_t gameplay_address = 0;
-    if (!TryResolveCurrentGameplayScene(&gameplay_address) || gameplay_address == 0) {
-        return actor_mask;
-    }
-
-    uintptr_t local_player_actor_address = 0;
-    if (!TryResolvePlayerActorForSlot(gameplay_address, 0, &local_player_actor_address) ||
-        local_player_actor_address == 0) {
-        return actor_mask;
-    }
-
-    const auto player_mask =
-        memory.ReadFieldOr<std::uint32_t>(local_player_actor_address, kActorPrimaryFlagMaskOffset, 0);
-    return player_mask != 0 ? player_mask : actor_mask;
+    return actor_mask;
 }
 
 bool DoesGameplayPathCircleOverlapObstacle(
@@ -99,11 +80,18 @@ bool IsGameplayPathPlacementTraversable(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto radius = memory.ReadFieldOr<float>(binding->actor_address, kActorCollisionRadiusOffset, 0.0f);
-    const auto collision_mask = ResolveGameplayPathCollisionMask(binding);
-    if (radius <= 0.0f) {
+    (void)memory;
+    float radius = 0.0f;
+    if (!TryReadFiniteFloatField(binding->actor_address, kActorCollisionRadiusOffset, &radius)) {
         if (error_message != nullptr) {
-            *error_message = "Bot actor has no collision radius for path placement queries.";
+            *error_message = "Bot actor collision radius is unreadable for path placement queries.";
+        }
+        return false;
+    }
+    const auto collision_mask = ResolveGameplayPathCollisionMask(binding);
+    if (radius <= 0.0f || collision_mask == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor has no native collision radius or mask for path placement queries.";
         }
         return false;
     }
@@ -188,7 +176,14 @@ bool IsGameplayPathSegmentTraversable(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto radius = memory.ReadFieldOr<float>(binding->actor_address, kActorCollisionRadiusOffset, 0.0f);
+    (void)memory;
+    float radius = 0.0f;
+    if (!TryReadFiniteFloatField(binding->actor_address, kActorCollisionRadiusOffset, &radius)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor collision radius is unreadable for path segment queries.";
+        }
+        return false;
+    }
     const auto cell_min = snapshot.cell_width < snapshot.cell_height ? snapshot.cell_width : snapshot.cell_height;
     float step_distance = cell_min * 0.25f;
     if (radius > 0.0f) {

@@ -100,33 +100,36 @@ SDModEquipVisualLaneState ReadEquipVisualLaneState(
     }
 
     auto& memory = ProcessMemory::Instance();
-    lane.wrapper_address =
-        memory.ReadFieldOr<uintptr_t>(equip_runtime_state_address, lane_offset, 0);
+    if (!memory.TryReadField(equip_runtime_state_address, lane_offset, &lane.wrapper_address)) {
+        return lane;
+    }
     if (lane.wrapper_address == 0) {
         return lane;
     }
 
-    lane.holder_address = memory.ReadValueOr<uintptr_t>(lane.wrapper_address, 0);
+    if (!memory.TryReadValue(lane.wrapper_address, &lane.holder_address)) {
+        return lane;
+    }
     if (lane.holder_address == 0) {
         return lane;
     }
 
-    lane.holder_kind =
-        memory.ReadFieldOr<std::uint32_t>(lane.holder_address, kVisualLaneHolderKindOffset, 0);
-    lane.current_object_address = memory.ReadFieldOr<uintptr_t>(
-        lane.holder_address,
-        kVisualLaneHolderCurrentObjectOffset,
-        0);
+    if (!memory.TryReadField(lane.holder_address, kVisualLaneHolderKindOffset, &lane.holder_kind) ||
+        !memory.TryReadField(
+            lane.holder_address,
+            kVisualLaneHolderCurrentObjectOffset,
+            &lane.current_object_address)) {
+        return lane;
+    }
     if (lane.current_object_address == 0) {
         return lane;
     }
 
-    lane.current_object_vtable =
-        memory.ReadValueOr<uintptr_t>(lane.current_object_address, 0);
-    lane.current_object_type_id = memory.ReadFieldOr<std::uint32_t>(
+    (void)memory.TryReadValue(lane.current_object_address, &lane.current_object_vtable);
+    (void)memory.TryReadField(
         lane.current_object_address,
         kGameObjectTypeIdOffset,
-        0);
+        &lane.current_object_type_id);
     return lane;
 }
 

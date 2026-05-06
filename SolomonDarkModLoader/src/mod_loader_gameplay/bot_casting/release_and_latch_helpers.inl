@@ -14,10 +14,11 @@ void FinishBotCastNativeLifecycle(
         known_release_object_state != nullptr
             ? *known_release_object_state
             : ReadBotNativeActiveSpellObjectState(context, false);
-    const auto actor_group_before =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
-    const auto actor_slot_before =
-        memory.ReadFieldOr<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset, 0);
+    std::uint8_t actor_group_before = kBotCastActorActiveCastGroupSentinel;
+    std::uint16_t actor_slot_before = kBotCastActorActiveCastSlotSentinel;
+    const bool actor_handle_before_readable =
+        memory.TryReadField(actor_address, kActorActiveCastGroupByteOffset, &actor_group_before) &&
+        memory.TryReadField(actor_address, kActorActiveCastSlotShortOffset, &actor_slot_before);
     DWORD cleanup_exception_code = 0;
     bool cleanup_ok = true;
     bool cleanup_actor_handle_live = false;
@@ -29,6 +30,7 @@ void FinishBotCastNativeLifecycle(
     bool cleanup_state_write_ok = false;
     bool cleanup_state_restore_ok = true;
     cleanup_actor_handle_live =
+        actor_handle_before_readable &&
         actor_group_before != kBotCastActorActiveCastGroupSentinel &&
         actor_slot_before != kBotCastActorActiveCastSlotSentinel;
     if (run_active_handle_cleanup && cleanup_actor_handle_live) {
@@ -65,8 +67,8 @@ void FinishBotCastNativeLifecycle(
                     cleanup_state_before);
         }
         if (cleanup_state_available && cleanup_state_entry_address != 0) {
-            cleanup_state_after =
-                memory.ReadValueOr<int>(cleanup_state_entry_address, -1);
+            cleanup_state_available =
+                memory.TryReadValue<int>(cleanup_state_entry_address, &cleanup_state_after);
         }
     }
     (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
@@ -107,10 +109,12 @@ void FinishBotCastNativeLifecycle(
             state.progression_spell_id_before);
     }
 
-    const auto group_after =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
-    const auto settled_heading =
-        memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
+    std::uint8_t group_after = kBotCastActorActiveCastGroupSentinel;
+    const bool group_after_readable =
+        memory.TryReadField(actor_address, kActorActiveCastGroupByteOffset, &group_after);
+    float settled_heading = 0.0f;
+    const bool settled_heading_readable =
+        TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &settled_heading);
     const bool completed_boulder_at_max =
         release_object_state.boulder_max_size_reached ||
         state.bounded_release_at_max_size ||
@@ -145,9 +149,15 @@ void FinishBotCastNativeLifecycle(
             : std::string("");
     (void)multiplayer::FinishBotAttack(
         binding->bot_id,
-        true,
+        settled_heading_readable,
         settled_heading,
         clear_facing_target);
+    const auto group_before_text =
+        actor_handle_before_readable ? HexString(actor_group_before) : std::string("unreadable");
+    const auto slot_before_text =
+        actor_handle_before_readable ? HexString(actor_slot_before) : std::string("unreadable");
+    const auto group_after_text =
+        group_after_readable ? HexString(group_after) : std::string("unreadable");
     Log(
         std::string("[bots] cast complete (") + exit_label + "). bot_id=" +
         std::to_string(binding->bot_id) +
@@ -155,9 +165,9 @@ void FinishBotCastNativeLifecycle(
         " ticks=" + std::to_string(state.ticks_waiting) +
         " post_release_ticks=" + std::to_string(state.bounded_post_release_ticks_waiting) +
         " saw_latch=" + (state.saw_latch ? std::string("1") : std::string("0")) +
-        " group_before=" + HexString(actor_group_before) +
-        " slot_before=" + HexString(actor_slot_before) +
-        " group_after=" + HexString(group_after) +
+        " group_before=" + group_before_text +
+        " slot_before=" + slot_before_text +
+        " group_after=" + group_after_text +
         " cleanup_requested=" + (run_active_handle_cleanup ? std::string("1") : std::string("0")) +
         " cleanup_actor_handle_live=" + (cleanup_actor_handle_live ? std::string("1") : std::string("0")) +
         " cleanup_state=" + HexString(cleanup_state_entry_address) +

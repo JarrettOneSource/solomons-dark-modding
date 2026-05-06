@@ -180,7 +180,10 @@ bool TryResolveGameplayRuntimeState(uintptr_t* gameplay_runtime_address) {
         return false;
     }
 
-    const auto gameplay_runtime = memory.ReadValueOr<uintptr_t>(gameplay_runtime_global_address, 0);
+    uintptr_t gameplay_runtime = 0;
+    if (!memory.TryReadValue(gameplay_runtime_global_address, &gameplay_runtime)) {
+        return false;
+    }
     if (gameplay_runtime == 0 || !memory.IsReadableRange(gameplay_runtime, 0x230)) {
         return false;
     }

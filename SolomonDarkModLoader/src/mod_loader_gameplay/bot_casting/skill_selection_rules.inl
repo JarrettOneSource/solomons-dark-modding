@@ -42,180 +42,212 @@ std::string DescribeGameplaySlotCastStartupWindow(uintptr_t actor_address) {
     }
 
     auto& memory = ProcessMemory::Instance();
+    const auto unreadable = []() { return std::string("unreadable"); };
+    const auto read_u8_hex = [&](uintptr_t address) -> std::string {
+        std::uint8_t value = 0;
+        return address != 0 && memory.TryReadValue(address, &value)
+            ? HexString(value)
+            : unreadable();
+    };
+    const auto read_u16_hex = [&](uintptr_t address) -> std::string {
+        std::uint16_t value = 0;
+        return address != 0 && memory.TryReadValue(address, &value)
+            ? HexString(value)
+            : unreadable();
+    };
+    const auto read_u32_hex = [&](uintptr_t address) -> std::string {
+        std::uint32_t value = 0;
+        return address != 0 && memory.TryReadValue(address, &value)
+            ? HexString(value)
+            : unreadable();
+    };
+    const auto read_ptr_hex = [&](uintptr_t address) -> std::string {
+        uintptr_t value = 0;
+        return address != 0 && memory.TryReadValue(address, &value)
+            ? HexString(value)
+            : unreadable();
+    };
+    const auto read_i32_text = [&](uintptr_t address) -> std::string {
+        std::int32_t value = 0;
+        return address != 0 && memory.TryReadValue(address, &value)
+            ? std::to_string(value)
+            : unreadable();
+    };
+    const auto read_float_text = [&](uintptr_t address) -> std::string {
+        float value = 0.0f;
+        return address != 0 && memory.TryReadValue(address, &value) && std::isfinite(value)
+            ? std::to_string(value)
+            : unreadable();
+    };
+    const auto field_u8_hex = [&](std::size_t offset) -> std::string {
+        std::uint8_t value = 0;
+        return memory.TryReadField(actor_address, offset, &value)
+            ? HexString(value)
+            : unreadable();
+    };
+    const auto field_i8_text = [&](std::size_t offset) -> std::string {
+        std::int8_t value = 0;
+        return memory.TryReadField(actor_address, offset, &value)
+            ? std::to_string(static_cast<int>(value))
+            : unreadable();
+    };
+    const auto field_i32_text = [&](std::size_t offset) -> std::string {
+        std::int32_t value = 0;
+        return memory.TryReadField(actor_address, offset, &value)
+            ? std::to_string(value)
+            : unreadable();
+    };
+    const auto field_u32_hex = [&](std::size_t offset) -> std::string {
+        std::uint32_t value = 0;
+        return memory.TryReadField(actor_address, offset, &value)
+            ? HexString(value)
+            : unreadable();
+    };
+    const auto field_u32_text = [&](std::size_t offset) -> std::string {
+        std::uint32_t value = 0;
+        return memory.TryReadField(actor_address, offset, &value)
+            ? std::to_string(value)
+            : unreadable();
+    };
+    const auto field_u16_hex = [&](std::size_t offset) -> std::string {
+        std::uint16_t value = 0;
+        return memory.TryReadField(actor_address, offset, &value)
+            ? HexString(value)
+            : unreadable();
+    };
+    const auto field_ptr_hex = [&](std::size_t offset) -> std::string {
+        uintptr_t value = 0;
+        return memory.TryReadField(actor_address, offset, &value)
+            ? HexString(value)
+            : unreadable();
+    };
+    const auto field_float_text = [&](std::size_t offset) -> std::string {
+        float value = 0.0f;
+        return TryReadFiniteFloatField(actor_address, offset, &value)
+            ? std::to_string(value)
+            : unreadable();
+    };
     const auto gameplay_global_flag_1abe =
-        memory.ReadValueOr<std::uint8_t>(
-            memory.ResolveGameAddressOrZero(kGameObjectGlobal + kGameplayPrimaryGateBlockFlagOffset),
-            0);
+        read_u8_hex(memory.ResolveGameAddressOrZero(kGameObjectGlobal + kGameplayPrimaryGateBlockFlagOffset));
     const auto gameplay_global_flag_1abd =
-        memory.ReadValueOr<std::uint8_t>(
-            memory.ResolveGameAddressOrZero(kGameObjectGlobal + kGameplayCastUiBlockFlagOffset),
-            0);
+        read_u8_hex(memory.ResolveGameAddressOrZero(kGameObjectGlobal + kGameplayCastUiBlockFlagOffset));
     const auto gameplay_global_flag_85 =
-        memory.ReadValueOr<std::uint8_t>(
-            memory.ResolveGameAddressOrZero(kGameObjectGlobal + kGameplayInputGateFlagOffset),
-            0);
-    const auto selection_ptr =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
-    const auto control_brain_ptr =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+        read_u8_hex(memory.ResolveGameAddressOrZero(kGameObjectGlobal + kGameplayInputGateFlagOffset));
+    uintptr_t selection_ptr = 0;
+    const bool selection_ptr_readable =
+        memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &selection_ptr);
+    const auto selection_ptr_text =
+        selection_ptr_readable ? HexString(selection_ptr) : unreadable();
+    uintptr_t control_brain_ptr = 0;
+    const bool control_brain_ptr_readable =
+        memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &control_brain_ptr);
+    const auto control_brain_ptr_text =
+        control_brain_ptr_readable ? HexString(control_brain_ptr) : unreadable();
     const auto control_brain_value =
-        control_brain_ptr != 0 && memory.IsReadableRange(control_brain_ptr, sizeof(uintptr_t))
-            ? memory.ReadValueOr<std::uint32_t>(control_brain_ptr, 0xFFFFFFFFu)
-            : 0xFFFFFFFFu;
-    const auto actor_dc_ptr =
-        memory.ReadFieldOr<uintptr_t>(
-            actor_address,
-            kActorCastDiagnosticContextOffset,
-            0);
+        control_brain_ptr != 0 ? read_u32_hex(control_brain_ptr) : unreadable();
+    uintptr_t actor_dc_ptr = 0;
+    const bool actor_dc_ptr_readable =
+        memory.TryReadField(actor_address, kActorCastDiagnosticContextOffset, &actor_dc_ptr);
+    const auto actor_dc_ptr_text =
+        actor_dc_ptr_readable ? HexString(actor_dc_ptr) : unreadable();
     const auto actor_dc_vtable =
-        actor_dc_ptr != 0 && memory.IsReadableRange(actor_dc_ptr, sizeof(uintptr_t))
-            ? memory.ReadValueOr<uintptr_t>(actor_dc_ptr + kObjectVtableOffset, 0)
-            : 0;
+        actor_dc_ptr != 0 ? read_ptr_hex(actor_dc_ptr + kObjectVtableOffset) : unreadable();
+    uintptr_t actor_dc_vtable_address = 0;
+    (void)(actor_dc_ptr != 0 &&
+           memory.TryReadValue(actor_dc_ptr + kObjectVtableOffset, &actor_dc_vtable_address));
     const auto actor_dc_slot_10 =
-        actor_dc_ptr != 0 &&
-                memory.IsReadableRange(
-                    actor_dc_ptr + kCastDiagnosticCallbackSlotOffset,
-                    sizeof(uintptr_t))
-            ? memory.ReadValueOr<uintptr_t>(
-                  actor_dc_ptr + kCastDiagnosticCallbackSlotOffset,
-                  0)
-            : 0;
+        actor_dc_ptr != 0
+            ? read_ptr_hex(actor_dc_ptr + kCastDiagnosticCallbackSlotOffset)
+            : unreadable();
     const auto actor_dc_callback_10 =
-        actor_dc_vtable != 0 &&
-                memory.IsReadableRange(
-                    actor_dc_vtable + kCastDiagnosticVtableCallbackOffset,
-                    sizeof(uintptr_t))
-            ? memory.ReadValueOr<uintptr_t>(
-                  actor_dc_vtable + kCastDiagnosticVtableCallbackOffset,
-                  0)
-            : 0;
-    const auto progression_handle =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
-    auto progression_runtime =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0);
-    if (progression_runtime == 0 &&
-        progression_handle != 0 &&
-        memory.IsReadableRange(progression_handle, sizeof(uintptr_t))) {
-        progression_runtime = memory.ReadValueOr<uintptr_t>(progression_handle, 0);
-    }
-    const auto read_progression_u32 = [&](std::size_t offset) -> std::uint32_t {
-        return progression_runtime != 0 &&
-               memory.IsReadableRange(progression_runtime + offset, sizeof(std::uint32_t))
-            ? memory.ReadValueOr<std::uint32_t>(progression_runtime + offset, 0)
-            : 0;
+        actor_dc_vtable_address != 0
+            ? read_ptr_hex(actor_dc_vtable_address + kCastDiagnosticVtableCallbackOffset)
+            : unreadable();
+    uintptr_t progression_handle = 0;
+    const bool progression_handle_readable =
+        memory.TryReadField(actor_address, kActorProgressionHandleOffset, &progression_handle);
+    uintptr_t progression_runtime = 0;
+    const bool progression_runtime_readable =
+        memory.TryReadField(actor_address, kActorProgressionRuntimeStateOffset, &progression_runtime);
+    const auto read_progression_u32 = [&](std::size_t offset) -> std::string {
+        return progression_runtime_readable && progression_runtime != 0
+            ? read_u32_hex(progression_runtime + offset)
+            : unreadable();
     };
-    const auto read_progression_float = [&](std::size_t offset) -> float {
-        return progression_runtime != 0 &&
-               memory.IsReadableRange(progression_runtime + offset, sizeof(float))
-            ? memory.ReadValueOr<float>(progression_runtime + offset, 0.0f)
-            : 0.0f;
+    const auto read_progression_float = [&](std::size_t offset) -> std::string {
+        return progression_runtime_readable && progression_runtime != 0
+            ? read_float_text(progression_runtime + offset)
+            : unreadable();
     };
-    std::string selection_summary = "sel_ptr=" + HexString(selection_ptr);
+    std::string selection_summary = "sel_ptr=" + selection_ptr_text;
     if (selection_ptr != 0) {
         selection_summary +=
-            " sel_id=" + std::to_string(memory.ReadValueOr<int>(
-                selection_ptr + kActorControlBrainStateIdOffset,
-                -9999)) +
-            " sel_group=" + HexString(memory.ReadValueOr<std::uint8_t>(
-                selection_ptr + kActorControlBrainTargetSlotOffset,
-                0xFF)) +
-            " sel_slot=" + HexString(memory.ReadValueOr<std::uint16_t>(
-                selection_ptr + kActorControlBrainTargetHandleOffset,
-                0xFFFF)) +
-            " sel_t8=" + std::to_string(memory.ReadValueOr<int>(
-                selection_ptr + kActorControlBrainRetargetTicksOffset,
-                0)) +
-            " sel_tC=" + std::to_string(memory.ReadValueOr<int>(
-                selection_ptr + kActorControlBrainTargetCooldownTicksOffset,
-                0)) +
-            " sel_t10=" + std::to_string(memory.ReadValueOr<int>(
-                selection_ptr + kActorControlBrainActionCooldownTicksOffset,
-                0)) +
-            " sel_t14=" + std::to_string(memory.ReadValueOr<int>(
-                selection_ptr + kActorControlBrainActionBurstTicksOffset,
-                0)) +
-            " sel_a1c=" + std::to_string(memory.ReadValueOr<float>(
-                selection_ptr + kActorControlBrainHeadingAccumulatorOffset,
-                0.0f)) +
-            " sel_a20=" + std::to_string(memory.ReadValueOr<float>(
-                selection_ptr + kActorControlBrainPursuitRangeOffset,
-                0.0f)) +
-            " sel_f24=" + HexString(memory.ReadValueOr<std::uint8_t>(
-                selection_ptr + kActorControlBrainFollowLeaderOffset,
-                0)) +
-            " sel_v28=" + std::to_string(memory.ReadValueOr<float>(
-                selection_ptr + kActorControlBrainDesiredFacingOffset,
-                0.0f)) +
-            " sel_v2c=" + std::to_string(memory.ReadValueOr<float>(
-                selection_ptr + kActorControlBrainDesiredFacingSmoothedOffset,
-                0.0f)) +
-            " sel_v30=" + std::to_string(memory.ReadValueOr<float>(
-                selection_ptr + kActorControlBrainMoveInputXOffset,
-                0.0f)) +
-            " sel_v34=" + std::to_string(memory.ReadValueOr<float>(
-                selection_ptr + kActorControlBrainMoveInputYOffset,
-                0.0f));
+            " sel_id=" + read_i32_text(selection_ptr + kActorControlBrainStateIdOffset) +
+            " sel_group=" + read_u8_hex(selection_ptr + kActorControlBrainTargetSlotOffset) +
+            " sel_slot=" + read_u16_hex(selection_ptr + kActorControlBrainTargetHandleOffset) +
+            " sel_t8=" + read_i32_text(selection_ptr + kActorControlBrainRetargetTicksOffset) +
+            " sel_tC=" + read_i32_text(selection_ptr + kActorControlBrainTargetCooldownTicksOffset) +
+            " sel_t10=" + read_i32_text(selection_ptr + kActorControlBrainActionCooldownTicksOffset) +
+            " sel_t14=" + read_i32_text(selection_ptr + kActorControlBrainActionBurstTicksOffset) +
+            " sel_a1c=" + read_float_text(selection_ptr + kActorControlBrainHeadingAccumulatorOffset) +
+            " sel_a20=" + read_float_text(selection_ptr + kActorControlBrainPursuitRangeOffset) +
+            " sel_f24=" + read_u8_hex(selection_ptr + kActorControlBrainFollowLeaderOffset) +
+            " sel_v28=" + read_float_text(selection_ptr + kActorControlBrainDesiredFacingOffset) +
+            " sel_v2c=" + read_float_text(selection_ptr + kActorControlBrainDesiredFacingSmoothedOffset) +
+            " sel_v30=" + read_float_text(selection_ptr + kActorControlBrainMoveInputXOffset) +
+            " sel_v34=" + read_float_text(selection_ptr + kActorControlBrainMoveInputYOffset);
     }
 
     return
-        "skill=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0)) +
-        " prev=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPreviousSkillIdOffset, 0)) +
-        " c21c=" + HexString(control_brain_ptr) +
-        " c21c_val=" + HexString(control_brain_value) +
-        " dc=" + HexString(actor_dc_ptr) +
-        " dc_vt=" + HexString(actor_dc_vtable) +
-        " dc_slot10=" + HexString(actor_dc_slot_10) +
-        " dc_vt_cb10=" + HexString(actor_dc_callback_10) +
-        " g1abe=" + HexString(gameplay_global_flag_1abe) +
-        " g1abd=" + HexString(gameplay_global_flag_1abd) +
-        " g85=" + HexString(gameplay_global_flag_85) +
-        " e4=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorPrimaryActionLatchE4Offset, 0)) +
-        " e8=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorPrimaryActionLatchE8Offset, 0)) +
-        " drive=" + HexString(memory.ReadFieldOr<std::uint8_t>(
-            actor_address,
-            kActorAnimationDriveStateByteOffset,
-            0)) +
-        " target_handle=" + HexString(memory.ReadFieldOr<std::uint32_t>(
-            actor_address,
-            kActorSpellTargetGroupByteOffset,
-            0)) +
-        " a168=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorCurrentTargetActorOffset, 0)) +
-        " no_int=" + HexString(memory.ReadFieldOr<std::uint8_t>(
-            actor_address,
-            kActorNoInterruptFlagOffset,
-            0)) +
-        " a258=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorContinuousPrimaryModeOffset, 0)) +
-        " a264=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorContinuousPrimaryActiveOffset, 0)) +
-        " g27c=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF)) +
-        " s27e=" + HexString(memory.ReadFieldOr<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset, 0xFFFF)) +
-        " prog=" + HexString(progression_runtime) +
-        " ph=" + HexString(progression_handle) +
-        " p750=" + HexString(read_progression_u32(kProgressionCurrentSpellIdOffset)) +
-        " p8a8=" + std::to_string(read_progression_float(kProgressionCastChargeAOffset)) +
-        " p8ac=" + std::to_string(read_progression_float(kProgressionEarthChargeCapOffset)) +
-        " p8b0=" + std::to_string(read_progression_float(kProgressionCastChargeBOffset)) +
-        " p8b4=" + std::to_string(read_progression_float(kProgressionCastChargeCOffset)) +
-        " f1b4=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorPurePrimaryTimingAOffset, 0.0f)) +
-        " f1b8=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorPurePrimaryTimingBOffset, 0.0f)) +
-        " f278=" + std::to_string(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorStartupCounterOffset, 0)) +
-        " f28c=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig28cOffset, 0.0f)) +
-        " f290=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig290Offset, 0.0f)) +
-        " f294=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig294Offset, 0.0f)) +
-        " f298=" + std::to_string(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorSpellConfig298Offset, 0)) +
-        " f29c=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig29cOffset, 0.0f)) +
-        " f2a0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2a0Offset, 0.0f)) +
-        " f2a4=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2a4Offset, 0.0f)) +
-        " aimx=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorAimTargetXOffset, 0.0f)) +
-        " aimy=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorAimTargetYOffset, 0.0f)) +
-        " aux0=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0)) +
-        " aux1=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0)) +
-        " spread=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0)) +
-        " f2c8=" + std::to_string(memory.ReadFieldOr<std::uint32_t>(actor_address, kActorSpellConfig2c8Offset, 0)) +
-        " f2cc=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2ccOffset, 0.0f)) +
-        " f2d0=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2d0Offset, 0.0f)) +
-        " f2d4=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2d4Offset, 0.0f)) +
-        " f2d8=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorSpellConfig2d8Offset, 0.0f)) +
-        " heading=" + std::to_string(memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f)) +
+        "skill=" + field_i32_text(kActorPrimarySkillIdOffset) +
+        " prev=" + field_i32_text(kActorPreviousSkillIdOffset) +
+        " c21c=" + control_brain_ptr_text +
+        " c21c_val=" + control_brain_value +
+        " dc=" + actor_dc_ptr_text +
+        " dc_vt=" + actor_dc_vtable +
+        " dc_slot10=" + actor_dc_slot_10 +
+        " dc_vt_cb10=" + actor_dc_callback_10 +
+        " g1abe=" + gameplay_global_flag_1abe +
+        " g1abd=" + gameplay_global_flag_1abd +
+        " g85=" + gameplay_global_flag_85 +
+        " e4=" + field_u32_hex(kActorPrimaryActionLatchE4Offset) +
+        " e8=" + field_u32_hex(kActorPrimaryActionLatchE8Offset) +
+        " drive=" + field_u8_hex(kActorAnimationDriveStateByteOffset) +
+        " target_handle=" + field_u32_hex(kActorSpellTargetGroupByteOffset) +
+        " a168=" + field_ptr_hex(kActorCurrentTargetActorOffset) +
+        " no_int=" + field_u8_hex(kActorNoInterruptFlagOffset) +
+        " a258=" + field_u32_hex(kActorContinuousPrimaryModeOffset) +
+        " a264=" + field_u32_hex(kActorContinuousPrimaryActiveOffset) +
+        " g27c=" + field_u8_hex(kActorActiveCastGroupByteOffset) +
+        " s27e=" + field_u16_hex(kActorActiveCastSlotShortOffset) +
+        " prog=" + (progression_runtime_readable ? HexString(progression_runtime) : unreadable()) +
+        " ph=" + (progression_handle_readable ? HexString(progression_handle) : unreadable()) +
+        " p750=" + read_progression_u32(kProgressionCurrentSpellIdOffset) +
+        " p8a8=" + read_progression_float(kProgressionCastChargeAOffset) +
+        " p8ac=" + read_progression_float(kProgressionEarthChargeCapOffset) +
+        " p8b0=" + read_progression_float(kProgressionCastChargeBOffset) +
+        " p8b4=" + read_progression_float(kProgressionCastChargeCOffset) +
+        " f1b4=" + field_float_text(kActorPurePrimaryTimingAOffset) +
+        " f1b8=" + field_float_text(kActorPurePrimaryTimingBOffset) +
+        " f278=" + field_u32_text(kActorStartupCounterOffset) +
+        " f28c=" + field_float_text(kActorSpellConfig28cOffset) +
+        " f290=" + field_float_text(kActorSpellConfig290Offset) +
+        " f294=" + field_float_text(kActorSpellConfig294Offset) +
+        " f298=" + field_u32_text(kActorSpellConfig298Offset) +
+        " f29c=" + field_float_text(kActorSpellConfig29cOffset) +
+        " f2a0=" + field_float_text(kActorSpellConfig2a0Offset) +
+        " f2a4=" + field_float_text(kActorSpellConfig2a4Offset) +
+        " aimx=" + field_float_text(kActorAimTargetXOffset) +
+        " aimy=" + field_float_text(kActorAimTargetYOffset) +
+        " aux0=" + field_u32_hex(kActorAimTargetAux0Offset) +
+        " aux1=" + field_u32_hex(kActorAimTargetAux1Offset) +
+        " spread=" + field_u8_hex(kActorCastSpreadModeByteOffset) +
+        " f2c8=" + field_u32_text(kActorSpellConfig2c8Offset) +
+        " f2cc=" + field_float_text(kActorSpellConfig2ccOffset) +
+        " f2d0=" + field_float_text(kActorSpellConfig2d0Offset) +
+        " f2d4=" + field_float_text(kActorSpellConfig2d4Offset) +
+        " f2d8=" + field_float_text(kActorSpellConfig2d8Offset) +
+        " heading=" + field_float_text(kActorHeadingOffset) +
         " " + selection_summary;
 }
 
@@ -500,48 +532,37 @@ void PrimeSelectionBrainForCastStartup(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto actor_owner =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
-    const auto target_owner =
-        memory.ReadFieldOr<uintptr_t>(target_actor_address, kActorOwnerOffset, 0);
-    const auto target_group =
-        memory.ReadFieldOr<std::uint8_t>(
-            target_actor_address,
-            kActorSlotOffset,
-            kTargetHandleGroupSentinel);
-    const auto target_slot =
-        memory.ReadFieldOr<std::uint16_t>(target_actor_address, kActorWorldSlotOffset, kTargetHandleSlotSentinel);
+    std::uint8_t target_group = kTargetHandleGroupSentinel;
+    std::uint16_t target_slot = kTargetHandleSlotSentinel;
     const bool have_explicit_target_handle =
-        target_actor_address != 0 &&
-        actor_owner != 0 &&
-        actor_owner == target_owner &&
-        target_group != kTargetHandleGroupSentinel &&
-        target_slot != kTargetHandleSlotSentinel;
+        TryResolveSameWorldTargetHandle(
+            actor_address,
+            target_actor_address,
+            &target_group,
+            &target_slot);
 
-    ongoing->selection_target_group_before =
-        memory.ReadValueOr<std::uint8_t>(
+    if (!memory.TryReadValue(
             selection_pointer + kActorControlBrainTargetSlotOffset,
-            kTargetHandleGroupSentinel);
-    ongoing->selection_target_slot_before =
-        memory.ReadValueOr<std::uint16_t>(
+            &ongoing->selection_target_group_before) ||
+        !memory.TryReadValue(
             selection_pointer + kActorControlBrainTargetHandleOffset,
-            kTargetHandleSlotSentinel);
-    ongoing->selection_retarget_ticks_before =
-        memory.ReadValueOr<std::int32_t>(
+            &ongoing->selection_target_slot_before) ||
+        !memory.TryReadValue(
             selection_pointer + kActorControlBrainRetargetTicksOffset,
-            0);
-    ongoing->selection_target_cooldown_before =
-        memory.ReadValueOr<std::int32_t>(
+            &ongoing->selection_retarget_ticks_before) ||
+        !memory.TryReadValue(
             selection_pointer + kActorControlBrainTargetCooldownTicksOffset,
-            0);
-    ongoing->selection_target_extra_before =
-        memory.ReadValueOr<std::int32_t>(
+            &ongoing->selection_target_cooldown_before) ||
+        !memory.TryReadValue(
             selection_pointer + kActorControlBrainActionCooldownTicksOffset,
-            0);
-    ongoing->selection_target_flags_before =
-        memory.ReadValueOr<std::int32_t>(
+            &ongoing->selection_target_extra_before) ||
+        !memory.TryReadValue(
             selection_pointer + kActorControlBrainActionBurstTicksOffset,
-            0);
+            &ongoing->selection_target_flags_before)) {
+        ongoing->selection_brain_override_active = false;
+        ongoing->selection_target_seed_active = false;
+        return;
+    }
     ongoing->selection_brain_override_active = true;
 
     // PlayerActorTick clears actor_primary_skill_id every tick and only
@@ -559,46 +580,59 @@ void PrimeSelectionBrainForCastStartup(
         ongoing->selection_target_group_seed = target_group;
         ongoing->selection_target_slot_seed = target_slot;
         ongoing->selection_target_hold_ticks = 60;
-        (void)memory.TryWriteField<std::uint8_t>(
+        if (!memory.TryWriteField<std::uint8_t>(
             selection_pointer,
             kActorControlBrainTargetSlotOffset,
-            target_group);
-        (void)memory.TryWriteField<std::uint16_t>(
+            target_group) ||
+            !memory.TryWriteField<std::uint16_t>(
             selection_pointer,
             kActorControlBrainTargetHandleOffset,
-            target_slot);
-        (void)memory.TryWriteField<std::int32_t>(
+            target_slot) ||
+            !memory.TryWriteField<std::int32_t>(
             selection_pointer,
             kActorControlBrainRetargetTicksOffset,
-            ongoing->selection_target_hold_ticks);
+            ongoing->selection_target_hold_ticks)) {
+            RestoreSelectionBrainAfterCast(*ongoing);
+            ongoing->selection_brain_override_active = false;
+            ongoing->selection_target_seed_active = false;
+            return;
+        }
     } else {
         ongoing->selection_target_seed_active = false;
         ongoing->selection_target_group_seed = kTargetHandleGroupSentinel;
         ongoing->selection_target_slot_seed = kTargetHandleSlotSentinel;
         ongoing->selection_target_hold_ticks = 0;
-        (void)memory.TryWriteField<std::uint8_t>(
+        if (!memory.TryWriteField<std::uint8_t>(
             selection_pointer,
             kActorControlBrainTargetSlotOffset,
-            kTargetHandleGroupSentinel);
-        (void)memory.TryWriteField<std::uint16_t>(
+            kTargetHandleGroupSentinel) ||
+            !memory.TryWriteField<std::uint16_t>(
             selection_pointer,
             kActorControlBrainTargetHandleOffset,
-            kTargetHandleSlotSentinel);
-        (void)memory.TryWriteField<std::int32_t>(
+            kTargetHandleSlotSentinel) ||
+            !memory.TryWriteField<std::int32_t>(
             selection_pointer,
             kActorControlBrainRetargetTicksOffset,
-            0);
+            0)) {
+            RestoreSelectionBrainAfterCast(*ongoing);
+            ongoing->selection_brain_override_active = false;
+            return;
+        }
     }
-    (void)memory.TryWriteField<std::int32_t>(
+    if (!memory.TryWriteField<std::int32_t>(
         selection_pointer,
         kActorControlBrainTargetCooldownTicksOffset,
-        0);
-    (void)memory.TryWriteField<std::int32_t>(
+        0) ||
+        !memory.TryWriteField<std::int32_t>(
         selection_pointer,
         kActorControlBrainActionCooldownTicksOffset,
-        0);
-    (void)memory.TryWriteField<std::int32_t>(
+        0) ||
+        !memory.TryWriteField<std::int32_t>(
         selection_pointer,
         kActorControlBrainActionBurstTicksOffset,
-        0);
+        0)) {
+        RestoreSelectionBrainAfterCast(*ongoing);
+        ongoing->selection_brain_override_active = false;
+        ongoing->selection_target_seed_active = false;
+    }
 }

@@ -567,7 +567,7 @@ def build_native_spell_stat_validation(
                 {
                     "line": line,
                     "bot_id": parse_int_text(prepped_match.group(1)),
-                    "kind": prepped_match.group(2) or "legacy_gameplay_slot",
+                    "kind": prepped_match.group(2) or "gameplay_slot",
                     "gameplay_slot": parse_int_text(prepped_match.group(3) or "-999"),
                     "skill_id": parse_int_text(prepped_match.group(4)),
                     "dispatcher_skill_id": parse_int_text(prepped_match.group(5)),
@@ -585,7 +585,7 @@ def build_native_spell_stat_validation(
                     "line": line,
                     "actor": parse_int_text(dispatch_match.group(1)),
                     "bot_id": parse_int_text(dispatch_match.group(2)),
-                    "chosen_runtime": parse_cast_startup_value(line, "chosen_runtime"),
+                    "actor_runtime": parse_cast_startup_value(line, "actor200_inner"),
                     "skill": parse_cast_startup_value(line, "skill"),
                     "previous_skill": parse_cast_startup_value(line, "prev"),
                     "progression_runtime": parse_cast_startup_value(line, "prog"),
@@ -1268,7 +1268,8 @@ local id = sd.bots.create({{
   }},
   scene = {{ kind = 'run' }},
   ready = true,
-  position = {{ x = {x}, y = {y}, heading = 90.0 }},
+  heading = 90.0,
+  position = {{ x = {x}, y = {y} }},
 }})
 print('ok=' .. tostring(id ~= nil))
 print('bot_id=' .. tostring(id))

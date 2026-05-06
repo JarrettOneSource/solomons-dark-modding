@@ -45,21 +45,14 @@ native result instead of overwriting it.
 - `runtime/ghidra_ally_hp_progression_paths.txt`
 - `runtime/ghidra_ally_hp_recompute_candidate.txt`
 - `runtime/ghidra_synthetic_source_profile_paths.txt`
-- `runtime/live_ally_hp_hardcoded_baseline_probe.json`
 - `runtime/live_ally_hp_native_defaults_probe.json`
 - `tests/re/run_static_re_tests.py`
 - `tests/re/run_live_ally_hp_native_defaults_probe.py`
 
-The live probe has two modes:
-
-- `--allow-hardcoded-baseline` records the pre-cleanup behavior where the clone
-  materializes through the standalone rail but HP/max HP are forced to `25.0f`.
-- default strict mode fails unless the shared-hub standalone clone materializes
-  with native `50.0f` HP/max HP and native `100.0f` MP/max MP.
+The live probe fails unless the shared-hub standalone clone materializes with
+native `50.0f` HP/max HP and native `100.0f` MP/max MP.
 
 Post-cleanup validation:
 
-- The pre-change baseline recorded `gameplay_slot=-1`, HP/max HP `25.0f`, and
-  MP/max MP `100.0f`.
 - The strict post-change probe recorded `gameplay_slot=-1`, HP/max HP `50.0f`,
   and MP/max MP `100.0f`.

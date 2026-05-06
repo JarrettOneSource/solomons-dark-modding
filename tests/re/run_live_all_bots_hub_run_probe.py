@@ -176,7 +176,7 @@ def launch_hub_with_replay(element: str, discipline: str, timeout_s: float) -> d
         str(int(timeout_s)),
     ]
     timed_out = False
-    replay_output_timeout_s = min(timeout_s + 45.0, 60.0)
+    replay_output_timeout_s = max(timeout_s + 45.0, 60.0)
     try:
         result = csp.run_command(args, timeout=replay_output_timeout_s)
         returncode: int | None = result.returncode

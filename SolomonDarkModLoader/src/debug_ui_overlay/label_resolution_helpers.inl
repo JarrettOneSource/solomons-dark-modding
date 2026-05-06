@@ -5,7 +5,7 @@ std::string ResolveBestControlLabelFromTextSurface(
     float top,
     float right,
     float bottom,
-    std::string fallback_label,
+    std::string provided_label,
     const std::vector<ObservedUiElement>& exact_text_elements) {
     std::string cached_label;
     if (TryReadCachedObjectLabel(control_address, &cached_label)) {
@@ -43,12 +43,12 @@ std::string ResolveBestControlLabelFromTextSurface(
         return best_match->label;
     }
 
-    return TrimAsciiWhitespace(std::move(fallback_label));
+    return TrimAsciiWhitespace(std::move(provided_label));
 }
 
 std::string ResolveBestLabelForObject(
     uintptr_t object_address,
-    std::string fallback_label,
+    std::string provided_label,
     const std::vector<ObservedUiElement>& exact_text_elements) {
     std::string cached_label;
     if (TryReadCachedObjectLabel(object_address, &cached_label)) {
@@ -77,7 +77,7 @@ std::string ResolveBestLabelForObject(
         return best_match->label;
     }
 
-    return TrimAsciiWhitespace(std::move(fallback_label));
+    return TrimAsciiWhitespace(std::move(provided_label));
 }
 
 std::string ResolveBestDarkCloudBrowserControlLabel(
@@ -86,7 +86,7 @@ std::string ResolveBestDarkCloudBrowserControlLabel(
     float top,
     float right,
     float bottom,
-    std::string fallback_label,
+    std::string provided_label,
     const std::vector<ObservedUiElement>& exact_text_elements) {
     return ResolveBestControlLabelFromTextSurface(
         "dark_cloud_browser",
@@ -95,6 +95,6 @@ std::string ResolveBestDarkCloudBrowserControlLabel(
         top,
         right,
         bottom,
-        std::move(fallback_label),
+        std::move(provided_label),
         exact_text_elements);
 }

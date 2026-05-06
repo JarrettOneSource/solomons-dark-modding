@@ -9,7 +9,7 @@ struct BotBoulderDamageProjectionSnapshot {
     uintptr_t target_actor = 0;
     uintptr_t target_health_base = 0;
     const char* target_health_kind = "unknown";
-    int progression_level = 1;
+    int progression_level = 0;
     float target_hp = 0.0f;
     float target_max_hp = 0.0f;
     float target_x = 0.0f;
@@ -65,6 +65,7 @@ bool TryPopulateBoulderProjectionTarget(
     const BotNativeActiveSpellObjectState& active_spell_state,
     BotBoulderDamageProjectionSnapshot* snapshot,
     uintptr_t target_actor) {
+    (void)memory;
     if (snapshot == nullptr || target_actor == 0) {
         return false;
     }
@@ -84,42 +85,18 @@ bool TryPopulateBoulderProjectionTarget(
     candidate.target_position_readable = false;
     candidate.target_in_impact = false;
     candidate.native_radius_damage_eligible = false;
-    if (kActorPositionXOffset != 0 &&
-        kActorPositionYOffset != 0 &&
-        memory.IsReadableRange(
-            target_actor + kActorPositionXOffset,
-            sizeof(float)) &&
-        memory.IsReadableRange(
-            target_actor + kActorPositionYOffset,
-            sizeof(float))) {
-        candidate.target_x =
-            memory.ReadFieldOr<float>(
-                target_actor,
-                kActorPositionXOffset,
-                0.0f);
-        candidate.target_y =
-            memory.ReadFieldOr<float>(
-                target_actor,
-                kActorPositionYOffset,
-                0.0f);
-        candidate.target_position_readable =
-            std::isfinite(candidate.target_x) &&
-            std::isfinite(candidate.target_y);
+    if (kActorPositionXOffset == 0 ||
+        kActorPositionYOffset == 0 ||
+        !TryReadFiniteFloatField(target_actor, kActorPositionXOffset, &candidate.target_x) ||
+        !TryReadFiniteFloatField(target_actor, kActorPositionYOffset, &candidate.target_y)) {
+        return false;
     }
-    if (kActorCollisionRadiusOffset != 0 &&
-        memory.IsReadableRange(
-            target_actor + kActorCollisionRadiusOffset,
-            sizeof(float))) {
-        candidate.target_radius =
-            memory.ReadFieldOr<float>(
-                target_actor,
-                kActorCollisionRadiusOffset,
-                0.0f);
-        if (!std::isfinite(candidate.target_radius) ||
-            candidate.target_radius < 0.0f ||
-            candidate.target_radius > 128.0f) {
-            candidate.target_radius = 0.0f;
-        }
+    candidate.target_position_readable = true;
+    if (kActorCollisionRadiusOffset == 0 ||
+        !TryReadFiniteFloatField(target_actor, kActorCollisionRadiusOffset, &candidate.target_radius) ||
+        candidate.target_radius < 0.0f ||
+        candidate.target_radius > 128.0f) {
+        return false;
     }
     if (candidate.target_position_readable &&
         std::isfinite(active_spell_state.object_x) &&
@@ -249,10 +226,12 @@ BotBoulderDamageProjectionSnapshot ReadBotBoulderDamageProjectionSnapshot(
         return snapshot;
     }
 
-    const auto progression_level =
-        ReadEarthBoulderProgressionLevel(
-            binding,
-            binding->ongoing_cast.progression_runtime_address);
+    int progression_level = 0;
+    if (!TryReadEarthBoulderProgressionLevel(
+            binding->ongoing_cast.progression_runtime_address,
+            &progression_level)) {
+        return snapshot;
+    }
     const auto resolved_native_damage = active_spell_state.release_base_damage;
     if (!std::isfinite(resolved_native_damage) ||
         resolved_native_damage <= 0.0f) {
@@ -270,7 +249,9 @@ BotBoulderDamageProjectionSnapshot ReadBotBoulderDamageProjectionSnapshot(
     const auto release_damage_scale = ResolveEarthBoulderReleaseDamageScale();
     const auto release_damage_floor = ResolveEarthBoulderReleaseDamageFloor();
     const auto release_damage_cap_scale = ResolveEarthBoulderReleaseDamageCapScale();
-    if (!std::isfinite(release_damage_scale) ||
+    if (!std::isfinite(damage_output_scale) ||
+        damage_output_scale <= 0.0f ||
+        !std::isfinite(release_damage_scale) ||
         release_damage_scale <= 0.0f ||
         !std::isfinite(release_damage_floor) ||
         release_damage_floor < 0.0f ||
@@ -282,10 +263,7 @@ BotBoulderDamageProjectionSnapshot ReadBotBoulderDamageProjectionSnapshot(
     snapshot.progression_level = progression_level;
     snapshot.charge = release_charge;
     snapshot.base_damage = resolved_native_damage;
-    snapshot.damage_output_scale =
-        std::isfinite(damage_output_scale) && damage_output_scale > 0.0f
-            ? damage_output_scale
-            : 0.0f;
+    snapshot.damage_output_scale = damage_output_scale;
     snapshot.release_damage_scale = release_damage_scale;
     snapshot.release_damage_floor = release_damage_floor;
     snapshot.release_damage_cap_scale = release_damage_cap_scale;

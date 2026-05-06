@@ -243,15 +243,12 @@ has already completed the cast path.
 Run the native ally HP/default-resource probe around the clone HP cleanup:
 
 ```bash
-python3 tests/re/run_live_ally_hp_native_defaults_probe.py --allow-hardcoded-baseline
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/Build-All.ps1 -Configuration Release
 python3 tests/re/run_live_ally_hp_native_defaults_probe.py
 ```
 
-The baseline mode proves the current shared-hub bot materializes through the
-standalone clone rail while still showing the `25.0f` HP overwrite. Strict mode
-fails unless the clone reports native `50.0f` HP/max HP and native `100.0f`
-MP/max MP from the recovered constructor/recompute path.
+The probe fails unless the shared-hub bot materializes through the standalone
+clone rail and reports native `50.0f` HP/max HP plus native `100.0f` MP/max MP
+from the recovered constructor/recompute path.
 
 Run the layout-backed pathfinding and movement probe after changing movement
 controller, nav-grid, GameNpc, or `[gameplay.pathfinding]` policy seams:

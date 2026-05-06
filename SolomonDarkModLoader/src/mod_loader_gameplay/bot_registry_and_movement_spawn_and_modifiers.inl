@@ -18,41 +18,16 @@ bool ResolveParticipantSpawnTransform(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto world_address =
-        memory.ReadFieldOr<uintptr_t>(local_actor_address, kActorOwnerOffset, 0);
+    uintptr_t world_address = 0;
+    if (!memory.TryReadField(local_actor_address, kActorOwnerOffset, &world_address)) {
+        return false;
+    }
     if (world_address == 0) {
         return false;
     }
 
-    bool allow_local_spawn_anchor = false;
-    if (request.bot_id != 0) {
-        const auto runtime_state = multiplayer::SnapshotRuntimeState();
-        if (const auto* participant = multiplayer::FindParticipant(runtime_state, request.bot_id);
-            participant != nullptr && multiplayer::IsLuaControlledParticipant(*participant)) {
-            allow_local_spawn_anchor = true;
-        }
-    }
-
-    if (!request.has_transform) {
-        if (!allow_local_spawn_anchor) {
-            return false;
-        }
-        x = memory.ReadFieldOr<float>(local_actor_address, kActorPositionXOffset, 0.0f) + kDefaultWizardBotOffsetX;
-        y = memory.ReadFieldOr<float>(local_actor_address, kActorPositionYOffset, 0.0f) + kDefaultWizardBotOffsetY;
-        heading = memory.ReadFieldOr<float>(local_actor_address, kActorHeadingOffset, 0.0f);
-    } else if (!request.has_heading) {
-        uintptr_t existing_actor_address = 0;
-        if (request.bot_id != 0) {
-            if (const auto* binding = FindParticipantEntity(request.bot_id); binding != nullptr) {
-                existing_actor_address = binding->actor_address;
-            }
-        }
-
-        if (existing_actor_address != 0) {
-            heading = memory.ReadFieldOr<float>(existing_actor_address, kActorHeadingOffset, 0.0f);
-        } else {
-            heading = memory.ReadFieldOr<float>(local_actor_address, kActorHeadingOffset, 0.0f);
-        }
+    if (!request.has_transform || !request.has_heading) {
+        return false;
     }
 
     if (request.has_transform && !validate_placement) {

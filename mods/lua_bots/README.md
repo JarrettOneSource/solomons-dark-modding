@@ -87,7 +87,7 @@ Current spawn behavior:
   per-bot spacing offset
 - anchored private/hub transitions spawn from the transition anchor plus each
   bot's configured per-bot spacing offset
-- run and fallback spawn point = `player position` plus each bot's
+- run spawn point = `player position` plus each bot's
   configured per-bot spacing offset
 
 Current same-scene follow behavior:

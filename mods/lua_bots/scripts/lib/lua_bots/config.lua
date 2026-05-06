@@ -191,8 +191,6 @@ function config.create()
     result.CURRENT_MANAGED_BOT_NAMES[bot_config.name] = true
   end
 
-  result.DEFAULT_SPAWN_OFFSET_X = 50.0
-  result.DEFAULT_SPAWN_OFFSET_Y = 0.0
   result.FOLLOW_STOP_DISTANCE = 100.0
   result.FOLLOW_RESUME_DISTANCE = 250.0
   result.FOLLOW_TARGET_ARRIVAL_DISTANCE = 32.0

@@ -15,10 +15,13 @@ bool StartPendingBotCastRequest(
     const auto queued_target_actor_address = request.target_actor_address;
 
     if (request.skill_id <= 0) {
+        float current_heading = 0.0f;
+        const bool current_heading_readable =
+            TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &current_heading);
         (void)multiplayer::FinishBotAttack(
             binding->bot_id,
-            true,
-            memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f),
+            current_heading_readable,
+            current_heading,
             true);
         if (error_message != nullptr) {
             *error_message = "cast has no skill_id";
@@ -32,10 +35,15 @@ bool StartPendingBotCastRequest(
     float aim_target_y = 0.0f;
     bool have_aim_target = false;
     if (request.has_aim_target) {
-        const auto actor_x =
-            memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-        const auto actor_y =
-            memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
+        float actor_x = 0.0f;
+        float actor_y = 0.0f;
+        if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &actor_x) ||
+            !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &actor_y)) {
+            if (error_message != nullptr) {
+                *error_message = "actor position unreadable for bot cast aim";
+            }
+            return false;
+        }
         const auto dx = request.aim_target_x - actor_x;
         const auto dy = request.aim_target_y - actor_y;
         if ((dx * dx) + (dy * dy) > 0.0001f) {
@@ -92,18 +100,23 @@ bool StartPendingBotCastRequest(
         }
     }
 
-    const auto heading_before =
-        memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
-    const auto aim_x_before =
-        memory.ReadFieldOr<float>(actor_address, kActorAimTargetXOffset, 0.0f);
-    const auto aim_y_before =
-        memory.ReadFieldOr<float>(actor_address, kActorAimTargetYOffset, 0.0f);
-    const auto aim_aux0_before =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
-    const auto aim_aux1_before =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
-    const auto spread_before =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
+    float heading_before = 0.0f;
+    float aim_x_before = 0.0f;
+    float aim_y_before = 0.0f;
+    std::uint32_t aim_aux0_before = 0;
+    std::uint32_t aim_aux1_before = 0;
+    std::uint8_t spread_before = 0;
+    if (!TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &heading_before) ||
+        !TryReadFiniteFloatField(actor_address, kActorAimTargetXOffset, &aim_x_before) ||
+        !TryReadFiniteFloatField(actor_address, kActorAimTargetYOffset, &aim_y_before) ||
+        !memory.TryReadField(actor_address, kActorAimTargetAux0Offset, &aim_aux0_before) ||
+        !memory.TryReadField(actor_address, kActorAimTargetAux1Offset, &aim_aux1_before) ||
+        !memory.TryReadField(actor_address, kActorCastSpreadModeByteOffset, &spread_before)) {
+        if (error_message != nullptr) {
+            *error_message = "actor cast startup state unreadable";
+        }
+        return false;
+    }
 
     if (have_aim_heading) {
         ApplyWizardActorFacingState(actor_address, aim_heading);
@@ -122,10 +135,15 @@ bool StartPendingBotCastRequest(
     (void)memory.TryWriteField<std::int32_t>(
         actor_address, kActorPrimarySkillIdOffset, request.skill_id);
 
-    const auto active_cast_group_before =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
-    const auto active_cast_slot_before =
-        memory.ReadFieldOr<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset, 0);
+    std::uint8_t active_cast_group_before = kBotCastActorActiveCastGroupSentinel;
+    std::uint16_t active_cast_slot_before = kBotCastActorActiveCastSlotSentinel;
+    if (!memory.TryReadField(actor_address, kActorActiveCastGroupByteOffset, &active_cast_group_before) ||
+        !memory.TryReadField(actor_address, kActorActiveCastSlotShortOffset, &active_cast_slot_before)) {
+        if (error_message != nullptr) {
+            *error_message = "native active-cast handle unreadable before bot cast";
+        }
+        return false;
+    }
     // If a prior cast left the handle cached (e.g. SEH abort), release it
     // properly before starting init so we don't leak a world-storage slot.
     if (active_cast_group_before != kBotCastActorActiveCastGroupSentinel) {
@@ -150,7 +168,7 @@ bool StartPendingBotCastRequest(
             (void)multiplayer::FinishBotAttack(
                 binding->bot_id,
                 true,
-                memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, heading_before),
+                heading_before,
                 true);
             if (error_message != nullptr) {
                 *error_message =
@@ -175,8 +193,25 @@ bool StartPendingBotCastRequest(
             dispatcher_address, actor_address, &exception_code);
     });
 
-    const auto active_group_post =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
+    std::uint8_t active_group_post = kBotCastActorActiveCastGroupSentinel;
+    if (!memory.TryReadField(actor_address, kActorActiveCastGroupByteOffset, &active_group_post)) {
+        ParticipantEntityBinding::OngoingCastState rollback{};
+        rollback.have_aim_heading = have_aim_heading;
+        rollback.have_aim_target = have_aim_target;
+        rollback.heading_before = heading_before;
+        rollback.aim_x_before = aim_x_before;
+        rollback.aim_y_before = aim_y_before;
+        rollback.aim_aux0_before = aim_aux0_before;
+        rollback.aim_aux1_before = aim_aux1_before;
+        rollback.spread_before = spread_before;
+        (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
+        RestoreBotCastAim(cast_context, rollback);
+        (void)multiplayer::FinishBotAttack(binding->bot_id, true, heading_before, true);
+        if (error_message != nullptr) {
+            *error_message = "native active-cast group unreadable after bot cast";
+        }
+        return false;
+    }
 
     // Diagnostic: immediately after dispatcher returns and before any cleanup,
     // ask the native world lookup for the active spell object so we can see
@@ -214,7 +249,7 @@ bool StartPendingBotCastRequest(
         (void)multiplayer::FinishBotAttack(
             binding->bot_id,
             true,
-            memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, heading_before),
+            heading_before,
             true);
 
         if (error_message != nullptr) {
@@ -257,10 +292,19 @@ bool StartPendingBotCastRequest(
     // the watch loop waiting for a latch that already came and went. Combo
     // dispatcher primaries arm through the gameplay-slot startup path instead
     // of this direct one so late native emission stays visible there.
-    const auto drive_state_post =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
-    const auto no_interrupt_post =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0);
+    std::uint8_t drive_state_post = 0;
+    std::uint8_t no_interrupt_post = 0;
+    if (!memory.TryReadField(actor_address, kActorAnimationDriveStateByteOffset, &drive_state_post) ||
+        !memory.TryReadField(actor_address, kActorNoInterruptFlagOffset, &no_interrupt_post)) {
+        ParticipantEntityBinding::OngoingCastState rollback = ongoing;
+        RestoreBotCastAim(cast_context, rollback);
+        (void)multiplayer::FinishBotAttack(binding->bot_id, true, heading_before, true);
+        ongoing = ParticipantEntityBinding::OngoingCastState{};
+        if (error_message != nullptr) {
+            *error_message = "native cast latch state unreadable after bot cast";
+        }
+        return false;
+    }
     ongoing.saw_activity =
         active_group_post != kBotCastActorActiveCastGroupSentinel ||
         drive_state_post != 0 ||
@@ -283,11 +327,12 @@ bool StartPendingBotCastRequest(
         " group_post=" + HexString(active_group_post) +
         " drive_post=" + HexString(drive_state_post) +
         " no_int_post=" + HexString(no_interrupt_post) +
-        " native_actor_slot=" +
-        std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
-            actor_address,
-            kActorSlotOffset,
-            -1))) +
+        " native_actor_slot=" + [&]() {
+            std::int8_t actor_slot = -1;
+            return memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot)
+                ? std::to_string(static_cast<int>(actor_slot))
+                : std::string("unreadable");
+        }() +
         " watch_armed=" + (binding->ongoing_cast.active ? std::string("1") : std::string("0")));
     return true;
 }

@@ -310,9 +310,11 @@ bool CreateGameplaySlotBotActor(
         return false;
     }
 
+    uintptr_t debug_local_actor = 0;
+    (void)memory.TryReadField(gameplay_address, kGameplayPlayerActorOffset, &debug_local_actor);
     LogBotVisualDebugStage(
         "slot_actor_pre_register",
-        memory.ReadFieldOr<uintptr_t>(gameplay_address, kGameplayPlayerActorOffset, 0),
+        debug_local_actor,
         slot_actor_address,
         0);
 
@@ -348,10 +350,15 @@ bool FinalizeGameplaySlotBotRegistration(
         kGameplayPlayerActorOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
     const auto progression_slot_offset =
         kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
-    const auto published_actor_address =
-        memory.ReadFieldOr<uintptr_t>(gameplay_address, actor_slot_offset, 0);
-    const auto published_progression_wrapper =
-        memory.ReadFieldOr<uintptr_t>(gameplay_address, progression_slot_offset, 0);
+    uintptr_t published_actor_address = 0;
+    uintptr_t published_progression_wrapper = 0;
+    if (!memory.TryReadField(gameplay_address, actor_slot_offset, &published_actor_address) ||
+        !memory.TryReadField(gameplay_address, progression_slot_offset, &published_progression_wrapper)) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay-slot registration could not read stock slot table entries.";
+        }
+        return false;
+    }
     if (published_actor_address != actor_address || published_progression_wrapper == 0) {
         if (error_message != nullptr) {
             *error_message =

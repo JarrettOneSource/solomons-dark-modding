@@ -9,22 +9,31 @@ void TickBotOwnedSkillsWizard(uintptr_t actor_address) {
         return;
     }
     auto& memory = ProcessMemory::Instance();
-    uintptr_t progression_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0);
+    uintptr_t progression_address = 0;
+    if (!memory.TryReadField(actor_address, kActorProgressionRuntimeStateOffset, &progression_address)) {
+        return;
+    }
     if (progression_address == 0) {
-        progression_address = ReadSmartPointerInnerObject(
-            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0));
+        uintptr_t progression_handle = 0;
+        if (!memory.TryReadField(actor_address, kActorProgressionHandleOffset, &progression_handle)) {
+            return;
+        }
+        progression_address = ReadSmartPointerInnerObject(progression_handle);
     }
     if (progression_address == 0) {
         return;
     }
-    const auto vtable_address =
-        memory.ReadFieldOr<uintptr_t>(progression_address, kObjectVtableOffset, 0);
+    uintptr_t vtable_address = 0;
+    if (!memory.TryReadField(progression_address, kObjectVtableOffset, &vtable_address)) {
+        return;
+    }
     if (vtable_address == 0) {
         return;
     }
-    const auto tick_fn_address =
-        memory.ReadFieldOr<uintptr_t>(vtable_address, kSkillsWizardTickVfuncOffset, 0);
+    uintptr_t tick_fn_address = 0;
+    if (!memory.TryReadField(vtable_address, kSkillsWizardTickVfuncOffset, &tick_fn_address)) {
+        return;
+    }
     if (tick_fn_address == 0) {
         return;
     }

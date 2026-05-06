@@ -41,15 +41,20 @@ void DispatchSpellCastForSelf(uintptr_t self_address, int spell_id) {
     DispatchLuaSpellCast(spell_id, x, y, direction_x, direction_y);
 }
 
-int ReadSpellCastHookSkillId(uintptr_t self_address) {
+bool TryReadSpellCastHookSkillId(uintptr_t self_address, int* spell_id) {
+    if (spell_id == nullptr) {
+        return false;
+    }
+
+    *spell_id = 0;
     if (self_address == 0 || kActorPrimarySkillIdOffset == 0) {
-        return 0;
+        return false;
     }
     auto& memory = ProcessMemory::Instance();
     if (!memory.IsReadableRange(self_address + kActorPrimarySkillIdOffset, sizeof(std::int32_t))) {
-        return 0;
+        return false;
     }
-    return memory.ReadFieldOr<std::int32_t>(self_address, kActorPrimarySkillIdOffset, 0);
+    return memory.TryReadField(self_address, kActorPrimarySkillIdOffset, spell_id);
 }
 
 #define SDMOD_DEFINE_SPELL_CAST_HOOK(name, hook_index)                              \
@@ -59,9 +64,14 @@ int ReadSpellCastHookSkillId(uintptr_t self_address) {
             return;                                                                  \
         }                                                                            \
         const auto self_address = reinterpret_cast<uintptr_t>(self);                 \
-        const auto spell_id = ReadSpellCastHookSkillId(self_address);                \
+        int spell_id = 0;                                                           \
+        const bool have_spell_id = TryReadSpellCastHookSkillId(self_address, &spell_id); \
         original(self, unused_edx);                                                  \
-        DispatchSpellCastForSelf(self_address, spell_id);                            \
+        if (have_spell_id) {                                                         \
+            DispatchSpellCastForSelf(self_address, spell_id);                        \
+        } else {                                                                     \
+            Log("spell.cast native skill id unavailable. actor=" + HexString(self_address)); \
+        }                                                                            \
     }
 
 SDMOD_DEFINE_SPELL_CAST_HOOK(3EB, kHookSpellCast3EB)
@@ -80,11 +90,16 @@ void __fastcall HookSpellCast_3EF(void* self, void* unused_edx) {
     }
 
     const auto self_address = reinterpret_cast<uintptr_t>(self);
-    const auto spell_id = ReadSpellCastHookSkillId(self_address);
+    int spell_id = 0;
+    const bool have_spell_id = TryReadSpellCastHookSkillId(self_address, &spell_id);
     Log("[bots] spell_3ef hook enter. " + DescribeSpellCastHookActorState(self_address));
     original(self, unused_edx);
     Log("[bots] spell_3ef hook exit. " + DescribeSpellCastHookActorState(self_address));
-    DispatchSpellCastForSelf(self_address, spell_id);
+    if (have_spell_id) {
+        DispatchSpellCastForSelf(self_address, spell_id);
+    } else {
+        Log("spell.cast native skill id unavailable. actor=" + HexString(self_address));
+    }
 }
 
 #undef SDMOD_DEFINE_SPELL_CAST_HOOK

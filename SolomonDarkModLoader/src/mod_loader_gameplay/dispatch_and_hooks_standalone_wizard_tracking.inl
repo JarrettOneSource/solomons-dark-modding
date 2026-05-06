@@ -24,7 +24,6 @@ void LogStandaloneWizardActorLifecycleEvent(
         return;
     }
 
-    auto& memory = ProcessMemory::Instance();
     Log(
         "[bots] " + std::string(label) +
         " actor=" + HexString(actor_address) +
@@ -32,20 +31,14 @@ void LogStandaloneWizardActorLifecycleEvent(
         " binding_slot=" + std::to_string(gameplay_slot) +
         " arg=" + std::to_string(free_flag_or_slot) +
         " caller=" + HexString(caller_address) +
-        " vtable=" + HexString(memory.ReadFieldOr<uintptr_t>(
-            actor_address,
-            kObjectVtableOffset,
-            0)) +
-        " +04=" + HexString(memory.ReadFieldOr<std::uint32_t>(actor_address, kObjectHeaderWordOffset, 0)) +
-        " owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
+        " vtable=" + ReadPointerFieldText(actor_address, kObjectVtableOffset) +
+        " +04=" + ReadU32FieldHexText(actor_address, kObjectHeaderWordOffset) +
+        " owner=" + ReadPointerFieldText(actor_address, kActorOwnerOffset) +
         " world_self=" + HexString(world_address) +
-        " slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
-            actor_address,
-            kActorSlotOffset,
-            -1))) +
-        " +1FC=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipRuntimeStateOffset, 0)) +
-        " +200=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
-        " +21C=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0)));
+        " slot=" + ReadI8FieldText(actor_address, kActorSlotOffset) +
+        " +1FC=" + ReadPointerFieldText(actor_address, kActorEquipRuntimeStateOffset) +
+        " +200=" + ReadPointerFieldText(actor_address, kActorProgressionRuntimeStateOffset) +
+        " +21C=" + ReadPointerFieldText(actor_address, kActorAnimationSelectionStateOffset));
 }
 
 std::string CaptureStackTraceSummary(std::size_t frames_to_skip, std::size_t max_frames) {
@@ -115,16 +108,24 @@ bool TryFindTrackedStandaloneWizardInPointerList(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto count = memory.ReadFieldOr<int>(list_address, kPointerListCountOffset, 0);
-    const auto items_address = memory.ReadFieldOr<uintptr_t>(list_address, kPointerListItemsOffset, 0);
+    int count = 0;
+    uintptr_t items_address = 0;
+    if (!memory.TryReadField(list_address, kPointerListCountOffset, &count) ||
+        !memory.TryReadField(list_address, kPointerListItemsOffset, &items_address)) {
+        return false;
+    }
     if (count <= 0 || count > 1024 || items_address == 0) {
         return false;
     }
 
     int tracked_count = 0;
     for (int index = 0; index < count; ++index) {
-        const auto actor_address =
-            memory.ReadValueOr<uintptr_t>(items_address + static_cast<std::size_t>(index) * sizeof(std::uint32_t), 0);
+        uintptr_t actor_address = 0;
+        if (!memory.TryReadValue(
+                items_address + static_cast<std::size_t>(index) * sizeof(std::uint32_t),
+                &actor_address)) {
+            continue;
+        }
         if (actor_address == 0) {
             continue;
         }
@@ -173,22 +174,16 @@ bool LogTrackedStandaloneWizardPuppetManagerDeleteBatchEvent(
         return false;
     }
 
-    auto& memory = ProcessMemory::Instance();
-    const auto count = memory.ReadFieldOr<int>(list_address, kPointerListCountOffset, 0);
-    const auto capacity = memory.ReadFieldOr<int>(list_address, kPointerListCapacityOffset, 0);
-    const auto items_address = memory.ReadFieldOr<uintptr_t>(list_address, kPointerListItemsOffset, 0);
-    const auto owns_storage = static_cast<unsigned>(memory.ReadFieldOr<std::uint8_t>(
-        list_address,
-        kPointerListOwnsStorageFlagOffset,
-        0));
-    const auto self_vtable = memory.ReadFieldOr<uintptr_t>(
+    uintptr_t owner_region = 0;
+    const bool have_owner_region = ProcessMemory::Instance().TryReadField(
         self_address,
-        kObjectVtableOffset,
-        0);
-    const auto owner_region = memory.ReadFieldOr<uintptr_t>(self_address, kPuppetManagerOwnerRegionOffset, 0);
-    const auto expected_manager =
-        owner_region == 0 ? 0 : owner_region + kRegionPuppetManagerOffset;
-    const auto puppet_manager_vtable = memory.ResolveGameAddressOrZero(kPuppetManagerVtable);
+        kPuppetManagerOwnerRegionOffset,
+        &owner_region);
+    const auto expected_manager = have_owner_region && owner_region != 0
+        ? HexString(owner_region + kRegionPuppetManagerOffset)
+        : UnreadableMemoryFieldText();
+    const auto puppet_manager_vtable =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kPuppetManagerVtable);
     const auto list_delta = list_address >= self_address
         ? list_address - self_address
         : self_address - list_address;
@@ -196,16 +191,16 @@ bool LogTrackedStandaloneWizardPuppetManagerDeleteBatchEvent(
     Log(
         "[bots] " + std::string(label) +
         " self=" + HexString(self_address) +
-        " self_vtable=" + HexString(self_vtable) +
+        " self_vtable=" + ReadPointerFieldText(self_address, kObjectVtableOffset) +
         " puppet_manager_vtable=" + HexString(puppet_manager_vtable) +
-        " owner_region=" + HexString(owner_region) +
-        " expected_manager=" + HexString(expected_manager) +
+        " owner_region=" + (have_owner_region ? HexString(owner_region) : UnreadableMemoryFieldText()) +
+        " expected_manager=" + expected_manager +
         " list=" + HexString(list_address) +
         " list_delta=" + HexString(list_delta) +
-        " count=" + std::to_string(count) +
-        " capacity=" + std::to_string(capacity) +
-        " owns_storage=" + std::to_string(owns_storage) +
-        " items=" + HexString(items_address) +
+        " count=" + ReadI32FieldText(list_address, kPointerListCountOffset) +
+        " capacity=" + ReadI32FieldText(list_address, kPointerListCapacityOffset) +
+        " owns_storage=" + ReadU8FieldText(list_address, kPointerListOwnsStorageFlagOffset) +
+        " items=" + ReadPointerFieldText(list_address, kPointerListItemsOffset) +
         " tracked_actor=" + HexString(actor_address) +
         " tracked_bot_id=" + std::to_string(bot_id) +
         " tracked_binding_slot=" + std::to_string(gameplay_slot) +
@@ -240,7 +235,6 @@ void LogStandaloneWizardRegionDeleteEvent(
         return;
     }
 
-    auto& memory = ProcessMemory::Instance();
     Log(
         "[bots] " + std::string(label) +
         " actor=" + HexString(actor_address) +
@@ -248,23 +242,11 @@ void LogStandaloneWizardRegionDeleteEvent(
         " binding_slot=" + std::to_string(gameplay_slot) +
         " caller=" + HexString(caller_address) +
         " deleter_self=" + HexString(deleter_address) +
-        " deleter_vtable=" + HexString(memory.ReadFieldOr<uintptr_t>(
-            deleter_address,
-            kObjectVtableOffset,
-            0)) +
-        " deleter_world=" + HexString(memory.ReadFieldOr<uintptr_t>(
-            deleter_address,
-            kPuppetManagerOwnerRegionOffset,
-            0)) +
-        " actor_vtable=" + HexString(memory.ReadFieldOr<uintptr_t>(
-            actor_address,
-            kObjectVtableOffset,
-            0)) +
-        " actor_owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
-        " actor_slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
-            actor_address,
-            kActorSlotOffset,
-            -1))) +
+        " deleter_vtable=" + ReadPointerFieldText(deleter_address, kObjectVtableOffset) +
+        " deleter_world=" + ReadPointerFieldText(deleter_address, kPuppetManagerOwnerRegionOffset) +
+        " actor_vtable=" + ReadPointerFieldText(actor_address, kObjectVtableOffset) +
+        " actor_owner=" + ReadPointerFieldText(actor_address, kActorOwnerOffset) +
+        " actor_slot=" + ReadI8FieldText(actor_address, kActorSlotOffset) +
         " active_vslot28_depth=" + std::to_string(g_player_actor_vslot28_depth) +
         " active_vslot28_actor=" + HexString(g_player_actor_vslot28_actor) +
         " active_vslot28_caller=" + HexString(g_player_actor_vslot28_caller) +

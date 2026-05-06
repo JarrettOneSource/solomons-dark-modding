@@ -28,16 +28,17 @@ bool PrimeGameplaySlotBotSelectionState(
             &slot_progression_wrapper);
         slot_progression_inner = ReadSmartPointerInnerObject(slot_progression_wrapper);
     }
+    uintptr_t actor_progression_runtime = 0;
+    uintptr_t actor_progression_handle = 0;
+    (void)memory.TryReadField(actor_address, kActorProgressionRuntimeStateOffset, &actor_progression_runtime);
+    (void)memory.TryReadField(actor_address, kActorProgressionHandleOffset, &actor_progression_handle);
     Log(
         "[bots] selection_prime entry actor=" + HexString(actor_address) +
         " slot=" + std::to_string(slot_index) +
         " param_prog=" + HexString(progression_address) +
-        " actor_prog_runtime=" + HexString(
-            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
-        " actor_prog_handle=" + HexString(
-            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0)) +
-        " actor_prog_inner=" + HexString(ReadSmartPointerInnerObject(
-            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0))) +
+        " actor_prog_runtime=" + HexString(actor_progression_runtime) +
+        " actor_prog_handle=" + HexString(actor_progression_handle) +
+        " actor_prog_inner=" + HexString(ReadSmartPointerInnerObject(actor_progression_handle)) +
         " slot_prog=" + HexString(slot_progression_wrapper) +
         " slot_prog_inner=" + HexString(slot_progression_inner));
 
@@ -189,14 +190,21 @@ bool PrimeStandaloneWizardProgressionSelectionState(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto progression_table_address = memory.ReadFieldOr<uintptr_t>(
-        progression_inner_address,
-        kStandaloneWizardProgressionTableBaseOffset,
-        0);
-    const auto progression_table_count = memory.ReadFieldOr<int>(
-        progression_inner_address,
-        kStandaloneWizardProgressionTableCountOffset,
-        0);
+    uintptr_t progression_table_address = 0;
+    int progression_table_count = 0;
+    if (!memory.TryReadField(
+            progression_inner_address,
+            kStandaloneWizardProgressionTableBaseOffset,
+            &progression_table_address) ||
+        !memory.TryReadField(
+            progression_inner_address,
+            kStandaloneWizardProgressionTableCountOffset,
+            &progression_table_count)) {
+        if (error_message != nullptr) {
+            *error_message = "Standalone progression selection table fields are unreadable.";
+        }
+        return false;
+    }
     if (progression_table_address == 0 || progression_table_count <= selection_state) {
         if (error_message != nullptr) {
             *error_message =

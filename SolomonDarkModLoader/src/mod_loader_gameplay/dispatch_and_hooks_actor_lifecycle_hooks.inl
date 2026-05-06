@@ -18,12 +18,6 @@ bool IsLocalPlayerActorDestructorTarget(uintptr_t actor_address) {
         return true;
     }
 
-    uintptr_t global_actor_address = 0;
-    if (TryReadResolvedGamePointerAbsolute(kLocalPlayerActorGlobal, &global_actor_address) &&
-        global_actor_address == actor_address) {
-        return true;
-    }
-
     uintptr_t gameplay_address = 0;
     uintptr_t local_actor_address = 0;
     if (TryResolveCurrentGameplayScene(&gameplay_address) && gameplay_address != 0 &&
@@ -32,7 +26,7 @@ bool IsLocalPlayerActorDestructorTarget(uintptr_t actor_address) {
         return true;
     }
 
-    return ProcessMemory::Instance().ReadFieldOr<std::int8_t>(actor_address, kActorSlotOffset, -1) == 0;
+    return false;
 }
 
 void HandleLocalPlayerActorDestructorTeardown(uintptr_t actor_address, uintptr_t caller_address) {
@@ -78,6 +72,16 @@ void __fastcall HookPlayerActorDtor(void* self, void* /*unused_edx*/, char free_
     }
     if (tracked_wizard) {
         auto& memory = ProcessMemory::Instance();
+        const auto actor_pointer_field = [&](uintptr_t offset) {
+            uintptr_t value = 0;
+            return memory.TryReadField(actor_address, offset, &value)
+                ? HexString(value)
+                : std::string("unreadable");
+        };
+        std::int8_t actor_slot = 0;
+        const auto actor_slot_text = memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot)
+            ? std::to_string(static_cast<int>(actor_slot))
+            : std::string("unreadable");
         Log(
             "[bots] player_dtor enter" +
             std::string(" actor=") + HexString(actor_address) +
@@ -86,14 +90,11 @@ void __fastcall HookPlayerActorDtor(void* self, void* /*unused_edx*/, char free_
             " kind=" + std::to_string(static_cast<int>(tracked_kind)) +
             " arg=" + std::to_string(static_cast<int>(free_flag)) +
             " caller=" + HexString(caller_address) +
-            " owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
-            " slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
-                actor_address,
-                kActorSlotOffset,
-                -1))) +
-            " +1FC=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipRuntimeStateOffset, 0)) +
-            " +200=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
-            " +21C=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0)));
+            " owner=" + actor_pointer_field(kActorOwnerOffset) +
+            " slot=" + actor_slot_text +
+            " +1FC=" + actor_pointer_field(kActorEquipRuntimeStateOffset) +
+            " +200=" + actor_pointer_field(kActorProgressionRuntimeStateOffset) +
+            " +21C=" + actor_pointer_field(kActorAnimationSelectionStateOffset));
     } else {
         LogStandaloneWizardActorLifecycleEvent(
             "player_dtor enter",
@@ -199,9 +200,10 @@ void __fastcall HookActorWorldUnregister(
     }
 
     if (actor_address != 0 && remove_from_container == 1) {
-        const auto actor_owner =
-            ProcessMemory::Instance().ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
-        if (actor_owner != 0 && actor_owner != world_address) {
+        uintptr_t actor_owner = 0;
+        if (ProcessMemory::Instance().TryReadField(actor_address, kActorOwnerOffset, &actor_owner) &&
+            actor_owner != 0 &&
+            actor_owner != world_address) {
             std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
             if (const auto* binding = FindParticipantEntityForActor(actor_address);
                 binding != nullptr && binding->kind == ParticipantEntityBinding::Kind::StandaloneWizard) {

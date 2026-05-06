@@ -103,10 +103,13 @@ bool TryResolvePlayerActorForSlot(uintptr_t gameplay_address, int slot_index, ui
         return false;
     }
 
-    *actor_address = ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
-        gameplay_address,
-        kGameplayPlayerActorOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride,
-        0);
+    if (!ProcessMemory::Instance().TryReadField(
+            gameplay_address,
+            kGameplayPlayerActorOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride,
+            actor_address)) {
+        *actor_address = 0;
+        return false;
+    }
     return *actor_address != 0;
 }
 
@@ -116,10 +119,13 @@ bool TryResolvePlayerProgressionForSlot(uintptr_t gameplay_address, int slot_ind
     }
 
     *progression_address = 0;
-    const auto handle = ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
-        gameplay_address,
-        kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride,
-        0);
+    uintptr_t handle = 0;
+    if (!ProcessMemory::Instance().TryReadField(
+            gameplay_address,
+            kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride,
+            &handle)) {
+        return false;
+    }
     if (handle == 0) {
         return false;
     }
@@ -139,10 +145,13 @@ bool TryResolvePlayerProgressionHandleForSlot(uintptr_t gameplay_address, int sl
     }
 
     *handle_address = 0;
-    const auto handle = ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
-        gameplay_address,
-        kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride,
-        0);
+    uintptr_t handle = 0;
+    if (!ProcessMemory::Instance().TryReadField(
+            gameplay_address,
+            kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride,
+            &handle)) {
+        return false;
+    }
     if (handle == 0) {
         return false;
     }
@@ -213,28 +222,24 @@ void CopyPlayerProgressionVitals(uintptr_t source_progression_address, uintptr_t
     }
 
     auto& memory = ProcessMemory::Instance();
-    memory.TryWriteField(
-        destination_progression_address,
-        kProgressionLevelOffset,
-        memory.ReadFieldOr<int>(source_progression_address, kProgressionLevelOffset, 0));
-    memory.TryWriteField(
-        destination_progression_address,
-        kProgressionXpOffset,
-        memory.ReadFieldOr<float>(source_progression_address, kProgressionXpOffset, 0.0f));
-    memory.TryWriteField(
-        destination_progression_address,
-        kProgressionHpOffset,
-        memory.ReadFieldOr<float>(source_progression_address, kProgressionHpOffset, 0.0f));
-    memory.TryWriteField(
-        destination_progression_address,
-        kProgressionMaxHpOffset,
-        memory.ReadFieldOr<float>(source_progression_address, kProgressionMaxHpOffset, 0.0f));
-    memory.TryWriteField(
-        destination_progression_address,
-        kProgressionMpOffset,
-        memory.ReadFieldOr<float>(source_progression_address, kProgressionMpOffset, 0.0f));
-    memory.TryWriteField(
-        destination_progression_address,
-        kProgressionMaxMpOffset,
-        memory.ReadFieldOr<float>(source_progression_address, kProgressionMaxMpOffset, 0.0f));
+    int level = 0;
+    float xp = 0.0f;
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    float mp = 0.0f;
+    float max_mp = 0.0f;
+    if (!memory.TryReadField(source_progression_address, kProgressionLevelOffset, &level) ||
+        !TryReadFiniteFloatField(source_progression_address, kProgressionXpOffset, &xp) ||
+        !TryReadFiniteFloatField(source_progression_address, kProgressionHpOffset, &hp) ||
+        !TryReadFiniteFloatField(source_progression_address, kProgressionMaxHpOffset, &max_hp) ||
+        !TryReadFiniteFloatField(source_progression_address, kProgressionMpOffset, &mp) ||
+        !TryReadFiniteFloatField(source_progression_address, kProgressionMaxMpOffset, &max_mp)) {
+        return;
+    }
+    memory.TryWriteField(destination_progression_address, kProgressionLevelOffset, level);
+    memory.TryWriteField(destination_progression_address, kProgressionXpOffset, xp);
+    memory.TryWriteField(destination_progression_address, kProgressionHpOffset, hp);
+    memory.TryWriteField(destination_progression_address, kProgressionMaxHpOffset, max_hp);
+    memory.TryWriteField(destination_progression_address, kProgressionMpOffset, mp);
+    memory.TryWriteField(destination_progression_address, kProgressionMaxMpOffset, max_mp);
 }

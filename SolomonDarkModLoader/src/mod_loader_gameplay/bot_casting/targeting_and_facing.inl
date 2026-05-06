@@ -61,24 +61,22 @@ bool TryResolveSameWorldTargetHandle(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto actor_owner =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
-    const auto target_owner =
-        memory.ReadFieldOr<uintptr_t>(target_actor_address, kActorOwnerOffset, 0);
+    uintptr_t actor_owner = 0;
+    uintptr_t target_owner = 0;
+    if (!memory.TryReadField(actor_address, kActorOwnerOffset, &actor_owner) ||
+        !memory.TryReadField(target_actor_address, kActorOwnerOffset, &target_owner)) {
+        return false;
+    }
     if (actor_owner == 0 || actor_owner != target_owner) {
         return false;
     }
 
-    const auto target_group =
-        memory.ReadFieldOr<std::uint8_t>(
-            target_actor_address,
-            kActorSlotOffset,
-            kTargetHandleGroupSentinel);
-    const auto target_slot =
-        memory.ReadFieldOr<std::uint16_t>(
-            target_actor_address,
-            kActorWorldSlotOffset,
-            kTargetHandleSlotSentinel);
+    std::uint8_t target_group = kTargetHandleGroupSentinel;
+    std::uint16_t target_slot = kTargetHandleSlotSentinel;
+    if (!memory.TryReadField(target_actor_address, kActorSlotOffset, &target_group) ||
+        !memory.TryReadField(target_actor_address, kActorWorldSlotOffset, &target_slot)) {
+        return false;
+    }
     if (target_group == kTargetHandleGroupSentinel ||
         target_slot == kTargetHandleSlotSentinel) {
         return false;
@@ -145,22 +143,30 @@ bool TryComputeActorAimTowardTargetFromOrigin(
         return false;
     }
 
-    const auto actor_owner = memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
-    const auto target_owner = memory.ReadFieldOr<uintptr_t>(target_actor_address, kActorOwnerOffset, 0);
+    uintptr_t actor_owner = 0;
+    uintptr_t target_owner = 0;
+    if (!memory.TryReadField(actor_address, kActorOwnerOffset, &actor_owner) ||
+        !memory.TryReadField(target_actor_address, kActorOwnerOffset, &target_owner)) {
+        return false;
+    }
     if (actor_owner == 0 || target_owner == 0 || actor_owner != target_owner) {
         return false;
     }
 
-    const auto actor_x =
-        origin_valid && std::isfinite(origin_x)
-            ? origin_x
-            : memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-    const auto actor_y =
-        origin_valid && std::isfinite(origin_y)
-            ? origin_y
-            : memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
-    const auto target_x = memory.ReadFieldOr<float>(target_actor_address, kActorPositionXOffset, 0.0f);
-    const auto target_y = memory.ReadFieldOr<float>(target_actor_address, kActorPositionYOffset, 0.0f);
+    float actor_x = origin_x;
+    float actor_y = origin_y;
+    if (!origin_valid || !std::isfinite(actor_x) || !std::isfinite(actor_y)) {
+        if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &actor_x) ||
+            !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &actor_y)) {
+            return false;
+        }
+    }
+    float target_x = 0.0f;
+    float target_y = 0.0f;
+    if (!TryReadFiniteFloatField(target_actor_address, kActorPositionXOffset, &target_x) ||
+        !TryReadFiniteFloatField(target_actor_address, kActorPositionYOffset, &target_y)) {
+        return false;
+    }
     const auto dx = target_x - actor_x;
     const auto dy = target_y - actor_y;
     if (!std::isfinite(dx) || !std::isfinite(dy) || ((dx * dx) + (dy * dy)) <= 0.0001f) {
@@ -239,58 +245,79 @@ bool WriteOngoingCastNativeTargetActor(
     }
 
     auto& memory = ProcessMemory::Instance();
-    if (!ongoing->current_target_actor_override_active) {
-        ongoing->current_target_actor_before =
-            memory.ReadFieldOr<uintptr_t>(actor_address, kActorCurrentTargetActorOffset, 0);
-        ongoing->current_target_actor_override_active = true;
+    uintptr_t current_target_actor_before = ongoing->current_target_actor_before;
+    if (!ongoing->current_target_actor_override_active &&
+        !memory.TryReadField(
+            actor_address,
+            kActorCurrentTargetActorOffset,
+            &current_target_actor_before)) {
+        return false;
     }
-    const bool target_pointer_written = memory.TryWriteField<uintptr_t>(
-        actor_address,
-        kActorCurrentTargetActorOffset,
-        target_actor_address);
 
-    if (OngoingCastNeedsNativeTargetHandle(*ongoing)) {
-        std::uint8_t target_group = kTargetHandleGroupSentinel;
-        std::uint16_t target_slot = kTargetHandleSlotSentinel;
-        if (TryResolveSameWorldTargetHandle(
+    std::uint8_t target_group = kTargetHandleGroupSentinel;
+    std::uint16_t target_slot = kTargetHandleSlotSentinel;
+    std::uint8_t native_target_group_before = ongoing->native_target_group_before;
+    std::uint16_t native_target_slot_before = ongoing->native_target_slot_before;
+    const bool needs_native_target_handle = OngoingCastNeedsNativeTargetHandle(*ongoing);
+    if (needs_native_target_handle) {
+        if (!TryResolveSameWorldTargetHandle(
                 actor_address,
                 target_actor_address,
                 &target_group,
                 &target_slot)) {
-            if (!ongoing->native_target_handle_override_active) {
-                ongoing->native_target_group_before =
-                    memory.ReadFieldOr<std::uint8_t>(
-                        actor_address,
-                        kActorSpellTargetGroupByteOffset,
-                        kTargetHandleGroupSentinel);
-                ongoing->native_target_slot_before =
-                    memory.ReadFieldOr<std::uint16_t>(
-                        actor_address,
-                        kActorSpellTargetSlotShortOffset,
-                        kTargetHandleSlotSentinel);
-                ongoing->native_target_handle_override_active = true;
-            }
-            (void)memory.TryWriteField<std::uint8_t>(
-                actor_address,
-                kActorSpellTargetGroupByteOffset,
-                target_group);
-            (void)memory.TryWriteField<std::uint16_t>(
-                actor_address,
-                kActorSpellTargetSlotShortOffset,
-                target_slot);
-        } else if (ongoing->native_target_handle_override_active) {
-            (void)memory.TryWriteField<std::uint8_t>(
-                actor_address,
-                kActorSpellTargetGroupByteOffset,
-                kTargetHandleGroupSentinel);
-            (void)memory.TryWriteField<std::uint16_t>(
-                actor_address,
-                kActorSpellTargetSlotShortOffset,
-                kTargetHandleSlotSentinel);
+            return false;
+        }
+        if (!ongoing->native_target_handle_override_active &&
+            (!memory.TryReadField(
+                 actor_address,
+                 kActorSpellTargetGroupByteOffset,
+                 &native_target_group_before) ||
+             !memory.TryReadField(
+                 actor_address,
+                 kActorSpellTargetSlotShortOffset,
+                 &native_target_slot_before))) {
+            return false;
         }
     }
 
-    return target_pointer_written;
+    const bool target_pointer_written = memory.TryWriteField<uintptr_t>(
+        actor_address,
+        kActorCurrentTargetActorOffset,
+        target_actor_address);
+    if (!target_pointer_written) {
+        return false;
+    }
+    if (!ongoing->current_target_actor_override_active) {
+        ongoing->current_target_actor_before = current_target_actor_before;
+        ongoing->current_target_actor_override_active = true;
+    }
+
+    if (needs_native_target_handle) {
+        if (!ongoing->native_target_handle_override_active) {
+            ongoing->native_target_group_before = native_target_group_before;
+            ongoing->native_target_slot_before = native_target_slot_before;
+            ongoing->native_target_handle_override_active = true;
+        }
+        if (!memory.TryWriteField<std::uint8_t>(
+                actor_address,
+                kActorSpellTargetGroupByteOffset,
+                target_group) ||
+            !memory.TryWriteField<std::uint16_t>(
+                actor_address,
+                kActorSpellTargetSlotShortOffset,
+                target_slot)) {
+            if (!memory.TryWriteField<uintptr_t>(
+                    actor_address,
+                    kActorCurrentTargetActorOffset,
+                    ongoing->current_target_actor_before)) {
+                Log("[bots] failed to restore native target actor after target-handle write failure.");
+            }
+            ongoing->current_target_actor_override_active = false;
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void ClearOngoingCastNativeTargetActor(
@@ -427,47 +454,45 @@ bool RefreshOngoingCastAimFromFacingTarget(
     ongoing->targetless_ticks_waiting = 0;
     binding->facing_target_actor_address = target_actor_address;
     ongoing->target_actor_address = target_actor_address;
-    const auto target_group =
-        memory.ReadFieldOr<std::uint8_t>(
+    std::uint8_t target_group = kTargetHandleGroupSentinel;
+    std::uint16_t target_slot = kTargetHandleSlotSentinel;
+    if (TryResolveSameWorldTargetHandle(
+            binding->actor_address,
             target_actor_address,
-            kActorSlotOffset,
-            kTargetHandleGroupSentinel);
-    const auto target_slot =
-        memory.ReadFieldOr<std::uint16_t>(
-            target_actor_address,
-            kActorWorldSlotOffset,
-            kTargetHandleSlotSentinel);
-    if (target_group != kTargetHandleGroupSentinel &&
-        target_slot != kTargetHandleSlotSentinel) {
+            &target_group,
+            &target_slot)) {
         ongoing->selection_target_seed_active = true;
         ongoing->selection_target_group_seed = target_group;
         ongoing->selection_target_slot_seed = target_slot;
         ongoing->selection_target_hold_ticks = 60;
         if (ongoing->selection_state_pointer != 0) {
-            (void)memory.TryWriteField<std::uint8_t>(
+            if (!memory.TryWriteField<std::uint8_t>(
                 ongoing->selection_state_pointer,
                 kActorControlBrainTargetSlotOffset,
-                target_group);
-            (void)memory.TryWriteField<std::uint16_t>(
+                target_group) ||
+                !memory.TryWriteField<std::uint16_t>(
                 ongoing->selection_state_pointer,
                 kActorControlBrainTargetHandleOffset,
-                target_slot);
-            (void)memory.TryWriteField<std::int32_t>(
+                target_slot) ||
+                !memory.TryWriteField<std::int32_t>(
                 ongoing->selection_state_pointer,
                 kActorControlBrainRetargetTicksOffset,
-                ongoing->selection_target_hold_ticks);
-            (void)memory.TryWriteField<std::int32_t>(
+                ongoing->selection_target_hold_ticks) ||
+                !memory.TryWriteField<std::int32_t>(
                 ongoing->selection_state_pointer,
                 kActorControlBrainTargetCooldownTicksOffset,
-                0);
-            (void)memory.TryWriteField<std::int32_t>(
+                0) ||
+                !memory.TryWriteField<std::int32_t>(
                 ongoing->selection_state_pointer,
                 kActorControlBrainActionCooldownTicksOffset,
-                0);
-            (void)memory.TryWriteField<std::int32_t>(
+                0) ||
+                !memory.TryWriteField<std::int32_t>(
                 ongoing->selection_state_pointer,
                 kActorControlBrainActionBurstTicksOffset,
-                0);
+                0)) {
+                ongoing->selection_target_seed_active = false;
+                return false;
+            }
         }
     } else {
         ongoing->selection_target_seed_active = false;
@@ -492,14 +517,12 @@ bool RefreshOngoingCastAimFromFacingTarget(
         auto have_startup_input =
             TryGetBindingMovementInputVector(*binding, &startup_input_x, &startup_input_y);
         if (!have_startup_input) {
-            const auto actor_x = memory.ReadFieldOr<float>(
-                binding->actor_address,
-                kActorPositionXOffset,
-                0.0f);
-            const auto actor_y = memory.ReadFieldOr<float>(
-                binding->actor_address,
-                kActorPositionYOffset,
-                0.0f);
+            float actor_x = 0.0f;
+            float actor_y = 0.0f;
+            if (!TryReadFiniteFloatField(binding->actor_address, kActorPositionXOffset, &actor_x) ||
+                !TryReadFiniteFloatField(binding->actor_address, kActorPositionYOffset, &actor_y)) {
+                return false;
+            }
             const auto dx = target_x - actor_x;
             const auto dy = target_y - actor_y;
             const auto distance = std::sqrt((dx * dx) + (dy * dy));

@@ -16,24 +16,33 @@ void InvokeBotCastWithNativeActorSlot(
     auto& memory = *context.memory;
     const auto actor_address = context.actor_address;
     invoke();
+    std::uint8_t actor_slot = 0xFE;
+    uintptr_t progression_runtime = 0;
+    uintptr_t actor_progression_handle = 0;
+    const auto actor_slot_text =
+        memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot)
+            ? HexString(actor_slot)
+            : std::string("unreadable");
+    const auto progression_runtime_text =
+        memory.TryReadField(
+            actor_address,
+            kActorProgressionRuntimeStateOffset,
+            &progression_runtime)
+            ? HexString(progression_runtime)
+            : std::string("unreadable");
+    const auto actor_progression_handle_text =
+        memory.TryReadField(
+            actor_address,
+            kActorProgressionHandleOffset,
+            &actor_progression_handle)
+            ? HexString(actor_progression_handle)
+            : std::string("unreadable");
     Log(
         std::string("[bots] native cast slot diag. actor=") + HexString(actor_address) +
         " slot_offset=" + HexString(static_cast<std::uint32_t>(kActorSlotOffset)) +
-        " slot=" + HexString(
-            memory.ReadFieldOr<std::uint8_t>(
-                actor_address,
-                kActorSlotOffset,
-                static_cast<std::uint8_t>(0xFE))) +
-        " progression_runtime=" +
-            HexString(memory.ReadFieldOr<uintptr_t>(
-                actor_address,
-                kActorProgressionRuntimeStateOffset,
-                0)) +
-        " actor_progression_handle=" +
-            HexString(memory.ReadFieldOr<uintptr_t>(
-                actor_address,
-                kActorProgressionHandleOffset,
-                0)));
+        " slot=" + actor_slot_text +
+        " progression_runtime=" + progression_runtime_text +
+        " actor_progression_handle=" + actor_progression_handle_text);
 }
 
 void RestoreBotCastAim(

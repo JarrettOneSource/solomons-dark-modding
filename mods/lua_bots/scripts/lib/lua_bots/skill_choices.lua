@@ -19,8 +19,14 @@ function skill_choices.install(ctx)
       return false
     end
 
-    local generation = tonumber(choices.generation) or 0
-    if generation ~= 0 and generation == tonumber(state.last_skill_choice_generation) then
+    local generation = tonumber(choices.generation)
+    if generation == nil then
+      ctx.log(string.format(
+        "skill_choice skipped id=%s reason=missing_generation",
+        tostring(state.bot_id)))
+      return false
+    end
+    if generation == tonumber(state.last_skill_choice_generation) then
       return false
     end
 

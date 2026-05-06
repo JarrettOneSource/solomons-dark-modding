@@ -125,12 +125,16 @@ bool TryReadProgressionCurrentSpellId(
         return false;
     }
 
+    std::int32_t resolved_spell_id = 0;
+    if (!memory.TryReadField(
+            progression_runtime_address,
+            kProgressionCurrentSpellIdOffset,
+            &resolved_spell_id)) {
+        return false;
+    }
+
     if (spell_id != nullptr) {
-        *spell_id =
-            memory.ReadFieldOr<std::int32_t>(
-                progression_runtime_address,
-                kProgressionCurrentSpellIdOffset,
-                0);
+        *spell_id = resolved_spell_id;
     }
     return true;
 }
@@ -230,16 +234,21 @@ bool TryReadNativePrimaryStatOutputs(
         return false;
     }
 
-    const auto values_address =
-        memory.ReadFieldOr<uintptr_t>(
+    uintptr_t values_address = 0;
+    std::int32_t count = 0;
+    if (!memory.TryReadField(
             progression_runtime_address,
             kProgressionPrimaryStatValuesOffset,
-            0);
-    const auto count =
-        memory.ReadFieldOr<std::int32_t>(
+            &values_address) ||
+        !memory.TryReadField(
             progression_runtime_address,
             kProgressionPrimaryStatCountOffset,
-            0);
+            &count)) {
+        if (error_message != nullptr) {
+            *error_message = "native primary spell stat output fields became unreadable";
+        }
+        return false;
+    }
     if (values_address == 0 || count <= 0) {
         if (error_message != nullptr) {
             *error_message = "native primary spell stat output array is empty";
@@ -490,17 +499,11 @@ bool TryResolveNativePrimarySelectionFromLiveProgression(
         }
         return false;
     }
-    if (native_spell_id == 0 &&
-        kProgressionCurrentSpellIdOffset != 0 &&
-        memory.IsReadableRange(
-            progression_runtime_address + kProgressionCurrentSpellIdOffset,
-            sizeof(std::int32_t))) {
-        native_spell_id =
-            static_cast<std::uint32_t>(
-                memory.ReadFieldOr<std::int32_t>(
-                    progression_runtime_address,
-                    kProgressionCurrentSpellIdOffset,
-                    0));
+    if (native_spell_id == 0) {
+        std::int32_t current_spell_id = 0;
+        if (TryReadProgressionCurrentSpellId(progression_runtime_address, &current_spell_id)) {
+            native_spell_id = static_cast<std::uint32_t>(current_spell_id);
+        }
     }
     RestoreProgressionCurrentSpellIdIfNeeded(
         progression_runtime_address,
@@ -650,26 +653,22 @@ bool TryResolveNativePrimarySpellStats(
         stats->mana_output_scale = mana_output_scale;
         stats->mana_spend_cost = stats->mana_cost / mana_output_scale;
     }
-    stats->current_spell_id =
-        kProgressionCurrentSpellIdOffset != 0 &&
-                memory.IsReadableRange(
-                    progression_runtime_address + kProgressionCurrentSpellIdOffset,
-                    sizeof(std::int32_t))
-            ? memory.ReadFieldOr<std::int32_t>(
-                  progression_runtime_address,
-                  kProgressionCurrentSpellIdOffset,
-                  stats->selection.build_skill_id)
-            : stats->selection.build_skill_id;
-    stats->progression_level =
-        kProgressionLevelOffset != 0 &&
-                memory.IsReadableRange(
-                    progression_runtime_address + kProgressionLevelOffset,
-                    sizeof(std::int32_t))
-            ? memory.ReadFieldOr<std::int32_t>(
-                  progression_runtime_address,
-                  kProgressionLevelOffset,
-                  1)
-            : 1;
+    if (!TryReadProgressionCurrentSpellId(progression_runtime_address, &stats->current_spell_id)) {
+        if (error_message != nullptr) {
+            *error_message = "native current spell id read failed";
+        }
+        return false;
+    }
+    if (kProgressionLevelOffset == 0 ||
+        !memory.TryReadField(
+            progression_runtime_address,
+            kProgressionLevelOffset,
+            &stats->progression_level)) {
+        if (error_message != nullptr) {
+            *error_message = "native progression level read failed";
+        }
+        return false;
+    }
     stats->resolved = true;
     return true;
 }

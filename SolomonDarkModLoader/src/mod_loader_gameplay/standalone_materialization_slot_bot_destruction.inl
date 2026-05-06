@@ -19,14 +19,24 @@ bool DestroyGameplaySlotBotResources(
         kGameplayPlayerActorOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
     const auto progression_slot_offset =
         kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
-    const auto published_actor_address =
-        memory.ReadFieldOr<uintptr_t>(gameplay_address, actor_slot_offset, 0);
+    uintptr_t published_actor_address = 0;
+    if (!memory.TryReadField(gameplay_address, actor_slot_offset, &published_actor_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay slot cleanup could not read published actor slot.";
+        }
+        return false;
+    }
     if (actor_address == 0) {
         actor_address = published_actor_address;
     }
 
     if (world_address == 0 && actor_address != 0) {
-        world_address = memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+        if (!memory.TryReadField(actor_address, kActorOwnerOffset, &world_address)) {
+            if (error_message != nullptr) {
+                *error_message = "Gameplay slot cleanup could not read actor world owner.";
+            }
+            return false;
+        }
     }
 
     if (actor_address != 0) {
@@ -83,32 +93,52 @@ bool DestroyLoaderOwnedWizardActor(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto live_owner_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+    uintptr_t live_owner_address = 0;
+    const bool live_owner_readable =
+        memory.TryReadField(actor_address, kActorOwnerOffset, &live_owner_address);
     if (live_owner_address != 0) {
         world_address = live_owner_address;
-    } else if (!raw_allocation) {
+    } else if (!raw_allocation || !live_owner_readable) {
         world_address = 0;
     }
 
     auto build_destroy_summary = [&](std::string_view stage) {
+        const auto read_u8_text = [&](std::size_t offset) {
+            std::uint8_t value = 0;
+            return memory.TryReadField(actor_address, offset, &value)
+                ? std::to_string(static_cast<int>(value))
+                : std::string("unreadable");
+        };
+        const auto read_ptr_text = [&](std::size_t offset) {
+            uintptr_t value = 0;
+            return memory.TryReadField(actor_address, offset, &value)
+                ? HexString(value)
+                : std::string("unreadable");
+        };
+        uintptr_t vtable = 0;
+        const auto vtable_text =
+            memory.TryReadValue(actor_address, &vtable)
+                ? HexString(vtable)
+                : std::string("unreadable");
         std::ostringstream out;
         out << "stage=" << stage
             << " actor=" << HexString(actor_address)
             << " world=" << HexString(world_address)
             << " raw_allocation=" << (raw_allocation ? "true" : "false")
             << " actor_summary={" << BuildActorVisualDebugSummary(actor_address) << "}"
-            << " byte5=" << static_cast<int>(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x05, 0))
-            << " byte6=" << static_cast<int>(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x06, 0))
-            << " vtable=" << HexString(memory.ReadValueOr<uintptr_t>(actor_address, 0))
-            << " owner=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0))
-            << " attach=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorHubVisualAttachmentPtrOffset, 0));
+            << " byte5=" << read_u8_text(0x05)
+            << " byte6=" << read_u8_text(0x06)
+            << " vtable=" << vtable_text
+            << " owner=" << read_ptr_text(kActorOwnerOffset)
+            << " attach=" << read_ptr_text(kActorHubVisualAttachmentPtrOffset);
         return out.str();
     };
 
     auto build_dtor_precrash_dump = [&]() {
         auto read_u32 = [&](uintptr_t addr) {
-            return memory.ReadValueOr<std::uint32_t>(addr, 0u);
+            std::uint32_t value = 0;
+            (void)memory.TryReadValue(addr, &value);
+            return value;
         };
         const uintptr_t om_base = actor_address + 0x16C;
         const std::uint32_t om_vt = read_u32(om_base + 0x00);

@@ -8,7 +8,7 @@ bool TryDeleteStagedSurvivalSaveDirectory(std::string* error_message) {
     std::error_code remove_error;
     std::filesystem::remove_all(save_directory, remove_error);
     if (!remove_error) {
-        Log("Debug UI compatibility: deleted staged survival save directory at " + save_directory.string());
+        Log("Debug UI save reset: deleted staged survival save directory at " + save_directory.string());
         return true;
     }
 
@@ -20,7 +20,7 @@ bool TryDeleteStagedSurvivalSaveDirectory(std::string* error_message) {
     return false;
 }
 
-bool TryPrepareMainMenuNewGameCompatibility(uintptr_t main_menu_address, std::string* error_message) {
+bool TryPrepareMainMenuNewGameSaveReset(uintptr_t main_menu_address, std::string* error_message) {
     if (main_menu_address == 0) {
         return true;
     }
@@ -56,7 +56,7 @@ bool TryPrepareMainMenuNewGameCompatibility(uintptr_t main_menu_address, std::st
     }
 
     Log(
-        "Debug UI compatibility: bypassed existing-save confirm for NEW GAME. menu=" +
+        "Debug UI save reset: bypassed existing-save confirm for NEW GAME. menu=" +
         HexString(main_menu_address) + " cleared +" +
         HexString(kTitleMainMenuHasPreviousSaveOffset) + ".");
     return true;

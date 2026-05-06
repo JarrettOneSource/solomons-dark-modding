@@ -85,10 +85,10 @@ end
 local ok = sd.bots.update({{
   id = bot.id,
   scene = {{ kind = 'run' }},
+  heading = 25.0,
   position = {{
     x = {player_x + offset_x},
     y = {player_y},
-    heading = 25.0,
   }},
 }})
 print('ok=' .. tostring(ok))

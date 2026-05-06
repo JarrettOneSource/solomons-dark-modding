@@ -115,23 +115,36 @@ bool TryReadResolvedGlobalInt(uintptr_t absolute_address, int* value) {
     return resolved != 0 && ProcessMemory::Instance().TryReadValue(resolved, value);
 }
 
-uintptr_t ReadSmartPointerInnerObjectForRunLifecycle(uintptr_t wrapper_address) {
+bool TryReadSmartPointerInnerObjectForRunLifecycle(uintptr_t wrapper_address, uintptr_t* inner_object) {
+    if (inner_object == nullptr) {
+        return false;
+    }
+
+    *inner_object = 0;
     if (wrapper_address == 0) {
-        return 0;
+        return false;
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto direct_inner = memory.ReadValueOr<uintptr_t>(wrapper_address, 0);
+    uintptr_t direct_inner = 0;
+    if (!memory.TryReadValue(wrapper_address, &direct_inner)) {
+        return false;
+    }
     if (direct_inner != 0 && memory.IsReadableRange(direct_inner, 1)) {
-        return direct_inner;
+        *inner_object = direct_inner;
+        return true;
     }
 
-    const auto gameplay_inner = memory.ReadValueOr<uintptr_t>(wrapper_address + 0x0C, 0);
+    uintptr_t gameplay_inner = 0;
+    if (!memory.TryReadValue(wrapper_address + 0x0C, &gameplay_inner)) {
+        return false;
+    }
     if (gameplay_inner != 0 && memory.IsReadableRange(gameplay_inner, 1)) {
-        return gameplay_inner;
+        *inner_object = gameplay_inner;
+        return true;
     }
 
-    return 0;
+    return false;
 }
 
 uintptr_t ResolveActorProgressionRuntimeForRunLifecycle(uintptr_t actor_address) {
@@ -140,37 +153,37 @@ uintptr_t ResolveActorProgressionRuntimeForRunLifecycle(uintptr_t actor_address)
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto direct_progression =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0);
+    uintptr_t direct_progression = 0;
+    if (!memory.TryReadField(actor_address, kActorProgressionRuntimeStateOffset, &direct_progression)) {
+        return 0;
+    }
     if (direct_progression != 0 && memory.IsReadableRange(direct_progression, 1)) {
         return direct_progression;
     }
 
-    const auto progression_handle =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
-    return ReadSmartPointerInnerObjectForRunLifecycle(progression_handle);
+    uintptr_t progression_handle = 0;
+    if (!memory.TryReadField(actor_address, kActorProgressionHandleOffset, &progression_handle)) {
+        return 0;
+    }
+    uintptr_t progression_runtime = 0;
+    return TryReadSmartPointerInnerObjectForRunLifecycle(progression_handle, &progression_runtime)
+        ? progression_runtime
+        : 0;
 }
 
 uintptr_t ResolveLocalPlayerActorForRunLifecycle() {
-    auto& memory = ProcessMemory::Instance();
     SDModSceneState scene_state;
-    if (TryGetSceneState(&scene_state) && scene_state.valid && scene_state.gameplay_scene_address != 0) {
-        const auto slot_actor =
-            memory.ReadFieldOr<uintptr_t>(scene_state.gameplay_scene_address, kGameplayPlayerActorOffset, 0);
-        if (slot_actor != 0 && memory.IsReadableRange(slot_actor, 1)) {
-            return slot_actor;
-        }
+    if (!TryGetSceneState(&scene_state) || !scene_state.valid || scene_state.gameplay_scene_address == 0) {
+        return 0;
     }
 
-    const auto local_actor_global = memory.ResolveGameAddressOrZero(kLocalPlayerActorGlobal);
-    const auto local_actor = memory.ReadValueOr<uintptr_t>(local_actor_global, 0);
-    if (local_actor != 0 && memory.IsReadableRange(local_actor, 1)) {
-        return local_actor;
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t slot_actor = 0;
+    if (!memory.TryReadField(scene_state.gameplay_scene_address, kGameplayPlayerActorOffset, &slot_actor)) {
+        return 0;
     }
-
-    SDModPlayerState player_state;
-    if (TryGetPlayerState(&player_state) && player_state.valid) {
-        return player_state.actor_address;
+    if (slot_actor != 0 && memory.IsReadableRange(slot_actor, 1)) {
+        return slot_actor;
     }
 
     return 0;

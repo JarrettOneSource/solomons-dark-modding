@@ -50,8 +50,16 @@ bool TryBuildBotPath(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto current_x = memory.ReadFieldOr<float>(binding->actor_address, kActorPositionXOffset, 0.0f);
-    const auto current_y = memory.ReadFieldOr<float>(binding->actor_address, kActorPositionYOffset, 0.0f);
+    (void)memory;
+    float current_x = 0.0f;
+    float current_y = 0.0f;
+    if (!TryReadFiniteFloatField(binding->actor_address, kActorPositionXOffset, &current_x) ||
+        !TryReadFiniteFloatField(binding->actor_address, kActorPositionYOffset, &current_y)) {
+        if (error_message != nullptr) {
+            *error_message = "Current actor position is unreadable.";
+        }
+        return false;
+    }
     auto start_anchor_x = current_x;
     auto start_anchor_y = current_y;
     auto path_target_x = binding->target_x;
@@ -67,10 +75,10 @@ bool TryBuildBotPath(
         return false;
     }
     if (!TryResolveGameplayPathCell(grid_snapshot, path_target_x, path_target_y, &goal_grid_x, &goal_grid_y)) {
-        const auto resolved_goal_grid_x = static_cast<int>(std::floor(path_target_y / grid_snapshot.cell_height));
-        const auto resolved_goal_grid_y = static_cast<int>(std::floor(path_target_x / grid_snapshot.cell_width));
-        goal_grid_x = resolved_goal_grid_x < 0 ? 0 : (resolved_goal_grid_x >= grid_snapshot.width ? grid_snapshot.width - 1 : resolved_goal_grid_x);
-        goal_grid_y = resolved_goal_grid_y < 0 ? 0 : (resolved_goal_grid_y >= grid_snapshot.height ? grid_snapshot.height - 1 : resolved_goal_grid_y);
+        if (error_message != nullptr) {
+            *error_message = "Requested movement destination is outside the gameplay path grid.";
+        }
+        return false;
     }
 
     const auto original_start_grid_x = start_grid_x;

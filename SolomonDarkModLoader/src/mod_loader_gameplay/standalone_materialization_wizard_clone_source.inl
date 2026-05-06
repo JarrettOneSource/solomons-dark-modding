@@ -85,15 +85,25 @@ bool ResolveNativeVisualProgressionRuntime(uintptr_t native_visual_actor_address
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto direct_runtime =
-        memory.ReadFieldOr<uintptr_t>(native_visual_actor_address, kActorProgressionRuntimeStateOffset, 0);
+    uintptr_t direct_runtime = 0;
+    if (!memory.TryReadField(
+            native_visual_actor_address,
+            kActorProgressionRuntimeStateOffset,
+            &direct_runtime)) {
+        return false;
+    }
     if (direct_runtime != 0) {
         *progression_address = direct_runtime;
         return true;
     }
 
-    const auto progression_wrapper =
-        memory.ReadFieldOr<uintptr_t>(native_visual_actor_address, kActorProgressionHandleOffset, 0);
+    uintptr_t progression_wrapper = 0;
+    if (!memory.TryReadField(
+            native_visual_actor_address,
+            kActorProgressionHandleOffset,
+            &progression_wrapper)) {
+        return false;
+    }
     const auto progression_inner = ReadSmartPointerInnerObject(progression_wrapper);
     if (progression_inner != 0) {
         *progression_address = progression_inner;
@@ -408,8 +418,13 @@ bool DestroyWizardCloneSourceActor(uintptr_t actor_address, std::string* error_m
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto live_world_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+    uintptr_t live_world_address = 0;
+    if (!memory.TryReadField(actor_address, kActorOwnerOffset, &live_world_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Clone-source cleanup could not read actor world owner.";
+        }
+        return false;
+    }
     bool unregistered_from_world = false;
     if (live_world_address != 0) {
         const auto unregister_address = memory.ResolveGameAddressOrZero(kActorWorldUnregister);
@@ -497,27 +512,45 @@ bool ApplySourceActorRenderSnapshotToTargetActor(
         return false;
     }
 
-    const auto source_variant_primary =
-        memory.ReadFieldOr<std::uint8_t>(source_actor_address, kActorRenderVariantPrimaryOffset, 0);
-    const auto source_variant_secondary =
-        memory.ReadFieldOr<std::uint8_t>(source_actor_address, kActorRenderVariantSecondaryOffset, 0);
-    const auto source_variant_tertiary =
-        memory.ReadFieldOr<std::uint8_t>(source_actor_address, kActorRenderVariantTertiaryOffset, 0);
-    const auto source_unknown74_mirror =
-        memory.ReadFieldOr<std::uint32_t>(source_actor_address, kActorSourceProfileUnknown74MirrorOffset, 0);
-    const auto source_unknown56_mirror =
-        memory.ReadFieldOr<std::uint16_t>(source_actor_address, kActorSourceProfileUnknown56MirrorOffset, 0);
+    std::uint8_t source_variant_primary = 0;
+    std::uint8_t source_variant_secondary = 0;
+    std::uint8_t source_variant_tertiary = 0;
+    std::uint32_t source_unknown74_mirror = 0;
+    std::uint16_t source_unknown56_mirror = 0;
+    if (!memory.TryReadField(source_actor_address, kActorRenderVariantPrimaryOffset, &source_variant_primary) ||
+        !memory.TryReadField(source_actor_address, kActorRenderVariantSecondaryOffset, &source_variant_secondary) ||
+        !memory.TryReadField(source_actor_address, kActorRenderVariantTertiaryOffset, &source_variant_tertiary) ||
+        !memory.TryReadField(source_actor_address, kActorSourceProfileUnknown74MirrorOffset, &source_unknown74_mirror) ||
+        !memory.TryReadField(source_actor_address, kActorSourceProfileUnknown56MirrorOffset, &source_unknown56_mirror)) {
+        if (error_message != nullptr) {
+            *error_message = "Failed to read source actor render variant mirrors.";
+        }
+        return false;
+    }
 
-    const auto equip_runtime_state_address =
-        memory.ReadFieldOr<uintptr_t>(target_actor_address, kActorEquipRuntimeStateOffset, 0);
+    uintptr_t equip_runtime_state_address = 0;
+    if (!memory.TryReadField(target_actor_address, kActorEquipRuntimeStateOffset, &equip_runtime_state_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Failed to read target actor equip runtime state.";
+        }
+        return false;
+    }
     uintptr_t attachment_lane_object_address = 0;
     if (equip_runtime_state_address != 0) {
         attachment_lane_object_address = ReadEquipVisualLaneState(
             equip_runtime_state_address,
             kActorEquipRuntimeVisualLinkAttachmentOffset).current_object_address;
     }
-    const auto actor_attachment_address =
-        memory.ReadFieldOr<uintptr_t>(target_actor_address, kActorHubVisualAttachmentPtrOffset, 0);
+    uintptr_t actor_attachment_address = 0;
+    if (!memory.TryReadField(
+            target_actor_address,
+            kActorHubVisualAttachmentPtrOffset,
+            &actor_attachment_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Failed to read target actor attachment pointer.";
+        }
+        return false;
+    }
 
     if (!memory.TryWriteValue(
             target_actor_address + kActorSourceProfileUnknown74MirrorOffset,

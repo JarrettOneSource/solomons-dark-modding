@@ -189,8 +189,18 @@ bool SetEquipVisualLaneObject(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto equip_runtime_state_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipRuntimeStateOffset, 0);
+    uintptr_t equip_runtime_state_address = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorEquipRuntimeStateOffset,
+            &equip_runtime_state_address)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Standalone " + std::string(label) +
+                " attach could not read the equip runtime state.";
+        }
+        return false;
+    }
     const auto lane = ReadEquipVisualLaneState(equip_runtime_state_address, lane_offset);
     if (lane.holder_address == 0) {
         if (error_message != nullptr) {
@@ -209,10 +219,18 @@ bool SetEquipVisualLaneObject(
         return false;
     }
 
-    const auto holder_object_before = memory.ReadFieldOr<uintptr_t>(
-        lane.holder_address,
-        kVisualLaneHolderCurrentObjectOffset,
-        0);
+    uintptr_t holder_object_before = 0;
+    if (!memory.TryReadField(
+            lane.holder_address,
+            kVisualLaneHolderCurrentObjectOffset,
+            &holder_object_before)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Standalone " + std::string(label) +
+                " attach could not read the holder object before attach.";
+        }
+        return false;
+    }
     std::ostringstream before_out;
     before_out << "[bots] equip_attach before label=" << label
                << " actor=" << HexString(actor_address)
@@ -247,10 +265,18 @@ bool SetEquipVisualLaneObject(
         return false;
     }
 
-    const auto holder_object_after = memory.ReadFieldOr<uintptr_t>(
-        lane.holder_address,
-        kVisualLaneHolderCurrentObjectOffset,
-        0);
+    uintptr_t holder_object_after = 0;
+    if (!memory.TryReadField(
+            lane.holder_address,
+            kVisualLaneHolderCurrentObjectOffset,
+            &holder_object_after)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Standalone " + std::string(label) +
+                " attach could not read the holder object after attach.";
+        }
+        return false;
+    }
     std::ostringstream after_out;
     after_out << "[bots] equip_attach after label=" << label
               << " actor=" << HexString(actor_address)

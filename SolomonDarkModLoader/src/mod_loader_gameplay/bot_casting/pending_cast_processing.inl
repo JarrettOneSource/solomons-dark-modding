@@ -197,29 +197,59 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 bool startup_mouse_left_applied = false;
                 if (TryResolveCurrentGameplayScene(&startup_gameplay_address) &&
                     startup_gameplay_address != 0) {
-                    saved_cast_intent = memory.ReadFieldOr<std::uint8_t>(
+                    if (!memory.TryReadField(
                         startup_gameplay_address,
                         kGameplayCastIntentOffset,
-                        0);
+                        &saved_cast_intent)) {
+                        FinishBotCastNativeLifecycle(
+                            cast_context,
+                            ongoing,
+                            "gameplay_cast_intent_unreadable",
+                            true);
+                        ongoing = ParticipantEntityBinding::OngoingCastState{};
+                        return true;
+                    }
                     startup_cast_intent_applied =
                         memory.TryWriteField<std::uint8_t>(
                             startup_gameplay_address,
                             kGameplayCastIntentOffset,
                             static_cast<std::uint8_t>(1));
-                    const auto input_buffer_index =
-                        memory.ReadFieldOr<int>(startup_gameplay_address, kGameplayInputBufferIndexOffset, -1);
-                    if (input_buffer_index >= 0) {
-                        live_mouse_left_offset =
-                            static_cast<std::size_t>(
-                                input_buffer_index * kGameplayInputBufferStride +
-                                kGameplayMouseLeftButtonOffset);
-                    } else {
-                        live_mouse_left_offset = kGameplayMouseLeftButtonOffset;
+                    int input_buffer_index = -1;
+                    if (!memory.TryReadField(
+                            startup_gameplay_address,
+                            kGameplayInputBufferIndexOffset,
+                            &input_buffer_index) ||
+                        input_buffer_index < 0) {
+                        FinishBotCastNativeLifecycle(
+                            cast_context,
+                            ongoing,
+                            "gameplay_input_buffer_unreadable",
+                            true);
+                        ongoing = ParticipantEntityBinding::OngoingCastState{};
+                        return true;
                     }
-                    saved_mouse_left = memory.ReadFieldOr<std::uint8_t>(
+                    live_mouse_left_offset =
+                        static_cast<std::size_t>(
+                            input_buffer_index * kGameplayInputBufferStride +
+                            kGameplayMouseLeftButtonOffset);
+                    if (!memory.TryReadField(
                         startup_gameplay_address,
                         live_mouse_left_offset,
-                        0);
+                        &saved_mouse_left)) {
+                        if (startup_cast_intent_applied) {
+                            (void)memory.TryWriteField<std::uint8_t>(
+                                startup_gameplay_address,
+                                kGameplayCastIntentOffset,
+                                saved_cast_intent);
+                        }
+                        FinishBotCastNativeLifecycle(
+                            cast_context,
+                            ongoing,
+                            "gameplay_mouse_left_unreadable",
+                            true);
+                        ongoing = ParticipantEntityBinding::OngoingCastState{};
+                        return true;
+                    }
                     startup_mouse_left_applied =
                         memory.TryWriteField<std::uint8_t>(
                             startup_gameplay_address,
@@ -247,12 +277,20 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     }
                 }
                 ongoing.post_stock_dispatch_attempted = true;
-                const auto drive_after_dispatch =
-                    memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
-                const auto no_interrupt_after_dispatch =
-                    memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0);
-                const auto active_group_after_dispatch =
-                    memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF);
+                std::uint8_t drive_after_dispatch = 0;
+                std::uint8_t no_interrupt_after_dispatch = 0;
+                std::uint8_t active_group_after_dispatch = kBotCastActorActiveCastGroupSentinel;
+                if (!memory.TryReadField(actor_address, kActorAnimationDriveStateByteOffset, &drive_after_dispatch) ||
+                    !memory.TryReadField(actor_address, kActorNoInterruptFlagOffset, &no_interrupt_after_dispatch) ||
+                    !memory.TryReadField(actor_address, kActorActiveCastGroupByteOffset, &active_group_after_dispatch)) {
+                    FinishBotCastNativeLifecycle(
+                        cast_context,
+                        ongoing,
+                        "post_dispatch_state_unreadable",
+                        true);
+                    ongoing = ParticipantEntityBinding::OngoingCastState{};
+                    return true;
+                }
                 Log(
                     "[bots] gameplay-slot post-stock dispatch. bot_id=" +
                     std::to_string(binding->bot_id) +
@@ -272,16 +310,20 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             }
         }
 
-        const auto drive_state =
-            memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
-        const auto no_interrupt =
-            memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0);
-        const auto actor_e4 =
-            memory.ReadFieldOr<std::uint32_t>(actor_address, kActorPrimaryActionLatchE4Offset, 0);
-        const auto actor_e8 =
-            memory.ReadFieldOr<std::uint32_t>(actor_address, kActorPrimaryActionLatchE8Offset, 0);
-        const auto active_cast_group =
-            memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0);
+        std::uint8_t drive_state = 0;
+        std::uint8_t no_interrupt = 0;
+        std::uint32_t actor_e4 = 0;
+        std::uint32_t actor_e8 = 0;
+        std::uint8_t active_cast_group = kBotCastActorActiveCastGroupSentinel;
+        if (!memory.TryReadField(actor_address, kActorAnimationDriveStateByteOffset, &drive_state) ||
+            !memory.TryReadField(actor_address, kActorNoInterruptFlagOffset, &no_interrupt) ||
+            !memory.TryReadField(actor_address, kActorPrimaryActionLatchE4Offset, &actor_e4) ||
+            !memory.TryReadField(actor_address, kActorPrimaryActionLatchE8Offset, &actor_e8) ||
+            !memory.TryReadField(actor_address, kActorActiveCastGroupByteOffset, &active_cast_group)) {
+            FinishBotCastNativeLifecycle(cast_context, ongoing, "active_cast_state_unreadable", true);
+            ongoing = ParticipantEntityBinding::OngoingCastState{};
+            return true;
+        }
         const bool has_live_handle = active_cast_group != kBotCastActorActiveCastGroupSentinel;
         const bool native_primary_action_active =
             OngoingCastNeedsNativeTargetActor(ongoing) &&
@@ -337,13 +379,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         const bool bounded_held_native_cast =
             OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing);
         const auto active_spell_state = ReadBotNativeActiveSpellObjectState(cast_context, false);
-        const auto earth_max_charge =
-            ongoing.progression_runtime_address != 0
-                ? memory.ReadFieldOr<float>(
-                      ongoing.progression_runtime_address,
-                      kProgressionEarthChargeCapOffset,
-                      1.0f)
-                : 1.0f;
+        const auto earth_max_charge = active_spell_state.max_charge;
         const auto earth_damage_projection =
             bounded_held_native_cast
                 ? ReadBotBoulderDamageProjectionSnapshot(cast_context, active_spell_state)
@@ -676,10 +712,13 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         while (multiplayer::ConsumePendingBotCast(binding->bot_id, &discarded_request)) {
             discarded_request = multiplayer::BotCastRequest{};
         }
+        float heading = 0.0f;
+        const bool heading_readable =
+            TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &heading);
         (void)multiplayer::FinishBotAttack(
             binding->bot_id,
-            true,
-            memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f),
+            heading_readable,
+            heading,
             true);
         return false;
     }

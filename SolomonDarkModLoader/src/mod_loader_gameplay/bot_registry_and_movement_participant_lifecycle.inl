@@ -149,8 +149,10 @@ void MarkParticipantEntityWorldUnregistered(uintptr_t actor_address) {
             kGameplayPlayerActorOffset + static_cast<std::size_t>(gameplay_slot) * kGameplayPlayerSlotStride;
         const auto progression_slot_offset =
             kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(gameplay_slot) * kGameplayPlayerSlotStride;
-        const auto published_actor =
-            memory.ReadFieldOr<uintptr_t>(gameplay_address, actor_slot_offset, 0);
+        uintptr_t published_actor = 0;
+        if (!memory.TryReadField(gameplay_address, actor_slot_offset, &published_actor)) {
+            return;
+        }
         if (published_actor == actor_address) {
             (void)memory.TryWriteField<uintptr_t>(gameplay_address, actor_slot_offset, 0);
             (void)memory.TryWriteField<uintptr_t>(gameplay_address, progression_slot_offset, 0);

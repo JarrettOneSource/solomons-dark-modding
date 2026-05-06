@@ -8,8 +8,13 @@ void LogLocalPlayerAnimationProbe() {
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto current_x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-    const auto current_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
+    (void)memory;
+    float current_x = 0.0f;
+    float current_y = 0.0f;
+    if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &current_x) ||
+        !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &current_y)) {
+        return;
+    }
 
     bool moving_now = false;
     if (g_local_player_animation_probe_has_last_position) {

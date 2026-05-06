@@ -55,7 +55,8 @@ def update_bot_position(bot_id: str, x: float, y: float, heading: float = 90.0) 
 local ok = sd.bots.update({{
   id = {bot_id},
   scene = {{ kind = 'run' }},
-  position = {{ x = {x}, y = {y}, heading = {heading} }},
+  heading = {heading},
+  position = {{ x = {x}, y = {y} }},
 }})
 print('ok=' .. tostring(ok))
 print('bot_id=' .. tostring({bot_id}))

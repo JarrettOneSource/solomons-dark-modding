@@ -158,7 +158,7 @@ std::vector<OverlayRenderElement> BuildOverlayRenderElements(const std::vector<O
         });
 
         const auto* surface_range = FindSurfaceRangeById(group.first);
-        std::size_t fallback_index = 0;
+        std::size_t label_index = 0;
         for (const auto index : indices) {
             const auto& observed = elements[index];
             OverlayRenderElement render_element;
@@ -166,11 +166,11 @@ std::vector<OverlayRenderElement> BuildOverlayRenderElements(const std::vector<O
             render_element.surface_title = observed.surface_title;
             render_element.source_object_ptr = observed.object_ptr;
             render_element.label = observed.label;
-            if (render_element.label.empty() && surface_range != nullptr && fallback_index < surface_range->ordered_labels.size()) {
-                render_element.label = surface_range->ordered_labels[fallback_index];
+            if (render_element.label.empty() && surface_range != nullptr && label_index < surface_range->ordered_labels.size()) {
+                render_element.label = surface_range->ordered_labels[label_index];
             }
             if (render_element.label.empty()) {
-                ++fallback_index;
+                ++label_index;
                 continue;
             }
 
@@ -185,7 +185,7 @@ std::vector<OverlayRenderElement> BuildOverlayRenderElements(const std::vector<O
                 observed.max_y + static_cast<float>(atlas.line_height) + kOverlayTextVerticalPadding);
             render_elements.push_back(std::move(render_element));
 
-            ++fallback_index;
+            ++label_index;
         }
     }
 

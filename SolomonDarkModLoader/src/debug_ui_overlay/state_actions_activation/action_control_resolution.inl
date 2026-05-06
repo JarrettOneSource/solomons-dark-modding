@@ -2,7 +2,7 @@ bool TryResolveUiActionControlAddress(
     std::string_view surface_root_id,
     uintptr_t owner_address,
     std::string_view action_id,
-    uintptr_t fallback_control_address,
+    uintptr_t snapshot_control_address,
     uintptr_t* control_address,
     std::string* error_message) {
     if (control_address == nullptr) {
@@ -32,8 +32,8 @@ bool TryResolveUiActionControlAddress(
         return true;
     }
 
-    if (fallback_control_address != 0) {
-        *control_address = fallback_control_address;
+    if (snapshot_control_address != 0) {
+        *control_address = snapshot_control_address;
         return true;
     }
 

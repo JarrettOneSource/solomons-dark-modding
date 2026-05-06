@@ -21,7 +21,6 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "gameplay_input_gate_flag", kGameplayInputGateFlagOffset),
         SDMOD_SIZE("gameplay.offsets", "gameplay_region_table", kGameplayRegionTableOffset),
         SDMOD_SIZE("gameplay.offsets", "gameplay_player_actor", kGameplayPlayerActorOffset),
-        SDMOD_SIZE("gameplay.offsets", "gameplay_player_fallback_position", kGameplayPlayerFallbackPositionOffset),
         SDMOD_SIZE("gameplay.offsets", "gameplay_player_progression_handle", kGameplayPlayerProgressionHandleOffset),
         SDMOD_SIZE("gameplay.offsets", "gameplay_input_buffer_index", kGameplayInputBufferIndexOffset),
         SDMOD_SIZE("gameplay.offsets", "gameplay_actor_attach_subobject", kGameplayActorAttachSubobjectOffset),

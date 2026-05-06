@@ -98,10 +98,10 @@ local id = sd.bots.create({{
   }},
   scene = {{ kind = 'shared_hub' }},
   ready = true,
+  heading = 270.0,
   position = {{
     x = (tonumber(player.x) or 0.0) + 112.0,
     y = tonumber(player.y) or 0.0,
-    heading = 270.0,
   }},
 }})
 emit('ok', id ~= nil)

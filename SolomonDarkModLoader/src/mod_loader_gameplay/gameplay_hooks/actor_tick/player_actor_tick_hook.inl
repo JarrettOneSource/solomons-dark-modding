@@ -75,29 +75,16 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 binding->desired_heading_valid &&
                 binding->controller_state != multiplayer::BotControllerState::Attacking;
             tracked_actor_desired_heading = binding->desired_heading;
-            tracked_actor_slot = static_cast<int>(ProcessMemory::Instance().ReadFieldOr<std::int8_t>(
-                actor_address,
-                kActorSlotOffset,
-                static_cast<std::int8_t>(-1)));
-            tracked_actor_world = ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
-                actor_address,
-                kActorOwnerOffset,
-                binding->materialized_world_address);
-            tracked_actor_progression_runtime =
-                ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
-                    actor_address,
-                    kActorProgressionRuntimeStateOffset,
-                    0);
-            tracked_actor_equip_runtime =
-                ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
-                    actor_address,
-                    kActorEquipRuntimeStateOffset,
-                    0);
-            tracked_actor_selection_state =
-                ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
-                    actor_address,
-                    kActorAnimationSelectionStateOffset,
-                    0);
+            std::int8_t tracked_actor_slot_i8 = -1;
+            auto& memory = ProcessMemory::Instance();
+            if (!memory.TryReadField(actor_address, kActorSlotOffset, &tracked_actor_slot_i8) ||
+                !memory.TryReadField(actor_address, kActorOwnerOffset, &tracked_actor_world) ||
+                !memory.TryReadField(actor_address, kActorProgressionRuntimeStateOffset, &tracked_actor_progression_runtime) ||
+                !memory.TryReadField(actor_address, kActorEquipRuntimeStateOffset, &tracked_actor_equip_runtime) ||
+                !memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &tracked_actor_selection_state)) {
+                tracked_actor_runtime_invalid = true;
+            }
+            tracked_actor_slot = static_cast<int>(tracked_actor_slot_i8);
             if (binding->materialized_world_address != tracked_actor_world) {
                 Log(
                     "[bots] tracked actor owner changed. bot_id=" + std::to_string(binding->bot_id) +
@@ -181,49 +168,42 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         if (drive_stock_cast_input &&
             TryResolveCurrentGameplayScene(&gameplay_address) &&
             gameplay_address != 0) {
-            saved_cast_intent = memory.ReadFieldOr<std::uint8_t>(
-                gameplay_address,
-                kGameplayCastIntentOffset,
-                0);
-            stock_cast_intent_applied =
-                memory.TryWriteField<std::uint8_t>(
+            if (memory.TryReadField(
                     gameplay_address,
                     kGameplayCastIntentOffset,
-                    static_cast<std::uint8_t>(1));
-            const auto input_buffer_index =
-                memory.ReadFieldOr<int>(gameplay_address, kGameplayInputBufferIndexOffset, -1);
-            if (input_buffer_index >= 0) {
-                live_mouse_left_offset =
-                    static_cast<std::size_t>(
-                        input_buffer_index * kGameplayInputBufferStride +
-                        kGameplayMouseLeftButtonOffset);
-                saved_mouse_left = memory.ReadFieldOr<std::uint8_t>(
-                    gameplay_address,
-                    live_mouse_left_offset,
-                    0);
-                stock_mouse_left_applied =
+                    &saved_cast_intent)) {
+                stock_cast_intent_applied =
                     memory.TryWriteField<std::uint8_t>(
                         gameplay_address,
-                        live_mouse_left_offset,
+                        kGameplayCastIntentOffset,
                         static_cast<std::uint8_t>(1));
-            } else {
-                live_mouse_left_offset = kGameplayMouseLeftButtonOffset;
-                saved_mouse_left = memory.ReadFieldOr<std::uint8_t>(
-                    gameplay_address,
-                    live_mouse_left_offset,
-                    0);
-                stock_mouse_left_applied =
-                    memory.TryWriteField<std::uint8_t>(
+                int input_buffer_index = -1;
+                if (memory.TryReadField(
                         gameplay_address,
-                        live_mouse_left_offset,
-                        static_cast<std::uint8_t>(1));
+                        kGameplayInputBufferIndexOffset,
+                        &input_buffer_index) &&
+                    input_buffer_index >= 0) {
+                    live_mouse_left_offset =
+                        static_cast<std::size_t>(
+                            input_buffer_index * kGameplayInputBufferStride +
+                            kGameplayMouseLeftButtonOffset);
+                    if (memory.TryReadField(
+                            gameplay_address,
+                            live_mouse_left_offset,
+                        &saved_mouse_left)) {
+                        stock_mouse_left_applied =
+                            memory.TryWriteField<std::uint8_t>(
+                                gameplay_address,
+                                live_mouse_left_offset,
+                                static_cast<std::uint8_t>(1));
+                    }
+                }
             }
         }
         if (pure_primary_needs_primary_gate_open) {
             const auto global_1abe_address =
                 memory.ResolveGameAddressOrZero(kGameObjectGlobal + kGameplayPrimaryGateBlockFlagOffset);
-            saved_global_1abe_for_stock_tick =
-                memory.ReadValueOr<std::uint8_t>(global_1abe_address, 0);
+            (void)memory.TryReadValue(global_1abe_address, &saved_global_1abe_for_stock_tick);
             if (global_1abe_address != 0 && saved_global_1abe_for_stock_tick != 0) {
                 global_1abe_zeroed_for_stock_tick =
                     memory.TryWriteValue<std::uint8_t>(
@@ -289,8 +269,9 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     " desired_heading=" + std::to_string(tracked_actor_desired_heading));
             }
         }
-        const auto heading_before =
-            memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f);
+        float heading_before = 0.0f;
+        const bool heading_before_readable =
+            TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &heading_before);
 
         if (tracked_actor_dead) {
             bool run_stock_death_transition = false;
@@ -405,7 +386,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                         " error=" + cast_error_message);
                 }
                 (void)RefreshWizardBindingTargetFacing(binding);
-                if (!ApplyWizardBindingFacingState(binding, actor_address)) {
+                if (!ApplyWizardBindingFacingState(binding, actor_address) && heading_before_readable) {
                     ApplyWizardActorFacingState(actor_address, heading_before);
                 }
                 if (!binding->ongoing_cast.active) {
@@ -427,10 +408,13 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     }
 
     if (gameplay_slot_wizard_actor) {
-        const auto position_before_x =
-            memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-        const auto position_before_y =
-            memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
+        float position_before_x = 0.0f;
+        float position_before_y = 0.0f;
+        if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &position_before_x) ||
+            !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &position_before_y)) {
+            original(self);
+            return;
+        }
 
         {
             std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
@@ -490,10 +474,10 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     tracked_move_error_message.clear();
                 }
                 binding->stock_tick_facing_origin_valid = true;
-                binding->stock_tick_facing_origin_x =
-                    memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, position_before_x);
-                binding->stock_tick_facing_origin_y =
-                    memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, position_before_y);
+                if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &binding->stock_tick_facing_origin_x) ||
+                    !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &binding->stock_tick_facing_origin_y)) {
+                    binding->stock_tick_facing_origin_valid = false;
+                }
                 if (binding->movement_active &&
                     tracked_actor_should_restore_desired_heading &&
                     !binding->facing_heading_valid) {
@@ -536,7 +520,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     if (local_player_actor) {
         MaybeLogLocalPlayerCastProbe(gameplay_address_for_pump, actor_address, true);
     }
-    if (memory.ReadFieldOr<std::int8_t>(actor_address, kActorSlotOffset, static_cast<std::int8_t>(-1)) == 0) {
+    std::int8_t actor_slot = -1;
+    if (memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot) && actor_slot == 0) {
         TickParticipantSceneBindingsIfActive();
     }
     LogLocalPlayerAnimationProbe();

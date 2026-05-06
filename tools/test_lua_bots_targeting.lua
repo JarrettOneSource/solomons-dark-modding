@@ -30,8 +30,9 @@ local environment_variables = {
 }
 
 local function distance(ax, ay, bx, by)
-  local dx = (ax or 0.0) - (bx or 0.0)
-  local dy = (ay or 0.0) - (by or 0.0)
+  assert(type(ax) == "number" and type(ay) == "number" and type(bx) == "number" and type(by) == "number")
+  local dx = ax - bx
+  local dy = ay - by
   return math.sqrt((dx * dx) + (dy * dy))
 end
 
@@ -301,8 +302,7 @@ for _, bot_context in ipairs(hooks.state.bots) do
 end
 
 local skill_bot = hooks.state.bots[1]
-hooks.state.bot_id = skill_bot.bot_id
-hooks.state.bot_profile = skill_bot.bot_profile
+hooks.load_bot_context(skill_bot)
 skill_choices[skill_bot.bot_id] = {
   pending = true,
   generation = 77,
@@ -366,7 +366,7 @@ local seen_run_spawn_y = {}
 for _, bot_context in ipairs(hooks.state.bots) do
   local bot = bot_store[bot_context.bot_id]
   assert(bot.scene.kind == "run", bot_context.bot_name .. " should be promoted into run scene")
-  assert(bot_context.scene_key == "run:-1:-1", bot_context.bot_name .. " should save run scene bookkeeping")
+  assert(bot_context.scene_key == "run::", bot_context.bot_name .. " should save run scene bookkeeping")
   assert(bot_context.pending_run_promotion == false, bot_context.bot_name .. " should clear pending run promotion")
   assert(seen_run_spawn_y[bot.y] ~= true, "run promotion spawn offsets should not overlap")
   seen_run_spawn_y[bot.y] = true
@@ -452,6 +452,7 @@ end
 
 math.randomseed(1234)
 local follow_context = hooks.state.bots[1]
+hooks.load_bot_context(follow_context)
 local follow_bot = bot_store[follow_context.bot_id]
 current_scene = {
   name = "testrun",
@@ -462,7 +463,6 @@ current_scene = {
 current_player = { x = 500.0, y = 500.0, heading = 0.0 }
 current_nav_grid = make_follow_grid(current_scene.world_id, current_player)
 current_actors = {}
-hooks.state.bot_id = follow_context.bot_id
 hooks.state.follow_target = nil
 hooks.state.last_command_ms = 0
 follow_bot.x = 200.0
@@ -712,6 +712,7 @@ enemy_a.dead = false
 enemy_a.hp = 100.0
 enemy_a.x = 40.0
 enemy_b.hp = 100.0
+hooks.load_bot_context(hooks.state.bots[1])
 hooks.state.bot_id = 42
 
 local attack_scene = { name = "testrun" }

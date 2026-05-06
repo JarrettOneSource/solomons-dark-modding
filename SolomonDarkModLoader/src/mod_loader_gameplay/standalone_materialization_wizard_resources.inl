@@ -6,8 +6,10 @@ void ReleaseStandaloneWizardSmartPointerResource(
     uintptr_t inner_address,
     const char* label) {
     auto& memory = ProcessMemory::Instance();
+    uintptr_t actor_wrapper_address = 0;
     if (actor_address != 0 &&
-        memory.ReadFieldOr<uintptr_t>(actor_address, handle_offset, 0) == wrapper_address) {
+        memory.TryReadField(actor_address, handle_offset, &actor_wrapper_address) &&
+        actor_wrapper_address == wrapper_address) {
         (void)memory.TryWriteField<uintptr_t>(actor_address, handle_offset, 0);
         (void)memory.TryWriteField<uintptr_t>(actor_address, runtime_state_offset, 0);
     }
