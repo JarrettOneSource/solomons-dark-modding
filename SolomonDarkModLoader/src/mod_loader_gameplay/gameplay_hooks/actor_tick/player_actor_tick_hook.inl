@@ -500,7 +500,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     const bool moved_this_tick =
                         binding->movement_active && binding->last_movement_displacement > 0.0001f;
                     if (moved_this_tick) {
-                        ApplyActorAnimationDriveState(actor_address, true);
+                        ApplyObservedBotAnimationState(binding, actor_address, true);
                     } else {
                         StopWizardBotActorMotion(actor_address);
                     }

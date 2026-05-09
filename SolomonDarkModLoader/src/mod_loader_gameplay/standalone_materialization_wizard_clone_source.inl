@@ -1,81 +1,3 @@
-bool SeedWizardCloneSourceActorFromNativeVisualActor(
-    uintptr_t source_actor_address,
-    uintptr_t native_visual_actor_address,
-    float x,
-    float y,
-    float heading,
-    std::string* error_message) {
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
-    if (source_actor_address == 0 || native_visual_actor_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Wizard clone-source seeding requires a source actor and native visual actor.";
-        }
-        return false;
-    }
-
-    auto snapshot = CaptureActorRenderBuildSnapshot(native_visual_actor_address);
-    const auto descriptor_has_data = std::any_of(
-        snapshot.descriptor.begin(),
-        snapshot.descriptor.end(),
-        [](std::uint8_t value) {
-            return value != 0;
-        });
-    if (!descriptor_has_data) {
-        if (error_message != nullptr) {
-            *error_message =
-                "Native visual actor has no descriptor block available for clone-source seeding.";
-        }
-        return false;
-    }
-
-    // Do not copy a live actor's attachment object pointer into the temporary
-    // source actor. FUN_0061AA00 transfers source+0x264 ownership into the new
-    // clone, so carrying a pointer from the local actor would steal native
-    // player state. Slot bots attach their own staff item after render seeding.
-    snapshot.attachment_address = 0;
-
-    std::string restore_error;
-    if (!RestoreActorRenderBuildSnapshot(source_actor_address, snapshot, &restore_error)) {
-        if (error_message != nullptr) {
-            *error_message = std::move(restore_error);
-        }
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    if (!memory.TryWriteField(source_actor_address, kActorPositionXOffset, x) ||
-        !memory.TryWriteField(source_actor_address, kActorPositionYOffset, y) ||
-        !memory.TryWriteField(source_actor_address, kActorHeadingOffset, heading) ||
-        !memory.TryWriteField<std::int32_t>(
-            source_actor_address,
-            kActorHubVisualSourceKindOffset,
-            kWizardCloneSourceActorKind) ||
-        !memory.TryWriteField<uintptr_t>(
-            source_actor_address,
-            kActorHubVisualSourceProfileOffset,
-            0) ||
-        !memory.TryWriteField<uintptr_t>(
-            source_actor_address,
-            kActorHubVisualSourceAuxPointerOffset,
-            0)) {
-        if (error_message != nullptr) {
-            *error_message = "Failed to seed the temporary clone-source actor from native visual state.";
-        }
-        return false;
-    }
-
-    ApplyActorAnimationDriveState(source_actor_address, false);
-    Log(
-        "[bots] native clone-source seeded. source_actor=" + HexString(source_actor_address) +
-        " native_visual_actor=" + HexString(native_visual_actor_address) +
-        " render_selection=" + std::to_string(snapshot.render_selection) +
-        " variant_primary=" + std::to_string(snapshot.variant_primary) +
-        " variant_secondary=" + std::to_string(snapshot.variant_secondary));
-    return true;
-}
-
 bool ResolveNativeVisualProgressionRuntime(uintptr_t native_visual_actor_address, uintptr_t* progression_address) {
     if (progression_address != nullptr) {
         *progression_address = 0;
@@ -113,15 +35,6 @@ bool ResolveNativeVisualProgressionRuntime(uintptr_t native_visual_actor_address
     return false;
 }
 
-constexpr std::size_t kDescriptorColorComponentCount = 4;
-constexpr std::size_t kDescriptorColorByteSize =
-    sizeof(float) * kDescriptorColorComponentCount;
-constexpr std::size_t kDescriptorAccentColorRelativeOffset =
-    kDescriptorColorByteSize;
-static_assert(
-    kDescriptorColorByteSize * 2 == kActorHubVisualDescriptorBlockSize,
-    "wizard descriptor block must hold two float4 color payloads");
-
 bool IsFiniteColorPayload(const float color[4]) {
     if (color == nullptr) {
         return false;
@@ -132,36 +45,6 @@ bool IsFiniteColorPayload(const float color[4]) {
         }
     }
     return true;
-}
-
-void CopyColorPayload(const float source[4], float destination[4]) {
-    if (source == nullptr || destination == nullptr) {
-        return;
-    }
-    for (int index = 0; index < 4; ++index) {
-        destination[index] = source[index];
-    }
-}
-
-bool TryReadActorDescriptorColor(
-    uintptr_t actor_address,
-    std::size_t relative_offset,
-    float out_color[4]) {
-    if (actor_address == 0 ||
-        out_color == nullptr ||
-        relative_offset + kDescriptorColorByteSize >
-            kActorHubVisualDescriptorBlockSize) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    if (!memory.TryRead(
-            actor_address + kActorHubVisualDescriptorBlockOffset + relative_offset,
-            out_color,
-            kDescriptorColorByteSize)) {
-        return false;
-    }
-    return IsFiniteColorPayload(out_color) && out_color[3] > 0.0f;
 }
 
 bool TryWriteSourceProfileColor(
@@ -178,7 +61,50 @@ bool TryWriteSourceProfileColor(
     return true;
 }
 
+bool TryReadNativeSourceActorDefaultTrimColor(
+    uintptr_t source_actor_address,
+    float out_color[4]) {
+    if (source_actor_address == 0 || out_color == nullptr) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.TryRead(
+            source_actor_address + kActorHubVisualDescriptorBlockOffset + sizeof(float) * 4,
+            out_color,
+            sizeof(float) * 4)) {
+        return false;
+    }
+    return IsFiniteColorPayload(out_color) && out_color[3] > 0.0f;
+}
+
+bool TryBuildSourceProfileColorPreimage(
+    const float native_descriptor_color[4],
+    float out_source_profile_color[4]) {
+    if (!IsFiniteColorPayload(native_descriptor_color) ||
+        out_source_profile_color == nullptr) {
+        return false;
+    }
+
+    // 0x005E3080 feeds source-profile color through 0x0040FC60 before helper
+    // publication. 0x0040FC60 applies the stock robe mix:
+    //     out = 0.2 * source + 0.8 * luminance(source)
+    // with 0.3086/0.6094/0.0820 channel weights. Those weights sum to one, so
+    // the preimage is source = 5 * target - 4 * luminance(target).
+    const float luminance =
+        0.3086f * native_descriptor_color[0] +
+        0.6094f * native_descriptor_color[1] +
+        0.0820f * native_descriptor_color[2];
+    for (int index = 0; index < 3; ++index) {
+        out_source_profile_color[index] =
+            native_descriptor_color[index] * 5.0f - luminance * 4.0f;
+    }
+    out_source_profile_color[3] = native_descriptor_color[3];
+    return IsFiniteColorPayload(out_source_profile_color);
+}
+
 bool BuildNativeDerivedWizardSourceProfile(
+    uintptr_t source_actor_address,
     uintptr_t native_visual_actor_address,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     uintptr_t* source_profile_address,
@@ -189,9 +115,12 @@ bool BuildNativeDerivedWizardSourceProfile(
     if (error_message != nullptr) {
         error_message->clear();
     }
-    if (native_visual_actor_address == 0 || source_profile_address == nullptr) {
+    if (source_actor_address == 0 ||
+        native_visual_actor_address == 0 ||
+        source_profile_address == nullptr) {
         if (error_message != nullptr) {
-            *error_message = "Native-derived source profile requires a visual actor and output pointer.";
+            *error_message =
+                "Native-derived source profile requires a source actor, visual actor, and output pointer.";
         }
         return false;
     }
@@ -224,13 +153,13 @@ bool BuildNativeDerivedWizardSourceProfile(
         return false;
     }
 
-    float native_color[4] = {};
+    float native_element_color[4] = {};
     DWORD exception_code = 0;
     if (!CallSkillsWizardGetPrimaryColorSafe(
             get_color_address,
             progression_address,
             EncodeSkillsWizardSelectionArg(primary_entry),
-            native_color,
+            native_element_color,
             &exception_code)) {
         if (error_message != nullptr) {
             *error_message =
@@ -240,19 +169,31 @@ bool BuildNativeDerivedWizardSourceProfile(
         return false;
     }
 
-    if (!IsFiniteColorPayload(native_color)) {
+    if (!IsFiniteColorPayload(native_element_color)) {
         if (error_message != nullptr) {
-            *error_message = "Native primary color output was not finite.";
+            *error_message = "Native source-profile color output was not finite.";
         }
         return false;
     }
 
-    float accent_color[4] = {};
-    if (!TryReadActorDescriptorColor(
-            native_visual_actor_address,
-            kDescriptorAccentColorRelativeOffset,
-            accent_color)) {
-        CopyColorPayload(native_color, accent_color);
+    float source_profile_cloth_color[4] = {};
+    if (!TryBuildSourceProfileColorPreimage(
+            native_element_color,
+            source_profile_cloth_color)) {
+        if (error_message != nullptr) {
+            *error_message = "Native descriptor color could not be converted to source-profile color.";
+        }
+        return false;
+    }
+
+    float native_default_trim_color[4] = {};
+    if (!TryReadNativeSourceActorDefaultTrimColor(
+            source_actor_address,
+            native_default_trim_color)) {
+        if (error_message != nullptr) {
+            *error_message = "Native source actor default trim color was unavailable.";
+        }
+        return false;
     }
 
     auto* buffer = static_cast<std::uint8_t*>(
@@ -274,8 +215,8 @@ bool BuildNativeDerivedWizardSourceProfile(
     *reinterpret_cast<std::int8_t*>(buffer + kSourceProfileWeaponTypeOffset) = 1;
     *reinterpret_cast<std::uint8_t*>(buffer + kSourceProfileVariantTertiaryOffset) = 0;
 
-    if (!TryWriteSourceProfileColor(buffer, kSourceProfileClothColorOffset, native_color) ||
-        !TryWriteSourceProfileColor(buffer, kSourceProfileTrimColorOffset, accent_color)) {
+    if (!TryWriteSourceProfileColor(buffer, kSourceProfileClothColorOffset, source_profile_cloth_color) ||
+        !TryWriteSourceProfileColor(buffer, kSourceProfileTrimColorOffset, native_default_trim_color)) {
         _aligned_free(buffer);
         if (error_message != nullptr) {
             *error_message = "Native-derived source profile color payload was not finite.";
@@ -288,10 +229,15 @@ bool BuildNativeDerivedWizardSourceProfile(
         "[bots] native-derived source profile. progression=" + HexString(progression_address) +
         " element=" + std::to_string(character_profile.element_id) +
         " primary_entry=" + std::to_string(primary_entry) +
-        " native_color=(" + std::to_string(native_color[0]) + ", " +
-            std::to_string(native_color[1]) + ", " + std::to_string(native_color[2]) + ")" +
-        " descriptor_accent=(" + std::to_string(accent_color[0]) + ", " +
-            std::to_string(accent_color[1]) + ", " + std::to_string(accent_color[2]) + ")");
+        " native_color=(" + std::to_string(native_element_color[0]) + ", " +
+            std::to_string(native_element_color[1]) + ", " +
+            std::to_string(native_element_color[2]) + ")" +
+        " source_profile_cloth=(" + std::to_string(source_profile_cloth_color[0]) + ", " +
+            std::to_string(source_profile_cloth_color[1]) + ", " +
+            std::to_string(source_profile_cloth_color[2]) + ")" +
+        " native_trim=(" + std::to_string(native_default_trim_color[0]) + ", " +
+            std::to_string(native_default_trim_color[1]) + ", " +
+            std::to_string(native_default_trim_color[2]) + ")");
     return true;
 }
 
@@ -322,6 +268,7 @@ bool SeedWizardCloneSourceActorFromNativeDerivedProfile(
     uintptr_t source_profile_address = 0;
     std::string profile_error;
     if (!BuildNativeDerivedWizardSourceProfile(
+            source_actor_address,
             native_visual_actor_address,
             character_profile,
             &source_profile_address,
@@ -475,134 +422,6 @@ bool DestroyWizardCloneSourceActor(uintptr_t actor_address, std::string* error_m
         if (error_message != nullptr) {
             *error_message =
                 "Clone-source Object_Delete failed with 0x" + HexString(exception_code) + ".";
-        }
-        return false;
-    }
-
-    return true;
-}
-
-bool ApplySourceActorRenderSnapshotToTargetActor(
-    uintptr_t target_actor_address,
-    uintptr_t source_actor_address,
-    std::string* error_message) {
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
-    if (target_actor_address == 0 || source_actor_address == 0) {
-        if (error_message != nullptr) {
-            *error_message =
-                "Source-actor render snapshot application requires both the target actor and built source actor.";
-        }
-        return false;
-    }
-
-    constexpr std::size_t kActorSourceProfileUnknown74MirrorOffset = 0x194;
-    constexpr std::size_t kActorSourceProfileUnknown56MirrorOffset = 0x1C0;
-
-    auto& memory = ProcessMemory::Instance();
-    std::array<std::uint8_t, kActorHubVisualDescriptorBlockSize> source_descriptor{};
-    if (!memory.TryRead(
-            source_actor_address + kActorHubVisualDescriptorBlockOffset,
-            source_descriptor.data(),
-            source_descriptor.size())) {
-        if (error_message != nullptr) {
-            *error_message = "Failed to read the built source actor descriptor block.";
-        }
-        return false;
-    }
-
-    std::uint8_t source_variant_primary = 0;
-    std::uint8_t source_variant_secondary = 0;
-    std::uint8_t source_variant_tertiary = 0;
-    std::uint32_t source_unknown74_mirror = 0;
-    std::uint16_t source_unknown56_mirror = 0;
-    if (!memory.TryReadField(source_actor_address, kActorRenderVariantPrimaryOffset, &source_variant_primary) ||
-        !memory.TryReadField(source_actor_address, kActorRenderVariantSecondaryOffset, &source_variant_secondary) ||
-        !memory.TryReadField(source_actor_address, kActorRenderVariantTertiaryOffset, &source_variant_tertiary) ||
-        !memory.TryReadField(source_actor_address, kActorSourceProfileUnknown74MirrorOffset, &source_unknown74_mirror) ||
-        !memory.TryReadField(source_actor_address, kActorSourceProfileUnknown56MirrorOffset, &source_unknown56_mirror)) {
-        if (error_message != nullptr) {
-            *error_message = "Failed to read source actor render variant mirrors.";
-        }
-        return false;
-    }
-
-    uintptr_t equip_runtime_state_address = 0;
-    if (!memory.TryReadField(target_actor_address, kActorEquipRuntimeStateOffset, &equip_runtime_state_address)) {
-        if (error_message != nullptr) {
-            *error_message = "Failed to read target actor equip runtime state.";
-        }
-        return false;
-    }
-    uintptr_t attachment_lane_object_address = 0;
-    if (equip_runtime_state_address != 0) {
-        attachment_lane_object_address = ReadEquipVisualLaneState(
-            equip_runtime_state_address,
-            kActorEquipRuntimeVisualLinkAttachmentOffset).current_object_address;
-    }
-    uintptr_t actor_attachment_address = 0;
-    if (!memory.TryReadField(
-            target_actor_address,
-            kActorHubVisualAttachmentPtrOffset,
-            &actor_attachment_address)) {
-        if (error_message != nullptr) {
-            *error_message = "Failed to read target actor attachment pointer.";
-        }
-        return false;
-    }
-
-    if (!memory.TryWriteValue(
-            target_actor_address + kActorSourceProfileUnknown74MirrorOffset,
-            source_unknown74_mirror) ||
-        !memory.TryWriteValue(
-            target_actor_address + kActorSourceProfileUnknown56MirrorOffset,
-            source_unknown56_mirror) ||
-        !memory.TryWriteField(
-            target_actor_address,
-            kActorRenderVariantPrimaryOffset,
-            source_variant_primary) ||
-        !memory.TryWriteField(
-            target_actor_address,
-            kActorRenderVariantSecondaryOffset,
-            source_variant_secondary) ||
-        !memory.TryWriteField(
-            target_actor_address,
-            kActorRenderWeaponTypeOffset,
-            static_cast<std::uint8_t>(0)) ||
-        !memory.TryWriteField(
-            target_actor_address,
-            kActorRenderVariantTertiaryOffset,
-            source_variant_tertiary) ||
-        !memory.TryWriteField(
-            target_actor_address,
-            kActorRenderSelectionByteOffset,
-            static_cast<std::uint8_t>(0)) ||
-        !memory.TryWrite(
-            target_actor_address + kActorHubVisualDescriptorBlockOffset,
-            source_descriptor.data(),
-            source_descriptor.size())) {
-        if (error_message != nullptr) {
-            *error_message = "Failed to mirror the built wizard render window onto the target actor.";
-        }
-        return false;
-    }
-
-    if (actor_attachment_address != 0 &&
-        actor_attachment_address != attachment_lane_object_address) {
-        Log(
-            "[bots] source render snapshot: clearing target actor attachment staging pointer. actor=" +
-            HexString(target_actor_address) +
-            " actor_attachment=" + HexString(actor_attachment_address) +
-            " attachment_lane=" + HexString(attachment_lane_object_address));
-    }
-
-    if (!memory.TryWriteField<uintptr_t>(
-            target_actor_address,
-            kActorHubVisualAttachmentPtrOffset,
-            0)) {
-        if (error_message != nullptr) {
-            *error_message = "Failed to clear the target actor attachment pointer after render snapshot application.";
         }
         return false;
     }

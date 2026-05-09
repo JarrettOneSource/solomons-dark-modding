@@ -1483,6 +1483,9 @@ def test_synthetic_source_profile_blocker_is_documented() -> str:
     clone_source_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_wizard_clone_source.inl"
     )
+    slot_creation_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_slot_bot_creation.inl"
+    )
     constants_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/gameplay_constants.inl"
     )
@@ -1502,8 +1505,11 @@ def test_synthetic_source_profile_blocker_is_documented() -> str:
         "0x005D0290",
         "0x00515290",
         "0x00660760",
+        "0x0040FC60",
         "That hardcoded workaround is removed",
         "native-derived source-profile staging",
+        "source-profile preimage",
+        "source actor's own",
         "runtime/ghidra_synthetic_source_profile_paths.txt",
         "runtime/ghidra_source_profile_negative_producer_scan.txt",
         "runtime/ghidra_source_profile_actor174_expanded_scan.txt",
@@ -1513,7 +1519,8 @@ def test_synthetic_source_profile_blocker_is_documented() -> str:
         "runtime/live_source_profile_writer_probe.json",
         "BuildNativeDerivedWizardSourceProfile",
         "SeedWizardCloneSourceActorFromNativeDerivedProfile",
-        "TryReadActorDescriptorColor",
+        "native element color seam",
+        "cloth and trim",
         "CallSkillsWizardGetPrimaryColorSafe",
         "kWizardCloneSourceActorKind == 3",
     )
@@ -1643,6 +1650,7 @@ def test_synthetic_source_profile_blocker_is_documented() -> str:
     )
     runtime_texts = {
         "clone source": clone_source_text,
+        "slot creation": slot_creation_text,
         "constants": constants_text,
         "project": project_text,
     }
@@ -1654,17 +1662,24 @@ def test_synthetic_source_profile_blocker_is_documented() -> str:
     ]
     required_runtime_tokens = (
         "BuildNativeDerivedWizardSourceProfile",
-        "TryReadActorDescriptorColor",
+        "native_element_color",
+        "TryBuildSourceProfileColorPreimage",
+        "TryReadNativeSourceActorDefaultTrimColor",
+        "source_profile_cloth_color",
+        "native_default_trim_color",
         "CallSkillsWizardGetPrimaryColorSafe",
         "ResolveNativePrimaryEntryForElement",
         "SeedWizardCloneSourceActorFromNativeDerivedProfile",
+        "CaptureActorRenderBuildSnapshot",
+        "ApplySourceActorRenderSelectorsToTargetActor",
+        "AttachBuiltDescriptorToEquipVisualLane",
         "CallActorBuildRenderDescriptorFromSourceSafe",
         "kWizardCloneSourceActorKind",
         "native_visual_actor_address",
     )
     missing_runtime_tokens = [
         token for token in required_runtime_tokens
-        if token not in clone_source_text and token not in constants_text
+        if token not in clone_source_text and token not in slot_creation_text and token not in constants_text
     ]
     if missing_runtime_tokens:
         regressions.append(
@@ -3637,7 +3652,7 @@ def test_remaining_active_hardcode_sources_are_removed() -> str:
             "kLumaB",
             "kNativeSourceMix",
             "kNativeLumaMix",
-            "trim_color",
+            "descriptor_accent",
         ),
     }
     regressions = [
@@ -3895,6 +3910,7 @@ def test_second_residual_runtime_and_trace_addresses_are_layout_backed() -> str:
     standalone_render_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_actor_render_state.inl"
     )
+    clone_source_text = read_text(STANDALONE_CLONE_SOURCE)
     crash_summary_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/crash_summary_builders.inl"
     )
@@ -3955,8 +3971,8 @@ def test_second_residual_runtime_and_trace_addresses_are_layout_backed() -> str:
             ", ".join(missing_layout))
 
     required_code_tokens = (
-        (standalone_render_text, "standalone_render", "kGameNpcSourceProfile74MirrorOffset"),
-        (standalone_render_text, "standalone_render", "kGameNpcSourceProfile56MirrorOffset"),
+        (crash_summary_text, "crash_summary", "kGameNpcSourceProfile74MirrorOffset"),
+        (crash_summary_text, "crash_summary", "kGameNpcSourceProfile56MirrorOffset"),
         (crash_summary_text, "crash_summary", "kActorGridCellPtrOffset"),
         (crash_summary_text, "crash_summary", "kActorOwnerOffset"),
         (crash_logger_text, "crash_logger", "kMovementControllerPrimaryCountOffset"),
@@ -4273,6 +4289,18 @@ def test_lua_follow_preserves_timeout_teleport() -> str:
 
 def test_native_derived_wizard_visuals_are_layout_backed() -> str:
     clone_source_text = read_text(STANDALONE_CLONE_SOURCE)
+    slot_creation_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_slot_bot_creation.inl"
+    )
+    actor_render_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_actor_render_state.inl"
+    )
+    priming_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_bot_priming_and_selection.inl"
+    )
+    standalone_spawn_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_standalone_wizard.inl"
+    )
     native_types_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/native_function_types.inl")
     safe_decls_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/seh_safe_call_declarations.inl")
     player_calls_text = read_text(
@@ -4289,13 +4317,23 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
         "SkillsWizardGetPrimaryColorFn",
         "CallSkillsWizardGetPrimaryColorSafe",
         "BuildNativeDerivedWizardSourceProfile",
-        "TryReadActorDescriptorColor",
+        "native_element_color",
+        "TryBuildSourceProfileColorPreimage",
+        "TryReadNativeSourceActorDefaultTrimColor",
         "ResolveNativePrimaryEntryForElement",
+        "CaptureActorRenderBuildSnapshot",
+        "ApplySourceActorRenderSelectorsToTargetActor",
+        "AttachBuiltDescriptorToEquipVisualLane",
+        "SeedWizardBotNativeCollisionStateFromSourceActor",
         "kNativeDerivedSourceProfileSize",
         "native-derived source profile",
     )
     combined_text = "\n".join((
         clone_source_text,
+        slot_creation_text,
+        actor_render_text,
+        priming_text,
+        standalone_spawn_text,
         native_types_text,
         safe_decls_text,
         player_calls_text,
@@ -4322,6 +4360,12 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
         r"0\.18303899f",
         r"-0\.09265301f",
         r"1\.05664342f",
+        r"TryReadActorDescriptorColor",
+        r"descriptor_accent",
+        r"ResolveNativeDisciplineEntryForDiscipline",
+        r"ClearActorLiveDescriptorBlock",
+        r"ApplySourceActorBodyDescriptorToTargetActor",
+        r"ApplySourceActorGameplaySlotRenderSnapshotToTargetActor",
     )
     present_forbidden = [
         pattern for pattern in forbidden_patterns if re.search(pattern, combined_text)
@@ -4331,7 +4375,29 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
             "native-derived wizard visual path still contains hardcoded table/color token(s): " +
             ", ".join(present_forbidden))
 
-    return "wizard visuals are built from the native Skills_Wizard color seam, not hardcoded element colors"
+    if not re.search(
+        r"CallWizardCloneFromSourceActorSafe[\s\S]*SeedWizardBotNativeCollisionStateFromSourceActor[\s\S]*DestroyWizardCloneSourceActor",
+        standalone_spawn_text,
+    ):
+        raise StaticReTestFailure(
+            "standalone clone spawn does not seed native collision before source cleanup")
+    if not re.search(
+        r"SeedWizardBotNativeCollisionStateFromSourceActor[\s\S]*SeedGameplaySlotBotRenderStateFromSourceActor",
+        priming_text,
+    ):
+        raise StaticReTestFailure(
+            "gameplay-slot bot priming does not seed native collision before render materialization")
+    if "AttachBuiltDescriptorToEquipVisualLane" not in slot_creation_text:
+        raise StaticReTestFailure(
+            "gameplay-slot bot materialization does not publish the source descriptor through helper lanes")
+    if not re.search(
+        r"CaptureActorRenderBuildSnapshot[\s\S]*ApplySourceActorRenderSelectorsToTargetActor[\s\S]*AttachBuiltDescriptorToEquipVisualLane",
+        slot_creation_text,
+    ):
+        raise StaticReTestFailure(
+            "gameplay-slot bot materialization does not publish safe source selector bytes before helper lanes")
+
+    return "wizard visuals are built from native Skills_Wizard colors and published through safe selectors plus stock clone/helper lanes"
 
 
 def test_standalone_animation_drive_applies_dynamic_fields() -> str:
@@ -4357,6 +4423,9 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
     required_tokens = (
         "kActorWalkCyclePrimaryOffset",
         "kActorWalkCycleSecondaryOffset",
+        "kActorRenderDriveStrideScaleOffset",
+        "kActorRenderAdvanceRateOffset",
+        "kActorRenderAdvancePhaseOffset",
     )
     missing = [token for token in required_tokens if token not in body]
     if missing:
@@ -4365,13 +4434,7 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
             ", ".join(missing))
 
     forbidden_dynamic_tokens = (
-        "kActorRenderDriveStrideScaleOffset",
-        "kActorRenderAdvanceRateOffset",
-        "kActorRenderAdvancePhaseOffset",
         "kActorRenderDriveMoveBlendOffset",
-        "dynamic_render_drive_stride",
-        "dynamic_render_advance_rate",
-        "dynamic_render_advance_phase",
         "dynamic_render_drive_move_blend",
     )
     dynamic_regressions = [
@@ -4392,8 +4455,10 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
     required_movement_tokens = (
         "Clear the previous",
         "ClearWizardBotMovementVectorInputs(actor_address);",
-        "IsStandaloneWizardKind(binding->kind) && !cast_active",
+        "IsWizardParticipantKind(binding->kind) && !cast_active",
+        "binding != nullptr && IsWizardParticipantKind(binding->kind)",
         "ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);",
+        "ApplyObservedBotAnimationState(binding, actor_address, true);",
         "Restore the bot's own vector after applying the profile",
         "Keep the bot's own vector after replay",
     )
@@ -4406,7 +4471,7 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
             "bot movement/animation tick ownership is missing token(s): " +
             ", ".join(missing_movement))
 
-    return "bot movement clears stale stock-tick inputs, writes only standalone walk-cycle fields, and leaves render phase/blend native-owned"
+    return "bot movement clears stale stock-tick inputs and applies binding-owned walk-cycle/advance fields for all wizard participants"
 
 
 def test_native_global_reads_do_not_use_loader_substitutes() -> str:

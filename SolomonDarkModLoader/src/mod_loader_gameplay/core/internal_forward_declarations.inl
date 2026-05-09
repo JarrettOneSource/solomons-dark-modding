@@ -111,6 +111,10 @@ bool PrimeGameplaySlotBotSelectionState(
 bool WireGameplaySlotBotRuntimeHandles(
     uintptr_t actor_address,
     std::string* error_message);
+bool SeedWizardBotNativeCollisionStateFromSourceActor(
+    uintptr_t actor_address,
+    uintptr_t native_visual_actor_address,
+    std::string* error_message);
 bool SeedGameplaySlotBotRenderStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t world_address,

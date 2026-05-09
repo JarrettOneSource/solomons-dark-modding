@@ -1,7 +1,5 @@
 struct ActorRenderBuildSnapshot {
     std::array<std::uint8_t, kActorHubVisualDescriptorBlockSize> descriptor{};
-    std::uint32_t source_profile_unknown74_mirror = 0;
-    std::uint16_t source_profile_unknown56_mirror = 0;
     std::uint8_t variant_primary = 0;
     std::uint8_t variant_secondary = 0;
     std::uint8_t weapon_type = 0;
@@ -21,14 +19,6 @@ ActorRenderBuildSnapshot CaptureActorRenderBuildSnapshot(uintptr_t actor_address
         actor_address + kActorHubVisualDescriptorBlockOffset,
         snapshot.descriptor.data(),
         snapshot.descriptor.size());
-    (void)memory.TryReadField(
-        actor_address,
-        kGameNpcSourceProfile74MirrorOffset,
-        &snapshot.source_profile_unknown74_mirror);
-    (void)memory.TryReadField(
-        actor_address,
-        kGameNpcSourceProfile56MirrorOffset,
-        &snapshot.source_profile_unknown56_mirror);
     (void)memory.TryReadField(actor_address, kActorRenderVariantPrimaryOffset, &snapshot.variant_primary);
     (void)memory.TryReadField(actor_address, kActorRenderVariantSecondaryOffset, &snapshot.variant_secondary);
     (void)memory.TryReadField(actor_address, kActorRenderWeaponTypeOffset, &snapshot.weapon_type);
@@ -38,57 +28,43 @@ ActorRenderBuildSnapshot CaptureActorRenderBuildSnapshot(uintptr_t actor_address
     return snapshot;
 }
 
-bool RestoreActorRenderBuildSnapshot(
-    uintptr_t actor_address,
-    const ActorRenderBuildSnapshot& snapshot,
+bool ApplySourceActorRenderSelectorsToTargetActor(
+    uintptr_t target_actor_address,
+    const ActorRenderBuildSnapshot& source_snapshot,
     std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
     }
-    if (actor_address == 0) {
+    if (target_actor_address == 0) {
         if (error_message != nullptr) {
-            *error_message = "Actor render-state restore requires a live actor.";
+            *error_message = "Render selector publication requires a live target actor.";
         }
         return false;
     }
 
     auto& memory = ProcessMemory::Instance();
     if (!memory.TryWriteField(
-            actor_address,
+            target_actor_address,
             kActorRenderVariantPrimaryOffset,
-            snapshot.variant_primary) ||
+            source_snapshot.variant_primary) ||
         !memory.TryWriteField(
-            actor_address,
+            target_actor_address,
             kActorRenderVariantSecondaryOffset,
-            snapshot.variant_secondary) ||
+            source_snapshot.variant_secondary) ||
         !memory.TryWriteField(
-            actor_address,
+            target_actor_address,
             kActorRenderWeaponTypeOffset,
-            snapshot.weapon_type) ||
+            static_cast<std::uint8_t>(0)) ||
         !memory.TryWriteField(
-            actor_address,
+            target_actor_address,
             kActorRenderSelectionByteOffset,
-            snapshot.render_selection) ||
+            source_snapshot.render_selection) ||
         !memory.TryWriteField(
-            actor_address,
+            target_actor_address,
             kActorRenderVariantTertiaryOffset,
-            snapshot.variant_tertiary) ||
-        !memory.TryWriteValue(
-            actor_address + kGameNpcSourceProfile74MirrorOffset,
-            snapshot.source_profile_unknown74_mirror) ||
-        !memory.TryWriteValue(
-            actor_address + kGameNpcSourceProfile56MirrorOffset,
-            snapshot.source_profile_unknown56_mirror) ||
-        !memory.TryWrite(
-            actor_address + kActorHubVisualDescriptorBlockOffset,
-            snapshot.descriptor.data(),
-            snapshot.descriptor.size()) ||
-        !memory.TryWriteField(
-            actor_address,
-            kActorHubVisualAttachmentPtrOffset,
-            snapshot.attachment_address)) {
+            source_snapshot.variant_tertiary)) {
         if (error_message != nullptr) {
-            *error_message = "Failed to restore the actor render-state snapshot.";
+            *error_message = "Failed to publish native-built render selector bytes.";
         }
         return false;
     }
@@ -113,23 +89,6 @@ void ClearActorSyntheticVisualSourceState(uintptr_t actor_address) {
     (void)memory.TryWriteField<uintptr_t>(
         actor_address,
         kActorHubVisualSourceAuxPointerOffset,
-        0);
-}
-
-void ClearActorLiveDescriptorBlock(uintptr_t actor_address) {
-    if (actor_address == 0) {
-        return;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    std::array<std::uint8_t, kActorHubVisualDescriptorBlockSize> zero_descriptor{};
-    (void)memory.TryWrite(
-        actor_address + kActorHubVisualDescriptorBlockOffset,
-        zero_descriptor.data(),
-        zero_descriptor.size());
-    (void)memory.TryWriteField<uintptr_t>(
-        actor_address,
-        kActorHubVisualAttachmentPtrOffset,
         0);
 }
 

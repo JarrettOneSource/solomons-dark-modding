@@ -489,9 +489,10 @@ the recomputed envelope.
     radius fields
     - `PlayerActor_EnsureProgressionHandleFromGameplaySlot (0x0052B900)` only
       writes them for the slot-0 actor at `gameplay + 0x1358`
-    - gameplay-slot bots can legitimately keep zero masks at those offsets
-    - the planner uses a player-equivalent mask fallback for placement queries
-      instead of mutating the bot's live actor identity fields
+    - wizard bots need those native mask fields populated during
+      materialization; the production path seeds radius, move-step scale, and
+      both mask fields from the live slot-0 wizard source actor, then the
+      planner reads the bot actor's own mask with no placement fallback
   - April 25 update:
     - live `testrun` movement geometry exposed hundreds of small circular
       scenery blockers with mask `0x4`
@@ -512,9 +513,9 @@ the recomputed envelope.
     - A* cell sampling and `sd.debug.get_nav_grid` both use the same static
       circle rejection path, so visual clutter/props affect routing instead of
       only debug overlays
-    - the existing player-equivalent collision-mask fallback is still used for
-      cell and type-2 object/hazard overlap checks, so gameplay-slot bots do not
-      inherit the overly strict zero-mask behavior
+    - cell and type-2 object/hazard overlap checks use the bot actor's live
+      native mask; a zero mask is treated as an invalid materialization state,
+      not something the planner papers over
     - `MovementCollision_TestCirclePlacementExtended (0x005238C0)` has two
       different mask meanings:
       - the first mask is a raw movement-circle block mask; intersecting entries

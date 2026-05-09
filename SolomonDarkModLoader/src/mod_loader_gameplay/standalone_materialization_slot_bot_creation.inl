@@ -47,6 +47,88 @@ bool WireGameplaySlotBotRuntimeHandles(
     return true;
 }
 
+bool SeedWizardBotNativeCollisionStateFromSourceActor(
+    uintptr_t actor_address,
+    uintptr_t native_visual_actor_address,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (actor_address == 0 || native_visual_actor_address == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Gameplay-slot collision seeding requires a live bot actor and native visual source.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    float source_radius = 0.0f;
+    float source_move_step_scale = 0.0f;
+    std::uint32_t source_primary_mask = 0;
+    std::uint32_t source_secondary_mask = 0;
+    if (!TryReadFiniteFloatField(
+            native_visual_actor_address,
+            kActorCollisionRadiusOffset,
+            &source_radius) ||
+        !TryReadFiniteFloatField(
+            native_visual_actor_address,
+            kActorMoveStepScaleOffset,
+            &source_move_step_scale) ||
+        !memory.TryReadField(
+            native_visual_actor_address,
+            kActorPrimaryFlagMaskOffset,
+            &source_primary_mask) ||
+        !memory.TryReadField(
+            native_visual_actor_address,
+            kActorSecondaryFlagMaskOffset,
+            &source_secondary_mask)) {
+        if (error_message != nullptr) {
+            *error_message = "Native visual source collision fields are unreadable.";
+        }
+        return false;
+    }
+    if (!(source_radius > 0.0f) ||
+        !(source_move_step_scale > 0.0f) ||
+        source_primary_mask == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Native visual source collision fields are invalid.";
+        }
+        return false;
+    }
+
+    if (!memory.TryWriteField(
+            actor_address,
+            kActorCollisionRadiusOffset,
+            source_radius) ||
+        !memory.TryWriteField(
+            actor_address,
+            kActorMoveStepScaleOffset,
+            source_move_step_scale) ||
+        !memory.TryWriteField(
+            actor_address,
+            kActorPrimaryFlagMaskOffset,
+            source_primary_mask) ||
+        !memory.TryWriteField(
+            actor_address,
+            kActorSecondaryFlagMaskOffset,
+            source_secondary_mask)) {
+        if (error_message != nullptr) {
+            *error_message = "Failed to seed wizard bot native collision fields.";
+        }
+        return false;
+    }
+
+    Log(
+        "[bots] wizard bot native collision seeded. actor=" + HexString(actor_address) +
+        " source=" + HexString(native_visual_actor_address) +
+        " radius=" + std::to_string(source_radius) +
+        " move_step=" + std::to_string(source_move_step_scale) +
+        " mask=" + HexString(source_primary_mask) +
+        " mask2=" + HexString(source_secondary_mask));
+    return true;
+}
+
 bool SeedGameplaySlotBotRenderStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t world_address,
@@ -66,8 +148,6 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
         }
         return false;
     }
-
-    ClearActorLiveDescriptorBlock(actor_address);
 
     auto& memory = ProcessMemory::Instance();
     const auto primary_visual_link_ctor_address =
@@ -112,6 +192,16 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
     constexpr bool kKeepSourceActorAliveDiagnostic = false;
 
     auto built_snapshot = CaptureActorRenderBuildSnapshot(source_actor_address);
+    if (!ApplySourceActorRenderSelectorsToTargetActor(
+            actor_address,
+            built_snapshot,
+            &stage_error)) {
+        cleanup_source();
+        if (error_message != nullptr) {
+            *error_message = stage_error;
+        }
+        return false;
+    }
 
     const auto& built_descriptor = built_snapshot.descriptor;
     if (!AttachBuiltDescriptorToEquipVisualLane(

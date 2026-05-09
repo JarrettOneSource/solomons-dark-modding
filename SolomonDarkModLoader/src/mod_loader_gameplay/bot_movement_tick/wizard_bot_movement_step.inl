@@ -295,7 +295,7 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
             ApplyWizardActorFacingState(actor_address, binding->desired_heading);
         }
         binding->last_movement_displacement = displacement_distance;
-        if (IsStandaloneWizardKind(binding->kind) && !cast_active) {
+        if (IsWizardParticipantKind(binding->kind) && !cast_active) {
             AdvanceStandaloneWizardWalkCycleState(binding, displacement_distance);
             ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
         }

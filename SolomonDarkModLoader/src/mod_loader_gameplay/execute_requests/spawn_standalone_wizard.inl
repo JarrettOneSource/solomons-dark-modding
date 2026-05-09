@@ -90,6 +90,7 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
         local_actor_address,
         0,
         source_actor_address);
+    const auto source_render_snapshot = CaptureActorRenderBuildSnapshot(source_actor_address);
 
     const auto clone_from_source_address =
         memory.ResolveGameAddressOrZero(kWizardCloneFromSourceActor);
@@ -107,6 +108,20 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
         return cleanup_spawn(
             "WizardCloneFromSourceActor failed with 0x" +
             HexString(clone_exception_code) + ".");
+    }
+
+    if (!SeedWizardBotNativeCollisionStateFromSourceActor(
+            actor_address,
+            local_actor_address,
+            &stage_error)) {
+        return cleanup_spawn(stage_error);
+    }
+
+    if (!ApplySourceActorRenderSelectorsToTargetActor(
+            actor_address,
+            source_render_snapshot,
+            &stage_error)) {
+        return cleanup_spawn(stage_error);
     }
 
     uintptr_t progression_address = 0;
@@ -226,6 +241,15 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
             HexString(actor_address) +
             " wrote_x=" + std::to_string(moved_x ? 1 : 0) +
             " wrote_y=" + std::to_string(moved_y ? 1 : 0));
+    }
+    if (moved_x && moved_y) {
+        DWORD transform_rebind_exception_code = 0;
+        if (!TryRebindActorToOwnerWorld(actor_address, &transform_rebind_exception_code)) {
+            Log(
+                "[bots] standalone clone final transform rebind failed. actor=" +
+                HexString(actor_address) +
+                " exception=" + HexString(transform_rebind_exception_code));
+        }
     }
 
     uintptr_t final_world_address = 0;

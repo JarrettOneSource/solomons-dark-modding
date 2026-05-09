@@ -143,6 +143,15 @@ bool PrimeGameplaySlotBotActor(
         }
 
         std::string stage_error;
+        if (!SeedWizardBotNativeCollisionStateFromSourceActor(
+                actor_address,
+                native_visual_actor_address,
+                &stage_error)) {
+            if (error_message != nullptr) {
+                *error_message = stage_error;
+            }
+            return false;
+        }
         if (!SeedGameplaySlotBotRenderStateFromSourceActor(
                 actor_address,
                 world_address,
