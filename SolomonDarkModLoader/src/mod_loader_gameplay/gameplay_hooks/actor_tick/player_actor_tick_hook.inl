@@ -403,6 +403,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             }
         }
         NormalizeGameplaySlotBotSyntheticVisualState(actor_address);
+        ResolveWizardParticipantActorCollisions();
         TickBotOwnedSkillsWizard(actor_address);
         return;
     }
@@ -500,7 +501,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     const bool moved_this_tick =
                         binding->movement_active && binding->last_movement_displacement > 0.0001f;
                     if (moved_this_tick) {
-                        ApplyObservedBotAnimationState(binding, actor_address, true);
+                        ApplyActorAnimationDriveState(actor_address, true);
                     } else {
                         StopWizardBotActorMotion(actor_address);
                     }
@@ -509,6 +510,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 PublishParticipantGameplaySnapshot(*binding);
             }
         }
+        ResolveWizardParticipantActorCollisions();
         TickBotOwnedSkillsWizard(actor_address);
         return;
     }
@@ -519,6 +521,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     original(self);
     if (local_player_actor) {
         MaybeLogLocalPlayerCastProbe(gameplay_address_for_pump, actor_address, true);
+        ResolveWizardParticipantActorCollisions();
     }
     std::int8_t actor_slot = -1;
     if (memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot) && actor_slot == 0) {

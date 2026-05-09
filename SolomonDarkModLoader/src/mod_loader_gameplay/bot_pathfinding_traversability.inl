@@ -52,6 +52,68 @@ bool IsGameplayPathOverlappingIgnoredCircleObstacle(
         radius);
 }
 
+bool IsGameplayPathBlockedByWizardParticipant(
+    const ParticipantEntityBinding* binding,
+    float world_x,
+    float world_y,
+    float radius,
+    std::string* error_message) {
+    if (binding == nullptr ||
+        binding->actor_address == 0 ||
+        radius <= 0.0f ||
+        !std::isfinite(world_x) ||
+        !std::isfinite(world_y) ||
+        !std::isfinite(radius)) {
+        return false;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    for (const auto& other : g_participant_entities) {
+        if (!IsWizardParticipantKind(other.kind) ||
+            other.actor_address == 0 ||
+            other.actor_address == binding->actor_address) {
+            continue;
+        }
+        if (binding->bot_id != 0 && other.bot_id == binding->bot_id) {
+            continue;
+        }
+        if (binding->materialized_world_address != 0 &&
+            other.materialized_world_address != 0 &&
+            other.materialized_world_address != binding->materialized_world_address) {
+            continue;
+        }
+
+        float other_x = 0.0f;
+        float other_y = 0.0f;
+        float other_radius = 0.0f;
+        if (!TryReadFiniteFloatField(other.actor_address, kActorPositionXOffset, &other_x) ||
+            !TryReadFiniteFloatField(other.actor_address, kActorPositionYOffset, &other_y) ||
+            !TryReadFiniteFloatField(other.actor_address, kActorCollisionRadiusOffset, &other_radius) ||
+            other_radius <= 0.0f ||
+            !std::isfinite(other_x) ||
+            !std::isfinite(other_y) ||
+            !std::isfinite(other_radius)) {
+            continue;
+        }
+
+        const auto combined_radius = radius + other_radius + 0.5f;
+        const auto delta_x = world_x - other_x;
+        const auto delta_y = world_y - other_y;
+        if ((delta_x * delta_x) + (delta_y * delta_y) <= combined_radius * combined_radius) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Path placement overlaps another wizard participant. actor=" +
+                    HexString(binding->actor_address) +
+                    " other_actor=" + HexString(other.actor_address) +
+                    " point=(" + std::to_string(world_x) + ", " + std::to_string(world_y) + ")";
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool IsGameplayPathPlacementTraversable(
     const GameplayPathGridSnapshot& snapshot,
     ParticipantEntityBinding* binding,
@@ -97,6 +159,9 @@ bool IsGameplayPathPlacementTraversable(
     }
 
     if (IsGameplayPathBlockedByStaticCircleObstacle(snapshot, world_x, world_y, radius)) {
+        return false;
+    }
+    if (IsGameplayPathBlockedByWizardParticipant(binding, world_x, world_y, radius, error_message)) {
         return false;
     }
 

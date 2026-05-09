@@ -3,8 +3,9 @@
 
 This launches the staged game, materializes standalone clone-rail bots, records
 the native registration/grid fields recovered from Ghidra, then forces a
-standalone/standalone overlap and verifies the loader's explicit standalone push
-keeps the actors separated.
+standalone/standalone and player/standalone overlap. The active scoped
+participant collision resolver should keep the actors separated while leaving
+the local player solid.
 """
 
 from __future__ import annotations
@@ -331,10 +332,20 @@ def reject_bad_log_tokens(log_tail: str) -> None:
 def run_probe(element: str, discipline: str) -> dict[str, Any]:
     result = drive_to_gameplay_scene(element, discipline)
     player = csp.query_player_state()
+    player_actor = csp.int_value(player, "actor_address")
+    player_native_initial = query_actor_materialization(player_actor)
+    player_radius = csp.float_value(player_native_initial, "radius")
     player_x = csp.float_value(player, "x")
     player_y = csp.float_value(player, "y")
-    if not math.isfinite(player_x) or not math.isfinite(player_y):
+    if (
+        player_actor == 0 or
+        not math.isfinite(player_x) or
+        not math.isfinite(player_y) or
+        not math.isfinite(player_radius) or
+        player_radius <= 0.0
+    ):
         raise LiveStandaloneCollisionProbeFailure(f"hub player position is invalid: {player}")
+    result["player_native_initial"] = player_native_initial
 
     csp.run_lua("if sd.bots and sd.bots.clear then sd.bots.clear() end\nprint('ok=true')")
     scene_kind = "shared_hub" if result.get("scene_name") == "hub" else "run"
@@ -403,9 +414,35 @@ def run_probe(element: str, discipline: str) -> dict[str, Any]:
     }
 
     push_result = wait_for_collision_push(first_actor, second_actor, first_radius + second_radius)
-    result["collision_push"] = push_result
+    result["bot_bot_collision_response"] = push_result
     if not push_result["pushed"]:
-        raise LiveStandaloneCollisionProbeFailure(f"standalone collision push did not separate actors: {push_result}")
+        raise LiveStandaloneCollisionProbeFailure(f"bot/bot participant collision did not separate actors: {push_result}")
+
+    player_native_before_overlap = query_actor_materialization(player_actor)
+    player_x = csp.float_value(player_native_before_overlap, "x")
+    player_y = csp.float_value(player_native_before_overlap, "y")
+    result["player_overlap_write"] = force_bot_overlap(first_bot_id, first_actor, player_x, player_y)
+    if result["player_overlap_write"].get("ok_x") != "true" or result["player_overlap_write"].get("ok_y") != "true":
+        raise LiveStandaloneCollisionProbeFailure(f"failed to force player/bot overlap: {result['player_overlap_write']}")
+
+    player_bot_result = wait_for_collision_push(player_actor, first_actor, player_radius + first_radius)
+    result["player_bot_collision_response"] = player_bot_result
+    if not player_bot_result["pushed"]:
+        raise LiveStandaloneCollisionProbeFailure(
+            f"player/bot participant collision did not separate actors: {player_bot_result}"
+        )
+
+    player_native_after_overlap = query_actor_materialization(player_actor)
+    player_drift = actor_distance(player_native_before_overlap, player_native_after_overlap)
+    result["player_solid_after_collision_response"] = {
+        "drift": player_drift,
+        "before": player_native_before_overlap,
+        "after": player_native_after_overlap,
+    }
+    if player_drift > 0.25:
+        raise LiveStandaloneCollisionProbeFailure(
+            f"player moved during participant collision response: {result['player_solid_after_collision_response']}"
+        )
 
     result["first_native_final"] = query_actor_materialization(first_actor)
     result["second_native_final"] = query_actor_materialization(second_actor)

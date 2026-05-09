@@ -10,4 +10,5 @@
 #include "bot_casting/release_and_latch_helpers.inl"
 #include "bot_casting/new_request_startup.inl"
 #include "bot_casting/pending_cast_processing.inl"
+#include "bot_movement/participant_collision_response.inl"
 #include "bot_movement/local_player_animation_probe.inl"

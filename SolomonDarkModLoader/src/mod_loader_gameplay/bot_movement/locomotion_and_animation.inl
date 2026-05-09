@@ -45,7 +45,10 @@ void QuiesceDeadWizardBinding(ParticipantEntityBinding* binding) {
 void AdvanceStandaloneWizardWalkCycleState(
     ParticipantEntityBinding* binding,
     float displacement_distance) {
-    if (binding == nullptr || !std::isfinite(displacement_distance) || displacement_distance <= 0.0001f) {
+    if (binding == nullptr ||
+        !IsStandaloneWizardKind(binding->kind) ||
+        !std::isfinite(displacement_distance) ||
+        displacement_distance <= 0.0001f) {
         return;
     }
 
@@ -105,9 +108,7 @@ void AdvanceStandaloneWizardWalkCycleState(
 
     binding->dynamic_walk_cycle_primary = primary;
     binding->dynamic_walk_cycle_secondary = secondary;
-    binding->dynamic_render_drive_stride = stride_step;
-    binding->dynamic_render_advance_rate = displacement_distance;
-    binding->dynamic_render_advance_phase = primary;
+    (void)stride_step;
 }
 
 void ClearWizardBotMovementVectorInputs(uintptr_t actor_address) {
@@ -151,13 +152,17 @@ void StopWizardBotActorMotion(uintptr_t actor_address) {
         binding != nullptr && IsWizardParticipantKind(binding->kind)) {
         binding->native_movement_accumulator_x = 0.0f;
         binding->native_movement_accumulator_y = 0.0f;
-        ApplyObservedBotAnimationState(binding, actor_address, false);
         binding->dynamic_walk_cycle_primary = 0.0f;
         binding->dynamic_walk_cycle_secondary = 0.0f;
         binding->dynamic_render_drive_stride = 0.0f;
         binding->dynamic_render_advance_rate = 0.0f;
         binding->dynamic_render_advance_phase = 0.0f;
-        ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
+        if (IsStandaloneWizardKind(binding->kind)) {
+            ApplyObservedBotAnimationState(binding, actor_address, false);
+            ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
+        } else {
+            ApplyActorAnimationDriveState(actor_address, false);
+        }
         return;
     }
 
@@ -185,7 +190,7 @@ void StopDeadWizardBotActorMotion(uintptr_t actor_address) {
 
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
     if (auto* binding = FindParticipantEntityForActor(actor_address);
-        binding != nullptr && IsWizardParticipantKind(binding->kind)) {
+        binding != nullptr && IsStandaloneWizardKind(binding->kind)) {
         binding->native_movement_accumulator_x = 0.0f;
         binding->native_movement_accumulator_y = 0.0f;
         binding->dynamic_walk_cycle_primary = 0.0f;
@@ -199,6 +204,10 @@ void StopDeadWizardBotActorMotion(uintptr_t actor_address) {
 
 void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t actor_address, bool moving) {
     if (binding == nullptr || actor_address == 0 || !IsWizardParticipantKind(binding->kind)) {
+        return;
+    }
+    if (!IsStandaloneWizardKind(binding->kind)) {
+        ApplyActorAnimationDriveState(actor_address, moving);
         return;
     }
 

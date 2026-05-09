@@ -943,9 +943,12 @@ and live-proved.
   - no native seam has been recovered that publishes and drives loader-owned
     standalone clone transforms through the stock dynamic overlap-response
     lifecycle after the loader discards stock tick position writes.
-  - active tick code no longer runs a loader-owned collision push bridge or
-    writes bot positions for standalone actor pushback. Recover a native publication/ownership path
-    before adding pushback again.
+  - active tick code now runs a scoped participant collision resolver,
+    `ResolveWizardParticipantActorCollisions`, after bot and local-player stock
+    ticks. It treats the local player as solid, moves only bot-owned wizard
+    actors, separates bot/bot and player/bot overlaps, and repairs moved actor
+    grid membership through `WorldCellGrid_RebindActor`. Recover a native publication/ownership path
+    before replacing this scoped runtime response.
 
 ### May 1 Standalone Collision Ownership Xref Pass
 
@@ -976,9 +979,13 @@ and live-proved.
 - The live standalone collision probe gives the runtime side of the historical
   bridge: staged standalone clones have a native owner world, nonzero grid cell
   pointer, enabled grid-member and collision-response flags, and valid radii.
-  Active code no longer keeps the explicit loader push bridge.
+  Active code no longer keeps the old standalone-only explicit push bridge.
+  User-visible collision is restored by the scoped participant collision
+  resolver, which uses actor radii and owner worlds, keeps the local player
+  immovable, moves only bot-owned actors, and rebinds moved bots through
+  `WorldCellGrid_RebindActor`.
 
-Replacement rule remains unchanged: the explicit standalone push bridge remains
+Replacement rule remains unchanged: the old standalone-only push bridge remains
 removed until a native lifecycle is recovered that both publishes loader-driven
 standalone clone transforms and routes dynamic actor/actor overlap response.
 

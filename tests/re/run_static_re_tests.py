@@ -55,6 +55,9 @@ SCENE_ANIMATION_DRIVE_PROFILES = (
 BOT_PATHFINDING_PATH_BUILDING = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_pathfinding_path_building.inl"
 )
+BOT_PATHFINDING_TRAVERSABILITY = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_pathfinding_traversability.inl"
+)
 STANDALONE_CLONE_SOURCE = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_wizard_clone_source.inl"
 )
@@ -264,7 +267,7 @@ INVESTIGATION_REGISTER_COVERAGE = {
         "test:Bot movement speed uses native live envelope",
     ),
     "Standalone collision": (
-        "test:Standalone collision blocker is documented and live-probed",
+        "test:Participant collision resolver is documented and live-probed",
     ),
     "Stock tick position restore": (
         "test:Player/GameNpc movement seed layout is named and documented",
@@ -2662,7 +2665,7 @@ def test_bot_movement_speed_uses_native_live_envelope() -> str:
     return "bot movement speed is driven by the native PlayerActorTick live envelope"
 
 
-def test_standalone_collision_blocker_is_documented_and_live_probed() -> str:
+def test_participant_collision_resolver_is_documented_and_live_probed() -> str:
     doc_text = read_text(PATHFINDING_RE_DOC)
     plan_text = read_text(NATIVE_SEAM_PLAN)
     registration_text = read_text(STANDALONE_COLLISION_REGISTRATION_GHIDRA)
@@ -2688,7 +2691,10 @@ def test_standalone_collision_blocker_is_documented_and_live_probed() -> str:
         "tests/re/run_live_standalone_collision_probe.py",
         "runtime/live_standalone_collision_probe.json",
         "native publication/ownership path",
-        "active tick code no longer runs a loader-owned collision push bridge",
+        "ResolveWizardParticipantActorCollisions",
+        "participant collision resolver",
+        "local player as solid",
+        "WorldCellGrid_RebindActor",
     )
     missing_doc = [token for token in required_doc_tokens if token not in doc_text]
     if missing_doc:
@@ -2788,6 +2794,8 @@ def test_standalone_collision_blocker_is_documented_and_live_probed() -> str:
 
     active_collision_text = "\n".join(
         read_text(path) for path in (
+            ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/participant_collision_response.inl",
+            ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_motion_helpers.inl",
             ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick_hooks.inl",
             ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl",
             MOD_LOADER_PROJECT,
@@ -2807,6 +2815,26 @@ def test_standalone_collision_blocker_is_documented_and_live_probed() -> str:
             "standalone collision push bridge tokens remain in active code: " +
             ", ".join(remaining_collision_tokens))
 
+    required_active_collision_tokens = (
+        "ResolveWizardParticipantActorCollisions",
+        "IsWizardParticipantKind(binding.kind)",
+        "TryResolvePlayerActorForSlot",
+        "CallWorldCellGridRebindActorSafe",
+        "PublishParticipantGameplaySnapshot(*subject.binding)",
+        "kActorCollisionRadiusOffset",
+        "IsActorRuntimeDead(binding.actor_address)",
+        "subject.movable",
+        "bot_movement/participant_collision_response.inl",
+        "ResolveWizardParticipantActorCollisions();",
+    )
+    missing_active_collision = [
+        token for token in required_active_collision_tokens if token not in active_collision_text
+    ]
+    if missing_active_collision:
+        raise StaticReTestFailure(
+            "participant collision resolver is missing active token(s): " +
+            ", ".join(missing_active_collision))
+
     required_probe_tokens = (
         "ACTOR_OFFSET_GRID_CELL = csp.read_runtime_layout_offset(\"actor_grid_cell_ptr\")",
         "ACTOR_OFFSET_GRID_MEMBER_FLAG = csp.read_runtime_layout_offset(\"actor_grid_member_flag\")",
@@ -2814,6 +2842,9 @@ def test_standalone_collision_blocker_is_documented_and_live_probed() -> str:
         "ACTOR_OFFSET_PRIMARY_FLAG_MASK = csp.read_runtime_layout_offset(\"actor_primary_flag_mask\")",
         "force_bot_overlap",
         "wait_for_collision_push",
+        "bot_bot_collision_response",
+        "player_bot_collision_response",
+        "player_solid_after_collision_response",
         "grid_member_flag_36",
         "collision_response_flag_37",
         "live_standalone_collision_probe.json",
@@ -2831,7 +2862,7 @@ def test_standalone_collision_blocker_is_documented_and_live_probed() -> str:
         raise StaticReTestFailure(
             "native seam plan does not record the recovered standalone collision blocker evidence")
 
-    return "standalone collision RE evidence is retained and the loader-owned push bridge is removed"
+    return "participant collision resolver is active, documented, and guarded against the old bridge"
 
 
 def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
@@ -4423,9 +4454,6 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
     required_tokens = (
         "kActorWalkCyclePrimaryOffset",
         "kActorWalkCycleSecondaryOffset",
-        "kActorRenderDriveStrideScaleOffset",
-        "kActorRenderAdvanceRateOffset",
-        "kActorRenderAdvancePhaseOffset",
     )
     missing = [token for token in required_tokens if token not in body]
     if missing:
@@ -4434,6 +4462,9 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
             ", ".join(missing))
 
     forbidden_dynamic_tokens = (
+        "kActorRenderDriveStrideScaleOffset",
+        "kActorRenderAdvanceRateOffset",
+        "kActorRenderAdvancePhaseOffset",
         "kActorRenderDriveMoveBlendOffset",
         "dynamic_render_drive_move_blend",
     )
@@ -4442,8 +4473,10 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
     ]
     locomotion_regressions = [
         token for token in (
+            "dynamic_render_drive_stride = stride_step",
+            "dynamic_render_advance_rate = displacement_distance",
+            "dynamic_render_advance_phase = primary",
             "dynamic_render_drive_move_blend = 1.0f",
-            "kActorRenderDriveMoveBlendOffset",
         )
         if token in locomotion_text
     ]
@@ -4455,10 +4488,11 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
     required_movement_tokens = (
         "Clear the previous",
         "ClearWizardBotMovementVectorInputs(actor_address);",
-        "IsWizardParticipantKind(binding->kind) && !cast_active",
-        "binding != nullptr && IsWizardParticipantKind(binding->kind)",
+        "IsStandaloneWizardKind(binding->kind) && !cast_active",
+        "binding != nullptr && IsStandaloneWizardKind(binding->kind)",
         "ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);",
         "ApplyObservedBotAnimationState(binding, actor_address, true);",
+        "ApplyActorAnimationDriveState(actor_address, true);",
         "Restore the bot's own vector after applying the profile",
         "Keep the bot's own vector after replay",
     )
@@ -4471,7 +4505,10 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
             "bot movement/animation tick ownership is missing token(s): " +
             ", ".join(missing_movement))
 
-    return "bot movement clears stale stock-tick inputs and applies binding-owned walk-cycle/advance fields for all wizard participants"
+    if "if (!IsStandaloneWizardKind(binding->kind))" not in locomotion_text:
+        raise StaticReTestFailure("gameplay-slot bots can still enter standalone animation replay")
+
+    return "bot movement clears stale stock-tick inputs and keeps standalone walk-cycle replay off gameplay-slot bots"
 
 
 def test_native_global_reads_do_not_use_loader_substitutes() -> str:
@@ -4617,6 +4654,8 @@ def test_repo_wide_native_reads_do_not_publish_substitute_state() -> str:
 
 def test_path_builder_does_not_walk_to_unrequested_alternate_goals() -> str:
     path_text = read_text(BOT_PATHFINDING_PATH_BUILDING)
+    traversability_text = read_text(BOT_PATHFINDING_TRAVERSABILITY)
+    motion_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_pathfinding_motion_update.inl")
 
     forbidden_tokens = (
         "best_reachable_index",
@@ -4635,14 +4674,42 @@ def test_path_builder_does_not_walk_to_unrequested_alternate_goals() -> str:
         "StopBotPathMotion",
         "native tick path update failed",
     )
-    combined_text = path_text + "\n" + read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_pathfinding_motion_update.inl") + "\n" + read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl")
+    combined_text = path_text + "\n" + motion_text + "\n" + read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl")
     missing = [token for token in required_tokens if token not in combined_text]
     if missing:
         raise StaticReTestFailure(
             "path failure guard is missing expected stop/failure token(s): " +
             ", ".join(missing))
 
-    return "unreachable movement targets fail cleanly instead of walking to hidden alternate goals"
+    required_participant_block_tokens = (
+        "IsGameplayPathBlockedByWizardParticipant",
+        "std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex)",
+        "other.actor_address == binding->actor_address",
+        "other.materialized_world_address != binding->materialized_world_address",
+        "Path placement overlaps another wizard participant",
+    )
+    missing_participant_block = [
+        token for token in required_participant_block_tokens if token not in traversability_text
+    ]
+    if missing_participant_block:
+        raise StaticReTestFailure(
+            "path placement does not reject occupied wizard participant circles: " +
+            ", ".join(missing_participant_block))
+
+    required_occupied_waypoint_tokens = (
+        "target_blocked_by_participant",
+        "IsGameplayPathBlockedByWizardParticipant(binding, waypoint.x, waypoint.y, actor_radius, nullptr)",
+        "StopBotPathMotion(binding, false);",
+    )
+    missing_occupied_waypoint = [
+        token for token in required_occupied_waypoint_tokens if token not in motion_text
+    ]
+    if missing_occupied_waypoint:
+        raise StaticReTestFailure(
+            "path follower does not rebuild away from occupied wizard participant waypoints: " +
+            ", ".join(missing_occupied_waypoint))
+
+    return "unreachable or occupied movement targets fail cleanly instead of walking to hidden alternate goals"
 
 
 def test_path_builder_expands_cells_before_los_smoothing() -> str:
@@ -4747,7 +4814,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Pathfinding movement layout is named and documented", test_pathfinding_movement_layout_is_named_and_documented),
     ("Player/GameNpc movement seed layout is named and documented", test_player_gamenpc_movement_seed_layout_is_named_and_documented),
     ("Bot movement speed uses native live envelope", test_bot_movement_speed_uses_native_live_envelope),
-    ("Standalone collision blocker is documented and live-probed", test_standalone_collision_blocker_is_documented_and_live_probed),
+    ("Participant collision resolver is documented and live-probed", test_participant_collision_resolver_is_documented_and_live_probed),
     ("Cast-state native contracts are documented and layout-backed", test_cast_state_native_contracts_are_documented_and_layout_backed),
     ("Lua bot constants are semantic or documented", test_lua_bot_constants_are_semantic_or_documented),
     ("remaining active hardcode sources are removed", test_remaining_active_hardcode_sources_are_removed),
