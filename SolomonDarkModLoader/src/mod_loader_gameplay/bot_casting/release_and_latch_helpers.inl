@@ -14,6 +14,38 @@ void FinishBotCastNativeLifecycle(
         known_release_object_state != nullptr
             ? *known_release_object_state
             : ReadBotNativeActiveSpellObjectState(context, false);
+    auto apply_native_action_rearm = [&]() {
+        if (!state.saw_activity || state.selection_state_pointer == 0) {
+            return false;
+        }
+        if (state.selection_target_seed_active) {
+            (void)memory.TryWriteField<std::uint8_t>(
+                state.selection_state_pointer,
+                kActorControlBrainTargetSlotOffset,
+                state.selection_target_group_seed);
+            (void)memory.TryWriteField<std::uint16_t>(
+                state.selection_state_pointer,
+                kActorControlBrainTargetHandleOffset,
+                state.selection_target_slot_seed);
+            (void)memory.TryWriteField<std::int32_t>(
+                state.selection_state_pointer,
+                kActorControlBrainRetargetTicksOffset,
+                kBotNativeActionRearmTicks);
+            (void)memory.TryWriteField<std::int32_t>(
+                state.selection_state_pointer,
+                kActorControlBrainTargetCooldownTicksOffset,
+                0);
+        }
+        const bool cooldown_written = memory.TryWriteField<std::int32_t>(
+            state.selection_state_pointer,
+            kActorControlBrainActionCooldownTicksOffset,
+            kBotNativeActionRearmTicks);
+        (void)memory.TryWriteField<std::int32_t>(
+            state.selection_state_pointer,
+            kActorControlBrainActionBurstTicksOffset,
+            0);
+        return cooldown_written;
+    };
     std::uint8_t actor_group_before = kBotCastActorActiveCastGroupSentinel;
     std::uint16_t actor_slot_before = kBotCastActorActiveCastSlotSentinel;
     const bool actor_handle_before_readable =
@@ -73,7 +105,11 @@ void FinishBotCastNativeLifecycle(
     }
     (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
     (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPreviousSkillIdOffset, 0);
+    const bool mana_stop =
+        std::strcmp(exit_label, "mana_reserve") == 0 ||
+        std::strcmp(exit_label, "mana_depleted") == 0;
     const bool should_clear_cast_latch =
+        mana_stop ||
         state.bounded_release_requested ||
         (state.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
          actor_group_before == kBotCastActorActiveCastGroupSentinel);
@@ -86,6 +122,7 @@ void FinishBotCastNativeLifecycle(
     RestoreSelectionStateObjectAfterCast(state);
     RestoreSelectionBrainAfterCast(state);
     ClearSelectionBrainTarget(state.selection_state_pointer);
+    const bool native_action_rearm_write = apply_native_action_rearm();
     RestoreOngoingCastNativeTargetActor(actor_address, state);
     if (clear_facing_target) {
         binding->facing_target_actor_address = 0;
@@ -176,6 +213,8 @@ void FinishBotCastNativeLifecycle(
         " cleanup_state_after=" + std::to_string(cleanup_state_after) +
         " cleanup_state_write=" + (cleanup_state_write_ok ? std::string("1") : std::string("0")) +
         " cleanup_state_restore=" + (cleanup_state_restore_ok ? std::string("1") : std::string("0")) +
+        " native_action_rearm=" + (native_action_rearm_write ? std::string("1") : std::string("0")) +
+        " native_action_rearm_ticks=" + std::to_string(kBotNativeActionRearmTicks) +
         " handle_source=" +
             (release_object_state.handle_from_selection_state ? std::string("selection") : std::string("actor")) +
         " selection_state=" + HexString(release_object_state.selection_state) +

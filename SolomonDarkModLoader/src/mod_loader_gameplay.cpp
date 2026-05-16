@@ -53,6 +53,7 @@ namespace {
 #include "mod_loader_gameplay/core/crash_summary_builders.inl"
 #include "mod_loader_gameplay/core/internal_forward_declarations.inl"
 #include "mod_loader_gameplay/core/standalone_owner_repair.inl"
+#include "mod_loader_gameplay/core/standalone_progression_slot_context.inl"
 
 #include "mod_loader_gameplay/scene_and_animation.inl"
 #include "mod_loader_gameplay/standalone_materialization.inl"

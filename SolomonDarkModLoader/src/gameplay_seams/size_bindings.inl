@@ -121,7 +121,6 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "visual_lane_holder_current_object", kVisualLaneHolderCurrentObjectOffset),
         SDMOD_SIZE("gameplay.offsets", "object_vtable", kObjectVtableOffset),
         SDMOD_SIZE("gameplay.offsets", "gameplay_actor_attach_vfunc", kGameplayActorAttachVfuncOffset),
-        SDMOD_SIZE("gameplay.offsets", "skills_wizard_tick_vfunc", kSkillsWizardTickVfuncOffset),
         SDMOD_SIZE("gameplay.offsets", "skills_wizard_probe_vfunc", kSkillsWizardProbeVfuncOffset),
         SDMOD_SIZE("gameplay.offsets", "game_object_type_id", kGameObjectTypeIdOffset),
         SDMOD_SIZE("gameplay.offsets", "object_position_x", kObjectPositionXOffset),

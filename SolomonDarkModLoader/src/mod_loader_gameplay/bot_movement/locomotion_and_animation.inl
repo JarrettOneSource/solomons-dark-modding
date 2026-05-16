@@ -42,11 +42,11 @@ void QuiesceDeadWizardBinding(ParticipantEntityBinding* binding) {
     binding->stock_tick_facing_origin_y = 0.0f;
 }
 
-void AdvanceStandaloneWizardWalkCycleState(
+void AdvanceWizardWalkCycleState(
     ParticipantEntityBinding* binding,
     float displacement_distance) {
     if (binding == nullptr ||
-        !IsStandaloneWizardKind(binding->kind) ||
+        !IsWizardParticipantKind(binding->kind) ||
         !std::isfinite(displacement_distance) ||
         displacement_distance <= 0.0001f) {
         return;
@@ -80,7 +80,7 @@ void AdvanceStandaloneWizardWalkCycleState(
         static bool s_logged_missing_native_walk_cycle_globals = false;
         if (!s_logged_missing_native_walk_cycle_globals) {
             s_logged_missing_native_walk_cycle_globals = true;
-            Log("[bots] native walk-cycle globals unavailable; dynamic standalone walk-cycle update skipped.");
+            Log("[bots] native walk-cycle globals unavailable; dynamic wizard walk-cycle update skipped.");
         }
         return;
     }
@@ -159,7 +159,7 @@ void StopWizardBotActorMotion(uintptr_t actor_address) {
         binding->dynamic_render_advance_phase = 0.0f;
         if (IsStandaloneWizardKind(binding->kind)) {
             ApplyObservedBotAnimationState(binding, actor_address, false);
-            ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
+            ApplyWizardDynamicWalkCycleState(binding, actor_address);
         } else {
             ApplyActorAnimationDriveState(actor_address, false);
         }
@@ -198,7 +198,7 @@ void StopDeadWizardBotActorMotion(uintptr_t actor_address) {
         binding->dynamic_render_drive_stride = 0.0f;
         binding->dynamic_render_advance_rate = 0.0f;
         binding->dynamic_render_advance_phase = 0.0f;
-        ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
+        ApplyWizardDynamicWalkCycleState(binding, actor_address);
     }
 }
 
@@ -208,6 +208,9 @@ void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t
     }
     if (!IsStandaloneWizardKind(binding->kind)) {
         ApplyActorAnimationDriveState(actor_address, moving);
+        if (moving) {
+            ApplyWizardDynamicWalkCycleState(binding, actor_address);
+        }
         return;
     }
 
@@ -221,7 +224,7 @@ void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t
     ClearLiveWizardActorAnimationDriveState(actor_address);
     ApplyStandaloneWizardAnimationDriveProfile(binding, actor_address, moving);
     ApplyStandaloneWizardPuppetDriveState(binding, actor_address, moving);
-    ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
+    ApplyWizardDynamicWalkCycleState(binding, actor_address);
     if (moving && movement_vector_readable) {
         // Standalone profiles are captured from the local player and include
         // its live +0x158/+0x15C vector. Keep the bot's own vector after replay.

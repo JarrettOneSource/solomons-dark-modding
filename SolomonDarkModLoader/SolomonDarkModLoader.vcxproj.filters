@@ -653,6 +653,9 @@
     <ClInclude Include="src\mod_loader_gameplay\core\standalone_owner_repair.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\standalone_progression_slot_context.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -704,9 +707,6 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\animation_advance_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
     </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\bot_owned_skills_tick.inl">
-      <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
-    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\player_actor_tick_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
     </ClInclude>
@@ -720,6 +720,9 @@
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\monster_pathfinding_hook.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_mana_hooks.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks.inl">

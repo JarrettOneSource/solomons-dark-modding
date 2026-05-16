@@ -68,6 +68,10 @@ bool CallSpellCastDispatcherSafe(
     uintptr_t dispatcher_address,
     uintptr_t actor_address,
     DWORD* exception_code);
+bool CallPlayerActorActionManagerTickSafe(
+    uintptr_t tick_address,
+    uintptr_t action_manager_address,
+    DWORD* exception_code);
 bool CallPurePrimarySpellStartSafe(
     uintptr_t startup_address,
     uintptr_t actor_address,

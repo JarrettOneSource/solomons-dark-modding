@@ -20,6 +20,7 @@ bool TryResolveLocalPlayerWorldContext(
     uintptr_t* progression_address,
     uintptr_t* world_address);
 uintptr_t ReadSmartPointerInnerObject(uintptr_t wrapper_address);
+bool TryReadResolvedGamePointerAbsolute(uintptr_t absolute_address, uintptr_t* value);
 bool AssignActorSmartPointerWrapperSafe(
     uintptr_t actor_address,
     std::size_t wrapper_offset,
@@ -52,6 +53,10 @@ bool CallSkillsWizardGetPrimaryColorSafe(
     uintptr_t progression_address,
     std::uint32_t primary_entry_arg,
     float out_color[4],
+    DWORD* exception_code);
+bool CallPlayerActorActionManagerTickSafe(
+    uintptr_t tick_address,
+    uintptr_t action_manager_address,
     DWORD* exception_code);
 bool CallPlayerAppearanceApplyChoiceSafe(
     uintptr_t apply_choice_address,

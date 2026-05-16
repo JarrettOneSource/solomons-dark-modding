@@ -313,7 +313,9 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     std::uint64_t bot_id = 0;
     bool startup = false;
     bool active_pure_primary_cast = false;
+    bool bot_owned_pure_primary_actor = false;
     bool local_player = false;
+    bool pure_primary_bot_owner_context = false;
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
@@ -321,13 +323,21 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
             (IsGameplaySlotWizardKind(binding->kind) ||
              IsStandaloneWizardKind(binding->kind))) {
             SyncWizardBotMovementIntent(binding);
-            log_this = true;
             bot_id = binding->bot_id;
             startup = binding->ongoing_cast.startup_in_progress;
+            bot_owned_pure_primary_actor = true;
             active_pure_primary_cast =
                 binding->ongoing_cast.active &&
                 binding->ongoing_cast.lane ==
                     ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary;
+            pure_primary_bot_owner_context = bot_owned_pure_primary_actor;
+            log_this = startup;
+            if (!log_this &&
+                active_pure_primary_cast &&
+                g_pure_primary_control_log_budget > 0) {
+                log_this = true;
+                --g_pure_primary_control_log_budget;
+            }
             if (active_pure_primary_cast) {
                 (void)RefreshAndApplyWizardBindingFacingState(binding, actor_address);
             }
@@ -398,10 +408,17 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
         g_spell_dispatch_probe.actor_address = actor_address;
         g_spell_dispatch_probe.bot_id = bot_id;
         g_spell_dispatch_probe.startup = startup;
-        g_spell_dispatch_probe.pure_primary_startup = active_pure_primary_cast;
+        g_spell_dispatch_probe.pure_primary_startup = bot_owned_pure_primary_actor;
         g_spell_dispatch_probe.local_player = local_player;
     }
-    original(self);
+    std::string slot_owner_context;
+    InvokeWithBotProgressionSlotOwnerContext(
+        actor_address,
+        pure_primary_bot_owner_context,
+        [&] {
+            original(self);
+        },
+        &slot_owner_context);
     g_spell_dispatch_probe = saved_probe;
     if (active_pure_primary_cast) {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
@@ -416,6 +433,7 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
         Log(
             "[bots] pure_primary_start exit actor=" + HexString(actor_address) +
             " bot_id=" + std::to_string(bot_id) +
+            " standalone_slot_owner_context={" + slot_owner_context + "}" +
             " startup={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     }
 }

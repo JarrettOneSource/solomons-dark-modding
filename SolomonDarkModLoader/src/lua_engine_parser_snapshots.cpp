@@ -73,6 +73,8 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "mp");
     lua_pushnumber(state, snapshot.max_mp);
     lua_setfield(state, -2, "max_mp");
+    lua_pushboolean(state, snapshot.mana_reserve_active ? 1 : 0);
+    lua_setfield(state, -2, "mana_reserve_active");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.actor_address));
     lua_setfield(state, -2, "actor_address");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.world_address));
@@ -143,6 +145,8 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "cast_ticks_waiting");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.cast_target_actor_address));
     lua_setfield(state, -2, "cast_target_actor_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.native_action_cooldown_ticks));
+    lua_setfield(state, -2, "native_action_cooldown_ticks");
     lua_pushboolean(state, snapshot.active_spell_object_readable ? 1 : 0);
     lua_setfield(state, -2, "active_spell_object_readable");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.active_spell_object_address));

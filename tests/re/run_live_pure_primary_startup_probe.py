@@ -25,6 +25,7 @@ import cast_state_probe as csp  # noqa: E402
 from bot_mana_trace_helpers import (  # noqa: E402
     arm_native_mana_delta_trace,
     assert_gameplay_player_actor_unchanged,
+    assert_gameplay_player_mana_not_decreased,
     capture_gameplay_player_actor,
     clear_native_mana_delta_trace,
     read_loader_log_lines,
@@ -229,6 +230,7 @@ def run_single_cast(
         )
 
     gameplay_actor_before = capture_gameplay_player_actor()
+    gameplay_player_actor_address = csp.int_value(gameplay_actor_before, "gameplay_player_actor")
     trace = arm_native_mana_delta_trace(TRACE_NAME)
     if trace.get("trace_ok") != "true":
         raise LivePurePrimaryStartupProbeFailure(f"failed to arm native mana delta trace: {trace}")
@@ -249,6 +251,8 @@ def run_single_cast(
             before_mp,
             TRACE_NAME,
             2.0,
+            player_actor_address=gameplay_player_actor_address,
+            gameplay_player_before=gameplay_actor_before,
         )
     finally:
         clear_native_mana_delta_trace(TRACE_NAME)
@@ -256,6 +260,11 @@ def run_single_cast(
     after_snapshot = capture_actor_cast_snapshot(bot_id)
     gameplay_actor_after = capture_gameplay_player_actor()
     assert_gameplay_player_actor_unchanged(
+        gameplay_actor_before,
+        gameplay_actor_after,
+        str(skill_id),
+    )
+    assert_gameplay_player_mana_not_decreased(
         gameplay_actor_before,
         gameplay_actor_after,
         str(skill_id),

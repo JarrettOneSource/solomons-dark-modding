@@ -15,7 +15,14 @@ void InvokeBotCastWithNativeActorSlot(
     InvokeFn&& invoke) {
     auto& memory = *context.memory;
     const auto actor_address = context.actor_address;
-    invoke();
+    std::string slot_owner_context;
+    InvokeWithStandaloneBotProgressionSlotContext(
+        actor_address,
+        context.binding != nullptr && IsStandaloneWizardKind(context.binding->kind),
+        [&] {
+            invoke();
+        },
+        &slot_owner_context);
     std::uint8_t actor_slot = 0xFE;
     uintptr_t progression_runtime = 0;
     uintptr_t actor_progression_handle = 0;
@@ -42,7 +49,8 @@ void InvokeBotCastWithNativeActorSlot(
         " slot_offset=" + HexString(static_cast<std::uint32_t>(kActorSlotOffset)) +
         " slot=" + actor_slot_text +
         " progression_runtime=" + progression_runtime_text +
-        " actor_progression_handle=" + actor_progression_handle_text);
+        " actor_progression_handle=" + actor_progression_handle_text +
+        " standalone_slot_owner_context={" + slot_owner_context + "}");
 }
 
 void RestoreBotCastAim(

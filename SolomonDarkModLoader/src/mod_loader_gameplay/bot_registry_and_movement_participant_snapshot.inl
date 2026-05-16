@@ -156,6 +156,16 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
     snapshot.cast_skill_id = binding.ongoing_cast.skill_id;
     snapshot.cast_ticks_waiting = binding.ongoing_cast.ticks_waiting;
     snapshot.cast_target_actor_address = binding.ongoing_cast.target_actor_address;
+    uintptr_t control_brain_address = 0;
+    if (memory.TryReadField(
+            binding.actor_address,
+            kActorAnimationSelectionStateOffset,
+            &control_brain_address) &&
+        control_brain_address != 0) {
+        (void)memory.TryReadValue<int>(
+            control_brain_address + kActorControlBrainActionCooldownTicksOffset,
+            &snapshot.native_action_cooldown_ticks);
+    }
     FillParticipantActiveSpellObjectSnapshot(&snapshot);
     if (!TryReadFiniteFloatField(binding.actor_address, kActorPositionXOffset, &snapshot.x) ||
         !TryReadFiniteFloatField(binding.actor_address, kActorPositionYOffset, &snapshot.y) ||

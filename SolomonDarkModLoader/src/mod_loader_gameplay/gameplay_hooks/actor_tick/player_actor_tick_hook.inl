@@ -1,3 +1,79 @@
+bool PumpQueuedBotNativeActionManager(
+    ParticipantEntityBinding* binding,
+    uintptr_t actor_address,
+    std::uint64_t now_ms) {
+    if (binding == nullptr ||
+        actor_address == 0 ||
+        !binding->ongoing_cast.active) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto tick_address =
+        memory.ResolveGameAddressOrZero(kPlayerActorActionManagerTick);
+    if (tick_address == 0 ||
+        kActorCastDiagnosticContextOffset == 0 ||
+        kPointerListCountOffset == 0) {
+        return false;
+    }
+
+    const auto action_manager_address =
+        actor_address + kActorCastDiagnosticContextOffset;
+    std::int32_t action_count_before = 0;
+    if (!memory.TryReadValue(
+            action_manager_address + kPointerListCountOffset,
+            &action_count_before) ||
+        action_count_before <= 0 ||
+        action_count_before > 64) {
+        return false;
+    }
+
+    uintptr_t first_action_wrapper = 0;
+    uintptr_t first_action_object = 0;
+    uintptr_t first_action_vtable = 0;
+    uintptr_t action_items = 0;
+    if (memory.TryReadValue(
+            action_manager_address + kPointerListItemsOffset,
+            &action_items) &&
+        action_items != 0 &&
+        memory.TryReadValue(action_items, &first_action_wrapper) &&
+        first_action_wrapper != 0 &&
+        memory.TryReadValue(first_action_wrapper, &first_action_object) &&
+        first_action_object != 0) {
+        (void)memory.TryReadValue(first_action_object, &first_action_vtable);
+    }
+
+    DWORD exception_code = 0;
+    const bool pumped =
+        CallPlayerActorActionManagerTickSafe(
+            tick_address,
+            action_manager_address,
+            &exception_code);
+
+    std::int32_t action_count_after = -1;
+    (void)memory.TryReadValue(
+        action_manager_address + kPointerListCountOffset,
+        &action_count_after);
+
+    static std::uint64_t s_last_action_pump_log_ms = 0;
+    if (!pumped || now_ms - s_last_action_pump_log_ms >= 500) {
+        s_last_action_pump_log_ms = now_ms;
+        Log(
+            "[bots] native action manager pump. bot_id=" +
+            std::to_string(binding->bot_id) +
+            " actor=" + HexString(actor_address) +
+            " action_manager=" + HexString(action_manager_address) +
+            " count_before=" + std::to_string(action_count_before) +
+            " count_after=" + std::to_string(action_count_after) +
+            " first_wrapper=" + HexString(first_action_wrapper) +
+            " first_object=" + HexString(first_action_object) +
+            " first_vtable=" + HexString(first_action_vtable) +
+            " ok=" + (pumped ? std::string("1") : std::string("0")) +
+            " seh=" + HexString(exception_code));
+    }
+    return pumped;
+}
+
 void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     const auto original =
         GetX86HookTrampoline<PlayerActorTickFn>(g_gameplay_keyboard_injection.player_actor_tick_hook);
@@ -142,6 +218,25 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         if (stock_tick_may_consume_stale_loader_vector) {
             ClearWizardBotMovementVectorInputs(actor_address);
         }
+        if (binding->ongoing_cast.active) {
+            (void)StopOngoingBotCastForManaReserve(
+                binding,
+                "pre_bot_stock_tick_mana_reserve");
+        }
+        bool mana_reserve_active_for_stock_tick = false;
+        if (!binding->ongoing_cast.active) {
+            mana_reserve_active_for_stock_tick =
+                ApplyBotNativeManaReserveRecovery(
+                    binding,
+                    actor_address,
+                    native_tick_now_ms);
+        }
+        if (mana_reserve_active_for_stock_tick) {
+            (void)RepairGameplayPlayerProgressionSlotOwner(
+                "skip_reserved_bot_stock_tick",
+                actor_address);
+            return;
+        }
 
         uintptr_t gameplay_address = 0;
         std::uint8_t saved_cast_intent = 0;
@@ -219,7 +314,26 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             OngoingCastShouldRefreshNativeTargetState(binding->ongoing_cast)) {
             ReapplyOngoingCastSelectionState(binding, actor_address, binding->ongoing_cast, true);
         }
+        const bool bot_stock_tick_uses_actor_progression_cache =
+            IsWizardParticipantKind(binding->kind);
+        if (bot_stock_tick_uses_actor_progression_cache) {
+            (void)EnsureActorProgressionRuntimeFieldFromHandle(
+                actor_address,
+                "pre_bot_stock_tick_progression_runtime");
+        }
         original(self);
+        if (bot_stock_tick_uses_actor_progression_cache) {
+            (void)EnsureActorProgressionRuntimeFieldFromHandle(
+                actor_address,
+                "post_bot_stock_tick_progression_runtime");
+        }
+        (void)PumpQueuedBotNativeActionManager(
+            binding,
+            actor_address,
+            native_tick_now_ms);
+        (void)RepairGameplayPlayerProgressionSlotOwner(
+            "post_bot_stock_tick",
+            actor_address);
         if (refresh_selection_target_for_stock_tick) {
             RefreshSelectionBrainTargetForOngoingCast(binding->ongoing_cast);
         }
@@ -404,7 +518,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         }
         NormalizeGameplaySlotBotSyntheticVisualState(actor_address);
         ResolveWizardParticipantActorCollisions();
-        TickBotOwnedSkillsWizard(actor_address);
         return;
     }
 
@@ -501,7 +614,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     const bool moved_this_tick =
                         binding->movement_active && binding->last_movement_displacement > 0.0001f;
                     if (moved_this_tick) {
-                        ApplyActorAnimationDriveState(actor_address, true);
+                        ApplyObservedBotAnimationState(binding, actor_address, true);
                     } else {
                         StopWizardBotActorMotion(actor_address);
                     }
@@ -511,7 +624,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             }
         }
         ResolveWizardParticipantActorCollisions();
-        TickBotOwnedSkillsWizard(actor_address);
         return;
     }
 

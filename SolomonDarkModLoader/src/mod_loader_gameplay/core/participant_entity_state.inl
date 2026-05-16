@@ -81,6 +81,9 @@ struct ParticipantEntityBinding {
     float stock_tick_facing_origin_x = 0.0f;
     float stock_tick_facing_origin_y = 0.0f;
     bool death_transition_stock_tick_seen = false;
+    std::uint64_t mana_recovery_not_before_ms = 0;
+    std::uint64_t last_mana_recovery_log_ms = 0;
+    std::uint64_t last_mana_reserve_cleanup_log_ms = 0;
 
     // Ongoing cast state. The loader primes the cast once and keeps a stock-owned
     // startup/watch state alive across ticks. Native slot gates are unlocked at

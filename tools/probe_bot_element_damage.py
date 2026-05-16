@@ -227,7 +227,7 @@ print('primary_entry_index=' .. tostring(entry))
         raise ElementDamageProbeFailure(
             f"sd.bots.resolve_primary_entry failed for {element}: {result}"
         )
-    primary_entry_index = csp.int_value(result, "primary_entry_index", -1)
+    primary_entry_index = parse_int_text(result.get("primary_entry_index"), -1)
     if primary_entry_index < 0:
         raise ElementDamageProbeFailure(
             f"sd.bots.resolve_primary_entry returned no entry for {element}: {result}"
@@ -456,6 +456,17 @@ def build_native_projectile_spawn_validation(
         and int(matching_release.get("release_charge_hold", 0)) == 1
         and int(matching_release.get("release_growth_stop", 0)) == 1
     )
+    target_lethal_min_charge_ok = (
+        release_reason != "target_lethal"
+        or (
+            matching_release is not None
+            and finite_float(float(matching_release.get("obj_charge", 0.0)))
+            and finite_float(float(matching_release.get("release_growth_stop_min_charge", 0.0)))
+            and float(matching_release.get("release_growth_stop_min_charge", 0.0)) > 0.0
+            and float(matching_release.get("obj_charge", 0.0)) + 0.001 >=
+                float(matching_release.get("release_growth_stop_min_charge", 0.0))
+        )
+    )
     target_lethal_charge_held_ok = (
         release_reason != "target_lethal"
         or (
@@ -490,6 +501,7 @@ def build_native_projectile_spawn_validation(
         "native_max_size_fields_match_when_used": release_reason != "max_size" or max_size_fields_ok,
         "native_target_lethal_fields_match_when_used": release_reason != "target_lethal" or target_lethal_fields_ok,
         "native_release_holds_chosen_charge": release_hold_fields_ok,
+        "native_target_lethal_waits_for_min_charge": target_lethal_min_charge_ok,
         "native_target_lethal_charge_stays_below_max": target_lethal_charge_held_ok,
         "native_cast_completed_after_release": matching_complete is not None
         and matching_complete.get("exit_label") in {
@@ -508,6 +520,7 @@ def build_native_projectile_spawn_validation(
         "release_reason": release_reason,
         "max_size_fields_ok": max_size_fields_ok,
         "target_lethal_fields_ok": target_lethal_fields_ok,
+        "target_lethal_min_charge_ok": target_lethal_min_charge_ok,
         "stock_cleanup_window_ok": stock_cleanup_window_ok,
         "release_hold_fields_ok": release_hold_fields_ok,
         "target_lethal_charge_held_ok": target_lethal_charge_held_ok,

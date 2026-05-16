@@ -129,8 +129,9 @@ python3 tests/re/run_live_bot_mana_writer_probe.py
 That probe traces the stock native mana-delta function during bot casts. It
 first verifies coordinate-only Earth startup in a no-wave run does not spend
 from stale `actor+0x2D0` state, then targets a real native wave enemy and
-requires both plausible bot-actor negative delta hits and a real MP decrease on
-the bot's live progression state. It writes
+requires plausible bot-actor negative delta hits, no gameplay-player negative
+delta hits or MP loss, and a real MP decrease on the bot's live progression
+state. It writes
 `runtime/live_bot_mana_writer_probe.json`.
 
 Run the focused bot native mana spend probe after the native seam is wired:
@@ -143,7 +144,7 @@ That probe launches the staged game, materializes only the Earth bot, disables
 autonomous Lua bot ticks, forces both current and max MP through the Lua memory
 bridge, queues an Earth primary cast against a real wave enemy, and asserts
 stock spell-handler execution traces a bot-owned native mana delta, reduces
-live bot MP, and leaves the gameplay local-player actor pointer unchanged.
+live bot MP, and leaves the gameplay local-player actor pointer and MP unchanged.
 
 Pure-primary PerCast mana is covered separately:
 
@@ -153,8 +154,19 @@ python3 tests/re/run_live_pure_primary_startup_probe.py --json
 
 That probe queues Fire and Ether pure-primary casts, requires them to leave the
 startup lifecycle normally, verifies each cast traces a bot-owned stock native
-mana delta with a real live MP decrease, and asserts the startup path used the
-bot actor's direct equip runtime instead of a local slot/window fallback.
+mana delta with a real live bot MP decrease and no gameplay-player MP loss, and
+asserts startup used the bot-owned progression owner context plus the bot
+actor's direct equip runtime instead of a local slot/window fallback. Held bot
+mana now scopes the owner context around the native mana-delta function itself,
+including its zero-MP callback, and bot stock ticks keep `actor+0x200` bound to
+the actor's own progression runtime without swapping slot 0 for the whole tick.
+Active held casts also check the live bot progression pool before each stock
+tick, so continuous Water/Air/Earth input is released as soon as the bot enters
+the 10% mana reserve. Reserved idle bots recover through the native
+`PlayerActorApplyManaDelta` path until their own pool is above 80%, then the
+normal cast-admission path can resume.
+The unverified bot-owned `Skills_Wizard::Tick` vfunc path was removed; a future
+per-bot stat tick needs fresh native evidence before it can run in production.
 
 Run the focused out-of-mana rejection probe after touching bot cast admission
 or mana readiness checks:
@@ -220,7 +232,9 @@ follows `0x00642090`: `distance^2 < query_radius^2 + actor_collision_radius^2`,
 but the release decision is based on the bot's current target, live target HP,
 and native projected release damage from the active Boulder object's
 `spell_object_release_base_damage=0x1F8` field rather than rebuilding the
-primary stat output array during the held cast.
+primary stat output array during the held cast. Target-lethal release still
+waits for the recovered native minimum-release charge so tiny floor-damage
+projections do not release earlier than a real instant-click player Boulder.
 Raise `--target-hp` when you specifically need the native max-size release path. Use
 `--require-hp-write-watch` only when specifically investigating the native HP
 writer path because page-guard watches can destabilize target acquisition.

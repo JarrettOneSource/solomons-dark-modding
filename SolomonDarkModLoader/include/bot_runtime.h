@@ -36,6 +36,9 @@ struct BotManaCost {
     std::int32_t skill_id = 0;
 };
 
+constexpr float kBotManaReserveEnterRatio = 0.10f;
+constexpr float kBotManaReserveExitRatio = 0.80f;
+
 struct BotCreateRequest {
     std::string display_name;
     MultiplayerCharacterProfile character_profile;
@@ -153,6 +156,7 @@ struct BotSnapshot {
     float max_hp = 0.0f;
     float mp = 0.0f;
     float max_mp = 0.0f;
+    bool mana_reserve_active = false;
     bool entity_materialized = false;
     uintptr_t actor_address = 0;
     uintptr_t world_address = 0;
@@ -189,6 +193,7 @@ struct BotSnapshot {
     std::int32_t cast_skill_id = 0;
     int cast_ticks_waiting = 0;
     uintptr_t cast_target_actor_address = 0;
+    int native_action_cooldown_ticks = 0;
     bool active_spell_object_readable = false;
     uintptr_t active_spell_object_address = 0;
     std::uint32_t active_spell_object_type = 0;
@@ -246,6 +251,11 @@ BotManaCost ResolveBotCastManaCost(
 float ResolveBotManaRequiredToStart(const BotManaCost& cost);
 bool CanBotManaStartCast(const BotManaCost& cost, float current_mp, float max_mp);
 const char* BotManaChargeKindLabel(BotManaChargeKind kind);
+bool RefreshBotManaReserveState(
+    std::uint64_t bot_id,
+    float current_mp,
+    float max_mp,
+    bool* reserve_active = nullptr);
 bool FinishBotAttack(
     std::uint64_t bot_id,
     bool desired_heading_valid,

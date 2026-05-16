@@ -169,7 +169,7 @@ void ApplyStandaloneWizardAnimationDriveProfile(
     }
 }
 
-void ApplyStandaloneWizardDynamicAnimationState(
+void ApplyWizardDynamicWalkCycleState(
     const ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
     if (binding == nullptr || actor_address == 0) {
@@ -312,7 +312,8 @@ void ResetStandaloneWizardControlBrain(uintptr_t actor_address) {
     (void)memory.TryWriteValue<int>(control_brain_address + kActorControlBrainActionBurstTicksOffset, 0);
     (void)memory.TryWriteValue<int>(control_brain_address + kActorControlBrainHeadingLockTicksOffset, 0);
     (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainHeadingAccumulatorOffset, 0.0f);
-    (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainPursuitRangeOffset, 0.0f);
+    // Keep the native pursuit range populated; Lua uses it as the live primary
+    // attack window for non-water elements.
     (void)memory.TryWriteValue<std::uint8_t>(control_brain_address + kActorControlBrainFollowLeaderOffset, 0);
     (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainDesiredFacingOffset, 0.0f);
     (void)memory.TryWriteValue<float>(

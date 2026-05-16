@@ -26,12 +26,28 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 CASTING_API = ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/casting_api.inl"
+BOT_RUNTIME_HEADER = ROOT / "SolomonDarkModLoader/include/bot_runtime.h"
+BOT_RUNTIME_DEFAULTS_AND_LOOKUP = (
+    ROOT / "SolomonDarkModLoader/src/bot_runtime/helpers/defaults_and_lookup.inl"
+)
+BOT_RUNTIME_LIFECYCLE_API = (
+    ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/lifecycle_api.inl"
+)
+BOT_RUNTIME_SNAPSHOTS_API = (
+    ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/snapshots_api.inl"
+)
 RESOURCE_STATE = ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/resource_state.inl"
 PENDING_CAST_PREPARATION = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/pending_cast_preparation.inl"
 )
 PENDING_CAST_PROCESSING = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/pending_cast_processing.inl"
+)
+CAST_RELEASE_HELPERS = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/release_and_latch_helpers.inl"
+)
+BOT_SNAPSHOT_BUILDERS = (
+    ROOT / "SolomonDarkModLoader/src/bot_runtime/helpers/snapshot_builders.inl"
 )
 SKILL_SELECTION_RULES = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/skill_selection_rules.inl"
@@ -42,6 +58,7 @@ BOULDER_PROJECTION = (
 NATIVE_SPELL_STATS_HEADER = ROOT / "SolomonDarkModLoader/include/native_spell_stats.h"
 NATIVE_SPELL_STATS_CPP = ROOT / "SolomonDarkModLoader/src/native_spell_stats.cpp"
 LUA_ENGINE_BOTS_BINDING = ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_bots.cpp"
+LUA_ENGINE_PARSER_SNAPSHOTS = ROOT / "SolomonDarkModLoader/src/lua_engine_parser_snapshots.cpp"
 NATIVE_STATBOOKS_HEADER = ROOT / "SolomonDarkModLoader/include/native_statbooks.h"
 NATIVE_STATBOOKS_CPP = ROOT / "SolomonDarkModLoader/src/native_statbooks.cpp"
 MOD_LOADER_PROJECT = ROOT / "SolomonDarkModLoader/SolomonDarkModLoader.vcxproj"
@@ -580,6 +597,9 @@ def test_boulder_projection_is_read_only_native_formula() -> str:
     )
     required_processing_tokens = (
         "earth_target_lethal_release_ready",
+        "earth_native_min_release_charge_reached",
+        "ResolveEarthBoulderReleaseGrowthStopMinCharge",
+        "min_release_ready",
         "earth_damage_projection.target_actor != 0",
         "earth_damage_projection.projected_hp_damage + 0.001f >= earth_damage_projection.target_hp",
         "target_lethal_released",
@@ -602,6 +622,9 @@ def test_boulder_projection_is_read_only_native_formula() -> str:
     if "native_radius_damage_eligible" in target_lethal_guard.group("body"):
         raise StaticReTestFailure(
             "target-lethal Boulder release should use live target HP and native projected damage without requiring current center-overlap")
+    if "earth_native_min_release_charge_reached" not in target_lethal_guard.group("body"):
+        raise StaticReTestFailure(
+            "target-lethal Boulder release must wait for the native minimum release charge")
     return "Earth boulder projection stays read-only and drives target-lethal release"
 
 
@@ -616,6 +639,9 @@ def test_boulder_held_charge_tracks_live_target_until_release() -> str:
     targeting_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/targeting_and_facing.inl"
     )
+    release_text = read_text(CAST_RELEASE_HELPERS)
+    snapshot_text = read_text(BOT_SNAPSHOT_BUILDERS)
+    casting_api_text = read_text(CASTING_API)
     required_skill_tokens = (
         "OngoingCastTracksLiveTargetDuringNativeTick(ongoing)",
         "OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing) &&",
@@ -635,6 +661,20 @@ def test_boulder_held_charge_tracks_live_target_until_release() -> str:
         "once release is requested, target refresh stops",
         "ongoing.bounded_release_requested = true",
         "ongoing.bounded_release_target_actor = earth_damage_projection.target_actor",
+        "HasBotNativeCastActivity(activity_before_dispatch)",
+        "native_activity_before_dispatch",
+        "gameplay_input_buffer_readable",
+        "bounded_held_release_requested_safety_cap",
+        "target_lethal_released",
+        "max_size_released",
+    )
+    required_release_tokens = (
+        "kBotNativeActionRearmTicks",
+        "native_action_rearm",
+    )
+    required_readiness_tokens = (
+        "native_action_cooldown_ticks",
+        "cast rejected for native action cooldown",
     )
     movement_tick_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/participant_scene_binding_ticks.inl"
@@ -652,12 +692,29 @@ def test_boulder_held_charge_tracks_live_target_until_release() -> str:
     missing = [token for token in required_skill_tokens if token not in skill_text]
     missing += [token for token in required_projection_tokens if token not in projection_text]
     missing += [token for token in required_processing_tokens if token not in processing_text]
+    missing += [token for token in required_release_tokens if token not in release_text]
+    missing += [
+        token for token in required_readiness_tokens
+        if token not in snapshot_text and token not in casting_api_text
+    ]
     missing += [token for token in required_movement_tokens if token not in movement_tick_text]
     missing += [token for token in required_targeting_tokens if token not in targeting_text]
     if missing:
         raise StaticReTestFailure(
             "Earth boulder held retarget/release contract is missing token(s): " +
             ", ".join(missing))
+    forbidden_processing_tokens = (
+        "gameplay_input_buffer_unreadable",
+        "gameplay_mouse_left_unreadable",
+    )
+    present_forbidden = [
+        token for token in forbidden_processing_tokens
+        if token in processing_text
+    ]
+    if present_forbidden:
+        raise StaticReTestFailure(
+            "Earth boulder startup still treats optional gameplay input buffer reads as fatal: " +
+            ", ".join(present_forbidden))
     return "Earth boulder held charge tracks live target until release"
 
 
@@ -794,6 +851,36 @@ def test_bot_mana_spend_is_stock_owned_through_native_gate_patch() -> str:
     processing_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/pending_cast_processing.inl"
     )
+    processing_context_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/processing_context.inl"
+    )
+    preparation_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/pending_cast_preparation.inl"
+    )
+    dispatch_hook_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_cast_hooks.inl"
+    )
+    player_control_hook_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
+    )
+    player_mana_hook_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_mana_hooks.inl"
+    )
+    player_tick_hook_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl"
+    )
+    standalone_slot_context_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/standalone_progression_slot_context.inl"
+    )
+    request_state_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/runtime_request_state.inl"
+    )
+    constants_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/gameplay_constants.inl"
+    )
+    public_api_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl"
+    )
     patch_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/native_cast_gate_patches.inl"
     )
@@ -804,9 +891,23 @@ def test_bot_mana_spend_is_stock_owned_through_native_gate_patch() -> str:
     required_tokens = {
         "binary layout": "player_actor_apply_mana_delta=0x0052B150",
         "gate branch layout": "player_actor_apply_mana_delta_local_actor_gate_branch=0x0052B171",
+        "ether gate branch layout": "spell_cast_008_slot_gate_branch=0x0053D1B3",
+        "ether projectile gate branch layout": "spell_cast_008_projectile_slot_gate_branch=0x0053D9D2",
+        "fire gate branch layout": "spell_cast_010_slot_gate_branch=0x0053E4E8",
+        "magic missile hit damage gate branch layout": "magic_missile_hit_damage_projectile_group_gate_branch=0x005F1F39",
         "gate patch name": "player_actor_apply_mana_delta_local_actor_gate",
+        "ether gate patch name": "spell_cast_008_ether_slot_gate",
+        "ether projectile gate patch name": "spell_cast_008_ether_projectile_slot_gate",
+        "fire gate patch name": "spell_cast_010_fire_slot_gate",
+        "magic missile hit damage gate patch name": "magic_missile_hit_damage_projectile_group_gate",
         "gate patch binding": "kPlayerActorApplyManaDeltaLocalActorGateBranch",
-        "gate opcode validator": "LooksLikeNativeNearJnzGate",
+        "ether gate patch binding": "kSpellCast008SlotGateBranch",
+        "ether projectile gate patch binding": "kSpellCast008ProjectileSlotGateBranch",
+        "fire gate patch binding": "kSpellCast010SlotGateBranch",
+        "magic missile hit damage gate patch binding": "kMagicMissileHitDamageProjectileGroupGateBranch",
+        "gate opcode validator": "LooksLikeNativeJnzGate",
+        "short jnz gate validator": "bytes[0] == 0x75",
+        "gate patch byte count": "patch->byte_count",
         "gate runtime restore": "patch->original = current",
         "processing live depletion": "native mana depleted",
         "processing live read": "TryReadProgressionMana",
@@ -819,17 +920,53 @@ def test_bot_mana_spend_is_stock_owned_through_native_gate_patch() -> str:
         "writer target actor": "target_actor_address=target_actor_address",
         "writer probe": "stock_native_mana_delta",
         "writer trace summary": "negative_bot_actor_hits",
+        "writer player trace guard": "negative_player_actor_hits",
+        "writer player mana guard": "assert_gameplay_player_mana_not_decreased",
+        "writer player mp delta": "player_mp_delta",
         "pure primary trace": "stock_native_mana_delta",
+        "standalone owner context type": "ScopedStandaloneBotProgressionSlotContext",
+        "standalone owner context invoke": "InvokeWithStandaloneBotProgressionSlotContext",
+        "standalone owner context log": "standalone_slot_owner_context",
+        "bot owner context invoke": "InvokeWithBotProgressionSlotOwnerContext",
+        "bot owner context mode": "require_standalone_slot",
+        "mana delta hook": "HookPlayerActorApplyManaDelta",
+        "mana delta hook state": "player_actor_apply_mana_delta_hook",
+        "mana delta hook size": "kPlayerActorApplyManaDeltaHookPatchSize",
+        "native mana delta owner context": "native mana delta owner context",
+        "pure primary bot owner context": "pure_primary_bot_owner_context",
+        "actor progression runtime cache": "EnsureActorProgressionRuntimeFieldFromHandle",
+        "pre stock tick progression runtime cache": "pre_bot_stock_tick_progression_runtime",
+        "post native mana delta repair": "post_native_bot_mana_delta",
+        "player slot owner repair": "RepairGameplayPlayerProgressionSlotOwner",
+        "post bot stock tick repair": "post_bot_stock_tick",
     }
     missing: list[str] = []
     if required_tokens["binary layout"] not in layout_text:
         missing.append(required_tokens["binary layout"])
     if required_tokens["gate branch layout"] not in layout_text:
         missing.append(required_tokens["gate branch layout"])
+    if required_tokens["ether gate branch layout"] not in layout_text:
+        missing.append(required_tokens["ether gate branch layout"])
+    if required_tokens["ether projectile gate branch layout"] not in layout_text:
+        missing.append(required_tokens["ether projectile gate branch layout"])
+    if required_tokens["fire gate branch layout"] not in layout_text:
+        missing.append(required_tokens["fire gate branch layout"])
+    if required_tokens["magic missile hit damage gate branch layout"] not in layout_text:
+        missing.append(required_tokens["magic missile hit damage gate branch layout"])
     for label, token in (
         ("gate patch name", required_tokens["gate patch name"]),
+        ("ether gate patch name", required_tokens["ether gate patch name"]),
+        ("ether projectile gate patch name", required_tokens["ether projectile gate patch name"]),
+        ("fire gate patch name", required_tokens["fire gate patch name"]),
+        ("magic missile hit damage gate patch name", required_tokens["magic missile hit damage gate patch name"]),
         ("gate patch binding", required_tokens["gate patch binding"]),
+        ("ether gate patch binding", required_tokens["ether gate patch binding"]),
+        ("ether projectile gate patch binding", required_tokens["ether projectile gate patch binding"]),
+        ("fire gate patch binding", required_tokens["fire gate patch binding"]),
+        ("magic missile hit damage gate patch binding", required_tokens["magic missile hit damage gate patch binding"]),
         ("gate opcode validator", required_tokens["gate opcode validator"]),
+        ("short jnz gate validator", required_tokens["short jnz gate validator"]),
+        ("gate patch byte count", required_tokens["gate patch byte count"]),
         ("gate runtime restore", required_tokens["gate runtime restore"]),
     ):
         if token not in patch_text:
@@ -854,11 +991,37 @@ def test_bot_mana_spend_is_stock_owned_through_native_gate_patch() -> str:
         ("writer target actor", writer_probe_text, required_tokens["writer target actor"]),
         ("writer probe", writer_probe_text, required_tokens["writer probe"]),
         ("writer trace summary", writer_probe_text + helper_text, required_tokens["writer trace summary"]),
+        ("writer player trace guard", writer_probe_text + native_spend_probe_text + pure_primary_probe_text + helper_text, required_tokens["writer player trace guard"]),
+        ("writer player mana guard", writer_probe_text + native_spend_probe_text + pure_primary_probe_text + helper_text, required_tokens["writer player mana guard"]),
+        ("writer player mp delta", writer_probe_text + native_spend_probe_text + helper_text, required_tokens["writer player mp delta"]),
         ("native spend probe", native_spend_probe_text, required_tokens["writer probe"]),
         ("pure primary trace", pure_primary_probe_text, required_tokens["pure primary trace"]),
+        ("standalone owner context type", standalone_slot_context_text, required_tokens["standalone owner context type"]),
+        ("standalone owner context invoke", standalone_slot_context_text + processing_context_text + preparation_text + dispatch_hook_text + player_control_hook_text + player_tick_hook_text, required_tokens["standalone owner context invoke"]),
+        ("standalone owner context log", processing_context_text + preparation_text + dispatch_hook_text + player_control_hook_text + player_tick_hook_text, required_tokens["standalone owner context log"]),
+        ("bot owner context invoke", standalone_slot_context_text + player_mana_hook_text, required_tokens["bot owner context invoke"]),
+        ("bot owner context mode", standalone_slot_context_text, required_tokens["bot owner context mode"]),
+        ("mana delta hook", player_mana_hook_text, required_tokens["mana delta hook"]),
+        ("mana delta hook state", player_mana_hook_text + request_state_text + public_api_text, required_tokens["mana delta hook state"]),
+        ("mana delta hook size", constants_text + public_api_text, required_tokens["mana delta hook size"]),
+        ("native mana delta owner context", player_mana_hook_text, required_tokens["native mana delta owner context"]),
+        ("pure primary bot owner context", preparation_text + dispatch_hook_text + player_control_hook_text, required_tokens["pure primary bot owner context"]),
+        ("actor progression runtime cache", standalone_slot_context_text + player_tick_hook_text + player_mana_hook_text, required_tokens["actor progression runtime cache"]),
+        ("pre stock tick progression runtime cache", player_tick_hook_text, required_tokens["pre stock tick progression runtime cache"]),
+        ("post native mana delta repair", player_mana_hook_text, required_tokens["post native mana delta repair"]),
+        ("player slot owner repair", standalone_slot_context_text, required_tokens["player slot owner repair"]),
+        ("post bot stock tick repair", player_tick_hook_text, required_tokens["post bot stock tick repair"]),
     ):
         if token not in text:
             missing.append(f"{label}:{token}")
+    if "standalone stock tick owner context" in player_tick_hook_text:
+        missing.append("standalone stock tick still swaps the player progression slot")
+    if "bot_stock_tick_needs_progression_owner" in player_tick_hook_text:
+        missing.append("bot stock tick still carries broad progression owner state")
+    if "bot stock tick mana owner context" in player_tick_hook_text:
+        missing.append("bot stock tick still logs broad progression owner context")
+    if "InvokeWithBotProgressionSlotOwnerContext(" in player_tick_hook_text:
+        missing.append("bot stock tick still wraps the whole native tick in slot owner context")
     if re.search(r"TryWriteField\s*<\s*float\s*>\s*\([^;]*kProgressionMpOffset", resource_text, re.S):
         missing.append("direct progression MP write still present")
     if re.search(
@@ -914,13 +1077,17 @@ def test_bot_cast_admission_refreshes_live_mana_before_queue() -> str:
         "TryRefreshParticipantGameplayState",
         "PublishParticipantGameplaySnapshot(*binding)",
         "ApplyGameplayStateToSnapshot(request.bot_id, &live_snapshot)",
+        "ApplyManaReserveStateToSnapshot(&live_snapshot)",
         "live_progression_available",
         "live_snapshot.max_mp > 0.0f",
         "live_snapshot.progression_runtime_state_address != 0",
+        "live_snapshot.mana_reserve_active",
+        "cast rejected for mana reserve",
+        "mode=reserve before=",
         "live_snapshot.mp <= kBotManaReadinessEpsilon",
         "cast rejected for mana",
         "mode=unavailable before=",
-        "snapshot->mp > kBotManaReadinessEpsilon",
+        "snapshot->mp > kBotManaReadinessEpsilon && !snapshot->mana_reserve_active",
     )
     combined_text = "\n".join(
         (casting_text, mod_loader_header_text, state_getters_text, snapshot_text)
@@ -939,6 +1106,125 @@ def test_bot_cast_admission_refreshes_live_mana_before_queue() -> str:
             "bot cast live mana rejection must run before pending-cast insertion")
 
     return "bot cast admission refreshes live mana and rejects empty MP before queueing"
+
+
+def test_bot_mana_reserve_uses_hysteresis_for_casting() -> str:
+    header_text = read_text(BOT_RUNTIME_HEADER)
+    runtime_text = read_text(ROOT / "SolomonDarkModLoader/src/bot_runtime.cpp")
+    lookup_text = read_text(BOT_RUNTIME_DEFAULTS_AND_LOOKUP)
+    casting_text = read_text(CASTING_API)
+    snapshot_text = read_text(BOT_SNAPSHOT_BUILDERS)
+    snapshots_api_text = read_text(BOT_RUNTIME_SNAPSHOTS_API)
+    lifecycle_text = read_text(BOT_RUNTIME_LIFECYCLE_API)
+    state_mutation_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/bot_runtime/helpers/state_mutation.inl"
+    )
+    preparation_text = read_text(PENDING_CAST_PREPARATION)
+    processing_text = read_text(PENDING_CAST_PROCESSING)
+    release_helpers_text = read_text(CAST_RELEASE_HELPERS)
+    player_mana_hook_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_mana_hooks.inl"
+    )
+    player_tick_hook_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl"
+    )
+    constants_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/gameplay_constants.inl"
+    )
+    lua_snapshot_text = read_text(LUA_ENGINE_PARSER_SNAPSHOTS)
+
+    required_tokens = (
+        "constexpr float kBotManaReserveEnterRatio = 0.10f",
+        "constexpr float kBotManaReserveExitRatio = 0.80f",
+        "bool mana_reserve_active = false",
+        "struct BotManaReserveState",
+        "std::vector<BotManaReserveState> g_bot_mana_reserves",
+        "ratio < kBotManaReserveEnterRatio",
+        "ratio > kBotManaReserveExitRatio",
+        "UpdateBotManaReserveStateLocked",
+        "RefreshBotManaReserveState",
+        "ApplyManaReserveStateToSnapshot(&live_snapshot)",
+        "ApplyManaReserveStateToSnapshot(snapshot)",
+        "live_snapshot.mana_reserve_active",
+        "cast rejected for mana reserve",
+        "mode=reserve before=",
+        "mana_reserve_active ||",
+        "native mana reserve",
+        "mana_stop_label = \"mana_reserve\"",
+        "StopOngoingBotCastForManaReserve",
+        "pre_bot_stock_tick_mana_reserve",
+        "ApplyBotNativeManaReserveRecovery",
+        "ClearIdleBotManaReserveNativeCastState",
+        "native mana reserve idle cast cleanup",
+        "InvokeNativeManaDeltaTrampolineForBotSafe",
+        "native mana reserve recovery",
+        "post_native_bot_mana_recovery",
+        "kBotManaReserveRecoveryIntervalMs",
+        "kBotManaReserveRecoveryRatioPerSecond",
+        "std::strcmp(exit_label, \"mana_reserve\") == 0",
+        "std::strcmp(exit_label, \"mana_depleted\") == 0",
+        "g_bot_mana_reserves.clear()",
+        "RemoveBotManaReserveState(bot_id)",
+        "lua_setfield(state, -2, \"mana_reserve_active\")",
+    )
+    combined_text = "\n".join((
+        header_text,
+        runtime_text,
+        lookup_text,
+        casting_text,
+        snapshot_text,
+        snapshots_api_text,
+        lifecycle_text,
+        state_mutation_text,
+        preparation_text,
+        processing_text,
+        release_helpers_text,
+        player_mana_hook_text,
+        player_tick_hook_text,
+        constants_text,
+        lua_snapshot_text,
+    ))
+    missing = [token for token in required_tokens if token not in combined_text]
+    if missing:
+        raise StaticReTestFailure(
+            "bot mana reserve hysteresis is missing native cast token(s): " +
+            ", ".join(missing))
+
+    enter_pos = lookup_text.find("ratio < kBotManaReserveEnterRatio")
+    exit_pos = lookup_text.find("ratio > kBotManaReserveExitRatio")
+    if not (0 <= enter_pos < exit_pos):
+        raise StaticReTestFailure(
+            "bot mana reserve must enter below the low threshold and exit above the high threshold")
+
+    refresh_pos = casting_text.find("ApplyManaReserveStateToSnapshot(&live_snapshot)")
+    reserve_reject_pos = casting_text.find("cast rejected for mana reserve")
+    queue_pos = casting_text.find("g_pending_casts.push_back")
+    if not (0 <= refresh_pos < reserve_reject_pos < queue_pos):
+        raise StaticReTestFailure(
+            "bot mana reserve rejection must run before pending-cast insertion")
+
+    active_reserve_pos = processing_text.find("native mana reserve")
+    active_finish_pos = processing_text.find(
+        "FinishBotCastNativeLifecycle(cast_context, ongoing, mana_stop_label, true)")
+    if not (0 <= active_reserve_pos < active_finish_pos):
+        raise StaticReTestFailure(
+            "active bot casts must finish through the native lifecycle when reserve is active")
+
+    run_stock_tick_pos = player_tick_hook_text.find("auto RunStockTick")
+    pre_stop_pos = player_tick_hook_text.find(
+        "StopOngoingBotCastForManaReserve", run_stock_tick_pos)
+    recovery_pos = player_tick_hook_text.find(
+        "ApplyBotNativeManaReserveRecovery", run_stock_tick_pos)
+    drive_input_pos = player_tick_hook_text.find(
+        "const bool drive_stock_cast_input", run_stock_tick_pos)
+    original_tick_pos = player_tick_hook_text.find("original(self);", drive_input_pos)
+    if not (
+        0 <= run_stock_tick_pos < pre_stop_pos < recovery_pos < drive_input_pos < original_tick_pos
+    ):
+        raise StaticReTestFailure(
+            "bot mana reserve stop/recovery must run before stock cast input and native tick")
+
+    return "bot mana reserve uses 10/80 hysteresis across native cast paths"
 
 
 def test_bot_out_of_mana_probe_checks_pre_execution_rejection() -> str:
@@ -1008,7 +1294,8 @@ def test_held_primary_mana_uses_native_spend_scale_and_start_rate() -> str:
         "ResolveBotManaRequiredToStart(cost)",
         "ResolveBotManaRequiredToStart(cast_mana)",
         "CanBotManaStartCast(cast_mana, current_mp, max_mp)",
-        "mode=per_second rate=",
+        "mana_reserve_active ? std::string(\"reserve\") : std::string(\"per_second\")",
+        "\" rate=\" + std::to_string(cast_mana.cost)",
         "native_stat_cost=",
         "native_output_scale=",
     )
@@ -1173,6 +1460,15 @@ def test_primary_attack_window_uses_live_native_selection_range() -> str:
         raise StaticReTestFailure(
             "primary attack window is missing live native selection-range token(s): " +
             ", ".join(missing))
+
+    drive_text = read_text(SCENE_ANIMATION_DRIVE_PROFILES)
+    reset_start = drive_text.find("void ResetStandaloneWizardControlBrain")
+    reset_end = drive_text.find("void ApplyStandaloneWizardPuppetDriveState", reset_start)
+    if reset_start < 0 or reset_end < 0:
+        raise StaticReTestFailure("ResetStandaloneWizardControlBrain was not found")
+    if "kActorControlBrainPursuitRangeOffset" in drive_text[reset_start:reset_end]:
+        raise StaticReTestFailure(
+            "control-brain reset still clears the native primary pursuit range used by Lua attack windows")
 
     return "primary attack window reads the live native selection pursuit range"
 
@@ -1412,6 +1708,8 @@ def test_bot_element_damage_probe_supports_upgraded_primary_victim_validation() 
         "actual_victims",
         "any_hostile_damaged",
         "native_spell_stat_validation.get(\"ok\") is True",
+        "native_target_lethal_waits_for_min_charge",
+        "target_lethal_min_charge_ok",
     )
     missing = [token for token in required_tokens if token not in probe_text]
     if missing:
@@ -2962,9 +3260,13 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
         "0x00545360",
         "actor+0x1FC",
         "native cast gate patches",
+        "0x0053D1B3",
+        "0x0053D9D2",
+        "0x0053E4E8",
         "0x00544C92",
         "0x00545393",
         "0x00545C2C",
+        "0x005F1F39",
     )
     missing_doc = [token for token in required_doc_tokens if token not in doc_text]
     if missing_doc:
@@ -3393,7 +3695,7 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
             ", ".join(missing_pure_primary_probe))
 
     if not re.search(
-        r"\| Slot-0 cast shim \|[^\n]+\|[^\n]*0x0052F3B9[^\n]*0x00544C92[^\n]*0x00545393[^\n]*0x00545C2C[^\n]*\|[^\n]*done:",
+        r"\| Slot-0 cast shim \|[^\n]+\|[^\n]*0x0052F3B9[^\n]*0x0053D1B3[^\n]*0x0053D9D2[^\n]*0x0053E4E8[^\n]*0x00544C92[^\n]*0x00545393[^\n]*0x00545C2C[^\n]*0x005F1F39[^\n]*\|[^\n]*done:",
         plan_text,
     ):
         raise StaticReTestFailure(
@@ -3958,9 +4260,6 @@ def test_second_residual_runtime_and_trace_addresses_are_layout_backed() -> str:
     actor_world_calls_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_actor_calls/actor_world_and_visual_calls.inl"
     )
-    bot_owned_tick_text = read_text(
-        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/bot_owned_skills_tick.inl"
-    )
     player_cast_hooks_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_cast_hooks.inl"
     )
@@ -3983,7 +4282,6 @@ def test_second_residual_runtime_and_trace_addresses_are_layout_backed() -> str:
         "cast_diagnostic_vtable_callback=0x10",
         "object_vtable=0x00",
         "gameplay_actor_attach_vfunc=0x10",
-        "skills_wizard_tick_vfunc=0x08",
         "skills_wizard_probe_vfunc=0x68",
         "actor_world_lookup_object_by_handle=0x0045ADE0",
         "trace_builder_entry=0x0044F5F0",
@@ -4013,7 +4311,6 @@ def test_second_residual_runtime_and_trace_addresses_are_layout_backed() -> str:
         (standalone_tracking_text, "standalone_tracking", "kObjectVtableOffset"),
         (public_state_getters_text, "public_state_getters", "kObjectVtableOffset"),
         (actor_world_calls_text, "actor_world_calls", "kGameplayActorAttachVfuncOffset"),
-        (bot_owned_tick_text, "bot_owned_tick", "kSkillsWizardTickVfuncOffset"),
         (player_cast_hooks_text, "player_cast_hooks", "kSkillsWizardProbeVfuncOffset"),
         (boulder_projection_text, "boulder_projection", "active_spell_state.release_base_damage"),
         (selection_text, "selection", "kActorControlBrainStateIdOffset"),
@@ -4043,7 +4340,6 @@ def test_second_residual_runtime_and_trace_addresses_are_layout_backed() -> str:
         (standalone_tracking_text, "standalone_tracking", r"(?:actor|self|deleter)_address,\s*0x00"),
         (public_state_getters_text, "public_state_getters", r"actor_address,\s*0x00"),
         (actor_world_calls_text, "actor_world_calls", r"vtable \+ 0x10"),
-        (bot_owned_tick_text, "bot_owned_tick", r"progression_address,\s*0|vtable_address,\s*0x8"),
         (player_cast_hooks_text, "player_cast_hooks", r"chosen_runtime,\s*0|chosen_vtable \+ 0x68"),
         (boulder_projection_text, "boulder_projection", r"active_spell_snapshot\.object,\s*0x58|stat_vtable \+ 0x100"),
         (selection_text, "selection", r"selection_ptr \+ 0x(?:0|1C|20|24|28|2C|30|34)|actor_address,\s*0xDC|actor_dc_(?:ptr|vtable) \+ 0x10"),
@@ -4060,6 +4356,33 @@ def test_second_residual_runtime_and_trace_addresses_are_layout_backed() -> str:
         raise StaticReTestFailure(
             "second residual raw offsets/addresses remain in: " +
             ", ".join(present_forbidden))
+
+    retired_tick_text = "\n".join(
+        read_text(path)
+        for path in (
+            ROOT / "SolomonDarkModLoader/src/gameplay_seams.h",
+            ROOT / "SolomonDarkModLoader/src/gameplay_seams/address_storage.inl",
+            ROOT / "SolomonDarkModLoader/src/gameplay_seams/size_bindings.inl",
+            ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick_hooks.inl",
+            ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl",
+            MOD_LOADER_PROJECT,
+            MOD_LOADER_PROJECT_FILTERS,
+            BINARY_LAYOUT,
+        )
+    )
+    retired_tick_tokens = (
+        "TickBotOwnedSkillsWizard",
+        "kSkillsWizardTickVfuncOffset",
+        "skills_wizard_tick_vfunc",
+        "bot_owned_skills_tick",
+    )
+    present_retired_tick_tokens = [
+        token for token in retired_tick_tokens if token in retired_tick_text
+    ]
+    if present_retired_tick_tokens:
+        raise StaticReTestFailure(
+            "retired unverified bot-owned Skills_Wizard tick remains: " +
+            ", ".join(present_retired_tick_tokens))
 
     return "second residual runtime offsets and trace addresses are layout-backed"
 
@@ -4444,11 +4767,11 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
     )
 
     match = re.search(
-        r"void ApplyStandaloneWizardDynamicAnimationState\([^)]*\)\s*\{(?P<body>.*?)\n\}",
+        r"void ApplyWizardDynamicWalkCycleState\([^)]*\)\s*\{(?P<body>.*?)\n\}",
         drive_text,
         re.S)
     if not match:
-        raise StaticReTestFailure("ApplyStandaloneWizardDynamicAnimationState was not found")
+        raise StaticReTestFailure("ApplyWizardDynamicWalkCycleState was not found")
 
     body = match.group("body")
     required_tokens = (
@@ -4458,7 +4781,7 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
     missing = [token for token in required_tokens if token not in body]
     if missing:
         raise StaticReTestFailure(
-            "standalone animation drive is missing dynamic write token(s): " +
+            "wizard animation drive is missing dynamic walk-cycle write token(s): " +
             ", ".join(missing))
 
     forbidden_dynamic_tokens = (
@@ -4482,17 +4805,18 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
     ]
     if dynamic_regressions or locomotion_regressions:
         raise StaticReTestFailure(
-            "standalone dynamic movement still writes native-owned render phase/blend token(s): " +
+            "wizard dynamic movement still writes native-owned render phase/blend token(s): " +
             ", ".join(dynamic_regressions + locomotion_regressions))
 
     required_movement_tokens = (
         "Clear the previous",
         "ClearWizardBotMovementVectorInputs(actor_address);",
-        "IsStandaloneWizardKind(binding->kind) && !cast_active",
+        "IsWizardParticipantKind(binding->kind) && !cast_active",
         "binding != nullptr && IsStandaloneWizardKind(binding->kind)",
-        "ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);",
+        "AdvanceWizardWalkCycleState(binding, displacement_distance);",
+        "ApplyWizardDynamicWalkCycleState(binding, actor_address);",
         "ApplyObservedBotAnimationState(binding, actor_address, true);",
-        "ApplyActorAnimationDriveState(actor_address, true);",
+        "ApplyActorAnimationDriveState(actor_address, moving);",
         "Restore the bot's own vector after applying the profile",
         "Keep the bot's own vector after replay",
     )
@@ -4508,7 +4832,7 @@ def test_standalone_animation_drive_applies_dynamic_fields() -> str:
     if "if (!IsStandaloneWizardKind(binding->kind))" not in locomotion_text:
         raise StaticReTestFailure("gameplay-slot bots can still enter standalone animation replay")
 
-    return "bot movement clears stale stock-tick inputs and keeps standalone walk-cycle replay off gameplay-slot bots"
+    return "bot movement clears stale stock-tick inputs, advances walk cycles for all wizard bots, and keeps standalone profile replay off gameplay-slot bots"
 
 
 def test_native_global_reads_do_not_use_loader_substitutes() -> str:
@@ -4796,6 +5120,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_bot_mana_spend_is_stock_owned_through_native_gate_patch,
     ),
     ("bot cast admission refreshes live mana before queue", test_bot_cast_admission_refreshes_live_mana_before_queue),
+    ("bot mana reserve uses native hysteresis", test_bot_mana_reserve_uses_hysteresis_for_casting),
     ("bot out-of-mana probe checks pre-execution rejection", test_bot_out_of_mana_probe_checks_pre_execution_rejection),
     ("held primary mana uses native spend scale and start rate", test_held_primary_mana_uses_native_spend_scale_and_start_rate),
     ("primary build skill mapping has single runtime owner", test_primary_build_skill_mapping_has_single_runtime_owner),

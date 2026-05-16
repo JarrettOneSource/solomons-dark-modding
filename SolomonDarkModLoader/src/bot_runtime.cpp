@@ -93,6 +93,12 @@ struct PendingBotSkillChoice {
     std::vector<BotSkillChoiceOption> options;
 };
 
+struct BotManaReserveState {
+    std::uint64_t bot_id = 0;
+    bool active = false;
+    float last_ratio = 1.0f;
+};
+
 std::mutex g_bot_runtime_mutex;
 bool g_bot_runtime_initialized = false;
 std::uint64_t g_next_bot_id = kFirstLuaControlledParticipantId;
@@ -106,6 +112,7 @@ std::vector<PendingBotEntitySync> g_pending_entity_syncs;
 std::vector<PendingBotMovementIntent> g_bot_movement_intents;
 std::vector<PendingBotDestroy> g_pending_destroys;
 std::vector<PendingBotSkillChoice> g_pending_skill_choices;
+std::vector<BotManaReserveState> g_bot_mana_reserves;
 
 constexpr float kBotArrivalThreshold = 0.5f;
 constexpr float kBotManaReadinessEpsilon = 0.001f;

@@ -53,6 +53,7 @@ void ResetPendingState() {
     g_bot_movement_intents.clear();
     g_pending_destroys.clear();
     g_pending_skill_choices.clear();
+    g_bot_mana_reserves.clear();
     g_next_cast_sequence = 1;
     g_next_entity_sync_generation = 1;
     g_next_movement_intent_revision = 1;

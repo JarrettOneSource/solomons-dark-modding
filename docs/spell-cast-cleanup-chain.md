@@ -70,12 +70,14 @@ that gate the live boulder launch. Runtime code now names those fields through
 `config/binary-layout.ini` rather than owning local numeric offsets.
 
 The former slot shim blocker was the native init predicate:
-`actor+0x5C == 0`. The current runtime removes the local-slot/progression
-redirect and installs layout-backed native cast gate patches instead. These
-patches validate the live instruction as the expected `jnz rel32` gate and
-capture the original bytes for restoration rather than carrying copied
-per-site byte payloads in source. They unlock the exact non-zero-slot branches
-while leaving
+`actor+0x5C == 0`. Ether has two separate native slot gates: one early setup
+gate at `0x0053D1B3`, and one projectile-allocation gate at `0x0053D9D2` that
+guards the stock `0x7D3` spell object allocation loop. The current runtime
+removes the local-slot/progression redirect and installs layout-backed
+native cast gate patches instead. These patches validate the live instruction as the
+expected `jnz rel32` gate and capture the original bytes for restoration rather
+than carrying copied per-site byte payloads in source. They unlock the exact
+non-zero-slot branches while leaving
 `actor+0x5C` pointed at the bot's real gameplay slot, so stock progression
 lookups use the bot's live slot data.
 
@@ -104,7 +106,8 @@ local-slot actor gate and the same slot-indexed progression lookup:
 uses `actor+0x5C` to select local progression state. The expanded offset scan
 keeps the hot cast functions tied to `+0x5C`, `+0x270`, `+0x27C/+0x27E`, and
 target handle `+0x164/+0x166`; the production fix is therefore a narrow native
-cast gate patch set at `0x0052F3B9`, `0x00544C92`, `0x00545393`, and
+cast gate patch set at `0x0052F3B9`, pure-primary Ether/Fire projectile gates
+`0x0053D1B3`/`0x0053D9D2`/`0x0053E4E8`, `0x00544C92`, `0x00545393`, and
 `0x00545C2C`.
 
 `tests/re/run_live_cast_shim_snapshot_probe.py --json --timeout 180` now validates this
@@ -198,11 +201,19 @@ The `(actor+0x5C == 0)` clause bakes in a "local player only" assumption.
   cone ever rendered.
 
 Fix: `native_cast_gate_patches.inl` byte-checks and patches the exact stock
-slot gates at `0x0052F3B9`, `0x00544C92`, `0x00545393`, and `0x00545C2C`.
-Bots keep their real gameplay slot in `actor+0x5C`; stock progression lookups
-and targeting therefore continue to observe the bot-owned slot. The spell
-object itself is initialized from the allocator's own `spell_obj+0x5C/+0x5E`
-(not actor identity), so it carries a valid group/slot through cleanup.
+slot gates at `0x0052F3B9`, `0x0053D1B3`, `0x0053D9D2`, `0x0053E4E8`,
+`0x00544C92`, `0x00545393`, and `0x00545C2C`. Bots keep their real gameplay
+slot in `actor+0x5C`; stock progression lookups and targeting therefore
+continue to observe the bot-owned slot. The pure-primary Ether/Fire handlers
+still run their native setup and mana path, but the unlocked projectile branch
+now reaches the stock allocator and world-registration calls instead of skipping
+them for nonzero gameplay slots. Ether's MagicMissile hit handler at
+`0x005F1F00` has a second damage gate at the short branch `0x005F1F39` that
+tests the projectile's own group byte at `spell_obj+0x5C`; the same native cast
+gate patches unlock that impact branch so bot-owned `0x7D3` projectiles reach
+the stock damage call. The spell object itself is initialized from the
+allocator's own `spell_obj+0x5C/+0x5E` (not actor identity), so it carries a
+valid group/slot through cleanup.
 
 ### Control-brain vector contract for primary startup
 

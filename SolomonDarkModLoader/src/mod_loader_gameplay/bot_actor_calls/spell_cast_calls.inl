@@ -18,6 +18,26 @@ bool CallSpellCastDispatcherSafe(
     }
 }
 
+bool CallPlayerActorActionManagerTickSafe(
+    uintptr_t tick_address,
+    uintptr_t action_manager_address,
+    DWORD* exception_code) {
+    auto* tick = reinterpret_cast<PlayerActorActionManagerTickFn>(tick_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (tick == nullptr || action_manager_address == 0) {
+        return false;
+    }
+
+    __try {
+        tick(reinterpret_cast<void*>(action_manager_address));
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
 bool CallPurePrimarySpellStartSafe(
     uintptr_t startup_address,
     uintptr_t actor_address,

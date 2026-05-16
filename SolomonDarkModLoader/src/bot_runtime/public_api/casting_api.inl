@@ -19,11 +19,17 @@ bool QueueBotCast(const BotCastRequest& request) {
     BotSnapshot live_snapshot{};
     FillBotSnapshot(*participant, &live_snapshot);
     ApplyGameplayStateToSnapshot(request.bot_id, &live_snapshot);
+    ApplyManaReserveStateToSnapshot(&live_snapshot);
+    if (live_snapshot.native_action_cooldown_ticks > 0) {
+        Log(
+            "[bots] cast rejected for native action cooldown. bot_id=" +
+            std::to_string(request.bot_id) +
+            " ticks=" + std::to_string(live_snapshot.native_action_cooldown_ticks));
+        return false;
+    }
     const bool live_progression_available =
         live_snapshot.progression_runtime_state_address != 0;
-    if (live_snapshot.entity_materialized &&
-        (live_snapshot.max_mp > 0.0f || live_progression_available) &&
-        live_snapshot.mp <= kBotManaReadinessEpsilon) {
+    auto resolve_rejected_skill_id = [&]() -> std::int32_t {
         std::int32_t rejected_skill_id = request.skill_id;
         if (request.kind == BotCastKind::Primary && rejected_skill_id <= 0) {
             NativePrimarySpellSelection selection{};
@@ -50,9 +56,28 @@ bool QueueBotCast(const BotCastRequest& request) {
                 rejected_skill_id = selection.build_skill_id;
             }
         }
+        return rejected_skill_id;
+    };
+    if (live_snapshot.entity_materialized &&
+        (live_snapshot.max_mp > 0.0f || live_progression_available) &&
+        live_snapshot.mana_reserve_active) {
+        Log(
+            "[bots] cast rejected for mana reserve. bot_id=" + std::to_string(request.bot_id) +
+            " skill_id=" + std::to_string(resolve_rejected_skill_id()) +
+            " kind=" + (request.kind == BotCastKind::Primary ? std::string("primary") : std::string("secondary")) +
+            " slot=" + std::to_string(request.secondary_slot) +
+            " mode=reserve before=" + std::to_string(live_snapshot.mp) +
+            " max=" + std::to_string(live_snapshot.max_mp) +
+            " enter_ratio=" + std::to_string(kBotManaReserveEnterRatio) +
+            " exit_ratio=" + std::to_string(kBotManaReserveExitRatio));
+        return false;
+    }
+    if (live_snapshot.entity_materialized &&
+        (live_snapshot.max_mp > 0.0f || live_progression_available) &&
+        live_snapshot.mp <= kBotManaReadinessEpsilon) {
         Log(
             "[bots] cast rejected for mana. bot_id=" + std::to_string(request.bot_id) +
-            " skill_id=" + std::to_string(rejected_skill_id) +
+            " skill_id=" + std::to_string(resolve_rejected_skill_id()) +
             " kind=" + (request.kind == BotCastKind::Primary ? std::string("primary") : std::string("secondary")) +
             " slot=" + std::to_string(request.secondary_slot) +
             " mode=unavailable before=" + std::to_string(live_snapshot.mp) +
@@ -269,6 +294,27 @@ bool CanBotManaStartCast(const BotManaCost& cost, float current_mp, float max_mp
     default:
         return true;
     }
+}
+
+bool RefreshBotManaReserveState(
+    std::uint64_t bot_id,
+    float current_mp,
+    float max_mp,
+    bool* reserve_active) {
+    if (reserve_active != nullptr) {
+        *reserve_active = false;
+    }
+
+    std::scoped_lock lock(g_bot_runtime_mutex);
+    if (!g_bot_runtime_initialized || bot_id == 0) {
+        return false;
+    }
+
+    const bool active = UpdateBotManaReserveStateLocked(bot_id, current_mp, max_mp);
+    if (reserve_active != nullptr) {
+        *reserve_active = active;
+    }
+    return true;
 }
 
 const char* BotManaChargeKindLabel(BotManaChargeKind kind) {

@@ -263,6 +263,7 @@
     <ClInclude Include="src\mod_loader_gameplay\core\runtime_request_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\seh_safe_call_declarations.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\standalone_owner_repair.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\core\standalone_progression_slot_context.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_actor_lifecycle_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_execute_requests.inl" />
@@ -280,12 +281,12 @@
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_tick_and_render_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\animation_advance_hook.inl" />
-    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\bot_owned_skills_tick.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\player_actor_tick_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\cast_probe_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\gameplay_hud_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\input_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\monster_pathfinding_hook.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_mana_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_control_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\nav_grid_snapshot_service.inl" />

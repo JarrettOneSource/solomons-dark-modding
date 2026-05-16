@@ -20,6 +20,7 @@ from bot_mana_trace_helpers import (  # noqa: E402
     assert_native_mana_delta_matches_prepared_rate,
     arm_native_mana_delta_trace,
     assert_gameplay_player_actor_unchanged,
+    assert_gameplay_player_mana_not_decreased,
     capture_gameplay_player_actor,
     clear_native_mana_delta_trace,
     find_latest_mana_prepared_cost,
@@ -69,6 +70,7 @@ def force_queue_and_wait_for_spend(
         raise LiveNativeManaSpendProbeFailure(f"bot has invalid runtime state: {bot_before}")
 
     gameplay_actor_before = capture_gameplay_player_actor()
+    gameplay_player_actor_address = csp.int_value(gameplay_actor_before, "gameplay_player_actor")
     log_start_index = len(read_loader_log_lines())
     trace = arm_native_mana_delta_trace(TRACE_NAME)
     if trace.get("trace_ok") != "true":
@@ -90,6 +92,8 @@ def force_queue_and_wait_for_spend(
             before_mp,
             TRACE_NAME,
             timeout_s,
+            player_actor_address=gameplay_player_actor_address,
+            gameplay_player_before=gameplay_actor_before,
         )
     finally:
         clear_native_mana_delta_trace(TRACE_NAME)
@@ -97,6 +101,11 @@ def force_queue_and_wait_for_spend(
 
     gameplay_actor_after = capture_gameplay_player_actor()
     assert_gameplay_player_actor_unchanged(
+        gameplay_actor_before,
+        gameplay_actor_after,
+        str(skill_id),
+    )
+    assert_gameplay_player_mana_not_decreased(
         gameplay_actor_before,
         gameplay_actor_after,
         str(skill_id),
@@ -196,10 +205,13 @@ def main() -> int:
         print(json.dumps(result, indent=2, sort_keys=True))
     elif result.get("passed"):
         mana_delta = result["per_second"]["stock_native_mana_delta"]
+        summary = mana_delta["trace_hit_summary"]
         print(
             "PASS: live bot native mana spend "
             f"mp_delta={mana_delta['mp_delta']:.3f} "
-            f"bot_actor_hits={len(mana_delta['trace_hit_summary']['bot_actor_hits'])}"
+            f"player_mp_delta={mana_delta.get('player_mp_delta'):.3f} "
+            f"bot_actor_hits={len(summary['bot_actor_hits'])} "
+            f"player_actor_hits={len(summary['player_actor_hits'])}"
         )
         print(f"Wrote {args.output}")
     else:

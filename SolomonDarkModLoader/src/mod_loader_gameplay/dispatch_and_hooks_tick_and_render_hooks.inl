@@ -1,5 +1,6 @@
 #include "gameplay_hooks/cast_probe_state.inl"
 #include "gameplay_hooks/monster_pathfinding_hook.inl"
+#include "gameplay_hooks/player_mana_hooks.inl"
 #include "gameplay_hooks/player_cast_hooks.inl"
 #include "gameplay_hooks/player_control_hooks.inl"
 #include "gameplay_hooks/gameplay_hud_hooks.inl"

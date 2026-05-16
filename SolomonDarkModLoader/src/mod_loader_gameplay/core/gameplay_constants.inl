@@ -2,6 +2,7 @@ constexpr std::size_t kGameplayMouseRefreshHookPatchSize = 8;
 constexpr std::size_t kGameplayKeyboardEdgeHookPatchSize = 9;
 constexpr std::size_t kPlayerActorTickHookPatchSize = 6;
 constexpr std::size_t kPlayerActorEnsureProgressionHandleHookPatchSize = 7;
+constexpr std::size_t kPlayerActorApplyManaDeltaHookPatchSize = 5;
 constexpr std::size_t kPlayerActorDtorHookPatchSize = 12;
 constexpr bool kEnablePlayerActorDtorHook = false;
 constexpr std::size_t kPlayerActorVtable28HookPatchSize = 6;
@@ -75,6 +76,16 @@ constexpr std::uint64_t kGameplayRegionSwitchDispatchSpacingMs = 500;
 constexpr std::uint64_t kGameplaySceneChurnDelayMs = 1500;
 constexpr DWORD kHubStartTestrunDispatchCooldownMs = 5000;
 constexpr std::uint32_t kInjectedGameplayMouseClickFrames = 2;
+// FUN_0052C910 arms the stock control-brain action cooldown at +0x10 from
+// native random windows such as 50..150 ticks. Bot casts use the same
+// actor-owned field after native completion so Lua readiness follows the
+// control-brain rearm path instead of owning an element timer.
+constexpr std::int32_t kBotNativeActionRearmMinTicks = 50;
+constexpr std::int32_t kBotNativeActionRearmMaxTicks = 150;
+constexpr std::int32_t kBotNativeActionRearmTicks =
+    (kBotNativeActionRearmMinTicks + kBotNativeActionRearmMaxTicks) / 2;
+constexpr std::uint64_t kBotManaReserveRecoveryIntervalMs = 250;
+constexpr float kBotManaReserveRecoveryRatioPerSecond = 0.10f;
 
 bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id) {
     // 1001 is the stock wave-spawned enemy actor type observed in arena runs.

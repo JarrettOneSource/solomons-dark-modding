@@ -104,9 +104,16 @@ if gameplay == 0 then
   emit('available', false)
   return
 end
+local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
 emit('available', true)
 emit('gameplay', gameplay)
 emit('gameplay_player_actor', sd.debug.read_ptr(gameplay + {gameplay_player_actor_offset}))
+if type(player) == 'table' then
+  emit('player_state_actor_address', player.actor_address)
+  emit('player_state_progression_runtime_state_address', player.progression_runtime_state_address)
+  emit('player_state_mp', player.mp)
+  emit('player_state_max_mp', player.max_mp)
+end
 """.strip()
         )
     )
@@ -126,6 +133,27 @@ def assert_gameplay_player_actor_unchanged(
             f"gameplay player actor changed during {label}: "
             f"before={before.get('gameplay_player_actor')} "
             f"after={after.get('gameplay_player_actor')}"
+        )
+
+
+def assert_gameplay_player_mana_not_decreased(
+    before: dict[str, str],
+    after: dict[str, str],
+    label: str,
+    *,
+    tolerance: float = 0.001,
+) -> None:
+    before_mp = csp.float_value(before, "player_state_mp")
+    after_mp = csp.float_value(after, "player_state_mp")
+    if before_mp != before_mp or after_mp != after_mp:
+        raise RuntimeError(
+            f"unable to capture gameplay player MP for {label}: before={before} after={after}"
+        )
+    player_mp_delta = before_mp - after_mp
+    if player_mp_delta > tolerance:
+        raise RuntimeError(
+            f"gameplay player MP decreased during {label}: "
+            f"before={before_mp} after={after_mp} delta={player_mp_delta}"
         )
 
 
@@ -211,10 +239,12 @@ def float_from_u32_bits(value: int) -> float:
 def summarize_native_mana_delta_trace_hits(
     hits: dict[str, str],
     actor_address: int,
+    player_actor_address: int = 0,
 ) -> dict[str, Any]:
     count = csp.int_value(hits, "count")
     rows: list[dict[str, Any]] = []
     bot_actor_hits: list[dict[str, Any]] = []
+    player_actor_hits: list[dict[str, Any]] = []
     stored_count = min(count, 96)
     for index in range(1, stored_count + 1):
         ecx = csp.int_value(hits, f"hit.{index}.ecx")
@@ -232,13 +262,18 @@ def summarize_native_mana_delta_trace_hits(
         rows.append(row)
         if ecx == actor_address:
             bot_actor_hits.append(row)
+        if player_actor_address and ecx == player_actor_address:
+            player_actor_hits.append(row)
     negative_bot_hits = [hit for hit in bot_actor_hits if hit["arg0_float"] < -0.001]
+    negative_player_hits = [hit for hit in player_actor_hits if hit["arg0_float"] < -0.001]
     return {
         "native_total_hit_count": count,
         "stored_hit_count": stored_count,
         "hits": rows,
         "bot_actor_hits": bot_actor_hits,
         "negative_bot_actor_hits": negative_bot_hits,
+        "player_actor_hits": player_actor_hits,
+        "negative_player_actor_hits": negative_player_hits,
     }
 
 
@@ -275,6 +310,8 @@ def wait_for_bot_native_mana_delta(
     timeout_s: float,
     *,
     min_delta: float = 0.001,
+    player_actor_address: int = 0,
+    gameplay_player_before: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     deadline = time.time() + timeout_s
     last_bot: dict[str, str] = {}
@@ -284,17 +321,45 @@ def wait_for_bot_native_mana_delta(
         last_bot = query_bot_runtime(bot_id)
         after_mp = csp.float_value(last_bot, "mp")
         last_hits = query_native_mana_delta_trace_hits(trace_name)
-        last_summary = summarize_native_mana_delta_trace_hits(last_hits, actor_address)
+        last_summary = summarize_native_mana_delta_trace_hits(
+            last_hits,
+            actor_address,
+            player_actor_address,
+        )
+        if last_summary["negative_player_actor_hits"]:
+            raise RuntimeError(
+                "stock native mana delta hit the gameplay player actor during bot cast: "
+                f"summary={last_summary}"
+            )
         if (
             after_mp == after_mp
             and before_mp - after_mp >= min_delta
             and last_summary["negative_bot_actor_hits"]
         ):
+            gameplay_player_after: dict[str, str] | None = None
+            player_mp_delta = math.nan
+            if gameplay_player_before is not None:
+                gameplay_player_after = capture_gameplay_player_actor()
+                assert_gameplay_player_actor_unchanged(
+                    gameplay_player_before,
+                    gameplay_player_after,
+                    "stock native bot mana delta",
+                )
+                assert_gameplay_player_mana_not_decreased(
+                    gameplay_player_before,
+                    gameplay_player_after,
+                    "stock native bot mana delta",
+                )
+                before_player_mp = csp.float_value(gameplay_player_before, "player_state_mp")
+                after_player_mp = csp.float_value(gameplay_player_after, "player_state_mp")
+                player_mp_delta = before_player_mp - after_player_mp
             return {
                 "bot_after": last_bot,
                 "trace_hits": last_hits,
                 "trace_hit_summary": last_summary,
                 "mp_delta": before_mp - after_mp,
+                "gameplay_player_after": gameplay_player_after,
+                "player_mp_delta": player_mp_delta,
             }
         time.sleep(0.2)
 

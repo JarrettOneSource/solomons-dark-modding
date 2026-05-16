@@ -132,6 +132,15 @@ bool PrimeGameplaySlotBotActor(
         }
     }
 
+    if (!EnsureActorProgressionRuntimeFieldFromHandle(
+            actor_address,
+            "gameplay_slot_prime_progression_runtime")) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay-slot bot progression runtime cache could not be bound to the actor-owned pool.";
+        }
+        return false;
+    }
+
     {
         uintptr_t native_visual_actor_address = 0;
         if (!TryResolvePlayerActorForSlot(gameplay_address, 0, &native_visual_actor_address) ||

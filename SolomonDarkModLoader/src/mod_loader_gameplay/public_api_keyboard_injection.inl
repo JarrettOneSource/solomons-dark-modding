@@ -15,6 +15,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     const auto player_actor_tick = ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorTick);
     const auto player_actor_progression_handle =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorEnsureProgressionHandle);
+    const auto player_actor_apply_mana_delta =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorApplyManaDelta);
     const auto player_actor_dtor = ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorDtor);
     const auto player_actor_vtable28 = ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorVtable28);
     const auto player_actor_pure_primary_gate =
@@ -53,6 +55,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         ProcessMemory::Instance().ResolveGameAddressOrZero(kMonsterPathfindingRefreshTarget);
     if (mouse_helper == 0 || helper == 0 || player_actor_tick == 0 ||
         player_actor_progression_handle == 0 ||
+        player_actor_apply_mana_delta == 0 ||
         player_actor_dtor == 0 ||
         player_actor_vtable28 == 0 ||
         player_actor_pure_primary_gate == 0 ||
@@ -407,8 +410,43 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         Log("Gameplay input injection: pure-primary post-builder hook unavailable; seam was unresolved.");
     }
 
+    if (!InstallX86Hook(
+            reinterpret_cast<void*>(player_actor_apply_mana_delta),
+            reinterpret_cast<void*>(&HookPlayerActorApplyManaDelta),
+            kPlayerActorApplyManaDeltaHookPatchSize,
+            &g_gameplay_keyboard_injection.player_actor_apply_mana_delta_hook,
+            &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
+        g_pure_primary_post_builder_trampoline = nullptr;
+        RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_finalize_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_reset_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_action_builder_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
+        if (error_message != nullptr) {
+            *error_message = "Failed to install player actor mana-delta hook: " + hook_error;
+        }
+        return false;
+    }
+
     std::string cast_gate_patch_error;
     if (!InstallNativeCastGatePatches(&cast_gate_patch_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_apply_mana_delta_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
         g_pure_primary_post_builder_trampoline = nullptr;
         RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
@@ -463,6 +501,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " keyboard_edge=" + HexString(helper) +
         " player_tick=" + HexString(player_actor_tick) +
         " player_vslot04=" + HexString(player_actor_progression_handle) +
+        " mana_delta=" + HexString(player_actor_apply_mana_delta) +
         " player_dtor=" + HexString(player_actor_dtor) +
         " player_vslot28=" + HexString(player_actor_vtable28) +
         " pure_primary_gate=" + HexString(player_actor_pure_primary_gate) +
@@ -493,6 +532,7 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_apply_mana_delta_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);

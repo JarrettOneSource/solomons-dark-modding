@@ -84,7 +84,10 @@ void __fastcall HookPlayerActorPurePrimaryGate(void* self, void* /*unused_edx*/)
     std::uint64_t bot_id = 0;
     bool startup = false;
     bool pure_primary_startup = false;
+    bool active_pure_primary_cast = false;
     bool selection_target_seed_active = false;
+    bool standalone_gate_actor = false;
+    bool pure_primary_bot_owner_context = false;
     std::uint8_t selection_target_group_seed = 0xFF;
     std::uint16_t selection_target_slot_seed = 0xFFFF;
     std::int32_t selection_target_hold_ticks = 0;
@@ -100,9 +103,17 @@ void __fastcall HookPlayerActorPurePrimaryGate(void* self, void* /*unused_edx*/)
             log_this = binding->ongoing_cast.startup_in_progress;
             bot_id = binding->bot_id;
             startup = binding->ongoing_cast.startup_in_progress;
+            standalone_gate_actor = IsStandaloneWizardKind(binding->kind);
+            active_pure_primary_cast =
+                binding->ongoing_cast.active &&
+                binding->ongoing_cast.lane ==
+                    ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary;
             pure_primary_startup =
                 binding->ongoing_cast.startup_in_progress &&
-                !binding->ongoing_cast.uses_dispatcher_skill_id;
+                binding->ongoing_cast.lane ==
+                    ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary;
+            pure_primary_bot_owner_context =
+                active_pure_primary_cast || standalone_gate_actor;
             selection_target_seed_active =
                 binding->ongoing_cast.selection_target_seed_active;
             selection_target_group_seed =
@@ -136,11 +147,19 @@ void __fastcall HookPlayerActorPurePrimaryGate(void* self, void* /*unused_edx*/)
             " startup=" + std::to_string(startup ? 1 : 0) +
             " startup_state={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     }
-    original(self);
+    std::string slot_owner_context;
+    InvokeWithBotProgressionSlotOwnerContext(
+        actor_address,
+        pure_primary_bot_owner_context,
+        [&] {
+            original(self);
+        },
+        &slot_owner_context);
     if (log_this) {
         Log(
             "[bots] pure_primary_gate exit actor=" + HexString(actor_address) +
             " bot_id=" + std::to_string(bot_id) +
+            " standalone_slot_owner_context={" + slot_owner_context + "}" +
             " startup_state={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     }
 }
@@ -159,7 +178,10 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
     std::uint64_t bot_id = 0;
     bool startup = false;
     bool pure_primary_startup = false;
+    bool active_pure_primary_cast = false;
     bool local_player = false;
+    bool standalone_dispatch_actor = false;
+    bool pure_primary_bot_owner_context = false;
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
@@ -169,9 +191,17 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
             log_this = true;
             bot_id = binding->bot_id;
             startup = binding->ongoing_cast.startup_in_progress;
+            standalone_dispatch_actor = IsStandaloneWizardKind(binding->kind);
+            active_pure_primary_cast =
+                binding->ongoing_cast.active &&
+                binding->ongoing_cast.lane ==
+                    ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary;
             pure_primary_startup =
                 binding->ongoing_cast.startup_in_progress &&
-                !binding->ongoing_cast.uses_dispatcher_skill_id;
+                binding->ongoing_cast.lane ==
+                    ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary;
+            pure_primary_bot_owner_context =
+                active_pure_primary_cast || standalone_dispatch_actor;
             if (binding->ongoing_cast.active &&
                 OngoingCastNeedsNativeTargetActor(binding->ongoing_cast)) {
                 if (OngoingCastShouldRefreshNativeTargetState(binding->ongoing_cast)) {
@@ -278,12 +308,20 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
         }
     }
 
-    original(self);
+    std::string slot_owner_context;
+    InvokeWithBotProgressionSlotOwnerContext(
+        actor_address,
+        pure_primary_bot_owner_context,
+        [&] {
+            original(self);
+        },
+        &slot_owner_context);
 
     if (log_this) {
         Log(
             "[bots] spell_dispatch exit actor=" + HexString(actor_address) +
             " bot_id=" + std::to_string(bot_id) +
+            " standalone_slot_owner_context={" + slot_owner_context + "}" +
             " startup_state={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     }
     g_spell_dispatch_probe = saved_probe;

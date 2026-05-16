@@ -58,6 +58,7 @@ bool TryGetParticipantGameplayState(
     state->cast_skill_id = it->cast_skill_id;
     state->cast_ticks_waiting = it->cast_ticks_waiting;
     state->cast_target_actor_address = it->cast_target_actor_address;
+    state->native_action_cooldown_ticks = it->native_action_cooldown_ticks;
     state->active_spell_object_readable = it->active_spell_object_readable;
     state->active_spell_object_address = it->active_spell_object_address;
     state->active_spell_object_type = it->active_spell_object_type;

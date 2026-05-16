@@ -23,6 +23,10 @@ void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) 
         snapshot->queued_cast_count = pending_cast->queued_cast_count;
         snapshot->last_queued_cast_ms = pending_cast->queued_at_ms;
     }
+    if (const auto* mana_reserve = FindBotManaReserveState(participant.participant_id);
+        mana_reserve != nullptr) {
+        snapshot->mana_reserve_active = mana_reserve->active;
+    }
     if (const auto* pending_choice = FindPendingSkillChoiceConst(participant.participant_id);
         pending_choice != nullptr) {
         snapshot->skill_choice_pending = true;
@@ -39,15 +43,22 @@ void DeriveBotCastReadiness(BotSnapshot* snapshot) {
     }
 
     const bool dead = snapshot->max_hp > 0.0f && snapshot->hp <= 0.0f;
+    const bool mana_sample_available =
+        std::isfinite(snapshot->mp) &&
+        std::isfinite(snapshot->max_mp) &&
+        snapshot->max_mp > 0.0f;
     const bool mana_ready =
-        snapshot->max_mp <= 0.0f ||
-        snapshot->mp > kBotManaReadinessEpsilon;
+        !mana_sample_available ||
+        (snapshot->mp > kBotManaReadinessEpsilon && !snapshot->mana_reserve_active);
+    const bool native_action_ready =
+        snapshot->native_action_cooldown_ticks <= 0;
     snapshot->cast_ready =
         snapshot->available &&
         snapshot->entity_materialized &&
         snapshot->actor_address != 0 &&
         !dead &&
         mana_ready &&
+        native_action_ready &&
         !snapshot->cast_pending &&
         !snapshot->cast_active;
 }
@@ -97,6 +108,7 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
     snapshot->cast_skill_id = gameplay_state.cast_skill_id;
     snapshot->cast_ticks_waiting = gameplay_state.cast_ticks_waiting;
     snapshot->cast_target_actor_address = gameplay_state.cast_target_actor_address;
+    snapshot->native_action_cooldown_ticks = gameplay_state.native_action_cooldown_ticks;
     snapshot->active_spell_object_readable = gameplay_state.active_spell_object_readable;
     snapshot->active_spell_object_address = gameplay_state.active_spell_object_address;
     snapshot->active_spell_object_type = gameplay_state.active_spell_object_type;
@@ -130,6 +142,15 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
     snapshot->mp = gameplay_state.mp;
     snapshot->max_mp = gameplay_state.max_mp;
     snapshot->in_run = true;
+}
+
+void ApplyManaReserveStateToSnapshot(BotSnapshot* snapshot) {
+    if (snapshot == nullptr || snapshot->bot_id == 0) {
+        return;
+    }
+
+    snapshot->mana_reserve_active =
+        UpdateBotManaReserveStateLocked(snapshot->bot_id, snapshot->mp, snapshot->max_mp);
 }
 
 void ApplyControllerStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {

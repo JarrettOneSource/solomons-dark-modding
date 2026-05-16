@@ -21,6 +21,7 @@ bool ReadBotSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
     std::scoped_lock lock(g_bot_runtime_mutex);
     FillBotSnapshot(*participant, snapshot);
     ApplyGameplayStateToSnapshot(bot_id, snapshot);
+    ApplyManaReserveStateToSnapshot(snapshot);
     ApplyControllerStateToSnapshot(bot_id, snapshot);
     DeriveBotCastReadiness(snapshot);
     return true;
@@ -43,6 +44,7 @@ bool ReadBotSnapshotByIndex(std::uint32_t index, BotSnapshot* snapshot) {
             std::scoped_lock lock(g_bot_runtime_mutex);
             FillBotSnapshot(participant, snapshot);
             ApplyGameplayStateToSnapshot(participant.participant_id, snapshot);
+            ApplyManaReserveStateToSnapshot(snapshot);
             ApplyControllerStateToSnapshot(participant.participant_id, snapshot);
             DeriveBotCastReadiness(snapshot);
             return true;

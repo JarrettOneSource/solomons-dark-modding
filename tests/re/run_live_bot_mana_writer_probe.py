@@ -26,6 +26,7 @@ from bot_mana_trace_helpers import (  # noqa: E402
     assert_native_mana_delta_matches_prepared_rate,
     arm_native_mana_delta_trace,
     assert_gameplay_player_actor_unchanged,
+    assert_gameplay_player_mana_not_decreased,
     capture_gameplay_player_actor,
     clear_native_mana_delta_trace,
     find_latest_mana_prepared_cost,
@@ -63,6 +64,8 @@ def queue_earth_primary_and_observe(
     *,
     target_actor_address: int = 0,
     observe_seconds: float,
+    player_actor_address: int = 0,
+    gameplay_player_before: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     log_start_index = len(read_loader_log_lines())
     trace = arm_native_mana_delta_trace(TRACE_NAME)
@@ -87,8 +90,29 @@ def queue_earth_primary_and_observe(
         stop_after_cast = stop_bot(bot_id)
 
     after_mp = csp.float_value(bot_after, "mp")
-    summary = summarize_native_mana_delta_trace_hits(hits, actor_address)
+    summary = summarize_native_mana_delta_trace_hits(hits, actor_address, player_actor_address)
     mp_delta = before_mp - after_mp if after_mp == after_mp else float("nan")
+    gameplay_player_after = (
+        capture_gameplay_player_actor()
+        if gameplay_player_before is not None
+        else None
+    )
+    if summary["negative_player_actor_hits"]:
+        raise LiveBotManaWriterFailure(
+            "coordinate-only Earth startup hit the gameplay player actor with native mana delta: "
+            f"{summary['negative_player_actor_hits']}"
+        )
+    if gameplay_player_before is not None and gameplay_player_after is not None:
+        assert_gameplay_player_actor_unchanged(
+            gameplay_player_before,
+            gameplay_player_after,
+            "coordinate-only Earth startup",
+        )
+        assert_gameplay_player_mana_not_decreased(
+            gameplay_player_before,
+            gameplay_player_after,
+            "coordinate-only Earth startup",
+        )
     result: dict[str, Any] = {
         "trace": trace,
         "cast_result": cast_result,
@@ -96,6 +120,7 @@ def queue_earth_primary_and_observe(
         "trace_hits": hits,
         "trace_hit_summary": summary,
         "mp_delta": mp_delta,
+        "gameplay_player_after": gameplay_player_after,
         "stop_after_cast": stop_after_cast,
     }
 
@@ -152,6 +177,7 @@ def run_probe(element: str, discipline: str, timeout_s: float) -> dict[str, Any]
         raise LiveBotManaWriterFailure(f"bot has invalid runtime state: {bot_before}")
 
     gameplay_actor_before = capture_gameplay_player_actor()
+    gameplay_player_actor_address = csp.int_value(gameplay_actor_before, "gameplay_player_actor")
     no_target_probe = queue_earth_primary_and_observe(
         bot_id,
         actor_address,
@@ -159,6 +185,8 @@ def run_probe(element: str, discipline: str, timeout_s: float) -> dict[str, Any]
         bot_x + 160.0,
         bot_y,
         observe_seconds=3.0,
+        player_actor_address=gameplay_player_actor_address,
+        gameplay_player_before=gameplay_actor_before,
     )
 
     mana_write_targeted = force_bot_mana(bot_id, FORCED_MANA, FORCED_MANA)
@@ -200,6 +228,8 @@ def run_probe(element: str, discipline: str, timeout_s: float) -> dict[str, Any]
             before_mp_targeted,
             TRACE_NAME,
             timeout_s,
+            player_actor_address=gameplay_player_actor_address,
+            gameplay_player_before=gameplay_actor_before,
         )
     finally:
         clear_native_mana_delta_trace(TRACE_NAME)
@@ -207,6 +237,11 @@ def run_probe(element: str, discipline: str, timeout_s: float) -> dict[str, Any]
 
     gameplay_actor_after = capture_gameplay_player_actor()
     assert_gameplay_player_actor_unchanged(
+        gameplay_actor_before,
+        gameplay_actor_after,
+        "bot mana writer probe",
+    )
+    assert_gameplay_player_mana_not_decreased(
         gameplay_actor_before,
         gameplay_actor_after,
         "bot mana writer probe",
@@ -239,6 +274,7 @@ def run_probe(element: str, discipline: str, timeout_s: float) -> dict[str, Any]
             "stock_native_mana_delta": mana_delta,
             "stop_after_cast": stop_after_cast,
             "gameplay_player_actor_after": gameplay_actor_after,
+            "player_mp_delta": mana_delta.get("player_mp_delta"),
             "loader_log_tail": tail_loader_log(220),
         }
     )
@@ -282,7 +318,9 @@ def main() -> int:
         print(
             "PASS: live bot mana writer probe captured stock native mana delta; "
             f"mp_delta={mana_delta.get('mp_delta'):.3f} "
-            f"bot_actor_hits={len(summary.get('bot_actor_hits', []))}"
+            f"player_mp_delta={mana_delta.get('player_mp_delta'):.3f} "
+            f"bot_actor_hits={len(summary.get('bot_actor_hits', []))} "
+            f"player_actor_hits={len(summary.get('player_actor_hits', []))}"
         )
         print(f"Wrote {args.output}")
     else:

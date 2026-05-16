@@ -470,15 +470,33 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         if (cast_mana.kind == multiplayer::BotManaChargeKind::PerCast) {
             float current_mp = 0.0f;
             float max_mp = 0.0f;
-            if (!TryReadProgressionMana(ongoing.progression_runtime_address, &current_mp, &max_mp) ||
+            bool mana_reserve_active = false;
+            const bool mana_read =
+                TryReadProgressionMana(ongoing.progression_runtime_address, &current_mp, &max_mp);
+            const bool mana_reserve_refreshed =
+                mana_read &&
+                multiplayer::RefreshBotManaReserveState(
+                    binding->bot_id,
+                    current_mp,
+                    max_mp,
+                    &mana_reserve_active);
+            if (!mana_read ||
+                !mana_reserve_refreshed ||
+                mana_reserve_active ||
                 !multiplayer::CanBotManaStartCast(cast_mana, current_mp, max_mp)) {
+                const std::string rejection_mode =
+                    mana_reserve_active ? std::string("reserve") : std::string("per_cast");
                 Log(
                     "[bots] mana rejected. bot_id=" + std::to_string(binding->bot_id) +
                     " skill_id=" + std::to_string(ongoing.skill_id) +
                     " kind=" + (request.kind == multiplayer::BotCastKind::Primary ? std::string("primary") : std::string("secondary")) +
                     " slot=" + std::to_string(request.secondary_slot) +
-                    " mode=per_cast cost=" + std::to_string(cast_mana.cost) +
-                    " before=" + std::to_string(current_mp));
+                    " mode=" + rejection_mode +
+                    " cost=" + std::to_string(cast_mana.cost) +
+                    " before=" + std::to_string(current_mp) +
+                    " max=" + std::to_string(max_mp) +
+                    " enter_ratio=" + std::to_string(multiplayer::kBotManaReserveEnterRatio) +
+                    " exit_ratio=" + std::to_string(multiplayer::kBotManaReserveExitRatio));
                 RollbackPreparedStartup(&ongoing);
                 finish_attack_idle();
                 if (error_message != nullptr) {
@@ -491,16 +509,34 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
             float max_mp = 0.0f;
             const float required_mana =
                 multiplayer::ResolveBotManaRequiredToStart(cast_mana);
-            if (!TryReadProgressionMana(ongoing.progression_runtime_address, &current_mp, &max_mp) ||
+            bool mana_reserve_active = false;
+            const bool mana_read =
+                TryReadProgressionMana(ongoing.progression_runtime_address, &current_mp, &max_mp);
+            const bool mana_reserve_refreshed =
+                mana_read &&
+                multiplayer::RefreshBotManaReserveState(
+                    binding->bot_id,
+                    current_mp,
+                    max_mp,
+                    &mana_reserve_active);
+            if (!mana_read ||
+                !mana_reserve_refreshed ||
+                mana_reserve_active ||
                 !multiplayer::CanBotManaStartCast(cast_mana, current_mp, max_mp)) {
+                const std::string rejection_mode =
+                    mana_reserve_active ? std::string("reserve") : std::string("per_second");
                 Log(
                     "[bots] mana rejected. bot_id=" + std::to_string(binding->bot_id) +
                     " skill_id=" + std::to_string(ongoing.skill_id) +
                     " kind=" + (request.kind == multiplayer::BotCastKind::Primary ? std::string("primary") : std::string("secondary")) +
                     " slot=" + std::to_string(request.secondary_slot) +
-                    " mode=per_second rate=" + std::to_string(cast_mana.cost) +
+                    " mode=" + rejection_mode +
+                    " rate=" + std::to_string(cast_mana.cost) +
                     " required=" + std::to_string(required_mana) +
-                    " before=" + std::to_string(current_mp));
+                    " before=" + std::to_string(current_mp) +
+                    " max=" + std::to_string(max_mp) +
+                    " enter_ratio=" + std::to_string(multiplayer::kBotManaReserveEnterRatio) +
+                    " exit_ratio=" + std::to_string(multiplayer::kBotManaReserveExitRatio));
                 RollbackPreparedStartup(&ongoing);
                 finish_attack_idle();
                 if (error_message != nullptr) {
@@ -531,8 +567,16 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     }
     if (cleanup_address != 0 && active_cast_group_before != kActorActiveCastGroupSentinel) {
         DWORD cleanup_exception_code = 0;
-        const auto cleanup_ok =
-            CallCastActiveHandleCleanupSafe(cleanup_address, actor_address, &cleanup_exception_code);
+        bool cleanup_ok = false;
+        std::string cleanup_owner_context;
+        InvokeWithBotProgressionSlotOwnerContext(
+            actor_address,
+            true,
+            [&] {
+                cleanup_ok =
+                    CallCastActiveHandleCleanupSafe(cleanup_address, actor_address, &cleanup_exception_code);
+            },
+            &cleanup_owner_context);
         if (!cleanup_ok) {
             RollbackPreparedStartup(&ongoing);
             finish_attack_idle();
@@ -543,6 +587,11 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
             }
             return false;
         }
+        Log(
+            "[bots] pre-start native cleanup owner context. bot_id=" +
+            std::to_string(binding->bot_id) +
+            " actor=" + HexString(actor_address) +
+            " standalone_slot_owner_context={" + cleanup_owner_context + "}");
     }
 
     ApplyPreparedState(&ongoing);
@@ -560,11 +609,26 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         const auto pure_primary_start_address =
             memory.ResolveGameAddressOrZero(kSpellCastPurePrimary);
         if (pure_primary_start_address != 0) {
-            pure_primary_primer_called =
-                CallPurePrimarySpellStartSafe(
-                    pure_primary_start_address,
-                    actor_address,
-                    &pure_primary_primer_exception);
+            std::string primer_owner_context;
+            const bool pure_primary_bot_owner_context =
+                ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary ||
+                IsStandaloneWizardKind(binding->kind);
+            InvokeWithBotProgressionSlotOwnerContext(
+                actor_address,
+                pure_primary_bot_owner_context,
+                [&] {
+                    pure_primary_primer_called =
+                        CallPurePrimarySpellStartSafe(
+                            pure_primary_start_address,
+                            actor_address,
+                            &pure_primary_primer_exception);
+                },
+                &primer_owner_context);
+            Log(
+                "[bots] pure primary primer owner context. bot_id=" +
+                std::to_string(binding->bot_id) +
+                " actor=" + HexString(actor_address) +
+                " standalone_slot_owner_context={" + primer_owner_context + "}");
         }
         if (pure_primary_primer_called && ongoing.uses_dispatcher_skill_id) {
             PrimeGameplaySlotPostGateDispatchState(actor_address, ongoing);
