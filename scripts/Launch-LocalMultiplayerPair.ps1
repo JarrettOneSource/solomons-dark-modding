@@ -193,6 +193,9 @@ function Start-MultiplayerInstance {
         "--instance", $Instance,
         "--runtime-flag", "multiplayer.steam_bootstrap=false"
     )
+    if ($Role -eq "client") {
+        $args += "--temporary-profile"
+    }
 
     Invoke-LauncherWithEnvironment -Environment $env -Arguments $args
 }

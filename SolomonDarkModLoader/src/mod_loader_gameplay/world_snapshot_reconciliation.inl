@@ -3,6 +3,7 @@ namespace {
 constexpr std::uint64_t kWorldSnapshotApplyStaleMs = 500;
 constexpr std::uint64_t kWorldSnapshotInterpolationDelayMs = 150;
 constexpr std::uint64_t kWorldSnapshotRunLifecycleRequestIntervalMs = 1000;
+constexpr std::uint64_t kHubAnimationDrivePhaseUnitsPerSecond = 150;
 constexpr float kWorldSnapshotSettleDistance = 0.05f;
 constexpr float kWorldSnapshotParkBase = 100000.0f;
 
@@ -26,6 +27,7 @@ struct WorldSnapshotApplyCounts {
     std::uint32_t matched_actor_count = 0;
     std::uint32_t created_actor_count = 0;
     std::uint32_t transform_write_count = 0;
+    std::uint32_t presentation_write_count = 0;
     std::uint32_t health_write_count = 0;
     std::uint32_t dead_actor_count = 0;
     std::uint32_t parked_actor_count = 0;
@@ -49,6 +51,97 @@ bool IsReplicatedWorldSnapshotSceneCurrent(
     const multiplayer::WorldSnapshotRuntimeInfo& snapshot) {
     return snapshot.valid &&
            snapshot.scene_intent.kind == SceneIntentKindFromSceneState(scene_state);
+}
+
+bool IsSameWorldSnapshotTimeline(
+    const multiplayer::WorldSnapshotRuntimeInfo& left,
+    const multiplayer::WorldSnapshotRuntimeInfo& right) {
+    return left.valid &&
+           right.valid &&
+           left.authority_participant_id == right.authority_participant_id &&
+           left.scene_epoch == right.scene_epoch &&
+           left.run_nonce == right.run_nonce &&
+           multiplayer::SameParticipantSceneIntent(left.scene_intent, right.scene_intent);
+}
+
+void CopyWorldActorPresentationState(
+    multiplayer::WorldActorSnapshot* target,
+    const multiplayer::WorldActorSnapshot& source) {
+    if (target == nullptr ||
+        target->network_actor_id != source.network_actor_id ||
+        target->native_type_id != source.native_type_id) {
+        return;
+    }
+
+    target->anim_drive_state = source.anim_drive_state;
+    target->presentation_flags = source.presentation_flags;
+    target->anim_drive_state_word = source.anim_drive_state_word;
+    target->render_variant_primary = source.render_variant_primary;
+    target->render_variant_secondary = source.render_variant_secondary;
+    target->render_weapon_type = source.render_weapon_type;
+    target->render_selection_byte = source.render_selection_byte;
+    target->render_variant_tertiary = source.render_variant_tertiary;
+    target->student_visual_state = source.student_visual_state;
+}
+
+bool IsReplicatedHubPhaseAdvancingActorSnapshot(
+    const multiplayer::WorldActorSnapshot& actor) {
+    switch (actor.native_type_id) {
+    case 0x138B:
+    case 0x138C:
+    case 0x138D:
+        return true;
+    default:
+        return false;
+    }
+}
+
+std::uint32_t AdvanceHubAnimationDrivePhase(
+    std::uint32_t drive_word,
+    std::uint64_t age_ms) {
+    const std::uint64_t phase_delta =
+        (age_ms * kHubAnimationDrivePhaseUnitsPerSecond + 500) / 1000;
+    const std::uint32_t phase =
+        (drive_word + static_cast<std::uint32_t>(phase_delta & 0xFFFFu)) & 0xFFFFu;
+    return (drive_word & 0xFFFF0000u) | phase;
+}
+
+void OverlayLatestWorldSnapshotPresentation(
+    multiplayer::WorldSnapshotRuntimeInfo* sampled_snapshot,
+    const multiplayer::WorldSnapshotRuntimeInfo& latest_snapshot,
+    std::uint64_t now_ms) {
+    if (sampled_snapshot == nullptr ||
+        !sampled_snapshot->valid ||
+        !latest_snapshot.valid ||
+        latest_snapshot.actors.empty() ||
+        now_ms < latest_snapshot.received_ms ||
+        now_ms - latest_snapshot.received_ms > kWorldSnapshotApplyStaleMs ||
+        !IsSameWorldSnapshotTimeline(*sampled_snapshot, latest_snapshot)) {
+        return;
+    }
+
+    std::unordered_map<std::uint64_t, const multiplayer::WorldActorSnapshot*> latest_by_id;
+    latest_by_id.reserve(latest_snapshot.actors.size());
+    for (const auto& actor : latest_snapshot.actors) {
+        if (actor.network_actor_id != 0) {
+            latest_by_id.emplace(actor.network_actor_id, &actor);
+        }
+    }
+
+    for (auto& actor : sampled_snapshot->actors) {
+        const auto it = latest_by_id.find(actor.network_actor_id);
+        if (it == latest_by_id.end() || it->second == nullptr) {
+            continue;
+        }
+        CopyWorldActorPresentationState(&actor, *it->second);
+        if ((actor.presentation_flags & multiplayer::WorldActorPresentationFlagAnimationDriveWord) != 0 &&
+            IsReplicatedHubPhaseAdvancingActorSnapshot(actor)) {
+            actor.anim_drive_state_word = AdvanceHubAnimationDrivePhase(
+                actor.anim_drive_state_word,
+                now_ms - latest_snapshot.received_ms);
+            actor.anim_drive_state = static_cast<std::uint8_t>(actor.anim_drive_state_word & 0xFFu);
+        }
+    }
 }
 
 bool IsReplicatedWorldSnapshotSceneChurnInFlight(std::uint64_t now_ms) {
@@ -359,6 +452,73 @@ void ApplyReplicatedWorldActorDriveState(uintptr_t actor_address, std::uint8_t d
         return;
     }
     (void)ProcessMemory::Instance().TryWriteField(actor_address, kActorAnimationDriveStateByteOffset, drive_state);
+}
+
+bool IsReplicatedHubStudentSnapshot(const multiplayer::WorldActorSnapshot& authoritative_actor) {
+    return authoritative_actor.native_type_id == 0x138A;
+}
+
+bool ApplyReplicatedWorldActorPresentation(
+    uintptr_t actor_address,
+    const multiplayer::WorldActorSnapshot& authoritative_actor) {
+    if (actor_address == 0 || authoritative_actor.presentation_flags == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    bool wrote = false;
+    if ((authoritative_actor.presentation_flags &
+         multiplayer::WorldActorPresentationFlagAnimationDriveWord) != 0 &&
+        kActorAnimationDriveStateByteOffset != 0) {
+        wrote = memory.TryWriteField(
+            actor_address,
+            kActorAnimationDriveStateByteOffset,
+            authoritative_actor.anim_drive_state_word) || wrote;
+    }
+
+    if (!IsReplicatedHubStudentSnapshot(authoritative_actor)) {
+        return wrote;
+    }
+
+    if ((authoritative_actor.presentation_flags &
+         multiplayer::WorldActorPresentationFlagStudentVisualState) != 0 &&
+        kStudentVisualStateBlockOffset != 0) {
+        wrote = memory.TryWrite(
+            actor_address + kStudentVisualStateBlockOffset,
+            authoritative_actor.student_visual_state.data(),
+            authoritative_actor.student_visual_state.size()) || wrote;
+    }
+
+    if ((authoritative_actor.presentation_flags &
+         multiplayer::WorldActorPresentationFlagStudentVariantBytes) != 0 &&
+        kActorRenderVariantPrimaryOffset != 0 &&
+        kActorRenderVariantSecondaryOffset != 0 &&
+        kActorRenderWeaponTypeOffset != 0 &&
+        kActorRenderSelectionByteOffset != 0 &&
+        kActorRenderVariantTertiaryOffset != 0) {
+        wrote = memory.TryWriteField(
+            actor_address,
+            kActorRenderVariantPrimaryOffset,
+            authoritative_actor.render_variant_primary) || wrote;
+        wrote = memory.TryWriteField(
+            actor_address,
+            kActorRenderVariantSecondaryOffset,
+            authoritative_actor.render_variant_secondary) || wrote;
+        wrote = memory.TryWriteField(
+            actor_address,
+            kActorRenderWeaponTypeOffset,
+            authoritative_actor.render_weapon_type) || wrote;
+        wrote = memory.TryWriteField(
+            actor_address,
+            kActorRenderSelectionByteOffset,
+            authoritative_actor.render_selection_byte) || wrote;
+        wrote = memory.TryWriteField(
+            actor_address,
+            kActorRenderVariantTertiaryOffset,
+            authoritative_actor.render_variant_tertiary) || wrote;
+    }
+
+    return wrote;
 }
 
 bool ApplyReplicatedWorldActorTransform(
@@ -878,6 +1038,7 @@ void PublishWorldSnapshotApplyCounts(
         state.world_snapshot_apply.created_actor_count = counts.created_actor_count;
         state.world_snapshot_apply.created_actor_total_count += counts.created_actor_count;
         state.world_snapshot_apply.transform_write_count = counts.transform_write_count;
+        state.world_snapshot_apply.presentation_write_count = counts.presentation_write_count;
         state.world_snapshot_apply.health_write_count = counts.health_write_count;
         state.world_snapshot_apply.dead_actor_count = counts.dead_actor_count;
         state.world_snapshot_apply.parked_actor_count = counts.parked_actor_count;
@@ -914,6 +1075,7 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
         }
         return;
     }
+    OverlayLatestWorldSnapshotPresentation(&snapshot, runtime_state.world_snapshot, now_ms);
     if (snapshot.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::SharedHub &&
         snapshot.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run) {
         if (runtime_state.world_snapshot_apply.valid) {
@@ -1015,6 +1177,9 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
                 if (ApplyReplicatedWorldActorTransform(created_actor_address, authoritative_actor, true)) {
                     counts.transform_write_count += 1;
                 }
+                if (ApplyReplicatedWorldActorPresentation(created_actor_address, authoritative_actor)) {
+                    counts.presentation_write_count += 1;
+                }
                 RecordWorldSnapshotBinding(
                     &counts,
                     authoritative_actor,
@@ -1033,6 +1198,9 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
         }
         if (ApplyReplicatedWorldActorTransform(binding.actor.actor_address, authoritative_actor, false)) {
             counts.transform_write_count += 1;
+        }
+        if (ApplyReplicatedWorldActorPresentation(binding.actor.actor_address, authoritative_actor)) {
+            counts.presentation_write_count += 1;
         }
         if (snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::Run &&
             ApplyReplicatedRunEnemyHealth(binding.actor.actor_address, authoritative_actor)) {

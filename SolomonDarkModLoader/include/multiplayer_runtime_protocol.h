@@ -4,10 +4,11 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 10;
+constexpr std::uint16_t kProtocolVersion = 11;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kWorldSnapshotMaxActors = 64;
+constexpr std::uint32_t kWorldActorStudentVisualStateBytes = 32;
 
 enum class PacketKind : std::uint16_t {
     State = 1,
@@ -38,6 +39,12 @@ enum WorldActorSnapshotFlags : std::uint8_t {
     WorldActorSnapshotFlagDead = 1 << 0,
     WorldActorSnapshotFlagTrackedEnemy = 1 << 1,
     WorldActorSnapshotFlagLifecycleOwned = 1 << 2,
+};
+
+enum WorldActorPresentationFlags : std::uint16_t {
+    WorldActorPresentationFlagAnimationDriveWord = 1 << 0,
+    WorldActorPresentationFlagStudentVisualState = 1 << 1,
+    WorldActorPresentationFlagStudentVariantBytes = 1 << 2,
 };
 
 enum WorldSnapshotFlags : std::uint8_t {
@@ -120,13 +127,21 @@ struct WorldActorSnapshotPacketState {
     std::int32_t world_slot;
     std::uint8_t flags;
     std::uint8_t anim_drive_state;
-    std::uint16_t reserved = 0;
+    std::uint16_t presentation_flags;
     float position_x;
     float position_y;
     float radius;
     float heading;
     float hp;
     float max_hp;
+    std::uint32_t anim_drive_state_word;
+    std::uint8_t render_variant_primary;
+    std::uint8_t render_variant_secondary;
+    std::uint8_t render_weapon_type;
+    std::uint8_t render_selection_byte;
+    std::uint8_t render_variant_tertiary;
+    std::uint8_t presentation_reserved[3];
+    std::uint8_t student_visual_state[kWorldActorStudentVisualStateBytes];
 };
 
 struct WorldSnapshotPacket {
@@ -172,7 +187,7 @@ static_assert(sizeof(StatePacket) == 148, "Unexpected state packet size");
 static_assert(sizeof(LaunchPacket) == 56, "Unexpected launch packet size");
 static_assert(sizeof(CastPacket) == 60, "Unexpected cast packet size");
 static_assert(sizeof(ProgressionPacket) == 32, "Unexpected progression packet size");
-static_assert(sizeof(WorldActorSnapshotPacketState) == 52, "Unexpected world actor snapshot size");
-static_assert(sizeof(WorldSnapshotPacket) == 3360, "Unexpected world snapshot packet size");
+static_assert(sizeof(WorldActorSnapshotPacketState) == 96, "Unexpected world actor snapshot size");
+static_assert(sizeof(WorldSnapshotPacket) == 6176, "Unexpected world snapshot packet size");
 
 }  // namespace sdmod::multiplayer

@@ -12,5 +12,6 @@ internal sealed record LauncherCommand(
     string? TargetModId,
     string? RuntimeProfileOverride,
     IReadOnlyList<string> RuntimeFlagOverrides,
+    bool TemporaryProfile,
     string? SteamAppIdOverride,
     string? SteamApiDllOverride);

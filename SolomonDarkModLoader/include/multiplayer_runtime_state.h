@@ -1,5 +1,6 @@
 #pragma once
 
+#include "multiplayer_runtime_protocol.h"
 #include "steam_bootstrap.h"
 
 #include <array>
@@ -119,12 +120,20 @@ struct WorldActorSnapshot {
     bool tracked_enemy = false;
     bool lifecycle_owned = false;
     std::uint8_t anim_drive_state = 0;
+    std::uint16_t presentation_flags = 0;
     float position_x = 0.0f;
     float position_y = 0.0f;
     float radius = 0.0f;
     float heading = 0.0f;
     float hp = 0.0f;
     float max_hp = 0.0f;
+    std::uint32_t anim_drive_state_word = 0;
+    std::uint8_t render_variant_primary = 0;
+    std::uint8_t render_variant_secondary = 0;
+    std::uint8_t render_weapon_type = 0;
+    std::uint8_t render_selection_byte = 0;
+    std::uint8_t render_variant_tertiary = 0;
+    std::array<std::uint8_t, kWorldActorStudentVisualStateBytes> student_visual_state = {};
 };
 
 struct WorldSnapshotActorBindingRuntimeInfo {
@@ -160,6 +169,7 @@ struct WorldSnapshotApplyRuntimeInfo {
     std::uint32_t created_actor_count = 0;
     std::uint32_t created_actor_total_count = 0;
     std::uint32_t transform_write_count = 0;
+    std::uint32_t presentation_write_count = 0;
     std::uint32_t health_write_count = 0;
     std::uint32_t dead_actor_count = 0;
     std::uint32_t parked_actor_count = 0;

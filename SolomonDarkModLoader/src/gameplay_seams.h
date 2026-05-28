@@ -228,6 +228,7 @@ extern std::size_t kActorAnimationMoveDurationTicksOffset;
 extern std::size_t kActorHubVisualSourceKindOffset;
 extern std::size_t kActorHubVisualSourceProfileOffset;
 extern std::size_t kActorHubVisualSourceAuxPointerOffset;
+extern std::size_t kStudentVisualStateBlockOffset;
 extern std::size_t kActorWalkCyclePrimaryOffset;
 extern std::size_t kActorWalkCycleSecondaryOffset;
 extern std::size_t kActorRenderDriveStrideScaleOffset;

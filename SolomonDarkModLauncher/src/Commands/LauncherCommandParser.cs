@@ -17,6 +17,7 @@ internal static class LauncherCommandParser
         string? stageRoot = null;
         string? runtimeProfile = null;
         var runtimeFlagOverrides = new List<string>();
+        var temporaryProfile = false;
         string? steamAppId = null;
         string? steamApiDll = null;
 
@@ -90,6 +91,12 @@ internal static class LauncherCommandParser
                 continue;
             }
 
+            if (arg == "--temporary-profile")
+            {
+                temporaryProfile = true;
+                continue;
+            }
+
             if (arg == "--steam-appid")
             {
                 steamAppId = ReadValue(args, ref index, arg);
@@ -117,6 +124,7 @@ internal static class LauncherCommandParser
             targetModId,
             runtimeProfile,
             runtimeFlagOverrides,
+            temporaryProfile,
             steamAppId,
             steamApiDll);
     }

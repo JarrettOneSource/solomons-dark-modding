@@ -41,8 +41,16 @@ finished peer networking layer.
   `WorldSnapshot` packets for non-player shared-hub scene actors and run-world
   tracked enemies. Clients keep a short world-snapshot history, sample it about
   150 ms in the past, and expose the latest replicated snapshot through Lua for
-  verification. Shared-hub actors are reconciled to the sampled host
-  transform/heading/drive snapshot on the gameplay thread, and missing known hub
+  verification. Shared-hub actors are reconciled to the buffered host
+  transform/heading snapshot on the gameplay thread; presentation state is
+  overlaid from the latest same-timeline host snapshot so animation phase does
+  not inherit the transform interpolation delay. Known phase-advancing named
+  hub NPC families (`0x138B`, `0x138C`, `0x138D`) advance the replicated drive
+  word by the measured native phase rate while waiting for the next snapshot.
+  Hub snapshots also
+  carry a typed presentation payload: the host's full hub animation-drive word
+  for factory-backed hub NPCs, plus Student-specific book/variant bytes and
+  randomized color/state bytes. Missing known hub
   NPC families (`0x1389`, `0x138A`, `0x138B`, `0x138C`, `0x138D`, `0x138F`,
   `0x1390`) are created through the stock factory plus generic world-register
   path before being reconciled. Run-world enemy
@@ -153,6 +161,10 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 - Local UDP two-process development harness:
   `scripts/Launch-LocalMultiplayerPair.ps1` launches `local-mp-host` and
   `local-mp-client` with separate runtime/stage roots and ports `47770/47771`.
+  The client launch uses `--temporary-profile`, which redirects APPDATA,
+  LOCALAPPDATA, and the staged `savegames` compatibility path into a fresh
+  runtime-local temporary profile so joining a multiplayer host cannot mutate
+  the user's single-player save files.
   This validates participant connection plus movement/heading materialization
   without Steam identity constraints. The harness assigns
   `SDMOD_MULTIPLAYER_PLAYER_NAME` and unique `SDMOD_LUA_EXEC_PIPE_NAME` values

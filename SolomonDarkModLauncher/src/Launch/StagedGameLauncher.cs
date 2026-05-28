@@ -30,12 +30,18 @@ internal static class StagedGameLauncher
     public static InjectedGame Launch(
         StageBuildResult stage,
         LauncherConfiguration configuration,
+        bool temporaryProfile = false,
         LaunchOptions? options = null)
     {
         options = IsolatedProfileBootstrapper.CreateLaunchOptions(
             configuration.Workspace,
             options?.EnvironmentOverrides,
-            TryResolveRetailAppDataPath());
+            TryResolveRetailAppDataPath(),
+            temporaryProfile);
+        if (options.TemporaryProfile && !string.IsNullOrWhiteSpace(options.SavegamesRootPath))
+        {
+            StageSandboxCompatibilityLinks.Materialize(stage.StageRootPath, options.SavegamesRootPath);
+        }
         options = ApplySandboxEnvironment(configuration, options);
         options = ApplySteamBootstrap(configuration, stage, options);
         var launchToken = Guid.NewGuid().ToString("N");
@@ -131,7 +137,7 @@ internal static class StagedGameLauncher
             environmentOverrides[SteamBootstrapConfiguration.ApiDllPathEnvironmentVariable] = stage.SteamBootstrap.StageApiDllPath;
         }
 
-        return new LaunchOptions(environmentOverrides);
+        return options with { EnvironmentOverrides = environmentOverrides };
     }
 
     private static LaunchOptions ApplySandboxEnvironment(
@@ -156,7 +162,7 @@ internal static class StagedGameLauncher
             }
         }
 
-        return new LaunchOptions(environmentOverrides);
+        return options with { EnvironmentOverrides = environmentOverrides };
     }
 
     private static LaunchOptions ApplyLaunchToken(LaunchOptions options, string launchToken)
@@ -171,7 +177,7 @@ internal static class StagedGameLauncher
         }
 
         environmentOverrides[LoaderLaunchContract.LaunchTokenEnvironmentVariable] = launchToken;
-        return new LaunchOptions(environmentOverrides);
+        return options with { EnvironmentOverrides = environmentOverrides };
     }
 
     private static string ResolveLoaderPath()

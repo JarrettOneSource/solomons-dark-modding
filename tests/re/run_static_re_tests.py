@@ -4244,6 +4244,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     service_loop_text = read_text(MULTIPLAYER_SERVICE_LOOP)
     lua_exec_pipe_text = read_text(LUA_EXEC_PIPE)
     staged_game_launcher_text = read_text(STAGED_GAME_LAUNCHER)
+    launcher_command_parser_text = read_text(ROOT / "SolomonDarkModLauncher/src/Commands/LauncherCommandParser.cs")
+    isolated_profile_bootstrapper_text = read_text(ROOT / "SolomonDarkModLauncher/src/Launch/IsolatedProfileBootstrapper.cs")
+    stage_sandbox_links_text = read_text(ROOT / "SolomonDarkModLauncher/src/Staging/StageSandboxCompatibilityLinks.cs")
     project_text = read_text(MOD_LOADER_PROJECT)
     project_filters_text = read_text(MOD_LOADER_PROJECT_FILTERS)
     bot_runtime_header_text = read_text(BOT_RUNTIME_HEADER)
@@ -4265,15 +4268,19 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     run_seed_verifier_text = read_text(RUN_ENEMY_SEED_VERIFIER)
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 10;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 11;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kWorldSnapshotMaxActors"),
+        (protocol_text, "kWorldActorStudentVisualStateBytes"),
         (protocol_text, "WorldSnapshotFlagTruncated"),
         (protocol_text, "WorldActorSnapshotFlagLifecycleOwned"),
+        (protocol_text, "WorldActorPresentationFlagAnimationDriveWord"),
+        (protocol_text, "WorldActorPresentationFlagStudentVisualState"),
+        (protocol_text, "WorldActorPresentationFlagStudentVariantBytes"),
         (protocol_text, "std::uint64_t participant_id;"),
         (protocol_text, "display_name"),
         (protocol_text, "static_assert(sizeof(StatePacket) == 148"),
-        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 3360"),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 6176"),
         (runtime_state_text, "LocalUdp"),
         (runtime_state_text, "WorldSnapshotRuntimeInfo"),
         (runtime_state_text, "WorldSnapshotApplyRuntimeInfo"),
@@ -4290,6 +4297,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (runtime_state_text, "truncated"),
         (runtime_state_text, "created_actor_count"),
         (runtime_state_text, "created_actor_total_count"),
+        (runtime_state_text, "presentation_write_count"),
         (runtime_state_text, "health_write_count"),
         (runtime_state_text, "dead_actor_count"),
         (runtime_state_text, "removed_actor_count"),
@@ -4302,6 +4310,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
         (transport_text, "RelayStatePacketToPeers"),
         (transport_text, "BuildLocalWorldSnapshotPacket"),
+        (transport_text, "PopulateWorldActorPresentationSnapshot"),
+        (transport_text, "student_visual_state"),
         (transport_text, "TryGetRunLifecycleEnemySpawnSerial"),
         (transport_text, "kRunHostLocalWorldActorNetworkIdBase"),
         (transport_text, "run_host_local_world_actor_ids_by_address"),
@@ -4322,6 +4332,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "CallActorWorldRegisterSafe"),
         (world_snapshot_reconciliation_text, "RemoveReplicatedSharedHubActor"),
         (world_snapshot_reconciliation_text, "CallActorWorldUnregisterSafe"),
+        (world_snapshot_reconciliation_text, "OverlayLatestWorldSnapshotPresentation"),
+        (world_snapshot_reconciliation_text, "kHubAnimationDrivePhaseUnitsPerSecond"),
+        (world_snapshot_reconciliation_text, "AdvanceHubAnimationDrivePhase"),
+        (world_snapshot_reconciliation_text, "ApplyReplicatedWorldActorPresentation"),
+        (world_snapshot_reconciliation_text, "kStudentVisualStateBlockOffset"),
+        (world_snapshot_reconciliation_text, "presentation_write_count"),
         (world_snapshot_reconciliation_text, "removed_actor_count"),
         (world_snapshot_reconciliation_text, "failed_remove_actor_count"),
         (world_snapshot_reconciliation_text, "HasPendingParticipantWorldMutation"),
@@ -4367,6 +4383,11 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (staged_game_launcher_text, "SDMOD_MULTIPLAYER_PARTICIPANT_ID"),
         (staged_game_launcher_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
         (staged_game_launcher_text, "SDMOD_LUA_EXEC_PIPE_NAME"),
+        (staged_game_launcher_text, "temporaryProfile"),
+        (staged_game_launcher_text, "StageSandboxCompatibilityLinks.Materialize(stage.StageRootPath, options.SavegamesRootPath)"),
+        (launcher_command_parser_text, "--temporary-profile"),
+        (isolated_profile_bootstrapper_text, "temporary-client-profile"),
+        (stage_sandbox_links_text, "savegamesTargetPath"),
         (project_text, "include\\multiplayer_local_transport.h"),
         (project_text, "src\\multiplayer_local_transport.cpp"),
         (project_filters_text, "include\\multiplayer_local_transport.h"),
@@ -4428,6 +4449,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (script_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
         (script_text, "SDMOD_LUA_EXEC_PIPE_NAME"),
         (script_text, "multiplayer.steam_bootstrap=false"),
+        (script_text, "--temporary-profile"),
         (verifier_text, "wait_for_remote"),
         (verifier_text, "nudge_player"),
         (verifier_text, "wait_for_remote_convergence"),

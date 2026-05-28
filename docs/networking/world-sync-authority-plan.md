@@ -40,6 +40,29 @@ The live result from the local host/client pair was divergent:
 This is enough to reject "they will stay matched if both clients enter the hub"
 as a baseline assumption.
 
+`tools/probe_hub_npc_presentation_sync.py` is the focused presentation-state
+probe for the same local host/client pair. It compares the host hub NPCs to the
+client's bound replicated actors through authoritative snapshot positions, then
+checks presentation fields that are not present in the current
+`WorldSnapshotPacket`.
+
+The current live run wrote `runtime/hub_npc_presentation_sync.json` and
+returned:
+
+- client had a valid, non-truncated `SharedHub` snapshot with `25` replicated
+  actors
+- `16` hub NPCs were compared against host actors
+- all `11` compared Students had divergent `+0x190..+0x1AF` color/state blocks
+- `4` of those `11` Students had divergent `+0x23C` primary variant bytes,
+  matching the visible book/no-book mismatch
+- all `5` compared named hub NPCs had divergent full animation/drive words or
+  adjacent presentation fields, but those offsets are not generic across named
+  NPC types and cannot be blindly copied as a common actor presentation block
+
+This confirms the first world snapshot slice synchronizes lifecycle, transform,
+heading, health, and the low animation-drive byte, but not the full visual
+presentation state that the hub scene uses for Students and named NPCs.
+
 `tools/verify_hub_student_seed_viability.py` is the focused seed viability
 probe for this question. It launches the normal two local stage instances with
 local multiplayer transport disabled, watches both Lua pipes, corrects a
@@ -249,6 +272,18 @@ For hub Students specifically, the recommended shape is:
   mismatch can be corrected.
 - Do not depend on the retail global RNG stream, stock actor enumeration order,
   or stock Student update cadence to remain aligned between clients.
+- The local UDP `WorldSnapshot` packet now carries a typed hub presentation
+  payload. Factory-backed hub NPCs include the authoritative full animation
+  drive word at `+0x160`; Students additionally include the proven randomized
+  `+0x190..+0x1AF` color/state bytes and the render variant bytes at
+  `+0x23C..+0x240`, including the book/no-book primary variant byte.
+- Add named-hub-NPC animation serializers only after each named family has a
+  validated field map. The live presentation probe shows those actors store
+  different type-specific data at nearby offsets.
+- For the named hub actor families whose `+0x160` animation drive word is a
+  live phase counter (`0x138B`, `0x138C`, `0x138D`), clients advance only that
+  replicated word at the measured stock rate between host snapshots. Static
+  named NPCs and Students keep exact host snapshot values.
 - If we want low-bandwidth Student prediction later, first build an explicit
   loader-owned Student state machine and seed that bounded machine, then
   reconcile with periodic authoritative snapshots.
@@ -267,7 +302,10 @@ In the first slices:
 - snapshots are stored in a short runtime history rather than immediately
   mutating native actors
 - gameplay samples the world history about 150 ms in the past and interpolates
-  replicated actor position/heading before applying the host snapshot
+  replicated actor position/heading before applying the host snapshot; hub
+  presentation state is copied from the latest same-timeline host snapshot so
+  animation phases are not delayed with transform interpolation, and known
+  moving named hub NPC drive words are phase-extrapolated between snapshots
 - Lua exposes the latest replicated snapshot through
   `sd.world.get_replicated_actors()`
 
@@ -276,6 +314,10 @@ The shared-hub lifecycle/reconciliation slice now does the following:
 - the client matches local actors by native type and type-local ordinal
 - matched actors receive authoritative position, heading, and animation-drive
   byte updates on the gameplay thread
+- matched hub actors receive authoritative presentation updates after stock
+  native tick from the latest host snapshot: hub animation-drive words for
+  factory-backed hub NPCs and
+  Student-specific book/color/variant bytes for `0x138A`
 - moved actors are rebound into the native world grid
 - missing known hub NPC families are created through the stock
   `GameObjectFactory_Create(type_id)` plus generic
@@ -348,6 +390,15 @@ Current verified gates:
   - current verifier rejects missing authoritative hub NPCs, failed hub NPC
     unregisters, and extra createable hub actors that remain after a complete
     host snapshot
+- `python3 tools/probe_hub_npc_presentation_sync.py --json`
+  - latest persisted result is `runtime/hub_npc_presentation_sync.json`
+  - verified the hub snapshot is valid and non-truncated on the client
+  - reproduced Student presentation divergence: `11/11` compared Students had
+    different `+0x190..+0x1AF` blocks, and `4/11` had different `+0x23C`
+    primary variant bytes
+  - verified named hub NPCs also carry unsynchronized animation/presentation
+    state, while showing those offsets are not safe to treat as one generic
+    copy range across all hub NPC families
 - `python3 tools/verify_run_world_snapshot.py --require-complete-lifecycle`
   - latest persisted result is `runtime/run_world_snapshot_verification.json`
   - client received host `Run` enemy snapshots

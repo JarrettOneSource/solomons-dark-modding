@@ -81,7 +81,7 @@ void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
 }
 
 void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSnapshot& actor) {
-    lua_createtable(state, 0, 18);
+    lua_createtable(state, 0, 27);
     lua_pushinteger(state, static_cast<lua_Integer>(actor.network_actor_id));
     lua_setfield(state, -2, "network_actor_id");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.native_type_id));
@@ -100,6 +100,20 @@ void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSna
     lua_setfield(state, -2, "lifecycle_owned");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.anim_drive_state));
     lua_setfield(state, -2, "anim_drive_state");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.presentation_flags));
+    lua_setfield(state, -2, "presentation_flags");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.anim_drive_state_word));
+    lua_setfield(state, -2, "anim_drive_state_word");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.render_variant_primary));
+    lua_setfield(state, -2, "render_variant_primary");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.render_variant_secondary));
+    lua_setfield(state, -2, "render_variant_secondary");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.render_weapon_type));
+    lua_setfield(state, -2, "render_weapon_type");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.render_selection_byte));
+    lua_setfield(state, -2, "render_selection_byte");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.render_variant_tertiary));
+    lua_setfield(state, -2, "render_variant_tertiary");
     lua_pushnumber(state, static_cast<lua_Number>(actor.position_x));
     lua_setfield(state, -2, "x");
     lua_pushnumber(state, static_cast<lua_Number>(actor.position_y));
@@ -461,6 +475,8 @@ int LuaWorldGetReplicatedActors(lua_State* state) {
     lua_setfield(state, -2, "created_actor_total_count");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.transform_write_count));
     lua_setfield(state, -2, "transform_write_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.presentation_write_count));
+    lua_setfield(state, -2, "presentation_write_count");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.health_write_count));
     lua_setfield(state, -2, "health_write_count");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.dead_actor_count));

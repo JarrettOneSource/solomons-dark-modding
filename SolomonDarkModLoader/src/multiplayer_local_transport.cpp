@@ -493,6 +493,90 @@ float ReadActorHeadingOrZero(uintptr_t actor_address) {
     return heading;
 }
 
+bool IsHubStudentActorType(std::uint32_t native_type_id) {
+    return native_type_id == 0x138A;
+}
+
+bool IsSharedHubFactoryActorType(std::uint32_t native_type_id) {
+    switch (native_type_id) {
+    case 0x1389:
+    case 0x138A:
+    case 0x138B:
+    case 0x138C:
+    case 0x138D:
+    case 0x138F:
+    case 0x1390:
+        return true;
+    default:
+        return false;
+    }
+}
+
+void PopulateWorldActorPresentationSnapshot(
+    uintptr_t actor_address,
+    std::uint32_t native_type_id,
+    ParticipantSceneIntentKind scene_kind,
+    WorldActorSnapshotPacketState* snapshot) {
+    if (actor_address == 0 || snapshot == nullptr) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (scene_kind == ParticipantSceneIntentKind::SharedHub &&
+        IsSharedHubFactoryActorType(native_type_id) &&
+        kActorAnimationDriveStateByteOffset != 0) {
+        std::uint32_t drive_word = 0;
+        if (memory.TryReadField(actor_address, kActorAnimationDriveStateByteOffset, &drive_word)) {
+            snapshot->presentation_flags |= WorldActorPresentationFlagAnimationDriveWord;
+            snapshot->anim_drive_state_word = drive_word;
+        }
+    }
+
+    if (scene_kind != ParticipantSceneIntentKind::SharedHub ||
+        !IsHubStudentActorType(native_type_id)) {
+        return;
+    }
+
+    if (kActorRenderVariantPrimaryOffset != 0 &&
+        kActorRenderVariantSecondaryOffset != 0 &&
+        kActorRenderWeaponTypeOffset != 0 &&
+        kActorRenderSelectionByteOffset != 0 &&
+        kActorRenderVariantTertiaryOffset != 0) {
+        bool have_variant_bytes = true;
+        have_variant_bytes = memory.TryReadField(
+            actor_address,
+            kActorRenderVariantPrimaryOffset,
+            &snapshot->render_variant_primary) && have_variant_bytes;
+        have_variant_bytes = memory.TryReadField(
+            actor_address,
+            kActorRenderVariantSecondaryOffset,
+            &snapshot->render_variant_secondary) && have_variant_bytes;
+        have_variant_bytes = memory.TryReadField(
+            actor_address,
+            kActorRenderWeaponTypeOffset,
+            &snapshot->render_weapon_type) && have_variant_bytes;
+        have_variant_bytes = memory.TryReadField(
+            actor_address,
+            kActorRenderSelectionByteOffset,
+            &snapshot->render_selection_byte) && have_variant_bytes;
+        have_variant_bytes = memory.TryReadField(
+            actor_address,
+            kActorRenderVariantTertiaryOffset,
+            &snapshot->render_variant_tertiary) && have_variant_bytes;
+        if (have_variant_bytes) {
+            snapshot->presentation_flags |= WorldActorPresentationFlagStudentVariantBytes;
+        }
+    }
+
+    if (kStudentVisualStateBlockOffset != 0 &&
+        memory.TryRead(
+            actor_address + kStudentVisualStateBlockOffset,
+            snapshot->student_visual_state,
+            kWorldActorStudentVisualStateBytes)) {
+        snapshot->presentation_flags |= WorldActorPresentationFlagStudentVisualState;
+    }
+}
+
 std::vector<sockaddr_in> BuildKnownSendEndpoints() {
     std::vector<sockaddr_in> endpoints;
     if (g_local_transport.configured_remote_valid) {
@@ -684,6 +768,11 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
         snapshot.heading = ReadActorHeadingOrZero(actor.actor_address);
         snapshot.hp = std::isfinite(actor.hp) ? actor.hp : 0.0f;
         snapshot.max_hp = std::isfinite(actor.max_hp) ? actor.max_hp : 0.0f;
+        PopulateWorldActorPresentationSnapshot(
+            actor.actor_address,
+            actor.object_type_id,
+            scene_intent.kind,
+            &snapshot);
         if (actor.dead) {
             snapshot.flags |= WorldActorSnapshotFlagDead;
         }
@@ -942,12 +1031,23 @@ void ApplyWorldSnapshotPacket(const WorldSnapshotPacket& packet, const sockaddr_
             actor.tracked_enemy = (packet_actor.flags & WorldActorSnapshotFlagTrackedEnemy) != 0;
             actor.lifecycle_owned = (packet_actor.flags & WorldActorSnapshotFlagLifecycleOwned) != 0;
             actor.anim_drive_state = packet_actor.anim_drive_state;
+            actor.presentation_flags = packet_actor.presentation_flags;
             actor.position_x = packet_actor.position_x;
             actor.position_y = packet_actor.position_y;
             actor.radius = packet_actor.radius;
             actor.heading = std::isfinite(packet_actor.heading) ? packet_actor.heading : 0.0f;
             actor.hp = std::isfinite(packet_actor.hp) ? packet_actor.hp : 0.0f;
             actor.max_hp = std::isfinite(packet_actor.max_hp) ? packet_actor.max_hp : 0.0f;
+            actor.anim_drive_state_word = packet_actor.anim_drive_state_word;
+            actor.render_variant_primary = packet_actor.render_variant_primary;
+            actor.render_variant_secondary = packet_actor.render_variant_secondary;
+            actor.render_weapon_type = packet_actor.render_weapon_type;
+            actor.render_selection_byte = packet_actor.render_selection_byte;
+            actor.render_variant_tertiary = packet_actor.render_variant_tertiary;
+            std::memcpy(
+                actor.student_visual_state.data(),
+                packet_actor.student_visual_state,
+                actor.student_visual_state.size());
             snapshot.actors.push_back(actor);
         }
 

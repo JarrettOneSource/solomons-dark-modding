@@ -52,7 +52,10 @@ internal static class LauncherCommandExecutor
         ModCatalog catalog)
     {
         var stageResult = StageBuilder.Build(configuration, catalog);
-        var launchedGame = StagedGameLauncher.Launch(stageResult, configuration);
+        var launchedGame = StagedGameLauncher.Launch(
+            stageResult,
+            configuration,
+            command.TemporaryProfile);
         return new LauncherCommandExecution(
             command,
             configuration,
