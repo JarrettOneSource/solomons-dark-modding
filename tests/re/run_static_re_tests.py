@@ -63,6 +63,23 @@ NATIVE_STATBOOKS_HEADER = ROOT / "SolomonDarkModLoader/include/native_statbooks.
 NATIVE_STATBOOKS_CPP = ROOT / "SolomonDarkModLoader/src/native_statbooks.cpp"
 MOD_LOADER_PROJECT = ROOT / "SolomonDarkModLoader/SolomonDarkModLoader.vcxproj"
 MOD_LOADER_PROJECT_FILTERS = ROOT / "SolomonDarkModLoader/SolomonDarkModLoader.vcxproj.filters"
+MULTIPLAYER_PROTOCOL = ROOT / "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
+MULTIPLAYER_RUNTIME_STATE = ROOT / "SolomonDarkModLoader/include/multiplayer_runtime_state.h"
+MULTIPLAYER_LOCAL_TRANSPORT = ROOT / "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
+MULTIPLAYER_LOCAL_TRANSPORT_HEADER = ROOT / "SolomonDarkModLoader/include/multiplayer_local_transport.h"
+MULTIPLAYER_SERVICE_LOOP = ROOT / "SolomonDarkModLoader/src/multiplayer_service_loop.cpp"
+LUA_EXEC_PIPE = ROOT / "SolomonDarkModLoader/src/lua_exec_pipe.cpp"
+STAGED_GAME_LAUNCHER = ROOT / "SolomonDarkModLauncher/src/Launch/StagedGameLauncher.cs"
+PARTICIPANT_ENTITY_SYNC = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/participant_entity_sync.inl"
+)
+PARTICIPANT_SCENE_BINDING_TICKS = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/participant_scene_binding_ticks.inl"
+)
+NETWORKING_DOC = ROOT / "docs/networking/README.md"
+MULTIPLAYER_PARTICIPANT_MODEL_DOC = ROOT / "docs/multiplayer-participant-model.md"
+LOCAL_MULTIPLAYER_PAIR_SCRIPT = ROOT / "scripts/Launch-LocalMultiplayerPair.ps1"
+LOCAL_MULTIPLAYER_SYNC_VERIFIER = ROOT / "tools/verify_local_multiplayer_sync.py"
 SCENE_SELECTION = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_bot_priming_and_selection.inl"
 )
@@ -85,10 +102,34 @@ BOT_REGISTRY_AND_MOVEMENT_SPAWN = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_spawn_and_modifiers.inl"
 )
 NATIVE_SEAM_PLAN = ROOT / "docs/native-seam-re-plan.md"
+ACCEPTED_NATIVE_SHIMS_DOC = ROOT / "docs/accepted-native-shims.md"
 SOURCE_PROFILE_RE_DOC = ROOT / "docs/native-source-profile-re.md"
 ALLY_HP_RE_DOC = ROOT / "docs/native-ally-hp-re.md"
 WAVE_SCALING_RE_DOC = ROOT / "docs/wave-scaling-re.md"
 PATHFINDING_RE_DOC = ROOT / "docs/pathfinding-investigation.md"
+GAMEPLAY_CONSTANTS = ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/gameplay_constants.inl"
+PLAYER_CAST_HOOKS = ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_cast_hooks.inl"
+PLAYER_ACTOR_TICK_HOOK = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl"
+)
+STANDALONE_DEBUG_SUMMARIES = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_debug_summaries.inl"
+)
+STANDALONE_SLOT_BOT_CREATION = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_slot_bot_creation.inl"
+)
+STANDALONE_SELECTION_PRIMING = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_selection_priming.inl"
+)
+STANDALONE_EQUIP_VISUAL_LANES = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_equip_visual_lanes.inl"
+)
+DISPATCH_REQUEST_QUEUES = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_request_queues.inl"
+)
+DISPATCH_PUMP_LOOP = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_pump_loop.inl"
+)
 BINARY_LAYOUT = ROOT / "config/binary-layout.ini"
 STAGED_BINARY_LAYOUT = ROOT / "runtime/stage/.sdmod/config/binary-layout.ini"
 STAGED_BINARY = ROOT / "runtime/stage/SolomonDark.exe"
@@ -604,7 +645,7 @@ def test_boulder_projection_is_read_only_native_formula() -> str:
         "earth_damage_projection.projected_hp_damage + 0.001f >= earth_damage_projection.target_hp",
         "target_lethal_released",
         "projection_target_in_impact",
-        "kBoundedHeldPostReleaseWorldUpdateTicks = kBoundedHeldNativeReleaseEdgeTicks",
+        "kBoundedHeldPostReleaseWorldUpdateTicks =\n            kBoundedHeldNativeReleaseEdgeTicks + 8",
     )
     missing = [token for token in required_projection_tokens if token not in projection_text]
     missing += [token for token in required_processing_tokens if token not in processing_text]
@@ -725,16 +766,21 @@ def test_boulder_live_retarget_probe_is_documented() -> str:
     required_probe_tokens = (
         "boulder_release_logged",
         "[bots] native boulder release requested.",
+        "default=25000.0",
         "release_target_actor",
         "target_in_impact",
         "retarget_removed",
+        "retarget_death_logged",
+        "retarget_impact_observed",
+        "enemy.death hook invoked",
         "initial target was damaged after the bot swapped targets",
+        "initial target died after the bot swapped targets",
     )
     required_doc_tokens = (
         "tests/re/run_live_boulder_retarget_probe.py",
         "charges Boulder on one real wave enemy",
         "freezes that retargeted actor at release",
-        "target remains alive",
+        "high-HP target remains alive",
     )
     missing = [token for token in required_probe_tokens if token not in probe_text]
     missing += [
@@ -1705,6 +1751,7 @@ def test_bot_element_damage_probe_supports_upgraded_primary_victim_validation() 
         "stress.debug_sync_level_up",
         "stress.choose_skill",
         "matched_primary_upgrade",
+        "matching_native_mana_delta",
         "actual_victims",
         "any_hostile_damaged",
         "native_spell_stat_validation.get(\"ok\") is True",
@@ -1717,12 +1764,26 @@ def test_bot_element_damage_probe_supports_upgraded_primary_victim_validation() 
             "bot element damage probe no longer supports upgraded primary victim validation token(s): " +
             ", ".join(missing))
 
+    run_element_match = re.search(
+        r"def run_element_probe\(element: str, args: argparse\.Namespace\) -> dict\[str, object\]:(?P<body>.*?)\n\ndef ",
+        probe_text,
+        re.S,
+    )
+    if run_element_match is None:
+        raise StaticReTestFailure("bot element damage probe run_element_probe block was not found")
+    run_element_body = run_element_match.group("body")
+    launch_index = run_element_body.find("result[\"navigation\"] = prepare_clean_run")
+    config_index = run_element_body.find("config = element_config(element)")
+    if launch_index == -1 or config_index == -1 or config_index < launch_index:
+        raise StaticReTestFailure(
+            "bot element damage probe resolves native primary entry before launching a clean Lua runtime")
+
     required_doc_tokens = (
         "run_live_bot_upgrade_damage_delta_probe.py",
-        "probe_earth_baseline_25000_bot_only_goal_confirm.json",
-        "probe_earth_upgraded_25000_bot_only_goal_confirm.json",
+        "probe_earth_baseline_35000_force_both_goal_confirm.json",
+        "probe_earth_upgraded_35000_force_both_goal_confirm.json",
         "held Boulder release diagnostics",
-        "native bot skill picker",
+        "skill picker",
         "native max-size release",
     )
     missing_doc = [token for token in required_doc_tokens if token not in readme_text]
@@ -1739,11 +1800,21 @@ def test_bot_upgrade_damage_delta_probe_checks_native_mana_projection_and_releas
     readme_text = read_text(ROOT / "tests/re/README.md")
 
     required_tokens = (
-        "probe_earth_baseline_25000_bot_only_goal_confirm.json",
-        "probe_earth_upgraded_25000_bot_only_goal_confirm.json",
+        "probe_earth_baseline_35000_force_both_goal_confirm.json",
+        "probe_earth_upgraded_35000_force_both_goal_confirm.json",
+        "DEFAULT_TARGET_HP = 35000.0",
+        "DEFAULT_CAST_INTERVAL_SECONDS = 30.0",
+        "MIN_POST_RELEASE_TICKS = 3",
+        "DEFAULT_CHILD_ATTEMPTS = 2",
+        "DEFAULT_CHILD_TIMEOUT_SECONDS = 240.0",
+        "subprocess.TimeoutExpired",
+        "child_artifact_has_native_boulder_release",
+        "native_boulder_release_artifact",
+        "output.unlink()",
+        "--cast-interval-seconds",
         "--apply-primary-upgrade",
         "--positioning",
-        "bot_only",
+        "force_both",
         "matched_primary_upgrade",
         "live_progression_primary_stat_output",
         "upgraded native mana cost did not increase",
@@ -1763,6 +1834,10 @@ def test_bot_upgrade_damage_delta_probe_checks_native_mana_projection_and_releas
     required_doc_tokens = (
         "run_live_bot_upgrade_damage_delta_probe.py",
         "same high-HP Earth setup twice",
+        "force_both",
+        "extended Earth cast window",
+        "target HP is intentionally above",
+        "upgraded max-size Boulder projection",
         "native Boulder upgrade",
         "native mana cost",
         "projected damage increase",
@@ -2749,7 +2824,11 @@ def test_player_gamenpc_movement_seed_layout_is_named_and_documented() -> str:
         (stock_restore_live_probe_text, "stock tick restore live probe", "WATCH: {WATCH_X} changed"),
         (stock_restore_live_probe_text, "stock tick restore live probe", "page-guard"),
         (stock_restore_live_probe_text, "stock tick restore live probe", "live_stock_tick_restore_probe.json"),
+        (monster_hook_text, "monster hook", "ClearHostileTargetsForDeadWizardActor"),
+        (monster_hook_text, "monster hook", "cleared dead wizard target refs"),
+        (monster_hook_text, "monster hook", "kHostileTargetBucketDeltaOffset"),
         (monster_hook_text, "monster hook", "kActorCurrentTargetActorOffset"),
+        (player_tick_text, "player tick", "ClearHostileTargetsForDeadWizardActor(actor_address)"),
         (targeting_text, "targeting", "kActorCurrentTargetActorOffset"),
         (movement_step_text, "movement step", "CallPlayerActorMoveStepSafe"),
         (movement_step_text, "movement step", "kActorMoveStepScaleOffset"),
@@ -4073,6 +4152,186 @@ def test_active_sources_reject_read_or_and_stale_path_language() -> str:
     return "active C++/Lua/layout/probe sources contain no Read*Or API, default bot offsets, or stale path wording"
 
 
+def test_accepted_native_shims_are_documented() -> str:
+    doc_text = read_text(ACCEPTED_NATIVE_SHIMS_DOC)
+    plan_text = read_text(NATIVE_SEAM_PLAN)
+    required_tokens = (
+        "# Accepted Native Shims",
+        "Cast gate patches and progression-slot owner context",
+        "Active spell object lookup and Boulder release normalization",
+        "Native spell stats and mana spend scaling",
+        "Source-profile staging for wizard visuals",
+        "Movement and pathfinding bridge",
+        "Participant collision and target cleanup",
+        "Live memory/debug tooling",
+        "Diagnostic logging gates",
+        "kEnableWizardBotHotPathDiagnostics = false",
+        "Would enabling several bots spam logs or per-frame memory dumps",
+    )
+    missing = [token for token in required_tokens if token not in doc_text]
+    if missing:
+        raise StaticReTestFailure(
+            "accepted native shim doc is missing token(s): " + ", ".join(missing))
+    if "docs/accepted-native-shims.md" not in plan_text:
+        raise StaticReTestFailure("native seam plan does not link the accepted native shim inventory")
+    return "accepted native shims and multiplayer guardrails are documented"
+
+
+def test_hot_path_diagnostics_are_default_off_and_gated() -> str:
+    constants_text = read_text(GAMEPLAY_CONSTANTS)
+    if "constexpr bool kEnableWizardBotHotPathDiagnostics = false;" not in constants_text:
+        raise StaticReTestFailure("wizard bot hot-path diagnostics are not default-off")
+
+    player_cast_text = read_text(PLAYER_CAST_HOOKS)
+    required_dispatch_gate = (
+        "log_this =\n"
+        "                binding->ongoing_cast.startup_in_progress ||\n"
+        "                kEnableWizardBotHotPathDiagnostics;"
+    )
+    if required_dispatch_gate not in player_cast_text:
+        raise StaticReTestFailure(
+            "spell_dispatch logging is no longer limited to cast startup or hot-path diagnostics")
+
+    files_and_tokens = (
+        (STANDALONE_DEBUG_SUMMARIES, "[bots] visual stage="),
+        (STANDALONE_DEBUG_SUMMARIES, "[bots] source_create stage="),
+        (STANDALONE_SLOT_BOT_CREATION, "[bots] visual stage=slot_actor_helper_lanes_seeded"),
+        (STANDALONE_SLOT_BOT_CREATION, "[bots] visual stage=slot_actor_staff_attached"),
+        (STANDALONE_SELECTION_PRIMING, "[bots] visual stage=selection_pre_refresh"),
+        (STANDALONE_SELECTION_PRIMING, "[bots] visual stage=selection_post_refresh"),
+        (STANDALONE_EQUIP_VISUAL_LANES, "[bots] equip_attach before label="),
+        (STANDALONE_EQUIP_VISUAL_LANES, "[bots] equip_attach after label="),
+        (DISPATCH_REQUEST_QUEUES, "[bots] queued sync update bot_id="),
+        (DISPATCH_PUMP_LOOP, "[bots] pump sync bot_id="),
+        (PLAYER_ACTOR_TICK_HOOK, "[bots] wizard stock cast input. actor="),
+    )
+    ungated: list[str] = []
+    for path, token in files_and_tokens:
+        text = read_text(path)
+        index = text.find(token)
+        if index < 0:
+            ungated.append(f"{path.relative_to(ROOT)} missing {token}")
+            continue
+        window = text[max(0, index - 500):index]
+        if (
+            "if constexpr (kEnableWizardBotHotPathDiagnostics)" not in window
+            and "if constexpr (!kEnableWizardBotHotPathDiagnostics)" not in window
+        ):
+            ungated.append(f"{path.relative_to(ROOT)} has ungated {token}")
+    if ungated:
+        raise StaticReTestFailure("; ".join(ungated))
+    actor_tick_text = read_text(PLAYER_ACTOR_TICK_HOOK)
+    if (
+        "[bots] native action manager pump. bot_id=" not in actor_tick_text or
+        "kEnableWizardBotHotPathDiagnostics &&\n         now_ms - s_last_action_pump_log_ms >= 500" not in actor_tick_text
+    ):
+        raise StaticReTestFailure("native action manager pump success logging is not hot-path gated")
+    return "high-volume dispatch, visual, equip, and sync diagnostics are gated by the default-off flag"
+
+
+def test_local_multiplayer_udp_transport_is_wired() -> str:
+    protocol_text = read_text(MULTIPLAYER_PROTOCOL)
+    runtime_state_text = read_text(MULTIPLAYER_RUNTIME_STATE)
+    transport_header_text = read_text(MULTIPLAYER_LOCAL_TRANSPORT_HEADER)
+    transport_text = read_text(MULTIPLAYER_LOCAL_TRANSPORT)
+    service_loop_text = read_text(MULTIPLAYER_SERVICE_LOOP)
+    lua_exec_pipe_text = read_text(LUA_EXEC_PIPE)
+    staged_game_launcher_text = read_text(STAGED_GAME_LAUNCHER)
+    project_text = read_text(MOD_LOADER_PROJECT)
+    project_filters_text = read_text(MOD_LOADER_PROJECT_FILTERS)
+    bot_runtime_header_text = read_text(BOT_RUNTIME_HEADER)
+    bot_snapshots_text = read_text(BOT_RUNTIME_SNAPSHOTS_API)
+    entity_sync_text = read_text(PARTICIPANT_ENTITY_SYNC)
+    scene_binding_text = read_text(PARTICIPANT_SCENE_BINDING_TICKS)
+    native_remote_playback_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/native_remote_playback.inl"
+    )
+    participant_collision_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/participant_collision_response.inl"
+    )
+    networking_doc_text = read_text(NETWORKING_DOC)
+    participant_doc_text = read_text(MULTIPLAYER_PARTICIPANT_MODEL_DOC)
+    script_text = read_text(LOCAL_MULTIPLAYER_PAIR_SCRIPT)
+    verifier_text = read_text(LOCAL_MULTIPLAYER_SYNC_VERIFIER)
+
+    required_pairs = (
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 7;"),
+        (protocol_text, "kParticipantDisplayNameBytes"),
+        (protocol_text, "std::uint64_t participant_id;"),
+        (protocol_text, "display_name"),
+        (protocol_text, "static_assert(sizeof(StatePacket) == 148"),
+        (runtime_state_text, "LocalUdp"),
+        (transport_header_text, "TickLocalTransport"),
+        (transport_text, "SDMOD_MULTIPLAYER_TRANSPORT"),
+        (transport_text, "SDMOD_MULTIPLAYER_LOCAL_PORT"),
+        (transport_text, "SDMOD_MULTIPLAYER_REMOTE_PORT"),
+        (transport_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
+        (transport_text, "RelayStatePacketToPeers"),
+        (transport_text, "CopyPacketDisplayName"),
+        (transport_text, "QueueParticipantEntitySync"),
+        (transport_text, "participant_materialized"),
+        (transport_text, "!participant_materialized"),
+        (transport_text, "ParticipantControllerKind::Native"),
+        (transport_text, "TryGetPlayerState"),
+        (service_loop_text, "InitializeLocalTransport()"),
+        (service_loop_text, "TickLocalTransport(now_ms)"),
+        (service_loop_text, "ShutdownLocalTransport()"),
+        (lua_exec_pipe_text, "SDMOD_LUA_EXEC_PIPE_NAME"),
+        (staged_game_launcher_text, "SDMOD_MULTIPLAYER_TRANSPORT"),
+        (staged_game_launcher_text, "SDMOD_MULTIPLAYER_PARTICIPANT_ID"),
+        (staged_game_launcher_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
+        (staged_game_launcher_text, "SDMOD_LUA_EXEC_PIPE_NAME"),
+        (project_text, "include\\multiplayer_local_transport.h"),
+        (project_text, "src\\multiplayer_local_transport.cpp"),
+        (project_filters_text, "include\\multiplayer_local_transport.h"),
+        (project_filters_text, "src\\multiplayer_local_transport.cpp"),
+        (bot_runtime_header_text, "bool ReadParticipantSnapshot"),
+        (bot_snapshots_text, "ReadParticipantSnapshot"),
+        (read_text(LUA_ENGINE_BOTS_BINDING), "LuaBotsGetParticipantState"),
+        (read_text(LUA_ENGINE_BOTS_BINDING), "LuaBotsGetParticipants"),
+        (read_text(LUA_ENGINE_BOTS_BINDING), "LuaBotsGetNameplate"),
+        (entity_sync_text, "ReadParticipantSnapshot(request.bot_id"),
+        (scene_binding_text, "ReadParticipantSnapshot(binding.bot_id"),
+        (native_remote_playback_text, "ApplyNativeRemoteParticipantPlayback"),
+        (native_remote_playback_text, "replicated_transform_playback_ms"),
+        (native_remote_playback_text, "kRemoteSnapDistance"),
+        (participant_collision_text, "left.local_player && right.native_remote"),
+        (participant_collision_text, "right.local_player && left.native_remote"),
+        (networking_doc_text, "client-predicted / authority-verified"),
+        (networking_doc_text, "SDMOD_MULTIPLAYER_TRANSPORT=local_udp"),
+        (networking_doc_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
+        (networking_doc_text, "verify_local_multiplayer_sync.py"),
+        (networking_doc_text, "SDMOD_LUA_EXEC_PIPE_NAME"),
+        (networking_doc_text, "player/player"),
+        (participant_doc_text, "RemoteParticipant + Native"),
+        (participant_doc_text, "native-remote playback"),
+        (participant_doc_text, "push both actors apart"),
+        (participant_doc_text, "sd.bots.get_participants()"),
+        (participant_doc_text, "sd.bots.get_nameplate(actor_address)"),
+        (script_text, "local-mp-host"),
+        (script_text, "local-mp-client"),
+        (script_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
+        (script_text, "SDMOD_LUA_EXEC_PIPE_NAME"),
+        (script_text, "multiplayer.steam_bootstrap=false"),
+        (verifier_text, "wait_for_remote"),
+        (verifier_text, "nudge_player"),
+        (verifier_text, "wait_for_remote_convergence"),
+        (verifier_text, "heading_tolerance: float = 0.25"),
+        (verifier_text, "observed-motion heading"),
+        (verifier_text, "wait_for_collision_push"),
+        (verifier_text, "sd.bots.get_nameplate"),
+        (verifier_text, "sd.hub.start_testrun"),
+    )
+    missing = [token for text, token in required_pairs if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "local multiplayer transport wiring missing token(s): " + ", ".join(missing))
+    if "heading + heading_delta * alpha" in native_remote_playback_text:
+        raise StaticReTestFailure("native remote playback is smoothing packet-authored heading")
+
+    return "local UDP dev transport is wired through protocol, service loop, participant sync, docs, and launch script"
+
+
 def test_player_state_exports_native_heading_for_bot_spawn() -> str:
     header_text = read_text(ROOT / "SolomonDarkModLoader/include/mod_loader.h")
     state_getters_text = read_text(
@@ -5145,6 +5404,9 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("remaining active hardcode sources are removed", test_remaining_active_hardcode_sources_are_removed),
     ("smell source inventory is current", test_smell_source_inventory_is_current),
     ("active sources reject substitute read APIs and stale path language", test_active_sources_reject_read_or_and_stale_path_language),
+    ("accepted native shims are documented", test_accepted_native_shims_are_documented),
+    ("hot-path diagnostics are default-off and gated", test_hot_path_diagnostics_are_default_off_and_gated),
+    ("local multiplayer UDP transport is wired", test_local_multiplayer_udp_transport_is_wired),
     ("player state exports native heading for bot spawn", test_player_state_exports_native_heading_for_bot_spawn),
     ("investigation register has static coverage", test_investigation_register_has_static_coverage),
     ("staged binary matches analysis binary", test_staged_binary_matches_analysis_binary),

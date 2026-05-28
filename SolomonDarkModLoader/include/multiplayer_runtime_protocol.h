@@ -4,8 +4,9 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 5;
+constexpr std::uint16_t kProtocolVersion = 7;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
+constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 
 enum class PacketKind : std::uint16_t {
     State = 1,
@@ -34,10 +35,12 @@ struct PacketHeader {
 
 struct StatePacket {
     PacketHeader header;
+    std::uint64_t participant_id;
+    char display_name[kParticipantDisplayNameBytes];
     std::uint8_t ready;
     std::uint8_t in_run;
     std::uint8_t transform_valid;
-    std::uint8_t reserved = 0;
+    std::uint8_t controller_kind;
     std::uint32_t run_nonce;
     std::int32_t element_id;
     std::int32_t discipline_id;
@@ -113,7 +116,7 @@ inline bool IsValidHeader(const PacketHeader& header, PacketKind expected_kind) 
 }
 
 static_assert(sizeof(PacketHeader) == 12, "Unexpected packet header size");
-static_assert(sizeof(StatePacket) == 108, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 148, "Unexpected state packet size");
 static_assert(sizeof(LaunchPacket) == 56, "Unexpected launch packet size");
 static_assert(sizeof(CastPacket) == 60, "Unexpected cast packet size");
 static_assert(sizeof(ProgressionPacket) == 32, "Unexpected progression packet size");

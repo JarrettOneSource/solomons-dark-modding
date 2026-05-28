@@ -295,6 +295,7 @@ function follow.install(ctx)
     end
 
     best_sample.gap = target.gap
+    best_sample.snap_distance = best_sample_distance
     return best_sample
   end
 
@@ -371,12 +372,34 @@ function follow.install(ctx)
     return 0.0
   end
 
+  local function follow_target_snap_is_acceptable(player, candidate, snapped)
+    if type(candidate) ~= "table" or type(snapped) ~= "table" then
+      return false
+    end
+
+    local snap_gap = ctx.distance(candidate.x, candidate.y, snapped.x, snapped.y)
+    if snap_gap == nil or snap_gap > config.FOLLOW_NAV_SNAP_MAX_DISTANCE then
+      return false
+    end
+
+    local player_gap = follow_target_player_gap(player, snapped)
+    if player_gap == nil or player_gap > config.FOLLOW_TARGET_MAX_PLAYER_GAP then
+      return false
+    end
+
+    return true
+  end
+
   local function should_refresh_follow_target(player, bot_gap, target)
     if type(player) ~= "table" or type(target) ~= "table" then
       return true
     end
     bot_gap = ctx.strict_number(bot_gap)
     if bot_gap == nil then
+      return true
+    end
+    local target_player_gap = follow_target_player_gap(player, target)
+    if target_player_gap == nil or target_player_gap > config.FOLLOW_TARGET_MAX_PLAYER_GAP then
       return true
     end
     if bot_gap <= config.FOLLOW_RESUME_DISTANCE then
@@ -412,9 +435,26 @@ function follow.install(ctx)
     local nav_grid = get_nav_grid_snapshot(now_ms)
     local best_target = nil
     local best_penalty = nil
+    local best_raw_target = nil
+    local best_raw_penalty = nil
 
     for _ = 1, config.FOLLOW_TARGET_SAMPLE_ATTEMPTS do
       local candidate = compute_follow_target(player, bot)
+      if type(candidate) == "table" then
+        local raw_target = annotate_follow_target({
+          x = candidate.x,
+          y = candidate.y,
+          gap = candidate.gap,
+        }, candidate, player)
+        if type(raw_target) == "table" then
+          local raw_penalty = follow_target_band_penalty(player, raw_target) or 1000000.0
+          if best_raw_penalty == nil or raw_penalty < best_raw_penalty then
+            best_raw_target = raw_target
+            best_raw_penalty = raw_penalty
+          end
+        end
+      end
+
       local snapped = type(candidate) == "table" and
         snap_target_to_nav(nav_grid, candidate, {
           avoid_outer_rows = true,
@@ -422,7 +462,7 @@ function follow.install(ctx)
       if type(snapped) == "table" then
         snapped = annotate_follow_target(snapped, candidate, player)
       end
-      if type(snapped) == "table" then
+      if type(snapped) == "table" and follow_target_snap_is_acceptable(player, candidate, snapped) then
         local penalty = follow_target_band_penalty(player, snapped) or 1000000.0
         if best_penalty == nil or penalty < best_penalty then
           best_target = snapped
@@ -434,7 +474,7 @@ function follow.install(ctx)
       end
     end
 
-    return best_target
+    return best_target or best_raw_target
   end
 
   local function update_same_scene_follow(now_ms, scene, player, bot)
@@ -585,6 +625,7 @@ function follow.install(ctx)
   ctx.compute_follow_target = compute_follow_target
   ctx.follow_target_player_gap = follow_target_player_gap
   ctx.follow_target_band_penalty = follow_target_band_penalty
+  ctx.follow_target_snap_is_acceptable = follow_target_snap_is_acceptable
   ctx.should_refresh_follow_target = should_refresh_follow_target
   ctx.annotate_follow_target = annotate_follow_target
   ctx.choose_follow_target = choose_follow_target

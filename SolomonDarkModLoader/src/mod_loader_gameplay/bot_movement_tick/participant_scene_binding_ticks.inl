@@ -61,7 +61,7 @@ void TickParticipantSceneBindings(uintptr_t gameplay_address, std::uint64_t now_
         for (auto& binding : g_participant_entities) {
             SyncWizardBotMovementIntent(&binding);
             multiplayer::BotSnapshot bot_snapshot;
-            if (multiplayer::ReadBotSnapshot(binding.bot_id, &bot_snapshot) && bot_snapshot.available) {
+            if (multiplayer::ReadParticipantSnapshot(binding.bot_id, &bot_snapshot) && bot_snapshot.available) {
                 binding.character_profile = bot_snapshot.character_profile;
                 binding.scene_intent = bot_snapshot.scene_intent;
             }

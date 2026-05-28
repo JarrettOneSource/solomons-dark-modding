@@ -1,6 +1,7 @@
 #include "lua_engine_bindings_internal.h"
 #include "gameplay_seams.h"
 #include "memory_access.h"
+#include "mod_loader.h"
 #include "native_spell_stats.h"
 
 #include <algorithm>
@@ -280,6 +281,72 @@ int LuaBotsGetState(lua_State* state) {
     return 1;
 }
 
+int LuaBotsGetParticipantState(lua_State* state) {
+    std::uint64_t participant_id = 0;
+    std::string error_message;
+    if (!ParseBotIdArgument(state, 1, &participant_id, &error_message)) {
+        return luaL_error(state, "%s", error_message.c_str());
+    }
+
+    multiplayer::BotSnapshot snapshot;
+    if (!multiplayer::ReadParticipantSnapshot(participant_id, &snapshot)) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    PushBotSnapshot(state, snapshot);
+    return 1;
+}
+
+int LuaBotsGetParticipants(lua_State* state) {
+    const auto runtime = multiplayer::SnapshotRuntimeState();
+    lua_createtable(state, static_cast<int>(runtime.participants.size()), 0);
+    lua_Integer output_index = 1;
+    for (const auto& participant : runtime.participants) {
+        if (!multiplayer::IsRemoteParticipant(participant)) {
+            continue;
+        }
+
+        multiplayer::BotSnapshot snapshot;
+        if (!multiplayer::ReadParticipantSnapshot(participant.participant_id, &snapshot)) {
+            continue;
+        }
+
+        PushBotSnapshot(state, snapshot);
+        lua_rawseti(state, -2, output_index++);
+    }
+    return 1;
+}
+
+int LuaBotsGetNameplate(lua_State* state) {
+    if (!lua_isinteger(state, 1) && !lua_isnumber(state, 1)) {
+        return luaL_error(state, "sd.bots.get_nameplate expects (actor_address)");
+    }
+
+    const auto actor_address_value = static_cast<lua_Integer>(lua_tointeger(state, 1));
+    if (actor_address_value <= 0) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    std::string display_name;
+    std::uint64_t participant_id = 0;
+    if (!TryGetGameplayHudParticipantDisplayNameForActor(
+            static_cast<uintptr_t>(actor_address_value),
+            &display_name,
+            &participant_id)) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_createtable(state, 0, 2);
+    lua_pushinteger(state, static_cast<lua_Integer>(participant_id));
+    lua_setfield(state, -2, "id");
+    lua_pushstring(state, display_name.c_str());
+    lua_setfield(state, -2, "name");
+    return 1;
+}
+
 void PushBotSkillChoiceSnapshot(lua_State* state, const multiplayer::BotSkillChoiceSnapshot& snapshot) {
     lua_createtable(state, 0, 5);
     lua_pushboolean(state, snapshot.pending ? 1 : 0);
@@ -504,7 +571,7 @@ int LuaBotsGetPrimaryAttackWindow(lua_State* state) {
 }  // namespace
 
 void RegisterLuaBotBindings(lua_State* state) {
-    lua_createtable(state, 0, 16);
+    lua_createtable(state, 0, 19);
     RegisterFunction(state, &LuaBotsCreate, "create");
     RegisterFunction(state, &LuaBotsDestroy, "destroy");
     RegisterFunction(state, &LuaBotsClear, "clear");
@@ -516,6 +583,9 @@ void RegisterLuaBotBindings(lua_State* state) {
     RegisterFunction(state, &LuaBotsCast, "cast");
     RegisterFunction(state, &LuaBotsGetCount, "get_count");
     RegisterFunction(state, &LuaBotsGetState, "get_state");
+    RegisterFunction(state, &LuaBotsGetParticipantState, "get_participant_state");
+    RegisterFunction(state, &LuaBotsGetParticipants, "get_participants");
+    RegisterFunction(state, &LuaBotsGetNameplate, "get_nameplate");
     RegisterFunction(state, &LuaBotsGetSkillChoices, "get_skill_choices");
     RegisterFunction(state, &LuaBotsChooseSkill, "choose_skill");
     RegisterFunction(state, &LuaBotsDebugSyncLevelUp, "debug_sync_level_up");

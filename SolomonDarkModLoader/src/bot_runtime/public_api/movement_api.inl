@@ -143,13 +143,9 @@ bool FaceBotTarget(std::uint64_t bot_id, uintptr_t target_actor_address, bool de
     }
 
     const auto* previous_intent = FindPendingMovementIntent(bot_id);
-    const bool changed =
+    const bool target_changed =
         previous_intent == nullptr ||
-        previous_intent->face_target_actor_address != target_actor_address ||
-        previous_intent->face_heading_valid != default_heading_valid ||
-        (default_heading_valid &&
-         (!previous_intent->face_heading_valid ||
-          std::fabs(previous_intent->face_heading - default_heading) > 0.01f));
+        previous_intent->face_target_actor_address != target_actor_address;
 
     if (default_heading_valid) {
         SetPendingFaceHeadingLocked(bot_id, true, default_heading, 0);
@@ -158,7 +154,7 @@ bool FaceBotTarget(std::uint64_t bot_id, uintptr_t target_actor_address, bool de
     }
     SetPendingFaceTargetLocked(bot_id, target_actor_address);
 
-    if (changed) {
+    if (target_changed) {
         Log(
             "[bots] queued face_target id=" + std::to_string(bot_id) +
             " target=" + std::to_string(static_cast<std::uintptr_t>(target_actor_address)) +

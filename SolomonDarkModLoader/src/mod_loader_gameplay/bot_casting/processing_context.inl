@@ -53,6 +53,20 @@ void InvokeBotCastWithNativeActorSlot(
         " standalone_slot_owner_context={" + slot_owner_context + "}");
 }
 
+template <typename InvokeFn>
+void InvokeBotCastCleanupWithNativeOwnerContext(
+    const BotCastProcessingContext& context,
+    InvokeFn&& invoke,
+    std::string* context_description = nullptr) {
+    InvokeWithBotProgressionSlotOwnerContext(
+        context.actor_address,
+        context.binding != nullptr && IsWizardParticipantKind(context.binding->kind),
+        [&] {
+            invoke();
+        },
+        context_description);
+}
+
 void RestoreBotCastAim(
     const BotCastProcessingContext& context,
     const ParticipantEntityBinding::OngoingCastState& state) {

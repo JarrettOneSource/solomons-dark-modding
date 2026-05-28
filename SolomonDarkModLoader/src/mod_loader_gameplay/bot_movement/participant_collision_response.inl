@@ -6,6 +6,8 @@ struct WizardParticipantCollisionSubject {
     float y = 0.0f;
     float radius = 0.0f;
     bool movable = false;
+    bool local_player = false;
+    bool native_remote = false;
     bool moved = false;
 };
 
@@ -64,6 +66,7 @@ void ResolveWizardParticipantActorCollisions() {
                 nullptr,
                 false,
                 &player_subject)) {
+            player_subject.local_player = true;
             subjects.push_back(player_subject);
         }
     }
@@ -86,6 +89,7 @@ void ResolveWizardParticipantActorCollisions() {
         }
 
         binding.materialized_world_address = subject.world_address;
+        subject.native_remote = IsNativeRemoteParticipantBinding(&binding);
         subjects.push_back(subject);
     }
 
@@ -102,8 +106,15 @@ void ResolveWizardParticipantActorCollisions() {
             for (std::size_t right_index = left_index + 1; right_index < subjects.size(); ++right_index) {
                 auto& left = subjects[left_index];
                 auto& right = subjects[right_index];
+                const bool native_player_pair =
+                    (left.local_player && right.native_remote) ||
+                    (right.local_player && left.native_remote);
+                const bool left_movable =
+                    native_player_pair ? left.local_player : left.movable;
+                const bool right_movable =
+                    native_player_pair ? right.local_player : right.movable;
                 if (left.world_address != right.world_address ||
-                    (!left.movable && !right.movable)) {
+                    (!left_movable && !right_movable)) {
                     continue;
                 }
 
@@ -132,7 +143,7 @@ void ResolveWizardParticipantActorCollisions() {
                     continue;
                 }
 
-                if (left.movable && right.movable) {
+                if (left_movable && right_movable) {
                     const float half_overlap = overlap * 0.5f;
                     left.x -= direction_x * half_overlap;
                     left.y -= direction_y * half_overlap;
@@ -140,11 +151,11 @@ void ResolveWizardParticipantActorCollisions() {
                     right.y += direction_y * half_overlap;
                     left.moved = true;
                     right.moved = true;
-                } else if (left.movable) {
+                } else if (left_movable) {
                     left.x -= direction_x * overlap;
                     left.y -= direction_y * overlap;
                     left.moved = true;
-                } else if (right.movable) {
+                } else if (right_movable) {
                     right.x += direction_x * overlap;
                     right.y += direction_y * overlap;
                     right.moved = true;
@@ -174,7 +185,9 @@ void ResolveWizardParticipantActorCollisions() {
 
     const auto rebind_actor_address = memory.ResolveGameAddressOrZero(kWorldCellGridRebindActor);
     for (auto& subject : subjects) {
-        if (!subject.moved || !subject.movable || subject.binding == nullptr) {
+        if (!subject.moved ||
+            (!subject.movable && !subject.local_player) ||
+            (subject.binding == nullptr && !subject.local_player)) {
             continue;
         }
 
@@ -182,7 +195,9 @@ void ResolveWizardParticipantActorCollisions() {
             !memory.TryWriteField(subject.actor_address, kActorPositionYOffset, subject.y)) {
             LogCollisionResponseFailure(
                 "position_write actor=" + HexString(subject.actor_address) +
-                " bot_id=" + std::to_string(subject.binding->bot_id));
+                " bot_id=" + (subject.binding != nullptr
+                                  ? std::to_string(subject.binding->bot_id)
+                                  : std::string("local")));
             continue;
         }
 
@@ -195,12 +210,16 @@ void ResolveWizardParticipantActorCollisions() {
                 &rebind_exception_code)) {
             LogCollisionResponseFailure(
                 "rebind actor=" + HexString(subject.actor_address) +
-                " bot_id=" + std::to_string(subject.binding->bot_id) +
+                " bot_id=" + (subject.binding != nullptr
+                                  ? std::to_string(subject.binding->bot_id)
+                                  : std::string("local")) +
                 " world=" + HexString(subject.world_address) +
                 " exception=" + HexString(rebind_exception_code));
         }
 
-        subject.binding->materialized_world_address = subject.world_address;
-        PublishParticipantGameplaySnapshot(*subject.binding);
+        if (subject.binding != nullptr) {
+            subject.binding->materialized_world_address = subject.world_address;
+            PublishParticipantGameplaySnapshot(*subject.binding);
+        }
     }
 }

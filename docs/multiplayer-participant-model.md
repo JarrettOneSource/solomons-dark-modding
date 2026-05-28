@@ -38,6 +38,16 @@ The local player is `ParticipantKind::LocalHuman` with a native controller.
 Lua bots are `RemoteParticipant + LuaBrain`. Future networked players should be
 `RemoteParticipant + Native`, not a separate actor/state family.
 
+The first local multiplayer transport uses this future path now: UDP peer state
+packets upsert `RemoteParticipant + Native` rows, then the existing participant
+materialization rail spawns those rows as remote wizard actors. Once an actor is
+materialized, incoming network transforms update the participant runtime snapshot
+and the gameplay tick performs native-remote playback toward that target. The
+sync queue is not used as a per-packet transform pump, because that queue is
+deliberately throttled for stock-safe spawn/rematerialization work. The local UDP
+state packet carries the participant display name, and the gameplay HUD/nameplate
+path resolves the materialized actor back to that participant name.
+
 The runtime reserves:
 
 - `kLocalParticipantId = 1`
@@ -45,6 +55,11 @@ The runtime reserves:
 
 The runtime participant carries Steam/session metadata, display name, readiness,
 transport flags, a character profile, and a live runtime snapshot.
+
+Lua validation can inspect networked remote players through
+`sd.bots.get_participants()`, `sd.bots.get_participant_state(id)`, and
+`sd.bots.get_nameplate(actor_address)`. Those APIs are intentionally query-only
+for native remote players.
 
 ## Character Profile
 
@@ -130,6 +145,14 @@ profile, scene intent, controller state, movement state, and stock runtime
 handles. Gameplay publishes those bindings back into runtime snapshots so Lua and
 debug tooling can see the live actor state.
 
+`RemoteParticipant + Native` bindings additionally cache the latest replicated
+transform target. During each player-actor tick, the loader refreshes that target
+from `RuntimeState`, interpolates the materialized actor toward it, and snaps only
+for large discontinuities such as scene changes. The participant collision
+resolver treats native remote players as solid against the local player and can
+push both actors apart; Lua bot collisions keep the older rule where the local
+player remains solid and the bot-owned actor yields.
+
 ## Networking Boundary
 
 The current protocol header is still a small fixed-packet scaffold:
@@ -145,8 +168,10 @@ for manifest handshake, join/bootstrap, entity lifecycle, input, snapshots,
 gameplay events, progression deltas, and reconnect.
 
 The multiplayer service loop currently pumps Steam bootstrap/callback state every
-50 ms and mirrors readiness into `RuntimeState`. It does not yet own peer
-sessions, packet transport, or replication.
+50 ms and mirrors readiness into `RuntimeState`. For rapid local development it
+can also pump a UDP loopback transport that exchanges `StatePacket` transform
+snapshots. The UDP path is a development backend for the same participant and
+replication boundary that Steam P2P and a later dedicated server should use.
 
 ## Invariants
 

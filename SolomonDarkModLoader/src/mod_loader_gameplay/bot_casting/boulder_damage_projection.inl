@@ -60,6 +60,30 @@ float ProjectEarthBoulderReleaseDamage(
         : release_damage_floor;
 }
 
+float ResolveEarthBoulderScaledReleaseBaseDamage(
+    float live_release_base_damage,
+    float damage_output_scale) {
+    if (!std::isfinite(live_release_base_damage) ||
+        live_release_base_damage <= 0.0f) {
+        return 0.0f;
+    }
+    if (!std::isfinite(damage_output_scale) ||
+        damage_output_scale <= 0.0f) {
+        return live_release_base_damage;
+    }
+    if (live_release_base_damage >= damage_output_scale) {
+        return live_release_base_damage;
+    }
+
+    const auto scaled_release_base_damage =
+        live_release_base_damage * damage_output_scale;
+    if (!std::isfinite(scaled_release_base_damage) ||
+        scaled_release_base_damage <= 0.0f) {
+        return live_release_base_damage;
+    }
+    return scaled_release_base_damage;
+}
+
 bool TryPopulateBoulderProjectionTarget(
     ProcessMemory& memory,
     const BotNativeActiveSpellObjectState& active_spell_state,
@@ -232,9 +256,9 @@ BotBoulderDamageProjectionSnapshot ReadBotBoulderDamageProjectionSnapshot(
             &progression_level)) {
         return snapshot;
     }
-    const auto resolved_native_damage = active_spell_state.release_base_damage;
-    if (!std::isfinite(resolved_native_damage) ||
-        resolved_native_damage <= 0.0f) {
+    const auto live_release_base_damage = active_spell_state.release_base_damage;
+    if (!std::isfinite(live_release_base_damage) ||
+        live_release_base_damage <= 0.0f) {
         return snapshot;
     }
     const float release_charge =
@@ -257,6 +281,14 @@ BotBoulderDamageProjectionSnapshot ReadBotBoulderDamageProjectionSnapshot(
         release_damage_floor < 0.0f ||
         !std::isfinite(release_damage_cap_scale) ||
         release_damage_cap_scale <= 0.0f) {
+        return snapshot;
+    }
+    const auto resolved_native_damage =
+        ResolveEarthBoulderScaledReleaseBaseDamage(
+            live_release_base_damage,
+            damage_output_scale);
+    if (!std::isfinite(resolved_native_damage) ||
+        resolved_native_damage <= 0.0f) {
         return snapshot;
     }
 

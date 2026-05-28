@@ -6,7 +6,7 @@ bool ExecuteParticipantEntitySyncNow(
     }
 
     multiplayer::BotSnapshot bot_snapshot;
-    if (!multiplayer::ReadBotSnapshot(request.bot_id, &bot_snapshot) || !bot_snapshot.available) {
+    if (!multiplayer::ReadParticipantSnapshot(request.bot_id, &bot_snapshot) || !bot_snapshot.available) {
         Log(
             "[bots] sync skipped stale request. bot_id=" + std::to_string(request.bot_id) +
             " element_id=" + std::to_string(request.character_profile.element_id));

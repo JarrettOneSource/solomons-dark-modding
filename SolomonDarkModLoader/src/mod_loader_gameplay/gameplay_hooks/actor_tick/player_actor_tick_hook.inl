@@ -56,7 +56,9 @@ bool PumpQueuedBotNativeActionManager(
         &action_count_after);
 
     static std::uint64_t s_last_action_pump_log_ms = 0;
-    if (!pumped || now_ms - s_last_action_pump_log_ms >= 500) {
+    if (!pumped ||
+        (kEnableWizardBotHotPathDiagnostics &&
+         now_ms - s_last_action_pump_log_ms >= 500)) {
         s_last_action_pump_log_ms = now_ms;
         Log(
             "[bots] native action manager pump. bot_id=" +
@@ -109,6 +111,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
 
     bool standalone_puppet_actor = false;
     bool gameplay_slot_wizard_actor = false;
+    bool tracked_actor_native_remote = false;
     bool tracked_actor_moving = false;
     bool tracked_actor_should_restore_desired_heading = false;
     float tracked_actor_desired_heading = 0.0f;
@@ -128,25 +131,34 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             binding != nullptr && IsWizardParticipantKind(binding->kind)) {
             standalone_puppet_actor = IsStandaloneWizardKind(binding->kind);
             gameplay_slot_wizard_actor = IsGameplaySlotWizardKind(binding->kind);
+            (void)RefreshNativeRemoteParticipantTransformTarget(binding);
+            tracked_actor_native_remote = IsNativeRemoteParticipantBinding(binding);
             tracked_actor_dead = IsActorRuntimeDead(actor_address);
             if (tracked_actor_dead) {
                 QuiesceDeadWizardBinding(binding);
                 StopDeadWizardBotActorMotion(actor_address);
+                (void)ClearHostileTargetsForDeadWizardActor(actor_address);
             } else {
                 binding->death_transition_stock_tick_seen = false;
-                SyncWizardBotMovementIntent(binding);
-                if (!UpdateWizardBotPathMotion(binding, native_tick_now_ms, &tracked_path_error_message) &&
-                    !tracked_path_error_message.empty()) {
-                    Log(
-                        "[bots] native tick path update failed. bot_id=" + std::to_string(binding->bot_id) +
-                        " actor=" + HexString(actor_address) +
-                        " error=" + tracked_path_error_message);
-                    tracked_path_error_message.clear();
+                if (!tracked_actor_native_remote) {
+                    SyncWizardBotMovementIntent(binding);
+                    if (!UpdateWizardBotPathMotion(binding, native_tick_now_ms, &tracked_path_error_message) &&
+                        !tracked_path_error_message.empty()) {
+                        Log(
+                            "[bots] native tick path update failed. bot_id=" + std::to_string(binding->bot_id) +
+                            " actor=" + HexString(actor_address) +
+                            " error=" + tracked_path_error_message);
+                        tracked_path_error_message.clear();
+                    }
                 }
             }
-            tracked_actor_moving = binding->movement_active;
+            tracked_actor_moving =
+                tracked_actor_native_remote
+                    ? NativeRemoteParticipantPlaybackTargetIsMoving(binding, actor_address)
+                    : binding->movement_active;
             tracked_actor_should_restore_desired_heading =
                 !tracked_actor_dead &&
+                !tracked_actor_native_remote &&
                 binding->movement_active &&
                 binding->desired_heading_valid &&
                 binding->controller_state != multiplayer::BotControllerState::Attacking;
@@ -356,18 +368,20 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         }
         if (stock_cast_intent_applied) {
             static std::uint64_t s_last_stock_cast_input_log_ms = 0;
-            if (native_tick_now_ms - s_last_stock_cast_input_log_ms >= 250) {
-                s_last_stock_cast_input_log_ms = native_tick_now_ms;
-                Log(
-                    "[bots] wizard stock cast input. actor=" +
-                    HexString(actor_address) +
-                    " gameplay=" + HexString(gameplay_address) +
-                    " mouse_left=" + (stock_mouse_left_applied ? std::string("1") : std::string("0")) +
-                    " kind=" +
-                        (IsGameplaySlotWizardKind(binding->kind)
-                             ? std::string("gameplay_slot")
-                             : std::string("standalone")) +
-                    " gameplay_slot=" + std::to_string(binding->gameplay_slot));
+            if constexpr (kEnableWizardBotHotPathDiagnostics) {
+                if (native_tick_now_ms - s_last_stock_cast_input_log_ms >= 250) {
+                    s_last_stock_cast_input_log_ms = native_tick_now_ms;
+                    Log(
+                        "[bots] wizard stock cast input. actor=" +
+                        HexString(actor_address) +
+                        " gameplay=" + HexString(gameplay_address) +
+                        " mouse_left=" + (stock_mouse_left_applied ? std::string("1") : std::string("0")) +
+                        " kind=" +
+                            (IsGameplaySlotWizardKind(binding->kind)
+                                 ? std::string("gameplay_slot")
+                                 : std::string("standalone")) +
+                        " gameplay_slot=" + std::to_string(binding->gameplay_slot));
+                }
             }
         }
     };
@@ -396,6 +410,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     std::string cast_error_message;
                     QuiesceDeadWizardBinding(binding);
                     StopDeadWizardBotActorMotion(actor_address);
+                    (void)ClearHostileTargetsForDeadWizardActor(actor_address);
                     (void)ProcessPendingBotCast(binding, &cast_error_message);
                     run_stock_death_transition = !binding->death_transition_stock_tick_seen;
                     binding->death_transition_stock_tick_seen = true;
@@ -431,27 +446,29 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     binding,
                     actor_address,
                     tracked_actor_moving);
-                std::string cast_error_message;
-                if (!binding->ongoing_cast.active) {
-                    (void)PreparePendingWizardBotCast(binding, &cast_error_message);
-                    if (!cast_error_message.empty()) {
-                        Log(
-                            "[bots] standalone cast prepare failed. bot_id=" +
-                            std::to_string(binding->bot_id) +
-                            " actor=" + HexString(actor_address) +
-                            " error=" + cast_error_message);
-                        cast_error_message.clear();
+                if (!IsNativeRemoteParticipantBinding(binding)) {
+                    std::string cast_error_message;
+                    if (!binding->ongoing_cast.active) {
+                        (void)PreparePendingWizardBotCast(binding, &cast_error_message);
+                        if (!cast_error_message.empty()) {
+                            Log(
+                                "[bots] standalone cast prepare failed. bot_id=" +
+                                std::to_string(binding->bot_id) +
+                                " actor=" + HexString(actor_address) +
+                                " error=" + cast_error_message);
+                            cast_error_message.clear();
+                        }
                     }
-                }
-                if (!binding->ongoing_cast.active) {
-                    ClearLiveWizardActorAnimationDriveState(actor_address);
-                } else {
-                    if (OngoingCastShouldRefreshNativeTargetState(binding->ongoing_cast)) {
-                        (void)RefreshOngoingCastAimFromFacingTarget(binding, &binding->ongoing_cast);
+                    if (!binding->ongoing_cast.active) {
+                        ClearLiveWizardActorAnimationDriveState(actor_address);
+                    } else {
+                        if (OngoingCastShouldRefreshNativeTargetState(binding->ongoing_cast)) {
+                            (void)RefreshOngoingCastAimFromFacingTarget(binding, &binding->ongoing_cast);
+                        }
                     }
+                    (void)RefreshWizardBindingTargetFacing(binding);
+                    (void)ApplyWizardBindingFacingState(binding, actor_address);
                 }
-                (void)RefreshWizardBindingTargetFacing(binding);
-                (void)ApplyWizardBindingFacingState(binding, actor_address);
             }
         }
         {
@@ -473,6 +490,19 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     QuiesceDeadWizardBinding(binding);
                     (void)ProcessPendingBotCast(binding, &cast_error_message);
                     PublishParticipantGameplaySnapshot(*binding);
+                    return;
+                }
+                if (IsNativeRemoteParticipantBinding(binding)) {
+                    const auto playback =
+                        ApplyNativeRemoteParticipantPlayback(binding, actor_address, native_tick_now_ms);
+                    if (playback.moving) {
+                        ApplyObservedBotAnimationState(binding, actor_address, true);
+                    } else {
+                        StopWizardBotActorMotion(actor_address);
+                    }
+                    PublishParticipantGameplaySnapshot(*binding);
+                    NormalizeGameplaySlotBotSyntheticVisualState(actor_address);
+                    ResolveWizardParticipantActorCollisions();
                     return;
                 }
                 if (!ApplyWizardBotMovementStep(binding, &tracked_move_error_message) &&
@@ -542,6 +572,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     const bool run_stock_death_transition = !binding->death_transition_stock_tick_seen;
                     QuiesceDeadWizardBinding(binding);
                     StopDeadWizardBotActorMotion(actor_address);
+                    (void)ClearHostileTargetsForDeadWizardActor(actor_address);
                     (void)ProcessPendingBotCast(binding, &cast_error_message);
                     binding->death_transition_stock_tick_seen = true;
                     if (run_stock_death_transition) {
@@ -556,6 +587,19 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                             " error=" + cast_error_message);
                     }
                     PublishParticipantGameplaySnapshot(*binding);
+                    return;
+                }
+                if (IsNativeRemoteParticipantBinding(binding)) {
+                    RunStockTick(binding);
+                    const auto playback =
+                        ApplyNativeRemoteParticipantPlayback(binding, actor_address, native_tick_now_ms);
+                    if (playback.moving) {
+                        ApplyObservedBotAnimationState(binding, actor_address, true);
+                    } else {
+                        StopWizardBotActorMotion(actor_address);
+                    }
+                    PublishParticipantGameplaySnapshot(*binding);
+                    ResolveWizardParticipantActorCollisions();
                     return;
                 }
                 if (!binding->ongoing_cast.active) {

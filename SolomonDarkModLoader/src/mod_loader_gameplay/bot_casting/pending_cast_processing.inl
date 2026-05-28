@@ -1,9 +1,13 @@
 struct BotBoulderReleaseHoldWrites {
     bool charge = false;
     bool release_charge = false;
+    bool release_damage = false;
+    bool release_base_damage = false;
     bool growth_rate = false;
     bool growth_stop_eligible = false;
     float growth_stop_min_charge = 0.0f;
+    float damage_output_scale = 0.0f;
+    float scaled_release_base_damage = 0.0f;
 };
 
 struct BotCastActivitySnapshot {
@@ -46,7 +50,8 @@ bool HasBotNativeCastActivity(const BotCastActivitySnapshot& snapshot) {
 BotBoulderReleaseHoldWrites HoldBotBoulderAtReleaseCharge(
     ProcessMemory& memory,
     const BotNativeActiveSpellObjectState& active_spell_state,
-    float release_charge) {
+    float release_charge,
+    bool write_release_damage_fields) {
     BotBoulderReleaseHoldWrites writes{};
     if (active_spell_state.object == 0 ||
         !std::isfinite(release_charge) ||
@@ -64,6 +69,26 @@ BotBoulderReleaseHoldWrites HoldBotBoulderAtReleaseCharge(
             active_spell_state.object,
             kSpellObjectReleaseChargeOffset,
             release_charge);
+    if (write_release_damage_fields) {
+        writes.damage_output_scale = ResolveEarthBoulderDamageOutputScale();
+        writes.scaled_release_base_damage =
+            ResolveEarthBoulderScaledReleaseBaseDamage(
+                active_spell_state.release_base_damage,
+                writes.damage_output_scale);
+        if (std::isfinite(writes.scaled_release_base_damage) &&
+            writes.scaled_release_base_damage > 0.0f) {
+            writes.release_damage =
+                memory.TryWriteField<float>(
+                    active_spell_state.object,
+                    kSpellObjectReleaseDamageOffset,
+                    writes.scaled_release_base_damage);
+            writes.release_base_damage =
+                memory.TryWriteField<float>(
+                    active_spell_state.object,
+                    kSpellObjectReleaseBaseDamageOffset,
+                    writes.scaled_release_base_damage);
+        }
+    }
     writes.growth_stop_min_charge =
         ResolveEarthBoulderReleaseGrowthStopMinCharge();
     writes.growth_stop_eligible =
@@ -219,6 +244,8 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         }
         (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
         constexpr int kBoundedHeldNativeReleaseEdgeTicks = 3;
+        constexpr int kBoundedHeldPostReleaseWorldUpdateTicks =
+            kBoundedHeldNativeReleaseEdgeTicks + 8;
         const bool preserve_bounded_release_edge =
             ongoing.bounded_release_requested &&
             ongoing.bounded_post_release_ticks_waiting < kBoundedHeldNativeReleaseEdgeTicks;
@@ -586,7 +613,10 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 release_charge = active_spell_state.charge;
             }
             if (!std::isfinite(release_base_damage) || release_base_damage <= 0.0f) {
-                release_base_damage = active_spell_state.release_base_damage;
+                release_base_damage =
+                    ResolveEarthBoulderScaledReleaseBaseDamage(
+                        active_spell_state.release_base_damage,
+                        release_damage_output_scale);
             }
             if (!std::isfinite(release_damage_output_scale) ||
                 release_damage_output_scale <= 0.0f) {
@@ -650,13 +680,12 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.bounded_release_requested &&
             ongoing.saw_live_handle &&
             ongoing.saw_activity &&
+            ongoing.bounded_post_release_ticks_waiting >=
+                kBoundedHeldPostReleaseWorldUpdateTicks &&
             !has_live_handle;
-        // Once release is requested, keep only a stock-sized native release
-        // window. The Earth handler gets a few frames with the chosen charge
-        // and stopped growth-rate field, then the bounded cleanup below
-        // finalizes the active handle before the visual can continue toward
-        // max size.
-        constexpr int kBoundedHeldPostReleaseWorldUpdateTicks = kBoundedHeldNativeReleaseEdgeTicks;
+        // ProcessPendingBotCast runs after the stock tick. After the held
+        // release edge, keep the lifecycle alive for several passes so stock
+        // sees input released and can drive the native Boulder impact path.
         const bool bounded_held_release_tick_processed =
             bounded_held_native_cast &&
             ongoing.bounded_release_requested &&
@@ -672,7 +701,8 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             (void)HoldBotBoulderAtReleaseCharge(
                 memory,
                 active_spell_state,
-                ongoing.bounded_release_charge);
+                ongoing.bounded_release_charge,
+                false);
         }
         const bool startup_timeout_hit =
             ongoing.startup_in_progress &&
@@ -711,8 +741,14 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             bounded_held_native_cast &&
             active_spell_state.readable &&
             !ongoing.bounded_release_requested;
+        const bool bounded_release_window_pending =
+            bounded_held_native_cast &&
+            ongoing.bounded_release_requested &&
+            ongoing.bounded_post_release_ticks_waiting <
+                kBoundedHeldPostReleaseWorldUpdateTicks;
         const bool safety_cap_hit =
             !bounded_native_charge_observable &&
+            !bounded_release_window_pending &&
             ongoing.ticks_waiting >=
                 ParticipantEntityBinding::OngoingCastState::kMaxTicksWaiting;
         const bool bounded_held_release_requested_safety_cap =
@@ -737,7 +773,8 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 HoldBotBoulderAtReleaseCharge(
                     memory,
                     active_spell_state,
-                    finalized_release_charge);
+                    finalized_release_charge,
+                    true);
             (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
             (void)memory.TryWriteField<std::int32_t>(
                 actor_address,
@@ -830,6 +867,14 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     (release_hold_writes.release_charge ? std::string("1") : std::string("0")) +
                 " release_charge_hold=" +
                     (release_hold_writes.charge ? std::string("1") : std::string("0")) +
+                " release_damage_hold=" +
+                    (release_hold_writes.release_damage ? std::string("1") : std::string("0")) +
+                " release_base_damage_hold=" +
+                    (release_hold_writes.release_base_damage ? std::string("1") : std::string("0")) +
+                " release_scaled_base_damage=" +
+                    std::to_string(release_hold_writes.scaled_release_base_damage) +
+                " release_damage_output_scale_hold=" +
+                    std::to_string(release_hold_writes.damage_output_scale) +
                 " release_growth_stop=" +
                     (release_hold_writes.growth_rate ? std::string("1") : std::string("0")) +
                 " release_growth_stop_eligible=" +

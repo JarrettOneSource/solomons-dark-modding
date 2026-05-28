@@ -35,6 +35,8 @@ local function publish_test_hooks(ctx)
     choose_follow_target = ctx.choose_follow_target,
     should_refresh_follow_target = ctx.should_refresh_follow_target,
     update_same_scene_follow = ctx.update_same_scene_follow,
+    scene_key = ctx.scene_key,
+    scene_matches = ctx.scene_matches,
     handle_pending_skill_choice = ctx.handle_pending_skill_choice,
     load_bot_context = ctx.load_bot_context,
     save_bot_context = ctx.save_bot_context,

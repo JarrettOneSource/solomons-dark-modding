@@ -1,3 +1,64 @@
+bool ClearHostileTargetsForDeadWizardActor(uintptr_t dead_actor_address) {
+    if (dead_actor_address == 0 || !IsActorRuntimeDead(dead_actor_address)) {
+        return false;
+    }
+
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    int scanned_hostiles = 0;
+    int cleared_hostiles = 0;
+    for (const auto& actor : actors) {
+        if (!actor.tracked_enemy ||
+            actor.actor_address == 0 ||
+            actor.dead ||
+            actor.actor_address == dead_actor_address) {
+            continue;
+        }
+
+        scanned_hostiles += 1;
+        uintptr_t current_target_actor_address = 0;
+        if (!memory.TryReadField(
+                actor.actor_address,
+                kActorCurrentTargetActorOffset,
+                &current_target_actor_address) ||
+            current_target_actor_address != dead_actor_address) {
+            continue;
+        }
+
+        const bool target_write =
+            memory.TryWriteField<uintptr_t>(
+                actor.actor_address,
+                kActorCurrentTargetActorOffset,
+                0);
+        const bool bucket_write =
+            memory.TryWriteField<std::int32_t>(
+                actor.actor_address,
+                kHostileTargetBucketDeltaOffset,
+                0);
+        if (target_write || bucket_write) {
+            cleared_hostiles += 1;
+        }
+    }
+
+    if (cleared_hostiles > 0) {
+        static std::uint64_t s_last_dead_wizard_target_clear_log_ms = 0;
+        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        if (now_ms - s_last_dead_wizard_target_clear_log_ms >= 250) {
+            s_last_dead_wizard_target_clear_log_ms = now_ms;
+            Log(
+                std::string("[hostile_ai] cleared dead wizard target refs") +
+                ". dead_target=" + HexString(dead_actor_address) +
+                " cleared=" + std::to_string(cleared_hostiles) +
+                " scanned=" + std::to_string(scanned_hostiles));
+        }
+    }
+    return cleared_hostiles > 0;
+}
+
 void __fastcall HookMonsterPathfindingRefreshTarget(void* self, void* /*unused_edx*/) {
     const auto original = GetX86HookTrampoline<MonsterPathfindingRefreshTargetFn>(
         g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);

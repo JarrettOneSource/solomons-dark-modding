@@ -265,6 +265,7 @@ bool ConsumePendingBotCast(std::uint64_t bot_id, BotCastRequest* request);
 std::uint32_t GetBotCount();
 bool ReadBotSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot);
 bool ReadBotSnapshotByIndex(std::uint32_t index, BotSnapshot* snapshot);
+bool ReadParticipantSnapshot(std::uint64_t participant_id, BotSnapshot* snapshot);
 void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintptr_t source_progression_address = 0);
 bool ReadBotSkillChoices(std::uint64_t bot_id, BotSkillChoiceSnapshot* snapshot);
 bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_message);

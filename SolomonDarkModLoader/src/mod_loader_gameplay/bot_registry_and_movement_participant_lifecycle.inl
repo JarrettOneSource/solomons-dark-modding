@@ -37,10 +37,16 @@ void RememberParticipantEntity(
         binding->stock_tick_facing_origin_x = 0.0f;
         binding->stock_tick_facing_origin_y = 0.0f;
         binding->death_transition_stock_tick_seen = false;
+        binding->replicated_transform_playback_ms = 0;
     }
 
+    const auto runtime_state = multiplayer::SnapshotRuntimeState();
+    const auto* participant = multiplayer::FindParticipant(runtime_state, participant_id);
     binding->character_profile = character_profile;
     binding->scene_intent = scene_intent;
+    binding->controller_kind =
+        participant != nullptr ? participant->controller_kind
+                               : multiplayer::ParticipantControllerKind::LuaBrain;
     binding->actor_address = actor_address;
     binding->gameplay_slot = gameplay_slot;
     binding->kind = kind;
@@ -68,6 +74,12 @@ void RememberParticipantEntity(
         binding->stock_tick_facing_origin_x = 0.0f;
         binding->stock_tick_facing_origin_y = 0.0f;
         binding->death_transition_stock_tick_seen = false;
+        binding->replicated_transform_valid = false;
+        binding->replicated_target_x = 0.0f;
+        binding->replicated_target_y = 0.0f;
+        binding->replicated_target_heading = 0.0f;
+        binding->replicated_transform_packet_ms = 0;
+        binding->replicated_transform_playback_ms = 0;
     }
 }
 
@@ -124,6 +136,12 @@ void ResetParticipantEntityMaterializationState(ParticipantEntityBinding* bindin
     binding->stock_tick_facing_origin_x = 0.0f;
     binding->stock_tick_facing_origin_y = 0.0f;
     binding->death_transition_stock_tick_seen = false;
+    binding->replicated_transform_valid = false;
+    binding->replicated_target_x = 0.0f;
+    binding->replicated_target_y = 0.0f;
+    binding->replicated_target_heading = 0.0f;
+    binding->replicated_transform_packet_ms = 0;
+    binding->replicated_transform_playback_ms = 0;
 }
 
 void MarkParticipantEntityWorldUnregistered(uintptr_t actor_address) {

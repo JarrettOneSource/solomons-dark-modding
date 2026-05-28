@@ -76,14 +76,16 @@ bool PrimeGameplaySlotBotSelectionState(
     }
     (void)TryWriteActorAnimationStateIdDirect(actor_address, selection_state);
 
-    Log(
-        "[bots] visual stage=selection_pre_refresh bot={" +
-        BuildActorVisualDebugSummary(actor_address) +
-        "} progression=" + HexString(progression_address) +
-        " choice_ids=" + std::to_string(choice_ids[0]) + "/" +
-        std::to_string(choice_ids[1]) + "/" +
-        std::to_string(choice_ids[2]) + "/" +
-        std::to_string(choice_ids[3]));
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        Log(
+            "[bots] visual stage=selection_pre_refresh bot={" +
+            BuildActorVisualDebugSummary(actor_address) +
+            "} progression=" + HexString(progression_address) +
+            " choice_ids=" + std::to_string(choice_ids[0]) + "/" +
+            std::to_string(choice_ids[1]) + "/" +
+            std::to_string(choice_ids[2]) + "/" +
+            std::to_string(choice_ids[3]));
+    }
 
     if (!PrimeStandaloneWizardProgressionSelectionState(
             progression_address,
@@ -163,12 +165,14 @@ bool PrimeGameplaySlotBotSelectionState(
     // globals.
     (void)memory.TryWriteField<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0);
     ApplyStandaloneWizardPuppetDriveState(nullptr, actor_address, false);
-    Log(
-        "[bots] visual stage=selection_post_refresh bot={" +
-        BuildActorVisualDebugSummary(actor_address) +
-        "} progression=" + HexString(progression_address) +
-        " selection_state=" + std::to_string(selection_state) +
-        " primary_spell_id=" + std::to_string(resolved_primary_skill_id));
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        Log(
+            "[bots] visual stage=selection_post_refresh bot={" +
+            BuildActorVisualDebugSummary(actor_address) +
+            "} progression=" + HexString(progression_address) +
+            " selection_state=" + std::to_string(selection_state) +
+            " primary_spell_id=" + std::to_string(resolved_primary_skill_id));
+    }
     return true;
 }
 

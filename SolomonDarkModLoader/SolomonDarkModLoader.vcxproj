@@ -96,6 +96,7 @@
     <ClInclude Include="include\memory_access.h" />
     <ClInclude Include="include\mod_loader.h" />
     <ClInclude Include="include\multiplayer_foundation.h" />
+    <ClInclude Include="include\multiplayer_local_transport.h" />
     <ClInclude Include="include\multiplayer_runtime_protocol.h" />
     <ClInclude Include="include\multiplayer_runtime_state.h" />
     <ClInclude Include="include\multiplayer_runtime_state.inl" />
@@ -359,6 +360,7 @@
     <ClCompile Include="src\mod_loader_gameplay.cpp" />
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp" />
     <ClCompile Include="src\multiplayer_foundation.cpp" />
+    <ClCompile Include="src\multiplayer_local_transport.cpp" />
     <ClCompile Include="src\multiplayer_runtime_state.cpp" />
     <ClCompile Include="src\multiplayer_service_loop.cpp" />
     <ClCompile Include="src\native_spell_stats.cpp" />

@@ -12,6 +12,17 @@ Use it before attaching an external debugger. It is fast, game-aware, and alread
 - Higher-level helper:
   - `python tools/live_bot_render_debug.py`
 
+For multi-instance local runs, set `SDMOD_LUA_EXEC_PIPE_NAME` to target a
+specific loader pipe. `scripts/Launch-LocalMultiplayerPair.ps1` assigns separate
+host/client pipe names automatically.
+
+For local multiplayer sync validation, use:
+
+- `sd.bots.get_participants()` for materialized remote native participants
+- `sd.bots.get_participant_state(id)` for one remote participant snapshot
+- `sd.bots.get_nameplate(actor_address)` to verify the gameplay nameplate lookup
+  resolves the actor back to the participant display name
+
 ## Core `sd.debug` APIs
 
 ### Scalar reads and writes

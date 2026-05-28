@@ -7,6 +7,9 @@ param(
     [Parameter(Mandatory = $false)]
     [switch]$Interactive,
 
+    [Parameter(Mandatory = $false)]
+    [string]$PipeName,
+
     [Parameter(ValueFromPipeline = $true)]
     [AllowEmptyString()]
     [string[]]$InputObject
@@ -15,7 +18,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$pipeName = 'SolomonDarkModLoader_LuaExec'
+if ([string]::IsNullOrWhiteSpace($PipeName)) {
+    $PipeName = [Environment]::GetEnvironmentVariable('SDMOD_LUA_EXEC_PIPE_NAME', 'Process')
+}
+if ([string]::IsNullOrWhiteSpace($PipeName)) {
+    $PipeName = 'SolomonDarkModLoader_LuaExec'
+}
+if ($PipeName.StartsWith('\\.\pipe\', [System.StringComparison]::OrdinalIgnoreCase)) {
+    $PipeName = $PipeName.Substring('\\.\pipe\'.Length)
+}
+$pipeName = $PipeName
 $utf8 = [System.Text.UTF8Encoding]::new($false)
 
 function Test-SolomonDarkRunning {

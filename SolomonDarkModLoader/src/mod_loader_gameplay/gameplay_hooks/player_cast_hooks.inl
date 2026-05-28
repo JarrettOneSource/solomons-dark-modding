@@ -188,7 +188,9 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
             binding != nullptr &&
             (IsGameplaySlotWizardKind(binding->kind) ||
              IsStandaloneWizardKind(binding->kind))) {
-            log_this = true;
+            log_this =
+                binding->ongoing_cast.startup_in_progress ||
+                kEnableWizardBotHotPathDiagnostics;
             bot_id = binding->bot_id;
             startup = binding->ongoing_cast.startup_in_progress;
             standalone_dispatch_actor = IsStandaloneWizardKind(binding->kind);

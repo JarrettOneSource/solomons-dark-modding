@@ -24,6 +24,7 @@ struct ParticipantEntityBinding {
     std::uint64_t bot_id = 0;
     multiplayer::MultiplayerCharacterProfile character_profile;
     multiplayer::ParticipantSceneIntent scene_intent;
+    multiplayer::ParticipantControllerKind controller_kind = multiplayer::ParticipantControllerKind::LuaBrain;
     uintptr_t actor_address = 0;
     int gameplay_slot = -1;
     Kind kind = Kind::PlaceholderEnemy;
@@ -68,6 +69,12 @@ struct ParticipantEntityBinding {
     uintptr_t standalone_equip_inner_address = 0;
     bool gameplay_attach_applied = false;
     bool raw_allocation = false;
+    bool replicated_transform_valid = false;
+    float replicated_target_x = 0.0f;
+    float replicated_target_y = 0.0f;
+    float replicated_target_heading = 0.0f;
+    std::uint64_t replicated_transform_packet_ms = 0;
+    std::uint64_t replicated_transform_playback_ms = 0;
     // "Currently facing" heading pinned across ticks. Sources: movement step
     // and cast dispatch each write this when they fire. Last setter wins, and
     // within a single tick cast is processed after movement so it takes

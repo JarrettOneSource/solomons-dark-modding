@@ -303,6 +303,10 @@ MANA_PREPARED_RE = re.compile(
     r"mana prepared\. bot_id=(\d+) skill_id=(-?\d+) kind=([a-z_]+) "
     r"progression_level=(\d+) cost=([0-9.+\\-eE]+).*?progression_runtime=(0x[0-9A-Fa-f]+)"
 )
+NATIVE_MANA_DELTA_RE = re.compile(
+    r"native mana delta owner context\. bot_id=(\d+) actor=(0x[0-9A-Fa-f]+) "
+    r"gameplay_slot=(-?\d+) delta=([-0-9.+eE]+) allow_prompt=(\d+).*"
+)
 MANA_REJECTED_RE = re.compile(
     r"(?:cast rejected for mana|mana rejected)\. bot_id=(\d+) skill_id=(-?\d+) .*?mode=([a-z_]+) .*"
 )
@@ -561,6 +565,7 @@ def build_native_spell_stat_validation(
     earth_spawn_matches: list[dict[str, object]] = []
     mana_spent_matches: list[dict[str, object]] = []
     mana_prepared_matches: list[dict[str, object]] = []
+    native_mana_delta_matches: list[dict[str, object]] = []
     mana_rejected_matches: list[dict[str, object]] = []
     for line in log_lines:
         loadout_match = LOADOUT_RE.search(line)
@@ -684,6 +689,12 @@ def build_native_spell_stat_validation(
                     "projected_damage": parse_log_float(line, "projected_damage"),
                     "projected_release_damage": parse_log_float(line, "projected_release_damage"),
                     "projected_hp_damage": parse_log_float(line, "projected_hp_damage"),
+                    "requested_target_actor": parse_cast_startup_value(line, "requested_target_actor"),
+                    "requested_target_health": parse_cast_startup_value(line, "requested_target_health"),
+                    "requested_target_health_kind": parse_log_word(line, "requested_target_health_kind"),
+                    "requested_target_health_readable": parse_cast_startup_value(line, "requested_target_health_readable"),
+                    "requested_target_hp": parse_log_float(line, "requested_target_hp"),
+                    "requested_target_max_hp": parse_log_float(line, "requested_target_max_hp"),
                     "target_actor": parse_cast_startup_value(line, "target_actor"),
                     "target_health": parse_cast_startup_value(line, "target_health"),
                     "target_health_kind": parse_log_word(line, "target_health_kind"),
@@ -699,6 +710,10 @@ def build_native_spell_stat_validation(
                     "projection_target_in_impact": parse_cast_startup_value(line, "projection_target_in_impact"),
                     "release_charge_write": parse_cast_startup_value(line, "release_charge_write"),
                     "release_charge_hold": parse_cast_startup_value(line, "release_charge_hold"),
+                    "release_damage_hold": parse_cast_startup_value(line, "release_damage_hold"),
+                    "release_base_damage_hold": parse_cast_startup_value(line, "release_base_damage_hold"),
+                    "release_scaled_base_damage": parse_log_float(line, "release_scaled_base_damage"),
+                    "release_damage_output_scale_hold": parse_log_float(line, "release_damage_output_scale_hold"),
                     "release_growth_stop": parse_cast_startup_value(line, "release_growth_stop"),
                     "release_growth_stop_eligible": parse_cast_startup_value(line, "release_growth_stop_eligible"),
                     "release_growth_stop_min_charge": parse_log_float(line, "release_growth_stop_min_charge"),
@@ -719,6 +734,7 @@ def build_native_spell_stat_validation(
                     "group_after": parse_cast_startup_value(line, "group_after"),
                     "cleanup_requested": parse_cast_startup_value(line, "cleanup_requested"),
                     "cleanup_actor_handle_live": parse_cast_startup_value(line, "cleanup_actor_handle_live"),
+                    "cleanup_invoked": parse_cast_startup_value(line, "cleanup_invoked"),
                     "handle_source": parse_log_word(line, "handle_source"),
                     "selection_state": parse_cast_startup_value(line, "selection_state"),
                     "obj_ptr": parse_cast_startup_value(line, "obj_ptr"),
@@ -779,6 +795,18 @@ def build_native_spell_stat_validation(
                     "progression_level": parse_int_text(mana_prepared_match.group(4)),
                     "cost": float(mana_prepared_match.group(5)),
                     "progression_runtime": parse_int_text(mana_prepared_match.group(6)),
+                }
+            )
+        native_mana_delta_match = NATIVE_MANA_DELTA_RE.search(line)
+        if native_mana_delta_match and parse_int_text(native_mana_delta_match.group(1)) == bot_id:
+            native_mana_delta_matches.append(
+                {
+                    "line": line,
+                    "bot_id": parse_int_text(native_mana_delta_match.group(1)),
+                    "actor": parse_int_text(native_mana_delta_match.group(2)),
+                    "gameplay_slot": parse_int_text(native_mana_delta_match.group(3)),
+                    "delta": float(native_mana_delta_match.group(4)),
+                    "allow_prompt": parse_int_text(native_mana_delta_match.group(5)),
                 }
             )
         mana_rejected_match = MANA_REJECTED_RE.search(line)
@@ -946,7 +974,22 @@ def build_native_spell_stat_validation(
         ),
         None,
     )
-    native_mana_accounted = matching_mana_spend is not None
+    matching_native_mana_delta = next(
+        (
+            item
+            for item in reversed(native_mana_delta_matches)
+            if float(item["delta"]) < 0.0
+        ),
+        None,
+    )
+    native_mana_accounted = (
+        matching_mana_spend is not None
+        or (
+            expected_mana_mode == "per_second"
+            and matching_mana_prepared is not None
+            and matching_native_mana_delta is not None
+        )
+    )
 
     checks = {
         "profile_element_matches": profile["element_id"] == config["element_id"],
@@ -985,6 +1028,7 @@ def build_native_spell_stat_validation(
         "matching_dispatch": matching_dispatch,
         "matching_mana_prepared": matching_mana_prepared,
         "matching_mana_spend": matching_mana_spend,
+        "matching_native_mana_delta": matching_native_mana_delta,
         "native_projectile_spawn_validation": native_projectile_spawn_validation,
         "loadout_log_count": len(loadout_matches),
         "prepped_log_count": len(prepped_matches),
@@ -995,6 +1039,7 @@ def build_native_spell_stat_validation(
         "earth_spawn_log_count": len(earth_spawn_matches),
         "mana_prepared_log_count": len(mana_prepared_matches),
         "mana_spent_log_count": len(mana_spent_matches),
+        "native_mana_delta_log_count": len(native_mana_delta_matches),
         "mana_rejected_log_count": len(mana_rejected_matches),
     }
 
@@ -2375,11 +2420,11 @@ def prepare_clean_run(player_element: str, discipline: str) -> dict[str, object]
     for attempt in range(3):
         csp.stop_game()
         csp.clear_loader_log()
-        csp.launch_game()
-        process_id = csp.wait_for_game_process(timeout_s=45.0)
-        csp.wait_for_lua_pipe(timeout_s=60.0)
-        early_tick_gate = crc.set_lua_tick_enabled(False)
         try:
+            csp.launch_game()
+            process_id = csp.wait_for_game_process(timeout_s=45.0)
+            csp.wait_for_lua_pipe(timeout_s=60.0)
+            early_tick_gate = crc.set_lua_tick_enabled(False)
             hub_flow = csp.drive_hub_flow(
                 process_id,
                 element=player_element,
@@ -2561,10 +2606,8 @@ def effective_controlled_cast_aim_position(
 
 
 def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, object]:
-    config = element_config(element)
     result: dict[str, object] = {
         "element": element,
-        "element_config": config,
         "ok": False,
         "navigation": {},
         "casts": [],
@@ -2598,6 +2641,8 @@ def run_element_probe(element: str, args: argparse.Namespace) -> dict[str, objec
                 "use --trace-profile safe_entry or pass --allow-unstable-inline-traces explicitly"
         )
         result["navigation"] = prepare_clean_run(args.player_element, args.discipline)
+        config = element_config(element)
+        result["element_config"] = config
         player = csp.query_player_state()
         planned_bot_x = float(args.bot_x)
         planned_bot_y = float(args.bot_y)

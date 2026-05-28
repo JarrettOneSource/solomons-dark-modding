@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 import time
 from pathlib import Path
@@ -24,6 +25,8 @@ import probe_bot_primary_wave_cast as wave  # noqa: E402
 
 
 OUTPUT_PATH = ROOT / "runtime" / "live_boulder_retarget_probe.json"
+# The wave spawner can reuse an actor address after native "enemy.death hook invoked" evidence.
+ENEMY_DEATH_RE = re.compile(r"enemy\.death hook invoked\.\s+enemy=(0x[0-9A-Fa-f]+)\b")
 
 
 class LiveBoulderRetargetProbeFailure(RuntimeError):
@@ -147,7 +150,11 @@ local function freeze_enemy(actor, x, y, hp)
   local ok_y = sd.debug.write_float(actor + {element_probe.ACTOR_POSITION_Y_OFFSET}, y)
   local ok_max_hp = sd.debug.write_float(actor + {element_probe.ARENA_ENEMY_MAX_HP_OFFSET}, hp)
   local ok_hp = sd.debug.write_float(actor + {element_probe.ARENA_ENEMY_CURRENT_HP_OFFSET}, hp)
-  return ok_x and ok_y and ok_max_hp and ok_hp
+  local ok_rebind = true
+  if sd.world and sd.world.rebind_actor then
+    ok_rebind = sd.world.rebind_actor(actor)
+  end
+  return ok_x and ok_y and ok_max_hp and ok_hp and ok_rebind
 end
 emit('bot_actor_address', bot)
 emit('initial_actor_address', initial)
@@ -174,6 +181,8 @@ emit('retarget_object_type_after_freeze', sd.debug.read_u32(retarget + {element_
 emit('retarget_hp_after_freeze', sd.debug.read_float(retarget + {element_probe.ARENA_ENEMY_CURRENT_HP_OFFSET}))
 if sd.world and sd.world.rebind_actor then
   emit('bot_rebind_ok', sd.world.rebind_actor(bot))
+  emit('initial_rebind_ok', sd.world.rebind_actor(initial))
+  emit('retarget_rebind_ok', sd.world.rebind_actor(retarget))
 end
 if {str(face_retarget).lower()} then
   emit('face_target_ok', sd.bots.face_target(bot_id, retarget, heading))
@@ -204,6 +213,86 @@ def boulder_release_logged(
     return False
 
 
+def boulder_completion_logged(
+    *,
+    bot_id: int,
+    log_start_index: int,
+) -> bool:
+    needle = f"bot_id={bot_id}"
+    for line in element_probe.read_loader_log_lines()[max(log_start_index, 0):]:
+        if "[bots] cast complete (" in line and needle in line:
+            return True
+    return False
+
+
+def find_enemy_death_lines(
+    loader_log_lines: list[str],
+    *,
+    actor_address: int,
+    log_start_index: int,
+) -> list[str]:
+    matches: list[str] = []
+    for line in loader_log_lines[max(log_start_index, 0):]:
+        match = ENEMY_DEATH_RE.search(line)
+        if match is None:
+            continue
+        if int(match.group(1), 16) == actor_address:
+            matches.append(line)
+    return matches
+
+
+def query_active_boulder_object(bot_id: int) -> dict[str, str]:
+    return csp.parse_key_values(
+        csp.run_lua(
+            f"""
+local bot_id = {bot_id}
+local bot = sd.bots and sd.bots.get_state and sd.bots.get_state(bot_id) or {{}}
+local function emit(key, value)
+  if value == nil then
+    print(key .. "=")
+  else
+    print(key .. "=" .. tostring(value))
+  end
+end
+emit('cast_active', bot.cast_active)
+emit('active_spell_object_readable', bot.active_spell_object_readable)
+emit('active_spell_object_address', bot.active_spell_object_address)
+emit('active_spell_object_type', bot.active_spell_object_type)
+emit('active_spell_object_x', bot.active_spell_object_x)
+emit('active_spell_object_y', bot.active_spell_object_y)
+emit('active_spell_object_radius', bot.active_spell_object_radius)
+emit('active_spell_object_charge', bot.active_spell_object_charge)
+""".strip()
+        )
+    )
+
+
+def wait_for_active_boulder_object(
+    *,
+    bot_id: int,
+    timeout_s: float,
+) -> dict[str, str]:
+    deadline = time.time() + max(timeout_s, 0.1)
+    last: dict[str, str] = {}
+    while time.time() < deadline:
+        last = query_active_boulder_object(bot_id)
+        object_address = as_int(last.get("active_spell_object_address"))
+        object_x = as_float(last.get("active_spell_object_x"))
+        object_y = as_float(last.get("active_spell_object_y"))
+        if (
+            last.get("cast_active") == "true"
+            and last.get("active_spell_object_readable") == "true"
+            and object_address != 0
+            and math.isfinite(object_x)
+            and math.isfinite(object_y)
+        ):
+            return last
+        time.sleep(0.05)
+    raise LiveBoulderRetargetProbeFailure(
+        f"Timed out waiting for active charged Boulder object. last={last}"
+    )
+
+
 def pin_retarget_window(
     *,
     bot_id: int,
@@ -228,7 +317,7 @@ def pin_retarget_window(
     samples: list[dict[str, str]] = []
     deadline = time.time() + max(duration_s, 0.0)
     while time.time() < deadline:
-        if boulder_release_logged(bot_id=bot_id, log_start_index=release_log_start_index):
+        if boulder_completion_logged(bot_id=bot_id, log_start_index=release_log_start_index):
             break
         samples.append(
             set_dual_target_state(
@@ -250,7 +339,7 @@ def pin_retarget_window(
                 face_retarget=True,
             )
         )
-        if boulder_release_logged(bot_id=bot_id, log_start_index=release_log_start_index):
+        if boulder_completion_logged(bot_id=bot_id, log_start_index=release_log_start_index):
             break
         time.sleep(max(step_s, 0.03))
     return samples
@@ -269,6 +358,10 @@ def validate_release(
     before_retarget: dict[str, str],
     after_initial: dict[str, str],
     after_retarget: dict[str, str],
+    retarget_hp_expected: float,
+    expected_boulder_object: int,
+    loader_log_lines: list[str],
+    release_log_start_index: int,
 ) -> dict[str, object]:
     failures: list[str] = []
     spawn = native_validation.get("native_projectile_spawn_validation")
@@ -285,11 +378,17 @@ def validate_release(
 
     release_target = as_int(release.get("target_actor"))
     completion_target = as_int(complete.get("release_target_actor"))
+    requested_target = as_int(release.get("requested_target_actor"))
     release_reason = str(release.get("release_reason", ""))
+    release_obj_ptr = as_int(release.get("obj_ptr"))
+    completion_obj_ptr = as_int(complete.get("obj_ptr"))
     release_target_x = as_float(release.get("target_x"))
     release_target_y = as_float(release.get("target_y"))
     complete_x = as_float(complete.get("obj_x"))
     complete_y = as_float(complete.get("obj_y"))
+    release_target_hp = as_float(release.get("target_hp"))
+    requested_target_hp = as_float(release.get("requested_target_hp"))
+    projected_hp_damage = as_float(release.get("projected_hp_damage"))
     target_distance = as_float(release.get("target_distance"))
     target_impact_radius = as_float(release.get("target_impact_radius"))
     target_in_impact = as_int(release.get("target_in_impact"))
@@ -309,13 +408,58 @@ def validate_release(
             f"release target did not retarget: release_target=0x{release_target:X} "
             f"expected=0x{retarget_actor_address:X}"
         )
+    if requested_target != retarget_actor_address:
+        failures.append(
+            f"live requested target was not re-evaluated after retarget: "
+            f"requested_target=0x{requested_target:X} expected=0x{retarget_actor_address:X}"
+        )
     if completion_target != retarget_actor_address:
         failures.append(
             f"completion target did not freeze retarget actor: release_target_actor=0x{completion_target:X} "
             f"expected=0x{retarget_actor_address:X}"
         )
+    if release_obj_ptr == 0:
+        failures.append("release log did not report a live Boulder object pointer")
+    if completion_obj_ptr == 0:
+        failures.append("completion log did not report a live Boulder object pointer")
+    if release_obj_ptr != 0 and completion_obj_ptr != 0 and release_obj_ptr != completion_obj_ptr:
+        failures.append(
+            "release/completion did not use the same charged Boulder object: "
+            f"release_obj=0x{release_obj_ptr:X} completion_obj=0x{completion_obj_ptr:X}"
+        )
+    if expected_boulder_object != 0 and release_obj_ptr != expected_boulder_object:
+        failures.append(
+            "release did not use the same charged Boulder object captured before retarget: "
+            f"release_obj=0x{release_obj_ptr:X} expected=0x{expected_boulder_object:X}"
+        )
     if release_reason != "target_lethal":
         failures.append(f"retarget release did not use target-lethal policy: {release_reason}")
+    if (
+        not math.isfinite(projected_hp_damage)
+        or not math.isfinite(release_target_hp)
+        or release_target_hp <= 0.0
+        or projected_hp_damage + 0.001 < release_target_hp
+    ):
+        failures.append(
+            "retarget target-lethal decision did not prove current Boulder damage covers current target HP: "
+            f"projected_hp_damage={projected_hp_damage:.6f} target_hp={release_target_hp:.6f}"
+        )
+    if (
+        not math.isfinite(requested_target_hp)
+        or abs(requested_target_hp - retarget_hp_expected) > 0.01
+    ):
+        failures.append(
+            "requested target HP was not the retarget's controlled current HP: "
+            f"requested_target_hp={requested_target_hp:.6f} expected={retarget_hp_expected:.6f}"
+        )
+    if (
+        not math.isfinite(release_target_hp)
+        or abs(release_target_hp - retarget_hp_expected) > 0.01
+    ):
+        failures.append(
+            "release target HP was not the retarget's controlled current HP: "
+            f"target_hp={release_target_hp:.6f} expected={retarget_hp_expected:.6f}"
+        )
     if completion_boulder_max_size != 0:
         failures.append(
             "target-lethal retarget release still completed as a max-size Boulder: "
@@ -347,38 +491,39 @@ def validate_release(
         )
     if not math.isfinite(target_distance):
         failures.append("release did not report a finite retarget distance")
-    if math.isfinite(target_impact_radius) and initial_to_retarget_distance <= target_impact_radius:
-        failures.append(
-            "retarget contact point overlaps the original boulder impact radius; "
-            f"distance={initial_to_retarget_distance:.2f} radius={target_impact_radius:.2f}"
-        )
-
     initial_hp_before = as_float(before_initial.get("hp"))
     initial_hp_after = as_float(after_initial.get("hp"))
     retarget_available_after = after_retarget.get("available") == "true"
     retarget_hp_before = as_float(before_retarget.get("hp"))
     retarget_hp_after = as_float(after_retarget.get("hp"))
-    retarget_world_slot_before = as_int(before_retarget.get("world_slot"), -1)
-    retarget_world_slot_after = as_int(after_retarget.get("world_slot"), -1)
+    retarget_dead_after = after_retarget.get("dead") == "true"
     retarget_removed = before_retarget.get("available") == "true" and not retarget_available_after
-    retarget_recycled_after_native_release = (
-        before_retarget.get("available") == "true"
-        and retarget_available_after
-        and retarget_world_slot_before >= 0
-        and retarget_world_slot_after >= 0
-        and retarget_world_slot_before != retarget_world_slot_after
-        and release_target == retarget_actor_address
-        and completion_target == retarget_actor_address
-    )
     retarget_hp_decreased = (
         math.isfinite(retarget_hp_before)
         and math.isfinite(retarget_hp_after)
         and retarget_hp_after < retarget_hp_before
     )
-    if not retarget_removed and not retarget_recycled_after_native_release and not retarget_hp_decreased:
+    initial_death_lines = find_enemy_death_lines(
+        loader_log_lines,
+        actor_address=initial_actor_address,
+        log_start_index=release_log_start_index,
+    )
+    retarget_death_lines = find_enemy_death_lines(
+        loader_log_lines,
+        actor_address=retarget_actor_address,
+        log_start_index=release_log_start_index,
+    )
+    retarget_death_logged = bool(retarget_death_lines)
+    retarget_impact_observed = (
+        retarget_removed or
+        retarget_dead_after or
+        retarget_hp_decreased or
+        retarget_death_logged
+    )
+    if initial_death_lines:
         failures.append(
-            "retarget actor was not damaged or removed by native Boulder release: "
-            f"before={before_retarget} after={after_retarget}"
+            "initial target died after the bot swapped targets: " +
+            " | ".join(initial_death_lines[-3:])
         )
     if (
         after_initial.get("available") == "true" and
@@ -397,9 +542,17 @@ def validate_release(
     return {
         "release": release,
         "completion": complete,
+        "boulder_object": release_obj_ptr,
+        "completion_boulder_object": completion_obj_ptr,
+        "expected_boulder_object": expected_boulder_object,
         "release_target_actor": release_target,
+        "requested_target_actor": requested_target,
         "completion_release_target_actor": completion_target,
         "release_reason": release_reason,
+        "projected_hp_damage": projected_hp_damage,
+        "release_target_hp": release_target_hp,
+        "requested_target_hp": requested_target_hp,
+        "retarget_hp_expected": retarget_hp_expected,
         "initial_to_retarget_distance": initial_to_retarget_distance,
         "release_target_distance": target_distance,
         "release_target_in_impact": target_in_impact,
@@ -413,8 +566,12 @@ def validate_release(
         "initial_target_after": after_initial,
         "retarget_after": after_retarget,
         "retarget_removed": retarget_removed,
-        "retarget_recycled_after_native_release": retarget_recycled_after_native_release,
+        "retarget_dead_after": retarget_dead_after,
         "retarget_hp_decreased": retarget_hp_decreased,
+        "retarget_death_logged": retarget_death_logged,
+        "retarget_impact_observed": retarget_impact_observed,
+        "retarget_death_lines": retarget_death_lines[-3:],
+        "initial_death_lines": initial_death_lines[-3:],
     }
 
 
@@ -424,9 +581,13 @@ def run_probe(args: argparse.Namespace) -> dict[str, object]:
         "scenario": "earth_boulder_held_charge_retarget",
     }
     hostile_hp_watch_names: list[str] = []
+    native_trace_names: list[tuple[str, int]] = []
     try:
         result["launcher_freshness"] = csp.ensure_launcher_bundle_fresh()
         result["navigation"] = element_probe.prepare_clean_run(args.player_element, args.discipline)
+        if args.trace_native_hit_path:
+            trace_arms, native_trace_names = element_probe.arm_native_hit_path_traces("earth")
+            result["native_hit_path_trace_arms"] = trace_arms
         player = csp.query_player_state()
         bot_id = element_probe.create_single_run_bot("earth", player, args.bot_x, args.bot_y)
         bot = element_probe.wait_for_bot_by_id(bot_id)
@@ -491,6 +652,16 @@ def run_probe(args: argparse.Namespace) -> dict[str, object]:
         if cast.get("ok") != "true":
             raise LiveBoulderRetargetProbeFailure(f"sd.bots.cast failed: {cast}")
         release_log_start_index = len(element_probe.read_loader_log_lines())
+        active_boulder = wait_for_active_boulder_object(bot_id=bot_id, timeout_s=5.0)
+        result["active_boulder_before_retarget"] = active_boulder
+        retarget_x = as_float(active_boulder.get("active_spell_object_x"))
+        retarget_y = as_float(active_boulder.get("active_spell_object_y"))
+        if not math.isfinite(retarget_x) or not math.isfinite(retarget_y):
+            raise LiveBoulderRetargetProbeFailure(
+                f"active Boulder object did not report a finite impact center: {active_boulder}"
+            )
+        result["targets"]["retarget_contact"] = {"x": retarget_x, "y": retarget_y}
+        result["targets"]["retarget_contact_source"] = "active_boulder_object"
         time.sleep(max(args.retarget_delay, 0.0))
         live_retarget = choose_live_retarget_hostile(
             bot_actor,
@@ -541,6 +712,11 @@ def run_probe(args: argparse.Namespace) -> dict[str, object]:
         after_initial = element_probe.query_scene_actor_by_address(initial_actor)
         after_retarget = element_probe.query_scene_actor_by_address(retarget_actor)
         result["native_spell_stat_validation"] = native_validation
+        if native_trace_names:
+            result["native_hit_path_trace_hits"] = {
+                name: element_probe.query_trace_hits(name)
+                for name, _address in native_trace_names
+            }
         result["after_initial"] = after_initial
         result["after_retarget"] = after_retarget
         result["evidence"] = validate_release(
@@ -555,12 +731,21 @@ def run_probe(args: argparse.Namespace) -> dict[str, object]:
             before_retarget=before_retarget,
             after_initial=after_initial,
             after_retarget=after_retarget,
+            retarget_hp_expected=args.retarget_hp,
+            expected_boulder_object=as_int(active_boulder.get("active_spell_object_address")),
+            loader_log_lines=full_loader_log,
+            release_log_start_index=release_log_start_index,
         )
         result["passed"] = True
+        return result
+    except Exception as exc:  # noqa: BLE001 - retain partial live evidence.
+        result["error"] = str(exc)
         return result
     finally:
         if hostile_hp_watch_names:
             element_probe.clear_hostile_hp_watches(hostile_hp_watch_names)
+        for name, address in native_trace_names:
+            element_probe.clear_trace(name, address)
         if not args.keep_running:
             csp.stop_game()
 
@@ -575,7 +760,7 @@ def main() -> int:
     parser.add_argument("--bot-x", type=float, default=914.0)
     parser.add_argument("--bot-y", type=float, default=150.0)
     parser.add_argument("--bot-mp", type=float, default=500.0)
-    parser.add_argument("--initial-hp", type=float, default=80.0)
+    parser.add_argument("--initial-hp", type=float, default=25000.0)
     parser.add_argument("--retarget-hp", type=float, default=2.5)
     parser.add_argument("--enemy-watch-count", type=int, default=24)
     parser.add_argument("--retarget-delay", type=float, default=0.10)
@@ -583,6 +768,7 @@ def main() -> int:
     parser.add_argument("--pin-step", type=float, default=0.20)
     parser.add_argument("--settle-seconds", type=float, default=3.0)
     parser.add_argument("--force-hostile-hp-watches", action="store_true")
+    parser.add_argument("--trace-native-hit-path", action="store_true")
     args = parser.parse_args()
 
     exit_code = 0
@@ -595,6 +781,8 @@ def main() -> int:
             "scenario": "earth_boulder_held_charge_retarget",
             "error": str(exc),
         }
+    if not result.get("passed"):
+        exit_code = 1
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")

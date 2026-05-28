@@ -231,25 +231,27 @@ bool SetEquipVisualLaneObject(
         }
         return false;
     }
-    std::ostringstream before_out;
-    before_out << "[bots] equip_attach before label=" << label
-               << " actor=" << HexString(actor_address)
-               << " holder=" << HexString(lane.holder_address)
-               << " object_before=" << HexString(holder_object_before)
-               << " object_new=" << HexString(object_address);
-    if (holder_object_before != 0) {
-        AppendAttachmentObjectDebugSummary(
-            &before_out,
-            "holder_object_before",
-            holder_object_before);
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        std::ostringstream before_out;
+        before_out << "[bots] equip_attach before label=" << label
+                   << " actor=" << HexString(actor_address)
+                   << " holder=" << HexString(lane.holder_address)
+                   << " object_before=" << HexString(holder_object_before)
+                   << " object_new=" << HexString(object_address);
+        if (holder_object_before != 0) {
+            AppendAttachmentObjectDebugSummary(
+                &before_out,
+                "holder_object_before",
+                holder_object_before);
+        }
+        if (object_address != 0) {
+            AppendAttachmentObjectDebugSummary(
+                &before_out,
+                "object_new_state",
+                object_address);
+        }
+        Log(before_out.str());
     }
-    if (object_address != 0) {
-        AppendAttachmentObjectDebugSummary(
-            &before_out,
-            "object_new_state",
-            object_address);
-    }
-    Log(before_out.str());
 
     DWORD exception_code = 0;
     if (!CallStandaloneWizardVisualLinkAttachSafe(
@@ -277,18 +279,20 @@ bool SetEquipVisualLaneObject(
         }
         return false;
     }
-    std::ostringstream after_out;
-    after_out << "[bots] equip_attach after label=" << label
-              << " actor=" << HexString(actor_address)
-              << " holder=" << HexString(lane.holder_address)
-              << " object_after=" << HexString(holder_object_after);
-    if (holder_object_after != 0) {
-        AppendAttachmentObjectDebugSummary(
-            &after_out,
-            "holder_object_after",
-            holder_object_after);
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        std::ostringstream after_out;
+        after_out << "[bots] equip_attach after label=" << label
+                  << " actor=" << HexString(actor_address)
+                  << " holder=" << HexString(lane.holder_address)
+                  << " object_after=" << HexString(holder_object_after);
+        if (holder_object_after != 0) {
+            AppendAttachmentObjectDebugSummary(
+                &after_out,
+                "holder_object_after",
+                holder_object_after);
+        }
+        Log(after_out.str());
     }
-    Log(after_out.str());
 
     return true;
 }

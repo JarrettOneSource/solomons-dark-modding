@@ -83,6 +83,9 @@ function scene_module.install(ctx)
     end
 
     local kind = normalize_scene_kind(scene_intent.kind)
+    if kind == "shared_hub" or kind == "run" then
+      return kind .. "::"
+    end
     local region_index = scene_intent.region_index
     local region_type_id = scene_intent.region_type_id
     return table.concat({

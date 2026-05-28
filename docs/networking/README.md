@@ -11,6 +11,11 @@ promise.
 
 One player hosts a normal Solomon's Dark session and becomes the authoritative world. Every other player sends movement and gameplay intents to the host; the host broadcasts authoritative player / enemy / drop / run state at ~20 Hz plus reliable gameplay events (cast, damage, pickup, wave transition). Clients render their own input immediately for responsiveness and hard-snap when the host disagrees. Multiplayer mode disables the dev/debug mutation backdoors and refuses mismatched mod sets so peers cannot silently diverge. No rollback, no serious anti-cheat, no dedicated server, no persistent-world machinery in the first ship — just one trusted-host Steam session that keeps everyone in the same fight and the same run.
 
+The implementation direction is client-predicted / authority-verified: clients
+perform local movement and presentation immediately, then the host or dedicated
+authority accepts, corrects, or rejects the claim. Clients never own canonical
+HP, deaths, drops, XP, or wave state.
+
 ## Implementation boundary
 
 The current source has the multiplayer foundation and participant rail, not a
@@ -20,12 +25,19 @@ finished peer networking layer.
   `MultiplayerCharacterProfile`, `ParticipantSceneIntent`, and runtime snapshot
   model used by Lua bots and future remote participants.
 - `multiplayer_service_loop.cpp` pumps Steam bootstrap/callback state every
-  50 ms and mirrors readiness into runtime state. It does not yet own peer
-  sessions, packet IO, or replication.
+  50 ms and mirrors readiness into runtime state. It also pumps the local UDP
+  development transport when `SDMOD_MULTIPLAYER_TRANSPORT=local_udp`.
 - `multiplayer_runtime_protocol.h` is a fixed-packet scaffold with
   `State`, `Launch`, `Cast`, and `Progression` packets. The packet families
   below describe the target co-op protocol, not what the current header fully
   implements.
+- `multiplayer_local_transport.cpp` is the first replication slice: two local
+  processes exchange `StatePacket` movement/heading snapshots over UDP and
+  materialize the peer as `RemoteParticipant + Native`. Existing remote players
+  use tick-level transform playback from the latest runtime snapshot; the
+  gameplay sync queue is only for materialization/rematerialization, not
+  continuous pose updates. This is a development transport, not the final Steam
+  P2P backend.
 - `docs/multiplayer-participant-model.md` is the implementation-facing model
   for profiles, scene intent, Lua bots, and future remote players.
 
@@ -35,6 +47,7 @@ finished peer networking layer.
 |---|---|
 | Authority | Host-authoritative-lite. Clients render local echo; hard-snap on host disagreement. |
 | Transport | `ISteamNetworkingSockets` + Steam Datagram Relay (SDR) only in v1. |
+| Local dev transport | UDP loopback can be enabled with `SDMOD_MULTIPLAYER_TRANSPORT=local_udp` so two local stage instances can test connection and pose sync without two Steam accounts. |
 | Off-Steam transport | **Not in v1.** GameNetworkingSockets / ENet / direct-IP deferred. |
 | Dedicated server | **Not in v1.** P2P-host only for first ship. |
 | Identity | Connection-bound. Host ignores client-declared player / actor IDs. |
@@ -74,6 +87,9 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 **Unreliable channel**
 - `input` — per-client input w/ sequence number
 - `snapshot-delta` — variable-size entity state burst, carrying `last_processed_input_seq` per receiving client
+- `state` — current fixed-packet development snapshot for local UDP movement /
+  heading tests. Carries network `participant_id`, profile/loadout summary,
+  vitals, position, and heading.
 
 **Explicitly not in v1:** `clock-sync`, `save-provenance`, input-replay-for-rollback.
 
@@ -105,6 +121,16 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 
 ### Phase 1 — P2P host MVP
 
+- Local UDP two-process development harness:
+  `scripts/Launch-LocalMultiplayerPair.ps1` launches `local-mp-host` and
+  `local-mp-client` with separate runtime/stage roots and ports `47770/47771`.
+  This validates participant connection plus movement/heading materialization
+  without Steam identity constraints. The harness assigns
+  `SDMOD_MULTIPLAYER_PLAYER_NAME` and unique `SDMOD_LUA_EXEC_PIPE_NAME` values
+  so both copies can be probed without colliding on the default Lua exec pipe.
+  `tools/verify_local_multiplayer_sync.py` is the live smoke test for hub/run
+  participant visibility, idle movement/heading convergence, player/player
+  collision push, and remote nameplate resolution.
 - `ITransport` abstraction + Steam `ISteamNetworkingSockets` impl
 - Steam lobby → transport handoff
 - `hello` + `manifest` handshake + `join/bootstrap` (chunked full-state)

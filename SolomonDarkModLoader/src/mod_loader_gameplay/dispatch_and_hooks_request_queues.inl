@@ -38,13 +38,15 @@ bool QueueParticipantSyncRequest(const PendingParticipantEntitySyncRequest& requ
     std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
     if (FindPendingParticipantSyncRequest(immediate_request.bot_id) != nullptr) {
         UpsertPendingParticipantSyncRequest(immediate_request);
-        Log(
-            "[bots] queued sync update bot_id=" + std::to_string(immediate_request.bot_id) +
-            " element_id=" + std::to_string(immediate_request.character_profile.element_id) +
-            " has_transform=" + std::to_string(immediate_request.has_transform ? 1 : 0) +
-            " x=" + std::to_string(immediate_request.x) +
-            " y=" + std::to_string(immediate_request.y) +
-            " heading=" + std::to_string(immediate_request.heading));
+        if constexpr (kEnableWizardBotHotPathDiagnostics) {
+            Log(
+                "[bots] queued sync update bot_id=" + std::to_string(immediate_request.bot_id) +
+                " element_id=" + std::to_string(immediate_request.character_profile.element_id) +
+                " has_transform=" + std::to_string(immediate_request.has_transform ? 1 : 0) +
+                " x=" + std::to_string(immediate_request.x) +
+                " y=" + std::to_string(immediate_request.y) +
+                " heading=" + std::to_string(immediate_request.heading));
+        }
         return true;
     }
 

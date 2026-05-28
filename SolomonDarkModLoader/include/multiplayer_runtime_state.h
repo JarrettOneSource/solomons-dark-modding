@@ -105,6 +105,7 @@ enum class SessionStatus {
 enum class SessionTransportKind {
     None,
     Steam,
+    LocalUdp,
 };
 
 struct RuntimeState {

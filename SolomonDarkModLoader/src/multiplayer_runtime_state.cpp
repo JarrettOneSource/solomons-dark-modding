@@ -255,6 +255,8 @@ const char* SessionTransportLabel(SessionTransportKind kind) {
         return "None";
     case SessionTransportKind::Steam:
         return "Steam";
+    case SessionTransportKind::LocalUdp:
+        return "LocalUdp";
     }
 
     return "Unknown";

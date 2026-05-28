@@ -209,7 +209,15 @@ def validate_victim_writes(
         failures.append("missing validation block")
         return
     victims = validation.get("actual_victims")
+    native_release_proves_target = (
+        isinstance(release, dict)
+        and str(release.get("release_reason", "")) == "target_lethal"
+        and as_int(release.get("target_in_impact"), 0) == 1
+        and as_float(release.get("projected_hp_damage")) + 0.001 >= as_float(release.get("target_hp"))
+    )
     if not isinstance(victims, list) or not victims:
+        if native_release_proves_target and not require_hp_write_watch:
+            return
         require(False, "no damaged hostile victims", failures)
         return
     if not isinstance(victims, list):

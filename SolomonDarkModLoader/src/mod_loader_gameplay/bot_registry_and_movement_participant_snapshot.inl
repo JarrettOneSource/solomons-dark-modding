@@ -225,7 +225,7 @@ void SyncParticipantRuntimeFromGameplaySnapshot(const ParticipantGameplaySnapsho
         participant->runtime.mana_current = static_cast<std::int32_t>(snapshot.mp);
         participant->runtime.mana_max = static_cast<std::int32_t>(snapshot.max_mp);
 
-        if (!multiplayer::IsLuaControlledParticipant(*participant)) {
+        if (multiplayer::IsNativeControlledParticipant(*participant)) {
             return;
         }
 
@@ -283,7 +283,7 @@ bool TryBuildParticipantRematerializationRequest(
     }
 
     multiplayer::BotSnapshot bot_snapshot;
-    if (!multiplayer::ReadBotSnapshot(binding.bot_id, &bot_snapshot) || !bot_snapshot.available) {
+    if (!multiplayer::ReadParticipantSnapshot(binding.bot_id, &bot_snapshot) || !bot_snapshot.available) {
         return false;
     }
 

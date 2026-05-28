@@ -283,7 +283,8 @@ bool ApplyBotNativeManaReserveRecovery(
     const bool should_log =
         !invoked ||
         !reserve_after ||
-        now_ms - binding->last_mana_recovery_log_ms >= 1000;
+        (kEnableWizardBotHotPathDiagnostics &&
+            now_ms - binding->last_mana_recovery_log_ms >= 1000);
     if (should_log) {
         binding->last_mana_recovery_log_ms = now_ms;
         Log(

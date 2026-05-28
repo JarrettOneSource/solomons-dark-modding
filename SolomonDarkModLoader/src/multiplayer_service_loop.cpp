@@ -1,6 +1,7 @@
 #include "multiplayer_service_loop.h"
 
 #include "logger.h"
+#include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_state.h"
 #include "steam_bootstrap.h"
 
@@ -49,6 +50,7 @@ void ServiceThreadMain() {
         SteamBootstrapTick();
         const auto steam_snapshot = GetSteamBootstrapSnapshot();
         ApplySteamSnapshotToRuntime(now_ms, steam_snapshot);
+        TickLocalTransport(now_ms);
         const auto runtime_state = SnapshotRuntimeState();
 
         if (steam_snapshot.transport_interfaces_ready && !logged_ready) {
@@ -80,9 +82,15 @@ bool StartServiceLoop() {
         return true;
     }
 
+    if (!InitializeLocalTransport()) {
+        g_service_running.store(false, std::memory_order_release);
+        return false;
+    }
+
     g_service_stop_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     if (g_service_stop_event == nullptr) {
         g_service_running.store(false, std::memory_order_release);
+        ShutdownLocalTransport();
         Log("Multiplayer foundation: failed to create the service loop stop event.");
         return false;
     }
@@ -94,6 +102,7 @@ bool StartServiceLoop() {
         g_service_running.store(false, std::memory_order_release);
         CloseHandle(g_service_stop_event);
         g_service_stop_event = nullptr;
+        ShutdownLocalTransport();
         Log("Multiplayer foundation: failed to start the service loop thread.");
         return false;
     }
@@ -111,6 +120,7 @@ void StopServiceLoop() {
         CloseHandle(g_service_stop_event);
         g_service_stop_event = nullptr;
     }
+    ShutdownLocalTransport();
 }
 
 bool IsServiceLoopRunning() {

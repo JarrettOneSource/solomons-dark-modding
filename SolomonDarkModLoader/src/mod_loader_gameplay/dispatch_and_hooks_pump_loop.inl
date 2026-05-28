@@ -182,13 +182,15 @@ void PumpQueuedGameplayActions() {
     }
 
     if (have_participant_sync_request) {
-        Log(
-            "[bots] pump sync bot_id=" + std::to_string(participant_sync_request.bot_id) +
-            " element_id=" + std::to_string(participant_sync_request.character_profile.element_id) +
-            " has_transform=" + std::to_string(participant_sync_request.has_transform ? 1 : 0) +
-            " x=" + std::to_string(participant_sync_request.x) +
-            " y=" + std::to_string(participant_sync_request.y) +
-            " heading=" + std::to_string(participant_sync_request.heading));
+        if constexpr (kEnableWizardBotHotPathDiagnostics) {
+            Log(
+                "[bots] pump sync bot_id=" + std::to_string(participant_sync_request.bot_id) +
+                " element_id=" + std::to_string(participant_sync_request.character_profile.element_id) +
+                " has_transform=" + std::to_string(participant_sync_request.has_transform ? 1 : 0) +
+                " x=" + std::to_string(participant_sync_request.x) +
+                " y=" + std::to_string(participant_sync_request.y) +
+                " heading=" + std::to_string(participant_sync_request.heading));
+        }
         std::string error_message;
         if (!ExecuteParticipantEntitySyncNow(participant_sync_request, &error_message)) {
             participant_sync_request.next_attempt_ms = now_ms + kWizardBotSyncRetryDelayMs;

@@ -17,7 +17,9 @@
 namespace sdmod {
 namespace {
 
-constexpr wchar_t kPipeName[] = L"\\\\.\\pipe\\SolomonDarkModLoader_LuaExec";
+constexpr wchar_t kDefaultPipeName[] = L"\\\\.\\pipe\\SolomonDarkModLoader_LuaExec";
+constexpr wchar_t kPipeNamePrefix[] = L"\\\\.\\pipe\\";
+constexpr wchar_t kPipeNameEnvironmentVariable[] = L"SDMOD_LUA_EXEC_PIPE_NAME";
 constexpr DWORD kPipeBufferSize = 64 * 1024;
 constexpr DWORD kPipeReconnectDelayMs = 250;
 constexpr size_t kMaxPipeMessageSize = 1024 * 1024;
@@ -75,6 +77,82 @@ void LogPipeWin32Failure(const char* operation, DWORD error) {
 
 bool IsPipeStopRequested() {
     return g_pipe_stop_event != nullptr && WaitForSingleObject(g_pipe_stop_event, 0) == WAIT_OBJECT_0;
+}
+
+std::string WideToUtf8(const std::wstring& value) {
+    if (value.empty()) {
+        return {};
+    }
+
+    const int required = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        value.c_str(),
+        static_cast<int>(value.size()),
+        nullptr,
+        0,
+        nullptr,
+        nullptr);
+    if (required <= 0) {
+        return {};
+    }
+
+    std::string output(static_cast<size_t>(required), '\0');
+    const int written = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        value.c_str(),
+        static_cast<int>(value.size()),
+        output.data(),
+        required,
+        nullptr,
+        nullptr);
+    if (written <= 0) {
+        return {};
+    }
+    return output;
+}
+
+std::wstring ReadEnvironmentString(const wchar_t* name) {
+    if (name == nullptr || name[0] == L'\0') {
+        return {};
+    }
+
+    const DWORD required = GetEnvironmentVariableW(name, nullptr, 0);
+    if (required == 0) {
+        return {};
+    }
+
+    std::wstring value(required, L'\0');
+    const DWORD written = GetEnvironmentVariableW(name, value.data(), required);
+    if (written == 0 || written >= required) {
+        return {};
+    }
+    value.resize(written);
+    return value;
+}
+
+std::wstring ResolvePipeName() {
+    std::wstring configured = ReadEnvironmentString(kPipeNameEnvironmentVariable);
+    if (configured.empty()) {
+        return kDefaultPipeName;
+    }
+
+    if (configured.compare(0, std::wstring_view(kPipeNamePrefix).size(), kPipeNamePrefix) == 0) {
+        return configured;
+    }
+
+    for (wchar_t& ch : configured) {
+        if (ch == L'\\' || ch == L'/') {
+            ch = L'_';
+        }
+    }
+    return std::wstring(kPipeNamePrefix) + configured;
+}
+
+const std::wstring& PipeName() {
+    static const std::wstring pipe_name = ResolvePipeName();
+    return pipe_name;
 }
 
 bool BuildPipeSecurityAttributes(SECURITY_ATTRIBUTES* attributes, SECURITY_DESCRIPTOR* descriptor) {
@@ -270,7 +348,7 @@ void NudgePipeServerForShutdown() {
     }
 
     HANDLE handle = CreateFileW(
-        kPipeName,
+        PipeName().c_str(),
         GENERIC_READ | GENERIC_WRITE,
         0,
         nullptr,
@@ -283,7 +361,7 @@ void NudgePipeServerForShutdown() {
 }
 
 void PipeServerMain() {
-    Log("[lua-exec-pipe] server started.");
+    Log("[lua-exec-pipe] server started. name=" + WideToUtf8(PipeName()));
 
     while (g_pipe_running.load(std::memory_order_acquire)) {
         SECURITY_ATTRIBUTES sa = {};
@@ -297,7 +375,7 @@ void PipeServerMain() {
         sa.bInheritHandle = FALSE;
 
         HANDLE pipe = CreateNamedPipeW(
-            kPipeName,
+            PipeName().c_str(),
             PIPE_ACCESS_DUPLEX,
             PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
             1,

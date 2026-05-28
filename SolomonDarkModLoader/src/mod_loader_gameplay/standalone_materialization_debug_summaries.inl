@@ -141,6 +141,10 @@ void LogBotVisualDebugStage(
     uintptr_t local_actor_address,
     uintptr_t bot_actor_address,
     uintptr_t visual_source_actor_address) {
+    if constexpr (!kEnableWizardBotHotPathDiagnostics) {
+        return;
+    }
+
     std::ostringstream out;
     out << "[bots] visual stage=" << stage;
     if (local_actor_address != 0) {
@@ -180,6 +184,10 @@ void LogWizardCloneSourceCreationStage(
     uintptr_t world_address,
     uintptr_t source_actor_address,
     uintptr_t source_profile_address) {
+    if constexpr (!kEnableWizardBotHotPathDiagnostics) {
+        return;
+    }
+
     std::ostringstream out;
     out << "[bots] source_create stage=" << stage
         << " world=" << HexString(world_address)

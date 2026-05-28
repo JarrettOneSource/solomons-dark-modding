@@ -34,6 +34,11 @@ python3 tests/re/run_live_cast_shim_snapshot_probe.py --json --timeout 180
 python3 tests/re/run_live_lua_bot_enemy_semantic_probe.py --json
 ```
 
+The accepted native shim inventory and multiplayer-readiness checklist live in
+`docs/accepted-native-shims.md`. Use that file as the contract for deciding
+whether a remaining memory-facing helper is an intentional stock-code bridge or
+a cleanup candidate.
+
 The static tests now enforce that the old primary mana arrays and Earth boulder
 damage table stay removed. The live probe launches the staged game, drives to a
 testrun, uses the Lua memory bridge, and queues all five primary skills through

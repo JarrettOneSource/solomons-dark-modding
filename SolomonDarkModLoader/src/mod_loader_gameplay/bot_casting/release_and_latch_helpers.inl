@@ -61,6 +61,8 @@ void FinishBotCastNativeLifecycle(
     bool cleanup_state_available = false;
     bool cleanup_state_write_ok = false;
     bool cleanup_state_restore_ok = true;
+    bool cleanup_invoked = false;
+    std::string cleanup_owner_context;
     cleanup_actor_handle_live =
         actor_handle_before_readable &&
         actor_group_before != kBotCastActorActiveCastGroupSentinel &&
@@ -88,10 +90,14 @@ void FinishBotCastNativeLifecycle(
                 }
             }
         }
-        InvokeBotCastWithNativeActorSlot(context, [&] {
-            cleanup_ok = CallCastActiveHandleCleanupSafe(
-                cleanup_address, actor_address, &cleanup_exception_code);
-        });
+        InvokeBotCastCleanupWithNativeOwnerContext(
+            context,
+            [&] {
+                cleanup_invoked = true;
+                cleanup_ok = CallCastActiveHandleCleanupSafe(
+                    cleanup_address, actor_address, &cleanup_exception_code);
+            },
+            &cleanup_owner_context);
         if (cleanup_state_write_ok) {
             cleanup_state_restore_ok =
                 memory.TryWriteValue<int>(
@@ -207,12 +213,14 @@ void FinishBotCastNativeLifecycle(
         " group_after=" + group_after_text +
         " cleanup_requested=" + (run_active_handle_cleanup ? std::string("1") : std::string("0")) +
         " cleanup_actor_handle_live=" + (cleanup_actor_handle_live ? std::string("1") : std::string("0")) +
+        " cleanup_invoked=" + (cleanup_invoked ? std::string("1") : std::string("0")) +
         " cleanup_state=" + HexString(cleanup_state_entry_address) +
         " cleanup_state_before=" + std::to_string(cleanup_state_before) +
         " cleanup_state_for_call=" + std::to_string(cleanup_state_for_call) +
         " cleanup_state_after=" + std::to_string(cleanup_state_after) +
         " cleanup_state_write=" + (cleanup_state_write_ok ? std::string("1") : std::string("0")) +
         " cleanup_state_restore=" + (cleanup_state_restore_ok ? std::string("1") : std::string("0")) +
+        " cleanup_owner_context={" + cleanup_owner_context + "}" +
         " native_action_rearm=" + (native_action_rearm_write ? std::string("1") : std::string("0")) +
         " native_action_rearm_ticks=" + std::to_string(kBotNativeActionRearmTicks) +
         " handle_source=" +

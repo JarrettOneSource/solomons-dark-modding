@@ -158,6 +158,9 @@
     <ClInclude Include="include\multiplayer_foundation.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\multiplayer_local_transport.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_protocol.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -932,6 +935,9 @@
       <Filter>Source Files\Loader</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_foundation.cpp">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\multiplayer_local_transport.cpp">
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_runtime_state.cpp">

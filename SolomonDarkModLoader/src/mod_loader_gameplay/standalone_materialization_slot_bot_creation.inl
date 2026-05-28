@@ -235,9 +235,11 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
         cleanup_source();
     }
     NormalizeGameplaySlotBotSyntheticVisualState(actor_address);
-    Log(
-        "[bots] visual stage=slot_actor_helper_lanes_seeded bot={" +
-        BuildActorVisualDebugSummary(actor_address) + "}");
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        Log(
+            "[bots] visual stage=slot_actor_helper_lanes_seeded bot={" +
+            BuildActorVisualDebugSummary(actor_address) + "}");
+    }
     return true;
 }
 
@@ -266,9 +268,11 @@ bool AttachGameplaySlotBotStaffItem(
         return false;
     }
 
-    Log(
-        "[bots] visual stage=slot_actor_staff_attached bot={" +
-        BuildActorVisualDebugSummary(actor_address) + "}");
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        Log(
+            "[bots] visual stage=slot_actor_staff_attached bot={" +
+            BuildActorVisualDebugSummary(actor_address) + "}");
+    }
     return true;
 }
 

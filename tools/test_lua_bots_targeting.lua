@@ -260,6 +260,8 @@ assert(hooks.state.bots[5].bot_name == "Lua Bot Fire", "fifth managed bot should
 assert(type(hooks.choose_follow_target) == "function", "choose_follow_target hook missing")
 assert(type(hooks.should_refresh_follow_target) == "function", "should_refresh_follow_target hook missing")
 assert(type(hooks.update_same_scene_follow) == "function", "update_same_scene_follow hook missing")
+assert(type(hooks.scene_key) == "function", "scene_key hook missing")
+assert(type(hooks.scene_matches) == "function", "scene_matches hook missing")
 assert(type(hooks.handle_pending_skill_choice) == "function", "handle_pending_skill_choice hook missing")
 assert(hooks.follow_stop_distance == 100.0, "follow stop distance should use the roomy 100-unit inner radius")
 assert(hooks.follow_resume_distance == 250.0, "follow resume distance should use the roomy 250-unit outer radius")
@@ -267,6 +269,14 @@ assert(hooks.follow_target_arrival_distance == 32.0, "follow target arrival shou
 assert(hooks.follow_move_timeout_ms == 30000, "follow move watchdog should be a 30-second recovery timer")
 assert(type(event_handlers["runtime.tick"]) == "function", "runtime.tick handler missing")
 assert(type(event_handlers["run.started"]) == "function", "run.started handler missing")
+assert(hooks.scene_key({ kind = "SharedHub", region_index = -1, region_type_id = -1 }) == "shared_hub::",
+  "shared hub snapshots should ignore private-region sentinel fields")
+assert(hooks.scene_key({ kind = "Run", region_index = -1, region_type_id = -1 }) == "run::",
+  "run snapshots should ignore private-region sentinel fields")
+assert(hooks.scene_matches({ kind = "SharedHub", region_index = -1, region_type_id = -1 }, { kind = "shared_hub" }),
+  "shared hub snapshots should match shared hub scene intents")
+assert(hooks.scene_matches({ kind = "Run", region_index = -1, region_type_id = -1 }, { kind = "run" }),
+  "run snapshots should match run scene intents")
 
 event_handlers["runtime.tick"]({ monotonic_milliseconds = 1000 })
 assert(#creates == 5, "hub tick should create exactly five bot participants")
@@ -421,6 +431,48 @@ local snapped_follow = hooks.snap_target_to_nav(
 assert(snapped_follow ~= nil, "hub follow snap should find a traversable sample")
 assert(math.abs(snapped_follow.x - 1012.5) < 0.001, "hub follow snap chose wrong x")
 assert(math.abs(snapped_follow.y - 187.5) < 0.001, "hub follow snap chose wrong y")
+assert(snapped_follow.snap_distance ~= nil, "follow snap should publish its snap distance")
+
+current_scene = {
+  name = "testrun",
+  kind = "testrun",
+  world_id = 0x2800,
+  transitioning = false,
+}
+local stale_player = { x = 1825.0, y = 2258.0, heading = 0.0 }
+current_nav_grid = {
+  valid = true,
+  world_id = current_scene.world_id,
+  width = 4,
+  height = 4,
+  cells = {
+    {
+      grid_x = 1,
+      grid_y = 1,
+      traversable = true,
+      samples = {
+        { world_x = 1775.0, world_y = 1775.0, traversable = true },
+        { world_x = 1825.0, world_y = 1775.0, traversable = true },
+        { world_x = 1875.0, world_y = 1775.0, traversable = true },
+      },
+    },
+  },
+}
+math.randomseed(4321)
+local stale_snap_target = hooks.choose_follow_target(
+  1700,
+  stale_player,
+  { x = 1825.0, y = 1775.0, transform_valid = true })
+assert(stale_snap_target ~= nil, "distant nav grid should still produce a near-player follow target")
+local stale_snap_gap = distance(stale_snap_target.x, stale_snap_target.y, stale_player.x, stale_player.y)
+assert(stale_snap_gap <= hooks.follow_resume_distance + 0.001, "distant nav snap recovery should stay near the player")
+assert(math.abs(stale_snap_target.y - 1775.0) > 1.0, "distant nav snap recovery should not use the far nav sample row")
+assert(hooks.should_refresh_follow_target(stale_player, 200.0, {
+  x = stale_player.x,
+  y = stale_player.y - 500.0,
+  player_x = stale_player.x,
+  player_y = stale_player.y,
+}) == true, "far stored follow targets should refresh even when the bot is near the player")
 
 local function make_follow_grid(world_id, player)
   local samples = {}

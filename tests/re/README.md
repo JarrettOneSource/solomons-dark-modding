@@ -78,15 +78,19 @@ python3 tests/re/run_live_bot_upgrade_damage_delta_probe.py --json
 ```
 
 That wrapper drives the same high-HP Earth setup twice and writes
-`runtime/probe_earth_baseline_25000_bot_only_goal_confirm.json` plus
-`runtime/probe_earth_upgraded_25000_bot_only_goal_confirm.json`. It keeps Earth
-on `bot_only` positioning so the controlled target remains a live wave enemy in
-the native damage scan. The baseline and upgraded runs both require the stock
-native max-size release path and native post-release launch window. The
-upgraded run uses the native bot skill picker to apply the native Boulder upgrade
-before combat, then requires native mana cost, projected damage increase, and a
-native max-size release while explicitly not treating incidental HP loss as proof
-of a native release hit.
+`runtime/probe_earth_baseline_35000_force_both_goal_confirm.json` plus
+`runtime/probe_earth_upgraded_35000_force_both_goal_confirm.json`. It keeps Earth
+on `force_both` positioning so the controlled target remains the native release
+target during the full held-Boulder window. The baseline and upgraded runs both
+require the stock native max-size release path and native post-release launch
+window. The wrapper uses an extended Earth cast window because the target HP is
+intentionally above the upgraded max-size Boulder projection. The upgraded run
+uses the native bot skill picker to apply the native Boulder upgrade before
+combat, then requires native mana cost, projected damage increase, and a native
+max-size release while explicitly not treating incidental HP loss as proof of a
+native release hit. The wrapper retries a child probe when the child artifact
+lacks native Boulder release telemetry, since those failures are launch/cast
+harness misses rather than valid upgrade-delta evidence.
 
 Run the all-bot skill-choice regression when touching bot level-up or choice
 application behavior:
@@ -218,7 +222,7 @@ python3 tests/re/run_live_boulder_impact_projection_probe.py
 That wrapper drives the existing Earth element damage harness and then asserts
 the native boulder object, release policy, native damage-output scale diagnostics,
 live Boulder release-base damage field, native finalizer floor/cap handling, native
-secondary-reach diagnostics, and victim/removal evidence. The static suite also
+secondary-reach diagnostics, and native target-lethal release evidence. The static suite also
 guards the held-charge retarget contract: Earth Boulder follows the bot's live
 target while charging, then freezes that target at release and commits cleanup
 after the native launch window so it cannot keep growing to max charge. The default keeps a
@@ -250,9 +254,10 @@ That probe charges Boulder on one real wave enemy, retargets the bot to a second
 real wave enemy during the held native tick, moves the original target out of
 the impact radius, then asserts the native release target is the retargeted
 enemy, the frozen release target is removed by native damage, and the original
-target remains alive. The default retarget delay is intentionally early so the
-swap happens during the held-charge window rather than after the original target
-has already completed the cast path.
+high-HP target remains alive. The initial target HP is intentionally above the
+native target-lethal projection so the default retarget delay lands during the
+held-charge window rather than after the original target has already completed
+the cast path.
 
 Run the native ally HP/default-resource probe around the clone HP cleanup:
 
