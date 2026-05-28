@@ -131,7 +131,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             binding != nullptr && IsWizardParticipantKind(binding->kind)) {
             standalone_puppet_actor = IsStandaloneWizardKind(binding->kind);
             gameplay_slot_wizard_actor = IsGameplaySlotWizardKind(binding->kind);
-            (void)RefreshNativeRemoteParticipantTransformTarget(binding);
+            (void)RefreshNativeRemoteParticipantTransformTarget(binding, native_tick_now_ms);
             tracked_actor_native_remote = IsNativeRemoteParticipantBinding(binding);
             tracked_actor_dead = IsActorRuntimeDead(actor_address);
             if (tracked_actor_dead) {
@@ -590,7 +590,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     return;
                 }
                 if (IsNativeRemoteParticipantBinding(binding)) {
-                    RunStockTick(binding);
                     const auto playback =
                         ApplyNativeRemoteParticipantPlayback(binding, actor_address, native_tick_now_ms);
                     if (playback.moving) {
@@ -682,6 +681,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     std::int8_t actor_slot = -1;
     if (memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot) && actor_slot == 0) {
         TickParticipantSceneBindingsIfActive();
+        ApplyReplicatedWorldSnapshotIfActive(gameplay_address_for_pump, static_cast<std::uint64_t>(::GetTickCount64()));
     }
     LogLocalPlayerAnimationProbe();
 }

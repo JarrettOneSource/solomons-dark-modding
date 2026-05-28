@@ -5,6 +5,8 @@
 #include "lua_engine.h"
 #include "memory_access.h"
 #include "mod_loader.h"
+#include "multiplayer_runtime_protocol.h"
+#include "multiplayer_runtime_state.h"
 #include "native_spell_stats.h"
 #include "runtime_debug.h"
 #include "runtime_tick_service.h"

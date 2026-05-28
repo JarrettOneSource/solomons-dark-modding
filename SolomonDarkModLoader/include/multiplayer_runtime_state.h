@@ -3,6 +3,7 @@
 #include "steam_bootstrap.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -81,6 +82,17 @@ struct ParticipantRuntimeInfo {
     ParticipantSceneIntent scene_intent;
 };
 
+struct ParticipantTransformSample {
+    bool valid = false;
+    std::uint64_t received_ms = 0;
+    std::uint32_t sequence = 0;
+    std::uint32_t run_nonce = 0;
+    ParticipantSceneIntent scene_intent;
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    float heading = 0.0f;
+};
+
 struct ParticipantInfo {
     std::uint64_t participant_id = 0;
     ParticipantKind kind = ParticipantKind::LocalHuman;
@@ -94,6 +106,63 @@ struct ParticipantInfo {
     std::uint64_t last_packet_ms = 0;
     MultiplayerCharacterProfile character_profile;
     ParticipantRuntimeInfo runtime;
+    std::vector<ParticipantTransformSample> transform_history;
+};
+
+struct WorldActorSnapshot {
+    std::uint64_t network_actor_id = 0;
+    std::uint32_t native_type_id = 0;
+    std::int32_t enemy_type = -1;
+    std::int32_t actor_slot = -1;
+    std::int32_t world_slot = -1;
+    bool dead = false;
+    bool tracked_enemy = false;
+    bool lifecycle_owned = false;
+    std::uint8_t anim_drive_state = 0;
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    float radius = 0.0f;
+    float heading = 0.0f;
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+};
+
+struct WorldSnapshotActorBindingRuntimeInfo {
+    std::uint64_t network_actor_id = 0;
+    uintptr_t local_actor_address = 0;
+    std::uint32_t native_type_id = 0;
+    std::int32_t enemy_type = -1;
+    bool matched = false;
+    bool parked = false;
+};
+
+struct WorldSnapshotRuntimeInfo {
+    bool valid = false;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t received_ms = 0;
+    std::uint32_t sequence = 0;
+    std::uint32_t scene_epoch = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t actor_total_count = 0;
+    bool truncated = false;
+    ParticipantSceneIntent scene_intent;
+    std::vector<WorldActorSnapshot> actors;
+};
+
+struct WorldSnapshotApplyRuntimeInfo {
+    bool valid = false;
+    std::uint64_t applied_ms = 0;
+    std::uint32_t sequence = 0;
+    std::uint32_t scene_epoch = 0;
+    std::uint32_t local_actor_count = 0;
+    std::uint32_t matched_actor_count = 0;
+    std::uint32_t created_actor_count = 0;
+    std::uint32_t created_actor_total_count = 0;
+    std::uint32_t transform_write_count = 0;
+    std::uint32_t health_write_count = 0;
+    std::uint32_t dead_actor_count = 0;
+    std::uint32_t parked_actor_count = 0;
+    std::vector<WorldSnapshotActorBindingRuntimeInfo> actor_bindings;
 };
 
 enum class SessionStatus {
@@ -127,15 +196,22 @@ struct RuntimeState {
     std::string status_text;
     std::string error_text;
     std::vector<ParticipantInfo> participants;
+    WorldSnapshotRuntimeInfo world_snapshot;
+    std::vector<WorldSnapshotRuntimeInfo> world_snapshot_history;
+    WorldSnapshotApplyRuntimeInfo world_snapshot_apply;
 };
 
 constexpr std::uint64_t kLocalParticipantId = 1ull;
 constexpr std::uint64_t kFirstLuaControlledParticipantId = 0x1000000000001000ull;
+constexpr std::size_t kParticipantTransformHistoryCapacity = 8;
+constexpr std::size_t kWorldSnapshotHistoryCapacity = 8;
 
 MultiplayerCharacterProfile DefaultCharacterProfile();
 bool IsValidCharacterProfile(const MultiplayerCharacterProfile& profile);
 bool IsValidParticipantSceneIntent(const ParticipantSceneIntent& scene_intent);
 ParticipantSceneIntent DefaultParticipantSceneIntent();
+bool SameParticipantSceneIntent(const ParticipantSceneIntent& left, const ParticipantSceneIntent& right);
+float InterpolateHeadingDegrees(float from_degrees, float to_degrees, float alpha);
 
 void InitializeRuntimeState();
 void ShutdownRuntimeState();
@@ -156,6 +232,18 @@ ParticipantInfo* UpsertRemoteParticipant(
     RuntimeState& state,
     std::uint64_t participant_id,
     ParticipantControllerKind controller_kind);
+void AppendParticipantTransformSample(ParticipantInfo* participant, const ParticipantTransformSample& sample);
+bool TrySampleParticipantTransform(
+    const ParticipantInfo& participant,
+    std::uint64_t now_ms,
+    std::uint64_t interpolation_delay_ms,
+    ParticipantTransformSample* sample);
+void AppendWorldSnapshot(RuntimeState* state, WorldSnapshotRuntimeInfo snapshot);
+bool TrySampleWorldSnapshot(
+    const RuntimeState& state,
+    std::uint64_t now_ms,
+    std::uint64_t interpolation_delay_ms,
+    WorldSnapshotRuntimeInfo* snapshot);
 bool IsLocalHumanParticipant(const ParticipantInfo& participant);
 bool IsRemoteParticipant(const ParticipantInfo& participant);
 bool IsLuaControlledParticipant(const ParticipantInfo& participant);

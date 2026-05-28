@@ -42,6 +42,54 @@ void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies)
     }
 }
 
+bool TryGetRunLifecycleEnemySpawnSerial(uintptr_t enemy_address, std::uint32_t* spawn_serial) {
+    return LookupEnemySpawnSerial(enemy_address, spawn_serial);
+}
+
+bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(std::uint32_t missing_enemy_count) {
+    if (missing_enemy_count == 0 || !IsCombatArenaActiveForEnemyTracking()) {
+        return false;
+    }
+
+    const auto spawner_address = g_state.last_wave_spawner.load(std::memory_order_acquire);
+    if (spawner_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.IsReadableRange(spawner_address, kWaveSpawnerLongDelayCountdownOffset + sizeof(std::int32_t))) {
+        return false;
+    }
+
+    std::int32_t remaining_budget = 0;
+    if (!memory.TryReadField(spawner_address, kWaveSpawnerRemainingBudgetOffset, &remaining_budget) ||
+        remaining_budget <= 0) {
+        return false;
+    }
+
+    const auto requested = static_cast<std::int32_t>(
+        (std::min<std::uint32_t>)(missing_enemy_count, static_cast<std::uint32_t>(remaining_budget)));
+    const bool wrote_spawn_delay =
+        memory.TryWriteField(spawner_address, kWaveSpawnerSpawnDelayCountdownOffset, static_cast<std::int32_t>(0));
+    const bool wrote_long_delay =
+        memory.TryWriteField(spawner_address, kWaveSpawnerLongDelayCountdownOffset, static_cast<std::int32_t>(0));
+    if (!wrote_spawn_delay || !wrote_long_delay) {
+        return false;
+    }
+
+    static std::uint64_t s_last_pool_accelerate_log_ms = 0;
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (now_ms - s_last_pool_accelerate_log_ms >= 1000) {
+        s_last_pool_accelerate_log_ms = now_ms;
+        Log(
+            "run.lifecycle enemy pool catch-up. spawner=" + HexString(spawner_address) +
+            " missing=" + std::to_string(missing_enemy_count) +
+            " requested=" + std::to_string(requested) +
+            " remaining_budget=" + std::to_string(remaining_budget));
+    }
+    return true;
+}
+
 void SetRunLifecycleCombatPreludeOnlySuppression(bool enabled) {
     g_state.combat_prelude_only_suppression.store(enabled, std::memory_order_release);
 }

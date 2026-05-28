@@ -4,6 +4,8 @@ struct NativeRemotePlaybackResult {
     bool wrote_position = false;
 };
 
+constexpr std::uint64_t kRemoteTransformInterpolationDelayMs = 120;
+
 bool IsNativeRemoteParticipantBinding(const ParticipantEntityBinding* binding) {
     return binding != nullptr &&
            binding->controller_kind == multiplayer::ParticipantControllerKind::Native;
@@ -22,7 +24,9 @@ float ShortestHeadingDeltaDegrees(float from_degrees, float to_degrees) {
     return delta;
 }
 
-bool RefreshNativeRemoteParticipantTransformTarget(ParticipantEntityBinding* binding) {
+bool RefreshNativeRemoteParticipantTransformTarget(
+    ParticipantEntityBinding* binding,
+    std::uint64_t now_ms) {
     if (binding == nullptr || binding->bot_id == 0) {
         return false;
     }
@@ -36,20 +40,27 @@ bool RefreshNativeRemoteParticipantTransformTarget(ParticipantEntityBinding* bin
 
     binding->controller_kind = participant->controller_kind;
     if (!multiplayer::IsNativeControlledParticipant(*participant) ||
-        !participant->runtime.transform_valid ||
-        !std::isfinite(participant->runtime.position_x) ||
-        !std::isfinite(participant->runtime.position_y) ||
-        !std::isfinite(participant->runtime.heading)) {
+        !participant->runtime.transform_valid) {
+        binding->replicated_transform_valid = false;
+        return false;
+    }
+
+    multiplayer::ParticipantTransformSample transform_sample;
+    if (!multiplayer::TrySampleParticipantTransform(
+            *participant,
+            now_ms,
+            kRemoteTransformInterpolationDelayMs,
+            &transform_sample)) {
         binding->replicated_transform_valid = false;
         return false;
     }
 
     binding->replicated_transform_valid = true;
-    binding->replicated_target_x = participant->runtime.position_x;
-    binding->replicated_target_y = participant->runtime.position_y;
+    binding->replicated_target_x = transform_sample.position_x;
+    binding->replicated_target_y = transform_sample.position_y;
     binding->replicated_target_heading =
-        NormalizeWizardActorHeadingForWrite(participant->runtime.heading);
-    binding->replicated_transform_packet_ms = participant->last_packet_ms;
+        NormalizeWizardActorHeadingForWrite(transform_sample.heading);
+    binding->replicated_transform_packet_ms = transform_sample.received_ms;
     return true;
 }
 
@@ -108,27 +119,16 @@ NativeRemotePlaybackResult ApplyNativeRemoteParticipantPlayback(
     result.moving = distance > 1.5f || std::fabs(heading_delta) > 2.0f;
 
     constexpr float kRemoteSnapDistance = 360.0f;
-    constexpr float kRemoteSettleDistance = 0.75f;
+    constexpr float kRemoteSettleDistance = 0.05f;
 
-    float next_x = binding->replicated_target_x;
-    float next_y = binding->replicated_target_y;
-    float next_heading = binding->replicated_target_heading;
-    if (distance > kRemoteSettleDistance && distance < kRemoteSnapDistance) {
-        std::uint64_t elapsed_ms = 50;
-        if (binding->replicated_transform_playback_ms != 0 &&
-            now_ms >= binding->replicated_transform_playback_ms) {
-            elapsed_ms = now_ms - binding->replicated_transform_playback_ms;
-        }
-        elapsed_ms = (std::min<std::uint64_t>)(elapsed_ms, 100);
-
-        float alpha = static_cast<float>(elapsed_ms) / 50.0f * 0.45f;
-        alpha = (std::clamp)(alpha, 0.25f, distance > 120.0f ? 0.85f : 0.65f);
-        next_x = x + dx * alpha;
-        next_y = y + dy * alpha;
-    }
+    const bool large_discontinuity = distance > kRemoteSnapDistance;
+    const float position_write_distance = large_discontinuity ? 0.0f : kRemoteSettleDistance;
+    const float next_x = binding->replicated_target_x;
+    const float next_y = binding->replicated_target_y;
+    const float next_heading = binding->replicated_target_heading;
 
     auto& memory = ProcessMemory::Instance();
-    if (std::fabs(next_x - x) > 0.01f || std::fabs(next_y - y) > 0.01f) {
+    if (distance > position_write_distance) {
         result.wrote_position =
             memory.TryWriteField(actor_address, kActorPositionXOffset, next_x) &&
             memory.TryWriteField(actor_address, kActorPositionYOffset, next_y);

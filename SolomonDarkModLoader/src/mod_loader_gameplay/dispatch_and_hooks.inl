@@ -1,5 +1,6 @@
 #include "dispatch_and_hooks_request_queues.inl"
 #include "dispatch_and_hooks_execute_requests.inl"
+#include "world_snapshot_reconciliation.inl"
 #include "dispatch_and_hooks_gameplay_thread_dispatch.inl"
 #include "dispatch_and_hooks_pump_loop.inl"
 #include "dispatch_and_hooks_mouse_refresh_hook.inl"

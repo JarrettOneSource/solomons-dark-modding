@@ -23,6 +23,7 @@ void LogProtocolSummary() {
             << ",launch=" << sizeof(LaunchPacket)
             << ",cast=" << sizeof(CastPacket)
             << ",progression=" << sizeof(ProgressionPacket)
+            << ",world_snapshot=" << sizeof(WorldSnapshotPacket)
             << "} service_tick_ms=" << GetServiceTickIntervalMs();
     Log(message.str());
 }

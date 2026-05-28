@@ -145,13 +145,15 @@ profile, scene intent, controller state, movement state, and stock runtime
 handles. Gameplay publishes those bindings back into runtime snapshots so Lua and
 debug tooling can see the live actor state.
 
-`RemoteParticipant + Native` bindings additionally cache the latest replicated
-transform target. During each player-actor tick, the loader refreshes that target
-from `RuntimeState`, interpolates the materialized actor toward it, and snaps only
-for large discontinuities such as scene changes. The participant collision
-resolver treats native remote players as solid against the local player and can
-push both actors apart; Lua bot collisions keep the older rule where the local
-player remains solid and the bot-owned actor yields.
+`RemoteParticipant + Native` bindings additionally cache a sampled replicated
+transform target. Incoming `StatePacket` transforms are appended to the
+participant's short transform history. During each player-actor tick, the loader
+samples that history about 120 ms in the past, writes the interpolated
+position/heading to the materialized actor, and snaps only for large
+discontinuities such as scene changes. The participant collision resolver treats
+native remote players as solid against the local player and can push both actors
+apart; Lua bot collisions keep the older rule where the local player remains
+solid and the bot-owned actor yields.
 
 ## Networking Boundary
 

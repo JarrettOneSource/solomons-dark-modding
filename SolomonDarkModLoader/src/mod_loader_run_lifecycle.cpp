@@ -9,6 +9,7 @@
 
 #include <intrin.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdint>

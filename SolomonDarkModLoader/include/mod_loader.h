@@ -308,6 +308,8 @@ std::uint64_t GetRunLifecycleElapsedMilliseconds();
 void SetRunLifecycleCombatPreludeOnlySuppression(bool enabled);
 void SetRunLifecycleWaveStartEnemyTracking(bool enabled);
 void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies);
+bool TryGetRunLifecycleEnemySpawnSerial(uintptr_t enemy_address, std::uint32_t* spawn_serial);
+bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(std::uint32_t missing_enemy_count);
 bool TryGetPlayerState(SDModPlayerState* state);
 bool TryGetWorldState(SDModWorldState* state);
 bool TryGetGameplayCombatState(SDModGameplayCombatState* state);

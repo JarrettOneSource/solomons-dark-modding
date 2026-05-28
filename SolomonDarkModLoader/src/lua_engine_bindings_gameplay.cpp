@@ -1,6 +1,7 @@
 #include "lua_engine_bindings_internal.h"
 
 #include "mod_loader.h"
+#include "multiplayer_runtime_state.h"
 
 #include <string>
 
@@ -77,6 +78,60 @@ void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
     lua_setfield(state, -2, "enemy_type");
     PushPositionTable(state, actor.x, actor.y);
     lua_setfield(state, -2, "position");
+}
+
+void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSnapshot& actor) {
+    lua_createtable(state, 0, 18);
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.network_actor_id));
+    lua_setfield(state, -2, "network_actor_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.native_type_id));
+    lua_setfield(state, -2, "object_type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.enemy_type));
+    lua_setfield(state, -2, "enemy_type");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.actor_slot));
+    lua_setfield(state, -2, "actor_slot");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.world_slot));
+    lua_setfield(state, -2, "world_slot");
+    lua_pushboolean(state, actor.dead ? 1 : 0);
+    lua_setfield(state, -2, "dead");
+    lua_pushboolean(state, actor.tracked_enemy ? 1 : 0);
+    lua_setfield(state, -2, "tracked_enemy");
+    lua_pushboolean(state, actor.lifecycle_owned ? 1 : 0);
+    lua_setfield(state, -2, "lifecycle_owned");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.anim_drive_state));
+    lua_setfield(state, -2, "anim_drive_state");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.position_x));
+    lua_setfield(state, -2, "x");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.position_y));
+    lua_setfield(state, -2, "y");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.radius));
+    lua_setfield(state, -2, "radius");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.heading));
+    lua_setfield(state, -2, "heading");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.hp));
+    lua_setfield(state, -2, "hp");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.max_hp));
+    lua_setfield(state, -2, "max_hp");
+    PushPositionTable(state, actor.position_x, actor.position_y);
+    lua_setfield(state, -2, "position");
+}
+
+void PushReplicatedWorldActorBinding(
+    lua_State* state,
+    const multiplayer::WorldSnapshotActorBindingRuntimeInfo& binding) {
+    lua_createtable(state, 0, 6);
+    lua_pushinteger(state, static_cast<lua_Integer>(binding.network_actor_id));
+    lua_setfield(state, -2, "network_actor_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(binding.local_actor_address));
+    lua_setfield(state, -2, "local_actor_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(binding.native_type_id));
+    lua_setfield(state, -2, "object_type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(binding.enemy_type));
+    lua_setfield(state, -2, "enemy_type");
+    lua_pushboolean(state, binding.matched ? 1 : 0);
+    lua_setfield(state, -2, "matched");
+    lua_pushboolean(state, binding.parked ? 1 : 0);
+    lua_setfield(state, -2, "parked");
 }
 
 int LuaGameplayStartWaves(lua_State* state) {
@@ -363,6 +418,76 @@ int LuaWorldListActors(lua_State* state) {
     return 1;
 }
 
+int LuaWorldGetReplicatedActors(lua_State* state) {
+    const auto runtime = multiplayer::SnapshotRuntimeState();
+    const auto& snapshot = runtime.world_snapshot;
+    if (!snapshot.valid) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_createtable(state, 0, 17);
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.authority_participant_id));
+    lua_setfield(state, -2, "authority_participant_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.received_ms));
+    lua_setfield(state, -2, "received_ms");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.sequence));
+    lua_setfield(state, -2, "sequence");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.scene_epoch));
+    lua_setfield(state, -2, "scene_epoch");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.run_nonce));
+    lua_setfield(state, -2, "run_nonce");
+    lua_pushstring(state, multiplayer::ParticipantSceneIntentKindLabel(snapshot.scene_intent.kind));
+    lua_setfield(state, -2, "scene_kind");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.actors.size()));
+    lua_setfield(state, -2, "actor_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.actor_total_count));
+    lua_setfield(state, -2, "actor_total_count");
+    lua_pushboolean(state, snapshot.truncated ? 1 : 0);
+    lua_setfield(state, -2, "truncated");
+    lua_pushboolean(state, runtime.world_snapshot_apply.valid ? 1 : 0);
+    lua_setfield(state, -2, "apply_valid");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.applied_ms));
+    lua_setfield(state, -2, "applied_ms");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.local_actor_count));
+    lua_setfield(state, -2, "local_actor_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.matched_actor_count));
+    lua_setfield(state, -2, "matched_actor_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.created_actor_count));
+    lua_setfield(state, -2, "created_actor_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.created_actor_total_count));
+    lua_setfield(state, -2, "created_actor_total_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.transform_write_count));
+    lua_setfield(state, -2, "transform_write_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.health_write_count));
+    lua_setfield(state, -2, "health_write_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.dead_actor_count));
+    lua_setfield(state, -2, "dead_actor_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.parked_actor_count));
+    lua_setfield(state, -2, "parked_actor_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.actor_bindings.size()));
+    lua_setfield(state, -2, "binding_count");
+
+    lua_createtable(state, static_cast<int>(snapshot.actors.size()), 0);
+    int lua_index = 1;
+    for (const auto& actor : snapshot.actors) {
+        PushReplicatedWorldActor(state, actor);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(lua_index));
+        ++lua_index;
+    }
+    lua_setfield(state, -2, "actors");
+
+    lua_createtable(state, static_cast<int>(runtime.world_snapshot_apply.actor_bindings.size()), 0);
+    lua_index = 1;
+    for (const auto& binding : runtime.world_snapshot_apply.actor_bindings) {
+        PushReplicatedWorldActorBinding(state, binding);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(lua_index));
+        ++lua_index;
+    }
+    lua_setfield(state, -2, "bindings");
+    return 1;
+}
+
 int LuaWorldRebindActor(lua_State* state) {
     const auto actor_address = static_cast<uintptr_t>(luaL_checkinteger(state, 1));
     std::string error_message;
@@ -417,10 +542,11 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaPlayerGetState, "get_state");
     lua_setfield(state, -2, "player");
 
-    lua_createtable(state, 0, 5);
+    lua_createtable(state, 0, 6);
     RegisterFunction(state, &LuaWorldGetState, "get_state");
     RegisterFunction(state, &LuaWorldGetScene, "get_scene");
     RegisterFunction(state, &LuaWorldListActors, "list_actors");
+    RegisterFunction(state, &LuaWorldGetReplicatedActors, "get_replicated_actors");
     RegisterFunction(state, &LuaWorldRebindActor, "rebind_actor");
     RegisterFunction(state, &LuaWorldSpawnReward, "spawn_reward");
     lua_setfield(state, -2, "world");

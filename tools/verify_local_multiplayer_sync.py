@@ -359,6 +359,53 @@ emit("after.heading", after and after.heading or 0)
     return values
 
 
+def snap_to_nav(pipe_name: str, x: float, y: float) -> tuple[float, float]:
+    code = f"""
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local grid = sd.debug.get_nav_grid(1)
+if type(grid) ~= "table" or grid.valid == false or type(grid.cells) ~= "table" then
+  emit("available", false)
+  return
+end
+local target_x = {x}
+local target_y = {y}
+local best = nil
+local best_gap = nil
+for _, cell in ipairs(grid.cells) do
+  if type(cell) == "table" and type(cell.samples) == "table" then
+    for _, sample in ipairs(cell.samples) do
+      if type(sample) == "table" and sample.traversable and
+          tonumber(sample.world_x) ~= nil and tonumber(sample.world_y) ~= nil then
+        local dx = tonumber(sample.world_x) - target_x
+        local dy = tonumber(sample.world_y) - target_y
+        local gap = math.sqrt(dx * dx + dy * dy)
+        if best_gap == nil or gap < best_gap then
+          best_gap = gap
+          best = sample
+        end
+      end
+    end
+  end
+end
+if best == nil then
+  emit("available", false)
+  return
+end
+emit("available", true)
+emit("x", best.world_x)
+emit("y", best.world_y)
+emit("gap", string.format("%.3f", best_gap or 0))
+"""
+    deadline = time.monotonic() + 5.0
+    last: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = parse_key_values(lua(pipe_name, code))
+        if last.get("available") == "true":
+            return float(last["x"]), float(last["y"])
+        time.sleep(0.25)
+    raise VerifyFailure(f"nav grid did not produce a traversable sample on {pipe_name}: {last}")
+
+
 def distance(ax: float, ay: float, bx: float, by: float) -> float:
     return ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
 
@@ -370,6 +417,32 @@ def query_local_transform(pipe_name: str) -> tuple[float, float, float]:
         float(values["player.y"]),
         float(values["player.heading"]),
     )
+
+
+def wait_for_local_transform_settled(
+    pipe_name: str,
+    timeout: float = 6.0,
+    stable_seconds: float = 0.5,
+    distance_tolerance: float = 0.75,
+    heading_tolerance: float = 0.5,
+) -> tuple[float, float, float]:
+    deadline = time.monotonic() + timeout
+    stable_since: float | None = None
+    last = query_local_transform(pipe_name)
+    while time.monotonic() < deadline:
+        time.sleep(0.1)
+        current = query_local_transform(pipe_name)
+        position_delta = distance(last[0], last[1], current[0], current[1])
+        heading_delta = abs(current[2] - last[2])
+        if position_delta <= distance_tolerance and heading_delta <= heading_tolerance:
+            if stable_since is None:
+                stable_since = time.monotonic()
+            if time.monotonic() - stable_since >= stable_seconds:
+                return current
+        else:
+            stable_since = None
+        last = current
+    return last
 
 
 def wait_for_remote_motion(
@@ -548,15 +621,24 @@ def start_testrun(pipe_name: str) -> None:
 def wait_for_scene(pipe_name: str, scene_name: str, timeout: float = 30.0) -> None:
     deadline = time.monotonic() + timeout
     last = ""
+    last_error = ""
     while time.monotonic() < deadline:
-        last = lua(
-            pipe_name,
-            "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')",
-        ).strip()
+        try:
+            last = lua(
+                pipe_name,
+                "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')",
+                timeout=5.0,
+            ).strip()
+            last_error = ""
+        except VerifyFailure as exc:
+            last_error = str(exc)
+            time.sleep(0.25)
+            continue
         if last == scene_name:
             return
         time.sleep(0.25)
-    raise VerifyFailure(f"{pipe_name} did not reach scene {scene_name}; last={last}")
+    suffix = f"; last_error={last_error}" if last_error else ""
+    raise VerifyFailure(f"{pipe_name} did not reach scene {scene_name}; last={last}{suffix}")
 
 
 def verify_scene(scene_name: str) -> dict[str, object]:
@@ -566,11 +648,12 @@ def verify_scene(scene_name: str) -> dict[str, object]:
     host_player_before = query(HOST_PIPE)
     base_x = float(host_player_before["player.x"])
     base_y = float(host_player_before["player.y"])
-    host_place = place_player(HOST_PIPE, base_x - 120.0, base_y, 90.0)
-    client_place = place_player(CLIENT_PIPE, base_x + 120.0, base_y, 270.0)
-    time.sleep(0.5)
-    host_idle_x, host_idle_y, _ = query_local_transform(HOST_PIPE)
-    client_idle_x, client_idle_y, _ = query_local_transform(CLIENT_PIPE)
+    host_place_x, host_place_y = snap_to_nav(HOST_PIPE, base_x - 120.0, base_y)
+    client_place_x, client_place_y = snap_to_nav(HOST_PIPE, base_x + 120.0, base_y)
+    host_place = place_player(HOST_PIPE, host_place_x, host_place_y, 90.0)
+    client_place = place_player(CLIENT_PIPE, client_place_x, client_place_y, 270.0)
+    host_idle_x, host_idle_y, _ = wait_for_local_transform_settled(HOST_PIPE)
+    client_idle_x, client_idle_y, _ = wait_for_local_transform_settled(CLIENT_PIPE)
     client_seen = wait_for_remote_convergence(
         CLIENT_PIPE,
         HOST_ID,
@@ -599,7 +682,7 @@ def verify_scene(scene_name: str) -> dict[str, object]:
 
     host_move = nudge_player(HOST_PIPE, 90.0, 0.0, 135.0)
     time.sleep(0.2)
-    host_x, host_y, _ = query_local_transform(HOST_PIPE)
+    host_x, host_y, _ = wait_for_local_transform_settled(HOST_PIPE, stable_seconds=0.25)
     client_after_host_move = wait_for_remote_motion(
         CLIENT_PIPE,
         HOST_ID,
@@ -617,7 +700,7 @@ def verify_scene(scene_name: str) -> dict[str, object]:
 
     client_move = nudge_player(CLIENT_PIPE, -70.0, 30.0, 225.0)
     time.sleep(0.2)
-    client_x, client_y, _ = query_local_transform(CLIENT_PIPE)
+    client_x, client_y, _ = wait_for_local_transform_settled(CLIENT_PIPE, stable_seconds=0.25)
     host_after_client_move = wait_for_remote_motion(
         HOST_PIPE,
         CLIENT_ID,

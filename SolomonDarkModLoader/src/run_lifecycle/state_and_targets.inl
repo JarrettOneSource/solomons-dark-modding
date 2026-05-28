@@ -48,6 +48,8 @@ struct RunLifecycleState {
     std::atomic<bool> wave_start_enemy_tracking{false};
     std::mutex enemy_type_mutex;
     std::unordered_map<uintptr_t, int> enemy_types_by_address;
+    std::unordered_map<uintptr_t, std::uint32_t> enemy_spawn_serials_by_address;
+    std::uint32_t next_enemy_spawn_serial = 1;
     bool initialized = false;
 } g_state;
 constexpr std::uint64_t kSpellCastClickWindowMs = 400;
@@ -57,6 +59,9 @@ constexpr char kGoldSourceSpend[] = "spend";
 constexpr char kGoldSourceScript[] = "script";
 constexpr char kGoldSourceUnknown[] = "unknown";
 constexpr char kDropKindGold[] = "gold";
+constexpr std::size_t kWaveSpawnerRemainingBudgetOffset = 0x20;
+constexpr std::size_t kWaveSpawnerSpawnDelayCountdownOffset = 0x24;
+constexpr std::size_t kWaveSpawnerLongDelayCountdownOffset = 0x2C;
 
 void BuildHookTargets(HookTarget* targets) {
     if (targets == nullptr) {

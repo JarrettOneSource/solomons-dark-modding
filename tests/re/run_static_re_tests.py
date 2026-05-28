@@ -68,6 +68,9 @@ MULTIPLAYER_RUNTIME_STATE = ROOT / "SolomonDarkModLoader/include/multiplayer_run
 MULTIPLAYER_LOCAL_TRANSPORT = ROOT / "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
 MULTIPLAYER_LOCAL_TRANSPORT_HEADER = ROOT / "SolomonDarkModLoader/include/multiplayer_local_transport.h"
 MULTIPLAYER_SERVICE_LOOP = ROOT / "SolomonDarkModLoader/src/multiplayer_service_loop.cpp"
+WORLD_SNAPSHOT_RECONCILIATION = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/world_snapshot_reconciliation.inl"
+)
 LUA_EXEC_PIPE = ROOT / "SolomonDarkModLoader/src/lua_exec_pipe.cpp"
 STAGED_GAME_LAUNCHER = ROOT / "SolomonDarkModLauncher/src/Launch/StagedGameLauncher.cs"
 PARTICIPANT_ENTITY_SYNC = (
@@ -77,9 +80,12 @@ PARTICIPANT_SCENE_BINDING_TICKS = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/participant_scene_binding_ticks.inl"
 )
 NETWORKING_DOC = ROOT / "docs/networking/README.md"
+WORLD_SYNC_AUTHORITY_PLAN_DOC = ROOT / "docs/networking/world-sync-authority-plan.md"
 MULTIPLAYER_PARTICIPANT_MODEL_DOC = ROOT / "docs/multiplayer-participant-model.md"
 LOCAL_MULTIPLAYER_PAIR_SCRIPT = ROOT / "scripts/Launch-LocalMultiplayerPair.ps1"
 LOCAL_MULTIPLAYER_SYNC_VERIFIER = ROOT / "tools/verify_local_multiplayer_sync.py"
+RUN_WORLD_SNAPSHOT_VERIFIER = ROOT / "tools/verify_run_world_snapshot.py"
+RUN_ENEMY_SEED_VERIFIER = ROOT / "tools/verify_run_enemy_seed_viability.py"
 SCENE_SELECTION = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_bot_priming_and_selection.inl"
 )
@@ -4234,6 +4240,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     runtime_state_text = read_text(MULTIPLAYER_RUNTIME_STATE)
     transport_header_text = read_text(MULTIPLAYER_LOCAL_TRANSPORT_HEADER)
     transport_text = read_text(MULTIPLAYER_LOCAL_TRANSPORT)
+    world_snapshot_reconciliation_text = read_text(WORLD_SNAPSHOT_RECONCILIATION)
     service_loop_text = read_text(MULTIPLAYER_SERVICE_LOOP)
     lua_exec_pipe_text = read_text(LUA_EXEC_PIPE)
     staged_game_launcher_text = read_text(STAGED_GAME_LAUNCHER)
@@ -4250,29 +4257,91 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/participant_collision_response.inl"
     )
     networking_doc_text = read_text(NETWORKING_DOC)
+    world_sync_plan_text = read_text(WORLD_SYNC_AUTHORITY_PLAN_DOC)
     participant_doc_text = read_text(MULTIPLAYER_PARTICIPANT_MODEL_DOC)
     script_text = read_text(LOCAL_MULTIPLAYER_PAIR_SCRIPT)
     verifier_text = read_text(LOCAL_MULTIPLAYER_SYNC_VERIFIER)
+    run_snapshot_verifier_text = read_text(RUN_WORLD_SNAPSHOT_VERIFIER)
+    run_seed_verifier_text = read_text(RUN_ENEMY_SEED_VERIFIER)
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 7;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 10;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
+        (protocol_text, "kWorldSnapshotMaxActors"),
+        (protocol_text, "WorldSnapshotFlagTruncated"),
+        (protocol_text, "WorldActorSnapshotFlagLifecycleOwned"),
         (protocol_text, "std::uint64_t participant_id;"),
         (protocol_text, "display_name"),
         (protocol_text, "static_assert(sizeof(StatePacket) == 148"),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 3360"),
         (runtime_state_text, "LocalUdp"),
+        (runtime_state_text, "WorldSnapshotRuntimeInfo"),
+        (runtime_state_text, "WorldSnapshotApplyRuntimeInfo"),
+        (runtime_state_text, "WorldSnapshotActorBindingRuntimeInfo"),
+        (runtime_state_text, "ParticipantTransformSample"),
+        (runtime_state_text, "transform_history"),
+        (runtime_state_text, "world_snapshot_history"),
+        (runtime_state_text, "kParticipantTransformHistoryCapacity"),
+        (runtime_state_text, "kWorldSnapshotHistoryCapacity"),
+        (runtime_state_text, "TrySampleParticipantTransform"),
+        (runtime_state_text, "TrySampleWorldSnapshot"),
+        (runtime_state_text, "InterpolateHeadingDegrees"),
+        (runtime_state_text, "actor_total_count"),
+        (runtime_state_text, "truncated"),
+        (runtime_state_text, "created_actor_count"),
+        (runtime_state_text, "created_actor_total_count"),
+        (runtime_state_text, "health_write_count"),
+        (runtime_state_text, "dead_actor_count"),
+        (runtime_state_text, "actor_bindings"),
         (transport_header_text, "TickLocalTransport"),
         (transport_text, "SDMOD_MULTIPLAYER_TRANSPORT"),
         (transport_text, "SDMOD_MULTIPLAYER_LOCAL_PORT"),
         (transport_text, "SDMOD_MULTIPLAYER_REMOTE_PORT"),
         (transport_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
         (transport_text, "RelayStatePacketToPeers"),
+        (transport_text, "BuildLocalWorldSnapshotPacket"),
+        (transport_text, "TryGetRunLifecycleEnemySpawnSerial"),
+        (transport_text, "BuildRunWorldActorNetworkId"),
+        (transport_text, "ParticipantSceneIntentKind::SharedHub"),
+        (transport_text, "ParticipantSceneIntentKind::Run"),
+        (transport_text, "actor.tracked_enemy"),
+        (transport_text, "WorldSnapshotFlagTruncated"),
+        (transport_text, "ApplyWorldSnapshotPacket"),
+        (world_snapshot_reconciliation_text, "ApplyReplicatedWorldSnapshotIfActive"),
+        (world_snapshot_reconciliation_text, "BuildLocalReplicatedWorldActorBindings"),
+        (world_snapshot_reconciliation_text, "TryCreateReplicatedSharedHubActor"),
+        (world_snapshot_reconciliation_text, "IsReplicatedSharedHubFactoryActorType"),
+        (world_snapshot_reconciliation_text, "CallGameObjectFactorySafe"),
+        (world_snapshot_reconciliation_text, "CallActorWorldRegisterSafe"),
+        (world_snapshot_reconciliation_text, "created_actor_total_count += counts.created_actor_count"),
+        (world_snapshot_reconciliation_text, "TryRebindActorToOwnerWorld"),
+        (world_snapshot_reconciliation_text, "kWorldSnapshotApplyStaleMs"),
+        (world_snapshot_reconciliation_text, "kWorldSnapshotInterpolationDelayMs"),
+        (world_snapshot_reconciliation_text, "TrySampleWorldSnapshot"),
+        (world_snapshot_reconciliation_text, "ParticipantSceneIntentKind::SharedHub"),
+        (world_snapshot_reconciliation_text, "ParticipantSceneIntentKind::Run"),
+        (world_snapshot_reconciliation_text, "QueueGameplayStartWaves"),
+        (world_snapshot_reconciliation_text, "IsLocalRunCombatAlreadyActive"),
+        (world_snapshot_reconciliation_text, "remote_state_wave"),
+        (world_snapshot_reconciliation_text, "MaybeCatchUpRunEnemyPoolForAuthoritativeSnapshot"),
+        (world_snapshot_reconciliation_text, "TryAccelerateRunLifecycleEnemyPoolForSnapshot"),
+        (world_snapshot_reconciliation_text, "TryBindAuthoritativeRunActorToLocalPool"),
+        (world_snapshot_reconciliation_text, "BindReplicatedRunActor"),
+        (world_snapshot_reconciliation_text, "RecordWorldSnapshotBinding"),
+        (world_snapshot_reconciliation_text, "ApplyReplicatedRunEnemyHealth"),
+        (world_snapshot_reconciliation_text, "kEnemyCurrentHpOffset"),
+        (world_snapshot_reconciliation_text, "kEnemyMaxHpOffset"),
+        (world_snapshot_reconciliation_text, "snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::SharedHub"),
         (transport_text, "CopyPacketDisplayName"),
         (transport_text, "QueueParticipantEntitySync"),
         (transport_text, "participant_materialized"),
         (transport_text, "!participant_materialized"),
         (transport_text, "ParticipantControllerKind::Native"),
+        (transport_text, "AppendParticipantTransformSample"),
+        (transport_text, "AppendWorldSnapshot"),
         (transport_text, "TryGetPlayerState"),
+        (transport_text, "TryGetWorldState"),
+        (transport_text, "packet.wave = local->runtime.wave"),
         (service_loop_text, "InitializeLocalTransport()"),
         (service_loop_text, "TickLocalTransport(now_ms)"),
         (service_loop_text, "ShutdownLocalTransport()"),
@@ -4294,6 +4363,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (scene_binding_text, "ReadParticipantSnapshot(binding.bot_id"),
         (native_remote_playback_text, "ApplyNativeRemoteParticipantPlayback"),
         (native_remote_playback_text, "replicated_transform_playback_ms"),
+        (native_remote_playback_text, "kRemoteTransformInterpolationDelayMs"),
+        (native_remote_playback_text, "TrySampleParticipantTransform"),
         (native_remote_playback_text, "kRemoteSnapDistance"),
         (participant_collision_text, "left.local_player && right.native_remote"),
         (participant_collision_text, "right.local_player && left.native_remote"),
@@ -4303,9 +4374,34 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (networking_doc_text, "verify_local_multiplayer_sync.py"),
         (networking_doc_text, "SDMOD_LUA_EXEC_PIPE_NAME"),
         (networking_doc_text, "player/player"),
+        (networking_doc_text, "WorldSnapshot"),
+        (networking_doc_text, "run-world"),
+        (networking_doc_text, "tracked enemies"),
+        (networking_doc_text, "bootstrap client wave activation"),
+        (networking_doc_text, "accelerates its native wave-spawner timers"),
+        (networking_doc_text, "host lifecycle spawn serial"),
+        (networking_doc_text, "live HP/max-HP"),
+        (world_sync_plan_text, "tools/verify_run_enemy_seed_viability.py"),
+        (world_sync_plan_text, "stock run-enemy lockstep was rejected"),
+        (world_sync_plan_text, "client's native wave spawner as a local"),
+        (world_sync_plan_text, "host lifecycle spawn serial"),
+        (world_sync_plan_text, "extra_unparked_client_tracked_enemies"),
+        (run_seed_verifier_text, "stock_run_enemy_lockstep_viable"),
+        (run_seed_verifier_text, "global_seed_as_primary_sync_recommended"),
+        (run_seed_verifier_text, "tracked_count_sequence_diverged"),
+        (run_seed_verifier_text, "launch_isolated_pair"),
+        (run_snapshot_verifier_text, "run_lifecycle_status"),
+        (run_snapshot_verifier_text, "authoritative_actors_matched"),
+        (run_snapshot_verifier_text, "host_only_snapshot_actors"),
+        (run_snapshot_verifier_text, "extra_client_tracked_enemies"),
+        (run_snapshot_verifier_text, "extra_unparked_client_tracked_enemies"),
+        (run_snapshot_verifier_text, "parked_client_tracked_enemies"),
+        (run_snapshot_verifier_text, "matched_binding_count"),
+        (run_snapshot_verifier_text, "lifecycle_owned_snapshot_actors"),
+        (run_snapshot_verifier_text, "--require-complete-lifecycle"),
         (participant_doc_text, "RemoteParticipant + Native"),
         (participant_doc_text, "native-remote playback"),
-        (participant_doc_text, "push both actors apart"),
+        (participant_doc_text, "push both actors"),
         (participant_doc_text, "sd.bots.get_participants()"),
         (participant_doc_text, "sd.bots.get_nameplate(actor_address)"),
         (script_text, "local-mp-host"),
@@ -4316,6 +4412,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (verifier_text, "wait_for_remote"),
         (verifier_text, "nudge_player"),
         (verifier_text, "wait_for_remote_convergence"),
+        (verifier_text, "wait_for_local_transform_settled"),
         (verifier_text, "heading_tolerance: float = 0.25"),
         (verifier_text, "observed-motion heading"),
         (verifier_text, "wait_for_collision_push"),
@@ -4326,10 +4423,10 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     if missing:
         raise StaticReTestFailure(
             "local multiplayer transport wiring missing token(s): " + ", ".join(missing))
-    if "heading + heading_delta * alpha" in native_remote_playback_text:
-        raise StaticReTestFailure("native remote playback is smoothing packet-authored heading")
+    if "latest runtime snapshot" in networking_doc_text:
+        raise StaticReTestFailure("networking docs still describe latest-packet playback instead of interpolation history")
 
-    return "local UDP dev transport is wired through protocol, service loop, participant sync, docs, and launch script"
+    return "local UDP dev transport is wired through protocol, service loop, interpolated participant/world sync, docs, and launch script"
 
 
 def test_player_state_exports_native_heading_for_bot_spawn() -> str:

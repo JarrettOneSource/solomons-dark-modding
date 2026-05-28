@@ -7,7 +7,7 @@ void __fastcall HookCreateArena(void* self, void* unused_edx) {
     g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
     g_state.run_start_tick_ms.store(static_cast<std::uint64_t>(GetTickCount64()), std::memory_order_release);
     g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
-    ClearRememberedEnemyTypes();
+    ClearRememberedEnemyTracking();
     original(self, unused_edx);
     DispatchLuaRunStarted();
 }
@@ -21,7 +21,7 @@ void __fastcall HookStartGame(void* self, void* unused_edx) {
     g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
     g_state.run_start_tick_ms.store(static_cast<std::uint64_t>(GetTickCount64()), std::memory_order_release);
     g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
-    ClearRememberedEnemyTypes();
+    ClearRememberedEnemyTracking();
     original(self, unused_edx);
     DispatchLuaRunStarted();
 }
@@ -95,6 +95,7 @@ void* __fastcall HookEnemySpawned(
     }
 
     const auto enemy_address = reinterpret_cast<uintptr_t>(enemy);
+    const auto spawn_serial = RememberEnemySpawnSerial(enemy_address);
     int enemy_type = -1;
     if (!TryReadEnemyTypeFromActor(enemy_address, &enemy_type) &&
         !TryReadEnemyTypeFromConfig(static_cast<uintptr_t>(enemy_config), &enemy_type)) {
@@ -110,6 +111,7 @@ void* __fastcall HookEnemySpawned(
     RememberEnemyType(enemy_address, enemy_type);
     Log(
         "enemy.spawned hook invoked. enemy=" + HexString(enemy_address) +
+        " spawn_serial=" + std::to_string(spawn_serial) +
         " enemy_type=" + std::to_string(enemy_type) +
         " pos=(" + std::to_string(x) + "," + std::to_string(y) + ")" +
         " run_active=" + std::to_string(IsRunActive() ? 1 : 0) +

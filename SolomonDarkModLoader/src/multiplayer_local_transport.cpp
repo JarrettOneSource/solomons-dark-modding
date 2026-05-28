@@ -6,7 +6,9 @@
 
 #include "multiplayer_local_transport.h"
 
+#include "gameplay_seams.h"
 #include "logger.h"
+#include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_runtime_state.h"
@@ -22,6 +24,9 @@
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 #pragma comment(lib, "Ws2_32.lib")
@@ -39,7 +44,9 @@ constexpr const char* kPlayerNameEnvironmentVariable = "SDMOD_MULTIPLAYER_PLAYER
 constexpr std::uint16_t kDefaultHostPort = 47770;
 constexpr std::uint16_t kDefaultClientPort = 47771;
 constexpr std::uint64_t kLocalDevParticipantIdBase = 0x2000000000000000ull;
+constexpr std::uint64_t kRunWorldActorNetworkIdBase = 0x1000000000000ull;
 constexpr std::uint64_t kLocalTransportSendIntervalMs = 50;
+constexpr std::uint64_t kLocalTransportWorldSnapshotIntervalMs = 100;
 constexpr int kMaxPacketsPerTick = 64;
 
 struct LocalPeerEndpoint {
@@ -61,9 +68,14 @@ struct LocalTransportState {
     sockaddr_in configured_remote{};
     std::uint64_t local_peer_id = 0;
     std::uint64_t last_send_ms = 0;
+    std::uint64_t last_world_snapshot_send_ms = 0;
     std::uint32_t next_sequence = 1;
+    std::uint32_t world_scene_epoch = 0;
     std::uint64_t packets_sent = 0;
     std::uint64_t packets_received = 0;
+    std::string world_scene_key;
+    std::unordered_map<uintptr_t, std::uint64_t> hub_world_actor_ids_by_address;
+    std::uint32_t next_hub_world_actor_serial = 1;
     std::vector<LocalPeerEndpoint> peers;
 };
 
@@ -290,6 +302,160 @@ ParticipantSceneIntent SceneIntentFromLocalScene() {
     return intent;
 }
 
+WorldSceneKind WorldSceneKindFromSceneIntent(const ParticipantSceneIntent& intent) {
+    switch (intent.kind) {
+    case ParticipantSceneIntentKind::SharedHub:
+        return WorldSceneKind::SharedHub;
+    case ParticipantSceneIntentKind::PrivateRegion:
+        return WorldSceneKind::PrivateRegion;
+    case ParticipantSceneIntentKind::Run:
+        return WorldSceneKind::Run;
+    }
+
+    return WorldSceneKind::Unknown;
+}
+
+ParticipantSceneIntent SceneIntentFromWorldSceneKind(WorldSceneKind kind) {
+    ParticipantSceneIntent intent;
+    switch (kind) {
+    case WorldSceneKind::SharedHub:
+        intent.kind = ParticipantSceneIntentKind::SharedHub;
+        break;
+    case WorldSceneKind::PrivateRegion:
+        intent.kind = ParticipantSceneIntentKind::PrivateRegion;
+        break;
+    case WorldSceneKind::Run:
+        intent.kind = ParticipantSceneIntentKind::Run;
+        break;
+    case WorldSceneKind::Unknown:
+    default:
+        intent.kind = ParticipantSceneIntentKind::PrivateRegion;
+        break;
+    }
+    return intent;
+}
+
+std::string BuildWorldSceneKey(const SDModSceneState& scene_state) {
+    std::ostringstream stream;
+    stream << scene_state.kind
+           << ":" << scene_state.name
+           << ":" << scene_state.current_region_index
+           << ":" << scene_state.region_type_id
+           << ":" << scene_state.gameplay_scene_address;
+    return stream.str();
+}
+
+std::uint64_t BuildRunWorldActorNetworkId(std::uint32_t spawn_serial) {
+    if (spawn_serial == 0) {
+        return 0;
+    }
+    return kRunWorldActorNetworkIdBase | static_cast<std::uint64_t>(spawn_serial);
+}
+
+bool ShouldReplicateWorldActor(
+    const SDModSceneActorState& actor,
+    ParticipantSceneIntentKind scene_kind) {
+    if (!actor.valid ||
+        actor.actor_address == 0 ||
+        actor.object_type_id == 0 ||
+        actor.object_type_id == 1 ||
+        !std::isfinite(actor.x) ||
+        !std::isfinite(actor.y) ||
+        !std::isfinite(actor.radius) ||
+        actor.radius < 0.0f) {
+        return false;
+    }
+
+    if (scene_kind == ParticipantSceneIntentKind::Run) {
+        return actor.tracked_enemy &&
+               std::isfinite(actor.hp) &&
+               std::isfinite(actor.max_hp) &&
+               actor.max_hp > 0.0f;
+    }
+
+    return scene_kind == ParticipantSceneIntentKind::SharedHub;
+}
+
+std::uint64_t AllocateHubWorldActorNetworkId(const SDModSceneActorState& actor) {
+    if (actor.actor_address == 0 || actor.object_type_id == 0) {
+        return 0;
+    }
+
+    const auto existing = g_local_transport.hub_world_actor_ids_by_address.find(actor.actor_address);
+    if (existing != g_local_transport.hub_world_actor_ids_by_address.end()) {
+        return existing->second;
+    }
+
+    if (g_local_transport.next_hub_world_actor_serial == 0) {
+        g_local_transport.next_hub_world_actor_serial = 1;
+    }
+    const auto serial = g_local_transport.next_hub_world_actor_serial++;
+    const auto network_actor_id =
+        (static_cast<std::uint64_t>(actor.object_type_id) << 32) |
+        static_cast<std::uint64_t>(serial);
+    g_local_transport.hub_world_actor_ids_by_address.emplace(actor.actor_address, network_actor_id);
+    return network_actor_id;
+}
+
+void ClearHubWorldActorNetworkIds() {
+    g_local_transport.hub_world_actor_ids_by_address.clear();
+    g_local_transport.next_hub_world_actor_serial = 1;
+}
+
+void PruneHubWorldActorNetworkIds(
+    const std::vector<SDModSceneActorState>& actors,
+    ParticipantSceneIntentKind scene_kind) {
+    if (scene_kind != ParticipantSceneIntentKind::SharedHub) {
+        ClearHubWorldActorNetworkIds();
+        return;
+    }
+
+    std::unordered_set<uintptr_t> live_actor_addresses;
+    for (const auto& actor : actors) {
+        if (ShouldReplicateWorldActor(actor, scene_kind)) {
+            live_actor_addresses.insert(actor.actor_address);
+        }
+    }
+
+    for (auto iterator = g_local_transport.hub_world_actor_ids_by_address.begin();
+         iterator != g_local_transport.hub_world_actor_ids_by_address.end();) {
+        if (live_actor_addresses.find(iterator->first) == live_actor_addresses.end()) {
+            iterator = g_local_transport.hub_world_actor_ids_by_address.erase(iterator);
+        } else {
+            ++iterator;
+        }
+    }
+}
+
+float ReadActorHeadingOrZero(uintptr_t actor_address) {
+    if (actor_address == 0 || kActorHeadingOffset == 0) {
+        return 0.0f;
+    }
+
+    float heading = 0.0f;
+    if (!ProcessMemory::Instance().TryReadField(actor_address, kActorHeadingOffset, &heading) ||
+        !std::isfinite(heading)) {
+        return 0.0f;
+    }
+    return heading;
+}
+
+std::vector<sockaddr_in> BuildKnownSendEndpoints() {
+    std::vector<sockaddr_in> endpoints;
+    if (g_local_transport.configured_remote_valid) {
+        endpoints.push_back(g_local_transport.configured_remote);
+    }
+    for (const auto& peer : g_local_transport.peers) {
+        const bool already_added = std::any_of(endpoints.begin(), endpoints.end(), [&](const sockaddr_in& existing) {
+            return SameEndpoint(existing, peer.address);
+        });
+        if (!already_added) {
+            endpoints.push_back(peer.address);
+        }
+    }
+    return endpoints;
+}
+
 void RefreshLocalParticipantFromGameState() {
     SDModPlayerState player_state;
     if (!TryGetPlayerState(&player_state) || !player_state.valid) {
@@ -298,6 +464,8 @@ void RefreshLocalParticipantFromGameState() {
 
     const auto scene_intent = SceneIntentFromLocalScene();
     const auto configured_name = ReadLocalDisplayName();
+    SDModWorldState world_state;
+    const bool have_world_state = TryGetWorldState(&world_state) && world_state.valid;
     UpdateRuntimeState([&](RuntimeState& state) {
         auto* local = UpsertLocalParticipant(state);
         if (local == nullptr) {
@@ -320,6 +488,9 @@ void RefreshLocalParticipantFromGameState() {
         local->runtime.mana_max = static_cast<std::int32_t>(std::lround(player_state.max_mp));
         local->runtime.level = player_state.level;
         local->runtime.experience_current = player_state.xp;
+        if (have_world_state) {
+            local->runtime.wave = world_state.wave;
+        }
         local->runtime.position_x = player_state.x;
         local->runtime.position_y = player_state.y;
         local->runtime.heading = player_state.heading;
@@ -368,17 +539,135 @@ StatePacket BuildLocalStatePacket() {
     return packet;
 }
 
-void SendPacketToEndpoint(const StatePacket& packet, const sockaddr_in& endpoint) {
+bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
+    if (packet == nullptr || !g_local_transport.is_host) {
+        return false;
+    }
+
+    SDModSceneState scene_state;
+    if (!TryGetSceneState(&scene_state) || !scene_state.valid) {
+        return false;
+    }
+
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        return false;
+    }
+
+    const auto scene_intent = SceneIntentFromLocalScene();
+    if (scene_intent.kind != ParticipantSceneIntentKind::SharedHub &&
+        scene_intent.kind != ParticipantSceneIntentKind::Run) {
+        return false;
+    }
+
+    const auto scene_key = BuildWorldSceneKey(scene_state);
+    if (scene_key != g_local_transport.world_scene_key) {
+        g_local_transport.world_scene_key = scene_key;
+        g_local_transport.world_scene_epoch += 1;
+        ClearHubWorldActorNetworkIds();
+    }
+    PruneHubWorldActorNetworkIds(actors, scene_intent.kind);
+
+    WorldSnapshotPacket built{};
+    built.header = MakePacketHeader(PacketKind::WorldSnapshot, g_local_transport.next_sequence++);
+    built.authority_participant_id = g_local_transport.local_peer_id;
+    built.scene_epoch = g_local_transport.world_scene_epoch;
+    built.scene_kind = static_cast<std::uint8_t>(WorldSceneKindFromSceneIntent(scene_intent));
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+    if (local != nullptr) {
+        built.run_nonce = local->runtime.run_nonce;
+    }
+
+    const bool run_scene = scene_intent.kind == ParticipantSceneIntentKind::Run;
+    std::uint32_t total_actor_count = 0;
+    for (const auto& actor : actors) {
+        if (!ShouldReplicateWorldActor(actor, scene_intent.kind)) {
+            continue;
+        }
+        std::uint64_t network_actor_id = 0;
+        if (run_scene) {
+            std::uint32_t spawn_serial = 0;
+            if (!TryGetRunLifecycleEnemySpawnSerial(actor.actor_address, &spawn_serial)) {
+                static std::uint64_t s_last_missing_run_actor_id_log_ms = 0;
+                const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+                if (now_ms - s_last_missing_run_actor_id_log_ms >= 1000) {
+                    s_last_missing_run_actor_id_log_ms = now_ms;
+                    Log(
+                        "world_snapshot: skipped run enemy without lifecycle spawn serial. actor=" +
+                        HexString(actor.actor_address) +
+                        " enemy_type=" + std::to_string(actor.enemy_type));
+                }
+                continue;
+            }
+            network_actor_id = BuildRunWorldActorNetworkId(spawn_serial);
+        } else {
+            network_actor_id = AllocateHubWorldActorNetworkId(actor);
+        }
+        if (network_actor_id == 0) {
+            continue;
+        }
+        total_actor_count += 1;
+        if (built.actor_count >= kWorldSnapshotMaxActors) {
+            continue;
+        }
+
+        auto& snapshot = built.actors[built.actor_count];
+        snapshot.network_actor_id = network_actor_id;
+        snapshot.native_type_id = actor.object_type_id;
+        snapshot.enemy_type = actor.enemy_type;
+        snapshot.actor_slot = actor.actor_slot;
+        snapshot.world_slot = actor.world_slot;
+        snapshot.anim_drive_state = actor.anim_drive_state;
+        snapshot.position_x = actor.x;
+        snapshot.position_y = actor.y;
+        snapshot.radius = actor.radius;
+        snapshot.heading = ReadActorHeadingOrZero(actor.actor_address);
+        snapshot.hp = std::isfinite(actor.hp) ? actor.hp : 0.0f;
+        snapshot.max_hp = std::isfinite(actor.max_hp) ? actor.max_hp : 0.0f;
+        if (actor.dead) {
+            snapshot.flags |= WorldActorSnapshotFlagDead;
+        }
+        if (actor.tracked_enemy) {
+            snapshot.flags |= WorldActorSnapshotFlagTrackedEnemy;
+        }
+        if (run_scene) {
+            snapshot.flags |= WorldActorSnapshotFlagLifecycleOwned;
+        }
+        built.actor_count += 1;
+    }
+    built.actor_total_count = static_cast<std::uint8_t>((std::min<std::uint32_t>)(total_actor_count, 0xFFu));
+    if (total_actor_count > built.actor_count) {
+        built.snapshot_flags |= WorldSnapshotFlagTruncated;
+    }
+
+    *packet = built;
+    return true;
+}
+
+void SendBufferToEndpoint(const void* packet, std::size_t packet_size, const sockaddr_in& endpoint) {
+    if (packet == nullptr || packet_size == 0 || packet_size > static_cast<std::size_t>((std::numeric_limits<int>::max)())) {
+        return;
+    }
     const int sent = sendto(
         g_local_transport.socket_handle,
-        reinterpret_cast<const char*>(&packet),
-        static_cast<int>(sizeof(packet)),
+        reinterpret_cast<const char*>(packet),
+        static_cast<int>(packet_size),
         0,
         reinterpret_cast<const sockaddr*>(&endpoint),
         sizeof(endpoint));
-    if (sent == static_cast<int>(sizeof(packet))) {
+    if (sent == static_cast<int>(packet_size)) {
         g_local_transport.packets_sent += 1;
     }
+}
+
+void SendPacketToEndpoint(const StatePacket& packet, const sockaddr_in& endpoint) {
+    SendBufferToEndpoint(&packet, sizeof(packet), endpoint);
+}
+
+void SendPacketToEndpoint(const WorldSnapshotPacket& packet, const sockaddr_in& endpoint) {
+    SendBufferToEndpoint(&packet, sizeof(packet), endpoint);
 }
 
 void SendLocalState(std::uint64_t now_ms) {
@@ -392,19 +681,25 @@ void SendLocalState(std::uint64_t now_ms) {
         return;
     }
 
-    std::vector<sockaddr_in> endpoints;
-    if (g_local_transport.configured_remote_valid) {
-        endpoints.push_back(g_local_transport.configured_remote);
+    const auto endpoints = BuildKnownSendEndpoints();
+    for (const auto& endpoint : endpoints) {
+        SendPacketToEndpoint(packet, endpoint);
     }
-    for (const auto& peer : g_local_transport.peers) {
-        const bool already_added = std::any_of(endpoints.begin(), endpoints.end(), [&](const sockaddr_in& existing) {
-            return SameEndpoint(existing, peer.address);
-        });
-        if (!already_added) {
-            endpoints.push_back(peer.address);
-        }
+}
+
+void SendWorldSnapshot(std::uint64_t now_ms) {
+    if (!g_local_transport.is_host ||
+        now_ms - g_local_transport.last_world_snapshot_send_ms < kLocalTransportWorldSnapshotIntervalMs) {
+        return;
+    }
+    g_local_transport.last_world_snapshot_send_ms = now_ms;
+
+    WorldSnapshotPacket packet{};
+    if (!BuildLocalWorldSnapshotPacket(&packet) || packet.actor_count == 0) {
+        return;
     }
 
+    const auto endpoints = BuildKnownSendEndpoints();
     for (const auto& endpoint : endpoints) {
         SendPacketToEndpoint(packet, endpoint);
     }
@@ -509,6 +804,17 @@ void ApplyRemoteStatePacket(const StatePacket& packet, const sockaddr_in& from, 
             participant->runtime.position_x = packet.position_x;
             participant->runtime.position_y = packet.position_y;
             participant->runtime.heading = packet.heading;
+
+            ParticipantTransformSample sample;
+            sample.valid = true;
+            sample.received_ms = now_ms;
+            sample.sequence = packet.header.sequence;
+            sample.run_nonce = packet.run_nonce;
+            sample.scene_intent = scene_intent;
+            sample.position_x = packet.position_x;
+            sample.position_y = packet.position_y;
+            sample.heading = packet.heading;
+            AppendParticipantTransformSample(participant, sample);
         }
     });
 
@@ -532,15 +838,74 @@ void ApplyRemoteStatePacket(const StatePacket& packet, const sockaddr_in& from, 
     }
 }
 
+void ApplyWorldSnapshotPacket(const WorldSnapshotPacket& packet, const sockaddr_in& from, std::uint64_t now_ms) {
+    if (g_local_transport.is_host ||
+        packet.authority_participant_id == 0 ||
+        packet.authority_participant_id == g_local_transport.local_peer_id) {
+        return;
+    }
+
+    const auto actor_count = static_cast<std::uint8_t>(
+        (std::min<std::uint32_t>)(packet.actor_count, kWorldSnapshotMaxActors));
+    UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
+
+    const auto scene_kind = static_cast<WorldSceneKind>(packet.scene_kind);
+    UpdateRuntimeState([&](RuntimeState& state) {
+        WorldSnapshotRuntimeInfo snapshot;
+        snapshot.valid = true;
+        snapshot.authority_participant_id = packet.authority_participant_id;
+        snapshot.received_ms = now_ms;
+        snapshot.sequence = packet.header.sequence;
+        snapshot.scene_epoch = packet.scene_epoch;
+        snapshot.run_nonce = packet.run_nonce;
+        snapshot.actor_total_count = packet.actor_total_count;
+        snapshot.truncated = (packet.snapshot_flags & WorldSnapshotFlagTruncated) != 0;
+        snapshot.scene_intent = SceneIntentFromWorldSceneKind(scene_kind);
+        snapshot.actors.reserve(actor_count);
+
+        for (std::uint8_t index = 0; index < actor_count; ++index) {
+            const auto& packet_actor = packet.actors[index];
+            if (packet_actor.network_actor_id == 0 ||
+                packet_actor.native_type_id == 0 ||
+                !std::isfinite(packet_actor.position_x) ||
+                !std::isfinite(packet_actor.position_y) ||
+                !std::isfinite(packet_actor.radius) ||
+                packet_actor.radius < 0.0f) {
+                continue;
+            }
+
+            WorldActorSnapshot actor;
+            actor.network_actor_id = packet_actor.network_actor_id;
+            actor.native_type_id = packet_actor.native_type_id;
+            actor.enemy_type = packet_actor.enemy_type;
+            actor.actor_slot = packet_actor.actor_slot;
+            actor.world_slot = packet_actor.world_slot;
+            actor.dead = (packet_actor.flags & WorldActorSnapshotFlagDead) != 0;
+            actor.tracked_enemy = (packet_actor.flags & WorldActorSnapshotFlagTrackedEnemy) != 0;
+            actor.lifecycle_owned = (packet_actor.flags & WorldActorSnapshotFlagLifecycleOwned) != 0;
+            actor.anim_drive_state = packet_actor.anim_drive_state;
+            actor.position_x = packet_actor.position_x;
+            actor.position_y = packet_actor.position_y;
+            actor.radius = packet_actor.radius;
+            actor.heading = std::isfinite(packet_actor.heading) ? packet_actor.heading : 0.0f;
+            actor.hp = std::isfinite(packet_actor.hp) ? packet_actor.hp : 0.0f;
+            actor.max_hp = std::isfinite(packet_actor.max_hp) ? packet_actor.max_hp : 0.0f;
+            snapshot.actors.push_back(actor);
+        }
+
+        AppendWorldSnapshot(&state, std::move(snapshot));
+    });
+}
+
 void ReceivePackets(std::uint64_t now_ms) {
     for (int packet_index = 0; packet_index < kMaxPacketsPerTick; ++packet_index) {
-        StatePacket packet{};
+        std::array<char, sizeof(WorldSnapshotPacket)> packet_buffer{};
         sockaddr_in from{};
         int from_length = sizeof(from);
         const int received = recvfrom(
             g_local_transport.socket_handle,
-            reinterpret_cast<char*>(&packet),
-            static_cast<int>(sizeof(packet)),
+            packet_buffer.data(),
+            static_cast<int>(packet_buffer.size()),
             0,
             reinterpret_cast<sockaddr*>(&from),
             &from_length);
@@ -552,13 +917,37 @@ void ReceivePackets(std::uint64_t now_ms) {
             return;
         }
 
-        if (received != static_cast<int>(sizeof(StatePacket)) ||
-            !IsValidHeader(packet.header, PacketKind::State)) {
+        if (received < static_cast<int>(sizeof(PacketHeader))) {
             continue;
         }
 
-        g_local_transport.packets_received += 1;
-        ApplyRemoteStatePacket(packet, from, now_ms);
+        PacketHeader header{};
+        std::memcpy(&header, packet_buffer.data(), sizeof(header));
+        if (!IsValidPacketHeader(header)) {
+            continue;
+        }
+
+        const auto kind = static_cast<PacketKind>(header.kind);
+        if (kind == PacketKind::State && received == static_cast<int>(sizeof(StatePacket))) {
+            StatePacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::State)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyRemoteStatePacket(packet, from, now_ms);
+            continue;
+        }
+
+        if (kind == PacketKind::WorldSnapshot && received == static_cast<int>(sizeof(WorldSnapshotPacket))) {
+            WorldSnapshotPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::WorldSnapshot)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyWorldSnapshotPacket(packet, from, now_ms);
+        }
     }
 }
 
@@ -650,6 +1039,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     RefreshLocalParticipantFromGameState();
     ReceivePackets(now_ms);
     SendLocalState(now_ms);
+    SendWorldSnapshot(now_ms);
     PublishLocalTransportRuntimeState();
 }
 

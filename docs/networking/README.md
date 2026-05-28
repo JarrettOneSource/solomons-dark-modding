@@ -28,18 +28,42 @@ finished peer networking layer.
   50 ms and mirrors readiness into runtime state. It also pumps the local UDP
   development transport when `SDMOD_MULTIPLAYER_TRANSPORT=local_udp`.
 - `multiplayer_runtime_protocol.h` is a fixed-packet scaffold with
-  `State`, `Launch`, `Cast`, and `Progression` packets. The packet families
-  below describe the target co-op protocol, not what the current header fully
-  implements.
+  `State`, `Launch`, `Cast`, `Progression`, and `WorldSnapshot` packets. The
+  packet families below describe the target co-op protocol, not what the
+  current header fully implements.
 - `multiplayer_local_transport.cpp` is the first replication slice: two local
   processes exchange `StatePacket` movement/heading snapshots over UDP and
-  materialize the peer as `RemoteParticipant + Native`. Existing remote players
-  use tick-level transform playback from the latest runtime snapshot; the
-  gameplay sync queue is only for materialization/rematerialization, not
-  continuous pose updates. This is a development transport, not the final Steam
-  P2P backend.
+  materialize the peer as `RemoteParticipant + Native`. Remote player packets
+  are kept in a short transform history; gameplay samples that history about
+  120 ms in the past and applies interpolated position/heading on the actor
+  tick. The gameplay sync queue is only for materialization/rematerialization,
+  not continuous pose updates. The local host also sends passive
+  `WorldSnapshot` packets for non-player shared-hub scene actors and run-world
+  tracked enemies. Clients keep a short world-snapshot history, sample it about
+  150 ms in the past, and expose the latest replicated snapshot through Lua for
+  verification. Shared-hub actors are reconciled to the sampled host
+  transform/heading/drive snapshot on the gameplay thread, and missing known hub
+  NPC families (`0x1389`, `0x138A`, `0x138B`, `0x138C`, `0x138D`, `0x138F`,
+  `0x1390`) are created through the stock factory plus generic world-register
+  path before being reconciled. Run-world enemy
+  snapshots now bootstrap client wave activation through the existing gameplay
+  action queue and reconcile stock-created tracked enemies to the host
+  transform/heading/drive snapshot, plus live HP/max-HP for matched tracked
+  enemies. Run enemy snapshots use a host lifecycle spawn serial captured by
+  the native enemy-spawn hook instead of type-local ordinals; clients bind their
+  local stock-spawned pool actors to those host IDs before applying
+  reconciliation. If a client has fewer stock wave enemies than the host
+  snapshot, it accelerates its native wave-spawner timers to fill the local
+  enemy pool through the stock path; if it has extra local hub actors or run
+  enemies, they are parked rather than destructed. Exact reliable drops,
+  pickups, and wave transitions are still snapshot-observed but not client-owned
+  until those lifecycle contracts are proven. This is a development transport,
+  not the final Steam P2P backend.
 - `docs/multiplayer-participant-model.md` is the implementation-facing model
   for profiles, scene intent, Lua bots, and future remote players.
+- `docs/networking/world-sync-authority-plan.md` records the current hub NPC
+  live/RE evidence and the decision to use host-authoritative world snapshots
+  instead of global-RNG lockstep for non-player actors.
 
 ## Committed decisions
 
@@ -147,6 +171,9 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 - Admin tooling (kick / ban / adminlist)
 - Latency simulation + stress test
 - Soft reconciliation upgrade for hard-snap (interpolate to host pos over 100–200ms) if playtests show chatter
+- The local UDP development backend already uses snapshot interpolation for
+  remote player and world actor presentation; the later Steam backend should
+  reuse that boundary instead of reintroducing latest-packet playback.
 
 ### Phase 3+ — Post-ship
 
