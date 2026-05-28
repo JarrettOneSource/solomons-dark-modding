@@ -284,6 +284,21 @@ For hub Students specifically, the recommended shape is:
   live phase counter (`0x138B`, `0x138C`, `0x138D`), clients advance only that
   replicated word at the measured stock rate between host snapshots. Static
   named NPCs and Students keep exact host snapshot values.
+- `tools/probe_named_hub_npc_fields.py` is the bounded per-family field probe
+  for named hub NPC presentation work. It uses the recovered factory allocation
+  sizes instead of the larger player/Student render window:
+  - `0x1389` witch / `FUN_005018d0` / `0x1C0`
+  - `0x138B` Annalist / `FUN_00502120` / `0x174`
+  - `0x138C` PotionGuy / `FUN_005023a0` / `0x180`
+  - `0x138D` ItemsGuy / `FUN_005024c0` / `0x174`
+  - `0x138F` Tyrannia / `FUN_00502450` / `0x180`
+  - `0x1390` Teacher / `FUN_00502570` / `0x178`
+- The bounded live field pass confirms the current runtime serializer should
+  not expand to `+0x220..+0x240` for named hub NPCs. Those offsets are outside
+  the named actor allocations and belonged to the larger player/Student render
+  layout. The only common, presently validated named-NPC animation serializer is
+  the existing `+0x160` drive word plus phase extrapolation for
+  `0x138B/0x138C/0x138D`.
 - If we want low-bandwidth Student prediction later, first build an explicit
   loader-owned Student state machine and seed that bounded machine, then
   reconcile with periodic authoritative snapshots.
@@ -393,12 +408,17 @@ Current verified gates:
 - `python3 tools/probe_hub_npc_presentation_sync.py --json`
   - latest persisted result is `runtime/hub_npc_presentation_sync.json`
   - verified the hub snapshot is valid and non-truncated on the client
-  - reproduced Student presentation divergence: `11/11` compared Students had
-    different `+0x190..+0x1AF` blocks, and `4/11` had different `+0x23C`
-    primary variant bytes
-  - verified named hub NPCs also carry unsynchronized animation/presentation
-    state, while showing those offsets are not safe to treat as one generic
-    copy range across all hub NPC families
+  - verified host-authored Student color/state blocks and primary
+    book/no-book variants converge on the client
+  - verified named hub NPC `+0x160` drive phases converge within the Lua
+    cross-process sampling tolerance
+- `python3 tools/probe_named_hub_npc_fields.py --samples 8 --interval 0.2`
+  - latest persisted result is `runtime/named_hub_npc_field_probe.json`
+  - confirmed the moving named drive-word families are `0x138B`, `0x138C`, and
+    `0x138D`
+  - confirmed the other candidate generic render offsets previously inspected
+    for named NPCs either fall outside the per-family allocation size or are
+    type-specific/native-local state not safe for a generic serializer
 - `python3 tools/verify_run_world_snapshot.py --require-complete-lifecycle`
   - latest persisted result is `runtime/run_world_snapshot_verification.json`
   - client received host `Run` enemy snapshots

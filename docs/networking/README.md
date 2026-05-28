@@ -47,6 +47,8 @@ finished peer networking layer.
   not inherit the transform interpolation delay. Known phase-advancing named
   hub NPC families (`0x138B`, `0x138C`, `0x138D`) advance the replicated drive
   word by the measured native phase rate while waiting for the next snapshot.
+  Named hub NPC serializers are bounded by their recovered per-family allocation sizes;
+  the larger player/Student render window is not reused for those classes.
   Hub snapshots also
   carry a typed presentation payload: the host's full hub animation-drive word
   for factory-backed hub NPCs, plus Student-specific book/variant bytes and
