@@ -119,7 +119,7 @@ void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSna
 void PushReplicatedWorldActorBinding(
     lua_State* state,
     const multiplayer::WorldSnapshotActorBindingRuntimeInfo& binding) {
-    lua_createtable(state, 0, 6);
+    lua_createtable(state, 0, 7);
     lua_pushinteger(state, static_cast<lua_Integer>(binding.network_actor_id));
     lua_setfield(state, -2, "network_actor_id");
     lua_pushinteger(state, static_cast<lua_Integer>(binding.local_actor_address));
@@ -132,6 +132,8 @@ void PushReplicatedWorldActorBinding(
     lua_setfield(state, -2, "matched");
     lua_pushboolean(state, binding.parked ? 1 : 0);
     lua_setfield(state, -2, "parked");
+    lua_pushboolean(state, binding.removed ? 1 : 0);
+    lua_setfield(state, -2, "removed");
 }
 
 int LuaGameplayStartWaves(lua_State* state) {
@@ -465,6 +467,10 @@ int LuaWorldGetReplicatedActors(lua_State* state) {
     lua_setfield(state, -2, "dead_actor_count");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.parked_actor_count));
     lua_setfield(state, -2, "parked_actor_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.removed_actor_count));
+    lua_setfield(state, -2, "removed_actor_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.failed_remove_actor_count));
+    lua_setfield(state, -2, "failed_remove_actor_count");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.actor_bindings.size()));
     lua_setfield(state, -2, "binding_count");
 

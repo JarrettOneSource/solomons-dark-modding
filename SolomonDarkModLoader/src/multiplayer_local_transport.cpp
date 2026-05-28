@@ -45,6 +45,7 @@ constexpr std::uint16_t kDefaultHostPort = 47770;
 constexpr std::uint16_t kDefaultClientPort = 47771;
 constexpr std::uint64_t kLocalDevParticipantIdBase = 0x2000000000000000ull;
 constexpr std::uint64_t kRunWorldActorNetworkIdBase = 0x1000000000000ull;
+constexpr std::uint64_t kRunHostLocalWorldActorNetworkIdBase = 0x1001000000000ull;
 constexpr std::uint64_t kLocalTransportSendIntervalMs = 50;
 constexpr std::uint64_t kLocalTransportWorldSnapshotIntervalMs = 100;
 constexpr int kMaxPacketsPerTick = 64;
@@ -75,7 +76,9 @@ struct LocalTransportState {
     std::uint64_t packets_received = 0;
     std::string world_scene_key;
     std::unordered_map<uintptr_t, std::uint64_t> hub_world_actor_ids_by_address;
+    std::unordered_map<uintptr_t, std::uint64_t> run_host_local_world_actor_ids_by_address;
     std::uint32_t next_hub_world_actor_serial = 1;
+    std::uint32_t next_run_host_local_world_actor_serial = 1;
     std::vector<LocalPeerEndpoint> peers;
 };
 
@@ -352,6 +355,26 @@ std::uint64_t BuildRunWorldActorNetworkId(std::uint32_t spawn_serial) {
     return kRunWorldActorNetworkIdBase | static_cast<std::uint64_t>(spawn_serial);
 }
 
+std::uint64_t AllocateRunHostLocalWorldActorNetworkId(const SDModSceneActorState& actor) {
+    if (actor.actor_address == 0 || actor.object_type_id == 0) {
+        return 0;
+    }
+
+    const auto existing = g_local_transport.run_host_local_world_actor_ids_by_address.find(actor.actor_address);
+    if (existing != g_local_transport.run_host_local_world_actor_ids_by_address.end()) {
+        return existing->second;
+    }
+
+    if (g_local_transport.next_run_host_local_world_actor_serial == 0) {
+        g_local_transport.next_run_host_local_world_actor_serial = 1;
+    }
+    const auto serial = g_local_transport.next_run_host_local_world_actor_serial++;
+    const auto network_actor_id =
+        kRunHostLocalWorldActorNetworkIdBase | static_cast<std::uint64_t>(serial);
+    g_local_transport.run_host_local_world_actor_ids_by_address.emplace(actor.actor_address, network_actor_id);
+    return network_actor_id;
+}
+
 bool ShouldReplicateWorldActor(
     const SDModSceneActorState& actor,
     ParticipantSceneIntentKind scene_kind) {
@@ -402,6 +425,11 @@ void ClearHubWorldActorNetworkIds() {
     g_local_transport.next_hub_world_actor_serial = 1;
 }
 
+void ClearRunHostLocalWorldActorNetworkIds() {
+    g_local_transport.run_host_local_world_actor_ids_by_address.clear();
+    g_local_transport.next_run_host_local_world_actor_serial = 1;
+}
+
 void PruneHubWorldActorNetworkIds(
     const std::vector<SDModSceneActorState>& actors,
     ParticipantSceneIntentKind scene_kind) {
@@ -421,6 +449,31 @@ void PruneHubWorldActorNetworkIds(
          iterator != g_local_transport.hub_world_actor_ids_by_address.end();) {
         if (live_actor_addresses.find(iterator->first) == live_actor_addresses.end()) {
             iterator = g_local_transport.hub_world_actor_ids_by_address.erase(iterator);
+        } else {
+            ++iterator;
+        }
+    }
+}
+
+void PruneRunHostLocalWorldActorNetworkIds(
+    const std::vector<SDModSceneActorState>& actors,
+    ParticipantSceneIntentKind scene_kind) {
+    if (scene_kind != ParticipantSceneIntentKind::Run) {
+        ClearRunHostLocalWorldActorNetworkIds();
+        return;
+    }
+
+    std::unordered_set<uintptr_t> live_actor_addresses;
+    for (const auto& actor : actors) {
+        if (ShouldReplicateWorldActor(actor, scene_kind)) {
+            live_actor_addresses.insert(actor.actor_address);
+        }
+    }
+
+    for (auto iterator = g_local_transport.run_host_local_world_actor_ids_by_address.begin();
+         iterator != g_local_transport.run_host_local_world_actor_ids_by_address.end();) {
+        if (live_actor_addresses.find(iterator->first) == live_actor_addresses.end()) {
+            iterator = g_local_transport.run_host_local_world_actor_ids_by_address.erase(iterator);
         } else {
             ++iterator;
         }
@@ -565,8 +618,10 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
         g_local_transport.world_scene_key = scene_key;
         g_local_transport.world_scene_epoch += 1;
         ClearHubWorldActorNetworkIds();
+        ClearRunHostLocalWorldActorNetworkIds();
     }
     PruneHubWorldActorNetworkIds(actors, scene_intent.kind);
+    PruneRunHostLocalWorldActorNetworkIds(actors, scene_intent.kind);
 
     WorldSnapshotPacket built{};
     built.header = MakePacketHeader(PacketKind::WorldSnapshot, g_local_transport.next_sequence++);
@@ -589,19 +644,22 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
         std::uint64_t network_actor_id = 0;
         if (run_scene) {
             std::uint32_t spawn_serial = 0;
-            if (!TryGetRunLifecycleEnemySpawnSerial(actor.actor_address, &spawn_serial)) {
+            if (TryGetRunLifecycleEnemySpawnSerial(actor.actor_address, &spawn_serial)) {
+                g_local_transport.run_host_local_world_actor_ids_by_address.erase(actor.actor_address);
+                network_actor_id = BuildRunWorldActorNetworkId(spawn_serial);
+            } else {
+                network_actor_id = AllocateRunHostLocalWorldActorNetworkId(actor);
                 static std::uint64_t s_last_missing_run_actor_id_log_ms = 0;
                 const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
                 if (now_ms - s_last_missing_run_actor_id_log_ms >= 1000) {
                     s_last_missing_run_actor_id_log_ms = now_ms;
                     Log(
-                        "world_snapshot: skipped run enemy without lifecycle spawn serial. actor=" +
+                        "world_snapshot: assigned host-local run enemy network id. actor=" +
                         HexString(actor.actor_address) +
-                        " enemy_type=" + std::to_string(actor.enemy_type));
+                        " enemy_type=" + std::to_string(actor.enemy_type) +
+                        " network_actor_id=" + std::to_string(network_actor_id));
                 }
-                continue;
             }
-            network_actor_id = BuildRunWorldActorNetworkId(spawn_serial);
         } else {
             network_actor_id = AllocateHubWorldActorNetworkId(actor);
         }

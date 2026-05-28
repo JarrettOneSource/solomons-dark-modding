@@ -49,16 +49,21 @@ finished peer networking layer.
   snapshots now bootstrap client wave activation through the existing gameplay
   action queue and reconcile stock-created tracked enemies to the host
   transform/heading/drive snapshot, plus live HP/max-HP for matched tracked
-  enemies. Run enemy snapshots use a host lifecycle spawn serial captured by
-  the native enemy-spawn hook instead of type-local ordinals; clients bind their
-  local stock-spawned pool actors to those host IDs before applying
-  reconciliation. If a client has fewer stock wave enemies than the host
+  enemies. Run enemy snapshots prefer a host lifecycle spawn serial captured by
+  the native enemy-spawn hook and allocate a stable host-local supplemental ID for
+  tracked run actors that do not expose that serial; clients bind their local
+  stock-spawned pool actors to those host IDs before applying reconciliation.
+  If a client has fewer stock wave enemies than the host
   snapshot, it accelerates its native wave-spawner timers to fill the local
-  enemy pool through the stock path; if it has extra local hub actors or run
-  enemies, they are parked rather than destructed. Exact reliable drops,
-  pickups, and wave transitions are still snapshot-observed but not client-owned
-  until those lifecycle contracts are proven. This is a development transport,
-  not the final Steam P2P backend.
+  enemy pool through the stock path. Extra client-side hub NPCs from replicated
+  factory-backed families are unregistered from the client world so the hub NPC
+  set converges to the host snapshot, and replicated hub NPCs created by the
+  client are unregistered before a native scene switch so hub-to-run teardown
+  does not leave loader-created actors in the outgoing world. Extra run enemies
+  are still parked because the run enemy pool is stock-spawner owned. Exact
+  reliable drops, pickups, and wave transitions are still snapshot-observed but
+  not client-owned until those lifecycle contracts are proven. This is a
+  development transport, not the final Steam P2P backend.
 - `docs/multiplayer-participant-model.md` is the implementation-facing model
   for profiles, scene intent, Lua bots, and future remote players.
 - `docs/networking/world-sync-authority-plan.md` records the current hub NPC

@@ -281,8 +281,13 @@ The shared-hub lifecycle/reconciliation slice now does the following:
   `GameObjectFactory_Create(type_id)` plus generic
   `ActorWorld_Register(world, group=0, slot=-1)` path before reconciliation
   (`0x1389`, `0x138A`, `0x138B`, `0x138C`, `0x138D`, `0x138F`, `0x1390`)
-- local actors beyond the complete authority snapshot for a replicated type are
-  parked outside the playable area instead of being destroyed
+- extra client-local actors from those replicated factory-backed hub NPC
+  families are removed through `ActorWorld_Unregister(world, actor,
+  remove_from_container=1)` so the client-owned hub NPC set converges to the
+  host snapshot without parking hidden duplicates
+- client-created replicated hub NPCs are also unregistered before native scene
+  switches, preventing loader-owned hub actors from leaking into hub-to-run
+  teardown
 - `sd.world.get_replicated_actors()` reports apply counts so live probes can
   distinguish "received snapshot" from "applied snapshot"
 
@@ -295,12 +300,16 @@ enemies through the host lifecycle spawn serial and write host position,
 heading, animation-drive state, and live HP/max-HP.
 
 The run lifecycle slice now treats the client's native wave spawner as a local
-enemy pool. The host assigns each run enemy a host lifecycle spawn serial from
-the native enemy-spawn hook and uses that serial as the authoritative run
-`network_actor_id` in snapshots. Clients keep a binding map from those host IDs
-to their local stock-spawned pool actors, then apply host transform, animation,
-and HP state through that binding. This replaces type-local ordinal matching for
-run enemies, so host enemy identity survives spawn/death order changes.
+enemy pool. The host prefers a lifecycle spawn serial from the native
+enemy-spawn hook and uses that serial as the authoritative run
+`network_actor_id` in snapshots. If a live tracked run actor does not expose a
+lifecycle serial, the host allocates a stable host-local supplemental ID for that
+actor address instead of dropping it from the authoritative snapshot. Clients
+keep a binding map from those host IDs to their local stock-spawned pool
+actors, then apply host transform, animation, and HP state through that
+binding. This replaces type-local ordinal matching for run enemies, so host
+enemy identity survives spawn/death order changes without losing serial-less
+tracked actors.
 
 When a complete host snapshot has more tracked enemies than the client, the
 client zeroes the stock wave spawner's spawn-delay and long-delay countdowns so
@@ -336,10 +345,9 @@ Current verified gates:
   - client received a non-truncated host `SharedHub` snapshot
   - latest persisted result is `runtime/world_snapshot_reconciliation.json`
   - verified missing known hub NPC families are filled on the client
-  - current interpolation proof has `apply_created_total=11`, left
-    `missing_createable_hub_actors=0`, compared `27` authoritative hub actors
-    within `7.190` units under the `8` unit gate, and parked `7`
-    client-only extras
+  - current verifier rejects missing authoritative hub NPCs, failed hub NPC
+    unregisters, and extra createable hub actors that remain after a complete
+    host snapshot
 - `python3 tools/verify_run_world_snapshot.py --require-complete-lifecycle`
   - latest persisted result is `runtime/run_world_snapshot_verification.json`
   - client received host `Run` enemy snapshots

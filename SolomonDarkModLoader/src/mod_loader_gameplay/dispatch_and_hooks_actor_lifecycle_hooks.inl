@@ -232,6 +232,7 @@ void __fastcall HookGameplaySwitchRegion(void* self, void* /*unused_edx*/, int r
     }
 
     const auto gameplay_address = reinterpret_cast<uintptr_t>(self);
+    RemoveReplicatedCreatedSharedHubActorsForSceneSwitch("scene switch pre-dispatch");
     DematerializeAllMaterializedWizardBotsForSceneSwitch("scene switch pre-dispatch");
     g_gameplay_keyboard_injection.scene_churn_not_before_ms.store(
         static_cast<std::uint64_t>(::GetTickCount64()) + kGameplaySceneChurnDelayMs,

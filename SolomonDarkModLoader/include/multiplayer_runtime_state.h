@@ -134,6 +134,7 @@ struct WorldSnapshotActorBindingRuntimeInfo {
     std::int32_t enemy_type = -1;
     bool matched = false;
     bool parked = false;
+    bool removed = false;
 };
 
 struct WorldSnapshotRuntimeInfo {
@@ -162,6 +163,8 @@ struct WorldSnapshotApplyRuntimeInfo {
     std::uint32_t health_write_count = 0;
     std::uint32_t dead_actor_count = 0;
     std::uint32_t parked_actor_count = 0;
+    std::uint32_t removed_actor_count = 0;
+    std::uint32_t failed_remove_actor_count = 0;
     std::vector<WorldSnapshotActorBindingRuntimeInfo> actor_bindings;
 };
 

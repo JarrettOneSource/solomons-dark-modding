@@ -33,15 +33,25 @@ local function finite(v)
   return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge
 end
 
+local function createable_hub_actor_type(type_id)
+  return type_id == 0x1389 or type_id == 0x138A or type_id == 0x138B or
+         type_id == 0x138C or type_id == 0x138D or type_id == 0x138F or
+         type_id == 0x1390
+end
+
 local actors = sd.world.list_actors() or {}
 local local_by_address = {}
 local local_replicable = 0
+local local_createable_hub_actors = 0
 for _, actor in ipairs(actors) do
   local type_id = tonumber(actor.object_type_id) or 0
   local actor_address = tonumber(actor.actor_address) or 0
   if actor_address ~= 0 and type_id ~= 0 and type_id ~= 1 and finite(tonumber(actor.x)) and finite(tonumber(actor.y)) then
     local_by_address[actor_address] = actor
     local_replicable = local_replicable + 1
+    if createable_hub_actor_type(type_id) then
+      local_createable_hub_actors = local_createable_hub_actors + 1
+    end
   end
 end
 
@@ -58,6 +68,7 @@ if replicated ~= nil and replicated.bindings ~= nil then
 end
 emit("scene", scene_name())
 emit("local_replicable", local_replicable)
+emit("local_createable_hub_actors", local_createable_hub_actors)
 emit("replicated_valid", replicated ~= nil)
 emit("replicated_count", replicated and replicated.actor_count or 0)
 emit("replicated_total_count", replicated and replicated.actor_total_count or 0)
@@ -68,13 +79,9 @@ emit("apply_created", replicated and replicated.created_actor_count or 0)
 emit("apply_created_total", replicated and replicated.created_actor_total_count or 0)
 emit("apply_transform_writes", replicated and replicated.transform_write_count or 0)
 emit("apply_parked", replicated and replicated.parked_actor_count or 0)
+emit("apply_removed", replicated and replicated.removed_actor_count or 0)
+emit("apply_remove_failed", replicated and replicated.failed_remove_actor_count or 0)
 emit("authority", replicated and replicated.authority_participant_id or 0)
-
-local function createable_hub_actor_type(type_id)
-  return type_id == 0x1389 or type_id == 0x138A or type_id == 0x138B or
-         type_id == 0x138C or type_id == 0x138D or type_id == 0x138F or
-         type_id == 0x1390
-end
 
 local compared = 0
 local within_4 = 0
@@ -82,11 +89,15 @@ local within_16 = 0
 local within_64 = 0
 local max_distance = 0.0
 local missing_createable_hub_actors = 0
+local replicated_createable_hub_actors = 0
 if replicated ~= nil and replicated.actors ~= nil then
   for _, actor in ipairs(replicated.actors) do
     local binding = binding_by_id[tonumber(actor.network_actor_id)]
     local local_actor = binding ~= nil and local_by_address[tonumber(binding.local_actor_address) or 0] or nil
     local type_id = tonumber(actor.object_type_id) or 0
+    if createable_hub_actor_type(type_id) then
+      replicated_createable_hub_actors = replicated_createable_hub_actors + 1
+    end
     if local_actor == nil and replicated.scene_kind == "SharedHub" and createable_hub_actor_type(type_id) then
       missing_createable_hub_actors = missing_createable_hub_actors + 1
     end
@@ -109,6 +120,8 @@ emit("live_within_16", within_16)
 emit("live_within_64", within_64)
 emit("live_max_distance", string.format("%.3f", max_distance))
 emit("missing_createable_hub_actors", missing_createable_hub_actors)
+emit("replicated_createable_hub_actors", replicated_createable_hub_actors)
+emit("extra_createable_hub_actors", math.max(0, local_createable_hub_actors - replicated_createable_hub_actors))
 """
 
 
@@ -135,6 +148,16 @@ def verify_client(values: dict[str, str], max_distance: float) -> tuple[bool, li
         failures.append(
             "client is missing createable authoritative hub actor(s): "
             f"{int(number(values, 'missing_createable_hub_actors'))}"
+        )
+    if number(values, "apply_remove_failed") > 0:
+        failures.append(
+            "client failed to remove extra createable hub actor(s): "
+            f"{int(number(values, 'apply_remove_failed'))}"
+        )
+    if number(values, "extra_createable_hub_actors") > 0:
+        failures.append(
+            "client still has extra createable hub actor(s): "
+            f"{int(number(values, 'extra_createable_hub_actors'))}"
         )
     if number(values, "live_max_distance", max_distance + 1.0) > max_distance:
         failures.append(

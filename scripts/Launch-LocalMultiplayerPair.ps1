@@ -538,7 +538,7 @@ function Wait-InstanceHub {
 $selection = Resolve-CreateSelection -PresetName $Preset
 $launchPreset = $Preset
 if ($null -ne $selection -and -not $UseSandboxPresetFlow) {
-    $launchPreset = "create_probe"
+    $launchPreset = "create_manual"
 }
 $waitForHub = (Test-PresetWaitsForHub -PresetName $Preset) -or ($null -ne $selection)
 

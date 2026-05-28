@@ -132,6 +132,7 @@ def launch_pair() -> dict[str, object]:
     deadline = time.monotonic() + 120.0
     buffer = ""
     last_hub_probe = 0.0
+    hub_ready_since: float | None = None
     while time.monotonic() < deadline:
         ready, _, _ = select.select([process.stdout], [], [], 0.1)
         if ready:
@@ -163,14 +164,19 @@ def launch_pair() -> dict[str, object]:
                 query_scene_for_launch(HOST_PIPE) == "hub"
                 and query_scene_for_launch(CLIENT_PIPE) == "hub"
             ):
-                terminate_launcher()
-                return {
-                    "fallbackReady": True,
-                    "hostLuaPipe": HOST_PIPE,
-                    "clientLuaPipe": CLIENT_PIPE,
-                    "hostName": HOST_NAME,
-                    "clientName": CLIENT_NAME,
-                }
+                if hub_ready_since is None:
+                    hub_ready_since = now
+                elif now - hub_ready_since >= 1.0:
+                    terminate_launcher()
+                    return {
+                        "fallbackReady": True,
+                        "hostLuaPipe": HOST_PIPE,
+                        "clientLuaPipe": CLIENT_PIPE,
+                        "hostName": HOST_NAME,
+                        "clientName": CLIENT_NAME,
+                    }
+            else:
+                hub_ready_since = None
 
     terminate_launcher()
     raise VerifyFailure(f"timed out waiting for pair launcher JSON:\n{buffer}")
@@ -630,7 +636,7 @@ def wait_for_scene(pipe_name: str, scene_name: str, timeout: float = 30.0) -> No
                 timeout=5.0,
             ).strip()
             last_error = ""
-        except VerifyFailure as exc:
+        except (VerifyFailure, subprocess.TimeoutExpired) as exc:
             last_error = str(exc)
             time.sleep(0.25)
             continue
@@ -661,6 +667,10 @@ def verify_scene(scene_name: str) -> dict[str, object]:
         host_idle_y,
         90.0,
         timeout=12.0,
+    )
+    client_idle_x, client_idle_y, _ = wait_for_local_transform_settled(
+        CLIENT_PIPE,
+        stable_seconds=0.75,
     )
     host_seen = wait_for_remote_convergence(
         HOST_PIPE,
