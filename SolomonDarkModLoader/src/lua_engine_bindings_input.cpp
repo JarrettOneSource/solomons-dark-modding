@@ -2,6 +2,7 @@
 
 #include "logger.h"
 #include "mod_loader.h"
+#include "multiplayer_local_transport.h"
 
 #include <Windows.h>
 
@@ -133,6 +134,12 @@ int LuaInputClickNormalized(lua_State* state) {
 }
 
 int LuaHubStartTestrun(lua_State* state) {
+    if (multiplayer::IsLocalTransportClient()) {
+        return luaL_error(
+            state,
+            "sd.hub.start_testrun is host-only while connected to a multiplayer session.");
+    }
+
     std::string error_message;
     if (!QueueHubStartTestrun(&error_message)) {
         return luaL_error(state, "sd.hub.start_testrun failed: %s", error_message.c_str());

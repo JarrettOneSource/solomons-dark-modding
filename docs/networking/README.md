@@ -74,7 +74,11 @@ finished peer networking layer.
   factory-backed families are unregistered from the client world so the hub NPC
   set converges to the host snapshot, and replicated hub NPCs created by the
   client are unregistered before a native scene switch so hub-to-run teardown
-  does not leave loader-created actors in the outgoing world. Extra run enemies
+  does not leave loader-created actors in the outgoing world. Host-authoritative
+  run entry is driven by the host's `StatePacket` scene intent: connected
+  clients reject direct `sd.hub.start_testrun` calls and block direct arena
+  `switch_region` attempts, then queue their local hub-to-run transition when
+  the configured host reports `in_run`. Extra run enemies
   are still parked because the run enemy pool is stock-spawner owned. Run loot
   drops are not global-RNG lockstep state: they are host-owned lifecycle
   entities with reliable spawn/despawn, pickup-request, and pickup-confirm/deny
@@ -189,7 +193,8 @@ Sampling happens on the stock game thread after native updates — no extra sim 
   `SDMOD_MULTIPLAYER_PLAYER_NAME` and unique `SDMOD_LUA_EXEC_PIPE_NAME` values
   so both copies can be probed without colliding on the default Lua exec pipe.
   `tools/verify_local_multiplayer_sync.py` is the live smoke test for hub/run
-  participant visibility, idle movement/heading convergence, player/player
+  participant visibility, host-authoritative run entry, connected-client
+  run-start blocking, idle movement/heading convergence, player/player
   collision push, and remote nameplate resolution.
 - `ITransport` abstraction + Steam `ISteamNetworkingSockets` impl
 - Steam lobby → transport handoff

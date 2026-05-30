@@ -18,9 +18,8 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     lua,
     parse_key_values,
-    start_testrun,
+    start_host_testrun_and_wait_for_clients,
     stop_games,
-    wait_for_scene,
 )
 from verify_run_world_snapshot import start_host_waves, wait_for_run_snapshot
 
@@ -350,15 +349,13 @@ def setup_live_run_pair(max_attempts: int = 3) -> dict[str, Any]:
             stop_games()
             launch = launch_pair()
             disable_bots()
-            start_testrun(HOST_PIPE)
-            start_testrun(CLIENT_PIPE)
-            wait_for_scene(HOST_PIPE, "testrun")
-            wait_for_scene(CLIENT_PIPE, "testrun")
+            host_run_entry = start_host_testrun_and_wait_for_clients()
             start_waves = start_host_waves()
             snapshot_ready = wait_for_run_snapshot(require_complete_lifecycle=True)
             return {
                 "attempt": attempt,
                 "launch": launch,
+                "host_run_entry": host_run_entry,
                 "start_waves": start_waves,
                 "snapshot_ready": snapshot_ready,
             }

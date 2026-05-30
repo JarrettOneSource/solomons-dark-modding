@@ -4270,6 +4270,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     run_seed_verifier_text = read_text(RUN_ENEMY_SEED_VERIFIER)
     run_enemy_presentation_probe_text = read_text(RUN_ENEMY_PRESENTATION_PROBE)
     run_reward_sync_probe_text = read_text(RUN_REWARD_SYNC_PROBE)
+    lua_input_text = read_text(ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_input.cpp")
     lua_gameplay_text = read_text(ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp")
     lua_runtime_text = read_text(ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp")
     named_hub_npc_probe_text = read_text(ROOT / "tools/probe_named_hub_npc_fields.py")
@@ -4326,6 +4327,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (runtime_state_text, "actor_bindings"),
         (runtime_state_text, "LootDropKindLabel"),
         (transport_header_text, "TickLocalTransport"),
+        (transport_header_text, "IsLocalTransportHost"),
+        (transport_header_text, "IsLocalTransportClient"),
         (transport_text, "SDMOD_MULTIPLAYER_TRANSPORT"),
         (transport_text, "SDMOD_MULTIPLAYER_LOCAL_PORT"),
         (transport_text, "SDMOD_MULTIPLAYER_REMOTE_PORT"),
@@ -4355,6 +4358,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "ApplyWorldSnapshotPacket"),
         (transport_text, "ApplyLootSnapshotPacket"),
         (transport_text, "SendLootSnapshot"),
+        (transport_text, "MaybeQueueClientHostRunStart"),
+        (transport_text, "kClientHostRunFollowRetryMs"),
+        (transport_text, "host-authoritative run entry"),
         (world_snapshot_reconciliation_text, "ApplyReplicatedWorldSnapshotIfActive"),
         (world_snapshot_reconciliation_text, "BuildLocalReplicatedWorldActorBindings"),
         (world_snapshot_reconciliation_text, "TryCreateReplicatedSharedHubActor"),
@@ -4407,6 +4413,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "TryGetPlayerState"),
         (transport_text, "TryGetWorldState"),
         (transport_text, "packet.wave = local->runtime.wave"),
+        (lua_input_text, "host-only while connected to a multiplayer session"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "Blocked client run switch_region while connected to multiplayer"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_gameplay_thread_dispatch.inl"), "g_multiplayer_client_authorized_hub_run_switch_depth"),
         (service_loop_text, "InitializeLocalTransport()"),
         (service_loop_text, "TickLocalTransport(now_ms)"),
         (service_loop_text, "ShutdownLocalTransport()"),
@@ -4454,6 +4463,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (networking_doc_text, "host lifecycle spawn serial"),
         (networking_doc_text, "live HP/max-HP"),
         (networking_doc_text, "run enemy presentation probe"),
+        (networking_doc_text, "host-authoritative run entry"),
+        (networking_doc_text, "connected-client"),
         (networking_doc_text, "death-handled byte"),
         (networking_doc_text, "per-family allocation sizes"),
         (networking_doc_text, "Synced host-owned run drops"),
@@ -4513,6 +4524,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (participant_doc_text, "sd.bots.get_nameplate(actor_address)"),
         (participant_doc_text, "Participant-Owned Inventory And Books"),
         (participant_doc_text, "ParticipantOwnedProgressionState"),
+        (participant_doc_text, "configured host reports `in_run`"),
         (participant_doc_text, "sd.runtime.get_multiplayer_state()"),
         (participant_doc_text, "inventory root and equipment sinks"),
         (participant_doc_text, "spellbook unlock/upgrade state"),
@@ -4543,6 +4555,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (verifier_text, "wait_for_collision_push"),
         (verifier_text, "sd.bots.get_nameplate"),
         (verifier_text, "sd.hub.start_testrun"),
+        (verifier_text, "assert_client_start_testrun_blocked"),
+        (verifier_text, "start_host_testrun_and_wait_for_clients"),
+        (verifier_text, "client_followed_host"),
+        (run_snapshot_verifier_text, "start_host_testrun_and_wait_for_clients"),
+        (run_enemy_presentation_probe_text, "start_host_testrun_and_wait_for_clients"),
+        (run_reward_sync_probe_text, "start_host_testrun_and_wait_for_clients"),
     )
     missing = [token for text, token in required_pairs if token not in text]
     if missing:

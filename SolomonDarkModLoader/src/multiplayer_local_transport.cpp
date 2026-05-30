@@ -50,6 +50,7 @@ constexpr std::uint64_t kRunLootDropNetworkIdBase = 0x1002000000000ull;
 constexpr std::uint64_t kLocalTransportSendIntervalMs = 50;
 constexpr std::uint64_t kLocalTransportWorldSnapshotIntervalMs = 100;
 constexpr std::uint64_t kLocalTransportLootSnapshotIntervalMs = 100;
+constexpr std::uint64_t kClientHostRunFollowRetryMs = 1000;
 constexpr std::uint32_t kGoldRewardNativeTypeId = 0x07DC;
 constexpr std::size_t kGoldRewardAmountTierOffset = 0x13C;
 constexpr std::size_t kGoldRewardAmountOffset = 0x140;
@@ -78,6 +79,7 @@ struct LocalTransportState {
     std::uint64_t last_send_ms = 0;
     std::uint64_t last_world_snapshot_send_ms = 0;
     std::uint64_t last_loot_snapshot_send_ms = 0;
+    std::uint64_t last_client_host_run_request_ms = 0;
     std::uint32_t next_sequence = 1;
     std::uint32_t world_scene_epoch = 0;
     std::uint64_t packets_sent = 0;
@@ -1114,6 +1116,66 @@ void RelayStatePacketToPeers(const StatePacket& packet, const sockaddr_in& sourc
     }
 }
 
+bool IsConfiguredRemoteAuthorityEndpoint(const sockaddr_in& from) {
+    return g_local_transport.configured_remote_valid &&
+           SameEndpoint(from, g_local_transport.configured_remote);
+}
+
+bool IsLocalSceneAlreadyRun(const SDModSceneState& scene_state) {
+    return scene_state.kind == "arena" || scene_state.name == "testrun";
+}
+
+bool IsLocalSceneSharedHub(const SDModSceneState& scene_state) {
+    return scene_state.kind == "hub" || scene_state.name == "hub";
+}
+
+void MaybeQueueClientHostRunStart(
+    const StatePacket& packet,
+    const ParticipantSceneIntent& scene_intent,
+    const sockaddr_in& from,
+    std::uint64_t now_ms) {
+    if (!IsLocalTransportClient() ||
+        scene_intent.kind != ParticipantSceneIntentKind::Run ||
+        packet.ready == 0 ||
+        !IsConfiguredRemoteAuthorityEndpoint(from)) {
+        return;
+    }
+
+    SDModSceneState scene_state;
+    if (!TryGetSceneState(&scene_state) || !scene_state.valid ||
+        IsLocalSceneAlreadyRun(scene_state)) {
+        return;
+    }
+    if (!IsLocalSceneSharedHub(scene_state)) {
+        Log(
+            "Multiplayer local UDP ignored host run intent outside hub. authority_participant_id=" +
+            std::to_string(packet.participant_id) +
+            " local_scene=" + scene_state.name +
+            " kind=" + scene_state.kind);
+        return;
+    }
+
+    const auto last_request_ms = g_local_transport.last_client_host_run_request_ms;
+    if (last_request_ms != 0 && now_ms < last_request_ms + kClientHostRunFollowRetryMs) {
+        return;
+    }
+
+    std::string error_message;
+    g_local_transport.last_client_host_run_request_ms = now_ms;
+    if (!QueueHubStartTestrun(&error_message)) {
+        Log(
+            "Multiplayer local UDP failed to follow host run intent. authority_participant_id=" +
+            std::to_string(packet.participant_id) +
+            " error=" + error_message);
+        return;
+    }
+
+    Log(
+        "Multiplayer local UDP queued host-authoritative run entry. authority_participant_id=" +
+        std::to_string(packet.participant_id) +
+        " sequence=" + std::to_string(packet.header.sequence));
+}
+
 void ApplyRemoteStatePacket(const StatePacket& packet, const sockaddr_in& from, std::uint64_t now_ms) {
     if (packet.participant_id == 0 ||
         packet.participant_id == kLocalParticipantId ||
@@ -1203,6 +1265,8 @@ void ApplyRemoteStatePacket(const StatePacket& packet, const sockaddr_in& from, 
             AppendParticipantTransformSample(participant, sample);
         }
     });
+
+    MaybeQueueClientHostRunStart(packet, scene_intent, from, now_ms);
 
     SDModParticipantGameplayState gameplay_state;
     const bool participant_materialized =
@@ -1510,6 +1574,14 @@ void TickLocalTransport(std::uint64_t now_ms) {
 
 bool IsLocalTransportEnabled() {
     return g_local_transport.initialized;
+}
+
+bool IsLocalTransportHost() {
+    return g_local_transport.initialized && g_local_transport.is_host;
+}
+
+bool IsLocalTransportClient() {
+    return g_local_transport.initialized && !g_local_transport.is_host;
 }
 
 }  // namespace sdmod::multiplayer

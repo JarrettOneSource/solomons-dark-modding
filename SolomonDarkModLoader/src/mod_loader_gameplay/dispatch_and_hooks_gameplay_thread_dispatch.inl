@@ -396,11 +396,14 @@ bool TryDispatchHubStartTestrunOnGameThread() {
     const bool have_arena_vtable = memory.TryReadValue(arena_address, &arena_vtable);
 
     DispatchException exception;
-    if (!CallGameplaySwitchRegionSafe(
-            switch_region_address,
-            gameplay_address,
-            kArenaRegionIndex,
-            &exception)) {
+    ++g_multiplayer_client_authorized_hub_run_switch_depth;
+    const bool switched = CallGameplaySwitchRegionSafe(
+        switch_region_address,
+        gameplay_address,
+        kArenaRegionIndex,
+        &exception);
+    --g_multiplayer_client_authorized_hub_run_switch_depth;
+    if (!switched) {
         g_gameplay_keyboard_injection.hub_start_testrun_cooldown_until_ms.store(
             now_ms + kHubStartTestrunDispatchCooldownMs,
             std::memory_order_release);

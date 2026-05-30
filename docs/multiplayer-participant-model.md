@@ -208,9 +208,13 @@ The multiplayer service loop currently pumps Steam bootstrap/callback state ever
 50 ms and mirrors readiness into `RuntimeState`. For rapid local development it
 can also pump a UDP loopback transport that exchanges `StatePacket` transform
 snapshots, host-owned `WorldSnapshot` actor snapshots, and host-owned run
-`LootSnapshot` metadata for gold drops. The UDP path is a development backend
-for the same participant and replication boundary that Steam P2P and a later
-dedicated server should use.
+`LootSnapshot` metadata for gold drops. The host's `StatePacket` also owns the
+local UDP run-entry scene intent: connected clients cannot call
+`sd.hub.start_testrun` or directly switch themselves into the arena, but they
+queue the normal stock-safe hub-to-run transition when the configured host reports `in_run`.
+The UDP path is a development backend for the same
+participant and replication boundary that Steam P2P and a later dedicated
+server should use.
 
 ## Invariants
 

@@ -78,3 +78,5 @@ struct GameplayKeyboardInjectionState {
     std::deque<PendingGameplayRegionSwitchRequest> pending_gameplay_region_switch_requests;
     std::deque<std::uint64_t> pending_participant_destroy_requests;
 } g_gameplay_keyboard_injection;
+
+thread_local std::uint32_t g_multiplayer_client_authorized_hub_run_switch_depth = 0;

@@ -231,6 +231,13 @@ void __fastcall HookGameplaySwitchRegion(void* self, void* /*unused_edx*/, int r
         return;
     }
 
+    if (region_index == kArenaRegionIndex &&
+        multiplayer::IsLocalTransportClient() &&
+        g_multiplayer_client_authorized_hub_run_switch_depth == 0) {
+        Log("Blocked client run switch_region while connected to multiplayer; waiting for host run intent.");
+        return;
+    }
+
     const auto gameplay_address = reinterpret_cast<uintptr_t>(self);
     RemoveReplicatedCreatedSharedHubActorsForSceneSwitch("scene switch pre-dispatch");
     DematerializeAllMaterializedWizardBotsForSceneSwitch("scene switch pre-dispatch");

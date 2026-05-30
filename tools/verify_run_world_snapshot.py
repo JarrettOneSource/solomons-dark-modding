@@ -16,9 +16,8 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     lua,
     parse_key_values,
-    start_testrun,
+    start_host_testrun_and_wait_for_clients,
     stop_games,
-    wait_for_scene,
 )
 
 RUNTIME_OUTPUT = ROOT / "runtime" / "run_world_snapshot_verification.json"
@@ -340,10 +339,7 @@ def main() -> int:
         stop_games()
         result["launch"] = launch_pair()
         disable_bots()
-        start_testrun(HOST_PIPE)
-        start_testrun(CLIENT_PIPE)
-        wait_for_scene(HOST_PIPE, "testrun")
-        wait_for_scene(CLIENT_PIPE, "testrun")
+        result["host_run_entry"] = start_host_testrun_and_wait_for_clients()
         result["start_waves"] = start_host_waves()
         result["snapshot"] = wait_for_run_snapshot(
             require_complete_lifecycle=args.require_complete_lifecycle,

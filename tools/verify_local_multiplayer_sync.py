@@ -624,6 +624,27 @@ def start_testrun(pipe_name: str) -> None:
         raise VerifyFailure(f"failed to start testrun on {pipe_name}: {values}")
 
 
+def assert_client_start_testrun_blocked() -> dict[str, object]:
+    expected = "host-only while connected to a multiplayer session"
+    try:
+        output = lua(CLIENT_PIPE, "print('ok=' .. tostring(sd.hub.start_testrun()))")
+    except VerifyFailure as exc:
+        if expected not in str(exc):
+            raise VerifyFailure(f"client start_testrun failed for an unexpected reason: {exc}") from exc
+        scene = lua(
+            CLIENT_PIPE,
+            "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')",
+        ).strip()
+        if scene != "hub":
+            raise VerifyFailure(f"client start_testrun block left client in unexpected scene {scene!r}")
+        return {
+            "blocked": True,
+            "expected_error": expected,
+            "scene": scene,
+        }
+    raise VerifyFailure(f"client unexpectedly started testrun directly: {output!r}")
+
+
 def wait_for_scene(pipe_name: str, scene_name: str, timeout: float = 30.0) -> None:
     deadline = time.monotonic() + timeout
     last = ""
@@ -645,6 +666,17 @@ def wait_for_scene(pipe_name: str, scene_name: str, timeout: float = 30.0) -> No
         time.sleep(0.25)
     suffix = f"; last_error={last_error}" if last_error else ""
     raise VerifyFailure(f"{pipe_name} did not reach scene {scene_name}; last={last}{suffix}")
+
+
+def start_host_testrun_and_wait_for_clients(timeout: float = 30.0) -> dict[str, object]:
+    start_testrun(HOST_PIPE)
+    wait_for_scene(HOST_PIPE, "testrun", timeout=timeout)
+    wait_for_scene(CLIENT_PIPE, "testrun", timeout=timeout)
+    return {
+        "host_started": True,
+        "client_followed_host": True,
+        "scene": "testrun",
+    }
 
 
 def verify_scene(scene_name: str) -> dict[str, object]:
@@ -767,10 +799,8 @@ def main() -> int:
         disable_bots()
         result["checks"].append(verify_scene("hub"))
 
-        start_testrun(HOST_PIPE)
-        start_testrun(CLIENT_PIPE)
-        wait_for_scene(HOST_PIPE, "testrun")
-        wait_for_scene(CLIENT_PIPE, "testrun")
+        result["client_start_blocked"] = assert_client_start_testrun_blocked()
+        result["host_run_entry"] = start_host_testrun_and_wait_for_clients()
         result["checks"].append(verify_scene("testrun"))
 
         result["ok"] = True
