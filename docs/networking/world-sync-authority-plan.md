@@ -368,6 +368,17 @@ binding. This replaces type-local ordinal matching for run enemies, so host
 enemy identity survives spawn/death order changes without losing serial-less
 tracked actors.
 
+`tools/probe_run_enemy_presentation_sync.py` is the focused run enemy
+presentation/death probe for this boundary. The live pass against the current
+wave enemy family (`0x03E9` / object type `1001`) showed:
+
+- host/client matched run enemies had zero drive-byte mismatches
+- the wider `+0x160` drive word stays zero on both sides, so the hub-style
+  full drive-word serializer is not justified for this run enemy family
+- HP-zero death state converged through the existing HP/dead snapshot path
+- the native death-handled byte stayed zero in this forced-HP probe, so there is
+  no validated death-handled byte serializer yet
+
 When a complete host snapshot has more tracked enemies than the client, the
 client zeroes the stock wave spawner's spawn-delay and long-delay countdowns so
 the stock path can fill more local enemy actors. When the client has extra
@@ -437,6 +448,16 @@ Current verified gates:
     `extra_unparked_client_tracked_enemies=0`
   - after host-side HP mutation, the lifecycle proof matched all `14` expected
     live snapshot actors, had no client-only extras, and reported zero HP delta
+- `python3 tools/probe_run_enemy_presentation_sync.py --samples 12 --interval
+  0.2`
+  - latest persisted result is `runtime/run_enemy_presentation_sync.json`
+  - verified matched run enemy drive bytes converge with zero mismatches
+  - verified the current run enemy drive word stays zero and should not be
+    promoted to a generic serializer
+  - verified HP-zero death state reaches the client with no local dead-state or
+    HP mismatch
+  - observed no live proof that the native death-handled byte should be copied
+    over the network
 - `python3 tools/verify_local_multiplayer_sync.py`
   - hub and testrun participant materialization, movement/heading, nameplates,
     and player/player push still pass with the world snapshot path enabled

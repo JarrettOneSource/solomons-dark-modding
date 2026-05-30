@@ -86,6 +86,7 @@ LOCAL_MULTIPLAYER_PAIR_SCRIPT = ROOT / "scripts/Launch-LocalMultiplayerPair.ps1"
 LOCAL_MULTIPLAYER_SYNC_VERIFIER = ROOT / "tools/verify_local_multiplayer_sync.py"
 RUN_WORLD_SNAPSHOT_VERIFIER = ROOT / "tools/verify_run_world_snapshot.py"
 RUN_ENEMY_SEED_VERIFIER = ROOT / "tools/verify_run_enemy_seed_viability.py"
+RUN_ENEMY_PRESENTATION_PROBE = ROOT / "tools/probe_run_enemy_presentation_sync.py"
 SCENE_SELECTION = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_bot_priming_and_selection.inl"
 )
@@ -4266,6 +4267,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     verifier_text = read_text(LOCAL_MULTIPLAYER_SYNC_VERIFIER)
     run_snapshot_verifier_text = read_text(RUN_WORLD_SNAPSHOT_VERIFIER)
     run_seed_verifier_text = read_text(RUN_ENEMY_SEED_VERIFIER)
+    run_enemy_presentation_probe_text = read_text(RUN_ENEMY_PRESENTATION_PROBE)
     named_hub_npc_probe_text = read_text(ROOT / "tools/probe_named_hub_npc_fields.py")
 
     required_pairs = (
@@ -4420,10 +4422,15 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (networking_doc_text, "accelerates its native wave-spawner timers"),
         (networking_doc_text, "host lifecycle spawn serial"),
         (networking_doc_text, "live HP/max-HP"),
+        (networking_doc_text, "run enemy presentation probe"),
+        (networking_doc_text, "death-handled byte"),
         (networking_doc_text, "per-family allocation sizes"),
         (world_sync_plan_text, "tools/probe_named_hub_npc_fields.py"),
         (world_sync_plan_text, "FUN_00502120"),
         (world_sync_plan_text, "larger player/Student render window"),
+        (world_sync_plan_text, "tools/probe_run_enemy_presentation_sync.py"),
+        (world_sync_plan_text, "drive word stays zero"),
+        (world_sync_plan_text, "death-handled byte"),
         (world_sync_plan_text, "tools/verify_run_enemy_seed_viability.py"),
         (world_sync_plan_text, "stock run-enemy lockstep was rejected"),
         (world_sync_plan_text, "client's native wave spawner as a local"),
@@ -4433,6 +4440,10 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (named_hub_npc_probe_text, "FUN_00502450"),
         (named_hub_npc_probe_text, "moving_drive_types"),
         (named_hub_npc_probe_text, "max_drive_phase_distance"),
+        (run_enemy_presentation_probe_text, "KILL_HOST_ENEMY_LUA"),
+        (run_enemy_presentation_probe_text, "setup_live_run_pair"),
+        (run_enemy_presentation_probe_text, "max_drive_byte_mismatches"),
+        (run_enemy_presentation_probe_text, "max_snapshot_dead"),
         (run_seed_verifier_text, "stock_run_enemy_lockstep_viable"),
         (run_seed_verifier_text, "global_seed_as_primary_sync_recommended"),
         (run_seed_verifier_text, "tracked_count_sequence_diverged"),

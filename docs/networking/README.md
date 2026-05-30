@@ -47,10 +47,10 @@ finished peer networking layer.
   not inherit the transform interpolation delay. Known phase-advancing named
   hub NPC families (`0x138B`, `0x138C`, `0x138D`) advance the replicated drive
   word by the measured native phase rate while waiting for the next snapshot.
-  Named hub NPC serializers are bounded by their recovered per-family allocation sizes;
-  the larger player/Student render window is not reused for those classes.
-  Hub snapshots also
-  carry a typed presentation payload: the host's full hub animation-drive word
+  Named hub NPC serializers use recovered per-family allocation sizes for
+  bounds; the larger player/Student render window is not reused for those
+  classes. Hub snapshots also carry a typed presentation payload: the host's
+  full hub animation-drive word
   for factory-backed hub NPCs, plus Student-specific book/variant bytes and
   randomized color/state bytes. Missing known hub
   NPC families (`0x1389`, `0x138A`, `0x138B`, `0x138C`, `0x138D`, `0x138F`,
@@ -59,7 +59,11 @@ finished peer networking layer.
   snapshots now bootstrap client wave activation through the existing gameplay
   action queue and reconcile stock-created tracked enemies to the host
   transform/heading/drive snapshot, plus live HP/max-HP for matched tracked
-  enemies. Run enemy snapshots prefer a host lifecycle spawn serial captured by
+  enemies. The run enemy presentation probe confirms the current wave enemy
+  family does not need the hub-style full drive-word serializer: the wider
+  drive word stays zero, the existing drive byte converges, and HP-zero dead
+  state converges without writing the native death-handled byte. Run enemy
+  snapshots prefer a host lifecycle spawn serial captured by
   the native enemy-spawn hook and allocate a stable host-local supplemental ID for
   tracked run actors that do not expose that serial; clients bind their local
   stock-spawned pool actors to those host IDs before applying reconciliation.
