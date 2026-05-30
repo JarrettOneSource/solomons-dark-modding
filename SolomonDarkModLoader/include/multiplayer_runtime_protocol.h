@@ -4,11 +4,12 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 11;
+constexpr std::uint16_t kProtocolVersion = 12;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kWorldSnapshotMaxActors = 64;
 constexpr std::uint32_t kWorldActorStudentVisualStateBytes = 32;
+constexpr std::uint32_t kLootSnapshotMaxDrops = 64;
 
 enum class PacketKind : std::uint16_t {
     State = 1,
@@ -16,6 +17,7 @@ enum class PacketKind : std::uint16_t {
     Cast = 3,
     Progression = 4,
     WorldSnapshot = 5,
+    LootSnapshot = 6,
 };
 
 enum class CastKind : std::uint8_t {
@@ -35,6 +37,15 @@ enum class WorldSceneKind : std::uint8_t {
     Run = 3,
 };
 
+enum class LootDropKind : std::uint8_t {
+    Unknown = 0,
+    Gold = 1,
+    Item = 2,
+    Potion = 3,
+    Orb = 4,
+    Powerup = 5,
+};
+
 enum WorldActorSnapshotFlags : std::uint8_t {
     WorldActorSnapshotFlagDead = 1 << 0,
     WorldActorSnapshotFlagTrackedEnemy = 1 << 1,
@@ -49,6 +60,14 @@ enum WorldActorPresentationFlags : std::uint16_t {
 
 enum WorldSnapshotFlags : std::uint8_t {
     WorldSnapshotFlagTruncated = 1 << 0,
+};
+
+enum LootDropSnapshotFlags : std::uint8_t {
+    LootDropSnapshotFlagActive = 1 << 0,
+};
+
+enum LootSnapshotFlags : std::uint8_t {
+    LootSnapshotFlagTruncated = 1 << 0,
 };
 
 #pragma pack(push, 1)
@@ -155,6 +174,34 @@ struct WorldSnapshotPacket {
     std::uint8_t snapshot_flags;
     WorldActorSnapshotPacketState actors[kWorldSnapshotMaxActors];
 };
+
+struct LootDropSnapshotPacketState {
+    std::uint64_t network_drop_id;
+    std::uint32_t native_type_id;
+    std::uint8_t drop_kind;
+    std::uint8_t flags;
+    std::uint16_t reserved = 0;
+    std::int32_t amount;
+    std::int32_t amount_tier;
+    std::int32_t actor_slot;
+    std::int32_t world_slot;
+    std::uint32_t lifetime;
+    float position_x;
+    float position_y;
+    float radius;
+};
+
+struct LootSnapshotPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint32_t scene_epoch;
+    std::uint32_t run_nonce;
+    std::uint8_t scene_kind;
+    std::uint8_t drop_count;
+    std::uint8_t drop_total_count;
+    std::uint8_t snapshot_flags;
+    LootDropSnapshotPacketState drops[kLootSnapshotMaxDrops];
+};
 #pragma pack(pop)
 
 inline PacketHeader MakePacketHeader(PacketKind kind, std::uint32_t sequence) {
@@ -189,5 +236,7 @@ static_assert(sizeof(CastPacket) == 60, "Unexpected cast packet size");
 static_assert(sizeof(ProgressionPacket) == 32, "Unexpected progression packet size");
 static_assert(sizeof(WorldActorSnapshotPacketState) == 96, "Unexpected world actor snapshot size");
 static_assert(sizeof(WorldSnapshotPacket) == 6176, "Unexpected world snapshot packet size");
+static_assert(sizeof(LootDropSnapshotPacketState) == 48, "Unexpected loot drop snapshot size");
+static_assert(sizeof(LootSnapshotPacket) == 3104, "Unexpected loot snapshot packet size");
 
 }  // namespace sdmod::multiplayer

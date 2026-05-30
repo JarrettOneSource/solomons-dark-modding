@@ -21,6 +21,7 @@ void InitializeParticipantDefaults(
 
     participant->kind = kind;
     participant->controller_kind = controller_kind;
+    participant->owned_progression.initialized = true;
 }
 
 void InitializeLocalParticipantLocked(RuntimeState& state) {
@@ -30,8 +31,10 @@ void InitializeLocalParticipantLocked(RuntimeState& state) {
 
     ParticipantInfo participant;
     participant.participant_id = kLocalParticipantId;
-    participant.kind = ParticipantKind::LocalHuman;
-    participant.controller_kind = ParticipantControllerKind::Native;
+    InitializeParticipantDefaults(
+        &participant,
+        ParticipantKind::LocalHuman,
+        ParticipantControllerKind::Native);
     participant.name = "Wizard";
     participant.is_owner = true;
     participant.character_profile = DefaultCharacterProfile();
@@ -317,8 +320,10 @@ ParticipantInfo* UpsertRemoteParticipant(
 
     ParticipantInfo created;
     created.participant_id = participant_id;
-    created.kind = ParticipantKind::RemoteParticipant;
-    created.controller_kind = controller_kind;
+    InitializeParticipantDefaults(
+        &created,
+        ParticipantKind::RemoteParticipant,
+        controller_kind);
     created.name = controller_kind == ParticipantControllerKind::LuaBrain
                        ? "Lua Bot"
                        : "Remote Wizard";
@@ -556,6 +561,25 @@ const char* ParticipantSceneIntentKindLabel(ParticipantSceneIntentKind kind) {
         return "PrivateRegion";
     case ParticipantSceneIntentKind::Run:
         return "Run";
+    }
+
+    return "Unknown";
+}
+
+const char* LootDropKindLabel(LootDropKind kind) {
+    switch (kind) {
+    case LootDropKind::Unknown:
+        return "Unknown";
+    case LootDropKind::Gold:
+        return "Gold";
+    case LootDropKind::Item:
+        return "Item";
+    case LootDropKind::Potion:
+        return "Potion";
+    case LootDropKind::Orb:
+        return "Orb";
+    case LootDropKind::Powerup:
+        return "Powerup";
     }
 
     return "Unknown";

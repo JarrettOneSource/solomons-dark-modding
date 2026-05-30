@@ -105,6 +105,51 @@ if replicated and replicated.actors then
 end
 emit("rep_reward.count", rep_reward_count)
 emit("rep_tracked_enemy.count", rep_tracked_enemy_count)
+
+local loot = sd.world.get_replicated_loot and sd.world.get_replicated_loot() or nil
+emit("loot.valid", loot ~= nil)
+emit("loot.scene_kind", loot and loot.scene_kind or "")
+emit("loot.drop_count", loot and loot.drop_count or 0)
+emit("loot.drop_total_count", loot and loot.drop_total_count or 0)
+emit("loot.truncated", loot and loot.truncated or false)
+local loot_gold_count = 0
+if loot and loot.drops then
+  for _, drop in ipairs(loot.drops) do
+    local type_id = tonumber(drop.object_type_id or drop.native_type_id) or 0
+    if type_id == 0x07DC or drop.kind == "Gold" then
+      loot_gold_count = loot_gold_count + 1
+      local prefix = "loot_gold." .. tostring(loot_gold_count) .. "."
+      emit(prefix .. "network_id", drop.network_drop_id or 0)
+      emit(prefix .. "type", type_id)
+      emit(prefix .. "kind", drop.kind or "")
+      emit(prefix .. "kind_id", drop.kind_id or 0)
+      emit(prefix .. "amount", drop.amount or 0)
+      emit(prefix .. "amount_tier", drop.amount_tier or 0)
+      emit(prefix .. "active", drop.active and 1 or 0)
+      emit(prefix .. "lifetime", drop.lifetime or 0)
+      emit(prefix .. "x", string.format("%.3f", tonumber(drop.x) or 0))
+      emit(prefix .. "y", string.format("%.3f", tonumber(drop.y) or 0))
+    end
+  end
+end
+emit("loot_gold.count", loot_gold_count)
+
+local mp = sd.runtime.get_multiplayer_state and sd.runtime.get_multiplayer_state() or nil
+emit("mp.valid", mp ~= nil)
+emit("mp.participant_count", mp and mp.participant_count or 0)
+if mp and mp.participants then
+  for index, participant in ipairs(mp.participants) do
+    local prefix = "mp.participant." .. tostring(index) .. "."
+    emit(prefix .. "id", participant.participant_id or 0)
+    emit(prefix .. "name", participant.name or "")
+    emit(prefix .. "kind", participant.kind or "")
+    emit(prefix .. "controller", participant.controller_kind or "")
+    emit(prefix .. "gold", participant.owned_progression and participant.owned_progression.gold or 0)
+    emit(prefix .. "inventory_revision", participant.owned_progression and participant.owned_progression.inventory_revision or 0)
+    emit(prefix .. "spellbook_revision", participant.owned_progression and participant.owned_progression.spellbook_revision or 0)
+    emit(prefix .. "statbook_revision", participant.owned_progression and participant.owned_progression.statbook_revision or 0)
+  end
+end
 """
 
 
@@ -173,6 +218,26 @@ def rep_reward_rows(capture_values: dict[str, str]) -> list[dict[str, Any]]:
             "y": parse_float(capture_values.get(row_prefix + "y")),
             "tracked_enemy": parse_int(capture_values.get(row_prefix + "tracked_enemy")),
             "lifecycle_owned": parse_int(capture_values.get(row_prefix + "lifecycle_owned")),
+        })
+    return rows
+
+
+def loot_gold_rows(capture_values: dict[str, str]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    count = parse_int(capture_values.get("loot_gold.count"))
+    for index in range(1, count + 1):
+        row_prefix = f"loot_gold.{index}."
+        rows.append({
+            "network_id": parse_int(capture_values.get(row_prefix + "network_id")),
+            "type": parse_int(capture_values.get(row_prefix + "type")),
+            "kind": capture_values.get(row_prefix + "kind", ""),
+            "kind_id": parse_int(capture_values.get(row_prefix + "kind_id")),
+            "amount": parse_int(capture_values.get(row_prefix + "amount")),
+            "amount_tier": parse_int(capture_values.get(row_prefix + "amount_tier")),
+            "active": parse_int(capture_values.get(row_prefix + "active")),
+            "lifetime": parse_int(capture_values.get(row_prefix + "lifetime")),
+            "x": parse_float(capture_values.get(row_prefix + "x")),
+            "y": parse_float(capture_values.get(row_prefix + "y")),
         })
     return rows
 
@@ -254,6 +319,60 @@ def wait_for_spawned_host_reward(
     )
 
 
+def select_replicated_loot_gold(
+    capture_values: dict[str, str],
+    *,
+    amount: int,
+    x: float,
+    y: float,
+) -> dict[str, Any] | None:
+    candidates: list[dict[str, Any]] = []
+    for row in loot_gold_rows(capture_values):
+        if row["network_id"] == 0:
+            continue
+        if row["type"] != GOLD_REWARD_TYPE_ID:
+            continue
+        if row["amount"] != amount:
+            continue
+        row = dict(row)
+        row["distance"] = round(distance(row["x"], row["y"], x, y), 3)
+        if row["distance"] <= REWARD_MATCH_RADIUS:
+            candidates.append(row)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda row: row["distance"])
+    return candidates[0]
+
+
+def wait_for_client_replicated_loot(
+    *,
+    amount: int,
+    x: float,
+    y: float,
+    timeout: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = capture(CLIENT_PIPE)
+        selected = select_replicated_loot_gold(
+            last,
+            amount=amount,
+            x=x,
+            y=y,
+        )
+        if selected is not None:
+            return {
+                "capture": last,
+                "drop": selected,
+            }
+        time.sleep(0.1)
+    raise VerifyFailure(
+        "client did not receive host-owned replicated loot metadata; "
+        f"amount={amount} x={x:.3f} y={y:.3f} last={last}"
+    )
+
+
 def wait_for_host_gold_delta(before_gold: int, amount: int, timeout: float) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
@@ -280,10 +399,12 @@ def summarize_reward_boundary(
     before_pair: dict[str, dict[str, str]],
     after_pair: dict[str, dict[str, str]],
     selected_reward: dict[str, Any],
+    selected_replicated_loot: dict[str, Any],
 ) -> dict[str, Any]:
     host_rewards = reward_rows(after_pair["host"])
     client_rewards = reward_rows(after_pair["client"])
     client_rep_rewards = rep_reward_rows(after_pair["client"])
+    client_loot_gold = loot_gold_rows(after_pair["client"])
     host_reward_addresses = {row["address"] for row in host_rewards}
     before_host_reward_addresses = {
         row["address"] for row in reward_rows(before_pair["host"])
@@ -296,16 +417,30 @@ def summarize_reward_boundary(
         "host_reward_count_after": len(host_rewards),
         "client_reward_count_after": len(client_rewards),
         "client_replicated_reward_count_after": len(client_rep_rewards),
+        "client_replicated_loot_count_after": len(client_loot_gold),
         "host_new_reward_addresses": [f"0x{address:08X}" for address in new_host_reward_addresses],
         "host_selected_reward": selected_reward,
+        "client_selected_replicated_loot": selected_replicated_loot,
         "host_amount_matches": selected_reward.get("amount") == PROBE_GOLD_AMOUNT,
         "host_tier_matches": selected_reward.get("amount_tier") == PROBE_EXPECTED_TIER,
         "host_reward_active_observed": selected_reward.get("active") != 0,
         "client_has_local_gold_reward": len(client_rewards) > 0,
         "client_has_replicated_gold_reward": len(client_rep_rewards) > 0,
+        "client_has_world_snapshot_gold_reward": len(client_rep_rewards) > 0,
+        "client_has_replicated_loot_gold": len(client_loot_gold) > 0,
+        "client_replicated_loot_amount_matches": (
+            selected_replicated_loot.get("amount") == PROBE_GOLD_AMOUNT
+        ),
+        "client_replicated_loot_tier_matches": (
+            selected_replicated_loot.get("amount_tier") == PROBE_EXPECTED_TIER
+        ),
         "client_snapshot_actor_count": parse_int(after_pair["client"].get("rep.actor_count")),
         "client_snapshot_tracked_enemy_count": parse_int(
             after_pair["client"].get("rep_tracked_enemy.count")
+        ),
+        "client_loot_snapshot_drop_count": parse_int(after_pair["client"].get("loot.drop_count")),
+        "client_loot_snapshot_total_drop_count": parse_int(
+            after_pair["client"].get("loot.drop_total_count")
         ),
     }
 
@@ -373,10 +508,22 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         y=stationary_y,
         timeout=args.spawn_timeout,
     )
+    replicated_loot = wait_for_client_replicated_loot(
+        amount=PROBE_GOLD_AMOUNT,
+        x=stationary_x,
+        y=stationary_y,
+        timeout=args.loot_timeout,
+    )
+    result["client_replicated_loot"] = replicated_loot
     time.sleep(args.post_spawn_settle)
     after_pair = capture_pair()
     result["after_stationary_spawn"] = after_pair
-    reward_boundary = summarize_reward_boundary(before_pair, after_pair, spawned["reward"])
+    reward_boundary = summarize_reward_boundary(
+        before_pair,
+        after_pair,
+        spawned["reward"],
+        replicated_loot["drop"],
+    )
     result["reward_boundary"] = reward_boundary
 
     before_pickup = capture(HOST_PIPE)
@@ -400,7 +547,10 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         reward_boundary["host_amount_matches"]
         and reward_boundary["host_tier_matches"]
         and not reward_boundary["client_has_local_gold_reward"]
-        and not reward_boundary["client_has_replicated_gold_reward"]
+        and not reward_boundary["client_has_world_snapshot_gold_reward"]
+        and reward_boundary["client_has_replicated_loot_gold"]
+        and reward_boundary["client_replicated_loot_amount_matches"]
+        and reward_boundary["client_replicated_loot_tier_matches"]
         and result["pickup"]["delta"] >= PROBE_GOLD_AMOUNT
     )
     result["conclusion"] = {
@@ -410,9 +560,14 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "host_reward_active_observed": reward_boundary["host_reward_active_observed"],
         "current_world_snapshot_excludes_gold_drops": (
-            not reward_boundary["client_has_replicated_gold_reward"]
+            not reward_boundary["client_has_world_snapshot_gold_reward"]
         ),
-        "client_does_not_render_host_gold_drop_today": (
+        "client_receives_host_loot_metadata": (
+            reward_boundary["client_has_replicated_loot_gold"]
+            and reward_boundary["client_replicated_loot_amount_matches"]
+            and reward_boundary["client_replicated_loot_tier_matches"]
+        ),
+        "client_does_not_spawn_stock_loot_actor_today": (
             not reward_boundary["client_has_local_gold_reward"]
         ),
         "stock_pickup_mutates_host_global_gold": result["pickup"]["delta"] >= PROBE_GOLD_AMOUNT,
@@ -426,6 +581,7 @@ def main() -> int:
     parser.add_argument("--no-launch", action="store_true")
     parser.add_argument("--attempts", type=int, default=3)
     parser.add_argument("--spawn-timeout", type=float, default=8.0)
+    parser.add_argument("--loot-timeout", type=float, default=8.0)
     parser.add_argument("--pickup-timeout", type=float, default=8.0)
     parser.add_argument("--post-spawn-settle", type=float, default=0.6)
     parser.add_argument("--spawn-offset-x", type=float, default=180.0)

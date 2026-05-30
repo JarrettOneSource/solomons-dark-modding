@@ -144,6 +144,14 @@ Current gaps:
 - no potion slot enumeration API
 - no equip inner-object decode beyond visual sink lanes
 
+Multiplayer exposure added for the first loot slice:
+
+- `sd.world.get_replicated_loot()` exposes host-owned run loot metadata received
+  by a client, starting with gold drops (`0x7DC`)
+- `sd.runtime.get_multiplayer_state()` exposes each participant's
+  `ParticipantOwnedProgressionState`: initialized flag, gold, and
+  inventory/spellbook/statbook/loadout revision counters
+
 ## Live Runtime Check
 
 Using the current `sd.world.get_scene().id` as a direct memory anchor:
@@ -538,18 +546,22 @@ the initial two-potion inventory state.
 reward boundary probe. It confirmed that host-spawned gold rewards appear in
 the host actor list as type `0x7DC`, with amount tier at `+0x13C`, amount at
 `+0x140`, lifetime at `+0x144`, and active byte at `+0x148`. The same run client
-received valid enemy snapshots but no local or replicated gold reward actor.
+receives host-owned gold metadata through `sd.world.get_replicated_loot()` while
+still receiving zero local stock gold actors and zero `WorldSnapshot` gold
+actors.
 Spawning a pickup-range reward on the host changed the host global gold by the
 drop amount, proving that stock pickup still goes through the global slot-0 gold
 path.
 
 For multiplayer, synced loot is required, but pickup credit must be
 participant-owned. Gold, item, potion, orb, and powerup drops should be
-host-owned lifecycle objects. Clients can request pickup, and the host should
-confirm or deny the request, then credit the owning participant's inventory,
-gold, spellbook, or statbook state. This keeps a joined client's primary
-single-player save isolated from the host's world and prevents client-local
-stock pickup from mutating the wrong process-global state.
+host-owned lifecycle objects. The current `LootSnapshot` slice is metadata only:
+clients can verify host drop identity and presentation fields, but they do not
+spawn a stock pickup actor yet. Clients can later request pickup, and the host
+should confirm or deny the request, then credit the owning participant's
+inventory, gold, spellbook, or statbook state. This keeps a joined client's
+primary single-player save isolated from the host's world and prevents
+client-local stock pickup from mutating the wrong process-global state.
 
 ### Remaining gaps after pickup pass
 

@@ -397,23 +397,30 @@ plus host-confirmed pickup, not client-local pickup of mirrored stock actors.
 `tools/probe_run_reward_sync.py` is the focused local UDP probe for the first
 reward boundary. It launches a host/client run, disables Lua bots, starts host
 waves, spawns a host gold reward through `sd.world.spawn_reward`, and then
-captures `sd.world.list_actors()` plus `sd.world.get_replicated_actors()` on
-both processes. The current live result is:
+captures `sd.world.list_actors()`, `sd.world.get_replicated_actors()`, and
+`sd.world.get_replicated_loot()` on both processes. The current local UDP
+slice is:
 
 - host gold reward actors are visible as native type `0x7DC`
 - `+0x13C` carries the amount tier byte; amount `7` produced tier `2`
 - `+0x140` carries the amount; the probe read back amount `7`
 - `+0x148` is the active byte; the probe records it, but active/inactive is
   treated as observed stock state instead of the reward-sync pass/fail gate
-- the client had zero local gold drops and zero replicated gold drops
+- the host emits a run-only `LootSnapshot` with a stable host drop id, amount,
+  amount tier, active byte, lifetime, position, actor slot, and world slot
+- the client receives that metadata through `sd.world.get_replicated_loot()`
+- the client still has zero local stock gold drops and zero world-snapshot gold
+  actors, by design
 - the client still had valid run enemy snapshots, so the gap is specific to
-  reward lifecycle, not a broken world snapshot channel
+  reward pickup/lifecycle authority, not a broken world snapshot channel
 - spawning a gold drop at the host player position increased host global gold by
   exactly the drop amount, proving stock pickup still routes through the global
   slot-0 economy path
 
-The implementation target is synced loot for all run drops, with each player
-owning independent inventory, gold, spellbook, and statbook state. That means:
+The implementation target remains synced loot for all run drops, with each
+player owning independent inventory, gold, spellbook, and statbook state. The
+metadata snapshot is a bridge to that target, not the final pickup contract.
+That means:
 
 - the host owns drop spawn/despawn identity and emits reliable loot lifecycle
   events; snapshots can carry presentation for already-known drops, but they are
@@ -508,8 +515,9 @@ Current verified gates:
   - latest persisted result is `runtime/run_reward_sync_probe.json`
   - verified host gold reward type `0x7DC`, amount `7`, tier `2`, and the
     active byte through live actor fields
-  - verified the current client receives run enemy snapshots but no local or
-    replicated gold reward actor
+  - verifies the client receives host-owned gold loot metadata through
+    `sd.world.get_replicated_loot()` while still receiving zero local stock gold
+    actors and zero world-snapshot gold actors
   - verified stock pickup still mutates host global gold by the drop amount,
     which is why synced loot needs host-confirmed pickup and participant-owned
     inventory/book state before visual drop mirroring is promoted

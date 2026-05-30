@@ -107,6 +107,14 @@ spellbook, and statbook state is mutable run/session state. Loot pickup must
 credit that mutable participant state, not `DAT_0081A388` global gold or
 `DAT_0081C264 + 0x13B8` as an unconditional slot-0 inventory root.
 
+The runtime now carries an explicit `ParticipantOwnedProgressionState` on each
+`ParticipantInfo`. The first fields are intentionally small: initialized flag,
+gold, and inventory/spellbook/statbook/loadout revision counters. Local UDP
+refresh populates the local participant's gold from live player state, and
+`sd.runtime.get_multiplayer_state()` exposes the participant ledger so live
+tests can prove loot pickup work is targeting participant state instead of
+silently falling back to the stock global economy.
+
 ## Scene Intent
 
 Participant scene ownership is explicit:
@@ -186,6 +194,8 @@ The current protocol header is still a small fixed-packet scaffold:
 - `LaunchPacket`
 - `CastPacket`
 - `ProgressionPacket`
+- `WorldSnapshotPacket`
+- `LootSnapshotPacket`
 - reliable loot/pickup packets for host-owned drops and per-participant
   inventory/spellbook/statbook deltas
 
@@ -197,8 +207,10 @@ gameplay events, progression deltas, and reconnect.
 The multiplayer service loop currently pumps Steam bootstrap/callback state every
 50 ms and mirrors readiness into `RuntimeState`. For rapid local development it
 can also pump a UDP loopback transport that exchanges `StatePacket` transform
-snapshots. The UDP path is a development backend for the same participant and
-replication boundary that Steam P2P and a later dedicated server should use.
+snapshots, host-owned `WorldSnapshot` actor snapshots, and host-owned run
+`LootSnapshot` metadata for gold drops. The UDP path is a development backend
+for the same participant and replication boundary that Steam P2P and a later
+dedicated server should use.
 
 ## Invariants
 

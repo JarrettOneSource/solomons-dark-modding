@@ -46,8 +46,15 @@ constexpr std::uint16_t kDefaultClientPort = 47771;
 constexpr std::uint64_t kLocalDevParticipantIdBase = 0x2000000000000000ull;
 constexpr std::uint64_t kRunWorldActorNetworkIdBase = 0x1000000000000ull;
 constexpr std::uint64_t kRunHostLocalWorldActorNetworkIdBase = 0x1001000000000ull;
+constexpr std::uint64_t kRunLootDropNetworkIdBase = 0x1002000000000ull;
 constexpr std::uint64_t kLocalTransportSendIntervalMs = 50;
 constexpr std::uint64_t kLocalTransportWorldSnapshotIntervalMs = 100;
+constexpr std::uint64_t kLocalTransportLootSnapshotIntervalMs = 100;
+constexpr std::uint32_t kGoldRewardNativeTypeId = 0x07DC;
+constexpr std::size_t kGoldRewardAmountTierOffset = 0x13C;
+constexpr std::size_t kGoldRewardAmountOffset = 0x140;
+constexpr std::size_t kGoldRewardLifetimeOffset = 0x144;
+constexpr std::size_t kGoldRewardActiveOffset = 0x148;
 constexpr int kMaxPacketsPerTick = 64;
 
 struct LocalPeerEndpoint {
@@ -70,6 +77,7 @@ struct LocalTransportState {
     std::uint64_t local_peer_id = 0;
     std::uint64_t last_send_ms = 0;
     std::uint64_t last_world_snapshot_send_ms = 0;
+    std::uint64_t last_loot_snapshot_send_ms = 0;
     std::uint32_t next_sequence = 1;
     std::uint32_t world_scene_epoch = 0;
     std::uint64_t packets_sent = 0;
@@ -77,8 +85,10 @@ struct LocalTransportState {
     std::string world_scene_key;
     std::unordered_map<uintptr_t, std::uint64_t> hub_world_actor_ids_by_address;
     std::unordered_map<uintptr_t, std::uint64_t> run_host_local_world_actor_ids_by_address;
+    std::unordered_map<uintptr_t, std::uint64_t> run_loot_drop_ids_by_address;
     std::uint32_t next_hub_world_actor_serial = 1;
     std::uint32_t next_run_host_local_world_actor_serial = 1;
+    std::uint32_t next_run_loot_drop_serial = 1;
     std::vector<LocalPeerEndpoint> peers;
 };
 
@@ -338,6 +348,24 @@ ParticipantSceneIntent SceneIntentFromWorldSceneKind(WorldSceneKind kind) {
     return intent;
 }
 
+LootDropKind LootDropKindFromPacketValue(std::uint8_t kind) {
+    switch (static_cast<LootDropKind>(kind)) {
+    case LootDropKind::Gold:
+        return LootDropKind::Gold;
+    case LootDropKind::Item:
+        return LootDropKind::Item;
+    case LootDropKind::Potion:
+        return LootDropKind::Potion;
+    case LootDropKind::Orb:
+        return LootDropKind::Orb;
+    case LootDropKind::Powerup:
+        return LootDropKind::Powerup;
+    case LootDropKind::Unknown:
+    default:
+        return LootDropKind::Unknown;
+    }
+}
+
 std::string BuildWorldSceneKey(const SDModSceneState& scene_state) {
     std::ostringstream stream;
     stream << scene_state.kind
@@ -353,6 +381,13 @@ std::uint64_t BuildRunWorldActorNetworkId(std::uint32_t spawn_serial) {
         return 0;
     }
     return kRunWorldActorNetworkIdBase | static_cast<std::uint64_t>(spawn_serial);
+}
+
+std::uint64_t BuildRunLootDropNetworkId(std::uint32_t spawn_serial) {
+    if (spawn_serial == 0) {
+        return 0;
+    }
+    return kRunLootDropNetworkIdBase | static_cast<std::uint64_t>(spawn_serial);
 }
 
 std::uint64_t AllocateRunHostLocalWorldActorNetworkId(const SDModSceneActorState& actor) {
@@ -373,6 +408,25 @@ std::uint64_t AllocateRunHostLocalWorldActorNetworkId(const SDModSceneActorState
         kRunHostLocalWorldActorNetworkIdBase | static_cast<std::uint64_t>(serial);
     g_local_transport.run_host_local_world_actor_ids_by_address.emplace(actor.actor_address, network_actor_id);
     return network_actor_id;
+}
+
+std::uint64_t AllocateRunLootDropNetworkId(const SDModSceneActorState& actor) {
+    if (actor.actor_address == 0 || actor.object_type_id == 0) {
+        return 0;
+    }
+
+    const auto existing = g_local_transport.run_loot_drop_ids_by_address.find(actor.actor_address);
+    if (existing != g_local_transport.run_loot_drop_ids_by_address.end()) {
+        return existing->second;
+    }
+
+    if (g_local_transport.next_run_loot_drop_serial == 0) {
+        g_local_transport.next_run_loot_drop_serial = 1;
+    }
+    const auto serial = g_local_transport.next_run_loot_drop_serial++;
+    const auto network_drop_id = BuildRunLootDropNetworkId(serial);
+    g_local_transport.run_loot_drop_ids_by_address.emplace(actor.actor_address, network_drop_id);
+    return network_drop_id;
 }
 
 bool ShouldReplicateWorldActor(
@@ -397,6 +451,19 @@ bool ShouldReplicateWorldActor(
     }
 
     return scene_kind == ParticipantSceneIntentKind::SharedHub;
+}
+
+bool ShouldReplicateLootDropActor(
+    const SDModSceneActorState& actor,
+    ParticipantSceneIntentKind scene_kind) {
+    return scene_kind == ParticipantSceneIntentKind::Run &&
+           actor.valid &&
+           actor.actor_address != 0 &&
+           actor.object_type_id == kGoldRewardNativeTypeId &&
+           std::isfinite(actor.x) &&
+           std::isfinite(actor.y) &&
+           std::isfinite(actor.radius) &&
+           actor.radius >= 0.0f;
 }
 
 std::uint64_t AllocateHubWorldActorNetworkId(const SDModSceneActorState& actor) {
@@ -428,6 +495,24 @@ void ClearHubWorldActorNetworkIds() {
 void ClearRunHostLocalWorldActorNetworkIds() {
     g_local_transport.run_host_local_world_actor_ids_by_address.clear();
     g_local_transport.next_run_host_local_world_actor_serial = 1;
+}
+
+void ClearRunLootDropNetworkIds() {
+    g_local_transport.run_loot_drop_ids_by_address.clear();
+    g_local_transport.next_run_loot_drop_serial = 1;
+}
+
+void RefreshWorldSceneTracking(const SDModSceneState& scene_state) {
+    const auto scene_key = BuildWorldSceneKey(scene_state);
+    if (scene_key == g_local_transport.world_scene_key) {
+        return;
+    }
+
+    g_local_transport.world_scene_key = scene_key;
+    g_local_transport.world_scene_epoch += 1;
+    ClearHubWorldActorNetworkIds();
+    ClearRunHostLocalWorldActorNetworkIds();
+    ClearRunLootDropNetworkIds();
 }
 
 void PruneHubWorldActorNetworkIds(
@@ -474,6 +559,31 @@ void PruneRunHostLocalWorldActorNetworkIds(
          iterator != g_local_transport.run_host_local_world_actor_ids_by_address.end();) {
         if (live_actor_addresses.find(iterator->first) == live_actor_addresses.end()) {
             iterator = g_local_transport.run_host_local_world_actor_ids_by_address.erase(iterator);
+        } else {
+            ++iterator;
+        }
+    }
+}
+
+void PruneRunLootDropNetworkIds(
+    const std::vector<SDModSceneActorState>& actors,
+    ParticipantSceneIntentKind scene_kind) {
+    if (scene_kind != ParticipantSceneIntentKind::Run) {
+        ClearRunLootDropNetworkIds();
+        return;
+    }
+
+    std::unordered_set<uintptr_t> live_actor_addresses;
+    for (const auto& actor : actors) {
+        if (ShouldReplicateLootDropActor(actor, scene_kind)) {
+            live_actor_addresses.insert(actor.actor_address);
+        }
+    }
+
+    for (auto iterator = g_local_transport.run_loot_drop_ids_by_address.begin();
+         iterator != g_local_transport.run_loot_drop_ids_by_address.end();) {
+        if (live_actor_addresses.find(iterator->first) == live_actor_addresses.end()) {
+            iterator = g_local_transport.run_loot_drop_ids_by_address.erase(iterator);
         } else {
             ++iterator;
         }
@@ -577,6 +687,47 @@ void PopulateWorldActorPresentationSnapshot(
     }
 }
 
+bool TryPopulateGoldLootDropSnapshot(
+    const SDModSceneActorState& actor,
+    std::uint64_t network_drop_id,
+    LootDropSnapshotPacketState* snapshot) {
+    if (snapshot == nullptr ||
+        network_drop_id == 0 ||
+        !ShouldReplicateLootDropActor(actor, ParticipantSceneIntentKind::Run)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t amount_tier = 0;
+    std::uint32_t amount_raw = 0;
+    std::uint32_t lifetime = 0;
+    std::uint8_t active = 0;
+    if (!memory.TryReadField(actor.actor_address, kGoldRewardAmountTierOffset, &amount_tier) ||
+        !memory.TryReadField(actor.actor_address, kGoldRewardAmountOffset, &amount_raw) ||
+        !memory.TryReadField(actor.actor_address, kGoldRewardLifetimeOffset, &lifetime) ||
+        !memory.TryReadField(actor.actor_address, kGoldRewardActiveOffset, &active)) {
+        return false;
+    }
+
+    LootDropSnapshotPacketState built{};
+    built.network_drop_id = network_drop_id;
+    built.native_type_id = actor.object_type_id;
+    built.drop_kind = static_cast<std::uint8_t>(LootDropKind::Gold);
+    built.flags = active != 0 ? LootDropSnapshotFlagActive : 0;
+    built.amount = amount_raw <= static_cast<std::uint32_t>((std::numeric_limits<std::int32_t>::max)())
+                       ? static_cast<std::int32_t>(amount_raw)
+                       : (std::numeric_limits<std::int32_t>::max)();
+    built.amount_tier = amount_tier;
+    built.actor_slot = actor.actor_slot;
+    built.world_slot = actor.world_slot;
+    built.lifetime = lifetime;
+    built.position_x = actor.x;
+    built.position_y = actor.y;
+    built.radius = actor.radius;
+    *snapshot = built;
+    return true;
+}
+
 std::vector<sockaddr_in> BuildKnownSendEndpoints() {
     std::vector<sockaddr_in> endpoints;
     if (g_local_transport.configured_remote_valid) {
@@ -625,6 +776,8 @@ void RefreshLocalParticipantFromGameState() {
         local->runtime.mana_max = static_cast<std::int32_t>(std::lround(player_state.max_mp));
         local->runtime.level = player_state.level;
         local->runtime.experience_current = player_state.xp;
+        local->owned_progression.initialized = true;
+        local->owned_progression.gold = player_state.gold;
         if (have_world_state) {
             local->runtime.wave = world_state.wave;
         }
@@ -697,13 +850,7 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
         return false;
     }
 
-    const auto scene_key = BuildWorldSceneKey(scene_state);
-    if (scene_key != g_local_transport.world_scene_key) {
-        g_local_transport.world_scene_key = scene_key;
-        g_local_transport.world_scene_epoch += 1;
-        ClearHubWorldActorNetworkIds();
-        ClearRunHostLocalWorldActorNetworkIds();
-    }
+    RefreshWorldSceneTracking(scene_state);
     PruneHubWorldActorNetworkIds(actors, scene_intent.kind);
     PruneRunHostLocalWorldActorNetworkIds(actors, scene_intent.kind);
 
@@ -793,6 +940,76 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
     return true;
 }
 
+bool BuildLocalLootSnapshotPacket(LootSnapshotPacket* packet) {
+    if (packet == nullptr || !g_local_transport.is_host) {
+        return false;
+    }
+
+    SDModSceneState scene_state;
+    if (!TryGetSceneState(&scene_state) || !scene_state.valid) {
+        return false;
+    }
+
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        return false;
+    }
+
+    const auto scene_intent = SceneIntentFromLocalScene();
+    if (scene_intent.kind != ParticipantSceneIntentKind::Run) {
+        PruneRunLootDropNetworkIds(actors, scene_intent.kind);
+        return false;
+    }
+
+    RefreshWorldSceneTracking(scene_state);
+    PruneRunLootDropNetworkIds(actors, scene_intent.kind);
+
+    LootSnapshotPacket built{};
+    built.header = MakePacketHeader(PacketKind::LootSnapshot, g_local_transport.next_sequence++);
+    built.authority_participant_id = g_local_transport.local_peer_id;
+    built.scene_epoch = g_local_transport.world_scene_epoch;
+    built.scene_kind = static_cast<std::uint8_t>(WorldSceneKindFromSceneIntent(scene_intent));
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+    if (local != nullptr) {
+        built.run_nonce = local->runtime.run_nonce;
+    }
+
+    std::uint32_t total_drop_count = 0;
+    for (const auto& actor : actors) {
+        if (!ShouldReplicateLootDropActor(actor, scene_intent.kind)) {
+            continue;
+        }
+
+        const auto network_drop_id = AllocateRunLootDropNetworkId(actor);
+        if (network_drop_id == 0) {
+            continue;
+        }
+
+        LootDropSnapshotPacketState snapshot{};
+        if (!TryPopulateGoldLootDropSnapshot(actor, network_drop_id, &snapshot)) {
+            continue;
+        }
+
+        total_drop_count += 1;
+        if (built.drop_count >= kLootSnapshotMaxDrops) {
+            continue;
+        }
+
+        built.drops[built.drop_count] = snapshot;
+        built.drop_count += 1;
+    }
+
+    built.drop_total_count = static_cast<std::uint8_t>((std::min<std::uint32_t>)(total_drop_count, 0xFFu));
+    if (total_drop_count > built.drop_count) {
+        built.snapshot_flags |= LootSnapshotFlagTruncated;
+    }
+
+    *packet = built;
+    return true;
+}
+
 void SendBufferToEndpoint(const void* packet, std::size_t packet_size, const sockaddr_in& endpoint) {
     if (packet == nullptr || packet_size == 0 || packet_size > static_cast<std::size_t>((std::numeric_limits<int>::max)())) {
         return;
@@ -814,6 +1031,10 @@ void SendPacketToEndpoint(const StatePacket& packet, const sockaddr_in& endpoint
 }
 
 void SendPacketToEndpoint(const WorldSnapshotPacket& packet, const sockaddr_in& endpoint) {
+    SendBufferToEndpoint(&packet, sizeof(packet), endpoint);
+}
+
+void SendPacketToEndpoint(const LootSnapshotPacket& packet, const sockaddr_in& endpoint) {
     SendBufferToEndpoint(&packet, sizeof(packet), endpoint);
 }
 
@@ -843,6 +1064,24 @@ void SendWorldSnapshot(std::uint64_t now_ms) {
 
     WorldSnapshotPacket packet{};
     if (!BuildLocalWorldSnapshotPacket(&packet) || packet.actor_count == 0) {
+        return;
+    }
+
+    const auto endpoints = BuildKnownSendEndpoints();
+    for (const auto& endpoint : endpoints) {
+        SendPacketToEndpoint(packet, endpoint);
+    }
+}
+
+void SendLootSnapshot(std::uint64_t now_ms) {
+    if (!g_local_transport.is_host ||
+        now_ms - g_local_transport.last_loot_snapshot_send_ms < kLocalTransportLootSnapshotIntervalMs) {
+        return;
+    }
+    g_local_transport.last_loot_snapshot_send_ms = now_ms;
+
+    LootSnapshotPacket packet{};
+    if (!BuildLocalLootSnapshotPacket(&packet)) {
         return;
     }
 
@@ -1055,6 +1294,62 @@ void ApplyWorldSnapshotPacket(const WorldSnapshotPacket& packet, const sockaddr_
     });
 }
 
+void ApplyLootSnapshotPacket(const LootSnapshotPacket& packet, const sockaddr_in& from, std::uint64_t now_ms) {
+    if (g_local_transport.is_host ||
+        packet.authority_participant_id == 0 ||
+        packet.authority_participant_id == g_local_transport.local_peer_id) {
+        return;
+    }
+
+    const auto drop_count = static_cast<std::uint8_t>(
+        (std::min<std::uint32_t>)(packet.drop_count, kLootSnapshotMaxDrops));
+    UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
+
+    const auto scene_kind = static_cast<WorldSceneKind>(packet.scene_kind);
+    UpdateRuntimeState([&](RuntimeState& state) {
+        LootSnapshotRuntimeInfo snapshot;
+        snapshot.valid = true;
+        snapshot.authority_participant_id = packet.authority_participant_id;
+        snapshot.received_ms = now_ms;
+        snapshot.sequence = packet.header.sequence;
+        snapshot.scene_epoch = packet.scene_epoch;
+        snapshot.run_nonce = packet.run_nonce;
+        snapshot.drop_total_count = packet.drop_total_count;
+        snapshot.truncated = (packet.snapshot_flags & LootSnapshotFlagTruncated) != 0;
+        snapshot.scene_intent = SceneIntentFromWorldSceneKind(scene_kind);
+        snapshot.drops.reserve(drop_count);
+
+        for (std::uint8_t index = 0; index < drop_count; ++index) {
+            const auto& packet_drop = packet.drops[index];
+            if (packet_drop.network_drop_id == 0 ||
+                packet_drop.native_type_id == 0 ||
+                !std::isfinite(packet_drop.position_x) ||
+                !std::isfinite(packet_drop.position_y) ||
+                !std::isfinite(packet_drop.radius) ||
+                packet_drop.radius < 0.0f) {
+                continue;
+            }
+
+            LootDropSnapshot drop;
+            drop.network_drop_id = packet_drop.network_drop_id;
+            drop.native_type_id = packet_drop.native_type_id;
+            drop.drop_kind = LootDropKindFromPacketValue(packet_drop.drop_kind);
+            drop.active = (packet_drop.flags & LootDropSnapshotFlagActive) != 0;
+            drop.amount = packet_drop.amount;
+            drop.amount_tier = packet_drop.amount_tier;
+            drop.actor_slot = packet_drop.actor_slot;
+            drop.world_slot = packet_drop.world_slot;
+            drop.lifetime = packet_drop.lifetime;
+            drop.position_x = packet_drop.position_x;
+            drop.position_y = packet_drop.position_y;
+            drop.radius = packet_drop.radius;
+            snapshot.drops.push_back(drop);
+        }
+
+        state.loot_snapshot = std::move(snapshot);
+    });
+}
+
 void ReceivePackets(std::uint64_t now_ms) {
     for (int packet_index = 0; packet_index < kMaxPacketsPerTick; ++packet_index) {
         std::array<char, sizeof(WorldSnapshotPacket)> packet_buffer{};
@@ -1105,6 +1400,17 @@ void ReceivePackets(std::uint64_t now_ms) {
             }
             g_local_transport.packets_received += 1;
             ApplyWorldSnapshotPacket(packet, from, now_ms);
+            continue;
+        }
+
+        if (kind == PacketKind::LootSnapshot && received == static_cast<int>(sizeof(LootSnapshotPacket))) {
+            LootSnapshotPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::LootSnapshot)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLootSnapshotPacket(packet, from, now_ms);
         }
     }
 }
@@ -1198,6 +1504,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     ReceivePackets(now_ms);
     SendLocalState(now_ms);
     SendWorldSnapshot(now_ms);
+    SendLootSnapshot(now_ms);
     PublishLocalTransportRuntimeState();
 }
 

@@ -83,6 +83,15 @@ struct ParticipantRuntimeInfo {
     ParticipantSceneIntent scene_intent;
 };
 
+struct ParticipantOwnedProgressionState {
+    bool initialized = false;
+    std::int32_t gold = 0;
+    std::uint32_t inventory_revision = 0;
+    std::uint32_t spellbook_revision = 0;
+    std::uint32_t statbook_revision = 0;
+    std::uint32_t loadout_revision = 0;
+};
+
 struct ParticipantTransformSample {
     bool valid = false;
     std::uint64_t received_ms = 0;
@@ -107,6 +116,7 @@ struct ParticipantInfo {
     std::uint64_t last_packet_ms = 0;
     MultiplayerCharacterProfile character_profile;
     ParticipantRuntimeInfo runtime;
+    ParticipantOwnedProgressionState owned_progression;
     std::vector<ParticipantTransformSample> transform_history;
 };
 
@@ -157,6 +167,34 @@ struct WorldSnapshotRuntimeInfo {
     bool truncated = false;
     ParticipantSceneIntent scene_intent;
     std::vector<WorldActorSnapshot> actors;
+};
+
+struct LootDropSnapshot {
+    std::uint64_t network_drop_id = 0;
+    std::uint32_t native_type_id = 0;
+    LootDropKind drop_kind = LootDropKind::Unknown;
+    bool active = false;
+    std::int32_t amount = 0;
+    std::int32_t amount_tier = 0;
+    std::int32_t actor_slot = -1;
+    std::int32_t world_slot = -1;
+    std::uint32_t lifetime = 0;
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    float radius = 0.0f;
+};
+
+struct LootSnapshotRuntimeInfo {
+    bool valid = false;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t received_ms = 0;
+    std::uint32_t sequence = 0;
+    std::uint32_t scene_epoch = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t drop_total_count = 0;
+    bool truncated = false;
+    ParticipantSceneIntent scene_intent;
+    std::vector<LootDropSnapshot> drops;
 };
 
 struct WorldSnapshotApplyRuntimeInfo {
@@ -212,6 +250,7 @@ struct RuntimeState {
     WorldSnapshotRuntimeInfo world_snapshot;
     std::vector<WorldSnapshotRuntimeInfo> world_snapshot_history;
     WorldSnapshotApplyRuntimeInfo world_snapshot_apply;
+    LootSnapshotRuntimeInfo loot_snapshot;
 };
 
 constexpr std::uint64_t kLocalParticipantId = 1ull;
@@ -267,6 +306,7 @@ const char* SessionTransportLabel(SessionTransportKind kind);
 const char* ParticipantKindLabel(ParticipantKind kind);
 const char* ParticipantControllerKindLabel(ParticipantControllerKind kind);
 const char* ParticipantSceneIntentKindLabel(ParticipantSceneIntentKind kind);
+const char* LootDropKindLabel(LootDropKind kind);
 
 }  // namespace sdmod::multiplayer
 

@@ -28,7 +28,8 @@ finished peer networking layer.
   50 ms and mirrors readiness into runtime state. It also pumps the local UDP
   development transport when `SDMOD_MULTIPLAYER_TRANSPORT=local_udp`.
 - `multiplayer_runtime_protocol.h` is a fixed-packet scaffold with
-  `State`, `Launch`, `Cast`, `Progression`, and `WorldSnapshot` packets. The
+  `State`, `Launch`, `Cast`, `Progression`, `WorldSnapshot`, and
+  `LootSnapshot` packets. The
   packet families below describe the target co-op protocol, not what the
   current header fully implements.
 - `multiplayer_local_transport.cpp` is the first replication slice: two local
@@ -75,12 +76,16 @@ finished peer networking layer.
   client are unregistered before a native scene switch so hub-to-run teardown
   does not leave loader-created actors in the outgoing world. Extra run enemies
   are still parked because the run enemy pool is stock-spawner owned. Run loot
-  drops are not global-RNG lockstep state: they must become host-owned lifecycle
+  drops are not global-RNG lockstep state: they are host-owned lifecycle
   entities with reliable spawn/despawn, pickup-request, and pickup-confirm/deny
-  events. `tools/probe_run_reward_sync.py` proves the current gap for gold: the
-  host sees type `0x7DC` drops with amount/tier fields, the client receives no
-  local or replicated drop, and stock pickup still credits the host's global
-  gold scalar. This is a development transport, not the final Steam P2P backend.
+  events. The local UDP transport now sends a run-only `LootSnapshot` metadata
+  slice for host gold drops (`0x7DC`) with a stable host drop id, amount, tier,
+  active byte, lifetime, and position, and exposes the client view through
+  `sd.world.get_replicated_loot()`. This deliberately does not spawn a stock
+  local gold actor on the client yet: stock pickup still credits the
+  process-global slot-0 gold scalar, so authoritative pickup must be hooked and
+  routed into participant-owned inventory/gold/book state first. This is a
+  development transport, not the final Steam P2P backend.
 - `docs/multiplayer-participant-model.md` is the implementation-facing model
   for profiles, scene intent, Lua bots, and future remote players.
 - `docs/networking/world-sync-authority-plan.md` records the current hub NPC
