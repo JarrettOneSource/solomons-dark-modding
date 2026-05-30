@@ -156,6 +156,7 @@ extern uintptr_t kSpellCastPurePrimary;
 extern uintptr_t kGoldChanged;
 extern uintptr_t kLevelUp;
 extern uintptr_t kGoldPickupCaller;
+extern uintptr_t kItemDropPickupCaller;
 extern uintptr_t kGoldSpendCaller;
 extern uintptr_t kGoldShopCaller;
 extern uintptr_t kGoldMirrorCaller;

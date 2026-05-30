@@ -74,10 +74,13 @@ finished peer networking layer.
   set converges to the host snapshot, and replicated hub NPCs created by the
   client are unregistered before a native scene switch so hub-to-run teardown
   does not leave loader-created actors in the outgoing world. Extra run enemies
-  are still parked because the run enemy pool is stock-spawner owned. Exact
-  reliable drops, pickups, and wave transitions are still snapshot-observed but
-  not client-owned until those lifecycle contracts are proven. This is a
-  development transport, not the final Steam P2P backend.
+  are still parked because the run enemy pool is stock-spawner owned. Run loot
+  drops are not global-RNG lockstep state: they must become host-owned lifecycle
+  entities with reliable spawn/despawn, pickup-request, and pickup-confirm/deny
+  events. `tools/probe_run_reward_sync.py` proves the current gap for gold: the
+  host sees type `0x7DC` drops with amount/tier fields, the client receives no
+  local or replicated drop, and stock pickup still credits the host's global
+  gold scalar. This is a development transport, not the final Steam P2P backend.
 - `docs/multiplayer-participant-model.md` is the implementation-facing model
   for profiles, scene intent, Lua bots, and future remote players.
 - `docs/networking/world-sync-authority-plan.md` records the current hub NPC
@@ -96,7 +99,7 @@ finished peer networking layer.
 | Identity | Connection-bound. Host ignores client-declared player / actor IDs. |
 | Mod compatibility | **Exact** protocol version + mod-manifest hash. Mismatch refuses connect. |
 | Anti-cheat | None in the serious sense. Baseline hygiene only (see below). |
-| Loot | Gold-only drops in v1. Non-gold inventory stays SP until non-gold RE work lands. |
+| Loot | Synced host-owned run drops. Each participant owns their own inventory, gold, spellbook, and statbook state; stock slot-0/global pickup paths must be replaced or bypassed before pickups become authoritative. |
 
 ## Tick rates
 
@@ -124,7 +127,12 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 - `join / bootstrap` — participant upsert + chunked full-state for fresh/reconnecting clients
 - `spawn / despawn` — entity lifecycle
 - `gameplay-event` — casts, damage, death, pickups, wave/boss transitions, run start/end
-- `progression-delta` — XP, gold, level, live loadout mutation (when non-gold lands)
+- `loot-drop` — host-owned drop spawn/despawn state for gold, item, potion,
+  orb, and powerup carriers as each native pickup seam is proven
+- `pickup-request / pickup-result` — client intent, host sanity check, and
+  per-participant inventory/spellbook/statbook credit
+- `progression-delta` — XP, gold, level, spellbook, statbook, and live loadout
+  mutation
 - `disconnect / reconnect`
 
 **Unreliable channel**
@@ -185,8 +193,8 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 - Enemy snapshot burst (20/30 Hz)
 - Cast / damage / death events
 - Wave + run lifecycle sync
-- Gold-drop spawn + pickup-request/confirm/deny
-- Progression-delta (XP / gold / level)
+- Loot-drop spawn/despawn + pickup-request/confirm/deny
+- Progression-delta (XP / gold / level / spellbook / statbook / live loadout)
 
 ### Phase 2 — Hardening
 
@@ -202,7 +210,8 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 
 - Dedicated server: `SteamGameServer_Init`, headless D3D9 stub, `--server` loader flag, slot-0 decoupling, server browser + direct-IP
 - Off-Steam transport: standalone GameNetworkingSockets or ENet
-- Non-gold inventory replication (after non-gold loot RE)
+- Durable participant inventory/book persistence after the per-run ownership
+  model is proven
 
 ## Latency characteristics (what input lag looks like)
 
@@ -213,7 +222,7 @@ For a non-host client on a typical Steam SDR connection (50–100ms RTT):
 | Movement | **Zero lag** — local echo applies input the frame it's pressed. |
 | Cast spell (animation) | **Zero lag** — animation plays optimistically on key-down. |
 | See damage numbers / hit resolve | **RTT delay** (~50–100ms) — host resolves, broadcasts. |
-| Pick up gold | **RTT delay** — pickup-request → host confirm. |
+| Pick up loot | **RTT delay** — pickup-request -> host confirm; the host credits the owning participant's inventory, gold, spellbook, or statbook state. |
 | See enemies | **100–150ms in the past** — snapshot interpolation buffer. |
 | Hard-snap / rubber-band | **Rare** — collision edge cases, desync after host correction. |
 
@@ -235,15 +244,15 @@ host position over a short window.
 - Off-Steam transport
 - Injected anti-cheat (EAC / BattleEye / VAC)
 - Persistent-world machinery
-- Inventory replication beyond gold
 - Hot-swap of participant controller on live actor
 
 ## Known gaps we accept in v1
 
 - Host can cheat in their own session (trusted-peer model)
 - Cross-region divergence (host sims one region; multi-region is later work)
-- Durable inventory persistence beyond one run (Phase 3+)
-- Gold-only drops are likely the biggest intentional v1 gameplay limitation; non-gold inventory replication stays deferred until the RE work lands.
+- Durable inventory/book persistence beyond one run (Phase 3+)
+- Non-gold item and potion materialization still need native pickup/factory RE,
+  but the multiplayer model no longer treats them as single-player-only state.
 
 ## Run-identity object (replaces "save-provenance" from earlier drafts)
 

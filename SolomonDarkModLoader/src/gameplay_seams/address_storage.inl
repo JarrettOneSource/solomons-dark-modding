@@ -139,6 +139,7 @@ uintptr_t kSpellCastPurePrimary = 0;
 uintptr_t kGoldChanged = 0;
 uintptr_t kLevelUp = 0;
 uintptr_t kGoldPickupCaller = 0;
+uintptr_t kItemDropPickupCaller = 0;
 uintptr_t kGoldSpendCaller = 0;
 uintptr_t kGoldShopCaller = 0;
 uintptr_t kGoldMirrorCaller = 0;

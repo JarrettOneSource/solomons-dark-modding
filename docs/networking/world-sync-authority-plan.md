@@ -388,11 +388,57 @@ different from the removed manual `sd.world.spawn_enemy` path: the client still
 uses the stock wave-spawner placement, group-budget, config, and bookkeeping
 path to create enemy actors.
 
-Exact reliable drops, pickups, and wave transitions remain observed but are not
-yet event-owned. Those require reliable lifecycle ownership and the
-create/register/destroy contracts above to be proven together.
+Exact reliable pickups and wave transitions remain observed but are not yet
+event-owned. Drops must be synced, but the safe boundary is host-owned lifecycle
+plus host-confirmed pickup, not client-local pickup of mirrored stock actors.
 
-## Live Verification - 2026-05-28
+## Run Loot Sync Boundary - 2026-05-29
+
+`tools/probe_run_reward_sync.py` is the focused local UDP probe for the first
+reward boundary. It launches a host/client run, disables Lua bots, starts host
+waves, spawns a host gold reward through `sd.world.spawn_reward`, and then
+captures `sd.world.list_actors()` plus `sd.world.get_replicated_actors()` on
+both processes. The current live result is:
+
+- host gold reward actors are visible as native type `0x7DC`
+- `+0x13C` carries the amount tier byte; amount `7` produced tier `2`
+- `+0x140` carries the amount; the probe read back amount `7`
+- `+0x148` is the active byte; the probe records it, but active/inactive is
+  treated as observed stock state instead of the reward-sync pass/fail gate
+- the client had zero local gold drops and zero replicated gold drops
+- the client still had valid run enemy snapshots, so the gap is specific to
+  reward lifecycle, not a broken world snapshot channel
+- spawning a gold drop at the host player position increased host global gold by
+  exactly the drop amount, proving stock pickup still routes through the global
+  slot-0 economy path
+
+The implementation target is synced loot for all run drops, with each player
+owning independent inventory, gold, spellbook, and statbook state. That means:
+
+- the host owns drop spawn/despawn identity and emits reliable loot lifecycle
+  events; snapshots can carry presentation for already-known drops, but they are
+  not the authority for pickup credit
+- clients may request a pickup, but the host resolves range/lineage sanity and
+  sends confirm/deny
+- credit applies to the owning participant's state, not to the stock global
+  gold scalar or the local slot-0 inventory root
+- gold uses `GoldActor_TickPickup (0x005E66B0)` because it still has actor,
+  amount, and pickup context before `Gold_ChangeGlobal` loses participant
+  identity
+- item and potion pickup ownership should start from
+  `ItemDropActor_TickPickup (0x005E6B50)` because it still has the drop carrier
+  and held item pointer before `Inventory_InsertOrStackItem` receives the stock
+  slot-0 inventory root
+- orbs (`0x7DB`) and powerups (`0x7F6`) are reward actors rather than inventory
+  roots; if they remain per-player rewards, they need their own pickup hooks and
+  participant credit paths
+
+This deliberately blocks visual-only drop mirroring as a final fix. Mirroring a
+stock gold actor on the client before pickup ownership exists would allow a
+client-local walk-over to mutate that client's local global gold and would not
+prove the host-authoritative loot contract.
+
+## Live Verification - 2026-05-29
 
 Current verified gates:
 
@@ -458,6 +504,15 @@ Current verified gates:
     HP mismatch
   - observed no live proof that the native death-handled byte should be copied
     over the network
+- `python3 tools/probe_run_reward_sync.py --attempts 3`
+  - latest persisted result is `runtime/run_reward_sync_probe.json`
+  - verified host gold reward type `0x7DC`, amount `7`, tier `2`, and the
+    active byte through live actor fields
+  - verified the current client receives run enemy snapshots but no local or
+    replicated gold reward actor
+  - verified stock pickup still mutates host global gold by the drop amount,
+    which is why synced loot needs host-confirmed pickup and participant-owned
+    inventory/book state before visual drop mirroring is promoted
 - `python3 tools/verify_local_multiplayer_sync.py`
   - hub and testrun participant materialization, movement/heading, nameplates,
     and player/player push still pass with the world snapshot path enabled

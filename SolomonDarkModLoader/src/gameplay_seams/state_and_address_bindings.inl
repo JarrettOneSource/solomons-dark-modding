@@ -176,6 +176,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("run_lifecycle.hooks", "level_up", kLevelUp),
 
         SDMOD_ADDR("run_lifecycle.callers", "gold_pickup", kGoldPickupCaller),
+        SDMOD_ADDR("run_lifecycle.callers", "item_drop_pickup", kItemDropPickupCaller),
         SDMOD_ADDR("run_lifecycle.callers", "gold_spend", kGoldSpendCaller),
         SDMOD_ADDR("run_lifecycle.callers", "gold_shop", kGoldShopCaller),
         SDMOD_ADDR("run_lifecycle.callers", "gold_mirror", kGoldMirrorCaller),

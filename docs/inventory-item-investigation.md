@@ -532,6 +532,25 @@ This was an offset sanity check in a transition scene, not a gameplay pickup
 proof. The older live gameplay inventory probe remains the stronger proof for
 the initial two-potion inventory state.
 
+### Multiplayer reward sync probe
+
+`python3 tools/probe_run_reward_sync.py --attempts 3` is the current local UDP
+reward boundary probe. It confirmed that host-spawned gold rewards appear in
+the host actor list as type `0x7DC`, with amount tier at `+0x13C`, amount at
+`+0x140`, lifetime at `+0x144`, and active byte at `+0x148`. The same run client
+received valid enemy snapshots but no local or replicated gold reward actor.
+Spawning a pickup-range reward on the host changed the host global gold by the
+drop amount, proving that stock pickup still goes through the global slot-0 gold
+path.
+
+For multiplayer, synced loot is required, but pickup credit must be
+participant-owned. Gold, item, potion, orb, and powerup drops should be
+host-owned lifecycle objects. Clients can request pickup, and the host should
+confirm or deny the request, then credit the owning participant's inventory,
+gold, spellbook, or statbook state. This keeps a joined client's primary
+single-player save isolated from the host's world and prevents client-local
+stock pickup from mutating the wrong process-global state.
+
 ### Remaining gaps after pickup pass
 
 - exact item materialization behind the owner vtable method at `+0x140` remains
@@ -540,15 +559,22 @@ the initial two-potion inventory state.
   unresolved
 - participant inventory implementation still needs a storage / lifetime contract
   for per-participant `SdItemListRoot` instances and equip sinks
+- participant spellbook and statbook state need the same storage / lifetime
+  contract as inventory, because loot and progression can mutate those books
+  independently per player
 - shop / trader purchase paths still need a separate economy ownership pass;
   `0x0056BF70` is already visible as a likely future seam because it spends
   global gold through `Gold_ChangeGlobal(-price, 0)` and inserts into the active
   inventory root
 
-## Current Best Next Targets (April 30)
+## Current Best Next Targets
 
+- define the reliable multiplayer loot-drop lifecycle packet/event contract
+  around host-owned drop IDs and pickup confirm/deny
 - implement a loader-side participant inventory state object with an
   `SdItemListRoot`-compatible root and per-participant gold
+- extend that participant state object with spellbook and statbook ownership
+  before rewards/progression can mutate those books in multiplayer
 - hook `ItemDropActor_TickPickup (0x005E6B50)` first, because it preserves both
   the world drop actor and the held item pointer before ownership is lost
 - hook `GoldActor_TickPickup (0x005E66B0)` second, because it preserves the gold

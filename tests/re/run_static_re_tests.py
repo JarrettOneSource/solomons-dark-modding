@@ -87,6 +87,7 @@ LOCAL_MULTIPLAYER_SYNC_VERIFIER = ROOT / "tools/verify_local_multiplayer_sync.py
 RUN_WORLD_SNAPSHOT_VERIFIER = ROOT / "tools/verify_run_world_snapshot.py"
 RUN_ENEMY_SEED_VERIFIER = ROOT / "tools/verify_run_enemy_seed_viability.py"
 RUN_ENEMY_PRESENTATION_PROBE = ROOT / "tools/probe_run_enemy_presentation_sync.py"
+RUN_REWARD_SYNC_PROBE = ROOT / "tools/probe_run_reward_sync.py"
 SCENE_SELECTION = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_bot_priming_and_selection.inl"
 )
@@ -4268,7 +4269,14 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     run_snapshot_verifier_text = read_text(RUN_WORLD_SNAPSHOT_VERIFIER)
     run_seed_verifier_text = read_text(RUN_ENEMY_SEED_VERIFIER)
     run_enemy_presentation_probe_text = read_text(RUN_ENEMY_PRESENTATION_PROBE)
+    run_reward_sync_probe_text = read_text(RUN_REWARD_SYNC_PROBE)
     named_hub_npc_probe_text = read_text(ROOT / "tools/probe_named_hub_npc_fields.py")
+    inventory_item_doc_text = read_text(ROOT / "docs/inventory-item-investigation.md")
+    binary_layout_text = read_text(BINARY_LAYOUT)
+    gameplay_seams_header_text = read_text(ROOT / "SolomonDarkModLoader/src/gameplay_seams.h")
+    gameplay_seams_bindings_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/gameplay_seams/state_and_address_bindings.inl"
+    )
 
     required_pairs = (
         (protocol_text, "constexpr std::uint16_t kProtocolVersion = 11;"),
@@ -4425,6 +4433,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (networking_doc_text, "run enemy presentation probe"),
         (networking_doc_text, "death-handled byte"),
         (networking_doc_text, "per-family allocation sizes"),
+        (networking_doc_text, "Synced host-owned run drops"),
+        (networking_doc_text, "pickup-request / pickup-result"),
+        (networking_doc_text, "inventory, gold, spellbook, and statbook state"),
         (world_sync_plan_text, "tools/probe_named_hub_npc_fields.py"),
         (world_sync_plan_text, "FUN_00502120"),
         (world_sync_plan_text, "larger player/Student render window"),
@@ -4436,6 +4447,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_sync_plan_text, "client's native wave spawner as a local"),
         (world_sync_plan_text, "host lifecycle spawn serial"),
         (world_sync_plan_text, "extra_unparked_client_tracked_enemies"),
+        (world_sync_plan_text, "tools/probe_run_reward_sync.py"),
+        (world_sync_plan_text, "host gold reward actors are visible as native type `0x7DC`"),
+        (world_sync_plan_text, "host-confirmed pickup and participant-owned"),
         (named_hub_npc_probe_text, "NAMED_TYPES"),
         (named_hub_npc_probe_text, "FUN_00502450"),
         (named_hub_npc_probe_text, "moving_drive_types"),
@@ -4444,6 +4458,10 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (run_enemy_presentation_probe_text, "setup_live_run_pair"),
         (run_enemy_presentation_probe_text, "max_drive_byte_mismatches"),
         (run_enemy_presentation_probe_text, "max_snapshot_dead"),
+        (run_reward_sync_probe_text, "GOLD_REWARD_TYPE_ID = 0x07DC"),
+        (run_reward_sync_probe_text, "stock_pickup_mutates_host_global_gold"),
+        (run_reward_sync_probe_text, "current_world_snapshot_excludes_gold_drops"),
+        (run_reward_sync_probe_text, "replication_safe_without_pickup_hook"),
         (run_seed_verifier_text, "stock_run_enemy_lockstep_viable"),
         (run_seed_verifier_text, "global_seed_as_primary_sync_recommended"),
         (run_seed_verifier_text, "tracked_count_sequence_diverged"),
@@ -4462,6 +4480,17 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (participant_doc_text, "push both actors"),
         (participant_doc_text, "sd.bots.get_participants()"),
         (participant_doc_text, "sd.bots.get_nameplate(actor_address)"),
+        (participant_doc_text, "Participant-Owned Inventory And Books"),
+        (participant_doc_text, "inventory root and equipment sinks"),
+        (participant_doc_text, "spellbook unlock/upgrade state"),
+        (participant_doc_text, "statbook allocation/upgrade state"),
+        (inventory_item_doc_text, "tools/probe_run_reward_sync.py --attempts 3"),
+        (inventory_item_doc_text, "ItemDropActor_TickPickup (0x005E6B50)"),
+        (inventory_item_doc_text, "credit the owning participant's inventory"),
+        (inventory_item_doc_text, "gold, spellbook, or statbook state"),
+        (binary_layout_text, "item_drop_pickup=0x005E6B50"),
+        (gameplay_seams_header_text, "kItemDropPickupCaller"),
+        (gameplay_seams_bindings_text, '"item_drop_pickup", kItemDropPickupCaller'),
         (script_text, "local-mp-host"),
         (script_text, "local-mp-client"),
         (script_text, '$launchPreset = "create_manual"'),
@@ -4486,6 +4515,18 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
             "local multiplayer transport wiring missing token(s): " + ", ".join(missing))
     if "latest runtime snapshot" in networking_doc_text:
         raise StaticReTestFailure("networking docs still describe latest-packet playback instead of interpolation history")
+    forbidden_networking_tokens = (
+        "Non-gold inventory stays SP",
+        "Gold-only drops",
+        "Inventory replication beyond gold",
+    )
+    present_networking_regressions = [
+        token for token in forbidden_networking_tokens if token in networking_doc_text
+    ]
+    if present_networking_regressions:
+        raise StaticReTestFailure(
+            "networking docs still describe loot as single-player/gold-only: " +
+            ", ".join(present_networking_regressions))
 
     return "local UDP dev transport is wired through protocol, service loop, interpolated participant/world sync, docs, and launch script"
 

@@ -84,6 +84,29 @@ other's save files. A local save or create-screen choice can be translated into 
 profile, and that profile is then translated locally into the stock source
 profile, progression, appearance, and loadout data needed by the game.
 
+## Participant-Owned Inventory And Books
+
+The multiplayer participant owns gameplay progression state that stock
+single-player stores on local slot 0 or in process-global fields:
+
+- inventory root and equipment sinks
+- gold
+- spellbook unlock/upgrade state
+- statbook allocation/upgrade state
+- current loadout derived from those books
+
+Joined clients should use temporary multiplayer profile storage so a host's
+world state cannot corrupt the client's primary single-player save. During a
+session, host-confirmed rewards and progression deltas update the participant
+state first. The stock UI and actor runtime can then be pointed at, or refreshed
+from, that participant-owned state as a presentation layer.
+
+This is different from the existing character profile summary in `StatePacket`.
+The profile gets a participant into the world; participant-owned inventory,
+spellbook, and statbook state is mutable run/session state. Loot pickup must
+credit that mutable participant state, not `DAT_0081A388` global gold or
+`DAT_0081C264 + 0x13B8` as an unconditional slot-0 inventory root.
+
 ## Scene Intent
 
 Participant scene ownership is explicit:
@@ -163,6 +186,8 @@ The current protocol header is still a small fixed-packet scaffold:
 - `LaunchPacket`
 - `CastPacket`
 - `ProgressionPacket`
+- reliable loot/pickup packets for host-owned drops and per-participant
+  inventory/spellbook/statbook deltas
 
 Those structs are useful for early shape checks, but the actual co-op design in
 `docs/networking/README.md` requires a broader reliable/unreliable packet family
