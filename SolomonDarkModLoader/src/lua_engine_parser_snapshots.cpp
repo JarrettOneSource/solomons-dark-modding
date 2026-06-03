@@ -26,7 +26,7 @@ void PushBotEquipVisualLaneState(
 void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot) {
     using namespace sdmod::detail::parsers;
 
-    lua_createtable(state, 0, 78);
+    lua_createtable(state, 0, 80);
     lua_pushboolean(state, snapshot.available ? 1 : 0);
     lua_setfield(state, -2, "available");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.bot_id));
@@ -171,6 +171,10 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "render_advance_rate");
     lua_pushnumber(state, snapshot.render_advance_phase);
     lua_setfield(state, -2, "render_advance_phase");
+    lua_pushnumber(state, snapshot.render_drive_effect_timer);
+    lua_setfield(state, -2, "render_drive_effect_timer");
+    lua_pushnumber(state, snapshot.render_drive_effect_progress);
+    lua_setfield(state, -2, "render_drive_effect_progress");
     lua_pushnumber(state, snapshot.render_drive_overlay_alpha);
     lua_setfield(state, -2, "render_drive_overlay_alpha");
     lua_pushnumber(state, snapshot.render_drive_move_blend);

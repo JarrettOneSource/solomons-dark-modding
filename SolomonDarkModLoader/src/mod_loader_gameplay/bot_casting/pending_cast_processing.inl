@@ -464,10 +464,61 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         const bool native_primary_action_active =
             OngoingCastNeedsNativeTargetActor(ongoing) &&
             (actor_e4 != 0 || actor_e8 != 0);
+        const bool native_remote_participant = IsNativeRemoteParticipantBinding(binding);
+        const bool remote_input_driven_cast =
+            native_remote_participant && ongoing.remote_input_controlled;
+        if (remote_input_driven_cast) {
+            multiplayer::BotCastInputState remote_input_state{};
+            const bool have_remote_input =
+                multiplayer::ReadBotCastInputState(
+                    binding->bot_id,
+                    &remote_input_state) &&
+                remote_input_state.cast_sequence ==
+                    ongoing.remote_input_cast_sequence;
+            const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+            if (have_remote_input) {
+                ongoing.remote_input_release_requested =
+                    remote_input_state.release_requested;
+                ongoing.remote_input_timed_out =
+                    !remote_input_state.release_requested &&
+                    remote_input_state.last_update_ms != 0 &&
+                    now_ms > remote_input_state.last_update_ms &&
+                    now_ms - remote_input_state.last_update_ms >= 400;
+                if (remote_input_state.has_aim_target) {
+                    ongoing.have_aim_target = true;
+                    ongoing.aim_target_x = remote_input_state.aim_target_x;
+                    ongoing.aim_target_y = remote_input_state.aim_target_y;
+                }
+                if (remote_input_state.has_aim_angle) {
+                    ongoing.have_aim_heading = true;
+                    ongoing.aim_heading = remote_input_state.aim_angle;
+                }
+                if (remote_input_state.target_actor_address != 0) {
+                    ongoing.target_actor_address =
+                        remote_input_state.target_actor_address;
+                    binding->facing_target_actor_address =
+                        remote_input_state.target_actor_address;
+                } else {
+                    ongoing.target_actor_address = 0;
+                    binding->facing_target_actor_address = 0;
+                    ClearOngoingCastNativeTargetActor(actor_address, &ongoing);
+                }
+            } else {
+                ongoing.remote_input_timed_out =
+                    ongoing.ticks_waiting >
+                    ParticipantEntityBinding::OngoingCastState::kTargetlessRetargetGraceTicks;
+            }
+        }
 
         ongoing.ticks_waiting += 1;
         if (ongoing.startup_in_progress) {
             ongoing.startup_ticks_waiting += 1;
+        }
+        if (ongoing.remote_input_release_requested ||
+            ongoing.remote_input_timed_out) {
+            ongoing.remote_input_release_ticks_waiting += 1;
+        } else {
+            ongoing.remote_input_release_ticks_waiting = 0;
         }
         if (drive_state != 0 || no_interrupt != 0 || native_primary_action_active) {
             ongoing.saw_latch = true;
@@ -484,6 +535,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         if (ongoing.mana_charge_kind != multiplayer::BotManaChargeKind::None &&
             ongoing.progression_runtime_address != 0 &&
             ongoing.saw_activity &&
+            !remote_input_driven_cast &&
             !ongoing.bounded_release_requested &&
             ongoing.mana_cost > 0.0f) {
             float current_mp = 0.0f;
@@ -533,14 +585,64 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         }
 
         // Some native primary actions do not publish a live spell-object handle,
-        // but their emission still runs through actor+0xE4/0xE8. Do not clear
-        // that latch at the first short settle or the hit path can be cut off.
-        constexpr int kPurePrimaryNoHandleSettleTicks = 160;
-        const bool pure_primary_no_handle_settled =
+        // but their emission still runs through actor+0xE4/0xE8. Remote player
+        // mirror casts are driven by explicit input phases: keep them alive
+        // while the sender is holding input, then settle promptly after release
+        // or input timeout.
+        constexpr int kRemoteReleasedPurePrimaryNoHandleSettleTicks = 2;
+        constexpr int kRemotePerCastPurePrimaryProjectileSettleTicks = 2;
+        constexpr int kRemotePerCastPurePrimaryNoProjectileSafetyTicks = 90;
+        constexpr int kRemotePurePrimaryNoHandleMinimumVisibleTicks = 20;
+        constexpr int kBotPurePrimaryNoHandleSettleTicks = 160;
+        const bool remote_input_release_or_timeout =
+            remote_input_driven_cast &&
+            (ongoing.remote_input_release_requested ||
+             ongoing.remote_input_timed_out);
+        const bool pure_primary_without_live_handle =
             ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
             ongoing.saw_activity &&
-            !has_live_handle &&
-            ongoing.ticks_waiting >= kPurePrimaryNoHandleSettleTicks;
+            !has_live_handle;
+        const bool remote_per_cast_pure_primary_without_live_handle =
+            remote_input_driven_cast &&
+            pure_primary_without_live_handle &&
+            ongoing.mana_charge_kind == multiplayer::BotManaChargeKind::PerCast;
+        if (remote_per_cast_pure_primary_without_live_handle &&
+            ongoing.remote_per_cast_projectile_baseline_valid &&
+            !ongoing.remote_per_cast_projectile_observed) {
+            uintptr_t observed_projectile_actor = 0;
+            if (TryFindNewPurePrimaryProjectileActorInScene(
+                    ongoing.remote_per_cast_projectile_expected_type,
+                    ongoing.remote_per_cast_projectile_addresses_before,
+                    &observed_projectile_actor)) {
+                ongoing.remote_per_cast_projectile_observed = true;
+                ongoing.remote_per_cast_projectile_observed_actor = observed_projectile_actor;
+            }
+        }
+        if (ongoing.remote_per_cast_projectile_observed) {
+            ongoing.remote_per_cast_projectile_observed_ticks_waiting += 1;
+        } else {
+            ongoing.remote_per_cast_projectile_observed_ticks_waiting = 0;
+        }
+        const bool remote_per_cast_pure_primary_no_handle_settled =
+            remote_per_cast_pure_primary_without_live_handle &&
+            ((ongoing.remote_per_cast_projectile_observed &&
+              ongoing.remote_per_cast_projectile_observed_ticks_waiting >=
+                  kRemotePerCastPurePrimaryProjectileSettleTicks) ||
+             ongoing.ticks_waiting >= kRemotePerCastPurePrimaryNoProjectileSafetyTicks);
+        const bool remote_release_driven_pure_primary_no_handle_settled =
+            remote_input_driven_cast &&
+            pure_primary_without_live_handle &&
+            ongoing.mana_charge_kind != multiplayer::BotManaChargeKind::PerCast &&
+            remote_input_release_or_timeout &&
+            ongoing.remote_input_release_ticks_waiting >=
+                kRemoteReleasedPurePrimaryNoHandleSettleTicks &&
+            ongoing.ticks_waiting >= kRemotePurePrimaryNoHandleMinimumVisibleTicks;
+        const bool pure_primary_no_handle_settled =
+            pure_primary_without_live_handle &&
+            (remote_input_driven_cast
+                 ? (remote_per_cast_pure_primary_no_handle_settled ||
+                    remote_release_driven_pure_primary_no_handle_settled)
+                 : ongoing.ticks_waiting >= kBotPurePrimaryNoHandleSettleTicks);
         const bool held_native_cast =
             OngoingCastRequiresHeldCastInputDuringNativeTick(ongoing);
         const bool bounded_held_native_cast =
@@ -584,10 +686,17 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             earth_damage_projection.target_hp > 0.0f &&
             std::isfinite(earth_damage_projection.projected_hp_damage) &&
             earth_damage_projection.projected_hp_damage + 0.001f >= earth_damage_projection.target_hp;
+        const bool remote_bounded_release_ready =
+            remote_input_driven_cast &&
+            remote_input_release_or_timeout &&
+            active_spell_state.readable;
+        const bool bot_bounded_release_ready =
+            !remote_input_driven_cast &&
+            (earth_max_size_reached || earth_target_lethal_release_ready);
         const bool bounded_held_release_ready =
             bounded_held_native_cast &&
             active_spell_state.readable &&
-            (earth_max_size_reached || earth_target_lethal_release_ready);
+            (remote_bounded_release_ready || bot_bounded_release_ready);
         const bool bounded_release_just_requested =
             bounded_held_release_ready && !ongoing.bounded_release_requested;
         if (bounded_release_just_requested) {
@@ -652,7 +761,9 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.bounded_max_size_reached = earth_max_size_reached;
             ongoing.bounded_release_at_max_size = earth_max_size_reached;
             ongoing.bounded_release_target_lethal =
-                !earth_max_size_reached && earth_target_lethal_release_ready;
+                !remote_input_driven_cast &&
+                !earth_max_size_reached &&
+                earth_target_lethal_release_ready;
             ongoing.bounded_release_charge = release_charge;
             ongoing.bounded_release_base_damage = release_base_damage;
             ongoing.bounded_release_projected_damage =
@@ -716,10 +827,17 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             no_interrupt == 0 &&
             actor_e4 == 0 &&
             actor_e8 == 0;
+        const bool targetless_aim_point_primary =
+            ongoing.have_aim_target &&
+            binding->facing_target_actor_address == 0 &&
+            ongoing.target_actor_address == 0 &&
+            !OngoingCastTracksLiveTargetDuringNativeTick(ongoing) &&
+            !OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing);
         const bool held_target_missing =
             held_native_cast &&
             ongoing.saw_activity &&
             !target_refreshed &&
+            !targetless_aim_point_primary &&
             binding->facing_target_actor_address == 0 &&
             ongoing.target_actor_address == 0;
         if (held_native_cast && target_refreshed &&
@@ -746,6 +864,19 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.bounded_release_requested &&
             ongoing.bounded_post_release_ticks_waiting <
                 kBoundedHeldPostReleaseWorldUpdateTicks;
+        const bool remote_pure_primary_no_handle_visibility_pending =
+            remote_input_driven_cast &&
+            ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
+            !has_live_handle &&
+            ongoing.ticks_waiting <
+                kRemotePurePrimaryNoHandleMinimumVisibleTicks;
+        const bool remote_input_release_settled =
+            remote_input_release_or_timeout &&
+            ongoing.saw_activity &&
+            !bounded_held_native_cast &&
+            !remote_per_cast_pure_primary_without_live_handle &&
+            !remote_pure_primary_no_handle_visibility_pending &&
+            ongoing.remote_input_release_ticks_waiting >= 2;
         const bool safety_cap_hit =
             !bounded_native_charge_observable &&
             !bounded_release_window_pending &&
@@ -885,6 +1016,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         }
 
         if (pure_primary_no_handle_settled || startup_timeout_hit || activity_released ||
+            remote_input_release_settled ||
             bounded_held_native_released || bounded_held_release_tick_processed ||
             bounded_held_release_requested_safety_cap || target_lost || safety_cap_hit) {
             const char* exit_label = "safety_cap";
@@ -892,6 +1024,10 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 exit_label = "startup_timeout";
             } else if (pure_primary_no_handle_settled) {
                 exit_label = "pure_primary_no_handle_settled";
+            } else if (remote_input_release_settled) {
+                exit_label = ongoing.remote_input_timed_out
+                    ? "remote_input_timeout"
+                    : "remote_input_released";
             } else if (bounded_held_native_released || bounded_held_release_tick_processed ||
                        bounded_held_release_requested_safety_cap) {
                 exit_label = ongoing.bounded_release_target_lethal

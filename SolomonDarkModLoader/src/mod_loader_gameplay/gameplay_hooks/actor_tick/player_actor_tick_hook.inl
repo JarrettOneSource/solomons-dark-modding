@@ -133,6 +133,12 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             gameplay_slot_wizard_actor = IsGameplaySlotWizardKind(binding->kind);
             (void)RefreshNativeRemoteParticipantTransformTarget(binding, native_tick_now_ms);
             tracked_actor_native_remote = IsNativeRemoteParticipantBinding(binding);
+            if (tracked_actor_native_remote) {
+                (void)EnsureActorProgressionRuntimeFieldFromHandle(
+                    actor_address,
+                    "native_remote_pre_tick_progression_runtime");
+                (void)ApplyNativeRemoteParticipantVitalState(binding, actor_address);
+            }
             tracked_actor_dead = IsActorRuntimeDead(actor_address);
             if (tracked_actor_dead) {
                 QuiesceDeadWizardBinding(binding);
@@ -225,18 +231,21 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         // native MoveStep path. Leaving +0x158/+0x15C populated here lets stock
         // consume the previous frame's vector and then our movement step
         // consumes the new vector again.
-        const bool stock_tick_may_consume_stale_loader_vector =
+        const bool native_remote_binding = IsNativeRemoteParticipantBinding(binding);
+        const bool loader_owned_movement_vector_present =
             binding->movement_active || binding->last_movement_displacement > 0.0001f;
+        const bool stock_tick_may_consume_stale_loader_vector =
+            native_remote_binding || loader_owned_movement_vector_present;
         if (stock_tick_may_consume_stale_loader_vector) {
             ClearWizardBotMovementVectorInputs(actor_address);
         }
-        if (binding->ongoing_cast.active) {
+        if (binding->ongoing_cast.active && !native_remote_binding) {
             (void)StopOngoingBotCastForManaReserve(
                 binding,
                 "pre_bot_stock_tick_mana_reserve");
         }
         bool mana_reserve_active_for_stock_tick = false;
-        if (!binding->ongoing_cast.active) {
+        if (!binding->ongoing_cast.active && !native_remote_binding) {
             mana_reserve_active_for_stock_tick =
                 ApplyBotNativeManaReserveRecovery(
                     binding,
@@ -438,27 +447,31 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
             if (auto* binding = FindParticipantEntityForActor(actor_address);
                 binding != nullptr && IsStandaloneWizardKind(binding->kind)) {
-                ApplyStandaloneWizardAnimationDriveProfile(
-                    binding,
-                    actor_address,
-                    tracked_actor_moving);
-                ApplyStandaloneWizardPuppetDriveState(
-                    binding,
-                    actor_address,
-                    tracked_actor_moving);
-                if (!IsNativeRemoteParticipantBinding(binding)) {
-                    std::string cast_error_message;
-                    if (!binding->ongoing_cast.active) {
-                        (void)PreparePendingWizardBotCast(binding, &cast_error_message);
-                        if (!cast_error_message.empty()) {
-                            Log(
-                                "[bots] standalone cast prepare failed. bot_id=" +
-                                std::to_string(binding->bot_id) +
-                                " actor=" + HexString(actor_address) +
-                                " error=" + cast_error_message);
-                            cast_error_message.clear();
-                        }
+                const bool native_remote = IsNativeRemoteParticipantBinding(binding);
+                if (!native_remote) {
+                    ApplyStandaloneWizardAnimationDriveProfile(
+                        binding,
+                        actor_address,
+                        tracked_actor_moving);
+                    ApplyStandaloneWizardPuppetDriveState(
+                        binding,
+                        actor_address,
+                        tracked_actor_moving);
+                }
+                std::string cast_error_message;
+                if (!binding->ongoing_cast.active) {
+                    (void)PreparePendingWizardBotCast(binding, &cast_error_message);
+                    if (!cast_error_message.empty()) {
+                        Log(
+                            "[bots] standalone cast prepare failed. bot_id=" +
+                            std::to_string(binding->bot_id) +
+                            " actor=" + HexString(actor_address) +
+                            " remote=" + std::to_string(native_remote ? 1 : 0) +
+                            " error=" + cast_error_message);
+                        cast_error_message.clear();
                     }
+                }
+                if (!native_remote) {
                     if (!binding->ongoing_cast.active) {
                         ClearLiveWizardActorAnimationDriveState(actor_address);
                     } else {
@@ -493,12 +506,26 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     return;
                 }
                 if (IsNativeRemoteParticipantBinding(binding)) {
+                    std::string cast_error_message;
                     const auto playback =
                         ApplyNativeRemoteParticipantPlayback(binding, actor_address, native_tick_now_ms);
-                    if (playback.moving) {
-                        ApplyObservedBotAnimationState(binding, actor_address, true);
+                    if (!playback.presentation_valid) {
+                        if (playback.moving) {
+                            ApplyObservedBotAnimationState(binding, actor_address, true);
                     } else {
                         StopWizardBotActorMotion(actor_address);
+                    }
+                }
+                (void)ProcessPendingBotCast(binding, &cast_error_message);
+                if (playback.presentation_valid) {
+                    (void)ApplyNativeRemoteParticipantPresentationState(binding, actor_address);
+                }
+                if (!cast_error_message.empty()) {
+                        Log(
+                            "[bots] native-remote standalone cast detail. bot_id=" +
+                            std::to_string(binding->bot_id) +
+                            " actor=" + HexString(actor_address) +
+                            " error=" + cast_error_message);
                     }
                     PublishParticipantGameplaySnapshot(*binding);
                     NormalizeGameplaySlotBotSyntheticVisualState(actor_address);
@@ -590,12 +617,35 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     return;
                 }
                 if (IsNativeRemoteParticipantBinding(binding)) {
+                    std::string native_remote_cast_error;
+                    const bool cast_active_before = binding->ongoing_cast.active;
+                    bool prepared_cast = false;
+                    if (!binding->ongoing_cast.active) {
+                        prepared_cast = PreparePendingWizardBotCast(
+                            binding,
+                            &native_remote_cast_error);
+                    } else if (OngoingCastShouldRefreshNativeTargetState(binding->ongoing_cast)) {
+                        (void)RefreshOngoingCastAimFromFacingTarget(binding, &binding->ongoing_cast);
+                    }
+                    if (binding->ongoing_cast.active || prepared_cast || cast_active_before) {
+                        RunStockTick(binding);
+                        (void)ProcessPendingBotCast(binding, &native_remote_cast_error);
+                    }
                     const auto playback =
                         ApplyNativeRemoteParticipantPlayback(binding, actor_address, native_tick_now_ms);
-                    if (playback.moving) {
-                        ApplyObservedBotAnimationState(binding, actor_address, true);
-                    } else {
-                        StopWizardBotActorMotion(actor_address);
+                    if (!playback.presentation_valid) {
+                        if (playback.moving) {
+                            ApplyObservedBotAnimationState(binding, actor_address, true);
+                        } else {
+                            StopWizardBotActorMotion(actor_address);
+                        }
+                    }
+                    if (!native_remote_cast_error.empty()) {
+                        Log(
+                            "[bots] native-remote gameplay-slot cast detail. bot_id=" +
+                            std::to_string(binding->bot_id) +
+                            " actor=" + HexString(actor_address) +
+                            " error=" + native_remote_cast_error);
                     }
                     PublishParticipantGameplaySnapshot(*binding);
                     ResolveWizardParticipantActorCollisions();
@@ -677,9 +727,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     if (local_player_actor) {
         MaybeLogLocalPlayerCastProbe(gameplay_address_for_pump, actor_address, true);
         ResolveWizardParticipantActorCollisions();
-    }
-    std::int8_t actor_slot = -1;
-    if (memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot) && actor_slot == 0) {
         TickParticipantSceneBindingsIfActive();
         ApplyReplicatedWorldSnapshotIfActive(gameplay_address_for_pump, static_cast<std::uint64_t>(::GetTickCount64()));
     }

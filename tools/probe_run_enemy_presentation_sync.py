@@ -25,6 +25,12 @@ from verify_run_world_snapshot import start_host_waves, wait_for_run_snapshot
 
 
 RUNTIME_OUTPUT = ROOT / "runtime" / "run_enemy_presentation_sync.json"
+LOCOMOTION_PRESENTATION_FLAG = 1 << 3
+LOCOMOTION_FIELD_TOLERANCE = 0.35
+LOCOMOTION_FIELDS = (
+    "walk_cycle_primary",
+    "walk_cycle_secondary",
+)
 
 
 CAPTURE_LUA = r"""
@@ -54,6 +60,12 @@ end
 local function actor_heading(address)
   if address == nil or address == 0 or heading_offset == nil then return 0 end
   return flt(address + heading_offset)
+end
+local walk_primary_offset = sd.debug.layout_offset("actor_walk_cycle_primary")
+local walk_secondary_offset = sd.debug.layout_offset("actor_walk_cycle_secondary")
+local function actor_float_field(address, offset)
+  if address == nil or address == 0 or offset == nil then return 0 end
+  return flt(address + offset)
 end
 local scene = sd.world.get_scene()
 emit("scene", scene and (scene.name or scene.kind) or "")
@@ -85,6 +97,8 @@ for index, actor in ipairs(tracked) do
   emit(prefix .. ".dead", actor.dead and 1 or 0)
   emit(prefix .. ".drive_byte", actor_drive_byte(address))
   emit(prefix .. ".drive_word", hx(actor_drive_word(address)))
+  emit(prefix .. ".walk_cycle_primary", string.format("%.4f", actor_float_field(address, walk_primary_offset)))
+  emit(prefix .. ".walk_cycle_secondary", string.format("%.4f", actor_float_field(address, walk_secondary_offset)))
   emit(prefix .. ".death_handled", actor_death_handled(address))
 end
 
@@ -122,6 +136,8 @@ if replicated and replicated.actors then
     emit(prefix .. ".drive_byte", actor.anim_drive_state or 0)
     emit(prefix .. ".presentation_flags", actor.presentation_flags or 0)
     emit(prefix .. ".drive_word", hx(actor.anim_drive_state_word or 0))
+    emit(prefix .. ".walk_cycle_primary", string.format("%.4f", tonumber(actor.walk_cycle_primary) or 0))
+    emit(prefix .. ".walk_cycle_secondary", string.format("%.4f", tonumber(actor.walk_cycle_secondary) or 0))
     emit(prefix .. ".hp", string.format("%.3f", tonumber(actor.hp) or 0))
     emit(prefix .. ".max_hp", string.format("%.3f", tonumber(actor.max_hp) or 0))
     emit(prefix .. ".has_local", local_actor ~= nil and 1 or 0)
@@ -131,6 +147,8 @@ if replicated and replicated.actors then
       emit(prefix .. ".local_dead", local_actor.dead and 1 or 0)
       emit(prefix .. ".local_drive_byte", actor_drive_byte(address))
       emit(prefix .. ".local_drive_word", hx(actor_drive_word(address)))
+      emit(prefix .. ".local_walk_cycle_primary", string.format("%.4f", actor_float_field(address, walk_primary_offset)))
+      emit(prefix .. ".local_walk_cycle_secondary", string.format("%.4f", actor_float_field(address, walk_secondary_offset)))
       emit(prefix .. ".local_death_handled", actor_death_handled(address))
       emit(prefix .. ".local_hp", string.format("%.3f", tonumber(local_actor.hp) or 0))
       emit(prefix .. ".local_max_hp", string.format("%.3f", tonumber(local_actor.max_hp) or 0))
@@ -212,6 +230,10 @@ def summarize_capture(host: dict[str, str], client: dict[str, str]) -> dict[str,
     local_death_handled_dead = 0
     snapshot_dead = 0
     snapshot_drive_word_present = 0
+    snapshot_locomotion_present = 0
+    locomotion_compared = 0
+    locomotion_mismatches = 0
+    max_locomotion_delta = 0.0
     client_drive_words_nonzero = 0
     host_client_ordinal_drive_word_mismatches = 0
     host_client_ordinal_death_handled_mismatches = 0
@@ -235,6 +257,17 @@ def summarize_capture(host: dict[str, str], client: dict[str, str]) -> dict[str,
             local_death_handled_dead += 1
         if parse_int(client.get(f"rep.{index}.presentation_flags")) & 1:
             snapshot_drive_word_present += 1
+        if parse_int(client.get(f"rep.{index}.presentation_flags")) & LOCOMOTION_PRESENTATION_FLAG:
+            snapshot_locomotion_present += 1
+            for field in LOCOMOTION_FIELDS:
+                snapshot_value = parse_float(client.get(f"rep.{index}.{field}"))
+                local_value = parse_float(client.get(f"rep.{index}.local_{field}"))
+                delta = abs(snapshot_value - local_value)
+                locomotion_compared += 1
+                if delta > max_locomotion_delta:
+                    max_locomotion_delta = delta
+                if delta > LOCOMOTION_FIELD_TOLERANCE:
+                    locomotion_mismatches += 1
         if parse_int(client.get(f"rep.{index}.local_drive_word")) != 0:
             client_drive_words_nonzero += 1
         snapshot_hp = parse_float(client.get(f"rep.{index}.hp"))
@@ -266,6 +299,10 @@ def summarize_capture(host: dict[str, str], client: dict[str, str]) -> dict[str,
         "compared": compared,
         "drive_byte_mismatches": drive_byte_mismatches,
         "snapshot_drive_word_present": snapshot_drive_word_present,
+        "snapshot_locomotion_present": snapshot_locomotion_present,
+        "locomotion_compared": locomotion_compared,
+        "locomotion_mismatches": locomotion_mismatches,
+        "max_locomotion_delta": round(max_locomotion_delta, 4),
         "client_drive_words_nonzero": client_drive_words_nonzero,
         "host_client_ordinal_drive_word_mismatches": host_client_ordinal_drive_word_mismatches,
         "snapshot_dead": snapshot_dead,
@@ -294,6 +331,10 @@ def aggregate_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
         "max_compared": max_value("compared"),
         "max_drive_byte_mismatches": max_value("drive_byte_mismatches"),
         "max_snapshot_drive_word_present": max_value("snapshot_drive_word_present"),
+        "max_snapshot_locomotion_present": max_value("snapshot_locomotion_present"),
+        "min_locomotion_compared": min_value("locomotion_compared"),
+        "max_locomotion_mismatches": max_value("locomotion_mismatches"),
+        "max_locomotion_delta": max_value("max_locomotion_delta"),
         "max_client_drive_words_nonzero": max_value("client_drive_words_nonzero"),
         "max_host_client_ordinal_drive_word_mismatches": max_value(
             "host_client_ordinal_drive_word_mismatches"
@@ -372,6 +413,7 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=0.2)
     parser.add_argument("--death-timeout", type=float, default=8.0)
     parser.add_argument("--no-launch", action="store_true")
+    parser.add_argument("--skip-death", action="store_true")
     args = parser.parse_args()
 
     result: dict[str, Any] = {"ok": False}
@@ -381,16 +423,32 @@ def main() -> int:
         baseline_samples = collect_samples(args.samples, args.interval)
         result["baseline"] = aggregate_samples(baseline_samples)
         result["baseline_samples"] = baseline_samples
-        result["host_kill"] = kill_host_enemy()
-        death_samples = wait_for_dead_snapshot(args.death_timeout, args.interval)
-        result["death"] = aggregate_samples(death_samples)
-        result["death_samples"] = death_samples
-        result["ok"] = (
+        baseline_ok = (
             result["baseline"]["min_compared"] > 0
             and result["baseline"]["max_drive_byte_mismatches"] == 0
-            and result["death"]["max_snapshot_dead"] > 0
-            and result["death"]["max_local_dead_mismatches"] == 0
-            and result["death"]["max_local_hp_mismatches"] == 0
+            and result["baseline"]["max_snapshot_locomotion_present"] > 0
+            and result["baseline"]["min_locomotion_compared"] > 0
+            and result["baseline"]["max_locomotion_mismatches"] == 0
+        )
+        if not args.skip_death:
+            result["host_kill"] = kill_host_enemy()
+            death_samples = wait_for_dead_snapshot(args.death_timeout, args.interval)
+            result["death"] = aggregate_samples(death_samples)
+            result["death_samples"] = death_samples
+        else:
+            result["host_kill"] = None
+            result["death"] = None
+            result["death_samples"] = []
+        result["ok"] = (
+            baseline_ok
+            and (
+                args.skip_death
+                or (
+                    result["death"]["max_snapshot_dead"] > 0
+                    and result["death"]["max_local_dead_mismatches"] == 0
+                    and result["death"]["max_local_hp_mismatches"] == 0
+                )
+            )
         )
         RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
         RUNTIME_OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")

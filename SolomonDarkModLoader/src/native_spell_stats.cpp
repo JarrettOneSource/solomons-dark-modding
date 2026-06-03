@@ -100,7 +100,10 @@ bool FillNativePrimarySelection(
     selection->primary_entry_index = primary_entry_index;
     selection->combo_entry_index = combo_entry_index;
     selection->build_skill_id = build_skill_id;
-    selection->pure_primary = primary_entry_index == combo_entry_index;
+    const bool entry_pair_is_pure_projectile =
+        primary_entry_index == combo_entry_index &&
+        !EntryUsesContinuousMana(primary_entry_index);
+    selection->pure_primary = entry_pair_is_pure_projectile;
     selection->per_second_mana =
         EntryUsesContinuousMana(primary_entry_index) ||
         EntryUsesContinuousMana(combo_entry_index);

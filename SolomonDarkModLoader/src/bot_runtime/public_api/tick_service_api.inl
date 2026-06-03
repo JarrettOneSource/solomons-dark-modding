@@ -118,6 +118,7 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
         std::scoped_lock lock(g_bot_runtime_mutex);
         if (participant_dead) {
             RemovePendingCast(pending_intent.bot_id);
+            RemoveBotCastInput(pending_intent.bot_id);
         }
         auto* current_pending_intent = FindPendingMovementIntent(pending_intent.bot_id);
         if (current_pending_intent != nullptr && current_pending_intent->revision == pending_intent.revision) {

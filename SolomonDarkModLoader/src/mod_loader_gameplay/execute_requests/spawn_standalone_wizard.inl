@@ -123,6 +123,7 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
             &stage_error)) {
         return cleanup_spawn(stage_error);
     }
+    NormalizeStandaloneWizardSyntheticVisualState(actor_address);
 
     uintptr_t progression_address = 0;
     if (!TryResolveActorProgressionRuntime(actor_address, &progression_address) ||
@@ -150,10 +151,6 @@ bool TrySpawnStandaloneRemoteWizardParticipantEntity(
         return cleanup_spawn(stage_error);
     }
     source_actor_address = 0;
-
-    if (!AttachGameplaySlotBotStaffItem(actor_address, &stage_error)) {
-        return cleanup_spawn(stage_error);
-    }
 
     const auto rebind_actor_address =
         memory.ResolveGameAddressOrZero(kWorldCellGridRebindActor);

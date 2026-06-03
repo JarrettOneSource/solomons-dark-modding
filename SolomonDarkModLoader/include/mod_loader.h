@@ -63,6 +63,7 @@ struct SDModPlayerState {
     std::uint32_t render_drive_flags = 0;
     std::uint32_t render_subject_drive_flags = 0;
     std::uint8_t anim_drive_state = 0;
+    std::uint32_t anim_drive_state_word = 0;
     std::uint8_t render_subject_anim_drive_state = 0;
     std::uint8_t render_variant_primary = 0;
     std::uint8_t render_variant_secondary = 0;
@@ -79,6 +80,8 @@ struct SDModPlayerState {
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
+    float render_drive_effect_timer = 0.0f;
+    float render_drive_effect_progress = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;
@@ -258,6 +261,8 @@ struct SDModParticipantGameplayState {
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
+    float render_drive_effect_timer = 0.0f;
+    float render_drive_effect_progress = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;
@@ -284,11 +289,13 @@ bool QueueGameplayMouseLeftClick(std::string* error_message);
 bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_message);
 std::uint64_t GetGameplayMouseLeftEdgeSerial();
 std::uint64_t GetGameplayMouseLeftEdgeTickMs();
+bool IsGameplayMouseLeftDown();
 bool QueueGameplayKeyPress(std::string_view binding_name, std::string* error_message);
 bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_message);
 bool QueueGameplayStartWaves(std::string* error_message);
 bool QueueGameplayEnableCombatPrelude(std::string* error_message);
 bool QueueHubStartTestrun(std::string* error_message);
+bool SetPendingRunGenerationSeed(std::uint32_t seed, std::string* error_message);
 bool QueueGameplaySwitchRegion(int region_index, std::string* error_message);
 bool QueueParticipantEntitySync(
     std::uint64_t participant_id,

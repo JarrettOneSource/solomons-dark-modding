@@ -80,6 +80,11 @@ bool CallCastActiveHandleCleanupSafe(
     uintptr_t cleanup_address,
     uintptr_t actor_address,
     DWORD* exception_code);
+bool CallNativeRngInitializeSafe(
+    uintptr_t initialize_address,
+    uintptr_t rng_state_address,
+    std::uint32_t seed,
+    DWORD* exception_code);
 bool CallWizardCloneFromSourceActorSafe(
     uintptr_t clone_address,
     uintptr_t source_actor_address,

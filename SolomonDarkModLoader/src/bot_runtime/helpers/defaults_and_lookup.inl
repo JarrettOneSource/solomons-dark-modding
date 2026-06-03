@@ -45,12 +45,33 @@ PendingBotCast* FindPendingCast(std::uint64_t bot_id) {
     return it == g_pending_casts.end() ? nullptr : &(*it);
 }
 
+PendingBotCastInput* FindBotCastInput(std::uint64_t bot_id) {
+    const auto it = std::find_if(
+        g_bot_cast_inputs.begin(),
+        g_bot_cast_inputs.end(),
+        [&](const PendingBotCastInput& input) {
+            return input.bot_id == bot_id;
+        });
+    return it == g_bot_cast_inputs.end() ? nullptr : &(*it);
+}
+
 void RemovePendingCast(std::uint64_t bot_id) {
     g_pending_casts.erase(
         std::remove_if(g_pending_casts.begin(), g_pending_casts.end(), [&](const PendingBotCast& cast) {
             return cast.bot_id == bot_id;
         }),
         g_pending_casts.end());
+}
+
+void RemoveBotCastInput(std::uint64_t bot_id) {
+    g_bot_cast_inputs.erase(
+        std::remove_if(
+            g_bot_cast_inputs.begin(),
+            g_bot_cast_inputs.end(),
+            [&](const PendingBotCastInput& input) {
+                return input.bot_id == bot_id;
+            }),
+        g_bot_cast_inputs.end());
 }
 
 PendingBotEntitySync* FindPendingEntitySync(std::uint64_t bot_id) {

@@ -27,6 +27,8 @@ GameplaySeamState& GetGameplaySeamState() {
 const AddressBinding* GetAddressBindings(std::size_t* count) {
     static const AddressBinding bindings[] = {
         SDMOD_ADDR("background_focus.hooks", "game_window_proc", kGameWindowProc),
+        SDMOD_ADDR("background_focus.globals", "window_input_scale_x", kWindowInputScaleXGlobal),
+        SDMOD_ADDR("background_focus.globals", "window_input_scale_y", kWindowInputScaleYGlobal),
 
         SDMOD_ADDR("gameplay.hooks", "mouse_refresh_helper", kGameplayMouseRefreshHelper),
         SDMOD_ADDR("gameplay.hooks", "keyboard_edge_helper", kGameplayKeyboardEdgeHelper),
@@ -100,6 +102,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "game_free", kGameFree),
         SDMOD_ADDR("gameplay.hooks", "game_operator_new", kGameOperatorNew),
         SDMOD_ADDR("gameplay.hooks", "native_int_array_clear", kNativeIntArrayClear),
+        SDMOD_ADDR("gameplay.hooks", "native_rng_initialize", kNativeRngInitialize),
         SDMOD_ADDR("gameplay.hooks", "cast_active_handle_cleanup", kCastActiveHandleCleanup),
         SDMOD_ADDR("gameplay.cast_gate_patches", "player_actor_apply_mana_delta_local_actor_gate_branch", kPlayerActorApplyManaDeltaLocalActorGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "cast_active_handle_cleanup_slot_gate_branch", kCastCleanupSlotGateBranch),
@@ -138,6 +141,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.globals", "local_player_actor", kLocalPlayerActorGlobal),
         SDMOD_ADDR("gameplay.globals", "native_int_array_vtable", kNativeIntArrayVtable),
         SDMOD_ADDR("gameplay.globals", "puppet_manager_vtable", kPuppetManagerVtable),
+        SDMOD_ADDR("gameplay.globals", "native_global_rng_state", kNativeGlobalRngStateGlobal),
         SDMOD_ADDR("gameplay.globals", "actor_walk_cycle_primary_divisor", kActorWalkCyclePrimaryDivisorGlobal),
         SDMOD_ADDR("gameplay.globals", "actor_walk_cycle_secondary_divisor", kActorWalkCycleSecondaryDivisorGlobal),
         SDMOD_ADDR("gameplay.globals", "actor_walk_cycle_primary_wrap_threshold", kActorWalkCyclePrimaryWrapThresholdGlobal),

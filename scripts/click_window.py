@@ -39,7 +39,15 @@ def screen_to_client(hwnd: int, screen_x: int, screen_y: int) -> tuple[int, int]
     return point.x, point.y
 
 
-def click_screen_point(hwnd: int, client_x: int, client_y: int, screen_x: int, screen_y: int) -> None:
+def click_screen_point(
+    hwnd: int,
+    client_x: int,
+    client_y: int,
+    screen_x: int,
+    screen_y: int,
+    hold_ms: int,
+    global_only: bool,
+) -> None:
     user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
     user32.SetCursorPos.restype = wintypes.BOOL
     user32.mouse_event.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.c_size_t]
@@ -58,10 +66,14 @@ def click_screen_point(hwnd: int, client_x: int, client_y: int, screen_x: int, s
     if not user32.SetCursorPos(screen_x, screen_y):
         raise OSError(ctypes.get_last_error(), "SetCursorPos failed")
 
-    user32.SendMessageW(hwnd, wm_mousemove, 0, client_lparam)
-    user32.SendMessageW(hwnd, wm_lbuttondown, mk_lbutton, client_lparam)
-    user32.SendMessageW(hwnd, wm_lbuttonup, 0, client_lparam)
+    if not global_only:
+        user32.SendMessageW(hwnd, wm_mousemove, 0, client_lparam)
+        user32.SendMessageW(hwnd, wm_lbuttondown, mk_lbutton, client_lparam)
     user32.mouse_event(mouseeventf_leftdown, 0, 0, 0, 0)
+    if hold_ms > 0:
+        time.sleep(hold_ms / 1000.0)
+    if not global_only:
+        user32.SendMessageW(hwnd, wm_lbuttonup, 0, client_lparam)
     user32.mouse_event(mouseeventf_leftup, 0, 0, 0, 0)
 
 
@@ -73,6 +85,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--x", type=float, required=True, help="Client X coordinate. Use pixels by default or a 0-1 fraction with --relative.")
     parser.add_argument("--y", type=float, required=True, help="Client Y coordinate. Use pixels by default or a 0-1 fraction with --relative.")
     parser.add_argument("--relative", action="store_true", help="Interpret --x and --y as 0-1 fractions of client width and height.")
+    parser.add_argument("--virtual-width", type=float, help="Scale pixel coordinates from this virtual client width.")
+    parser.add_argument("--virtual-height", type=float, help="Scale pixel coordinates from this virtual client height.")
     parser.add_argument("--screen", action="store_true", help="Interpret --x and --y as absolute screen coordinates.")
     parser.add_argument("--activate", action="store_true", help="Bring the matched window to the foreground before clicking.")
     parser.add_argument(
@@ -86,6 +100,17 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=150,
         help="Delay after the click before exiting. Default: 150.",
+    )
+    parser.add_argument(
+        "--hold-ms",
+        type=int,
+        default=0,
+        help="Keep the left mouse button down for this many milliseconds before release.",
+    )
+    parser.add_argument(
+        "--global-only",
+        action="store_true",
+        help="Use only foreground OS mouse state events after positioning the cursor.",
     )
     return parser
 
@@ -108,6 +133,14 @@ def main() -> int:
     click_y = args.y
     if args.screen and args.relative:
         parser.error("--screen and --relative cannot be used together.")
+    if args.screen and (args.virtual_width is not None or args.virtual_height is not None):
+        parser.error("--screen cannot be combined with --virtual-width or --virtual-height.")
+    if args.relative and (args.virtual_width is not None or args.virtual_height is not None):
+        parser.error("--relative cannot be combined with --virtual-width or --virtual-height.")
+    if (args.virtual_width is None) != (args.virtual_height is None):
+        parser.error("--virtual-width and --virtual-height must be provided together.")
+    if args.virtual_width is not None and (args.virtual_width <= 0 or args.virtual_height <= 0):
+        parser.error("--virtual-width and --virtual-height must be positive.")
 
     if args.screen:
         absolute_x = int(round(click_x))
@@ -117,11 +150,22 @@ def main() -> int:
         if args.relative:
             click_x *= client_width
             click_y *= client_height
+        elif args.virtual_width is not None and args.virtual_height is not None:
+            click_x = (click_x / args.virtual_width) * client_width
+            click_y = (click_y / args.virtual_height) * client_height
 
         absolute_x = origin_x + int(round(click_x))
         absolute_y = origin_y + int(round(click_y))
 
-    click_screen_point(window.hwnd, int(round(click_x)), int(round(click_y)), absolute_x, absolute_y)
+    click_screen_point(
+        window.hwnd,
+        int(round(click_x)),
+        int(round(click_y)),
+        absolute_x,
+        absolute_y,
+        max(0, args.hold_ms),
+        args.global_only,
+    )
     time.sleep(max(0, args.post_delay_ms) / 1000.0)
     print(f"clicked {window.title} at client=({int(round(click_x))},{int(round(click_y))}) screen=({absolute_x},{absolute_y})")
     return 0

@@ -5,7 +5,6 @@ struct ActorRenderBuildSnapshot {
     std::uint8_t weapon_type = 0;
     std::uint8_t render_selection = 0;
     std::uint8_t variant_tertiary = 0;
-    uintptr_t attachment_address = 0;
 };
 
 ActorRenderBuildSnapshot CaptureActorRenderBuildSnapshot(uintptr_t actor_address) {
@@ -24,7 +23,6 @@ ActorRenderBuildSnapshot CaptureActorRenderBuildSnapshot(uintptr_t actor_address
     (void)memory.TryReadField(actor_address, kActorRenderWeaponTypeOffset, &snapshot.weapon_type);
     (void)memory.TryReadField(actor_address, kActorRenderSelectionByteOffset, &snapshot.render_selection);
     (void)memory.TryReadField(actor_address, kActorRenderVariantTertiaryOffset, &snapshot.variant_tertiary);
-    (void)memory.TryReadField(actor_address, kActorHubVisualAttachmentPtrOffset, &snapshot.attachment_address);
     return snapshot;
 }
 
@@ -93,5 +91,9 @@ void ClearActorSyntheticVisualSourceState(uintptr_t actor_address) {
 }
 
 void NormalizeGameplaySlotBotSyntheticVisualState(uintptr_t actor_address) {
+    ClearActorSyntheticVisualSourceState(actor_address);
+}
+
+void NormalizeStandaloneWizardSyntheticVisualState(uintptr_t actor_address) {
     ClearActorSyntheticVisualSourceState(actor_address);
 }

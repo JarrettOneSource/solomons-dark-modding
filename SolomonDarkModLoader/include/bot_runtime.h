@@ -74,12 +74,33 @@ struct BotCastRequest {
     BotCastKind kind = BotCastKind::Primary;
     std::int32_t secondary_slot = -1;
     std::int32_t skill_id = 0;
+    std::uint32_t cast_sequence = 0;
+    bool remote_input_controlled = false;
     uintptr_t target_actor_address = 0;
+    bool has_origin_transform = false;
+    float origin_position_x = 0.0f;
+    float origin_position_y = 0.0f;
+    bool has_origin_heading = false;
+    float origin_heading = 0.0f;
     bool has_aim_target = false;
     float aim_target_x = 0.0f;
     float aim_target_y = 0.0f;
     bool has_aim_angle = false;
     float aim_angle = 0.0f;
+};
+
+struct BotCastInputState {
+    std::uint64_t bot_id = 0;
+    bool active = false;
+    bool release_requested = false;
+    std::uint32_t cast_sequence = 0;
+    std::uint64_t last_update_ms = 0;
+    bool has_aim_target = false;
+    float aim_target_x = 0.0f;
+    float aim_target_y = 0.0f;
+    bool has_aim_angle = false;
+    float aim_angle = 0.0f;
+    uintptr_t target_actor_address = 0;
 };
 
 struct BotMoveToRequest {
@@ -206,6 +227,8 @@ struct BotSnapshot {
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
+    float render_drive_effect_timer = 0.0f;
+    float render_drive_effect_progress = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;
@@ -242,6 +265,9 @@ bool FaceBot(std::uint64_t bot_id, float heading);
 bool FaceBotTarget(std::uint64_t bot_id, uintptr_t target_actor_address, bool default_heading_valid, float default_heading);
 bool ReadBotMovementIntent(std::uint64_t bot_id, BotMovementIntentSnapshot* snapshot);
 bool QueueBotCast(const BotCastRequest& request);
+bool UpdateBotCastInput(const BotCastInputState& input_state);
+bool ReadBotCastInputState(std::uint64_t bot_id, BotCastInputState* input_state);
+bool ClearBotCastInput(std::uint64_t bot_id, std::uint32_t cast_sequence);
 BotManaCost ResolveBotCastManaCost(
     const MultiplayerCharacterProfile& character_profile,
     uintptr_t progression_runtime_address,

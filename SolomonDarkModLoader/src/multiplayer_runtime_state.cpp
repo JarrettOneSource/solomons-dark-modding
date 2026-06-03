@@ -84,6 +84,13 @@ WorldActorSnapshot InterpolateWorldActorSnapshot(
     result.position_x = before.position_x + (after.position_x - before.position_x) * alpha;
     result.position_y = before.position_y + (after.position_y - before.position_y) * alpha;
     result.heading = InterpolateHeadingDegrees(before.heading, after.heading, alpha);
+    if ((before.presentation_flags & WorldActorPresentationFlagLocomotionFloats) != 0 &&
+        (after.presentation_flags & WorldActorPresentationFlagLocomotionFloats) != 0) {
+        result.walk_cycle_primary =
+            before.walk_cycle_primary + (after.walk_cycle_primary - before.walk_cycle_primary) * alpha;
+        result.walk_cycle_secondary =
+            before.walk_cycle_secondary + (after.walk_cycle_secondary - before.walk_cycle_secondary) * alpha;
+    }
     return result;
 }
 
@@ -126,6 +133,39 @@ WorldSnapshotRuntimeInfo InterpolateWorldSnapshot(
         actor = InterpolateWorldActorSnapshot(previous, actor, alpha);
     }
     return result;
+}
+
+void PruneRemovedRunActorsFromSample(
+    const WorldSnapshotRuntimeInfo& latest,
+    WorldSnapshotRuntimeInfo* sample) {
+    if (sample == nullptr ||
+        !sample->valid ||
+        !latest.valid ||
+        sample->scene_intent.kind != ParticipantSceneIntentKind::Run ||
+        latest.scene_intent.kind != ParticipantSceneIntentKind::Run ||
+        !SameWorldSnapshotTimeline(*sample, latest)) {
+        return;
+    }
+
+    std::unordered_map<std::uint64_t, bool> latest_actor_ids;
+    latest_actor_ids.reserve(latest.actors.size());
+    for (const auto& actor : latest.actors) {
+        if (actor.network_actor_id != 0) {
+            latest_actor_ids.emplace(actor.network_actor_id, true);
+        }
+    }
+
+    sample->actors.erase(
+        std::remove_if(
+            sample->actors.begin(),
+            sample->actors.end(),
+            [&](const WorldActorSnapshot& actor) {
+                return actor.lifecycle_owned &&
+                       actor.tracked_enemy &&
+                       actor.network_actor_id != 0 &&
+                       latest_actor_ids.find(actor.network_actor_id) == latest_actor_ids.end();
+            }),
+        sample->actors.end());
 }
 
 }  // namespace
@@ -411,6 +451,34 @@ bool TrySampleParticipantTransform(
     sample->position_x = before->position_x + (after->position_x - before->position_x) * alpha;
     sample->position_y = before->position_y + (after->position_y - before->position_y) * alpha;
     sample->heading = InterpolateHeadingDegrees(before->heading, after->heading, alpha);
+    if ((before->presentation_flags & ParticipantPresentationFlagRenderDriveFloats) != 0 &&
+        (after->presentation_flags & ParticipantPresentationFlagRenderDriveFloats) != 0) {
+        sample->walk_cycle_primary =
+            before->walk_cycle_primary + (after->walk_cycle_primary - before->walk_cycle_primary) * alpha;
+        sample->walk_cycle_secondary =
+            before->walk_cycle_secondary + (after->walk_cycle_secondary - before->walk_cycle_secondary) * alpha;
+        sample->render_drive_stride =
+            before->render_drive_stride + (after->render_drive_stride - before->render_drive_stride) * alpha;
+        sample->render_advance_rate =
+            before->render_advance_rate + (after->render_advance_rate - before->render_advance_rate) * alpha;
+        sample->render_advance_phase =
+            before->render_advance_phase + (after->render_advance_phase - before->render_advance_phase) * alpha;
+        sample->render_drive_effect_timer =
+            before->render_drive_effect_timer +
+            (after->render_drive_effect_timer - before->render_drive_effect_timer) * alpha;
+        sample->render_drive_effect_progress =
+            before->render_drive_effect_progress +
+            (after->render_drive_effect_progress - before->render_drive_effect_progress) * alpha;
+        sample->render_drive_overlay_alpha =
+            before->render_drive_overlay_alpha +
+            (after->render_drive_overlay_alpha - before->render_drive_overlay_alpha) * alpha;
+        sample->render_drive_move_blend =
+            before->render_drive_move_blend +
+            (after->render_drive_move_blend - before->render_drive_move_blend) * alpha;
+    }
+    if ((after->presentation_flags & ParticipantPresentationFlagStaffVisualState) != 0) {
+        sample->attachment_staff_visual_state = after->attachment_staff_visual_state;
+    }
     return true;
 }
 
@@ -477,14 +545,17 @@ bool TrySampleWorldSnapshot(
     }
     if (before == nullptr) {
         *snapshot = *after;
+        PruneRemovedRunActorsFromSample(state.world_snapshot, snapshot);
         return true;
     }
     if (after == nullptr || after == before) {
         *snapshot = *before;
+        PruneRemovedRunActorsFromSample(state.world_snapshot, snapshot);
         return true;
     }
 
     *snapshot = InterpolateWorldSnapshot(*before, *after, sample_ms);
+    PruneRemovedRunActorsFromSample(state.world_snapshot, snapshot);
     return true;
 }
 

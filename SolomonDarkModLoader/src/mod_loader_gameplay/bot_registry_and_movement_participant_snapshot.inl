@@ -179,6 +179,8 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
     (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveStrideScaleOffset, &snapshot.render_drive_stride);
     (void)TryReadFiniteFloatField(render_probe_address, kActorRenderAdvanceRateOffset, &snapshot.render_advance_rate);
     (void)TryReadFiniteFloatField(render_probe_address, kActorRenderAdvancePhaseOffset, &snapshot.render_advance_phase);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveEffectTimerOffset, &snapshot.render_drive_effect_timer);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveEffectProgressOffset, &snapshot.render_drive_effect_progress);
     (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveOverlayAlphaOffset, &snapshot.render_drive_overlay_alpha);
     (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveMoveBlendOffset, &snapshot.render_drive_move_blend);
 
@@ -220,14 +222,16 @@ void SyncParticipantRuntimeFromGameplaySnapshot(const ParticipantGameplaySnapsho
             return;
         }
 
-        participant->runtime.life_current = static_cast<std::int32_t>(snapshot.hp);
-        participant->runtime.life_max = static_cast<std::int32_t>(snapshot.max_hp);
-        participant->runtime.mana_current = static_cast<std::int32_t>(snapshot.mp);
-        participant->runtime.mana_max = static_cast<std::int32_t>(snapshot.max_mp);
-
+        // Native remote participants are packet-owned; feeding the mirrored
+        // actor's local HP back into runtime can pin remote deaths at zero.
         if (multiplayer::IsNativeControlledParticipant(*participant)) {
             return;
         }
+
+        participant->runtime.life_current = snapshot.hp;
+        participant->runtime.life_max = snapshot.max_hp;
+        participant->runtime.mana_current = snapshot.mp;
+        participant->runtime.mana_max = snapshot.max_mp;
 
         participant->runtime.transform_valid = true;
         participant->runtime.position_x = snapshot.x;

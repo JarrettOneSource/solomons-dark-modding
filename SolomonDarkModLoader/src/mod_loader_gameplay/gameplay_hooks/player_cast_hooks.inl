@@ -51,15 +51,17 @@ void __fastcall HookPlayerActorVtable28(void* self, void* /*unused_edx*/) {
                     " slot=0 hud_case100_depth=" + std::to_string(g_gameplay_hud_case100_depth));
             }
         }
-        if (have_slot &&
-            slot > 0 &&
-            now_ms <= g_gameplay_slot_hud_probe_until_ms &&
-            actor_address == g_gameplay_slot_hud_probe_actor) {
-            Log(
-                "[bots] hud_probe vslot28 actor=" + HexString(actor_address) +
-                    " slot=" + std::to_string(static_cast<int>(slot)) +
-                    " caller=" + HexString(g_player_actor_vslot28_caller) +
-                    " hud_case100_depth=" + std::to_string(g_gameplay_hud_case100_depth));
+        if constexpr (kEnableWizardBotHotPathDiagnostics) {
+            if (have_slot &&
+                slot > 0 &&
+                now_ms <= g_gameplay_slot_hud_probe_until_ms &&
+                actor_address == g_gameplay_slot_hud_probe_actor) {
+                Log(
+                    "[bots] hud_probe vslot28 actor=" + HexString(actor_address) +
+                        " slot=" + std::to_string(static_cast<int>(slot)) +
+                        " caller=" + HexString(g_player_actor_vslot28_caller) +
+                        " hud_case100_depth=" + std::to_string(g_gameplay_hud_case100_depth));
+            }
         }
     }
 

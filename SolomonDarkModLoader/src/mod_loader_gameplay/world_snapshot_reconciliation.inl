@@ -4,8 +4,17 @@ constexpr std::uint64_t kWorldSnapshotApplyStaleMs = 500;
 constexpr std::uint64_t kWorldSnapshotInterpolationDelayMs = 150;
 constexpr std::uint64_t kWorldSnapshotRunLifecycleRequestIntervalMs = 1000;
 constexpr std::uint64_t kHubAnimationDrivePhaseUnitsPerSecond = 150;
+constexpr std::uint64_t kRunEntryAuthoritySnapshotStaleMs = 3000;
 constexpr float kWorldSnapshotSettleDistance = 0.05f;
 constexpr float kWorldSnapshotParkBase = 100000.0f;
+constexpr float kRunEntryFormationSpacing = 64.0f;
+constexpr float kRunEntryFormationNavSnapMaxDistance = 48.0f;
+constexpr float kRunEntryFormationNavSnapMaxAuthorityDistance = 96.0f;
+constexpr float kRunEntryFormationReapplyDistance = 32.0f;
+constexpr std::uint64_t kRunEntryFormationBootstrapMs = 5000;
+constexpr std::uint64_t kRunEntryFormationReapplyIntervalMs = 100;
+constexpr std::uint32_t kSolomonDigNativeTypeId = 0x1391;
+constexpr std::uint32_t kSolomonRunStaticNativeTypeId = 0x1392;
 
 std::unordered_map<std::uint64_t, uintptr_t> g_replicated_created_hub_actors;
 std::unordered_map<std::uint64_t, uintptr_t> g_replicated_hub_bindings_by_network_id;
@@ -14,6 +23,12 @@ std::uint32_t g_replicated_created_hub_scene_epoch = 0;
 std::unordered_map<std::uint64_t, uintptr_t> g_replicated_run_bindings_by_network_id;
 std::unordered_map<uintptr_t, std::uint64_t> g_replicated_run_network_ids_by_actor;
 std::uint32_t g_replicated_run_actor_scene_epoch = 0;
+uintptr_t g_run_entry_formation_world_address = 0;
+std::uint64_t g_run_entry_formation_authority_participant_id = 0;
+std::uint32_t g_run_entry_formation_run_nonce = 0;
+std::uint64_t g_run_entry_formation_started_ms = 0;
+std::uint64_t g_run_entry_formation_last_apply_ms = 0;
+bool g_run_entry_formation_settled = false;
 
 struct ReplicatedWorldActorLocalBinding {
     SDModSceneActorState actor;
@@ -66,7 +81,8 @@ bool IsSameWorldSnapshotTimeline(
 
 void CopyWorldActorPresentationState(
     multiplayer::WorldActorSnapshot* target,
-    const multiplayer::WorldActorSnapshot& source) {
+    const multiplayer::WorldActorSnapshot& source,
+    bool copy_locomotion_floats = true) {
     if (target == nullptr ||
         target->network_actor_id != source.network_actor_id ||
         target->native_type_id != source.native_type_id) {
@@ -76,6 +92,10 @@ void CopyWorldActorPresentationState(
     target->anim_drive_state = source.anim_drive_state;
     target->presentation_flags = source.presentation_flags;
     target->anim_drive_state_word = source.anim_drive_state_word;
+    if (copy_locomotion_floats) {
+        target->walk_cycle_primary = source.walk_cycle_primary;
+        target->walk_cycle_secondary = source.walk_cycle_secondary;
+    }
     target->render_variant_primary = source.render_variant_primary;
     target->render_variant_secondary = source.render_variant_secondary;
     target->render_weapon_type = source.render_weapon_type;
@@ -133,7 +153,10 @@ void OverlayLatestWorldSnapshotPresentation(
         if (it == latest_by_id.end() || it->second == nullptr) {
             continue;
         }
-        CopyWorldActorPresentationState(&actor, *it->second);
+        CopyWorldActorPresentationState(
+            &actor,
+            *it->second,
+            sampled_snapshot->scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run);
         if ((actor.presentation_flags & multiplayer::WorldActorPresentationFlagAnimationDriveWord) != 0 &&
             IsReplicatedHubPhaseAdvancingActorSnapshot(actor)) {
             actor.anim_drive_state_word = AdvanceHubAnimationDrivePhase(
@@ -204,11 +227,301 @@ bool CanMutateReplicatedSharedHubActors(
            RemoteNativeParticipantsSettledForScene(snapshot.scene_intent, now_ms);
 }
 
+void ResetHostAuthoritativeRunEntryFormation() {
+    g_run_entry_formation_world_address = 0;
+    g_run_entry_formation_authority_participant_id = 0;
+    g_run_entry_formation_run_nonce = 0;
+    g_run_entry_formation_started_ms = 0;
+    g_run_entry_formation_last_apply_ms = 0;
+    g_run_entry_formation_settled = false;
+}
+
+bool IsFreshRunEntryAuthoritySnapshot(
+    const multiplayer::WorldSnapshotRuntimeInfo& snapshot,
+    std::uint64_t now_ms) {
+    return snapshot.valid &&
+           snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::Run &&
+           snapshot.authority_participant_id != 0 &&
+           now_ms >= snapshot.received_ms &&
+           now_ms - snapshot.received_ms <= kRunEntryAuthoritySnapshotStaleMs;
+}
+
+const multiplayer::ParticipantInfo* FindRunEntryAuthorityParticipant(
+    const multiplayer::RuntimeState& runtime_state,
+    std::uint64_t now_ms) {
+    if (!IsFreshRunEntryAuthoritySnapshot(runtime_state.world_snapshot, now_ms)) {
+        return nullptr;
+    }
+
+    const auto* authority = multiplayer::FindParticipant(
+        runtime_state,
+        runtime_state.world_snapshot.authority_participant_id);
+    if (authority == nullptr ||
+        !multiplayer::IsRemoteParticipant(*authority) ||
+        authority->controller_kind != multiplayer::ParticipantControllerKind::Native ||
+        !authority->transport_connected ||
+        !authority->runtime.valid ||
+        !authority->runtime.transform_valid ||
+        !authority->runtime.in_run ||
+        authority->runtime.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run ||
+        !std::isfinite(authority->runtime.position_x) ||
+        !std::isfinite(authority->runtime.position_y) ||
+        !std::isfinite(authority->runtime.heading)) {
+        return nullptr;
+    }
+    if (authority->last_packet_ms != 0 && now_ms > authority->last_packet_ms + kRunEntryAuthoritySnapshotStaleMs) {
+        return nullptr;
+    }
+    return authority;
+}
+
+std::uint32_t ResolveRunEntryFormationSlot(
+    const multiplayer::RuntimeState& runtime_state,
+    std::uint64_t authority_participant_id,
+    std::uint64_t local_transport_participant_id) {
+    if (local_transport_participant_id == 0 ||
+        local_transport_participant_id == authority_participant_id) {
+        return 1;
+    }
+
+    std::uint32_t slot = 1;
+    for (const auto& participant : runtime_state.participants) {
+        if (participant.participant_id == 0 ||
+            participant.participant_id == authority_participant_id ||
+            participant.participant_id == local_transport_participant_id ||
+            participant.participant_id > local_transport_participant_id ||
+            !multiplayer::IsRemoteParticipant(participant) ||
+            !participant.transport_connected ||
+            !participant.runtime.valid ||
+            participant.runtime.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run) {
+            continue;
+        }
+        slot += 1;
+    }
+    return slot;
+}
+
+void ResolveRunEntryFormationOffset(std::uint32_t slot, float* offset_x, float* offset_y) {
+    if (offset_x == nullptr || offset_y == nullptr) {
+        return;
+    }
+
+    if (slot == 0) {
+        slot = 1;
+    }
+    const std::uint32_t ring = (slot - 1) / 8 + 1;
+    switch ((slot - 1) % 8) {
+    case 0:
+        *offset_x = kRunEntryFormationSpacing * static_cast<float>(ring);
+        *offset_y = 0.0f;
+        break;
+    case 1:
+        *offset_x = -kRunEntryFormationSpacing * static_cast<float>(ring);
+        *offset_y = 0.0f;
+        break;
+    case 2:
+        *offset_x = 0.0f;
+        *offset_y = kRunEntryFormationSpacing * static_cast<float>(ring);
+        break;
+    case 3:
+        *offset_x = 0.0f;
+        *offset_y = -kRunEntryFormationSpacing * static_cast<float>(ring);
+        break;
+    case 4:
+        *offset_x = kRunEntryFormationSpacing * static_cast<float>(ring);
+        *offset_y = kRunEntryFormationSpacing * static_cast<float>(ring);
+        break;
+    case 5:
+        *offset_x = -kRunEntryFormationSpacing * static_cast<float>(ring);
+        *offset_y = kRunEntryFormationSpacing * static_cast<float>(ring);
+        break;
+    case 6:
+        *offset_x = kRunEntryFormationSpacing * static_cast<float>(ring);
+        *offset_y = -kRunEntryFormationSpacing * static_cast<float>(ring);
+        break;
+    default:
+        *offset_x = -kRunEntryFormationSpacing * static_cast<float>(ring);
+        *offset_y = -kRunEntryFormationSpacing * static_cast<float>(ring);
+        break;
+    }
+}
+
+bool TrySnapRunEntryFormationTargetToNav(
+    float desired_x,
+    float desired_y,
+    float authority_x,
+    float authority_y,
+    float* target_x,
+    float* target_y) {
+    if (target_x == nullptr || target_y == nullptr) {
+        return false;
+    }
+
+    SDModGameplayNavGridState nav_grid;
+    if (!TryGetGameplayNavGridState(&nav_grid, 1) || !nav_grid.valid) {
+        return false;
+    }
+
+    const float max_distance2 =
+        kRunEntryFormationNavSnapMaxDistance * kRunEntryFormationNavSnapMaxDistance;
+    const float max_authority_distance2 =
+        kRunEntryFormationNavSnapMaxAuthorityDistance * kRunEntryFormationNavSnapMaxAuthorityDistance;
+    float best_distance2 = max_distance2;
+    bool found = false;
+    for (const auto& cell : nav_grid.cells) {
+        for (const auto& sample : cell.samples) {
+            if (!sample.traversable ||
+                !std::isfinite(sample.world_x) ||
+                !std::isfinite(sample.world_y)) {
+                continue;
+            }
+            const float dx = sample.world_x - desired_x;
+            const float dy = sample.world_y - desired_y;
+            const float distance2 = dx * dx + dy * dy;
+            const float authority_dx = sample.world_x - authority_x;
+            const float authority_dy = sample.world_y - authority_y;
+            const float authority_distance2 = authority_dx * authority_dx + authority_dy * authority_dy;
+            if (authority_distance2 > max_authority_distance2) {
+                continue;
+            }
+            if (distance2 <= best_distance2) {
+                best_distance2 = distance2;
+                *target_x = sample.world_x;
+                *target_y = sample.world_y;
+                found = true;
+            }
+        }
+    }
+    return found;
+}
+
+void ApplyHostAuthoritativeRunEntryFormationIfNeeded(
+    const multiplayer::RuntimeState& runtime_state,
+    std::uint64_t now_ms) {
+    if (!multiplayer::IsLocalTransportClient()) {
+        return;
+    }
+
+    SDModSceneState scene_state;
+    if (!TryGetSceneState(&scene_state) ||
+        !scene_state.valid ||
+        SceneIntentKindFromSceneState(scene_state) != multiplayer::ParticipantSceneIntentKind::Run) {
+        ResetHostAuthoritativeRunEntryFormation();
+        return;
+    }
+    if (IsReplicatedWorldSnapshotSceneChurnInFlight(now_ms)) {
+        return;
+    }
+
+    const auto* authority = FindRunEntryAuthorityParticipant(runtime_state, now_ms);
+    if (authority == nullptr) {
+        return;
+    }
+
+    SDModPlayerState player_state;
+    if (!TryGetPlayerState(&player_state) ||
+        !player_state.valid ||
+        player_state.actor_address == 0 ||
+        player_state.world_address == 0) {
+        return;
+    }
+
+    const auto authority_id = authority->participant_id;
+    const auto run_nonce = runtime_state.world_snapshot.run_nonce;
+    const bool existing_formation =
+        g_run_entry_formation_world_address == player_state.world_address &&
+        g_run_entry_formation_authority_participant_id == authority_id &&
+        g_run_entry_formation_run_nonce == run_nonce;
+    if (!existing_formation) {
+        g_run_entry_formation_settled = false;
+    }
+    if (existing_formation && g_run_entry_formation_settled) {
+        return;
+    }
+    if (existing_formation &&
+        g_run_entry_formation_started_ms != 0 &&
+        now_ms - g_run_entry_formation_started_ms > kRunEntryFormationBootstrapMs) {
+        return;
+    }
+
+    const auto local_transport_participant_id = multiplayer::GetLocalTransportParticipantId();
+    const auto slot = ResolveRunEntryFormationSlot(
+        runtime_state,
+        authority_id,
+        local_transport_participant_id);
+    float offset_x = 0.0f;
+    float offset_y = 0.0f;
+    ResolveRunEntryFormationOffset(slot, &offset_x, &offset_y);
+
+    const float desired_x = authority->runtime.position_x + offset_x;
+    const float desired_y = authority->runtime.position_y + offset_y;
+    if (!std::isfinite(desired_x) || !std::isfinite(desired_y)) {
+        return;
+    }
+
+    float target_x = desired_x;
+    float target_y = desired_y;
+    const bool nav_snapped = TrySnapRunEntryFormationTargetToNav(
+        desired_x,
+        desired_y,
+        authority->runtime.position_x,
+        authority->runtime.position_y,
+        &target_x,
+        &target_y);
+    const float current_target_dx = player_state.x - target_x;
+    const float current_target_dy = player_state.y - target_y;
+    const float current_target_distance2 =
+        current_target_dx * current_target_dx + current_target_dy * current_target_dy;
+    if (existing_formation &&
+        current_target_distance2 <= kRunEntryFormationReapplyDistance * kRunEntryFormationReapplyDistance) {
+        g_run_entry_formation_settled = true;
+        return;
+    }
+    if (existing_formation &&
+        g_run_entry_formation_last_apply_ms != 0 &&
+        now_ms - g_run_entry_formation_last_apply_ms < kRunEntryFormationReapplyIntervalMs) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const bool wrote_position =
+        memory.TryWriteField(player_state.actor_address, kActorPositionXOffset, target_x) &&
+        memory.TryWriteField(player_state.actor_address, kActorPositionYOffset, target_y);
+    if (!wrote_position) {
+        return;
+    }
+
+    ApplyWizardActorFacingState(player_state.actor_address, authority->runtime.heading);
+    std::string rebind_error;
+    const bool rebound = RebindSceneActorCell(player_state.actor_address, &rebind_error);
+    g_run_entry_formation_world_address = player_state.world_address;
+    g_run_entry_formation_authority_participant_id = authority_id;
+    g_run_entry_formation_run_nonce = run_nonce;
+    if (!existing_formation || g_run_entry_formation_started_ms == 0) {
+        g_run_entry_formation_started_ms = now_ms;
+    }
+    g_run_entry_formation_last_apply_ms = now_ms;
+
+    Log(
+        "world_snapshot: applied host-authoritative run entry formation. authority=" +
+        std::to_string(authority_id) +
+        " local=" + std::to_string(local_transport_participant_id) +
+        " slot=" + std::to_string(slot) +
+        " target=(" + std::to_string(target_x) + "," + std::to_string(target_y) + ")" +
+        " anchor=(" + std::to_string(authority->runtime.position_x) + "," +
+        std::to_string(authority->runtime.position_y) + ")" +
+        " reapply=" + (existing_formation ? "true" : "false") +
+        " nav_snapped=" + (nav_snapped ? "true" : "false") +
+        " rebound=" + (rebound ? "true" : "false") +
+        (rebound ? "" : " rebind_error=" + rebind_error));
+}
+
 bool ShouldReconcileLocalWorldActor(
     const SDModSceneActorState& actor,
     multiplayer::ParticipantSceneIntentKind scene_kind) {
     if (!actor.valid ||
         actor.actor_address == 0 ||
+        actor.owner_address == 0 ||
         actor.object_type_id == 0 ||
         actor.object_type_id == 1 ||
         !std::isfinite(actor.x) ||
@@ -219,10 +532,13 @@ bool ShouldReconcileLocalWorldActor(
     }
 
     if (scene_kind == multiplayer::ParticipantSceneIntentKind::Run) {
-        return actor.tracked_enemy &&
-               std::isfinite(actor.hp) &&
-               std::isfinite(actor.max_hp) &&
-               actor.max_hp > 0.0f;
+        return (actor.tracked_enemy &&
+                std::isfinite(actor.hp) &&
+                std::isfinite(actor.max_hp) &&
+                actor.max_hp > 0.0f) ||
+               (!actor.tracked_enemy &&
+                (actor.object_type_id == kSolomonDigNativeTypeId ||
+                 actor.object_type_id == kSolomonRunStaticNativeTypeId));
     }
 
     return scene_kind == multiplayer::ParticipantSceneIntentKind::SharedHub;
@@ -237,11 +553,16 @@ bool ShouldUseAuthoritativeWorldActorForScene(
     }
 
     if (scene_kind == multiplayer::ParticipantSceneIntentKind::Run) {
-        return actor.tracked_enemy &&
-               actor.lifecycle_owned &&
-               std::isfinite(actor.hp) &&
-               std::isfinite(actor.max_hp) &&
-               actor.max_hp > 0.0f;
+        return actor.lifecycle_owned &&
+               ((actor.tracked_enemy &&
+                 !actor.dead &&
+                 std::isfinite(actor.hp) &&
+                 std::isfinite(actor.max_hp) &&
+                 actor.max_hp > 0.0f &&
+                 actor.hp > 0.05f) ||
+                (actor.run_static &&
+                 (actor.native_type_id == kSolomonDigNativeTypeId ||
+                  actor.native_type_id == kSolomonRunStaticNativeTypeId)));
     }
 
     return scene_kind == multiplayer::ParticipantSceneIntentKind::SharedHub;
@@ -477,6 +798,21 @@ bool ApplyReplicatedWorldActorPresentation(
     }
 
     if (!IsReplicatedHubStudentSnapshot(authoritative_actor)) {
+        if ((authoritative_actor.presentation_flags &
+             multiplayer::WorldActorPresentationFlagLocomotionFloats) != 0) {
+            if (kActorWalkCyclePrimaryOffset != 0 && std::isfinite(authoritative_actor.walk_cycle_primary)) {
+                wrote = memory.TryWriteField(
+                    actor_address,
+                    kActorWalkCyclePrimaryOffset,
+                    authoritative_actor.walk_cycle_primary) || wrote;
+            }
+            if (kActorWalkCycleSecondaryOffset != 0 && std::isfinite(authoritative_actor.walk_cycle_secondary)) {
+                wrote = memory.TryWriteField(
+                    actor_address,
+                    kActorWalkCycleSecondaryOffset,
+                    authoritative_actor.walk_cycle_secondary) || wrote;
+            }
+        }
         return wrote;
     }
 
@@ -692,6 +1028,19 @@ bool ApplyReplicatedRunEnemyHealth(
         return false;
     }
 
+    if (multiplayer::IsLocalTransportClient() &&
+        authoritative_actor.network_actor_id != 0 &&
+        local_health.hp + 0.05f < authoritative_hp) {
+        multiplayer::QueueLocalEnemyDamageClaim(
+            authoritative_actor.network_actor_id,
+            0,
+            authoritative_hp,
+            local_health.hp,
+            authoritative_max_hp,
+            authoritative_actor.position_x,
+            authoritative_actor.position_y);
+    }
+
     auto& memory = ProcessMemory::Instance();
     bool wrote = true;
     if (max_hp_changed) {
@@ -701,25 +1050,6 @@ bool ApplyReplicatedRunEnemyHealth(
         wrote = memory.TryWriteField(actor_address, kEnemyCurrentHpOffset, authoritative_hp) && wrote;
     }
     return wrote;
-}
-
-bool ParkReplicatedWorldActor(uintptr_t actor_address, std::uint32_t park_index) {
-    if (actor_address == 0) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    const float parked_x = kWorldSnapshotParkBase + static_cast<float>(park_index * 12);
-    const float parked_y = kWorldSnapshotParkBase;
-    const bool wrote_position =
-        memory.TryWriteField(actor_address, kActorPositionXOffset, parked_x) &&
-        memory.TryWriteField(actor_address, kActorPositionYOffset, parked_y);
-    if (wrote_position) {
-        DWORD rebind_exception_code = 0;
-        (void)TryRebindActorToOwnerWorld(actor_address, &rebind_exception_code);
-    }
-    ApplyReplicatedWorldActorDriveState(actor_address, 0);
-    return wrote_position;
 }
 
 bool RemoveReplicatedSharedHubActor(
@@ -753,12 +1083,69 @@ bool RemoveReplicatedSharedHubActor(
         exception_code);
 }
 
+bool RemoveReplicatedRunActor(
+    const ReplicatedWorldActorLocalBinding& binding,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (binding.actor.actor_address == 0 ||
+        !ShouldReconcileLocalWorldActor(binding.actor, multiplayer::ParticipantSceneIntentKind::Run)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t world_address = 0;
+    if (!memory.TryReadField(binding.actor.actor_address, kActorOwnerOffset, &world_address) ||
+        world_address == 0) {
+        return false;
+    }
+
+    const auto unregister_address = memory.ResolveGameAddressOrZero(kActorWorldUnregister);
+    if (unregister_address == 0) {
+        return false;
+    }
+
+    return CallActorWorldUnregisterSafe(
+        unregister_address,
+        world_address,
+        binding.actor.actor_address,
+        1,
+        exception_code);
+}
+
+bool ParkReplicatedRunActor(const ReplicatedWorldActorLocalBinding& binding) {
+    if (binding.actor.actor_address == 0 ||
+        !binding.actor.tracked_enemy ||
+        !ShouldReconcileLocalWorldActor(binding.actor, multiplayer::ParticipantSceneIntentKind::Run)) {
+        return false;
+    }
+
+    const auto actor_address = binding.actor.actor_address;
+    const float address_jitter_x = static_cast<float>((actor_address >> 4) & 0x3FFu);
+    const float address_jitter_y = static_cast<float>((actor_address >> 14) & 0x3FFu);
+    const float park_x = kWorldSnapshotParkBase + address_jitter_x * 8.0f;
+    const float park_y = kWorldSnapshotParkBase + address_jitter_y * 8.0f;
+
+    auto& memory = ProcessMemory::Instance();
+    bool wrote =
+        memory.TryWriteField(actor_address, kActorPositionXOffset, park_x) &&
+        memory.TryWriteField(actor_address, kActorPositionYOffset, park_y);
+    if (std::isfinite(binding.actor.max_hp) && binding.actor.max_hp > 0.0f) {
+        wrote = memory.TryWriteField(actor_address, kEnemyCurrentHpOffset, binding.actor.max_hp) && wrote;
+        wrote = memory.TryWriteField(actor_address, kEnemyMaxHpOffset, binding.actor.max_hp) && wrote;
+    }
+
+    DWORD rebind_exception_code = 0;
+    (void)TryRebindActorToOwnerWorld(actor_address, &rebind_exception_code);
+    return wrote;
+}
+
 void RemoveReplicatedCreatedSharedHubActorsForSceneSwitch(const char* reason) {
     if (g_replicated_created_hub_actors.empty()) {
         return;
     }
 
-    auto& memory = ProcessMemory::Instance();
     std::vector<std::pair<std::uint64_t, uintptr_t>> created_actors;
     created_actors.reserve(g_replicated_created_hub_actors.size());
     for (const auto& entry : g_replicated_created_hub_actors) {
@@ -767,40 +1154,40 @@ void RemoveReplicatedCreatedSharedHubActorsForSceneSwitch(const char* reason) {
         }
     }
 
+    auto& memory = ProcessMemory::Instance();
+    std::uint32_t removed_count = 0;
+    std::uint32_t failed_remove_count = 0;
+    DWORD last_exception_code = 0;
     for (const auto& entry : created_actors) {
         std::uint32_t native_type_id = 0;
         if (!memory.TryReadField(entry.second, kGameObjectTypeIdOffset, &native_type_id) ||
             !IsReplicatedSharedHubFactoryActorType(native_type_id)) {
-            UnbindReplicatedSharedHubActor(entry.first, entry.second);
+            ++failed_remove_count;
             continue;
         }
 
         ReplicatedWorldActorLocalBinding binding;
-        binding.actor.valid = true;
+        binding.network_actor_id = entry.first;
         binding.actor.actor_address = entry.second;
         binding.actor.object_type_id = native_type_id;
-        binding.network_actor_id = entry.first;
-
         DWORD exception_code = 0;
         if (RemoveReplicatedSharedHubActor(binding, &exception_code)) {
-            Log(
-                "world_snapshot: unregistered replicated hub actor for scene switch. reason=" +
-                std::string(reason != nullptr ? reason : "unknown") +
-                " actor=" + HexString(entry.second) +
-                " network_actor_id=" + std::to_string(entry.first));
+            ++removed_count;
         } else {
-            Log(
-                "world_snapshot: failed to unregister replicated hub actor for scene switch. reason=" +
-                std::string(reason != nullptr ? reason : "unknown") +
-                " actor=" + HexString(entry.second) +
-                " network_actor_id=" + std::to_string(entry.first) +
-                " seh=" + HexString(exception_code));
+            ++failed_remove_count;
+            last_exception_code = exception_code;
         }
-        UnbindReplicatedSharedHubActor(entry.first, entry.second);
     }
 
     ClearReplicatedSharedHubActorBindings();
     g_replicated_created_hub_scene_epoch = 0;
+    Log(
+        "world_snapshot: removed replicated hub actors for scene switch. reason=" +
+        std::string(reason != nullptr ? reason : "unknown") +
+        " count=" + std::to_string(static_cast<std::uint32_t>(created_actors.size())) +
+        " removed=" + std::to_string(removed_count) +
+        " failed=" + std::to_string(failed_remove_count) +
+        " last_seh=" + HexString(last_exception_code));
 }
 
 std::vector<ReplicatedWorldActorLocalBinding> BuildLocalReplicatedWorldActorBindings(
@@ -868,10 +1255,20 @@ bool TryQueueClientRunLifecycle(std::uint64_t now_ms, const char* source_label) 
             " detail=" + error_message);
         return false;
     }
+    Log(
+        "world_snapshot: queued client run lifecycle. source=" +
+        std::string(source_label != nullptr ? source_label : "unknown"));
     return true;
 }
 
+std::uint32_t CountAuthoritativeTrackedRunEnemiesForScene(
+    const multiplayer::WorldSnapshotRuntimeInfo& snapshot);
+
 void MaybeQueueRunLifecycleForRemoteAuthority(std::uint64_t now_ms) {
+    if (multiplayer::IsLocalTransportClient()) {
+        return;
+    }
+
     SDModSceneState scene_state;
     if (!TryGetSceneState(&scene_state) ||
         !scene_state.valid ||
@@ -899,14 +1296,34 @@ void MaybeQueueRunLifecycleForAuthoritativeSnapshot(
         snapshot.actors.empty()) {
         return;
     }
+    if (CountAuthoritativeTrackedRunEnemiesForScene(snapshot) == 0) {
+        return;
+    }
     (void)TryQueueClientRunLifecycle(now_ms, "world_snapshot");
 }
 
-std::uint32_t CountAuthoritativeWorldActorsForScene(
+std::uint32_t CountAuthoritativeTrackedRunEnemiesForScene(
     const multiplayer::WorldSnapshotRuntimeInfo& snapshot) {
+    if (snapshot.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run) {
+        return 0;
+    }
+
     std::uint32_t count = 0;
     for (const auto& authoritative_actor : snapshot.actors) {
-        if (ShouldUseAuthoritativeWorldActorForScene(authoritative_actor, snapshot.scene_intent.kind)) {
+        if (authoritative_actor.tracked_enemy &&
+            ShouldUseAuthoritativeWorldActorForScene(authoritative_actor, snapshot.scene_intent.kind)) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
+std::uint32_t CountLocalTrackedRunEnemyBindings(
+    const std::vector<ReplicatedWorldActorLocalBinding>& local_bindings) {
+    std::uint32_t count = 0;
+    for (const auto& binding : local_bindings) {
+        if (binding.actor.tracked_enemy &&
+            ShouldReconcileLocalWorldActor(binding.actor, multiplayer::ParticipantSceneIntentKind::Run)) {
             count += 1;
         }
     }
@@ -915,18 +1332,22 @@ std::uint32_t CountAuthoritativeWorldActorsForScene(
 
 void MaybeCatchUpRunEnemyPoolForAuthoritativeSnapshot(
     const multiplayer::WorldSnapshotRuntimeInfo& snapshot,
-    std::uint32_t local_actor_count) {
+    std::uint32_t local_tracked_enemy_count) {
     if (snapshot.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run ||
         snapshot.truncated) {
         return;
     }
-
-    const auto authoritative_actor_count = CountAuthoritativeWorldActorsForScene(snapshot);
-    if (authoritative_actor_count <= local_actor_count) {
+    if (!IsLocalRunCombatAlreadyActive()) {
         return;
     }
 
-    (void)TryAccelerateRunLifecycleEnemyPoolForSnapshot(authoritative_actor_count - local_actor_count);
+    const auto authoritative_tracked_enemy_count = CountAuthoritativeTrackedRunEnemiesForScene(snapshot);
+    if (authoritative_tracked_enemy_count <= local_tracked_enemy_count) {
+        return;
+    }
+
+    (void)TryAccelerateRunLifecycleEnemyPoolForSnapshot(
+        authoritative_tracked_enemy_count - local_tracked_enemy_count);
 }
 
 bool TryBindAuthoritativeRunActorToLocalPool(
@@ -942,7 +1363,10 @@ bool TryBindAuthoritativeRunActorToLocalPool(
         return false;
     }
 
-    auto choose_binding = [&](bool require_enemy_type) -> bool {
+    auto choose_binding = [&](bool require_enemy_type, bool prefer_nearest) -> bool {
+        float best_distance_sq = (std::numeric_limits<float>::max)();
+        std::size_t best_index = 0;
+        bool found = false;
         for (std::size_t index = 0; index < local_bindings->size(); ++index) {
             auto& binding = (*local_bindings)[index];
             if (binding.matched ||
@@ -957,17 +1381,38 @@ bool TryBindAuthoritativeRunActorToLocalPool(
                 binding.actor.enemy_type != authoritative_actor.enemy_type) {
                 continue;
             }
-            BindReplicatedRunActor(authoritative_actor.network_actor_id, binding.actor.actor_address);
-            binding.network_actor_id = authoritative_actor.network_actor_id;
-            if (binding_index_out != nullptr) {
-                *binding_index_out = index;
+
+            if (prefer_nearest) {
+                const float dx = authoritative_actor.position_x - binding.actor.x;
+                const float dy = authoritative_actor.position_y - binding.actor.y;
+                const float distance_sq = dx * dx + dy * dy;
+                if (!found || distance_sq < best_distance_sq) {
+                    found = true;
+                    best_index = index;
+                    best_distance_sq = distance_sq;
+                }
+                continue;
             }
-            return true;
+
+            found = true;
+            best_index = index;
+            break;
         }
-        return false;
+
+        if (!found) {
+            return false;
+        }
+        auto& binding = (*local_bindings)[best_index];
+        BindReplicatedRunActor(authoritative_actor.network_actor_id, binding.actor.actor_address);
+        binding.network_actor_id = authoritative_actor.network_actor_id;
+        if (binding_index_out != nullptr) {
+            *binding_index_out = best_index;
+        }
+        return true;
     };
 
-    return choose_binding(true) || choose_binding(false);
+    const bool prefer_nearest = authoritative_actor.run_static;
+    return choose_binding(true, prefer_nearest) || choose_binding(false, prefer_nearest);
 }
 
 bool TryBindAuthoritativeSharedHubActorToLocalPool(
@@ -1059,6 +1504,7 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
     MaybeQueueRunLifecycleForRemoteAuthority(now_ms);
 
     const auto runtime_state = multiplayer::SnapshotRuntimeState();
+    ApplyHostAuthoritativeRunEntryFormationIfNeeded(runtime_state, now_ms);
     multiplayer::WorldSnapshotRuntimeInfo snapshot;
     const bool have_snapshot = multiplayer::TrySampleWorldSnapshot(
         runtime_state,
@@ -1070,6 +1516,14 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
         snapshot.actors.empty() ||
         now_ms < snapshot.received_ms ||
         now_ms - snapshot.received_ms > kWorldSnapshotApplyStaleMs) {
+        if (runtime_state.world_snapshot_apply.valid) {
+            ClearWorldSnapshotApplyState(now_ms);
+        }
+        return;
+    }
+    const auto local_transport_participant_id = multiplayer::GetLocalTransportParticipantId();
+    if (local_transport_participant_id != 0 &&
+        snapshot.authority_participant_id == local_transport_participant_id) {
         if (runtime_state.world_snapshot_apply.valid) {
             ClearWorldSnapshotApplyState(now_ms);
         }
@@ -1108,19 +1562,11 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
     auto local_bindings = BuildLocalReplicatedWorldActorBindings(snapshot.scene_intent.kind);
     WorldSnapshotApplyCounts counts;
     counts.local_actor_count = static_cast<std::uint32_t>(local_bindings.size());
-    MaybeCatchUpRunEnemyPoolForAuthoritativeSnapshot(snapshot, counts.local_actor_count);
+    MaybeCatchUpRunEnemyPoolForAuthoritativeSnapshot(
+        snapshot,
+        CountLocalTrackedRunEnemyBindings(local_bindings));
 
-    std::unordered_map<std::uint64_t, std::size_t> local_by_network_id;
-    local_by_network_id.reserve(local_bindings.size());
-    for (std::size_t index = 0; index < local_bindings.size(); ++index) {
-        if (local_bindings[index].network_actor_id != 0) {
-            local_by_network_id.emplace(local_bindings[index].network_actor_id, index);
-        }
-    }
-
-    std::unordered_map<std::uint32_t, std::uint32_t> authoritative_type_counts;
     std::unordered_set<std::uint64_t> authoritative_ids;
-    authoritative_type_counts.reserve(snapshot.actors.size());
     authoritative_ids.reserve(snapshot.actors.size());
     const bool snapshot_may_be_complete = !snapshot.truncated &&
         (snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::SharedHub ||
@@ -1131,8 +1577,31 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
             continue;
         }
         authoritative_ids.insert(authoritative_actor.network_actor_id);
-        authoritative_type_counts[authoritative_actor.native_type_id] += 1;
+    }
 
+    if (snapshot_may_be_complete &&
+        snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::Run) {
+        for (auto& binding : local_bindings) {
+            if (binding.network_actor_id != 0 &&
+                authoritative_ids.find(binding.network_actor_id) == authoritative_ids.end()) {
+                UnbindReplicatedRunActor(binding.network_actor_id, binding.actor.actor_address);
+                binding.network_actor_id = 0;
+            }
+        }
+    }
+
+    std::unordered_map<std::uint64_t, std::size_t> local_by_network_id;
+    local_by_network_id.reserve(local_bindings.size());
+    for (std::size_t index = 0; index < local_bindings.size(); ++index) {
+        if (local_bindings[index].network_actor_id != 0) {
+            local_by_network_id.emplace(local_bindings[index].network_actor_id, index);
+        }
+    }
+
+    for (const auto& authoritative_actor : snapshot.actors) {
+        if (!ShouldUseAuthoritativeWorldActorForScene(authoritative_actor, snapshot.scene_intent.kind)) {
+            continue;
+        }
         auto local_it = local_by_network_id.find(authoritative_actor.network_actor_id);
         if (local_it == local_by_network_id.end() &&
             snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::SharedHub) {
@@ -1203,6 +1672,7 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
             counts.presentation_write_count += 1;
         }
         if (snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::Run &&
+            authoritative_actor.tracked_enemy &&
             ApplyReplicatedRunEnemyHealth(binding.actor.actor_address, authoritative_actor)) {
             counts.health_write_count += 1;
         }
@@ -1212,28 +1682,55 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
     if (snapshot_may_be_complete &&
         (snapshot.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::SharedHub ||
          can_mutate_shared_hub_actors)) {
-        std::uint32_t park_index = 0;
         for (auto& binding : local_bindings) {
             if (binding.matched) {
                 continue;
             }
             if (snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::Run) {
-                const bool bound_to_missing_authority =
-                    binding.network_actor_id != 0 &&
-                    authoritative_ids.find(binding.network_actor_id) == authoritative_ids.end();
-                const bool unbound_extra_for_replicated_type =
-                    binding.network_actor_id == 0 &&
-                    authoritative_type_counts.find(binding.actor.object_type_id) != authoritative_type_counts.end();
-                const bool should_park = bound_to_missing_authority || unbound_extra_for_replicated_type;
-                if (!should_park) {
-                    continue;
-                }
-                if (ParkReplicatedWorldActor(binding.actor.actor_address, ++park_index)) {
-                    binding.parked = true;
-                    counts.parked_actor_count += 1;
-                    RecordWorldSnapshotBinding(&counts, binding, false, true);
+                const auto removed_network_actor_id = binding.network_actor_id;
+                if (binding.network_actor_id != 0 &&
+                    authoritative_ids.find(binding.network_actor_id) == authoritative_ids.end()) {
                     UnbindReplicatedRunActor(binding.network_actor_id, binding.actor.actor_address);
                     binding.network_actor_id = 0;
+                }
+                DWORD exception_code = 0;
+                const auto removed_actor_address = binding.actor.actor_address;
+                if (binding.actor.tracked_enemy && ParkReplicatedRunActor(binding)) {
+                    counts.parked_actor_count += 1;
+                    if (removed_network_actor_id != 0) {
+                        auto removed_binding = binding;
+                        removed_binding.network_actor_id = removed_network_actor_id;
+                        RecordWorldSnapshotBinding(&counts, removed_binding, false, true, true);
+                        UnbindReplicatedRunActor(removed_network_actor_id, removed_actor_address);
+                    }
+                    Log(
+                        "world_snapshot: parked extra run actor. actor=" +
+                        HexString(removed_actor_address) +
+                        " type=" + HexString(static_cast<uintptr_t>(binding.actor.object_type_id)) +
+                        " network_actor_id=" + std::to_string(removed_network_actor_id));
+                    continue;
+                }
+                if (RemoveReplicatedRunActor(binding, &exception_code)) {
+                    counts.removed_actor_count += 1;
+                    if (removed_network_actor_id != 0) {
+                        auto removed_binding = binding;
+                        removed_binding.network_actor_id = removed_network_actor_id;
+                        RecordWorldSnapshotBinding(&counts, removed_binding, false, false, true);
+                        UnbindReplicatedRunActor(removed_network_actor_id, removed_actor_address);
+                    }
+                    Log(
+                        "world_snapshot: unregistered extra run actor. actor=" +
+                        HexString(removed_actor_address) +
+                        " type=" + HexString(static_cast<uintptr_t>(binding.actor.object_type_id)) +
+                        " network_actor_id=" + std::to_string(removed_network_actor_id));
+                } else {
+                    counts.failed_remove_actor_count += 1;
+                    Log(
+                        "world_snapshot: failed to unregister extra run actor. actor=" +
+                        HexString(removed_actor_address) +
+                        " type=" + HexString(static_cast<uintptr_t>(binding.actor.object_type_id)) +
+                        " network_actor_id=" + std::to_string(removed_network_actor_id) +
+                        " seh=" + HexString(exception_code));
                 }
                 continue;
             }

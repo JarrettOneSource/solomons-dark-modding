@@ -301,6 +301,139 @@ void __fastcall HookPlayerControlBrainUpdate(
     }
 }
 
+bool IsActorCurrentLocalPlayerSlotZero(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    uintptr_t gameplay_address = 0;
+    uintptr_t local_actor_address = 0;
+    return TryResolveCurrentGameplayScene(&gameplay_address) &&
+           gameplay_address != 0 &&
+           TryResolvePlayerActorForSlot(gameplay_address, 0, &local_actor_address) &&
+           local_actor_address == actor_address;
+}
+
+bool IsUsableLocalPlayerCastAimTarget(
+    float position_x,
+    float position_y,
+    float aim_target_x,
+    float aim_target_y) {
+    if (!std::isfinite(position_x) ||
+        !std::isfinite(position_y) ||
+        !std::isfinite(aim_target_x) ||
+        !std::isfinite(aim_target_y)) {
+        return false;
+    }
+    if (std::abs(aim_target_x) < 0.001f && std::abs(aim_target_y) < 0.001f) {
+        return false;
+    }
+
+    const auto dx = aim_target_x - position_x;
+    const auto dy = aim_target_y - position_y;
+    const auto distance = std::sqrt((dx * dx) + (dy * dy));
+    constexpr float kMinCastAimDistance = 1.0f;
+    constexpr float kMaxCastAimDistance = 4096.0f;
+    constexpr float kMaxCastAimCoordinateMagnitude = 20000.0f;
+    return std::isfinite(distance) &&
+           distance >= kMinCastAimDistance &&
+           distance <= kMaxCastAimDistance &&
+           std::abs(aim_target_x) <= kMaxCastAimCoordinateMagnitude &&
+           std::abs(aim_target_y) <= kMaxCastAimCoordinateMagnitude;
+}
+
+bool QueueLocalPlayerPrimaryCastForMultiplayer(uintptr_t actor_address) {
+    if (!multiplayer::IsLocalTransportEnabled() ||
+        !IsActorCurrentLocalPlayerSlotZero(actor_address)) {
+        return false;
+    }
+
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+
+    static std::atomic<uintptr_t> s_last_multiplayer_primary_actor{0};
+    static std::atomic<std::uint64_t> s_last_multiplayer_primary_tick_ms{0};
+    const auto last_actor =
+        s_last_multiplayer_primary_actor.load(std::memory_order_acquire);
+    const auto last_tick_ms =
+        s_last_multiplayer_primary_tick_ms.load(std::memory_order_acquire);
+    if (last_actor == actor_address && last_tick_ms == now_ms) {
+        return false;
+    }
+    s_last_multiplayer_primary_actor.store(actor_address, std::memory_order_release);
+    s_last_multiplayer_primary_tick_ms.store(now_ms, std::memory_order_release);
+
+    float x = 0.0f;
+    float y = 0.0f;
+    float heading = 0.0f;
+    if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &x) ||
+        !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &y) ||
+        !TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &heading)) {
+        Log("Multiplayer local primary cast skipped: actor fields unavailable. actor=" + HexString(actor_address));
+        return false;
+    }
+
+    auto radians =
+        (NormalizeWizardActorHeadingForWrite(heading) - 90.0f) /
+        kWizardHeadingRadiansToDegrees;
+    auto direction_x = static_cast<float>(std::cos(radians));
+    auto direction_y = static_cast<float>(std::sin(radians));
+    if (!std::isfinite(direction_x) || !std::isfinite(direction_y)) {
+        return false;
+    }
+
+    bool has_aim_target = false;
+    float aim_target_x = 0.0f;
+    float aim_target_y = 0.0f;
+    if (TryReadFiniteFloatField(actor_address, kActorAimTargetXOffset, &aim_target_x) &&
+        TryReadFiniteFloatField(actor_address, kActorAimTargetYOffset, &aim_target_y) &&
+        IsUsableLocalPlayerCastAimTarget(x, y, aim_target_x, aim_target_y)) {
+        const auto aim_dx = aim_target_x - x;
+        const auto aim_dy = aim_target_y - y;
+        const auto aim_length = std::sqrt((aim_dx * aim_dx) + (aim_dy * aim_dy));
+        if (std::isfinite(aim_length) && aim_length > 0.0001f) {
+            direction_x = aim_dx / aim_length;
+            direction_y = aim_dy / aim_length;
+            has_aim_target = true;
+        }
+    }
+
+    uintptr_t target_actor_address = 0;
+    (void)ProcessMemory::Instance().TryReadField(
+        actor_address,
+        kActorCurrentTargetActorOffset,
+        &target_actor_address);
+
+    const auto native_queue_id = multiplayer::QueueLocalSpellCastEvent(
+        0,
+        x,
+        y,
+            direction_x,
+            direction_y,
+            0,
+            target_actor_address,
+            12,
+            has_aim_target,
+            aim_target_x,
+            aim_target_y);
+    if (native_queue_id == 0) {
+        return false;
+    }
+    Log(
+        "Multiplayer local primary cast queued from native pure-primary. actor=" +
+        HexString(actor_address) +
+        " native_queue_id=" + std::to_string(native_queue_id) +
+        " native_tick_ms=" + std::to_string(now_ms) +
+        " pos=(" + std::to_string(x) + "," + std::to_string(y) + ")" +
+        " heading=" + std::to_string(heading) +
+        " dir=(" + std::to_string(direction_x) + "," + std::to_string(direction_y) + ")" +
+        " aim_target=" +
+            (has_aim_target
+                ? (std::to_string(aim_target_x) + "," + std::to_string(aim_target_y))
+                : std::string("<none>")) +
+        " target=" + HexString(target_actor_address));
+    return true;
+}
+
 void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     const auto original =
         GetX86HookTrampoline<PlayerActorNoArgMethodFn>(g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
@@ -429,6 +562,7 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
             (void)RefreshAndApplyWizardBindingFacingState(binding, actor_address);
         }
     }
+    (void)QueueLocalPlayerPrimaryCastForMultiplayer(actor_address);
     if (log_this) {
         Log(
             "[bots] pure_primary_start exit actor=" + HexString(actor_address) +

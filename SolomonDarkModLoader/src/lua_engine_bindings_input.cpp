@@ -59,6 +59,15 @@ bool TrySendHostProcessLeftClickNormalized(
     normalized_x = (std::max)(0.0, (std::min)(1.0, normalized_x));
     normalized_y = (std::max)(0.0, (std::min)(1.0, normalized_y));
 
+    if (IsRunLifecycleActive()) {
+        std::string gameplay_click_error;
+        if (QueueGameplayMouseLeftClick(&gameplay_click_error)) {
+            return true;
+        }
+
+        Log("Gameplay click queue failed; falling back to windowed SendInput: " + gameplay_click_error);
+    }
+
     HWND window = nullptr;
     bool have_window_click_point = false;
     if (TryFindHostProcessWindow(&window) && window != nullptr) {
@@ -79,15 +88,6 @@ bool TrySendHostProcessLeftClickNormalized(
                 }
             }
         }
-    }
-
-    if (IsRunLifecycleActive()) {
-        std::string gameplay_click_error;
-        if (QueueGameplayMouseLeftClick(&gameplay_click_error)) {
-            return true;
-        }
-
-        Log("Gameplay click queue failed; falling back to windowed SendInput: " + gameplay_click_error);
     }
 
     if (!have_window_click_point) {
@@ -185,14 +185,70 @@ int LuaInputHoldMouseLeftFrames(lua_State* state) {
     return 1;
 }
 
+int LuaInputQueueLocalSpellCast(lua_State* state) {
+    const auto raw_skill_id = luaL_checkinteger(state, 1);
+    if (raw_skill_id < 0) {
+        return luaL_error(state, "sd.input.queue_local_spell_cast skill_id must be non-negative");
+    }
+
+    const auto direction_x = static_cast<float>(luaL_optnumber(state, 2, 1.0));
+    const auto direction_y = static_cast<float>(luaL_optnumber(state, 3, 0.0));
+    const auto hold_frames = luaL_optinteger(state, 4, 0);
+    if (hold_frames < 0 || hold_frames > 3600) {
+        return luaL_error(state, "sd.input.queue_local_spell_cast hold_frames must be in the range 0..3600");
+    }
+    SDModPlayerState player_state;
+    if (!TryGetPlayerState(&player_state) || !player_state.valid) {
+        return luaL_error(state, "sd.input.queue_local_spell_cast requires a live player");
+    }
+
+    multiplayer::QueueLocalSpellCastEvent(
+        static_cast<int>(raw_skill_id),
+        player_state.x,
+        player_state.y,
+        direction_x,
+        direction_y,
+        0,
+        0,
+        static_cast<std::uint32_t>(hold_frames));
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaInputQueueLocalEnemyDamageClaim(lua_State* state) {
+    const auto raw_network_actor_id = luaL_checkinteger(state, 1);
+    const auto raw_skill_id = luaL_checkinteger(state, 2);
+    const auto authoritative_hp = static_cast<float>(luaL_checknumber(state, 3));
+    const auto local_hp = static_cast<float>(luaL_checknumber(state, 4));
+    const auto max_hp = static_cast<float>(luaL_checknumber(state, 5));
+    const auto target_position_x = static_cast<float>(luaL_checknumber(state, 6));
+    const auto target_position_y = static_cast<float>(luaL_checknumber(state, 7));
+    if (raw_network_actor_id <= 0) {
+        return luaL_error(state, "sd.input.queue_local_enemy_damage_claim network_actor_id must be positive");
+    }
+
+    multiplayer::QueueLocalEnemyDamageClaim(
+        static_cast<std::uint64_t>(raw_network_actor_id),
+        static_cast<std::int32_t>(raw_skill_id),
+        authoritative_hp,
+        local_hp,
+        max_hp,
+        target_position_x,
+        target_position_y);
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 }  // namespace
 
 void RegisterLuaInputBindings(lua_State* state) {
-    lua_createtable(state, 0, 4);
+    lua_createtable(state, 0, 6);
     RegisterFunction(state, &LuaInputPressKey, "press_key");
     RegisterFunction(state, &LuaInputPressScancode, "press_scancode");
     RegisterFunction(state, &LuaInputClickNormalized, "click_normalized");
     RegisterFunction(state, &LuaInputHoldMouseLeftFrames, "hold_mouse_left_frames");
+    RegisterFunction(state, &LuaInputQueueLocalSpellCast, "queue_local_spell_cast");
+    RegisterFunction(state, &LuaInputQueueLocalEnemyDamageClaim, "queue_local_enemy_damage_claim");
     lua_setfield(state, -2, "input");
 }
 

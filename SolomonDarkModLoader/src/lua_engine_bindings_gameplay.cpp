@@ -81,7 +81,7 @@ void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
 }
 
 void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSnapshot& actor) {
-    lua_createtable(state, 0, 27);
+    lua_createtable(state, 0, 30);
     lua_pushinteger(state, static_cast<lua_Integer>(actor.network_actor_id));
     lua_setfield(state, -2, "network_actor_id");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.native_type_id));
@@ -98,12 +98,18 @@ void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSna
     lua_setfield(state, -2, "tracked_enemy");
     lua_pushboolean(state, actor.lifecycle_owned ? 1 : 0);
     lua_setfield(state, -2, "lifecycle_owned");
+    lua_pushboolean(state, actor.run_static ? 1 : 0);
+    lua_setfield(state, -2, "run_static");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.anim_drive_state));
     lua_setfield(state, -2, "anim_drive_state");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.presentation_flags));
     lua_setfield(state, -2, "presentation_flags");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.anim_drive_state_word));
     lua_setfield(state, -2, "anim_drive_state_word");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.walk_cycle_primary));
+    lua_setfield(state, -2, "walk_cycle_primary");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.walk_cycle_secondary));
+    lua_setfield(state, -2, "walk_cycle_secondary");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.render_variant_primary));
     lua_setfield(state, -2, "render_variant_primary");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.render_variant_secondary));
@@ -242,7 +248,7 @@ int LuaPlayerGetState(lua_State* state) {
         return 1;
     }
 
-    lua_createtable(state, 0, 56);
+    lua_createtable(state, 0, 58);
     lua_pushnumber(state, static_cast<lua_Number>(player_state.hp));
     lua_setfield(state, -2, "hp");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.max_hp));
@@ -315,6 +321,8 @@ int LuaPlayerGetState(lua_State* state) {
     lua_setfield(state, -2, "render_subject_drive_flags");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.anim_drive_state));
     lua_setfield(state, -2, "anim_drive_state");
+    lua_pushinteger(state, static_cast<lua_Integer>(player_state.anim_drive_state_word));
+    lua_setfield(state, -2, "anim_drive_state_word");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.render_subject_anim_drive_state));
     lua_setfield(state, -2, "render_subject_anim_drive_state");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.render_variant_primary));
@@ -347,6 +355,10 @@ int LuaPlayerGetState(lua_State* state) {
     lua_setfield(state, -2, "render_advance_rate");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.render_advance_phase));
     lua_setfield(state, -2, "render_advance_phase");
+    lua_pushnumber(state, static_cast<lua_Number>(player_state.render_drive_effect_timer));
+    lua_setfield(state, -2, "render_drive_effect_timer");
+    lua_pushnumber(state, static_cast<lua_Number>(player_state.render_drive_effect_progress));
+    lua_setfield(state, -2, "render_drive_effect_progress");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.render_drive_overlay_alpha));
     lua_setfield(state, -2, "render_drive_overlay_alpha");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.render_drive_move_blend));

@@ -16,6 +16,8 @@ constexpr std::uint8_t kProgressionLocalPlayerModeValue = 0;
 constexpr std::uint8_t kProgressionNonLocalModeValue = 1;
 
 extern uintptr_t kGameWindowProc;
+extern uintptr_t kWindowInputScaleXGlobal;
+extern uintptr_t kWindowInputScaleYGlobal;
 
 extern uintptr_t kGameplayMouseRefreshHelper;
 extern uintptr_t kGameplayKeyboardEdgeHelper;
@@ -89,6 +91,7 @@ extern uintptr_t kGameObjectFactory;
 extern uintptr_t kGameFree;
 extern uintptr_t kGameOperatorNew;
 extern uintptr_t kNativeIntArrayClear;
+extern uintptr_t kNativeRngInitialize;
 extern uintptr_t kCastActiveHandleCleanup;
 extern uintptr_t kPlayerActorApplyManaDeltaLocalActorGateBranch;
 extern uintptr_t kCastCleanupSlotGateBranch;
@@ -120,6 +123,7 @@ extern uintptr_t kPlayerSelectionState0Global;
 extern uintptr_t kPlayerSelectionState1Global;
 extern uintptr_t kLocalPlayerActorGlobal;
 extern uintptr_t kNativeIntArrayVtable;
+extern uintptr_t kNativeGlobalRngStateGlobal;
 extern uintptr_t kActorWalkCyclePrimaryDivisorGlobal;
 extern uintptr_t kActorWalkCycleSecondaryDivisorGlobal;
 extern uintptr_t kActorWalkCyclePrimaryWrapThresholdGlobal;

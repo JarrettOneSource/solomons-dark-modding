@@ -35,10 +35,28 @@ void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies)
         return;
     }
 
+    SDModSceneState scene_state;
+    const bool have_scene =
+        TryGetSceneState(&scene_state) && scene_state.valid && scene_state.world_address != 0;
+    auto& memory = ProcessMemory::Instance();
+
     std::lock_guard<std::mutex> lock(g_state.enemy_type_mutex);
     enemies->reserve(g_state.enemy_types_by_address.size());
-    for (const auto& [actor_address, enemy_type] : g_state.enemy_types_by_address) {
-        enemies->push_back({actor_address, enemy_type});
+    for (auto it = g_state.enemy_types_by_address.begin();
+         it != g_state.enemy_types_by_address.end();) {
+        const auto actor_address = it->first;
+        if (have_scene) {
+            uintptr_t owner_address = 0;
+            if (!memory.TryReadField(actor_address, kActorOwnerOffset, &owner_address) ||
+                owner_address != scene_state.world_address) {
+                g_state.enemy_spawn_serials_by_address.erase(actor_address);
+                it = g_state.enemy_types_by_address.erase(it);
+                continue;
+            }
+        }
+
+        enemies->push_back({actor_address, it->second});
+        ++it;
     }
 }
 
@@ -50,6 +68,7 @@ bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(std::uint32_t missing_enemy_c
     if (missing_enemy_count == 0 || !IsCombatArenaActiveForEnemyTracking()) {
         return false;
     }
+    constexpr std::int32_t kMaxReasonableEnemyPoolCatchUpBudget = 128;
 
     const auto spawner_address = g_state.last_wave_spawner.load(std::memory_order_acquire);
     if (spawner_address == 0) {
@@ -63,7 +82,8 @@ bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(std::uint32_t missing_enemy_c
 
     std::int32_t remaining_budget = 0;
     if (!memory.TryReadField(spawner_address, kWaveSpawnerRemainingBudgetOffset, &remaining_budget) ||
-        remaining_budget <= 0) {
+        remaining_budget <= 0 ||
+        remaining_budget > kMaxReasonableEnemyPoolCatchUpBudget) {
         return false;
     }
 

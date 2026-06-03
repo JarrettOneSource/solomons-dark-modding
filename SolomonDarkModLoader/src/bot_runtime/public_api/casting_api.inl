@@ -5,22 +5,34 @@ bool QueueBotCast(const BotCastRequest& request) {
     }
 
     const RuntimeState runtime = SnapshotRuntimeState();
-    const auto* participant = FindBot(runtime, request.bot_id);
-    if (participant == nullptr) {
+    const auto* participant = FindParticipant(runtime, request.bot_id);
+    if (participant == nullptr ||
+        (!IsLuaControlledParticipant(*participant) &&
+         !(IsRemoteParticipant(*participant) && IsNativeControlledParticipant(*participant)))) {
         return false;
     }
     if (IsParticipantRuntimeDead(*participant)) {
         ClearDeadBotControlsLocked(*participant);
+        RemoveBotCastInput(request.bot_id);
         return false;
     }
+    const bool remote_native_participant =
+        IsRemoteParticipant(*participant) && IsNativeControlledParticipant(*participant);
+    const bool remote_native_input_controlled =
+        remote_native_participant && request.remote_input_controlled;
 
     SDModParticipantGameplayState refreshed_gameplay_state{};
     (void)TryRefreshParticipantGameplayState(request.bot_id, &refreshed_gameplay_state);
     BotSnapshot live_snapshot{};
     FillBotSnapshot(*participant, &live_snapshot);
     ApplyGameplayStateToSnapshot(request.bot_id, &live_snapshot);
-    ApplyManaReserveStateToSnapshot(&live_snapshot);
-    if (live_snapshot.native_action_cooldown_ticks > 0) {
+    if (remote_native_participant) {
+        RemoveBotManaReserveState(request.bot_id);
+        live_snapshot.mana_reserve_active = false;
+    } else {
+        ApplyManaReserveStateToSnapshot(&live_snapshot);
+    }
+    if (live_snapshot.native_action_cooldown_ticks > 0 && !remote_native_participant) {
         Log(
             "[bots] cast rejected for native action cooldown. bot_id=" +
             std::to_string(request.bot_id) +
@@ -60,7 +72,8 @@ bool QueueBotCast(const BotCastRequest& request) {
     };
     if (live_snapshot.entity_materialized &&
         (live_snapshot.max_mp > 0.0f || live_progression_available) &&
-        live_snapshot.mana_reserve_active) {
+        live_snapshot.mana_reserve_active &&
+        !remote_native_input_controlled) {
         Log(
             "[bots] cast rejected for mana reserve. bot_id=" + std::to_string(request.bot_id) +
             " skill_id=" + std::to_string(resolve_rejected_skill_id()) +
@@ -74,7 +87,8 @@ bool QueueBotCast(const BotCastRequest& request) {
     }
     if (live_snapshot.entity_materialized &&
         (live_snapshot.max_mp > 0.0f || live_progression_available) &&
-        live_snapshot.mp <= kBotManaReadinessEpsilon) {
+        live_snapshot.mp <= kBotManaReadinessEpsilon &&
+        !remote_native_input_controlled) {
         Log(
             "[bots] cast rejected for mana. bot_id=" + std::to_string(request.bot_id) +
             " skill_id=" + std::to_string(resolve_rejected_skill_id()) +
@@ -119,7 +133,10 @@ bool QueueBotCast(const BotCastRequest& request) {
     bool queued = false;
     const auto now_ms = GetTickCount64();
     UpdateRuntimeState([&](RuntimeState& state) {
-        if (FindBot(state, request.bot_id) == nullptr) {
+        const auto* live_participant = FindParticipant(state, request.bot_id);
+        if (live_participant == nullptr ||
+            (!IsLuaControlledParticipant(*live_participant) &&
+             !(IsRemoteParticipant(*live_participant) && IsNativeControlledParticipant(*live_participant)))) {
             return;
         }
 
@@ -132,7 +149,14 @@ bool QueueBotCast(const BotCastRequest& request) {
         pending_cast->kind = request.kind;
         pending_cast->secondary_slot = request.secondary_slot;
         pending_cast->skill_id = request.skill_id;
+        pending_cast->cast_sequence = request.cast_sequence;
+        pending_cast->remote_input_controlled = request.remote_input_controlled;
         pending_cast->target_actor_address = request.target_actor_address;
+        pending_cast->has_origin_transform = request.has_origin_transform;
+        pending_cast->origin_position_x = request.origin_position_x;
+        pending_cast->origin_position_y = request.origin_position_y;
+        pending_cast->has_origin_heading = request.has_origin_heading;
+        pending_cast->origin_heading = request.origin_heading;
         pending_cast->has_aim_target = request.has_aim_target;
         pending_cast->aim_target_x = request.aim_target_x;
         pending_cast->aim_target_y = request.aim_target_y;
@@ -140,6 +164,25 @@ bool QueueBotCast(const BotCastRequest& request) {
         pending_cast->aim_angle = request.aim_angle;
         pending_cast->queued_cast_count = g_next_cast_sequence++;
         pending_cast->queued_at_ms = now_ms;
+        if (request.remote_input_controlled) {
+            auto* input = FindBotCastInput(request.bot_id);
+            if (input == nullptr) {
+                g_bot_cast_inputs.push_back(PendingBotCastInput{});
+                input = &g_bot_cast_inputs.back();
+                input->bot_id = request.bot_id;
+            }
+            input->state.bot_id = request.bot_id;
+            input->state.active = true;
+            input->state.release_requested = false;
+            input->state.cast_sequence = request.cast_sequence;
+            input->state.last_update_ms = now_ms;
+            input->state.has_aim_target = request.has_aim_target;
+            input->state.aim_target_x = request.aim_target_x;
+            input->state.aim_target_y = request.aim_target_y;
+            input->state.has_aim_angle = request.has_aim_angle;
+            input->state.aim_angle = request.aim_angle;
+            input->state.target_actor_address = request.target_actor_address;
+        }
         SetPendingFaceTargetLocked(request.bot_id, request.target_actor_address);
         if (desired_heading_valid) {
             SetPendingFaceHeadingLocked(request.bot_id, true, desired_heading, 0);
@@ -154,6 +197,102 @@ bool QueueBotCast(const BotCastRequest& request) {
     }
 
     return queued;
+}
+
+bool UpdateBotCastInput(const BotCastInputState& input_state) {
+    std::scoped_lock lock(g_bot_runtime_mutex);
+    if (!g_bot_runtime_initialized ||
+        input_state.bot_id == 0 ||
+        input_state.cast_sequence == 0 ||
+        (input_state.has_aim_target &&
+         (!std::isfinite(input_state.aim_target_x) ||
+          !std::isfinite(input_state.aim_target_y))) ||
+        (input_state.has_aim_angle && !std::isfinite(input_state.aim_angle))) {
+        return false;
+    }
+
+    const RuntimeState runtime = SnapshotRuntimeState();
+    const auto* participant = FindParticipant(runtime, input_state.bot_id);
+    if (participant == nullptr ||
+        (!IsLuaControlledParticipant(*participant) &&
+         !(IsRemoteParticipant(*participant) && IsNativeControlledParticipant(*participant)))) {
+        return false;
+    }
+    if (IsParticipantRuntimeDead(*participant)) {
+        RemoveBotCastInput(input_state.bot_id);
+        return false;
+    }
+
+    auto* existing = FindBotCastInput(input_state.bot_id);
+    if (existing != nullptr &&
+        existing->state.cast_sequence != 0 &&
+        static_cast<std::int32_t>(input_state.cast_sequence - existing->state.cast_sequence) < 0) {
+        return false;
+    }
+    if (existing == nullptr) {
+        g_bot_cast_inputs.push_back(PendingBotCastInput{});
+        existing = &g_bot_cast_inputs.back();
+        existing->bot_id = input_state.bot_id;
+    }
+
+    existing->state = input_state;
+    existing->state.bot_id = input_state.bot_id;
+    if (existing->state.last_update_ms == 0) {
+        existing->state.last_update_ms = GetTickCount64();
+    }
+    if (existing->state.release_requested) {
+        existing->state.active = false;
+    }
+    SetPendingFaceTargetLocked(input_state.bot_id, input_state.target_actor_address);
+    if (input_state.has_aim_angle) {
+        SetPendingFaceHeadingLocked(
+            input_state.bot_id,
+            true,
+            NormalizeHeadingDegrees(input_state.aim_angle),
+            0);
+    }
+    return true;
+}
+
+bool ReadBotCastInputState(std::uint64_t bot_id, BotCastInputState* input_state) {
+    if (input_state == nullptr || bot_id == 0) {
+        return false;
+    }
+
+    std::scoped_lock lock(g_bot_runtime_mutex);
+    if (!g_bot_runtime_initialized) {
+        return false;
+    }
+
+    const auto* existing = FindBotCastInput(bot_id);
+    if (existing == nullptr) {
+        return false;
+    }
+    *input_state = existing->state;
+    return true;
+}
+
+bool ClearBotCastInput(std::uint64_t bot_id, std::uint32_t cast_sequence) {
+    if (bot_id == 0) {
+        return false;
+    }
+
+    std::scoped_lock lock(g_bot_runtime_mutex);
+    if (!g_bot_runtime_initialized) {
+        return false;
+    }
+
+    const auto* existing = FindBotCastInput(bot_id);
+    if (existing == nullptr) {
+        return false;
+    }
+    if (cast_sequence != 0 &&
+        existing->state.cast_sequence != 0 &&
+        existing->state.cast_sequence != cast_sequence) {
+        return false;
+    }
+    RemoveBotCastInput(bot_id);
+    return true;
 }
 
 BotManaCost ResolveBotCastManaCost(
@@ -172,6 +311,13 @@ BotManaCost ResolveBotCastManaCost(
                     progression_runtime_address,
                     skill_id,
                     &selection);
+            if (!selection_resolved) {
+                selection_resolved =
+                    TryResolveNativePrimarySelectionFromPair(
+                        skill_id,
+                        skill_id,
+                        &selection);
+            }
         } else {
             const auto default_entry =
                 ResolveNativePrimaryEntryForElement(character_profile.element_id);
@@ -419,7 +565,14 @@ bool ConsumePendingBotCast(std::uint64_t bot_id, BotCastRequest* request) {
     request->kind = pending_cast->kind;
     request->secondary_slot = pending_cast->secondary_slot;
     request->skill_id = pending_cast->skill_id;
+    request->cast_sequence = pending_cast->cast_sequence;
+    request->remote_input_controlled = pending_cast->remote_input_controlled;
     request->target_actor_address = pending_cast->target_actor_address;
+    request->has_origin_transform = pending_cast->has_origin_transform;
+    request->origin_position_x = pending_cast->origin_position_x;
+    request->origin_position_y = pending_cast->origin_position_y;
+    request->has_origin_heading = pending_cast->has_origin_heading;
+    request->origin_heading = pending_cast->origin_heading;
     request->has_aim_target = pending_cast->has_aim_target;
     request->aim_target_x = pending_cast->aim_target_x;
     request->aim_target_y = pending_cast->aim_target_y;

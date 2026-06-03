@@ -161,6 +161,15 @@ bool PrimeGameplaySlotBotActor(
             }
             return false;
         }
+        if (!SeedWizardBotNativeSpellDispatchStateFromSourceActor(
+                actor_address,
+                native_visual_actor_address,
+                &stage_error)) {
+            if (error_message != nullptr) {
+                *error_message = stage_error;
+            }
+            return false;
+        }
         if (!SeedGameplaySlotBotRenderStateFromSourceActor(
                 actor_address,
                 world_address,
@@ -170,16 +179,6 @@ bool PrimeGameplaySlotBotActor(
                 y,
                 heading,
                 &stage_error)) {
-            if (error_message != nullptr) {
-                *error_message = stage_error;
-            }
-            return false;
-        }
-    }
-
-    {
-        std::string stage_error;
-        if (!AttachGameplaySlotBotStaffItem(actor_address, &stage_error)) {
             if (error_message != nullptr) {
                 *error_message = stage_error;
             }
@@ -319,7 +318,23 @@ bool TryResolvePrimaryCastDescriptorFromSkillId(
             skill_id,
             &selection,
             &selection_error)) {
-        return false;
+        // Some stock primary hooks publish the dispatcher/selection id
+        // directly (for example Earth 0x28) rather than the Skills_Wizard
+        // build id. Resolve those through the same primary descriptor table.
+        switch (skill_id) {
+        case 0x08:
+        case 0x10:
+        case 0x18:
+        case 0x20:
+        case 0x28:
+            return TryResolvePrimaryCastDescriptorFromSelectionPair(
+                skill_id,
+                skill_id,
+                -1,
+                descriptor);
+        default:
+            return false;
+        }
     }
 
     return TryResolvePrimaryCastDescriptorFromSelectionPair(

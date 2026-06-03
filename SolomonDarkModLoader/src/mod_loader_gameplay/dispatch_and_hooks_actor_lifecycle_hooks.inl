@@ -184,7 +184,10 @@ void __fastcall HookActorWorldUnregister(
     const auto now_ms = static_cast<std::uint64_t>(::GetTickCount64());
     const auto scene_churn_until =
         g_gameplay_keyboard_injection.scene_churn_not_before_ms.load(std::memory_order_acquire);
-    if (actor_address != 0 && remove_from_container == 1 && now_ms < scene_churn_until) {
+    if (actor_address != 0 &&
+        remove_from_container == 1 &&
+        now_ms < scene_churn_until &&
+        g_loader_owned_actor_destroy_unregister_depth == 0) {
         std::uint64_t bot_id = 0;
         int gameplay_slot = -1;
         if (TryCaptureTrackedStandaloneWizardBindingIdentity(actor_address, &bot_id, &gameplay_slot)) {
@@ -239,13 +242,24 @@ void __fastcall HookGameplaySwitchRegion(void* self, void* /*unused_edx*/, int r
     }
 
     const auto gameplay_address = reinterpret_cast<uintptr_t>(self);
+    (void)ApplyPendingRunGenerationSeedForSceneSwitch(region_index, "gameplay_switch_region_pre_dispatch");
+    const auto scene_churn_until =
+        static_cast<std::uint64_t>(::GetTickCount64()) + kGameplaySceneChurnDelayMs;
+    g_gameplay_keyboard_injection.scene_churn_not_before_ms.store(
+        scene_churn_until,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.store(
+        scene_churn_until,
+        std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
+        g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();
+    }
     RemoveReplicatedCreatedSharedHubActorsForSceneSwitch("scene switch pre-dispatch");
     DematerializeAllMaterializedWizardBotsForSceneSwitch("scene switch pre-dispatch");
-    g_gameplay_keyboard_injection.scene_churn_not_before_ms.store(
-        static_cast<std::uint64_t>(::GetTickCount64()) + kGameplaySceneChurnDelayMs,
-        std::memory_order_release);
     Log(
         "[bots] gameplay switch-region hook. gameplay=" + HexString(gameplay_address) +
         " target_region=" + std::to_string(region_index));
     original(self, region_index);
+    AbandonMaterializedWizardBotsForSceneSwitch("scene switch post-dispatch");
 }

@@ -297,6 +297,40 @@ bool SetEquipVisualLaneObject(
     return true;
 }
 
+bool AttachGameplaySlotBotStaffItem(
+    uintptr_t actor_address,
+    std::string* error_message) {
+    uintptr_t staff_item_address = 0;
+    std::string stage_error;
+    if (!CreateGameplaySlotStaffItemObject(&staff_item_address, &stage_error) ||
+        !SetEquipVisualLaneObject(
+            actor_address,
+            kActorEquipRuntimeVisualLinkAttachmentOffset,
+            staff_item_address,
+            "attachment",
+            &stage_error)) {
+        if (staff_item_address != 0) {
+            DWORD destroy_exception_code = 0;
+            (void)CallScalarDeletingDestructorSafe(
+                staff_item_address,
+                1,
+                &destroy_exception_code);
+        }
+        if (error_message != nullptr) {
+            *error_message = stage_error;
+        }
+        return false;
+    }
+
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        Log(
+            "[bots] visual stage=slot_actor_owned_staff_attached staff=" +
+            HexString(staff_item_address) +
+            " bot={" + BuildActorVisualDebugSummary(actor_address) + "}");
+    }
+    return true;
+}
+
 bool DetachGameplaySlotBotVisualLanes(uintptr_t actor_address, std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();

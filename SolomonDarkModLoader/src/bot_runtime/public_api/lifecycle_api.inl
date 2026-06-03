@@ -132,6 +132,7 @@ bool DestroyBot(std::uint64_t bot_id) {
 
     if (removed) {
         RemovePendingCast(bot_id);
+        RemoveBotCastInput(bot_id);
         RemovePendingEntitySync(bot_id);
         RemovePendingMovementIntent(bot_id);
         RemovePendingSkillChoice(bot_id);

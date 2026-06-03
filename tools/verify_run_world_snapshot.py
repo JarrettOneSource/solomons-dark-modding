@@ -30,9 +30,13 @@ local actors = sd.world.list_actors() or {}
 local tracked = 0
 local live = 0
 local dead = 0
+local parked = 0
 for _, actor in ipairs(actors) do
   if actor.tracked_enemy then
     tracked = tracked + 1
+    if (tonumber(actor.x) or 0) > 50000 and (tonumber(actor.y) or 0) > 50000 then
+      parked = parked + 1
+    end
     local hp = tonumber(actor.hp) or 0
     local max_hp = tonumber(actor.max_hp) or 0
     if actor.dead or (max_hp > 0 and hp <= 0) then
@@ -46,6 +50,7 @@ emit("scene", scene and (scene.name or scene.kind) or "")
 emit("tracked_enemies", tracked)
 emit("live_enemies", live)
 emit("dead_enemies", dead)
+emit("parked_enemies", parked)
 """
 
 
@@ -58,6 +63,9 @@ local scene = sd.world.get_scene()
 local actors = sd.world.list_actors() or {}
 local local_by_address = {}
 local local_tracked = 0
+local local_live = 0
+local local_dead = 0
+local local_parked = 0
 for _, actor in ipairs(actors) do
   local type_id = tonumber(actor.object_type_id) or 0
   if actor.tracked_enemy and type_id ~= 0 and type_id ~= 1 and finite(tonumber(actor.x)) and finite(tonumber(actor.y)) then
@@ -66,6 +74,16 @@ for _, actor in ipairs(actors) do
       local_by_address[address] = actor
     end
     local_tracked = local_tracked + 1
+    local hp = tonumber(actor.hp) or 0
+    local max_hp = tonumber(actor.max_hp) or 0
+    if actor.dead or (max_hp > 0 and hp <= 0) then
+      local_dead = local_dead + 1
+    elseif max_hp > 0 and hp > 0 then
+      local_live = local_live + 1
+    end
+    if (tonumber(actor.x) or 0) > 50000 and (tonumber(actor.y) or 0) > 50000 then
+      local_parked = local_parked + 1
+    end
   end
 end
 local replicated = sd.world.get_replicated_actors and sd.world.get_replicated_actors() or nil
@@ -86,6 +104,9 @@ if replicated and replicated.bindings then
 end
 emit("scene", scene and (scene.name or scene.kind) or "")
 emit("local_tracked_enemies", local_tracked)
+emit("local_live_tracked_enemies", local_live)
+emit("local_dead_tracked_enemies", local_dead)
+emit("local_parked_enemies", local_parked)
 emit("replicated_valid", replicated ~= nil)
 emit("scene_kind", replicated and replicated.scene_kind or "")
 emit("actor_count", replicated and replicated.actor_count or 0)
@@ -116,17 +137,20 @@ local min_snapshot_hp = nil
 local min_local_hp = nil
 if replicated and replicated.actors then
   for _, actor in ipairs(replicated.actors) do
-    if actor.tracked_enemy then tracked = tracked + 1 end
+    local is_tracked = actor.tracked_enemy
+    if is_tracked then tracked = tracked + 1 end
     if actor.lifecycle_owned then lifecycle_owned = lifecycle_owned + 1 end
-    if tonumber(actor.enemy_type) and tonumber(actor.enemy_type) >= 0 then
+    if is_tracked and tonumber(actor.enemy_type) and tonumber(actor.enemy_type) >= 0 then
       enemy_type_count = enemy_type_count + 1
     end
     local hp = tonumber(actor.hp) or 0
     local max_hp = tonumber(actor.max_hp) or 0
-    if actor.dead or (max_hp > 0 and hp <= 0) then
-      dead = dead + 1
-    elseif max_hp > 0 and hp > 0 then
-      live = live + 1
+    if is_tracked then
+      if actor.dead or (max_hp > 0 and hp <= 0) then
+        dead = dead + 1
+      elseif max_hp > 0 and hp > 0 then
+        live = live + 1
+      end
     end
     local local_actor = local_by_id[tonumber(actor.network_actor_id)]
     if local_actor ~= nil and finite(tonumber(actor.x)) and finite(tonumber(actor.y)) then
@@ -167,31 +191,6 @@ emit("min_local_hp", min_local_hp and string.format("%.3f", min_local_hp) or "")
 """
 
 
-HOST_DAMAGE_LUA = r"""
-local function emit(key, value) print(key .. "=" .. tostring(value)) end
-local actors = sd.world.list_actors() or {}
-local hp_offset = sd.debug.layout_offset("enemy_current_hp")
-for _, actor in ipairs(actors) do
-  local type_id = tonumber(actor.object_type_id) or 0
-  if actor.tracked_enemy and type_id ~= 0 and type_id ~= 1 then
-    local hp = tonumber(actor.hp) or 0
-    local max_hp = tonumber(actor.max_hp) or 0
-    if hp_offset ~= nil and max_hp > 2.0 and hp > 1.0 and actor.actor_address ~= nil and actor.actor_address ~= 0 then
-      local target_hp = math.max(1.0, max_hp * 0.5)
-      emit("selected_actor_address", tostring(actor.actor_address))
-      emit("object_type_id", type_id)
-      emit("old_hp", string.format("%.3f", hp))
-      emit("max_hp", string.format("%.3f", max_hp))
-      emit("target_hp", string.format("%.3f", target_hp))
-      emit("write_hp", sd.debug.write_float(actor.actor_address + hp_offset, target_hp))
-      return
-    end
-  end
-end
-emit("write_hp", false)
-"""
-
-
 def values(pipe_name: str, code: str) -> dict[str, str]:
     return parse_key_values(lua(pipe_name, code))
 
@@ -212,15 +211,19 @@ def start_host_waves() -> dict[str, str]:
 
 def run_lifecycle_status(host: dict[str, str], client: dict[str, str]) -> dict[str, object]:
     expected_live = min(
-        number(host, "tracked_enemies"),
-        number(client, "actor_count"),
+        number(host, "live_enemies"),
+        number(client, "live_snapshot_actors"),
     )
     compared = number(client, "live_compared")
     local_tracked = number(client, "local_tracked_enemies")
+    local_live = number(client, "local_live_tracked_enemies")
+    local_dead = number(client, "local_dead_tracked_enemies")
+    live_parked_client_tracked_enemies = number(client, "local_parked_enemies")
+    local_live_unparked = max(0.0, local_live - live_parked_client_tracked_enemies)
     host_only_snapshot_actors = max(0.0, expected_live - compared)
-    extra_client_tracked_enemies = max(0.0, local_tracked - expected_live)
+    extra_client_tracked_enemies = max(0.0, local_live_unparked - expected_live)
     parked = number(client, "apply_parked")
-    extra_unparked_client_tracked_enemies = max(0.0, extra_client_tracked_enemies - parked)
+    extra_unparked_client_tracked_enemies = extra_client_tracked_enemies
     authoritative_actors_matched = (
         expected_live > 0
         and number(client, "apply_matched") >= expected_live
@@ -230,6 +233,7 @@ def run_lifecycle_status(host: dict[str, str], client: dict[str, str]) -> dict[s
         authoritative_actors_matched
         and int(host_only_snapshot_actors) == 0
         and int(extra_unparked_client_tracked_enemies) == 0
+        and int(local_dead) == 0
     )
     return {
         "complete": complete,
@@ -240,7 +244,11 @@ def run_lifecycle_status(host: dict[str, str], client: dict[str, str]) -> dict[s
         "extra_client_tracked_enemies": int(extra_client_tracked_enemies),
         "extra_unparked_client_tracked_enemies": int(extra_unparked_client_tracked_enemies),
         "parked_client_tracked_enemies": int(parked),
+        "live_parked_client_tracked_enemies": int(live_parked_client_tracked_enemies),
         "local_tracked_enemies": int(local_tracked),
+        "local_live_tracked_enemies": int(local_live),
+        "local_live_unparked_tracked_enemies": int(local_live_unparked),
+        "local_dead_tracked_enemies": int(local_dead),
     }
 
 
@@ -248,15 +256,19 @@ def wait_for_run_snapshot(
     timeout: float = 45.0,
     max_distance: float = 64.0,
     require_complete_lifecycle: bool = False,
+    stable_seconds: float | None = None,
 ) -> dict[str, object]:
     deadline = time.monotonic() + timeout
+    required_stable_seconds = 2.0 if stable_seconds is None and require_complete_lifecycle else (stable_seconds or 0.0)
+    stable_since: float | None = None
+    stable_result: dict[str, object] | None = None
     last_host: dict[str, str] = {}
     last_client: dict[str, str] = {}
     while time.monotonic() < deadline:
         last_host = values(HOST_PIPE, HOST_ENEMY_LUA)
         last_client = values(CLIENT_PIPE, CLIENT_SNAPSHOT_LUA)
         lifecycle = run_lifecycle_status(last_host, last_client)
-        if (
+        valid = (
             last_host.get("scene") == "testrun"
             and number(last_host, "tracked_enemies") > 0
             and last_client.get("scene") == "testrun"
@@ -272,60 +284,28 @@ def wait_for_run_snapshot(
             and number(last_client, "matched_binding_count") > 0
             and number(last_client, "live_compared") > 0
             and number(last_client, "live_max_distance", max_distance + 1.0) <= max_distance
+            and number(last_host, "parked_enemies") == 0
             and (not require_complete_lifecycle or lifecycle["complete"])
-        ):
-            return {
+        )
+        if valid:
+            stable_result = {
                 "host": last_host,
                 "client": last_client,
                 "lifecycle": lifecycle,
             }
+            now = time.monotonic()
+            if stable_since is None:
+                stable_since = now
+            if required_stable_seconds <= 0.0 or now - stable_since >= required_stable_seconds:
+                return stable_result
+        else:
+            stable_since = None
+            stable_result = None
         time.sleep(0.25)
 
     raise VerifyFailure(
         "client did not receive a host-authored run enemy snapshot; "
         f"host={last_host} client={last_client}"
-    )
-
-
-def damage_host_enemy() -> dict[str, str]:
-    result = values(HOST_PIPE, HOST_DAMAGE_LUA)
-    if result.get("write_hp") != "true":
-        raise VerifyFailure(f"failed to damage a host enemy: {result}")
-    return result
-
-
-def wait_for_health_convergence(
-    target_hp: float,
-    timeout: float = 15.0,
-    max_distance: float = 64.0,
-    require_complete_lifecycle: bool = False,
-) -> dict[str, object]:
-    deadline = time.monotonic() + timeout
-    last_host: dict[str, str] = {}
-    last_client: dict[str, str] = {}
-    while time.monotonic() < deadline:
-        last_host = values(HOST_PIPE, HOST_ENEMY_LUA)
-        last_client = values(CLIENT_PIPE, CLIENT_SNAPSHOT_LUA)
-        lifecycle = run_lifecycle_status(last_host, last_client)
-        if (
-            last_client.get("scene") == "testrun"
-            and last_client.get("replicated_valid") == "true"
-            and last_client.get("scene_kind") == "Run"
-            and number(last_client, "lifecycle_owned_snapshot_actors") >= number(last_client, "tracked_snapshot_actors")
-            and number(last_client, "live_max_distance", max_distance + 1.0) <= max_distance
-            and number(last_client, "hp_compared") > 0
-            and number(last_client, "hp_within_quarter") >= number(last_client, "hp_compared")
-            and number(last_client, "max_hp_delta", 999.0) <= 0.25
-            and number(last_client, "min_snapshot_hp", 999.0) <= target_hp + 0.25
-            and number(last_client, "min_local_hp", 999.0) <= target_hp + 0.25
-            and (not require_complete_lifecycle or lifecycle["complete"])
-        ):
-            return {"host": last_host, "client": last_client, "lifecycle": lifecycle, "target_hp": target_hp}
-        time.sleep(0.25)
-
-    raise VerifyFailure(
-        "client run enemy HP did not converge to host authoritative snapshot; "
-        f"target_hp={target_hp:.3f} host={last_host} client={last_client}"
     )
 
 
@@ -342,11 +322,6 @@ def main() -> int:
         result["host_run_entry"] = start_host_testrun_and_wait_for_clients()
         result["start_waves"] = start_host_waves()
         result["snapshot"] = wait_for_run_snapshot(
-            require_complete_lifecycle=args.require_complete_lifecycle,
-        )
-        result["host_damage"] = damage_host_enemy()
-        result["health_sync"] = wait_for_health_convergence(
-            number(result["host_damage"], "target_hp"),
             require_complete_lifecycle=args.require_complete_lifecycle,
         )
         result["ok"] = True

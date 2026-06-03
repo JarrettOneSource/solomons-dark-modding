@@ -4,9 +4,10 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 12;
+constexpr std::uint16_t kProtocolVersion = 20;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
+constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
 constexpr std::uint32_t kWorldSnapshotMaxActors = 64;
 constexpr std::uint32_t kWorldActorStudentVisualStateBytes = 32;
 constexpr std::uint32_t kLootSnapshotMaxDrops = 64;
@@ -18,6 +19,8 @@ enum class PacketKind : std::uint16_t {
     Progression = 4,
     WorldSnapshot = 5,
     LootSnapshot = 6,
+    EnemyDamageClaim = 7,
+    EnemyDamageResult = 8,
 };
 
 enum class CastKind : std::uint8_t {
@@ -25,9 +28,20 @@ enum class CastKind : std::uint8_t {
     Secondary = 2,
 };
 
+enum class CastInputPhase : std::uint8_t {
+    Pressed = 1,
+    Held = 2,
+    Released = 3,
+};
+
 enum class ProgressionEventKind : std::uint8_t {
     ExperienceContribution = 1,
     ExperienceAward = 2,
+};
+
+enum class EnemyDamageResultCode : std::uint8_t {
+    Accepted = 1,
+    Rejected = 2,
 };
 
 enum class WorldSceneKind : std::uint8_t {
@@ -50,12 +64,14 @@ enum WorldActorSnapshotFlags : std::uint8_t {
     WorldActorSnapshotFlagDead = 1 << 0,
     WorldActorSnapshotFlagTrackedEnemy = 1 << 1,
     WorldActorSnapshotFlagLifecycleOwned = 1 << 2,
+    WorldActorSnapshotFlagRunStatic = 1 << 3,
 };
 
 enum WorldActorPresentationFlags : std::uint16_t {
     WorldActorPresentationFlagAnimationDriveWord = 1 << 0,
     WorldActorPresentationFlagStudentVisualState = 1 << 1,
     WorldActorPresentationFlagStudentVariantBytes = 1 << 2,
+    WorldActorPresentationFlagLocomotionFloats = 1 << 3,
 };
 
 enum WorldSnapshotFlags : std::uint8_t {
@@ -68,6 +84,14 @@ enum LootDropSnapshotFlags : std::uint8_t {
 
 enum LootSnapshotFlags : std::uint8_t {
     LootSnapshotFlagTruncated = 1 << 0,
+};
+
+enum ParticipantPresentationFlags : std::uint16_t {
+    ParticipantPresentationFlagAnimationDriveWord = 1 << 0,
+    ParticipantPresentationFlagRenderDriveFloats = 1 << 1,
+    ParticipantPresentationFlagStaffVisualState = 1 << 2,
+    ParticipantPresentationFlagRenderSelectorBytes = 1 << 3,
+    ParticipantPresentationFlagVisualLinkColorBlocks = 1 << 4,
 };
 
 #pragma pack(push, 1)
@@ -92,10 +116,10 @@ struct StatePacket {
     std::int32_t appearance_choice_ids[4];
     std::int32_t level;
     std::int32_t wave;
-    std::int32_t life_current;
-    std::int32_t life_max;
-    std::int32_t mana_current;
-    std::int32_t mana_max;
+    float life_current;
+    float life_max;
+    float mana_current;
+    float mana_max;
     std::int32_t experience_current;
     std::int32_t experience_next;
     std::int32_t primary_entry_index;
@@ -104,6 +128,30 @@ struct StatePacket {
     float position_x;
     float position_y;
     float heading;
+    std::uint8_t anim_drive_state;
+    std::uint8_t presentation_reserved[1] = {};
+    std::uint16_t presentation_flags;
+    std::uint32_t attachment_staff_visual_state;
+    std::uint8_t render_variant_primary;
+    std::uint8_t render_variant_secondary;
+    std::uint8_t render_weapon_type;
+    std::uint8_t render_selection_byte;
+    std::uint8_t render_variant_tertiary;
+    std::uint8_t visual_link_reserved[3] = {};
+    std::uint32_t primary_visual_link_type_id;
+    std::uint32_t secondary_visual_link_type_id;
+    std::uint8_t primary_visual_link_color_block[kParticipantVisualLinkColorBlockBytes];
+    std::uint8_t secondary_visual_link_color_block[kParticipantVisualLinkColorBlockBytes];
+    std::uint32_t anim_drive_state_word;
+    float walk_cycle_primary;
+    float walk_cycle_secondary;
+    float render_drive_stride;
+    float render_advance_rate;
+    float render_advance_phase;
+    float render_drive_effect_timer;
+    float render_drive_effect_progress;
+    float render_drive_overlay_alpha;
+    float render_drive_move_blend;
 };
 
 struct LaunchPacket {
@@ -114,10 +162,15 @@ struct LaunchPacket {
 
 struct CastPacket {
     PacketHeader header;
+    std::uint64_t participant_id;
+    std::uint32_t cast_sequence;
     std::uint8_t cast_kind;
     std::int8_t secondary_slot;
-    std::uint16_t reserved = 0;
+    std::uint8_t input_phase;
+    std::uint8_t input_flags;
     std::uint32_t run_nonce;
+    std::uint64_t target_network_actor_id;
+    std::int32_t skill_id;
     std::int32_t element_id;
     std::int32_t discipline_id;
     std::int32_t primary_entry_index;
@@ -126,6 +179,10 @@ struct CastPacket {
     float position_x;
     float position_y;
     float heading;
+    float direction_x;
+    float direction_y;
+    float aim_target_x;
+    float aim_target_y;
 };
 
 struct ProgressionPacket {
@@ -154,6 +211,8 @@ struct WorldActorSnapshotPacketState {
     float hp;
     float max_hp;
     std::uint32_t anim_drive_state_word;
+    float walk_cycle_primary;
+    float walk_cycle_secondary;
     std::uint8_t render_variant_primary;
     std::uint8_t render_variant_secondary;
     std::uint8_t render_weapon_type;
@@ -202,6 +261,38 @@ struct LootSnapshotPacket {
     std::uint8_t snapshot_flags;
     LootDropSnapshotPacketState drops[kLootSnapshotMaxDrops];
 };
+
+struct EnemyDamageClaimPacket {
+    PacketHeader header;
+    std::uint64_t participant_id;
+    std::uint32_t claim_sequence;
+    std::uint32_t run_nonce;
+    std::uint64_t target_network_actor_id;
+    std::int32_t skill_id;
+    float claimed_damage;
+    float client_before_hp;
+    float client_after_hp;
+    float caster_position_x;
+    float caster_position_y;
+    float target_position_x;
+    float target_position_y;
+    std::uint8_t lethal;
+    std::uint8_t reserved[3] = {};
+};
+
+struct EnemyDamageResultPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t claimant_participant_id;
+    std::uint32_t claim_sequence;
+    std::uint32_t run_nonce;
+    std::uint64_t target_network_actor_id;
+    std::uint8_t result_code;
+    std::uint8_t dead;
+    std::uint16_t reserved = 0;
+    float authoritative_hp;
+    float authoritative_max_hp;
+};
 #pragma pack(pop)
 
 inline PacketHeader MakePacketHeader(PacketKind kind, std::uint32_t sequence) {
@@ -230,13 +321,15 @@ inline bool IsValidHeader(const PacketHeader& header, PacketKind expected_kind) 
 }
 
 static_assert(sizeof(PacketHeader) == 12, "Unexpected packet header size");
-static_assert(sizeof(StatePacket) == 148, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 276, "Unexpected state packet size");
 static_assert(sizeof(LaunchPacket) == 56, "Unexpected launch packet size");
-static_assert(sizeof(CastPacket) == 60, "Unexpected cast packet size");
+static_assert(sizeof(CastPacket) == 100, "Unexpected cast packet size");
 static_assert(sizeof(ProgressionPacket) == 32, "Unexpected progression packet size");
-static_assert(sizeof(WorldActorSnapshotPacketState) == 96, "Unexpected world actor snapshot size");
-static_assert(sizeof(WorldSnapshotPacket) == 6176, "Unexpected world snapshot packet size");
+static_assert(sizeof(WorldActorSnapshotPacketState) == 104, "Unexpected world actor snapshot size");
+static_assert(sizeof(WorldSnapshotPacket) == 6688, "Unexpected world snapshot packet size");
 static_assert(sizeof(LootDropSnapshotPacketState) == 48, "Unexpected loot drop snapshot size");
 static_assert(sizeof(LootSnapshotPacket) == 3104, "Unexpected loot snapshot packet size");
+static_assert(sizeof(EnemyDamageClaimPacket) == 72, "Unexpected enemy damage claim packet size");
+static_assert(sizeof(EnemyDamageResultPacket) == 56, "Unexpected enemy damage result packet size");
 
 }  // namespace sdmod::multiplayer

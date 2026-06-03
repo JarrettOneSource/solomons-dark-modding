@@ -82,7 +82,7 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
     lua_createtable(state, static_cast<int>(runtime.participants.size()), 0);
     int lua_index = 1;
     for (const auto& participant : runtime.participants) {
-        lua_createtable(state, 0, 15);
+        lua_createtable(state, 0, 19);
         lua_pushinteger(state, static_cast<lua_Integer>(participant.participant_id));
         lua_setfield(state, -2, "participant_id");
         lua_pushinteger(state, static_cast<lua_Integer>(participant.steam_id));
@@ -111,6 +111,14 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         lua_setfield(state, -2, "run_nonce");
         lua_pushstring(state, multiplayer::ParticipantSceneIntentKindLabel(participant.runtime.scene_intent.kind));
         lua_setfield(state, -2, "scene_kind");
+        lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.life_current));
+        lua_setfield(state, -2, "life_current");
+        lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.life_max));
+        lua_setfield(state, -2, "life_max");
+        lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.mana_current));
+        lua_setfield(state, -2, "mana_current");
+        lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.mana_max));
+        lua_setfield(state, -2, "mana_max");
         PushOwnedProgressionState(state, participant.owned_progression);
         lua_setfield(state, -2, "owned_progression");
         lua_rawseti(state, -2, static_cast<lua_Integer>(lua_index));

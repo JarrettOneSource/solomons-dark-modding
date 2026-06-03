@@ -85,9 +85,18 @@ MULTIPLAYER_PARTICIPANT_MODEL_DOC = ROOT / "docs/multiplayer-participant-model.m
 LOCAL_MULTIPLAYER_PAIR_SCRIPT = ROOT / "scripts/Launch-LocalMultiplayerPair.ps1"
 LOCAL_MULTIPLAYER_SYNC_VERIFIER = ROOT / "tools/verify_local_multiplayer_sync.py"
 RUN_WORLD_SNAPSHOT_VERIFIER = ROOT / "tools/verify_run_world_snapshot.py"
+RUN_STATIC_LAYOUT_SYNC_VERIFIER = ROOT / "tools/verify_run_static_layout_sync.py"
+PLAYER_HEALTH_DEATH_SYNC_VERIFIER = ROOT / "tools/verify_player_health_death_sync.py"
+REAL_INPUT_SPELL_CAST_SYNC_VERIFIER = ROOT / "tools/verify_real_input_spell_cast_sync.py"
+RUN_LIFECYCLE_SPELL_CAST_HOOKS = (
+    ROOT / "SolomonDarkModLoader/src/run_lifecycle/spell_cast_hooks.inl"
+)
 RUN_ENEMY_SEED_VERIFIER = ROOT / "tools/verify_run_enemy_seed_viability.py"
 RUN_ENEMY_PRESENTATION_PROBE = ROOT / "tools/probe_run_enemy_presentation_sync.py"
 RUN_REWARD_SYNC_PROBE = ROOT / "tools/probe_run_reward_sync.py"
+GAMEPLAY_HUD_HOOKS = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/gameplay_hud_hooks.inl"
+)
 SCENE_SELECTION = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_bot_priming_and_selection.inl"
 )
@@ -119,6 +128,9 @@ GAMEPLAY_CONSTANTS = ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/g
 PLAYER_CAST_HOOKS = ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_cast_hooks.inl"
 PLAYER_ACTOR_TICK_HOOK = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl"
+)
+ACTOR_ANIMATION_ADVANCE_HOOK = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/animation_advance_hook.inl"
 )
 STANDALONE_DEBUG_SUMMARIES = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_debug_summaries.inl"
@@ -1174,6 +1186,7 @@ def test_bot_mana_reserve_uses_hysteresis_for_casting() -> str:
         ROOT / "SolomonDarkModLoader/src/bot_runtime/helpers/state_mutation.inl"
     )
     preparation_text = read_text(PENDING_CAST_PREPARATION)
+    release_text = read_text(CAST_RELEASE_HELPERS)
     processing_text = read_text(PENDING_CAST_PROCESSING)
     release_helpers_text = read_text(CAST_RELEASE_HELPERS)
     player_mana_hook_text = read_text(
@@ -1425,6 +1438,61 @@ def test_primary_build_skill_mapping_has_single_runtime_owner() -> str:
             "primary combo build-skill mapping is missing native builder token(s): " +
             ", ".join(missing_tokens))
     return "primary combo build-skill mapping is resolved from live Skills_Wizard output"
+
+
+def test_primary_mana_resolver_accepts_native_dispatcher_entry_ids() -> str:
+    casting_text = read_text(CASTING_API)
+    scene_text = read_text(SCENE_SELECTION)
+    native_spell_stats_text = read_text(NATIVE_SPELL_STATS_CPP)
+
+    resolver_match = re.search(
+        r"BotManaCost\s+ResolveBotCastManaCost\([^{}]*\)\s*\{(?P<body>.*?)\n\}",
+        casting_text,
+        re.S,
+    )
+    if not resolver_match:
+        raise StaticReTestFailure("could not find ResolveBotCastManaCost body")
+    resolver_body = resolver_match.group("body")
+    required_tokens = (
+        "TryResolveNativePrimarySelectionFromSkillId",
+        "if (!selection_resolved)",
+        "TryResolveNativePrimarySelectionFromPair",
+        "skill_id,\n                        skill_id",
+    )
+    missing = [token for token in required_tokens if token not in resolver_body]
+    if missing:
+        raise StaticReTestFailure(
+            "primary mana resolver does not accept native dispatcher entry ids: " +
+            ", ".join(missing))
+
+    descriptor_tokens = (
+        "case 0x18:",
+        "case 0x20:",
+        "case 0x28:",
+        "TryResolvePrimaryCastDescriptorFromSelectionPair",
+    )
+    missing_descriptor_tokens = [
+        token for token in descriptor_tokens if token not in scene_text
+    ]
+    if missing_descriptor_tokens:
+        raise StaticReTestFailure(
+            "primary descriptor resolver no longer accepts native dispatcher ids: " +
+            ", ".join(missing_descriptor_tokens))
+
+    dispatcher_mana_tokens = (
+        "entry_pair_is_pure_projectile",
+        "!EntryUsesContinuousMana(primary_entry_index)",
+        "selection->pure_primary = entry_pair_is_pure_projectile",
+    )
+    missing_dispatcher_mana_tokens = [
+        token for token in dispatcher_mana_tokens if token not in native_spell_stats_text
+    ]
+    if missing_dispatcher_mana_tokens:
+        raise StaticReTestFailure(
+            "native dispatcher entry ids still look like pure-projectile mana selections: " +
+            ", ".join(missing_dispatcher_mana_tokens))
+
+    return "primary mana resolver accepts native dispatcher ids through validated primary pairs"
 
 
 def test_primary_selection_mapping_is_native_backed_not_static_table() -> str:
@@ -4204,7 +4272,7 @@ def test_hot_path_diagnostics_are_default_off_and_gated() -> str:
         (STANDALONE_DEBUG_SUMMARIES, "[bots] visual stage="),
         (STANDALONE_DEBUG_SUMMARIES, "[bots] source_create stage="),
         (STANDALONE_SLOT_BOT_CREATION, "[bots] visual stage=slot_actor_helper_lanes_seeded"),
-        (STANDALONE_SLOT_BOT_CREATION, "[bots] visual stage=slot_actor_staff_attached"),
+        (STANDALONE_EQUIP_VISUAL_LANES, "[bots] visual stage=slot_actor_owned_staff_attached"),
         (STANDALONE_SELECTION_PRIMING, "[bots] visual stage=selection_pre_refresh"),
         (STANDALONE_SELECTION_PRIMING, "[bots] visual stage=selection_post_refresh"),
         (STANDALONE_EQUIP_VISUAL_LANES, "[bots] equip_attach before label="),
@@ -4255,6 +4323,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     bot_snapshots_text = read_text(BOT_RUNTIME_SNAPSHOTS_API)
     entity_sync_text = read_text(PARTICIPANT_ENTITY_SYNC)
     scene_binding_text = read_text(PARTICIPANT_SCENE_BINDING_TICKS)
+    participant_snapshot_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_snapshot.inl"
+    )
     native_remote_playback_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/native_remote_playback.inl"
     )
@@ -4267,6 +4338,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     script_text = read_text(LOCAL_MULTIPLAYER_PAIR_SCRIPT)
     verifier_text = read_text(LOCAL_MULTIPLAYER_SYNC_VERIFIER)
     run_snapshot_verifier_text = read_text(RUN_WORLD_SNAPSHOT_VERIFIER)
+    run_static_layout_verifier_text = read_text(RUN_STATIC_LAYOUT_SYNC_VERIFIER)
+    player_health_death_verifier_text = read_text(PLAYER_HEALTH_DEATH_SYNC_VERIFIER)
     run_seed_verifier_text = read_text(RUN_ENEMY_SEED_VERIFIER)
     run_enemy_presentation_probe_text = read_text(RUN_ENEMY_PRESENTATION_PROBE)
     run_reward_sync_probe_text = read_text(RUN_REWARD_SYNC_PROBE)
@@ -4276,13 +4349,17 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     named_hub_npc_probe_text = read_text(ROOT / "tools/probe_named_hub_npc_fields.py")
     inventory_item_doc_text = read_text(ROOT / "docs/inventory-item-investigation.md")
     binary_layout_text = read_text(BINARY_LAYOUT)
+    background_focus_text = read_text(ROOT / "SolomonDarkModLoader/src/background_focus_bypass.cpp")
     gameplay_seams_header_text = read_text(ROOT / "SolomonDarkModLoader/src/gameplay_seams.h")
     gameplay_seams_bindings_text = read_text(
         ROOT / "SolomonDarkModLoader/src/gameplay_seams/state_and_address_bindings.inl"
     )
+    run_generation_seed_helpers_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/run_generation_seed_helpers.inl"
+    )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 12;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 20;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kWorldSnapshotMaxActors"),
         (protocol_text, "kLootSnapshotMaxDrops"),
@@ -4290,15 +4367,37 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "WorldSnapshotFlagTruncated"),
         (protocol_text, "LootSnapshotFlagTruncated"),
         (protocol_text, "LootSnapshot = 6"),
+        (protocol_text, "EnemyDamageClaim = 7"),
+        (protocol_text, "EnemyDamageResult = 8"),
         (protocol_text, "Gold = 1"),
         (protocol_text, "WorldActorSnapshotFlagLifecycleOwned"),
         (protocol_text, "WorldActorPresentationFlagAnimationDriveWord"),
         (protocol_text, "WorldActorPresentationFlagStudentVisualState"),
         (protocol_text, "WorldActorPresentationFlagStudentVariantBytes"),
+        (protocol_text, "WorldActorPresentationFlagLocomotionFloats"),
+        (protocol_text, "WorldActorSnapshotFlagRunStatic"),
         (protocol_text, "std::uint64_t participant_id;"),
+        (protocol_text, "std::uint64_t target_network_actor_id;"),
+        (protocol_text, "float life_current;"),
+        (protocol_text, "float life_max;"),
+        (protocol_text, "float mana_current;"),
+        (protocol_text, "float mana_max;"),
+        (protocol_text, "ParticipantPresentationFlagAnimationDriveWord"),
+        (protocol_text, "ParticipantPresentationFlagRenderDriveFloats"),
+        (protocol_text, "ParticipantPresentationFlagStaffVisualState"),
+        (protocol_text, "ParticipantPresentationFlagRenderSelectorBytes"),
+        (protocol_text, "ParticipantPresentationFlagVisualLinkColorBlocks"),
+        (protocol_text, "std::uint32_t attachment_staff_visual_state;"),
+        (protocol_text, "std::uint8_t primary_visual_link_color_block"),
+        (protocol_text, "std::uint32_t anim_drive_state_word;"),
+        (protocol_text, "float render_drive_effect_timer;"),
+        (protocol_text, "float render_drive_effect_progress;"),
+        (protocol_text, "float render_drive_overlay_alpha;"),
+        (protocol_text, "float render_drive_move_blend;"),
         (protocol_text, "display_name"),
-        (protocol_text, "static_assert(sizeof(StatePacket) == 148"),
-        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 6176"),
+        (protocol_text, "static_assert(sizeof(StatePacket) == 276"),
+        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 104"),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 6688"),
         (protocol_text, "static_assert(sizeof(LootSnapshotPacket) == 3104"),
         (runtime_state_text, "LocalUdp"),
         (runtime_state_text, "ParticipantOwnedProgressionState"),
@@ -4315,6 +4414,13 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (runtime_state_text, "TrySampleParticipantTransform"),
         (runtime_state_text, "TrySampleWorldSnapshot"),
         (runtime_state_text, "InterpolateHeadingDegrees"),
+        (runtime_state_text, "float life_current"),
+        (runtime_state_text, "float mana_current"),
+        (runtime_state_text, "std::uint16_t presentation_flags"),
+        (runtime_state_text, "float render_drive_effect_timer"),
+        (runtime_state_text, "float render_drive_effect_progress"),
+        (runtime_state_text, "float render_drive_overlay_alpha"),
+        (runtime_state_text, "float render_drive_move_blend"),
         (runtime_state_text, "actor_total_count"),
         (runtime_state_text, "truncated"),
         (runtime_state_text, "created_actor_count"),
@@ -4329,11 +4435,22 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_header_text, "TickLocalTransport"),
         (transport_header_text, "IsLocalTransportHost"),
         (transport_header_text, "IsLocalTransportClient"),
+        (transport_header_text, "GetLocalTransportParticipantId"),
         (transport_text, "SDMOD_MULTIPLAYER_TRANSPORT"),
         (transport_text, "SDMOD_MULTIPLAYER_LOCAL_PORT"),
         (transport_text, "SDMOD_MULTIPLAYER_REMOTE_PORT"),
         (transport_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
         (transport_text, "RelayStatePacketToPeers"),
+        (transport_text, "NormalizeRenderDriveEffectState"),
+        (transport_text, "kRenderDriveEffectTimerEpsilon"),
+        (transport_text, "packet.anim_drive_state_word = local->runtime.anim_drive_state_word"),
+        (transport_text, "packet.render_drive_effect_timer = local->runtime.render_drive_effect_timer"),
+        (transport_text, "participant->runtime.render_drive_effect_timer = effect_state.timer"),
+        (transport_text, "sample.render_drive_effect_timer = effect_state.timer"),
+        (transport_text, "sample.render_drive_overlay_alpha = packet.render_drive_overlay_alpha"),
+        (transport_text, "staff attachment tail field at +0x84 is native-owned"),
+        (transport_text, "packet.presentation_flags & ~ParticipantPresentationFlagStaffVisualState"),
+        (transport_text, "participant->runtime.attachment_staff_visual_state = 0"),
         (transport_text, "BuildLocalWorldSnapshotPacket"),
         (transport_text, "BuildLocalLootSnapshotPacket"),
         (transport_text, "PopulateWorldActorPresentationSnapshot"),
@@ -4341,6 +4458,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "TryGetRunLifecycleEnemySpawnSerial"),
         (transport_text, "kRunHostLocalWorldActorNetworkIdBase"),
         (transport_text, "kRunLootDropNetworkIdBase"),
+        (transport_text, "kSolomonDigNativeTypeId"),
+        (transport_text, "IsRunStaticLayoutActor"),
         (transport_text, "run_host_local_world_actor_ids_by_address"),
         (transport_text, "run_loot_drop_ids_by_address"),
         (transport_text, "AllocateRunHostLocalWorldActorNetworkId"),
@@ -4348,7 +4467,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "PruneRunHostLocalWorldActorNetworkIds"),
         (transport_text, "PruneRunLootDropNetworkIds"),
         (transport_text, "kGoldRewardAmountOffset"),
-        (transport_text, "assigned host-local run enemy network id"),
+        (transport_text, "assigned host-local run actor network id"),
         (transport_text, "BuildRunWorldActorNetworkId"),
         (transport_text, "ParticipantSceneIntentKind::SharedHub"),
         (transport_text, "ParticipantSceneIntentKind::Run"),
@@ -4358,10 +4477,27 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "ApplyWorldSnapshotPacket"),
         (transport_text, "ApplyLootSnapshotPacket"),
         (transport_text, "SendLootSnapshot"),
+        (transport_text, "packet.actor_count == 0 && scene_kind != WorldSceneKind::Run"),
         (transport_text, "MaybeQueueClientHostRunStart"),
         (transport_text, "kClientHostRunFollowRetryMs"),
         (transport_text, "host-authoritative run entry"),
+        (transport_text, "SetPendingRunGenerationSeed(packet.run_nonce"),
+        (transport_text, "run_generation_seed"),
+        (run_generation_seed_helpers_text, "BuildHostRunGenerationSeed"),
+        (run_generation_seed_helpers_text, "ApplyPendingRunGenerationSeedForSceneSwitch"),
+        (run_generation_seed_helpers_text, "kNativeGlobalRngStateGlobal"),
+        (run_generation_seed_helpers_text, "kNativeRngInitialize"),
+        (run_generation_seed_helpers_text, "CallNativeRngInitializeSafe"),
+        (run_generation_seed_helpers_text, "Initialized host-authoritative run generation RNG"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_gameplay_action_queues.inl"), "EnsureHostRunGenerationSeed(\"hub_start_testrun_queue\")"),
         (world_snapshot_reconciliation_text, "ApplyReplicatedWorldSnapshotIfActive"),
+        (world_snapshot_reconciliation_text, "authoritative_actor.run_static"),
+        (world_snapshot_reconciliation_text, "ApplyHostAuthoritativeRunEntryFormationIfNeeded"),
+        (world_snapshot_reconciliation_text, "GetLocalTransportParticipantId"),
+        (world_snapshot_reconciliation_text, "kRunEntryFormationNavSnapMaxAuthorityDistance"),
+        (world_snapshot_reconciliation_text, "kRunEntryFormationBootstrapMs"),
+        (world_snapshot_reconciliation_text, "kRunEntryFormationReapplyIntervalMs"),
+        (world_snapshot_reconciliation_text, "g_run_entry_formation_settled"),
         (world_snapshot_reconciliation_text, "BuildLocalReplicatedWorldActorBindings"),
         (world_snapshot_reconciliation_text, "TryCreateReplicatedSharedHubActor"),
         (world_snapshot_reconciliation_text, "IsReplicatedSharedHubFactoryActorType"),
@@ -4382,7 +4518,16 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "pending_participant_sync_requests"),
         (world_snapshot_reconciliation_text, "CanMutateReplicatedSharedHubActors"),
         (world_snapshot_reconciliation_text, "RemoveReplicatedCreatedSharedHubActorsForSceneSwitch"),
+        (world_snapshot_reconciliation_text, "removed replicated hub actors for scene switch"),
+        (world_snapshot_reconciliation_text, "RemoveReplicatedSharedHubActor(binding, &exception_code)"),
+        (world_snapshot_reconciliation_text, "failed_remove_count"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "RemoveReplicatedCreatedSharedHubActorsForSceneSwitch(\"scene switch pre-dispatch\")"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "wizard_bot_sync_not_before_ms.store"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "pending_participant_sync_requests.clear()"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "DematerializeAllMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "AbandonMaterializedWizardBotsForSceneSwitch(\"scene switch post-dispatch\")"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"), "DematerializeParticipantEntityNow(bot_id, false, reason)"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"), "abandoned bot entity for scene switch"),
         (world_snapshot_reconciliation_text, "created_actor_total_count += counts.created_actor_count"),
         (world_snapshot_reconciliation_text, "TryRebindActorToOwnerWorld"),
         (world_snapshot_reconciliation_text, "kWorldSnapshotApplyStaleMs"),
@@ -4395,6 +4540,11 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "remote_state_wave"),
         (world_snapshot_reconciliation_text, "MaybeCatchUpRunEnemyPoolForAuthoritativeSnapshot"),
         (world_snapshot_reconciliation_text, "TryAccelerateRunLifecycleEnemyPoolForSnapshot"),
+        (world_snapshot_reconciliation_text, "CountAuthoritativeTrackedRunEnemiesForScene"),
+        (world_snapshot_reconciliation_text, "CountLocalTrackedRunEnemyBindings"),
+        (world_snapshot_reconciliation_text, "authoritative_actor.tracked_enemy &&"),
+        (world_snapshot_reconciliation_text, "authoritative_tracked_enemy_count - local_tracked_enemy_count"),
+        (world_snapshot_reconciliation_text, "CountLocalTrackedRunEnemyBindings(local_bindings)"),
         (world_snapshot_reconciliation_text, "TryBindAuthoritativeRunActorToLocalPool"),
         (world_snapshot_reconciliation_text, "BindReplicatedRunActor"),
         (world_snapshot_reconciliation_text, "RecordWorldSnapshotBinding"),
@@ -4411,9 +4561,11 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "AppendWorldSnapshot"),
         (transport_text, "state.loot_snapshot"),
         (transport_text, "TryGetPlayerState"),
+        (transport_text, "local->runtime.life_current = player_state.hp"),
         (transport_text, "TryGetWorldState"),
         (transport_text, "packet.wave = local->runtime.wave"),
         (lua_input_text, "host-only while connected to a multiplayer session"),
+        (lua_input_text, "QueueGameplayMouseLeftClick(&gameplay_click_error)"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "Blocked client run switch_region while connected to multiplayer"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_gameplay_thread_dispatch.inl"), "g_multiplayer_client_authorized_hub_run_switch_depth"),
         (service_loop_text, "InitializeLocalTransport()"),
@@ -4441,6 +4593,19 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (entity_sync_text, "ReadParticipantSnapshot(request.bot_id"),
         (scene_binding_text, "ReadParticipantSnapshot(binding.bot_id"),
         (native_remote_playback_text, "ApplyNativeRemoteParticipantPlayback"),
+        (native_remote_playback_text, "ApplyNativeRemoteParticipantVitalState"),
+        (native_remote_playback_text, "ApplyNativeRemoteParticipantPresentationState"),
+        (native_remote_playback_text, "replicated_presentation_valid"),
+        (read_text(PLAYER_ACTOR_TICK_HOOK), "binding->ongoing_cast.active && !native_remote_binding"),
+        (read_text(PLAYER_ACTOR_TICK_HOOK), "if (!playback.presentation_valid)"),
+        (read_text(ACTOR_ANIMATION_ADVANCE_HOOK), "struct AnimationAdvanceContextScope"),
+        (read_text(ACTOR_ANIMATION_ADVANCE_HOOK), "~AnimationAdvanceContextScope()"),
+        (read_text(PLAYER_ACTOR_TICK_HOOK), "ApplyNativeRemoteParticipantPresentationState(binding, actor_address)"),
+        (native_remote_playback_text, "participant->runtime.life_current"),
+        (native_remote_playback_text, "kProgressionHpOffset"),
+        (native_remote_playback_text, "kProgressionMpOffset"),
+        (participant_snapshot_text, "if (multiplayer::IsNativeControlledParticipant(*participant))"),
+        (participant_snapshot_text, "participant->runtime.life_current = snapshot.hp"),
         (native_remote_playback_text, "replicated_transform_playback_ms"),
         (native_remote_playback_text, "kRemoteTransformInterpolationDelayMs"),
         (native_remote_playback_text, "TrySampleParticipantTransform"),
@@ -4451,6 +4616,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (networking_doc_text, "SDMOD_MULTIPLAYER_TRANSPORT=local_udp"),
         (networking_doc_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
         (networking_doc_text, "verify_local_multiplayer_sync.py"),
+        (networking_doc_text, "verify_player_health_death_sync.py"),
         (networking_doc_text, "SDMOD_LUA_EXEC_PIPE_NAME"),
         (networking_doc_text, "player/player"),
         (networking_doc_text, "WorldSnapshot"),
@@ -4464,7 +4630,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (networking_doc_text, "live HP/max-HP"),
         (networking_doc_text, "run enemy presentation probe"),
         (networking_doc_text, "host-authoritative run entry"),
+        (networking_doc_text, "host-authored run generation seed"),
+        (networking_doc_text, "run-static prop families"),
+        (networking_doc_text, "verify_run_static_layout_sync.py"),
         (networking_doc_text, "connected-client"),
+        (networking_doc_text, "empty Run"),
+        (networking_doc_text, "one-shot run-entry formation placement"),
         (networking_doc_text, "death-handled byte"),
         (networking_doc_text, "per-family allocation sizes"),
         (networking_doc_text, "Synced host-owned run drops"),
@@ -4475,6 +4646,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_sync_plan_text, "larger player/Student render window"),
         (world_sync_plan_text, "tools/probe_run_enemy_presentation_sync.py"),
         (world_sync_plan_text, "drive word stays zero"),
+        (world_sync_plan_text, "WorldActorPresentationFlagLocomotionFloats"),
         (world_sync_plan_text, "death-handled byte"),
         (world_sync_plan_text, "tools/verify_run_enemy_seed_viability.py"),
         (world_sync_plan_text, "stock run-enemy lockstep was rejected"),
@@ -4492,6 +4664,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (run_enemy_presentation_probe_text, "KILL_HOST_ENEMY_LUA"),
         (run_enemy_presentation_probe_text, "setup_live_run_pair"),
         (run_enemy_presentation_probe_text, "max_drive_byte_mismatches"),
+        (run_enemy_presentation_probe_text, "max_snapshot_locomotion_present"),
+        (run_enemy_presentation_probe_text, "max_locomotion_mismatches"),
         (run_enemy_presentation_probe_text, "max_snapshot_dead"),
         (run_reward_sync_probe_text, "GOLD_REWARD_TYPE_ID = 0x07DC"),
         (run_reward_sync_probe_text, "stock_pickup_mutates_host_global_gold"),
@@ -4536,16 +4710,45 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (inventory_item_doc_text, "credit the owning participant's"),
         (inventory_item_doc_text, "gold, spellbook, or statbook state"),
         (binary_layout_text, "item_drop_pickup=0x005E6B50"),
+        (binary_layout_text, "native_global_rng_state=0x00818B08"),
+        (binary_layout_text, "native_rng_initialize=0x00401120"),
+        (binary_layout_text, "window_input_scale_x=0x00818678"),
+        (binary_layout_text, "window_input_scale_y=0x0081867C"),
+        (background_focus_text, "UpdateWindowInputScale"),
+        (background_focus_text, "IsMouseInputMessage"),
+        (background_focus_text, "FindCurrentProcessMainWindow"),
+        (background_focus_text, "WM_WINDOWPOSCHANGED"),
+        (background_focus_text, "Updated SolomonDark window input scale"),
+        (background_focus_text, "kWindowInputScaleXGlobal"),
+        (background_focus_text, "kWindowInputScaleYGlobal"),
+        (gameplay_seams_header_text, "kWindowInputScaleXGlobal"),
+        (gameplay_seams_header_text, "kWindowInputScaleYGlobal"),
+        (gameplay_seams_header_text, "kNativeGlobalRngStateGlobal"),
+        (gameplay_seams_header_text, "kNativeRngInitialize"),
+        (gameplay_seams_bindings_text, '"window_input_scale_x", kWindowInputScaleXGlobal'),
+        (gameplay_seams_bindings_text, '"window_input_scale_y", kWindowInputScaleYGlobal'),
+        (gameplay_seams_bindings_text, '"native_global_rng_state", kNativeGlobalRngStateGlobal'),
+        (gameplay_seams_bindings_text, '"native_rng_initialize", kNativeRngInitialize'),
         (gameplay_seams_header_text, "kItemDropPickupCaller"),
         (gameplay_seams_bindings_text, '"item_drop_pickup", kItemDropPickupCaller'),
         (script_text, "local-mp-host"),
         (script_text, "local-mp-client"),
-        (script_text, '$launchPreset = "create_manual"'),
+        (script_text, "[string]$HostPreset"),
+        (script_text, "[string]$ClientPreset"),
+        (script_text, "$effectiveHostPreset"),
+        (script_text, "$effectiveClientPreset"),
+        (script_text, '$hostLaunchPreset = "create_manual"'),
+        (script_text, '$clientLaunchPreset = "create_manual"'),
         (read_text(ROOT / "mods/lua_ui_sandbox_lab/scripts/lib/setup.lua"), 'active_preset == "create_manual"'),
         (script_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
         (script_text, "SDMOD_LUA_EXEC_PIPE_NAME"),
         (script_text, "multiplayer.steam_bootstrap=false"),
         (script_text, "--temporary-profile"),
+        (script_text, "[switch]$AllowFocusSteal"),
+        (script_text, "$showNoActivate = 4"),
+        (script_text, "if ($AllowFocusSteal) {"),
+        (script_text, "Window click fallback requires -AllowFocusSteal"),
+        (script_text, "allowFocusSteal = [bool]$AllowFocusSteal"),
         (verifier_text, "wait_for_remote"),
         (verifier_text, "nudge_player"),
         (verifier_text, "wait_for_remote_convergence"),
@@ -4557,15 +4760,56 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (verifier_text, "sd.hub.start_testrun"),
         (verifier_text, "assert_client_start_testrun_blocked"),
         (verifier_text, "start_host_testrun_and_wait_for_clients"),
+        (verifier_text, "verify_run_entry_bootstrap"),
+        (verifier_text, "client_replicated_scene_kind"),
         (verifier_text, "client_followed_host"),
         (run_snapshot_verifier_text, "start_host_testrun_and_wait_for_clients"),
+        (run_static_layout_verifier_text, "start_host_testrun_and_wait_for_clients"),
+        (run_static_layout_verifier_text, "circle_digest"),
+        (run_static_layout_verifier_text, "circle_mask4_digest"),
+        (run_static_layout_verifier_text, "circle_mask4_count"),
+        (run_static_layout_verifier_text, "shape_digest"),
+        (run_static_layout_verifier_text, "static_actor_digest"),
+        (run_static_layout_verifier_text, "local_run_nonce"),
+        (player_health_death_verifier_text, "DEAD_CORPSE_DRIVE_STATE"),
+        (player_health_death_verifier_text, "set_local_player_vitals"),
+        (player_health_death_verifier_text, "assert_dead_remote_ignores_transform"),
+        (player_health_death_verifier_text, "assert_restored_remote_follows_transform"),
+        (player_health_death_verifier_text, "host_to_client"),
+        (player_health_death_verifier_text, "client_to_host"),
         (run_enemy_presentation_probe_text, "start_host_testrun_and_wait_for_clients"),
         (run_reward_sync_probe_text, "start_host_testrun_and_wait_for_clients"),
     )
     missing = [token for text, token in required_pairs if token not in text]
+    native_remote_vital_guard = participant_snapshot_text.find(
+        "if (multiplayer::IsNativeControlledParticipant(*participant))"
+    )
+    gameplay_snapshot_vital_feedback = participant_snapshot_text.find(
+        "participant->runtime.life_current = snapshot.hp"
+    )
+    if not (0 <= native_remote_vital_guard < gameplay_snapshot_vital_feedback):
+        missing.append(
+            "native remote participant snapshot guard before gameplay vitals write"
+        )
     if missing:
         raise StaticReTestFailure(
             "local multiplayer transport wiring missing token(s): " + ", ".join(missing))
+    allow_focus_gate = script_text.find("if ($AllowFocusSteal) {")
+    foreground_call = script_text.find(
+        "[void][SolomonDarkWindowActivator]::SetForegroundWindow")
+    if allow_focus_gate < 0 or foreground_call < allow_focus_gate:
+        raise StaticReTestFailure(
+            "local multiplayer pair launcher must keep SetForegroundWindow behind -AllowFocusSteal")
+    fallback_guard = script_text.find("Window click fallback requires -AllowFocusSteal")
+    activate_flag = script_text.find("--activate")
+    if fallback_guard < 0 or activate_flag < fallback_guard:
+        raise StaticReTestFailure(
+            "local multiplayer pair launcher must guard activate-click fallback behind -AllowFocusSteal")
+    gameplay_click_queue = lua_input_text.find("QueueGameplayMouseLeftClick(&gameplay_click_error)")
+    window_foreground_fallback = lua_input_text.find("SetForegroundWindow(window)")
+    if not (0 <= gameplay_click_queue < window_foreground_fallback):
+        raise StaticReTestFailure(
+            "Lua input clicks must try the no-focus gameplay queue before foreground window fallback")
     if "latest runtime snapshot" in networking_doc_text:
         raise StaticReTestFailure("networking docs still describe latest-packet playback instead of interpolation history")
     forbidden_networking_tokens = (
@@ -5157,6 +5401,9 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
     slot_creation_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_slot_bot_creation.inl"
     )
+    equip_visual_lanes_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_equip_visual_lanes.inl"
+    )
     actor_render_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_actor_render_state.inl"
     )
@@ -5166,6 +5413,7 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
     standalone_spawn_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_standalone_wizard.inl"
     )
+    release_text = read_text(CAST_RELEASE_HELPERS)
     native_types_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/native_function_types.inl")
     safe_decls_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/seh_safe_call_declarations.inl")
     player_calls_text = read_text(
@@ -5189,16 +5437,20 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
         "CaptureActorRenderBuildSnapshot",
         "ApplySourceActorRenderSelectorsToTargetActor",
         "AttachBuiltDescriptorToEquipVisualLane",
+        "AttachGameplaySlotBotStaffItem",
         "SeedWizardBotNativeCollisionStateFromSourceActor",
+        "NormalizeStandaloneWizardSyntheticVisualState",
         "kNativeDerivedSourceProfileSize",
         "native-derived source profile",
     )
     combined_text = "\n".join((
         clone_source_text,
         slot_creation_text,
+        equip_visual_lanes_text,
         actor_render_text,
         priming_text,
         standalone_spawn_text,
+        release_text,
         native_types_text,
         safe_decls_text,
         player_calls_text,
@@ -5231,6 +5483,7 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
         r"ClearActorLiveDescriptorBlock",
         r"ApplySourceActorBodyDescriptorToTargetActor",
         r"ApplySourceActorGameplaySlotRenderSnapshotToTargetActor",
+        r"TransferSourceActorAttachmentToEquipVisualLane",
     )
     present_forbidden = [
         pattern for pattern in forbidden_patterns if re.search(pattern, combined_text)
@@ -5247,6 +5500,12 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
         raise StaticReTestFailure(
             "standalone clone spawn does not seed native collision before source cleanup")
     if not re.search(
+        r"ApplySourceActorRenderSelectorsToTargetActor[\s\S]*NormalizeStandaloneWizardSyntheticVisualState\(actor_address\)",
+        standalone_spawn_text,
+    ):
+        raise StaticReTestFailure(
+            "standalone clone spawn does not clear source-profile scratch pointers after native render selection")
+    if not re.search(
         r"SeedWizardBotNativeCollisionStateFromSourceActor[\s\S]*SeedGameplaySlotBotRenderStateFromSourceActor",
         priming_text,
     ):
@@ -5256,13 +5515,93 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
         raise StaticReTestFailure(
             "gameplay-slot bot materialization does not publish the source descriptor through helper lanes")
     if not re.search(
-        r"CaptureActorRenderBuildSnapshot[\s\S]*ApplySourceActorRenderSelectorsToTargetActor[\s\S]*AttachBuiltDescriptorToEquipVisualLane",
+        r"CaptureActorRenderBuildSnapshot[\s\S]*ApplySourceActorRenderSelectorsToTargetActor[\s\S]*AttachBuiltDescriptorToEquipVisualLane[\s\S]*AttachGameplaySlotBotStaffItem\(\s*actor_address,\s*&stage_error",
         slot_creation_text,
     ):
         raise StaticReTestFailure(
-            "gameplay-slot bot materialization does not publish safe source selector bytes before helper lanes")
+            "gameplay-slot bot materialization does not publish safe source selector bytes, helper lanes, and a target-owned staff attachment")
+    staff_attach_match = re.search(
+        r"AttachGameplaySlotBotStaffItem[\s\S]*?\n\}",
+        equip_visual_lanes_text,
+    )
+    if not staff_attach_match:
+        raise StaticReTestFailure("could not find gameplay-slot target-owned staff attach helper")
+    staff_attach_text = staff_attach_match.group(0)
+    missing_staff_attach_tokens = [
+        token for token in (
+            "CreateGameplaySlotStaffItemObject",
+            "kActorEquipRuntimeVisualLinkAttachmentOffset",
+            "staff_item_address",
+            "CallScalarDeletingDestructorSafe",
+            "slot_actor_owned_staff_attached",
+        )
+        if token not in staff_attach_text
+    ]
+    if missing_staff_attach_tokens:
+        raise StaticReTestFailure(
+            "gameplay-slot staff path does not create and attach a target-owned stock staff object: " +
+            ", ".join(missing_staff_attach_tokens))
+    forbidden_staff_attach_tokens = [
+        token for token in (
+            "source_attachment_address",
+            "slot_actor_source_staff_transferred",
+            "built_snapshot.attachment_address",
+        )
+        if token in slot_creation_text or token in staff_attach_text
+    ]
+    if forbidden_staff_attach_tokens:
+        raise StaticReTestFailure(
+            "gameplay-slot staff path must not attach the temporary source actor attachment: " +
+            ", ".join(forbidden_staff_attach_tokens))
 
-    return "wizard visuals are built from native Skills_Wizard colors and published through safe selectors plus stock clone/helper lanes"
+    required_remote_visual_settle_tokens = (
+        "if (native_remote_participant)",
+        "kActorContinuousPrimaryActiveOffset",
+        "remote_visual_staging_before",
+        "remote_visual_staging_clear_ok",
+        "Remote casts run through stock spell handlers without the local player",
+        "kActorRenderDriveOverlayAlphaOffset",
+        "remote_overlay_alpha_clear_ok",
+        "kActorRenderDriveMoveBlendOffset",
+        "remote_overlay_phase_clear_ok",
+    )
+    missing_remote_visual_settle_tokens = [
+        token for token in required_remote_visual_settle_tokens
+        if token not in release_text
+    ]
+    if missing_remote_visual_settle_tokens:
+        raise StaticReTestFailure(
+            "native remote cast completion no longer settles continuous-primary visual staging: " +
+            ", ".join(missing_remote_visual_settle_tokens))
+    if "kActorContinuousPrimaryActiveOffset" in actor_render_text:
+        raise StaticReTestFailure(
+            "visual normalizers must not clear the active continuous-primary/orb staging field during active casts")
+
+    native_remote_playback_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/native_remote_playback.inl")
+    for required_token in (
+        "kActorRenderDriveEffectTimerOffset",
+        "binding->replicated_render_drive_effect_timer",
+        "kActorRenderDriveEffectProgressOffset",
+        "binding->replicated_render_drive_effect_progress",
+    ):
+        if required_token not in native_remote_playback_text:
+            raise StaticReTestFailure(
+                "native remote playback must sync damage flash effect timer/progress fields")
+
+    if re.search(
+        r"TryWriteField\(\s*actor_address,\s*kActorRenderDriveOverlayAlphaOffset",
+        native_remote_playback_text,
+        re.S,
+    ) or re.search(
+        r"TryWriteField\(\s*actor_address,\s*kActorRenderDriveMoveBlendOffset",
+        native_remote_playback_text,
+        re.S,
+    ):
+        raise StaticReTestFailure(
+            "native remote playback must not write clone-owned overlay/cache offsets +0x248 or +0x268")
+
+    return "wizard visuals are built from native Skills_Wizard colors and published through safe selectors plus helper lanes and a target-owned staff"
 
 
 def test_standalone_animation_drive_applies_dynamic_fields() -> str:
@@ -5618,6 +5957,282 @@ def test_path_builder_expands_cells_before_los_smoothing() -> str:
     return "A* expands traversable cells first and applies LOS as waypoint smoothing"
 
 
+def test_remote_per_cast_primary_settles_without_waiting_for_release() -> str:
+    processing_text = read_text(PENDING_CAST_PROCESSING)
+    preparation_text = read_text(PENDING_CAST_PREPARATION)
+    release_text = read_text(CAST_RELEASE_HELPERS)
+    projectile_observation_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/projectile_observation.inl"
+    )
+    player_control_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
+    )
+    transport_text = read_text(MULTIPLAYER_LOCAL_TRANSPORT)
+    runtime_state_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/runtime_request_state.inl"
+    )
+    verifier_text = read_text(REAL_INPUT_SPELL_CAST_SYNC_VERIFIER)
+    animation_element_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_animation_mana_elements.py"
+    )
+
+    required_processing_tokens = (
+        "remote_per_cast_pure_primary_no_handle_settled",
+        "ongoing.mana_charge_kind == multiplayer::BotManaChargeKind::PerCast",
+        "remote_per_cast_pure_primary_without_live_handle",
+        "remote_per_cast_projectile_observed",
+        "kRemotePerCastPurePrimaryProjectileSettleTicks",
+        "kRemotePerCastPurePrimaryNoProjectileSafetyTicks",
+        "remote_release_driven_pure_primary_no_handle_settled",
+        "ongoing.mana_charge_kind != multiplayer::BotManaChargeKind::PerCast",
+        "remote_input_release_or_timeout",
+        "!remote_per_cast_pure_primary_without_live_handle",
+    )
+    missing_processing_tokens = [
+        token for token in required_processing_tokens if token not in processing_text
+    ]
+    if missing_processing_tokens:
+        raise StaticReTestFailure(
+            "remote per-cast primary settlement is missing token(s): " +
+            ", ".join(missing_processing_tokens))
+
+    required_observation_tokens = (
+        (preparation_text, "preparation", "remote_per_cast_projectile_baseline_valid"),
+        (preparation_text, "preparation", "remote_per_cast_projectile_expected_type"),
+        (preparation_text, "preparation", "remote_per_cast_projectile_addresses_before"),
+        (preparation_text, "preparation", "ExpectedPurePrimaryProjectileTypeForSelectionState"),
+        (preparation_text, "preparation", "TryListPurePrimaryProjectileActorAddressesInScene("),
+        (preparation_text, "preparation", "ongoing.remote_per_cast_projectile_expected_type"),
+        (preparation_text, "preparation", "remote_cast_sequence="),
+        (projectile_observation_text, "projectile_observation", "IsPurePrimaryProjectileActorType"),
+        (projectile_observation_text, "projectile_observation", "ExpectedPurePrimaryProjectileTypeForSelectionState"),
+        (projectile_observation_text, "projectile_observation", "return 0x7D3"),
+        (projectile_observation_text, "projectile_observation", "0x7D4"),
+        (projectile_observation_text, "projectile_observation", "return 0x7D5"),
+        (projectile_observation_text, "projectile_observation", "TryListSceneActors"),
+        (projectile_observation_text, "projectile_observation", "TryFindNewPurePrimaryProjectileActorInScene("),
+        (processing_text, "processing", "TryFindNewPurePrimaryProjectileActorInScene("),
+        (processing_text, "processing", "ongoing.remote_per_cast_projectile_expected_type"),
+        (processing_text, "processing", "remote_per_cast_projectile_observed_actor"),
+        (release_text, "release", "remote_cast_sequence="),
+        (release_text, "release", "remote_projectile_expected_type="),
+        (release_text, "release", "remote_projectile_observed_actor="),
+        (player_control_text, "player_control", "native_tick_ms="),
+        (player_control_text, "player_control", "native_queue_id="),
+        (player_control_text, "player_control", "s_last_multiplayer_primary_actor"),
+    )
+    missing_observation_tokens = [
+        f"{label}:{token}" for text, label, token in required_observation_tokens if token not in text
+    ]
+    if missing_observation_tokens:
+        raise StaticReTestFailure(
+            "remote per-cast projectile observation is missing token(s): " +
+            ", ".join(missing_observation_tokens))
+
+    required_startup_sanitizer_tokens = (
+        "TryReadRollbackAimTargetFloat",
+        "std::isfinite(raw) ? raw : fallback_value",
+        "memory.TryWriteField(actor_address, offset, *value)",
+        "aim_x_fallback",
+        "aim_y_fallback",
+    )
+    missing_startup_sanitizer_tokens = [
+        token for token in required_startup_sanitizer_tokens
+        if token not in preparation_text
+    ]
+    if missing_startup_sanitizer_tokens:
+        raise StaticReTestFailure(
+            "remote cast startup does not sanitize stale non-finite aim-target rollback fields: " +
+            ", ".join(missing_startup_sanitizer_tokens))
+    if re.search(
+        r"TryReadFiniteFloatField\(\s*actor_address,\s*kActorAimTargetXOffset",
+        preparation_text,
+        re.S,
+    ) or re.search(
+        r"TryReadFiniteFloatField\(\s*actor_address,\s*kActorAimTargetYOffset",
+        preparation_text,
+        re.S,
+    ):
+        raise StaticReTestFailure(
+            "remote cast startup must not reject stale non-finite actor aim-target cache fields")
+
+    stale_click_tokens = [
+        token for token in (
+            "last_multiplayer_primary_cast_click_serial",
+            "kLocalPrimaryCastClickWindowMs",
+            "s_last_multiplayer_primary_edge_serial",
+            "GetGameplayMouseLeftEdgeSerial",
+            "GetGameplayMouseLeftEdgeTickMs",
+            "click_serial=",
+        )
+        if token in player_control_text or token in runtime_state_text
+    ]
+    if stale_click_tokens:
+        raise StaticReTestFailure(
+            "multiplayer primary emission is still click-serial gated: " +
+            ", ".join(stale_click_tokens))
+    required_replacement_tokens = (
+        "ReleaseActiveLocalCastInputForReplacement",
+        "Multiplayer local active cast replaced by native cast",
+        "replacement_native_queue_id",
+        "CastInputPhase::Released",
+    )
+    missing_replacement_tokens = [
+        token for token in required_replacement_tokens if token not in transport_text
+    ]
+    if missing_replacement_tokens:
+        raise StaticReTestFailure(
+            "held primary native restarts are still dropped instead of replacing the active replicated cast: " +
+            ", ".join(missing_replacement_tokens))
+    if "Multiplayer local cast event dropped while gesture active" in transport_text:
+        raise StaticReTestFailure(
+            "held primary native restarts still use the old drop path while a gesture is active")
+
+    if "remote_projectile_observed_count != native_hook_count" not in verifier_text:
+        if "assert_sequence_counts" not in verifier_text:
+            raise StaticReTestFailure(
+                "real-input spell verifier must reject remote projectile lifecycle overproduction")
+    if "parse_remote_settle_sequences" not in verifier_text:
+        raise StaticReTestFailure(
+            "real-input spell verifier must compare completed remote cast sequences")
+    if "parse_local_pressed_sequences" not in verifier_text:
+        raise StaticReTestFailure(
+            "real-input spell verifier must compare against source cast sequences")
+    if "Multiplayer local native cast sent" not in verifier_text:
+        raise StaticReTestFailure(
+            "real-input spell verifier must map native queue ids to transport cast sequences")
+    if '"sampled_fire_addresses": sorted(observed_fire)' not in verifier_text:
+        raise StaticReTestFailure(
+            "real-input spell verifier must report sampled projectile actors")
+    if "remote_projectile_observed_sequences" not in verifier_text:
+        raise StaticReTestFailure(
+            "real-input spell verifier must report completed remote projectile lifecycle sequences")
+    if "native_hook_count = count_local_native_queues" not in verifier_text:
+        raise StaticReTestFailure(
+            "real-input spell verifier must compare remote presentation against source native hook count")
+    if "remote_settle_count" not in verifier_text:
+        raise StaticReTestFailure(
+            "real-input spell verifier must require one remote per-cast lifecycle settlement")
+    if "held_fire |= parse_unique_fire(state)" not in verifier_text:
+        raise StaticReTestFailure(
+            "real-input spell verifier must sample short-lived projectiles during the hold window")
+    required_animation_element_verifier_tokens = (
+        "parse_remote_projectile_spawn_sequences",
+        "remote_projectile_expected_type=",
+        "remote_projectile_observed=1",
+        "obj_type=",
+        "runtime_observed_sequences",
+        "sample_observed_projectile",
+    )
+    missing_animation_element_verifier_tokens = [
+        token for token in required_animation_element_verifier_tokens
+        if token not in animation_element_verifier_text
+    ]
+    if missing_animation_element_verifier_tokens:
+        raise StaticReTestFailure(
+            "all-element verifier does not assert exact runtime projectile type evidence: " +
+            ", ".join(missing_animation_element_verifier_tokens))
+
+    return "remote per-cast primaries settle from projectile observation and verifier rejects overfire"
+
+
+def test_run_lifecycle_spell_hooks_only_forward_local_player_casts() -> str:
+    spell_hook_text = read_text(RUN_LIFECYCLE_SPELL_CAST_HOOKS)
+    required_tokens = (
+        "bool IsLocalPlayerActorForRunLifecycle(uintptr_t actor_address)",
+        "ResolveLocalPlayerActorForRunLifecycle()",
+        "if (!IsLocalPlayerActorForRunLifecycle(self_address))",
+        "g_state.last_consumed_spell_click_serial.store",
+        "multiplayer::QueueLocalSpellCastEvent(",
+    )
+    missing = [token for token in required_tokens if token not in spell_hook_text]
+    if missing:
+        raise StaticReTestFailure(
+            "run-lifecycle spell hooks can still forward non-local casts: " +
+            ", ".join(missing))
+
+    guard_pos = spell_hook_text.find("if (!IsLocalPlayerActorForRunLifecycle(self_address))")
+    consume_pos = spell_hook_text.find("g_state.last_consumed_spell_click_serial.store")
+    queue_pos = spell_hook_text.find("multiplayer::QueueLocalSpellCastEvent(")
+    if not (guard_pos >= 0 and consume_pos >= 0 and queue_pos >= 0 and guard_pos < consume_pos < queue_pos):
+        raise StaticReTestFailure(
+            "run-lifecycle spell hook must prove local actor before consuming click serial or queueing network cast")
+
+    return "run-lifecycle native spell hooks only forward local-player casts"
+
+
+def test_multiplayer_nameplates_render_from_hud_not_animation_advance() -> str:
+    hud_text = read_text(GAMEPLAY_HUD_HOOKS)
+    animation_text = read_text(ACTOR_ANIMATION_ADVANCE_HOOK)
+    player_tick_text = read_text(PLAYER_ACTOR_TICK_HOOK)
+
+    forbidden_animation_tokens = (
+        "DrawGameplayHudParticipantName(",
+        "native gameplay HUD participant name draw",
+        "std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex)",
+        "TryCaptureTrackedStandaloneWizardBindingIdentity(",
+        "NormalizeGameplaySlotBotSyntheticVisualState(actor_address)",
+        "ApplyNativeRemoteParticipantPresentationState(binding, actor_address)",
+    )
+    present = [token for token in forbidden_animation_tokens if token in animation_text]
+    if present:
+        raise StaticReTestFailure(
+            "animation advance hook still owns participant presentation/nameplate work: " +
+            ", ".join(present))
+
+    required_animation_tokens = (
+        "struct AnimationAdvanceContextScope",
+        "~AnimationAdvanceContextScope()",
+        "original(self);",
+    )
+    missing_animation = [
+        token for token in required_animation_tokens
+        if token not in animation_text
+    ]
+    if missing_animation:
+        raise StaticReTestFailure(
+            "animation advance hook no longer has exception-safe passive context tracking: " +
+            ", ".join(missing_animation))
+
+    required_hud_tokens = (
+        "void DrawGameplayHudParticipantNameplates()",
+        "struct HudCase100ContextScope",
+        "~HudCase100ContextScope()",
+        "if (context_scope.previous_depth == 0)",
+        "struct NameplateDrawDepthScope",
+        "DrawGameplayHudParticipantNameplates();",
+        "SnapshotRuntimeState()",
+        "std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex)",
+        "multiplayer::IsRemoteParticipant(*participant)",
+        "DrawGameplayHudParticipantName(",
+        "TryProjectGameplayHudNameplatePosition",
+        "scene_state.kind != \"arena\"",
+        "kGameplayHudVirtualWidth",
+        "actor_x - player_state.x",
+    )
+    missing = [token for token in required_hud_tokens if token not in hud_text]
+    if missing:
+        raise StaticReTestFailure(
+            "HUD render hook does not own remote participant nameplate drawing: " +
+            ", ".join(missing))
+
+    required_player_tick_tokens = (
+        "native_remote_pre_tick_progression_runtime",
+        "ApplyNativeRemoteParticipantPlayback(binding, actor_address, native_tick_now_ms)",
+        "ApplyNativeRemoteParticipantPresentationState(binding, actor_address)",
+    )
+    missing_player_tick = [
+        token for token in required_player_tick_tokens
+        if token not in player_tick_text
+    ]
+    if missing_player_tick:
+        raise StaticReTestFailure(
+            "player tick no longer owns remote participant playback/presentation: " +
+            ", ".join(missing_player_tick))
+
+    return "remote nameplates and presentation writes stay out of the actor animation callback"
+
+
 TESTS: list[tuple[str, Callable[[], str]]] = [
     ("primary mana resolver uses native live spell stats", test_primary_mana_resolver_uses_native_live_spell_stats),
     ("Earth boulder damage uses native live spell stats", test_earth_boulder_damage_uses_native_live_spell_stats),
@@ -5634,7 +6249,11 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("bot mana reserve uses native hysteresis", test_bot_mana_reserve_uses_hysteresis_for_casting),
     ("bot out-of-mana probe checks pre-execution rejection", test_bot_out_of_mana_probe_checks_pre_execution_rejection),
     ("held primary mana uses native spend scale and start rate", test_held_primary_mana_uses_native_spend_scale_and_start_rate),
+    ("remote per-cast primary settles without waiting for release", test_remote_per_cast_primary_settles_without_waiting_for_release),
+    ("run-lifecycle spell hooks only forward local player casts", test_run_lifecycle_spell_hooks_only_forward_local_player_casts),
+    ("multiplayer nameplates render outside animation advance", test_multiplayer_nameplates_render_from_hud_not_animation_advance),
     ("primary build skill mapping has single runtime owner", test_primary_build_skill_mapping_has_single_runtime_owner),
+    ("primary mana resolver accepts native dispatcher entry ids", test_primary_mana_resolver_accepts_native_dispatcher_entry_ids),
     ("primary selection mapping is native-backed", test_primary_selection_mapping_is_native_backed_not_static_table),
     ("primary attack window uses live native selection range", test_primary_attack_window_uses_live_native_selection_range),
     ("bot level sync uses native level_up", test_bot_level_sync_uses_native_level_up),

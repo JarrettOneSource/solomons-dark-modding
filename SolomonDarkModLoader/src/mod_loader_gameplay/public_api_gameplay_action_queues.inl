@@ -25,6 +25,28 @@ bool QueueHubStartTestrun(std::string* error_message) {
         return false;
     }
 
+    SceneContextSnapshot scene_context;
+    std::string readiness_error;
+    if (!TryValidateRemoteParticipantSpawnReadiness(gameplay_address, &scene_context, &readiness_error)) {
+        if (error_message != nullptr) {
+            *error_message = readiness_error;
+        }
+        return false;
+    }
+    if (!IsSharedHubSceneContext(scene_context)) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay scene is not in the shared hub.";
+        }
+        return false;
+    }
+
+    std::uint32_t run_generation_seed = 0;
+    if (multiplayer::IsLocalTransportHost()) {
+        run_generation_seed = EnsureHostRunGenerationSeed("hub_start_testrun_queue");
+    } else {
+        run_generation_seed = ReadPendingRunGenerationSeed();
+    }
+
     multiplayer::SetAllBotSceneIntentsToRun();
 
     g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.exchange(1, std::memory_order_acq_rel);
@@ -41,8 +63,24 @@ bool QueueHubStartTestrun(std::string* error_message) {
         " target_region=" + std::to_string(kArenaRegionIndex) +
         " arena_enter_dispatch=" + HexString(kArenaStartRunDispatch) +
         " create=" + HexString(kArenaCreate) +
+        " run_generation_seed=" +
+        (run_generation_seed != 0 ? HexString(static_cast<uintptr_t>(run_generation_seed)) : std::string("none")) +
         " testrun_mode_flag=" +
         (have_testrun_mode_flag ? std::to_string(static_cast<unsigned>(testrun_mode_flag)) : std::string("unreadable")));
+    return true;
+}
+
+bool SetPendingRunGenerationSeed(std::uint32_t seed, std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay action pump is not initialized.";
+        }
+        return false;
+    }
+    (void)SetPendingRunGenerationSeedInternal(seed, "network_authority");
     return true;
 }
 

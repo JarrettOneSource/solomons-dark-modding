@@ -1,4 +1,6 @@
 uintptr_t kGameWindowProc = 0;
+uintptr_t kWindowInputScaleXGlobal = 0;
+uintptr_t kWindowInputScaleYGlobal = 0;
 
 uintptr_t kGameplayMouseRefreshHelper = 0;
 uintptr_t kGameplayKeyboardEdgeHelper = 0;
@@ -72,6 +74,7 @@ uintptr_t kGameObjectFactory = 0;
 uintptr_t kGameFree = 0;
 uintptr_t kGameOperatorNew = 0;
 uintptr_t kNativeIntArrayClear = 0;
+uintptr_t kNativeRngInitialize = 0;
 uintptr_t kCastActiveHandleCleanup = 0;
 uintptr_t kPlayerActorApplyManaDeltaLocalActorGateBranch = 0;
 uintptr_t kCastCleanupSlotGateBranch = 0;
@@ -103,6 +106,7 @@ uintptr_t kPlayerSelectionState0Global = 0;
 uintptr_t kPlayerSelectionState1Global = 0;
 uintptr_t kLocalPlayerActorGlobal = 0;
 uintptr_t kNativeIntArrayVtable = 0;
+uintptr_t kNativeGlobalRngStateGlobal = 0;
 uintptr_t kActorWalkCyclePrimaryDivisorGlobal = 0;
 uintptr_t kActorWalkCycleSecondaryDivisorGlobal = 0;
 uintptr_t kActorWalkCyclePrimaryWrapThresholdGlobal = 0;

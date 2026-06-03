@@ -73,7 +73,13 @@ def extract_json(buffer: str) -> dict[str, object] | None:
     return value
 
 
-def launch_pair() -> dict[str, object]:
+def launch_pair(
+    preset: str = "map_create_fire_mind_hub",
+    *,
+    host_preset: str | None = None,
+    client_preset: str | None = None,
+    temporary_host_profile: bool = True,
+) -> dict[str, object]:
     args = [
         "powershell.exe",
         "-NoProfile",
@@ -86,6 +92,15 @@ def launch_pair() -> dict[str, object]:
         "-ClientName",
         CLIENT_NAME,
     ]
+    if host_preset is not None or client_preset is not None:
+        if host_preset is not None:
+            args.extend(["-HostPreset", host_preset])
+        if client_preset is not None:
+            args.extend(["-ClientPreset", client_preset])
+    else:
+        args.extend(["-Preset", preset])
+    if temporary_host_profile:
+        args.append("-TemporaryHostProfile")
     process = subprocess.Popen(
         args,
         cwd=ROOT,
@@ -202,6 +217,25 @@ def parse_key_values(text: str) -> dict[str, str]:
     return values
 
 
+def parse_int_text(value: str | None, default: int = 0) -> int:
+    if value is None or value == "":
+        return default
+    try:
+        return int(value, 0)
+    except ValueError:
+        return int(float(value))
+
+
+def visual_blocks_by_type(values: dict[str, str], prefix: str) -> dict[int, str]:
+    blocks: dict[int, str] = {}
+    for lane in ("primary", "secondary"):
+        type_id = parse_int_text(values.get(f"{prefix}.{lane}_visual_type"), 0)
+        block = values.get(f"{prefix}.{lane}_visual_block", "")
+        if type_id != 0 and block:
+            blocks[type_id] = block
+    return blocks
+
+
 QUERY_LUA = r"""
 local function emit(key, value)
   if value == nil then
@@ -224,7 +258,47 @@ local function actor_radius(actor_address)
   end
   return sd.debug.read_float(actor_address + radius_offset) or 0
 end
+local function staff_visual_state(lane)
+  if lane == nil or lane.current_object_address == nil or lane.current_object_address == 0 then
+    return 0
+  end
+  return sd.debug.read_u32(lane.current_object_address + 0x84) or 0
+end
+local function visual_link_block(lane)
+  if lane == nil or lane.current_object_address == nil or lane.current_object_address == 0 then
+    return ""
+  end
+  local out = {}
+  for i = 0, 31 do
+    out[#out + 1] = string.format("%02X", tonumber(sd.debug.read_u8(lane.current_object_address + 0x88 + i)) or 0)
+  end
+  return table.concat(out, " ")
+end
+local function visual_link_type(lane)
+  if lane == nil then
+    return 0
+  end
+  return lane.current_object_type_id or 0
+end
+local function render_selector(state)
+  if state == nil then
+    return ""
+  end
+  return table.concat({
+    tostring(state.render_variant_primary or 0),
+    tostring(state.render_variant_secondary or 0),
+    tostring(state.render_weapon_type or 0),
+    tostring(state.render_selection_byte or 0),
+    tostring(state.render_variant_tertiary or 0),
+  }, ",")
+end
 emit("player.radius", player and actor_radius(player.actor_address) or 0)
+emit("player.staff_visual_state", player and staff_visual_state(player.attachment_visual_lane) or 0)
+emit("player.render_selector", render_selector(player))
+emit("player.primary_visual_type", player and visual_link_type(player.primary_visual_lane) or 0)
+emit("player.primary_visual_block", player and visual_link_block(player.primary_visual_lane) or "")
+emit("player.secondary_visual_type", player and visual_link_type(player.secondary_visual_lane) or 0)
+emit("player.secondary_visual_block", player and visual_link_block(player.secondary_visual_lane) or "")
 local peers = sd.bots.get_participants()
 emit("peer.count", #peers)
 for i, peer in ipairs(peers) do
@@ -239,12 +313,28 @@ for i, peer in ipairs(peers) do
   emit(prefix .. "y", peer.y)
   emit(prefix .. "heading", peer.heading)
   emit(prefix .. "radius", actor_radius(peer.actor_address))
+  emit(prefix .. "staff_visual_state", staff_visual_state(peer.attachment_visual_lane))
+  emit(prefix .. "render_selector", render_selector(peer))
+  emit(prefix .. "primary_visual_type", visual_link_type(peer.primary_visual_lane))
+  emit(prefix .. "primary_visual_block", visual_link_block(peer.primary_visual_lane))
+  emit(prefix .. "secondary_visual_type", visual_link_type(peer.secondary_visual_lane))
+  emit(prefix .. "secondary_visual_block", visual_link_block(peer.secondary_visual_lane))
   local nameplate = nil
   if peer.actor_address ~= nil and peer.actor_address ~= 0 then
     nameplate = sd.bots.get_nameplate(peer.actor_address)
   end
   emit(prefix .. "nameplate", nameplate and nameplate.name or "")
 end
+local replicated = nil
+if sd.world.get_replicated_actors ~= nil then
+  replicated = sd.world.get_replicated_actors()
+end
+emit("replicated.valid", replicated ~= nil)
+emit("replicated.scene_kind", replicated and replicated.scene_kind or "")
+emit("replicated.actor_count", replicated and replicated.actor_count or 0)
+emit("replicated.actor_total_count", replicated and replicated.actor_total_count or 0)
+emit("replicated.authority_participant_id", replicated and replicated.authority_participant_id or 0)
+emit("replicated.apply_valid", replicated and replicated.apply_valid or false)
 """
 
 
@@ -261,9 +351,16 @@ def wait_for_remote(
 ) -> dict[str, str]:
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
+    last_error = ""
     prefix = f"peer.{participant_id}."
     while time.monotonic() < deadline:
-        last = query(pipe_name)
+        try:
+            last = query(pipe_name)
+            last_error = ""
+        except (VerifyFailure, subprocess.TimeoutExpired) as exc:
+            last_error = str(exc)
+            time.sleep(0.25)
+            continue
         if (
             last.get("scene") == expected_scene
             and last.get(prefix + "name") == expected_name
@@ -274,8 +371,9 @@ def wait_for_remote(
         ):
             return last
         time.sleep(0.25)
+    suffix = f"; last_error={last_error}" if last_error else ""
     raise VerifyFailure(
-        f"remote participant {participant_id} not visible on {pipe_name}; last={last}"
+        f"remote participant {participant_id} not visible on {pipe_name}; last={last}{suffix}"
     )
 
 
@@ -416,6 +514,10 @@ def distance(ax: float, ay: float, bx: float, by: float) -> float:
     return ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
 
 
+def heading_distance(a: float, b: float) -> float:
+    return abs((a - b + 180.0) % 360.0 - 180.0)
+
+
 def query_local_transform(pipe_name: str) -> tuple[float, float, float]:
     values = query(pipe_name)
     return (
@@ -439,7 +541,7 @@ def wait_for_local_transform_settled(
         time.sleep(0.1)
         current = query_local_transform(pipe_name)
         position_delta = distance(last[0], last[1], current[0], current[1])
-        heading_delta = abs(current[2] - last[2])
+        heading_delta = heading_distance(current[2], last[2])
         if position_delta <= distance_tolerance and heading_delta <= heading_tolerance:
             if stable_since is None:
                 stable_since = time.monotonic()
@@ -471,7 +573,7 @@ def wait_for_remote_motion(
         moved_distance = ((x - previous_x) ** 2 + (y - previous_y) ** 2) ** 0.5
         if (
             moved_distance >= 2.0
-            and abs(heading - expected_heading) <= heading_tolerance
+            and heading_distance(heading, expected_heading) <= heading_tolerance
         ):
             return last
         time.sleep(0.2)
@@ -500,7 +602,7 @@ def wait_for_remote_convergence(
         heading = float(last.get(prefix + "heading", "nan"))
         if (
             distance(x, y, expected_x, expected_y) <= 3.0
-            and abs(heading - expected_heading) <= 1.0
+            and heading_distance(heading, expected_heading) <= 1.0
         ):
             return last
         time.sleep(0.15)
@@ -612,8 +714,24 @@ def wait_for_collision_push(scene_name: str) -> dict[str, object]:
 
 def disable_bots() -> None:
     code = "lua_bots_disable_tick = true; sd.bots.clear(); return tostring(sd.bots.get_count())"
-    host_count = lua(HOST_PIPE, code)
-    client_count = lua(CLIENT_PIPE, code)
+
+    def disable_one(pipe_name: str) -> str:
+        deadline = time.monotonic() + 15.0
+        last_error = ""
+        last_count = ""
+        while time.monotonic() < deadline:
+            try:
+                last_count = lua(pipe_name, code, timeout=5.0).strip()
+                if last_count == "0":
+                    return last_count
+            except (VerifyFailure, subprocess.TimeoutExpired) as exc:
+                last_error = str(exc)
+            time.sleep(0.25)
+        detail = last_error or last_count
+        raise VerifyFailure(f"failed to disable bots on {pipe_name}: {detail!r}")
+
+    host_count = disable_one(HOST_PIPE)
+    client_count = disable_one(CLIENT_PIPE)
     if host_count.strip() != "0" or client_count.strip() != "0":
         raise VerifyFailure(f"failed to disable bots: host={host_count!r} client={client_count!r}")
 
@@ -668,7 +786,46 @@ def wait_for_scene(pipe_name: str, scene_name: str, timeout: float = 30.0) -> No
     raise VerifyFailure(f"{pipe_name} did not reach scene {scene_name}; last={last}{suffix}")
 
 
+def wait_for_both_hub_settled(settle_seconds: float = 3.0, timeout: float = 15.0) -> None:
+    deadline = time.monotonic() + timeout
+    settled_since: float | None = None
+    last_host = ""
+    last_client = ""
+    while time.monotonic() < deadline:
+        try:
+            last_host = lua(
+                HOST_PIPE,
+                "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')",
+                timeout=5.0,
+            ).strip()
+            last_client = lua(
+                CLIENT_PIPE,
+                "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')",
+                timeout=5.0,
+            ).strip()
+        except (VerifyFailure, subprocess.TimeoutExpired):
+            settled_since = None
+            time.sleep(0.25)
+            continue
+        now = time.monotonic()
+        if last_host == "" or last_client == "":
+            time.sleep(0.25)
+            continue
+        if last_host == "hub" and last_client == "hub":
+            if settled_since is None:
+                settled_since = now
+            elif now - settled_since >= settle_seconds:
+                return
+        else:
+            settled_since = None
+        time.sleep(0.25)
+    raise VerifyFailure(
+        f"instances did not remain hub-settled before run entry; host={last_host!r} client={last_client!r}"
+    )
+
+
 def start_host_testrun_and_wait_for_clients(timeout: float = 30.0) -> dict[str, object]:
+    wait_for_both_hub_settled()
     start_testrun(HOST_PIPE)
     wait_for_scene(HOST_PIPE, "testrun", timeout=timeout)
     wait_for_scene(CLIENT_PIPE, "testrun", timeout=timeout)
@@ -679,9 +836,100 @@ def start_host_testrun_and_wait_for_clients(timeout: float = 30.0) -> dict[str, 
     }
 
 
+def verify_run_entry_bootstrap(timeout: float = 15.0) -> dict[str, object]:
+    wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "testrun")
+    wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "testrun")
+
+    deadline = time.monotonic() + timeout
+    last: dict[str, object] = {}
+    while time.monotonic() < deadline:
+        host = query(HOST_PIPE)
+        client = query(CLIENT_PIPE)
+        host_x = float(host["player.x"])
+        host_y = float(host["player.y"])
+        client_x = float(client["player.x"])
+        client_y = float(client["player.y"])
+        host_client_spawn_distance = distance(host_x, host_y, client_x, client_y)
+        host_observed_client_distance = distance(
+            float(host[f"peer.{CLIENT_ID}.x"]),
+            float(host[f"peer.{CLIENT_ID}.y"]),
+            client_x,
+            client_y,
+        )
+        client_observed_host_distance = distance(
+            float(client[f"peer.{HOST_ID}.x"]),
+            float(client[f"peer.{HOST_ID}.y"]),
+            host_x,
+            host_y,
+        )
+        client_replicated_scene_kind = client.get("replicated.scene_kind", "")
+        last = {
+            "host_player": [host_x, host_y],
+            "client_player": [client_x, client_y],
+            "host_client_spawn_distance": host_client_spawn_distance,
+            "host_observed_client_distance": host_observed_client_distance,
+            "client_observed_host_distance": client_observed_host_distance,
+            "client_replicated_scene_kind": client_replicated_scene_kind,
+            "client_replicated_actor_count": parse_int_text(client.get("replicated.actor_count")),
+            "client_replicated_actor_total_count": parse_int_text(client.get("replicated.actor_total_count")),
+            "client_replicated_authority_participant_id": parse_int_text(client.get("replicated.authority_participant_id")),
+        }
+        if (
+            host.get("scene") == "testrun"
+            and client.get("scene") == "testrun"
+            and client_replicated_scene_kind == "Run"
+            and host_client_spawn_distance <= 112.0
+            and host_observed_client_distance <= 32.0
+            and client_observed_host_distance <= 32.0
+        ):
+            return last
+        time.sleep(0.25)
+
+    raise VerifyFailure(f"run entry bootstrap did not converge; last={last}")
+
+
 def verify_scene(scene_name: str) -> dict[str, object]:
     host_seen = wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, scene_name)
     client_seen = wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, scene_name)
+    host_source_staff_visual_state = int(
+        float(host_seen.get("player.staff_visual_state", "0") or "0"))
+    client_source_staff_visual_state = int(
+        float(client_seen.get("player.staff_visual_state", "0") or "0"))
+    host_remote_staff_visual_state = int(
+        float(host_seen.get(f"peer.{CLIENT_ID}.staff_visual_state", "0") or "0"))
+    client_remote_staff_visual_state = int(
+        float(client_seen.get(f"peer.{HOST_ID}.staff_visual_state", "0") or "0"))
+    # Staff attachment +0x84 is native-owned and can contain process-local data
+    # in run scenes. Keep it in the report for diagnosis, but do not require
+    # cross-client equality.
+    host_source_selector = host_seen.get("player.render_selector", "")
+    client_source_selector = client_seen.get("player.render_selector", "")
+    host_remote_selector = host_seen.get(f"peer.{CLIENT_ID}.render_selector", "")
+    client_remote_selector = client_seen.get(f"peer.{HOST_ID}.render_selector", "")
+    if host_remote_selector != client_source_selector:
+        raise VerifyFailure(
+            "host remote render selector does not mirror client source: "
+            f"remote={host_remote_selector!r} source={client_source_selector!r}")
+    if client_remote_selector != host_source_selector:
+        raise VerifyFailure(
+            "client remote render selector does not mirror host source: "
+            f"remote={client_remote_selector!r} source={host_source_selector!r}")
+    client_source_visual_blocks = visual_blocks_by_type(client_seen, "player")
+    host_source_visual_blocks = visual_blocks_by_type(host_seen, "player")
+    host_remote_visual_blocks = visual_blocks_by_type(host_seen, f"peer.{CLIENT_ID}")
+    client_remote_visual_blocks = visual_blocks_by_type(client_seen, f"peer.{HOST_ID}")
+    for type_id, source_block in client_source_visual_blocks.items():
+        remote_block = host_remote_visual_blocks.get(type_id, "")
+        if remote_block != source_block:
+            raise VerifyFailure(
+                "host remote visual-link block does not mirror client source: "
+                f"type=0x{type_id:04X} remote={remote_block!r} source={source_block!r}")
+    for type_id, source_block in host_source_visual_blocks.items():
+        remote_block = client_remote_visual_blocks.get(type_id, "")
+        if remote_block != source_block:
+            raise VerifyFailure(
+                "client remote visual-link block does not mirror host source: "
+                f"type=0x{type_id:04X} remote={remote_block!r} source={source_block!r}")
 
     host_player_before = query(HOST_PIPE)
     base_x = float(host_player_before["player.x"])
@@ -690,17 +938,17 @@ def verify_scene(scene_name: str) -> dict[str, object]:
     client_place_x, client_place_y = snap_to_nav(HOST_PIPE, base_x + 120.0, base_y)
     host_place = place_player(HOST_PIPE, host_place_x, host_place_y, 90.0)
     client_place = place_player(CLIENT_PIPE, client_place_x, client_place_y, 270.0)
-    host_idle_x, host_idle_y, _ = wait_for_local_transform_settled(HOST_PIPE)
-    client_idle_x, client_idle_y, _ = wait_for_local_transform_settled(CLIENT_PIPE)
+    host_idle_x, host_idle_y, host_idle_heading = wait_for_local_transform_settled(HOST_PIPE)
+    client_idle_x, client_idle_y, client_idle_heading = wait_for_local_transform_settled(CLIENT_PIPE)
     client_seen = wait_for_remote_convergence(
         CLIENT_PIPE,
         HOST_ID,
         host_idle_x,
         host_idle_y,
-        90.0,
+        host_idle_heading,
         timeout=12.0,
     )
-    client_idle_x, client_idle_y, _ = wait_for_local_transform_settled(
+    client_idle_x, client_idle_y, client_idle_heading = wait_for_local_transform_settled(
         CLIENT_PIPE,
         stable_seconds=0.75,
     )
@@ -709,7 +957,7 @@ def verify_scene(scene_name: str) -> dict[str, object]:
         CLIENT_ID,
         client_idle_x,
         client_idle_y,
-        270.0,
+        client_idle_heading,
         timeout=12.0,
     )
 
@@ -724,38 +972,38 @@ def verify_scene(scene_name: str) -> dict[str, object]:
 
     host_move = nudge_player(HOST_PIPE, 90.0, 0.0, 135.0)
     time.sleep(0.2)
-    host_x, host_y, _ = wait_for_local_transform_settled(HOST_PIPE, stable_seconds=0.25)
+    host_x, host_y, host_heading = wait_for_local_transform_settled(HOST_PIPE, stable_seconds=0.25)
     client_after_host_move = wait_for_remote_motion(
         CLIENT_PIPE,
         HOST_ID,
         client_observed_host_before[0],
         client_observed_host_before[1],
-        135.0,
+        host_heading,
     )
     client_after_host_settled = wait_for_remote_convergence(
         CLIENT_PIPE,
         HOST_ID,
         host_x,
         host_y,
-        135.0,
+        host_heading,
     )
 
     client_move = nudge_player(CLIENT_PIPE, -70.0, 30.0, 225.0)
     time.sleep(0.2)
-    client_x, client_y, _ = wait_for_local_transform_settled(CLIENT_PIPE, stable_seconds=0.25)
+    client_x, client_y, client_heading = wait_for_local_transform_settled(CLIENT_PIPE, stable_seconds=0.25)
     host_after_client_move = wait_for_remote_motion(
         HOST_PIPE,
         CLIENT_ID,
         host_observed_client_before[0],
         host_observed_client_before[1],
-        225.0,
+        client_heading,
     )
     host_after_client_settled = wait_for_remote_convergence(
         HOST_PIPE,
         CLIENT_ID,
         client_x,
         client_y,
-        225.0,
+        client_heading,
     )
     collision = wait_for_collision_push(scene_name)
 
@@ -763,8 +1011,18 @@ def verify_scene(scene_name: str) -> dict[str, object]:
         "scene": scene_name,
         "host_remote_name": host_seen[f"peer.{CLIENT_ID}.name"],
         "host_remote_nameplate": host_seen[f"peer.{CLIENT_ID}.nameplate"],
+        "host_remote_staff_visual_state": f"0x{host_remote_staff_visual_state:08X}",
+        "client_source_staff_visual_state": f"0x{client_source_staff_visual_state:08X}",
+        "host_remote_render_selector": host_remote_selector,
+        "client_source_render_selector": client_source_selector,
+        "host_remote_visual_link_types": sorted(host_remote_visual_blocks),
         "client_remote_name": client_seen[f"peer.{HOST_ID}.name"],
         "client_remote_nameplate": client_seen[f"peer.{HOST_ID}.nameplate"],
+        "client_remote_staff_visual_state": f"0x{client_remote_staff_visual_state:08X}",
+        "host_source_staff_visual_state": f"0x{host_source_staff_visual_state:08X}",
+        "client_remote_render_selector": client_remote_selector,
+        "host_source_render_selector": host_source_selector,
+        "client_remote_visual_link_types": sorted(client_remote_visual_blocks),
         "host_moved_to": [host_x, host_y],
         "client_observed_host_before": list(client_observed_host_before),
         "client_observed_host_at": [
@@ -801,6 +1059,7 @@ def main() -> int:
 
         result["client_start_blocked"] = assert_client_start_testrun_blocked()
         result["host_run_entry"] = start_host_testrun_and_wait_for_clients()
+        result["run_entry_bootstrap"] = verify_run_entry_bootstrap()
         result["checks"].append(verify_scene("testrun"))
 
         result["ok"] = True

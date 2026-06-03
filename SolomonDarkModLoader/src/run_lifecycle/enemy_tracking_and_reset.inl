@@ -108,6 +108,7 @@ void ForgetEnemyType(uintptr_t enemy_address) {
 
     std::lock_guard<std::mutex> lock(g_state.enemy_type_mutex);
     g_state.enemy_types_by_address.erase(enemy_address);
+    g_state.enemy_spawn_serials_by_address.erase(enemy_address);
 }
 
 void ClearRememberedEnemyTracking() {

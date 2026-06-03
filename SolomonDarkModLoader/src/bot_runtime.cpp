@@ -39,7 +39,14 @@ struct PendingBotCast {
     BotCastKind kind = BotCastKind::Primary;
     std::int32_t secondary_slot = -1;
     std::int32_t skill_id = 0;
+    std::uint32_t cast_sequence = 0;
+    bool remote_input_controlled = false;
     uintptr_t target_actor_address = 0;
+    bool has_origin_transform = false;
+    float origin_position_x = 0.0f;
+    float origin_position_y = 0.0f;
+    bool has_origin_heading = false;
+    float origin_heading = 0.0f;
     bool has_aim_target = false;
     float aim_target_x = 0.0f;
     float aim_target_y = 0.0f;
@@ -47,6 +54,11 @@ struct PendingBotCast {
     float aim_angle = 0.0f;
     std::uint64_t queued_cast_count = 0;
     std::uint64_t queued_at_ms = 0;
+};
+
+struct PendingBotCastInput {
+    std::uint64_t bot_id = 0;
+    BotCastInputState state;
 };
 
 struct PendingBotEntitySync {
@@ -108,6 +120,7 @@ std::uint64_t g_next_movement_intent_revision = 1;
 std::uint64_t g_next_destroy_generation = 1;
 std::uint64_t g_next_skill_choice_generation = 1;
 std::vector<PendingBotCast> g_pending_casts;
+std::vector<PendingBotCastInput> g_bot_cast_inputs;
 std::vector<PendingBotEntitySync> g_pending_entity_syncs;
 std::vector<PendingBotMovementIntent> g_bot_movement_intents;
 std::vector<PendingBotDestroy> g_pending_destroys;

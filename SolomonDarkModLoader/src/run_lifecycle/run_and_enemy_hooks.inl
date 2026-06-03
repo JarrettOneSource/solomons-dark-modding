@@ -34,6 +34,57 @@ void __cdecl HookRunEnded() {
     CompleteRunLifecycleEnd("death", true);
 }
 
+bool ShouldSuppressClientAuthoritativeRunWaveSpawner(std::uint64_t now_ms) {
+    if (!multiplayer::IsLocalTransportClient()) {
+        return false;
+    }
+
+    const auto runtime_state = multiplayer::SnapshotRuntimeState();
+    const auto& snapshot = runtime_state.world_snapshot;
+    if (!snapshot.valid ||
+        snapshot.truncated ||
+        snapshot.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run ||
+        snapshot.actors.empty() ||
+        snapshot.authority_participant_id == 0 ||
+        now_ms < snapshot.received_ms ||
+        now_ms - snapshot.received_ms > 1000) {
+        return false;
+    }
+
+    std::uint32_t authoritative_live_enemies = 0;
+    for (const auto& actor : snapshot.actors) {
+        if (actor.tracked_enemy &&
+            !actor.dead &&
+            std::isfinite(actor.hp) &&
+            std::isfinite(actor.max_hp) &&
+            actor.max_hp > 0.0f &&
+            actor.hp > 0.05f) {
+            authoritative_live_enemies += 1;
+        }
+    }
+
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        return false;
+    }
+
+    std::uint32_t local_live_enemies = 0;
+    for (const auto& actor : actors) {
+        if (actor.valid &&
+            actor.actor_address != 0 &&
+            actor.tracked_enemy &&
+            !actor.dead &&
+            std::isfinite(actor.hp) &&
+            std::isfinite(actor.max_hp) &&
+            actor.max_hp > 0.0f &&
+            actor.hp > 0.05f) {
+            local_live_enemies += 1;
+        }
+    }
+
+    return local_live_enemies >= authoritative_live_enemies;
+}
+
 void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
     const auto original = GetX86HookTrampoline<WaveSpawnerTickFn>(g_state.hooks[kHookWaveSpawnerTick]);
     if (original == nullptr) return;
@@ -59,6 +110,16 @@ void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
         } else {
             Log("WaveSpawner_Tick invoked. self=" + HexString(self_address) + " vtable=unreadable");
         }
+    }
+
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (ShouldSuppressClientAuthoritativeRunWaveSpawner(now_ms)) {
+        static std::uint64_t s_last_authority_suppress_log_ms = 0;
+        if (now_ms - s_last_authority_suppress_log_ms >= 1000) {
+            s_last_authority_suppress_log_ms = now_ms;
+            Log("WaveSpawner_Tick suppressed for host-authoritative client run. self=" + HexString(self_address));
+        }
+        return;
     }
 
     original(self, unused_edx);

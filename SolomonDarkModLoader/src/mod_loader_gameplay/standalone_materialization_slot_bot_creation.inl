@@ -129,6 +129,99 @@ bool SeedWizardBotNativeCollisionStateFromSourceActor(
     return true;
 }
 
+bool SeedWizardBotNativeSpellDispatchStateFromSourceActor(
+    uintptr_t actor_address,
+    uintptr_t native_visual_actor_address,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (actor_address == 0 || native_visual_actor_address == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Gameplay-slot spell dispatch seeding requires a live bot actor and native visual source.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::string failed_seed_field;
+    auto copy_u32 = [&](const char* label, std::size_t offset) -> bool {
+        std::uint32_t value = 0;
+        if (!memory.TryReadField(native_visual_actor_address, offset, &value)) {
+            failed_seed_field =
+                std::string(label) + " read failed at +" + HexString(offset);
+            return false;
+        }
+        if (!memory.TryWriteField(actor_address, offset, value)) {
+            failed_seed_field =
+                std::string(label) + " write failed at +" + HexString(offset) +
+                " value=" + HexString(value);
+            return false;
+        }
+        return true;
+    };
+    auto copy_float = [&](const char* label, std::size_t offset) -> bool {
+        float value = 0.0f;
+        if (!memory.TryReadField(native_visual_actor_address, offset, &value)) {
+            failed_seed_field =
+                std::string(label) + " read failed at +" + HexString(offset);
+            return false;
+        }
+        if (!std::isfinite(value)) {
+            failed_seed_field =
+                std::string(label) + " non-finite at +" + HexString(offset) +
+                " value=" + std::to_string(value);
+            return false;
+        }
+        if (!memory.TryWriteField(actor_address, offset, value)) {
+            failed_seed_field =
+                std::string(label) + " write failed at +" + HexString(offset) +
+                " value=" + std::to_string(value);
+            return false;
+        }
+        return true;
+    };
+
+    if (!copy_u32("startup_counter", kActorStartupCounterOffset) ||
+        !copy_float("spell_config_28c", kActorSpellConfig28cOffset) ||
+        !copy_float("spell_config_290", kActorSpellConfig290Offset) ||
+        !copy_float("spell_config_294", kActorSpellConfig294Offset) ||
+        !copy_u32("spell_config_298", kActorSpellConfig298Offset) ||
+        !copy_float("spell_config_29c", kActorSpellConfig29cOffset) ||
+        !copy_float("spell_config_2a0", kActorSpellConfig2a0Offset) ||
+        !copy_float("spell_config_2a4", kActorSpellConfig2a4Offset) ||
+        !copy_u32("spell_config_2c8", kActorSpellConfig2c8Offset) ||
+        !copy_float("spell_config_2cc", kActorSpellConfig2ccOffset) ||
+        !copy_float("spell_config_2d0", kActorSpellConfig2d0Offset) ||
+        !copy_float("spell_config_2d4", kActorSpellConfig2d4Offset) ||
+        !copy_float("spell_config_2d8", kActorSpellConfig2d8Offset)) {
+        if (error_message != nullptr) {
+            *error_message = failed_seed_field.empty()
+                ? "Failed to seed wizard bot native spell dispatch fields."
+                : "Failed to seed wizard bot native spell dispatch fields: " + failed_seed_field + ".";
+        }
+        return false;
+    }
+
+    std::uint32_t startup_counter = 0;
+    std::uint32_t config_298 = 0;
+    std::uint32_t config_2c8 = 0;
+    float config_2d8 = 0.0f;
+    (void)memory.TryReadField(actor_address, kActorStartupCounterOffset, &startup_counter);
+    (void)memory.TryReadField(actor_address, kActorSpellConfig298Offset, &config_298);
+    (void)memory.TryReadField(actor_address, kActorSpellConfig2c8Offset, &config_2c8);
+    (void)memory.TryReadField(actor_address, kActorSpellConfig2d8Offset, &config_2d8);
+    Log(
+        "[bots] wizard bot native spell dispatch seeded. actor=" + HexString(actor_address) +
+        " source=" + HexString(native_visual_actor_address) +
+        " startup=" + HexString(startup_counter) +
+        " config298=" + HexString(config_298) +
+        " config2c8=" + HexString(config_2c8) +
+        " config2d8=" + std::to_string(config_2d8));
+    return true;
+}
+
 bool SeedGameplaySlotBotRenderStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t world_address,
@@ -225,6 +318,14 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
         return false;
     }
 
+    if (!AttachGameplaySlotBotStaffItem(actor_address, &stage_error)) {
+        cleanup_source();
+        if (error_message != nullptr) {
+            *error_message = stage_error;
+        }
+        return false;
+    }
+
     if constexpr (kKeepSourceActorAliveDiagnostic) {
         if (source_actor_address != 0) {
             (void)memory.TryWriteField(source_actor_address, kActorPositionXOffset, 100000.0f);
@@ -238,39 +339,6 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
     if constexpr (kEnableWizardBotHotPathDiagnostics) {
         Log(
             "[bots] visual stage=slot_actor_helper_lanes_seeded bot={" +
-            BuildActorVisualDebugSummary(actor_address) + "}");
-    }
-    return true;
-}
-
-bool AttachGameplaySlotBotStaffItem(
-    uintptr_t actor_address,
-    std::string* error_message) {
-    uintptr_t staff_item_address = 0;
-    std::string stage_error;
-    if (!CreateGameplaySlotStaffItemObject(&staff_item_address, &stage_error) ||
-        !SetEquipVisualLaneObject(
-            actor_address,
-            kActorEquipRuntimeVisualLinkAttachmentOffset,
-            staff_item_address,
-            "attachment",
-            &stage_error)) {
-        if (staff_item_address != 0) {
-            DWORD destroy_exception_code = 0;
-            (void)CallScalarDeletingDestructorSafe(
-                staff_item_address,
-                1,
-                &destroy_exception_code);
-        }
-        if (error_message != nullptr) {
-            *error_message = stage_error;
-        }
-        return false;
-    }
-
-    if constexpr (kEnableWizardBotHotPathDiagnostics) {
-        Log(
-            "[bots] visual stage=slot_actor_staff_attached bot={" +
             BuildActorVisualDebugSummary(actor_address) + "}");
     }
     return true;

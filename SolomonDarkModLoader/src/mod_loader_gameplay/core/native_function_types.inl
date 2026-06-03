@@ -68,6 +68,7 @@ using ActorBuildRenderDescriptorFromSourceFn = void(__thiscall*)(void* self);
 using ScalarDeletingDestructorFn = void(__thiscall*)(void* self, int flags);
 using SpawnRewardGoldFn = void(__thiscall*)(void* self, std::uint32_t x_bits, std::uint32_t y_bits, int amount, int lifetime);
 using GameFreeFn = void(__cdecl*)(void* memory);
+using NativeRngInitializeFn = void(__thiscall*)(void* self, std::uint32_t seed);
 using GameplayHudRenderDispatchFn = void(__thiscall*)(void* self, int render_case);
 
 struct NativeGameString {

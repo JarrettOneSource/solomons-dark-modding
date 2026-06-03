@@ -33,12 +33,17 @@ finished peer networking layer.
   packet families below describe the target co-op protocol, not what the
   current header fully implements.
 - `multiplayer_local_transport.cpp` is the first replication slice: two local
-  processes exchange `StatePacket` movement/heading snapshots over UDP and
-  materialize the peer as `RemoteParticipant + Native`. Remote player packets
-  are kept in a short transform history; gameplay samples that history about
-  120 ms in the past and applies interpolated position/heading on the actor
-  tick. The gameplay sync queue is only for materialization/rematerialization,
-  not continuous pose updates. The local host also sends passive
+  processes exchange `StatePacket` movement/heading/vital snapshots over UDP
+  and materialize the peer as `RemoteParticipant + Native`. Remote player
+  packets are kept in a short transform history; gameplay samples that history
+  about 120 ms in the past and applies interpolated position/heading on the
+  actor tick. HP/MP travel as native-float progression values on the same
+  packet, are written into the materialized remote actor's progression runtime
+  before death detection, and HP-zero uses the existing wizard corpse path so
+  dead remote players stop moving and ignore later owner transform packets until
+  a positive HP packet arrives. The gameplay sync queue is only for
+  materialization/rematerialization, not continuous pose updates. The local host
+  also sends passive
   `WorldSnapshot` packets for non-player shared-hub scene actors and run-world
   tracked enemies. Clients keep a short world-snapshot history, sample it about
   150 ms in the past, and expose the latest replicated snapshot through Lua for
@@ -62,8 +67,12 @@ finished peer networking layer.
   transform/heading/drive snapshot, plus live HP/max-HP for matched tracked
   enemies. The run enemy presentation probe confirms the current wave enemy
   family does not need the hub-style full drive-word serializer: the wider
-  drive word stays zero, the existing drive byte converges, and HP-zero dead
-  state converges without writing the native death-handled byte. Run enemy
+  drive word stays zero and the existing drive byte converges. Run enemy
+  snapshots now also carry the validated walk-cycle floats at
+  `+0x220/+0x224` so matched client enemy actors use the host's
+  walk-cycle phase instead of advancing a local-only phase. The native
+  death-handled byte remains a separate unpromoted field because the current
+  direct HP-zero probe does not prove it should be copied. Run enemy
   snapshots prefer a host lifecycle spawn serial captured by
   the native enemy-spawn hook and allocate a stable host-local supplemental ID for
   tracked run actors that do not expose that serial; clients bind their local
@@ -74,11 +83,29 @@ finished peer networking layer.
   factory-backed families are unregistered from the client world so the hub NPC
   set converges to the host snapshot, and replicated hub NPCs created by the
   client are unregistered before a native scene switch so hub-to-run teardown
-  does not leave loader-created actors in the outgoing world. Host-authoritative
+  does not leave loader-created actors in the outgoing world. Remote participant
+  wizard actors are also dematerialized before the native scene switch while the
+  outgoing world is still stable, then rematerialized as fresh participant
+  actors after scene churn settles. Host-authoritative
   run entry is driven by the host's `StatePacket` scene intent: connected
   clients reject direct `sd.hub.start_testrun` calls and block direct arena
   `switch_region` attempts, then queue their local hub-to-run transition when
-  the configured host reports `in_run`. Extra run enemies
+  the configured host reports `in_run`. The host stamps the run with a
+  host-authored run generation seed, sends it as `run_nonce`, and both host and
+  client call the stock native RNG initializer (`0x00401120`) on the RNG state
+  referenced by the native global (`0x00818B08`) inside the
+  `GameplaySwitchRegion` hook before stock arena generation runs. The seed
+  aligns the static-generation shape set, but host snapshots still explicitly
+  carry the recovered run-static prop families (`0x1391`, `0x1392`) so trees,
+  tombstones, and their movement blockers converge to the host instead of
+  depending on global-RNG lockstep.
+  `tools/verify_run_static_layout_sync.py` compares the resulting movement
+  circle/shape/static-actor digests across the two local clients. The host also
+  sends an empty Run
+  `WorldSnapshot` before wave enemies exist so clients clear any stale hub
+  world snapshot immediately; clients use that authority marker plus the
+  host's current transform to apply a one-shot run-entry formation placement
+  beside the host before normal movement replication resumes. Extra run enemies
   are still parked because the run enemy pool is stock-spawner owned. Run loot
   drops are not global-RNG lockstep state: they are host-owned lifecycle
   entities with reliable spawn/despawn, pickup-request, and pickup-confirm/deny
@@ -196,6 +223,10 @@ Sampling happens on the stock game thread after native updates — no extra sim 
   participant visibility, host-authoritative run entry, connected-client
   run-start blocking, idle movement/heading convergence, player/player
   collision push, and remote nameplate resolution.
+  `tools/verify_player_health_death_sync.py` is the focused live test for
+  host-to-client and client-to-host player HP/MP replication, HP-zero death
+  presentation, corpse inertness, and revive/resumed transform playback in a
+  shared run.
 - `ITransport` abstraction + Steam `ISteamNetworkingSockets` impl
 - Steam lobby → transport handoff
 - `hello` + `manifest` handshake + `join/bootstrap` (chunked full-state)

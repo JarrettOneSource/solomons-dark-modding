@@ -563,6 +563,8 @@ void ShutdownGameplayKeyboardInjection() {
     g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_start_waves_requests.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_enable_combat_prelude_requests.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_run_generation_seed.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_run_generation_seed_valid.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.hub_start_testrun_cooldown_until_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.start_waves_retry_not_before_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.store(0, std::memory_order_release);

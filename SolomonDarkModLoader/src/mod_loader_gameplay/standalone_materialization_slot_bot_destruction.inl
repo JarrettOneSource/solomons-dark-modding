@@ -205,12 +205,15 @@ bool DestroyLoaderOwnedWizardActor(
             build_dtor_precrash_dump());
 
         DWORD exception_code = 0;
-        if (!CallActorWorldUnregisterSafe(
-                unregister_address,
-                world_address,
-                actor_address,
-                1,
-                &exception_code)) {
+        ++g_loader_owned_actor_destroy_unregister_depth;
+        const bool unregistered = CallActorWorldUnregisterSafe(
+            unregister_address,
+            world_address,
+            actor_address,
+            1,
+            &exception_code);
+        --g_loader_owned_actor_destroy_unregister_depth;
+        if (!unregistered) {
             Log("[bots] destroy_loader_owned_actor unregister_failed " + build_destroy_summary("post_unregister_exception"));
             if (error_message != nullptr) {
                 *error_message = "ActorWorld_Unregister failed with 0x" + HexString(exception_code) + ".";

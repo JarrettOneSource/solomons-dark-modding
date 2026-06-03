@@ -32,6 +32,13 @@ bool ExecuteParticipantEntitySyncNow(
         }
         return false;
     }
+    if (!ShouldParticipantSceneIntentMaterializeInScene(request.scene_intent, scene_context)) {
+        Log(
+            "[bots] sync skipped scene mismatch. bot_id=" + std::to_string(request.bot_id) +
+            " element_id=" + std::to_string(request.character_profile.element_id) +
+            " scene=" + DescribeSceneKind(scene_context));
+        return true;
+    }
 
     if (TryUpdateParticipantEntity(gameplay_address, request, error_message)) {
         Log(

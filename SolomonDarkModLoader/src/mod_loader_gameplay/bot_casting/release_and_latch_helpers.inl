@@ -9,12 +9,16 @@ void FinishBotCastNativeLifecycle(
     auto& memory = *context.memory;
     const auto actor_address = context.actor_address;
     const auto cleanup_address = context.cleanup_address;
+    const bool native_remote_participant = IsNativeRemoteParticipantBinding(binding);
 
     const auto release_object_state =
         known_release_object_state != nullptr
             ? *known_release_object_state
             : ReadBotNativeActiveSpellObjectState(context, false);
     auto apply_native_action_rearm = [&]() {
+        if (native_remote_participant) {
+            return false;
+        }
         if (!state.saw_activity || state.selection_state_pointer == 0) {
             return false;
         }
@@ -152,6 +156,78 @@ void FinishBotCastNativeLifecycle(
             state.progression_spell_id_before);
     }
 
+    uintptr_t remote_visual_staging_before = 0;
+    bool remote_visual_staging_readable = false;
+    bool remote_visual_staging_clear_requested = false;
+    bool remote_visual_staging_clear_ok = true;
+    float remote_overlay_alpha_before = 0.0f;
+    float remote_overlay_phase_before = 0.0f;
+    bool remote_overlay_alpha_readable = false;
+    bool remote_overlay_phase_readable = false;
+    bool remote_overlay_alpha_clear_requested = false;
+    bool remote_overlay_phase_clear_requested = false;
+    bool remote_overlay_alpha_clear_ok = true;
+    bool remote_overlay_phase_clear_ok = true;
+    if (native_remote_participant) {
+        // The continuous-primary active field aliases the hub staff/orb staging
+        // pointer at +0x264. Leave it alone while a cast is active, but settle it
+        // when the native remote cast lifecycle finishes so idle rendering returns
+        // to the target-owned equip-lane staff only.
+        remote_visual_staging_readable =
+            memory.TryReadField(
+                actor_address,
+                kActorContinuousPrimaryActiveOffset,
+                &remote_visual_staging_before);
+        remote_visual_staging_clear_requested =
+            remote_visual_staging_readable && remote_visual_staging_before != 0;
+        if (remote_visual_staging_clear_requested) {
+            remote_visual_staging_clear_ok =
+                memory.TryWriteField<uintptr_t>(
+                    actor_address,
+                    kActorContinuousPrimaryActiveOffset,
+                    0);
+        }
+        // Remote casts run through stock spell handlers without the local player
+        // input lifecycle that normally drains the render overlay phase/cache.
+        // Leaving +0x248/+0x268 nonzero was proven to create persistent oversized
+        // staff/orb helper draws after held casts. These fields are native-owned
+        // diagnostics during playback, so clear only at remote cast completion.
+        if (kActorRenderDriveOverlayAlphaOffset != 0) {
+            remote_overlay_alpha_readable =
+                TryReadFiniteFloatField(
+                    actor_address,
+                    kActorRenderDriveOverlayAlphaOffset,
+                    &remote_overlay_alpha_before);
+            remote_overlay_alpha_clear_requested =
+                remote_overlay_alpha_readable &&
+                std::fabs(remote_overlay_alpha_before) > 0.001f;
+            if (remote_overlay_alpha_clear_requested) {
+                remote_overlay_alpha_clear_ok =
+                    memory.TryWriteField<float>(
+                        actor_address,
+                        kActorRenderDriveOverlayAlphaOffset,
+                        0.0f);
+            }
+        }
+        if (kActorRenderDriveMoveBlendOffset != 0) {
+            remote_overlay_phase_readable =
+                TryReadFiniteFloatField(
+                    actor_address,
+                    kActorRenderDriveMoveBlendOffset,
+                    &remote_overlay_phase_before);
+            remote_overlay_phase_clear_requested =
+                remote_overlay_phase_readable &&
+                std::fabs(remote_overlay_phase_before) > 0.001f;
+            if (remote_overlay_phase_clear_requested) {
+                remote_overlay_phase_clear_ok =
+                    memory.TryWriteField<float>(
+                        actor_address,
+                        kActorRenderDriveMoveBlendOffset,
+                        0.0f);
+            }
+        }
+    }
+
     std::uint8_t group_after = kBotCastActorActiveCastGroupSentinel;
     const bool group_after_readable =
         memory.TryReadField(actor_address, kActorActiveCastGroupByteOffset, &group_after);
@@ -195,6 +271,11 @@ void FinishBotCastNativeLifecycle(
         settled_heading_readable,
         settled_heading,
         clear_facing_target);
+    if (state.remote_input_controlled) {
+        (void)multiplayer::ClearBotCastInput(
+            binding->bot_id,
+            state.remote_input_cast_sequence);
+    }
     const auto group_before_text =
         actor_handle_before_readable ? HexString(actor_group_before) : std::string("unreadable");
     const auto slot_before_text =
@@ -205,9 +286,24 @@ void FinishBotCastNativeLifecycle(
         std::string("[bots] cast complete (") + exit_label + "). bot_id=" +
         std::to_string(binding->bot_id) +
         " skill_id=" + std::to_string(state.skill_id) +
+        " remote_input_controlled=" +
+            (state.remote_input_controlled ? std::string("1") : std::string("0")) +
+        " remote_cast_sequence=" + std::to_string(state.remote_input_cast_sequence) +
         " ticks=" + std::to_string(state.ticks_waiting) +
         " post_release_ticks=" + std::to_string(state.bounded_post_release_ticks_waiting) +
         " saw_latch=" + (state.saw_latch ? std::string("1") : std::string("0")) +
+        " remote_projectile_baseline=" +
+            (state.remote_per_cast_projectile_baseline_valid ? std::string("1") : std::string("0")) +
+        " remote_projectile_expected_type=" +
+            HexString(static_cast<uintptr_t>(state.remote_per_cast_projectile_expected_type)) +
+        " remote_projectile_before=" +
+            std::to_string(state.remote_per_cast_projectile_count_before) +
+        " remote_projectile_observed=" +
+            (state.remote_per_cast_projectile_observed ? std::string("1") : std::string("0")) +
+        " remote_projectile_observed_actor=" +
+            HexString(state.remote_per_cast_projectile_observed_actor) +
+        " remote_projectile_observed_ticks=" +
+            std::to_string(state.remote_per_cast_projectile_observed_ticks_waiting) +
         " group_before=" + group_before_text +
         " slot_before=" + slot_before_text +
         " group_after=" + group_after_text +
@@ -223,6 +319,28 @@ void FinishBotCastNativeLifecycle(
         " cleanup_owner_context={" + cleanup_owner_context + "}" +
         " native_action_rearm=" + (native_action_rearm_write ? std::string("1") : std::string("0")) +
         " native_action_rearm_ticks=" + std::to_string(kBotNativeActionRearmTicks) +
+        " remote_visual_staging_before=" +
+            (remote_visual_staging_readable ? HexString(remote_visual_staging_before) : std::string("unreadable")) +
+        " remote_visual_staging_clear=" +
+            (remote_visual_staging_clear_requested ? std::string("1") : std::string("0")) +
+        " remote_visual_staging_clear_ok=" +
+            (remote_visual_staging_clear_ok ? std::string("1") : std::string("0")) +
+        " remote_overlay_alpha_before=" +
+            (remote_overlay_alpha_readable
+                 ? std::to_string(remote_overlay_alpha_before)
+                 : std::string("unreadable")) +
+        " remote_overlay_alpha_clear=" +
+            (remote_overlay_alpha_clear_requested ? std::string("1") : std::string("0")) +
+        " remote_overlay_alpha_clear_ok=" +
+            (remote_overlay_alpha_clear_ok ? std::string("1") : std::string("0")) +
+        " remote_overlay_phase_before=" +
+            (remote_overlay_phase_readable
+                 ? std::to_string(remote_overlay_phase_before)
+                 : std::string("unreadable")) +
+        " remote_overlay_phase_clear=" +
+            (remote_overlay_phase_clear_requested ? std::string("1") : std::string("0")) +
+        " remote_overlay_phase_clear_ok=" +
+            (remote_overlay_phase_clear_ok ? std::string("1") : std::string("0")) +
         " handle_source=" +
             (release_object_state.handle_from_selection_state ? std::string("selection") : std::string("actor")) +
         " selection_state=" + HexString(release_object_state.selection_state) +

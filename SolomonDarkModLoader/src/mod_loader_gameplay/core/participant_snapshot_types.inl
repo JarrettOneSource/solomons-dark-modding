@@ -84,6 +84,8 @@ struct ParticipantGameplaySnapshot {
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
+    float render_drive_effect_timer = 0.0f;
+    float render_drive_effect_progress = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;

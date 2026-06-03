@@ -1,6 +1,7 @@
 void PumpQueuedGameplayActions();
 ParticipantEntityBinding* FindParticipantEntity(std::uint64_t participant_id);
 ParticipantEntityBinding* FindParticipantEntityForGameplaySlot(int gameplay_slot);
+bool TryRebindActorToOwnerWorld(uintptr_t actor_address, DWORD* exception_code);
 void StopWizardBotActorMotion(uintptr_t actor_address);
 void StopDeadWizardBotActorMotion(uintptr_t actor_address);
 bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id);
@@ -120,6 +121,10 @@ bool SeedWizardBotNativeCollisionStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t native_visual_actor_address,
     std::string* error_message);
+bool SeedWizardBotNativeSpellDispatchStateFromSourceActor(
+    uintptr_t actor_address,
+    uintptr_t native_visual_actor_address,
+    std::string* error_message);
 bool SeedGameplaySlotBotRenderStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t world_address,
@@ -128,9 +133,6 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
     float x,
     float y,
     float heading,
-    std::string* error_message);
-bool AttachGameplaySlotBotStaffItem(
-    uintptr_t actor_address,
     std::string* error_message);
 bool PrimeGameplaySlotBotActor(
     uintptr_t gameplay_address,

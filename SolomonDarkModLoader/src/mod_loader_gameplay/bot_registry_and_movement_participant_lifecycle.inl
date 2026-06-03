@@ -263,22 +263,6 @@ void DematerializeParticipantEntityNow(std::uint64_t bot_id, bool forget_binding
                 destroy_error = "Gameplay slot cleanup could not resolve a gameplay scene.";
             }
         } else {
-            if (IsStandaloneWizardKind(binding->kind) &&
-                (binding->standalone_progression_wrapper_address != 0 ||
-                 binding->standalone_progression_inner_address != 0 ||
-                 binding->standalone_equip_wrapper_address != 0 ||
-                 binding->standalone_equip_inner_address != 0)) {
-                ReleaseStandaloneWizardVisualResources(
-                    binding->actor_address,
-                    binding->standalone_progression_wrapper_address,
-                    binding->standalone_progression_inner_address,
-                    binding->standalone_equip_wrapper_address,
-                    binding->standalone_equip_inner_address);
-                binding->standalone_progression_wrapper_address = 0;
-                binding->standalone_progression_inner_address = 0;
-                binding->standalone_equip_wrapper_address = 0;
-                binding->standalone_equip_inner_address = 0;
-            }
             destroyed = DestroyLoaderOwnedWizardActor(
                 binding->actor_address,
                 binding->materialized_world_address,
@@ -323,5 +307,28 @@ void DematerializeAllMaterializedWizardBotsForSceneSwitch(std::string_view reaso
 
     for (const auto bot_id : bot_ids) {
         DematerializeParticipantEntityNow(bot_id, false, reason);
+    }
+}
+
+void AbandonMaterializedWizardBotsForSceneSwitch(std::string_view reason) {
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    for (auto& binding : g_participant_entities) {
+        if (!IsWizardParticipantKind(binding.kind) || binding.actor_address == 0) {
+            continue;
+        }
+
+        const auto bot_id = binding.bot_id;
+        const auto actor_address = binding.actor_address;
+        const auto gameplay_slot = binding.gameplay_slot;
+        const auto kind = binding.kind;
+
+        ResetParticipantEntityMaterializationState(&binding);
+        PublishParticipantGameplaySnapshot(binding);
+        Log(
+            "[bots] abandoned bot entity for scene switch. bot_id=" + std::to_string(bot_id) +
+            " slot=" + std::to_string(gameplay_slot) +
+            " kind=" + std::to_string(static_cast<int>(kind)) +
+            " actor=" + HexString(actor_address) +
+            " reason=" + std::string(reason));
     }
 }

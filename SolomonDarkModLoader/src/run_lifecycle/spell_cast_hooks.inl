@@ -1,5 +1,17 @@
+bool IsLocalPlayerActorForRunLifecycle(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    const auto local_actor_address = ResolveLocalPlayerActorForRunLifecycle();
+    return local_actor_address != 0 && local_actor_address == actor_address;
+}
+
 void DispatchSpellCastForSelf(uintptr_t self_address, int spell_id) {
     if (self_address == 0 || spell_id <= 0 || !IsRunActive()) {
+        return;
+    }
+    if (!IsLocalPlayerActorForRunLifecycle(self_address)) {
         return;
     }
 
@@ -18,7 +30,6 @@ void DispatchSpellCastForSelf(uintptr_t self_address, int spell_id) {
     if (last_consumed_click_serial == click_serial) {
         return;
     }
-    g_state.last_consumed_spell_click_serial.store(click_serial, std::memory_order_release);
 
     float x = 0.0f;
     float y = 0.0f;
@@ -32,12 +43,43 @@ void DispatchSpellCastForSelf(uintptr_t self_address, int spell_id) {
             " actor=" + HexString(self_address));
         return;
     }
+    g_state.last_consumed_spell_click_serial.store(click_serial, std::memory_order_release);
+
+    uintptr_t target_actor_address = 0;
+    (void)ProcessMemory::Instance().TryReadField(
+        self_address,
+        kActorCurrentTargetActorOffset,
+        &target_actor_address);
+    float aim_target_x = 0.0f;
+    float aim_target_y = 0.0f;
+    const bool has_aim_target =
+        TryReadFloatField(self_address, kActorAimTargetXOffset, &aim_target_x) &&
+        TryReadFloatField(self_address, kActorAimTargetYOffset, &aim_target_y) &&
+        std::isfinite(aim_target_x) &&
+        std::isfinite(aim_target_y);
 
     Log(
         "spell.cast hook invoked. spell_id=" + std::to_string(spell_id) +
         " pos=(" + std::to_string(x) + "," + std::to_string(y) + ")" +
         " dir=(" + std::to_string(direction_x) + "," + std::to_string(direction_y) + ")" +
+        " aim_target=" +
+            (has_aim_target
+                ? (std::to_string(aim_target_x) + "," + std::to_string(aim_target_y))
+                : std::string("<none>")) +
+        " target=" + HexString(target_actor_address) +
         " run_active=" + std::to_string(IsRunActive() ? 1 : 0));
+    multiplayer::QueueLocalSpellCastEvent(
+        spell_id,
+        x,
+        y,
+        direction_x,
+        direction_y,
+        0,
+        target_actor_address,
+        0,
+        has_aim_target,
+        aim_target_x,
+        aim_target_y);
     DispatchLuaSpellCast(spell_id, x, y, direction_x, direction_y);
 }
 

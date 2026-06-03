@@ -78,6 +78,8 @@ bool TryGetParticipantGameplayState(
     state->render_drive_stride = it->render_drive_stride;
     state->render_advance_rate = it->render_advance_rate;
     state->render_advance_phase = it->render_advance_phase;
+    state->render_drive_effect_timer = it->render_drive_effect_timer;
+    state->render_drive_effect_progress = it->render_drive_effect_progress;
     state->render_drive_overlay_alpha = it->render_drive_overlay_alpha;
     state->render_drive_move_blend = it->render_drive_move_blend;
     state->gameplay_attach_applied = it->gameplay_attach_applied;
@@ -228,6 +230,7 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     (void)memory.TryReadField(actor_address, kActorHubVisualSourceKindOffset, &state->hub_visual_source_kind);
     (void)memory.TryReadField(actor_address, kActorRenderDriveFlagsOffset, &state->render_drive_flags);
     (void)memory.TryReadField(actor_address, kActorAnimationDriveStateByteOffset, &state->anim_drive_state);
+    (void)memory.TryReadField(actor_address, kActorAnimationDriveStateByteOffset, &state->anim_drive_state_word);
     (void)memory.TryReadField(actor_address, kActorRenderVariantPrimaryOffset, &state->render_variant_primary);
     (void)memory.TryReadField(actor_address, kActorRenderVariantSecondaryOffset, &state->render_variant_secondary);
     (void)memory.TryReadField(actor_address, kActorRenderWeaponTypeOffset, &state->render_weapon_type);
@@ -238,6 +241,8 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveStrideScaleOffset, &state->render_drive_stride);
     (void)TryReadFiniteFloatField(actor_address, kActorRenderAdvanceRateOffset, &state->render_advance_rate);
     (void)TryReadFiniteFloatField(actor_address, kActorRenderAdvancePhaseOffset, &state->render_advance_phase);
+    (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveEffectTimerOffset, &state->render_drive_effect_timer);
+    (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveEffectProgressOffset, &state->render_drive_effect_progress);
     (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveOverlayAlphaOffset, &state->render_drive_overlay_alpha);
     (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveMoveBlendOffset, &state->render_drive_move_blend);
     if (resolved_gameplay_address) {

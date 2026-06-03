@@ -67,6 +67,8 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint32_t> pending_hub_start_testrun_requests{0};
     std::atomic<std::uint32_t> pending_start_waves_requests{0};
     std::atomic<std::uint32_t> pending_enable_combat_prelude_requests{0};
+    std::atomic<std::uint32_t> pending_run_generation_seed{0};
+    std::atomic<std::uint8_t> pending_run_generation_seed_valid{0};
     std::atomic<std::uint64_t> hub_start_testrun_cooldown_until_ms{0};
     std::atomic<std::uint64_t> start_waves_retry_not_before_ms{0};
     std::atomic<std::uint64_t> wizard_bot_sync_not_before_ms{0};
@@ -80,3 +82,4 @@ struct GameplayKeyboardInjectionState {
 } g_gameplay_keyboard_injection;
 
 thread_local std::uint32_t g_multiplayer_client_authorized_hub_run_switch_depth = 0;
+thread_local std::uint32_t g_loader_owned_actor_destroy_unregister_depth = 0;

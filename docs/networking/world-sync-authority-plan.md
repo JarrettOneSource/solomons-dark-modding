@@ -375,9 +375,28 @@ wave enemy family (`0x03E9` / object type `1001`) showed:
 - host/client matched run enemies had zero drive-byte mismatches
 - the wider `+0x160` drive word stays zero on both sides, so the hub-style
   full drive-word serializer is not justified for this run enemy family
+- visible run enemy walk timing still depends on the native walk-cycle floats
+  at `+0x220/+0x224`, so the world snapshot carries those two fields behind
+  `WorldActorPresentationFlagLocomotionFloats`
 - HP-zero death state converged through the existing HP/dead snapshot path
 - the native death-handled byte stayed zero in this forced-HP probe, so there is
   no validated death-handled byte serializer yet
+
+`tools/verify_player_health_death_sync.py` is the focused player vital/death
+sync verifier. It runs a host/client pair in `testrun`, writes local native
+progression HP/MP on each owner, and verifies the opposite process receives and
+applies those values to the materialized remote player actor. The current
+contract is:
+
+- player `StatePacket` vitals are native-float HP/MP values, not rounded
+  integer summaries
+- remote player vitals are written before the actor tick classifies the remote
+  participant as alive or dead
+- HP-zero remote players enter the existing wizard corpse path, stop accepting
+  owner transform playback, and clear hostile targeting through the same dead
+  wizard cleanup path
+- a later positive-HP packet revives the remote actor for replication purposes
+  and normal transform playback resumes
 
 When a complete host snapshot has more tracked enemies than the client, the
 client zeroes the stock wave spawner's spawn-delay and long-delay countdowns so
@@ -502,14 +521,15 @@ Current verified gates:
   - after host-side HP mutation, the lifecycle proof matched all `14` expected
     live snapshot actors, had no client-only extras, and reported zero HP delta
 - `python3 tools/probe_run_enemy_presentation_sync.py --samples 12 --interval
-  0.2`
+  0.2 --skip-death`
   - latest persisted result is `runtime/run_enemy_presentation_sync.json`
   - verified matched run enemy drive bytes converge with zero mismatches
   - verified the current run enemy drive word stays zero and should not be
     promoted to a generic serializer
-  - verified HP-zero death state reaches the client with no local dead-state or
-    HP mismatch
-  - observed no live proof that the native death-handled byte should be copied
+  - verified host-authored run enemy walk-cycle floats are present and applied
+    to matched client enemy actors within tolerance
+  - death-state probing remains separate because direct HP-zero mutation does
+    not reliably exercise the native death animation path
     over the network
 - `python3 tools/probe_run_reward_sync.py --attempts 3`
   - latest persisted result is `runtime/run_reward_sync_probe.json`

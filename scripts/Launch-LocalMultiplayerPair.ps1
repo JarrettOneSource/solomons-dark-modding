@@ -1,5 +1,7 @@
 param(
     [string]$Preset = "map_create_fire_mind_hub",
+    [string]$HostPreset = "",
+    [string]$ClientPreset = "",
     [UInt16]$HostPort = 47770,
     [UInt16]$ClientPort = 47771,
     [string]$RemoteHost = "127.0.0.1",
@@ -9,7 +11,10 @@ param(
     [string]$ClientName = "Client Player",
     [switch]$DisableMultiplayerTransport,
     [switch]$UseSandboxPresetFlow,
-    [switch]$NoKill
+    [switch]$TemporaryHostProfile,
+    [switch]$NoTileWindows,
+    [switch]$NoKill,
+    [switch]$AllowFocusSteal
 )
 
 Set-StrictMode -Version 3.0
@@ -42,8 +47,22 @@ public static class SolomonDarkWindowActivator {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll", EntryPoint="GetWindowLongW")] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll")] public static extern IntPtr GetMenu(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool AdjustWindowRectEx(ref RECT lpRect, int dwStyle, bool bMenu, int dwExStyle);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
 }
 "@
+
+Add-Type -AssemblyName System.Windows.Forms
 
 function ConvertTo-ProcessArgument {
     param([string]$Value)
@@ -82,6 +101,58 @@ function ConvertTo-ProcessArgument {
     return $builder.ToString()
 }
 
+function ConvertFrom-FirstJsonObject {
+    param([string]$Text)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return $null
+    }
+
+    $start = $Text.IndexOf('{')
+    if ($start -lt 0) {
+        return $null
+    }
+
+    $depth = 0
+    $inString = $false
+    $escaped = $false
+    for ($index = $start; $index -lt $Text.Length; $index += 1) {
+        $character = $Text[$index]
+        if ($inString) {
+            if ($escaped) {
+                $escaped = $false
+            } elseif ($character -eq '\') {
+                $escaped = $true
+            } elseif ($character -eq '"') {
+                $inString = $false
+            }
+            continue
+        }
+
+        if ($character -eq '"') {
+            $inString = $true
+            continue
+        }
+        if ($character -eq '{') {
+            $depth += 1
+            continue
+        }
+        if ($character -eq '}') {
+            $depth -= 1
+            if ($depth -eq 0) {
+                $candidate = $Text.Substring($start, ($index - $start) + 1)
+                try {
+                    return $candidate | ConvertFrom-Json -ErrorAction Stop
+                } catch {
+                    return $null
+                }
+            }
+        }
+    }
+
+    return $null
+}
+
 function Invoke-LauncherWithEnvironment {
     param(
         [hashtable]$Environment,
@@ -114,11 +185,9 @@ function Invoke-LauncherWithEnvironment {
             $stdout = Get-Content -Path $stdoutPath -Raw -ErrorAction SilentlyContinue
             $stderr = Get-Content -Path $stderrPath -Raw -ErrorAction SilentlyContinue
             if (-not [string]::IsNullOrWhiteSpace($stdout)) {
-                try {
-                    $result = $stdout | ConvertFrom-Json
+                $result = ConvertFrom-FirstJsonObject -Text $stdout
+                if ($null -ne $result) {
                     break
-                } catch {
-                    $result = $null
                 }
             }
             if ($process.HasExited -and $process.ExitCode -ne 0) {
@@ -158,6 +227,7 @@ function Invoke-LauncherWithEnvironment {
 function Start-MultiplayerInstance {
     param(
         [string]$Instance,
+        [string]$InstanceLaunchPreset,
         [string]$Role,
         [UInt16]$LocalPort,
         [UInt16]$RemotePort,
@@ -166,7 +236,7 @@ function Start-MultiplayerInstance {
     )
 
     $env = @{
-        SDMOD_UI_SANDBOX_PRESET = $launchPreset
+        SDMOD_UI_SANDBOX_PRESET = $InstanceLaunchPreset
         SDMOD_LUA_EXEC_PIPE_NAME = "SolomonDarkModLoader_LuaExec_$Instance"
     }
     if (-not $DisableMultiplayerTransport) {
@@ -193,7 +263,7 @@ function Start-MultiplayerInstance {
         "--instance", $Instance,
         "--runtime-flag", "multiplayer.steam_bootstrap=false"
     )
-    if ($Role -eq "client") {
+    if ($Role -eq "client" -or ($Role -eq "host" -and $TemporaryHostProfile)) {
         $args += "--temporary-profile"
     }
 
@@ -223,6 +293,20 @@ function Resolve-CreateSelection {
         }
     }
     return $null
+}
+
+$createElementIds = @{
+    ether = 0
+    fire = 1
+    air = 2
+    water = 3
+    earth = 4
+}
+
+$createDisciplineIds = @{
+    mind = 0
+    body = 1
+    arcane = 2
 }
 
 function Invoke-InstanceLuaExec {
@@ -258,6 +342,123 @@ function Convert-KeyValueText {
     return $values
 }
 
+function Get-StagedGraphicsResolution {
+    $settingsPath = Join-Path $root "runtime\stage\sandbox\settings.txt"
+    if (Test-Path $settingsPath) {
+        foreach ($line in (Get-Content -Path $settingsPath -ErrorAction SilentlyContinue)) {
+            if ($line -match "^Graphics\.Resolution=(\d+),(\d+)\s*$") {
+                $width = [int]$Matches[1]
+                $height = [int]$Matches[2]
+                if ($width -gt 0 -and $height -gt 0) {
+                    return [pscustomobject]@{
+                        Width = $width
+                        Height = $height
+                    }
+                }
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        Width = 1600
+        Height = 900
+    }
+}
+
+$stagedGraphicsResolution = Get-StagedGraphicsResolution
+
+function Get-AspectCorrectOuterSize {
+    param(
+        [IntPtr]$WindowHandle,
+        [int]$MaxOuterWidth,
+        [int]$MaxOuterHeight,
+        [double]$AspectRatio
+    )
+
+    $gwlStyle = -16
+    $gwlExStyle = -20
+    $style = [SolomonDarkWindowActivator]::GetWindowLong($WindowHandle, $gwlStyle)
+    $exStyle = [SolomonDarkWindowActivator]::GetWindowLong($WindowHandle, $gwlExStyle)
+    $frame = New-Object SolomonDarkWindowActivator+RECT
+    $hasMenu = [SolomonDarkWindowActivator]::GetMenu($WindowHandle) -ne [IntPtr]::Zero
+    [void][SolomonDarkWindowActivator]::AdjustWindowRectEx([ref]$frame, $style, $hasMenu, $exStyle)
+
+    $frameWidth = $frame.Right - $frame.Left
+    $frameHeight = $frame.Bottom - $frame.Top
+    $clientWidth = [Math]::Max(640, $MaxOuterWidth - $frameWidth)
+    $clientHeight = [int][Math]::Round($clientWidth / $AspectRatio)
+    $outerWidth = $clientWidth + $frameWidth
+    $outerHeight = $clientHeight + $frameHeight
+
+    if ($outerHeight -gt $MaxOuterHeight) {
+        $clientHeight = [Math]::Max(360, $MaxOuterHeight - $frameHeight)
+        $clientWidth = [int][Math]::Round($clientHeight * $AspectRatio)
+        $outerWidth = $clientWidth + $frameWidth
+        $outerHeight = $clientHeight + $frameHeight
+    }
+
+    return [pscustomobject]@{
+        Width = $outerWidth
+        Height = $outerHeight
+        ClientWidth = $clientWidth
+        ClientHeight = $clientHeight
+    }
+}
+
+function Set-LocalMultiplayerWindowLayout {
+    param(
+        [int]$HostProcessId,
+        [int]$ClientProcessId
+    )
+
+    $hostProcess = Get-Process -Id $HostProcessId -ErrorAction Stop
+    $clientProcess = Get-Process -Id $ClientProcessId -ErrorAction Stop
+    if ($hostProcess.MainWindowHandle -eq 0 -or $clientProcess.MainWindowHandle -eq 0) {
+        throw "One or both multiplayer windows are not ready for tiling."
+    }
+
+    $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $columnWidth = [int][Math]::Floor($workingArea.Width / 2)
+    $aspectRatio = [double]$stagedGraphicsResolution.Width / [double]$stagedGraphicsResolution.Height
+    $hostSize = Get-AspectCorrectOuterSize `
+        -WindowHandle $hostProcess.MainWindowHandle `
+        -MaxOuterWidth $columnWidth `
+        -MaxOuterHeight $workingArea.Height `
+        -AspectRatio $aspectRatio
+    $clientSize = Get-AspectCorrectOuterSize `
+        -WindowHandle $clientProcess.MainWindowHandle `
+        -MaxOuterWidth $columnWidth `
+        -MaxOuterHeight $workingArea.Height `
+        -AspectRatio $aspectRatio
+
+    $flags = 0x0004 -bor 0x0010 -bor 0x0040
+    $showNoActivate = 4
+    [void][SolomonDarkWindowActivator]::ShowWindow($hostProcess.MainWindowHandle, $showNoActivate)
+    [void][SolomonDarkWindowActivator]::ShowWindow($clientProcess.MainWindowHandle, $showNoActivate)
+    [void][SolomonDarkWindowActivator]::SetWindowPos(
+        $hostProcess.MainWindowHandle,
+        [IntPtr]::Zero,
+        $workingArea.Left,
+        $workingArea.Top,
+        $hostSize.Width,
+        $hostSize.Height,
+        $flags)
+    [void][SolomonDarkWindowActivator]::SetWindowPos(
+        $clientProcess.MainWindowHandle,
+        [IntPtr]::Zero,
+        $workingArea.Left + $columnWidth,
+        $workingArea.Top,
+        $clientSize.Width,
+        $clientSize.Height,
+        $flags)
+
+    return [pscustomobject]@{
+        host = $hostSize
+        client = $clientSize
+        aspectRatio = $aspectRatio
+    }
+}
+
 function Wait-InstanceLuaValue {
     param(
         [string]$PipeName,
@@ -290,10 +491,15 @@ function Set-ProcessForeground {
     while ((Get-Date) -lt $deadline) {
         $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
         if ($null -ne $process -and $process.MainWindowHandle -ne 0) {
-            [void][SolomonDarkWindowActivator]::ShowWindow($process.MainWindowHandle, 9)
-            [void][SolomonDarkWindowActivator]::BringWindowToTop($process.MainWindowHandle)
-            [void][SolomonDarkWindowActivator]::SetForegroundWindow($process.MainWindowHandle)
-            Start-Sleep -Milliseconds 400
+            if ($AllowFocusSteal) {
+                [void][SolomonDarkWindowActivator]::ShowWindow($process.MainWindowHandle, 9)
+                [void][SolomonDarkWindowActivator]::BringWindowToTop($process.MainWindowHandle)
+                [void][SolomonDarkWindowActivator]::SetForegroundWindow($process.MainWindowHandle)
+                Start-Sleep -Milliseconds 400
+            } else {
+                [void][SolomonDarkWindowActivator]::ShowWindow($process.MainWindowHandle, 4)
+                Start-Sleep -Milliseconds 100
+            }
             return
         }
         Start-Sleep -Milliseconds 100
@@ -347,11 +553,16 @@ function Invoke-CreateWindowClick {
     )
 
     $point = Get-CreateActionCenter -PipeName $PipeName -ActionId $ActionId
+    if (-not $AllowFocusSteal) {
+        throw "Window click fallback requires -AllowFocusSteal; use Lua UI actions for no-focus automation."
+    }
     Set-ProcessForeground -ProcessId $ProcessId
     $clickOutput = & py -3 $clickWindowScript `
         --pid $ProcessId `
         --x $point.X `
         --y $point.Y `
+        --virtual-width $stagedGraphicsResolution.Width `
+        --virtual-height $stagedGraphicsResolution.Height `
         --activate `
         --activation-delay-ms 500 `
         --post-delay-ms 250 2>&1
@@ -410,38 +621,57 @@ function Test-CreateSelectionUnset {
 function Wait-CreateElementLatched {
     param(
         [string]$PipeName,
+        [int]$ExpectedElementId,
         [int]$TimeoutSeconds = 8
     )
 
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $lastState = $null
     while ((Get-Date) -lt $deadline) {
         $state = Get-CreateSelectionState -PipeName $PipeName
-        if (-not (Test-CreateSelectionUnset $state["element_selected"]) -and
+        $lastState = $state
+        $selectedElement = 0L
+        $hasSelectedElement = [long]::TryParse([string]$state["element_selected"], [ref]$selectedElement)
+        if ($hasSelectedElement -and
+            $selectedElement -eq $ExpectedElementId -and
             $state["discipline_enabled"] -ne "0") {
             return $true
         }
         Start-Sleep -Milliseconds 250
     }
 
+    if ($null -ne $lastState) {
+        Write-Warning "Timed out waiting for create element id $ExpectedElementId on $PipeName. Last state: $($lastState | ConvertTo-Json -Compress)"
+    }
     return $false
 }
 
 function Wait-CreateDisciplineAccepted {
     param(
         [string]$PipeName,
+        [int]$ExpectedDisciplineId,
         [int]$TimeoutSeconds = 10
     )
 
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $lastState = $null
     while ((Get-Date) -lt $deadline) {
         $state = Get-CreateSelectionState -PipeName $PipeName
-        if ($state["scene"] -eq "hub" -or $state["ui"] -ne "create" -or
-            -not (Test-CreateSelectionUnset $state["discipline_selected"])) {
+        $lastState = $state
+        $selectedDiscipline = 0L
+        $hasSelectedDiscipline = [long]::TryParse([string]$state["discipline_selected"], [ref]$selectedDiscipline)
+        if ($hasSelectedDiscipline -and $selectedDiscipline -eq $ExpectedDisciplineId) {
+            return $true
+        }
+        if ($state["scene"] -eq "hub" -or $state["ui"] -ne "create") {
             return $true
         }
         Start-Sleep -Milliseconds 250
     }
 
+    if ($null -ne $lastState) {
+        Write-Warning "Timed out waiting for create discipline id $ExpectedDisciplineId on $PipeName. Last state: $($lastState | ConvertTo-Json -Compress)"
+    }
     return $false
 }
 
@@ -494,6 +724,15 @@ function Invoke-CreateSelection {
         [int]$ProcessId
     )
 
+    if (-not $createElementIds.ContainsKey($Element)) {
+        throw "Unknown create element '$Element'."
+    }
+    if (-not $createDisciplineIds.ContainsKey($Discipline)) {
+        throw "Unknown create discipline '$Discipline'."
+    }
+    $expectedElementId = [int]$createElementIds[$Element]
+    $expectedDisciplineId = [int]$createDisciplineIds[$Discipline]
+
     Wait-InstanceLuaValue `
         -PipeName $PipeName `
         -ExpectedValue "create" `
@@ -502,29 +741,35 @@ function Invoke-CreateSelection {
     $elementActionId = "create.select_element_$Element"
     $elementLatched = $false
     for ($attempt = 1; $attempt -le 3 -and -not $elementLatched; $attempt += 1) {
-        Invoke-CreateWindowClick `
+        Invoke-UiActionAndWait `
             -PipeName $PipeName `
             -ActionId $elementActionId `
+            -SurfaceId "create" `
             -ProcessId $ProcessId
-        $elementLatched = Wait-CreateElementLatched -PipeName $PipeName
+        $elementLatched = Wait-CreateElementLatched `
+            -PipeName $PipeName `
+            -ExpectedElementId $expectedElementId
     }
     if (-not $elementLatched) {
         $state = Get-CreateSelectionState -PipeName $PipeName
-        throw "Create element action $elementActionId did not latch on $PipeName. State: $($state | ConvertTo-Json -Compress)"
+        throw "Create element action $elementActionId did not latch expected id $expectedElementId on $PipeName. State: $($state | ConvertTo-Json -Compress)"
     }
 
     $disciplineActionId = "create.select_discipline_$Discipline"
     $disciplineAccepted = $false
     for ($attempt = 1; $attempt -le 3 -and -not $disciplineAccepted; $attempt += 1) {
-        Invoke-CreateWindowClick `
+        Invoke-UiActionAndWait `
             -PipeName $PipeName `
             -ActionId $disciplineActionId `
+            -SurfaceId "create" `
             -ProcessId $ProcessId
-        $disciplineAccepted = Wait-CreateDisciplineAccepted -PipeName $PipeName
+        $disciplineAccepted = Wait-CreateDisciplineAccepted `
+            -PipeName $PipeName `
+            -ExpectedDisciplineId $expectedDisciplineId
     }
     if (-not $disciplineAccepted) {
         $state = Get-CreateSelectionState -PipeName $PipeName
-        throw "Create discipline action $disciplineActionId was not accepted on $PipeName. State: $($state | ConvertTo-Json -Compress)"
+        throw "Create discipline action $disciplineActionId was not accepted with expected id $expectedDisciplineId on $PipeName. State: $($state | ConvertTo-Json -Compress)"
     }
 }
 
@@ -538,29 +783,39 @@ function Wait-InstanceHub {
         -Code "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')"
 }
 
-$selection = Resolve-CreateSelection -PresetName $Preset
-$launchPreset = $Preset
-if ($null -ne $selection -and -not $UseSandboxPresetFlow) {
-    $launchPreset = "create_manual"
+$effectiveHostPreset = if ([string]::IsNullOrWhiteSpace($HostPreset)) { $Preset } else { $HostPreset }
+$effectiveClientPreset = if ([string]::IsNullOrWhiteSpace($ClientPreset)) { $Preset } else { $ClientPreset }
+
+$hostSelection = Resolve-CreateSelection -PresetName $effectiveHostPreset
+$clientSelection = Resolve-CreateSelection -PresetName $effectiveClientPreset
+$hostLaunchPreset = $effectiveHostPreset
+$clientLaunchPreset = $effectiveClientPreset
+if ($null -ne $hostSelection -and -not $UseSandboxPresetFlow) {
+    $hostLaunchPreset = "create_manual"
 }
-$waitForHub = (Test-PresetWaitsForHub -PresetName $Preset) -or ($null -ne $selection)
+if ($null -ne $clientSelection -and -not $UseSandboxPresetFlow) {
+    $clientLaunchPreset = "create_manual"
+}
+$hostWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveHostPreset) -or ($null -ne $hostSelection)
+$clientWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveClientPreset) -or ($null -ne $clientSelection)
 
 $hostResult = Start-MultiplayerInstance `
     -Instance "local-mp-host" `
+    -InstanceLaunchPreset $hostLaunchPreset `
     -Role "host" `
     -LocalPort $HostPort `
     -RemotePort $ClientPort `
     -ParticipantId $HostParticipantId `
     -PlayerName $HostName
 
-if ($null -ne $selection -and -not $UseSandboxPresetFlow) {
+if ($null -ne $hostSelection -and -not $UseSandboxPresetFlow) {
     Invoke-CreateSelection `
         -PipeName "SolomonDarkModLoader_LuaExec_local-mp-host" `
-        -Element $selection.Element `
-        -Discipline $selection.Discipline `
+        -Element $hostSelection.Element `
+        -Discipline $hostSelection.Discipline `
         -ProcessId ([int]$hostResult.launch.processId)
 }
-if ($waitForHub) {
+if ($hostWaitForHub) {
     Wait-InstanceHub -PipeName "SolomonDarkModLoader_LuaExec_local-mp-host"
 }
 
@@ -568,32 +823,50 @@ Start-Sleep -Seconds 2
 
 $clientResult = Start-MultiplayerInstance `
     -Instance "local-mp-client" `
+    -InstanceLaunchPreset $clientLaunchPreset `
     -Role "client" `
     -LocalPort $ClientPort `
     -RemotePort $HostPort `
     -ParticipantId $ClientParticipantId `
     -PlayerName $ClientName
 
-if ($null -ne $selection -and -not $UseSandboxPresetFlow) {
+if ($null -ne $clientSelection -and -not $UseSandboxPresetFlow) {
     Invoke-CreateSelection `
         -PipeName "SolomonDarkModLoader_LuaExec_local-mp-client" `
-        -Element $selection.Element `
-        -Discipline $selection.Discipline `
+        -Element $clientSelection.Element `
+        -Discipline $clientSelection.Discipline `
         -ProcessId ([int]$clientResult.launch.processId)
 }
-if ($waitForHub) {
+if ($clientWaitForHub) {
     Wait-InstanceHub -PipeName "SolomonDarkModLoader_LuaExec_local-mp-client"
+}
+
+$windowLayout = $null
+$windowLayoutError = $null
+if (-not $NoTileWindows) {
+    try {
+        $windowLayout = Set-LocalMultiplayerWindowLayout `
+            -HostProcessId ([int]$hostResult.launch.processId) `
+            -ClientProcessId ([int]$clientResult.launch.processId)
+    } catch {
+        $windowLayoutError = $_.Exception.Message
+    }
 }
 
 [pscustomobject]@{
     preset = $Preset
-    launchPreset = $launchPreset
+    hostPreset = $effectiveHostPreset
+    clientPreset = $effectiveClientPreset
+    hostLaunchPreset = $hostLaunchPreset
+    clientLaunchPreset = $clientLaunchPreset
     hostProcessId = $hostResult.launch.processId
     clientProcessId = $clientResult.launch.processId
     hostPort = $HostPort
     clientPort = $ClientPort
     multiplayerTransportEnabled = -not $DisableMultiplayerTransport
     sandboxPresetFlowEnabled = [bool]$UseSandboxPresetFlow
+    temporaryHostProfile = [bool]$TemporaryHostProfile
+    allowFocusSteal = [bool]$AllowFocusSteal
     hostParticipantId = $HostParticipantId
     clientParticipantId = $ClientParticipantId
     hostName = $HostName
@@ -602,4 +875,7 @@ if ($waitForHub) {
     clientLuaPipe = "SolomonDarkModLoader_LuaExec_local-mp-client"
     hostLog = $hostResult.launch.startupLogPath
     clientLog = $clientResult.launch.startupLogPath
-} | ConvertTo-Json -Depth 4
+    graphicsResolution = $stagedGraphicsResolution
+    windowLayout = $windowLayout
+    windowLayoutError = $windowLayoutError
+} | ConvertTo-Json -Depth 4 -Compress

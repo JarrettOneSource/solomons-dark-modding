@@ -50,6 +50,8 @@ constexpr int kWizardProgressionFactoryTypeId = 0x0BBB;
 constexpr std::size_t kPlayerActorSize = 0x398;
 constexpr std::size_t kStandaloneWizardEquipSize = 100;
 constexpr std::size_t kStandaloneWizardAttachmentItemSize = 0x88;
+constexpr std::size_t kStandaloneWizardAttachmentStaffVisualStateOffset = 0x84;
+constexpr std::uint32_t kStandaloneWizardStaffItemTypeId = 0x1B5C;
 // Object_Ctor treats +0x04..+0x07 as object-header state, not an actor-owned
 // render-context pointer. Keep the raw word available for dumps and probes, but
 // do not treat it as a transferable render node.

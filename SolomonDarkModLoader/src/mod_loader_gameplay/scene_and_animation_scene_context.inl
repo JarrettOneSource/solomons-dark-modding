@@ -82,28 +82,34 @@ bool IsArenaSceneContext(const SceneContextSnapshot& scene_context) {
     return scene_context.current_region_index == kArenaRegionIndex || scene_context.region_type_id == kSceneTypeArena;
 }
 
-bool ShouldBotBeMaterializedInScene(const ParticipantEntityBinding& binding, const SceneContextSnapshot& scene_context) {
+bool ShouldParticipantSceneIntentMaterializeInScene(
+    const multiplayer::ParticipantSceneIntent& scene_intent,
+    const SceneContextSnapshot& scene_context) {
     if (scene_context.world_address == 0) {
         return false;
     }
 
-    switch (binding.scene_intent.kind) {
+    switch (scene_intent.kind) {
     case multiplayer::ParticipantSceneIntentKind::Run:
         return IsArenaSceneContext(scene_context);
     case multiplayer::ParticipantSceneIntentKind::SharedHub:
         return IsSharedHubSceneContext(scene_context);
     case multiplayer::ParticipantSceneIntentKind::PrivateRegion: {
         const bool region_matches =
-            binding.scene_intent.region_index >= 0 &&
+            scene_intent.region_index >= 0 &&
             scene_context.current_region_index >= 0 &&
-            binding.scene_intent.region_index == scene_context.current_region_index;
+            scene_intent.region_index == scene_context.current_region_index;
         const bool type_matches =
-            binding.scene_intent.region_type_id >= 0 &&
+            scene_intent.region_type_id >= 0 &&
             scene_context.region_type_id >= 0 &&
-            binding.scene_intent.region_type_id == scene_context.region_type_id;
+            scene_intent.region_type_id == scene_context.region_type_id;
         return region_matches || type_matches;
     }
     }
+
     return false;
 }
 
+bool ShouldBotBeMaterializedInScene(const ParticipantEntityBinding& binding, const SceneContextSnapshot& scene_context) {
+    return ShouldParticipantSceneIntentMaterializeInScene(binding.scene_intent, scene_context);
+}

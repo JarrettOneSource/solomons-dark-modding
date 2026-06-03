@@ -1,3 +1,27 @@
+bool TryReadRollbackAimTargetFloat(
+    uintptr_t actor_address,
+    std::size_t offset,
+    float fallback_value,
+    float* value) {
+    if (value == nullptr) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    float raw = 0.0f;
+    if (actor_address == 0 ||
+        !memory.TryReadField(actor_address, offset, &raw)) {
+        *value = 0.0f;
+        return false;
+    }
+
+    *value = std::isfinite(raw) ? raw : fallback_value;
+    if (!std::isfinite(raw)) {
+        (void)memory.TryWriteField(actor_address, offset, *value);
+    }
+    return true;
+}
+
 bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
@@ -146,6 +170,31 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         return false;
     }
     const auto queued_target_actor_address = request.target_actor_address;
+    if (request.has_origin_transform) {
+        if (!std::isfinite(request.origin_position_x) ||
+            !std::isfinite(request.origin_position_y) ||
+            !memory.TryWriteField(actor_address, kActorPositionXOffset, request.origin_position_x) ||
+            !memory.TryWriteField(actor_address, kActorPositionYOffset, request.origin_position_y)) {
+            finish_attack_idle();
+            if (error_message != nullptr) {
+                *error_message = "origin transform write failed for bot cast";
+            }
+            return false;
+        }
+
+        DWORD rebind_exception_code = 0;
+        if (!TryRebindActorToOwnerWorld(actor_address, &rebind_exception_code)) {
+            Log(
+                "[bots] cast origin rebind failed. bot_id=" +
+                std::to_string(binding->bot_id) +
+                " actor=" + HexString(actor_address) +
+                " exception=" + HexString(rebind_exception_code));
+        }
+    }
+    if (request.has_origin_heading && std::isfinite(request.origin_heading)) {
+        ApplyWizardActorFacingState(actor_address, request.origin_heading);
+    }
+
     int requested_skill_id = request.skill_id;
     ResolvedPrimaryCastDescriptor primary_descriptor{};
     bool have_primary_descriptor = false;
@@ -237,7 +286,10 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     auto effective_target_actor_address =
         queued_target_actor_address != 0
             ? queued_target_actor_address
-            : binding->facing_target_actor_address;
+            : (request.remote_input_controlled ? 0 : binding->facing_target_actor_address);
+    if (request.remote_input_controlled && queued_target_actor_address == 0) {
+        binding->facing_target_actor_address = 0;
+    }
     if (effective_target_actor_address != 0) {
         float live_target_x = 0.0f;
         float live_target_y = 0.0f;
@@ -279,6 +331,8 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         have_primary_descriptor
             ? primary_descriptor.lane
             : ParticipantEntityBinding::OngoingCastState::Lane::Dispatcher;
+    ongoing.remote_input_controlled = request.remote_input_controlled;
+    ongoing.remote_input_cast_sequence = request.cast_sequence;
     ongoing.skill_id =
         have_primary_descriptor && primary_descriptor.build_skill_id > 0
             ? primary_descriptor.build_skill_id
@@ -298,9 +352,26 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         binding->facing_heading_value = aim_heading;
         binding->facing_heading_valid = true;
     }
+    float aim_x_fallback = have_aim_target && std::isfinite(aim_target_x) ? aim_target_x : 0.0f;
+    float aim_y_fallback = have_aim_target && std::isfinite(aim_target_y) ? aim_target_y : 0.0f;
+    float actor_x_for_rollback_aim = 0.0f;
+    float actor_y_for_rollback_aim = 0.0f;
+    if (TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &actor_x_for_rollback_aim) &&
+        TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &actor_y_for_rollback_aim)) {
+        aim_x_fallback = actor_x_for_rollback_aim;
+        aim_y_fallback = actor_y_for_rollback_aim;
+    }
     if (!TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &ongoing.heading_before) ||
-        !TryReadFiniteFloatField(actor_address, kActorAimTargetXOffset, &ongoing.aim_x_before) ||
-        !TryReadFiniteFloatField(actor_address, kActorAimTargetYOffset, &ongoing.aim_y_before) ||
+        !TryReadRollbackAimTargetFloat(
+            actor_address,
+            kActorAimTargetXOffset,
+            aim_x_fallback,
+            &ongoing.aim_x_before) ||
+        !TryReadRollbackAimTargetFloat(
+            actor_address,
+            kActorAimTargetYOffset,
+            aim_y_fallback,
+            &ongoing.aim_y_before) ||
         !memory.TryReadField(actor_address, kActorAimTargetAux0Offset, &ongoing.aim_aux0_before) ||
         !memory.TryReadField(actor_address, kActorAimTargetAux1Offset, &ongoing.aim_aux1_before) ||
         !memory.TryReadField(actor_address, kActorCastSpreadModeByteOffset, &ongoing.spread_before) ||
@@ -442,6 +513,21 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     ongoing.mana_charge_kind = cast_mana.kind;
     ongoing.mana_cost = cast_mana.cost;
     ongoing.mana_progression_level = cast_mana.progression_level;
+    const bool remote_native_input_controlled =
+        ongoing.remote_input_controlled && IsNativeRemoteParticipantBinding(binding);
+    if (ongoing.remote_input_controlled &&
+        ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
+        ongoing.mana_charge_kind == multiplayer::BotManaChargeKind::PerCast) {
+        ongoing.remote_per_cast_projectile_expected_type =
+            ExpectedPurePrimaryProjectileTypeForSelectionState(ongoing.selection_state_target);
+        if (TryListPurePrimaryProjectileActorAddressesInScene(
+                ongoing.remote_per_cast_projectile_expected_type,
+                &ongoing.remote_per_cast_projectile_addresses_before)) {
+            ongoing.remote_per_cast_projectile_baseline_valid = true;
+            ongoing.remote_per_cast_projectile_count_before =
+                static_cast<int>(ongoing.remote_per_cast_projectile_addresses_before.size());
+        }
+    }
     if (NativeManaRateConfigRequiredForOngoingCast(ongoing)) {
         ongoing.native_mana_rate_config_invalidated =
             ClearNativeManaRateConfigForOngoingCast(actor_address, ongoing);
@@ -467,7 +553,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
             return false;
         }
 
-        if (cast_mana.kind == multiplayer::BotManaChargeKind::PerCast) {
+        if (cast_mana.kind == multiplayer::BotManaChargeKind::PerCast && !remote_native_input_controlled) {
             float current_mp = 0.0f;
             float max_mp = 0.0f;
             bool mana_reserve_active = false;
@@ -504,7 +590,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
                 }
                 return false;
             }
-        } else {
+        } else if (!remote_native_input_controlled) {
             float current_mp = 0.0f;
             float max_mp = 0.0f;
             const float required_mana =
@@ -641,8 +727,10 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
             ReapplyOngoingCastSelectionState(binding, actor_address, ongoing, true);
         }
     }
-    g_gameplay_slot_hud_probe_actor = actor_address;
-    g_gameplay_slot_hud_probe_until_ms = static_cast<std::uint64_t>(GetTickCount64()) + 400;
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        g_gameplay_slot_hud_probe_actor = actor_address;
+        g_gameplay_slot_hud_probe_until_ms = static_cast<std::uint64_t>(GetTickCount64()) + 400;
+    }
     std::int32_t progression_spell_id_for_log = 0;
     const auto progression_spell_id_text =
         ongoing.progression_runtime_address != 0 &&
@@ -660,6 +748,9 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
                  : std::string("standalone")) +
         " gameplay_slot=" + std::to_string(binding->gameplay_slot) +
         " skill_id=" + std::to_string(ongoing.skill_id) +
+        " remote_input_controlled=" +
+            (ongoing.remote_input_controlled ? std::string("1") : std::string("0")) +
+        " remote_cast_sequence=" + std::to_string(ongoing.remote_input_cast_sequence) +
         " dispatcher_skill_id=" + std::to_string(ongoing.dispatcher_skill_id) +
         " lane=" +
             (ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary

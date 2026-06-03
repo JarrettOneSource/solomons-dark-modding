@@ -741,6 +741,9 @@ The safest stock-aligned model is:
 - treat `+0x160` as an animation-branch selector that must not be hard-forced incorrectly
 - treat `+0x22C/+0x234/+0x238/+0x220/+0x224/+0x228` as the loader-owned
   motion/frame-driving state that must remain coherent
+- remote participant playback may replicate only those loader-owned motion/frame
+  fields; packet-level `+0x248/+0x268` samples remain diagnostics and must not be
+  applied to materialized remote gameplay-slot actors
 - treat `+0x268` as native-owned overlay/effect phase state; observe it, but do
   not write it from loader movement
 

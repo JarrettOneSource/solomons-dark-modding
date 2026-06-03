@@ -349,6 +349,9 @@ bool OngoingCastShouldRefreshNativeTargetState(
 uintptr_t ResolveOngoingCastNativeTargetActor(
     const ParticipantEntityBinding* binding,
     const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    if (ongoing.remote_input_controlled) {
+        return ongoing.target_actor_address;
+    }
     if (binding != nullptr &&
         OngoingCastShouldUseLiveFacingTarget(ongoing) &&
         binding->facing_target_actor_address != 0) {

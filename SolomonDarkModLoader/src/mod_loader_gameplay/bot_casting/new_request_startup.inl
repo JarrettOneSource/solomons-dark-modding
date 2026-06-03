@@ -13,6 +13,29 @@ bool StartPendingBotCastRequest(
         return false;
     }
     const auto queued_target_actor_address = request.target_actor_address;
+    if (request.has_origin_transform) {
+        if (!std::isfinite(request.origin_position_x) ||
+            !std::isfinite(request.origin_position_y) ||
+            !memory.TryWriteField(actor_address, kActorPositionXOffset, request.origin_position_x) ||
+            !memory.TryWriteField(actor_address, kActorPositionYOffset, request.origin_position_y)) {
+            if (error_message != nullptr) {
+                *error_message = "origin transform write failed for bot cast";
+            }
+            return false;
+        }
+
+        DWORD rebind_exception_code = 0;
+        if (!TryRebindActorToOwnerWorld(actor_address, &rebind_exception_code)) {
+            Log(
+                "[bots] cast origin rebind failed. bot_id=" +
+                std::to_string(binding->bot_id) +
+                " actor=" + HexString(actor_address) +
+                " exception=" + HexString(rebind_exception_code));
+        }
+    }
+    if (request.has_origin_heading && std::isfinite(request.origin_heading)) {
+        ApplyWizardActorFacingState(actor_address, request.origin_heading);
+    }
 
     if (request.skill_id <= 0) {
         float current_heading = 0.0f;
@@ -65,7 +88,10 @@ bool StartPendingBotCastRequest(
     auto effective_target_actor_address =
         queued_target_actor_address != 0
             ? queued_target_actor_address
-            : binding->facing_target_actor_address;
+            : (request.remote_input_controlled ? 0 : binding->facing_target_actor_address);
+    if (request.remote_input_controlled && queued_target_actor_address == 0) {
+        binding->facing_target_actor_address = 0;
+    }
     if (effective_target_actor_address != 0) {
         float live_target_x = 0.0f;
         float live_target_y = 0.0f;
@@ -271,6 +297,8 @@ bool StartPendingBotCastRequest(
     auto& ongoing = binding->ongoing_cast;
     ongoing.active = true;
     ongoing.skill_id = request.skill_id;
+    ongoing.remote_input_controlled = request.remote_input_controlled;
+    ongoing.remote_input_cast_sequence = request.cast_sequence;
     ongoing.have_aim_heading = have_aim_heading;
     ongoing.aim_heading = aim_heading;
     ongoing.have_aim_target = have_aim_target;
