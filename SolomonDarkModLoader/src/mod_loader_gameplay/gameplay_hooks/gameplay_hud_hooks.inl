@@ -1,5 +1,3 @@
-void DrawGameplayHudParticipantNameplates();
-
 void __fastcall HookGameplayHudRenderDispatch(void* self, void* /*unused_edx*/, int render_case) {
     const auto original = GetX86HookTrampoline<GameplayHudRenderDispatchFn>(
         g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
@@ -44,9 +42,6 @@ void __fastcall HookGameplayHudRenderDispatch(void* self, void* /*unused_edx*/, 
         }
     }
     original(self, render_case);
-    if (context_scope.previous_depth == 0) {
-        DrawGameplayHudParticipantNameplates();
-    }
 }
 
 bool CallGameplayExactTextObjectRenderSafe(
@@ -105,43 +100,16 @@ bool CallGameplayExactTextObjectRenderSafe(
     return false;
 }
 
-bool TryProjectGameplayHudNameplatePosition(
-    uintptr_t actor_address,
-    float actor_x,
-    float actor_y,
-    float* draw_x,
-    float* draw_y) {
-    if (draw_x == nullptr || draw_y == nullptr || actor_address == 0) {
-        return false;
-    }
+std::string BuildGameplayNameplateExactText(const std::string& display_name) {
+    constexpr char kExactTextCommandPrefix = '_';
+    constexpr const char* kHalfScaleCommand = "s(0.5)";
 
-    constexpr float kGameplayHudVirtualWidth = 1600.0f;
-    constexpr float kGameplayHudVirtualHeight = 900.0f;
-    constexpr float kNameplateVerticalOffset = 45.0f;
-
-    SDModSceneState scene_state;
-    if (!TryGetSceneState(&scene_state) || !scene_state.valid ||
-        scene_state.kind != "arena") {
-        *draw_x = actor_x;
-        *draw_y = actor_y - kNameplateVerticalOffset;
-        return true;
-    }
-
-    SDModPlayerState player_state;
-    if (!TryGetPlayerState(&player_state) || !player_state.valid ||
-        !std::isfinite(player_state.x) || !std::isfinite(player_state.y)) {
-        return false;
-    }
-
-    // Arena actor coordinates are world-space, while the exact-text HUD render
-    // helper consumes virtual screen coordinates. Hub coordinates are already
-    // screen-sized, so only arena labels need the local camera-centered projection.
-    *draw_x = (kGameplayHudVirtualWidth * 0.5f) + (actor_x - player_state.x);
-    *draw_y =
-        (kGameplayHudVirtualHeight * 0.5f) +
-        (actor_y - player_state.y) -
-        kNameplateVerticalOffset;
-    return std::isfinite(*draw_x) && std::isfinite(*draw_y);
+    std::string text;
+    text.reserve(display_name.size() + 7);
+    text.push_back(kExactTextCommandPrefix);
+    text += kHalfScaleCommand;
+    text += display_name;
+    return text;
 }
 
 bool DrawGameplayHudParticipantName(
@@ -167,20 +135,18 @@ bool DrawGameplayHudParticipantName(
     if (string_assign_address == 0 ||
         text_object_render_address == 0 ||
         text_object_global_address == 0 ||
-        kGameplayNameplateTextObjectOffset == 0 ||
+        kGameplayExactTextObjectOffset == 0 ||
         !memory.IsReadableRange(text_object_global_address, sizeof(uintptr_t))) {
         return false;
     }
 
     uintptr_t text_object_base = 0;
-    if (!memory.TryReadValue(text_object_global_address, &text_object_base)) {
-        return false;
-    }
-    if (text_object_base == 0) {
+    if (!memory.TryReadValue(text_object_global_address, &text_object_base) ||
+        text_object_base == 0) {
         return false;
     }
 
-    const auto text_object_address = text_object_base + kGameplayNameplateTextObjectOffset;
+    const auto text_object_address = text_object_base + kGameplayExactTextObjectOffset;
     if (!memory.IsReadableRange(text_object_address, sizeof(uintptr_t))) {
         return false;
     }
@@ -191,9 +157,7 @@ bool DrawGameplayHudParticipantName(
         !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &y)) {
         return false;
     }
-    if (!TryProjectGameplayHudNameplatePosition(actor_address, x, y, &x, &y)) {
-        return false;
-    }
+    y -= 45.0f;
     if (draw_x != nullptr) {
         *draw_x = x;
     }
@@ -201,87 +165,13 @@ bool DrawGameplayHudParticipantName(
         *draw_y = y;
     }
 
+    const auto nameplate_text = BuildGameplayNameplateExactText(display_name);
     return CallGameplayExactTextObjectRenderSafe(
         string_assign_address,
         text_object_render_address,
         text_object_address,
-        display_name.c_str(),
+        nameplate_text.c_str(),
         x,
         y,
         exception_code);
-}
-
-struct NameplateDrawDepthScope {
-    int& depth;
-
-    explicit NameplateDrawDepthScope(int& active_depth) : depth(active_depth) {
-        ++depth;
-    }
-
-    ~NameplateDrawDepthScope() {
-        --depth;
-    }
-};
-
-void DrawGameplayHudParticipantNameplates() {
-    static thread_local int s_nameplate_draw_depth = 0;
-    if (s_nameplate_draw_depth != 0) {
-        return;
-    }
-
-    struct NameplateCandidate {
-        uintptr_t actor_address = 0;
-        std::uint64_t participant_id = 0;
-    };
-
-    std::vector<NameplateCandidate> candidates;
-    {
-        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-        candidates.reserve(g_participant_entities.size());
-        for (const auto& binding : g_participant_entities) {
-            if (!IsWizardParticipantKind(binding.kind) || binding.actor_address == 0) {
-                continue;
-            }
-            candidates.push_back(NameplateCandidate{binding.actor_address, binding.bot_id});
-        }
-    }
-    if (candidates.empty()) {
-        return;
-    }
-
-    const auto runtime = multiplayer::SnapshotRuntimeState();
-    NameplateDrawDepthScope depth_scope(s_nameplate_draw_depth);
-    for (const auto& candidate : candidates) {
-        const auto* participant = multiplayer::FindParticipant(runtime, candidate.participant_id);
-        if (participant == nullptr ||
-            !multiplayer::IsRemoteParticipant(*participant) ||
-            participant->name.empty()) {
-            continue;
-        }
-
-        DWORD exception_code = 0;
-        float draw_x = 0.0f;
-        float draw_y = 0.0f;
-        const bool drew_label =
-            DrawGameplayHudParticipantName(
-                candidate.actor_address,
-                participant->name,
-                &draw_x,
-                &draw_y,
-                &exception_code);
-        if constexpr (kEnableWizardBotHotPathDiagnostics) {
-            static int s_native_hud_name_draw_logs_remaining = 24;
-            if (s_native_hud_name_draw_logs_remaining > 0) {
-                --s_native_hud_name_draw_logs_remaining;
-                Log(
-                    "[bots] native gameplay HUD participant name draw. actor=" +
-                    HexString(candidate.actor_address) +
-                    " participant=" + std::to_string(candidate.participant_id) +
-                    " name=" + participant->name +
-                    " ok=" + std::string(drew_label ? "1" : "0") +
-                    " exception=" + HexString(static_cast<uintptr_t>(exception_code)) +
-                    " xy=(" + std::to_string(draw_x) + "," + std::to_string(draw_y) + ")");
-            }
-        }
-    }
 }

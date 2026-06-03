@@ -151,7 +151,6 @@ uintptr_t kGoldScriptCaller = 0;
 
 std::size_t kHubStartTestrunControlByteOffset = 0;
 std::size_t kGameplayExactTextObjectOffset = 0;
-std::size_t kGameplayNameplateTextObjectOffset = 0;
 std::size_t kStandaloneWizardProgressionTableBaseOffset = 0;
 std::size_t kStandaloneWizardProgressionTableCountOffset = 0;
 std::size_t kStandaloneWizardProgressionEntryStride = 0;

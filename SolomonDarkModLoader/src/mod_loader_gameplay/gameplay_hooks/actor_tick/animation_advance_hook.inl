@@ -42,4 +42,28 @@ void __fastcall HookActorAnimationAdvance(void* self, void* /*unused_edx*/) {
     } context_scope(actor_address, reinterpret_cast<uintptr_t>(_ReturnAddress()));
 
     original(self);
+    if (IsTrackedWizardParticipantActorForHud(actor_address)) {
+        std::string display_name;
+        std::uint64_t participant_id = 0;
+        if (TryGetGameplayHudParticipantDisplayNameForActor(actor_address, &display_name, &participant_id) &&
+            !display_name.empty()) {
+            DWORD exception_code = 0;
+            float draw_x = 0.0f;
+            float draw_y = 0.0f;
+            const bool drew_label =
+                DrawGameplayHudParticipantName(actor_address, display_name, &draw_x, &draw_y, &exception_code);
+            static int s_native_hud_name_draw_logs_remaining = 24;
+            if (s_native_hud_name_draw_logs_remaining > 0) {
+                --s_native_hud_name_draw_logs_remaining;
+                Log(
+                    "[bots] native gameplay HUD participant name draw. source=actor_callback actor=" +
+                    HexString(actor_address) +
+                    " participant=" + std::to_string(participant_id) +
+                    " name=" + display_name +
+                    " ok=" + std::string(drew_label ? "1" : "0") +
+                    " exception=" + HexString(static_cast<uintptr_t>(exception_code)) +
+                    " xy=(" + std::to_string(draw_x) + "," + std::to_string(draw_y) + ")");
+            }
+        }
+    }
 }

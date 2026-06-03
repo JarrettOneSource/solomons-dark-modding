@@ -73,6 +73,8 @@ WORLD_SNAPSHOT_RECONCILIATION = (
 )
 LUA_EXEC_PIPE = ROOT / "SolomonDarkModLoader/src/lua_exec_pipe.cpp"
 STAGED_GAME_LAUNCHER = ROOT / "SolomonDarkModLauncher/src/Launch/StagedGameLauncher.cs"
+MOD_LOADER_HEADER = ROOT / "SolomonDarkModLoader/include/mod_loader.h"
+MOD_LOADER_GAMEPLAY = ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay.cpp"
 PARTICIPANT_ENTITY_SYNC = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/participant_entity_sync.inl"
 )
@@ -96,6 +98,16 @@ RUN_ENEMY_PRESENTATION_PROBE = ROOT / "tools/probe_run_enemy_presentation_sync.p
 RUN_REWARD_SYNC_PROBE = ROOT / "tools/probe_run_reward_sync.py"
 GAMEPLAY_HUD_HOOKS = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/gameplay_hud_hooks.inl"
+)
+GAMEPLAY_PUBLIC_STATE_GETTERS = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"
+)
+DEBUG_UI_OVERLAY_FRAME_RENDER = (
+    ROOT / "SolomonDarkModLoader/src/debug_ui_overlay/label_resolution_surface_registry_and_frame_render.inl"
+)
+DEBUG_UI_OVERLAY_HEADER = ROOT / "SolomonDarkModLoader/include/debug_ui_overlay.h"
+DEBUG_UI_OVERLAY_PUBLIC_SURFACE = (
+    ROOT / "SolomonDarkModLoader/src/debug_ui_overlay/public_api_surface_dispatch.inl"
 )
 SCENE_SELECTION = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_bot_priming_and_selection.inl"
@@ -131,6 +143,12 @@ PLAYER_ACTOR_TICK_HOOK = (
 )
 ACTOR_ANIMATION_ADVANCE_HOOK = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/animation_advance_hook.inl"
+)
+GAMEPLAY_KEYBOARD_INJECTION = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl"
+)
+GAMEPLAY_NATIVE_FUNCTION_TYPES = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/native_function_types.inl"
 )
 STANDALONE_DEBUG_SUMMARIES = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_debug_summaries.inl"
@@ -6225,14 +6243,22 @@ def test_run_lifecycle_spell_hooks_only_forward_local_player_casts() -> str:
     return "run-lifecycle native spell hooks only forward local-player casts"
 
 
-def test_multiplayer_nameplates_render_from_hud_not_animation_advance() -> str:
+def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
     hud_text = read_text(GAMEPLAY_HUD_HOOKS)
+    public_state_text = read_text(GAMEPLAY_PUBLIC_STATE_GETTERS)
+    overlay_text = read_text(DEBUG_UI_OVERLAY_FRAME_RENDER)
+    overlay_header_text = read_text(DEBUG_UI_OVERLAY_HEADER)
+    overlay_public_text = read_text(DEBUG_UI_OVERLAY_PUBLIC_SURFACE)
+    mod_loader_header_text = read_text(MOD_LOADER_HEADER)
+    mod_loader_text = read_text(MOD_LOADER_GAMEPLAY)
+    layout_text = read_text(BINARY_LAYOUT)
     animation_text = read_text(ACTOR_ANIMATION_ADVANCE_HOOK)
     player_tick_text = read_text(PLAYER_ACTOR_TICK_HOOK)
+    keyboard_injection_text = read_text(GAMEPLAY_KEYBOARD_INJECTION)
+    native_types_text = read_text(GAMEPLAY_NATIVE_FUNCTION_TYPES)
 
     forbidden_animation_tokens = (
-        "DrawGameplayHudParticipantName(",
-        "native gameplay HUD participant name draw",
+        "TryListGameplayParticipantNameplates(",
         "std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex)",
         "TryCaptureTrackedStandaloneWizardBindingIdentity(",
         "NormalizeGameplaySlotBotSyntheticVisualState(actor_address)",
@@ -6241,13 +6267,18 @@ def test_multiplayer_nameplates_render_from_hud_not_animation_advance() -> str:
     present = [token for token in forbidden_animation_tokens if token in animation_text]
     if present:
         raise StaticReTestFailure(
-            "animation advance hook still owns participant presentation/nameplate work: " +
+            "animation advance hook still owns participant presentation or snapshot work: " +
             ", ".join(present))
 
     required_animation_tokens = (
         "struct AnimationAdvanceContextScope",
         "~AnimationAdvanceContextScope()",
         "original(self);",
+        "IsTrackedWizardParticipantActorForHud(actor_address)",
+        "TryGetGameplayHudParticipantDisplayNameForActor(actor_address, &display_name, &participant_id)",
+        "DrawGameplayHudParticipantName(actor_address, display_name, &draw_x, &draw_y, &exception_code)",
+        "source=actor_callback",
+        "native gameplay HUD participant name draw",
     )
     missing_animation = [
         token for token in required_animation_tokens
@@ -6255,35 +6286,166 @@ def test_multiplayer_nameplates_render_from_hud_not_animation_advance() -> str:
     ]
     if missing_animation:
         raise StaticReTestFailure(
-            "animation advance hook no longer has exception-safe passive context tracking: " +
+            "animation advance hook no longer matches native nameplate baseline commit 35378b3: " +
             ", ".join(missing_animation))
 
-    required_hud_tokens = (
-        "void DrawGameplayHudParticipantNameplates()",
-        "struct HudCase100ContextScope",
-        "~HudCase100ContextScope()",
-        "if (context_scope.previous_depth == 0)",
-        "struct NameplateDrawDepthScope",
-        "DrawGameplayHudParticipantNameplates();",
-        "SnapshotRuntimeState()",
-        "std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex)",
-        "multiplayer::IsRemoteParticipant(*participant)",
-        "DrawGameplayHudParticipantName(",
+    original_pos = animation_text.find("original(self);")
+    draw_pos = animation_text.find("DrawGameplayHudParticipantName(actor_address, display_name, &draw_x, &draw_y, &exception_code)")
+    if original_pos < 0 or draw_pos < 0 or original_pos > draw_pos:
+        raise StaticReTestFailure(
+            "remote participant nameplate draw must run after the stock actor animation/render callback")
+
+    forbidden_hud_tokens = (
+        "TryListGameplayParticipantNameplates(",
+        "multiplayer-nameplate",
+        "ShouldDrawGameplayHudParticipantNameFromActorCallback",
+        "PublishGameplayParticipantNameplateOverlaySnapshot",
+        "ClearDebugUiGameplayNameplateOverlaySnapshot",
+        "DebugUiGameplayNameplateOverlayItem",
+        "PublishDebugUiGameplayNameplateOverlaySnapshot",
         "TryProjectGameplayHudNameplatePosition",
+        "TryGetPlayerState(",
         "scene_state.kind != \"arena\"",
         "kGameplayHudVirtualWidth",
         "actor_x - player_state.x",
     )
-    missing = [token for token in required_hud_tokens if token not in hud_text]
-    if missing:
+    present_hud = [token for token in forbidden_hud_tokens if token in hud_text]
+    if present_hud:
         raise StaticReTestFailure(
-            "HUD render hook does not own remote participant nameplate drawing: " +
-            ", ".join(missing))
+            "native nameplate helper still contains stale arena projection or overlay plumbing: " +
+            ", ".join(present_hud))
+
+    required_hud_tokens = (
+        "bool CallGameplayExactTextObjectRenderSafe(",
+        "NativeStringAssignFn",
+        "NativeExactTextObjectRenderFn",
+        "NativeGameString native_text",
+        "string_assign(&native_text, nullptr)",
+        "std::string BuildGameplayNameplateExactText(const std::string& display_name)",
+        "constexpr const char* kHalfScaleCommand = \"s(0.5)\"",
+        "bool DrawGameplayHudParticipantName(",
+        "ResolveGameAddressOrZero(kGameplayStringAssign)",
+        "ResolveGameAddressOrZero(kGameplayExactTextObjectRender)",
+        "ResolveGameAddressOrZero(kGameplayExactTextObjectGlobal)",
+        "kGameplayExactTextObjectOffset",
+        "const auto text_object_address = text_object_base + kGameplayExactTextObjectOffset",
+        "TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &x)",
+        "TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &y)",
+        "y -= 45.0f;",
+        "const auto nameplate_text = BuildGameplayNameplateExactText(display_name);",
+        "CallGameplayExactTextObjectRenderSafe(",
+        "nameplate_text.c_str()",
+    )
+    missing_hud = [token for token in required_hud_tokens if token not in hud_text]
+    if missing_hud:
+        raise StaticReTestFailure(
+            "native exact-text helper no longer matches native nameplate baseline commit 35378b3: " +
+            ", ".join(missing_hud))
+
+    forbidden_public_tokens = (
+        "struct SDModGameplayNameplateDrawItem",
+        "TryListGameplayParticipantNameplates(",
+        "DebugUiGameplayNameplateOverlayItem",
+        "PublishDebugUiGameplayNameplateOverlaySnapshot",
+        "ClearDebugUiGameplayNameplateOverlaySnapshot",
+    )
+    present_public = [
+        token for token in forbidden_public_tokens
+        if token in public_state_text or token in mod_loader_header_text or token in overlay_header_text or token in overlay_public_text
+    ]
+    if present_public:
+        raise StaticReTestFailure(
+            "public nameplate snapshot or overlay API was reintroduced: " +
+            ", ".join(present_public))
+
+    forbidden_overlay_tokens = (
+        "RenderGameplayParticipantNameplates(",
+        "TryListGameplayParticipantNameplates(&items)",
+        "TryGetPlayerState(",
+        "TryGetSceneState(",
+        "struct GameplayNameplateOverlayRenderItem",
+        "CopyRecentGameplayNameplateOverlayItems()",
+        "BuildGameplayNameplateOverlayRenderItems(",
+        "kGameplayNameplateOverlayMaximumIdleMs",
+        "kGameplayNameplateVirtualWidth",
+        "kGameplayNameplateVirtualHeight",
+        "TryProjectGameplayNameplateWithD3dTransform(",
+        "DrawGameplayNameplateOverlayItem(",
+        "Debug UI overlay rendered cached gameplay nameplates",
+        "struct DebugUiGameplayNameplateOverlayItem",
+        "PublishDebugUiGameplayNameplateOverlaySnapshot",
+        "ClearDebugUiGameplayNameplateOverlaySnapshot",
+        "gameplay_nameplate_overlay_items",
+        "gameplay_nameplate_overlay_captured_at",
+    )
+    combined_overlay_text = "\n".join((
+        overlay_text,
+        overlay_header_text,
+        overlay_public_text,
+        mod_loader_text,
+    ))
+    present_overlay = [token for token in forbidden_overlay_tokens if token in combined_overlay_text]
+    if present_overlay:
+        raise StaticReTestFailure(
+            "D3D gameplay nameplate overlay workaround was reintroduced instead of native commit 35378b3 path: " +
+            ", ".join(present_overlay))
+
+    required_layout_tokens = (
+        "gameplay_string_assign=0x00402AE0",
+        "gameplay_exact_text_object_render=0x0043BCD0",
+        "gameplay_exact_text_object=0x008199A0",
+        "gameplay_exact_text_object=0xE7D98",
+    )
+    missing_layout = [token for token in required_layout_tokens if token not in layout_text]
+    if missing_layout:
+        raise StaticReTestFailure(
+            "native exact-text layout keys are missing: " +
+            ", ".join(missing_layout))
+
+    forbidden_layout_tokens = ("gameplay_nameplate_text_object",)
+    present_layout = [token for token in forbidden_layout_tokens if token in layout_text]
+    if present_layout:
+        raise StaticReTestFailure(
+            "stale nameplate-only native text layout keys were reintroduced: " +
+            ", ".join(present_layout))
+
+    required_native_type_tokens = (
+        "struct NativeGameString",
+        "static_assert(sizeof(NativeGameString) == 0x1C",
+        "using NativeStringAssignFn = void(__thiscall*)(void* self, char* text)",
+        "using NativeExactTextObjectRenderFn = void(__thiscall*)(void* self, NativeGameString text, float x, float y)",
+    )
+    missing_native_types = [
+        token for token in required_native_type_tokens
+        if token not in native_types_text
+    ]
+    if missing_native_types:
+        raise StaticReTestFailure(
+            "native text function types are missing: " +
+            ", ".join(missing_native_types))
+
+    required_injection_tokens = (
+        "ResolveGameAddressOrZero(kGameplayStringAssign)",
+        "ResolveGameAddressOrZero(kGameplayExactTextObjectRender)",
+        "ResolveGameAddressOrZero(kGameplayExactTextObjectGlobal)",
+        "kGameplayExactTextObjectOffset == 0",
+        "native HUD text helpers",
+        "gameplay_exact_text_object_offset=",
+    )
+    missing_injection = [
+        token for token in required_injection_tokens
+        if token not in keyboard_injection_text
+    ]
+    if missing_injection:
+        raise StaticReTestFailure(
+            "gameplay injection startup no longer validates native HUD text helpers: " +
+            ", ".join(missing_injection))
 
     required_player_tick_tokens = (
         "native_remote_pre_tick_progression_runtime",
         "ApplyNativeRemoteParticipantPlayback(binding, actor_address, native_tick_now_ms)",
         "ApplyNativeRemoteParticipantPresentationState(binding, actor_address)",
+        "ApplyReplicatedWorldSnapshotIfActive(gameplay_address_for_pump, static_cast<std::uint64_t>(::GetTickCount64()))",
     )
     missing_player_tick = [
         token for token in required_player_tick_tokens
@@ -6294,7 +6456,11 @@ def test_multiplayer_nameplates_render_from_hud_not_animation_advance() -> str:
             "player tick no longer owns remote participant playback/presentation: " +
             ", ".join(missing_player_tick))
 
-    return "remote nameplates and presentation writes stay out of the actor animation callback"
+    if "PublishGameplayParticipantNameplateOverlaySnapshot();" in player_tick_text:
+        raise StaticReTestFailure(
+            "player tick still publishes stale D3D nameplate overlay snapshots")
+
+    return "remote nameplates use native actor-callback exact text with direct native scaling"
 
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
@@ -6316,7 +6482,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("remote per-cast primary settles without waiting for release", test_remote_per_cast_primary_settles_without_waiting_for_release),
     ("remote held input casts defer lifecycle to sender input", test_remote_held_input_casts_defer_lifecycle_to_sender_input),
     ("run-lifecycle spell hooks only forward local player casts", test_run_lifecycle_spell_hooks_only_forward_local_player_casts),
-    ("multiplayer nameplates render outside animation advance", test_multiplayer_nameplates_render_from_hud_not_animation_advance),
+    ("multiplayer nameplates render through native scene passes", test_multiplayer_nameplates_render_from_native_scene_passes),
     ("primary build skill mapping has single runtime owner", test_primary_build_skill_mapping_has_single_runtime_owner),
     ("primary mana resolver accepts native dispatcher entry ids", test_primary_mana_resolver_accepts_native_dispatcher_entry_ids),
     ("primary selection mapping is native-backed", test_primary_selection_mapping_is_native_backed_not_static_table),
