@@ -11,8 +11,11 @@ constexpr float kRunEntryFormationSpacing = 64.0f;
 constexpr float kRunEntryFormationNavSnapMaxDistance = 48.0f;
 constexpr float kRunEntryFormationNavSnapMaxAuthorityDistance = 96.0f;
 constexpr float kRunEntryFormationReapplyDistance = 32.0f;
+constexpr float kRunEntryFormationAuthoritySettleDistance = 8.0f;
 constexpr std::uint64_t kRunEntryFormationBootstrapMs = 5000;
 constexpr std::uint64_t kRunEntryFormationReapplyIntervalMs = 100;
+constexpr std::uint64_t kRunEntryFormationAuthorityStableMs = 500;
+constexpr std::uint64_t kRunEntryFormationMinimumSettleMs = 2000;
 constexpr std::uint32_t kSolomonDigNativeTypeId = 0x1391;
 constexpr std::uint32_t kSolomonRunStaticNativeTypeId = 0x1392;
 
@@ -28,6 +31,10 @@ std::uint64_t g_run_entry_formation_authority_participant_id = 0;
 std::uint32_t g_run_entry_formation_run_nonce = 0;
 std::uint64_t g_run_entry_formation_started_ms = 0;
 std::uint64_t g_run_entry_formation_last_apply_ms = 0;
+float g_run_entry_formation_authority_x = 0.0f;
+float g_run_entry_formation_authority_y = 0.0f;
+std::uint64_t g_run_entry_formation_authority_stable_since_ms = 0;
+bool g_run_entry_formation_have_authority_sample = false;
 bool g_run_entry_formation_settled = false;
 
 struct ReplicatedWorldActorLocalBinding {
@@ -233,6 +240,10 @@ void ResetHostAuthoritativeRunEntryFormation() {
     g_run_entry_formation_run_nonce = 0;
     g_run_entry_formation_started_ms = 0;
     g_run_entry_formation_last_apply_ms = 0;
+    g_run_entry_formation_authority_x = 0.0f;
+    g_run_entry_formation_authority_y = 0.0f;
+    g_run_entry_formation_authority_stable_since_ms = 0;
+    g_run_entry_formation_have_authority_sample = false;
     g_run_entry_formation_settled = false;
 }
 
@@ -428,19 +439,53 @@ void ApplyHostAuthoritativeRunEntryFormationIfNeeded(
 
     const auto authority_id = authority->participant_id;
     const auto run_nonce = runtime_state.world_snapshot.run_nonce;
-    const bool existing_formation =
+    const bool same_formation =
         g_run_entry_formation_world_address == player_state.world_address &&
         g_run_entry_formation_authority_participant_id == authority_id &&
         g_run_entry_formation_run_nonce == run_nonce;
-    if (!existing_formation) {
+    if (!same_formation) {
+        g_run_entry_formation_world_address = player_state.world_address;
+        g_run_entry_formation_authority_participant_id = authority_id;
+        g_run_entry_formation_run_nonce = run_nonce;
+        g_run_entry_formation_started_ms = now_ms;
+        g_run_entry_formation_last_apply_ms = 0;
+        g_run_entry_formation_authority_x = 0.0f;
+        g_run_entry_formation_authority_y = 0.0f;
+        g_run_entry_formation_authority_stable_since_ms = 0;
+        g_run_entry_formation_have_authority_sample = false;
         g_run_entry_formation_settled = false;
     }
-    if (existing_formation && g_run_entry_formation_settled) {
+    if (same_formation && g_run_entry_formation_settled) {
         return;
     }
-    if (existing_formation &&
-        g_run_entry_formation_started_ms != 0 &&
+
+    const float authority_sample_dx =
+        g_run_entry_formation_have_authority_sample
+            ? authority->runtime.position_x - g_run_entry_formation_authority_x
+            : 0.0f;
+    const float authority_sample_dy =
+        g_run_entry_formation_have_authority_sample
+            ? authority->runtime.position_y - g_run_entry_formation_authority_y
+            : 0.0f;
+    const bool authority_sample_changed =
+        !g_run_entry_formation_have_authority_sample ||
+        authority_sample_dx * authority_sample_dx + authority_sample_dy * authority_sample_dy >
+            kRunEntryFormationAuthoritySettleDistance * kRunEntryFormationAuthoritySettleDistance;
+    if (authority_sample_changed) {
+        g_run_entry_formation_authority_x = authority->runtime.position_x;
+        g_run_entry_formation_authority_y = authority->runtime.position_y;
+        g_run_entry_formation_authority_stable_since_ms = now_ms;
+        g_run_entry_formation_have_authority_sample = true;
+        g_run_entry_formation_settled = false;
+    }
+
+    if (g_run_entry_formation_started_ms != 0 &&
         now_ms - g_run_entry_formation_started_ms > kRunEntryFormationBootstrapMs) {
+        return;
+    }
+    if (!g_run_entry_formation_have_authority_sample ||
+        g_run_entry_formation_authority_stable_since_ms == 0 ||
+        now_ms - g_run_entry_formation_authority_stable_since_ms < kRunEntryFormationAuthorityStableMs) {
         return;
     }
 
@@ -472,12 +517,15 @@ void ApplyHostAuthoritativeRunEntryFormationIfNeeded(
     const float current_target_dy = player_state.y - target_y;
     const float current_target_distance2 =
         current_target_dx * current_target_dx + current_target_dy * current_target_dy;
-    if (existing_formation &&
+    if (same_formation &&
         current_target_distance2 <= kRunEntryFormationReapplyDistance * kRunEntryFormationReapplyDistance) {
-        g_run_entry_formation_settled = true;
+        if (g_run_entry_formation_started_ms != 0 &&
+            now_ms - g_run_entry_formation_started_ms >= kRunEntryFormationMinimumSettleMs) {
+            g_run_entry_formation_settled = true;
+        }
         return;
     }
-    if (existing_formation &&
+    if (same_formation &&
         g_run_entry_formation_last_apply_ms != 0 &&
         now_ms - g_run_entry_formation_last_apply_ms < kRunEntryFormationReapplyIntervalMs) {
         return;
@@ -494,12 +542,6 @@ void ApplyHostAuthoritativeRunEntryFormationIfNeeded(
     ApplyWizardActorFacingState(player_state.actor_address, authority->runtime.heading);
     std::string rebind_error;
     const bool rebound = RebindSceneActorCell(player_state.actor_address, &rebind_error);
-    g_run_entry_formation_world_address = player_state.world_address;
-    g_run_entry_formation_authority_participant_id = authority_id;
-    g_run_entry_formation_run_nonce = run_nonce;
-    if (!existing_formation || g_run_entry_formation_started_ms == 0) {
-        g_run_entry_formation_started_ms = now_ms;
-    }
     g_run_entry_formation_last_apply_ms = now_ms;
 
     Log(
@@ -510,7 +552,7 @@ void ApplyHostAuthoritativeRunEntryFormationIfNeeded(
         " target=(" + std::to_string(target_x) + "," + std::to_string(target_y) + ")" +
         " anchor=(" + std::to_string(authority->runtime.position_x) + "," +
         std::to_string(authority->runtime.position_y) + ")" +
-        " reapply=" + (existing_formation ? "true" : "false") +
+        " reapply=" + (same_formation ? "true" : "false") +
         " nav_snapped=" + (nav_snapped ? "true" : "false") +
         " rebound=" + (rebound ? "true" : "false") +
         (rebound ? "" : " rebind_error=" + rebind_error));

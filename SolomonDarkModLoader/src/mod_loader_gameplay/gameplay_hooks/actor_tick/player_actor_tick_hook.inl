@@ -627,8 +627,10 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     } else if (OngoingCastShouldRefreshNativeTargetState(binding->ongoing_cast)) {
                         (void)RefreshOngoingCastAimFromFacingTarget(binding, &binding->ongoing_cast);
                     }
+                    // Stock tick maintains native run overlay/nameplate child state;
+                    // replicated playback below restores the authoritative transform.
+                    RunStockTick(binding);
                     if (binding->ongoing_cast.active || prepared_cast || cast_active_before) {
-                        RunStockTick(binding);
                         (void)ProcessPendingBotCast(binding, &native_remote_cast_error);
                     }
                     const auto playback =
