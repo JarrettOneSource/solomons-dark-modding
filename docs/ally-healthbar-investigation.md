@@ -58,6 +58,33 @@ source is not in the plain `PlayerWizard vt[7]` or `vt[10]` bodies.
 
 ## Text Storage Candidate
 
+### Current verified bundle-label source
+
+The top-center `ALLY` / `GOLEM` labels are native sprite records, not ordinary
+ASCII/UTF-16 strings passed through `Text_Draw`:
+
+- `UI.bundle` is 113 fixed records of 45 bytes each.
+- `UI.bundle` record `0` begins with `x=96`, `y=49`, `w=26`, `h=7` and the
+  matching `UI.png` crop is the stock `ALLY` label.
+- `UI.bundle` record `23` begins with `x=421`, `y=53`, `w=37`, `h=7` and the
+  matching `UI.png` crop is the stock `GOLEM` label.
+- `FUN_00512060` case `100` references the `DAT_008199B8` UI record table; the
+  runtime table expands compact bundle records into `0xC4` draw records.
+
+The first implemented source-level substitution is the launcher-stage
+`HudLabelAssetMaterializer`. When `SDMOD_HUD_ALLY_LABEL` is set, it rewrites
+staged `UI.bundle` record `0` to a wider generated-label rectangle and renders
+that label into staged `runtime/stage/images/UI.png`, so the stock HUD draws the
+changed source sprite. The local multiplayer pair launcher sets this variable
+to the remote player's display name for each instance. This is intentionally
+different from the rejected D3D overlay/mask approach.
+
+For player-specific names, a later pass still needs a per-row selection seam or
+per-row record swap. Editing record `0` changes every stock `ALLY` use because
+the native HUD reuses that record.
+
+### Superseded string-object trail
+
 The strongest known text draw site is inside `FUN_0060C540`:
 
 - it calls `Text_Draw(DAT_00819978 + 0x4210)`

@@ -15,5 +15,6 @@ internal sealed record StageBuildResult(
     StageMirrorResult StageMirror,
     RuntimeMetadataStageResult RuntimeMetadata,
     SteamStageBootstrapResult SteamBootstrap,
+    HudLabelAssetResult HudLabels,
     int EnabledModCount,
     int AppliedOverlayCount);

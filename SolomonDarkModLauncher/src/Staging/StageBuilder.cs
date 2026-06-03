@@ -19,6 +19,7 @@ internal static class StageBuilder
         var appliedOverlayCount = OverlayStageMaterializer.Materialize(
             configuration.Workspace.StageRootPath,
             catalog.EnabledMods);
+        var hudLabels = HudLabelAssetMaterializer.Materialize(configuration.Workspace.StageRootPath);
         var runtimeConfig = RuntimeConfigStageMaterializer.Materialize(configuration);
         var runtimeMetadata = RuntimeMetadataStageMaterializer.Materialize(
             configuration.Workspace.StageRootPath,
@@ -32,6 +33,7 @@ internal static class StageBuilder
             stageMirror,
             catalog.EnabledMods,
             appliedOverlayCount,
+            hudLabels,
             runtimeMetadata,
             steamBootstrap);
 
@@ -48,6 +50,7 @@ internal static class StageBuilder
             stageMirror,
             runtimeMetadata,
             steamBootstrap,
+            hudLabels,
             catalog.EnabledMods.Count,
             appliedOverlayCount);
     }

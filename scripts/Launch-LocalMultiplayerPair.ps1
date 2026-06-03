@@ -232,12 +232,14 @@ function Start-MultiplayerInstance {
         [UInt16]$LocalPort,
         [UInt16]$RemotePort,
         [string]$ParticipantId,
-        [string]$PlayerName
+        [string]$PlayerName,
+        [string]$RemotePlayerName
     )
 
     $env = @{
         SDMOD_UI_SANDBOX_PRESET = $InstanceLaunchPreset
         SDMOD_LUA_EXEC_PIPE_NAME = "SolomonDarkModLoader_LuaExec_$Instance"
+        SDMOD_HUD_ALLY_LABEL = $RemotePlayerName
     }
     if (-not $DisableMultiplayerTransport) {
         $env.SDMOD_MULTIPLAYER_TRANSPORT = "local_udp"
@@ -806,7 +808,8 @@ $hostResult = Start-MultiplayerInstance `
     -LocalPort $HostPort `
     -RemotePort $ClientPort `
     -ParticipantId $HostParticipantId `
-    -PlayerName $HostName
+    -PlayerName $HostName `
+    -RemotePlayerName $ClientName
 
 if ($null -ne $hostSelection -and -not $UseSandboxPresetFlow) {
     Invoke-CreateSelection `
@@ -828,7 +831,8 @@ $clientResult = Start-MultiplayerInstance `
     -LocalPort $ClientPort `
     -RemotePort $HostPort `
     -ParticipantId $ClientParticipantId `
-    -PlayerName $ClientName
+    -PlayerName $ClientName `
+    -RemotePlayerName $HostName
 
 if ($null -ne $clientSelection -and -not $UseSandboxPresetFlow) {
     Invoke-CreateSelection `

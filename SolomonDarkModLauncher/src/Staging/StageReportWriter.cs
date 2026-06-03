@@ -12,6 +12,7 @@ internal static class StageReportWriter
         StageMirrorResult stageMirror,
         IReadOnlyList<DiscoveredMod> enabledMods,
         int appliedOverlayCount,
+        HudLabelAssetResult hudLabels,
         RuntimeMetadataStageResult runtimeMetadata,
         SteamStageBootstrapResult steamBootstrap)
     {
@@ -42,6 +43,18 @@ internal static class StageReportWriter
                 stageApiDllPath = steamBootstrap.StageApiDllPath,
                 steamApiSourcePath = steamBootstrap.SteamApiSourcePath,
                 readyForInitialization = steamBootstrap.ReadyForInitialization
+            },
+            hudLabels = new
+            {
+                hudLabels.Applied,
+                hudLabels.Label,
+                hudLabels.UiBundlePath,
+                hudLabels.UiImagePath,
+                hudLabels.RecordIndex,
+                hudLabels.X,
+                hudLabels.Y,
+                hudLabels.Width,
+                hudLabels.Height
             },
             runtimeMetadata = new
             {

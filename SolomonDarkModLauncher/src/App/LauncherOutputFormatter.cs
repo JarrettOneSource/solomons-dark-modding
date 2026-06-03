@@ -146,6 +146,10 @@ internal static class LauncherOutputFormatter
         builder.AppendLine($"Enabled mods: {result.EnabledModCount}");
         builder.AppendLine($"Applied overlays: {result.AppliedOverlayCount}");
         builder.AppendLine(
+            $"HUD labels: applied={result.HudLabels.Applied} label={result.HudLabels.Label} " +
+            $"record={result.HudLabels.RecordIndex} rect={result.HudLabels.X},{result.HudLabels.Y}," +
+            $"{result.HudLabels.Width}x{result.HudLabels.Height}");
+        builder.AppendLine(
             $"Staged runtime mods: total={result.RuntimeMetadata.StagedRuntimeModCount} " +
             $"lua={result.RuntimeMetadata.StagedLuaModCount} native={result.RuntimeMetadata.StagedNativeModCount} " +
             $"profile={result.RuntimeMetadata.RuntimeProfileName}");

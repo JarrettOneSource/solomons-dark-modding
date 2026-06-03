@@ -67,7 +67,10 @@ internal static class LauncherJsonConsole
                     StageRuntimeBootstrapPath = execution.StageResult.StageRuntimeBootstrapPath,
                     StageRuntimeFlagsPath = execution.StageResult.StageRuntimeFlagsPath,
                     EnabledModCount = execution.StageResult.EnabledModCount,
-                    AppliedOverlayCount = execution.StageResult.AppliedOverlayCount
+                    AppliedOverlayCount = execution.StageResult.AppliedOverlayCount,
+                    HudLabel = execution.StageResult.HudLabels.Label,
+                    HudLabelApplied = execution.StageResult.HudLabels.Applied,
+                    HudLabelRecordIndex = execution.StageResult.HudLabels.RecordIndex
                 },
             Launch = execution.LaunchedGame is null
                 ? null
@@ -182,6 +185,9 @@ internal static class LauncherJsonConsole
         public required string StageRuntimeFlagsPath { get; init; }
         public required int EnabledModCount { get; init; }
         public required int AppliedOverlayCount { get; init; }
+        public required string HudLabel { get; init; }
+        public required bool HudLabelApplied { get; init; }
+        public required int HudLabelRecordIndex { get; init; }
     }
 
     private sealed class LauncherJsonLaunch
