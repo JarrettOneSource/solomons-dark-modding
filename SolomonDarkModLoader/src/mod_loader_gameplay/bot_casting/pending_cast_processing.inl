@@ -689,6 +689,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         const bool remote_bounded_release_ready =
             remote_input_driven_cast &&
             remote_input_release_or_timeout &&
+            earth_native_min_release_charge_reached &&
             active_spell_state.readable;
         const bool bot_bounded_release_ready =
             !remote_input_driven_cast &&
@@ -847,7 +848,12 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         } else if (held_target_missing) {
             ongoing.targetless_ticks_waiting += 1;
         }
+        // Remote-player casts are driven by the sender's input stream. A
+        // targetless held cast such as lightning must stay alive until release
+        // or input timeout instead of being cleaned up by the bot retarget
+        // watchdog.
         const bool target_lost =
+            !remote_input_driven_cast &&
             held_target_missing &&
             ongoing.targetless_ticks_waiting >=
                 ParticipantEntityBinding::OngoingCastState::kTargetlessRetargetGraceTicks;
@@ -877,7 +883,11 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             !remote_per_cast_pure_primary_without_live_handle &&
             !remote_pure_primary_no_handle_visibility_pending &&
             ongoing.remote_input_release_ticks_waiting >= 2;
+        const bool remote_input_active_without_release =
+            remote_input_driven_cast &&
+            !remote_input_release_or_timeout;
         const bool safety_cap_hit =
+            !remote_input_active_without_release &&
             !bounded_native_charge_observable &&
             !bounded_release_window_pending &&
             ongoing.ticks_waiting >=

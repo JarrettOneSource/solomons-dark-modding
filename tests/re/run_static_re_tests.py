@@ -686,6 +686,16 @@ def test_boulder_projection_is_read_only_native_formula() -> str:
     if "earth_native_min_release_charge_reached" not in target_lethal_guard.group("body"):
         raise StaticReTestFailure(
             "target-lethal Boulder release must wait for the native minimum release charge")
+    remote_release_guard = re.search(
+        r"const bool remote_bounded_release_ready =(?P<body>.*?);",
+        processing_text,
+        re.DOTALL,
+    )
+    if remote_release_guard is None:
+        raise StaticReTestFailure("remote Boulder release guard was not found")
+    if "earth_native_min_release_charge_reached" not in remote_release_guard.group("body"):
+        raise StaticReTestFailure(
+            "remote Boulder release must wait for the native minimum release charge")
     return "Earth boulder projection stays read-only and drives target-lethal release"
 
 
@@ -6136,6 +6146,60 @@ def test_remote_per_cast_primary_settles_without_waiting_for_release() -> str:
     return "remote per-cast primaries settle from projectile observation and verifier rejects overfire"
 
 
+def test_remote_held_input_casts_defer_lifecycle_to_sender_input() -> str:
+    processing_text = read_text(PENDING_CAST_PROCESSING)
+
+    target_lost_guard = re.search(
+        r"const bool target_lost =(?P<body>.*?);",
+        processing_text,
+        re.DOTALL,
+    )
+    if target_lost_guard is None:
+        raise StaticReTestFailure("target-lost guard was not found")
+    target_lost_body = target_lost_guard.group("body")
+    required_target_lost_tokens = (
+        "!remote_input_driven_cast",
+        "held_target_missing",
+        "kTargetlessRetargetGraceTicks",
+    )
+    missing_target_lost_tokens = [
+        token for token in required_target_lost_tokens
+        if token not in target_lost_body
+    ]
+    if missing_target_lost_tokens:
+        raise StaticReTestFailure(
+            "remote held input can still be cleaned up as target-lost: " +
+            ", ".join(missing_target_lost_tokens))
+
+    required_processing_tokens = (
+        "Remote-player casts are driven by the sender's input stream.",
+        "remote_input_active_without_release",
+        "remote_input_release_settled",
+        "!remote_input_active_without_release",
+    )
+    missing_processing_tokens = [
+        token for token in required_processing_tokens
+        if token not in processing_text
+    ]
+    if missing_processing_tokens:
+        raise StaticReTestFailure(
+            "remote held input lifecycle is missing sender-input guard token(s): " +
+            ", ".join(missing_processing_tokens))
+
+    safety_cap_guard = re.search(
+        r"const bool safety_cap_hit =(?P<body>.*?);",
+        processing_text,
+        re.DOTALL,
+    )
+    if safety_cap_guard is None:
+        raise StaticReTestFailure("safety-cap guard was not found")
+    if "!remote_input_active_without_release" not in safety_cap_guard.group("body"):
+        raise StaticReTestFailure(
+            "remote held input can still hit the generic safety cap while sender input is active")
+
+    return "remote held input casts defer lifecycle cleanup to sender release or timeout"
+
+
 def test_run_lifecycle_spell_hooks_only_forward_local_player_casts() -> str:
     spell_hook_text = read_text(RUN_LIFECYCLE_SPELL_CAST_HOOKS)
     required_tokens = (
@@ -6250,6 +6314,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("bot out-of-mana probe checks pre-execution rejection", test_bot_out_of_mana_probe_checks_pre_execution_rejection),
     ("held primary mana uses native spend scale and start rate", test_held_primary_mana_uses_native_spend_scale_and_start_rate),
     ("remote per-cast primary settles without waiting for release", test_remote_per_cast_primary_settles_without_waiting_for_release),
+    ("remote held input casts defer lifecycle to sender input", test_remote_held_input_casts_defer_lifecycle_to_sender_input),
     ("run-lifecycle spell hooks only forward local player casts", test_run_lifecycle_spell_hooks_only_forward_local_player_casts),
     ("multiplayer nameplates render outside animation advance", test_multiplayer_nameplates_render_from_hud_not_animation_advance),
     ("primary build skill mapping has single runtime owner", test_primary_build_skill_mapping_has_single_runtime_owner),
