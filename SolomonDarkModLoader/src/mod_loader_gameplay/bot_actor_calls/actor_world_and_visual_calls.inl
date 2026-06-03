@@ -16,7 +16,8 @@ bool CallGameplayActorAttachSafe(
             return false;
         }
 
-        const auto attach_address = *reinterpret_cast<uintptr_t*>(vtable + 0x10);
+        const auto attach_address =
+            *reinterpret_cast<uintptr_t*>(vtable + kGameplayActorAttachVfuncOffset);
         if (attach_address == 0) {
             return false;
         }

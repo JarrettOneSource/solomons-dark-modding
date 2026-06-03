@@ -1,30 +1,41 @@
-float ReadResolvedGameFloatOr(uintptr_t absolute_address, float fallback) {
+bool TryReadResolvedGameFloat(uintptr_t absolute_address, float* value) {
+    if (value == nullptr) {
+        return false;
+    }
+
     auto& memory = ProcessMemory::Instance();
     const auto resolved_address = memory.ResolveGameAddressOrZero(absolute_address);
     if (resolved_address == 0) {
-        return fallback;
+        return false;
     }
 
-    return memory.ReadValueOr<float>(resolved_address, fallback);
+    return memory.TryReadValue(resolved_address, value);
 }
 
-float ReadResolvedGameDoubleAsFloatOr(uintptr_t absolute_address, float fallback) {
+bool TryReadResolvedGameDoubleAsFloat(uintptr_t absolute_address, float* value) {
+    if (value == nullptr) {
+        return false;
+    }
+
     auto& memory = ProcessMemory::Instance();
     const auto resolved_address = memory.ResolveGameAddressOrZero(absolute_address);
     if (resolved_address == 0) {
-        return fallback;
+        return false;
     }
 
-    return static_cast<float>(memory.ReadValueOr<double>(resolved_address, static_cast<double>(fallback)));
+    double native_value = 0.0;
+    if (!memory.TryReadValue(resolved_address, &native_value)) {
+        return false;
+    }
+
+    *value = static_cast<float>(native_value);
+    return true;
 }
 
 constexpr std::int32_t kSuppressedSelectionRetargetTicks = 60;
-constexpr std::size_t kArenaEnemyMaxHpOffset = 0x170;
-constexpr std::size_t kArenaEnemyCurrentHpOffset = 0x174;
-constexpr std::size_t kArenaEnemyHealthReadSize = kArenaEnemyCurrentHpOffset + sizeof(float);
 
 bool IsArenaEnemyActorHealthType(std::uint32_t object_type_id) {
-    return object_type_id == 1001;
+    return IsArenaCombatActorTypeInternal(object_type_id);
 }
 
 struct ActorHealthRuntime {
@@ -43,32 +54,35 @@ bool TryReadArenaEnemyActorHealth(uintptr_t actor_address, ActorHealthRuntime* h
     }
 
     auto& memory = ProcessMemory::Instance();
-    if (!memory.IsReadableRange(actor_address, kArenaEnemyHealthReadSize)) {
+    if (!memory.IsReadableRange(actor_address + kEnemyCurrentHpOffset, sizeof(float)) ||
+        !memory.IsReadableRange(actor_address + kEnemyMaxHpOffset, sizeof(float))) {
         return false;
     }
 
-    const auto object_type_id =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, kGameObjectTypeIdOffset, 0);
+    std::uint32_t object_type_id = 0;
+    if (!memory.TryReadField(actor_address, kGameObjectTypeIdOffset, &object_type_id)) {
+        return false;
+    }
     if (!IsArenaEnemyActorHealthType(object_type_id)) {
         return false;
     }
 
-    const auto hp =
-        memory.ReadFieldOr<float>(actor_address, kArenaEnemyCurrentHpOffset, 0.0f);
-    auto max_hp = memory.ReadFieldOr<float>(actor_address, kArenaEnemyMaxHpOffset, 0.0f);
-    if (!std::isfinite(hp) || !std::isfinite(max_hp)) {
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    if (!memory.TryReadField(actor_address, kEnemyCurrentHpOffset, &hp) ||
+        !memory.TryReadField(actor_address, kEnemyMaxHpOffset, &max_hp)) {
         return false;
     }
-    if (max_hp <= 0.0f && hp > 0.0f) {
-        max_hp = hp;
+    if (!std::isfinite(hp) || !std::isfinite(max_hp)) {
+        return false;
     }
     if (max_hp <= 0.0f) {
         return false;
     }
 
     health->base_address = actor_address;
-    health->current_hp_offset = kArenaEnemyCurrentHpOffset;
-    health->max_hp_offset = kArenaEnemyMaxHpOffset;
+    health->current_hp_offset = kEnemyCurrentHpOffset;
+    health->max_hp_offset = kEnemyMaxHpOffset;
     health->progression_address = 0;
     health->kind = "arena_enemy";
     health->hp = hp;
@@ -93,9 +107,12 @@ bool TryReadActorProgressionHealth(uintptr_t actor_address, ActorHealthRuntime* 
         return false;
     }
 
-    const auto hp = memory.ReadFieldOr<float>(progression_address, kProgressionHpOffset, 0.0f);
-    const auto max_hp =
-        memory.ReadFieldOr<float>(progression_address, kProgressionMaxHpOffset, 0.0f);
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    if (!memory.TryReadField(progression_address, kProgressionHpOffset, &hp) ||
+        !memory.TryReadField(progression_address, kProgressionMaxHpOffset, &max_hp)) {
+        return false;
+    }
     if (!std::isfinite(hp) || !std::isfinite(max_hp) || max_hp <= 0.0f) {
         return false;
     }
@@ -120,15 +137,6 @@ bool TryReadActorHealthRuntime(uintptr_t actor_address, ActorHealthRuntime* heal
     return TryReadActorProgressionHealth(actor_address, health);
 }
 
-struct ManaSpendResult {
-    bool readable = false;
-    bool spent = false;
-    float before = 0.0f;
-    float after = 0.0f;
-    float requested = 0.0f;
-    float actual = 0.0f;
-};
-
 bool TryReadProgressionMana(uintptr_t progression_address, float* mp, float* max_mp) {
     if (progression_address == 0 || mp == nullptr || max_mp == nullptr) {
         return false;
@@ -139,9 +147,12 @@ bool TryReadProgressionMana(uintptr_t progression_address, float* mp, float* max
         !memory.IsReadableRange(progression_address + kProgressionMaxMpOffset, sizeof(float))) {
         return false;
     }
-    const auto current = memory.ReadFieldOr<float>(progression_address, kProgressionMpOffset, 0.0f);
-    const auto maximum =
-        memory.ReadFieldOr<float>(progression_address, kProgressionMaxMpOffset, 0.0f);
+    float current = 0.0f;
+    float maximum = 0.0f;
+    if (!memory.TryReadField(progression_address, kProgressionMpOffset, &current) ||
+        !memory.TryReadField(progression_address, kProgressionMaxMpOffset, &maximum)) {
+        return false;
+    }
     if (!std::isfinite(current) || !std::isfinite(maximum) || maximum <= 0.0f) {
         return false;
     }
@@ -150,80 +161,221 @@ bool TryReadProgressionMana(uintptr_t progression_address, float* mp, float* max
     return true;
 }
 
-ManaSpendResult TrySpendProgressionMana(
-    uintptr_t progression_address,
-    float requested_amount,
-    bool allow_partial) {
-    ManaSpendResult result{};
-    result.requested = requested_amount;
-    if (!std::isfinite(requested_amount) || requested_amount <= 0.0f) {
-        result.spent = true;
-        return result;
-    }
-
-    float before = 0.0f;
-    float max_mp = 0.0f;
-    if (!TryReadProgressionMana(progression_address, &before, &max_mp)) {
-        return result;
-    }
-    result.readable = true;
-    result.before = before;
-    if (before <= 0.0f) {
-        result.after = before;
-        return result;
-    }
-
-    const float actual_amount =
-        allow_partial && before < requested_amount ? before : requested_amount;
-    if (before + 0.001f < requested_amount && !allow_partial) {
-        result.after = before;
-        return result;
-    }
-    const float after = before > actual_amount ? before - actual_amount : 0.0f;
-    auto& memory = ProcessMemory::Instance();
-    result.spent =
-        memory.TryWriteField<float>(progression_address, kProgressionMpOffset, after);
-    if (result.spent) {
-        result.after = after;
-        result.actual = actual_amount;
-    } else {
-        result.after = before;
-    }
-    return result;
-}
-
-constexpr std::array<float, 26> kEarthBoulderBaseDamageByLevel = {
-    0.0f,   10.0f,  30.0f,  50.0f,  75.0f,  100.0f, 120.0f, 140.0f, 160.0f,
-    180.0f, 200.0f, 220.0f, 240.0f, 260.0f, 280.0f, 300.0f, 320.0f, 340.0f,
-    360.0f, 380.0f, 400.0f, 420.0f, 440.0f, 460.0f, 480.0f, 500.0f,
+struct NativeManaRateConfigValidation {
+    bool required = false;
+    bool invalidated = false;
+    bool readable = false;
+    bool plausible = true;
+    float native_rate = 0.0f;
+    float expected_rate = 0.0f;
+    float max_allowed_rate = 0.0f;
+    const char* reason = "not_required";
 };
 
-int ResolveEarthBoulderStatbookLevel(
-    const ParticipantEntityBinding* binding,
-    uintptr_t progression_runtime_address) {
-    int level = binding != nullptr ? binding->character_profile.level : 1;
+bool NativeManaRateConfigRequiredForOngoingCast(
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    return ongoing.active &&
+           ongoing.uses_dispatcher_skill_id &&
+           ongoing.mana_charge_kind == multiplayer::BotManaChargeKind::PerSecond &&
+           std::isfinite(ongoing.mana_cost) &&
+           ongoing.mana_cost > 0.0f;
+}
+
+bool ClearNativeManaRateConfigForOngoingCast(
+    uintptr_t actor_address,
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    if (actor_address == 0 || !NativeManaRateConfigRequiredForOngoingCast(ongoing)) {
+        return false;
+    }
+
     auto& memory = ProcessMemory::Instance();
-    if (progression_runtime_address != 0 &&
-        kProgressionLevelOffset != 0 &&
-        memory.IsReadableRange(progression_runtime_address + kProgressionLevelOffset, sizeof(int))) {
-        level = memory.ReadFieldOr<int>(progression_runtime_address, kProgressionLevelOffset, level);
+    if (kActorSpellConfig2d0Offset == 0 ||
+        !memory.IsReadableRange(actor_address + kActorSpellConfig2d0Offset, sizeof(float))) {
+        return false;
     }
-    if (level < 1) {
-        return 1;
+    return memory.TryWriteField<float>(actor_address, kActorSpellConfig2d0Offset, 0.0f);
+}
+
+NativeManaRateConfigValidation ValidateNativeManaRateConfigForOngoingCast(
+    uintptr_t actor_address,
+    const ParticipantEntityBinding::OngoingCastState& ongoing) {
+    NativeManaRateConfigValidation validation{};
+    validation.required = NativeManaRateConfigRequiredForOngoingCast(ongoing);
+    validation.invalidated = ongoing.native_mana_rate_config_invalidated;
+    validation.expected_rate = ongoing.mana_cost;
+    if (!validation.required) {
+        return validation;
     }
-    const auto max_level = static_cast<int>(kEarthBoulderBaseDamageByLevel.size()) - 1;
-    return level > max_level ? max_level : level;
+
+    validation.plausible = false;
+    const auto rate_ceiling = std::fabs(validation.expected_rate) * 4.0f;
+    validation.max_allowed_rate = rate_ceiling > 0.01f ? rate_ceiling : 0.01f;
+    if (!validation.invalidated) {
+        validation.reason = "not_invalidated";
+        return validation;
+    }
+    if (actor_address == 0 || kActorSpellConfig2d0Offset == 0) {
+        validation.reason = "address_unavailable";
+        return validation;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.IsReadableRange(actor_address + kActorSpellConfig2d0Offset, sizeof(float))) {
+        validation.reason = "unreadable";
+        return validation;
+    }
+
+    if (!memory.TryReadField(actor_address, kActorSpellConfig2d0Offset, &validation.native_rate)) {
+        validation.reason = "unreadable";
+        return validation;
+    }
+    validation.readable = true;
+    if (!std::isfinite(validation.native_rate) || validation.native_rate <= 0.0f) {
+        validation.reason = "pending";
+        return validation;
+    }
+
+    if (validation.native_rate > validation.max_allowed_rate) {
+        validation.reason = "mismatch";
+        return validation;
+    }
+
+    validation.plausible = true;
+    validation.reason = "ready";
+    return validation;
+}
+
+bool TryReadEarthBoulderProgressionLevel(
+    uintptr_t progression_runtime_address,
+    int* level) {
+    if (level == nullptr) {
+        return false;
+    }
+    *level = 0;
+    if (progression_runtime_address == 0 || kProgressionLevelOffset == 0) {
+        return false;
+    }
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.IsReadableRange(progression_runtime_address + kProgressionLevelOffset, sizeof(int)) ||
+        !memory.TryReadField(progression_runtime_address, kProgressionLevelOffset, level)) {
+        *level = 0;
+        return false;
+    }
+    if (*level <= 0) {
+        *level = 0;
+        return false;
+    }
+    return true;
 }
 
 float ResolveEarthBoulderBaseDamage(
     const ParticipantEntityBinding* binding,
     uintptr_t progression_runtime_address,
     int* resolved_level) {
-    const auto level = ResolveEarthBoulderStatbookLevel(binding, progression_runtime_address);
-    if (resolved_level != nullptr) {
-        *resolved_level = level;
+    (void)binding;
+    int progression_level = 0;
+    if (!TryReadEarthBoulderProgressionLevel(progression_runtime_address, &progression_level)) {
+        Log(
+            "[bots] failed to resolve native Earth boulder progression level. progression=" +
+            HexString(progression_runtime_address));
+        if (resolved_level != nullptr) {
+            *resolved_level = 0;
+        }
+        return 0.0f;
     }
-    return kEarthBoulderBaseDamageByLevel[static_cast<std::size_t>(level)];
+    NativePrimarySpellSelection selection{};
+    const auto earth_primary_entry = ResolveNativePrimaryEntryForElement(2);
+    std::string selection_error;
+    if (!TryResolveNativePrimarySelectionFromLiveProgression(
+            progression_runtime_address,
+            earth_primary_entry,
+            earth_primary_entry,
+            &selection,
+            &selection_error)) {
+        Log("[bots] failed to resolve native Earth boulder selection. error=" + selection_error);
+        if (resolved_level != nullptr) {
+            *resolved_level = progression_level;
+        }
+        return 0.0f;
+    }
+
+    NativePrimarySpellStats stats{};
+    std::string error_message;
+    if (!TryResolveNativePrimarySpellStats(
+            progression_runtime_address,
+            selection,
+            &stats,
+            &error_message)) {
+        Log(
+            "[bots] failed to resolve native Earth boulder damage. progression=" +
+            HexString(progression_runtime_address) +
+            " progression_level=" + std::to_string(progression_level) +
+            " error=" + error_message);
+        if (resolved_level != nullptr) {
+            *resolved_level = progression_level;
+        }
+        return 0.0f;
+    }
+
+    if (resolved_level != nullptr) {
+        *resolved_level = stats.progression_level;
+    }
+    return stats.damage;
+}
+
+float ResolveEarthBoulderDamageOutputScale() {
+    float scale = 0.0f;
+    if (!TryReadResolvedGameDoubleAsFloat(kEarthBoulderDamageOutputScaleGlobal, &scale)) {
+        return 0.0f;
+    }
+    if (!std::isfinite(scale) || scale <= 0.0f) {
+        return 0.0f;
+    }
+    return scale;
+}
+
+float ResolveEarthBoulderReleaseDamageScale() {
+    float scale = 0.0f;
+    if (!TryReadResolvedGameDoubleAsFloat(kEarthBoulderReleaseDamageScaleGlobal, &scale)) {
+        return 0.0f;
+    }
+    if (!std::isfinite(scale) || scale <= 0.0f) {
+        return 0.0f;
+    }
+    return scale;
+}
+
+float ResolveEarthBoulderReleaseDamageFloor() {
+    float floor = 0.0f;
+    if (!TryReadResolvedGameDoubleAsFloat(kEarthBoulderReleaseDamageFloorGlobal, &floor)) {
+        return 0.0f;
+    }
+    if (!std::isfinite(floor) || floor < 0.0f) {
+        return 0.0f;
+    }
+    return floor;
+}
+
+float ResolveEarthBoulderReleaseDamageCapScale() {
+    float scale = 0.0f;
+    if (!TryReadResolvedGameDoubleAsFloat(kEarthBoulderReleaseDamageCapScaleGlobal, &scale)) {
+        return 0.0f;
+    }
+    if (!std::isfinite(scale) || scale <= 0.0f) {
+        return 0.0f;
+    }
+    return scale;
+}
+
+float ResolveEarthBoulderReleaseGrowthStopMinCharge() {
+    float charge = 0.0f;
+    if (!TryReadResolvedGameFloat(kEarthBoulderReleaseGrowthStopMinChargeGlobal, &charge)) {
+        return 0.0f;
+    }
+    if (!std::isfinite(charge) || charge < 0.0f) {
+        return 0.0f;
+    }
+    return charge;
 }
 
 bool IsActorRuntimeDead(uintptr_t actor_address) {
@@ -233,8 +385,10 @@ bool IsActorRuntimeDead(uintptr_t actor_address) {
 
     ActorHealthRuntime health;
     auto& memory = ProcessMemory::Instance();
-    const auto object_type_id =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, kGameObjectTypeIdOffset, 0);
+    std::uint32_t object_type_id = 0;
+    if (!memory.TryReadField(actor_address, kGameObjectTypeIdOffset, &object_type_id)) {
+        return false;
+    }
     if (IsArenaEnemyActorHealthType(object_type_id) &&
         TryReadArenaEnemyActorHealth(actor_address, &health)) {
         return health.max_hp > 0.0f && health.hp <= 0.0f;
@@ -244,7 +398,9 @@ bool IsActorRuntimeDead(uintptr_t actor_address) {
         return health.max_hp > 0.0f && health.hp <= 0.0f;
     }
 
-    if (memory.ReadFieldOr<std::uint8_t>(actor_address, kEnemyDeathHandledOffset, 0) != 0) {
+    std::uint8_t death_handled = 0;
+    if (memory.TryReadField(actor_address, kEnemyDeathHandledOffset, &death_handled) &&
+        death_handled != 0) {
         return true;
     }
     return false;

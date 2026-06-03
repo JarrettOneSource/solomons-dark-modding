@@ -32,6 +32,72 @@ Date: 2026-04-13
         step` logs, so the scene-membership cutover is proven but hub movement
         needs its own follow-up pass
 
+### May 1 live all-bots follow regression
+
+Live tracing of `PlayerActor_MoveStep (0x00525800)` in the shared hub showed the
+bot actors were entering the native move-step path, including calls from the
+loader-side movement tick. The bad behavior was higher in the loader A* policy:
+when the requested follow target could not be routed to, `TryBuildBotPath`
+silently substituted a "best reachable" cell while leaving the bot's public
+target unchanged. In the hub courtyard this fallback could point away from the
+player, so bots appeared to walk out of view even though native movement was
+active.
+
+The production rule from that trace is: an unreachable requested target must
+fail cleanly or recover only the actor's current start anchor; it must not become
+a hidden alternate destination. Lua follow may then pick or reissue a real
+target, but the C++ path layer must not walk toward an unrequested goal.
+
+Follow-up live hub investigation found a second planner bug in the same area:
+cell traversability and A* neighbor expansion used different acceptance rules.
+`IsGameplayPathCellTraversable` accepted a cell when any native placement sample
+inside the cell was valid, but the A* neighbor expansion also required direct
+line-of-sight from the previous cell sample to the next sample. In tight hub
+geometry, this rejected adjacent cells even though native placement and the grid
+both considered those cells walkable.
+
+The corrected contract is:
+- A* expansion is a cell-grid planner and may enter any neighboring cell that
+  passes the same native-backed cell traversability check used for goals.
+- line-of-sight is a path simplification pass only; after a cell route exists,
+  the simplifier greedily removes waypoints when the native placement samples
+  prove the longer segment is clear.
+- the path builder still keeps reconstructed sample points for waypoints and
+  still fails cleanly when no cell route exists.
+
+### May 5 native PlayerActorTick speed envelope
+
+The Fire-bot speed regression came from the loader applying a normalized
+direction vector directly through `PlayerActor_MoveStep`. Stock player movement
+does not do that. `PlayerActorTick (0x00548B00)` accumulates input into
+`actor +0x158/+0x15C`, clamps that vector to the live native PlayerActorTick
+speed envelope, applies `PlayerActor_MoveStep (0x00525800)`, then damps the
+stored vector for the next tick.
+
+The recovered live formula is:
+
+```text
+vec_x += input_x / *0x007DE810
+vec_y += input_y / *0x007DE810
+speed_cap = actor +0x120 * actor +0x74 * progression +0x90 * *0x00784740
+dx = actor +0x218 * vec_x
+dy = actor +0x218 * vec_y
+vec *= *0x00784E20
+```
+
+The active bot movement path now mirrors that contract with layout-backed
+globals `movement_input_acceleration_divisor=0x007DE810`,
+`movement_speed_scalar=0x00784740`, and
+`movement_velocity_damping=0x00784E20`. The bot-owned progression runtime stays
+authoritative: movement reads `progression +0x90` from the bot actor, so native
+stat refreshes or skill effects change the cap through live memory instead of
+through Lua or staged skill-file constants. The live regression is
+`tests/re/run_live_bot_native_speed_probe.py`; it launches all bots, verifies
+baseline Fire movement against the computed cap, temporarily lowers the live
+bot-owned `progression +0x90` field to prove the cap follows memory, applies
+native Rush when offered, and verifies post-skill movement still stays inside
+the recomputed envelope.
+
 ## Verified Stock Pathfinding Anchors
 
 ### 1. Monster setup data contains explicit pathfinding and flanking bytes
@@ -423,9 +489,10 @@ Date: 2026-04-13
     radius fields
     - `PlayerActor_EnsureProgressionHandleFromGameplaySlot (0x0052B900)` only
       writes them for the slot-0 actor at `gameplay + 0x1358`
-    - gameplay-slot bots can legitimately keep zero masks at those offsets
-    - the planner uses a player-equivalent mask fallback for placement queries
-      instead of mutating the bot's live actor identity fields
+    - wizard bots need those native mask fields populated during
+      materialization; the production path seeds radius, move-step scale, and
+      both mask fields from the live slot-0 wizard source actor, then the
+      planner reads the bot actor's own mask with no placement fallback
   - April 25 update:
     - live `testrun` movement geometry exposed hundreds of small circular
       scenery blockers with mask `0x4`
@@ -446,9 +513,9 @@ Date: 2026-04-13
     - A* cell sampling and `sd.debug.get_nav_grid` both use the same static
       circle rejection path, so visual clutter/props affect routing instead of
       only debug overlays
-    - the existing player-equivalent collision-mask fallback is still used for
-      cell and type-2 object/hazard overlap checks, so gameplay-slot bots do not
-      inherit the overly strict zero-mask behavior
+    - cell and type-2 object/hazard overlap checks use the bot actor's live
+      native mask; a zero mask is treated as an invalid materialization state,
+      not something the planner papers over
     - `MovementCollision_TestCirclePlacementExtended (0x005238C0)` has two
       different mask meanings:
       - the first mask is a raw movement-circle block mask; intersecting entries
@@ -616,6 +683,348 @@ Date: 2026-04-13
   - remaining unknown is no longer the cell addressing formula; it is whether
     the loader should rely directly on the newly identified placement-query
     wrappers or continue deeper until every cell mask/value is fully named
+
+## April 30 Layout-Backed Movement Seam
+
+- Fresh Ghidra artifact:
+  - `runtime/ghidra_pathfinding_movement_paths.txt`
+  - `runtime/ghidra_player_gamenpc_movement_seed_paths.txt`
+  - `runtime/ghidra_player_gamenpc_movement_seed_offsets.txt`
+- Native grid and cell membership are now backed by repeated function evidence:
+  - `PlayerActor_MoveStep (0x00525800)` computes:
+    - `grid_x = floor(actor_x / (movement_controller + 0xE0))`
+    - `grid_y = floor(actor_y / (movement_controller + 0xE4))`
+    - cell address =
+      `(movement_controller + 0xB4) + ((height * grid_x) + grid_y) * 0x18`
+    - bounds come from `+0xD8` height and `+0xDC` width
+  - `ResolveSceneGridCellFromScaledCoords (0x00521260)` and
+    `WorldCellGrid_RebindActor (0x005217B0)` use the same formula.
+- Native placement queries now explain the loader-owned obstacle policy:
+  - `MovementCollision_TestCirclePlacementExtended (0x005238C0)` first scans
+    movement circles at:
+    - controller `+0xA0` count
+    - controller `+0xAC` pointer list
+    - circle `+0x14` mask
+    - circle `+0x18/+0x1C` position
+    - circle `+0x30` radius
+  - it then rebuilds/checks primary and secondary overlap lists through:
+    - primary count/list at controller `+0x40/+0x4C`
+    - secondary count/list at controller `+0x70/+0x7C`
+  - `MovementCollision_TestCirclePlacement (0x00523C90)` uses the same
+    primary/secondary overlap lists without the raw movement-circle prepass.
+- GameNpc goal movement is also concrete enough for named offsets:
+  - `GameNpc_SetMoveGoal (0x005E9D50)` writes:
+    - `+0x198` move flag
+    - `+0x19C/+0x1A0` goal
+    - `+0x1A4/+0x1A8` goal-start mirror
+    - `+0x1AC` mode
+    - `+0x1B0` repath timer
+    - `+0x1B8` startup cadence
+  - `GameNpc_FollowTrackedSlot (0x005EA450)` writes:
+    - `+0x1C2` tracked gameplay slot
+    - `+0x1C3` completion callback flag
+  - `GameNpc_MovementTick (0x006042C0)` consumes those same fields and drives
+    final motion through `PlayerActor_MoveStep`.
+- Replacement direction for this cluster:
+  - move recovered movement-controller, movement-circle, and GameNpc fields
+    into `config/binary-layout.ini` plus `gameplay_seams`
+  - keep loader-owned A* as an explicitly documented policy, because no native
+    arbitrary point A-to-B path planner has been recovered
+  - keep push-through gate filtering as policy backed by live geometry until
+    its exact native object family is named
+  - keep standalone puppet collision blocked until a native registration path
+    publishes standalone clones into the movement controller's dynamic collider
+    list.
+
+### April 30 Player/GameNpc Movement Seed Pass
+
+- Player/wizard movement inputs:
+  - `Player_Ctor (0x0052A500)` initializes `actor + 0x218` to `1.0f`.
+  - `PlayerActorTick (0x00548B00)` reads the control-brain vector, adds it into
+    `actor + 0x158/+0x15C`, derives the per-step budget from `actor + 0x218`,
+    and then reaches `PlayerActor_MoveStep (0x00525800)`.
+  - `PlayerControlBrain_Update (0x0052C910)` is the native input producer for
+    the `actor + 0x21C` control-brain fields, including move input
+    `+0x30/+0x34`.
+- Native monster/GameNpc target state:
+  - `MonsterPathfinding_RefreshTarget (0x00483480)` writes the selected current
+    target pointer to `actor + 0x168`.
+  - The same function treats `actor + 0x1E0` as the target refresh cadence
+    divisor and stores `actor + 0x1DC = actor_tick % actor_target_repath_cadence`.
+  - This confirms the old diagnostic `0x1E0` read was not acceleration or speed.
+- GameNpc goal state:
+  - `GameNpc_Ctor (0x005E9A90)` initializes the GameNpc movement window.
+  - `GameNpc_MovementTick (0x006042C0)` consumes `+0x19C/+0x1A0` goal,
+    `+0x1C2` tracked slot, and the motion cadence fields before calling
+    `PlayerActor_MoveStep`.
+- Replacement rule:
+  - `actor + 0x168` and `actor + 0x1E0` are now named layout seams:
+    `actor_current_target_actor` and `actor_target_repath_cadence`.
+  - The loader can continue using its own normalized movement intent for bots,
+    because no native bot-side producer for the player's control-brain input
+    has been recovered. That is a documented policy choice, not an anonymous
+    offset.
+
+### April 30 Stock Tick Restore Live Pass
+
+- Fresh Ghidra artifact:
+  - `runtime/ghidra_stock_tick_restore_paths.txt`
+  - refreshes `PlayerActorTick (0x00548B00)`,
+    `PlayerActor_MoveStep (0x00525800)`,
+    `PlayerControlBrain_Update (0x0052C910)`, and
+    `Player_Ctor (0x0052A500)`.
+- Live probe:
+  - `tests/re/run_live_stock_tick_restore_probe.py`
+  - uses low-impact live watches via `sd.debug.watch`, not page-guard write
+    watches, because the actor position fields share a hot object page with the
+    fields read by the tick hook.
+  - validates a stable shared-hub standalone clone (`gameplay_slot=-1`), live
+    position watch changes during `sd.bots.move_to`, and a stationary post-stop
+    window with no drift.
+- Current result:
+  - the probe records the current non-drifting baseline and any stock drift
+    lines if they appear, but it does not recover a native ownership handoff
+    that would let stock tick own bot transforms safely.
+  - active tick code no longer snapshots and rewrites bot X/Y around stock
+    `PlayerActorTick`; stale locomotion inputs are cleared before stock tick,
+    and bot movement stays on the native `PlayerActor_MoveStep` executor.
+
+### May 1 Stock Tick Ownership Xref Pass
+
+- Fresh Ghidra artifacts:
+  - `runtime/ghidra_stock_tick_ownership_xrefs.txt`
+  - `runtime/ghidra_stock_tick_input_offset_accesses.txt`
+- `PlayerActorTick (0x00548B00)` is still a vtable target, not a recovered
+  public handoff API:
+  - the only direct reference in this pass is `0x00793F7C`, outside a containing
+    function;
+  - `PlayerControlBrain_Update (0x0052C910)` has one direct caller,
+    `PlayerActorTick`;
+  - `PlayerActor_HandleCastTransition (0x00548A00)` is likewise called from
+    `PlayerActorTick`.
+- `PlayerActor_MoveStep (0x00525800)` remains a shared executor, not ownership:
+  - `PlayerActorTick` calls it twice in the player-family tick;
+  - `GameNpc_MovementTick (0x006042C0)` also calls it for real GameNpc actors;
+  - no new caller in the xref pass gives loader-owned standalone transforms a
+    native producer or owner.
+- The broad offset-access pass keeps the same model:
+  - `PlayerActorTick` is the heavy consumer of `+0x158/+0x15C`, `+0x218`, and
+    `+0x21C`;
+  - `PlayerControlBrain_Update` owns the control-brain target and movement input
+    fields, including `+0x30/+0x34`;
+  - `WizardCloneFromSourceActor (0x0061AA00)` seeds clone control state, but
+    does not provide a standalone bot transform owner after materialization.
+- Fresh live probe:
+  - `tests/re/run_live_stock_tick_restore_probe.py`
+  - output artifact: `runtime/live_stock_tick_restore_probe.json`
+  - passing capture materialized a shared-hub standalone clone with
+    `gameplay_slot=-1`, armed low-impact watches on actor `+0x18/+0x1C`,
+    observed 10 X and 10 Y position changes during `sd.bots.move_to`, then
+    measured `stationary_observation.max_distance=0.0` with no stock drift
+    events.
+
+Replacement rule: do not restore bot X/Y after stock tick. Keep
+`PlayerActor_MoveStep` as the native movement executor, and recover a native
+per-bot input producer or transform owner before adding any new stock-tick
+ownership path.
+
+### April 30 Registered GameNpc Rail Blocker Pass
+
+- Fresh Ghidra artifact:
+  - `runtime/ghidra_registered_gamenpc_publication_blockers.txt`
+- Live blocker probe:
+  - `tests/re/run_live_registered_gamenpc_blocker_probe.py`
+  - materializes a shared-hub bot and fails if the loader selects
+    `rail=registered_gamenpc`, classifies the actor as `RegisteredGameNpc`, or
+    produces object type `0x1397` through the old clone handoff.
+- The disabled registered rail was cleaned up so it cannot accidentally
+  materialize through the wrong actor family:
+  - `CreateWizard` preview/source path `0x00466FA0` allocates type `0x1397` and
+    registers that source actor.
+  - `GameNpc_Ctor (0x005E9A90)` initializes that `0x1397` source actor family
+    and its movement window.
+  - `WizardCloneFromSourceActor (0x0061AA00)` allocates object size `0x398`,
+    which is the player-family clone path, not a long-lived `0x1397` actor.
+  - `GameNpc_SetMoveGoal (0x005E9D50)`, `GameNpc_MovementTick (0x006042C0)`,
+    and `GameNpc_FollowTrackedSlot (0x005EA450)` remain valid native movement
+    evidence for real GameNpc actors, but there is still no proven loader-side
+    publication lifecycle that creates a long-lived `0x1397` participant.
+- Replacement rule:
+  - The registered GameNpc participant rail has been removed from active code
+    instead of leaving a permanent blocked branch.
+  - Registered GameNpc native movement driving stays unavailable until a native
+    long-lived `0x1397` publication lifecycle is recovered and live-proved.
+
+### May 1 Registered GameNpc Publication Xref Pass
+
+- Fresh Ghidra artifacts:
+  - `runtime/ghidra_registered_gamenpc_publication_xrefs.txt`
+  - `runtime/ghidra_registered_gamenpc_publication_expanded.txt`
+- `0x00466FA0` has only one direct xref in the current Ghidra project:
+  `0x00689750` case `0x40F`. That path is a script/action dispatcher that
+  creates the preview/source `GameNpc (0x1397)` actor, stores it into the
+  create-wizard state, and then invokes downstream UI/preview handling. This is
+  not a general participant publication API.
+- `0x005B7080` still maps factory case `0x1397` to `Object_Allocate(0x268)` and
+  `GameNpc_Ctor (0x005E9A90)`, but the broad factory xref list is mixed object
+  construction. It does not identify a long-lived bot participant owner.
+- The expanded pass keeps the same split:
+  - `ActorWorldRegister (0x0063F6D0)` and
+    `ActorWorldRegisterGameplaySlotActor (0x00641090)` publish actors into
+    world/gameplay slot structures.
+  - `Actor_SetPositionAndRebindIfActive (0x00622D90)` and
+    `WorldCellGrid_RebindActor (0x005217B0)` are valid rebinding helpers.
+  - `GameNpc_SetMoveGoal (0x005E9D50)`,
+    `GameNpc_MovementTick (0x006042C0)`, and
+    `GameNpc_FollowTrackedSlot (0x005EA450)` remain native movement seams for
+    real `0x1397` actors.
+  - No recovered caller combines these pieces into a stock-safe loader-facing
+    lifecycle that publishes a durable `0x1397` bot participant.
+- The live blocker probe now disables sample Lua bot ticking, arms traces for
+  `create_wizard_preview_source`, `gamenpc_set_move_goal`,
+  `gamenpc_set_tracked_slot_assist`, and `gamenpc_movement_tick`, then
+  materializes one shared-hub bot. The passing capture records:
+  - `raw.object_type_id=1` for the materialized bot;
+  - `world_actor_type_summary.gamenpc_count=0`;
+  - zero native GameNpc movement trace hits;
+  - `rail=standalone_clone`, not `rail=registered_gamenpc`.
+
+Replacement rule remains unchanged: the registered rail is absent from active
+runtime code until a native long-lived `0x1397` publication owner is recovered
+and live-proved.
+
+### April 30 Standalone Collision/Materialization Pass
+
+- Fresh Ghidra artifacts:
+  - `runtime/ghidra_standalone_collision_registration_paths.txt`
+  - `runtime/ghidra_standalone_collision_overlap_builder_paths.txt`
+  - `runtime/ghidra_wizard_clone_from_source_instructions.txt`
+  - `runtime/ghidra_actor_collision_flag_offsets.txt`
+  - `runtime/ghidra_standalone_collision_ownership_xrefs.txt`
+  - `runtime/ghidra_standalone_collision_field_writes.txt`
+- `WizardCloneFromSourceActor (0x0061AA00)` does register the cloned actor:
+  - instruction evidence shows it loads `ECX` from `source_actor + 0x58`,
+    then calls `ActorWorldRegister (0x0063F6D0)` with group `0`,
+    the cloned actor pointer, slot `-1`, and normal insert mode.
+  - after registration, it also attaches the clone through the gameplay
+    attach list at `gameplay + 0x1388`.
+- `ActorWorldRegister (0x0063F6D0)` is now concrete:
+  - inserts into the world bucket table at
+    `world + 0x500 + (group * 0x800 + slot_index) * 4`
+  - pushes the actor through the world `+0x310` list
+  - mirrors world/group/slot into actor `+0x58/+0x5C/+0x5E`
+  - clears the actor register transient byte at `+0x68`
+  - additionally inserts object type `0x400` actors into the world `+0x360`
+    list.
+- `WorldCellGrid_RebindActor (0x005217B0)` remains the native cell repair seam:
+  - it only does work when actor `+0x36` is enabled
+  - it removes the previous cell owner from actor `+0x54`
+  - it computes the cell from actor `+0x18/+0x1C` and writes the new cell back
+    to actor `+0x54`.
+- The stock collision response chain is now clearer but still not a complete
+  replacement seam for standalone bots:
+  - `PlayerActor_MoveStep (0x00525800)` builds collision context from movement
+    deltas, then calls `0x00521B80`, `0x00522500`,
+    `0x00522C00`/`0x00522B20`, and grid rebind.
+  - `0x00521B80` rebuilds primary nearby-cell candidates into controller
+    `+0x40/+0x4C`.
+  - `0x00522500` scans type-2 cell collider owners/subitems and writes
+    secondary overlap candidates into controller `+0x70/+0x7C`.
+  - `0x00522C00` and `0x00522B20` apply response only through that movement
+    context and require actor-side response state such as `+0x37`.
+- Live regression coverage:
+  - `tests/re/run_live_standalone_collision_probe.py`
+  - output artifact: `runtime/live_standalone_collision_probe.json`
+  - the probe verifies the clone has a native owner world, native grid-cell
+    binding, and non-zero collision radii, then forces a standalone/standalone
+    overlap. This remains historical evidence for the removed bridge, not a
+    production collision strategy.
+- Current result:
+  - no native seam has been recovered that publishes and drives loader-owned
+    standalone clone transforms through the stock dynamic overlap-response
+    lifecycle after the loader discards stock tick position writes.
+  - active tick code now runs a scoped participant collision resolver,
+    `ResolveWizardParticipantActorCollisions`, after bot and local-player stock
+    ticks. It treats the local player as solid, moves only bot-owned wizard
+    actors, separates bot/bot and player/bot overlaps, and repairs moved actor
+    grid membership through `WorldCellGrid_RebindActor`. Recover a native publication/ownership path
+    before replacing this scoped runtime response.
+
+### May 1 Standalone Collision Ownership Xref Pass
+
+- Fresh Ghidra artifacts:
+  - `runtime/ghidra_standalone_collision_ownership_xrefs.txt`
+  - `runtime/ghidra_standalone_collision_field_writes.txt`
+- `Actor_SetPositionAndRebindIfActive (0x00622D90)` has ten direct refs across
+  eight caller functions. Its body writes actor `+0x18/+0x1C`, then calls
+  `WorldCellGrid_RebindActor (0x005217B0)` only when actor `+0x36` is enabled
+  and actor `+0x58` has an owner world.
+- `WorldCellGrid_RebindActor (0x005217B0)` is reached from only three recovered
+  callers in this pass:
+  - `Actor_SetPositionAndRebindIfActive (0x00622D90)`;
+  - `FUN_0052A0B0`, a placement/search helper;
+  - `ActorWorldRegisterGameplaySlotActor (0x00641090)`.
+  This keeps it useful as a cell repair seam, but not as proof of standalone
+  dynamic overlap ownership.
+- `PlayerActor_MoveStep (0x00525800)` is still the only recovered caller of the
+  direct overlap response helpers `0x00522C00` and `0x00522B20`; those helpers
+  do not have an independent per-actor publication API in the current evidence.
+- Field-write evidence confirms the grid-cell owner field is maintained by both
+  `WorldCellGrid_RebindActor` and `PlayerActor_MoveStep`:
+  - `0x005217B0` clears and rewrites actor `+0x54`;
+  - `0x00525800` also clears and rewrites actor `+0x54` after movement.
+  The same scan keeps actor `+0x36`, `+0x37`, and movement-context `+0x80` /
+  `+0x120` in the collision evidence set, but does not identify a new owner
+  that would let the loader remove its explicit standalone push.
+- The live standalone collision probe gives the runtime side of the historical
+  bridge: staged standalone clones have a native owner world, nonzero grid cell
+  pointer, enabled grid-member and collision-response flags, and valid radii.
+  Active code no longer keeps the old standalone-only explicit push bridge.
+  User-visible collision is restored by the scoped participant collision
+  resolver, which uses actor radii and owner worlds, keeps the local player
+  immovable, moves only bot-owned actors, and rebinds moved bots through
+  `WorldCellGrid_RebindActor`.
+
+Replacement rule remains unchanged: the old standalone-only push bridge remains
+removed until a native lifecycle is recovered that both publishes loader-driven
+standalone clone transforms and routes dynamic actor/actor overlap response.
+
+## Pathfinding Policy Scalar Pass
+
+- Fresh evidence artifacts:
+  - `runtime/ghidra_pathfinding_policy_scalar_scan.txt`
+  - `runtime/ghidra_pathfinding_policy_scalar_decompile.txt`
+  - `runtime/ghidra_pathfinding_policy_float_globals.txt`
+- Native constructors and consumers now explain the static-circle gate policy:
+  - `Fencepost` constructor `0x005E1E20` writes:
+    - object type `0xBBE`
+    - movement circle mask `0x4`
+    - radius from native float global `0x007DE984`
+  - `0x007DE984` dumps as float `10.0`.
+  - `Goodie` constructor `0x005E3D60` writes movement circle mask `0x2004`,
+    proving the static-plus-pushable bit pattern exists natively.
+  - `FUN_005F43E0` scans list entries, compares object type `0xBBE`, and uses
+    the same circle position fields to associate generated gameplay objects
+    with fencepost endpoints.
+  - `0x007DE9D0` dumps as float `2.0`, used by that fencepost endpoint
+    association helper; it is not the movement-circle collision radius.
+- Implementation consequence:
+  - movement-grid offsets remain in `[gameplay.offsets]`
+  - these recovered path policy scalars now live in `[gameplay.pathfinding]`
+    instead of C++ literals:
+    - `static_circle_obstacle_mask=0x00000004`
+    - `pushable_circle_obstacle_mask=0x00002000`
+    - `push_through_gate_circle_object_type=0x00000BBE`
+    - `push_through_gate_circle_radius=10`
+  - loader-owned sampling knobs also live in `[gameplay.pathfinding]`:
+    - `cell_placement_sample_resolution=5`
+    - `cell_line_sample_resolution=12`
+    - `push_through_gate_radius_epsilon_milliunits=10`
+    - `max_static_circle_obstacles=8192`
+  - `tests/re/run_live_pathfinding_layout_probe.py` now verifies the staged
+    profile keys and scans live movement circles through `sd.debug.read_*`,
+    requiring at least one static-circle hit and one push-through gate with the
+    configured type/radius.
 
 ## Exact Next Runtime Probes
 

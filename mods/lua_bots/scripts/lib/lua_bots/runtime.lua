@@ -29,21 +29,49 @@ function runtime.install(ctx)
     return probe
   end
 
+  local function strict_number(value)
+    local number = tonumber(value)
+    if number == nil or number ~= number then
+      return nil
+    end
+    return number
+  end
+
   local function distance(ax, ay, bx, by)
-    local dx = (ax or 0.0) - (bx or 0.0)
-    local dy = (ay or 0.0) - (by or 0.0)
+    ax = strict_number(ax)
+    ay = strict_number(ay)
+    bx = strict_number(bx)
+    by = strict_number(by)
+    if ax == nil or ay == nil or bx == nil or by == nil then
+      return nil
+    end
+
+    local dx = ax - bx
+    local dy = ay - by
     return math.sqrt((dx * dx) + (dy * dy))
   end
 
   local function bot_formation_offset(radius)
-    local offset_x = tonumber(state.spawn_offset_x) or config.DEFAULT_SPAWN_OFFSET_X
-    local offset_y = tonumber(state.spawn_offset_y) or config.DEFAULT_SPAWN_OFFSET_Y
+    local offset_x = tonumber(state.spawn_offset_x)
+    local offset_y = tonumber(state.spawn_offset_y)
+    if offset_x == nil or offset_y == nil then
+      return nil, nil
+    end
     local offset_len = distance(offset_x, offset_y, 0.0, 0.0)
     if offset_len < 0.001 then
-      return tonumber(radius) or config.FOLLOW_STOP_DISTANCE, 0.0
+      local requested_radius = tonumber(radius)
+      if requested_radius == nil then
+        return nil, nil
+      end
+      return requested_radius, 0.0
     end
 
-    local scale = (tonumber(radius) or config.FOLLOW_STOP_DISTANCE) / offset_len
+    local requested_radius = tonumber(radius)
+    if requested_radius == nil then
+      return nil, nil
+    end
+
+    local scale = requested_radius / offset_len
     return offset_x * scale, offset_y * scale
   end
 
@@ -53,9 +81,19 @@ function runtime.install(ctx)
     end
 
     local offset_x, offset_y = bot_formation_offset(radius)
+    if offset_x == nil or offset_y == nil then
+      return nil
+    end
+
+    local target_x = tonumber(target.x)
+    local target_y = tonumber(target.y)
+    if target_x == nil or target_y == nil then
+      return nil
+    end
+
     return {
-      x = (tonumber(target.x) or 0.0) + offset_x,
-      y = (tonumber(target.y) or 0.0) + offset_y,
+      x = target_x + offset_x,
+      y = target_y + offset_y,
     }
   end
 
@@ -126,6 +164,7 @@ function runtime.install(ctx)
   ctx.log = log
   ctx.log_diag = log_diag
   ctx.get_probe_state = get_probe_state
+  ctx.strict_number = strict_number
   ctx.distance = distance
   ctx.bot_formation_offset = bot_formation_offset
   ctx.add_bot_formation_offset = add_bot_formation_offset

@@ -1,3 +1,104 @@
+bool TryResolveWizardBotNativeMovementEnvelope(
+    ParticipantEntityBinding* binding,
+    uintptr_t actor_address,
+    float* speed_cap,
+    float* input_acceleration_divisor,
+    float* velocity_damping,
+    std::string* error_message) {
+    if (binding == nullptr || actor_address == 0 ||
+        speed_cap == nullptr ||
+        input_acceleration_divisor == nullptr ||
+        velocity_damping == nullptr) {
+        if (error_message != nullptr) {
+            *error_message = "Bot movement envelope requires a live actor.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    float actor_movement_speed_multiplier = 0.0f;
+    float actor_move_speed_scale = 0.0f;
+    if (!TryReadFiniteFloatField(actor_address, kActorMovementSpeedMultiplierOffset, &actor_movement_speed_multiplier) ||
+        !TryReadFiniteFloatField(actor_address, kActorMoveSpeedScaleOffset, &actor_move_speed_scale)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor native movement scalar fields are unreadable.";
+        }
+        return false;
+    }
+    if (!std::isfinite(actor_movement_speed_multiplier) ||
+        !std::isfinite(actor_move_speed_scale) ||
+        actor_movement_speed_multiplier < 0.0f ||
+        actor_move_speed_scale < 0.0f) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor has invalid native movement scalar fields.";
+        }
+        return false;
+    }
+
+    float progression_move_speed = 1.0f;
+    if (IsStandaloneWizardKind(binding->kind) || IsGameplaySlotWizardKind(binding->kind)) {
+        uintptr_t progression_address = 0;
+        if (!TryResolveActorProgressionRuntime(actor_address, &progression_address) ||
+            progression_address == 0 ||
+            !memory.IsReadableRange(progression_address + kProgressionMoveSpeedOffset, sizeof(float))) {
+            if (error_message != nullptr) {
+                *error_message = "Bot movement requires the bot-owned progression runtime.";
+            }
+            return false;
+        }
+        if (!TryReadFiniteFloatField(
+                progression_address,
+                kProgressionMoveSpeedOffset,
+                &progression_move_speed)) {
+            if (error_message != nullptr) {
+                *error_message = "Bot progression native move speed is unreadable.";
+            }
+            return false;
+        }
+        if (!std::isfinite(progression_move_speed) || progression_move_speed < 0.0f) {
+            if (error_message != nullptr) {
+                *error_message = "Bot progression has invalid native move speed.";
+            }
+            return false;
+        }
+    }
+
+    float speed_scalar = 0.0f;
+    float acceleration_divisor = 0.0f;
+    float damping = 0.0f;
+    const bool have_native_movement_globals =
+        TryReadResolvedGameDoubleAsFloat(kMovementSpeedScalarGlobal, &speed_scalar) &&
+        TryReadResolvedGameDoubleAsFloat(kMovementInputAccelerationDivisorGlobal, &acceleration_divisor) &&
+        TryReadResolvedGameDoubleAsFloat(kMovementVelocityDampingGlobal, &damping);
+    if (!std::isfinite(speed_scalar) ||
+        !std::isfinite(acceleration_divisor) ||
+        !std::isfinite(damping) ||
+        !have_native_movement_globals ||
+        speed_scalar < 0.0f ||
+        acceleration_divisor <= 0.0f ||
+        damping < 0.0f) {
+        if (error_message != nullptr) {
+            *error_message = "Bot movement native scalar globals are unavailable.";
+        }
+        return false;
+    }
+
+    *speed_cap =
+        actor_movement_speed_multiplier *
+        actor_move_speed_scale *
+        progression_move_speed *
+        speed_scalar;
+    if (!std::isfinite(*speed_cap) || *speed_cap < 0.0f) {
+        if (error_message != nullptr) {
+            *error_message = "Bot movement native speed cap is invalid.";
+        }
+        return false;
+    }
+    *input_acceleration_divisor = acceleration_divisor;
+    *velocity_damping = damping;
+    return true;
+}
+
 bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* error_message) {
     if (binding == nullptr || binding->actor_address == 0) {
         if (error_message != nullptr) {
@@ -8,8 +109,13 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
 
     auto& memory = ProcessMemory::Instance();
     const auto actor_address = binding->actor_address;
-    const auto live_world_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, binding->materialized_world_address);
+    uintptr_t live_world_address = 0;
+    if (!memory.TryReadField(actor_address, kActorOwnerOffset, &live_world_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor world owner is unreadable.";
+        }
+        return false;
+    }
     if (live_world_address != 0 && binding->materialized_world_address != live_world_address) {
         binding->materialized_world_address = live_world_address;
     }
@@ -23,21 +129,17 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
     const auto magnitude = std::sqrt(
         binding->direction_x * binding->direction_x + binding->direction_y * binding->direction_y);
 
-    if (IsRegisteredGameNpcKind(binding->kind)) {
-        binding->last_movement_displacement = 0.0f;
-        PublishParticipantGameplaySnapshot(*binding);
-        return true;
-    }
-
     const bool cast_active = binding->ongoing_cast.active;
     if (!binding->movement_active || magnitude <= 0.0001f) {
         binding->last_movement_displacement = 0.0f;
+        binding->native_movement_accumulator_x = 0.0f;
+        binding->native_movement_accumulator_y = 0.0f;
         if (cast_active) {
             // Continuous casts own the attack animation/control lane while they
             // are alive. Clear only stale locomotion inputs so the bot does not
             // slide; do not force the broader idle animation state over the
             // native cast pose.
-            ClearWizardBotLocomotionInputs(actor_address);
+            ClearWizardBotMovementVectorInputs(actor_address);
         } else {
             ApplyObservedBotAnimationState(binding, actor_address, false);
             StopWizardBotActorMotion(binding->actor_address);
@@ -50,10 +152,22 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
     float direction_x = binding->direction_x / magnitude;
     float direction_y = binding->direction_y / magnitude;
 
-    const auto position_before_x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-    const auto position_before_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
-    const auto owner_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+    float position_before_x = 0.0f;
+    float position_before_y = 0.0f;
+    if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &position_before_x) ||
+        !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &position_before_y)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor position is unreadable before movement.";
+        }
+        return false;
+    }
+    uintptr_t owner_address = 0;
+    if (!memory.TryReadField(actor_address, kActorOwnerOffset, &owner_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor world owner is unreadable before movement.";
+        }
+        return false;
+    }
     const auto movement_controller_address =
         live_world_address != 0 ? (live_world_address + kActorOwnerMovementControllerOffset) : 0;
     const auto move_step_address =
@@ -71,30 +185,69 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
         }
     };
     // Bot movement mirrors the stock player path in PlayerActorTick (FUN_00548B00)
-    // around 0x0054B050 / 0x0054B58D:
+    // around 0x005494C4, 0x0054B050, and 0x0054B58D:
     //
-    //   move_step_scale = *(float*)(actor + 0x218)   ; set to 1.0f at construction
-    //                                                ; by Player_Ctor @ 0x0052A588
-    //   dir_x           = *(float*)(actor + 0x158)   ; direction accumulator the
-    //   dir_y           = *(float*)(actor + 0x15C)   ; tick folds control input into
-    //   dx              = move_step_scale * dir_x
-    //   dy              = move_step_scale * dir_y
+    //   vec_x += input_x / *0x007DE810
+    //   vec_y += input_y / *0x007DE810
+    //   speed cap = actor+0x120 * actor+0x74 * progression+0x90 * *0x00784740
+    //   dx = actor+0x218 * vec_x
+    //   dy = actor+0x218 * vec_y
     //   FUN_00525800(world + 0x378, actor, dx, dy, 0)
+    //   vec *= *0x00784E20
     //
-    // For bots the native tick never folds control input into +0x158/+0x15C
-    // (no input source), so we seed those accumulators with our own normalized
-    // target direction. If +0x218 is zero (e.g. the clone didn't run Player_Ctor),
-    // initialize it to 1.0f — matching what the native constructor writes.
-    float move_step_scale = memory.ReadFieldOr<float>(actor_address, kActorMoveStepScaleOffset, 0.0f);
-    if (!(move_step_scale > 0.0f)) {
-        move_step_scale = 1.0f;
-        (void)memory.TryWriteField(actor_address, kActorMoveStepScaleOffset, move_step_scale);
+    // The bot's stock tick still needs +0x158/+0x15C cleared before it runs so
+    // it cannot consume the prior frame twice. Keep the accumulator in the
+    // binding, then publish the same vector to actor memory only for the
+    // recovered native MoveStep call and animation replay.
+    float native_speed_cap = 0.0f;
+    float native_input_acceleration_divisor = 0.0f;
+    float native_velocity_damping = 0.0f;
+    if (!TryResolveWizardBotNativeMovementEnvelope(
+            binding,
+            actor_address,
+            &native_speed_cap,
+            &native_input_acceleration_divisor,
+            &native_velocity_damping,
+            error_message)) {
+        binding->last_movement_displacement = 0.0f;
+        PublishParticipantGameplaySnapshot(*binding);
+        return false;
     }
-    (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, direction_x);
-    (void)memory.TryWriteField(actor_address, kActorAnimationDriveParameterOffset, direction_y);
+    float move_step_scale = 0.0f;
+    if (!TryReadFiniteFloatField(actor_address, kActorMoveStepScaleOffset, &move_step_scale) ||
+        !(move_step_scale > 0.0f)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor native move-step scale is unreadable or invalid.";
+        }
+        binding->last_movement_displacement = 0.0f;
+        PublishParticipantGameplaySnapshot(*binding);
+        return false;
+    }
+    if (!std::isfinite(binding->native_movement_accumulator_x)) {
+        binding->native_movement_accumulator_x = 0.0f;
+    }
+    if (!std::isfinite(binding->native_movement_accumulator_y)) {
+        binding->native_movement_accumulator_y = 0.0f;
+    }
+    auto velocity_x =
+        binding->native_movement_accumulator_x + (direction_x / native_input_acceleration_divisor);
+    auto velocity_y =
+        binding->native_movement_accumulator_y + (direction_y / native_input_acceleration_divisor);
+    const auto velocity_magnitude = std::sqrt((velocity_x * velocity_x) + (velocity_y * velocity_y));
+    if (native_speed_cap >= 0.0f &&
+        std::isfinite(velocity_magnitude) &&
+        velocity_magnitude > native_speed_cap &&
+        velocity_magnitude > 0.0001f) {
+        const auto velocity_scale = native_speed_cap / velocity_magnitude;
+        velocity_x *= velocity_scale;
+        velocity_y *= velocity_scale;
+    }
 
-    const auto move_step_x = direction_x * move_step_scale;
-    const auto move_step_y = direction_y * move_step_scale;
+    (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, velocity_x);
+    (void)memory.TryWriteField(actor_address, kActorAnimationDriveParameterOffset, velocity_y);
+
+    const auto move_step_x = velocity_x * move_step_scale;
+    const auto move_step_y = velocity_y * move_step_scale;
     DWORD exception_code = 0;
     std::uint32_t move_result = 0;
     if ((binding->kind == ParticipantEntityBinding::Kind::PlaceholderEnemy ||
@@ -111,99 +264,44 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
             0,
             &exception_code,
             &move_result)) {
-        auto position_after_x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-        auto position_after_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
-        auto delta_x = position_after_x - position_before_x;
-        auto delta_y = position_after_y - position_before_y;
-        auto displacement_distance = std::sqrt((delta_x * delta_x) + (delta_y * delta_y));
-        auto applied_direction_x = direction_x;
-        auto applied_direction_y = direction_y;
-        auto movement_log_result = move_result != 0 ? "player_move_step_ok" : "player_move_step_blocked";
-        if ((move_result == 0 || displacement_distance <= 0.0001f) && !cast_active) {
-            const auto recovery_start_x = position_after_x;
-            const auto recovery_start_y = position_after_y;
-            const auto final_target_x = binding->target_x - recovery_start_x;
-            const auto final_target_y = binding->target_y - recovery_start_y;
-            const auto final_target_distance =
-                std::sqrt((final_target_x * final_target_x) + (final_target_y * final_target_y));
-            if (final_target_distance > 0.0001f) {
-                const auto target_direction_x = final_target_x / final_target_distance;
-                const auto target_direction_y = final_target_y / final_target_distance;
-                constexpr float kSqrtHalf = 0.70710678118f;
-                constexpr std::array<std::pair<float, float>, 7> kRecoveryRotations = {{
-                    {1.0f, 0.0f},
-                    {kSqrtHalf, kSqrtHalf},
-                    {kSqrtHalf, -kSqrtHalf},
-                    {0.0f, 1.0f},
-                    {0.0f, -1.0f},
-                    {-kSqrtHalf, kSqrtHalf},
-                    {-kSqrtHalf, -kSqrtHalf},
-                }};
-                for (const auto& rotation : kRecoveryRotations) {
-                    const auto recovery_direction_x =
-                        target_direction_x * rotation.first - target_direction_y * rotation.second;
-                    const auto recovery_direction_y =
-                        target_direction_x * rotation.second + target_direction_y * rotation.first;
-                    const auto recovery_magnitude =
-                        std::sqrt((recovery_direction_x * recovery_direction_x) + (recovery_direction_y * recovery_direction_y));
-                    if (recovery_magnitude <= 0.0001f) {
-                        continue;
-                    }
-
-                    const auto normalized_recovery_direction_x = recovery_direction_x / recovery_magnitude;
-                    const auto normalized_recovery_direction_y = recovery_direction_y / recovery_magnitude;
-                    DWORD recovery_exception_code = 0;
-                    std::uint32_t recovery_move_result = 0;
-                    if (!CallPlayerActorMoveStepSafe(
-                            move_step_address,
-                            movement_controller_address,
-                            actor_address,
-                            normalized_recovery_direction_x * move_step_scale,
-                            normalized_recovery_direction_y * move_step_scale,
-                            0,
-                            &recovery_exception_code,
-                            &recovery_move_result)) {
-                        continue;
-                    }
-
-                    const auto recovery_after_x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-                    const auto recovery_after_y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
-                    const auto recovery_delta_x = recovery_after_x - recovery_start_x;
-                    const auto recovery_delta_y = recovery_after_y - recovery_start_y;
-                    const auto recovery_displacement =
-                        std::sqrt((recovery_delta_x * recovery_delta_x) + (recovery_delta_y * recovery_delta_y));
-                    if (recovery_displacement <= 0.0001f) {
-                        continue;
-                    }
-
-                    position_after_x = recovery_after_x;
-                    position_after_y = recovery_after_y;
-                    delta_x = position_after_x - position_before_x;
-                    delta_y = position_after_y - position_before_y;
-                    displacement_distance = std::sqrt((delta_x * delta_x) + (delta_y * delta_y));
-                    move_result = recovery_move_result;
-                    applied_direction_x = normalized_recovery_direction_x;
-                    applied_direction_y = normalized_recovery_direction_y;
-                    direction_x = normalized_recovery_direction_x;
-                    direction_y = normalized_recovery_direction_y;
-                    binding->desired_heading = NormalizeGameplayHeadingDegrees(
-                        static_cast<float>(std::atan2(direction_y, direction_x) * (180.0 / 3.14159265358979323846) + 90.0));
-                    movement_log_result = "player_move_step_detour";
-                    break;
-                }
+        float position_after_x = 0.0f;
+        float position_after_y = 0.0f;
+        if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &position_after_x) ||
+            !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &position_after_y)) {
+            if (error_message != nullptr) {
+                *error_message = "Bot actor position is unreadable after movement.";
             }
+            binding->last_movement_displacement = 0.0f;
+            PublishParticipantGameplaySnapshot(*binding);
+            return false;
         }
+        const auto delta_x = position_after_x - position_before_x;
+        const auto delta_y = position_after_y - position_before_y;
+        const auto displacement_distance = std::sqrt((delta_x * delta_x) + (delta_y * delta_y));
+        const auto applied_direction_x = direction_x;
+        const auto applied_direction_y = direction_y;
+        binding->native_movement_accumulator_x = velocity_x * native_velocity_damping;
+        binding->native_movement_accumulator_y = velocity_y * native_velocity_damping;
+        (void)memory.TryWriteField(
+            actor_address,
+            kActorAnimationConfigBlockOffset,
+            binding->native_movement_accumulator_x);
+        (void)memory.TryWriteField(
+            actor_address,
+            kActorAnimationDriveParameterOffset,
+            binding->native_movement_accumulator_y);
+        auto movement_log_result = move_result != 0 ? "player_move_step_ok" : "player_move_step_blocked";
         if (!ApplyWizardBindingFacingState(binding, actor_address) && binding->desired_heading_valid) {
             ApplyWizardActorFacingState(actor_address, binding->desired_heading);
         }
         binding->last_movement_displacement = displacement_distance;
-        if (IsStandaloneWizardKind(binding->kind) && !cast_active) {
-            AdvanceStandaloneWizardWalkCycleState(binding, displacement_distance);
-            ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
+        if (IsWizardParticipantKind(binding->kind) && !cast_active) {
+            AdvanceWizardWalkCycleState(binding, displacement_distance);
+            ApplyWizardDynamicWalkCycleState(binding, actor_address);
         }
         if (displacement_distance <= 0.0001f) {
             if (cast_active) {
-                ClearWizardBotLocomotionInputs(actor_address);
+                ClearWizardBotMovementVectorInputs(actor_address);
             } else {
                 StopWizardBotActorMotion(actor_address);
             }
@@ -233,8 +331,8 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
             movement_controller_address,
             applied_direction_x,
             applied_direction_y,
-            applied_direction_x,
-            applied_direction_y,
+            velocity_x,
+            velocity_y,
             position_before_x,
             position_before_y,
             position_after_x,
@@ -251,6 +349,9 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
     }
 
     binding->last_movement_displacement = 0.0f;
+    binding->native_movement_accumulator_x = 0.0f;
+    binding->native_movement_accumulator_y = 0.0f;
+    ClearWizardBotMovementVectorInputs(actor_address);
     PublishParticipantGameplaySnapshot(*binding);
-    return true;
+    return false;
 }

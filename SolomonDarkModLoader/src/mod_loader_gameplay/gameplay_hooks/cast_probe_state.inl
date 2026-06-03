@@ -11,7 +11,6 @@ struct SpellDispatchProbeState {
     int depth = 0;
     uintptr_t actor_address = 0;
     std::uint64_t bot_id = 0;
-    uintptr_t pure_primary_item_sink_fallback = 0;
     bool startup = false;
     bool pure_primary_startup = false;
     bool local_player = false;
@@ -23,61 +22,6 @@ std::int32_t g_pure_primary_control_log_budget = 32;
 std::int32_t g_pure_primary_post_builder_log_budget = 64;
 void* g_pure_primary_post_builder_trampoline = nullptr;
 
-struct PurePrimaryLocalActorWindowShim {
-    struct Field {
-        std::size_t offset = 0;
-        std::uint32_t before = 0;
-        bool restored = false;
-    };
-
-    bool active = false;
-    std::array<Field, 1> fields{};
-};
-
-PurePrimaryLocalActorWindowShim EnterPurePrimaryLocalActorWindow(uintptr_t actor_address) {
-    PurePrimaryLocalActorWindowShim state{};
-    if (actor_address == 0) {
-        return state;
-    }
-
-    state.active = true;
-    state.fields = {{
-        {0x1FC, 0, false},
-    }};
-
-    auto& memory = ProcessMemory::Instance();
-    for (auto& field : state.fields) {
-        if (field.offset == 0) {
-            continue;
-        }
-        field.before = memory.ReadFieldOr<std::uint32_t>(actor_address, field.offset, 0);
-        if (field.before != 0 &&
-            memory.TryWriteField<std::uint32_t>(actor_address, field.offset, 0)) {
-            field.restored = true;
-        }
-    }
-    return state;
-}
-
-void LeavePurePrimaryLocalActorWindow(
-    uintptr_t actor_address,
-    const PurePrimaryLocalActorWindowShim& state) {
-    if (!state.active || actor_address == 0) {
-        return;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    for (auto it = state.fields.rbegin(); it != state.fields.rend(); ++it) {
-        if (!it->restored || it->offset == 0) {
-            continue;
-        }
-        (void)memory.TryWriteField<std::uint32_t>(
-            actor_address,
-            it->offset,
-            it->before);
-    }
-}
-
 void __cdecl OnPurePrimaryPostBuilder(uintptr_t builder_result) {
     const auto probe = g_spell_dispatch_probe;
     if (!probe.pure_primary_startup || probe.actor_address == 0 ||
@@ -86,33 +30,15 @@ void __cdecl OnPurePrimaryPostBuilder(uintptr_t builder_result) {
     }
     --g_pure_primary_post_builder_log_budget;
 
-    auto& memory = ProcessMemory::Instance();
-    const auto result_type =
-        builder_result != 0 && kGameObjectTypeIdOffset != 0 &&
-                memory.IsReadableRange(builder_result + kGameObjectTypeIdOffset, sizeof(std::uint32_t))
-            ? memory.ReadFieldOr<std::uint32_t>(builder_result, kGameObjectTypeIdOffset, 0)
-            : 0;
-    const auto result_field34 =
-        builder_result != 0 && memory.IsReadableRange(builder_result + 0x34, sizeof(float))
-            ? memory.ReadValueOr<float>(builder_result + 0x34, 0.0f)
-            : 0.0f;
-    const auto result_field38 =
-        builder_result != 0 && memory.IsReadableRange(builder_result + 0x38, sizeof(float))
-            ? memory.ReadValueOr<float>(builder_result + 0x38, 0.0f)
-            : 0.0f;
-    const auto active_cast_group =
-        memory.ReadFieldOr<std::uint8_t>(probe.actor_address, kActorActiveCastGroupByteOffset, 0xFF);
-    const auto active_cast_slot =
-        memory.ReadFieldOr<std::uint16_t>(probe.actor_address, kActorActiveCastSlotShortOffset, 0xFFFF);
     Log(
         "[bots] pure_primary_post_builder actor=" + HexString(probe.actor_address) +
         " bot_id=" + std::to_string(probe.bot_id) +
         " builder_result=" + HexString(builder_result) +
-        " result_type=" + HexString(result_type) +
-        " result_f34=" + std::to_string(result_field34) +
-        " result_f38=" + std::to_string(result_field38) +
-        " active_cast_group=" + HexString(active_cast_group) +
-        " active_cast_slot=" + HexString(active_cast_slot) +
+        " result_type=" + ReadU32FieldHexText(builder_result, kGameObjectTypeIdOffset) +
+        " result_f34=" + ReadFloatValueText(builder_result + kSpellBuilderResultParamAOffset) +
+        " result_f38=" + ReadFloatValueText(builder_result + kSpellBuilderResultParamBOffset) +
+        " active_cast_group=" + ReadU8FieldHexText(probe.actor_address, kActorActiveCastGroupByteOffset) +
+        " active_cast_slot=" + ReadU16FieldHexText(probe.actor_address, kActorActiveCastSlotShortOffset) +
         " startup_state={" + DescribeGameplaySlotCastStartupWindow(probe.actor_address) + "}");
 }
 
@@ -129,22 +55,27 @@ __declspec(naked) void HookPurePrimaryPostBuilder() {
     }
 }
 
-std::uint8_t ReadGameplayMouseLeftLiveByte(uintptr_t gameplay_address) {
-    if (gameplay_address == 0) {
-        return 0;
+bool TryReadGameplayMouseLeftLiveByte(uintptr_t gameplay_address, std::uint8_t* value) {
+    if (value != nullptr) {
+        *value = 0;
+    }
+    if (gameplay_address == 0 || value == nullptr) {
+        return false;
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto input_buffer_index =
-        memory.ReadFieldOr<int>(gameplay_address, kGameplayInputBufferIndexOffset, -1);
+    int input_buffer_index = 0;
+    if (!memory.TryReadField(gameplay_address, kGameplayInputBufferIndexOffset, &input_buffer_index)) {
+        return false;
+    }
     if (input_buffer_index < 0) {
-        return memory.ReadFieldOr<std::uint8_t>(gameplay_address, kGameplayMouseLeftButtonOffset, 0);
+        return memory.TryReadField(gameplay_address, kGameplayMouseLeftButtonOffset, value);
     }
 
     const auto live_mouse_left_offset =
         static_cast<std::size_t>(
             input_buffer_index * kGameplayInputBufferStride + kGameplayMouseLeftButtonOffset);
-    return memory.ReadFieldOr<std::uint8_t>(gameplay_address, live_mouse_left_offset, 0);
+    return memory.TryReadField(gameplay_address, live_mouse_left_offset, value);
 }
 
 std::string DescribeLocalPlayerCastProbeState(
@@ -152,9 +83,9 @@ std::string DescribeLocalPlayerCastProbeState(
     uintptr_t actor_address,
     const char* phase) {
     auto& memory = ProcessMemory::Instance();
-    const auto gameplay_cast_intent =
-        memory.ReadFieldOr<std::uint32_t>(gameplay_address, kGameplayCastIntentOffset, 0);
-    const auto gameplay_mouse_left = ReadGameplayMouseLeftLiveByte(gameplay_address);
+    std::uint8_t gameplay_mouse_left = 0;
+    const bool have_gameplay_mouse_left =
+        TryReadGameplayMouseLeftLiveByte(gameplay_address, &gameplay_mouse_left);
     const auto click_serial = GetGameplayMouseLeftEdgeSerial();
     const auto click_tick_ms = GetGameplayMouseLeftEdgeTickMs();
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
@@ -165,37 +96,40 @@ std::string DescribeLocalPlayerCastProbeState(
     (void)TryReadGameplayIndexStateValue(
         static_cast<int>(kGameplayIndexStateActorSelectionBaseIndex),
         &slot0_selection_state);
-    const auto slot0_selection_global = ReadResolvedGlobalIntOr(kPlayerSelectionState0Global, 0);
+    int slot0_selection_global = kUnknownAnimationStateId;
+    (void)TryReadResolvedGlobalInt(kPlayerSelectionState0Global, &slot0_selection_global);
     const auto actor_selection_state = ResolveActorAnimationStateId(actor_address);
-    const auto selection_pointer =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
-    const auto progression_handle =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
-    const auto progression_runtime = ReadSmartPointerInnerObject(progression_handle);
+    uintptr_t progression_handle = 0;
+    const bool have_progression_handle =
+        memory.TryReadField(actor_address, kActorProgressionHandleOffset, &progression_handle);
+    const auto progression_runtime =
+        have_progression_handle ? ReadSmartPointerInnerObject(progression_handle) : 0;
 
     return
         "phase=" + std::string(phase) +
         " gameplay=" + HexString(gameplay_address) +
-        " cast_intent=" + HexString(gameplay_cast_intent) +
-        " mouse_left=" + HexString(gameplay_mouse_left) +
+        " cast_intent=" + ReadU32FieldHexText(gameplay_address, kGameplayCastIntentOffset) +
+        " mouse_left=" + (have_gameplay_mouse_left
+            ? HexString(gameplay_mouse_left)
+            : UnreadableMemoryFieldText()) +
         " click_serial=" + std::to_string(click_serial) +
         " click_age_ms=" + std::to_string(click_age_ms) +
         " actor=" + HexString(actor_address) +
-        " actor200=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x200, 0)) +
-        " actor21c=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, 0x21C, 0)) +
-        " skill=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0)) +
-        " prev=" + std::to_string(memory.ReadFieldOr<std::int32_t>(actor_address, kActorPrimarySkillIdOffset + sizeof(std::int32_t), 0)) +
-        " drive=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0)) +
-        " no_int=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorNoInterruptFlagOffset, 0)) +
-        " group=" + HexString(memory.ReadFieldOr<std::uint8_t>(actor_address, kActorActiveCastGroupByteOffset, 0xFF)) +
-        " cast_slot=" + HexString(memory.ReadFieldOr<std::uint16_t>(actor_address, kActorActiveCastSlotShortOffset, 0xFFFF)) +
+        " progression_runtime=" + ReadPointerFieldText(actor_address, kActorProgressionRuntimeStateOffset) +
+        " animation_selection=" + ReadPointerFieldText(actor_address, kActorAnimationSelectionStateOffset) +
+        " skill=" + ReadI32FieldText(actor_address, kActorPrimarySkillIdOffset) +
+        " prev=" + ReadI32FieldText(actor_address, kActorPreviousSkillIdOffset) +
+        " drive=" + ReadU8FieldHexText(actor_address, kActorAnimationDriveStateByteOffset) +
+        " no_int=" + ReadU8FieldHexText(actor_address, kActorNoInterruptFlagOffset) +
+        " group=" + ReadU8FieldHexText(actor_address, kActorActiveCastGroupByteOffset) +
+        " cast_slot=" + ReadU16FieldHexText(actor_address, kActorActiveCastSlotShortOffset) +
         " anim_state=" + std::to_string(actor_selection_state) +
         " slot0_sel=" + std::to_string(slot0_selection_state) +
         " slot0_global=" + std::to_string(slot0_selection_global) +
-        " selection_ptr=" + HexString(selection_pointer) +
-        " progression_handle=" + HexString(progression_handle) +
+        " selection_ptr=" + ReadPointerFieldText(actor_address, kActorAnimationSelectionStateOffset) +
+        " progression_handle=" + (have_progression_handle ? HexString(progression_handle) : UnreadableMemoryFieldText()) +
         " progression_runtime=" + HexString(progression_runtime) +
-        " prog750=" + std::to_string(memory.ReadValueOr<std::uint32_t>(progression_runtime + 0x750, 0));
+        " prog750=" + ReadU32ValueHexText(progression_runtime + kProgressionCurrentSpellIdOffset);
 }
 
 void MaybeArmLocalPlayerCastProbe(uintptr_t gameplay_address, uintptr_t actor_address) {
@@ -206,12 +140,14 @@ void MaybeArmLocalPlayerCastProbe(uintptr_t gameplay_address, uintptr_t actor_ad
         return;
     }
 
-    auto& memory = ProcessMemory::Instance();
-    const auto gameplay_cast_intent =
-        memory.ReadFieldOr<std::uint32_t>(gameplay_address, kGameplayCastIntentOffset, 0);
+    std::uint32_t gameplay_cast_intent = 0;
+    const bool have_gameplay_cast_intent = ProcessMemory::Instance().TryReadField(
+        gameplay_address,
+        kGameplayCastIntentOffset,
+        &gameplay_cast_intent);
     const auto click_serial = GetGameplayMouseLeftEdgeSerial();
 
-    if (gameplay_cast_intent == 0 && click_serial == 0) {
+    if (!have_gameplay_cast_intent || (gameplay_cast_intent == 0 && click_serial == 0)) {
         return;
     }
     if (click_serial != 0 && click_serial == g_local_player_cast_probe.armed_click_serial) {

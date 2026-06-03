@@ -69,21 +69,23 @@ void __fastcall HookPlayerControlBrainUpdate(
                     face_target_x = live_target_x;
                     face_target_y = live_target_y;
                     face_heading = live_face_heading;
-                    const auto origin_x =
-                        binding->stock_tick_facing_origin_valid
-                            ? binding->stock_tick_facing_origin_x
-                            : memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-                    const auto origin_y =
-                        binding->stock_tick_facing_origin_valid
-                            ? binding->stock_tick_facing_origin_y
-                            : memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
-                    const auto dx = live_target_x - origin_x;
-                    const auto dy = live_target_y - origin_y;
-                    const auto distance = std::sqrt((dx * dx) + (dy * dy));
-                    if (std::isfinite(distance) && distance > 0.0001f) {
-                        have_face_vector = true;
-                        face_vector_x = dx / distance;
-                        face_vector_y = dy / distance;
+                    float origin_x = binding->stock_tick_facing_origin_x;
+                    float origin_y = binding->stock_tick_facing_origin_y;
+                    bool have_origin = binding->stock_tick_facing_origin_valid;
+                    if (!have_origin) {
+                        have_origin =
+                            TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &origin_x) &&
+                            TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &origin_y);
+                    }
+                    if (have_origin) {
+                        const auto dx = live_target_x - origin_x;
+                        const auto dy = live_target_y - origin_y;
+                        const auto distance = std::sqrt((dx * dx) + (dy * dy));
+                        if (std::isfinite(distance) && distance > 0.0001f) {
+                            have_face_vector = true;
+                            face_vector_x = dx / distance;
+                            face_vector_y = dy / distance;
+                        }
                     }
                 }
             }
@@ -132,8 +134,9 @@ void __fastcall HookPlayerControlBrainUpdate(
         }
     }
 
-    const auto selection_pointer =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+    uintptr_t selection_pointer = 0;
+    const bool have_selection_pointer =
+        memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &selection_pointer);
     constexpr auto kControlBrainVectorSize = sizeof(float) * 2;
     const auto read_vector2 = [&](void* vector_pointer, float* x, float* y) -> bool {
         if (x == nullptr || y == nullptr) {
@@ -145,9 +148,8 @@ void __fastcall HookPlayerControlBrainUpdate(
         if (address == 0 || !memory.IsReadableRange(address, kControlBrainVectorSize)) {
             return false;
         }
-        *x = memory.ReadValueOr<float>(address, 0.0f);
-        *y = memory.ReadValueOr<float>(address + sizeof(float), 0.0f);
-        return true;
+        return memory.TryReadValue(address, x) &&
+               memory.TryReadValue(address + sizeof(float), y);
     };
     const auto write_vector2 = [&](void* vector_pointer, float x, float y) -> bool {
         const auto address = reinterpret_cast<uintptr_t>(vector_pointer);
@@ -170,13 +172,25 @@ void __fastcall HookPlayerControlBrainUpdate(
             " bot_id=" + std::to_string(bot_id) +
             " startup=" + std::to_string(startup ? 1 : 0) +
             " native_target_control=" + std::to_string(native_target_control_active ? 1 : 0) +
-            " sel_ptr=" + HexString(selection_pointer) +
+            " sel_ptr=" + (have_selection_pointer ? HexString(selection_pointer) : UnreadableMemoryFieldText()) +
             " sel_group=" +
-                HexString(selection_pointer != 0 ? memory.ReadValueOr<std::uint8_t>(selection_pointer + 0x4, 0xFF) : 0xFF) +
+                (selection_pointer != 0
+                    ? ReadValueDiagnosticText<std::uint8_t>(
+                        selection_pointer + kActorControlBrainTargetSlotOffset,
+                        [](std::uint8_t value) { return HexString(static_cast<uintptr_t>(value)); })
+                    : UnreadableMemoryFieldText()) +
             " sel_slot=" +
-                HexString(selection_pointer != 0 ? memory.ReadValueOr<std::uint16_t>(selection_pointer + 0x6, 0xFFFF) : 0xFFFF) +
+                (selection_pointer != 0
+                    ? ReadValueDiagnosticText<std::uint16_t>(
+                        selection_pointer + kActorControlBrainTargetHandleOffset,
+                        [](std::uint16_t value) { return HexString(static_cast<uintptr_t>(value)); })
+                    : UnreadableMemoryFieldText()) +
             " sel_t8=" +
-                std::to_string(selection_pointer != 0 ? memory.ReadValueOr<std::int32_t>(selection_pointer + 0x8, 0) : 0) +
+                (selection_pointer != 0
+                    ? ReadValueDiagnosticText<std::int32_t>(
+                        selection_pointer + kActorControlBrainRetargetTicksOffset,
+                        [](std::int32_t value) { return std::to_string(value); })
+                    : UnreadableMemoryFieldText()) +
             " move_before=(" + std::to_string(move_x_before) + "," + std::to_string(move_y_before) + ")" +
             " face_before=(" + std::to_string(face_x_before) + "," + std::to_string(face_y_before) + ")" +
             " startup_state={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
@@ -188,19 +202,28 @@ void __fastcall HookPlayerControlBrainUpdate(
         }
         (void)memory.TryWriteField<std::uint8_t>(
             selection_pointer,
-            0x04,
+            kActorControlBrainTargetSlotOffset,
             selection_target_group_seed);
         (void)memory.TryWriteField<std::uint16_t>(
             selection_pointer,
-            0x06,
+            kActorControlBrainTargetHandleOffset,
             selection_target_slot_seed);
         (void)memory.TryWriteField<std::int32_t>(
             selection_pointer,
-            0x08,
+            kActorControlBrainRetargetTicksOffset,
             selection_target_hold_ticks);
-        (void)memory.TryWriteField<std::int32_t>(selection_pointer, 0x0C, 0);
-        (void)memory.TryWriteField<std::int32_t>(selection_pointer, 0x10, 0);
-        (void)memory.TryWriteField<std::int32_t>(selection_pointer, 0x14, 0);
+        (void)memory.TryWriteField<std::int32_t>(
+            selection_pointer,
+            kActorControlBrainTargetCooldownTicksOffset,
+            0);
+        (void)memory.TryWriteField<std::int32_t>(
+            selection_pointer,
+            kActorControlBrainActionCooldownTicksOffset,
+            0);
+        (void)memory.TryWriteField<std::int32_t>(
+            selection_pointer,
+            kActorControlBrainActionBurstTicksOffset,
+            0);
     };
 
     const auto apply_face_control = [&]() {
@@ -211,8 +234,7 @@ void __fastcall HookPlayerControlBrainUpdate(
         ApplyWizardActorFacingState(actor_address, face_heading);
         if (native_target_control_active && startup && selection_pointer != 0) {
             // The stock pure-primary startup gate needs a non-zero movement
-            // vector. Use the follow lane while moving and only fall back to
-            // attack-facing when idle.
+            // vector. Use the follow lane while moving and attack-facing when idle.
             const auto startup_input_x =
                 have_startup_move_vector ? startup_move_vector_x : face_vector_x;
             const auto startup_input_y =
@@ -279,6 +301,139 @@ void __fastcall HookPlayerControlBrainUpdate(
     }
 }
 
+bool IsActorCurrentLocalPlayerSlotZero(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    uintptr_t gameplay_address = 0;
+    uintptr_t local_actor_address = 0;
+    return TryResolveCurrentGameplayScene(&gameplay_address) &&
+           gameplay_address != 0 &&
+           TryResolvePlayerActorForSlot(gameplay_address, 0, &local_actor_address) &&
+           local_actor_address == actor_address;
+}
+
+bool IsUsableLocalPlayerCastAimTarget(
+    float position_x,
+    float position_y,
+    float aim_target_x,
+    float aim_target_y) {
+    if (!std::isfinite(position_x) ||
+        !std::isfinite(position_y) ||
+        !std::isfinite(aim_target_x) ||
+        !std::isfinite(aim_target_y)) {
+        return false;
+    }
+    if (std::abs(aim_target_x) < 0.001f && std::abs(aim_target_y) < 0.001f) {
+        return false;
+    }
+
+    const auto dx = aim_target_x - position_x;
+    const auto dy = aim_target_y - position_y;
+    const auto distance = std::sqrt((dx * dx) + (dy * dy));
+    constexpr float kMinCastAimDistance = 1.0f;
+    constexpr float kMaxCastAimDistance = 4096.0f;
+    constexpr float kMaxCastAimCoordinateMagnitude = 20000.0f;
+    return std::isfinite(distance) &&
+           distance >= kMinCastAimDistance &&
+           distance <= kMaxCastAimDistance &&
+           std::abs(aim_target_x) <= kMaxCastAimCoordinateMagnitude &&
+           std::abs(aim_target_y) <= kMaxCastAimCoordinateMagnitude;
+}
+
+bool QueueLocalPlayerPrimaryCastForMultiplayer(uintptr_t actor_address) {
+    if (!multiplayer::IsLocalTransportEnabled() ||
+        !IsActorCurrentLocalPlayerSlotZero(actor_address)) {
+        return false;
+    }
+
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+
+    static std::atomic<uintptr_t> s_last_multiplayer_primary_actor{0};
+    static std::atomic<std::uint64_t> s_last_multiplayer_primary_tick_ms{0};
+    const auto last_actor =
+        s_last_multiplayer_primary_actor.load(std::memory_order_acquire);
+    const auto last_tick_ms =
+        s_last_multiplayer_primary_tick_ms.load(std::memory_order_acquire);
+    if (last_actor == actor_address && last_tick_ms == now_ms) {
+        return false;
+    }
+    s_last_multiplayer_primary_actor.store(actor_address, std::memory_order_release);
+    s_last_multiplayer_primary_tick_ms.store(now_ms, std::memory_order_release);
+
+    float x = 0.0f;
+    float y = 0.0f;
+    float heading = 0.0f;
+    if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &x) ||
+        !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &y) ||
+        !TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &heading)) {
+        Log("Multiplayer local primary cast skipped: actor fields unavailable. actor=" + HexString(actor_address));
+        return false;
+    }
+
+    auto radians =
+        (NormalizeWizardActorHeadingForWrite(heading) - 90.0f) /
+        kWizardHeadingRadiansToDegrees;
+    auto direction_x = static_cast<float>(std::cos(radians));
+    auto direction_y = static_cast<float>(std::sin(radians));
+    if (!std::isfinite(direction_x) || !std::isfinite(direction_y)) {
+        return false;
+    }
+
+    bool has_aim_target = false;
+    float aim_target_x = 0.0f;
+    float aim_target_y = 0.0f;
+    if (TryReadFiniteFloatField(actor_address, kActorAimTargetXOffset, &aim_target_x) &&
+        TryReadFiniteFloatField(actor_address, kActorAimTargetYOffset, &aim_target_y) &&
+        IsUsableLocalPlayerCastAimTarget(x, y, aim_target_x, aim_target_y)) {
+        const auto aim_dx = aim_target_x - x;
+        const auto aim_dy = aim_target_y - y;
+        const auto aim_length = std::sqrt((aim_dx * aim_dx) + (aim_dy * aim_dy));
+        if (std::isfinite(aim_length) && aim_length > 0.0001f) {
+            direction_x = aim_dx / aim_length;
+            direction_y = aim_dy / aim_length;
+            has_aim_target = true;
+        }
+    }
+
+    uintptr_t target_actor_address = 0;
+    (void)ProcessMemory::Instance().TryReadField(
+        actor_address,
+        kActorCurrentTargetActorOffset,
+        &target_actor_address);
+
+    const auto native_queue_id = multiplayer::QueueLocalSpellCastEvent(
+        0,
+        x,
+        y,
+            direction_x,
+            direction_y,
+            0,
+            target_actor_address,
+            12,
+            has_aim_target,
+            aim_target_x,
+            aim_target_y);
+    if (native_queue_id == 0) {
+        return false;
+    }
+    Log(
+        "Multiplayer local primary cast queued from native pure-primary. actor=" +
+        HexString(actor_address) +
+        " native_queue_id=" + std::to_string(native_queue_id) +
+        " native_tick_ms=" + std::to_string(now_ms) +
+        " pos=(" + std::to_string(x) + "," + std::to_string(y) + ")" +
+        " heading=" + std::to_string(heading) +
+        " dir=(" + std::to_string(direction_x) + "," + std::to_string(direction_y) + ")" +
+        " aim_target=" +
+            (has_aim_target
+                ? (std::to_string(aim_target_x) + "," + std::to_string(aim_target_y))
+                : std::string("<none>")) +
+        " target=" + HexString(target_actor_address));
+    return true;
+}
+
 void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     const auto original =
         GetX86HookTrampoline<PlayerActorNoArgMethodFn>(g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
@@ -290,9 +445,10 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     bool log_this = false;
     std::uint64_t bot_id = 0;
     bool startup = false;
-    bool apply_local_selection_shim = false;
+    bool active_pure_primary_cast = false;
+    bool bot_owned_pure_primary_actor = false;
     bool local_player = false;
-    uintptr_t fallback_slot_obj = 0;
+    bool pure_primary_bot_owner_context = false;
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
@@ -300,14 +456,22 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
             (IsGameplaySlotWizardKind(binding->kind) ||
              IsStandaloneWizardKind(binding->kind))) {
             SyncWizardBotMovementIntent(binding);
-            log_this = true;
             bot_id = binding->bot_id;
             startup = binding->ongoing_cast.startup_in_progress;
-            apply_local_selection_shim =
+            bot_owned_pure_primary_actor = true;
+            active_pure_primary_cast =
                 binding->ongoing_cast.active &&
                 binding->ongoing_cast.lane ==
                     ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary;
-            if (apply_local_selection_shim) {
+            pure_primary_bot_owner_context = bot_owned_pure_primary_actor;
+            log_this = startup;
+            if (!log_this &&
+                active_pure_primary_cast &&
+                g_pure_primary_control_log_budget > 0) {
+                log_this = true;
+                --g_pure_primary_control_log_budget;
+            }
+            if (active_pure_primary_cast) {
                 (void)RefreshAndApplyWizardBindingFacingState(binding, actor_address);
             }
         }
@@ -325,142 +489,50 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     }
 
     auto& memory = ProcessMemory::Instance();
-    uintptr_t pure_primary_slot_sink_inner = 0;
-    uintptr_t pure_primary_attachment_item = 0;
-    std::uint32_t pure_primary_saved_slot_item = 0;
-    bool pure_primary_slot_item_shim_applied = false;
-    if (apply_local_selection_shim) {
-        pure_primary_attachment_item = ResolveActorAttachmentLaneItem(actor_address);
-        {
-            std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-            if (auto* binding = FindParticipantEntityForActor(actor_address);
-                binding != nullptr &&
-                (IsGameplaySlotWizardKind(binding->kind) ||
-                 IsStandaloneWizardKind(binding->kind))) {
-                if (pure_primary_attachment_item != 0) {
-                    binding->ongoing_cast.pure_primary_item_sink_fallback =
-                        pure_primary_attachment_item;
-                } else {
-                    pure_primary_attachment_item =
-                        binding->ongoing_cast.pure_primary_item_sink_fallback;
-                }
-            }
-        }
-    }
-
-    PurePrimaryLocalActorWindowShim pure_primary_actor_window_shim{};
-    if (apply_local_selection_shim) {
-        pure_primary_actor_window_shim = EnterPurePrimaryLocalActorWindow(actor_address);
-        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-        if (auto* binding = FindParticipantEntityForActor(actor_address);
-            binding != nullptr &&
-            (IsGameplaySlotWizardKind(binding->kind) ||
-             IsStandaloneWizardKind(binding->kind))) {
-            SyncWizardBotMovementIntent(binding);
-            (void)RefreshAndApplyWizardBindingFacingState(binding, actor_address);
-        }
-    }
-
-    if (apply_local_selection_shim) {
-        const auto gameplay_global = memory.ReadValueOr<uintptr_t>(
-            memory.ResolveGameAddressOrZero(0x0081c264),
-            0);
-        const auto shim_slot_obj =
-            gameplay_global != 0
-                ? gameplay_global + 0x1410
-                : 0;
-        const auto fallback_slot_obj30 =
-            shim_slot_obj != 0 &&
-                    memory.IsReadableRange(shim_slot_obj + 0x30, sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(shim_slot_obj + 0x30, 0)
-                : 0;
-        pure_primary_slot_sink_inner =
-            fallback_slot_obj30 != 0 &&
-                    memory.IsReadableRange(fallback_slot_obj30, sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(fallback_slot_obj30, 0)
-                : 0;
-        if (pure_primary_attachment_item != 0 &&
-            pure_primary_slot_sink_inner != 0 &&
-            memory.IsReadableRange(pure_primary_slot_sink_inner + 4, sizeof(std::uint32_t))) {
-            pure_primary_saved_slot_item =
-                memory.ReadValueOr<std::uint32_t>(pure_primary_slot_sink_inner + 4, 0);
-            pure_primary_slot_item_shim_applied =
-                memory.TryWriteValue<std::uint32_t>(
-                    pure_primary_slot_sink_inner + 4,
-                    static_cast<std::uint32_t>(pure_primary_attachment_item));
-        }
-    }
-
     if (log_this) {
-        const auto actor_1fc = memory.ReadFieldOr<std::uint32_t>(actor_address, 0x1FC, 0);
-        const auto actor_1fc_ptr = static_cast<uintptr_t>(actor_1fc);
-        const auto actor_1fc_obj30 =
-            actor_1fc_ptr != 0 && memory.IsReadableRange(actor_1fc_ptr + 0x30, sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(actor_1fc_ptr + 0x30, 0)
-                : 0;
-        const auto actor_1fc_inner =
-            actor_1fc_obj30 != 0 && memory.IsReadableRange(actor_1fc_obj30, sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(actor_1fc_obj30, 0)
-                : 0;
-        const auto actor_1fc_plus4 =
-            actor_1fc_inner != 0 && memory.IsReadableRange(actor_1fc_inner + 4, sizeof(std::uint32_t))
-                ? memory.ReadValueOr<std::uint32_t>(actor_1fc_inner + 4, 0)
-                : 0;
-        const auto actor_1fc_plus4_type =
-            actor_1fc_plus4 != 0 && memory.IsReadableRange(static_cast<uintptr_t>(actor_1fc_plus4) + 8, sizeof(std::uint32_t))
-                ? memory.ReadValueOr<std::uint32_t>(static_cast<uintptr_t>(actor_1fc_plus4) + 8, 0)
-                : 0;
-        std::uint8_t effective_slot_byte =
-            memory.ReadFieldOr<std::uint8_t>(actor_address, kActorSlotOffset, 0xFF);
-        if (apply_local_selection_shim) {
-            effective_slot_byte = 0;
-        }
-        const auto gameplay_global =
-            ProcessMemory::Instance().ReadValueOr<uintptr_t>(
-                ProcessMemory::Instance().ResolveGameAddressOrZero(0x0081c264),
-                0);
-        fallback_slot_obj =
-            gameplay_global != 0
-                ? gameplay_global +
-                    static_cast<std::size_t>(effective_slot_byte) * 0x64 +
-                    0x1410
-                : 0;
-        const auto fallback_slot_obj30 =
-            fallback_slot_obj != 0 && memory.IsReadableRange(fallback_slot_obj + 0x30, sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(fallback_slot_obj + 0x30, 0)
-                : 0;
-        const auto fallback_slot_inner =
-            fallback_slot_obj30 != 0 && memory.IsReadableRange(fallback_slot_obj30, sizeof(uintptr_t))
-                ? memory.ReadValueOr<uintptr_t>(fallback_slot_obj30, 0)
-                : 0;
-        const auto fallback_slot_plus4 =
-            fallback_slot_inner != 0 && memory.IsReadableRange(fallback_slot_inner + 4, sizeof(std::uint32_t))
-                ? memory.ReadValueOr<std::uint32_t>(fallback_slot_inner + 4, 0)
-                : 0;
-        const auto fallback_slot_plus4_type =
-            fallback_slot_plus4 != 0 && memory.IsReadableRange(static_cast<uintptr_t>(fallback_slot_plus4) + 8, sizeof(std::uint32_t))
-                ? memory.ReadValueOr<std::uint32_t>(static_cast<uintptr_t>(fallback_slot_plus4) + 8, 0)
-                : 0;
+        uintptr_t actor_1fc_ptr = 0;
+        const bool have_actor_1fc =
+            memory.TryReadField(actor_address, kActorEquipRuntimeStateOffset, &actor_1fc_ptr);
+        uintptr_t actor_1fc_obj30 = 0;
+        const bool have_actor_1fc_obj30 =
+            have_actor_1fc &&
+            actor_1fc_ptr != 0 &&
+            memory.TryReadValue(
+                actor_1fc_ptr + kActorEquipRuntimeVisualLinkAttachmentOffset,
+                &actor_1fc_obj30);
+        uintptr_t actor_1fc_inner = 0;
+        const bool have_actor_1fc_inner =
+            have_actor_1fc_obj30 &&
+            actor_1fc_obj30 != 0 &&
+            memory.TryReadValue(actor_1fc_obj30, &actor_1fc_inner);
+        std::uint32_t actor_1fc_plus4 = 0;
+        const bool have_actor_1fc_plus4 =
+            have_actor_1fc_inner &&
+            actor_1fc_inner != 0 &&
+            memory.TryReadValue(
+                actor_1fc_inner + kVisualLaneHolderCurrentObjectOffset,
+                &actor_1fc_plus4);
+        std::uint32_t actor_1fc_plus4_type = 0;
+        const bool have_actor_1fc_plus4_type =
+            have_actor_1fc_plus4 &&
+            actor_1fc_plus4 != 0 &&
+            memory.TryReadValue(
+                static_cast<uintptr_t>(actor_1fc_plus4) + kGameObjectTypeIdOffset,
+                &actor_1fc_plus4_type);
         Log(
             "[bots] pure_primary_start enter actor=" + HexString(actor_address) +
             " bot_id=" + std::to_string(bot_id) +
             " startup=" + std::to_string(startup ? 1 : 0) +
-            " local_sel_shim=" + std::to_string(apply_local_selection_shim ? 1 : 0) +
-            " local_window_shim=" + std::to_string(pure_primary_actor_window_shim.active ? 1 : 0) +
-            " actor1fc=" + HexString(actor_1fc_ptr) +
-            " actor1fc30=" + HexString(actor_1fc_obj30) +
-            " actor1fc_inner=" + HexString(actor_1fc_inner) +
-            " actor1fc_plus4=" + HexString(actor_1fc_plus4) +
-            " actor1fc_plus4_type=" + HexString(actor_1fc_plus4_type) +
-            " fallback_slot_byte=" + HexString(effective_slot_byte) +
-            " fallback_slot_obj=" + HexString(fallback_slot_obj) +
-            " fallback_slot_obj30=" + HexString(fallback_slot_obj30) +
-            " fallback_slot_inner=" + HexString(fallback_slot_inner) +
-            " fallback_slot_plus4=" + HexString(fallback_slot_plus4) +
-            " fallback_slot_plus4_type=" + HexString(fallback_slot_plus4_type) +
-            " slot_item_shim=" + std::to_string(pure_primary_slot_item_shim_applied ? 1 : 0) +
-            " slot_item_saved=" + HexString(pure_primary_saved_slot_item) +
-            " attachment_item=" + HexString(pure_primary_attachment_item) +
+            " direct_actor_equip=" + (have_actor_1fc
+                ? std::to_string(actor_1fc_ptr != 0 ? 1 : 0)
+                : UnreadableMemoryFieldText()) +
+            " actor1fc=" + (have_actor_1fc ? HexString(actor_1fc_ptr) : UnreadableMemoryFieldText()) +
+            " actor1fc30=" + (have_actor_1fc_obj30 ? HexString(actor_1fc_obj30) : UnreadableMemoryFieldText()) +
+            " actor1fc_inner=" + (have_actor_1fc_inner ? HexString(actor_1fc_inner) : UnreadableMemoryFieldText()) +
+            " actor1fc_plus4=" + (have_actor_1fc_plus4 ? HexString(actor_1fc_plus4) : UnreadableMemoryFieldText()) +
+            " actor1fc_plus4_type=" + (have_actor_1fc_plus4_type
+                ? HexString(actor_1fc_plus4_type)
+                : UnreadableMemoryFieldText()) +
             " startup={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     }
     SpellDispatchProbeState saved_probe = g_spell_dispatch_probe;
@@ -468,20 +540,20 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
         g_spell_dispatch_probe.depth = saved_probe.depth + 1;
         g_spell_dispatch_probe.actor_address = actor_address;
         g_spell_dispatch_probe.bot_id = bot_id;
-        g_spell_dispatch_probe.pure_primary_item_sink_fallback =
-            pure_primary_attachment_item;
         g_spell_dispatch_probe.startup = startup;
-        g_spell_dispatch_probe.pure_primary_startup = apply_local_selection_shim;
+        g_spell_dispatch_probe.pure_primary_startup = bot_owned_pure_primary_actor;
         g_spell_dispatch_probe.local_player = local_player;
     }
-    original(self);
-    if (pure_primary_slot_item_shim_applied) {
-        (void)memory.TryWriteValue<std::uint32_t>(
-            pure_primary_slot_sink_inner + 4,
-            pure_primary_saved_slot_item);
-    }
+    std::string slot_owner_context;
+    InvokeWithBotProgressionSlotOwnerContext(
+        actor_address,
+        pure_primary_bot_owner_context,
+        [&] {
+            original(self);
+        },
+        &slot_owner_context);
     g_spell_dispatch_probe = saved_probe;
-    if (apply_local_selection_shim) {
+    if (active_pure_primary_cast) {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
             binding != nullptr &&
@@ -490,11 +562,12 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
             (void)RefreshAndApplyWizardBindingFacingState(binding, actor_address);
         }
     }
+    (void)QueueLocalPlayerPrimaryCastForMultiplayer(actor_address);
     if (log_this) {
         Log(
             "[bots] pure_primary_start exit actor=" + HexString(actor_address) +
             " bot_id=" + std::to_string(bot_id) +
+            " standalone_slot_owner_context={" + slot_owner_context + "}" +
             " startup={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     }
-    LeavePurePrimaryLocalActorWindow(actor_address, pure_primary_actor_window_shim);
 }

@@ -30,8 +30,9 @@ local environment_variables = {
 }
 
 local function distance(ax, ay, bx, by)
-  local dx = (ax or 0.0) - (bx or 0.0)
-  local dy = (ay or 0.0) - (by or 0.0)
+  assert(type(ax) == "number" and type(ay) == "number" and type(bx) == "number" and type(by) == "number")
+  local dx = ax - bx
+  local dy = ay - by
   return math.sqrt((dx * dx) + (dy * dy))
 end
 
@@ -110,6 +111,18 @@ _G.sd = {
     end,
   },
   bots = {
+    resolve_primary_entry = function(element_id)
+      local entries = { 0x10, 0x20, 0x28, 0x18, 0x08 }
+      local index = (tonumber(element_id) or -1) + 1
+      return entries[index]
+    end,
+    get_primary_attack_window = function(bot_id, element_id)
+      local id = tonumber(element_id) or 0
+      if id == 1 then
+        return { min_range = 0.0, max_range = 170.0, native_backed = true, source = "native_water_control_brain_range" }
+      end
+      return { min_range = 0.0, max_range = 300.0, native_backed = true, source = "native_selection_pursuit_range" }
+    end,
     create = function(request)
       next_bot_id = next_bot_id + 1
       local bot = {
@@ -199,11 +212,11 @@ _G.sd = {
       table.insert(faces, { id = bot_id, heading = heading })
       return true
     end,
-    face_target = function(bot_id, actor_address, fallback_heading)
+    face_target = function(bot_id, actor_address, default_heading)
       table.insert(face_targets, {
         id = bot_id,
         actor_address = actor_address,
-        fallback_heading = fallback_heading,
+        default_heading = default_heading,
       })
       return true
     end,
@@ -247,6 +260,8 @@ assert(hooks.state.bots[5].bot_name == "Lua Bot Fire", "fifth managed bot should
 assert(type(hooks.choose_follow_target) == "function", "choose_follow_target hook missing")
 assert(type(hooks.should_refresh_follow_target) == "function", "should_refresh_follow_target hook missing")
 assert(type(hooks.update_same_scene_follow) == "function", "update_same_scene_follow hook missing")
+assert(type(hooks.scene_key) == "function", "scene_key hook missing")
+assert(type(hooks.scene_matches) == "function", "scene_matches hook missing")
 assert(type(hooks.handle_pending_skill_choice) == "function", "handle_pending_skill_choice hook missing")
 assert(hooks.follow_stop_distance == 100.0, "follow stop distance should use the roomy 100-unit inner radius")
 assert(hooks.follow_resume_distance == 250.0, "follow resume distance should use the roomy 250-unit outer radius")
@@ -254,6 +269,14 @@ assert(hooks.follow_target_arrival_distance == 32.0, "follow target arrival shou
 assert(hooks.follow_move_timeout_ms == 30000, "follow move watchdog should be a 30-second recovery timer")
 assert(type(event_handlers["runtime.tick"]) == "function", "runtime.tick handler missing")
 assert(type(event_handlers["run.started"]) == "function", "run.started handler missing")
+assert(hooks.scene_key({ kind = "SharedHub", region_index = -1, region_type_id = -1 }) == "shared_hub::",
+  "shared hub snapshots should ignore private-region sentinel fields")
+assert(hooks.scene_key({ kind = "Run", region_index = -1, region_type_id = -1 }) == "run::",
+  "run snapshots should ignore private-region sentinel fields")
+assert(hooks.scene_matches({ kind = "SharedHub", region_index = -1, region_type_id = -1 }, { kind = "shared_hub" }),
+  "shared hub snapshots should match shared hub scene intents")
+assert(hooks.scene_matches({ kind = "Run", region_index = -1, region_type_id = -1 }, { kind = "run" }),
+  "run snapshots should match run scene intents")
 
 event_handlers["runtime.tick"]({ monotonic_milliseconds = 1000 })
 assert(#creates == 5, "hub tick should create exactly five bot participants")
@@ -262,16 +285,16 @@ assert(creates[2].name == "Lua Bot Earth", "hub second create should be earth bo
 assert(creates[3].name == "Lua Bot Air", "hub third create should be air bot")
 assert(creates[4].name == "Lua Bot Ether", "hub fourth create should be ether bot")
 assert(creates[5].name == "Lua Bot Fire", "hub fifth create should be fire bot")
-assert(math.abs(creates[1].position.x - 1006.0) < 0.001, "water hub spawn should use default hub x plus bot offset")
-assert(math.abs(creates[1].position.y - 448.0) < 0.001, "water hub spawn should use default hub y plus bot offset")
-assert(math.abs(creates[2].position.x - 1006.0) < 0.001, "earth hub spawn should use default hub x plus bot offset")
-assert(math.abs(creates[2].position.y - 488.0) < 0.001, "earth hub spawn should use default hub y plus bot offset")
-assert(math.abs(creates[3].position.x - 1006.0) < 0.001, "air hub spawn should use default hub x plus bot offset")
-assert(math.abs(creates[3].position.y - 528.0) < 0.001, "air hub spawn should use default hub y plus bot offset")
-assert(math.abs(creates[4].position.x - 1006.0) < 0.001, "ether hub spawn should use default hub x plus bot offset")
-assert(math.abs(creates[4].position.y - 568.0) < 0.001, "ether hub spawn should use default hub y plus bot offset")
-assert(math.abs(creates[5].position.x - 1006.0) < 0.001, "fire hub spawn should use default hub x plus bot offset")
-assert(math.abs(creates[5].position.y - 608.0) < 0.001, "fire hub spawn should use default hub y plus bot offset")
+assert(math.abs(creates[1].position.x - 150.0) < 0.001, "water hub spawn should use player x plus bot offset")
+assert(math.abs(creates[1].position.y - 40.0) < 0.001, "water hub spawn should use player y plus bot offset")
+assert(math.abs(creates[2].position.x - 150.0) < 0.001, "earth hub spawn should use player x plus bot offset")
+assert(math.abs(creates[2].position.y - 80.0) < 0.001, "earth hub spawn should use player y plus bot offset")
+assert(math.abs(creates[3].position.x - 150.0) < 0.001, "air hub spawn should use player x plus bot offset")
+assert(math.abs(creates[3].position.y - 120.0) < 0.001, "air hub spawn should use player y plus bot offset")
+assert(math.abs(creates[4].position.x - 150.0) < 0.001, "ether hub spawn should use player x plus bot offset")
+assert(math.abs(creates[4].position.y - 160.0) < 0.001, "ether hub spawn should use player y plus bot offset")
+assert(math.abs(creates[5].position.x - 150.0) < 0.001, "fire hub spawn should use player x plus bot offset")
+assert(math.abs(creates[5].position.y - 200.0) < 0.001, "fire hub spawn should use player y plus bot offset")
 assert(hooks.state.bots[1].bot_id ~= nil, "water bot id was not tracked")
 assert(hooks.state.bots[2].bot_id ~= nil, "earth bot id was not tracked")
 assert(hooks.state.bots[3].bot_id ~= nil, "air bot id was not tracked")
@@ -289,8 +312,7 @@ for _, bot_context in ipairs(hooks.state.bots) do
 end
 
 local skill_bot = hooks.state.bots[1]
-hooks.state.bot_id = skill_bot.bot_id
-hooks.state.bot_profile = skill_bot.bot_profile
+hooks.load_bot_context(skill_bot)
 skill_choices[skill_bot.bot_id] = {
   pending = true,
   generation = 77,
@@ -354,7 +376,7 @@ local seen_run_spawn_y = {}
 for _, bot_context in ipairs(hooks.state.bots) do
   local bot = bot_store[bot_context.bot_id]
   assert(bot.scene.kind == "run", bot_context.bot_name .. " should be promoted into run scene")
-  assert(bot_context.scene_key == "run:-1:-1", bot_context.bot_name .. " should save run scene bookkeeping")
+  assert(bot_context.scene_key == "run::", bot_context.bot_name .. " should save run scene bookkeeping")
   assert(bot_context.pending_run_promotion == false, bot_context.bot_name .. " should clear pending run promotion")
   assert(seen_run_spawn_y[bot.y] ~= true, "run promotion spawn offsets should not overlap")
   seen_run_spawn_y[bot.y] = true
@@ -409,6 +431,48 @@ local snapped_follow = hooks.snap_target_to_nav(
 assert(snapped_follow ~= nil, "hub follow snap should find a traversable sample")
 assert(math.abs(snapped_follow.x - 1012.5) < 0.001, "hub follow snap chose wrong x")
 assert(math.abs(snapped_follow.y - 187.5) < 0.001, "hub follow snap chose wrong y")
+assert(snapped_follow.snap_distance ~= nil, "follow snap should publish its snap distance")
+
+current_scene = {
+  name = "testrun",
+  kind = "testrun",
+  world_id = 0x2800,
+  transitioning = false,
+}
+local stale_player = { x = 1825.0, y = 2258.0, heading = 0.0 }
+current_nav_grid = {
+  valid = true,
+  world_id = current_scene.world_id,
+  width = 4,
+  height = 4,
+  cells = {
+    {
+      grid_x = 1,
+      grid_y = 1,
+      traversable = true,
+      samples = {
+        { world_x = 1775.0, world_y = 1775.0, traversable = true },
+        { world_x = 1825.0, world_y = 1775.0, traversable = true },
+        { world_x = 1875.0, world_y = 1775.0, traversable = true },
+      },
+    },
+  },
+}
+math.randomseed(4321)
+local stale_snap_target = hooks.choose_follow_target(
+  1700,
+  stale_player,
+  { x = 1825.0, y = 1775.0, transform_valid = true })
+assert(stale_snap_target ~= nil, "distant nav grid should still produce a near-player follow target")
+local stale_snap_gap = distance(stale_snap_target.x, stale_snap_target.y, stale_player.x, stale_player.y)
+assert(stale_snap_gap <= hooks.follow_resume_distance + 0.001, "distant nav snap recovery should stay near the player")
+assert(math.abs(stale_snap_target.y - 1775.0) > 1.0, "distant nav snap recovery should not use the far nav sample row")
+assert(hooks.should_refresh_follow_target(stale_player, 200.0, {
+  x = stale_player.x,
+  y = stale_player.y - 500.0,
+  player_x = stale_player.x,
+  player_y = stale_player.y,
+}) == true, "far stored follow targets should refresh even when the bot is near the player")
 
 local function make_follow_grid(world_id, player)
   local samples = {}
@@ -440,6 +504,7 @@ end
 
 math.randomseed(1234)
 local follow_context = hooks.state.bots[1]
+hooks.load_bot_context(follow_context)
 local follow_bot = bot_store[follow_context.bot_id]
 current_scene = {
   name = "testrun",
@@ -450,7 +515,6 @@ current_scene = {
 current_player = { x = 500.0, y = 500.0, heading = 0.0 }
 current_nav_grid = make_follow_grid(current_scene.world_id, current_player)
 current_actors = {}
-hooks.state.bot_id = follow_context.bot_id
 hooks.state.follow_target = nil
 hooks.state.last_command_ms = 0
 follow_bot.x = 200.0
@@ -666,7 +730,7 @@ current_actors = {
   {
     actor_address = 250,
     object_type_id = 5010,
-    tracked_enemy = true,
+    tracked_enemy = false,
     dead = false,
     hp = 100.0,
     max_hp = 100.0,
@@ -700,6 +764,7 @@ enemy_a.dead = false
 enemy_a.hp = 100.0
 enemy_a.x = 40.0
 enemy_b.hp = 100.0
+hooks.load_bot_context(hooks.state.bots[1])
 hooks.state.bot_id = 42
 
 local attack_scene = { name = "testrun" }
@@ -734,7 +799,7 @@ faces = {}
 face_targets = {}
 enemy_a.dead = false
 enemy_a.hp = 100.0
-enemy_a.x = 200.0
+enemy_a.x = 160.0
 enemy_b.hp = 0.0
 bot.cast_ready = true
 hooks.state.bot_profile = { element_id = 1 }
@@ -746,7 +811,7 @@ assert(casts[1].target_actor_address == enemy_a.actor_address, "water-range atta
 casts = {}
 faces = {}
 face_targets = {}
-enemy_a.x = 240.0
+enemy_a.x = 190.0
 enemy_a.hp = 100.0
 bot.cast_ready = true
 hooks.state.bot_profile = { element_id = 1 }

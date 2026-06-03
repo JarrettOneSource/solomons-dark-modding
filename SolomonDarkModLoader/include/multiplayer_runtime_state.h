@@ -1,8 +1,10 @@
 #pragma once
 
+#include "multiplayer_runtime_protocol.h"
 #include "steam_bootstrap.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -66,10 +68,10 @@ struct ParticipantRuntimeInfo {
     std::uint32_t run_nonce = 0;
     std::int32_t level = 0;
     std::int32_t wave = 0;
-    std::int32_t life_current = 0;
-    std::int32_t life_max = 0;
-    std::int32_t mana_current = 0;
-    std::int32_t mana_max = 0;
+    float life_current = 0.0f;
+    float life_max = 0.0f;
+    float mana_current = 0.0f;
+    float mana_max = 0.0f;
     std::int32_t experience_current = 0;
     std::int32_t experience_next = 0;
     std::int32_t primary_entry_index = -1;
@@ -78,7 +80,71 @@ struct ParticipantRuntimeInfo {
     float position_x = 0.0f;
     float position_y = 0.0f;
     float heading = 0.0f;
+    std::uint8_t anim_drive_state = 0;
+    std::uint16_t presentation_flags = 0;
+    std::uint32_t attachment_staff_visual_state = 0;
+    std::uint8_t render_variant_primary = 0;
+    std::uint8_t render_variant_secondary = 0;
+    std::uint8_t render_weapon_type = 0;
+    std::uint8_t render_selection_byte = 0;
+    std::uint8_t render_variant_tertiary = 0;
+    std::uint32_t primary_visual_link_type_id = 0;
+    std::uint32_t secondary_visual_link_type_id = 0;
+    std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> primary_visual_link_color_block = {};
+    std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> secondary_visual_link_color_block = {};
+    std::uint32_t anim_drive_state_word = 0;
+    float walk_cycle_primary = 0.0f;
+    float walk_cycle_secondary = 0.0f;
+    float render_drive_stride = 0.0f;
+    float render_advance_rate = 0.0f;
+    float render_advance_phase = 0.0f;
+    float render_drive_effect_timer = 0.0f;
+    float render_drive_effect_progress = 0.0f;
+    float render_drive_overlay_alpha = 0.0f;
+    float render_drive_move_blend = 0.0f;
     ParticipantSceneIntent scene_intent;
+};
+
+struct ParticipantOwnedProgressionState {
+    bool initialized = false;
+    std::int32_t gold = 0;
+    std::uint32_t inventory_revision = 0;
+    std::uint32_t spellbook_revision = 0;
+    std::uint32_t statbook_revision = 0;
+    std::uint32_t loadout_revision = 0;
+};
+
+struct ParticipantTransformSample {
+    bool valid = false;
+    std::uint64_t received_ms = 0;
+    std::uint32_t sequence = 0;
+    std::uint32_t run_nonce = 0;
+    ParticipantSceneIntent scene_intent;
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    float heading = 0.0f;
+    std::uint8_t anim_drive_state = 0;
+    std::uint16_t presentation_flags = 0;
+    std::uint32_t attachment_staff_visual_state = 0;
+    std::uint8_t render_variant_primary = 0;
+    std::uint8_t render_variant_secondary = 0;
+    std::uint8_t render_weapon_type = 0;
+    std::uint8_t render_selection_byte = 0;
+    std::uint8_t render_variant_tertiary = 0;
+    std::uint32_t primary_visual_link_type_id = 0;
+    std::uint32_t secondary_visual_link_type_id = 0;
+    std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> primary_visual_link_color_block = {};
+    std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> secondary_visual_link_color_block = {};
+    std::uint32_t anim_drive_state_word = 0;
+    float walk_cycle_primary = 0.0f;
+    float walk_cycle_secondary = 0.0f;
+    float render_drive_stride = 0.0f;
+    float render_advance_rate = 0.0f;
+    float render_advance_phase = 0.0f;
+    float render_drive_effect_timer = 0.0f;
+    float render_drive_effect_progress = 0.0f;
+    float render_drive_overlay_alpha = 0.0f;
+    float render_drive_move_blend = 0.0f;
 };
 
 struct ParticipantInfo {
@@ -94,6 +160,107 @@ struct ParticipantInfo {
     std::uint64_t last_packet_ms = 0;
     MultiplayerCharacterProfile character_profile;
     ParticipantRuntimeInfo runtime;
+    ParticipantOwnedProgressionState owned_progression;
+    std::vector<ParticipantTransformSample> transform_history;
+};
+
+struct WorldActorSnapshot {
+    std::uint64_t network_actor_id = 0;
+    std::uint32_t native_type_id = 0;
+    std::int32_t enemy_type = -1;
+    std::int32_t actor_slot = -1;
+    std::int32_t world_slot = -1;
+    bool dead = false;
+    bool tracked_enemy = false;
+    bool lifecycle_owned = false;
+    bool run_static = false;
+    std::uint8_t anim_drive_state = 0;
+    std::uint16_t presentation_flags = 0;
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    float radius = 0.0f;
+    float heading = 0.0f;
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    std::uint32_t anim_drive_state_word = 0;
+    float walk_cycle_primary = 0.0f;
+    float walk_cycle_secondary = 0.0f;
+    std::uint8_t render_variant_primary = 0;
+    std::uint8_t render_variant_secondary = 0;
+    std::uint8_t render_weapon_type = 0;
+    std::uint8_t render_selection_byte = 0;
+    std::uint8_t render_variant_tertiary = 0;
+    std::array<std::uint8_t, kWorldActorStudentVisualStateBytes> student_visual_state = {};
+};
+
+struct WorldSnapshotActorBindingRuntimeInfo {
+    std::uint64_t network_actor_id = 0;
+    uintptr_t local_actor_address = 0;
+    std::uint32_t native_type_id = 0;
+    std::int32_t enemy_type = -1;
+    bool matched = false;
+    bool parked = false;
+    bool removed = false;
+};
+
+struct WorldSnapshotRuntimeInfo {
+    bool valid = false;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t received_ms = 0;
+    std::uint32_t sequence = 0;
+    std::uint32_t scene_epoch = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t actor_total_count = 0;
+    bool truncated = false;
+    ParticipantSceneIntent scene_intent;
+    std::vector<WorldActorSnapshot> actors;
+};
+
+struct LootDropSnapshot {
+    std::uint64_t network_drop_id = 0;
+    std::uint32_t native_type_id = 0;
+    LootDropKind drop_kind = LootDropKind::Unknown;
+    bool active = false;
+    std::int32_t amount = 0;
+    std::int32_t amount_tier = 0;
+    std::int32_t actor_slot = -1;
+    std::int32_t world_slot = -1;
+    std::uint32_t lifetime = 0;
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    float radius = 0.0f;
+};
+
+struct LootSnapshotRuntimeInfo {
+    bool valid = false;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t received_ms = 0;
+    std::uint32_t sequence = 0;
+    std::uint32_t scene_epoch = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t drop_total_count = 0;
+    bool truncated = false;
+    ParticipantSceneIntent scene_intent;
+    std::vector<LootDropSnapshot> drops;
+};
+
+struct WorldSnapshotApplyRuntimeInfo {
+    bool valid = false;
+    std::uint64_t applied_ms = 0;
+    std::uint32_t sequence = 0;
+    std::uint32_t scene_epoch = 0;
+    std::uint32_t local_actor_count = 0;
+    std::uint32_t matched_actor_count = 0;
+    std::uint32_t created_actor_count = 0;
+    std::uint32_t created_actor_total_count = 0;
+    std::uint32_t transform_write_count = 0;
+    std::uint32_t presentation_write_count = 0;
+    std::uint32_t health_write_count = 0;
+    std::uint32_t dead_actor_count = 0;
+    std::uint32_t parked_actor_count = 0;
+    std::uint32_t removed_actor_count = 0;
+    std::uint32_t failed_remove_actor_count = 0;
+    std::vector<WorldSnapshotActorBindingRuntimeInfo> actor_bindings;
 };
 
 enum class SessionStatus {
@@ -105,6 +272,7 @@ enum class SessionStatus {
 enum class SessionTransportKind {
     None,
     Steam,
+    LocalUdp,
 };
 
 struct RuntimeState {
@@ -126,15 +294,23 @@ struct RuntimeState {
     std::string status_text;
     std::string error_text;
     std::vector<ParticipantInfo> participants;
+    WorldSnapshotRuntimeInfo world_snapshot;
+    std::vector<WorldSnapshotRuntimeInfo> world_snapshot_history;
+    WorldSnapshotApplyRuntimeInfo world_snapshot_apply;
+    LootSnapshotRuntimeInfo loot_snapshot;
 };
 
 constexpr std::uint64_t kLocalParticipantId = 1ull;
 constexpr std::uint64_t kFirstLuaControlledParticipantId = 0x1000000000001000ull;
+constexpr std::size_t kParticipantTransformHistoryCapacity = 8;
+constexpr std::size_t kWorldSnapshotHistoryCapacity = 8;
 
 MultiplayerCharacterProfile DefaultCharacterProfile();
 bool IsValidCharacterProfile(const MultiplayerCharacterProfile& profile);
 bool IsValidParticipantSceneIntent(const ParticipantSceneIntent& scene_intent);
 ParticipantSceneIntent DefaultParticipantSceneIntent();
+bool SameParticipantSceneIntent(const ParticipantSceneIntent& left, const ParticipantSceneIntent& right);
+float InterpolateHeadingDegrees(float from_degrees, float to_degrees, float alpha);
 
 void InitializeRuntimeState();
 void ShutdownRuntimeState();
@@ -155,6 +331,18 @@ ParticipantInfo* UpsertRemoteParticipant(
     RuntimeState& state,
     std::uint64_t participant_id,
     ParticipantControllerKind controller_kind);
+void AppendParticipantTransformSample(ParticipantInfo* participant, const ParticipantTransformSample& sample);
+bool TrySampleParticipantTransform(
+    const ParticipantInfo& participant,
+    std::uint64_t now_ms,
+    std::uint64_t interpolation_delay_ms,
+    ParticipantTransformSample* sample);
+void AppendWorldSnapshot(RuntimeState* state, WorldSnapshotRuntimeInfo snapshot);
+bool TrySampleWorldSnapshot(
+    const RuntimeState& state,
+    std::uint64_t now_ms,
+    std::uint64_t interpolation_delay_ms,
+    WorldSnapshotRuntimeInfo* snapshot);
 bool IsLocalHumanParticipant(const ParticipantInfo& participant);
 bool IsRemoteParticipant(const ParticipantInfo& participant);
 bool IsLuaControlledParticipant(const ParticipantInfo& participant);
@@ -165,6 +353,7 @@ const char* SessionTransportLabel(SessionTransportKind kind);
 const char* ParticipantKindLabel(ParticipantKind kind);
 const char* ParticipantControllerKindLabel(ParticipantControllerKind kind);
 const char* ParticipantSceneIntentKindLabel(ParticipantSceneIntentKind kind);
+const char* LootDropKindLabel(LootDropKind kind);
 
 }  // namespace sdmod::multiplayer
 

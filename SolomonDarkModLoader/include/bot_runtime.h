@@ -30,9 +30,14 @@ struct BotManaCost {
     bool resolved = false;
     BotManaChargeKind kind = BotManaChargeKind::None;
     float cost = 0.0f;
-    std::int32_t statbook_level = 1;
+    float native_stat_cost = 0.0f;
+    float native_output_scale = 1.0f;
+    std::int32_t progression_level = 1;
     std::int32_t skill_id = 0;
 };
+
+constexpr float kBotManaReserveEnterRatio = 0.10f;
+constexpr float kBotManaReserveExitRatio = 0.80f;
 
 struct BotCreateRequest {
     std::string display_name;
@@ -69,12 +74,33 @@ struct BotCastRequest {
     BotCastKind kind = BotCastKind::Primary;
     std::int32_t secondary_slot = -1;
     std::int32_t skill_id = 0;
+    std::uint32_t cast_sequence = 0;
+    bool remote_input_controlled = false;
     uintptr_t target_actor_address = 0;
+    bool has_origin_transform = false;
+    float origin_position_x = 0.0f;
+    float origin_position_y = 0.0f;
+    bool has_origin_heading = false;
+    float origin_heading = 0.0f;
     bool has_aim_target = false;
     float aim_target_x = 0.0f;
     float aim_target_y = 0.0f;
     bool has_aim_angle = false;
     float aim_angle = 0.0f;
+};
+
+struct BotCastInputState {
+    std::uint64_t bot_id = 0;
+    bool active = false;
+    bool release_requested = false;
+    std::uint32_t cast_sequence = 0;
+    std::uint64_t last_update_ms = 0;
+    bool has_aim_target = false;
+    float aim_target_x = 0.0f;
+    float aim_target_y = 0.0f;
+    bool has_aim_angle = false;
+    float aim_angle = 0.0f;
+    uintptr_t target_actor_address = 0;
 };
 
 struct BotMoveToRequest {
@@ -151,6 +177,7 @@ struct BotSnapshot {
     float max_hp = 0.0f;
     float mp = 0.0f;
     float max_mp = 0.0f;
+    bool mana_reserve_active = false;
     bool entity_materialized = false;
     uintptr_t actor_address = 0;
     uintptr_t world_address = 0;
@@ -187,11 +214,21 @@ struct BotSnapshot {
     std::int32_t cast_skill_id = 0;
     int cast_ticks_waiting = 0;
     uintptr_t cast_target_actor_address = 0;
+    int native_action_cooldown_ticks = 0;
+    bool active_spell_object_readable = false;
+    uintptr_t active_spell_object_address = 0;
+    std::uint32_t active_spell_object_type = 0;
+    float active_spell_object_x = 0.0f;
+    float active_spell_object_y = 0.0f;
+    float active_spell_object_radius = 0.0f;
+    float active_spell_object_charge = 0.0f;
     float walk_cycle_primary = 0.0f;
     float walk_cycle_secondary = 0.0f;
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
+    float render_drive_effect_timer = 0.0f;
+    float render_drive_effect_progress = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;
@@ -225,16 +262,26 @@ bool UpdateBot(const BotUpdateRequest& request);
 bool MoveBotTo(const BotMoveToRequest& request);
 bool StopBot(std::uint64_t bot_id);
 bool FaceBot(std::uint64_t bot_id, float heading);
-bool FaceBotTarget(std::uint64_t bot_id, uintptr_t target_actor_address, bool fallback_heading_valid, float fallback_heading);
+bool FaceBotTarget(std::uint64_t bot_id, uintptr_t target_actor_address, bool default_heading_valid, float default_heading);
 bool ReadBotMovementIntent(std::uint64_t bot_id, BotMovementIntentSnapshot* snapshot);
 bool QueueBotCast(const BotCastRequest& request);
+bool UpdateBotCastInput(const BotCastInputState& input_state);
+bool ReadBotCastInputState(std::uint64_t bot_id, BotCastInputState* input_state);
+bool ClearBotCastInput(std::uint64_t bot_id, std::uint32_t cast_sequence);
 BotManaCost ResolveBotCastManaCost(
     const MultiplayerCharacterProfile& character_profile,
+    uintptr_t progression_runtime_address,
     BotCastKind kind,
     std::int32_t secondary_slot,
     std::int32_t skill_id);
 float ResolveBotManaRequiredToStart(const BotManaCost& cost);
+bool CanBotManaStartCast(const BotManaCost& cost, float current_mp, float max_mp);
 const char* BotManaChargeKindLabel(BotManaChargeKind kind);
+bool RefreshBotManaReserveState(
+    std::uint64_t bot_id,
+    float current_mp,
+    float max_mp,
+    bool* reserve_active = nullptr);
 bool FinishBotAttack(
     std::uint64_t bot_id,
     bool desired_heading_valid,
@@ -244,6 +291,7 @@ bool ConsumePendingBotCast(std::uint64_t bot_id, BotCastRequest* request);
 std::uint32_t GetBotCount();
 bool ReadBotSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot);
 bool ReadBotSnapshotByIndex(std::uint32_t index, BotSnapshot* snapshot);
+bool ReadParticipantSnapshot(std::uint64_t participant_id, BotSnapshot* snapshot);
 void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintptr_t source_progression_address = 0);
 bool ReadBotSkillChoices(std::uint64_t bot_id, BotSkillChoiceSnapshot* snapshot);
 bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_message);

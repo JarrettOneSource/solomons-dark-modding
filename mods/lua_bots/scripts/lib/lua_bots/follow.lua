@@ -22,8 +22,6 @@ function follow.install(ctx)
   end
 
   local function reset_travel_candidate()
-    state.hub_candidate_name = nil
-    state.hub_candidate_since_ms = 0
     state.target_area_name = nil
     state.travel_state = "idle"
   end
@@ -33,11 +31,8 @@ function follow.install(ctx)
       return false
     end
 
-    return ctx.distance(
-      tonumber(a.x) or 0.0,
-      tonumber(a.y) or 0.0,
-      tonumber(b.x) or 0.0,
-      tonumber(b.y) or 0.0) <= 0.001
+    local gap = ctx.distance(a.x, a.y, b.x, b.y)
+    return gap ~= nil and gap <= 0.001
   end
 
   local function teleport_to_follow_target(now_ms, scene, bot, reason)
@@ -74,7 +69,7 @@ function follow.install(ctx)
       update.scene = scene_intent
     end
     if type(bot) == "table" and tonumber(bot.heading) ~= nil then
-      update.position.heading = tonumber(bot.heading)
+      update.heading = tonumber(bot.heading)
     end
 
     local call_ok, update_result = pcall(sd.bots.update, update)
@@ -94,7 +89,10 @@ function follow.install(ctx)
         target_x,
         target_y))
       state.follow_target = nil
-      state.last_command_ms = tonumber(now_ms) or state.last_tick_ms or 0
+      local command_ms = ctx.strict_number(now_ms)
+      if command_ms ~= nil then
+        state.last_command_ms = command_ms
+      end
     else
       ctx.log_diag(string.format(
         "follow_teleport failed id=%s reason=%s point=(%.2f, %.2f)",
@@ -127,11 +125,17 @@ function follow.install(ctx)
       return true
     end
 
+    if type(bot) ~= "table" then
+      return false
+    end
     local arrival_gap = ctx.distance(
-      tonumber(type(bot) == "table" and bot.x or 0.0) or 0.0,
-      tonumber(type(bot) == "table" and bot.y or 0.0) or 0.0,
-      tonumber(state.follow_target.x) or 0.0,
-      tonumber(state.follow_target.y) or 0.0)
+      bot.x,
+      bot.y,
+      state.follow_target.x,
+      state.follow_target.y)
+    if arrival_gap == nil then
+      return false
+    end
     if arrival_gap <= config.FOLLOW_TARGET_ARRIVAL_DISTANCE then
       return false
     end
@@ -146,14 +150,25 @@ function follow.install(ctx)
     if state.bot_id == nil or type(target) ~= "table" then
       return false
     end
-    if now_ms - state.last_command_ms < config.COMMAND_COOLDOWN_MS then
+    now_ms = ctx.strict_number(now_ms)
+    local last_command_ms = ctx.strict_number(state.last_command_ms)
+    if now_ms == nil or last_command_ms == nil then
+      return false
+    end
+    if now_ms - last_command_ms < config.COMMAND_COOLDOWN_MS then
       return false
     end
     if type(sd) ~= "table" or type(sd.bots) ~= "table" or type(sd.bots.move_to) ~= "function" then
       return false
     end
 
-    local ok = sd.bots.move_to(state.bot_id, target.x, target.y)
+    local target_x = ctx.strict_number(target.x)
+    local target_y = ctx.strict_number(target.y)
+    if target_x == nil or target_y == nil then
+      return false
+    end
+
+    local ok = sd.bots.move_to(state.bot_id, target_x, target_y)
     if ok then
       local previous_target = state.follow_target
       local move_started_ms = now_ms
@@ -161,8 +176,8 @@ function follow.install(ctx)
         move_started_ms = previous_target.move_started_ms
       end
       state.follow_target = {
-        x = target.x,
-        y = target.y,
+        x = target_x,
+        y = target_y,
         reason = reason,
         player_x = target.player_x,
         player_y = target.player_y,
@@ -174,15 +189,15 @@ function follow.install(ctx)
         "follow_move id=%s reason=%s point=(%.2f, %.2f)",
         tostring(state.bot_id),
         tostring(reason),
-        target.x,
-        target.y))
+        target_x,
+        target_y))
     else
       ctx.log_diag(string.format(
         "follow_move failed id=%s reason=%s point=(%.2f, %.2f)",
         tostring(state.bot_id),
         tostring(reason),
-        target.x,
-        target.y))
+        target_x,
+        target_y))
     end
     return ok
   end
@@ -261,12 +276,14 @@ function follow.install(ctx)
           if type(sample) == "table" and sample.traversable and
               tonumber(sample.world_x) ~= nil and tonumber(sample.world_y) ~= nil then
             local gap = ctx.distance(target_x, target_y, tonumber(sample.world_x), tonumber(sample.world_y))
-            local score = nav_sample_score(grid, cell, gap, options)
-            if best_sample_score == nil or score < best_sample_score or
-                (score == best_sample_score and gap < best_sample_distance) then
-              best_sample_score = score
-              best_sample_distance = gap
-              best_sample = { x = tonumber(sample.world_x), y = tonumber(sample.world_y) }
+            if gap ~= nil then
+              local score = nav_sample_score(grid, cell, gap, options)
+              if best_sample_score == nil or score < best_sample_score or
+                  (score == best_sample_score and gap < best_sample_distance) then
+                best_sample_score = score
+                best_sample_distance = gap
+                best_sample = { x = tonumber(sample.world_x), y = tonumber(sample.world_y) }
+              end
             end
           end
         end
@@ -278,6 +295,7 @@ function follow.install(ctx)
     end
 
     best_sample.gap = target.gap
+    best_sample.snap_distance = best_sample_distance
     return best_sample
   end
 
@@ -288,25 +306,37 @@ function follow.install(ctx)
 
     local snapped = snap_target_to_nav(get_nav_grid_snapshot(now_ms), spawn, {
       prefer_traversable_cell = true,
-      avoid_outer_rows = true,
     })
     if type(snapped) ~= "table" then
       return nil
     end
 
+    local snapped_x = ctx.strict_number(snapped.x)
+    local snapped_y = ctx.strict_number(snapped.y)
+    local heading = ctx.strict_number(spawn.heading)
+    if snapped_x == nil or snapped_y == nil or heading == nil then
+      return nil
+    end
+
     return {
-      x = tonumber(snapped.x) or tonumber(spawn.x) or 0.0,
-      y = tonumber(snapped.y) or tonumber(spawn.y) or 0.0,
-      heading = tonumber(spawn.heading),
+      x = snapped_x,
+      y = snapped_y,
+      heading = heading,
     }
   end
 
   local function compute_follow_target(player, bot)
-    local player_x = tonumber(player.x) or 0.0
-    local player_y = tonumber(player.y) or 0.0
-    local bot_x = tonumber(bot.x) or 0.0
-    local bot_y = tonumber(bot.y) or 0.0
+    local player_x = ctx.strict_number(player.x)
+    local player_y = ctx.strict_number(player.y)
+    local bot_x = ctx.strict_number(bot.x)
+    local bot_y = ctx.strict_number(bot.y)
+    if player_x == nil or player_y == nil or bot_x == nil or bot_y == nil then
+      return nil
+    end
     local gap = ctx.distance(bot_x, bot_y, player_x, player_y)
+    if gap == nil then
+      return nil
+    end
     local radius = config.FOLLOW_STOP_DISTANCE +
       (math.random() * (config.FOLLOW_RESUME_DISTANCE - config.FOLLOW_STOP_DISTANCE))
     local angle = math.random() * math.pi * 2.0
@@ -325,11 +355,7 @@ function follow.install(ctx)
       return nil
     end
 
-    return ctx.distance(
-      tonumber(player.x) or 0.0,
-      tonumber(player.y) or 0.0,
-      tonumber(target.x) or 0.0,
-      tonumber(target.y) or 0.0)
+    return ctx.distance(player.x, player.y, target.x, target.y)
   end
 
   local function follow_target_band_penalty(player, target)
@@ -346,27 +372,59 @@ function follow.install(ctx)
     return 0.0
   end
 
+  local function follow_target_snap_is_acceptable(player, candidate, snapped)
+    if type(candidate) ~= "table" or type(snapped) ~= "table" then
+      return false
+    end
+
+    local snap_gap = ctx.distance(candidate.x, candidate.y, snapped.x, snapped.y)
+    if snap_gap == nil or snap_gap > config.FOLLOW_NAV_SNAP_MAX_DISTANCE then
+      return false
+    end
+
+    local player_gap = follow_target_player_gap(player, snapped)
+    if player_gap == nil or player_gap > config.FOLLOW_TARGET_MAX_PLAYER_GAP then
+      return false
+    end
+
+    return true
+  end
+
   local function should_refresh_follow_target(player, bot_gap, target)
     if type(player) ~= "table" or type(target) ~= "table" then
       return true
     end
-    if (tonumber(bot_gap) or 0.0) <= config.FOLLOW_RESUME_DISTANCE then
+    bot_gap = ctx.strict_number(bot_gap)
+    if bot_gap == nil then
+      return true
+    end
+    local target_player_gap = follow_target_player_gap(player, target)
+    if target_player_gap == nil or target_player_gap > config.FOLLOW_TARGET_MAX_PLAYER_GAP then
+      return true
+    end
+    if bot_gap <= config.FOLLOW_RESUME_DISTANCE then
       return false
     end
 
-    return ctx.distance(
-      tonumber(player.x) or 0.0,
-      tonumber(player.y) or 0.0,
-      tonumber(target.player_x) or 0.0,
-      tonumber(target.player_y) or 0.0) > config.FOLLOW_TARGET_REFRESH_DISTANCE
+    local player_drift = ctx.distance(player.x, player.y, target.player_x, target.player_y)
+    return player_drift == nil or player_drift > config.FOLLOW_TARGET_REFRESH_DISTANCE
   end
 
   local function annotate_follow_target(target, source, player)
     if type(target) ~= "table" then
       return nil
     end
-    local player_x = tonumber(type(source) == "table" and source.player_x or nil) or tonumber(player.x) or 0.0
-    local player_y = tonumber(type(source) == "table" and source.player_y or nil) or tonumber(player.y) or 0.0
+    local player_x = type(source) == "table" and ctx.strict_number(source.player_x) or nil
+    local player_y = type(source) == "table" and ctx.strict_number(source.player_y) or nil
+    if player_x == nil then
+      player_x = ctx.strict_number(player.x)
+    end
+    if player_y == nil then
+      player_y = ctx.strict_number(player.y)
+    end
+    if player_x == nil or player_y == nil or ctx.strict_number(target.x) == nil or ctx.strict_number(target.y) == nil then
+      return nil
+    end
     target.player_x = player_x
     target.player_y = player_y
     target.player_gap = ctx.distance(player_x, player_y, target.x, target.y)
@@ -377,14 +435,34 @@ function follow.install(ctx)
     local nav_grid = get_nav_grid_snapshot(now_ms)
     local best_target = nil
     local best_penalty = nil
+    local best_raw_target = nil
+    local best_raw_penalty = nil
 
     for _ = 1, config.FOLLOW_TARGET_SAMPLE_ATTEMPTS do
       local candidate = compute_follow_target(player, bot)
-      local snapped = snap_target_to_nav(nav_grid, candidate, {
-        avoid_outer_rows = true,
-      })
+      if type(candidate) == "table" then
+        local raw_target = annotate_follow_target({
+          x = candidate.x,
+          y = candidate.y,
+          gap = candidate.gap,
+        }, candidate, player)
+        if type(raw_target) == "table" then
+          local raw_penalty = follow_target_band_penalty(player, raw_target) or 1000000.0
+          if best_raw_penalty == nil or raw_penalty < best_raw_penalty then
+            best_raw_target = raw_target
+            best_raw_penalty = raw_penalty
+          end
+        end
+      end
+
+      local snapped = type(candidate) == "table" and
+        snap_target_to_nav(nav_grid, candidate, {
+          avoid_outer_rows = true,
+        }) or nil
       if type(snapped) == "table" then
-        annotate_follow_target(snapped, candidate, player)
+        snapped = annotate_follow_target(snapped, candidate, player)
+      end
+      if type(snapped) == "table" and follow_target_snap_is_acceptable(player, candidate, snapped) then
         local penalty = follow_target_band_penalty(player, snapped) or 1000000.0
         if best_penalty == nil or penalty < best_penalty then
           best_target = snapped
@@ -396,7 +474,7 @@ function follow.install(ctx)
       end
     end
 
-    return best_target
+    return best_target or best_raw_target
   end
 
   local function update_same_scene_follow(now_ms, scene, player, bot)
@@ -404,8 +482,8 @@ function follow.install(ctx)
       return
     end
 
-    local actor_address = tonumber(bot.actor_address) or 0
-    if actor_address == 0 or not bot.transform_valid then
+    local actor_address = ctx.strict_number(bot.actor_address)
+    if actor_address == nil or actor_address == 0 or not bot.transform_valid then
       return
     end
 
@@ -417,11 +495,10 @@ function follow.install(ctx)
       return
     end
 
-    local gap = ctx.distance(
-      tonumber(bot.x) or 0.0,
-      tonumber(bot.y) or 0.0,
-      tonumber(player.x) or 0.0,
-      tonumber(player.y) or 0.0)
+    local gap = ctx.distance(bot.x, bot.y, player.x, player.y)
+    if gap == nil then
+      return
+    end
 
     if state.follow_target ~= nil then
       if expire_follow_move_if_needed(now_ms, scene, bot) then
@@ -429,10 +506,14 @@ function follow.install(ctx)
       end
 
       local arrival_gap = ctx.distance(
-        tonumber(bot.x) or 0.0,
-        tonumber(bot.y) or 0.0,
-        tonumber(state.follow_target.x) or 0.0,
-        tonumber(state.follow_target.y) or 0.0)
+        bot.x,
+        bot.y,
+        state.follow_target.x,
+        state.follow_target.y)
+      if arrival_gap == nil then
+        state.follow_target = nil
+        return
+      end
       if arrival_gap <= config.FOLLOW_TARGET_ARRIVAL_DISTANCE then
         stop_follow_move("follow_arrival")
         return
@@ -461,7 +542,7 @@ function follow.install(ctx)
       end
 
       local target_gap = ctx.distance(bot.target_x, bot.target_y, state.follow_target.x, state.follow_target.y)
-      if target_gap > config.FOLLOW_TARGET_REFRESH_DISTANCE then
+      if target_gap == nil or target_gap > config.FOLLOW_TARGET_REFRESH_DISTANCE then
         issue_follow_move(state.follow_target, now_ms, "follow_reissue")
       end
       return
@@ -470,11 +551,11 @@ function follow.install(ctx)
     if bot.moving or bot.has_target then
       if bot.target_x ~= nil and bot.target_y ~= nil then
         local native_arrival_gap = ctx.distance(
-          tonumber(bot.x) or 0.0,
-          tonumber(bot.y) or 0.0,
-          tonumber(bot.target_x) or 0.0,
-          tonumber(bot.target_y) or 0.0)
-        if native_arrival_gap <= config.FOLLOW_TARGET_ARRIVAL_DISTANCE then
+          bot.x,
+          bot.y,
+          bot.target_x,
+          bot.target_y)
+        if native_arrival_gap ~= nil and native_arrival_gap <= config.FOLLOW_TARGET_ARRIVAL_DISTANCE then
           stop_follow_move("follow_arrival")
         elseif gap > config.FOLLOW_RESUME_DISTANCE then
           local target = choose_follow_target(now_ms, player, bot)
@@ -505,15 +586,20 @@ function follow.install(ctx)
       return
     end
 
-    local bot_x = tonumber(bot.x) or 0.0
-    local bot_y = tonumber(bot.y) or 0.0
+    local bot_x = ctx.strict_number(bot.x)
+    local bot_y = ctx.strict_number(bot.y)
+    if bot_x == nil or bot_y == nil then
+      state.last_bot_sample = nil
+      state.stuck_samples = 0
+      return
+    end
     if type(state.last_bot_sample) == "table" and bot.moving then
       local drift = ctx.distance(
         bot_x,
         bot_y,
-        tonumber(state.last_bot_sample.x) or 0.0,
-        tonumber(state.last_bot_sample.y) or 0.0)
-      if drift <= config.STUCK_POSITION_EPSILON then
+        state.last_bot_sample.x,
+        state.last_bot_sample.y)
+      if drift ~= nil and drift <= config.STUCK_POSITION_EPSILON then
         state.stuck_samples = state.stuck_samples + 1
       else
         state.stuck_samples = 0
@@ -539,6 +625,7 @@ function follow.install(ctx)
   ctx.compute_follow_target = compute_follow_target
   ctx.follow_target_player_gap = follow_target_player_gap
   ctx.follow_target_band_penalty = follow_target_band_penalty
+  ctx.follow_target_snap_is_acceptable = follow_target_snap_is_acceptable
   ctx.should_refresh_follow_target = should_refresh_follow_target
   ctx.annotate_follow_target = annotate_follow_target
   ctx.choose_follow_target = choose_follow_target

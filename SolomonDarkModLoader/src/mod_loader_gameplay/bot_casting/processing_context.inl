@@ -10,34 +10,61 @@ struct BotCastProcessingContext {
 };
 
 template <typename InvokeFn>
-void InvokeBotCastWithLocalPlayerSlot(
+void InvokeBotCastWithNativeActorSlot(
     const BotCastProcessingContext& context,
     InvokeFn&& invoke) {
-    auto* binding = context.binding;
     auto& memory = *context.memory;
     const auto actor_address = context.actor_address;
-
-    LocalPlayerCastShimState shim_state;
-    const auto shim_active = EnterLocalPlayerCastShim(binding, &shim_state);
-    invoke();
-    LeaveLocalPlayerCastShim(shim_state);
+    std::string slot_owner_context;
+    InvokeWithStandaloneBotProgressionSlotContext(
+        actor_address,
+        context.binding != nullptr && IsStandaloneWizardKind(context.binding->kind),
+        [&] {
+            invoke();
+        },
+        &slot_owner_context);
+    std::uint8_t actor_slot = 0xFE;
+    uintptr_t progression_runtime = 0;
+    uintptr_t actor_progression_handle = 0;
+    const auto actor_slot_text =
+        memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot)
+            ? HexString(actor_slot)
+            : std::string("unreadable");
+    const auto progression_runtime_text =
+        memory.TryReadField(
+            actor_address,
+            kActorProgressionRuntimeStateOffset,
+            &progression_runtime)
+            ? HexString(progression_runtime)
+            : std::string("unreadable");
+    const auto actor_progression_handle_text =
+        memory.TryReadField(
+            actor_address,
+            kActorProgressionHandleOffset,
+            &actor_progression_handle)
+            ? HexString(actor_progression_handle)
+            : std::string("unreadable");
     Log(
-        std::string("[bots] slot_flip diag. actor=") + HexString(actor_address) +
+        std::string("[bots] native cast slot diag. actor=") + HexString(actor_address) +
         " slot_offset=" + HexString(static_cast<std::uint32_t>(kActorSlotOffset)) +
-        " saved=" + HexString(shim_state.saved_actor_slot) +
-        " during=" + HexString(
-            memory.ReadFieldOr<std::uint8_t>(
-                actor_address,
-                kActorSlotOffset,
-                static_cast<std::uint8_t>(0xFE))) +
-        " flip_needed=" + (shim_active ? "1" : "0") +
-        " flip_wr=" + (shim_active ? "1" : "0") +
-        " restore_wr=" + (shim_active ? "1" : "0") +
-        " shim_slot=" + std::to_string(binding->gameplay_slot) +
-        " prog_redirect=" + (shim_state.progression_slot_redirected ? "1" : "0") +
-        " prog_restore=" + (shim_state.progression_slot_restore_needed ? "1" : "0") +
-        " prog_saved=" + HexString(shim_state.saved_local_progression_handle) +
-        " prog_bot=" + HexString(shim_state.redirected_progression_handle));
+        " slot=" + actor_slot_text +
+        " progression_runtime=" + progression_runtime_text +
+        " actor_progression_handle=" + actor_progression_handle_text +
+        " standalone_slot_owner_context={" + slot_owner_context + "}");
+}
+
+template <typename InvokeFn>
+void InvokeBotCastCleanupWithNativeOwnerContext(
+    const BotCastProcessingContext& context,
+    InvokeFn&& invoke,
+    std::string* context_description = nullptr) {
+    InvokeWithBotProgressionSlotOwnerContext(
+        context.actor_address,
+        context.binding != nullptr && IsWizardParticipantKind(context.binding->kind),
+        [&] {
+            invoke();
+        },
+        context_description);
 }
 
 void RestoreBotCastAim(

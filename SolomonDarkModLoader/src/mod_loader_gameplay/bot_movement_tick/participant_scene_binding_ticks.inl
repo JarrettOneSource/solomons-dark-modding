@@ -24,9 +24,14 @@ void SyncWizardBotMovementIntent(ParticipantEntityBinding* binding) {
     binding->desired_heading_valid = intent.desired_heading_valid;
     binding->desired_heading = intent.desired_heading;
     binding->facing_target_actor_address = intent.face_target_actor_address;
+    if (intent.face_target_actor_address != 0 &&
+        binding->ongoing_cast.active &&
+        OngoingCastShouldUseLiveFacingTarget(binding->ongoing_cast)) {
+        binding->ongoing_cast.target_actor_address = intent.face_target_actor_address;
+    }
     const bool target_face_applied = RefreshWizardBindingTargetFacing(binding);
     if (target_face_applied) {
-        // Native target-facing wins over fallback headings because the target can move.
+        // Native target-facing wins over default headings because the target can move.
     } else if (intent.face_heading_valid) {
         binding->facing_heading_valid = true;
         binding->facing_heading_value = intent.face_heading;
@@ -56,7 +61,7 @@ void TickParticipantSceneBindings(uintptr_t gameplay_address, std::uint64_t now_
         for (auto& binding : g_participant_entities) {
             SyncWizardBotMovementIntent(&binding);
             multiplayer::BotSnapshot bot_snapshot;
-            if (multiplayer::ReadBotSnapshot(binding.bot_id, &bot_snapshot) && bot_snapshot.available) {
+            if (multiplayer::ReadParticipantSnapshot(binding.bot_id, &bot_snapshot) && bot_snapshot.available) {
                 binding.character_profile = bot_snapshot.character_profile;
                 binding.scene_intent = bot_snapshot.scene_intent;
             }
@@ -164,33 +169,4 @@ void TickParticipantSceneBindingsIfActive() {
 
     std::lock_guard<std::recursive_mutex> pump_lock(g_gameplay_action_pump_mutex);
     TickParticipantSceneBindings(gameplay_address, now_ms);
-    {
-        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-        for (auto& binding : g_participant_entities) {
-            if (!IsRegisteredGameNpcKind(binding.kind) || binding.actor_address == 0) {
-                continue;
-            }
-
-            LogRegisteredGameNpcMovementControllerAnomaly(binding, now_ms);
-            SyncWizardBotMovementIntent(&binding);
-            std::string path_error;
-            if (!UpdateWizardBotPathMotion(&binding, now_ms, &path_error) &&
-                !path_error.empty()) {
-                Log(
-                    "[bots] registered_gamenpc path update failed. bot_id=" +
-                    std::to_string(binding.bot_id) +
-                    " actor=" + HexString(binding.actor_address) +
-                    " error=" + path_error);
-            }
-            std::string movement_error;
-            if (!DriveRegisteredGameNpcMovement(gameplay_address, &binding, now_ms, &movement_error) &&
-                !movement_error.empty()) {
-                Log(
-                    "[bots] registered_gamenpc movement failed. bot_id=" +
-                    std::to_string(binding.bot_id) +
-                    " actor=" + HexString(binding.actor_address) +
-                    " error=" + movement_error);
-            }
-        }
-    }
 }

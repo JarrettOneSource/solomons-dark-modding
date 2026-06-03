@@ -486,15 +486,16 @@ function Wait-ForHubBotReady {
         return "complete"
     }
 
+    $lastState = ""
     while ((Get-Date) -lt $deadline) {
         if (-not (Get-Process SolomonDark -ErrorAction SilentlyContinue)) {
             throw "SolomonDark exited before the hub bot became ready."
         }
 
-        $state = Invoke-LuaExecRaw `
+        $lastState = Invoke-LuaExecRaw `
             -Step "Hub bot ready probe" `
             -Code "local count = type(sd.bots) == 'table' and type(sd.bots.get_count) == 'function' and sd.bots.get_count() or 0; local scene = sd.world.get_scene(); return 'scene=' .. tostring(scene and scene.name) .. '|count=' .. tostring(count)"
-        if ($state -match 'scene=hub\|count=(\d+)') {
+        if ($lastState -match 'scene=hub\|count=(\d+)') {
             if ([int]$Matches[1] -ge $expectedCount) {
                 return "complete"
             }
@@ -503,7 +504,7 @@ function Wait-ForHubBotReady {
         Start-Sleep -Milliseconds 250
     }
 
-    throw "Timed out waiting for the hub bot spawn marker."
+    throw "Timed out waiting for the hub bot spawn marker. last_state=$lastState expected_count=$expectedCount"
 }
 
 function Wait-ForRunBotReady {
@@ -518,15 +519,16 @@ function Wait-ForRunBotReady {
         return "complete"
     }
 
+    $lastState = ""
     while ((Get-Date) -lt $deadline) {
         if (-not (Get-Process SolomonDark -ErrorAction SilentlyContinue)) {
             throw "SolomonDark exited before the run bot became ready."
         }
 
-        $state = Invoke-LuaExecRaw `
+        $lastState = Invoke-LuaExecRaw `
             -Step "Run bot ready probe" `
             -Code "local count = type(sd.bots) == 'table' and type(sd.bots.get_count) == 'function' and sd.bots.get_count() or 0; local scene = sd.world.get_scene(); return 'scene=' .. tostring(scene and scene.name) .. '|count=' .. tostring(count)"
-        if ($state -match 'scene=testrun\|count=(\d+)') {
+        if ($lastState -match 'scene=testrun\|count=(\d+)') {
             if ([int]$Matches[1] -ge $expectedCount) {
                 return "complete"
             }
@@ -535,7 +537,7 @@ function Wait-ForRunBotReady {
         Start-Sleep -Milliseconds 250
     }
 
-    throw "Timed out waiting for the run bot spawn marker."
+    throw "Timed out waiting for the run bot spawn marker. last_state=$lastState expected_count=$expectedCount"
 }
 
 function Read-LauncherCommandOutput {

@@ -70,6 +70,11 @@ local function run_case(case)
       end,
     },
     bots = {
+      resolve_primary_entry = function(element_id)
+        local entries = { 0x10, 0x20, 0x28, 0x18, 0x08 }
+        local index = (tonumber(element_id) or -1) + 1
+        return entries[index]
+      end,
       get_state = function()
         return {}
       end,

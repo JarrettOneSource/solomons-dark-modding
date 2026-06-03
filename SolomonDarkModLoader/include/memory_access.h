@@ -46,16 +46,6 @@ public:
     }
 
     template <typename T>
-    T ReadValueOr(uintptr_t address, T fallback = T{}) {
-        T value = fallback;
-        if (!TryReadValue(address, &value)) {
-            return fallback;
-        }
-
-        return value;
-    }
-
-    template <typename T>
     bool TryWriteValue(uintptr_t address, const T& value) {
         return TryWrite(address, &value, sizeof(T));
     }
@@ -67,15 +57,6 @@ public:
         }
 
         return TryReadValue(base_address + offset, value);
-    }
-
-    template <typename T>
-    T ReadFieldOr(uintptr_t base_address, size_t offset, T fallback = T{}) {
-        if (base_address == 0) {
-            return fallback;
-        }
-
-        return ReadValueOr(base_address + offset, fallback);
     }
 
     template <typename T>

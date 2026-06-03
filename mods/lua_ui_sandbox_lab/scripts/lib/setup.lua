@@ -124,9 +124,10 @@ local function build_steps(mode, actions, active_preset)
     { kind = "wait_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "activate_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "resolve_new_game_branch", create_surface_id = "create", confirm_action_id = actions.dialog_primary, confirm_surface_id = "dialog" },
-    { kind = "wait_create_selection_ready", phase = "element" },
+    { kind = "wait_create_selection_ready", phase = "element", action_id = create_element_action },
     { kind = "activate_action", action_id = create_element_action, surface_id = "create", skip_find = true },
-    { kind = "wait_create_selection_ready", phase = "discipline" },
+    { kind = "delay", duration_ms = 3000 },
+    { kind = "wait_create_selection_ready", phase = "discipline", action_id = create_discipline_action },
     { kind = "activate_action", action_id = create_discipline_action, surface_id = "create", skip_find = true },
     { kind = "wait_surface_not", surface_id = "create" },
     { kind = "delay", duration_ms = 1000 },
@@ -143,9 +144,10 @@ local function build_steps(mode, actions, active_preset)
     { kind = "wait_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "activate_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "resolve_new_game_branch", create_surface_id = "create", confirm_action_id = actions.dialog_primary, confirm_surface_id = "dialog" },
-    { kind = "wait_create_selection_ready", phase = "element" },
+    { kind = "wait_create_selection_ready", phase = "element", action_id = create_element_action },
     { kind = "activate_action", action_id = create_element_action, surface_id = "create", skip_find = true },
-    { kind = "wait_create_selection_ready", phase = "discipline" },
+    { kind = "delay", duration_ms = 3000 },
+    { kind = "wait_create_selection_ready", phase = "discipline", action_id = create_discipline_action },
     { kind = "activate_action", action_id = create_discipline_action, surface_id = "create", skip_find = true },
     { kind = "wait_surface_not", surface_id = "create" },
     { kind = "delay", duration_ms = 250 },
@@ -160,9 +162,10 @@ local function build_steps(mode, actions, active_preset)
     { kind = "wait_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "activate_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "resolve_new_game_branch", create_surface_id = "create", confirm_action_id = actions.dialog_primary, confirm_surface_id = "dialog" },
-    { kind = "wait_create_selection_ready", phase = "element" },
+    { kind = "wait_create_selection_ready", phase = "element", action_id = create_element_action },
     { kind = "activate_action", action_id = create_element_action, surface_id = "create", skip_find = true },
-    { kind = "wait_create_selection_ready", phase = "discipline" },
+    { kind = "delay", duration_ms = 3000 },
+    { kind = "wait_create_selection_ready", phase = "discipline", action_id = create_discipline_action },
     { kind = "activate_action", action_id = create_discipline_action, surface_id = "create", skip_find = true },
     { kind = "wait_surface_not", surface_id = "create" },
     { kind = "delay", duration_ms = 1000 },
@@ -177,9 +180,10 @@ local function build_steps(mode, actions, active_preset)
     { kind = "wait_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "activate_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "resolve_new_game_branch", create_surface_id = "create", confirm_action_id = actions.dialog_primary, confirm_surface_id = "dialog" },
-    { kind = "wait_create_selection_ready", phase = "element" },
+    { kind = "wait_create_selection_ready", phase = "element", action_id = create_element_action },
     { kind = "activate_action", action_id = create_element_action, surface_id = "create", skip_find = true },
-    { kind = "wait_create_selection_ready", phase = "discipline" },
+    { kind = "delay", duration_ms = 3000 },
+    { kind = "wait_create_selection_ready", phase = "discipline", action_id = create_discipline_action },
     { kind = "activate_action", action_id = create_discipline_action, surface_id = "create", skip_find = true },
     { kind = "wait_surface_not", surface_id = "create" },
     { kind = "delay", duration_ms = 1000 },
@@ -199,11 +203,25 @@ local function build_steps(mode, actions, active_preset)
     { kind = "delay", duration_ms = 18000 },
   }
 
+  local create_manual_steps = {
+    { kind = "wait_action", action_id = actions.dialog_primary, surface_id = "dialog" },
+    { kind = "activate_action", action_id = actions.dialog_primary, surface_id = "dialog" },
+    { kind = "wait_surface", surface_id = "main_menu" },
+    { kind = "wait_action", action_id = actions.main_menu_play, surface_id = "main_menu" },
+    { kind = "activate_action", action_id = actions.main_menu_play, surface_id = "main_menu" },
+    { kind = "wait_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
+    { kind = "activate_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
+    { kind = "resolve_new_game_branch", create_surface_id = "create", confirm_action_id = actions.dialog_primary, confirm_surface_id = "dialog" },
+  }
+
   if mode == "create_probe" then
     return create_probe_steps
   end
   if mode == "wizard_compare" then
     return {}
+  end
+  if active_preset == "create_manual" then
+    return create_manual_steps
   end
   if active_preset == "trace_rich_item_startup" then
     return trace_rich_item_startup_steps
@@ -288,6 +306,11 @@ local function new(ctx)
 
     local status = tostring(dispatch_snapshot.status or "")
     if status == "queued" or status == "dispatching" then
+      local snapshot = ctx.get_snapshot()
+      if status == "dispatching" and type(step.surface_id) == "string" and
+          type(snapshot) == "table" and snapshot.surface_id ~= step.surface_id then
+        return true
+      end
       return nil, "waiting_for_dispatch"
     end
 
@@ -408,6 +431,19 @@ local function new(ctx)
     local enabled = ctx.read_object_u8(owner_address, enabled_offset)
     local selected = ctx.read_object_u32(owner_address, selected_offset)
     if enabled ~= nil and enabled ~= 0 and is_create_selection_unset(selected) then
+      return true
+    end
+
+    if type(step.action_id) == "string" and type(sd.ui) == "table" and
+        type(sd.ui.find_action) == "function" then
+      local action = sd.ui.find_action(step.action_id, "create")
+      if action ~= nil then
+        return true
+      end
+    end
+
+    local snapshot = ctx.get_snapshot()
+    if type(snapshot) == "table" and snapshot.surface_id == "create" then
       return true
     end
 

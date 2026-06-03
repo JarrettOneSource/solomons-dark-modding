@@ -35,11 +35,6 @@ function state_module.create(config)
     active_private_area_name = nil,
     pending_run_promotion = false,
     last_scene_name = nil,
-    scene_entered_ms = 0,
-    last_player_sample = nil,
-    hub_candidate_name = nil,
-    hub_candidate_since_ms = 0,
-    entrance_armed = {},
     last_bot_sample = nil,
     stuck_samples = 0,
     last_skill_choice_generation = 0,
@@ -69,12 +64,18 @@ function state_module.create(config)
   end
 
   function api.make_bot_context(bot_config)
+    local spawn_offset_x = tonumber(bot_config.spawn_offset_x)
+    local spawn_offset_y = tonumber(bot_config.spawn_offset_y)
+    if spawn_offset_x == nil or spawn_offset_y == nil then
+      error("bot config requires numeric spawn offsets: " .. tostring(bot_config.key or bot_config.name))
+    end
+
     local bot_state = {
       config = bot_config,
       bot_name = bot_config.name,
       bot_profile = bot_config.profile,
-      spawn_offset_x = tonumber(bot_config.spawn_offset_x) or config.DEFAULT_SPAWN_OFFSET_X,
-      spawn_offset_y = tonumber(bot_config.spawn_offset_y) or config.DEFAULT_SPAWN_OFFSET_Y,
+      spawn_offset_x = spawn_offset_x,
+      spawn_offset_y = spawn_offset_y,
     }
     api.reset_bot_context(bot_state)
     return bot_state
@@ -107,20 +108,6 @@ function state_module.create(config)
     end
   end
 
-  function api.sync_legacy_state_alias()
-    local first = state.bots[1]
-    if type(first) ~= "table" then
-      return
-    end
-    for _, field in ipairs(BOT_CONTEXT_FIELDS) do
-      state[field] = first[field]
-    end
-    state.bot_name = first.bot_name
-    state.bot_profile = first.bot_profile
-    state.spawn_offset_x = first.spawn_offset_x
-    state.spawn_offset_y = first.spawn_offset_y
-  end
-
   function api.clear_current_bot_state()
     state.bot_id = nil
     state.bot_dead = false
@@ -141,22 +128,16 @@ function state_module.create(config)
     for _, bot_state in ipairs(state.bots) do
       api.reset_bot_context(bot_state)
     end
-    api.sync_legacy_state_alias()
+    api.clear_current_bot_state()
     state.travel_state = "idle"
     state.target_area_name = nil
     state.active_private_area_name = nil
     state.last_scene_name = nil
-    state.scene_entered_ms = 0
-    state.last_player_sample = nil
-    state.hub_candidate_name = nil
-    state.hub_candidate_since_ms = 0
-    state.entrance_armed = {}
     state.nav_grid_cache = nil
     state.nav_grid_cache_world_id = nil
     state.nav_grid_cache_at_ms = 0
   end
 
-  api.sync_legacy_state_alias()
   lua_bots_debug = state
 
   return state, api

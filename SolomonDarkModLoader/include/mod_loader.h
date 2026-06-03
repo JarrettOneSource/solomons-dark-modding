@@ -17,7 +17,6 @@ constexpr int kSDModParticipantGameplayKindUnknown = -1;
 constexpr int kSDModParticipantGameplayKindPlaceholderEnemy = 0;
 constexpr int kSDModParticipantGameplayKindStandaloneWizard = 1;
 constexpr int kSDModParticipantGameplayKindGameplaySlotWizard = 2;
-constexpr int kSDModParticipantGameplayKindRegisteredGameNpc = 3;
 
 struct SDModEquipVisualLaneState {
     uintptr_t wrapper_address = 0;
@@ -38,6 +37,7 @@ struct SDModPlayerState {
     int level = 0;
     float x = 0.0f;
     float y = 0.0f;
+    float heading = 0.0f;
     int gold = 0;
     uintptr_t actor_address = 0;
     uintptr_t render_subject_address = 0;
@@ -63,6 +63,7 @@ struct SDModPlayerState {
     std::uint32_t render_drive_flags = 0;
     std::uint32_t render_subject_drive_flags = 0;
     std::uint8_t anim_drive_state = 0;
+    std::uint32_t anim_drive_state_word = 0;
     std::uint8_t render_subject_anim_drive_state = 0;
     std::uint8_t render_variant_primary = 0;
     std::uint8_t render_variant_secondary = 0;
@@ -79,6 +80,8 @@ struct SDModPlayerState {
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
+    float render_drive_effect_timer = 0.0f;
+    float render_drive_effect_progress = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;
@@ -135,6 +138,7 @@ struct SDModSceneActorState {
     int world_slot = -1;
     float x = 0.0f;
     float y = 0.0f;
+    float radius = 0.0f;
     std::uint8_t anim_drive_state = 0;
     uintptr_t progression_handle_address = 0;
     uintptr_t progression_runtime_address = 0;
@@ -145,24 +149,6 @@ struct SDModSceneActorState {
     uintptr_t animation_state_ptr = 0;
     bool tracked_enemy = false;
     int enemy_type = -1;
-};
-
-struct SDModEnemySpawnResult {
-    bool valid = false;
-    bool ok = false;
-    std::uint64_t request_id = 0;
-    int type_id = 0;
-    uintptr_t actor_address = 0;
-    float requested_x = 0.0f;
-    float requested_y = 0.0f;
-    float x = 0.0f;
-    float y = 0.0f;
-    bool wrote_x = false;
-    bool wrote_y = false;
-    bool rebind_ok = false;
-    DWORD rebind_exception_code = 0;
-    std::uint64_t completed_tick_ms = 0;
-    std::string error_message;
 };
 
 struct SDModTrackedEnemyState {
@@ -255,6 +241,14 @@ struct SDModParticipantGameplayState {
     std::int32_t cast_skill_id = 0;
     int cast_ticks_waiting = 0;
     uintptr_t cast_target_actor_address = 0;
+    int native_action_cooldown_ticks = 0;
+    bool active_spell_object_readable = false;
+    uintptr_t active_spell_object_address = 0;
+    std::uint32_t active_spell_object_type = 0;
+    float active_spell_object_x = 0.0f;
+    float active_spell_object_y = 0.0f;
+    float active_spell_object_radius = 0.0f;
+    float active_spell_object_charge = 0.0f;
     float x = 0.0f;
     float y = 0.0f;
     float heading = 0.0f;
@@ -267,6 +261,8 @@ struct SDModParticipantGameplayState {
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
+    float render_drive_effect_timer = 0.0f;
+    float render_drive_effect_progress = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;
@@ -293,11 +289,13 @@ bool QueueGameplayMouseLeftClick(std::string* error_message);
 bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_message);
 std::uint64_t GetGameplayMouseLeftEdgeSerial();
 std::uint64_t GetGameplayMouseLeftEdgeTickMs();
+bool IsGameplayMouseLeftDown();
 bool QueueGameplayKeyPress(std::string_view binding_name, std::string* error_message);
 bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_message);
 bool QueueGameplayStartWaves(std::string* error_message);
 bool QueueGameplayEnableCombatPrelude(std::string* error_message);
 bool QueueHubStartTestrun(std::string* error_message);
+bool SetPendingRunGenerationSeed(std::uint32_t seed, std::string* error_message);
 bool QueueGameplaySwitchRegion(int region_index, std::string* error_message);
 bool QueueParticipantEntitySync(
     std::uint64_t participant_id,
@@ -317,6 +315,8 @@ std::uint64_t GetRunLifecycleElapsedMilliseconds();
 void SetRunLifecycleCombatPreludeOnlySuppression(bool enabled);
 void SetRunLifecycleWaveStartEnemyTracking(bool enabled);
 void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies);
+bool TryGetRunLifecycleEnemySpawnSerial(uintptr_t enemy_address, std::uint32_t* spawn_serial);
+bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(std::uint32_t missing_enemy_count);
 bool TryGetPlayerState(SDModPlayerState* state);
 bool TryGetWorldState(SDModWorldState* state);
 bool TryGetGameplayCombatState(SDModGameplayCombatState* state);
@@ -331,17 +331,13 @@ void FlushNavGridSnapshotOnSceneUnload();
 bool TryGetParticipantGameplayState(
     std::uint64_t participant_id,
     SDModParticipantGameplayState* state);
+bool TryRefreshParticipantGameplayState(
+    std::uint64_t participant_id,
+    SDModParticipantGameplayState* state);
 bool TryGetGameplayHudParticipantDisplayNameForActor(
     uintptr_t actor_address,
     std::string* display_name,
     std::uint64_t* participant_id = nullptr);
-bool SpawnEnemyByType(
-    int type_id,
-    float x,
-    float y,
-    std::string* error_message,
-    std::uint64_t* request_id = nullptr);
-bool TryGetLastEnemySpawnResult(SDModEnemySpawnResult* result, std::uint64_t request_id = 0);
 bool RebindSceneActorCell(uintptr_t actor_address, std::string* error_message);
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);
 

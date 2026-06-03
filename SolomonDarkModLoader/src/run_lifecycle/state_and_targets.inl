@@ -48,6 +48,8 @@ struct RunLifecycleState {
     std::atomic<bool> wave_start_enemy_tracking{false};
     std::mutex enemy_type_mutex;
     std::unordered_map<uintptr_t, int> enemy_types_by_address;
+    std::unordered_map<uintptr_t, std::uint32_t> enemy_spawn_serials_by_address;
+    std::uint32_t next_enemy_spawn_serial = 1;
     bool initialized = false;
 } g_state;
 constexpr std::uint64_t kSpellCastClickWindowMs = 400;
@@ -57,6 +59,9 @@ constexpr char kGoldSourceSpend[] = "spend";
 constexpr char kGoldSourceScript[] = "script";
 constexpr char kGoldSourceUnknown[] = "unknown";
 constexpr char kDropKindGold[] = "gold";
+constexpr std::size_t kWaveSpawnerRemainingBudgetOffset = 0x20;
+constexpr std::size_t kWaveSpawnerSpawnDelayCountdownOffset = 0x24;
+constexpr std::size_t kWaveSpawnerLongDelayCountdownOffset = 0x2C;
 
 void BuildHookTargets(HookTarget* targets) {
     if (targets == nullptr) {
@@ -105,28 +110,46 @@ bool IsCombatArenaActiveForEnemyTracking() {
         combat_state.combat_wave_index > 0;
 }
 
-int ReadResolvedGlobalIntOr(uintptr_t absolute_address, int fallback = 0) {
+bool TryReadResolvedGlobalInt(uintptr_t absolute_address, int* value) {
+    if (value == nullptr) {
+        return false;
+    }
+
+    *value = 0;
     const auto resolved = ProcessMemory::Instance().ResolveGameAddressOrZero(absolute_address);
-    return ProcessMemory::Instance().ReadValueOr<int>(resolved, fallback);
+    return resolved != 0 && ProcessMemory::Instance().TryReadValue(resolved, value);
 }
 
-uintptr_t ReadSmartPointerInnerObjectForRunLifecycle(uintptr_t wrapper_address) {
+bool TryReadSmartPointerInnerObjectForRunLifecycle(uintptr_t wrapper_address, uintptr_t* inner_object) {
+    if (inner_object == nullptr) {
+        return false;
+    }
+
+    *inner_object = 0;
     if (wrapper_address == 0) {
-        return 0;
+        return false;
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto direct_inner = memory.ReadValueOr<uintptr_t>(wrapper_address, 0);
+    uintptr_t direct_inner = 0;
+    if (!memory.TryReadValue(wrapper_address, &direct_inner)) {
+        return false;
+    }
     if (direct_inner != 0 && memory.IsReadableRange(direct_inner, 1)) {
-        return direct_inner;
+        *inner_object = direct_inner;
+        return true;
     }
 
-    const auto gameplay_inner = memory.ReadValueOr<uintptr_t>(wrapper_address + 0x0C, 0);
+    uintptr_t gameplay_inner = 0;
+    if (!memory.TryReadValue(wrapper_address + 0x0C, &gameplay_inner)) {
+        return false;
+    }
     if (gameplay_inner != 0 && memory.IsReadableRange(gameplay_inner, 1)) {
-        return gameplay_inner;
+        *inner_object = gameplay_inner;
+        return true;
     }
 
-    return 0;
+    return false;
 }
 
 uintptr_t ResolveActorProgressionRuntimeForRunLifecycle(uintptr_t actor_address) {
@@ -135,37 +158,37 @@ uintptr_t ResolveActorProgressionRuntimeForRunLifecycle(uintptr_t actor_address)
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto direct_progression =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0);
+    uintptr_t direct_progression = 0;
+    if (!memory.TryReadField(actor_address, kActorProgressionRuntimeStateOffset, &direct_progression)) {
+        return 0;
+    }
     if (direct_progression != 0 && memory.IsReadableRange(direct_progression, 1)) {
         return direct_progression;
     }
 
-    const auto progression_handle =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
-    return ReadSmartPointerInnerObjectForRunLifecycle(progression_handle);
+    uintptr_t progression_handle = 0;
+    if (!memory.TryReadField(actor_address, kActorProgressionHandleOffset, &progression_handle)) {
+        return 0;
+    }
+    uintptr_t progression_runtime = 0;
+    return TryReadSmartPointerInnerObjectForRunLifecycle(progression_handle, &progression_runtime)
+        ? progression_runtime
+        : 0;
 }
 
 uintptr_t ResolveLocalPlayerActorForRunLifecycle() {
-    auto& memory = ProcessMemory::Instance();
     SDModSceneState scene_state;
-    if (TryGetSceneState(&scene_state) && scene_state.valid && scene_state.gameplay_scene_address != 0) {
-        const auto slot_actor =
-            memory.ReadFieldOr<uintptr_t>(scene_state.gameplay_scene_address, kGameplayPlayerActorOffset, 0);
-        if (slot_actor != 0 && memory.IsReadableRange(slot_actor, 1)) {
-            return slot_actor;
-        }
+    if (!TryGetSceneState(&scene_state) || !scene_state.valid || scene_state.gameplay_scene_address == 0) {
+        return 0;
     }
 
-    const auto local_actor_global = memory.ResolveGameAddressOrZero(kLocalPlayerActorGlobal);
-    const auto local_actor = memory.ReadValueOr<uintptr_t>(local_actor_global, 0);
-    if (local_actor != 0 && memory.IsReadableRange(local_actor, 1)) {
-        return local_actor;
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t slot_actor = 0;
+    if (!memory.TryReadField(scene_state.gameplay_scene_address, kGameplayPlayerActorOffset, &slot_actor)) {
+        return 0;
     }
-
-    SDModPlayerState player_state;
-    if (TryGetPlayerState(&player_state) && player_state.valid) {
-        return player_state.actor_address;
+    if (slot_actor != 0 && memory.IsReadableRange(slot_actor, 1)) {
+        return slot_actor;
     }
 
     return 0;
@@ -184,8 +207,8 @@ bool IsLocalPlayerProgressionForRunLifecycle(uintptr_t progression_address) {
     return local_progression != 0 && local_progression == progression_address;
 }
 
-int ReadPendingLevelKindOrZero() {
-    return ReadResolvedGlobalIntOr(kPendingLevelKindGlobal, 0);
+bool TryReadPendingLevelKind(int* pending_level_kind) {
+    return TryReadResolvedGlobalInt(kPendingLevelKindGlobal, pending_level_kind);
 }
 
 bool TryWritePendingLevelKind(int pending_level_kind) {
@@ -198,7 +221,15 @@ void RestoreNonLocalPendingLevelKind(
     int pending_before,
     int level_after,
     int xp_after) {
-    const auto pending_after = ReadPendingLevelKindOrZero();
+    int pending_after = 0;
+    if (!TryReadPendingLevelKind(&pending_after)) {
+        Log(
+            "level.up pending-level-kind global unavailable after native level-up. progression=" +
+            HexString(progression_address) +
+            " level=" + std::to_string(level_after) +
+            " xp=" + std::to_string(xp_after));
+        return;
+    }
     if (pending_after == pending_before) {
         return;
     }

@@ -5,10 +5,12 @@
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "mod_loader_internal.h"
+#include "multiplayer_local_transport.h"
 #include "x86_hook.h"
 
 #include <intrin.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdint>

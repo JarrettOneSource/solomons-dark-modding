@@ -1,9 +1,10 @@
 void PumpQueuedGameplayActions();
 ParticipantEntityBinding* FindParticipantEntity(std::uint64_t participant_id);
 ParticipantEntityBinding* FindParticipantEntityForGameplaySlot(int gameplay_slot);
+bool TryRebindActorToOwnerWorld(uintptr_t actor_address, DWORD* exception_code);
 void StopWizardBotActorMotion(uintptr_t actor_address);
 void StopDeadWizardBotActorMotion(uintptr_t actor_address);
-void StopRegisteredGameNpcMotion(ParticipantEntityBinding* binding);
+bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id);
 void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t actor_address, bool moving);
 void PublishParticipantGameplaySnapshot(const ParticipantEntityBinding& binding);
 void RememberParticipantEntity(
@@ -20,6 +21,7 @@ bool TryResolveLocalPlayerWorldContext(
     uintptr_t* progression_address,
     uintptr_t* world_address);
 uintptr_t ReadSmartPointerInnerObject(uintptr_t wrapper_address);
+bool TryReadResolvedGamePointerAbsolute(uintptr_t absolute_address, uintptr_t* value);
 bool AssignActorSmartPointerWrapperSafe(
     uintptr_t actor_address,
     std::size_t wrapper_offset,
@@ -45,6 +47,17 @@ bool CallSkillsWizardBuildPrimarySpellSafe(
     uintptr_t progression_address,
     std::uint32_t primary_entry_arg,
     std::uint32_t combo_entry_arg,
+    std::uint32_t* output_spell_id,
+    DWORD* exception_code);
+bool CallSkillsWizardGetPrimaryColorSafe(
+    uintptr_t color_address,
+    uintptr_t progression_address,
+    std::uint32_t primary_entry_arg,
+    float out_color[4],
+    DWORD* exception_code);
+bool CallPlayerActorActionManagerTickSafe(
+    uintptr_t tick_address,
+    uintptr_t action_manager_address,
     DWORD* exception_code);
 bool CallPlayerAppearanceApplyChoiceSafe(
     uintptr_t apply_choice_address,
@@ -52,27 +65,6 @@ bool CallPlayerAppearanceApplyChoiceSafe(
     int choice_id,
     int ensure_assets,
     DWORD* exception_code);
-bool EnterLocalPlayerCastShim(
-    const ParticipantEntityBinding* binding,
-    LocalPlayerCastShimState* state);
-void LeaveLocalPlayerCastShim(const LocalPlayerCastShimState& state);
-bool CallGameNpcSetMoveGoalSafe(
-    uintptr_t set_move_goal_address,
-    uintptr_t npc_address,
-    std::uint8_t mode,
-    int follow_flag,
-    float x,
-    float y,
-    float extra_scalar,
-    DWORD* exception_code,
-    SehExceptionDetails* exception_details);
-bool CallGameNpcSetTrackedSlotAssistSafe(
-    uintptr_t set_tracked_slot_assist_address,
-    uintptr_t npc_address,
-    int slot_index,
-    int require_callback,
-    DWORD* exception_code,
-    SehExceptionDetails* exception_details);
 bool CallGameplayActorAttachSafe(
     uintptr_t gameplay_address,
     uintptr_t actor_address,
@@ -125,16 +117,22 @@ bool PrimeGameplaySlotBotSelectionState(
 bool WireGameplaySlotBotRuntimeHandles(
     uintptr_t actor_address,
     std::string* error_message);
+bool SeedWizardBotNativeCollisionStateFromSourceActor(
+    uintptr_t actor_address,
+    uintptr_t native_visual_actor_address,
+    std::string* error_message);
+bool SeedWizardBotNativeSpellDispatchStateFromSourceActor(
+    uintptr_t actor_address,
+    uintptr_t native_visual_actor_address,
+    std::string* error_message);
 bool SeedGameplaySlotBotRenderStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t world_address,
+    uintptr_t native_visual_actor_address,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
     float heading,
-    std::string* error_message);
-bool AttachGameplaySlotBotStaffItem(
-    uintptr_t actor_address,
     std::string* error_message);
 bool PrimeGameplaySlotBotActor(
     uintptr_t gameplay_address,
@@ -170,9 +168,5 @@ bool DestroyLoaderOwnedWizardActor(
     uintptr_t actor_address,
     uintptr_t world_address,
     bool raw_allocation,
-    std::string* error_message);
-bool DestroyRegisteredGameNpcActor(
-    uintptr_t actor_address,
-    uintptr_t world_address,
     std::string* error_message);
 void DestroyParticipantEntityNow(std::uint64_t participant_id);

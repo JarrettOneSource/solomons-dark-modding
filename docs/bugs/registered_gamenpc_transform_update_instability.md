@@ -793,3 +793,38 @@ Current loader behavior (April 18, 2026):
   - with a fresh staged run and a materialized registered `GameNpc`, calling
     `sd.bots.update({ id=bot.id, position={ x=player.x, y=player.y } })`
     now returns `false`
+
+April 30, 2026 cleanup:
+
+- the registered participant spawn rail now hard-blocks with an explicit error
+  instead of cloning through `WizardCloneFromSourceActor` and remembering the
+  player-family result as `RegisteredGameNpc`
+- `tests/re/run_live_registered_gamenpc_blocker_probe.py` validates the current
+  runtime behavior by materializing a shared-hub bot through the standalone
+  clone rail and rejecting `rail=registered_gamenpc`, `RegisteredGameNpc`
+  classification, or a live `0x1397` actor.
+- `runtime/ghidra_registered_gamenpc_publication_blockers.txt` records the
+  relevant proof points:
+  - `0x00466FA0` creates/registers the `0x1397` preview/source actor
+  - `0x0061AA00` allocates the player-family clone path (`0x398`)
+  - `0x005E9D50`/`0x006042C0`/`0x005EA450` remain real GameNpc movement
+    seams, but there is still no proven long-lived `0x1397` publication
+    lifecycle for loader participants
+
+May 1, 2026 follow-up:
+
+- `runtime/ghidra_registered_gamenpc_publication_xrefs.txt` shows
+  `CreateWizard` preview/source path `0x00466FA0` has one direct xref in the
+  current project: `0x00689750` case `0x40F`. It is still a preview/source
+  actor action, not a generic participant publication API.
+- `runtime/ghidra_registered_gamenpc_publication_expanded.txt` keeps factory
+  case `0x1397`, `ActorWorldRegister`, `ActorWorldRegisterGameplaySlotActor`,
+  `WorldCellGrid_RebindActor`, and the GameNpc movement functions separated;
+  no stock owner combines them into a durable loader-facing `0x1397`
+  participant lifecycle.
+- `tests/re/run_live_registered_gamenpc_blocker_probe.py` now disables sample
+  Lua bot ticking, scans `sd.world.list_actors()`, and arms native traces. The
+  passing staged run records a player-family bot (`raw.object_type_id=1`),
+  `world_actor_type_summary.gamenpc_count=0`, and zero
+  `gamenpc_set_move_goal` / `gamenpc_set_tracked_slot_assist` /
+  `gamenpc_movement_tick` trace hits.

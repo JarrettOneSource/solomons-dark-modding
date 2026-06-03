@@ -180,7 +180,10 @@ bool TryResolveGameplayRuntimeState(uintptr_t* gameplay_runtime_address) {
         return false;
     }
 
-    const auto gameplay_runtime = memory.ReadValueOr<uintptr_t>(gameplay_runtime_global_address, 0);
+    uintptr_t gameplay_runtime = 0;
+    if (!memory.TryReadValue(gameplay_runtime_global_address, &gameplay_runtime)) {
+        return false;
+    }
     if (gameplay_runtime == 0 || !memory.IsReadableRange(gameplay_runtime, 0x230)) {
         return false;
     }
@@ -219,7 +222,11 @@ bool TryEnableCombatPreludeOnGameThread() {
 
     ArenaWaveStartState before;
     const bool have_before = TryReadArenaWaveStartState(arena_address, &before);
-    const auto enemy_count = ReadResolvedGlobalIntOr(kEnemyCountGlobal);
+    int enemy_count = 0;
+    if (!TryReadResolvedGlobalInt(kEnemyCountGlobal, &enemy_count)) {
+        Log("combat_prelude: native enemy-count global unavailable.");
+        return false;
+    }
     if (have_before && before.combat_wave_index > 0) {
         Log(
             "combat_prelude: refusing because waves are already active. arena=" + HexString(arena_address) +
@@ -293,12 +300,14 @@ bool TryEnableCombatPreludeOnGameThread() {
 
     ArenaWaveStartState after;
     const bool have_after = TryReadArenaWaveStartState(arena_address, &after);
+    int enemy_count_after = 0;
+    const bool have_enemy_count_after = TryReadResolvedGlobalInt(kEnemyCountGlobal, &enemy_count_after);
     Log(
         "combat_prelude: dispatched. arena=" + HexString(arena_address) +
         " runtime=" + HexString(gameplay_runtime_address) +
         " before=" + (have_before ? DescribeArenaWaveStartState(before) : std::string("unreadable")) +
         " after=" + (have_after ? DescribeArenaWaveStartState(after) : std::string("unreadable")) +
-        " enemy_count=" + std::to_string(ReadResolvedGlobalIntOr(kEnemyCountGlobal)));
+        " enemy_count=" + (have_enemy_count_after ? std::to_string(enemy_count_after) : std::string("unreadable")));
     SetRunLifecycleCombatPreludeOnlySuppression(true);
     return true;
 }
@@ -387,11 +396,14 @@ bool TryDispatchHubStartTestrunOnGameThread() {
     const bool have_arena_vtable = memory.TryReadValue(arena_address, &arena_vtable);
 
     DispatchException exception;
-    if (!CallGameplaySwitchRegionSafe(
-            switch_region_address,
-            gameplay_address,
-            kArenaRegionIndex,
-            &exception)) {
+    ++g_multiplayer_client_authorized_hub_run_switch_depth;
+    const bool switched = CallGameplaySwitchRegionSafe(
+        switch_region_address,
+        gameplay_address,
+        kArenaRegionIndex,
+        &exception);
+    --g_multiplayer_client_authorized_hub_run_switch_depth;
+    if (!switched) {
         g_gameplay_keyboard_injection.hub_start_testrun_cooldown_until_ms.store(
             now_ms + kHubStartTestrunDispatchCooldownMs,
             std::memory_order_release);

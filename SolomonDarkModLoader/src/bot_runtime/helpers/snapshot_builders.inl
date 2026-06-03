@@ -1,3 +1,8 @@
+bool IsNativeRemoteParticipantSnapshot(const BotSnapshot& snapshot) {
+    return snapshot.participant_kind == ParticipantKind::RemoteParticipant &&
+           snapshot.controller_kind == ParticipantControllerKind::Native;
+}
+
 void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) {
     if (snapshot == nullptr) {
         return;
@@ -18,10 +23,21 @@ void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) 
     snapshot->position_x = participant.runtime.position_x;
     snapshot->position_y = participant.runtime.position_y;
     snapshot->heading = participant.runtime.heading;
+    snapshot->hp = participant.runtime.life_current;
+    snapshot->max_hp = participant.runtime.life_max;
+    snapshot->mp = participant.runtime.mana_current;
+    snapshot->max_mp = participant.runtime.mana_max;
     if (const auto* pending_cast = FindPendingCast(participant.participant_id); pending_cast != nullptr) {
         snapshot->cast_pending = true;
         snapshot->queued_cast_count = pending_cast->queued_cast_count;
         snapshot->last_queued_cast_ms = pending_cast->queued_at_ms;
+    }
+    if (IsNativeRemoteParticipantSnapshot(*snapshot)) {
+        RemoveBotManaReserveState(participant.participant_id);
+        snapshot->mana_reserve_active = false;
+    } else if (const auto* mana_reserve = FindBotManaReserveState(participant.participant_id);
+               mana_reserve != nullptr) {
+        snapshot->mana_reserve_active = mana_reserve->active;
     }
     if (const auto* pending_choice = FindPendingSkillChoiceConst(participant.participant_id);
         pending_choice != nullptr) {
@@ -39,23 +55,22 @@ void DeriveBotCastReadiness(BotSnapshot* snapshot) {
     }
 
     const bool dead = snapshot->max_hp > 0.0f && snapshot->hp <= 0.0f;
-    const auto cast_mana = ResolveBotCastManaCost(
-        snapshot->character_profile,
-        BotCastKind::Primary,
-        -1,
-        0);
-    const float required_mana = ResolveBotManaRequiredToStart(cast_mana);
+    const bool mana_sample_available =
+        std::isfinite(snapshot->mp) &&
+        std::isfinite(snapshot->max_mp) &&
+        snapshot->max_mp > 0.0f;
     const bool mana_ready =
-        cast_mana.resolved &&
-        (cast_mana.kind == BotManaChargeKind::None ||
-         snapshot->max_mp <= 0.0f ||
-         snapshot->mp + 0.001f >= required_mana);
+        !mana_sample_available ||
+        (snapshot->mp > kBotManaReadinessEpsilon && !snapshot->mana_reserve_active);
+    const bool native_action_ready =
+        snapshot->native_action_cooldown_ticks <= 0;
     snapshot->cast_ready =
         snapshot->available &&
         snapshot->entity_materialized &&
         snapshot->actor_address != 0 &&
         !dead &&
         mana_ready &&
+        native_action_ready &&
         !snapshot->cast_pending &&
         !snapshot->cast_active;
 }
@@ -105,11 +120,21 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
     snapshot->cast_skill_id = gameplay_state.cast_skill_id;
     snapshot->cast_ticks_waiting = gameplay_state.cast_ticks_waiting;
     snapshot->cast_target_actor_address = gameplay_state.cast_target_actor_address;
+    snapshot->native_action_cooldown_ticks = gameplay_state.native_action_cooldown_ticks;
+    snapshot->active_spell_object_readable = gameplay_state.active_spell_object_readable;
+    snapshot->active_spell_object_address = gameplay_state.active_spell_object_address;
+    snapshot->active_spell_object_type = gameplay_state.active_spell_object_type;
+    snapshot->active_spell_object_x = gameplay_state.active_spell_object_x;
+    snapshot->active_spell_object_y = gameplay_state.active_spell_object_y;
+    snapshot->active_spell_object_radius = gameplay_state.active_spell_object_radius;
+    snapshot->active_spell_object_charge = gameplay_state.active_spell_object_charge;
     snapshot->walk_cycle_primary = gameplay_state.walk_cycle_primary;
     snapshot->walk_cycle_secondary = gameplay_state.walk_cycle_secondary;
     snapshot->render_drive_stride = gameplay_state.render_drive_stride;
     snapshot->render_advance_rate = gameplay_state.render_advance_rate;
     snapshot->render_advance_phase = gameplay_state.render_advance_phase;
+    snapshot->render_drive_effect_timer = gameplay_state.render_drive_effect_timer;
+    snapshot->render_drive_effect_progress = gameplay_state.render_drive_effect_progress;
     snapshot->render_drive_overlay_alpha = gameplay_state.render_drive_overlay_alpha;
     snapshot->render_drive_move_blend = gameplay_state.render_drive_move_blend;
     snapshot->gameplay_attach_applied = gameplay_state.gameplay_attach_applied;
@@ -131,6 +156,20 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
     snapshot->mp = gameplay_state.mp;
     snapshot->max_mp = gameplay_state.max_mp;
     snapshot->in_run = true;
+}
+
+void ApplyManaReserveStateToSnapshot(BotSnapshot* snapshot) {
+    if (snapshot == nullptr || snapshot->bot_id == 0) {
+        return;
+    }
+    if (IsNativeRemoteParticipantSnapshot(*snapshot)) {
+        RemoveBotManaReserveState(snapshot->bot_id);
+        snapshot->mana_reserve_active = false;
+        return;
+    }
+
+    snapshot->mana_reserve_active =
+        UpdateBotManaReserveStateLocked(snapshot->bot_id, snapshot->mp, snapshot->max_mp);
 }
 
 void ApplyControllerStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {

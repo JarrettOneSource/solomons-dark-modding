@@ -1,7 +1,126 @@
 #include "lua_engine_bindings_internal.h"
+#include "gameplay_seams.h"
+#include "memory_access.h"
+#include "mod_loader.h"
+#include "native_spell_stats.h"
+
+#include <algorithm>
+#include <cmath>
 
 namespace sdmod::detail {
 namespace {
+
+struct PrimaryAttackWindow {
+    bool resolved = false;
+    bool native_backed = false;
+    float min_range = 0.0f;
+    float max_range = 0.0f;
+    const char* source = "unresolved";
+};
+
+bool TryReadResolvedGameFloat(uintptr_t absolute_address, float* value) {
+    if (value != nullptr) {
+        *value = 0.0f;
+    }
+    if (absolute_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto resolved_address = memory.ResolveGameAddressOrZero(absolute_address);
+    if (resolved_address == 0 ||
+        !memory.IsReadableRange(resolved_address, sizeof(float))) {
+        return false;
+    }
+
+    float candidate = 0.0f;
+    if (!memory.TryReadValue(resolved_address, &candidate) ||
+        !std::isfinite(candidate) ||
+        candidate <= 0.0f) {
+        return false;
+    }
+
+    if (value != nullptr) {
+        *value = candidate;
+    }
+    return true;
+}
+
+bool ReadNativePrimarySelectionPursuitRange(
+    uintptr_t actor_address,
+    int element_id,
+    float* range,
+    const char** source) {
+    if (range != nullptr) {
+        *range = 0.0f;
+    }
+    if (source != nullptr) {
+        *source = "unresolved";
+    }
+
+    if (element_id == 1) {
+        float water_range = 0.0f;
+        if (TryReadResolvedGameFloat(kWaterPrimaryControlBrainRangeGlobal, &water_range)) {
+            if (range != nullptr) {
+                *range = water_range;
+            }
+            if (source != nullptr) {
+                *source = "native_water_control_brain_range";
+            }
+            return true;
+        }
+    }
+
+    if (actor_address == 0 ||
+        kActorAnimationSelectionStateOffset == 0 ||
+        kActorControlBrainPursuitRangeOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.IsReadableRange(actor_address + kActorAnimationSelectionStateOffset, sizeof(uintptr_t))) {
+        return false;
+    }
+
+    uintptr_t selection_state = 0;
+    if (!memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &selection_state)) {
+        return false;
+    }
+    if (selection_state == 0 ||
+        !memory.IsReadableRange(selection_state + kActorControlBrainPursuitRangeOffset, sizeof(float))) {
+        return false;
+    }
+
+    float pursuit_range = 0.0f;
+    if (!memory.TryReadValue(selection_state + kActorControlBrainPursuitRangeOffset, &pursuit_range) ||
+        !std::isfinite(pursuit_range) ||
+        pursuit_range <= 0.0f) {
+        return false;
+    }
+
+    if (range != nullptr) {
+        *range = pursuit_range;
+    }
+    if (source != nullptr) {
+        *source = "native_selection_pursuit_range";
+    }
+    return true;
+}
+
+PrimaryAttackWindow ResolvePrimaryAttackWindow(int element_id, uintptr_t actor_address) {
+    PrimaryAttackWindow window{};
+    float max_range = 0.0f;
+    const char* source = "unresolved";
+    if (!ReadNativePrimarySelectionPursuitRange(actor_address, element_id, &max_range, &source)) {
+        return window;
+    }
+
+    window.resolved = true;
+    window.native_backed = true;
+    window.max_range = max_range;
+    window.source = source;
+    return window;
+}
 
 int LuaBotsCreate(lua_State* state) {
     multiplayer::BotCreateRequest request;
@@ -97,7 +216,7 @@ int LuaBotsFaceTarget(lua_State* state) {
         return luaL_error(state, "%s", error_message.c_str());
     }
     if (!lua_isinteger(state, 2) && !lua_isnumber(state, 2)) {
-        return luaL_error(state, "sd.bots.face_target expects (id, actor_address[, fallback_angle])");
+        return luaL_error(state, "sd.bots.face_target expects (id, actor_address[, default_angle])");
     }
 
     const auto target_actor_value = static_cast<lua_Integer>(lua_tointeger(state, 2));
@@ -105,13 +224,13 @@ int LuaBotsFaceTarget(lua_State* state) {
         return luaL_error(state, "sd.bots.face_target actor_address must be non-negative");
     }
     const auto target_actor_address = static_cast<uintptr_t>(target_actor_value);
-    const bool fallback_heading_valid = lua_gettop(state) >= 3 && !lua_isnil(state, 3);
-    float fallback_heading = 0.0f;
-    if (fallback_heading_valid) {
+    const bool default_heading_valid = lua_gettop(state) >= 3 && !lua_isnil(state, 3);
+    float default_heading = 0.0f;
+    if (default_heading_valid) {
         if (!lua_isnumber(state, 3)) {
-            return luaL_error(state, "sd.bots.face_target fallback_angle must be a number");
+            return luaL_error(state, "sd.bots.face_target default_angle must be a number");
         }
-        fallback_heading = static_cast<float>(lua_tonumber(state, 3));
+        default_heading = static_cast<float>(lua_tonumber(state, 3));
     }
 
     lua_pushboolean(
@@ -119,8 +238,8 @@ int LuaBotsFaceTarget(lua_State* state) {
         multiplayer::FaceBotTarget(
             bot_id,
             target_actor_address,
-            fallback_heading_valid,
-            fallback_heading) ? 1 : 0);
+            default_heading_valid,
+            default_heading) ? 1 : 0);
     return 1;
 }
 
@@ -159,6 +278,72 @@ int LuaBotsGetState(lua_State* state) {
     }
 
     PushBotSnapshotArray(state);
+    return 1;
+}
+
+int LuaBotsGetParticipantState(lua_State* state) {
+    std::uint64_t participant_id = 0;
+    std::string error_message;
+    if (!ParseBotIdArgument(state, 1, &participant_id, &error_message)) {
+        return luaL_error(state, "%s", error_message.c_str());
+    }
+
+    multiplayer::BotSnapshot snapshot;
+    if (!multiplayer::ReadParticipantSnapshot(participant_id, &snapshot)) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    PushBotSnapshot(state, snapshot);
+    return 1;
+}
+
+int LuaBotsGetParticipants(lua_State* state) {
+    const auto runtime = multiplayer::SnapshotRuntimeState();
+    lua_createtable(state, static_cast<int>(runtime.participants.size()), 0);
+    lua_Integer output_index = 1;
+    for (const auto& participant : runtime.participants) {
+        if (!multiplayer::IsRemoteParticipant(participant)) {
+            continue;
+        }
+
+        multiplayer::BotSnapshot snapshot;
+        if (!multiplayer::ReadParticipantSnapshot(participant.participant_id, &snapshot)) {
+            continue;
+        }
+
+        PushBotSnapshot(state, snapshot);
+        lua_rawseti(state, -2, output_index++);
+    }
+    return 1;
+}
+
+int LuaBotsGetNameplate(lua_State* state) {
+    if (!lua_isinteger(state, 1) && !lua_isnumber(state, 1)) {
+        return luaL_error(state, "sd.bots.get_nameplate expects (actor_address)");
+    }
+
+    const auto actor_address_value = static_cast<lua_Integer>(lua_tointeger(state, 1));
+    if (actor_address_value <= 0) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    std::string display_name;
+    std::uint64_t participant_id = 0;
+    if (!TryGetGameplayHudParticipantDisplayNameForActor(
+            static_cast<uintptr_t>(actor_address_value),
+            &display_name,
+            &participant_id)) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_createtable(state, 0, 2);
+    lua_pushinteger(state, static_cast<lua_Integer>(participant_id));
+    lua_setfield(state, -2, "id");
+    lua_pushstring(state, display_name.c_str());
+    lua_setfield(state, -2, "name");
     return 1;
 }
 
@@ -325,10 +510,68 @@ int LuaBotsDebugSyncLevelUp(lua_State* state) {
     return 1;
 }
 
+int LuaBotsResolvePrimaryEntry(lua_State* state) {
+    if (!lua_isinteger(state, 1) && !lua_isnumber(state, 1)) {
+        return luaL_error(state, "sd.bots.resolve_primary_entry expects (element_id)");
+    }
+
+    const auto element_id = static_cast<int>(lua_tointeger(state, 1));
+    const auto primary_entry = ResolveNativePrimaryEntryForElement(element_id);
+    if (primary_entry < 0) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_pushinteger(state, static_cast<lua_Integer>(primary_entry));
+    return 1;
+}
+
+int LuaBotsGetPrimaryAttackWindow(lua_State* state) {
+    std::uint64_t bot_id = 0;
+    std::string error_message;
+    if (!ParseBotIdArgument(state, 1, &bot_id, &error_message)) {
+        return luaL_error(state, "%s", error_message.c_str());
+    }
+
+    int element_id = -1;
+    if (lua_gettop(state) >= 2 && !lua_isnil(state, 2)) {
+        if (!lua_isinteger(state, 2) && !lua_isnumber(state, 2)) {
+            return luaL_error(state, "sd.bots.get_primary_attack_window element_id must be an integer");
+        }
+        element_id = static_cast<int>(lua_tointeger(state, 2));
+    }
+
+    uintptr_t actor_address = 0;
+    multiplayer::BotSnapshot snapshot;
+    if (multiplayer::ReadBotSnapshot(bot_id, &snapshot) && snapshot.available) {
+        if (element_id < 0) {
+            element_id = snapshot.character_profile.element_id;
+        }
+        actor_address = snapshot.actor_address;
+    }
+
+    const auto window = ResolvePrimaryAttackWindow(element_id, actor_address);
+    if (!window.resolved) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_createtable(state, 0, 4);
+    lua_pushnumber(state, static_cast<lua_Number>(window.min_range));
+    lua_setfield(state, -2, "min_range");
+    lua_pushnumber(state, static_cast<lua_Number>(window.max_range));
+    lua_setfield(state, -2, "max_range");
+    lua_pushboolean(state, window.native_backed ? 1 : 0);
+    lua_setfield(state, -2, "native_backed");
+    lua_pushstring(state, window.source);
+    lua_setfield(state, -2, "source");
+    return 1;
+}
+
 }  // namespace
 
 void RegisterLuaBotBindings(lua_State* state) {
-    lua_createtable(state, 0, 14);
+    lua_createtable(state, 0, 19);
     RegisterFunction(state, &LuaBotsCreate, "create");
     RegisterFunction(state, &LuaBotsDestroy, "destroy");
     RegisterFunction(state, &LuaBotsClear, "clear");
@@ -340,9 +583,14 @@ void RegisterLuaBotBindings(lua_State* state) {
     RegisterFunction(state, &LuaBotsCast, "cast");
     RegisterFunction(state, &LuaBotsGetCount, "get_count");
     RegisterFunction(state, &LuaBotsGetState, "get_state");
+    RegisterFunction(state, &LuaBotsGetParticipantState, "get_participant_state");
+    RegisterFunction(state, &LuaBotsGetParticipants, "get_participants");
+    RegisterFunction(state, &LuaBotsGetNameplate, "get_nameplate");
     RegisterFunction(state, &LuaBotsGetSkillChoices, "get_skill_choices");
     RegisterFunction(state, &LuaBotsChooseSkill, "choose_skill");
     RegisterFunction(state, &LuaBotsDebugSyncLevelUp, "debug_sync_level_up");
+    RegisterFunction(state, &LuaBotsResolvePrimaryEntry, "resolve_primary_entry");
+    RegisterFunction(state, &LuaBotsGetPrimaryAttackWindow, "get_primary_attack_window");
     lua_setfield(state, -2, "bots");
 }
 

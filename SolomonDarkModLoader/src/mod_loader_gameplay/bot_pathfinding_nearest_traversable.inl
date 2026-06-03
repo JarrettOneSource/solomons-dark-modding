@@ -87,8 +87,16 @@ bool TryResolveNearestTraversablePlacement(
     probe_binding.actor_address = probe_actor_address;
     probe_binding.materialized_world_address = world_address;
     auto& memory = ProcessMemory::Instance();
-    const auto anchor_x = memory.ReadFieldOr<float>(probe_actor_address, kActorPositionXOffset, 0.0f);
-    const auto anchor_y = memory.ReadFieldOr<float>(probe_actor_address, kActorPositionYOffset, 0.0f);
+    (void)memory;
+    float anchor_x = 0.0f;
+    float anchor_y = 0.0f;
+    if (!TryReadFiniteFloatField(probe_actor_address, kActorPositionXOffset, &anchor_x) ||
+        !TryReadFiniteFloatField(probe_actor_address, kActorPositionYOffset, &anchor_y)) {
+        if (error_message != nullptr) {
+            *error_message = "Placement probe actor position is unreadable.";
+        }
+        return false;
+    }
     if (IsGameplayPathPlacementTraversable(snapshot, &probe_binding, desired_x, desired_y, error_message) &&
         IsGameplayPathSegmentTraversable(snapshot, &probe_binding, anchor_x, anchor_y, desired_x, desired_y, nullptr)) {
         *resolved_x = desired_x;
@@ -109,7 +117,13 @@ bool TryResolveNearestTraversablePlacement(
                                      : (resolved_goal_grid_y >= snapshot.height ? snapshot.height - 1 : resolved_goal_grid_y);
     }
 
-    const auto radius = memory.ReadFieldOr<float>(probe_actor_address, kActorCollisionRadiusOffset, 0.0f);
+    float radius = 0.0f;
+    if (!TryReadFiniteFloatField(probe_actor_address, kActorCollisionRadiusOffset, &radius)) {
+        if (error_message != nullptr) {
+            *error_message = "Placement probe actor collision radius is unreadable.";
+        }
+        return false;
+    }
     const auto preferred_margin = radius > 8.0f ? radius : 8.0f;
     const auto max_margin_x = snapshot.cell_width * 0.45f;
     const auto max_margin_y = snapshot.cell_height * 0.45f;
@@ -235,4 +249,3 @@ bool TryResolveNearestTraversablePlacement(
     }
     return false;
 }
-

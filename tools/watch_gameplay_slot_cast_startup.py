@@ -14,12 +14,22 @@ import cast_state_probe as csp
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = ROOT / "runtime" / "watch_gameplay_slot_cast_startup.json"
 
-GAMEPLAY_CAST_INTENT_OFFSET = 0x1E4
-GAMEPLAY_MOUSE_LEFT_FALLBACK_OFFSET = 0x279
-GAMEPLAY_INDEX_STATE_ACTOR_SELECTION_BASE_INDEX = 0x0C
-PROGRESSION_CURRENT_SPELL_ID_OFFSET = 0x750
-SPELL_DISPATCH_BODY_ADDRESS = 0x00548A03
-SPELL_3EF_BODY_ADDRESS = 0x0052BB87
+GAMEPLAY_CAST_INTENT_OFFSET = csp.read_runtime_layout_offset("gameplay_cast_intent")
+GAMEPLAY_MOUSE_LEFT_FALLBACK_OFFSET = csp.read_runtime_layout_offset("gameplay_mouse_left_button")
+GAMEPLAY_INDEX_STATE_ACTOR_SELECTION_BASE_INDEX = (
+    csp.read_runtime_layout_offset("player_selection_state_0") -
+    csp.read_runtime_layout_offset("gameplay_index_state_table")
+) // 4
+PROGRESSION_CURRENT_SPELL_ID_OFFSET = csp.read_runtime_layout_offset("progression_current_spell_id")
+ACTOR_ANIMATION_DRIVE_STATE_OFFSET = csp.read_runtime_layout_offset("actor_animation_drive_state_byte")
+ACTOR_NO_INTERRUPT_FLAG_OFFSET = csp.read_runtime_layout_offset("actor_no_interrupt_flag")
+ACTOR_PROGRESSION_RUNTIME_STATE_OFFSET = csp.read_runtime_layout_offset("actor_progression_runtime_state")
+ACTOR_ANIMATION_SELECTION_STATE_OFFSET = csp.read_runtime_layout_offset("actor_animation_selection_state")
+ACTOR_PRIMARY_SKILL_ID_OFFSET = csp.read_runtime_layout_offset("actor_primary_skill_id")
+ACTOR_ACTIVE_CAST_GROUP_OFFSET = csp.read_runtime_layout_offset("actor_active_cast_group_byte")
+ACTOR_ACTIVE_CAST_SLOT_OFFSET = csp.read_runtime_layout_offset("actor_active_cast_slot_short")
+SPELL_DISPATCH_BODY_ADDRESS = csp.read_runtime_layout_offset("trace_spell_cast_dispatcher_body")
+SPELL_3EF_BODY_ADDRESS = csp.read_runtime_layout_offset("trace_spell_cast_3ef_body")
 
 
 class WatchFailure(RuntimeError):
@@ -77,8 +87,8 @@ def arm_watches(
         )
 
     addresses = {
-        "bot_actor_270": bot_actor + 0x270,
-        "bot_actor_27c": bot_actor + 0x27C,
+        "bot_primary_skill_id": bot_actor + ACTOR_PRIMARY_SKILL_ID_OFFSET,
+        "bot_active_cast_handle": bot_actor + ACTOR_ACTIVE_CAST_GROUP_OFFSET,
         "bot_prog_750": bot_progression + PROGRESSION_CURRENT_SPELL_ID_OFFSET,
         "slot0_selection": selection_table + GAMEPLAY_INDEX_STATE_ACTOR_SELECTION_BASE_INDEX * 4,
         "slot1_selection": selection_table + (GAMEPLAY_INDEX_STATE_ACTOR_SELECTION_BASE_INDEX + 1) * 4,
@@ -194,12 +204,13 @@ local function emit(key, value)
 end
 local actor = {bot_actor}
 local progression = {bot_progression}
-emit('actor_270', sd.debug.read_u32(actor + 0x270))
-emit('actor_27c', sd.debug.read_u32(actor + 0x27C))
-emit('actor_160', sd.debug.read_u32(actor + 0x160))
-emit('actor_1ec', sd.debug.read_u32(actor + 0x1EC))
-emit('actor_200', sd.debug.read_u32(actor + 0x200))
-emit('actor_21c', sd.debug.read_u32(actor + 0x21C))
+emit('actor_primary_skill_id', sd.debug.read_u32(actor + {ACTOR_PRIMARY_SKILL_ID_OFFSET}))
+emit('actor_active_cast_group', sd.debug.read_u8(actor + {ACTOR_ACTIVE_CAST_GROUP_OFFSET}))
+emit('actor_active_cast_slot', sd.debug.read_u16(actor + {ACTOR_ACTIVE_CAST_SLOT_OFFSET}))
+emit('actor_drive_state', sd.debug.read_u8(actor + {ACTOR_ANIMATION_DRIVE_STATE_OFFSET}))
+emit('actor_no_interrupt', sd.debug.read_u8(actor + {ACTOR_NO_INTERRUPT_FLAG_OFFSET}))
+emit('actor_progression_runtime', sd.debug.read_u32(actor + {ACTOR_PROGRESSION_RUNTIME_STATE_OFFSET}))
+emit('actor_animation_selection', sd.debug.read_u32(actor + {ACTOR_ANIMATION_SELECTION_STATE_OFFSET}))
 emit('prog_750', sd.debug.read_u32(progression + {PROGRESSION_CURRENT_SPELL_ID_OFFSET}))
 """.strip()
         )

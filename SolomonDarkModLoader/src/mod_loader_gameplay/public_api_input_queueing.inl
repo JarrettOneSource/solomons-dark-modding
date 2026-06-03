@@ -10,6 +10,10 @@ std::uint64_t GetGameplayMouseLeftEdgeTickMs() {
     return g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.load(std::memory_order_acquire);
 }
 
+bool IsGameplayMouseLeftDown() {
+    return g_gameplay_keyboard_injection.last_observed_mouse_left_down.load(std::memory_order_acquire);
+}
+
 bool QueueGameplayMouseLeftClick(std::string* error_message) {
     return QueueGameplayMouseLeftHoldFrames(kInjectedGameplayMouseClickFrames, error_message);
 }

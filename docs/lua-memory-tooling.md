@@ -12,6 +12,17 @@ Use it before attaching an external debugger. It is fast, game-aware, and alread
 - Higher-level helper:
   - `python tools/live_bot_render_debug.py`
 
+For multi-instance local runs, set `SDMOD_LUA_EXEC_PIPE_NAME` to target a
+specific loader pipe. `scripts/Launch-LocalMultiplayerPair.ps1` assigns separate
+host/client pipe names automatically.
+
+For local multiplayer sync validation, use:
+
+- `sd.bots.get_participants()` for materialized remote native participants
+- `sd.bots.get_participant_state(id)` for one remote participant snapshot
+- `sd.bots.get_nameplate(actor_address)` to verify the gameplay nameplate lookup
+  resolves the actor back to the participant display name
+
 ## Core `sd.debug` APIs
 
 ### Scalar reads and writes
@@ -166,7 +177,6 @@ Current external CLI fallback already installed:
 - `/mnt/c/Program Files/WindowsApps/Microsoft.WinDbg_1.2601.12001.0_x64__8wekyb3d8bbwe/x86/cdb.exe`
 
 ## Reliability Notes
-- The earlier “Lua tracing is flaky” behavior was caused by three concrete issues:
 - The earlier “Lua tracing is flaky” behavior was caused by several concrete issues:
   - startup traces were sometimes armed too late, after the interesting stock function had already run
   - the sandbox config loader only copied a hardcoded allowlist of keys, so newly added `trace_*` addresses could exist in `probe-layout.ini` but still read back as `nil`
@@ -181,12 +191,15 @@ Current external CLI fallback already installed:
   - sandbox preset resolution now falls back to `config/active_preset.txt` when the environment variable is absent
   - `trace_function` now auto-sizes its trampoline patch on x86 instruction boundaries; for example, `EquipAttachmentSink_Attach (0x00575850)` now arms with `patch=5` instead of the old crashing `patch=7`
   - the trace hook now explicitly rejects relative-branch/call instructions in the copied prologue, because the current stub does not relocate them
+  - `trace_function` now rejects trace windows that overlap an already-installed 5-byte `E9` jump patch, including body addresses that land inside the jump operand
+  - `untrace_function` now resolves executable/game-image addresses the same way `trace_function` does, so original-address untrace calls disarm the same runtime hook that was armed
   - the startup attach probe now targets the taken non-type-7 fast path at `0x005758D2` instead of the branchy function entry at `0x00575850`
   - the separate automation/background-focus crash turned out to be the same class of bug in the generic hooker: the old background-focus bypass installed a raw fixed-size hook on the game window proc and split its prologue on a non-instruction boundary
   - the loader now has a dedicated safe x86 hook path for hooks that must execute through a copied trampoline, and the background-focus bypass uses that safe installer
 - Practical takeaway:
   - when a trace fails, check `sd.debug.get_last_error()` immediately
   - when comparing an address across tools, prefer `query_memory(...).resolved_address`
+  - do not trace a `trace_*_body` address just because it is executable; if it resolves into an existing hook stub, the correct behavior is a `relative jump patch` refusal
   - if a trace target resolves to non-executable memory, treat that as an RE bug in the mapped address, not as a hook-installer bug
 
 ## Current Rendering Investigation Focus
@@ -290,5 +303,5 @@ Current external CLI fallback already installed:
     - the range input is derived as `205 + 4 * actor[0x290]`; level-1 water had
       `actor[0x290] = 0.0`, and the same field appears to drive upgraded wider
       frost behavior
-    - `frost_jet.cfg` carries damage/mana only (`mDamage[1]=2.5`,
-      `mManaCost[1]=12.5` per second), not geometry
+    - the Skills_Wizard stat output carries damage/mana; geometry is produced
+      by the native frost-jet cone path, not by the mana/stat output

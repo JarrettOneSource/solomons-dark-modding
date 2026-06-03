@@ -6,14 +6,23 @@ internal static class StageSandboxCompatibilityLinks
 {
     public static void Materialize(string stageRootPath)
     {
+        Materialize(stageRootPath, Path.Combine(stageRootPath, "sandbox", "savegames"));
+    }
+
+    public static void Materialize(string stageRootPath, string savegamesTargetPath)
+    {
         var sandboxSavegamesPath = Path.Combine(stageRootPath, "sandbox", "savegames");
         if (!Directory.Exists(sandboxSavegamesPath))
         {
             Directory.CreateDirectory(sandboxSavegamesPath);
         }
+        if (!Directory.Exists(savegamesTargetPath))
+        {
+            Directory.CreateDirectory(savegamesTargetPath);
+        }
 
         var stageSavegamesPath = Path.Combine(stageRootPath, "savegames");
-        RecreateDirectoryJunction(stageSavegamesPath, sandboxSavegamesPath);
+        RecreateDirectoryJunction(stageSavegamesPath, savegamesTargetPath);
     }
 
     private static void RecreateDirectoryJunction(string linkPath, string targetPath)

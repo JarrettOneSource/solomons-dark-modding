@@ -53,8 +53,10 @@ bool CallActorProgressionRefreshSafe(
 
     __try {
         auto& memory = ProcessMemory::Instance();
-        const auto progression_handle =
-            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
+        uintptr_t progression_handle = 0;
+        if (!memory.TryReadField(actor_address, kActorProgressionHandleOffset, &progression_handle)) {
+            return false;
+        }
         const auto progression_runtime =
             progression_handle != 0 ? ReadSmartPointerInnerObject(progression_handle) : 0;
         if (progression_runtime == 0) {
@@ -73,6 +75,7 @@ bool CallSkillsWizardBuildPrimarySpellSafe(
     uintptr_t progression_address,
     std::uint32_t primary_entry_arg,
     std::uint32_t combo_entry_arg,
+    std::uint32_t* output_spell_id,
     DWORD* exception_code) {
     auto* build_primary_spell =
         reinterpret_cast<SkillsWizardBuildPrimarySpellFn>(build_address);
@@ -84,7 +87,7 @@ bool CallSkillsWizardBuildPrimarySpellSafe(
     }
 
     __try {
-        build_primary_spell(
+        const auto spell_id = build_primary_spell(
             reinterpret_cast<void*>(progression_address),
             primary_entry_arg,
             combo_entry_arg,
@@ -92,6 +95,40 @@ bool CallSkillsWizardBuildPrimarySpellSafe(
             0,
             0,
             0);
+        if (output_spell_id != nullptr) {
+            *output_spell_id = spell_id;
+        }
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool CallSkillsWizardGetPrimaryColorSafe(
+    uintptr_t color_address,
+    uintptr_t progression_address,
+    std::uint32_t primary_entry_arg,
+    float out_color[4],
+    DWORD* exception_code) {
+    auto* get_primary_color = reinterpret_cast<SkillsWizardGetPrimaryColorFn>(color_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (out_color != nullptr) {
+        out_color[0] = 0.0f;
+        out_color[1] = 0.0f;
+        out_color[2] = 0.0f;
+        out_color[3] = 0.0f;
+    }
+    if (get_primary_color == nullptr || progression_address == 0 || out_color == nullptr) {
+        return false;
+    }
+
+    __try {
+        get_primary_color(
+            reinterpret_cast<void*>(progression_address),
+            out_color,
+            primary_entry_arg);
         return true;
     } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
         return false;

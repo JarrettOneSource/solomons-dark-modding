@@ -6,7 +6,7 @@ bool ExecuteParticipantEntitySyncNow(
     }
 
     multiplayer::BotSnapshot bot_snapshot;
-    if (!multiplayer::ReadBotSnapshot(request.bot_id, &bot_snapshot) || !bot_snapshot.available) {
+    if (!multiplayer::ReadParticipantSnapshot(request.bot_id, &bot_snapshot) || !bot_snapshot.available) {
         Log(
             "[bots] sync skipped stale request. bot_id=" + std::to_string(request.bot_id) +
             " element_id=" + std::to_string(request.character_profile.element_id));
@@ -32,6 +32,13 @@ bool ExecuteParticipantEntitySyncNow(
         }
         return false;
     }
+    if (!ShouldParticipantSceneIntentMaterializeInScene(request.scene_intent, scene_context)) {
+        Log(
+            "[bots] sync skipped scene mismatch. bot_id=" + std::to_string(request.bot_id) +
+            " element_id=" + std::to_string(request.character_profile.element_id) +
+            " scene=" + DescribeSceneKind(scene_context));
+        return true;
+    }
 
     if (TryUpdateParticipantEntity(gameplay_address, request, error_message)) {
         Log(
@@ -42,11 +49,8 @@ bool ExecuteParticipantEntitySyncNow(
 
     const bool use_slot_bot_rail =
         ShouldUseGameplaySlotBotParticipantRail(gameplay_address, scene_context);
-    const bool use_registered_gamenpc_rail =
-        !use_slot_bot_rail && ShouldUseRegisteredGameNpcParticipantRail(scene_context);
     const char* rail_name =
-        use_slot_bot_rail ? "gameplay_slot_bot"
-                          : (use_registered_gamenpc_rail ? "registered_gamenpc" : "standalone_clone");
+        use_slot_bot_rail ? "gameplay_slot_bot" : "standalone_clone";
     Log(
         "[bots] sync spawning actor. bot_id=" + std::to_string(request.bot_id) +
         " element_id=" + std::to_string(request.character_profile.element_id) +
@@ -60,26 +64,18 @@ bool ExecuteParticipantEntitySyncNow(
                   request,
                   error_message,
                   &exception_code)
-            : (use_registered_gamenpc_rail
-                   ? TrySpawnRegisteredGameNpcParticipantEntitySafe(
-                         gameplay_address,
-                         request,
-                         error_message,
-                         &exception_code)
-                   : TrySpawnStandaloneRemoteWizardParticipantEntitySafe(
-                         gameplay_address,
-                         request,
-                         error_message,
-                         &exception_code));
+            : TrySpawnStandaloneRemoteWizardParticipantEntitySafe(
+                  gameplay_address,
+                  request,
+                  error_message,
+                  &exception_code);
     if (spawned) {
         return true;
     }
     if (error_message != nullptr && error_message->empty()) {
         const char* rail_fn_name =
             use_slot_bot_rail ? "TrySpawnGameplaySlotBotParticipantEntity"
-                              : (use_registered_gamenpc_rail
-                                     ? "TrySpawnRegisteredGameNpcParticipantEntity"
-                                     : "TrySpawnStandaloneRemoteWizardParticipantEntity");
+                              : "TrySpawnStandaloneRemoteWizardParticipantEntity";
         if (exception_code != 0) {
             *error_message =
                 std::string(rail_fn_name) + " threw 0x" + HexString(exception_code) + ".";

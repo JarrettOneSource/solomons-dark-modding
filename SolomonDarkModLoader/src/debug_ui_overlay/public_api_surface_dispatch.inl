@@ -262,7 +262,7 @@ bool TryResolveSettingsSnapshotElementDispatch(
             return false;
         }
         Log(
-            "Debug UI overlay resolved settings element by live label fallback. label=" +
+            "Debug UI overlay resolved settings element by live label match. label=" +
             SanitizeDebugLogLabel(element.label) +
             " source=" + HexString(element.source_object_ptr) +
             " settings=" + HexString(settings_address) +
@@ -289,26 +289,25 @@ bool TryResolveSettingsSnapshotElementDispatch(
         return false;
     }
 
-    // Fallback: use the control_offset from binary-layout.ini to resolve the control
-    // directly from the settings object address. This handles settings actions (LOGIN INFO,
-    // TWEAK GAME, etc.) whose text source objects are not in the settings child control tree.
+    // Use the binary-layout.ini control_offset to resolve settings actions whose
+    // text source objects are not in the settings child control tree.
     if (!element.action_id.empty()) {
         const auto* action_definition = FindUiActionDefinition(element.action_id);
         if (action_definition != nullptr) {
             const auto control_offset = GetDefinitionAddress(action_definition->addresses, "control_offset");
             if (control_offset != 0 && settings_address != 0) {
-                const auto fallback_control = settings_address + control_offset;
+                const auto layout_control = settings_address + control_offset;
                 uintptr_t vftable_check = 0;
-                if (TryReadPointerValueDirect(fallback_control, &vftable_check) && vftable_check != 0) {
+                if (TryReadPointerValueDirect(layout_control, &vftable_check) && vftable_check != 0) {
                     *owner_address = settings_address;
-                    *control_address = fallback_control;
+                    *control_address = layout_control;
                     Log(
-                        "Debug UI overlay resolved settings element via control_offset fallback. label=" +
+                        "Debug UI overlay resolved settings element via control_offset. label=" +
                         SanitizeDebugLogLabel(element.label) +
                         " action=" + std::string(element.action_id) +
                         " settings=" + HexString(settings_address) +
                         " control_offset=" + HexString(control_offset) +
-                        " control=" + HexString(fallback_control));
+                        " control=" + HexString(layout_control));
                     return true;
                 }
             }

@@ -45,12 +45,33 @@ PendingBotCast* FindPendingCast(std::uint64_t bot_id) {
     return it == g_pending_casts.end() ? nullptr : &(*it);
 }
 
+PendingBotCastInput* FindBotCastInput(std::uint64_t bot_id) {
+    const auto it = std::find_if(
+        g_bot_cast_inputs.begin(),
+        g_bot_cast_inputs.end(),
+        [&](const PendingBotCastInput& input) {
+            return input.bot_id == bot_id;
+        });
+    return it == g_bot_cast_inputs.end() ? nullptr : &(*it);
+}
+
 void RemovePendingCast(std::uint64_t bot_id) {
     g_pending_casts.erase(
         std::remove_if(g_pending_casts.begin(), g_pending_casts.end(), [&](const PendingBotCast& cast) {
             return cast.bot_id == bot_id;
         }),
         g_pending_casts.end());
+}
+
+void RemoveBotCastInput(std::uint64_t bot_id) {
+    g_bot_cast_inputs.erase(
+        std::remove_if(
+            g_bot_cast_inputs.begin(),
+            g_bot_cast_inputs.end(),
+            [&](const PendingBotCastInput& input) {
+                return input.bot_id == bot_id;
+            }),
+        g_bot_cast_inputs.end());
 }
 
 PendingBotEntitySync* FindPendingEntitySync(std::uint64_t bot_id) {
@@ -128,6 +149,86 @@ const PendingBotSkillChoice* FindPendingSkillChoiceConst(std::uint64_t bot_id) {
             return pending_choice.bot_id == bot_id;
         });
     return it == g_pending_skill_choices.end() ? nullptr : &(*it);
+}
+
+BotManaReserveState* FindBotManaReserveState(std::uint64_t bot_id) {
+    const auto it = std::find_if(
+        g_bot_mana_reserves.begin(),
+        g_bot_mana_reserves.end(),
+        [&](const BotManaReserveState& state) {
+            return state.bot_id == bot_id;
+        });
+    return it == g_bot_mana_reserves.end() ? nullptr : &(*it);
+}
+
+void RemoveBotManaReserveState(std::uint64_t bot_id) {
+    g_bot_mana_reserves.erase(
+        std::remove_if(
+            g_bot_mana_reserves.begin(),
+            g_bot_mana_reserves.end(),
+            [&](const BotManaReserveState& state) {
+                return state.bot_id == bot_id;
+            }),
+        g_bot_mana_reserves.end());
+}
+
+bool TryResolveBotManaRatio(float current_mp, float max_mp, float* ratio) {
+    if (ratio != nullptr) {
+        *ratio = 0.0f;
+    }
+    if (!std::isfinite(current_mp) || !std::isfinite(max_mp) || max_mp <= 0.0f) {
+        return false;
+    }
+
+    const auto resolved_ratio = current_mp / max_mp;
+    if (!std::isfinite(resolved_ratio)) {
+        return false;
+    }
+    if (ratio != nullptr) {
+        *ratio = resolved_ratio;
+    }
+    return true;
+}
+
+bool UpdateBotManaReserveStateLocked(std::uint64_t bot_id, float current_mp, float max_mp) {
+    if (bot_id == 0) {
+        return false;
+    }
+
+    float ratio = 0.0f;
+    if (!TryResolveBotManaRatio(current_mp, max_mp, &ratio)) {
+        const auto* existing = FindBotManaReserveState(bot_id);
+        return existing != nullptr && existing->active;
+    }
+
+    auto* state = FindBotManaReserveState(bot_id);
+    if (state == nullptr) {
+        g_bot_mana_reserves.push_back(BotManaReserveState{});
+        state = &g_bot_mana_reserves.back();
+        state->bot_id = bot_id;
+    }
+
+    const bool was_active = state->active;
+    if (ratio < kBotManaReserveEnterRatio) {
+        state->active = true;
+    } else if (ratio > kBotManaReserveExitRatio) {
+        state->active = false;
+    }
+    state->last_ratio = ratio;
+
+    if (state->active != was_active) {
+        Log(
+            std::string("[bots] mana reserve ") +
+            (state->active ? "entered" : "exited") +
+            ". bot_id=" + std::to_string(bot_id) +
+            " mp=" + std::to_string(current_mp) +
+            " max=" + std::to_string(max_mp) +
+            " ratio=" + std::to_string(ratio) +
+            " enter_ratio=" + std::to_string(kBotManaReserveEnterRatio) +
+            " exit_ratio=" + std::to_string(kBotManaReserveExitRatio));
+    }
+
+    return state->active;
 }
 
 void RemovePendingSkillChoice(std::uint64_t bot_id) {

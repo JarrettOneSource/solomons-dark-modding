@@ -9,13 +9,22 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LAUNCHER = ROOT / "dist" / "launcher" / "SolomonDarkModLauncher.exe"
 LUA_EXEC = ROOT / "tools" / "lua-exec.py"
+REPLAY_SCRIPT = ROOT / "scripts" / "Replay-UiSandbox.ps1"
 BOT_NAME = "Lua Bot Fire"
 
 
 class ProofFailure(RuntimeError):
     pass
+
+
+def to_windows_path(path: Path) -> str:
+    text = str(path.resolve())
+    if text.startswith("/mnt/") and len(text) > 6 and text[6] == "/":
+        drive = text[5].upper()
+        rest = text[7:].replace("/", "\\")
+        return f"{drive}:\\{rest}"
+    return text
 
 
 def run_command(args: list[str], *, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
@@ -28,17 +37,52 @@ def stop_game() -> None:
             "powershell.exe",
             "-NoProfile",
             "-Command",
-            "Get-Process SolomonDark,SolomonDarkModLauncher -ErrorAction SilentlyContinue | Stop-Process -Force",
+            "Get-Process SolomonDark,SolomonDarkModLauncher -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue",
         ]
     )
 
 
 def launch_game() -> None:
-    result = run_command([str(LAUNCHER), "launch"], timeout=120.0)
-    sys.stdout.write(result.stdout)
-    sys.stderr.write(result.stderr)
-    if result.returncode != 0:
-        raise ProofFailure(f"launcher failed with exit code {result.returncode}")
+    args = [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        to_windows_path(REPLAY_SCRIPT),
+        "-Preset",
+        "map_create_fire_mind_hub",
+        "-BotSet",
+        "all",
+        "-KeepRunning",
+        "-CompletionTimeoutSeconds",
+        "120",
+    ]
+    stdout_text = ""
+    stderr_text = ""
+    try:
+        result = run_command(args, timeout=90.0)
+        stdout_text = result.stdout or ""
+        stderr_text = result.stderr or ""
+        returncode = result.returncode
+    except subprocess.TimeoutExpired as exc:
+        stdout_text = exc.stdout or ""
+        stderr_text = exc.stderr or ""
+        returncode = None
+    if isinstance(stdout_text, bytes):
+        stdout_text = stdout_text.decode("utf-8", errors="replace")
+    if isinstance(stderr_text, bytes):
+        stderr_text = stderr_text.decode("utf-8", errors="replace")
+    sys.stdout.write(stdout_text)
+    sys.stderr.write(stderr_text)
+
+    if "OUTCOME=complete" not in stdout_text or "PROCESS_ALIVE=True" not in stdout_text:
+        raise ProofFailure(
+            "Replay harness failed to leave a live hub session.\n"
+            f"STDOUT:\n{stdout_text}\nSTDERR:\n{stderr_text}"
+        )
+    if returncode not in (0, None):
+        raise ProofFailure(f"Replay harness exited with code {returncode}")
 
 
 def run_lua(code: str, *, timeout: float = 20.0) -> str:
@@ -163,16 +207,6 @@ def switch_region(region_index: int) -> None:
         raise ProofFailure(f"switch_region({region_index}) failed")
 
 
-def arm_memorator_entrance_candidate() -> None:
-    run_lua(
-        """
-lua_bots_debug.hub_candidate_name='memorator'
-lua_bots_debug.hub_candidate_since_ms=0
-lua_bots_debug.scene_entered_ms=0
-""".strip()
-    )
-
-
 def main() -> int:
     try:
         stop_game()
@@ -181,7 +215,6 @@ def main() -> int:
         hub = wait_for_scene("hub")
         bot_hub = wait_for_managed_bot("SharedHub", materialized=True)
 
-        arm_memorator_entrance_candidate()
         stage_samples = []
         for step in range(20):
             sample = get_managed_bot()
@@ -192,14 +225,14 @@ def main() -> int:
 
         switch_region(1)
         memorator = wait_for_scene("memorator")
-        bot_mem = wait_for_managed_bot("PrivateRegion", materialized=False)
+        bot_mem = wait_for_managed_bot("PrivateRegion", materialized=True)
         for _ in range(12):
             time.sleep(0.25)
         bot_mem = get_managed_bot()
 
         switch_region(0)
         hub_return = wait_for_scene("hub")
-        bot_hub_return = wait_for_managed_bot("SharedHub", materialized=False)
+        bot_hub_return = wait_for_managed_bot("SharedHub", materialized=True)
         for _ in range(12):
             time.sleep(0.25)
         bot_hub_return = get_managed_bot()

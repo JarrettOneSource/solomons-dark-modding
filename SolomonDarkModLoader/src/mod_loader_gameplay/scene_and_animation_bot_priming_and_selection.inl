@@ -28,27 +28,44 @@ bool PrimeGameplaySlotBotActor(
             kGameplayPlayerActorOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
         const auto progression_slot_offset =
             kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
-        const auto slot_actor =
-            memory.ReadFieldOr<uintptr_t>(gameplay_address, actor_slot_offset, 0);
-        const auto slot_progression_wrapper =
-            memory.ReadFieldOr<uintptr_t>(gameplay_address, progression_slot_offset, 0);
-        const auto slot_progression_inner =
-            ReadSmartPointerInnerObject(slot_progression_wrapper);
+        const auto unreadable = []() { return std::string("unreadable"); };
+        const auto field_ptr = [&](uintptr_t base, std::size_t offset, uintptr_t* value) -> std::string {
+            *value = 0;
+            return memory.TryReadField(base, offset, value)
+                ? HexString(*value)
+                : unreadable();
+        };
+        uintptr_t slot_actor = 0;
+        uintptr_t slot_progression_wrapper = 0;
+        uintptr_t actor_progression_handle = 0;
+        uintptr_t actor_progression_runtime = 0;
+        uintptr_t actor_equip_handle = 0;
+        uintptr_t actor_selection = 0;
+        const auto slot_actor_text = field_ptr(gameplay_address, actor_slot_offset, &slot_actor);
+        const auto slot_progression_wrapper_text =
+            field_ptr(gameplay_address, progression_slot_offset, &slot_progression_wrapper);
+        const auto slot_progression_inner = ReadSmartPointerInnerObject(slot_progression_wrapper);
+        const auto actor_progression_handle_text =
+            field_ptr(actor_address, kActorProgressionHandleOffset, &actor_progression_handle);
+        const auto actor_progression_runtime_text =
+            field_ptr(actor_address, kActorProgressionRuntimeStateOffset, &actor_progression_runtime);
+        const auto actor_equip_handle_text =
+            field_ptr(actor_address, kActorEquipHandleOffset, &actor_equip_handle);
+        const auto actor_selection_text =
+            field_ptr(actor_address, kActorAnimationSelectionStateOffset, &actor_selection);
         Log(
             "[bots] prime_slot_actor " + std::string(label) +
             " gameplay=" + HexString(gameplay_address) +
             " slot=" + std::to_string(slot_index) +
             " param_prog=" + HexString(slot_progression_address) +
-            " slot_actor=" + HexString(slot_actor) +
-            " slot_prog=" + HexString(slot_progression_wrapper) +
+            " slot_actor=" + slot_actor_text +
+            " slot_prog=" + slot_progression_wrapper_text +
             " slot_prog_inner=" + HexString(slot_progression_inner) +
-            " actor_prog_handle=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0)) +
-            " actor_prog_inner=" + HexString(ReadSmartPointerInnerObject(
-                memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0))) +
-            " actor_prog_runtime=" + HexString(
-                memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
-            " actor_equip_handle=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipHandleOffset, 0)) +
-            " actor_selection=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0)));
+            " actor_prog_handle=" + actor_progression_handle_text +
+            " actor_prog_inner=" + HexString(ReadSmartPointerInnerObject(actor_progression_handle)) +
+            " actor_prog_runtime=" + actor_progression_runtime_text +
+            " actor_equip_handle=" + actor_equip_handle_text +
+            " actor_selection=" + actor_selection_text);
     };
     log_prime_state("enter");
 
@@ -98,8 +115,13 @@ bool PrimeGameplaySlotBotActor(
         }
     }
 
-    const auto equip_handle_after_refresh =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipHandleOffset, 0);
+    uintptr_t equip_handle_after_refresh = 0;
+    if (!memory.TryReadField(actor_address, kActorEquipHandleOffset, &equip_handle_after_refresh)) {
+        if (error_message != nullptr) {
+            *error_message = "Actor equip handle unreadable after runtime handle refresh.";
+        }
+        return false;
+    }
     if (equip_handle_after_refresh == 0) {
         std::string stage_error;
         if (!WireGameplaySlotBotRuntimeHandles(actor_address, &stage_error)) {
@@ -110,26 +132,53 @@ bool PrimeGameplaySlotBotActor(
         }
     }
 
+    if (!EnsureActorProgressionRuntimeFieldFromHandle(
+            actor_address,
+            "gameplay_slot_prime_progression_runtime")) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay-slot bot progression runtime cache could not be bound to the actor-owned pool.";
+        }
+        return false;
+    }
+
     {
+        uintptr_t native_visual_actor_address = 0;
+        if (!TryResolvePlayerActorForSlot(gameplay_address, 0, &native_visual_actor_address) ||
+            native_visual_actor_address == 0) {
+            if (error_message != nullptr) {
+                *error_message = "Unable to resolve slot-0 native visual source actor.";
+            }
+            return false;
+        }
+
         std::string stage_error;
-        if (!SeedGameplaySlotBotRenderStateFromSourceActor(
+        if (!SeedWizardBotNativeCollisionStateFromSourceActor(
                 actor_address,
-                world_address,
-                character_profile,
-                x,
-                y,
-                heading,
+                native_visual_actor_address,
                 &stage_error)) {
             if (error_message != nullptr) {
                 *error_message = stage_error;
             }
             return false;
         }
-    }
-
-    {
-        std::string stage_error;
-        if (!AttachGameplaySlotBotStaffItem(actor_address, &stage_error)) {
+        if (!SeedWizardBotNativeSpellDispatchStateFromSourceActor(
+                actor_address,
+                native_visual_actor_address,
+                &stage_error)) {
+            if (error_message != nullptr) {
+                *error_message = stage_error;
+            }
+            return false;
+        }
+        if (!SeedGameplaySlotBotRenderStateFromSourceActor(
+                actor_address,
+                world_address,
+                native_visual_actor_address,
+                character_profile,
+                x,
+                y,
+                heading,
+                &stage_error)) {
             if (error_message != nullptr) {
                 *error_message = stage_error;
             }
@@ -155,6 +204,13 @@ bool PrimeGameplaySlotBotActor(
     (void)memory.TryWriteField(actor_address, kActorPositionXOffset, x);
     (void)memory.TryWriteField(actor_address, kActorPositionYOffset, y);
     ApplyWizardActorFacingState(actor_address, heading);
+
+    if (!EnsureBotOwnedProgressionMode(slot_progression_address, "gameplay_slot_prime")) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay-slot bot progression could not be marked as bot-owned non-local mode.";
+        }
+        return false;
+    }
 
     log_prime_state("exit");
     return true;
@@ -182,31 +238,12 @@ int ResolveStandaloneWizardRenderSelectionIndex(int wizard_id) {
 }
 
 int ResolveStandaloneWizardSelectionState(int wizard_id) {
-    // Convert the coarse selector byte back through the stock clone mapping so
-    // source-profile staging and concrete actor selection stay on the same
-    // element branch.
-    switch (ResolveStandaloneWizardRenderSelectionIndex(wizard_id)) {
-    case 0:
-        return 0x08;
-    case 1:
-        return 0x10;
-    case 2:
-        return 0x18;
-    case 3:
-        return 0x20;
-    case 4:
-        return 0x28;
-    default:
-        return kStandaloneWizardHiddenSelectionState;
-    }
+    const auto primary_entry = ResolveNativePrimaryEntryForElement(wizard_id);
+    return primary_entry >= 0 ? primary_entry : kStandaloneWizardHiddenSelectionState;
 }
 
 int ResolveProfileSelectionState(const multiplayer::MultiplayerCharacterProfile& character_profile) {
-    return ResolveStandaloneWizardSelectionState(ResolveProfileElementId(character_profile));
-}
-
-std::uint32_t EncodeSkillsWizardSelectionArg(int selection_value) {
-    return static_cast<std::uint32_t>(selection_value);
+    return ResolveStandaloneWizardSelectionState(character_profile.element_id);
 }
 
 struct ResolvedPrimaryCastDescriptor {
@@ -219,72 +256,27 @@ struct ResolvedPrimaryCastDescriptor {
     int selection_state = kUnknownAnimationStateId;
 };
 
-bool TryResolvePrimaryBuildSpellIdFromSelectionPair(
-    int primary_entry_index,
-    int combo_entry_index,
-    int* skill_id) {
-    if (skill_id == nullptr) {
-        return false;
-    }
-
-    *skill_id = -1;
-    auto Matches = [&](int a, int b) {
-        return primary_entry_index == a && combo_entry_index == b;
-    };
-
-    if (Matches(0x08, 0x10) || Matches(0x10, 0x08)) {
-        *skill_id = 1000;
-    } else if (Matches(0x08, 0x18) || Matches(0x18, 0x08)) {
-        *skill_id = 0x3EA;
-    } else if (Matches(0x08, 0x20) || Matches(0x20, 0x08)) {
-        *skill_id = 0x3E9;
-    } else if (Matches(0x08, 0x28) || Matches(0x28, 0x08)) {
-        *skill_id = 0x3EE;
-    } else if (Matches(0x10, 0x18) || Matches(0x18, 0x10)) {
-        *skill_id = 0x3EB;
-    } else if (Matches(0x10, 0x20) || Matches(0x20, 0x10)) {
-        *skill_id = 0x3ED;
-    } else if (Matches(0x10, 0x28) || Matches(0x28, 0x10)) {
-        *skill_id = 0x3EF;
-    } else if (Matches(0x18, 0x20) || Matches(0x20, 0x18)) {
-        *skill_id = 0x3EC;
-    } else if (Matches(0x18, 0x28) || Matches(0x28, 0x18)) {
-        *skill_id = 0x3F1;
-    } else if (Matches(0x20, 0x28) || Matches(0x28, 0x20)) {
-        *skill_id = 0x3F0;
-    } else if (Matches(0x08, 0x08)) {
-        *skill_id = 0x3F2;
-    } else if (Matches(0x10, 0x10)) {
-        *skill_id = 0x3F3;
-    } else if (Matches(0x18, 0x18)) {
-        *skill_id = 0x3F5;
-    } else if (Matches(0x20, 0x20)) {
-        *skill_id = 0x3F4;
-    } else if (Matches(0x28, 0x28)) {
-        *skill_id = 0x3F6;
-    }
-
-    return *skill_id > 0;
-}
-
 bool TryResolvePrimaryCastDescriptorFromSelectionPair(
     int primary_entry_index,
     int combo_entry_index,
+    int build_skill_id,
     ResolvedPrimaryCastDescriptor* descriptor) {
     if (descriptor == nullptr) {
+        return false;
+    }
+
+    NativePrimarySpellSelection selection{};
+    if (!TryResolveNativePrimarySelectionFromPair(
+            primary_entry_index,
+            combo_entry_index,
+            &selection)) {
         return false;
     }
 
     *descriptor = ResolvedPrimaryCastDescriptor{};
     descriptor->primary_entry_index = primary_entry_index;
     descriptor->combo_entry_index = combo_entry_index;
-
-    if (!TryResolvePrimaryBuildSpellIdFromSelectionPair(
-            primary_entry_index,
-            combo_entry_index,
-            &descriptor->build_skill_id)) {
-        return false;
-    }
+    descriptor->build_skill_id = build_skill_id;
 
     auto Matches = [&](int a, int b) {
         return primary_entry_index == a && combo_entry_index == b;
@@ -307,38 +299,61 @@ bool TryResolvePrimaryCastDescriptorFromSelectionPair(
     }
 
     descriptor->lane = ParticipantEntityBinding::OngoingCastState::Lane::Dispatcher;
-    descriptor->dispatcher_skill_id = descriptor->build_skill_id;
-    switch (descriptor->dispatcher_skill_id) {
-    case 0x18:
-    case 0x20:
-    case 0x28:
-        descriptor->selection_state = descriptor->dispatcher_skill_id;
-        return true;
-    case 1000:
-    case 0x3E9:
-    case 0x3EA:
-    case 0x3EB:
-    case 0x3EC:
-    case 0x3ED:
-    case 0x3EE:
-    case 0x3EF:
-    case 0x3F0:
-    case 0x3F1:
-        descriptor->selection_state = 0x34;
-        return true;
-    default:
+    if (build_skill_id <= 0) {
         return false;
     }
+    descriptor->dispatcher_skill_id = build_skill_id;
+    descriptor->selection_state = kPrimaryComboDispatcherSelectionState;
+    return true;
+}
+
+bool TryResolvePrimaryCastDescriptorFromSkillId(
+    uintptr_t progression_runtime_address,
+    int skill_id,
+    ResolvedPrimaryCastDescriptor* descriptor) {
+    NativePrimarySpellSelection selection{};
+    std::string selection_error;
+    if (!TryResolveNativePrimarySelectionFromSkillId(
+            progression_runtime_address,
+            skill_id,
+            &selection,
+            &selection_error)) {
+        // Some stock primary hooks publish the dispatcher/selection id
+        // directly (for example Earth 0x28) rather than the Skills_Wizard
+        // build id. Resolve those through the same primary descriptor table.
+        switch (skill_id) {
+        case 0x08:
+        case 0x10:
+        case 0x18:
+        case 0x20:
+        case 0x28:
+            return TryResolvePrimaryCastDescriptorFromSelectionPair(
+                skill_id,
+                skill_id,
+                -1,
+                descriptor);
+        default:
+            return false;
+        }
+    }
+
+    return TryResolvePrimaryCastDescriptorFromSelectionPair(
+        selection.primary_entry_index,
+        selection.combo_entry_index,
+        selection.build_skill_id,
+        descriptor);
 }
 
 bool TryResolveProfilePrimaryCastDescriptor(
     const multiplayer::MultiplayerCharacterProfile& character_profile,
+    uintptr_t progression_runtime_address,
     ResolvedPrimaryCastDescriptor* descriptor) {
     if (descriptor == nullptr) {
         return false;
     }
 
-    const auto default_entry_index = ResolveProfileSelectionState(character_profile);
+    const auto default_entry_index =
+        ResolveNativePrimaryEntryForElement(character_profile.element_id);
     const auto requested_primary =
         character_profile.loadout.primary_entry_index >= 0
             ? character_profile.loadout.primary_entry_index
@@ -348,9 +363,23 @@ bool TryResolveProfilePrimaryCastDescriptor(
             ? character_profile.loadout.primary_combo_entry_index
             : requested_primary;
 
+    int build_skill_id = -1;
+    NativePrimarySpellSelection live_selection{};
+    std::string selection_error;
+    if (progression_runtime_address != 0 &&
+        TryResolveNativePrimarySelectionFromLiveProgression(
+            progression_runtime_address,
+            requested_primary,
+            requested_combo,
+            &live_selection,
+            &selection_error)) {
+        build_skill_id = live_selection.build_skill_id;
+    }
+
     return TryResolvePrimaryCastDescriptorFromSelectionPair(
         requested_primary,
         requested_combo,
+        build_skill_id,
         descriptor);
 }
 
@@ -374,7 +403,7 @@ bool ApplyProfilePrimaryLoadoutToSkillsWizard(
     }
 
     ResolvedPrimaryCastDescriptor descriptor{};
-    if (!TryResolveProfilePrimaryCastDescriptor(character_profile, &descriptor)) {
+    if (!TryResolveProfilePrimaryCastDescriptor(character_profile, progression_address, &descriptor)) {
         if (error_message != nullptr) {
             *error_message =
                 "Profile primary loadout does not resolve to a stock spell pair. primary=" +
@@ -414,12 +443,14 @@ bool ApplyProfilePrimaryLoadoutToSkillsWizard(
         return false;
     }
 
+    std::uint32_t native_spell_id = 0;
     DWORD exception_code = 0;
     if (!CallSkillsWizardBuildPrimarySpellSafe(
             build_primary_spell_address,
             progression_address,
             EncodeSkillsWizardSelectionArg(descriptor.primary_entry_index),
             EncodeSkillsWizardSelectionArg(descriptor.combo_entry_index),
+            &native_spell_id,
             &exception_code)) {
         if (error_message != nullptr) {
             *error_message =
@@ -427,6 +458,9 @@ bool ApplyProfilePrimaryLoadoutToSkillsWizard(
                 HexString(exception_code) + ".";
         }
         return false;
+    }
+    if (resolved_skill_id != nullptr && native_spell_id > 0) {
+        *resolved_skill_id = static_cast<int>(native_spell_id);
     }
 
     return true;

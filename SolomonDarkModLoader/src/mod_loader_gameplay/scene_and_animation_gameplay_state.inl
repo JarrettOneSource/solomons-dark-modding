@@ -16,9 +16,14 @@ bool TryResolveArena(uintptr_t* arena_address) {
     return TryReadResolvedGamePointerAbsolute(kArenaGlobal, arena_address) && *arena_address != 0;
 }
 
-int ReadResolvedGlobalIntOr(uintptr_t absolute_address, int fallback = 0) {
+bool TryReadResolvedGlobalInt(uintptr_t absolute_address, int* value) {
+    if (value == nullptr) {
+        return false;
+    }
+
+    *value = 0;
     const auto resolved = ProcessMemory::Instance().ResolveGameAddressOrZero(absolute_address);
-    return ProcessMemory::Instance().ReadValueOr<int>(resolved, fallback);
+    return resolved != 0 && ProcessMemory::Instance().TryReadValue(resolved, value);
 }
 
 bool TryWriteResolvedGlobalInt(uintptr_t absolute_address, int value) {
@@ -40,7 +45,10 @@ bool TryResolveGameplayIndexState(uintptr_t* table_address, int* entry_count) {
         return false;
     }
 
-    const auto resolved_entry_count = ReadResolvedGlobalIntOr(kGameplayIndexStateCountGlobal, 0);
+    int resolved_entry_count = 0;
+    if (!TryReadResolvedGlobalInt(kGameplayIndexStateCountGlobal, &resolved_entry_count)) {
+        return false;
+    }
     if (resolved_entry_count <= 0) {
         return false;
     }
@@ -191,4 +199,3 @@ std::string DescribeRegionNameByType(int region_type_id) {
         return std::string();
     }
 }
-

@@ -9,11 +9,18 @@ bool TryResolveActorProgressionRuntime(uintptr_t actor_address, uintptr_t* progr
     }
 
     auto& memory = ProcessMemory::Instance();
-    auto resolved_progression_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0);
+    uintptr_t resolved_progression_address = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorProgressionRuntimeStateOffset,
+            &resolved_progression_address)) {
+        return false;
+    }
     if (resolved_progression_address == 0) {
-        const auto progression_handle =
-            memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
+        uintptr_t progression_handle = 0;
+        if (!memory.TryReadField(actor_address, kActorProgressionHandleOffset, &progression_handle)) {
+            return false;
+        }
         if (progression_handle != 0) {
             resolved_progression_address = ReadSmartPointerInnerObject(progression_handle);
         }
@@ -47,14 +54,16 @@ bool TryResolveLocalPlayerWorldContext(
 
     uintptr_t resolved_actor_address = 0;
     if (!TryResolvePlayerActorForSlot(gameplay_address, 0, &resolved_actor_address) || resolved_actor_address == 0) {
-        (void)TryReadResolvedGamePointerAbsolute(kLocalPlayerActorGlobal, &resolved_actor_address);
-        if (resolved_actor_address == 0) {
-            return false;
-        }
+        return false;
     }
 
-    const auto resolved_world_address =
-        ProcessMemory::Instance().ReadFieldOr<uintptr_t>(resolved_actor_address, kActorOwnerOffset, 0);
+    uintptr_t resolved_world_address = 0;
+    if (!ProcessMemory::Instance().TryReadField(
+            resolved_actor_address,
+            kActorOwnerOffset,
+            &resolved_world_address)) {
+        return false;
+    }
     if (resolved_world_address == 0) {
         return false;
     }
@@ -68,10 +77,7 @@ bool TryResolveLocalPlayerWorldContext(
     if (progression_address != nullptr) {
         if (!TryResolveActorProgressionRuntime(resolved_actor_address, progression_address) ||
             *progression_address == 0) {
-            if (!TryResolvePlayerProgressionForSlot(gameplay_address, 0, progression_address) ||
-                *progression_address == 0) {
-                return false;
-            }
+            return false;
         }
     }
 

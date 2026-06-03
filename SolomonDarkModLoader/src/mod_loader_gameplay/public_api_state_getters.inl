@@ -58,6 +58,14 @@ bool TryGetParticipantGameplayState(
     state->cast_skill_id = it->cast_skill_id;
     state->cast_ticks_waiting = it->cast_ticks_waiting;
     state->cast_target_actor_address = it->cast_target_actor_address;
+    state->native_action_cooldown_ticks = it->native_action_cooldown_ticks;
+    state->active_spell_object_readable = it->active_spell_object_readable;
+    state->active_spell_object_address = it->active_spell_object_address;
+    state->active_spell_object_type = it->active_spell_object_type;
+    state->active_spell_object_x = it->active_spell_object_x;
+    state->active_spell_object_y = it->active_spell_object_y;
+    state->active_spell_object_radius = it->active_spell_object_radius;
+    state->active_spell_object_charge = it->active_spell_object_charge;
     state->x = it->x;
     state->y = it->y;
     state->heading = it->heading;
@@ -70,6 +78,8 @@ bool TryGetParticipantGameplayState(
     state->render_drive_stride = it->render_drive_stride;
     state->render_advance_rate = it->render_advance_rate;
     state->render_advance_phase = it->render_advance_phase;
+    state->render_drive_effect_timer = it->render_drive_effect_timer;
+    state->render_drive_effect_progress = it->render_drive_effect_progress;
     state->render_drive_overlay_alpha = it->render_drive_overlay_alpha;
     state->render_drive_move_blend = it->render_drive_move_blend;
     state->gameplay_attach_applied = it->gameplay_attach_applied;
@@ -77,6 +87,18 @@ bool TryGetParticipantGameplayState(
     state->secondary_visual_lane = it->secondary_visual_lane;
     state->attachment_visual_lane = it->attachment_visual_lane;
     return true;
+}
+
+bool TryRefreshParticipantGameplayState(
+    std::uint64_t participant_id,
+    SDModParticipantGameplayState* state) {
+    auto* binding = FindParticipantEntity(participant_id);
+    if (binding == nullptr || binding->actor_address == 0) {
+        return TryGetParticipantGameplayState(participant_id, state);
+    }
+
+    PublishParticipantGameplaySnapshot(*binding);
+    return TryGetParticipantGameplayState(participant_id, state);
 }
 
 bool TryGetGameplayHudParticipantDisplayNameForActor(
@@ -133,85 +155,96 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     uintptr_t world_address = 0;
     const bool resolved_gameplay_address =
         TryResolveCurrentGameplayScene(&gameplay_address) && gameplay_address != 0;
-    if (resolved_gameplay_address) {
-        (void)TryResolveLocalPlayerWorldContext(
+    if (!resolved_gameplay_address ||
+        !TryResolveLocalPlayerWorldContext(
             gameplay_address,
             &actor_address,
             &progression_address,
-            &world_address);
+            &world_address) ||
+        actor_address == 0 ||
+        progression_address == 0 ||
+        world_address == 0) {
+        return false;
     }
 
-    if (actor_address == 0 || progression_address == 0 || world_address == 0) {
-        (void)TryReadResolvedGamePointerAbsolute(kLocalPlayerActorGlobal, &actor_address);
-        if (actor_address == 0) {
-            return false;
-        }
-
-        auto& memory = ProcessMemory::Instance();
-        world_address = memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
-        if (world_address == 0 || !TryResolveActorProgressionRuntime(actor_address, &progression_address)) {
-            return false;
-        }
+    int gold = 0;
+    if (!TryReadResolvedGlobalInt(kGoldGlobal, &gold)) {
+        return false;
     }
 
     auto& memory = ProcessMemory::Instance();
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    float mp = 0.0f;
+    float max_mp = 0.0f;
+    int xp = 0;
+    int level = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    float heading = 0.0f;
+    if (!TryReadFiniteFloatField(progression_address, kProgressionHpOffset, &hp) ||
+        !TryReadFiniteFloatField(progression_address, kProgressionMaxHpOffset, &max_hp) ||
+        !TryReadFiniteFloatField(progression_address, kProgressionMpOffset, &mp) ||
+        !TryReadFiniteFloatField(progression_address, kProgressionMaxMpOffset, &max_mp) ||
+        !TryReadPlayerRoundedXp(progression_address, &xp) ||
+        !memory.TryReadField(progression_address, kProgressionLevelOffset, &level) ||
+        !TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &x) ||
+        !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &y) ||
+        !TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &heading)) {
+        return false;
+    }
+
     state->valid = true;
-    state->hp = memory.ReadFieldOr<float>(progression_address, kProgressionHpOffset, 0.0f);
-    state->max_hp = memory.ReadFieldOr<float>(progression_address, kProgressionMaxHpOffset, 0.0f);
-    state->mp = memory.ReadFieldOr<float>(progression_address, kProgressionMpOffset, 0.0f);
-    state->max_mp = memory.ReadFieldOr<float>(progression_address, kProgressionMaxMpOffset, 0.0f);
-    state->xp = ReadRoundedXpOrUnknown(progression_address);
-    state->level = memory.ReadFieldOr<int>(progression_address, kProgressionLevelOffset, 0);
-    state->x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-    state->y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
-    state->gold = ReadResolvedGlobalIntOr(kGoldGlobal);
+    state->hp = hp;
+    state->max_hp = max_hp;
+    state->mp = mp;
+    state->max_mp = max_mp;
+    state->xp = xp;
+    state->level = level;
+    state->x = x;
+    state->y = y;
+    state->heading = heading;
+    state->gold = gold;
     state->actor_address = actor_address;
     state->render_subject_address = actor_address;
     state->world_address = world_address;
     state->progression_address = progression_address;
-    state->animation_state_ptr = memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
-    state->render_frame_table = memory.ReadFieldOr<uintptr_t>(actor_address, kActorRenderFrameTableOffset, 0);
-    state->hub_visual_attachment_ptr =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorHubVisualAttachmentPtrOffset, 0);
-    state->hub_visual_source_profile_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorHubVisualSourceProfileOffset, 0);
+    (void)memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &state->animation_state_ptr);
+    (void)memory.TryReadField(actor_address, kActorRenderFrameTableOffset, &state->render_frame_table);
+    (void)memory.TryReadField(actor_address, kActorHubVisualAttachmentPtrOffset, &state->hub_visual_attachment_ptr);
+    (void)memory.TryReadField(
+        actor_address,
+        kActorHubVisualSourceProfileOffset,
+        &state->hub_visual_source_profile_address);
     state->hub_visual_descriptor_signature = HashMemoryBlockFNV1a32(
         actor_address + kActorHubVisualDescriptorBlockOffset,
         kActorHubVisualDescriptorBlockSize);
-    state->progression_handle_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
-    state->equip_handle_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipHandleOffset, 0);
-    state->equip_runtime_state_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipRuntimeStateOffset, 0);
-    state->actor_slot = static_cast<int>(memory.ReadFieldOr<std::int8_t>(actor_address, kActorSlotOffset, -1));
+    (void)memory.TryReadField(actor_address, kActorProgressionHandleOffset, &state->progression_handle_address);
+    (void)memory.TryReadField(actor_address, kActorEquipHandleOffset, &state->equip_handle_address);
+    (void)memory.TryReadField(actor_address, kActorEquipRuntimeStateOffset, &state->equip_runtime_state_address);
+    std::int8_t actor_slot = -1;
+    if (memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot)) {
+        state->actor_slot = static_cast<int>(actor_slot);
+    }
     state->resolved_animation_state_id = ResolveActorAnimationStateId(actor_address);
-    state->hub_visual_source_kind =
-        memory.ReadFieldOr<std::int32_t>(actor_address, kActorHubVisualSourceKindOffset, 0);
-    state->render_drive_flags =
-        memory.ReadFieldOr<std::uint32_t>(actor_address, kActorRenderDriveFlagsOffset, 0);
-    state->anim_drive_state =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
-    state->render_variant_primary =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorRenderVariantPrimaryOffset, 0);
-    state->render_variant_secondary =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorRenderVariantSecondaryOffset, 0);
-    state->render_weapon_type =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorRenderWeaponTypeOffset, 0);
-    state->render_selection_byte =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorRenderSelectionByteOffset, 0);
-    state->render_variant_tertiary =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorRenderVariantTertiaryOffset, 0);
-    state->walk_cycle_primary = memory.ReadFieldOr<float>(actor_address, kActorWalkCyclePrimaryOffset, 0.0f);
-    state->walk_cycle_secondary = memory.ReadFieldOr<float>(actor_address, kActorWalkCycleSecondaryOffset, 0.0f);
-    state->render_drive_stride =
-        memory.ReadFieldOr<float>(actor_address, kActorRenderDriveStrideScaleOffset, 0.0f);
-    state->render_advance_rate = memory.ReadFieldOr<float>(actor_address, kActorRenderAdvanceRateOffset, 0.0f);
-    state->render_advance_phase = memory.ReadFieldOr<float>(actor_address, kActorRenderAdvancePhaseOffset, 0.0f);
-    state->render_drive_overlay_alpha =
-        memory.ReadFieldOr<float>(actor_address, kActorRenderDriveOverlayAlphaOffset, 0.0f);
-    state->render_drive_move_blend =
-        memory.ReadFieldOr<float>(actor_address, kActorRenderDriveMoveBlendOffset, 0.0f);
+    (void)memory.TryReadField(actor_address, kActorHubVisualSourceKindOffset, &state->hub_visual_source_kind);
+    (void)memory.TryReadField(actor_address, kActorRenderDriveFlagsOffset, &state->render_drive_flags);
+    (void)memory.TryReadField(actor_address, kActorAnimationDriveStateByteOffset, &state->anim_drive_state);
+    (void)memory.TryReadField(actor_address, kActorAnimationDriveStateByteOffset, &state->anim_drive_state_word);
+    (void)memory.TryReadField(actor_address, kActorRenderVariantPrimaryOffset, &state->render_variant_primary);
+    (void)memory.TryReadField(actor_address, kActorRenderVariantSecondaryOffset, &state->render_variant_secondary);
+    (void)memory.TryReadField(actor_address, kActorRenderWeaponTypeOffset, &state->render_weapon_type);
+    (void)memory.TryReadField(actor_address, kActorRenderSelectionByteOffset, &state->render_selection_byte);
+    (void)memory.TryReadField(actor_address, kActorRenderVariantTertiaryOffset, &state->render_variant_tertiary);
+    (void)TryReadFiniteFloatField(actor_address, kActorWalkCyclePrimaryOffset, &state->walk_cycle_primary);
+    (void)TryReadFiniteFloatField(actor_address, kActorWalkCycleSecondaryOffset, &state->walk_cycle_secondary);
+    (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveStrideScaleOffset, &state->render_drive_stride);
+    (void)TryReadFiniteFloatField(actor_address, kActorRenderAdvanceRateOffset, &state->render_advance_rate);
+    (void)TryReadFiniteFloatField(actor_address, kActorRenderAdvancePhaseOffset, &state->render_advance_phase);
+    (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveEffectTimerOffset, &state->render_drive_effect_timer);
+    (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveEffectProgressOffset, &state->render_drive_effect_progress);
+    (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveOverlayAlphaOffset, &state->render_drive_overlay_alpha);
+    (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveMoveBlendOffset, &state->render_drive_move_blend);
     if (resolved_gameplay_address) {
         state->primary_visual_lane =
             ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkPrimaryOffset);
@@ -222,33 +255,33 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     }
 
     const auto render_subject_address = state->render_subject_address;
-    state->render_subject_animation_state_ptr =
-        memory.ReadFieldOr<uintptr_t>(render_subject_address, kActorAnimationSelectionStateOffset, 0);
-    state->render_subject_frame_table =
-        memory.ReadFieldOr<uintptr_t>(render_subject_address, kActorRenderFrameTableOffset, 0);
-    state->render_subject_hub_visual_attachment_ptr =
-        memory.ReadFieldOr<uintptr_t>(render_subject_address, kActorHubVisualAttachmentPtrOffset, 0);
-    state->render_subject_hub_visual_source_profile_address =
-        memory.ReadFieldOr<uintptr_t>(render_subject_address, kActorHubVisualSourceProfileOffset, 0);
+    (void)memory.TryReadField(
+        render_subject_address,
+        kActorAnimationSelectionStateOffset,
+        &state->render_subject_animation_state_ptr);
+    (void)memory.TryReadField(render_subject_address, kActorRenderFrameTableOffset, &state->render_subject_frame_table);
+    (void)memory.TryReadField(
+        render_subject_address,
+        kActorHubVisualAttachmentPtrOffset,
+        &state->render_subject_hub_visual_attachment_ptr);
+    (void)memory.TryReadField(
+        render_subject_address,
+        kActorHubVisualSourceProfileOffset,
+        &state->render_subject_hub_visual_source_profile_address);
     state->render_subject_hub_visual_descriptor_signature = HashMemoryBlockFNV1a32(
         render_subject_address + kActorHubVisualDescriptorBlockOffset,
         kActorHubVisualDescriptorBlockSize);
-    state->render_subject_hub_visual_source_kind =
-        memory.ReadFieldOr<std::int32_t>(render_subject_address, kActorHubVisualSourceKindOffset, 0);
-    state->render_subject_drive_flags =
-        memory.ReadFieldOr<std::uint32_t>(render_subject_address, kActorRenderDriveFlagsOffset, 0);
-    state->render_subject_anim_drive_state =
-        memory.ReadFieldOr<std::uint8_t>(render_subject_address, kActorAnimationDriveStateByteOffset, 0);
-    state->render_subject_variant_primary =
-        memory.ReadFieldOr<std::uint8_t>(render_subject_address, kActorRenderVariantPrimaryOffset, 0);
-    state->render_subject_variant_secondary =
-        memory.ReadFieldOr<std::uint8_t>(render_subject_address, kActorRenderVariantSecondaryOffset, 0);
-    state->render_subject_weapon_type =
-        memory.ReadFieldOr<std::uint8_t>(render_subject_address, kActorRenderWeaponTypeOffset, 0);
-    state->render_subject_selection_byte =
-        memory.ReadFieldOr<std::uint8_t>(render_subject_address, kActorRenderSelectionByteOffset, 0);
-    state->render_subject_variant_tertiary =
-        memory.ReadFieldOr<std::uint8_t>(render_subject_address, kActorRenderVariantTertiaryOffset, 0);
+    (void)memory.TryReadField(
+        render_subject_address,
+        kActorHubVisualSourceKindOffset,
+        &state->render_subject_hub_visual_source_kind);
+    (void)memory.TryReadField(render_subject_address, kActorRenderDriveFlagsOffset, &state->render_subject_drive_flags);
+    (void)memory.TryReadField(render_subject_address, kActorAnimationDriveStateByteOffset, &state->render_subject_anim_drive_state);
+    (void)memory.TryReadField(render_subject_address, kActorRenderVariantPrimaryOffset, &state->render_subject_variant_primary);
+    (void)memory.TryReadField(render_subject_address, kActorRenderVariantSecondaryOffset, &state->render_subject_variant_secondary);
+    (void)memory.TryReadField(render_subject_address, kActorRenderWeaponTypeOffset, &state->render_subject_weapon_type);
+    (void)memory.TryReadField(render_subject_address, kActorRenderSelectionByteOffset, &state->render_subject_selection_byte);
+    (void)memory.TryReadField(render_subject_address, kActorRenderVariantTertiaryOffset, &state->render_subject_variant_tertiary);
     state->gameplay_attach_applied = true;
     return true;
 }
@@ -264,12 +297,22 @@ bool TryGetWorldState(SDModWorldState* state) {
         return false;
     }
 
+    int enemy_count = 0;
+    if (!TryReadResolvedGlobalInt(kEnemyCountGlobal, &enemy_count)) {
+        return false;
+    }
+
     state->valid = true;
     state->wave = GetRunLifecycleCurrentWave();
     if (state->wave <= 0) {
-        state->wave = ProcessMemory::Instance().ReadFieldOr<int>(arena_address, kArenaCombatWaveIndexOffset, 0);
+        if (!ProcessMemory::Instance().TryReadField(
+                arena_address,
+                kArenaCombatWaveIndexOffset,
+                &state->wave)) {
+            return false;
+        }
     }
-    state->enemy_count = ReadResolvedGlobalIntOr(kEnemyCountGlobal);
+    state->enemy_count = enemy_count;
     state->time_elapsed_ms = GetRunLifecycleElapsedMilliseconds();
     return true;
 }
@@ -306,13 +349,10 @@ bool TryGetGameplayCombatState(SDModGameplayCombatState* state) {
 }
 
 bool IsArenaCombatActorType(std::uint32_t object_type_id) {
-    // 1001 is the stock wave-spawned enemy actor type observed in arena runs.
-    // Solomon/NPC helper actors can look hostile while waves start, but they
-    // are not the wave combat targets the autonomous bot should attack.
-    return object_type_id == 1001;
+    return IsArenaCombatActorTypeInternal(object_type_id);
 }
 
-bool IsArenaCombatActiveForSceneActorFallback() {
+bool IsArenaCombatActiveForUntrackedSceneActor() {
     SDModGameplayCombatState combat_state;
     if (!TryGetGameplayCombatState(&combat_state) || !combat_state.valid) {
         return false;
@@ -335,6 +375,15 @@ bool TryGetSceneState(SDModSceneState* state) {
 
     SceneContextSnapshot scene_context;
     (void)TryBuildSceneContextSnapshot(gameplay_scene_address, &scene_context);
+    int pending_level_kind = 0;
+    int transition_target_a = 0;
+    int transition_target_b = 0;
+    if (!TryReadResolvedGlobalInt(kPendingLevelKindGlobal, &pending_level_kind) ||
+        !TryReadResolvedGlobalInt(kTransitionTargetAGlobal, &transition_target_a) ||
+        !TryReadResolvedGlobalInt(kTransitionTargetBGlobal, &transition_target_b)) {
+        return false;
+    }
+
     state->valid = true;
     state->kind = DescribeSceneKind(scene_context);
     state->name = DescribeSceneName(scene_context);
@@ -344,9 +393,9 @@ bool TryGetSceneState(SDModSceneState* state) {
     state->region_state_address = scene_context.region_state_address;
     state->current_region_index = scene_context.current_region_index;
     state->region_type_id = scene_context.region_type_id;
-    state->pending_level_kind = ReadResolvedGlobalIntOr(kPendingLevelKindGlobal);
-    state->transition_target_a = ReadResolvedGlobalIntOr(kTransitionTargetAGlobal);
-    state->transition_target_b = ReadResolvedGlobalIntOr(kTransitionTargetBGlobal);
+    state->pending_level_kind = pending_level_kind;
+    state->transition_target_a = transition_target_a;
+    state->transition_target_b = transition_target_b;
     return true;
 }
 
@@ -371,35 +420,55 @@ bool TryBuildSceneActorState(
     state.tracked_enemy = tracked_enemy;
     state.enemy_type = enemy_type;
     const bool hook_tracked_enemy = tracked_enemy;
-    state.vtable_address = memory.ReadFieldOr<uintptr_t>(actor_address, 0x00, 0);
+    if (!memory.TryReadField(actor_address, kObjectVtableOffset, &state.vtable_address)) {
+        return false;
+    }
     if (state.vtable_address == 0 || !memory.IsReadableRange(state.vtable_address, sizeof(uintptr_t))) {
         return false;
     }
 
-    state.first_method_address = memory.ReadValueOr<uintptr_t>(state.vtable_address, 0);
+    if (!memory.TryReadValue(state.vtable_address, &state.first_method_address)) {
+        return false;
+    }
     if (state.first_method_address == 0 || !memory.IsExecutableRange(state.first_method_address, 1)) {
         return false;
     }
 
-    state.owner_address = memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+    if (!memory.TryReadField(actor_address, kActorOwnerOffset, &state.owner_address)) {
+        return false;
+    }
     if (require_scene_owner && state.owner_address != scene_context.world_address) {
         return false;
     }
 
     state.valid = true;
-    state.object_type_id = memory.ReadFieldOr<std::uint32_t>(actor_address, kGameObjectTypeIdOffset, 0);
+    if (!memory.TryReadField(actor_address, kGameObjectTypeIdOffset, &state.object_type_id)) {
+        return false;
+    }
+    if (tracked_enemy && !IsArenaCombatActorType(state.object_type_id)) {
+        return false;
+    }
     const bool scene_combat_enemy_candidate =
         !tracked_enemy &&
         IsArenaCombatActorType(state.object_type_id) &&
-        IsArenaCombatActiveForSceneActorFallback();
-    state.object_header_word = memory.ReadFieldOr<std::uint32_t>(actor_address, kObjectHeaderWordOffset, 0);
-    state.actor_slot = static_cast<int>(memory.ReadFieldOr<std::int8_t>(actor_address, kActorSlotOffset, -1));
-    state.world_slot = static_cast<int>(memory.ReadFieldOr<std::int16_t>(actor_address, kActorWorldSlotOffset, -1));
-    state.x = memory.ReadFieldOr<float>(actor_address, kActorPositionXOffset, 0.0f);
-    state.y = memory.ReadFieldOr<float>(actor_address, kActorPositionYOffset, 0.0f);
-    state.anim_drive_state =
-        memory.ReadFieldOr<std::uint8_t>(actor_address, kActorAnimationDriveStateByteOffset, 0);
-    state.progression_handle_address = memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionHandleOffset, 0);
+        IsArenaCombatActiveForUntrackedSceneActor();
+    std::int8_t actor_slot = -1;
+    std::int16_t world_slot = -1;
+    if (!memory.TryReadField(actor_address, kObjectHeaderWordOffset, &state.object_header_word) ||
+        !memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot) ||
+        !memory.TryReadField(actor_address, kActorWorldSlotOffset, &world_slot) ||
+        !TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &state.x) ||
+        !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &state.y) ||
+        !TryReadFiniteFloatField(actor_address, kActorCollisionRadiusOffset, &state.radius)) {
+        return false;
+    }
+    state.actor_slot = static_cast<int>(actor_slot);
+    state.world_slot = static_cast<int>(world_slot);
+    if (state.radius < 0.0f || state.radius > 256.0f) {
+        return false;
+    }
+    (void)memory.TryReadField(actor_address, kActorAnimationDriveStateByteOffset, &state.anim_drive_state);
+    (void)memory.TryReadField(actor_address, kActorProgressionHandleOffset, &state.progression_handle_address);
     ActorHealthRuntime actor_health;
     if (IsArenaEnemyActorHealthType(state.object_type_id) &&
         TryReadArenaEnemyActorHealth(actor_address, &actor_health)) {
@@ -411,8 +480,10 @@ bool TryBuildSceneActorState(
         state.progression_runtime_address != 0 &&
         memory.IsReadableRange(state.progression_runtime_address + kProgressionHpOffset, sizeof(float)) &&
         memory.IsReadableRange(state.progression_runtime_address + kProgressionMaxHpOffset, sizeof(float))) {
-        state.hp = memory.ReadFieldOr<float>(state.progression_runtime_address, kProgressionHpOffset, 0.0f);
-        state.max_hp = memory.ReadFieldOr<float>(state.progression_runtime_address, kProgressionMaxHpOffset, 0.0f);
+        if (!TryReadFiniteFloatField(state.progression_runtime_address, kProgressionHpOffset, &state.hp) ||
+            !TryReadFiniteFloatField(state.progression_runtime_address, kProgressionMaxHpOffset, &state.max_hp)) {
+            return false;
+        }
         state.dead = state.hp <= 0.0f && state.max_hp > 0.0f;
     } else {
         state.progression_runtime_address = 0;
@@ -432,17 +503,21 @@ bool TryBuildSceneActorState(
 
     if (tracked_enemy) {
         if (hook_tracked_enemy || scene_combat_enemy) {
-            const bool death_handled = memory.ReadFieldOr<std::uint8_t>(actor_address, kEnemyDeathHandledOffset, 0) != 0;
+            std::uint8_t death_handled_byte = 0;
+            const bool death_handled =
+                memory.TryReadField(actor_address, kEnemyDeathHandledOffset, &death_handled_byte) &&
+                death_handled_byte != 0;
             state.dead = state.dead || death_handled;
         }
-        if (!state.dead && state.max_hp <= 0.0f) {
-            state.hp = 1.0f;
-            state.max_hp = 1.0f;
+        if (!std::isfinite(state.hp) ||
+            !std::isfinite(state.max_hp) ||
+            state.max_hp <= 0.0f) {
+            return false;
         }
     }
 
-    state.equip_handle_address = memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipHandleOffset, 0);
-    state.animation_state_ptr = memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+    (void)memory.TryReadField(actor_address, kActorEquipHandleOffset, &state.equip_handle_address);
+    (void)memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &state.animation_state_ptr);
     *actor_state = state;
     return true;
 }
@@ -469,9 +544,12 @@ bool TryListSceneActors(std::vector<SDModSceneActorState>* actors) {
     std::unordered_set<uintptr_t> seen;
     actors->reserve(128);
     for (std::size_t bucket_index = 0; bucket_index < kSceneActorBucketScanCount; ++bucket_index) {
-        const auto actor_address = memory.ReadValueOr<uintptr_t>(
-            scene_context.world_address + kActorWorldBucketTableOffset + bucket_index * sizeof(uintptr_t),
-            0);
+        uintptr_t actor_address = 0;
+        if (!memory.TryReadValue(
+                scene_context.world_address + kActorWorldBucketTableOffset + bucket_index * sizeof(uintptr_t),
+                &actor_address)) {
+            continue;
+        }
         if (actor_address == 0 || !seen.insert(actor_address).second) {
             continue;
         }

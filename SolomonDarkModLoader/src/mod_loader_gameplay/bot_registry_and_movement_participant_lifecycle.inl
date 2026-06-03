@@ -23,17 +23,13 @@ void RememberParticipantEntity(
         binding->standalone_progression_inner_address = 0;
         binding->standalone_equip_wrapper_address = 0;
         binding->standalone_equip_inner_address = 0;
-        binding->registered_gamenpc_goal_active = false;
-        binding->registered_gamenpc_following_local_slot = false;
-        binding->registered_gamenpc_goal_x = 0.0f;
-        binding->registered_gamenpc_goal_y = 0.0f;
-        binding->synthetic_source_profile_address = 0;
         binding->dynamic_walk_cycle_primary = 0.0f;
         binding->dynamic_walk_cycle_secondary = 0.0f;
         binding->dynamic_render_drive_stride = 0.0f;
         binding->dynamic_render_advance_rate = 0.0f;
         binding->dynamic_render_advance_phase = 0.0f;
-        binding->dynamic_render_drive_move_blend = 0.0f;
+        binding->native_movement_accumulator_x = 0.0f;
+        binding->native_movement_accumulator_y = 0.0f;
         binding->facing_heading_valid = false;
         binding->facing_heading_value = 0.0f;
         binding->facing_target_actor_address = 0;
@@ -41,10 +37,16 @@ void RememberParticipantEntity(
         binding->stock_tick_facing_origin_x = 0.0f;
         binding->stock_tick_facing_origin_y = 0.0f;
         binding->death_transition_stock_tick_seen = false;
+        binding->replicated_transform_playback_ms = 0;
     }
 
+    const auto runtime_state = multiplayer::SnapshotRuntimeState();
+    const auto* participant = multiplayer::FindParticipant(runtime_state, participant_id);
     binding->character_profile = character_profile;
     binding->scene_intent = scene_intent;
+    binding->controller_kind =
+        participant != nullptr ? participant->controller_kind
+                               : multiplayer::ParticipantControllerKind::LuaBrain;
     binding->actor_address = actor_address;
     binding->gameplay_slot = gameplay_slot;
     binding->kind = kind;
@@ -57,18 +59,14 @@ void RememberParticipantEntity(
         binding->standalone_progression_inner_address = 0;
         binding->standalone_equip_wrapper_address = 0;
         binding->standalone_equip_inner_address = 0;
-        binding->registered_gamenpc_goal_active = false;
-        binding->registered_gamenpc_following_local_slot = false;
-        binding->registered_gamenpc_goal_x = 0.0f;
-        binding->registered_gamenpc_goal_y = 0.0f;
-        binding->synthetic_source_profile_address = 0;
         binding->raw_allocation = false;
         binding->dynamic_walk_cycle_primary = 0.0f;
         binding->dynamic_walk_cycle_secondary = 0.0f;
         binding->dynamic_render_drive_stride = 0.0f;
         binding->dynamic_render_advance_rate = 0.0f;
         binding->dynamic_render_advance_phase = 0.0f;
-        binding->dynamic_render_drive_move_blend = 0.0f;
+        binding->native_movement_accumulator_x = 0.0f;
+        binding->native_movement_accumulator_y = 0.0f;
         binding->facing_heading_valid = false;
         binding->facing_heading_value = 0.0f;
         binding->facing_target_actor_address = 0;
@@ -76,6 +74,12 @@ void RememberParticipantEntity(
         binding->stock_tick_facing_origin_x = 0.0f;
         binding->stock_tick_facing_origin_y = 0.0f;
         binding->death_transition_stock_tick_seen = false;
+        binding->replicated_transform_valid = false;
+        binding->replicated_target_x = 0.0f;
+        binding->replicated_target_y = 0.0f;
+        binding->replicated_target_heading = 0.0f;
+        binding->replicated_transform_packet_ms = 0;
+        binding->replicated_transform_playback_ms = 0;
     }
 }
 
@@ -116,19 +120,15 @@ void ResetParticipantEntityMaterializationState(ParticipantEntityBinding* bindin
     binding->standalone_progression_inner_address = 0;
     binding->standalone_equip_wrapper_address = 0;
     binding->standalone_equip_inner_address = 0;
-    binding->registered_gamenpc_goal_active = false;
-    binding->registered_gamenpc_following_local_slot = false;
-    binding->registered_gamenpc_goal_x = 0.0f;
-    binding->registered_gamenpc_goal_y = 0.0f;
     binding->gameplay_attach_applied = false;
     binding->raw_allocation = false;
-    binding->synthetic_source_profile_address = 0;
     binding->dynamic_walk_cycle_primary = 0.0f;
     binding->dynamic_walk_cycle_secondary = 0.0f;
     binding->dynamic_render_drive_stride = 0.0f;
     binding->dynamic_render_advance_rate = 0.0f;
     binding->dynamic_render_advance_phase = 0.0f;
-    binding->dynamic_render_drive_move_blend = 0.0f;
+    binding->native_movement_accumulator_x = 0.0f;
+    binding->native_movement_accumulator_y = 0.0f;
     binding->facing_heading_valid = false;
     binding->facing_heading_value = 0.0f;
     binding->facing_target_actor_address = 0;
@@ -136,6 +136,12 @@ void ResetParticipantEntityMaterializationState(ParticipantEntityBinding* bindin
     binding->stock_tick_facing_origin_x = 0.0f;
     binding->stock_tick_facing_origin_y = 0.0f;
     binding->death_transition_stock_tick_seen = false;
+    binding->replicated_transform_valid = false;
+    binding->replicated_target_x = 0.0f;
+    binding->replicated_target_y = 0.0f;
+    binding->replicated_target_heading = 0.0f;
+    binding->replicated_transform_packet_ms = 0;
+    binding->replicated_transform_playback_ms = 0;
 }
 
 void MarkParticipantEntityWorldUnregistered(uintptr_t actor_address) {
@@ -161,8 +167,10 @@ void MarkParticipantEntityWorldUnregistered(uintptr_t actor_address) {
             kGameplayPlayerActorOffset + static_cast<std::size_t>(gameplay_slot) * kGameplayPlayerSlotStride;
         const auto progression_slot_offset =
             kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(gameplay_slot) * kGameplayPlayerSlotStride;
-        const auto published_actor =
-            memory.ReadFieldOr<uintptr_t>(gameplay_address, actor_slot_offset, 0);
+        uintptr_t published_actor = 0;
+        if (!memory.TryReadField(gameplay_address, actor_slot_offset, &published_actor)) {
+            return;
+        }
         if (published_actor == actor_address) {
             (void)memory.TryWriteField<uintptr_t>(gameplay_address, actor_slot_offset, 0);
             (void)memory.TryWriteField<uintptr_t>(gameplay_address, progression_slot_offset, 0);
@@ -233,11 +241,7 @@ void DematerializeParticipantEntityNow(std::uint64_t bot_id, bool forget_binding
             return;
         }
 
-        if (IsRegisteredGameNpcKind(binding->kind)) {
-            StopRegisteredGameNpcMotion(binding);
-        } else {
-            StopWizardBotActorMotion(actor_address);
-        }
+        StopWizardBotActorMotion(actor_address);
 
         std::string destroy_error;
         bool destroyed = false;
@@ -254,42 +258,16 @@ void DematerializeParticipantEntityNow(std::uint64_t bot_id, bool forget_binding
                     binding->gameplay_slot,
                     binding->actor_address,
                     binding->materialized_world_address,
-                    binding->synthetic_source_profile_address,
                     &destroy_error);
             } else {
                 destroy_error = "Gameplay slot cleanup could not resolve a gameplay scene.";
             }
-        } else if (IsRegisteredGameNpcKind(binding->kind)) {
-            destroyed = DestroyRegisteredGameNpcActor(
-                binding->actor_address,
-                binding->materialized_world_address,
-                &destroy_error);
         } else {
-            if (IsStandaloneWizardKind(binding->kind) &&
-                (binding->standalone_progression_wrapper_address != 0 ||
-                 binding->standalone_progression_inner_address != 0 ||
-                 binding->standalone_equip_wrapper_address != 0 ||
-                 binding->standalone_equip_inner_address != 0)) {
-                ReleaseStandaloneWizardVisualResources(
-                    binding->actor_address,
-                    binding->standalone_progression_wrapper_address,
-                    binding->standalone_progression_inner_address,
-                    binding->standalone_equip_wrapper_address,
-                    binding->standalone_equip_inner_address);
-                binding->standalone_progression_wrapper_address = 0;
-                binding->standalone_progression_inner_address = 0;
-                binding->standalone_equip_wrapper_address = 0;
-                binding->standalone_equip_inner_address = 0;
-            }
             destroyed = DestroyLoaderOwnedWizardActor(
                 binding->actor_address,
                 binding->materialized_world_address,
                 binding->raw_allocation,
                 &destroy_error);
-        }
-        if (destroyed) {
-            DestroySyntheticWizardSourceProfile(binding->synthetic_source_profile_address);
-            binding->synthetic_source_profile_address = 0;
         }
         if (!destroyed) {
             if (IsParticipantActorMemoryFreshWritable(actor_address)) {
@@ -329,5 +307,28 @@ void DematerializeAllMaterializedWizardBotsForSceneSwitch(std::string_view reaso
 
     for (const auto bot_id : bot_ids) {
         DematerializeParticipantEntityNow(bot_id, false, reason);
+    }
+}
+
+void AbandonMaterializedWizardBotsForSceneSwitch(std::string_view reason) {
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    for (auto& binding : g_participant_entities) {
+        if (!IsWizardParticipantKind(binding.kind) || binding.actor_address == 0) {
+            continue;
+        }
+
+        const auto bot_id = binding.bot_id;
+        const auto actor_address = binding.actor_address;
+        const auto gameplay_slot = binding.gameplay_slot;
+        const auto kind = binding.kind;
+
+        ResetParticipantEntityMaterializationState(&binding);
+        PublishParticipantGameplaySnapshot(binding);
+        Log(
+            "[bots] abandoned bot entity for scene switch. bot_id=" + std::to_string(bot_id) +
+            " slot=" + std::to_string(gameplay_slot) +
+            " kind=" + std::to_string(static_cast<int>(kind)) +
+            " actor=" + HexString(actor_address) +
+            " reason=" + std::string(reason));
     }
 }

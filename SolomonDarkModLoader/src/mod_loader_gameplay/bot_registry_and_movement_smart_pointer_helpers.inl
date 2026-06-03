@@ -4,14 +4,20 @@ uintptr_t ReadSmartPointerInnerObject(uintptr_t wrapper_address) {
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto direct_inner = memory.ReadValueOr<uintptr_t>(wrapper_address, 0);
+    uintptr_t direct_inner = 0;
+    if (!memory.TryReadValue(wrapper_address, &direct_inner)) {
+        return 0;
+    }
     if (direct_inner != 0 && memory.IsReadableRange(direct_inner, 1)) {
         return direct_inner;
     }
 
     // Gameplay-slot wrappers are not the loader-owned 8-byte clone wrappers.
-    // Their live object pointer sits at +0x0C, so support both contracts here.
-    const auto gameplay_inner = memory.ReadValueOr<uintptr_t>(wrapper_address + 0x0C, 0);
+    // Their live object pointer sits at +0x0C.
+    uintptr_t gameplay_inner = 0;
+    if (!memory.TryReadValue(wrapper_address + 0x0C, &gameplay_inner)) {
+        return 0;
+    }
     if (gameplay_inner != 0 && memory.IsReadableRange(gameplay_inner, 1)) {
         return gameplay_inner;
     }
@@ -86,7 +92,10 @@ bool AssignActorSmartPointerWrapperSafe(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto existing_wrapper_address = memory.ReadFieldOr<uintptr_t>(actor_address, wrapper_offset, 0);
+    uintptr_t existing_wrapper_address = 0;
+    if (!memory.TryReadField(actor_address, wrapper_offset, &existing_wrapper_address)) {
+        return false;
+    }
     if (existing_wrapper_address == source_wrapper_address) {
         const auto inner_object = ReadSmartPointerInnerObject(source_wrapper_address);
         return memory.TryWriteField(actor_address, runtime_state_offset, inner_object);
@@ -121,4 +130,3 @@ bool AssignActorSmartPointerWrapperSafe(
 
     return true;
 }
-

@@ -14,18 +14,19 @@ using NativeProgressionNoArgFn = void(__thiscall*)(void* progression);
 using NativeProgressionIntArgFn = void(__thiscall*)(void* progression, int value);
 using NativePlayerAppearanceApplyChoiceFn = void(__thiscall*)(void* progression, int choice_id, int ensure_assets);
 using NativeActorProgressionRefreshFn = void(__thiscall*)(void* progression);
+using NativeLevelUpFn = void(__fastcall*)(void* progression, void* unused_edx);
 
-constexpr std::size_t kProgressionPreviousXpThresholdOffset = 0x38;
-constexpr std::size_t kProgressionNextXpThresholdOffset = 0x3C;
-constexpr std::size_t kProgressionSpecialChoiceArgumentOffset = 0x844;
-constexpr std::size_t kNativeSkillOptionRollVtableOffset = 0x74;
-constexpr std::size_t kNativeSpecialChoicePostRefreshVtableOffset = 0x94;
-constexpr std::size_t kNativeSpecialChoiceActivateVtableOffset = 0x9C;
 constexpr int kBaseLevelUpChoiceCount = 3;
 constexpr int kBonusLevelUpChoiceCount = 4;
 constexpr int kNativeSkillChoiceMaxCopyCount = 16;
-constexpr int kBonusLevelUpChoiceCountSkillId = 0x3F;
-constexpr int kSpecialChoice34Id = 0x34;
+
+int NativeBonusLevelUpChoiceCountSkillId() {
+    return static_cast<int>(kGameplaySkillChoiceBonusChoiceCountSkillId);
+}
+
+int NativeSpecialChoiceActivationId() {
+    return static_cast<int>(kGameplaySkillChoiceSpecialActivationId);
+}
 
 std::string FormatSkillChoiceOptionsForLog(const std::vector<BotSkillChoiceOption>& options) {
     std::string text;
@@ -48,18 +49,26 @@ int CaptureBotSkillChoiceSeh(EXCEPTION_POINTERS* exception_pointers, DWORD* exce
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
-uintptr_t ReadProgressionVtableSlot(uintptr_t progression_address, std::size_t slot_offset) {
+bool TryReadProgressionVtableSlot(uintptr_t progression_address, std::size_t slot_offset, uintptr_t* method_address) {
+    if (method_address == nullptr) {
+        return false;
+    }
+
+    *method_address = 0;
     if (progression_address == 0) {
-        return 0;
+        return false;
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto vtable = memory.ReadValueOr<uintptr_t>(progression_address, 0);
+    uintptr_t vtable = 0;
+    if (!memory.TryReadValue(progression_address, &vtable)) {
+        return false;
+    }
     if (vtable == 0 || !memory.IsReadableRange(vtable + slot_offset, sizeof(uintptr_t))) {
-        return 0;
+        return false;
     }
 
-    return memory.ReadValueOr<uintptr_t>(vtable + slot_offset, 0);
+    return memory.TryReadValue(vtable + slot_offset, method_address) && *method_address != 0;
 }
 
 bool CallNativeIntArrayClear(NativeIntArray* array, DWORD* exception_code) {
@@ -104,25 +113,38 @@ bool CallNativeSkillOptionRoll(
     }
 }
 
-int ResolveNativeSkillChoiceCount(uintptr_t progression_address) {
+bool TryResolveNativeSkillChoiceCount(uintptr_t progression_address, int* choice_count) {
+    if (choice_count == nullptr) {
+        return false;
+    }
+
+    *choice_count = 0;
     if (progression_address == 0) {
-        return kBaseLevelUpChoiceCount;
+        return false;
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto table_address =
-        memory.ReadFieldOr<uintptr_t>(progression_address, kStandaloneWizardProgressionTableBaseOffset, 0);
-    const auto table_count =
-        memory.ReadFieldOr<std::int32_t>(progression_address, kStandaloneWizardProgressionTableCountOffset, 0);
-    if (table_address == 0 || table_count <= kBonusLevelUpChoiceCountSkillId) {
-        return kBaseLevelUpChoiceCount;
+    uintptr_t table_address = 0;
+    std::int32_t table_count = 0;
+    if (!memory.TryReadField(progression_address, kStandaloneWizardProgressionTableBaseOffset, &table_address) ||
+        !memory.TryReadField(progression_address, kStandaloneWizardProgressionTableCountOffset, &table_count)) {
+        return false;
+    }
+    const auto bonus_choice_skill_id = NativeBonusLevelUpChoiceCountSkillId();
+    if (table_address == 0 || table_count <= bonus_choice_skill_id) {
+        return false;
     }
 
     const auto visible_offset =
-        static_cast<std::size_t>(kBonusLevelUpChoiceCountSkillId) * kStandaloneWizardProgressionEntryStride +
+        static_cast<std::size_t>(bonus_choice_skill_id) * kStandaloneWizardProgressionEntryStride +
         kStandaloneWizardProgressionVisibleFlagOffset;
-    const auto visible = memory.ReadValueOr<std::uint16_t>(table_address + visible_offset, 0);
-    return visible > 0 ? kBonusLevelUpChoiceCount : kBaseLevelUpChoiceCount;
+    std::uint16_t visible = 0;
+    if (!memory.TryReadValue(table_address + visible_offset, &visible)) {
+        return false;
+    }
+
+    *choice_count = visible > 0 ? kBonusLevelUpChoiceCount : kBaseLevelUpChoiceCount;
+    return true;
 }
 
 bool RollNativeSkillChoiceOptions(
@@ -142,12 +164,16 @@ bool RollNativeSkillChoiceOptions(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto desired_count = ResolveNativeSkillChoiceCount(progression_address);
+    int desired_count = 0;
+    if (!TryResolveNativeSkillChoiceCount(progression_address, &desired_count)) {
+        return false;
+    }
     if (requested_choice_count != nullptr) {
         *requested_choice_count = desired_count;
     }
     const auto array_vtable = memory.ResolveGameAddressOrZero(kNativeIntArrayVtable);
-    const auto roll_address = ReadProgressionVtableSlot(progression_address, kNativeSkillOptionRollVtableOffset);
+    uintptr_t roll_address = 0;
+    (void)TryReadProgressionVtableSlot(progression_address, kNativeSkillOptionRollVtableOffset, &roll_address);
     auto* roll_options = reinterpret_cast<NativeSkillOptionRollFn>(roll_address);
     if (array_vtable == 0 || roll_options == nullptr) {
         return false;
@@ -200,7 +226,8 @@ bool CallNativeProgressionNoArg(
     if (exception_code != nullptr) {
         *exception_code = 0;
     }
-    const auto method_address = ReadProgressionVtableSlot(progression_address, vtable_slot_offset);
+    uintptr_t method_address = 0;
+    (void)TryReadProgressionVtableSlot(progression_address, vtable_slot_offset, &method_address);
     auto* method = reinterpret_cast<NativeProgressionNoArgFn>(method_address);
     if (method == nullptr || progression_address == 0) {
         return false;
@@ -222,7 +249,8 @@ bool CallNativeProgressionIntArg(
     if (exception_code != nullptr) {
         *exception_code = 0;
     }
-    const auto method_address = ReadProgressionVtableSlot(progression_address, vtable_slot_offset);
+    uintptr_t method_address = 0;
+    (void)TryReadProgressionVtableSlot(progression_address, vtable_slot_offset, &method_address);
     auto* method = reinterpret_cast<NativeProgressionIntArgFn>(method_address);
     if (method == nullptr || progression_address == 0) {
         return false;
@@ -275,7 +303,62 @@ bool CallNativeActorProgressionRefresh(uintptr_t progression_address, DWORD* exc
     }
 }
 
-bool ApplyNativeSpecialChoice34(uintptr_t progression_address, DWORD* exception_code) {
+bool EnsureBotOwnedProgressionMode(uintptr_t progression_address) {
+    if (progression_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t previous_mode = kProgressionLocalPlayerModeValue;
+    const bool read_previous = memory.TryReadField<std::uint8_t>(
+        progression_address,
+        kProgressionNonLocalModeFlagOffset,
+        &previous_mode);
+    if (read_previous && previous_mode == kProgressionNonLocalModeValue) {
+        return true;
+    }
+
+    if (!memory.TryWriteField<std::uint8_t>(
+            progression_address,
+            kProgressionNonLocalModeFlagOffset,
+            kProgressionNonLocalModeValue)) {
+        Log(
+            "[bots] bot-owned progression mode failed before native level_up. progression=" +
+            HexString(progression_address));
+        return false;
+    }
+
+    Log(
+        "[bots] bot-owned progression mode set before native level_up. progression=" +
+        HexString(progression_address) +
+        " previous_mode=" + (read_previous ? std::to_string(previous_mode) : "unreadable") +
+        " mode=" + std::to_string(kProgressionNonLocalModeValue));
+    return true;
+}
+
+bool CallNativeLevelUpSafe(uintptr_t progression_address, DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    const auto level_up_address = ProcessMemory::Instance().ResolveGameAddressOrZero(kLevelUp);
+    auto* level_up = reinterpret_cast<NativeLevelUpFn>(level_up_address);
+    if (level_up == nullptr || progression_address == 0) {
+        return false;
+    }
+
+    __try {
+        // This intentionally calls the game's native level_up entrypoint. When
+        // the run-lifecycle hook is installed, the patched entrypoint still
+        // reaches the original through the hook trampoline and preserves the
+        // non-local picker guard used for bot progressions.
+        level_up(reinterpret_cast<void*>(progression_address), nullptr);
+        return true;
+    } __except (CaptureBotSkillChoiceSeh(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool ApplyNativeSpecialChoice(uintptr_t progression_address, DWORD* exception_code) {
     if (exception_code != nullptr) {
         *exception_code = 0;
     }
@@ -284,22 +367,29 @@ bool ApplyNativeSpecialChoice34(uintptr_t progression_address, DWORD* exception_
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto table_address =
-        memory.ReadFieldOr<uintptr_t>(progression_address, kStandaloneWizardProgressionTableBaseOffset, 0);
-    const auto table_count =
-        memory.ReadFieldOr<std::int32_t>(progression_address, kStandaloneWizardProgressionTableCountOffset, 0);
-    if (table_address == 0 || table_count <= kSpecialChoice34Id) {
+    uintptr_t table_address = 0;
+    std::int32_t table_count = 0;
+    if (!memory.TryReadField(progression_address, kStandaloneWizardProgressionTableBaseOffset, &table_address) ||
+        !memory.TryReadField(progression_address, kStandaloneWizardProgressionTableCountOffset, &table_count)) {
+        return false;
+    }
+    const auto special_choice_id = NativeSpecialChoiceActivationId();
+    if (table_address == 0 || table_count <= special_choice_id) {
         return false;
     }
 
     const auto entry_active_offset =
-        static_cast<std::size_t>(kSpecialChoice34Id) * kStandaloneWizardProgressionEntryStride +
+        static_cast<std::size_t>(special_choice_id) * kStandaloneWizardProgressionEntryStride +
         kStandaloneWizardProgressionActiveFlagOffset;
     const std::uint16_t active = 1;
-    (void)memory.TryWriteValue<std::uint16_t>(table_address + entry_active_offset, active);
+    if (!memory.TryWriteValue<std::uint16_t>(table_address + entry_active_offset, active)) {
+        return false;
+    }
 
-    const auto special_argument =
-        memory.ReadFieldOr<std::int32_t>(progression_address, kProgressionSpecialChoiceArgumentOffset, 0);
+    std::int32_t special_argument = 0;
+    if (!memory.TryReadField(progression_address, kProgressionSpecialChoiceArgumentOffset, &special_argument)) {
+        return false;
+    }
     return CallNativeProgressionIntArg(
         progression_address,
         kNativeSpecialChoiceActivateVtableOffset,
@@ -325,12 +415,14 @@ bool ApplyNativeSkillChoiceToProgression(
         }
     }
 
-    if (option.option_id == kSpecialChoice34Id) {
+    const auto special_choice_id = NativeSpecialChoiceActivationId();
+    if (option.option_id == special_choice_id) {
         DWORD special_exception = 0;
-        if (!ApplyNativeSpecialChoice34(progression_address, &special_exception)) {
+        if (!ApplyNativeSpecialChoice(progression_address, &special_exception)) {
             Log(
-                "[bots] native special skill choice 0x34 post-apply path failed progression=" +
+                "[bots] native special skill choice post-apply path failed progression=" +
                 HexString(progression_address) +
+                " choice_id=" + std::to_string(special_choice_id) +
                 " exception=0x" + HexString(special_exception));
         }
     }
@@ -339,15 +431,16 @@ bool ApplyNativeSkillChoiceToProgression(
         return false;
     }
 
-    if (option.option_id == kSpecialChoice34Id) {
+    if (option.option_id == special_choice_id) {
         DWORD post_exception = 0;
         if (!CallNativeProgressionNoArg(
                 progression_address,
                 kNativeSpecialChoicePostRefreshVtableOffset,
                 &post_exception)) {
             Log(
-                "[bots] native special skill choice 0x34 post-refresh path failed progression=" +
+                "[bots] native special skill choice post-refresh path failed progression=" +
                 HexString(progression_address) +
+                " choice_id=" + std::to_string(special_choice_id) +
                 " exception=0x" + HexString(post_exception));
         }
     }
@@ -355,32 +448,49 @@ bool ApplyNativeSkillChoiceToProgression(
     return true;
 }
 
-int ReadProgressionRoundedXpOrFallback(uintptr_t progression_address, int fallback) {
+bool TryReadProgressionRoundedXp(uintptr_t progression_address, int* experience) {
+    if (experience == nullptr) {
+        return false;
+    }
+
+    *experience = -1;
     if (progression_address == 0) {
-        return fallback;
+        return false;
     }
-    const auto xp = ProcessMemory::Instance().ReadFieldOr<float>(
-        progression_address,
-        kProgressionXpOffset,
-        static_cast<float>(fallback));
-    if (xp < 0.0f || xp != xp) {
-        return fallback;
+
+    float xp = 0.0f;
+    if (!ProcessMemory::Instance().TryReadField(progression_address, kProgressionXpOffset, &xp) ||
+        !std::isfinite(xp) ||
+        xp < 0.0f) {
+        return false;
     }
-    return static_cast<int>(std::lround(xp));
+
+    *experience = static_cast<int>(std::lround(xp));
+    return true;
 }
 
-int ReadProgressionNextXpOrZero(uintptr_t progression_address) {
+bool TryReadProgressionNextXp(uintptr_t progression_address, int* next_experience) {
+    if (next_experience == nullptr) {
+        return false;
+    }
+
+    *next_experience = 0;
     if (progression_address == 0) {
-        return 0;
+        return false;
     }
-    const auto next_xp = ProcessMemory::Instance().ReadFieldOr<float>(
-        progression_address,
-        kProgressionNextXpThresholdOffset,
-        0.0f);
-    if (next_xp < 0.0f || next_xp != next_xp) {
-        return 0;
+
+    float next_xp = 0.0f;
+    if (!ProcessMemory::Instance().TryReadField(
+            progression_address,
+            kProgressionNextXpThresholdOffset,
+            &next_xp) ||
+        !std::isfinite(next_xp) ||
+        next_xp < 0.0f) {
+        return false;
     }
-    return static_cast<int>(std::lround(next_xp));
+
+    *next_experience = static_cast<int>(std::lround(next_xp));
+    return true;
 }
 
 void UpdateBotLevelProfileState(
@@ -417,45 +527,85 @@ bool SyncNativeBotProgressionLevel(
     }
 
     auto& memory = ProcessMemory::Instance();
-    bool wrote_any = false;
-    wrote_any |= memory.TryWriteField<std::int32_t>(progression_address, kProgressionLevelOffset, level);
-    wrote_any |= memory.TryWriteField<float>(progression_address, kProgressionXpOffset, static_cast<float>(experience));
-
-    if (source_progression_address != 0) {
-        const auto previous_threshold = memory.ReadFieldOr<float>(
-            source_progression_address,
-            kProgressionPreviousXpThresholdOffset,
-            -1.0f);
-        const auto next_threshold = memory.ReadFieldOr<float>(
-            source_progression_address,
-            kProgressionNextXpThresholdOffset,
-            -1.0f);
-        if (previous_threshold >= 0.0f) {
-            wrote_any |= memory.TryWriteField<float>(
-                progression_address,
-                kProgressionPreviousXpThresholdOffset,
-                previous_threshold);
-        }
-        if (next_threshold >= 0.0f) {
-            wrote_any |= memory.TryWriteField<float>(
-                progression_address,
-                kProgressionNextXpThresholdOffset,
-                next_threshold);
-        }
-    }
-
-    const auto max_hp = memory.ReadFieldOr<float>(progression_address, kProgressionMaxHpOffset, 0.0f);
-    if (max_hp > 0.0f) {
-        wrote_any |= memory.TryWriteField<float>(progression_address, kProgressionHpOffset, max_hp);
-    }
-    const auto max_mp = memory.ReadFieldOr<float>(progression_address, kProgressionMaxMpOffset, 0.0f);
-    if (max_mp > 0.0f) {
-        wrote_any |= memory.TryWriteField<float>(progression_address, kProgressionMpOffset, max_mp);
-    }
-
-    if (!wrote_any) {
+    if (!EnsureBotOwnedProgressionMode(progression_address)) {
         return false;
     }
 
-    return CallNativeActorProgressionRefresh(progression_address, exception_code);
+    std::int32_t level_before = 0;
+    float xp_before = 0.0f;
+    if (!memory.TryReadField(progression_address, kProgressionLevelOffset, &level_before) ||
+        !memory.TryReadField(progression_address, kProgressionXpOffset, &xp_before) ||
+        !std::isfinite(xp_before)) {
+        return false;
+    }
+
+    float target_xp = static_cast<float>(experience);
+    if (source_progression_address != 0) {
+        float source_xp = 0.0f;
+        if (!memory.TryReadField(source_progression_address, kProgressionXpOffset, &source_xp) ||
+            !std::isfinite(source_xp)) {
+            return false;
+        }
+        if (source_xp >= 0.0f && source_xp > target_xp) {
+            target_xp = source_xp;
+        }
+    }
+
+    if (experience >= 0 && target_xp >= 0.0f) {
+        (void)memory.TryWriteField<float>(progression_address, kProgressionXpOffset, target_xp);
+    }
+
+    if (level_before >= level) {
+        Log(
+            "[bots] native level_up sync skipped; progression already at target. progression=" +
+            HexString(progression_address) +
+            " level_before=" + std::to_string(level_before) +
+            " target_level=" + std::to_string(level) +
+            " xp_before=" + std::to_string(xp_before) +
+            " target_xp=" + std::to_string(target_xp));
+        return true;
+    }
+
+    constexpr int kMaxNativeLevelUpCalls = 256;
+    int level_after = level_before;
+    int calls = 0;
+    while (level_after < level && calls < kMaxNativeLevelUpCalls) {
+        const auto previous_level = level_after;
+        if (!CallNativeLevelUpSafe(progression_address, exception_code)) {
+            return false;
+        }
+
+        ++calls;
+        if (!memory.TryReadField(progression_address, kProgressionLevelOffset, &level_after)) {
+            return false;
+        }
+        if (level_after <= previous_level) {
+            break;
+        }
+    }
+
+    float xp_after = 0.0f;
+    float previous_threshold = 0.0f;
+    float next_threshold = 0.0f;
+    if (!memory.TryReadField(progression_address, kProgressionXpOffset, &xp_after) ||
+        !memory.TryReadField(progression_address, kProgressionPreviousXpThresholdOffset, &previous_threshold) ||
+        !memory.TryReadField(progression_address, kProgressionNextXpThresholdOffset, &next_threshold) ||
+        !std::isfinite(xp_after) ||
+        !std::isfinite(previous_threshold) ||
+        !std::isfinite(next_threshold)) {
+        return false;
+    }
+    const bool synced = level_after >= level;
+    Log(
+        "[bots] native level_up sync. progression=" + HexString(progression_address) +
+        " level_before=" + std::to_string(level_before) +
+        " level_after=" + std::to_string(level_after) +
+        " target_level=" + std::to_string(level) +
+        " calls=" + std::to_string(calls) +
+        " xp_before=" + std::to_string(xp_before) +
+        " xp_after=" + std::to_string(xp_after) +
+        " previous_threshold=" + std::to_string(previous_threshold) +
+        " next_threshold=" + std::to_string(next_threshold) +
+        " synced=" + std::to_string(synced ? 1 : 0));
+    return synced;
 }

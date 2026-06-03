@@ -2,21 +2,21 @@ local config = {}
 
 local ACTIVE_BOTS_ENV_VAR = "SDMOD_LUA_BOTS_ACTIVE"
 
-local function default_primary_entry_index_for_element(element_id)
-  -- Keep bot primary loadout aligned with the stock live selection-state map:
-  -- ether -> 0x08, fire -> 0x10, air -> 0x18, water -> 0x20, earth -> 0x28.
-  local map = {
-    [0] = 0x10,
-    [1] = 0x20,
-    [2] = 0x28,
-    [3] = 0x18,
-    [4] = 0x08,
-  }
-  return map[tonumber(element_id) or -1] or 0x08
+local function native_primary_entry_index_for_element(element_id)
+  if type(sd) ~= "table" or type(sd.bots) ~= "table" or
+      type(sd.bots.resolve_primary_entry) ~= "function" then
+    error("sd.bots.resolve_primary_entry is required to build bot primary loadouts")
+  end
+
+  local ok, primary_entry = pcall(sd.bots.resolve_primary_entry, element_id)
+  if not ok or type(primary_entry) ~= "number" then
+    error("native primary entry is unavailable for element_id=" .. tostring(element_id))
+  end
+  return primary_entry
 end
 
 local function make_bot_profile(element_id, discipline_id)
-  local primary_entry_index = default_primary_entry_index_for_element(element_id)
+  local primary_entry_index = native_primary_entry_index_for_element(element_id)
   return {
     element_id = element_id,
     discipline_id = discipline_id,
@@ -191,81 +191,24 @@ function config.create()
     result.CURRENT_MANAGED_BOT_NAMES[bot_config.name] = true
   end
 
-  result.DEFAULT_SPAWN_OFFSET_X = 50.0
-  result.DEFAULT_SPAWN_OFFSET_Y = 0.0
-  result.DEFAULT_HUB_SPAWN_X = 956.0
-  result.DEFAULT_HUB_SPAWN_Y = 508.0
   result.FOLLOW_STOP_DISTANCE = 100.0
   result.FOLLOW_RESUME_DISTANCE = 250.0
   result.FOLLOW_TARGET_ARRIVAL_DISTANCE = 32.0
   result.FOLLOW_TARGET_REFRESH_DISTANCE = 24.0
+  result.FOLLOW_TARGET_MAX_PLAYER_GAP = 320.0
+  result.FOLLOW_NAV_SNAP_MAX_DISTANCE = 160.0
   result.FOLLOW_TARGET_SAMPLE_ATTEMPTS = 8
   result.FOLLOW_MOVE_TIMEOUT_MS = 30000
   result.COMMAND_COOLDOWN_MS = 250
   result.TICK_INTERVAL_MS = 100
   result.ATTACK_DIAG_INTERVAL_MS = 1000
-  result.DEFAULT_ATTACK_RANGE = 96.0
-  result.WATER_BASE_CONE_RANGE = 205.0
-  result.WATER_RANGE_PER_SHAPE_UNIT = 4.0
-  result.WATER_RANGE_SAFETY_MARGIN = 5.0
-  result.ATTACK_RANGE_BY_ELEMENT_ID = {
-    [0] = 360.0,
-    [1] = result.WATER_BASE_CONE_RANGE - result.WATER_RANGE_SAFETY_MARGIN,
-    [2] = 360.0,
-    [3] = 360.0,
-    [4] = 360.0,
-  }
-  result.MIN_ATTACK_RANGE_BY_ELEMENT_ID = {
-    [2] = 96.0,
-  }
-  result.WAVE_ENEMY_OBJECT_TYPE_ID = 1001
   result.SPAWN_RETRY_MS = 500
   result.SCENE_UPDATE_COOLDOWN_MS = 250
   result.NAV_GRID_REFRESH_MS = 3000
   result.NAV_GRID_SUBDIVISIONS = 2
   result.ENABLE_FOLLOW_MOVEMENT = true
-  result.ENTRANCE_TRIGGER_DISTANCE = 96.0
-  result.ENTRANCE_ARRIVAL_DISTANCE = 20.0
-  result.HUB_ENTRANCE_ARM_DELAY_MS = 1500
-  result.HUB_ENTRANCE_DWELL_MS = 350
-  result.PLAYER_MOVEMENT_ARM_DISTANCE = 12.0
   result.STUCK_SAMPLE_THRESHOLD = 8
   result.STUCK_POSITION_EPSILON = 1.0
-  result.SUPPORTED_PRIVATE_AREAS = {
-    memorator = {
-      name = "memorator",
-      region_index = 1,
-      region_type_id = 4002,
-      hub_anchor = { x = 87.480285644531, y = 443.60046386719 },
-      hub_wait_anchor = { x = 75.0, y = 375.0 },
-      interior_anchor = { x = 512.0, y = 798.25897216797 },
-    },
-    librarian = {
-      name = "librarian",
-      region_index = 2,
-      region_type_id = 4004,
-      hub_anchor = { x = 124.76531219482, y = 496.97552490234 },
-      hub_wait_anchor = { x = 75.0, y = 525.0 },
-      interior_anchor = { x = 512.0, y = 924.0 },
-    },
-    dowser = {
-      name = "dowser",
-      region_index = 3,
-      region_type_id = 4003,
-      hub_anchor = { x = 627.5, y = 137.6875 },
-      hub_wait_anchor = { x = 675.0, y = 75.0 },
-      interior_anchor = { x = 537.5, y = 647.73309326172 },
-    },
-    polisher_arch = {
-      name = "polisher_arch",
-      region_index = 4,
-      region_type_id = 4005,
-      hub_anchor = { x = 952.5, y = 106.6875 },
-      hub_wait_anchor = { x = 825.0, y = 75.0 },
-      interior_anchor = { x = 512.0, y = 867.88549804688 },
-    },
-  }
-
   return result
 end
 

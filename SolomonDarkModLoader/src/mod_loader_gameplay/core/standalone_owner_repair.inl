@@ -11,7 +11,14 @@ bool EnsureStandaloneWizardWorldOwner(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto current_owner = memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+    uintptr_t current_owner = 0;
+    if (!memory.TryReadField(actor_address, kActorOwnerOffset, &current_owner)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Standalone actor owner is unreadable before " + std::string(stage) + ".";
+        }
+        return false;
+    }
     if (current_owner == world_address) {
         return true;
     }
@@ -24,7 +31,14 @@ bool EnsureStandaloneWizardWorldOwner(
         return false;
     }
 
-    const auto repaired_owner = memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+    uintptr_t repaired_owner = 0;
+    if (!memory.TryReadField(actor_address, kActorOwnerOffset, &repaired_owner)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Standalone actor owner is unreadable after " + std::string(stage) + ".";
+        }
+        return false;
+    }
     if (repaired_owner != world_address) {
         if (error_message != nullptr) {
             *error_message =

@@ -1,12 +1,15 @@
 struct BotBoulderDamageProjectionSnapshot {
     bool readable = false;
+    uintptr_t requested_target_actor = 0;
+    uintptr_t requested_target_health_base = 0;
+    const char* requested_target_health_kind = "unknown";
+    bool requested_target_health_readable = false;
+    float requested_target_hp = 0.0f;
+    float requested_target_max_hp = 0.0f;
     uintptr_t target_actor = 0;
     uintptr_t target_health_base = 0;
-    uintptr_t stat_source = 0;
-    uintptr_t stat_vtable = 0;
-    uintptr_t damage_getter = 0;
     const char* target_health_kind = "unknown";
-    int statbook_level = 1;
+    int progression_level = 0;
     float target_hp = 0.0f;
     float target_max_hp = 0.0f;
     float target_x = 0.0f;
@@ -14,218 +17,347 @@ struct BotBoulderDamageProjectionSnapshot {
     float target_radius = 0.0f;
     float target_distance = 0.0f;
     float target_impact_radius = 0.0f;
-    float target_damage_scale = 0.0f;
     float charge = 0.0f;
     float base_damage = 0.0f;
-    float statbook_damage = 0.0f;
     float projected_damage = 0.0f;
-    DWORD damage_getter_seh = 0;
-    bool damage_getter_attempted = false;
-    bool native_damage_scale_available = false;
+    float damage_output_scale = 0.0f;
+    float release_damage_scale = 0.0f;
+    float release_damage_floor = 0.0f;
+    float release_damage_cap_scale = 0.0f;
+    float projected_release_damage = 0.0f;
+    float projected_hp_damage = 0.0f;
     bool target_position_readable = false;
     bool target_in_impact = false;
-    bool impact_context_write_attempted = false;
-    bool impact_context_write_ok = false;
-    float impact_context_x = 0.0f;
-    float impact_context_y = 0.0f;
-    float impact_context_radius = 0.0f;
+    bool native_radius_damage_eligible = false;
 };
+
+float ProjectEarthBoulderReleaseDamage(
+    float native_base_damage,
+    float release_charge,
+    float release_damage_scale,
+    float release_damage_floor,
+    float release_damage_cap_scale) {
+    if (!std::isfinite(native_base_damage) ||
+        native_base_damage <= 0.0f ||
+        !std::isfinite(release_charge) ||
+        release_charge <= 0.0f ||
+        !std::isfinite(release_damage_scale) ||
+        release_damage_scale <= 0.0f ||
+        !std::isfinite(release_damage_floor) ||
+        release_damage_floor < 0.0f ||
+        !std::isfinite(release_damage_cap_scale) ||
+        release_damage_cap_scale <= 0.0f) {
+        return 0.0f;
+    }
+
+    const auto scaled_base_damage = native_base_damage * release_damage_scale;
+    const auto quadratic_damage =
+        scaled_base_damage * release_charge * release_charge;
+    const auto capped_damage =
+        (std::min)(quadratic_damage, scaled_base_damage * release_damage_cap_scale);
+    return release_damage_floor <= capped_damage
+        ? capped_damage
+        : release_damage_floor;
+}
+
+float ResolveEarthBoulderScaledReleaseBaseDamage(
+    float live_release_base_damage,
+    float damage_output_scale) {
+    if (!std::isfinite(live_release_base_damage) ||
+        live_release_base_damage <= 0.0f) {
+        return 0.0f;
+    }
+    if (!std::isfinite(damage_output_scale) ||
+        damage_output_scale <= 0.0f) {
+        return live_release_base_damage;
+    }
+    if (live_release_base_damage >= damage_output_scale) {
+        return live_release_base_damage;
+    }
+
+    const auto scaled_release_base_damage =
+        live_release_base_damage * damage_output_scale;
+    if (!std::isfinite(scaled_release_base_damage) ||
+        scaled_release_base_damage <= 0.0f) {
+        return live_release_base_damage;
+    }
+    return scaled_release_base_damage;
+}
+
+bool TryPopulateBoulderProjectionTarget(
+    ProcessMemory& memory,
+    const BotNativeActiveSpellObjectState& active_spell_state,
+    BotBoulderDamageProjectionSnapshot* snapshot,
+    uintptr_t target_actor) {
+    (void)memory;
+    if (snapshot == nullptr || target_actor == 0) {
+        return false;
+    }
+
+    ActorHealthRuntime target_health{};
+    if (!TryReadActorHealthRuntime(target_actor, &target_health) ||
+        target_health.hp <= 0.0f) {
+        return false;
+    }
+
+    auto candidate = *snapshot;
+    candidate.target_actor = target_actor;
+    candidate.target_health_base = target_health.base_address;
+    candidate.target_health_kind = target_health.kind;
+    candidate.target_hp = target_health.hp;
+    candidate.target_max_hp = target_health.max_hp;
+    candidate.target_position_readable = false;
+    candidate.target_in_impact = false;
+    candidate.native_radius_damage_eligible = false;
+    if (kActorPositionXOffset == 0 ||
+        kActorPositionYOffset == 0 ||
+        !TryReadFiniteFloatField(target_actor, kActorPositionXOffset, &candidate.target_x) ||
+        !TryReadFiniteFloatField(target_actor, kActorPositionYOffset, &candidate.target_y)) {
+        return false;
+    }
+    candidate.target_position_readable = true;
+    if (kActorCollisionRadiusOffset == 0 ||
+        !TryReadFiniteFloatField(target_actor, kActorCollisionRadiusOffset, &candidate.target_radius) ||
+        candidate.target_radius < 0.0f ||
+        candidate.target_radius > 128.0f) {
+        return false;
+    }
+    if (candidate.target_position_readable &&
+        std::isfinite(active_spell_state.object_x) &&
+        std::isfinite(active_spell_state.object_y)) {
+        const auto target_dx = candidate.target_x - active_spell_state.object_x;
+        const auto target_dy = candidate.target_y - active_spell_state.object_y;
+        const auto target_distance_squared =
+            (target_dx * target_dx) + (target_dy * target_dy);
+        candidate.target_distance = std::sqrt(target_distance_squared);
+        const float object_radius =
+            std::isfinite(active_spell_state.object_radius) &&
+                    active_spell_state.object_radius > 0.0f &&
+                    active_spell_state.object_radius <= 128.0f
+                ? active_spell_state.object_radius
+                : 0.0f;
+        const auto release_charge = candidate.charge;
+        const auto native_secondary_reach_radius =
+            object_radius * release_charge * 2.0f;
+        const auto native_secondary_reach_radius_squared =
+            (native_secondary_reach_radius * native_secondary_reach_radius) +
+            (candidate.target_radius * candidate.target_radius);
+        candidate.target_impact_radius =
+            native_secondary_reach_radius_squared > 0.0f
+                ? std::sqrt(native_secondary_reach_radius_squared)
+                : 0.0f;
+        if (!std::isfinite(candidate.target_impact_radius) ||
+            candidate.target_impact_radius <= 0.0f ||
+            candidate.target_impact_radius > 192.0f) {
+            candidate.target_impact_radius = 0.0f;
+        }
+        // Native World_QueryRadius uses distance^2 <
+        // query_radius^2 + actor_collision_radius^2.
+        candidate.target_in_impact =
+            candidate.target_impact_radius > 0.0f &&
+            std::isfinite(target_distance_squared) &&
+            target_distance_squared < native_secondary_reach_radius_squared;
+        candidate.native_radius_damage_eligible = candidate.target_in_impact;
+    }
+
+    candidate.readable =
+        std::isfinite(candidate.projected_damage) &&
+        candidate.projected_damage > 0.0f &&
+        std::isfinite(candidate.projected_release_damage) &&
+        candidate.projected_release_damage > 0.0f &&
+        std::isfinite(candidate.projected_hp_damage) &&
+        candidate.projected_hp_damage > 0.0f;
+    if (!candidate.readable) {
+        return false;
+    }
+
+    *snapshot = candidate;
+    return true;
+}
+
+bool IsBoulderProjectionTargetLethal(
+    const BotBoulderDamageProjectionSnapshot& snapshot) {
+    return snapshot.readable &&
+           snapshot.target_actor != 0 &&
+           std::isfinite(snapshot.target_hp) &&
+           snapshot.target_hp > 0.0f &&
+           std::isfinite(snapshot.projected_hp_damage) &&
+           snapshot.projected_hp_damage + 0.001f >= snapshot.target_hp;
+}
+
+bool FindBestNativeBoulderImpactVictim(
+    ProcessMemory& memory,
+    const BotNativeActiveSpellObjectState& active_spell_state,
+    const BotBoulderDamageProjectionSnapshot& base_snapshot,
+    BotBoulderDamageProjectionSnapshot* snapshot) {
+    if (snapshot == nullptr || !base_snapshot.readable) {
+        return false;
+    }
+
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        return false;
+    }
+
+    bool found = false;
+    BotBoulderDamageProjectionSnapshot best{};
+    for (const auto& actor : actors) {
+        if (!actor.tracked_enemy ||
+            actor.actor_address == 0 ||
+            actor.dead ||
+            actor.hp <= 0.0f) {
+            continue;
+        }
+
+        auto candidate = base_snapshot;
+        if (!TryPopulateBoulderProjectionTarget(
+                memory,
+                active_spell_state,
+                &candidate,
+                actor.actor_address) ||
+            !candidate.native_radius_damage_eligible ||
+            !IsBoulderProjectionTargetLethal(candidate)) {
+            continue;
+        }
+
+        if (!found ||
+            candidate.target_hp < best.target_hp ||
+            (candidate.target_hp == best.target_hp &&
+             candidate.target_distance < best.target_distance)) {
+            best = candidate;
+            found = true;
+        }
+    }
+
+    if (!found) {
+        return false;
+    }
+
+    // native_boulder_impact_victim_scan: release chooses a live enemy that is
+    // inside the active Boulder object's recovered native secondary reach.
+    *snapshot = best;
+    return true;
+}
 
 BotBoulderDamageProjectionSnapshot ReadBotBoulderDamageProjectionSnapshot(
     const BotCastProcessingContext& context,
-    const BotActiveSpellObjectSnapshot& active_spell_snapshot) {
+    const BotNativeActiveSpellObjectState& active_spell_state) {
     auto* binding = context.binding;
     auto& memory = *context.memory;
 
     BotBoulderDamageProjectionSnapshot snapshot{};
-    if (!active_spell_snapshot.readable || active_spell_snapshot.object == 0) {
+    if (!active_spell_state.readable || active_spell_state.object == 0) {
         return snapshot;
     }
 
-    snapshot.target_actor = ResolveOngoingCastNativeTargetActor(
-        binding,
-        binding->ongoing_cast);
-    ActorHealthRuntime target_health{};
-    if (!TryReadActorHealthRuntime(snapshot.target_actor, &target_health) ||
-        target_health.hp <= 0.0f) {
+    int progression_level = 0;
+    if (!TryReadEarthBoulderProgressionLevel(
+            binding->ongoing_cast.progression_runtime_address,
+            &progression_level)) {
         return snapshot;
     }
-
-    int statbook_level = 1;
-    const auto resolved_statbook_damage = ResolveEarthBoulderBaseDamage(
-        binding,
-        binding->ongoing_cast.progression_runtime_address,
-        &statbook_level);
-    if (!std::isfinite(resolved_statbook_damage) ||
-        resolved_statbook_damage <= 0.0f) {
+    const auto live_release_base_damage = active_spell_state.release_base_damage;
+    if (!std::isfinite(live_release_base_damage) ||
+        live_release_base_damage <= 0.0f) {
         return snapshot;
     }
     const float release_charge =
-        std::isfinite(active_spell_snapshot.object_f74) &&
-                active_spell_snapshot.object_f74 > 0.0f
-            ? active_spell_snapshot.object_f74
+        std::isfinite(active_spell_state.charge) &&
+                active_spell_state.charge > 0.0f
+            ? active_spell_state.charge
             : 0.0f;
     if (release_charge <= 0.0f) {
         return snapshot;
     }
+    const auto damage_output_scale = ResolveEarthBoulderDamageOutputScale();
+    const auto release_damage_scale = ResolveEarthBoulderReleaseDamageScale();
+    const auto release_damage_floor = ResolveEarthBoulderReleaseDamageFloor();
+    const auto release_damage_cap_scale = ResolveEarthBoulderReleaseDamageCapScale();
+    if (!std::isfinite(damage_output_scale) ||
+        damage_output_scale <= 0.0f ||
+        !std::isfinite(release_damage_scale) ||
+        release_damage_scale <= 0.0f ||
+        !std::isfinite(release_damage_floor) ||
+        release_damage_floor < 0.0f ||
+        !std::isfinite(release_damage_cap_scale) ||
+        release_damage_cap_scale <= 0.0f) {
+        return snapshot;
+    }
+    const auto resolved_native_damage =
+        ResolveEarthBoulderScaledReleaseBaseDamage(
+            live_release_base_damage,
+            damage_output_scale);
+    if (!std::isfinite(resolved_native_damage) ||
+        resolved_native_damage <= 0.0f) {
+        return snapshot;
+    }
 
-    snapshot.target_health_base = target_health.base_address;
-    snapshot.target_health_kind = target_health.kind;
-    snapshot.statbook_level = statbook_level;
-    snapshot.target_hp = target_health.hp;
-    snapshot.target_max_hp = target_health.max_hp;
-    if (kActorPositionXOffset != 0 &&
-        kActorPositionYOffset != 0 &&
-        memory.IsReadableRange(
-            snapshot.target_actor + kActorPositionXOffset,
-            sizeof(float)) &&
-        memory.IsReadableRange(
-            snapshot.target_actor + kActorPositionYOffset,
-            sizeof(float))) {
-        snapshot.target_x =
-            memory.ReadFieldOr<float>(
-                snapshot.target_actor,
-                kActorPositionXOffset,
-                0.0f);
-        snapshot.target_y =
-            memory.ReadFieldOr<float>(
-                snapshot.target_actor,
-                kActorPositionYOffset,
-                0.0f);
-        snapshot.target_position_readable =
-            std::isfinite(snapshot.target_x) &&
-            std::isfinite(snapshot.target_y);
-    }
-    if (kActorCollisionRadiusOffset != 0 &&
-        memory.IsReadableRange(
-            snapshot.target_actor + kActorCollisionRadiusOffset,
-            sizeof(float))) {
-        snapshot.target_radius =
-            memory.ReadFieldOr<float>(
-                snapshot.target_actor,
-                kActorCollisionRadiusOffset,
-                0.0f);
-        if (!std::isfinite(snapshot.target_radius) ||
-            snapshot.target_radius < 0.0f ||
-            snapshot.target_radius > 128.0f) {
-            snapshot.target_radius = 0.0f;
-        }
-    }
-    if (snapshot.target_position_readable &&
-        std::isfinite(active_spell_snapshot.object_x) &&
-        std::isfinite(active_spell_snapshot.object_y)) {
-        const auto target_dx = snapshot.target_x - active_spell_snapshot.object_x;
-        const auto target_dy = snapshot.target_y - active_spell_snapshot.object_y;
-        snapshot.target_distance =
-            std::sqrt((target_dx * target_dx) + (target_dy * target_dy));
-        const float object_radius =
-            std::isfinite(active_spell_snapshot.object_radius) &&
-                    active_spell_snapshot.object_radius > 0.0f &&
-                    active_spell_snapshot.object_radius <= 128.0f
-                ? active_spell_snapshot.object_radius
-                : 0.0f;
-        snapshot.target_impact_radius = object_radius + snapshot.target_radius;
-        if (object_radius <= 0.0f ||
-            !std::isfinite(snapshot.target_impact_radius) ||
-            snapshot.target_impact_radius <= 0.0f ||
-            snapshot.target_impact_radius > 256.0f) {
-            snapshot.target_impact_radius = 0.0f;
-        }
-        snapshot.target_in_impact =
-            snapshot.target_impact_radius > 0.0f &&
-            std::isfinite(snapshot.target_distance) &&
-            snapshot.target_distance <= snapshot.target_impact_radius + 0.001f;
-    }
+    snapshot.progression_level = progression_level;
     snapshot.charge = release_charge;
-    snapshot.statbook_damage = resolved_statbook_damage;
-    snapshot.base_damage = resolved_statbook_damage;
+    snapshot.base_damage = resolved_native_damage;
+    snapshot.damage_output_scale = damage_output_scale;
+    snapshot.release_damage_scale = release_damage_scale;
+    snapshot.release_damage_floor = release_damage_floor;
+    snapshot.release_damage_cap_scale = release_damage_cap_scale;
     snapshot.projected_damage =
         snapshot.base_damage * snapshot.charge * snapshot.charge;
+    snapshot.projected_release_damage =
+        ProjectEarthBoulderReleaseDamage(
+            snapshot.base_damage,
+            snapshot.charge,
+            snapshot.release_damage_scale,
+            snapshot.release_damage_floor,
+            snapshot.release_damage_cap_scale);
+    snapshot.projected_hp_damage = snapshot.projected_release_damage;
     snapshot.readable =
         std::isfinite(snapshot.projected_damage) &&
-        snapshot.projected_damage > 0.0f;
+        snapshot.projected_damage > 0.0f &&
+        std::isfinite(snapshot.projected_release_damage) &&
+        snapshot.projected_release_damage > 0.0f &&
+        std::isfinite(snapshot.projected_hp_damage) &&
+        snapshot.projected_hp_damage > 0.0f;
     if (!snapshot.readable) {
         return snapshot;
     }
 
-    DWORD damage_getter_exception_code = 0;
-    snapshot.stat_source =
-        memory.ReadFieldOr<std::uintptr_t>(active_spell_snapshot.object, 0x58, 0);
-    if (snapshot.stat_source != 0 &&
-        memory.IsReadableRange(snapshot.stat_source, sizeof(std::uintptr_t))) {
-        snapshot.stat_vtable =
-            memory.ReadValueOr<std::uintptr_t>(snapshot.stat_source, 0);
-        if (snapshot.stat_vtable != 0 &&
-            memory.IsReadableRange(snapshot.stat_vtable + 0x100, sizeof(std::uintptr_t))) {
-            snapshot.damage_getter =
-                memory.ReadValueOr<std::uintptr_t>(snapshot.stat_vtable + 0x100, 0);
-        }
+    const auto current_target_actor = ResolveOngoingCastNativeTargetActor(
+        binding,
+        binding->ongoing_cast);
+    snapshot.requested_target_actor = current_target_actor;
+    ActorHealthRuntime requested_target_health{};
+    if (TryReadActorHealthRuntime(current_target_actor, &requested_target_health)) {
+        snapshot.requested_target_health_readable = true;
+        snapshot.requested_target_health_base = requested_target_health.base_address;
+        snapshot.requested_target_health_kind = requested_target_health.kind;
+        snapshot.requested_target_hp = requested_target_health.hp;
+        snapshot.requested_target_max_hp = requested_target_health.max_hp;
     }
-    if (snapshot.stat_source != 0 &&
-        snapshot.target_in_impact &&
-        snapshot.target_position_readable &&
-        std::isfinite(active_spell_snapshot.object_x) &&
-        std::isfinite(active_spell_snapshot.object_y) &&
-        std::isfinite(snapshot.target_impact_radius) &&
-        snapshot.target_impact_radius > 0.0f) {
-        const float object_radius =
-            std::isfinite(active_spell_snapshot.object_radius) &&
-                    active_spell_snapshot.object_radius > 0.0f
-                ? active_spell_snapshot.object_radius
-                : 0.0f;
-        const float context_radius =
-            object_radius > snapshot.target_impact_radius
-                ? object_radius
-                : snapshot.target_impact_radius;
-        if (std::isfinite(context_radius) && context_radius > 0.0f) {
-            snapshot.impact_context_write_attempted = true;
-            snapshot.impact_context_x = active_spell_snapshot.object_x - context_radius;
-            snapshot.impact_context_y = active_spell_snapshot.object_y;
-            snapshot.impact_context_radius = context_radius;
-            const bool write_x =
-                memory.TryWriteField<float>(
-                    snapshot.stat_source,
-                    0x8BCC,
-                    snapshot.impact_context_x);
-            const bool write_y =
-                memory.TryWriteField<float>(
-                    snapshot.stat_source,
-                    0x8BD0,
-                    snapshot.impact_context_y);
-            const bool write_radius =
-                memory.TryWriteField<float>(
-                    snapshot.stat_source,
-                    0x8BD4,
-                    snapshot.impact_context_radius);
-            const bool write_y_extent =
-                memory.TryWriteField<float>(
-                    snapshot.stat_source,
-                    0x8BD8,
-                    0.0f);
-            snapshot.impact_context_write_ok =
-                write_x && write_y && write_radius && write_y_extent;
-        }
-    }
-    if (snapshot.damage_getter != 0 &&
-        memory.IsExecutableRange(snapshot.damage_getter, 1)) {
-        snapshot.damage_getter_attempted = true;
-        snapshot.native_damage_scale_available =
-            CallNativeTwoFloatGetterSafe(
-                snapshot.damage_getter,
-                snapshot.stat_source,
-                snapshot.target_x,
-                snapshot.target_y,
-                &snapshot.target_damage_scale,
-                &damage_getter_exception_code) &&
-            snapshot.target_position_readable &&
-            std::isfinite(snapshot.target_damage_scale) &&
-            snapshot.target_damage_scale > 0.0f;
-        snapshot.damage_getter_seh = damage_getter_exception_code;
+    auto current_target_snapshot = snapshot;
+    const bool current_target_readable =
+        TryPopulateBoulderProjectionTarget(
+            memory,
+            active_spell_state,
+            &current_target_snapshot,
+            current_target_actor);
+    if (current_target_readable && IsBoulderProjectionTargetLethal(current_target_snapshot)) {
+        return current_target_snapshot;
     }
 
-    // The vtable getter is useful as a native reachability diagnostic,
-    // but damage magnitude follows the statbook "damage x size^2"
-    // formula recovered from the Earth release path and confirmed
-    // against live HP deltas.
+    auto impact_victim_snapshot = snapshot;
+    if (FindBestNativeBoulderImpactVictim(
+            memory,
+            active_spell_state,
+            snapshot,
+            &impact_victim_snapshot)) {
+        return impact_victim_snapshot;
+    }
+
+    // Read-only: callers may use the native release-damage projection to
+    // release a held Boulder when it can kill the live target. The native
+    // impact scan remains available for already-overlapped victims, but this
+    // helper never writes guessed native query context.
+    if (current_target_readable) {
+        return current_target_snapshot;
+    }
     return snapshot;
 }

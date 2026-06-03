@@ -1,7 +1,9 @@
 using GameplayKeyboardEdgeFn = std::uint8_t(__thiscall*)(void* self, std::uint32_t scancode);
 using GameplayMouseRefreshFn = void(__fastcall*)(void* self, void* unused_edx);
 using PlayerActorTickFn = void(__thiscall*)(void* self);
+using PlayerActorActionManagerTickFn = void(__thiscall*)(void* self);
 using PlayerActorNoArgMethodFn = void(__thiscall*)(void* self);
+using PlayerActorApplyManaDeltaFn = std::uint8_t(__thiscall*)(void* self, float delta, std::uint8_t allow_prompt);
 using PlayerActorDtorFn = void(__thiscall*)(void* self, char free_flag);
 using PuppetManagerDeletePuppetFn = void(__thiscall*)(void* self, void* actor);
 using PointerListDeleteBatchFn = void(__thiscall*)(void* self, void* list);
@@ -21,13 +23,13 @@ using ActorWorldRegisterFn = std::uint32_t(__thiscall*)(void* self, int actor_gr
 using ActorWorldUnregisterFn = void(__thiscall*)(void* self, void* actor, char remove_from_container);
 using ActorWorldRegisterGameplaySlotActorFn = void(__thiscall*)(void* self, int slot_index);
 using ActorWorldUnregisterGameplaySlotActorFn = void(__thiscall*)(void* self, int slot_index);
+using ActorWorldLookupObjectByHandleFn = uintptr_t(__thiscall*)(void* self, void* handle);
 using WorldCellGridRebindActorFn = void(__thiscall*)(void* self, void* actor);
 using MonsterPathfindingRefreshTargetFn = void(__fastcall*)(void* self, void* unused_edx);
 using PlayerActorMoveStepFn = std::uint32_t(__thiscall*)(void* self, void* actor, float move_x, float move_y, unsigned int flags);
 using SpellCastDispatcherFn = void(__thiscall*)(void* actor);
 using PurePrimarySpellStartFn = void(__thiscall*)(void* actor);
 using CastActiveHandleCleanupFn = void(__thiscall*)(void* actor);
-using NativeTwoFloatGetterFn = float(__thiscall*)(void* self, float x, float y);
 using ActorGetProfileFn = void*(__thiscall*)(void* self);
 using ProfileResolveStatEntryFn = void*(__thiscall*)(void* self, int stat_index);
 using StatBookComputeValueFn = float(__thiscall*)(void* self, float base_value, int entry_idx, char apply_modifier);
@@ -45,7 +47,7 @@ using ActorAnimationAdvanceFn = void(__thiscall*)(void* self);
 using PlayerActorRefreshRuntimeHandlesFn = void(__thiscall*)(void* self);
 using ActorProgressionRefreshFn = void(__thiscall*)(void* self);
 using PlayerAppearanceApplyChoiceFn = void(__thiscall*)(void* progression, int choice_id, int ensure_assets);
-using SkillsWizardBuildPrimarySpellFn = void(__thiscall*)(
+using SkillsWizardBuildPrimarySpellFn = std::uint32_t(__thiscall*)(
     void* self,
     std::uint32_t primary_entry,
     std::uint32_t combo_entry,
@@ -53,9 +55,10 @@ using SkillsWizardBuildPrimarySpellFn = void(__thiscall*)(
     std::uint32_t reserved1,
     std::uint32_t reserved2,
     std::uint32_t reserved3);
-using GameNpcSetMoveGoalFn = void(__thiscall*)(void* self, std::uint8_t mode, int follow_flag, float x, float y, float extra_scalar);
-using GameNpcSetTrackedSlotAssistFn = void(__thiscall*)(void* self, int slot_index, int require_callback);
-using EquipAttachmentSinkGetCurrentItemFn = int(__fastcall*)(int sink);
+using SkillsWizardGetPrimaryColorFn = void(__thiscall*)(
+    void* self,
+    float* out_color,
+    std::uint32_t primary_entry);
 using SpellActionBuilderFn = void(__thiscall*)(void* self, int mode, int arg2);
 using SpellBuilderResetFn = void(__cdecl*)();
 using SpellBuilderFinalizeFn = void(__cdecl*)();
@@ -64,12 +67,8 @@ using StandaloneWizardVisualLinkAttachFn = std::uint8_t(__thiscall*)(void* self,
 using ActorBuildRenderDescriptorFromSourceFn = void(__thiscall*)(void* self);
 using ScalarDeletingDestructorFn = void(__thiscall*)(void* self, int flags);
 using SpawnRewardGoldFn = void(__thiscall*)(void* self, std::uint32_t x_bits, std::uint32_t y_bits, int amount, int lifetime);
-using EnemyConfigCtorFn = void(__thiscall*)(void* self);
-using EnemyConfigDtorFn = void(__thiscall*)(void* self);
-using EnemyConfigBuildFn = void(__thiscall*)(void* self, int type_id, int variant, void* config_buffer, void* modifier_list);
-using EnemySpawnFn =
-    void* (__thiscall*)(void* self, void* spawn_anchor, void* enemy_config, int spawn_mode, int param_5, int param_6, char allow_override);
 using GameFreeFn = void(__cdecl*)(void* memory);
+using NativeRngInitializeFn = void(__thiscall*)(void* self, std::uint32_t seed);
 using GameplayHudRenderDispatchFn = void(__thiscall*)(void* self, int render_case);
 
 struct NativeGameString {

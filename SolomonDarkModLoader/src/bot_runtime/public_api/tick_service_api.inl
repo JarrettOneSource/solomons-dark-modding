@@ -91,7 +91,6 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
         }
 
         SDModParticipantGameplayState gameplay_state;
-        bool registered_gamenpc_native_movement = false;
         if (TryGetParticipantGameplayState(pending_intent.bot_id, &gameplay_state) &&
             gameplay_state.available &&
             gameplay_state.entity_materialized) {
@@ -99,8 +98,6 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
             current_x = gameplay_state.x;
             current_y = gameplay_state.y;
             current_heading = gameplay_state.heading;
-            registered_gamenpc_native_movement =
-                gameplay_state.entity_kind == kSDModParticipantGameplayKindRegisteredGameNpc;
         }
 
         if (participant_dead) {
@@ -114,24 +111,6 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
             updated_intent.desired_heading_valid = have_transform || pending_intent.desired_heading_valid;
             updated_intent.desired_heading =
                 have_transform ? current_heading : pending_intent.desired_heading;
-        } else if (registered_gamenpc_native_movement &&
-            updated_intent.state == BotControllerState::Moving &&
-            gameplay_state.movement_intent_revision == pending_intent.revision &&
-            !gameplay_state.moving) {
-            // Registered GameNpc movement is consumed on the gameplay scene-binding
-            // tick, not immediately at the runtime API boundary. Only treat
-            // moving=false as native completion after gameplay has observed the
-            // same movement intent revision; otherwise a freshly queued move_to()
-            // is collapsed back to idle before gameplay can build the path.
-            updated_intent.state = BotControllerState::Idle;
-            updated_intent.has_target = false;
-            updated_intent.target_x = current_x;
-            updated_intent.target_y = current_y;
-            updated_intent.distance_to_target = 0.0f;
-            updated_intent.direction_x = 0.0f;
-            updated_intent.direction_y = 0.0f;
-            updated_intent.desired_heading_valid = true;
-            updated_intent.desired_heading = current_heading;
         } else {
             DeriveControllerMotionFromTransform(&updated_intent, have_transform, current_x, current_y, current_heading);
         }
@@ -139,6 +118,7 @@ void TickBotRuntime(std::uint64_t monotonic_ms) {
         std::scoped_lock lock(g_bot_runtime_mutex);
         if (participant_dead) {
             RemovePendingCast(pending_intent.bot_id);
+            RemoveBotCastInput(pending_intent.bot_id);
         }
         auto* current_pending_intent = FindPendingMovementIntent(pending_intent.bot_id);
         if (current_pending_intent != nullptr && current_pending_intent->revision == pending_intent.revision) {

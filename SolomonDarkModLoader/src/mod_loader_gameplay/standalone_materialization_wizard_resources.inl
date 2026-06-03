@@ -6,8 +6,10 @@ void ReleaseStandaloneWizardSmartPointerResource(
     uintptr_t inner_address,
     const char* label) {
     auto& memory = ProcessMemory::Instance();
+    uintptr_t actor_wrapper_address = 0;
     if (actor_address != 0 &&
-        memory.ReadFieldOr<uintptr_t>(actor_address, handle_offset, 0) == wrapper_address) {
+        memory.TryReadField(actor_address, handle_offset, &actor_wrapper_address) &&
+        actor_wrapper_address == wrapper_address) {
         (void)memory.TryWriteField<uintptr_t>(actor_address, handle_offset, 0);
         (void)memory.TryWriteField<uintptr_t>(actor_address, runtime_state_offset, 0);
     }
@@ -211,6 +213,24 @@ bool CreateStandaloneWizardProgressionWrapper(
         return false;
     }
 
+    if (!EnsureBotOwnedProgressionMode(progression_object_address, "standalone_progression_ctor")) {
+        DWORD release_exception_code = 0;
+        if (!CallScalarDeletingDestructorSafe(
+                progression_object_address,
+                1,
+                &release_exception_code) &&
+            release_exception_code != 0) {
+            Log(
+                "[bots] standalone progression object cleanup skipped after mode failure. inner=" +
+                HexString(progression_object_address) +
+                " code=0x" + HexString(release_exception_code));
+        }
+        if (error_message != nullptr) {
+            *error_message = "Standalone progression could not be marked as bot-owned non-local mode.";
+        }
+        return false;
+    }
+
     uintptr_t progression_wrapper_address = 0;
     exception_code = 0;
     if (!CallGameOperatorNewSafe(
@@ -250,4 +270,3 @@ bool CreateStandaloneWizardProgressionWrapper(
     }
     return true;
 }
-

@@ -11,7 +11,9 @@ import sys
 from ctypes import wintypes
 from pathlib import Path
 
-PIPE_NAME = r"\\.\pipe\SolomonDarkModLoader_LuaExec"
+DEFAULT_PIPE_NAME = r"\\.\pipe\SolomonDarkModLoader_LuaExec"
+PIPE_PREFIX = "\\\\.\\pipe\\"
+PIPE_NAME_ENV = "SDMOD_LUA_EXEC_PIPE_NAME"
 BUFFER_SIZE = 4096
 MAX_MESSAGE_SIZE = 1024 * 1024
 
@@ -26,6 +28,18 @@ GENERIC_WRITE = 0x40000000
 OPEN_EXISTING = 3
 PIPE_READMODE_MESSAGE = 2
 INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+
+def _resolve_pipe_name() -> str:
+    configured = os.environ.get(PIPE_NAME_ENV, "").strip()
+    if not configured:
+        return DEFAULT_PIPE_NAME
+    if configured.lower().startswith(PIPE_PREFIX.lower()):
+        return configured
+    return PIPE_PREFIX + configured.replace("\\", "_").replace("/", "_")
+
+
+PIPE_NAME = _resolve_pipe_name()
 
 
 def _is_wsl() -> bool:
@@ -55,6 +69,8 @@ def _send_lua_wsl(code: str) -> str:
         "-NoProfile",
         "-File",
         "scripts/Invoke-LuaExec.ps1",
+        "-PipeName",
+        PIPE_NAME,
         "-Code",
         code,
     ]

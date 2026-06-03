@@ -16,18 +16,32 @@ internal static class StagedGameLauncher
         "SDMOD_TEST_AUTOSPAWN_BOT_WIZARD_ID",
         "SDMOD_TEST_AUTOSPAWN_BOT_TRACE",
         "SDMOD_EXPERIMENTAL_REMOTE_WIZARD_SPAWN",
-        "SDMOD_DISABLE_EXPERIMENTAL_REMOTE_WIZARD_SPAWN"
+        "SDMOD_DISABLE_EXPERIMENTAL_REMOTE_WIZARD_SPAWN",
+        "SDMOD_MULTIPLAYER_TRANSPORT",
+        "SDMOD_MULTIPLAYER_ROLE",
+        "SDMOD_MULTIPLAYER_LOCAL_PORT",
+        "SDMOD_MULTIPLAYER_REMOTE_HOST",
+        "SDMOD_MULTIPLAYER_REMOTE_PORT",
+        "SDMOD_MULTIPLAYER_PARTICIPANT_ID",
+        "SDMOD_MULTIPLAYER_PLAYER_NAME",
+        "SDMOD_LUA_EXEC_PIPE_NAME"
     };
 
     public static InjectedGame Launch(
         StageBuildResult stage,
         LauncherConfiguration configuration,
+        bool temporaryProfile = false,
         LaunchOptions? options = null)
     {
         options = IsolatedProfileBootstrapper.CreateLaunchOptions(
             configuration.Workspace,
             options?.EnvironmentOverrides,
-            TryResolveRetailAppDataPath());
+            TryResolveRetailAppDataPath(),
+            temporaryProfile);
+        if (options.TemporaryProfile && !string.IsNullOrWhiteSpace(options.SavegamesRootPath))
+        {
+            StageSandboxCompatibilityLinks.Materialize(stage.StageRootPath, options.SavegamesRootPath);
+        }
         options = ApplySandboxEnvironment(configuration, options);
         options = ApplySteamBootstrap(configuration, stage, options);
         var launchToken = Guid.NewGuid().ToString("N");
@@ -123,7 +137,7 @@ internal static class StagedGameLauncher
             environmentOverrides[SteamBootstrapConfiguration.ApiDllPathEnvironmentVariable] = stage.SteamBootstrap.StageApiDllPath;
         }
 
-        return new LaunchOptions(environmentOverrides);
+        return options with { EnvironmentOverrides = environmentOverrides };
     }
 
     private static LaunchOptions ApplySandboxEnvironment(
@@ -148,7 +162,7 @@ internal static class StagedGameLauncher
             }
         }
 
-        return new LaunchOptions(environmentOverrides);
+        return options with { EnvironmentOverrides = environmentOverrides };
     }
 
     private static LaunchOptions ApplyLaunchToken(LaunchOptions options, string launchToken)
@@ -163,7 +177,7 @@ internal static class StagedGameLauncher
         }
 
         environmentOverrides[LoaderLaunchContract.LaunchTokenEnvironmentVariable] = launchToken;
-        return new LaunchOptions(environmentOverrides);
+        return options with { EnvironmentOverrides = environmentOverrides };
     }
 
     private static string ResolveLoaderPath()

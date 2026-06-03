@@ -10,13 +10,20 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
         return;
     }
 
-    const auto live_buffer_index =
-        ProcessMemory::Instance().ReadFieldOr<int>(self_address, kGameplayInputBufferIndexOffset, -1);
+    int live_buffer_index = -1;
+    if (!ProcessMemory::Instance().TryReadField(
+            self_address,
+            kGameplayInputBufferIndexOffset,
+            &live_buffer_index)) {
+        return;
+    }
     if (live_buffer_index >= 0) {
         const auto live_mouse_button_offset = static_cast<std::size_t>(
             live_buffer_index * kGameplayInputBufferStride + kGameplayMouseLeftButtonOffset);
+        std::uint8_t mouse_left = 0;
         const bool is_pressed =
-            ProcessMemory::Instance().ReadFieldOr<std::uint8_t>(self_address, live_mouse_button_offset, 0) != 0;
+            ProcessMemory::Instance().TryReadField(self_address, live_mouse_button_offset, &mouse_left) &&
+            mouse_left != 0;
         const bool was_pressed =
             g_gameplay_keyboard_injection.last_observed_mouse_left_down.exchange(is_pressed, std::memory_order_acq_rel);
         if (is_pressed && !was_pressed) {
@@ -35,9 +42,12 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
             continue;
         }
 
-        const auto buffer_index =
-            ProcessMemory::Instance().ReadFieldOr<int>(self_address, kGameplayInputBufferIndexOffset, -1);
-        if (buffer_index < 0) {
+        int buffer_index = -1;
+        if (!ProcessMemory::Instance().TryReadField(
+                self_address,
+                kGameplayInputBufferIndexOffset,
+                &buffer_index) ||
+            buffer_index < 0) {
             return;
         }
 
@@ -79,4 +89,3 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
     }
 
 }
-

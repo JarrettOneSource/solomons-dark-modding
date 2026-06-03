@@ -14,14 +14,13 @@ bool CaptureActorAnimationDriveProfile(
     }
 
     profile->valid = true;
-    profile->walk_cycle_primary =
-        memory.ReadFieldOr<float>(actor_address, kActorWalkCyclePrimaryOffset, 0.0f);
-    profile->walk_cycle_secondary =
-        memory.ReadFieldOr<float>(actor_address, kActorWalkCycleSecondaryOffset, 0.0f);
-    profile->render_drive_stride =
-        memory.ReadFieldOr<float>(actor_address, kActorRenderDriveStrideScaleOffset, 0.0f);
-    profile->render_advance_rate =
-        memory.ReadFieldOr<float>(actor_address, kActorRenderAdvanceRateOffset, 0.0f);
+    if (!TryReadFiniteFloatField(actor_address, kActorWalkCyclePrimaryOffset, &profile->walk_cycle_primary) ||
+        !TryReadFiniteFloatField(actor_address, kActorWalkCycleSecondaryOffset, &profile->walk_cycle_secondary) ||
+        !TryReadFiniteFloatField(actor_address, kActorRenderDriveStrideScaleOffset, &profile->render_drive_stride) ||
+        !TryReadFiniteFloatField(actor_address, kActorRenderAdvanceRateOffset, &profile->render_advance_rate)) {
+        profile->valid = false;
+        return false;
+    }
     return true;
 }
 
@@ -170,7 +169,7 @@ void ApplyStandaloneWizardAnimationDriveProfile(
     }
 }
 
-void ApplyStandaloneWizardDynamicAnimationState(
+void ApplyWizardDynamicWalkCycleState(
     const ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
     if (binding == nullptr || actor_address == 0) {
@@ -200,12 +199,25 @@ void ApplyActorAnimationDriveState(uintptr_t actor_address, bool moving) {
         return;
     }
 
+    auto& memory = ProcessMemory::Instance();
+    float movement_vector_x = 0.0f;
+    float movement_vector_y = 0.0f;
+    const bool movement_vector_readable =
+        TryReadFiniteFloatField(actor_address, kActorAnimationConfigBlockOffset, &movement_vector_x) &&
+        TryReadFiniteFloatField(actor_address, kActorAnimationDriveParameterOffset, &movement_vector_y);
+
     if (const auto* observed_profile = SelectObservedAnimationDriveProfile(moving);
         observed_profile != nullptr) {
         (void)ApplyActorAnimationDriveProfile(actor_address, *observed_profile);
     }
+    if (moving && movement_vector_readable) {
+        // Observed profiles carry the local player's +0x158/+0x15C vector.
+        // Restore the bot's own vector after applying the profile so the stock
+        // render path does not drive staff/robe orientation from the player.
+        (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, movement_vector_x);
+        (void)memory.TryWriteField(actor_address, kActorAnimationDriveParameterOffset, movement_vector_y);
+    }
 
-    auto& memory = ProcessMemory::Instance();
     ClearLiveWizardActorAnimationDriveState(actor_address);
 
     if (!moving) {
@@ -213,8 +225,10 @@ void ApplyActorAnimationDriveState(uintptr_t actor_address, bool moving) {
         return;
     }
 
-    auto move_duration =
-        memory.ReadFieldOr<std::int32_t>(actor_address, kActorAnimationMoveDurationTicksOffset, 0);
+    std::int32_t move_duration = 0;
+    if (!memory.TryReadField(actor_address, kActorAnimationMoveDurationTicksOffset, &move_duration)) {
+        return;
+    }
     if (move_duration < 1) {
         move_duration = 1;
     } else if (move_duration < (std::numeric_limits<std::int32_t>::max)()) {
@@ -244,8 +258,10 @@ void ApplyWizardActorFacingState(uintptr_t actor_address, float heading_degrees)
     auto& memory = ProcessMemory::Instance();
     (void)memory.TryWriteField(actor_address, kActorHeadingOffset, heading);
 
-    const auto control_brain_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+    uintptr_t control_brain_address = 0;
+    if (!memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &control_brain_address)) {
+        return;
+    }
     if (control_brain_address == 0) {
         return;
     }
@@ -277,8 +293,10 @@ void ResetStandaloneWizardControlBrain(uintptr_t actor_address) {
 
     constexpr int kSuppressedSelectionRetargetTicks = 60;
     auto& memory = ProcessMemory::Instance();
-    const auto control_brain_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+    uintptr_t control_brain_address = 0;
+    if (!memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &control_brain_address)) {
+        return;
+    }
     if (control_brain_address == 0) {
         return;
     }
@@ -294,7 +312,8 @@ void ResetStandaloneWizardControlBrain(uintptr_t actor_address) {
     (void)memory.TryWriteValue<int>(control_brain_address + kActorControlBrainActionBurstTicksOffset, 0);
     (void)memory.TryWriteValue<int>(control_brain_address + kActorControlBrainHeadingLockTicksOffset, 0);
     (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainHeadingAccumulatorOffset, 0.0f);
-    (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainPursuitRangeOffset, 0.0f);
+    // Keep the native pursuit range populated; Lua uses it as the live primary
+    // attack window for non-water elements.
     (void)memory.TryWriteValue<std::uint8_t>(control_brain_address + kActorControlBrainFollowLeaderOffset, 0);
     (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainDesiredFacingOffset, 0.0f);
     (void)memory.TryWriteValue<float>(
@@ -313,13 +332,17 @@ void ApplyStandaloneWizardPuppetDriveState(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto control_brain_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+    uintptr_t control_brain_address = 0;
+    if (!memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &control_brain_address)) {
+        return;
+    }
     if (!moving) {
         (void)memory.TryWriteField(actor_address, kActorAnimationMoveDurationTicksOffset, 0);
     } else {
-        auto move_duration =
-            memory.ReadFieldOr<std::int32_t>(actor_address, kActorAnimationMoveDurationTicksOffset, 0);
+        std::int32_t move_duration = 0;
+        if (!memory.TryReadField(actor_address, kActorAnimationMoveDurationTicksOffset, &move_duration)) {
+            return;
+        }
         if (move_duration < 1) {
             move_duration = 1;
         } else if (move_duration < (std::numeric_limits<std::int32_t>::max)()) {
@@ -344,12 +367,14 @@ void ApplyStandaloneWizardPuppetDriveState(
         move_input_y = 0.0f;
     }
 
-    const auto desired_heading =
-        binding->facing_heading_valid
-            ? binding->facing_heading_value
-            : (binding->desired_heading_valid
-                   ? binding->desired_heading
-                   : memory.ReadFieldOr<float>(actor_address, kActorHeadingOffset, 0.0f));
+    float desired_heading = 0.0f;
+    if (binding->facing_heading_valid) {
+        desired_heading = binding->facing_heading_value;
+    } else if (binding->desired_heading_valid) {
+        desired_heading = binding->desired_heading;
+    } else if (!TryReadFiniteFloatField(actor_address, kActorHeadingOffset, &desired_heading)) {
+        return;
+    }
     (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainHeadingAccumulatorOffset, desired_heading);
     (void)memory.TryWriteValue<float>(control_brain_address + kActorControlBrainDesiredFacingOffset, desired_heading);
     (void)memory.TryWriteValue<float>(

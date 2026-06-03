@@ -18,12 +18,6 @@ bool IsLocalPlayerActorDestructorTarget(uintptr_t actor_address) {
         return true;
     }
 
-    uintptr_t global_actor_address = 0;
-    if (TryReadResolvedGamePointerAbsolute(kLocalPlayerActorGlobal, &global_actor_address) &&
-        global_actor_address == actor_address) {
-        return true;
-    }
-
     uintptr_t gameplay_address = 0;
     uintptr_t local_actor_address = 0;
     if (TryResolveCurrentGameplayScene(&gameplay_address) && gameplay_address != 0 &&
@@ -32,7 +26,7 @@ bool IsLocalPlayerActorDestructorTarget(uintptr_t actor_address) {
         return true;
     }
 
-    return ProcessMemory::Instance().ReadFieldOr<std::int8_t>(actor_address, kActorSlotOffset, -1) == 0;
+    return false;
 }
 
 void HandleLocalPlayerActorDestructorTeardown(uintptr_t actor_address, uintptr_t caller_address) {
@@ -78,6 +72,16 @@ void __fastcall HookPlayerActorDtor(void* self, void* /*unused_edx*/, char free_
     }
     if (tracked_wizard) {
         auto& memory = ProcessMemory::Instance();
+        const auto actor_pointer_field = [&](uintptr_t offset) {
+            uintptr_t value = 0;
+            return memory.TryReadField(actor_address, offset, &value)
+                ? HexString(value)
+                : std::string("unreadable");
+        };
+        std::int8_t actor_slot = 0;
+        const auto actor_slot_text = memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot)
+            ? std::to_string(static_cast<int>(actor_slot))
+            : std::string("unreadable");
         Log(
             "[bots] player_dtor enter" +
             std::string(" actor=") + HexString(actor_address) +
@@ -86,14 +90,11 @@ void __fastcall HookPlayerActorDtor(void* self, void* /*unused_edx*/, char free_
             " kind=" + std::to_string(static_cast<int>(tracked_kind)) +
             " arg=" + std::to_string(static_cast<int>(free_flag)) +
             " caller=" + HexString(caller_address) +
-            " owner=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0)) +
-            " slot=" + std::to_string(static_cast<int>(memory.ReadFieldOr<std::int8_t>(
-                actor_address,
-                kActorSlotOffset,
-                -1))) +
-            " +1FC=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipRuntimeStateOffset, 0)) +
-            " +200=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorProgressionRuntimeStateOffset, 0)) +
-            " +21C=" + HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0)));
+            " owner=" + actor_pointer_field(kActorOwnerOffset) +
+            " slot=" + actor_slot_text +
+            " +1FC=" + actor_pointer_field(kActorEquipRuntimeStateOffset) +
+            " +200=" + actor_pointer_field(kActorProgressionRuntimeStateOffset) +
+            " +21C=" + actor_pointer_field(kActorAnimationSelectionStateOffset));
     } else {
         LogStandaloneWizardActorLifecycleEvent(
             "player_dtor enter",
@@ -183,7 +184,10 @@ void __fastcall HookActorWorldUnregister(
     const auto now_ms = static_cast<std::uint64_t>(::GetTickCount64());
     const auto scene_churn_until =
         g_gameplay_keyboard_injection.scene_churn_not_before_ms.load(std::memory_order_acquire);
-    if (actor_address != 0 && remove_from_container == 1 && now_ms < scene_churn_until) {
+    if (actor_address != 0 &&
+        remove_from_container == 1 &&
+        now_ms < scene_churn_until &&
+        g_loader_owned_actor_destroy_unregister_depth == 0) {
         std::uint64_t bot_id = 0;
         int gameplay_slot = -1;
         if (TryCaptureTrackedStandaloneWizardBindingIdentity(actor_address, &bot_id, &gameplay_slot)) {
@@ -199,26 +203,10 @@ void __fastcall HookActorWorldUnregister(
     }
 
     if (actor_address != 0 && remove_from_container == 1) {
-        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-        if (const auto* binding = FindParticipantEntityForActor(actor_address);
-            binding != nullptr && IsRegisteredGameNpcKind(binding->kind)) {
-            Log(
-                "[bots] world_unregister observed for registered GameNpc. bot_id=" +
-                std::to_string(binding->bot_id) +
-                " actor=" + HexString(actor_address) +
-                " world_self=" + HexString(world_address) +
-                " actor_owner=" + HexString(ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
-                    actor_address,
-                    kActorOwnerOffset,
-                    0)) +
-                " remove_from_container=" + std::to_string(static_cast<int>(remove_from_container)));
-        }
-    }
-
-    if (actor_address != 0 && remove_from_container == 1) {
-        const auto actor_owner =
-            ProcessMemory::Instance().ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
-        if (actor_owner != 0 && actor_owner != world_address) {
+        uintptr_t actor_owner = 0;
+        if (ProcessMemory::Instance().TryReadField(actor_address, kActorOwnerOffset, &actor_owner) &&
+            actor_owner != 0 &&
+            actor_owner != world_address) {
             std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
             if (const auto* binding = FindParticipantEntityForActor(actor_address);
                 binding != nullptr && binding->kind == ParticipantEntityBinding::Kind::StandaloneWizard) {
@@ -246,13 +234,32 @@ void __fastcall HookGameplaySwitchRegion(void* self, void* /*unused_edx*/, int r
         return;
     }
 
+    if (region_index == kArenaRegionIndex &&
+        multiplayer::IsLocalTransportClient() &&
+        g_multiplayer_client_authorized_hub_run_switch_depth == 0) {
+        Log("Blocked client run switch_region while connected to multiplayer; waiting for host run intent.");
+        return;
+    }
+
     const auto gameplay_address = reinterpret_cast<uintptr_t>(self);
-    DematerializeAllMaterializedWizardBotsForSceneSwitch("scene switch pre-dispatch");
+    (void)ApplyPendingRunGenerationSeedForSceneSwitch(region_index, "gameplay_switch_region_pre_dispatch");
+    const auto scene_churn_until =
+        static_cast<std::uint64_t>(::GetTickCount64()) + kGameplaySceneChurnDelayMs;
     g_gameplay_keyboard_injection.scene_churn_not_before_ms.store(
-        static_cast<std::uint64_t>(::GetTickCount64()) + kGameplaySceneChurnDelayMs,
+        scene_churn_until,
         std::memory_order_release);
+    g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.store(
+        scene_churn_until,
+        std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
+        g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();
+    }
+    RemoveReplicatedCreatedSharedHubActorsForSceneSwitch("scene switch pre-dispatch");
+    DematerializeAllMaterializedWizardBotsForSceneSwitch("scene switch pre-dispatch");
     Log(
         "[bots] gameplay switch-region hook. gameplay=" + HexString(gameplay_address) +
         " target_region=" + std::to_string(region_index));
     original(self, region_index);
+    AbandonMaterializedWizardBotsForSceneSwitch("scene switch post-dispatch");
 }

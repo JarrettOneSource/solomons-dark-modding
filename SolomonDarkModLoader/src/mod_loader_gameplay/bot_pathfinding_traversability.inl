@@ -4,30 +4,11 @@ std::uint32_t ResolveGameplayPathCollisionMask(ParticipantEntityBinding* binding
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto actor_mask =
-        memory.ReadFieldOr<std::uint32_t>(binding->actor_address, kActorPrimaryFlagMaskOffset, 0);
-    if (actor_mask != 0) {
-        return actor_mask;
+    std::uint32_t actor_mask = 0;
+    if (!memory.TryReadField(binding->actor_address, kActorPrimaryFlagMaskOffset, &actor_mask)) {
+        return 0;
     }
-
-    // Stock only seeds +0x38/+0x3C through the slot-0 actor path, so
-    // gameplay-slot bots can legitimately keep zero masks. For path planning we
-    // want player-equivalent placement semantics without mutating the bot's live
-    // actor identity fields.
-    uintptr_t gameplay_address = 0;
-    if (!TryResolveCurrentGameplayScene(&gameplay_address) || gameplay_address == 0) {
-        return actor_mask;
-    }
-
-    uintptr_t local_player_actor_address = 0;
-    if (!TryResolvePlayerActorForSlot(gameplay_address, 0, &local_player_actor_address) ||
-        local_player_actor_address == 0) {
-        return actor_mask;
-    }
-
-    const auto player_mask =
-        memory.ReadFieldOr<std::uint32_t>(local_player_actor_address, kActorPrimaryFlagMaskOffset, 0);
-    return player_mask != 0 ? player_mask : actor_mask;
+    return actor_mask;
 }
 
 bool DoesGameplayPathCircleOverlapObstacle(
@@ -71,6 +52,68 @@ bool IsGameplayPathOverlappingIgnoredCircleObstacle(
         radius);
 }
 
+bool IsGameplayPathBlockedByWizardParticipant(
+    const ParticipantEntityBinding* binding,
+    float world_x,
+    float world_y,
+    float radius,
+    std::string* error_message) {
+    if (binding == nullptr ||
+        binding->actor_address == 0 ||
+        radius <= 0.0f ||
+        !std::isfinite(world_x) ||
+        !std::isfinite(world_y) ||
+        !std::isfinite(radius)) {
+        return false;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    for (const auto& other : g_participant_entities) {
+        if (!IsWizardParticipantKind(other.kind) ||
+            other.actor_address == 0 ||
+            other.actor_address == binding->actor_address) {
+            continue;
+        }
+        if (binding->bot_id != 0 && other.bot_id == binding->bot_id) {
+            continue;
+        }
+        if (binding->materialized_world_address != 0 &&
+            other.materialized_world_address != 0 &&
+            other.materialized_world_address != binding->materialized_world_address) {
+            continue;
+        }
+
+        float other_x = 0.0f;
+        float other_y = 0.0f;
+        float other_radius = 0.0f;
+        if (!TryReadFiniteFloatField(other.actor_address, kActorPositionXOffset, &other_x) ||
+            !TryReadFiniteFloatField(other.actor_address, kActorPositionYOffset, &other_y) ||
+            !TryReadFiniteFloatField(other.actor_address, kActorCollisionRadiusOffset, &other_radius) ||
+            other_radius <= 0.0f ||
+            !std::isfinite(other_x) ||
+            !std::isfinite(other_y) ||
+            !std::isfinite(other_radius)) {
+            continue;
+        }
+
+        const auto combined_radius = radius + other_radius + 0.5f;
+        const auto delta_x = world_x - other_x;
+        const auto delta_y = world_y - other_y;
+        if ((delta_x * delta_x) + (delta_y * delta_y) <= combined_radius * combined_radius) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Path placement overlaps another wizard participant. actor=" +
+                    HexString(binding->actor_address) +
+                    " other_actor=" + HexString(other.actor_address) +
+                    " point=(" + std::to_string(world_x) + ", " + std::to_string(world_y) + ")";
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool IsGameplayPathPlacementTraversable(
     const GameplayPathGridSnapshot& snapshot,
     ParticipantEntityBinding* binding,
@@ -99,11 +142,18 @@ bool IsGameplayPathPlacementTraversable(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto radius = memory.ReadFieldOr<float>(binding->actor_address, kActorCollisionRadiusOffset, 0.0f);
-    const auto collision_mask = ResolveGameplayPathCollisionMask(binding);
-    if (radius <= 0.0f) {
+    (void)memory;
+    float radius = 0.0f;
+    if (!TryReadFiniteFloatField(binding->actor_address, kActorCollisionRadiusOffset, &radius)) {
         if (error_message != nullptr) {
-            *error_message = "Bot actor has no collision radius for path placement queries.";
+            *error_message = "Bot actor collision radius is unreadable for path placement queries.";
+        }
+        return false;
+    }
+    const auto collision_mask = ResolveGameplayPathCollisionMask(binding);
+    if (radius <= 0.0f || collision_mask == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor has no native collision radius or mask for path placement queries.";
         }
         return false;
     }
@@ -111,16 +161,21 @@ bool IsGameplayPathPlacementTraversable(
     if (IsGameplayPathBlockedByStaticCircleObstacle(snapshot, world_x, world_y, radius)) {
         return false;
     }
+    if (IsGameplayPathBlockedByWizardParticipant(binding, world_x, world_y, radius, error_message)) {
+        return false;
+    }
 
     std::uint32_t blocked = 0;
     DWORD exception_code = 0;
+    const auto static_circle_obstacle_mask = GameplayPathStaticCircleObstacleMask();
+    const auto pushable_circle_obstacle_mask = GameplayPathPushableCircleObstacleMask();
     const auto native_circle_block_mask =
         collision_mask &
-        ~(kGameplayPathStaticCircleObstacleMask | kGameplayPathPushableCircleObstacleMask);
+        ~(static_circle_obstacle_mask | pushable_circle_obstacle_mask);
     const auto native_overlap_allow_mask =
         collision_mask |
-        kGameplayPathStaticCircleObstacleMask |
-        kGameplayPathPushableCircleObstacleMask;
+        static_circle_obstacle_mask |
+        pushable_circle_obstacle_mask;
     const auto extended_placement_address =
         memory.ResolveGameAddressOrZero(kMovementCollisionTestCirclePlacementExtended);
     bool placement_ok = false;
@@ -186,7 +241,14 @@ bool IsGameplayPathSegmentTraversable(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto radius = memory.ReadFieldOr<float>(binding->actor_address, kActorCollisionRadiusOffset, 0.0f);
+    (void)memory;
+    float radius = 0.0f;
+    if (!TryReadFiniteFloatField(binding->actor_address, kActorCollisionRadiusOffset, &radius)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor collision radius is unreadable for path segment queries.";
+        }
+        return false;
+    }
     const auto cell_min = snapshot.cell_width < snapshot.cell_height ? snapshot.cell_width : snapshot.cell_height;
     float step_distance = cell_min * 0.25f;
     if (radius > 0.0f) {

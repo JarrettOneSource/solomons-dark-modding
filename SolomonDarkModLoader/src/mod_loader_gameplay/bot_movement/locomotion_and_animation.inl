@@ -22,6 +22,8 @@ void QuiesceDeadWizardBinding(ParticipantEntityBinding* binding) {
     binding->has_target = false;
     binding->direction_x = 0.0f;
     binding->direction_y = 0.0f;
+    binding->native_movement_accumulator_x = 0.0f;
+    binding->native_movement_accumulator_y = 0.0f;
     binding->desired_heading_valid = false;
     binding->desired_heading = 0.0f;
     binding->target_x = 0.0f;
@@ -40,24 +42,48 @@ void QuiesceDeadWizardBinding(ParticipantEntityBinding* binding) {
     binding->stock_tick_facing_origin_y = 0.0f;
 }
 
-void AdvanceStandaloneWizardWalkCycleState(
+void AdvanceWizardWalkCycleState(
     ParticipantEntityBinding* binding,
     float displacement_distance) {
-    if (binding == nullptr || !std::isfinite(displacement_distance) || displacement_distance <= 0.0001f) {
+    if (binding == nullptr ||
+        !IsWizardParticipantKind(binding->kind) ||
+        !std::isfinite(displacement_distance) ||
+        displacement_distance <= 0.0001f) {
         return;
     }
 
-    const auto primary_divisor =
-        (std::max)(0.0001f, ReadResolvedGameDoubleAsFloatOr(kActorWalkCyclePrimaryDivisorGlobal, 1.0f));
-    const auto secondary_divisor =
-        (std::max)(0.0001f, ReadResolvedGameDoubleAsFloatOr(kActorWalkCycleSecondaryDivisorGlobal, 1.0f));
-    const auto primary_wrap_threshold =
-        (std::max)(0.0001f, ReadResolvedGameFloatOr(kActorWalkCyclePrimaryWrapThresholdGlobal, 1.0f));
-    const auto secondary_wrap_threshold =
-        (std::max)(0.0001f, ReadResolvedGameFloatOr(kActorWalkCycleSecondaryWrapThresholdGlobal, 1.0f));
-    const auto secondary_wrap_step =
-        (std::max)(0.0001f, ReadResolvedGameDoubleAsFloatOr(kActorWalkCycleSecondaryWrapStepGlobal, secondary_wrap_threshold));
-    const auto stride_step = ReadResolvedGameDoubleAsFloatOr(kActorWalkCycleStrideStepGlobal, 1.0f);
+    float primary_divisor = 0.0f;
+    float secondary_divisor = 0.0f;
+    float primary_wrap_threshold = 0.0f;
+    float secondary_wrap_threshold = 0.0f;
+    float secondary_wrap_step = 0.0f;
+    float stride_step = 0.0f;
+    const bool have_native_walk_cycle_globals =
+        TryReadResolvedGameDoubleAsFloat(kActorWalkCyclePrimaryDivisorGlobal, &primary_divisor) &&
+        TryReadResolvedGameDoubleAsFloat(kActorWalkCycleSecondaryDivisorGlobal, &secondary_divisor) &&
+        TryReadResolvedGameFloat(kActorWalkCyclePrimaryWrapThresholdGlobal, &primary_wrap_threshold) &&
+        TryReadResolvedGameFloat(kActorWalkCycleSecondaryWrapThresholdGlobal, &secondary_wrap_threshold) &&
+        TryReadResolvedGameDoubleAsFloat(kActorWalkCycleSecondaryWrapStepGlobal, &secondary_wrap_step) &&
+        TryReadResolvedGameDoubleAsFloat(kActorWalkCycleStrideStepGlobal, &stride_step);
+    if (!have_native_walk_cycle_globals ||
+        !std::isfinite(primary_divisor) ||
+        !std::isfinite(secondary_divisor) ||
+        !std::isfinite(primary_wrap_threshold) ||
+        !std::isfinite(secondary_wrap_threshold) ||
+        !std::isfinite(secondary_wrap_step) ||
+        !std::isfinite(stride_step) ||
+        primary_divisor <= 0.0001f ||
+        secondary_divisor <= 0.0001f ||
+        primary_wrap_threshold <= 0.0001f ||
+        secondary_wrap_threshold <= 0.0001f ||
+        secondary_wrap_step <= 0.0001f) {
+        static bool s_logged_missing_native_walk_cycle_globals = false;
+        if (!s_logged_missing_native_walk_cycle_globals) {
+            s_logged_missing_native_walk_cycle_globals = true;
+            Log("[bots] native walk-cycle globals unavailable; dynamic wizard walk-cycle update skipped.");
+        }
+        return;
+    }
 
     auto primary = binding->dynamic_walk_cycle_primary;
     auto secondary = binding->dynamic_walk_cycle_secondary;
@@ -82,10 +108,17 @@ void AdvanceStandaloneWizardWalkCycleState(
 
     binding->dynamic_walk_cycle_primary = primary;
     binding->dynamic_walk_cycle_secondary = secondary;
-    binding->dynamic_render_drive_stride = stride_step;
-    binding->dynamic_render_advance_rate = displacement_distance;
-    binding->dynamic_render_drive_move_blend = 1.0f;
-    binding->dynamic_render_advance_phase = primary;
+    (void)stride_step;
+}
+
+void ClearWizardBotMovementVectorInputs(uintptr_t actor_address) {
+    if (!IsParticipantActorMemoryFreshWritable(actor_address)) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, 0.0f);
+    (void)memory.TryWriteField(actor_address, kActorAnimationDriveParameterOffset, 0.0f);
 }
 
 void ClearWizardBotLocomotionInputs(uintptr_t actor_address) {
@@ -94,14 +127,12 @@ void ClearWizardBotLocomotionInputs(uintptr_t actor_address) {
     }
 
     auto& memory = ProcessMemory::Instance();
-    (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, 0.0f);
-    (void)memory.TryWriteField(actor_address, kActorAnimationDriveParameterOffset, 0.0f);
+    ClearWizardBotMovementVectorInputs(actor_address);
     (void)memory.TryWriteField(actor_address, kActorWalkCyclePrimaryOffset, 0.0f);
     (void)memory.TryWriteField(actor_address, kActorWalkCycleSecondaryOffset, 0.0f);
     (void)memory.TryWriteField(actor_address, kActorRenderDriveStrideScaleOffset, 0.0f);
     (void)memory.TryWriteField(actor_address, kActorRenderAdvanceRateOffset, 0.0f);
     (void)memory.TryWriteField(actor_address, kActorRenderAdvancePhaseOffset, 0.0f);
-    (void)memory.TryWriteField(actor_address, kActorRenderDriveMoveBlendOffset, 0.0f);
 }
 
 void StopWizardBotActorMotion(uintptr_t actor_address) {
@@ -118,15 +149,20 @@ void StopWizardBotActorMotion(uintptr_t actor_address) {
 
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
     if (auto* binding = FindParticipantEntityForActor(actor_address);
-        binding != nullptr && binding->kind == ParticipantEntityBinding::Kind::StandaloneWizard) {
-        ApplyObservedBotAnimationState(binding, actor_address, false);
+        binding != nullptr && IsWizardParticipantKind(binding->kind)) {
+        binding->native_movement_accumulator_x = 0.0f;
+        binding->native_movement_accumulator_y = 0.0f;
         binding->dynamic_walk_cycle_primary = 0.0f;
         binding->dynamic_walk_cycle_secondary = 0.0f;
         binding->dynamic_render_drive_stride = 0.0f;
         binding->dynamic_render_advance_rate = 0.0f;
         binding->dynamic_render_advance_phase = 0.0f;
-        binding->dynamic_render_drive_move_blend = 0.0f;
-        ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
+        if (IsStandaloneWizardKind(binding->kind)) {
+            ApplyObservedBotAnimationState(binding, actor_address, false);
+            ApplyWizardDynamicWalkCycleState(binding, actor_address);
+        } else {
+            ApplyActorAnimationDriveState(actor_address, false);
+        }
         return;
     }
 
@@ -154,26 +190,47 @@ void StopDeadWizardBotActorMotion(uintptr_t actor_address) {
 
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
     if (auto* binding = FindParticipantEntityForActor(actor_address);
-        binding != nullptr && binding->kind == ParticipantEntityBinding::Kind::StandaloneWizard) {
+        binding != nullptr && IsStandaloneWizardKind(binding->kind)) {
+        binding->native_movement_accumulator_x = 0.0f;
+        binding->native_movement_accumulator_y = 0.0f;
         binding->dynamic_walk_cycle_primary = 0.0f;
         binding->dynamic_walk_cycle_secondary = 0.0f;
         binding->dynamic_render_drive_stride = 0.0f;
         binding->dynamic_render_advance_rate = 0.0f;
         binding->dynamic_render_advance_phase = 0.0f;
-        binding->dynamic_render_drive_move_blend = 0.0f;
-        ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
+        ApplyWizardDynamicWalkCycleState(binding, actor_address);
     }
 }
 
 void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t actor_address, bool moving) {
-    if (binding == nullptr || actor_address == 0 || binding->kind != ParticipantEntityBinding::Kind::StandaloneWizard) {
+    if (binding == nullptr || actor_address == 0 || !IsWizardParticipantKind(binding->kind)) {
         return;
     }
+    if (!IsStandaloneWizardKind(binding->kind)) {
+        ApplyActorAnimationDriveState(actor_address, moving);
+        if (moving) {
+            ApplyWizardDynamicWalkCycleState(binding, actor_address);
+        }
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    float movement_vector_x = 0.0f;
+    float movement_vector_y = 0.0f;
+    const bool movement_vector_readable =
+        TryReadFiniteFloatField(actor_address, kActorAnimationConfigBlockOffset, &movement_vector_x) &&
+        TryReadFiniteFloatField(actor_address, kActorAnimationDriveParameterOffset, &movement_vector_y);
 
     ClearLiveWizardActorAnimationDriveState(actor_address);
     ApplyStandaloneWizardAnimationDriveProfile(binding, actor_address, moving);
     ApplyStandaloneWizardPuppetDriveState(binding, actor_address, moving);
-    ApplyStandaloneWizardDynamicAnimationState(binding, actor_address);
+    ApplyWizardDynamicWalkCycleState(binding, actor_address);
+    if (moving && movement_vector_readable) {
+        // Standalone profiles are captured from the local player and include
+        // its live +0x158/+0x15C vector. Keep the bot's own vector after replay.
+        (void)memory.TryWriteField(actor_address, kActorAnimationConfigBlockOffset, movement_vector_x);
+        (void)memory.TryWriteField(actor_address, kActorAnimationDriveParameterOffset, movement_vector_y);
+    }
 
     const auto desired_state_id = ResolveProfileSelectionState(binding->character_profile);
     if (TryWriteActorAnimationStateIdDirect(actor_address, desired_state_id)) {
@@ -210,26 +267,24 @@ void LogWizardBotMovementFrame(
     }
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
     (void)now_ms;
-    auto& memory = ProcessMemory::Instance();
     const auto delta_x = position_after_x - position_before_x;
     const auto delta_y = position_after_y - position_before_y;
     const auto d = std::sqrt(delta_x * delta_x + delta_y * delta_y);
-    const auto scale_0x74 = memory.ReadFieldOr<float>(actor_address, kActorMoveSpeedScaleOffset, 0.0f);
-    const auto move_step_scale_0x218 =
-        memory.ReadFieldOr<float>(actor_address, kActorMoveStepScaleOffset, 0.0f);
-    const auto dir_x_0x158 =
-        memory.ReadFieldOr<float>(actor_address, kActorAnimationConfigBlockOffset, 0.0f);
-    const auto dir_y_0x15C =
-        memory.ReadFieldOr<float>(actor_address, kActorAnimationDriveParameterOffset, 0.0f);
+    const auto read_float_text = [&](std::size_t offset) -> std::string {
+        float value = 0.0f;
+        return TryReadFiniteFloatField(actor_address, offset, &value)
+            ? std::to_string(value)
+            : std::string("unreadable");
+    };
     Log(
         "[bots] standalone_mv bot=" + std::to_string(binding->bot_id) +
         " before=(" + std::to_string(position_before_x) + "," + std::to_string(position_before_y) + ")" +
         " after=(" + std::to_string(position_after_x) + "," + std::to_string(position_after_y) + ")" +
         " d=" + std::to_string(d) +
         " dir=(" + std::to_string(direction_x) + "," + std::to_string(direction_y) + ")" +
-        " 0x74=" + std::to_string(scale_0x74) +
-        " 0x218=" + std::to_string(move_step_scale_0x218) +
-        " 0x158=" + std::to_string(dir_x_0x158) +
-        " 0x15C=" + std::to_string(dir_y_0x15C) +
+        " 0x74=" + read_float_text(kActorMoveSpeedScaleOffset) +
+        " 0x218=" + read_float_text(kActorMoveStepScaleOffset) +
+        " 0x158=" + read_float_text(kActorAnimationConfigBlockOffset) +
+        " 0x15C=" + read_float_text(kActorAnimationDriveParameterOffset) +
         " path=" + std::string(path_label != nullptr ? path_label : ""));
 }

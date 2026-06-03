@@ -49,10 +49,12 @@ void ApplyCharacterProfile(ParticipantInfo* participant, const MultiplayerCharac
 
 void ResetPendingState() {
     g_pending_casts.clear();
+    g_bot_cast_inputs.clear();
     g_pending_entity_syncs.clear();
     g_bot_movement_intents.clear();
     g_pending_destroys.clear();
     g_pending_skill_choices.clear();
+    g_bot_mana_reserves.clear();
     g_next_cast_sequence = 1;
     g_next_entity_sync_generation = 1;
     g_next_movement_intent_revision = 1;

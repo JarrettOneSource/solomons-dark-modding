@@ -25,17 +25,16 @@ DEFAULT_PROBE_HP_VALUE = 500.0
 DEFAULT_ELEMENT = "ether"
 DEFAULT_DISCIPLINE = "mind"
 
-PROGRESSION_POINTER_OFFSET = 0x200
-PROGRESSION_HANDLE_OFFSET = 0x300
-OBJECT_TYPE_ID_OFFSET = 0x08
-ARENA_ENEMY_OBJECT_TYPE_ID = 1001
-ARENA_ENEMY_MAX_HP_OFFSET = 0x170
-ARENA_ENEMY_HP_OFFSET = 0x174
-SPELL_DISPATCH_BODY_ADDRESS = 0x00548A03
-SPELL_3EF_BODY_ADDRESS = 0x0052BB87
+PROGRESSION_POINTER_OFFSET = csp.read_runtime_layout_offset("actor_progression_runtime_state")
+PROGRESSION_HANDLE_OFFSET = csp.read_runtime_layout_offset("actor_progression_handle")
+OBJECT_TYPE_ID_OFFSET = csp.read_runtime_layout_offset("game_object_type_id")
+ARENA_ENEMY_MAX_HP_OFFSET = csp.read_runtime_layout_offset("enemy_max_hp")
+ARENA_ENEMY_HP_OFFSET = csp.read_runtime_layout_offset("enemy_current_hp")
+SPELL_DISPATCH_BODY_ADDRESS = csp.read_runtime_layout_offset("trace_spell_cast_dispatcher_body")
+SPELL_3EF_BODY_ADDRESS = csp.read_runtime_layout_offset("trace_spell_cast_3ef_body")
 
 ATTACK_RE = re.compile(
-    r"attack id=.*? enemy=0x([0-9A-Fa-f]+).*?"
+    r"attack id=(\d+).*? enemy=0x([0-9A-Fa-f]+).*?"
     r"bot=\(([0-9.+-]+),\s*([0-9.+-]+)\).*?"
     r"target=\(([0-9.+-]+),\s*([0-9.+-]+)\).*?"
     r"gap=([0-9.]+)"
@@ -67,6 +66,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
     parser.add_argument("--keep-running", action="store_true")
     parser.add_argument("--skip-hp-watch", action="store_true")
+    parser.add_argument(
+        "--semantic-setup-only",
+        action="store_true",
+        help="Stop after proving tracked_enemy discovery and semantic arena-health setup.",
+    )
     return parser
 
 
@@ -96,7 +100,11 @@ def start_clean_testrun(process_id: int, element: str, discipline: str) -> dict[
     return {"hub_flow": hub_flow, "testrun": testrun}
 
 
-def sustain_probe_health(hp_value: float = DEFAULT_PROBE_HP_VALUE) -> dict[str, str]:
+def sustain_probe_health(
+    hp_value: float = DEFAULT_PROBE_HP_VALUE,
+    bot_id: int | None = None,
+) -> dict[str, str]:
+    bot_id_value = 0 if bot_id is None else int(bot_id)
     return csp.parse_key_values(
         csp.run_lua(
             f"""
@@ -118,8 +126,21 @@ if type(player) == 'table' then
   end
 end
 
+local selected_bot_id = {bot_id_value}
 local bots = sd.bots and sd.bots.get_state and sd.bots.get_state()
-local bot = type(bots) == 'table' and bots[1] or nil
+local bot = nil
+if type(bots) == 'table' then
+  if selected_bot_id ~= 0 then
+    for _, candidate in ipairs(bots) do
+      if tonumber(candidate.id) == selected_bot_id then
+        bot = candidate
+        break
+      end
+    end
+  else
+    bot = bots[1]
+  end
+end
 if type(bot) == 'table' then
   local progression = tonumber(bot.progression_runtime_state_address) or 0
   emit('bot_id', bot.id)
@@ -148,8 +169,7 @@ local function emit(key, value)
 end
 local n = 0
 for _, actor in ipairs(actors) do
-  local object_type_id = tonumber(actor.object_type_id) or 0
-  if object_type_id == 1001 then
+  if actor.tracked_enemy == true then
     n = n + 1
     local prefix = "enemy." .. tostring(n) .. "."
     for _, key in ipairs({
@@ -224,6 +244,122 @@ def wait_for_specific_live_enemies(addresses: list[int], timeout_s: float = 12.0
     )
 
 
+def list_bot_states() -> list[dict[str, str]]:
+    values = csp.parse_key_values(
+        csp.run_lua(
+            """
+local bots = sd.bots and sd.bots.get_state and sd.bots.get_state() or {}
+local contexts = rawget(_G, "lua_bots_debug")
+contexts = type(contexts) == "table" and type(contexts.bots) == "table" and contexts.bots or {}
+local function emit(key, value)
+  if value == nil then
+    print(key .. "=")
+  else
+    print(key .. "=" .. tostring(value))
+  end
+end
+local function context_for_bot(bot_id)
+  for _, context in ipairs(contexts) do
+    if tostring(context.bot_id) == tostring(bot_id) then
+      return context
+    end
+  end
+  return nil
+end
+emit("count", #bots)
+for index, bot in ipairs(bots) do
+  local prefix = "bot." .. tostring(index) .. "."
+  local context = context_for_bot(bot.id)
+  local profile = type(context) == "table" and context.bot_profile or nil
+  for _, key in ipairs({
+    "id","actor_address","progression_runtime_state_address","progression_handle_address",
+    "equip_handle_address","equip_runtime_state_address","gameplay_slot","actor_slot",
+    "hp","max_hp","mp","max_mp","x","y","state"
+  }) do
+    emit(prefix .. key, bot[key])
+  end
+  emit(prefix .. "bot_name", type(context) == "table" and context.bot_name or nil)
+  emit(prefix .. "profile_element_id", type(profile) == "table" and profile.element_id or nil)
+  emit(prefix .. "profile_discipline_id", type(profile) == "table" and profile.discipline_id or nil)
+end
+""".strip()
+        )
+    )
+    bots: list[dict[str, str]] = []
+    for index in range(1, csp.int_value(values, "count") + 1):
+        prefix = f"bot.{index}."
+        bot = {
+            key[len(prefix):]: value
+            for key, value in values.items()
+            if key.startswith(prefix)
+        }
+        if bot:
+            bots.append(bot)
+    return bots
+
+
+def wait_for_materialized_bots(min_count: int = 2, timeout_s: float = 45.0) -> list[dict[str, str]]:
+    deadline = time.time() + timeout_s
+    last: list[dict[str, str]] = []
+    while time.time() < deadline:
+        last = [
+            bot for bot in list_bot_states()
+            if csp.int_value(bot, "actor_address") != 0
+        ]
+        if len(last) >= min_count:
+            return last
+        time.sleep(0.25)
+    raise AutonomousCombatProbeFailure(
+        f"Timed out waiting for {min_count} materialized bots. Last={last}"
+    )
+
+
+def choose_probe_bot(bots: list[dict[str, str]]) -> dict[str, str]:
+    materialized = [
+        bot for bot in bots
+        if csp.int_value(bot, "id") != 0 and csp.int_value(bot, "actor_address") != 0
+    ]
+    if not materialized:
+        raise AutonomousCombatProbeFailure(f"No materialized bot available for autonomous probe. Bots={bots}")
+
+    for bot in materialized:
+        if csp.int_value(bot, "profile_element_id") == 0:
+            return bot
+    for bot in materialized:
+        profile_element_id = csp.int_value(bot, "profile_element_id")
+        if profile_element_id != 2:
+            return bot
+    return materialized[0]
+
+
+def query_bot_state_by_id(bot_id: int) -> dict[str, str]:
+    for bot in list_bot_states():
+        if csp.int_value(bot, "id") == bot_id:
+            bot["available"] = "true"
+            return bot
+    return {"available": "false", "id": str(bot_id)}
+
+
+def promote_bot_into_run_scene(bot_id: int, player_x: float, player_y: float) -> dict[str, str]:
+    return csp.parse_key_values(
+        csp.run_lua(
+            f"""
+local ok = sd.bots.update({{
+  id = {bot_id},
+  scene = {{ kind = 'run' }},
+  heading = 25.0,
+  position = {{
+    x = {player_x + crc.SPAWN_OFFSET_X},
+    y = {player_y},
+  }},
+}})
+print('ok=' .. tostring(ok))
+print('bot_id=' .. tostring({bot_id}))
+""".strip()
+        )
+    )
+
+
 def start_waves() -> dict[str, str]:
     values = csp.parse_key_values(csp.run_lua("print('ok='..tostring(sd.gameplay.start_waves()))"))
     if values.get("ok") != "true":
@@ -256,7 +392,17 @@ local function emit(key, value)
   end
 end
 local actor = {actor_address}
+local function is_tracked_enemy_actor(wanted)
+  local actors = sd.world and sd.world.list_actors and sd.world.list_actors() or {{}}
+  for _, actor_state in ipairs(actors) do
+    if (tonumber(actor_state.actor_address) or 0) == wanted then
+      return actor_state.tracked_enemy == true
+    end
+  end
+  return false
+end
 local object_type_id = tonumber(sd.debug.read_u32(actor + {OBJECT_TYPE_ID_OFFSET})) or 0
+local tracked_enemy = is_tracked_enemy_actor(actor)
 local progression = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_POINTER_OFFSET})) or 0
 local handle = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_HANDLE_OFFSET})) or 0
 if progression == 0 and handle ~= 0 then
@@ -264,9 +410,10 @@ if progression == 0 and handle ~= 0 then
 end
 emit("actor", actor)
 emit("object_type_id", object_type_id)
+emit("tracked_enemy", tracked_enemy)
 emit("progression", progression)
 emit("handle", handle)
-if object_type_id == {ARENA_ENEMY_OBJECT_TYPE_ID} then
+if tracked_enemy then
   emit("health_kind", "arena_enemy")
   emit("hp_address", actor + {ARENA_ENEMY_HP_OFFSET})
   emit("hp", sd.debug.read_float(actor + {ARENA_ENEMY_HP_OFFSET}))
@@ -294,7 +441,17 @@ local function emit(key, value)
   end
 end
 local actor = {actor_address}
+local function is_tracked_enemy_actor(wanted)
+  local actors = sd.world and sd.world.list_actors and sd.world.list_actors() or {{}}
+  for _, actor_state in ipairs(actors) do
+    if (tonumber(actor_state.actor_address) or 0) == wanted then
+      return actor_state.tracked_enemy == true
+    end
+  end
+  return false
+end
 local object_type_id = tonumber(sd.debug.read_u32(actor + {OBJECT_TYPE_ID_OFFSET})) or 0
+local tracked_enemy = is_tracked_enemy_actor(actor)
 local progression = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_POINTER_OFFSET})) or 0
 local handle = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_HANDLE_OFFSET})) or 0
 if progression == 0 and handle ~= 0 then
@@ -302,9 +459,10 @@ if progression == 0 and handle ~= 0 then
 end
 emit("actor", actor)
 emit("object_type_id", object_type_id)
+emit("tracked_enemy", tracked_enemy)
 emit("progression", progression)
 emit("handle", handle)
-if object_type_id == {ARENA_ENEMY_OBJECT_TYPE_ID} then
+if tracked_enemy then
   emit("health_kind", "arena_enemy")
   emit("hp_address", actor + {ARENA_ENEMY_HP_OFFSET})
   emit("max_hp_ok", sd.debug.write_float(actor + {ARENA_ENEMY_MAX_HP_OFFSET}, {hp_value}))
@@ -497,6 +655,34 @@ sd.debug.clear_trace_hits("autonomous_spell_3ef_body")
     )
 
 
+def configure_lua_probe_diagnostics(probe_bot_id: int) -> dict[str, str]:
+    return csp.parse_key_values(
+        csp.run_lua(
+            f"""
+lua_bots_enable_diagnostic_logs = true
+lua_bots_probe = {{
+  enabled = true,
+  bot_id = {probe_bot_id},
+  disable_follow = true,
+}}
+print('ok=true')
+print('probe_bot_id=' .. tostring({probe_bot_id}))
+print('lua_bots_enable_diagnostic_logs=' .. tostring(lua_bots_enable_diagnostic_logs))
+""".strip()
+        )
+    )
+
+
+def clear_lua_probe_diagnostics() -> None:
+    csp.run_lua(
+        """
+lua_bots_enable_diagnostic_logs = false
+lua_bots_probe = nil
+print('ok=true')
+""".strip()
+    )
+
+
 def query_trace_hits(name: str) -> dict[str, str]:
     return csp.parse_key_values(
         csp.run_lua(
@@ -531,11 +717,34 @@ def read_loader_lines() -> list[str]:
     return text.splitlines()
 
 
-def read_attack_lines() -> list[str]:
-    return [
+def read_attack_lines(bot_id: int | None = None) -> list[str]:
+    lines = [
         line for line in read_loader_lines()
         if "[lua.bots] attack id=" in line
     ]
+    if bot_id is None:
+        return lines
+    bot_token = f"attack id={bot_id} "
+    return [line for line in lines if bot_token in line]
+
+
+def read_native_cast_lines(bot_id: int | None = None) -> list[str]:
+    native_tokens = (
+        "queued cast for bot id=",
+        "wizard cast prepped.",
+        "pure_primary_start enter",
+        "spell_dispatch enter",
+        "mana spent.",
+        "cast complete",
+    )
+    lines = [
+        line for line in read_loader_lines()
+        if any(token in line for token in native_tokens)
+    ]
+    if bot_id is None:
+        return lines
+    bot_tokens = (f"bot_id={bot_id}", f"bot id={bot_id}")
+    return [line for line in lines if any(token in line for token in bot_tokens)]
 
 
 def read_enemy_death_lines() -> list[str]:
@@ -560,13 +769,14 @@ def parse_attacks(lines: list[str]) -> list[dict[str, object]]:
             continue
         attacks.append({
             "line": line,
-            "enemy_hex": match.group(1).upper(),
-            "enemy_address": int(match.group(1), 16),
-            "bot_x": float(match.group(2)),
-            "bot_y": float(match.group(3)),
-            "target_x": float(match.group(4)),
-            "target_y": float(match.group(5)),
-            "gap": float(match.group(6)),
+            "bot_id": int(match.group(1)),
+            "enemy_hex": match.group(2).upper(),
+            "enemy_address": int(match.group(2), 16),
+            "bot_x": float(match.group(3)),
+            "bot_y": float(match.group(4)),
+            "target_x": float(match.group(5)),
+            "target_y": float(match.group(6)),
+            "gap": float(match.group(7)),
         })
     return attacks
 
@@ -671,16 +881,17 @@ def classify_attack_against_live_enemies(attack: dict[str, object]) -> dict[str,
     }
 
 
-def observe_attack_window(seconds: float) -> dict[str, object]:
-    baseline_attack_count = len(read_attack_lines())
+def observe_attack_window(seconds: float, bot_id: int | None = None) -> dict[str, object]:
+    baseline_attack_count = len(read_attack_lines(bot_id))
     baseline_death_count = len(read_enemy_death_lines())
+    baseline_native_cast_count = len(read_native_cast_lines(bot_id))
     crc.set_lua_tick_enabled(True)
     samples: list[dict[str, object]] = []
     try:
         deadline = time.time() + seconds
         sampled_attack_count = 0
         while time.time() < deadline:
-            current_attack_lines = read_attack_lines()[baseline_attack_count:]
+            current_attack_lines = read_attack_lines(bot_id)[baseline_attack_count:]
             if len(current_attack_lines) > sampled_attack_count:
                 new_attacks = parse_attacks(current_attack_lines[sampled_attack_count:])
                 for attack in new_attacks:
@@ -690,14 +901,20 @@ def observe_attack_window(seconds: float) -> dict[str, object]:
     finally:
         crc.set_lua_tick_enabled(False)
 
-    lines = read_attack_lines()[baseline_attack_count:]
+    lines = read_attack_lines(bot_id)[baseline_attack_count:]
     death_lines = read_enemy_death_lines()[baseline_death_count:]
+    native_cast_lines = read_native_cast_lines(bot_id)[baseline_native_cast_count:]
     return {
         "lines": lines[-20:],
         "attacks": parse_attacks(lines),
         "closest_samples": samples,
         "enemy_deaths": parse_enemy_deaths(death_lines),
         "enemy_death_lines": death_lines[-20:],
+        "native_cast_lines": native_cast_lines[-40:],
+        "native_cast_log_count": len(native_cast_lines),
+        "mana_spend_log_count": sum(1 for line in native_cast_lines if "mana spent." in line),
+        "spell_dispatch_log_count": sum(1 for line in native_cast_lines if "spell_dispatch enter" in line),
+        "queued_cast_log_count": sum(1 for line in native_cast_lines if "queued cast for bot id=" in line),
     }
 
 
@@ -706,6 +923,41 @@ def any_attack_targeted_closest(window: dict[str, object]) -> bool:
     if not isinstance(samples, list):
         return False
     return any(bool(sample.get("target_is_closest")) for sample in samples if isinstance(sample, dict))
+
+
+def target_health_evidence(
+    target_address: int,
+    near_address: int,
+    far_address: int,
+    before: dict[str, object],
+    after: dict[str, object],
+    write_hits: dict[str, object],
+) -> dict[str, object]:
+    role = "unknown"
+    if target_address != 0:
+        if target_address == near_address:
+            role = "near"
+        elif target_address == far_address:
+            role = "far"
+
+    before_entry = before.get(role) if role != "unknown" else None
+    after_entry = after.get(role) if role != "unknown" else None
+    write_entry = write_hits.get(role) if role != "unknown" else None
+    hp_before = csp.float_value(before_entry, "hp") if isinstance(before_entry, dict) else float("nan")
+    hp_after = csp.float_value(after_entry, "hp") if isinstance(after_entry, dict) else float("nan")
+    write_count = csp.int_value(write_entry, "count") if isinstance(write_entry, dict) else 0
+    hp_decreased = math.isfinite(hp_before) and math.isfinite(hp_after) and hp_after < hp_before
+
+    return {
+        "role": role,
+        "address": target_address,
+        "hp_before": hp_before,
+        "hp_after": hp_after,
+        "hp_delta": hp_after - hp_before if math.isfinite(hp_before) and math.isfinite(hp_after) else float("nan"),
+        "write_hits": write_count,
+        "hp_decreased": hp_decreased,
+        "damage_or_write_seen": hp_decreased or write_count > 0,
+    }
 
 
 def run_validation(args: argparse.Namespace) -> dict[str, object]:
@@ -722,38 +974,41 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
     result["navigation"] = start_clean_testrun(process_id, args.element, args.discipline)
     result["steps"].append({"step": "testrun_ready"})
 
-    crc.set_lua_tick_enabled(True)
-    spawned_bot = csp.wait_for_materialized_bot()
-    crc.set_lua_tick_enabled(False)
-    player = csp.query_player_state()
-    promotion = crc.promote_bot_into_run_scene(csp.float_value(player, "x"), csp.float_value(player, "y"))
-    if promotion.get("ok") != "true":
-        raise AutonomousCombatProbeFailure(f"Bot run-scene promotion failed: {promotion}")
-    time.sleep(1.0)
-    bot = csp.query_bot_state()
-    if csp.int_value(bot, "actor_address") == 0:
-        raise AutonomousCombatProbeFailure(f"Bot did not materialize after promotion: {bot}")
-    crc.stop_bot(bot["id"])
-    bot_x = csp.float_value(bot, "x")
-    bot_y = csp.float_value(bot, "y")
-    result["bot_setup"] = {
-        "spawned": spawned_bot,
-        "promoted": bot,
-        "promotion": promotion,
-        "stop": crc.stop_bot(bot["id"]),
-    }
-
     known_addresses = {
         csp.int_value(enemy, "actor_address")
         for enemy in list_enemy_actors()
         if csp.int_value(enemy, "actor_address") != 0
     }
     result["pre_wave_known_enemy_addresses"] = sorted(known_addresses)
-    result["probe_health_before_waves"] = sustain_probe_health()
     result["start_waves"] = start_waves()
     result["wave_combat_state"] = wait_for_wave_combat_active()
     enemies = wait_for_live_enemies(2)
     result["live_enemies_after_wave_start"] = enemies
+
+    crc.set_lua_tick_enabled(True)
+    spawned_bots = wait_for_materialized_bots(min_count=1)
+    crc.set_lua_tick_enabled(False)
+    selected_bot = choose_probe_bot(spawned_bots)
+    probe_bot_id = csp.int_value(selected_bot, "id")
+    bot = query_bot_state_by_id(probe_bot_id)
+    if csp.int_value(bot, "actor_address") == 0:
+        raise AutonomousCombatProbeFailure(f"Post-wave bot did not materialize: {bot}")
+    stopped_bot = crc.stop_bot(bot["id"])
+    time.sleep(2.0)
+    bot = query_bot_state_by_id(probe_bot_id)
+    if csp.int_value(bot, "actor_address") == 0:
+        raise AutonomousCombatProbeFailure(f"Post-wave bot disappeared after stop: {bot}")
+    bot_x = csp.float_value(bot, "x")
+    bot_y = csp.float_value(bot, "y")
+    result["bot_setup"] = {
+        "spawned": spawned_bots,
+        "selected": selected_bot,
+        "active": bot,
+        "selection_mode": "post_wave_active_bot",
+        "stop": stopped_bot,
+    }
+    result["probe_diagnostics"] = configure_lua_probe_diagnostics(probe_bot_id)
+    result["probe_health_after_wave_bot_selection"] = sustain_probe_health(bot_id=probe_bot_id)
 
     first_enemy_address = csp.int_value(enemies[0], "actor_address")
     second_enemy_address = csp.int_value(enemies[1], "actor_address")
@@ -771,8 +1026,36 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         args.far_standoff,
         args.hp,
     )
-    result["probe_health_after_initial_placement"] = sustain_probe_health()
+    result["probe_health_after_initial_placement"] = sustain_probe_health(bot_id=probe_bot_id)
     result["enemies_before_first_window"] = live_enemy_actors()
+    if args.semantic_setup_only:
+        semantic_placements_ok = all(
+            isinstance(placement, dict) and
+            isinstance(placement.get("vitals"), dict) and
+            isinstance(placement.get("position"), dict) and
+            placement["vitals"].get("tracked_enemy") == "true" and
+            placement["vitals"].get("health_kind") == "arena_enemy" and
+            placement["position"].get("x_ok") == "true" and
+            placement["position"].get("y_ok") == "true"
+            for placement in result["initial_enemy_placements"]
+        )
+        selected_enemies_ok = (
+            first_enemy_address != 0 and
+            second_enemy_address != 0 and
+            first_enemy_address != second_enemy_address
+        )
+        result["semantic_setup_only"] = True
+        result["semantic_setup_validation"] = {
+            "selected_enemies_ok": selected_enemies_ok,
+            "semantic_placements_ok": semantic_placements_ok,
+            "tracked_enemy_count": len(result["enemies_before_first_window"]),
+        }
+        result["ok"] = bool(
+            selected_enemies_ok and
+            semantic_placements_ok and
+            len(result["enemies_before_first_window"]) >= 2
+        )
+        return result
 
     result["spell_trace_arm"] = arm_spell_traces()
     result["hp_watch_initial_near"] = (
@@ -789,8 +1072,8 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         "near": query_progression_for_actor(first_enemy_address),
         "far": query_progression_for_actor(second_enemy_address),
     }
-    first_window = observe_attack_window(args.observe_seconds)
-    result["probe_health_after_first_window"] = sustain_probe_health()
+    first_window = observe_attack_window(args.observe_seconds, probe_bot_id)
+    result["probe_health_after_first_window"] = sustain_probe_health(bot_id=probe_bot_id)
     first_after = {
         "near": query_progression_for_actor(first_enemy_address),
         "far": query_progression_for_actor(second_enemy_address),
@@ -822,7 +1105,7 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         args.far_standoff,
         args.hp,
     )
-    result["probe_health_after_swap"] = sustain_probe_health()
+    result["probe_health_after_swap"] = sustain_probe_health(bot_id=probe_bot_id)
     time.sleep(2.3)
     result["enemies_before_second_window"] = live_enemy_actors()
     result["hp_watch_swapped_near"] = (
@@ -839,8 +1122,8 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         "near": query_progression_for_actor(second_enemy_address),
         "far": query_progression_for_actor(first_enemy_address),
     }
-    second_window = observe_attack_window(args.observe_seconds)
-    result["probe_health_after_second_window"] = sustain_probe_health()
+    second_window = observe_attack_window(args.observe_seconds, probe_bot_id)
+    result["probe_health_after_second_window"] = sustain_probe_health(bot_id=probe_bot_id)
     second_after = {
         "near": query_progression_for_actor(second_enemy_address),
         "far": query_progression_for_actor(first_enemy_address),
@@ -878,10 +1161,41 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
     first_near_hp_after = csp.float_value(first_after["near"], "hp")
     second_near_hp_before = csp.float_value(second_before["near"], "hp")
     second_near_hp_after = csp.float_value(second_after["near"], "hp")
+    first_far_hp_before = csp.float_value(first_before["far"], "hp")
+    first_far_hp_after = csp.float_value(first_after["far"], "hp")
+    second_far_hp_before = csp.float_value(second_before["far"], "hp")
+    second_far_hp_after = csp.float_value(second_after["far"], "hp")
     first_near_write_count = csp.int_value(result["first_window"]["write_hits"]["near"], "count")
     second_near_write_count = csp.int_value(result["second_window"]["write_hits"]["near"], "count")
+    first_far_write_count = csp.int_value(result["first_window"]["write_hits"]["far"], "count")
+    second_far_write_count = csp.int_value(result["second_window"]["write_hits"]["far"], "count")
+    first_target_health = target_health_evidence(
+        first_target,
+        first_enemy_address,
+        second_enemy_address,
+        first_before,
+        first_after,
+        result["first_window"]["write_hits"],
+    )
+    second_target_health = target_health_evidence(
+        second_target,
+        second_enemy_address,
+        first_enemy_address,
+        second_before,
+        second_after,
+        result["second_window"]["write_hits"],
+    )
     dispatch_hits = csp.int_value(result["spell_trace_hits"]["dispatch_body"], "count")
     spell_3ef_hits = csp.int_value(result["spell_trace_hits"]["spell_3ef_body"], "count")
+    first_native_cast_count = int(first_window.get("native_cast_log_count") or 0)
+    second_native_cast_count = int(second_window.get("native_cast_log_count") or 0)
+    first_mana_spend_count = int(first_window.get("mana_spend_log_count") or 0)
+    second_mana_spend_count = int(second_window.get("mana_spend_log_count") or 0)
+    spell_dispatch_log_count = (
+        int(first_window.get("spell_dispatch_log_count") or 0) +
+        int(second_window.get("spell_dispatch_log_count") or 0)
+    )
+    mana_spend_log_count = first_mana_spend_count + second_mana_spend_count
 
     first_targeted_closest = any_attack_targeted_closest(first_window)
     second_targeted_closest = any_attack_targeted_closest(second_window)
@@ -891,11 +1205,24 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
     second_targeted_death_matches = match_targeted_deaths(second_window)
     first_targeted_death_seen = bool(first_targeted_death_matches)
     second_targeted_death_seen = bool(second_targeted_death_matches)
-    hp_damage_or_write_seen = (
+    target_hp_damage_or_write_seen = (
+        bool(first_target_health["damage_or_write_seen"])
+        or bool(second_target_health["damage_or_write_seen"])
+    )
+    controlled_damage_or_write_seen = (
         first_near_write_count > 0
         or second_near_write_count > 0
+        or first_far_write_count > 0
+        or second_far_write_count > 0
         or first_near_hp_after < first_near_hp_before
         or second_near_hp_after < second_near_hp_before
+        or first_far_hp_after < first_far_hp_before
+        or second_far_hp_after < second_far_hp_before
+    )
+    targeted_damage_or_write_seen = (
+        target_hp_damage_or_write_seen
+        or first_targeted_death_seen
+        or second_targeted_death_seen
     )
     hidden_damage_log_count = sum(
         1 for line in loader_log_tail if "pure_primary_damage applied" in line
@@ -916,8 +1243,20 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         "first_near_hp_after": first_near_hp_after,
         "second_near_hp_before": second_near_hp_before,
         "second_near_hp_after": second_near_hp_after,
+        "first_far_hp_before": first_far_hp_before,
+        "first_far_hp_after": first_far_hp_after,
+        "second_far_hp_before": second_far_hp_before,
+        "second_far_hp_after": second_far_hp_after,
         "first_near_hp_write_hits": first_near_write_count,
         "second_near_hp_write_hits": second_near_write_count,
+        "first_far_hp_write_hits": first_far_write_count,
+        "second_far_hp_write_hits": second_far_write_count,
+        "first_target_health": first_target_health,
+        "second_target_health": second_target_health,
+        "first_target_hp_decreased": bool(first_target_health["hp_decreased"]),
+        "second_target_hp_decreased": bool(second_target_health["hp_decreased"]),
+        "target_hp_damage_or_write_seen": target_hp_damage_or_write_seen,
+        "controlled_damage_or_write_seen": controlled_damage_or_write_seen,
         "first_enemy_death_count": first_enemy_death_count,
         "second_enemy_death_count": second_enemy_death_count,
         "first_targeted_death_seen": first_targeted_death_seen,
@@ -928,10 +1267,16 @@ def run_validation(args: argparse.Namespace) -> dict[str, object]:
         "second_targeted_death_matches": second_targeted_death_matches,
         "spell_dispatch_hits": dispatch_hits,
         "spell_3ef_hits": spell_3ef_hits,
+        "first_native_cast_log_count": first_native_cast_count,
+        "second_native_cast_log_count": second_native_cast_count,
+        "spell_dispatch_log_count": spell_dispatch_log_count,
+        "mana_spend_log_count": mana_spend_log_count,
+        "native_cast_evidence_seen": first_native_cast_count > 0 or second_native_cast_count > 0,
         "hidden_damage_log_count": hidden_damage_log_count,
         "hidden_damage_bridge_ok": hidden_damage_log_count == 0,
-        "hp_damage_or_write_seen": hp_damage_or_write_seen,
-        "damage_or_hp_write_seen": hp_damage_or_write_seen,
+        "hp_damage_or_write_seen": controlled_damage_or_write_seen,
+        "targeted_damage_or_write_seen": targeted_damage_or_write_seen,
+        "damage_or_hp_write_seen": targeted_damage_or_write_seen or controlled_damage_or_write_seen,
     }
     result["closest_target_ok"] = all(
         bool(result["validation"][key])
@@ -975,6 +1320,7 @@ def main() -> int:
             clear_hp_watch("autonomous_swapped_near_hp")
             clear_hp_watch("autonomous_swapped_far_hp")
             clear_spell_traces()
+            clear_lua_probe_diagnostics()
         except Exception:
             pass
         args.output.parent.mkdir(parents=True, exist_ok=True)

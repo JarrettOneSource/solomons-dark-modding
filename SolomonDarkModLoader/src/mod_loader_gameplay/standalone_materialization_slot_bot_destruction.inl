@@ -3,7 +3,6 @@ bool DestroyGameplaySlotBotResources(
     int slot_index,
     uintptr_t actor_address,
     uintptr_t world_address,
-    uintptr_t synthetic_source_profile_address,
     std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
@@ -20,14 +19,24 @@ bool DestroyGameplaySlotBotResources(
         kGameplayPlayerActorOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
     const auto progression_slot_offset =
         kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
-    const auto published_actor_address =
-        memory.ReadFieldOr<uintptr_t>(gameplay_address, actor_slot_offset, 0);
+    uintptr_t published_actor_address = 0;
+    if (!memory.TryReadField(gameplay_address, actor_slot_offset, &published_actor_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay slot cleanup could not read published actor slot.";
+        }
+        return false;
+    }
     if (actor_address == 0) {
         actor_address = published_actor_address;
     }
 
     if (world_address == 0 && actor_address != 0) {
-        world_address = memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+        if (!memory.TryReadField(actor_address, kActorOwnerOffset, &world_address)) {
+            if (error_message != nullptr) {
+                *error_message = "Gameplay slot cleanup could not read actor world owner.";
+            }
+            return false;
+        }
     }
 
     if (actor_address != 0) {
@@ -68,8 +77,6 @@ bool DestroyGameplaySlotBotResources(
     (void)memory.TryWriteField<uintptr_t>(gameplay_address, actor_slot_offset, 0);
     (void)memory.TryWriteField<uintptr_t>(gameplay_address, progression_slot_offset, 0);
 
-    (void)synthetic_source_profile_address;
-
     return true;
 }
 
@@ -86,32 +93,52 @@ bool DestroyLoaderOwnedWizardActor(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto live_owner_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0);
+    uintptr_t live_owner_address = 0;
+    const bool live_owner_readable =
+        memory.TryReadField(actor_address, kActorOwnerOffset, &live_owner_address);
     if (live_owner_address != 0) {
         world_address = live_owner_address;
-    } else if (!raw_allocation) {
+    } else if (!raw_allocation || !live_owner_readable) {
         world_address = 0;
     }
 
     auto build_destroy_summary = [&](std::string_view stage) {
+        const auto read_u8_text = [&](std::size_t offset) {
+            std::uint8_t value = 0;
+            return memory.TryReadField(actor_address, offset, &value)
+                ? std::to_string(static_cast<int>(value))
+                : std::string("unreadable");
+        };
+        const auto read_ptr_text = [&](std::size_t offset) {
+            uintptr_t value = 0;
+            return memory.TryReadField(actor_address, offset, &value)
+                ? HexString(value)
+                : std::string("unreadable");
+        };
+        uintptr_t vtable = 0;
+        const auto vtable_text =
+            memory.TryReadValue(actor_address, &vtable)
+                ? HexString(vtable)
+                : std::string("unreadable");
         std::ostringstream out;
         out << "stage=" << stage
             << " actor=" << HexString(actor_address)
             << " world=" << HexString(world_address)
             << " raw_allocation=" << (raw_allocation ? "true" : "false")
             << " actor_summary={" << BuildActorVisualDebugSummary(actor_address) << "}"
-            << " byte5=" << static_cast<int>(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x05, 0))
-            << " byte6=" << static_cast<int>(memory.ReadFieldOr<std::uint8_t>(actor_address, 0x06, 0))
-            << " vtable=" << HexString(memory.ReadValueOr<uintptr_t>(actor_address, 0))
-            << " owner=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorOwnerOffset, 0))
-            << " attach=" << HexString(memory.ReadFieldOr<uintptr_t>(actor_address, kActorHubVisualAttachmentPtrOffset, 0));
+            << " byte5=" << read_u8_text(0x05)
+            << " byte6=" << read_u8_text(0x06)
+            << " vtable=" << vtable_text
+            << " owner=" << read_ptr_text(kActorOwnerOffset)
+            << " attach=" << read_ptr_text(kActorHubVisualAttachmentPtrOffset);
         return out.str();
     };
 
     auto build_dtor_precrash_dump = [&]() {
         auto read_u32 = [&](uintptr_t addr) {
-            return memory.ReadValueOr<std::uint32_t>(addr, 0u);
+            std::uint32_t value = 0;
+            (void)memory.TryReadValue(addr, &value);
+            return value;
         };
         const uintptr_t om_base = actor_address + 0x16C;
         const std::uint32_t om_vt = read_u32(om_base + 0x00);
@@ -130,7 +157,8 @@ bool DestroyLoaderOwnedWizardActor(
         const std::uint32_t e_vt_s0 = om_e0_vt ? read_u32(om_e0_vt + 0x00) : 0;
         const std::uint32_t e_vt_s4 = om_e0_vt ? read_u32(om_e0_vt + 0x04) : 0;
         const std::uint32_t e_vt_s8 = om_e0_vt ? read_u32(om_e0_vt + 0x08) : 0;
-        const std::uint32_t dat_81c264 = read_u32(0x00C0C264u);
+        const auto dat_81c264_global = memory.ResolveGameAddressOrZero(kGameplayRuntimeGlobal);
+        const std::uint32_t dat_81c264 = dat_81c264_global ? read_u32(dat_81c264_global) : 0;
         const std::uint32_t dat_1388 = dat_81c264 ? read_u32(dat_81c264 + 0x1388) : 0;
         const std::uint32_t dat_1388_1c = dat_1388 ? read_u32(dat_1388 + 0x1C) : 0;
         std::ostringstream out;
@@ -177,12 +205,15 @@ bool DestroyLoaderOwnedWizardActor(
             build_dtor_precrash_dump());
 
         DWORD exception_code = 0;
-        if (!CallActorWorldUnregisterSafe(
-                unregister_address,
-                world_address,
-                actor_address,
-                1,
-                &exception_code)) {
+        ++g_loader_owned_actor_destroy_unregister_depth;
+        const bool unregistered = CallActorWorldUnregisterSafe(
+            unregister_address,
+            world_address,
+            actor_address,
+            1,
+            &exception_code);
+        --g_loader_owned_actor_destroy_unregister_depth;
+        if (!unregistered) {
             Log("[bots] destroy_loader_owned_actor unregister_failed " + build_destroy_summary("post_unregister_exception"));
             if (error_message != nullptr) {
                 *error_message = "ActorWorld_Unregister failed with 0x" + HexString(exception_code) + ".";

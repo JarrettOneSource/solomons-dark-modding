@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch testrun, spawn a hostile near a bot before waves, and observe bot combat."""
+"""Launch testrun, move a stock hostile near a bot, and observe bot combat."""
 
 from __future__ import annotations
 
@@ -18,15 +18,14 @@ DEFAULT_STANDOFF = 120.0
 DEFAULT_OBSERVE_SECONDS = 8.0
 DEFAULT_TARGET_HP = 100.0
 SPAWN_OFFSET_X = 80.0
-ACTOR_POSITION_X_OFFSET = 0x18
-ACTOR_POSITION_Y_OFFSET = 0x1C
-ACTOR_HEADING_OFFSET = 0x6C
-OBJECT_TYPE_ID_OFFSET = 0x08
-ARENA_ENEMY_OBJECT_TYPE_ID = 1001
-ARENA_ENEMY_MAX_HP_OFFSET = 0x170
-ARENA_ENEMY_CURRENT_HP_OFFSET = 0x174
-PROGRESSION_POINTER_OFFSET = 0x200
-PROGRESSION_HANDLE_OFFSET = 0x300
+ACTOR_POSITION_X_OFFSET = csp.read_runtime_layout_offset("actor_position_x")
+ACTOR_POSITION_Y_OFFSET = csp.read_runtime_layout_offset("actor_position_y")
+ACTOR_HEADING_OFFSET = csp.read_runtime_layout_offset("actor_heading")
+OBJECT_TYPE_ID_OFFSET = csp.read_runtime_layout_offset("game_object_type_id")
+ARENA_ENEMY_MAX_HP_OFFSET = csp.read_runtime_layout_offset("enemy_max_hp")
+ARENA_ENEMY_CURRENT_HP_OFFSET = csp.read_runtime_layout_offset("enemy_current_hp")
+PROGRESSION_POINTER_OFFSET = csp.read_runtime_layout_offset("actor_progression_runtime_state")
+PROGRESSION_HANDLE_OFFSET = csp.read_runtime_layout_offset("actor_progression_handle")
 
 
 class CloseRangeProbeFailure(RuntimeError):
@@ -34,7 +33,7 @@ class CloseRangeProbeFailure(RuntimeError):
 def query_combat_sample() -> dict[str, str]:
     return csp.parse_key_values(
         csp.run_lua(
-            """
+            f"""
 local bots = sd.bots and sd.bots.get_state and sd.bots.get_state()
 local bot = type(bots) == 'table' and bots[1] or nil
 local actors = sd.world and sd.world.list_actors and sd.world.list_actors()
@@ -50,18 +49,18 @@ if type(bot) ~= 'table' then
   return
 end
 emit('available', true)
-for _, key in ipairs({
+for _, key in ipairs({{
   'id','actor_address','gameplay_slot','actor_slot','hp','max_hp',
   'mp','max_mp','x','y','state','queued_cast_count','last_queued_cast_ms'
-}) do
+}}) do
   emit('bot.' .. key, bot[key])
 end
 local bx = tonumber(bot.x) or 0.0
 local by = tonumber(bot.y) or 0.0
 local bot_actor = tonumber(bot.actor_address) or 0
 if bot_actor ~= 0 and sd.debug and sd.debug.read_float then
-  bx = tonumber(sd.debug.read_float(bot_actor + 0x18)) or bx
-  by = tonumber(sd.debug.read_float(bot_actor + 0x1C)) or by
+  bx = tonumber(sd.debug.read_float(bot_actor + {ACTOR_POSITION_X_OFFSET})) or bx
+  by = tonumber(sd.debug.read_float(bot_actor + {ACTOR_POSITION_Y_OFFSET})) or by
 end
 emit('bot.live_x', bx)
 emit('bot.live_y', by)
@@ -69,12 +68,11 @@ local best = nil
 local best_gap = math.huge
 if type(actors) == 'table' then
   for _, actor in ipairs(actors) do
-    local obj = tonumber(actor.object_type_id) or 0
     local tracked = actor.tracked_enemy == true
     local dead = actor.dead == true
     local hp = tonumber(actor.hp) or 0.0
     local max_hp = tonumber(actor.max_hp) or 0.0
-    if (tracked or obj == 1001) and not dead and (max_hp <= 0.0 or hp > 0.0) then
+    if tracked and not dead and (max_hp <= 0.0 or hp > 0.0) then
       local ax = tonumber(actor.x) or 0.0
       local ay = tonumber(actor.y) or 0.0
       local dx = ax - bx
@@ -171,6 +169,9 @@ emit('actor_address', actor)
 emit('x_ok', sd.debug.write_float(actor + {ACTOR_POSITION_X_OFFSET}, {x}))
 emit('y_ok', sd.debug.write_float(actor + {ACTOR_POSITION_Y_OFFSET}, {y}))
 {heading_line}
+if sd.world and sd.world.rebind_actor then
+  emit('rebind_ok', sd.world.rebind_actor(actor))
+end
 emit('x', sd.debug.read_float(actor + {ACTOR_POSITION_X_OFFSET}))
 emit('y', sd.debug.read_float(actor + {ACTOR_POSITION_Y_OFFSET}))
 """.strip()
@@ -208,9 +209,20 @@ local function emit(key, value)
   end
 end
 local actor = {actor_address}
+local function is_tracked_enemy_actor(wanted)
+  local actors = sd.world and sd.world.list_actors and sd.world.list_actors() or {{}}
+  for _, actor_state in ipairs(actors) do
+    if (tonumber(actor_state.actor_address) or 0) == wanted then
+      return actor_state.tracked_enemy == true
+    end
+  end
+  return false
+end
 local object_type_id = tonumber(sd.debug.read_u32(actor + {OBJECT_TYPE_ID_OFFSET})) or 0
+local tracked_enemy = is_tracked_enemy_actor(actor)
 emit("object_type_id", object_type_id)
-if object_type_id == {ARENA_ENEMY_OBJECT_TYPE_ID} then
+emit("tracked_enemy", tracked_enemy)
+if tracked_enemy then
   emit("actor", actor)
   emit("progression", 0)
   emit("handle", 0)
@@ -248,9 +260,20 @@ local function emit(key, value)
   end
 end
 local actor = {actor_address}
+local function is_tracked_enemy_actor(wanted)
+  local actors = sd.world and sd.world.list_actors and sd.world.list_actors() or {{}}
+  for _, actor_state in ipairs(actors) do
+    if (tonumber(actor_state.actor_address) or 0) == wanted then
+      return actor_state.tracked_enemy == true
+    end
+  end
+  return false
+end
 local object_type_id = tonumber(sd.debug.read_u32(actor + {OBJECT_TYPE_ID_OFFSET})) or 0
+local tracked_enemy = is_tracked_enemy_actor(actor)
 emit("object_type_id", object_type_id)
-if object_type_id == {ARENA_ENEMY_OBJECT_TYPE_ID} then
+emit("tracked_enemy", tracked_enemy)
+if tracked_enemy then
   emit("actor", actor)
   emit("progression", 0)
   emit("handle", 0)
@@ -364,7 +387,7 @@ def filter_loader_log(lines: list[str]) -> list[str]:
         "cast prepped",
         "cast prepare failed",
         "cast post-tick detail",
-        "synthetic cast intent",
+        "stock cast input",
         "cast complete",
         "cast dispatch failed",
         "spell_obj diag",
@@ -453,10 +476,10 @@ end
 local ok = sd.bots.update({{
   id = bot.id,
   scene = {{ kind = 'run' }},
+  heading = 25.0,
   position = {{
     x = {player_x + SPAWN_OFFSET_X},
     y = {player_y},
-    heading = 25.0,
   }},
 }})
 print('ok=' .. tostring(ok))
@@ -465,26 +488,9 @@ print('ok=' .. tostring(ok))
     )
 
 
-def spawn_hostile_near_bot(bot_x: float, bot_y: float, standoff: float) -> dict[str, str]:
-    return csp.parse_key_values(
-        csp.run_lua(
-            f"""
-local ok, err, request_id = sd.world.spawn_enemy({{
-  type_id = 5010,
-  x = {bot_x + standoff},
-  y = {bot_y},
-}})
-print('ok=' .. tostring(ok))
-print('err=' .. tostring(err))
-print('request_id=' .. tostring(request_id))
-""".strip()
-        )
-    )
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Spawn a hostile near a bot before waves and observe Lua-brain-driven combat."
+        description="Move a native wave hostile near a bot and observe Lua-brain-driven combat."
     )
     parser.add_argument("--standoff", type=float, default=DEFAULT_STANDOFF)
     parser.add_argument("--observe-seconds", type=float, default=DEFAULT_OBSERVE_SECONDS)
@@ -531,6 +537,7 @@ def main() -> int:
 
         testrun = start_testrun_without_waves()
         result["navigation"].append({"step": "testrun_started", "result": testrun})
+        csp.boost_player_survival()
         set_lua_tick_enabled(True)
 
         bot = csp.wait_for_materialized_bot()
@@ -548,20 +555,21 @@ def main() -> int:
         time.sleep(1.0)
         bot = csp.wait_for_materialized_bot()
         stop_after_promotion = stop_bot(bot["id"])
-        # Enemy_Create's manual-spawn binding intentionally refuses to run once
-        # arena combat is populated, so seed controlled hostiles first and only
-        # then enable the no-wave combat prelude.
-        spawn = spawn_hostile_near_bot(
-            csp.float_value(bot, "x"),
-            csp.float_value(bot, "y"),
-            args.standoff,
-        )
-        if spawn.get("ok") != "true":
-            raise CloseRangeProbeFailure(f"Spawn enemy failed: {spawn}")
-        combat = enable_combat_prelude()
-        combat_state = wait_for_combat_prelude_ready()
-        result["navigation"].append({"step": "combat_prelude_enabled", "result": combat, "state": combat_state})
+        waves = csp.parse_key_values(csp.run_lua("print('ok='..tostring(sd.gameplay.start_waves()))"))
+        if waves.get("ok") != "true":
+            raise CloseRangeProbeFailure(f"sd.gameplay.start_waves failed: {waves}")
+        result["navigation"].append({"step": "waves_started", "result": waves})
         time.sleep(1.0)
+        hostile = csp.wait_for_nearest_enemy(max_gap=5000.0)
+        hostile_address = hostile["actor_address"]
+        hostile_positioning = force_actor_position(
+            hostile_address,
+            csp.float_value(bot, "x") + args.standoff,
+            csp.float_value(bot, "y"),
+        )
+        if hostile_positioning.get("x_ok") != "true" or hostile_positioning.get("y_ok") != "true":
+            raise CloseRangeProbeFailure(f"Hostile positioning failed: {hostile_positioning}")
+        time.sleep(0.25)
         hostile = csp.wait_for_nearest_enemy(max_gap=2000.0)
         hostile_address = hostile["actor_address"]
         forced_vitals = force_actor_vitals(hostile_address, args.hp)
@@ -596,7 +604,7 @@ def main() -> int:
             "promotion": promotion,
             "stop_after_promotion": stop_after_promotion,
             "standoff": args.standoff,
-            "spawn": spawn,
+            "hostile_positioning": hostile_positioning,
             "forced_vitals": forced_vitals,
             "hp_watch": hp_watch,
             "direct_cast": direct_cast,

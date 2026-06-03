@@ -1,5 +1,7 @@
 #include "logger_internal.h"
 
+#include "gameplay_seams.h"
+
 namespace sdmod::detail::logger {
 
 void AppendCrashText(const char* text) {
@@ -148,10 +150,10 @@ void AppendMovementContextCandidate(std::ostringstream* out, const char* label, 
     std::uint32_t primary_list = 0;
     std::uint32_t secondary_count = 0;
     std::uint32_t secondary_list = 0;
-    if (!TryReadCrashU32(context_address + 0x40, &primary_count) ||
-        !TryReadCrashU32(context_address + 0x4C, &primary_list) ||
-        !TryReadCrashU32(context_address + 0x70, &secondary_count) ||
-        !TryReadCrashU32(context_address + 0x7C, &secondary_list)) {
+    if (!TryReadCrashU32(context_address + sdmod::kMovementControllerPrimaryCountOffset, &primary_count) ||
+        !TryReadCrashU32(context_address + sdmod::kMovementControllerPrimaryListOffset, &primary_list) ||
+        !TryReadCrashU32(context_address + sdmod::kMovementControllerSecondaryCountOffset, &secondary_count) ||
+        !TryReadCrashU32(context_address + sdmod::kMovementControllerSecondaryListOffset, &secondary_list)) {
         return;
     }
     if (primary_count > 256 || secondary_count > 256) {
@@ -183,13 +185,19 @@ void AppendMovementContextCandidate(std::ostringstream* out, const char* label, 
             std::uint32_t value_0c = 0;
             std::uint32_t value_10 = 0;
             std::uint32_t value_14 = 0;
-            if (TryReadCrashU32(static_cast<uintptr_t>(entry_address) + 0x0C, &value_0c)) {
+            if (TryReadCrashU32(
+                    static_cast<uintptr_t>(entry_address) + sdmod::kMovementOverlapEntryTypeOffset,
+                    &value_0c)) {
                 *out << " " << entry_label << index << "_0c=0x" << HexString(value_0c);
             }
-            if (TryReadCrashU32(static_cast<uintptr_t>(entry_address) + 0x10, &value_10)) {
+            if (TryReadCrashU32(
+                    static_cast<uintptr_t>(entry_address) + sdmod::kMovementOverlapEntryMaskOffset,
+                    &value_10)) {
                 *out << " " << entry_label << index << "_10=0x" << HexString(value_10);
             }
-            if (TryReadCrashU32(static_cast<uintptr_t>(entry_address) + 0x14, &value_14)) {
+            if (TryReadCrashU32(
+                    static_cast<uintptr_t>(entry_address) + sdmod::kMovementOverlapEntryAuxOffset,
+                    &value_14)) {
                 *out << " " << entry_label << index << "_14=0x" << HexString(value_14);
             }
         }

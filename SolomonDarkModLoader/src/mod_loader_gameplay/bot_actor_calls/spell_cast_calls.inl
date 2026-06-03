@@ -18,6 +18,26 @@ bool CallSpellCastDispatcherSafe(
     }
 }
 
+bool CallPlayerActorActionManagerTickSafe(
+    uintptr_t tick_address,
+    uintptr_t action_manager_address,
+    DWORD* exception_code) {
+    auto* tick = reinterpret_cast<PlayerActorActionManagerTickFn>(tick_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (tick == nullptr || action_manager_address == 0) {
+        return false;
+    }
+
+    __try {
+        tick(reinterpret_cast<void*>(action_manager_address));
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
 bool CallPurePrimarySpellStartSafe(
     uintptr_t startup_address,
     uintptr_t actor_address,
@@ -58,26 +78,36 @@ bool CallCastActiveHandleCleanupSafe(
     }
 }
 
-bool CallNativeTwoFloatGetterSafe(
-    uintptr_t getter_address,
-    uintptr_t object_address,
-    float x,
-    float y,
-    float* result,
+bool CallActorWorldLookupObjectByHandleSafe(
+    uintptr_t lookup_address,
+    uintptr_t world_address,
+    std::uint8_t group,
+    std::uint16_t slot,
+    uintptr_t* object_address,
     DWORD* exception_code) {
-    auto* getter = reinterpret_cast<NativeTwoFloatGetterFn>(getter_address);
-    if (result != nullptr) {
-        *result = 0.0f;
+    auto* lookup = reinterpret_cast<ActorWorldLookupObjectByHandleFn>(lookup_address);
+    if (object_address != nullptr) {
+        *object_address = 0;
     }
     if (exception_code != nullptr) {
         *exception_code = 0;
     }
-    if (getter == nullptr || object_address == 0 || result == nullptr) {
+    if (lookup == nullptr || world_address == 0 || object_address == nullptr) {
         return false;
     }
 
+    struct NativeObjectHandle {
+        std::uint8_t group = 0;
+        std::uint8_t reserved = 0;
+        std::uint16_t slot = 0;
+    };
+    NativeObjectHandle handle{};
+    handle.group = group;
+    handle.slot = slot;
+
     __try {
-        *result = getter(reinterpret_cast<void*>(object_address), x, y);
+        *object_address =
+            lookup(reinterpret_cast<void*>(world_address), reinterpret_cast<void*>(&handle));
         return true;
     } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
         return false;

@@ -1,3 +1,64 @@
+void FillParticipantActiveSpellObjectSnapshot(ParticipantGameplaySnapshot* snapshot) {
+    if (snapshot == nullptr ||
+        snapshot->world_address == 0 ||
+        snapshot->active_cast_group == 0xFF ||
+        snapshot->active_cast_slot == 0xFFFF) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto lookup_address = memory.ResolveGameAddressOrZero(kActorWorldLookupObjectByHandle);
+    uintptr_t object_address = 0;
+    DWORD lookup_exception = 0;
+    if (lookup_address == 0 ||
+        !CallActorWorldLookupObjectByHandleSafe(
+            lookup_address,
+            snapshot->world_address,
+            snapshot->active_cast_group,
+            snapshot->active_cast_slot,
+            &object_address,
+            &lookup_exception) ||
+        object_address == 0 ||
+        !memory.IsReadableRange(object_address, 0x80)) {
+        return;
+    }
+
+    float object_x = 0.0f;
+    float object_y = 0.0f;
+    float object_radius = 0.0f;
+    float object_charge = 0.0f;
+    if (!TryReadFiniteFloatField(object_address, kObjectPositionXOffset, &object_x) ||
+        !TryReadFiniteFloatField(object_address, kObjectPositionYOffset, &object_y) ||
+        !TryReadFiniteFloatField(object_address, kObjectCollisionRadiusOffset, &object_radius) ||
+        !TryReadFiniteFloatField(object_address, kSpellObjectChargeOffset, &object_charge)) {
+        return;
+    }
+    if (!std::isfinite(object_x) ||
+        !std::isfinite(object_y) ||
+        !std::isfinite(object_radius) ||
+        object_radius < 0.0f ||
+        object_radius > 128.0f ||
+        !std::isfinite(object_charge) ||
+        object_charge < 0.0f) {
+        return;
+    }
+
+    snapshot->active_spell_object_readable = true;
+    snapshot->active_spell_object_address = object_address;
+    if (!memory.TryReadField(
+            object_address,
+            kGameObjectTypeIdOffset,
+            &snapshot->active_spell_object_type)) {
+        snapshot->active_spell_object_readable = false;
+        snapshot->active_spell_object_address = 0;
+        return;
+    }
+    snapshot->active_spell_object_x = object_x;
+    snapshot->active_spell_object_y = object_y;
+    snapshot->active_spell_object_radius = object_radius;
+    snapshot->active_spell_object_charge = object_charge;
+}
+
 ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEntityBinding& binding) {
     ParticipantGameplaySnapshot snapshot;
     snapshot.bot_id = binding.bot_id;
@@ -23,105 +84,123 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
 
     auto& memory = ProcessMemory::Instance();
     const auto render_probe_address = binding.actor_address;
-    snapshot.world_address = memory.ReadFieldOr<uintptr_t>(binding.actor_address, kActorOwnerOffset, 0);
-    snapshot.actor_slot = memory.ReadFieldOr<std::int8_t>(binding.actor_address, kActorSlotOffset, -1);
+    if (!memory.TryReadField(binding.actor_address, kActorOwnerOffset, &snapshot.world_address) ||
+        !memory.TryReadField(binding.actor_address, kActorSlotOffset, &snapshot.actor_slot)) {
+        snapshot.entity_materialized = false;
+        snapshot.actor_address = 0;
+        return snapshot;
+    }
     snapshot.slot_anim_state_index = ResolveActorAnimationStateSlotIndex(binding.actor_address);
-    snapshot.animation_state_ptr =
-        memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorAnimationSelectionStateOffset, 0);
-    snapshot.render_frame_table =
-        memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorRenderFrameTableOffset, 0);
-    snapshot.hub_visual_attachment_ptr =
-        memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorHubVisualAttachmentPtrOffset, 0);
-    snapshot.hub_visual_source_profile_address =
-        memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorHubVisualSourceProfileOffset, 0);
+    (void)memory.TryReadField(
+        render_probe_address,
+        kActorAnimationSelectionStateOffset,
+        &snapshot.animation_state_ptr);
+    (void)memory.TryReadField(
+        render_probe_address,
+        kActorRenderFrameTableOffset,
+        &snapshot.render_frame_table);
+    (void)memory.TryReadField(
+        render_probe_address,
+        kActorHubVisualAttachmentPtrOffset,
+        &snapshot.hub_visual_attachment_ptr);
+    (void)memory.TryReadField(
+        render_probe_address,
+        kActorHubVisualSourceProfileOffset,
+        &snapshot.hub_visual_source_profile_address);
     snapshot.hub_visual_descriptor_signature = HashMemoryBlockFNV1a32(
         render_probe_address + kActorHubVisualDescriptorBlockOffset,
         kActorHubVisualDescriptorBlockSize);
-    if (!IsRegisteredGameNpcKind(binding.kind)) {
-        snapshot.progression_handle_address =
-            memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorProgressionHandleOffset, 0);
-        snapshot.equip_handle_address =
-            memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorEquipHandleOffset, 0);
-        snapshot.progression_runtime_state_address =
-            memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorProgressionRuntimeStateOffset, 0);
-        snapshot.equip_runtime_state_address =
-            memory.ReadFieldOr<uintptr_t>(render_probe_address, kActorEquipRuntimeStateOffset, 0);
-        if (snapshot.progression_runtime_state_address == 0 && snapshot.progression_handle_address != 0) {
-            snapshot.progression_runtime_state_address =
-                ReadSmartPointerInnerObject(snapshot.progression_handle_address);
-        }
-        if (snapshot.equip_runtime_state_address == 0 && snapshot.equip_handle_address != 0) {
-            snapshot.equip_runtime_state_address =
-                ReadSmartPointerInnerObject(snapshot.equip_handle_address);
-        }
-        snapshot.primary_visual_lane = ReadEquipVisualLaneState(
-            snapshot.equip_runtime_state_address,
-            kActorEquipRuntimeVisualLinkPrimaryOffset);
-        snapshot.secondary_visual_lane = ReadEquipVisualLaneState(
-            snapshot.equip_runtime_state_address,
-            kActorEquipRuntimeVisualLinkSecondaryOffset);
-        snapshot.attachment_visual_lane = ReadEquipVisualLaneState(
-            snapshot.equip_runtime_state_address,
-            kActorEquipRuntimeVisualLinkAttachmentOffset);
+    if (!memory.TryReadField(render_probe_address, kActorProgressionHandleOffset, &snapshot.progression_handle_address) ||
+        !memory.TryReadField(render_probe_address, kActorEquipHandleOffset, &snapshot.equip_handle_address) ||
+        !memory.TryReadField(render_probe_address, kActorProgressionRuntimeStateOffset, &snapshot.progression_runtime_state_address) ||
+        !memory.TryReadField(render_probe_address, kActorEquipRuntimeStateOffset, &snapshot.equip_runtime_state_address)) {
+        snapshot.entity_materialized = false;
+        snapshot.actor_address = 0;
+        return snapshot;
     }
+    if (snapshot.progression_runtime_state_address == 0 && snapshot.progression_handle_address != 0) {
+        snapshot.progression_runtime_state_address =
+            ReadSmartPointerInnerObject(snapshot.progression_handle_address);
+    }
+    if (snapshot.equip_runtime_state_address == 0 && snapshot.equip_handle_address != 0) {
+        snapshot.equip_runtime_state_address =
+            ReadSmartPointerInnerObject(snapshot.equip_handle_address);
+    }
+    snapshot.primary_visual_lane = ReadEquipVisualLaneState(
+        snapshot.equip_runtime_state_address,
+        kActorEquipRuntimeVisualLinkPrimaryOffset);
+    snapshot.secondary_visual_lane = ReadEquipVisualLaneState(
+        snapshot.equip_runtime_state_address,
+        kActorEquipRuntimeVisualLinkSecondaryOffset);
+    snapshot.attachment_visual_lane = ReadEquipVisualLaneState(
+        snapshot.equip_runtime_state_address,
+        kActorEquipRuntimeVisualLinkAttachmentOffset);
     snapshot.resolved_animation_state_id = ResolveActorAnimationStateId(render_probe_address);
-    snapshot.hub_visual_source_kind =
-        memory.ReadFieldOr<std::int32_t>(render_probe_address, kActorHubVisualSourceKindOffset, 0);
-    snapshot.render_drive_flags =
-        memory.ReadFieldOr<std::uint32_t>(render_probe_address, kActorRenderDriveFlagsOffset, 0);
-    snapshot.anim_drive_state =
-        memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorAnimationDriveStateByteOffset, 0);
-    snapshot.no_interrupt =
-        memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorNoInterruptFlagOffset, 0);
-    snapshot.active_cast_group =
-        memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorActiveCastGroupByteOffset, 0xFF);
-    snapshot.active_cast_slot =
-        memory.ReadFieldOr<std::uint16_t>(render_probe_address, kActorActiveCastSlotShortOffset, 0xFFFF);
-    snapshot.render_variant_primary =
-        memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorRenderVariantPrimaryOffset, 0);
-    snapshot.render_variant_secondary =
-        memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorRenderVariantSecondaryOffset, 0);
-    snapshot.render_weapon_type =
-        memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorRenderWeaponTypeOffset, 0);
-    snapshot.render_selection_byte =
-        memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorRenderSelectionByteOffset, 0);
-    snapshot.render_variant_tertiary =
-        memory.ReadFieldOr<std::uint8_t>(render_probe_address, kActorRenderVariantTertiaryOffset, 0);
+    (void)memory.TryReadField(render_probe_address, kActorHubVisualSourceKindOffset, &snapshot.hub_visual_source_kind);
+    (void)memory.TryReadField(render_probe_address, kActorRenderDriveFlagsOffset, &snapshot.render_drive_flags);
+    (void)memory.TryReadField(render_probe_address, kActorAnimationDriveStateByteOffset, &snapshot.anim_drive_state);
+    (void)memory.TryReadField(render_probe_address, kActorNoInterruptFlagOffset, &snapshot.no_interrupt);
+    if (!memory.TryReadField(render_probe_address, kActorActiveCastGroupByteOffset, &snapshot.active_cast_group) ||
+        !memory.TryReadField(render_probe_address, kActorActiveCastSlotShortOffset, &snapshot.active_cast_slot)) {
+        snapshot.active_cast_group = 0xFF;
+        snapshot.active_cast_slot = 0xFFFF;
+    }
+    (void)memory.TryReadField(render_probe_address, kActorRenderVariantPrimaryOffset, &snapshot.render_variant_primary);
+    (void)memory.TryReadField(render_probe_address, kActorRenderVariantSecondaryOffset, &snapshot.render_variant_secondary);
+    (void)memory.TryReadField(render_probe_address, kActorRenderWeaponTypeOffset, &snapshot.render_weapon_type);
+    (void)memory.TryReadField(render_probe_address, kActorRenderSelectionByteOffset, &snapshot.render_selection_byte);
+    (void)memory.TryReadField(render_probe_address, kActorRenderVariantTertiaryOffset, &snapshot.render_variant_tertiary);
     snapshot.cast_active = binding.ongoing_cast.active;
     snapshot.cast_startup_in_progress = binding.ongoing_cast.startup_in_progress;
     snapshot.cast_saw_activity = binding.ongoing_cast.saw_activity;
     snapshot.cast_skill_id = binding.ongoing_cast.skill_id;
     snapshot.cast_ticks_waiting = binding.ongoing_cast.ticks_waiting;
     snapshot.cast_target_actor_address = binding.ongoing_cast.target_actor_address;
-    snapshot.x = memory.ReadFieldOr<float>(binding.actor_address, kActorPositionXOffset, 0.0f);
-    snapshot.y = memory.ReadFieldOr<float>(binding.actor_address, kActorPositionYOffset, 0.0f);
-    snapshot.heading = memory.ReadFieldOr<float>(binding.actor_address, kActorHeadingOffset, 0.0f);
-    snapshot.walk_cycle_primary =
-        memory.ReadFieldOr<float>(render_probe_address, kActorWalkCyclePrimaryOffset, 0.0f);
-    snapshot.walk_cycle_secondary =
-        memory.ReadFieldOr<float>(render_probe_address, kActorWalkCycleSecondaryOffset, 0.0f);
-    snapshot.render_drive_stride =
-        memory.ReadFieldOr<float>(render_probe_address, kActorRenderDriveStrideScaleOffset, 0.0f);
-    snapshot.render_advance_rate =
-        memory.ReadFieldOr<float>(render_probe_address, kActorRenderAdvanceRateOffset, 0.0f);
-    snapshot.render_advance_phase =
-        memory.ReadFieldOr<float>(render_probe_address, kActorRenderAdvancePhaseOffset, 0.0f);
-    snapshot.render_drive_overlay_alpha =
-        memory.ReadFieldOr<float>(render_probe_address, kActorRenderDriveOverlayAlphaOffset, 0.0f);
-    snapshot.render_drive_move_blend =
-        memory.ReadFieldOr<float>(render_probe_address, kActorRenderDriveMoveBlendOffset, 0.0f);
+    uintptr_t control_brain_address = 0;
+    if (memory.TryReadField(
+            binding.actor_address,
+            kActorAnimationSelectionStateOffset,
+            &control_brain_address) &&
+        control_brain_address != 0) {
+        (void)memory.TryReadValue<int>(
+            control_brain_address + kActorControlBrainActionCooldownTicksOffset,
+            &snapshot.native_action_cooldown_ticks);
+    }
+    FillParticipantActiveSpellObjectSnapshot(&snapshot);
+    if (!TryReadFiniteFloatField(binding.actor_address, kActorPositionXOffset, &snapshot.x) ||
+        !TryReadFiniteFloatField(binding.actor_address, kActorPositionYOffset, &snapshot.y) ||
+        !TryReadFiniteFloatField(binding.actor_address, kActorHeadingOffset, &snapshot.heading)) {
+        snapshot.entity_materialized = false;
+        snapshot.actor_address = 0;
+        return snapshot;
+    }
+    (void)TryReadFiniteFloatField(render_probe_address, kActorWalkCyclePrimaryOffset, &snapshot.walk_cycle_primary);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorWalkCycleSecondaryOffset, &snapshot.walk_cycle_secondary);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveStrideScaleOffset, &snapshot.render_drive_stride);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorRenderAdvanceRateOffset, &snapshot.render_advance_rate);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorRenderAdvancePhaseOffset, &snapshot.render_advance_phase);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveEffectTimerOffset, &snapshot.render_drive_effect_timer);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveEffectProgressOffset, &snapshot.render_drive_effect_progress);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveOverlayAlphaOffset, &snapshot.render_drive_overlay_alpha);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveMoveBlendOffset, &snapshot.render_drive_move_blend);
 
-    if (!IsRegisteredGameNpcKind(binding.kind)) {
-        auto progression_address =
-            memory.ReadFieldOr<uintptr_t>(binding.actor_address, kActorProgressionRuntimeStateOffset, 0);
-        if (progression_address == 0 && snapshot.progression_handle_address != 0) {
-            progression_address = ReadSmartPointerInnerObject(snapshot.progression_handle_address);
-        }
-        if (progression_address != 0) {
-            snapshot.hp = memory.ReadFieldOr<float>(progression_address, kProgressionHpOffset, 0.0f);
-            snapshot.max_hp = memory.ReadFieldOr<float>(progression_address, kProgressionMaxHpOffset, 0.0f);
-            snapshot.mp = memory.ReadFieldOr<float>(progression_address, kProgressionMpOffset, 0.0f);
-            snapshot.max_mp = memory.ReadFieldOr<float>(progression_address, kProgressionMaxMpOffset, 0.0f);
+    uintptr_t progression_address = 0;
+    if (!memory.TryReadField(binding.actor_address, kActorProgressionRuntimeStateOffset, &progression_address)) {
+        snapshot.entity_materialized = false;
+        snapshot.actor_address = 0;
+        return snapshot;
+    }
+    if (progression_address == 0 && snapshot.progression_handle_address != 0) {
+        progression_address = ReadSmartPointerInnerObject(snapshot.progression_handle_address);
+    }
+    if (progression_address != 0) {
+        if (!TryReadFiniteFloatField(progression_address, kProgressionHpOffset, &snapshot.hp) ||
+            !TryReadFiniteFloatField(progression_address, kProgressionMaxHpOffset, &snapshot.max_hp) ||
+            !TryReadFiniteFloatField(progression_address, kProgressionMpOffset, &snapshot.mp) ||
+            !TryReadFiniteFloatField(progression_address, kProgressionMaxMpOffset, &snapshot.max_mp)) {
+            snapshot.entity_materialized = false;
+            snapshot.actor_address = 0;
+            return snapshot;
         }
     }
 
@@ -143,14 +222,16 @@ void SyncParticipantRuntimeFromGameplaySnapshot(const ParticipantGameplaySnapsho
             return;
         }
 
-        participant->runtime.life_current = static_cast<std::int32_t>(snapshot.hp);
-        participant->runtime.life_max = static_cast<std::int32_t>(snapshot.max_hp);
-        participant->runtime.mana_current = static_cast<std::int32_t>(snapshot.mp);
-        participant->runtime.mana_max = static_cast<std::int32_t>(snapshot.max_mp);
-
-        if (!multiplayer::IsLuaControlledParticipant(*participant)) {
+        // Native remote participants are packet-owned; feeding the mirrored
+        // actor's local HP back into runtime can pin remote deaths at zero.
+        if (multiplayer::IsNativeControlledParticipant(*participant)) {
             return;
         }
+
+        participant->runtime.life_current = snapshot.hp;
+        participant->runtime.life_max = snapshot.max_hp;
+        participant->runtime.mana_current = snapshot.mp;
+        participant->runtime.mana_max = snapshot.max_mp;
 
         participant->runtime.transform_valid = true;
         participant->runtime.position_x = snapshot.x;
@@ -206,7 +287,7 @@ bool TryBuildParticipantRematerializationRequest(
     }
 
     multiplayer::BotSnapshot bot_snapshot;
-    if (!multiplayer::ReadBotSnapshot(binding.bot_id, &bot_snapshot) || !bot_snapshot.available) {
+    if (!multiplayer::ReadParticipantSnapshot(binding.bot_id, &bot_snapshot) || !bot_snapshot.available) {
         return false;
     }
 

@@ -47,9 +47,185 @@ bool WireGameplaySlotBotRuntimeHandles(
     return true;
 }
 
+bool SeedWizardBotNativeCollisionStateFromSourceActor(
+    uintptr_t actor_address,
+    uintptr_t native_visual_actor_address,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (actor_address == 0 || native_visual_actor_address == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Gameplay-slot collision seeding requires a live bot actor and native visual source.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    float source_radius = 0.0f;
+    float source_move_step_scale = 0.0f;
+    std::uint32_t source_primary_mask = 0;
+    std::uint32_t source_secondary_mask = 0;
+    if (!TryReadFiniteFloatField(
+            native_visual_actor_address,
+            kActorCollisionRadiusOffset,
+            &source_radius) ||
+        !TryReadFiniteFloatField(
+            native_visual_actor_address,
+            kActorMoveStepScaleOffset,
+            &source_move_step_scale) ||
+        !memory.TryReadField(
+            native_visual_actor_address,
+            kActorPrimaryFlagMaskOffset,
+            &source_primary_mask) ||
+        !memory.TryReadField(
+            native_visual_actor_address,
+            kActorSecondaryFlagMaskOffset,
+            &source_secondary_mask)) {
+        if (error_message != nullptr) {
+            *error_message = "Native visual source collision fields are unreadable.";
+        }
+        return false;
+    }
+    if (!(source_radius > 0.0f) ||
+        !(source_move_step_scale > 0.0f) ||
+        source_primary_mask == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Native visual source collision fields are invalid.";
+        }
+        return false;
+    }
+
+    if (!memory.TryWriteField(
+            actor_address,
+            kActorCollisionRadiusOffset,
+            source_radius) ||
+        !memory.TryWriteField(
+            actor_address,
+            kActorMoveStepScaleOffset,
+            source_move_step_scale) ||
+        !memory.TryWriteField(
+            actor_address,
+            kActorPrimaryFlagMaskOffset,
+            source_primary_mask) ||
+        !memory.TryWriteField(
+            actor_address,
+            kActorSecondaryFlagMaskOffset,
+            source_secondary_mask)) {
+        if (error_message != nullptr) {
+            *error_message = "Failed to seed wizard bot native collision fields.";
+        }
+        return false;
+    }
+
+    Log(
+        "[bots] wizard bot native collision seeded. actor=" + HexString(actor_address) +
+        " source=" + HexString(native_visual_actor_address) +
+        " radius=" + std::to_string(source_radius) +
+        " move_step=" + std::to_string(source_move_step_scale) +
+        " mask=" + HexString(source_primary_mask) +
+        " mask2=" + HexString(source_secondary_mask));
+    return true;
+}
+
+bool SeedWizardBotNativeSpellDispatchStateFromSourceActor(
+    uintptr_t actor_address,
+    uintptr_t native_visual_actor_address,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (actor_address == 0 || native_visual_actor_address == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Gameplay-slot spell dispatch seeding requires a live bot actor and native visual source.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::string failed_seed_field;
+    auto copy_u32 = [&](const char* label, std::size_t offset) -> bool {
+        std::uint32_t value = 0;
+        if (!memory.TryReadField(native_visual_actor_address, offset, &value)) {
+            failed_seed_field =
+                std::string(label) + " read failed at +" + HexString(offset);
+            return false;
+        }
+        if (!memory.TryWriteField(actor_address, offset, value)) {
+            failed_seed_field =
+                std::string(label) + " write failed at +" + HexString(offset) +
+                " value=" + HexString(value);
+            return false;
+        }
+        return true;
+    };
+    auto copy_float = [&](const char* label, std::size_t offset) -> bool {
+        float value = 0.0f;
+        if (!memory.TryReadField(native_visual_actor_address, offset, &value)) {
+            failed_seed_field =
+                std::string(label) + " read failed at +" + HexString(offset);
+            return false;
+        }
+        if (!std::isfinite(value)) {
+            failed_seed_field =
+                std::string(label) + " non-finite at +" + HexString(offset) +
+                " value=" + std::to_string(value);
+            return false;
+        }
+        if (!memory.TryWriteField(actor_address, offset, value)) {
+            failed_seed_field =
+                std::string(label) + " write failed at +" + HexString(offset) +
+                " value=" + std::to_string(value);
+            return false;
+        }
+        return true;
+    };
+
+    if (!copy_u32("startup_counter", kActorStartupCounterOffset) ||
+        !copy_float("spell_config_28c", kActorSpellConfig28cOffset) ||
+        !copy_float("spell_config_290", kActorSpellConfig290Offset) ||
+        !copy_float("spell_config_294", kActorSpellConfig294Offset) ||
+        !copy_u32("spell_config_298", kActorSpellConfig298Offset) ||
+        !copy_float("spell_config_29c", kActorSpellConfig29cOffset) ||
+        !copy_float("spell_config_2a0", kActorSpellConfig2a0Offset) ||
+        !copy_float("spell_config_2a4", kActorSpellConfig2a4Offset) ||
+        !copy_u32("spell_config_2c8", kActorSpellConfig2c8Offset) ||
+        !copy_float("spell_config_2cc", kActorSpellConfig2ccOffset) ||
+        !copy_float("spell_config_2d0", kActorSpellConfig2d0Offset) ||
+        !copy_float("spell_config_2d4", kActorSpellConfig2d4Offset) ||
+        !copy_float("spell_config_2d8", kActorSpellConfig2d8Offset)) {
+        if (error_message != nullptr) {
+            *error_message = failed_seed_field.empty()
+                ? "Failed to seed wizard bot native spell dispatch fields."
+                : "Failed to seed wizard bot native spell dispatch fields: " + failed_seed_field + ".";
+        }
+        return false;
+    }
+
+    std::uint32_t startup_counter = 0;
+    std::uint32_t config_298 = 0;
+    std::uint32_t config_2c8 = 0;
+    float config_2d8 = 0.0f;
+    (void)memory.TryReadField(actor_address, kActorStartupCounterOffset, &startup_counter);
+    (void)memory.TryReadField(actor_address, kActorSpellConfig298Offset, &config_298);
+    (void)memory.TryReadField(actor_address, kActorSpellConfig2c8Offset, &config_2c8);
+    (void)memory.TryReadField(actor_address, kActorSpellConfig2d8Offset, &config_2d8);
+    Log(
+        "[bots] wizard bot native spell dispatch seeded. actor=" + HexString(actor_address) +
+        " source=" + HexString(native_visual_actor_address) +
+        " startup=" + HexString(startup_counter) +
+        " config298=" + HexString(config_298) +
+        " config2c8=" + HexString(config_2c8) +
+        " config2d8=" + std::to_string(config_2d8));
+    return true;
+}
+
 bool SeedGameplaySlotBotRenderStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t world_address,
+    uintptr_t native_visual_actor_address,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
@@ -58,15 +234,13 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
     if (error_message != nullptr) {
         error_message->clear();
     }
-    if (actor_address == 0 || world_address == 0) {
+    if (actor_address == 0 || world_address == 0 || native_visual_actor_address == 0) {
         if (error_message != nullptr) {
             *error_message =
-                "Gameplay-slot render seeding requires a live actor and world.";
+                "Gameplay-slot render seeding requires a live actor, world, and native visual source.";
         }
         return false;
     }
-
-    ClearActorLiveDescriptorBlock(actor_address);
 
     auto& memory = ProcessMemory::Instance();
     const auto primary_visual_link_ctor_address =
@@ -82,16 +256,15 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
     }
 
     uintptr_t source_actor_address = 0;
-    uintptr_t source_profile_address = 0;
     std::string stage_error;
     if (!CreateWizardCloneSourceActor(
             world_address,
+            native_visual_actor_address,
             character_profile,
             x,
             y,
             heading,
             &source_actor_address,
-            &source_profile_address,
             &stage_error)) {
         if (error_message != nullptr) {
             *error_message = std::move(stage_error);
@@ -104,9 +277,6 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
         if (source_actor_address != 0) {
             (void)DestroyWizardCloneSourceActor(source_actor_address, &cleanup_error);
         }
-        if (source_profile_address != 0) {
-            DestroySyntheticWizardSourceProfile(source_profile_address);
-        }
         if (!cleanup_error.empty()) {
             Log("[bots] source actor cleanup detail: " + cleanup_error);
         }
@@ -115,6 +285,16 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
     constexpr bool kKeepSourceActorAliveDiagnostic = false;
 
     auto built_snapshot = CaptureActorRenderBuildSnapshot(source_actor_address);
+    if (!ApplySourceActorRenderSelectorsToTargetActor(
+            actor_address,
+            built_snapshot,
+            &stage_error)) {
+        cleanup_source();
+        if (error_message != nullptr) {
+            *error_message = stage_error;
+        }
+        return false;
+    }
 
     const auto& built_descriptor = built_snapshot.descriptor;
     if (!AttachBuiltDescriptorToEquipVisualLane(
@@ -138,6 +318,14 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
         return false;
     }
 
+    if (!AttachGameplaySlotBotStaffItem(actor_address, &stage_error)) {
+        cleanup_source();
+        if (error_message != nullptr) {
+            *error_message = stage_error;
+        }
+        return false;
+    }
+
     if constexpr (kKeepSourceActorAliveDiagnostic) {
         if (source_actor_address != 0) {
             (void)memory.TryWriteField(source_actor_address, kActorPositionXOffset, 100000.0f);
@@ -148,40 +336,11 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
         cleanup_source();
     }
     NormalizeGameplaySlotBotSyntheticVisualState(actor_address);
-    Log(
-        "[bots] visual stage=slot_actor_helper_lanes_seeded bot={" +
-        BuildActorVisualDebugSummary(actor_address) + "}");
-    return true;
-}
-
-bool AttachGameplaySlotBotStaffItem(
-    uintptr_t actor_address,
-    std::string* error_message) {
-    uintptr_t staff_item_address = 0;
-    std::string stage_error;
-    if (!CreateGameplaySlotStaffItemObject(&staff_item_address, &stage_error) ||
-        !SetEquipVisualLaneObject(
-            actor_address,
-            kActorEquipRuntimeVisualLinkAttachmentOffset,
-            staff_item_address,
-            "attachment",
-            &stage_error)) {
-        if (staff_item_address != 0) {
-            DWORD destroy_exception_code = 0;
-            (void)CallScalarDeletingDestructorSafe(
-                staff_item_address,
-                1,
-                &destroy_exception_code);
-        }
-        if (error_message != nullptr) {
-            *error_message = stage_error;
-        }
-        return false;
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        Log(
+            "[bots] visual stage=slot_actor_helper_lanes_seeded bot={" +
+            BuildActorVisualDebugSummary(actor_address) + "}");
     }
-
-    Log(
-        "[bots] visual stage=slot_actor_staff_attached bot={" +
-        BuildActorVisualDebugSummary(actor_address) + "}");
     return true;
 }
 
@@ -313,9 +472,11 @@ bool CreateGameplaySlotBotActor(
         return false;
     }
 
+    uintptr_t debug_local_actor = 0;
+    (void)memory.TryReadField(gameplay_address, kGameplayPlayerActorOffset, &debug_local_actor);
     LogBotVisualDebugStage(
         "slot_actor_pre_register",
-        memory.ReadFieldOr<uintptr_t>(gameplay_address, kGameplayPlayerActorOffset, 0),
+        debug_local_actor,
         slot_actor_address,
         0);
 
@@ -351,10 +512,15 @@ bool FinalizeGameplaySlotBotRegistration(
         kGameplayPlayerActorOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
     const auto progression_slot_offset =
         kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride;
-    const auto published_actor_address =
-        memory.ReadFieldOr<uintptr_t>(gameplay_address, actor_slot_offset, 0);
-    const auto published_progression_wrapper =
-        memory.ReadFieldOr<uintptr_t>(gameplay_address, progression_slot_offset, 0);
+    uintptr_t published_actor_address = 0;
+    uintptr_t published_progression_wrapper = 0;
+    if (!memory.TryReadField(gameplay_address, actor_slot_offset, &published_actor_address) ||
+        !memory.TryReadField(gameplay_address, progression_slot_offset, &published_progression_wrapper)) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay-slot registration could not read stock slot table entries.";
+        }
+        return false;
+    }
     if (published_actor_address != actor_address || published_progression_wrapper == 0) {
         if (error_message != nullptr) {
             *error_message =

@@ -1,5 +1,7 @@
 #include "logger_internal.h"
 
+#include "gameplay_seams.h"
+
 namespace sdmod::detail::logger {
 
 LONG WINAPI CrashExceptionFilter(EXCEPTION_POINTERS* exception_pointers) {
@@ -201,18 +203,33 @@ LONG CALLBACK FirstChanceExceptionLogger(EXCEPTION_POINTERS* exception_pointers)
 
         struct NullPrimaryEntryRecovery {
             const char* description;
-            std::uintptr_t crash_ghidra_eip;
-            std::uintptr_t recover_ghidra_eip;
+            const std::uintptr_t* crash_ghidra_eip;
+            const std::uintptr_t* recover_ghidra_eip;
             bool match_eax_null;
             std::uintptr_t expected_access;
         };
         static constexpr NullPrimaryEntryRecovery kNullEntryRecoveries[] = {
-            {"MovementCollision_QueryType2Hazards", 0x009125E0, 0x009126C2, false, 0xC},
-            {"MovementCollision_IteratePrimary", 0x00522D10, 0x00522E00, true, 0x10},
+            {
+                "MovementCollision_QueryType2Hazards",
+                &kMovementCollisionQueryType2HazardsCrash,
+                &kMovementCollisionQueryType2HazardsRecover,
+                false,
+                0xC,
+            },
+            {
+                "MovementCollision_IteratePrimary",
+                &kMovementCollisionIteratePrimaryCrash,
+                &kMovementCollisionIteratePrimaryRecover,
+                true,
+                0x10,
+            },
         };
 
         for (const auto& entry : kNullEntryRecoveries) {
-            const uintptr_t crash_eip = memory.ResolveGameAddressOrZero(entry.crash_ghidra_eip);
+            if (entry.crash_ghidra_eip == nullptr || entry.recover_ghidra_eip == nullptr) {
+                continue;
+            }
+            const uintptr_t crash_eip = memory.ResolveGameAddressOrZero(*entry.crash_ghidra_eip);
             if (crash_eip == 0 || eip_val != crash_eip) {
                 continue;
             }
@@ -223,7 +240,7 @@ LONG CALLBACK FirstChanceExceptionLogger(EXCEPTION_POINTERS* exception_pointers)
             if (!reg_matches || access_addr != entry.expected_access) {
                 continue;
             }
-            const uintptr_t recover_eip = memory.ResolveGameAddressOrZero(entry.recover_ghidra_eip);
+            const uintptr_t recover_eip = memory.ResolveGameAddressOrZero(*entry.recover_ghidra_eip);
             if (recover_eip == 0) {
                 break;
             }

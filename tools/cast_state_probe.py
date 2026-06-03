@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import math
@@ -22,10 +23,17 @@ LUA_EXEC = ROOT / "tools" / "lua-exec.py"
 CLICK_WINDOW = ROOT / "scripts" / "click_window.py"
 LOADER_LOG = ROOT / "runtime" / "stage" / ".sdmod" / "logs" / "solomondarkmodloader.log"
 OUTPUT_PATH = ROOT / "runtime" / "cast_state_probe.json"
+MOD_STATE_PATH = ROOT / "runtime" / "mod-manager-state.json"
+STAGED_BINARY_LAYOUT = ROOT / "runtime" / "stage" / ".sdmod" / "config" / "binary-layout.ini"
+ROOT_BINARY_LAYOUT = ROOT / "config" / "binary-layout.ini"
+PROBE_LAYOUT = ROOT / "mods" / "lua_ui_sandbox_lab" / "config" / "probe-layout.ini"
+PROBE_REQUIRED_MODS_ENV = "SD_PROBE_REQUIRED_MODS"
+LUA_BOT_MOD_ID = "sample.lua.bots"
+NO_LOADED_LUA_MOD_STATE_TEXT = "No loaded Lua mod state is available"
 
 DEFAULT_ELEMENT = "fire"
 DEFAULT_DISCIPLINE = "mind"
-DEFAULT_BOT_SKILL_ID = 0x3EF
+DEFAULT_BOT_SKILL_ID_KEY = "cast_probe_default_skill_id"
 CREATE_ELEMENT_CENTERS = {
     "ether": (826, 369),
     "earth": (656, 417),
@@ -38,52 +46,91 @@ CREATE_DISCIPLINE_CENTERS = {
     "body": (875, 460),
     "mind": (1025, 460),
 }
-CREATE_OWNER_ELEMENT_ENABLED_BYTE_OFFSET = 0x18C
-CREATE_OWNER_ELEMENT_SELECTED_OFFSET = 0x1A4
-CREATE_OWNER_DISCIPLINE_ENABLED_BYTE_OFFSET = 0x228
-CREATE_OWNER_DISCIPLINE_SELECTED_OFFSET = 0x22C
 ALLOW_MOUSE_UI_AUTOMATION = os.environ.get("SD_PROBE_ALLOW_MOUSE", "").lower() in {
     "1",
     "true",
     "yes",
     "on",
 }
+
+
+def read_runtime_layout_offset(name: str) -> int:
+    layout_paths = [STAGED_BINARY_LAYOUT, ROOT_BINARY_LAYOUT] if STAGED_BINARY_LAYOUT.exists() else [ROOT_BINARY_LAYOUT]
+    checked: list[Path] = []
+    for layout_path in layout_paths:
+        if layout_path in checked:
+            continue
+        checked.append(layout_path)
+        text = layout_path.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("#", ";")) or "=" not in stripped:
+                continue
+            key, value = stripped.split("=", 1)
+            if key.strip() == name:
+                return int(value.strip(), 0)
+    locations = ", ".join(str(path) for path in checked)
+    raise RuntimeError(f"Unable to find {name!r} in {locations}")
+
+
+def read_probe_layout_offset(name: str) -> int:
+    text = PROBE_LAYOUT.read_text(encoding="utf-8")
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", ";", "[")) or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        if key.strip() == name:
+            return int(value.strip(), 0)
+    raise RuntimeError(f"Unable to find {name!r} in {PROBE_LAYOUT}")
+
+
+DEFAULT_BOT_SKILL_ID = read_runtime_layout_offset(DEFAULT_BOT_SKILL_ID_KEY)
+CREATE_OWNER_ELEMENT_ENABLED_BYTE_OFFSET = read_probe_layout_offset("create_owner_element_enabled_byte")
+CREATE_OWNER_ELEMENT_SELECTED_OFFSET = read_probe_layout_offset("create_owner_element_selected")
+CREATE_OWNER_DISCIPLINE_ENABLED_BYTE_OFFSET = read_probe_layout_offset("create_owner_discipline_enabled_byte")
+CREATE_OWNER_DISCIPLINE_SELECTED_OFFSET = read_probe_layout_offset("create_owner_discipline_selected")
+
+
 ACTOR_RAW_OFFSETS = {
-    "owner_ptr": ("ptr", 0x58),
-    "runtime_profile_ptr": ("ptr", 0x200),
-    "pure_primary_e4": ("u32", 0xE4),
-    "pure_primary_e8": ("u32", 0xE8),
-    "walk_x": ("float", 0x158),
-    "walk_y": ("float", 0x15C),
-    "spell_cfg_278_raw": ("u32", 0x278),
-    "pure_primary_timer_1b8": ("float", 0x1B8),
-    "pure_primary_item_sink": ("ptr", 0x1FC),
-    "spell_cfg_298_raw": ("u32", 0x298),
-    "spell_cfg_29c_float": ("float", 0x29C),
-    "spell_cfg_2a0_float": ("float", 0x2A0),
-    "spell_cfg_2a4_float": ("float", 0x2A4),
-    "spell_cfg_2c8_raw": ("u32", 0x2C8),
-    "spell_cfg_2cc_float": ("float", 0x2CC),
-    "spell_cfg_2d0_float": ("float", 0x2D0),
-    "spell_cfg_2d4_float": ("float", 0x2D4),
-    "spell_cfg_2d8_float": ("float", 0x2D8),
-    "heading": ("float", 0x6C),
-    "cast_drive_state": ("u8", 0x160),
-    "cast_no_interrupt": ("u8", 0x1EC),
-    "cast_primary_skill_id": ("u32", 0x270),
-    "cast_group_byte": ("u8", 0x27C),
-    "cast_slot_short": ("u16", 0x27E),
-    "aim_x": ("float", 0x2A8),
-    "aim_y": ("float", 0x2AC),
-    "aim_aux0": ("u32", 0x2B0),
-    "aim_aux1": ("u32", 0x2B4),
-    "aim_spread_mode": ("u8", 0x2DC),
+    "owner_ptr": ("ptr", read_runtime_layout_offset("actor_owner")),
+    "runtime_profile_ptr": ("ptr", read_runtime_layout_offset("actor_progression_runtime_state")),
+    "pure_primary_e4": ("u32", read_runtime_layout_offset("actor_primary_action_latch_e4")),
+    "pure_primary_e8": ("u32", read_runtime_layout_offset("actor_primary_action_latch_e8")),
+    "walk_x": ("float", read_runtime_layout_offset("actor_animation_config_block")),
+    "walk_y": ("float", read_runtime_layout_offset("actor_animation_drive_parameter")),
+    "spell_cfg_278_raw": ("u32", read_runtime_layout_offset("actor_startup_counter")),
+    "pure_primary_timing_a": ("float", read_runtime_layout_offset("actor_pure_primary_timing_a")),
+    "pure_primary_timing_b": ("float", read_runtime_layout_offset("actor_pure_primary_timing_b")),
+    "pure_primary_item_sink": ("ptr", read_runtime_layout_offset("actor_equip_runtime_state")),
+    "spell_cfg_298_raw": ("u32", read_runtime_layout_offset("actor_spell_config_298")),
+    "spell_cfg_29c_float": ("float", read_runtime_layout_offset("actor_spell_config_29c")),
+    "spell_cfg_2a0_float": ("float", read_runtime_layout_offset("actor_spell_config_2a0")),
+    "spell_cfg_2a4_float": ("float", read_runtime_layout_offset("actor_spell_config_2a4")),
+    "spell_cfg_2c8_raw": ("u32", read_runtime_layout_offset("actor_spell_config_2c8")),
+    "spell_cfg_2cc_float": ("float", read_runtime_layout_offset("actor_spell_config_2cc")),
+    "spell_cfg_2d0_float": ("float", read_runtime_layout_offset("actor_spell_config_2d0")),
+    "spell_cfg_2d4_float": ("float", read_runtime_layout_offset("actor_spell_config_2d4")),
+    "spell_cfg_2d8_float": ("float", read_runtime_layout_offset("actor_spell_config_2d8")),
+    "heading": ("float", read_runtime_layout_offset("actor_heading")),
+    "cast_drive_state": ("u8", read_runtime_layout_offset("actor_animation_drive_state_byte")),
+    "cast_no_interrupt": ("u8", read_runtime_layout_offset("actor_no_interrupt_flag")),
+    "cast_primary_skill_id": ("u32", read_runtime_layout_offset("actor_primary_skill_id")),
+    "cast_group_byte": ("u8", read_runtime_layout_offset("actor_active_cast_group_byte")),
+    "cast_slot_short": ("u16", read_runtime_layout_offset("actor_active_cast_slot_short")),
+    "aim_x": ("float", read_runtime_layout_offset("actor_aim_target_x")),
+    "aim_y": ("float", read_runtime_layout_offset("actor_aim_target_y")),
+    "aim_aux0": ("u32", read_runtime_layout_offset("actor_aim_target_aux0")),
+    "aim_aux1": ("u32", read_runtime_layout_offset("actor_aim_target_aux1")),
+    "aim_spread_mode": ("u8", read_runtime_layout_offset("actor_cast_spread_mode_byte")),
 }
-PROFILE_TEMPLATE_OFFSET = 0x750
-GAMEPLAY_PLAYER_PROGRESSION_HANDLE_OFFSET = 0x1654
+PROFILE_TEMPLATE_OFFSET = read_runtime_layout_offset("progression_current_spell_id")
+GAMEPLAY_PLAYER_PROGRESSION_HANDLE_OFFSET = read_runtime_layout_offset("gameplay_player_progression_handle")
 GAMEPLAY_PLAYER_SLOT_STRIDE = 4
-PROGRESSION_HP_OFFSET = 0x70
-PROGRESSION_MAX_HP_OFFSET = 0x74
+PROGRESSION_HP_OFFSET = read_runtime_layout_offset("progression_hp")
+PROGRESSION_MAX_HP_OFFSET = read_runtime_layout_offset("progression_max_hp")
+GAMEPLAY_CAST_INTENT_OFFSET = read_runtime_layout_offset("gameplay_cast_intent")
+GAMEPLAY_MOUSE_LEFT_FALLBACK_OFFSET = read_runtime_layout_offset("gameplay_mouse_left_button")
 
 
 class ProbeFailure(RuntimeError):
@@ -115,6 +162,92 @@ def run_powershell(command: str, *, timeout: float | None = None) -> subprocess.
     )
 
 
+def _split_mod_id_list(value: str | None) -> list[str]:
+    if value is None:
+        return []
+    stripped = value.strip()
+    if not stripped or stripped.lower() in {"0", "false", "none", "off"}:
+        return []
+
+    mod_ids: list[str] = []
+    seen: set[str] = set()
+    for raw in stripped.replace(",", ";").split(";"):
+        mod_id = raw.strip()
+        if not mod_id:
+            continue
+        key = mod_id.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        mod_ids.append(mod_id)
+    return mod_ids
+
+
+def required_probe_mod_ids() -> list[str]:
+    return _split_mod_id_list(os.environ.get(PROBE_REQUIRED_MODS_ENV))
+
+
+def _join_mod_id_list(mod_ids: list[str]) -> str:
+    return ";".join(mod_ids)
+
+
+@contextmanager
+def temporary_required_lua_mods(*mod_ids: str):
+    """Require Lua mods for a launch without permanently dirtying launcher state."""
+    previous_env = os.environ.get(PROBE_REQUIRED_MODS_ENV)
+    state_existed = MOD_STATE_PATH.exists()
+    previous_state = MOD_STATE_PATH.read_text(encoding="utf-8") if state_existed else None
+
+    combined = _split_mod_id_list(previous_env)
+    seen = {mod_id.lower() for mod_id in combined}
+    for mod_id in mod_ids:
+        for parsed in _split_mod_id_list(mod_id):
+            key = parsed.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            combined.append(parsed)
+
+    if combined:
+        os.environ[PROBE_REQUIRED_MODS_ENV] = _join_mod_id_list(combined)
+    else:
+        os.environ.pop(PROBE_REQUIRED_MODS_ENV, None)
+
+    try:
+        yield
+    finally:
+        if previous_env is None:
+            os.environ.pop(PROBE_REQUIRED_MODS_ENV, None)
+        else:
+            os.environ[PROBE_REQUIRED_MODS_ENV] = previous_env
+
+        if state_existed and previous_state is not None:
+            MOD_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            MOD_STATE_PATH.write_text(previous_state, encoding="utf-8")
+        else:
+            MOD_STATE_PATH.unlink(missing_ok=True)
+
+
+def ensure_required_lua_mods_enabled() -> list[dict[str, object]]:
+    mod_ids = required_probe_mod_ids()
+    enabled: list[dict[str, object]] = []
+    for mod_id in mod_ids:
+        result = run_command([str(LAUNCHER), "enable-mod", mod_id, "--json"], timeout=30.0)
+        record = {
+            "mod_id": mod_id,
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
+        enabled.append(record)
+        if result.returncode != 0:
+            raise ProbeFailure(
+                f"failed to enable required Lua mod {mod_id!r} with exit code {result.returncode}\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+    return enabled
+
+
 def to_windows_path(path: Path) -> str:
     result = run_command(["wslpath", "-w", str(path)], timeout=10.0)
     if result.returncode != 0:
@@ -122,6 +255,43 @@ def to_windows_path(path: Path) -> str:
             f"wslpath failed for {path}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
     return result.stdout.strip()
+
+
+def powershell_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def normalize_launcher_path(raw_path: str) -> str:
+    path = raw_path.strip()
+    if not path:
+        raise ProbeFailure("Launcher path override was empty.")
+    if path.startswith("/"):
+        return to_windows_path(Path(path))
+    if len(path) >= 2 and path[1] == ":":
+        return path
+    return to_windows_path((ROOT / path).resolve())
+
+
+def build_launcher_arguments() -> list[str]:
+    args = ["launch"]
+
+    game_dir = os.environ.get("SD_PROBE_GAME_DIR")
+    if game_dir:
+        args.extend(["--game-dir", normalize_launcher_path(game_dir)])
+
+    runtime_profile = os.environ.get("SD_PROBE_RUNTIME_PROFILE")
+    if runtime_profile:
+        args.extend(["--runtime-profile", runtime_profile.strip()])
+
+    runtime_flags = os.environ.get("SD_PROBE_RUNTIME_FLAGS")
+    if runtime_flags:
+        for raw_flag in runtime_flags.split(";"):
+            flag = raw_flag.strip()
+            if not flag:
+                continue
+            args.extend(["--runtime-flag", flag])
+
+    return args
 
 
 def sha256_file(path: Path) -> str:
@@ -181,10 +351,12 @@ def clear_loader_log() -> None:
 
 
 def launch_game() -> None:
+    ensure_required_lua_mods_enabled()
     launcher_path = to_windows_path(LAUNCHER).replace("'", "''")
     working_directory = to_windows_path(LAUNCHER.parent).replace("'", "''")
+    arguments = powershell_quote(subprocess.list2cmdline(build_launcher_arguments()))
     result = run_powershell(
-        f"Start-Process -FilePath '{launcher_path}' -ArgumentList 'launch' "
+        f"Start-Process -FilePath '{launcher_path}' -ArgumentList {arguments} "
         f"-WorkingDirectory '{working_directory}' | Out-Null",
         timeout=15.0,
     )
@@ -237,16 +409,29 @@ def run_lua(code: str, *, timeout_s: float = 20.0) -> str:
 
 def wait_for_lua_pipe(timeout_s: float = 60.0) -> None:
     deadline = time.time() + timeout_s
+    last_error = ""
+    saw_no_loaded_mod_state = False
     while time.time() < deadline:
         try:
             output = run_lua("print('ready=true')", timeout_s=5.0)
-        except ProbeFailure:
+        except ProbeFailure as exc:
+            last_error = str(exc)
+            if NO_LOADED_LUA_MOD_STATE_TEXT in last_error:
+                saw_no_loaded_mod_state = True
             time.sleep(0.25)
             continue
         if "ready=true" in output:
             return
         time.sleep(0.25)
-    raise ProbeFailure("Timed out waiting for Lua exec pipe.")
+    if saw_no_loaded_mod_state:
+        required_mods = required_probe_mod_ids()
+        suffix = f" Required mods were: {required_mods}." if required_mods else ""
+        raise ProbeFailure(
+            "Timed out waiting for Lua exec pipe: the pipe answered, but no Lua mod state was loaded."
+            f"{suffix} Last lua-exec error: {last_error}"
+        )
+    detail = f" Last lua-exec error: {last_error}" if last_error else ""
+    raise ProbeFailure(f"Timed out waiting for Lua exec pipe.{detail}")
 
 
 def query_ui_snapshot() -> dict[str, str]:
@@ -604,7 +789,12 @@ def choose_create_options(process_id: int, *, element: str, discipline: str) -> 
         if not ALLOW_MOUSE_UI_AUTOMATION:
             raise
         click_create_choice(process_id, *CREATE_ELEMENT_CENTERS[element])
-    wait_for_create_selection_ready("discipline")
+    try:
+        wait_for_create_selection_ready("discipline")
+    except ProbeFailure:
+        snapshot = query_ui_snapshot()
+        if not snapshot_contains_action(snapshot, f"create.select_discipline_{discipline}", "create"):
+            raise
     try:
         activate_ui_action(f"create.select_discipline_{discipline}", "create")
     except ProbeFailure:
@@ -747,7 +937,9 @@ def drive_new_game_flow(process_id: int, *, element: str, discipline: str) -> No
             if not new_game_clicked and "main_menu.new_game" in action_ids:
                 activate_or_click_snapshot_action(process_id, snapshot, "main_menu.new_game", "main_menu")
                 new_game_clicked = True
-                wait_for_surface("create", timeout_s=15.0)
+                branch = resolve_new_game_branch_after_activation(process_id, [])
+                if is_settled_scene(branch, "hub"):
+                    return
                 choose_create_options(process_id, element=element, discipline=discipline)
                 create_selected = True
                 wait_for_scene("hub", timeout_s=45.0)
@@ -761,9 +953,31 @@ def drive_new_game_flow(process_id: int, *, element: str, discipline: str) -> No
 
         time.sleep(0.25)
 
+    final_scene = query_scene_state()
+    final_snapshot = query_ui_snapshot()
+    final_surface = final_snapshot.get("surface_id")
+    if final_surface == "main_menu":
+        final_action_ids = {
+            final_snapshot.get(f"element.{index}.action_id"): index
+            for index in range(1, 9)
+            if final_snapshot.get(f"element.{index}.action_id")
+        }
+        if "main_menu.new_game" in final_action_ids:
+            activate_or_click_snapshot_action(process_id, final_snapshot, "main_menu.new_game", "main_menu")
+            branch = resolve_new_game_branch_after_activation(process_id, ["main_menu.new_game"])
+            if is_settled_scene(branch, "hub"):
+                return
+            choose_create_options(process_id, element=element, discipline=discipline)
+            wait_for_scene("hub", timeout_s=45.0)
+            return
+    if final_surface == "create":
+        choose_create_options(process_id, element=element, discipline=discipline)
+        wait_for_scene("hub", timeout_s=45.0)
+        return
+
     raise ProbeFailure(
         "Timed out driving new-game flow. "
-        f"Last scene={query_scene_state()} last_ui={query_ui_snapshot()} "
+        f"Last scene={final_scene} last_ui={final_snapshot} "
         f"play_clicked={play_clicked} new_game_clicked={new_game_clicked} create_selected={create_selected}"
     )
 
@@ -944,10 +1158,12 @@ def query_actor_raw_fields(label: str, actor_address: int) -> dict[str, str]:
         lines.append(f"emit('{name}', sd.debug.{reader}(actor + {offset}))")
     lines.extend(
         [
-            "local profile = sd.debug.read_ptr(actor + 0x200)",
+            "local profile = sd.debug.read_ptr(actor + "
+            f"{read_runtime_layout_offset('actor_progression_runtime_state')})",
             "emit('profile_ptr', profile)",
             f"if profile and profile ~= 0 then emit('profile_template_id', sd.debug.read_u32(profile + {PROFILE_TEMPLATE_OFFSET})) end",
-            "local owner = sd.debug.read_ptr(actor + 0x58)",
+            "local owner = sd.debug.read_ptr(actor + "
+            f"{read_runtime_layout_offset('actor_owner')})",
             "emit('owner_ptr', owner)",
         ]
     )
@@ -1011,12 +1227,11 @@ local by = tonumber(bot.y) or 0.0
 local best = nil
 local best_gap = math.huge
 for _, actor in ipairs(actors) do
-  local obj = tonumber(actor.object_type_id) or 0
   local tracked = actor.tracked_enemy == true
   local dead = actor.dead == true
   local hp = tonumber(actor.hp) or 0.0
   local max_hp = tonumber(actor.max_hp) or 0.0
-  if (tracked or obj == 1001) and not dead and (max_hp <= 0.0 or hp > 0.0) then
+  if tracked and not dead and (max_hp <= 0.0 or hp > 0.0) then
     local ax = tonumber(actor.x) or 0.0
     local ay = tonumber(actor.y) or 0.0
     local dx = ax - bx
@@ -1212,7 +1427,7 @@ def main() -> int:
         wait_for_lua_pipe()
         result["navigation"].append({"step": "launch", "process_id": process_id})
 
-        hub_flow = drive_hub_flow(process_id, element=args.element, discipline=args.discipline, prefer_resume=True)
+        hub_flow = drive_hub_flow(process_id, element=args.element, discipline=args.discipline, prefer_resume=False)
         result["navigation"].append(
             {"step": "hub_ready", "flow": hub_flow, "element": args.element, "discipline": args.discipline}
         )

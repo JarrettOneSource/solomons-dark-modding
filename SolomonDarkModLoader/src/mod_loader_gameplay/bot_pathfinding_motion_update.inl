@@ -52,13 +52,32 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto actor_x = memory.ReadFieldOr<float>(binding->actor_address, kActorPositionXOffset, 0.0f);
-    const auto actor_y = memory.ReadFieldOr<float>(binding->actor_address, kActorPositionYOffset, 0.0f);
+    (void)memory;
+    float actor_x = 0.0f;
+    float actor_y = 0.0f;
+    if (!TryReadFiniteFloatField(binding->actor_address, kActorPositionXOffset, &actor_x) ||
+        !TryReadFiniteFloatField(binding->actor_address, kActorPositionYOffset, &actor_y)) {
+        StopBotPathMotion(binding, false);
+        if (error_message != nullptr) {
+            *error_message = "Bot actor position is unreadable during path motion.";
+        }
+        return false;
+    }
+    float actor_radius = 0.0f;
+    (void)TryReadFiniteFloatField(binding->actor_address, kActorCollisionRadiusOffset, &actor_radius);
     const auto target_delta_x = binding->target_x - actor_x;
     const auto target_delta_y = binding->target_y - actor_y;
     const auto target_distance =
         std::sqrt(target_delta_x * target_delta_x + target_delta_y * target_delta_y);
-    if (target_distance <= kWizardBotPathFinalArrivalThreshold) {
+    const auto target_blocked_by_participant =
+        actor_radius > 0.0f &&
+        IsGameplayPathBlockedByWizardParticipant(
+            binding,
+            binding->target_x,
+            binding->target_y,
+            actor_radius,
+            nullptr);
+    if (target_distance <= kWizardBotPathFinalArrivalThreshold && !target_blocked_by_participant) {
         StopBotPathMotion(binding, false);
         (void)multiplayer::StopBot(binding->bot_id);
         return true;
@@ -66,6 +85,11 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
 
     while (binding->path_waypoint_index < binding->path_waypoints.size()) {
         const auto& waypoint = binding->path_waypoints[binding->path_waypoint_index];
+        if (actor_radius > 0.0f &&
+            IsGameplayPathBlockedByWizardParticipant(binding, waypoint.x, waypoint.y, actor_radius, nullptr)) {
+            StopBotPathMotion(binding, false);
+            return true;
+        }
         const auto delta_x = waypoint.x - actor_x;
         const auto delta_y = waypoint.y - actor_y;
         const auto distance = std::sqrt(delta_x * delta_x + delta_y * delta_y);
@@ -80,7 +104,9 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
     }
 
     if (binding->path_waypoint_index >= binding->path_waypoints.size()) {
-        const bool arrived_at_target = target_distance <= kWizardBotPathFinalArrivalThreshold;
+        const bool arrived_at_target =
+            target_distance <= kWizardBotPathFinalArrivalThreshold ||
+            target_blocked_by_participant;
         StopBotPathMotion(binding, false);
         if (!arrived_at_target) {
             if constexpr (kEnableWizardBotHotPathDiagnostics) {

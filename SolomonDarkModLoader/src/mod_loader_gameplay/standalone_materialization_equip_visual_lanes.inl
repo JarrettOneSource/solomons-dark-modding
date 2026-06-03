@@ -189,8 +189,18 @@ bool SetEquipVisualLaneObject(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto equip_runtime_state_address =
-        memory.ReadFieldOr<uintptr_t>(actor_address, kActorEquipRuntimeStateOffset, 0);
+    uintptr_t equip_runtime_state_address = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorEquipRuntimeStateOffset,
+            &equip_runtime_state_address)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Standalone " + std::string(label) +
+                " attach could not read the equip runtime state.";
+        }
+        return false;
+    }
     const auto lane = ReadEquipVisualLaneState(equip_runtime_state_address, lane_offset);
     if (lane.holder_address == 0) {
         if (error_message != nullptr) {
@@ -209,29 +219,39 @@ bool SetEquipVisualLaneObject(
         return false;
     }
 
-    const auto holder_object_before = memory.ReadFieldOr<uintptr_t>(
-        lane.holder_address,
-        kVisualLaneHolderCurrentObjectOffset,
-        0);
-    std::ostringstream before_out;
-    before_out << "[bots] equip_attach before label=" << label
-               << " actor=" << HexString(actor_address)
-               << " holder=" << HexString(lane.holder_address)
-               << " object_before=" << HexString(holder_object_before)
-               << " object_new=" << HexString(object_address);
-    if (holder_object_before != 0) {
-        AppendAttachmentObjectDebugSummary(
-            &before_out,
-            "holder_object_before",
-            holder_object_before);
+    uintptr_t holder_object_before = 0;
+    if (!memory.TryReadField(
+            lane.holder_address,
+            kVisualLaneHolderCurrentObjectOffset,
+            &holder_object_before)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Standalone " + std::string(label) +
+                " attach could not read the holder object before attach.";
+        }
+        return false;
     }
-    if (object_address != 0) {
-        AppendAttachmentObjectDebugSummary(
-            &before_out,
-            "object_new_state",
-            object_address);
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        std::ostringstream before_out;
+        before_out << "[bots] equip_attach before label=" << label
+                   << " actor=" << HexString(actor_address)
+                   << " holder=" << HexString(lane.holder_address)
+                   << " object_before=" << HexString(holder_object_before)
+                   << " object_new=" << HexString(object_address);
+        if (holder_object_before != 0) {
+            AppendAttachmentObjectDebugSummary(
+                &before_out,
+                "holder_object_before",
+                holder_object_before);
+        }
+        if (object_address != 0) {
+            AppendAttachmentObjectDebugSummary(
+                &before_out,
+                "object_new_state",
+                object_address);
+        }
+        Log(before_out.str());
     }
-    Log(before_out.str());
 
     DWORD exception_code = 0;
     if (!CallStandaloneWizardVisualLinkAttachSafe(
@@ -247,23 +267,67 @@ bool SetEquipVisualLaneObject(
         return false;
     }
 
-    const auto holder_object_after = memory.ReadFieldOr<uintptr_t>(
-        lane.holder_address,
-        kVisualLaneHolderCurrentObjectOffset,
-        0);
-    std::ostringstream after_out;
-    after_out << "[bots] equip_attach after label=" << label
-              << " actor=" << HexString(actor_address)
-              << " holder=" << HexString(lane.holder_address)
-              << " object_after=" << HexString(holder_object_after);
-    if (holder_object_after != 0) {
-        AppendAttachmentObjectDebugSummary(
-            &after_out,
-            "holder_object_after",
-            holder_object_after);
+    uintptr_t holder_object_after = 0;
+    if (!memory.TryReadField(
+            lane.holder_address,
+            kVisualLaneHolderCurrentObjectOffset,
+            &holder_object_after)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Standalone " + std::string(label) +
+                " attach could not read the holder object after attach.";
+        }
+        return false;
     }
-    Log(after_out.str());
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        std::ostringstream after_out;
+        after_out << "[bots] equip_attach after label=" << label
+                  << " actor=" << HexString(actor_address)
+                  << " holder=" << HexString(lane.holder_address)
+                  << " object_after=" << HexString(holder_object_after);
+        if (holder_object_after != 0) {
+            AppendAttachmentObjectDebugSummary(
+                &after_out,
+                "holder_object_after",
+                holder_object_after);
+        }
+        Log(after_out.str());
+    }
 
+    return true;
+}
+
+bool AttachGameplaySlotBotStaffItem(
+    uintptr_t actor_address,
+    std::string* error_message) {
+    uintptr_t staff_item_address = 0;
+    std::string stage_error;
+    if (!CreateGameplaySlotStaffItemObject(&staff_item_address, &stage_error) ||
+        !SetEquipVisualLaneObject(
+            actor_address,
+            kActorEquipRuntimeVisualLinkAttachmentOffset,
+            staff_item_address,
+            "attachment",
+            &stage_error)) {
+        if (staff_item_address != 0) {
+            DWORD destroy_exception_code = 0;
+            (void)CallScalarDeletingDestructorSafe(
+                staff_item_address,
+                1,
+                &destroy_exception_code);
+        }
+        if (error_message != nullptr) {
+            *error_message = stage_error;
+        }
+        return false;
+    }
+
+    if constexpr (kEnableWizardBotHotPathDiagnostics) {
+        Log(
+            "[bots] visual stage=slot_actor_owned_staff_attached staff=" +
+            HexString(staff_item_address) +
+            " bot={" + BuildActorVisualDebugSummary(actor_address) + "}");
+    }
     return true;
 }
 

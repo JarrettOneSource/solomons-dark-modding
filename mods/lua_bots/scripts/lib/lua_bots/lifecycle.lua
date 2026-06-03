@@ -34,8 +34,13 @@ function lifecycle.install(ctx)
       return
     end
 
+    local dead_since_ms = ctx.strict_number(now_ms)
+    if dead_since_ms == nil then
+      return
+    end
+
     state.bot_dead = true
-    state.dead_bot_since_ms = tonumber(now_ms) or state.last_tick_ms or 0
+    state.dead_bot_since_ms = dead_since_ms
     state.follow_target = nil
     state.last_command_ms = 0
 
@@ -43,10 +48,15 @@ function lifecycle.install(ctx)
       pcall(sd.bots.stop, state.bot_id)
     end
 
+    local hp = type(bot) == "table" and ctx.strict_number(bot.hp) or nil
+    if hp == nil then
+      return
+    end
+
     ctx.log(string.format(
       "managed bot dead id=%s hp=%.2f; leaving corpse inert for rest of run",
       tostring(state.bot_id),
-      tonumber(type(bot) == "table" and bot.hp or 0.0) or 0.0))
+      hp))
   end
 
   local function is_managed_bot_name(bot_name)

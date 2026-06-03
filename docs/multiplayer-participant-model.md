@@ -38,6 +38,16 @@ The local player is `ParticipantKind::LocalHuman` with a native controller.
 Lua bots are `RemoteParticipant + LuaBrain`. Future networked players should be
 `RemoteParticipant + Native`, not a separate actor/state family.
 
+The first local multiplayer transport uses this future path now: UDP peer state
+packets upsert `RemoteParticipant + Native` rows, then the existing participant
+materialization rail spawns those rows as remote wizard actors. Once an actor is
+materialized, incoming network transforms update the participant runtime snapshot
+and the gameplay tick performs native-remote playback toward that target. The
+sync queue is not used as a per-packet transform pump, because that queue is
+deliberately throttled for stock-safe spawn/rematerialization work. The local UDP
+state packet carries the participant display name, and the gameplay HUD/nameplate
+path resolves the materialized actor back to that participant name.
+
 The runtime reserves:
 
 - `kLocalParticipantId = 1`
@@ -45,6 +55,11 @@ The runtime reserves:
 
 The runtime participant carries Steam/session metadata, display name, readiness,
 transport flags, a character profile, and a live runtime snapshot.
+
+Lua validation can inspect networked remote players through
+`sd.bots.get_participants()`, `sd.bots.get_participant_state(id)`, and
+`sd.bots.get_nameplate(actor_address)`. Those APIs are intentionally query-only
+for native remote players.
 
 ## Character Profile
 
@@ -68,6 +83,37 @@ The important design rule is that remote participants and bots do not load each
 other's save files. A local save or create-screen choice can be translated into a
 profile, and that profile is then translated locally into the stock source
 profile, progression, appearance, and loadout data needed by the game.
+
+## Participant-Owned Inventory And Books
+
+The multiplayer participant owns gameplay progression state that stock
+single-player stores on local slot 0 or in process-global fields:
+
+- inventory root and equipment sinks
+- gold
+- spellbook unlock/upgrade state
+- statbook allocation/upgrade state
+- current loadout derived from those books
+
+Joined clients should use temporary multiplayer profile storage so a host's
+world state cannot corrupt the client's primary single-player save. During a
+session, host-confirmed rewards and progression deltas update the participant
+state first. The stock UI and actor runtime can then be pointed at, or refreshed
+from, that participant-owned state as a presentation layer.
+
+This is different from the existing character profile summary in `StatePacket`.
+The profile gets a participant into the world; participant-owned inventory,
+spellbook, and statbook state is mutable run/session state. Loot pickup must
+credit that mutable participant state, not `DAT_0081A388` global gold or
+`DAT_0081C264 + 0x13B8` as an unconditional slot-0 inventory root.
+
+The runtime now carries an explicit `ParticipantOwnedProgressionState` on each
+`ParticipantInfo`. The first fields are intentionally small: initialized flag,
+gold, and inventory/spellbook/statbook/loadout revision counters. Local UDP
+refresh populates the local participant's gold from live player state, and
+`sd.runtime.get_multiplayer_state()` exposes the participant ledger so live
+tests can prove loot pickup work is targeting participant state instead of
+silently falling back to the stock global economy.
 
 ## Scene Intent
 
@@ -130,6 +176,16 @@ profile, scene intent, controller state, movement state, and stock runtime
 handles. Gameplay publishes those bindings back into runtime snapshots so Lua and
 debug tooling can see the live actor state.
 
+`RemoteParticipant + Native` bindings additionally cache a sampled replicated
+transform target. Incoming `StatePacket` transforms are appended to the
+participant's short transform history. During each player-actor tick, the loader
+samples that history about 120 ms in the past, writes the interpolated
+position/heading to the materialized actor, and snaps only for large
+discontinuities such as scene changes. The participant collision resolver treats
+native remote players as solid against the local player and can push both actors
+apart; Lua bot collisions keep the older rule where the local player remains
+solid and the bot-owned actor yields.
+
 ## Networking Boundary
 
 The current protocol header is still a small fixed-packet scaffold:
@@ -138,6 +194,10 @@ The current protocol header is still a small fixed-packet scaffold:
 - `LaunchPacket`
 - `CastPacket`
 - `ProgressionPacket`
+- `WorldSnapshotPacket`
+- `LootSnapshotPacket`
+- reliable loot/pickup packets for host-owned drops and per-participant
+  inventory/spellbook/statbook deltas
 
 Those structs are useful for early shape checks, but the actual co-op design in
 `docs/networking/README.md` requires a broader reliable/unreliable packet family
@@ -145,8 +205,16 @@ for manifest handshake, join/bootstrap, entity lifecycle, input, snapshots,
 gameplay events, progression deltas, and reconnect.
 
 The multiplayer service loop currently pumps Steam bootstrap/callback state every
-50 ms and mirrors readiness into `RuntimeState`. It does not yet own peer
-sessions, packet transport, or replication.
+50 ms and mirrors readiness into `RuntimeState`. For rapid local development it
+can also pump a UDP loopback transport that exchanges `StatePacket` transform
+snapshots, host-owned `WorldSnapshot` actor snapshots, and host-owned run
+`LootSnapshot` metadata for gold drops. The host's `StatePacket` also owns the
+local UDP run-entry scene intent: connected clients cannot call
+`sd.hub.start_testrun` or directly switch themselves into the arena, but they
+queue the normal stock-safe hub-to-run transition when the configured host reports `in_run`.
+The UDP path is a development backend for the same
+participant and replication boundary that Steam P2P and a later dedicated
+server should use.
 
 ## Invariants
 

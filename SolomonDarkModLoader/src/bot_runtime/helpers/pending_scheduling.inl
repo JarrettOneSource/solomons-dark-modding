@@ -86,6 +86,7 @@ void ClearDeadBotControlsLocked(const ParticipantInfo& participant) {
     }
 
     RemovePendingCast(bot_id);
+    RemoveBotCastInput(bot_id);
     const auto* previous_intent = FindPendingMovementIntent(bot_id);
     const auto desired_heading_valid =
         participant.runtime.transform_valid ||

@@ -249,6 +249,27 @@ bool CallGameFreeSafe(
     }
 }
 
+bool CallNativeRngInitializeSafe(
+    uintptr_t initialize_address,
+    uintptr_t rng_state_address,
+    std::uint32_t seed,
+    DWORD* exception_code) {
+    auto* initialize = reinterpret_cast<NativeRngInitializeFn>(initialize_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (initialize == nullptr || rng_state_address == 0) {
+        return false;
+    }
+
+    __try {
+        initialize(reinterpret_cast<void*>(rng_state_address), seed);
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
 bool CallRawObjectCtorSafe(
     uintptr_t ctor_address,
     void* object_memory,
@@ -304,4 +325,3 @@ bool CallPlayerActorCtorSafe(
         return false;
     }
 }
-

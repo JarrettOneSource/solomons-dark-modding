@@ -3,7 +3,13 @@ void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintpt
         return;
     }
 
-    const auto next_experience = ReadProgressionNextXpOrZero(source_progression_address);
+    int next_experience = 0;
+    if (source_progression_address != 0 &&
+        !TryReadProgressionNextXp(source_progression_address, &next_experience)) {
+        Log(
+            "[bots] shared level-up native next-xp unavailable. source_progression=" +
+            HexString(source_progression_address));
+    }
     RuntimeState runtime = SnapshotRuntimeState();
     struct BotProgressionTarget {
         std::uint64_t bot_id = 0;
@@ -211,14 +217,21 @@ bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_mes
             HexString(apply_exception));
     }
 
-    const auto level = ProcessMemory::Instance().ReadFieldOr<int>(
-        gameplay_state.progression_runtime_state_address,
-        kProgressionLevelOffset,
-        pending_choice.level);
-    const auto experience = ReadProgressionRoundedXpOrFallback(
-        gameplay_state.progression_runtime_state_address,
-        pending_choice.experience);
-    const auto next_experience = ReadProgressionNextXpOrZero(gameplay_state.progression_runtime_state_address);
+    int level = 0;
+    if (!ProcessMemory::Instance().TryReadField(
+            gameplay_state.progression_runtime_state_address,
+            kProgressionLevelOffset,
+            &level)) {
+        return fail("native bot skill choice level read failed");
+    }
+    int experience = 0;
+    if (!TryReadProgressionRoundedXp(gameplay_state.progression_runtime_state_address, &experience)) {
+        return fail("native bot skill choice xp read failed");
+    }
+    int next_experience = 0;
+    if (!TryReadProgressionNextXp(gameplay_state.progression_runtime_state_address, &next_experience)) {
+        return fail("native bot skill choice next-xp read failed");
+    }
     UpdateBotLevelProfileState(request.bot_id, level, experience, next_experience);
 
     {

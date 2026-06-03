@@ -81,7 +81,7 @@ bool TryFindGameplayPathCellSample(
     float preferred_x,
     float preferred_y,
     bool require_direct_reachability,
-    bool allow_anchor_fallback,
+    bool allow_current_anchor_sample,
     float anchor_x,
     float anchor_y,
     float* resolved_x,
@@ -95,7 +95,14 @@ bool TryFindGameplayPathCellSample(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto radius = memory.ReadFieldOr<float>(binding->actor_address, kActorCollisionRadiusOffset, 0.0f);
+    (void)memory;
+    float radius = 0.0f;
+    if (!TryReadFiniteFloatField(binding->actor_address, kActorCollisionRadiusOffset, &radius)) {
+        if (error_message != nullptr) {
+            *error_message = "Bot actor collision radius is unreadable for path cell sampling.";
+        }
+        return false;
+    }
     const auto preferred_margin = radius > 8.0f ? radius : 8.0f;
     const auto cell_min_x = static_cast<float>(grid_y) * snapshot.cell_width;
     const auto cell_max_x = cell_min_x + snapshot.cell_width;
@@ -163,11 +170,11 @@ bool TryFindGameplayPathCellSample(
         }
     };
 
-    if (allow_anchor_fallback && anchor_in_cell) {
+    if (allow_current_anchor_sample && anchor_in_cell) {
         // The actor is already occupying this point. Native placement queries
         // can reject that sample because the actor overlaps itself, but for the
         // path planner the current anchor is a valid start sample by definition.
-        // Goal sampling must be able to suppress this fallback, otherwise a
+        // Goal sampling must be able to suppress this current-anchor sample, otherwise a
         // same-cell destination can degenerate into "stay where you already are"
         // and the caller loops forever on an empty path.
         accept_sample_without_query(anchor_x, anchor_y);
@@ -182,13 +189,13 @@ bool TryFindGameplayPathCellSample(
         GameplayPathCellCenterY(snapshot, grid_x));
 
     if (require_direct_reachability) {
-        constexpr int kGameplayPathCellLineSampleResolution = 12;
+        const auto line_sample_resolution = GameplayPathCellLineSampleResolution();
         const auto line_target_x = preferred_in_cell ? preferred_x : clamped_preferred_x;
         const auto line_target_y = preferred_in_cell ? preferred_y : clamped_preferred_y;
-        for (int sample_index = 0; sample_index < kGameplayPathCellLineSampleResolution; ++sample_index) {
+        for (int sample_index = 0; sample_index < line_sample_resolution; ++sample_index) {
             const auto t =
                 static_cast<float>(sample_index + 1) /
-                static_cast<float>(kGameplayPathCellLineSampleResolution + 1);
+                static_cast<float>(line_sample_resolution + 1);
             const auto sample_x = anchor_x + (line_target_x - anchor_x) * t;
             const auto sample_y = anchor_y + (line_target_y - anchor_y) * t;
             if (!GameplayPathCellContainsWorldPoint(snapshot, grid_x, grid_y, sample_x, sample_y)) {
@@ -200,18 +207,19 @@ bool TryFindGameplayPathCellSample(
 
     const auto usable_width = (cell_max_x - margin_x) - (cell_min_x + margin_x);
     const auto usable_height = (cell_max_y - margin_y) - (cell_min_y + margin_y);
-    for (int sample_index_x = 0; sample_index_x < kGameplayPathCellPlacementSampleResolution; ++sample_index_x) {
+    const auto placement_sample_resolution = GameplayPathCellPlacementSampleResolution();
+    for (int sample_index_x = 0; sample_index_x < placement_sample_resolution; ++sample_index_x) {
         const auto t_x =
             (static_cast<float>(sample_index_x) + 0.5f) /
-            static_cast<float>(kGameplayPathCellPlacementSampleResolution);
+            static_cast<float>(placement_sample_resolution);
         const auto sample_x =
             (usable_width <= 0.0f)
                 ? (cell_min_x + margin_x)
                 : (cell_min_x + margin_x + usable_width * t_x);
-        for (int sample_index_y = 0; sample_index_y < kGameplayPathCellPlacementSampleResolution; ++sample_index_y) {
+        for (int sample_index_y = 0; sample_index_y < placement_sample_resolution; ++sample_index_y) {
             const auto t_y =
                 (static_cast<float>(sample_index_y) + 0.5f) /
-                static_cast<float>(kGameplayPathCellPlacementSampleResolution);
+                static_cast<float>(placement_sample_resolution);
             const auto sample_y =
                 (usable_height <= 0.0f)
                     ? (cell_min_y + margin_y)

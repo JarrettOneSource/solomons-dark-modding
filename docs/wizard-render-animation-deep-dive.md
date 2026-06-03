@@ -23,7 +23,7 @@ Those three pipelines share data, but they are not interchangeable.
 - `Mod Loader/runtime/ghidra-player-descriptor-candidates.txt`
 - `Mod Loader/runtime/equip-analysis-summary.md`
 - `Mod Loader/SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization*.inl`
-- `Mod Loader/SolomonDarkModLoader/src/mod_loader_gameplay/core/synthetic_wizard_source_profiles.inl`
+- `Mod Loader/docs/native-source-profile-re.md`
 
 ## Executive summary
 
@@ -34,7 +34,9 @@ The stock game has one authoritative body-render path for wizards, but there are
 
 The important consequence is:
 
-- `actor + 0x244..+0x263` drives the wizard body colors.
+- `source_actor + 0x244..+0x263` is the packed descriptor produced by
+  `0x005E3080`; stock standalone clones publish that descriptor through
+  robe/hat helper items, not by copying it onto the live clone actor.
 - `actor + 0x264` is a source-side attachment staging slot, not the long-term storage for cloned standalone wizards.
 - standalone robe/hat visuals live in equip-linked `0xA8` objects, not directly on the actor.
 - `actor + 0x23F` is a coarse render-selection byte, while `actor + 0x21C` is the concrete selection/control state consumed by the animation/render path.
@@ -85,6 +87,10 @@ Outputs:
 - mirrors `source +0x56 -> actor +0x1C0`
 - mirrors `source +0x74 -> actor +0x194`
 - packs cloth/trim float4 colors from `source +0xB4` and `source +0xC4` into the actor-side descriptor block at `+0x244..+0x263`
+  - the cloth color is a source-profile preimage; `0x0040FC60` applies the
+    native robe mix before helper publication
+  - trim stays on the native source actor default trim color unless a future
+    recovered source-profile materializer proves a different owner
 - copies selector bytes:
   - `source +0x9C -> actor +0x23C`
   - `source +0x9D -> actor +0x23D`
@@ -101,7 +107,7 @@ This is the key distinction:
 - it does not create standalone robe/hat visual links
 - it does not populate standalone equip sinks
 
-### 1.3 Wizard body rendering consumes actor-local descriptor state
+### 1.3 Wizard body rendering and clone-side actor-local state
 
 Function: `0x00622430` dispatches to `0x00621780` for wizard bodies when `actor + 0x174 == 3`.
 
@@ -117,7 +123,13 @@ So the actor-side wizard body render contract is:
 - selectors choose which body parts/rows to sample
 - the descriptor block provides the actual cloth/trim colors
 
-This means the body color problem is not in the equip helper objects. The body renderer reads the actor-side descriptor block directly.
+That contract applies to source/profile actors prepared by `0x005E3080`. It is
+not a license to overwrite a standalone clone's live `+0x244..+0x263` window
+after `0x0061AA00`: a May 6, 2026 crash stack reached `0x0053B680`, where the
+clone-side `+0x244` value was consumed as a count/capacity and drove
+`operator new` into `std::bad_alloc`. The production rule is therefore that
+standalone and gameplay-slot bots receive colors through stock clone/helper
+lanes, while actor-local animation/render counters stay native-owned.
 
 ### 1.4 Attachment rendering is item-driven, not descriptor-driven
 
@@ -204,9 +216,9 @@ So `Gameplay_FinalizePlayerStart` is a reference for helper-item construction or
 | `+0x23E` | `render_weapon_type` | weapon-type selector |
 | `+0x23F` | `render_selection_byte` | coarse render-selection byte |
 | `+0x240` | `render_variant_tertiary` | tertiary variant selector |
-| `+0x244..+0x263` | `render_descriptor` | packed cloth + trim color data used by body render |
+| `+0x244..+0x263` | `source_render_descriptor` / clone render counters | packed cloth + trim color data on source/profile actors; not a safe post-clone write target on standalone actors |
 | `+0x264` | `hub_visual_attachment` | source-side attachment item pointer |
-| `+0x268` | `render_drive_move_blend` | movement blend scalar |
+| `+0x268` | `render_overlay_effect_phase` | native-owned overlay/effect phase gate; historically exposed as `render_drive_move_blend`, but loader movement must not write it |
 | `+0x300` | `progression_handle` | wrapper pointer, not the inner runtime |
 | `+0x304` | `equip_handle` | wrapper pointer, not the inner runtime |
 
@@ -229,13 +241,15 @@ So `Gameplay_FinalizePlayerStart` is a reference for helper-item construction or
 
 ### 2.3 Actor-side render descriptor block
 
-`SdActorRenderDescriptorBlock` at `actor +0x244..+0x263`:
+`SdActorRenderDescriptorBlock` at source/profile actor `+0x244..+0x263`:
 
 - `+0x244..+0x253`: packed cloth color dwords
 - `+0x254..+0x263`: packed trim color dwords
 - `+0x248`: readable as `overlay_alpha` during render-drive overlay work
 
-This block is not a float4 block. It is the actor-side packed sprite color payload used by the body renderer.
+This block is not a float4 block. It is the packed sprite color payload that
+stock clone publication copies into robe/hat helper objects. Standalone clone
+actor `+0x244` must not be overwritten with this payload after cloning.
 
 ### 2.4 Standalone equip runtime and visual links
 
@@ -546,15 +560,15 @@ Current bot materialization code in `src/mod_loader_gameplay/standalone_material
 The key bridge is `SeedGameplaySlotBotRenderStateFromSourceActor`, plus
 `CreateWizardCloneSourceActor`, which:
 
-- synthesizes a source profile
-- calls `ActorBuildRenderDescriptorFromSource`
+- now seeds the temporary source actor from a live native visual snapshot
+- calls `WizardCloneFromSourceActor` without a loader-owned source-profile buffer
 - then, before the April 10, 2026 fix, copied donor-owned animation state back over the bot anyway
 
 Relevant loader sections:
 
 - `standalone_materialization_slot_bot_creation.inl`
 - `standalone_materialization_wizard_clone_source.inl`
-- `core/synthetic_wizard_source_profiles.inl`
+- `docs/native-source-profile-re.md`
 
 That is not the stock clone design.
 
@@ -595,7 +609,32 @@ That directly conflicts with the recovered `0x0054BA80` behavior:
 
 The current helper no longer does that. Idle writes `+0x160 = 0`, which keeps the bot on the main `0x0054BA80` branch.
 
-## 6.4 Pre-fix staff ownership diverged from stock
+## 6.4 May 1 Staff Orb Scale Regression
+
+Live all-bots testing exposed a movement-only visual corruption: when a bot
+walked, the staff orb/light effect expanded to a huge persistent glow while robe
+colors stayed correct. A screenshot was captured at
+`runtime/screenshots/staff_orb_window.png`.
+
+Runtime state showed the active moving bot had `actor +0x268 = 1.0f` because the
+loader had started treating that field as a writable movement blend. The
+recovered animation artifacts say something more specific:
+
+- `0x0054BA80` / `ActorAnimation_Advance` reads `actor +0x268` while dispatching
+  overlay/effect helper draws.
+- `refs_dat819978.log` shows the native path incrementing `+0x260/+0x264/+0x268/
+  +0x26C/+0x270` by a native frame step and wrapping them against a native
+  threshold.
+- `0x00538B80` / `ActorAnimation_MainPath` gates extra overlay/helper draws from
+  `actor +0x238/+0x248/+0x268`.
+
+The corrected contract is that loader-driven walking may update the walk-cycle
+and frame-phase fields it owns (`+0x220/+0x224/+0x228/+0x234/+0x238`), but it
+must leave `+0x268` native-owned. The `render_drive_move_blend` API name remains
+as a legacy diagnostic exposure for now; it should be treated as read-only
+overlay/effect phase evidence, not a movement-control input.
+
+## 6.5 Pre-fix staff ownership diverged from stock
 
 Before the April 10, 2026 fix, bot finalization created robe/hat visuals but left the stock-built attachment parked on actor `+0x264` instead of transferring it into the equip sink.
 
@@ -624,7 +663,7 @@ Live validation from the April 11 build:
 - equip `+0x30` still holds a non-null attachment object
 - the staff orb still renders, which confirms the orb comes from the attachment path rather than actor-side `+0x23E`
 
-## 6.5 World registration order differs from stock
+## 6.6 World registration order differs from stock
 
 Stock clone registers the new actor immediately after construction, before progression/equip/link priming.
 
@@ -640,7 +679,7 @@ See:
 
 This may not be the root visual bug, but it is a real sequencing difference from stock.
 
-## 6.6 The loader still needs non-stock scene/render hacks
+## 6.7 The loader still needs non-stock scene/render hacks
 
 Before the residual fix, the loader:
 
@@ -656,7 +695,7 @@ That was strong evidence that the bot did not own its own clean render/scene att
 
 In stock clone, those writes are not part of the recovered sequence.
 
-## 6.7 Pre-fix finalization and per-tick repair reapplied donor animation state
+## 6.8 Pre-fix finalization and per-tick repair reapplied donor animation state
 
 Before the fix, the loader:
 
@@ -695,20 +734,29 @@ The safest stock-aligned model is:
 
 - treat `+0x174/+0x178/+0x244..+0x264` as the source-side visual staging area
 - treat robe/hat helper items and equip sink `+0x30` as the standalone-clone equipment state
+- target actors may receive the native-built selector bytes at
+  `+0x23C/+0x23D/+0x23F/+0x240`; the packed descriptor block at
+  `+0x244..+0x263` stays source/helper-lane owned
 - treat `+0x23F` as input and `+0x21C` as the concrete live selection state
 - treat `+0x160` as an animation-branch selector that must not be hard-forced incorrectly
-- treat `+0x22C/+0x234/+0x238/+0x220/+0x224/+0x228/+0x268` as the motion/frame-driving state that must remain coherent
+- treat `+0x22C/+0x234/+0x238/+0x220/+0x224/+0x228` as the loader-owned
+  motion/frame-driving state that must remain coherent
+- remote participant playback may replicate only those loader-owned motion/frame
+  fields; packet-level `+0x248/+0x268` samples remain diagnostics and must not be
+  applied to materialized remote gameplay-slot actors
+- treat `+0x268` as native-owned overlay/effect phase state; observe it, but do
+  not write it from loader movement
 
 If the bot path reintroduces donor `+0x21C` writes or donor copies of `+0x220..+0x263`, fixes will remain fragile.
 
 ## 8. High-confidence conclusions
 
-1. The wizard body renderer reads the actor-local descriptor block at `+0x244..+0x263` directly.
+1. `0x005E3080` produces packed wizard descriptor bytes on source/profile actors, and `0x0061AA00` publishes those bytes through clone helper items.
 2. The glowing staff/wand visuals come from an item object, not from body descriptor colors.
 3. `actor +0x264` is a source-side attachment slot. Stock standalone clones transfer that object into equip sink `+0x30`.
 4. `actor +0x21C` is a required `0x38` live selection/control object, not just an optional cached int.
 5. `actor +0x23F` is not the final active animation state. Stock clone maps it into concrete `+0x21C` ids.
-6. The key animation desync bugs came from donor-clobbering bot-owned `+0x21C` and `+0x220..+0x263` state after runtime initialization, and later from per-tick reuse of the player's live observed drive profile. The current loader fix removes that overwrite, caches bot-owned drive profiles, and restores stock staff transfer.
+6. The key animation desync bugs came from donor-clobbering bot-owned `+0x21C` and `+0x220..+0x263` state after runtime initialization, and later from per-tick reuse of the player's live observed drive profile. The current loader fix removes that overwrite, caches bot-owned drive profiles, restores stock staff transfer, and leaves the `+0x268` overlay/effect phase under native ownership.
 
 ## 9. Remaining uncertainty
 

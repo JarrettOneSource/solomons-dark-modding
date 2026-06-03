@@ -37,15 +37,16 @@ function scene_module.install(ctx)
       return { kind = "run" }
     end
 
-    local area = config.SUPPORTED_PRIVATE_AREAS[scene_name]
-    if area == nil then
+    local region_index = tonumber(scene.region_index)
+    local region_type_id = tonumber(scene.region_type_id)
+    if region_index == nil or region_type_id == nil then
       return nil
     end
 
     return {
       kind = "private_region",
-      region_index = area.region_index,
-      region_type_id = area.region_type_id,
+      region_index = region_index,
+      region_type_id = region_type_id,
     }
   end
 
@@ -62,10 +63,15 @@ function scene_module.install(ctx)
       return { kind = "shared_hub" }
     end
     if kind == "private_region" then
+      local region_index = tonumber(scene.region_index)
+      local region_type_id = tonumber(scene.region_type_id)
+      if region_index == nil or region_type_id == nil then
+        return nil
+      end
       return {
         kind = "private_region",
-        region_index = tonumber(scene.region_index) or -1,
-        region_type_id = tonumber(scene.region_type_id) or -1,
+        region_index = region_index,
+        region_type_id = region_type_id,
       }
     end
     return nil
@@ -77,10 +83,15 @@ function scene_module.install(ctx)
     end
 
     local kind = normalize_scene_kind(scene_intent.kind)
+    if kind == "shared_hub" or kind == "run" then
+      return kind .. "::"
+    end
+    local region_index = scene_intent.region_index
+    local region_type_id = scene_intent.region_type_id
     return table.concat({
       kind,
-      tostring(scene_intent.region_index or -1),
-      tostring(scene_intent.region_type_id or -1),
+      region_index == nil and "" or tostring(region_index),
+      region_type_id == nil and "" or tostring(region_type_id),
     }, ":")
   end
 
@@ -98,28 +109,37 @@ function scene_module.install(ctx)
     end
 
     local heading = tonumber(player.heading)
-    local offset_x = tonumber(state.spawn_offset_x) or config.DEFAULT_SPAWN_OFFSET_X
-    local offset_y = tonumber(state.spawn_offset_y) or config.DEFAULT_SPAWN_OFFSET_Y
+    local offset_x = tonumber(state.spawn_offset_x)
+    local offset_y = tonumber(state.spawn_offset_y)
+    if heading == nil or offset_x == nil or offset_y == nil then
+      return nil
+    end
+
     if type(anchor) == "table" then
+      local anchor_x = tonumber(anchor.x)
+      local anchor_y = tonumber(anchor.y)
+      if anchor_x == nil or anchor_y == nil then
+        return nil
+      end
       return {
-        x = (tonumber(anchor.x) or 0.0) + offset_x,
-        y = (tonumber(anchor.y) or 0.0) + offset_y,
+        x = anchor_x + offset_x,
+        y = anchor_y + offset_y,
         heading = heading,
+        snap_to_nav = true,
       }
     end
 
-    if type(scene_intent) == "table" and normalize_scene_kind(scene_intent.kind) == "shared_hub" then
-      return {
-        x = config.DEFAULT_HUB_SPAWN_X + offset_x,
-        y = config.DEFAULT_HUB_SPAWN_Y + offset_y,
-        heading = heading,
-      }
+    local player_x = tonumber(player.x)
+    local player_y = tonumber(player.y)
+    if player_x == nil or player_y == nil then
+      return nil
     end
 
     return {
-      x = (tonumber(player.x) or 0.0) + offset_x,
-      y = (tonumber(player.y) or 0.0) + offset_y,
+      x = player_x + offset_x,
+      y = player_y + offset_y,
       heading = heading,
+      snap_to_nav = false,
     }
   end
 
@@ -130,7 +150,10 @@ function scene_module.install(ctx)
     if type(sd) ~= "table" or type(sd.bots) ~= "table" or type(sd.bots.update) ~= "function" then
       return false
     end
-    now_ms = tonumber(now_ms) or state.last_tick_ms or 0
+    now_ms = tonumber(now_ms)
+    if now_ms == nil then
+      return false
+    end
     if not force and now_ms - state.last_scene_sync_ms < config.SCENE_UPDATE_COOLDOWN_MS then
       return false
     end
@@ -139,19 +162,21 @@ function scene_module.install(ctx)
     if type(spawn) ~= "table" then
       return false
     end
-    spawn = ctx.snap_spawn_transform(now_ms, spawn)
-    if type(spawn) ~= "table" then
-      return false
+    if spawn.snap_to_nav ~= false then
+      spawn = ctx.snap_spawn_transform(now_ms, spawn)
+      if type(spawn) ~= "table" then
+        return false
+      end
     end
 
     local ok = sd.bots.update({
       id = state.bot_id,
       profile = state.bot_profile,
       scene = scene_intent,
+      heading = spawn.heading,
       position = {
         x = spawn.x,
         y = spawn.y,
-        heading = spawn.heading,
       },
     })
     if ok then
@@ -192,9 +217,11 @@ function scene_module.install(ctx)
     if type(spawn) ~= "table" then
       return nil
     end
-    spawn = ctx.snap_spawn_transform(now_ms, spawn)
-    if type(spawn) ~= "table" then
-      return nil
+    if spawn.snap_to_nav ~= false then
+      spawn = ctx.snap_spawn_transform(now_ms, spawn)
+      if type(spawn) ~= "table" then
+        return nil
+      end
     end
 
     if state.bot_id == nil then
@@ -212,10 +239,10 @@ function scene_module.install(ctx)
         profile = state.bot_profile,
         scene = scene_intent,
         ready = true,
+        heading = spawn.heading,
         position = {
           x = spawn.x,
           y = spawn.y,
-          heading = spawn.heading,
         },
       })
       if bot_id == nil then

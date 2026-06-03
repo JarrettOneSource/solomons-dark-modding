@@ -7,7 +7,7 @@ void __fastcall HookCreateArena(void* self, void* unused_edx) {
     g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
     g_state.run_start_tick_ms.store(static_cast<std::uint64_t>(GetTickCount64()), std::memory_order_release);
     g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
-    ClearRememberedEnemyTypes();
+    ClearRememberedEnemyTracking();
     original(self, unused_edx);
     DispatchLuaRunStarted();
 }
@@ -21,7 +21,7 @@ void __fastcall HookStartGame(void* self, void* unused_edx) {
     g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
     g_state.run_start_tick_ms.store(static_cast<std::uint64_t>(GetTickCount64()), std::memory_order_release);
     g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
-    ClearRememberedEnemyTypes();
+    ClearRememberedEnemyTracking();
     original(self, unused_edx);
     DispatchLuaRunStarted();
 }
@@ -32,6 +32,57 @@ void __cdecl HookRunEnded() {
     g_state.run_active.store(false, std::memory_order_release);
     original();
     CompleteRunLifecycleEnd("death", true);
+}
+
+bool ShouldSuppressClientAuthoritativeRunWaveSpawner(std::uint64_t now_ms) {
+    if (!multiplayer::IsLocalTransportClient()) {
+        return false;
+    }
+
+    const auto runtime_state = multiplayer::SnapshotRuntimeState();
+    const auto& snapshot = runtime_state.world_snapshot;
+    if (!snapshot.valid ||
+        snapshot.truncated ||
+        snapshot.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run ||
+        snapshot.actors.empty() ||
+        snapshot.authority_participant_id == 0 ||
+        now_ms < snapshot.received_ms ||
+        now_ms - snapshot.received_ms > 1000) {
+        return false;
+    }
+
+    std::uint32_t authoritative_live_enemies = 0;
+    for (const auto& actor : snapshot.actors) {
+        if (actor.tracked_enemy &&
+            !actor.dead &&
+            std::isfinite(actor.hp) &&
+            std::isfinite(actor.max_hp) &&
+            actor.max_hp > 0.0f &&
+            actor.hp > 0.05f) {
+            authoritative_live_enemies += 1;
+        }
+    }
+
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        return false;
+    }
+
+    std::uint32_t local_live_enemies = 0;
+    for (const auto& actor : actors) {
+        if (actor.valid &&
+            actor.actor_address != 0 &&
+            actor.tracked_enemy &&
+            !actor.dead &&
+            std::isfinite(actor.hp) &&
+            std::isfinite(actor.max_hp) &&
+            actor.max_hp > 0.0f &&
+            actor.hp > 0.05f) {
+            local_live_enemies += 1;
+        }
+    }
+
+    return local_live_enemies >= authoritative_live_enemies;
 }
 
 void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
@@ -59,6 +110,16 @@ void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
         } else {
             Log("WaveSpawner_Tick invoked. self=" + HexString(self_address) + " vtable=unreadable");
         }
+    }
+
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (ShouldSuppressClientAuthoritativeRunWaveSpawner(now_ms)) {
+        static std::uint64_t s_last_authority_suppress_log_ms = 0;
+        if (now_ms - s_last_authority_suppress_log_ms >= 1000) {
+            s_last_authority_suppress_log_ms = now_ms;
+            Log("WaveSpawner_Tick suppressed for host-authoritative client run. self=" + HexString(self_address));
+        }
+        return;
     }
 
     original(self, unused_edx);
@@ -95,12 +156,23 @@ void* __fastcall HookEnemySpawned(
     }
 
     const auto enemy_address = reinterpret_cast<uintptr_t>(enemy);
-    const auto enemy_type = ReadEnemyType(enemy_address, static_cast<uintptr_t>(enemy_config));
-    const auto x = ReadFloatFieldOrZero(enemy_address, kActorPositionXOffset);
-    const auto y = ReadFloatFieldOrZero(enemy_address, kActorPositionYOffset);
+    const auto spawn_serial = RememberEnemySpawnSerial(enemy_address);
+    int enemy_type = -1;
+    if (!TryReadEnemyTypeFromActor(enemy_address, &enemy_type) &&
+        !TryReadEnemyTypeFromConfig(static_cast<uintptr_t>(enemy_config), &enemy_type)) {
+        Log("enemy.spawned native type unavailable. enemy=" + HexString(enemy_address));
+        return enemy;
+    }
+    float x = 0.0f;
+    float y = 0.0f;
+    if (!TryReadActorPosition(enemy_address, &x, &y)) {
+        Log("enemy.spawned native position unavailable. enemy=" + HexString(enemy_address));
+        return enemy;
+    }
     RememberEnemyType(enemy_address, enemy_type);
     Log(
         "enemy.spawned hook invoked. enemy=" + HexString(enemy_address) +
+        " spawn_serial=" + std::to_string(spawn_serial) +
         " enemy_type=" + std::to_string(enemy_type) +
         " pos=(" + std::to_string(x) + "," + std::to_string(y) + ")" +
         " run_active=" + std::to_string(IsRunActive() ? 1 : 0) +
@@ -118,15 +190,32 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
 
     const auto self_address = reinterpret_cast<uintptr_t>(self);
     auto& memory = ProcessMemory::Instance();
-    const bool already_handled = memory.ReadFieldOr<std::uint8_t>(self_address, kEnemyDeathHandledOffset, 0) != 0;
-    auto enemy_type = LookupRememberedEnemyType(self_address);
-    if (enemy_type < 0) {
-        enemy_type = ReadEnemyType(self_address);
-    }
-    const auto x = ReadFloatFieldOrZero(self_address, kActorPositionXOffset);
-    const auto y = ReadFloatFieldOrZero(self_address, kActorPositionYOffset);
+    std::uint8_t already_handled_byte = 0;
+    const bool have_already_handled =
+        memory.TryReadField(self_address, kEnemyDeathHandledOffset, &already_handled_byte);
+    int enemy_type = LookupRememberedEnemyType(self_address);
+    const bool have_enemy_type = enemy_type >= 0 || TryReadEnemyTypeFromActor(self_address, &enemy_type);
+    float x = 0.0f;
+    float y = 0.0f;
+    const bool have_position = TryReadActorPosition(self_address, &x, &y);
 
     const auto result = original(self, unused_edx);
+    if (!have_enemy_type) {
+        Log("enemy.death native type unavailable. enemy=" + HexString(self_address));
+        ForgetEnemyType(self_address);
+        return result;
+    }
+    if (!have_position) {
+        Log("enemy.death native position unavailable. enemy=" + HexString(self_address));
+        ForgetEnemyType(self_address);
+        return result;
+    }
+    if (!have_already_handled) {
+        Log("enemy.death native handled flag unavailable. enemy=" + HexString(self_address));
+        ForgetEnemyType(self_address);
+        return result;
+    }
+    const bool already_handled = already_handled_byte != 0;
     Log(
         "enemy.death hook invoked. enemy=" + HexString(self_address) +
         " enemy_type=" + std::to_string(enemy_type) +
@@ -152,7 +241,14 @@ int __stdcall HookGoldChanged(int delta, char allow_negative) {
     const auto* source = ClassifyGoldChangeSource(return_address, delta);
     const auto result = original(delta, allow_negative);
     if (result != 0) {
-        DispatchLuaGoldChanged(ReadResolvedGlobalIntOr(kGoldGlobal), delta, source);
+        int gold = 0;
+        if (TryReadResolvedGlobalInt(kGoldGlobal, &gold)) {
+            DispatchLuaGoldChanged(gold, delta, source);
+        } else {
+            Log(
+                "gold.changed native gold global unavailable. delta=" + std::to_string(delta) +
+                " source=" + std::string(source));
+        }
     }
     return result;
 }
@@ -184,24 +280,56 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
     }
 
     const auto progression_address = reinterpret_cast<uintptr_t>(self);
-    const auto level_before =
-        ProcessMemory::Instance().ReadFieldOr<int>(progression_address, kProgressionLevelOffset, 0);
-    const auto pending_before = ReadPendingLevelKindOrZero();
+    auto& memory = ProcessMemory::Instance();
+    int level_before = 0;
+    const bool have_level_before =
+        memory.TryReadField(progression_address, kProgressionLevelOffset, &level_before);
+    int pending_before = 0;
+    const bool have_pending_before = TryReadPendingLevelKind(&pending_before);
     const auto local_player_level_up = IsLocalPlayerProgressionForRunLifecycle(progression_address);
     original(self, unused_edx);
     if (!IsRunActive()) {
         return;
     }
 
-    const auto level_after =
-        ProcessMemory::Instance().ReadFieldOr<int>(progression_address, kProgressionLevelOffset, level_before);
+    if (!have_level_before) {
+        Log(
+            "level.up native level-before unavailable. progression=" +
+            HexString(progression_address));
+        return;
+    }
+
+    int level_after = 0;
+    if (!memory.TryReadField(progression_address, kProgressionLevelOffset, &level_after)) {
+        Log(
+            "level.up native level-after unavailable. progression=" +
+            HexString(progression_address) +
+            " level_before=" + std::to_string(level_before));
+        return;
+    }
     if (level_after <= level_before) {
         return;
     }
 
-    const auto xp_after = ReadRoundedXpOrUnknown(progression_address);
+    int xp_after = 0;
+    if (!TryReadRunLifecycleRoundedXp(progression_address, &xp_after)) {
+        Log(
+            "level.up native xp unavailable. progression=" +
+            HexString(progression_address) +
+            " level_before=" + std::to_string(level_before) +
+            " level_after=" + std::to_string(level_after));
+        return;
+    }
     if (!local_player_level_up) {
-        RestoreNonLocalPendingLevelKind(progression_address, pending_before, level_after, xp_after);
+        if (have_pending_before) {
+            RestoreNonLocalPendingLevelKind(progression_address, pending_before, level_after, xp_after);
+        } else {
+            Log(
+                "level.up pending-level-kind global unavailable before native level-up; restore skipped. progression=" +
+                HexString(progression_address) +
+                " level=" + std::to_string(level_after) +
+                " xp=" + std::to_string(xp_after));
+        }
         return;
     }
 

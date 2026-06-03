@@ -36,20 +36,66 @@ std::uint32_t FloatToBits(float value) {
     return bits;
 }
 
-int ReadRoundedXpOrUnknown(uintptr_t progression_address) {
+bool TryReadFiniteFloatField(uintptr_t address, std::size_t offset, float* value) {
+    if (value == nullptr) {
+        return false;
+    }
+
+    *value = 0.0f;
+    return address != 0 &&
+           ProcessMemory::Instance().TryReadField(address, offset, value) &&
+           std::isfinite(*value);
+}
+
+bool TryReadPlayerRoundedXp(uintptr_t progression_address, int* experience) {
+    if (experience == nullptr) {
+        return false;
+    }
+
+    *experience = 0;
+    float xp = 0.0f;
+    if (!TryReadFiniteFloatField(progression_address, kProgressionXpOffset, &xp) ||
+        xp < 0.0f) {
+        return false;
+    }
+
+    *experience = static_cast<int>(std::lround(xp));
+    return true;
+}
+
+bool EnsureBotOwnedProgressionMode(uintptr_t progression_address, const char* stage) {
     if (progression_address == 0) {
-        return kUnknownXpSentinel;
+        return false;
     }
 
-    const auto xp = ProcessMemory::Instance().ReadFieldOr<float>(
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t previous_mode = kProgressionLocalPlayerModeValue;
+    const bool read_previous = memory.TryReadField<std::uint8_t>(
         progression_address,
-        kProgressionXpOffset,
-        static_cast<float>(kUnknownXpSentinel));
-    if (xp < 0.0f) {
-        return kUnknownXpSentinel;
+        kProgressionNonLocalModeFlagOffset,
+        &previous_mode);
+    if (read_previous && previous_mode == kProgressionNonLocalModeValue) {
+        return true;
     }
 
-    return static_cast<int>(std::lround(xp));
+    if (!memory.TryWriteField<std::uint8_t>(
+            progression_address,
+            kProgressionNonLocalModeFlagOffset,
+            kProgressionNonLocalModeValue)) {
+        Log(
+            "[bots] bot-owned progression mode failed. stage=" +
+            std::string(stage != nullptr ? stage : "unknown") +
+            " progression=" + HexString(progression_address));
+        return false;
+    }
+
+    Log(
+        "[bots] bot-owned progression mode set. stage=" +
+        std::string(stage != nullptr ? stage : "unknown") +
+        " progression=" + HexString(progression_address) +
+        " previous_mode=" + (read_previous ? std::to_string(previous_mode) : "unreadable") +
+        " mode=" + std::to_string(kProgressionNonLocalModeValue));
+    return true;
 }
 
 bool TryResolvePlayerActorForSlot(uintptr_t gameplay_address, int slot_index, uintptr_t* actor_address) {
@@ -57,10 +103,13 @@ bool TryResolvePlayerActorForSlot(uintptr_t gameplay_address, int slot_index, ui
         return false;
     }
 
-    *actor_address = ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
-        gameplay_address,
-        kGameplayPlayerActorOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride,
-        0);
+    if (!ProcessMemory::Instance().TryReadField(
+            gameplay_address,
+            kGameplayPlayerActorOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride,
+            actor_address)) {
+        *actor_address = 0;
+        return false;
+    }
     return *actor_address != 0;
 }
 
@@ -70,10 +119,13 @@ bool TryResolvePlayerProgressionForSlot(uintptr_t gameplay_address, int slot_ind
     }
 
     *progression_address = 0;
-    const auto handle = ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
-        gameplay_address,
-        kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride,
-        0);
+    uintptr_t handle = 0;
+    if (!ProcessMemory::Instance().TryReadField(
+            gameplay_address,
+            kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride,
+            &handle)) {
+        return false;
+    }
     if (handle == 0) {
         return false;
     }
@@ -93,10 +145,13 @@ bool TryResolvePlayerProgressionHandleForSlot(uintptr_t gameplay_address, int sl
     }
 
     *handle_address = 0;
-    const auto handle = ProcessMemory::Instance().ReadFieldOr<uintptr_t>(
-        gameplay_address,
-        kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride,
-        0);
+    uintptr_t handle = 0;
+    if (!ProcessMemory::Instance().TryReadField(
+            gameplay_address,
+            kGameplayPlayerProgressionHandleOffset + static_cast<std::size_t>(slot_index) * kGameplayPlayerSlotStride,
+            &handle)) {
+        return false;
+    }
     if (handle == 0) {
         return false;
     }
@@ -167,29 +222,24 @@ void CopyPlayerProgressionVitals(uintptr_t source_progression_address, uintptr_t
     }
 
     auto& memory = ProcessMemory::Instance();
-    memory.TryWriteField(
-        destination_progression_address,
-        kProgressionLevelOffset,
-        memory.ReadFieldOr<int>(source_progression_address, kProgressionLevelOffset, 0));
-    memory.TryWriteField(
-        destination_progression_address,
-        kProgressionXpOffset,
-        memory.ReadFieldOr<float>(source_progression_address, kProgressionXpOffset, 0.0f));
-    memory.TryWriteField(
-        destination_progression_address,
-        kProgressionHpOffset,
-        memory.ReadFieldOr<float>(source_progression_address, kProgressionHpOffset, 0.0f));
-    memory.TryWriteField(
-        destination_progression_address,
-        kProgressionMaxHpOffset,
-        memory.ReadFieldOr<float>(source_progression_address, kProgressionMaxHpOffset, 0.0f));
-    memory.TryWriteField(
-        destination_progression_address,
-        kProgressionMpOffset,
-        memory.ReadFieldOr<float>(source_progression_address, kProgressionMpOffset, 0.0f));
-    memory.TryWriteField(
-        destination_progression_address,
-        kProgressionMaxMpOffset,
-        memory.ReadFieldOr<float>(source_progression_address, kProgressionMaxMpOffset, 0.0f));
+    int level = 0;
+    float xp = 0.0f;
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    float mp = 0.0f;
+    float max_mp = 0.0f;
+    if (!memory.TryReadField(source_progression_address, kProgressionLevelOffset, &level) ||
+        !TryReadFiniteFloatField(source_progression_address, kProgressionXpOffset, &xp) ||
+        !TryReadFiniteFloatField(source_progression_address, kProgressionHpOffset, &hp) ||
+        !TryReadFiniteFloatField(source_progression_address, kProgressionMaxHpOffset, &max_hp) ||
+        !TryReadFiniteFloatField(source_progression_address, kProgressionMpOffset, &mp) ||
+        !TryReadFiniteFloatField(source_progression_address, kProgressionMaxMpOffset, &max_mp)) {
+        return;
+    }
+    memory.TryWriteField(destination_progression_address, kProgressionLevelOffset, level);
+    memory.TryWriteField(destination_progression_address, kProgressionXpOffset, xp);
+    memory.TryWriteField(destination_progression_address, kProgressionHpOffset, hp);
+    memory.TryWriteField(destination_progression_address, kProgressionMaxHpOffset, max_hp);
+    memory.TryWriteField(destination_progression_address, kProgressionMpOffset, mp);
+    memory.TryWriteField(destination_progression_address, kProgressionMaxMpOffset, max_mp);
 }
-

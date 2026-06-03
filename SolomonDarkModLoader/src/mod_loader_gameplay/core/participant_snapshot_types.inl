@@ -64,6 +64,14 @@ struct ParticipantGameplaySnapshot {
     std::int32_t cast_skill_id = 0;
     int cast_ticks_waiting = 0;
     uintptr_t cast_target_actor_address = 0;
+    int native_action_cooldown_ticks = 0;
+    bool active_spell_object_readable = false;
+    uintptr_t active_spell_object_address = 0;
+    std::uint32_t active_spell_object_type = 0;
+    float active_spell_object_x = 0.0f;
+    float active_spell_object_y = 0.0f;
+    float active_spell_object_radius = 0.0f;
+    float active_spell_object_charge = 0.0f;
     float x = 0.0f;
     float y = 0.0f;
     float heading = 0.0f;
@@ -76,6 +84,8 @@ struct ParticipantGameplaySnapshot {
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
+    float render_drive_effect_timer = 0.0f;
+    float render_drive_effect_progress = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;
@@ -93,33 +103,36 @@ SDModEquipVisualLaneState ReadEquipVisualLaneState(
     }
 
     auto& memory = ProcessMemory::Instance();
-    lane.wrapper_address =
-        memory.ReadFieldOr<uintptr_t>(equip_runtime_state_address, lane_offset, 0);
+    if (!memory.TryReadField(equip_runtime_state_address, lane_offset, &lane.wrapper_address)) {
+        return lane;
+    }
     if (lane.wrapper_address == 0) {
         return lane;
     }
 
-    lane.holder_address = memory.ReadValueOr<uintptr_t>(lane.wrapper_address, 0);
+    if (!memory.TryReadValue(lane.wrapper_address, &lane.holder_address)) {
+        return lane;
+    }
     if (lane.holder_address == 0) {
         return lane;
     }
 
-    lane.holder_kind =
-        memory.ReadFieldOr<std::uint32_t>(lane.holder_address, kVisualLaneHolderKindOffset, 0);
-    lane.current_object_address = memory.ReadFieldOr<uintptr_t>(
-        lane.holder_address,
-        kVisualLaneHolderCurrentObjectOffset,
-        0);
+    if (!memory.TryReadField(lane.holder_address, kVisualLaneHolderKindOffset, &lane.holder_kind) ||
+        !memory.TryReadField(
+            lane.holder_address,
+            kVisualLaneHolderCurrentObjectOffset,
+            &lane.current_object_address)) {
+        return lane;
+    }
     if (lane.current_object_address == 0) {
         return lane;
     }
 
-    lane.current_object_vtable =
-        memory.ReadValueOr<uintptr_t>(lane.current_object_address, 0);
-    lane.current_object_type_id = memory.ReadFieldOr<std::uint32_t>(
+    (void)memory.TryReadValue(lane.current_object_address, &lane.current_object_vtable);
+    (void)memory.TryReadField(
         lane.current_object_address,
         kGameObjectTypeIdOffset,
-        0);
+        &lane.current_object_type_id);
     return lane;
 }
 

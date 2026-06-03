@@ -31,6 +31,11 @@ POST_PROMOTION_SETTLE_SECONDS = 3.0
 POST_WAVES_SETTLE_SECONDS = 2.0
 DEFAULT_TRACE_PROFILE = "full"
 SETUP_MODES = ("combat_prelude", "waves")
+OBJECT_TYPE_ID_OFFSET = csp.read_runtime_layout_offset("game_object_type_id")
+ARENA_ENEMY_MAX_HP_OFFSET = csp.read_runtime_layout_offset("enemy_max_hp")
+ARENA_ENEMY_CURRENT_HP_OFFSET = csp.read_runtime_layout_offset("enemy_current_hp")
+PROGRESSION_POINTER_OFFSET = csp.read_runtime_layout_offset("actor_progression_runtime_state")
+PROGRESSION_HANDLE_OFFSET = csp.read_runtime_layout_offset("actor_progression_handle")
 
 
 class WaveCastProbeFailure(RuntimeError):
@@ -80,10 +85,10 @@ end
 local ok = sd.bots.update({{
   id = bot.id,
   scene = {{ kind = 'run' }},
+  heading = 25.0,
   position = {{
     x = {player_x + offset_x},
     y = {player_y},
-    heading = 25.0,
   }},
 }})
 print('ok=' .. tostring(ok))
@@ -384,19 +389,30 @@ if actor == 0 or not sd.debug or not sd.debug.read_ptr then
   emit('available', false)
   return
 end
-local object_type_id = tonumber(sd.debug.read_u32(actor + 0x08)) or 0
+local object_type_id = tonumber(sd.debug.read_u32(actor + {OBJECT_TYPE_ID_OFFSET})) or 0
+local function is_tracked_enemy_actor(wanted)
+  local actors = sd.world and sd.world.list_actors and sd.world.list_actors() or {{}}
+  for _, actor_state in ipairs(actors) do
+    if (tonumber(actor_state.actor_address) or 0) == wanted then
+      return actor_state.tracked_enemy == true
+    end
+  end
+  return false
+end
+local tracked_enemy = is_tracked_enemy_actor(actor)
 emit('object_type_id', object_type_id)
-if object_type_id == 1001 then
+emit('tracked_enemy', tracked_enemy)
+if tracked_enemy then
   emit('available', true)
   emit('health_kind', 'arena_enemy')
   emit('progression_runtime', 0)
   emit('progression_handle', 0)
-  emit('hp', sd.debug.read_float(actor + 0x174))
-  emit('max_hp', sd.debug.read_float(actor + 0x170))
+  emit('hp', sd.debug.read_float(actor + {ARENA_ENEMY_CURRENT_HP_OFFSET}))
+  emit('max_hp', sd.debug.read_float(actor + {ARENA_ENEMY_MAX_HP_OFFSET}))
   return
 end
-local progression = tonumber(sd.debug.read_ptr(actor + 0x200)) or 0
-local handle = tonumber(sd.debug.read_ptr(actor + 0x300)) or 0
+local progression = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_POINTER_OFFSET})) or 0
+local handle = tonumber(sd.debug.read_ptr(actor + {PROGRESSION_HANDLE_OFFSET})) or 0
 if progression == 0 and handle ~= 0 then
   progression = tonumber(sd.debug.read_ptr(handle)) or 0
 end
@@ -545,7 +561,7 @@ def main() -> int:
             process_id,
             element=args.element,
             discipline=args.discipline,
-            prefer_resume=True,
+            prefer_resume=False,
         )
         result["navigation"].append(
             {

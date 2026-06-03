@@ -5,12 +5,14 @@ Lua-controlled participants.
 
 ## Level-Up Gate
 
-`0x0067C250` is the progression level-up routine. It updates:
+`0x0067C250` is the native level-up routine. It updates:
 
 - `progression + 0x30`: current level
 - `progression + 0x34`: current XP
 - `progression + 0x38`: previous XP threshold
 - `progression + 0x3C`: next XP threshold
+- `progression + 0x40`: local/non-local progression mode (`0` is local
+  player-style, nonzero skips local picker UI)
 - `progression + 0x44`: pending local skill-pick count
 - `progression + 0x70/0x74`: HP/current max
 - `progression + 0x7C/0x80`: MP/current max
@@ -19,10 +21,23 @@ The routine only increments the pending picker count for local player-style
 progressions (`progression + 0x40 == 0`). Non-local/bot progressions can level,
 but they do not get native UI pick state.
 
+The base progression constructor initializes `progression + 0x40` to local
+player-style mode. Bot-owned progressions are marked non-local through `progression + 0x40`
+when the loader materializes them, and the bot level-sync path verifies that
+mode before entering native `level_up`. That keeps the bot on the native
+level/threshold path without allocating the local player level-up screen object
+at `progression + 0x83C`.
+
 The loader still snapshots the global pending-picker counter before every
 level-up hook. If a non-local progression changes that global value, the hook
 restores the exact previous value so bot or remote levels cannot create extra
 local skill-picker screens or extend an already pending player picker loop.
+
+Bots call the same native `level_up` routine when syncing to the shared player
+level. The loader stages the bot's current XP from the live source progression
+or debug-sync request, then lets `0x0067C250` advance the bot progression's
+level and threshold fields. This path does not write progression level, HP, max HP, MP, or max MP directly. HP/MP limit changes remain owned by the native
+skill-choice apply and refresh path below.
 
 ## Option Roll
 
@@ -47,8 +62,10 @@ if (*(short *)(progression->table + (0x3F * 0x70) + 0x22) > 0) {
 ```
 
 So the native choice count is normally `3`, but rises to `4` when skill/entry
-`0x3F` is visible. The bot path mirrors this by reading the bot's own
-progression table before calling the same progression vtable roll method.
+`0x3F` is visible. The bot path mirrors this by reading
+`[gameplay.skill_choices].bonus_choice_count_skill_id` from
+`config/binary-layout.ini`, checking the bot's own progression table, and then
+calling the same progression vtable roll method.
 
 `Array<int>` layout:
 

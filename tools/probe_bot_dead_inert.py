@@ -91,10 +91,10 @@ end
 local ok = sd.bots.update({{
   id = bot.id,
   scene = {{ kind = 'run' }},
+  heading = 25.0,
   position = {{
     x = {player_x + PROMOTE_OFFSET_X},
     y = {player_y},
-    heading = 25.0,
   }},
 }})
 print('ok=' .. tostring(ok))
@@ -149,17 +149,17 @@ for _, key in ipairs({{
 end
 local actor = tonumber(bot.actor_address) or 0
 if actor ~= 0 and sd.debug then
-  emit('raw_x', sd.debug.read_float(actor + 0x18))
-  emit('raw_y', sd.debug.read_float(actor + 0x1C))
-  emit('raw_walk_x', sd.debug.read_float(actor + 0x158))
-  emit('raw_walk_y', sd.debug.read_float(actor + 0x15C))
-  emit('raw_drive', sd.debug.read_u8(actor + 0x160))
-  emit('raw_no_interrupt', sd.debug.read_u8(actor + 0x1EC))
-  emit('raw_skill', sd.debug.read_u32(actor + 0x270))
-  emit('raw_cast_group', sd.debug.read_u8(actor + 0x27C))
-  emit('raw_cast_slot', sd.debug.read_u16(actor + 0x27E))
-  emit('raw_e4', sd.debug.read_u32(actor + 0xE4))
-  emit('raw_e8', sd.debug.read_u32(actor + 0xE8))
+  emit('raw_x', sd.debug.read_float(actor + {csp.read_runtime_layout_offset("actor_position_x")}))
+  emit('raw_y', sd.debug.read_float(actor + {csp.read_runtime_layout_offset("actor_position_y")}))
+  emit('raw_walk_x', sd.debug.read_float(actor + {csp.read_runtime_layout_offset("actor_animation_config_block")}))
+  emit('raw_walk_y', sd.debug.read_float(actor + {csp.read_runtime_layout_offset("actor_animation_drive_parameter")}))
+  emit('raw_drive', sd.debug.read_u8(actor + {csp.read_runtime_layout_offset("actor_animation_drive_state_byte")}))
+  emit('raw_no_interrupt', sd.debug.read_u8(actor + {csp.read_runtime_layout_offset("actor_no_interrupt_flag")}))
+  emit('raw_skill', sd.debug.read_u32(actor + {csp.read_runtime_layout_offset("actor_primary_skill_id")}))
+  emit('raw_cast_group', sd.debug.read_u8(actor + {csp.read_runtime_layout_offset("actor_active_cast_group_byte")}))
+  emit('raw_cast_slot', sd.debug.read_u16(actor + {csp.read_runtime_layout_offset("actor_active_cast_slot_short")}))
+  emit('raw_e4', sd.debug.read_u32(actor + {csp.read_runtime_layout_offset("actor_primary_action_latch_e4")}))
+  emit('raw_e8', sd.debug.read_u32(actor + {csp.read_runtime_layout_offset("actor_primary_action_latch_e8")}))
 end
 """.strip()
         )
@@ -321,7 +321,7 @@ def main() -> int:
         result["process_id"] = process_id
         result["navigation"].append({"step": "launch", "process_id": process_id})
 
-        hub_flow = csp.drive_hub_flow(process_id, element=args.element, discipline=args.discipline, prefer_resume=True)
+        hub_flow = csp.drive_hub_flow(process_id, element=args.element, discipline=args.discipline, prefer_resume=False)
         result["navigation"].append(
             {"step": "hub_ready", "flow": hub_flow, "element": args.element, "discipline": args.discipline}
         )

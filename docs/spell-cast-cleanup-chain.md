@@ -17,8 +17,11 @@ The pure-primary startup path also matters for fire, ether, and other
 staff-driven primary effects:
 
 - `0x0052DA80` is the live pure-primary allocator/startup path.
-- It resolves the current staff item through the equip sink, selecting mode `3`
-  for item type `0x1B5C`.
+- `runtime/ghidra_pure_primary_equip_sink_paths.txt` proves that startup first
+  reads `actor+0x1FC`; when that actor-owned equip runtime exists, the path uses
+  its visual sink at `+0x30` and calls `0x00570D80`, which returns the sink's
+  current item from `sink+0x4`.
+- It selects mode `3` for item type `0x1B5C`.
 - The builder call site is `0x0052DB04 -> 0x0044F5F0`.
 - `0x0044F5F0` starts with a two-instruction prologue (`push -1`, then
   `push 0x76559B`), so any detour there must cover `7` bytes. A `5`-byte
@@ -37,8 +40,132 @@ staff-driven primary effects:
 | `+0x2B0/+0x2B4` | `aim_aux0/1` (u32) | Aux fields the projectile spawn path reads. |
 | `+0x2DC` | `cast_spread_mode_byte` (u8) | `0` = use aim_target fields verbatim; non-zero adds spread. |
 
-`world + 0x500 + (group * 0x800 + slot) * 4` is the cached-handle dereference used
-by both `FUN_00548A00` (phase 2, after init) and `FUN_0052F3B0` (on cleanup).
+`0x0045ADE0` is the native cached-handle lookup used by cast cleanup and
+selection paths. It dereferences `world + 0x500 + (group * 0x800 + slot) * 4`
+internally, so runtime code calls that seam instead of duplicating the bucket
+math.
+
+## April 30 cast-state RE refresh
+
+The current cast cleanup work is backed by these durable artifacts:
+
+- `runtime/ghidra_stock_tick_slot_shim_cast_paths.txt`
+- `runtime/ghidra_cast_state_offsets.txt`
+- `runtime/ghidra_cast_spell_object_handlers.txt`
+- `runtime/ghidra_pure_primary_equip_sink_paths.txt`
+- `tests/re/run_live_cast_shim_snapshot_probe.py`
+- `runtime/live_cast_shim_snapshot_probe.json`
+
+Ghidra confirms `0x00548B00` owns the per-tick stock driver,
+`0x00548A00` dispatches through the local progression slot selected from
+`DAT_0081c264 + 0x1654 + actor+0x5C * 4`, and `0x0052F3B0` is the stock
+active-handle cleanup path. `0x0052C910` owns the control-brain target fields
+used while stock targeting is refreshed.
+
+The handle lookup is now understood as a real native object seam:
+`0x0052DA40` resolves the selection state for the actor, and `0x0045ADE0`
+dereferences `world + 0x500 + (group * 0x800 + slot) * 4`. The Earth/boulder
+handler at `0x00545360` proves the spell-object phase and release-timer fields
+that gate the live boulder launch. Runtime code now names those fields through
+`config/binary-layout.ini` rather than owning local numeric offsets.
+
+The former slot shim blocker was the native init predicate:
+`actor+0x5C == 0`. Ether has two separate native slot gates: one early setup
+gate at `0x0053D1B3`, and one projectile-allocation gate at `0x0053D9D2` that
+guards the stock `0x7D3` spell object allocation loop. The current runtime
+removes the local-slot/progression redirect and installs layout-backed
+native cast gate patches instead. These patches validate the live instruction as the
+expected `jnz rel32` gate and capture the original bytes for restoration rather
+than carrying copied per-site byte payloads in source. They unlock the exact
+non-zero-slot branches while leaving
+`actor+0x5C` pointed at the bot's real gameplay slot, so stock progression
+lookups use the bot's live slot data.
+
+The former pure-primary local equip sink shim was separate from that slot gate.
+`0x0052DA80` already has a native actor-owned path through `actor+0x1FC`; the
+loader now requires bots to carry that real equip runtime and no longer hooks
+`0x00570D80`, swaps the local slot sink, or opens a local actor window around
+pure-primary startup.
+
+## May 1 slot-0 dispatch xref pass
+
+The follow-up pass added two focused artifacts:
+
+- `runtime/ghidra_cast_slot0_dispatch_xrefs.txt`
+- `runtime/ghidra_cast_slot0_gate_offset_accesses.txt`
+
+`0x00548A00` still has only one direct code caller, `PlayerActorTick`
+at `0x00548B00`. The spell handlers checked from that dispatcher
+(`0x00544C60`, `0x00541870`, `0x00545360`) still route through the same
+local-slot actor gate and the same slot-indexed progression lookup:
+`DAT_0081c264 + 0x1654 + actor+0x5C * 4`.
+
+`0x0052F3B0` remains the cleanup method and is reached from
+`PlayerActorTick` plus the boulder handler path, but it also checks
+`actor+0x5C == 0` before touching the active handle. `0x0052DA40` likewise
+uses `actor+0x5C` to select local progression state. The expanded offset scan
+keeps the hot cast functions tied to `+0x5C`, `+0x270`, `+0x27C/+0x27E`, and
+target handle `+0x164/+0x166`; the production fix is therefore a narrow native
+cast gate patch set at `0x0052F3B9`, pure-primary Ether/Fire projectile gates
+`0x0053D1B3`/`0x0053D9D2`/`0x0053E4E8`, `0x00544C92`, `0x00545393`, and
+`0x00545C2C`.
+
+`tests/re/run_live_cast_shim_snapshot_probe.py --json --timeout 180` now validates this
+contract without starting arena waves. The April 30 run wrote
+`runtime/live_cast_shim_snapshot_probe.json`, captured a live Earth spell
+object (`object_type=2005`, group `0`, slot `5`) through the native world
+bucket, confirmed the native active-object lookup, and checked
+`gameplay_player_actor`, `gameplay_player_progression_handle`,
+`bot_actor_slot`, and `bot_actor_progression_handle` after cast completion.
+
+The May 1 rerun uses the same Earth primary because Fire/Ether PerCast primaries
+finish too quickly to leave a stable world-bucket handle for Lua inspection.
+In the no-wave harness Earth currently completes through the documented
+`safety_cap` cleanup path, so the live probe default timeout is `60s` and the
+artifact asserts restoration rather than assuming a max-size impact release.
+
+## May 1 selection and active-handle lifecycle pass
+
+The selection/latch pass added focused artifacts:
+
+- `runtime/ghidra_selection_lifecycle_xrefs.txt`
+- `runtime/ghidra_selection_and_cleanup_targets.txt`
+- `runtime/ghidra_selection_brain_offset_accesses.txt`
+- `runtime/ghidra_active_spell_lifecycle_xrefs.txt`
+- `runtime/ghidra_cast_latch_offset_accesses.txt`
+- `runtime/ghidra_boulder_spell_object_vtable_slots.txt`
+
+`0x0052C910` remains the stock control-brain selection updater and has one
+direct caller in the current static xref pass: `PlayerActorTick` at
+`0x00548B00`. It owns selection-state target group/slot clearing, retarget
+tick maintenance, facing/movement vector production, and the native target
+sentinels at `actor+0x164/+0x166`, but it is not a standalone setter/clearer
+API for bot-owned casts.
+
+The globals at `0x00819EC4/0x00819EC8` are not a recovered bot selection API.
+Their direct refs are UI/render setup paths and global selection-state array
+maintenance (`FUN_005BC8E0`, `FUN_005D2380`, `FUN_0064AA80`,
+`FUN_00652D90`). The bot runtime therefore still keeps its explicit
+layout-backed selection-state priming/restoration until a real native owner
+lifecycle is found.
+
+Active-handle cleanup is still the stock `0x0052F3B0` chain. The xref pass ties
+it to `0x0045ADE0` for world-bucket object lookup and `0x00524D70` for the
+post-finalize collision/availability test; it calls the active object's
+function-table entries at `+0x70` and then `+0x6C`, then writes
+`actor+0x27C = 0xFF` and `actor+0x27E = 0xFFFF`.
+
+The live Earth boulder handle resolves a runtime function table at `0x00A6E014`,
+but the static image contains zero data and no references at that address. The
+table is built or relocated at runtime, so it is useful as a live diagnostic but
+not a static ownership seam. The live probe now also asserts that after cleanup
+the active group/slot/object are sentinels, the cast skill ids are zeroed, and
+the native idle latch state is bounded before the artifact is accepted.
+
+Result: no native replacement setter/clearer or bot release/cancel transition
+was recovered in this pass. The current explicit selection restore,
+active-handle snapshot, and bounded latch cleanup remain documented blockers
+rather than final native-clean code.
 
 ## Per-spell handler gate
 
@@ -73,14 +200,20 @@ The `(actor+0x5C == 0)` clause bakes in a "local player only" assumption.
   (`ticks=0 saw_latch=0 group_post=0xFF drive_post=0x0`) yet no projectile or
   cone ever rendered.
 
-Fix: `InvokeWithLocalPlayerSlot` in `ProcessPendingBotCast`
-(`src/mod_loader_gameplay/bot_casting/pending_cast_processing.inl`) wraps each native
-dispatcher/cleanup call with a transient `actor+0x5C = 0` write and an immediate
-restore to the saved slot. The flip lives entirely inside the synchronous
-`__thiscall` into the game, so hostile AI / HUD / rendering observe the bot's
-true slot on every other access. The spell object itself is initialized from
-the allocator's own `spell_obj+0x5C/+0x5E` (not actor identity), so it still
-carries a valid group/slot after the bot's slot is restored.
+Fix: `native_cast_gate_patches.inl` byte-checks and patches the exact stock
+slot gates at `0x0052F3B9`, `0x0053D1B3`, `0x0053D9D2`, `0x0053E4E8`,
+`0x00544C92`, `0x00545393`, and `0x00545C2C`. Bots keep their real gameplay
+slot in `actor+0x5C`; stock progression lookups and targeting therefore
+continue to observe the bot-owned slot. The pure-primary Ether/Fire handlers
+still run their native setup and mana path, but the unlocked projectile branch
+now reaches the stock allocator and world-registration calls instead of skipping
+them for nonzero gameplay slots. Ether's MagicMissile hit handler at
+`0x005F1F00` has a second damage gate at the short branch `0x005F1F39` that
+tests the projectile's own group byte at `spell_obj+0x5C`; the same native cast
+gate patches unlock that impact branch so bot-owned `0x7D3` projectiles reach
+the stock damage call. The spell object itself is initialized from the
+allocator's own `spell_obj+0x5C/+0x5E` (not actor identity), so it carries a
+valid group/slot through cleanup.
 
 ### Control-brain vector contract for primary startup
 
@@ -179,7 +312,7 @@ The per-tick flow for a bot actor is:
 
 ### Watch continuation path
 
-When `ongoing_cast.active`, we do NOT re-dispatch — native `PlayerActorTick`
+When `ongoing_cast.active`, we do NOT re-dispatch; native `PlayerActorTick`
 is driving the handler. We just:
 
 - Re-pin `actor+0x270` and aim fields (so the handler's per-tick reads see
@@ -191,8 +324,9 @@ is driving the handler. We just:
   OR `ticks_waiting >= 300` → "safety_cap" (≈3s at 100Hz, well above any
   observed cast duration).
 - On exit, call `CallCastActiveHandleCleanupSafe` (which wraps `FUN_0052F3B0`
-  with SEH; on SEH fall back to writing the 0xFF/0xFFFF sentinels directly),
-  clear `actor+0x270`, restore aim backups.
+  with SEH), clear `actor+0x270`, and restore aim backups. Cleanup failures
+  are logged as native failures; active code no longer writes the cached-handle
+  bytes directly as a fallback.
 
 ### Why a watch and not another pump?
 

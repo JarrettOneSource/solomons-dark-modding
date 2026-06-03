@@ -3,7 +3,10 @@ int ResolveActorAnimationStateSlotIndex(uintptr_t actor_address) {
         return -1;
     }
 
-    const auto slot = ProcessMemory::Instance().ReadFieldOr<std::int8_t>(actor_address, kActorSlotOffset, -1);
+    std::int8_t slot = -1;
+    if (!ProcessMemory::Instance().TryReadField(actor_address, kActorSlotOffset, &slot)) {
+        return -1;
+    }
     if (slot < 0) {
         return -1;
     }
@@ -22,7 +25,10 @@ bool TryResolveActorAnimationStateSlotAddress(uintptr_t actor_address, uintptr_t
         return false;
     }
 
-    const auto entry_count = ReadResolvedGlobalIntOr(kGameplayIndexStateCountGlobal, 0);
+    int entry_count = 0;
+    if (!TryReadResolvedGlobalInt(kGameplayIndexStateCountGlobal, &entry_count)) {
+        return false;
+    }
     if (entry_count <= slot_index) {
         return false;
     }
@@ -43,9 +49,15 @@ int ResolveActorAnimationStateId(uintptr_t actor_address) {
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto state_pointer = memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+    uintptr_t state_pointer = 0;
+    if (!memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &state_pointer)) {
+        return kUnknownAnimationStateId;
+    }
     if (state_pointer != 0) {
-        return memory.ReadValueOr<int>(state_pointer, kUnknownAnimationStateId);
+        int state_id = kUnknownAnimationStateId;
+        return memory.TryReadValue(state_pointer, &state_id)
+            ? state_id
+            : kUnknownAnimationStateId;
     }
 
     uintptr_t slot_address = 0;
@@ -53,7 +65,10 @@ int ResolveActorAnimationStateId(uintptr_t actor_address) {
         return kUnknownAnimationStateId;
     }
 
-    return memory.ReadValueOr<int>(slot_address, kUnknownAnimationStateId);
+    int slot_state_id = kUnknownAnimationStateId;
+    return memory.TryReadValue(slot_address, &slot_state_id)
+        ? slot_state_id
+        : kUnknownAnimationStateId;
 }
 
 bool TryResolvePlayerActorForSlot(uintptr_t gameplay_address, int slot_index, uintptr_t* actor_address);
@@ -77,7 +92,9 @@ bool TryWriteActorAnimationStateIdDirect(uintptr_t actor_address, int state_id) 
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto state_pointer = memory.ReadFieldOr<uintptr_t>(actor_address, kActorAnimationSelectionStateOffset, 0);
+    uintptr_t state_pointer = 0;
+    if (!memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &state_pointer)) {
+        return false;
+    }
     return state_pointer != 0 && memory.TryWriteValue<int>(state_pointer, state_id);
 }
-
