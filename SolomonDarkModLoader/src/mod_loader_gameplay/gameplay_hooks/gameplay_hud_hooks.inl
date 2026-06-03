@@ -114,12 +114,14 @@ std::string BuildGameplayNameplateExactText(const std::string& display_name) {
 
 float EstimateGameplayNameplateTextWidth(std::string_view display_name) {
     constexpr float kHalfScale = 0.5f;
-    constexpr float kGlyphAdvance = 10.0f;
-    constexpr float kSpaceAdvance = 5.0f;
+    // ExactText consumes scene coordinates; these advances were measured from
+    // live half-scale participant nameplate captures.
+    constexpr float kNativeGlyphAdvance = 16.0f;
+    constexpr float kNativeSpaceAdvance = 8.0f;
 
     float width = 0.0f;
     for (const unsigned char ch : display_name) {
-        width += std::isspace(ch) ? kSpaceAdvance : kGlyphAdvance;
+        width += std::isspace(ch) ? kNativeSpaceAdvance : kNativeGlyphAdvance;
     }
     return width * kHalfScale;
 }

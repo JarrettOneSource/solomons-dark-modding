@@ -6333,6 +6333,8 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &y)",
         "y -= 45.0f;",
         "float EstimateGameplayNameplateTextWidth(std::string_view display_name)",
+        "constexpr float kNativeGlyphAdvance = 16.0f;",
+        "constexpr float kNativeSpaceAdvance = 8.0f;",
         "float CalculateGameplayNameplateDrawX(float actor_x, std::string_view display_name)",
         "x = CalculateGameplayNameplateDrawX(x, display_name);",
         "const auto nameplate_text = BuildGameplayNameplateExactText(display_name);",
