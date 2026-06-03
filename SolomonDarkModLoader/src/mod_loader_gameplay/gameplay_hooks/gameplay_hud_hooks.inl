@@ -112,6 +112,22 @@ std::string BuildGameplayNameplateExactText(const std::string& display_name) {
     return text;
 }
 
+float EstimateGameplayNameplateTextWidth(std::string_view display_name) {
+    constexpr float kHalfScale = 0.5f;
+    constexpr float kGlyphAdvance = 10.0f;
+    constexpr float kSpaceAdvance = 5.0f;
+
+    float width = 0.0f;
+    for (const unsigned char ch : display_name) {
+        width += std::isspace(ch) ? kSpaceAdvance : kGlyphAdvance;
+    }
+    return width * kHalfScale;
+}
+
+float CalculateGameplayNameplateDrawX(float actor_x, std::string_view display_name) {
+    return actor_x - (EstimateGameplayNameplateTextWidth(display_name) * 0.5f);
+}
+
 bool DrawGameplayHudParticipantName(
     uintptr_t actor_address,
     const std::string& display_name,
@@ -158,6 +174,7 @@ bool DrawGameplayHudParticipantName(
         return false;
     }
     y -= 45.0f;
+    x = CalculateGameplayNameplateDrawX(x, display_name);
     if (draw_x != nullptr) {
         *draw_x = x;
     }
