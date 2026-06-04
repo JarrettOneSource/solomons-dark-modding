@@ -100,6 +100,7 @@
     <ClInclude Include="include\multiplayer_runtime_protocol.h" />
     <ClInclude Include="include\multiplayer_runtime_state.h" />
     <ClInclude Include="include\multiplayer_runtime_state.inl" />
+    <ClInclude Include="include\native_enemy_lifecycle.h" />
     <ClInclude Include="include\native_spell_stats.h" />
     <ClInclude Include="include\multiplayer_service_loop.h" />
     <ClInclude Include="include\native_mods.h" />
@@ -363,6 +364,7 @@
     <ClCompile Include="src\multiplayer_local_transport.cpp" />
     <ClCompile Include="src\multiplayer_runtime_state.cpp" />
     <ClCompile Include="src\multiplayer_service_loop.cpp" />
+    <ClCompile Include="src\native_enemy_lifecycle.cpp" />
     <ClCompile Include="src\native_spell_stats.cpp" />
     <ClCompile Include="src\native_mods.cpp" />
     <ClCompile Include="src\runtime_bootstrap.cpp" />

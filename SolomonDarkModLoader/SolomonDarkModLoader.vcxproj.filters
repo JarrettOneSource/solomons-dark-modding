@@ -170,6 +170,9 @@
     <ClInclude Include="include\multiplayer_runtime_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\native_enemy_lifecycle.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\native_spell_stats.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -945,6 +948,9 @@
     </ClCompile>
     <ClCompile Include="src\multiplayer_service_loop.cpp">
       <Filter>Source Files\Multiplayer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\native_enemy_lifecycle.cpp">
+      <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="src\native_spell_stats.cpp">
       <Filter>Source Files\Support</Filter>

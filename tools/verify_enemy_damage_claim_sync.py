@@ -227,6 +227,7 @@ emit("found", false)
 
 CLIENT_BOUND_ENEMY_BY_ID_LUA = r"""
 local target_id = tonumber("__NETWORK_ACTOR_ID__") or 0
+local target_address = tonumber("__LOCAL_ACTOR_ADDRESS__") or 0
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
 local actors = sd.world.list_actors() or {}
 local local_by_address = {}
@@ -234,9 +235,21 @@ for _, actor in ipairs(actors) do
   local address = tonumber(actor.actor_address) or 0
   if address ~= 0 then local_by_address[address] = actor end
 end
+local death_handled_offset = sd.debug.layout_offset("enemy_death_handled")
+local function read_death_handled(address)
+  if death_handled_offset == nil or address == 0 then return 0 end
+  local ok, value = pcall(function()
+    return sd.debug.read_u8(address + death_handled_offset)
+  end)
+  if not ok then return 0 end
+  return tonumber(value) or 0
+end
 local replicated = sd.world.get_replicated_actors and sd.world.get_replicated_actors() or nil
 if replicated == nil or replicated.bindings == nil then
-  emit("found", false)
+  local fallback_death = read_death_handled(target_address)
+  emit("found", fallback_death ~= 0)
+  emit("address_fallback", target_address ~= 0)
+  emit("death_handled", fallback_death)
   return
 end
 for _, binding in ipairs(replicated.bindings) do
@@ -251,10 +264,19 @@ for _, binding in ipairs(replicated.bindings) do
     emit("hp", string.format("%.3f", tonumber(actor.hp) or 0))
     emit("max_hp", string.format("%.3f", tonumber(actor.max_hp) or 0))
     emit("dead", actor.dead or false)
+    emit("death_handled", read_death_handled(tonumber(actor.actor_address) or 0))
     emit("x", actor.x or 0)
     emit("y", actor.y or 0)
     return
   end
+end
+local fallback_death = read_death_handled(target_address)
+if fallback_death ~= 0 then
+  emit("found", true)
+  emit("address_fallback", true)
+  emit("local_actor_address", target_address)
+  emit("death_handled", fallback_death)
+  return
 end
 emit("found", false)
 """
@@ -333,14 +355,20 @@ def wait_for_host_enemy_killed(target: dict[str, str], timeout: float = 12.0) ->
     raise VerifyFailure(f"host enemy did not die from client claim; target={target} last={last}")
 
 
+def client_bound_enemy_query(network_actor_id: str, local_actor_address: str = "0") -> dict[str, str]:
+    return values(
+        CLIENT_PIPE,
+        CLIENT_BOUND_ENEMY_BY_ID_LUA
+        .replace("__NETWORK_ACTOR_ID__", network_actor_id)
+        .replace("__LOCAL_ACTOR_ADDRESS__", local_actor_address),
+    )
+
+
 def wait_for_client_rollback(network_actor_id: str, expected_hp: float, timeout: float = 8.0) -> dict[str, str]:
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
     while time.monotonic() < deadline:
-        last = values(
-            CLIENT_PIPE,
-            CLIENT_BOUND_ENEMY_BY_ID_LUA.replace("__NETWORK_ACTOR_ID__", network_actor_id),
-        )
+        last = client_bound_enemy_query(network_actor_id)
         if last.get("found") == "true" and abs(number(last, "hp") - expected_hp) <= 0.1:
             return last
         time.sleep(0.15)
@@ -354,15 +382,33 @@ def wait_for_client_enemy_removed(network_actor_id: str, timeout: float = 10.0) 
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
     while time.monotonic() < deadline:
-        last = values(
-            CLIENT_PIPE,
-            CLIENT_BOUND_ENEMY_BY_ID_LUA.replace("__NETWORK_ACTOR_ID__", network_actor_id),
-        )
+        last = client_bound_enemy_query(network_actor_id)
         if last.get("found") != "true":
             return {"found": "false", "network_actor_id": network_actor_id}
         time.sleep(0.15)
     raise VerifyFailure(
         f"client still has the killed enemy bound after host accepted death; "
+        f"network_actor_id={network_actor_id} last={last}"
+    )
+
+
+def wait_for_client_enemy_death_handled(
+    network_actor_id: str,
+    local_actor_address: str = "0",
+    timeout: float = 8.0,
+) -> dict[str, str]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = client_bound_enemy_query(network_actor_id, local_actor_address)
+        if (
+            last.get("found") == "true"
+            and int(number(last, "death_handled")) != 0
+        ):
+            return last
+        time.sleep(0.15)
+    raise VerifyFailure(
+        f"client replicated enemy never ran native death handling after host accepted death; "
         f"network_actor_id={network_actor_id} last={last}"
     )
 
@@ -418,7 +464,16 @@ def main() -> int:
         result["move_client_near_for_kill"] = move_client_near(rejected_target)
         time.sleep(0.6)
         result["client_kill"] = damage_client_enemy("kill", rejected_target["network_actor_id"])
+        result["client_kill_predicted_death_handled"] = wait_for_client_enemy_death_handled(
+            result["client_kill"]["network_actor_id"],
+            result["client_kill"]["local_actor_address"],
+            timeout=3.0,
+        )
         result["host_kill_accept"] = wait_for_host_enemy_killed(result["client_kill"])
+        result["client_kill_death_handled"] = wait_for_client_enemy_death_handled(
+            result["client_kill"]["network_actor_id"],
+            result["client_kill"]["local_actor_address"],
+        )
         result["post_kill_snapshot"] = wait_for_run_snapshot(
             require_complete_lifecycle=True,
             stable_seconds=2.0,

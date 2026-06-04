@@ -68,6 +68,8 @@ MULTIPLAYER_RUNTIME_STATE = ROOT / "SolomonDarkModLoader/include/multiplayer_run
 MULTIPLAYER_LOCAL_TRANSPORT = ROOT / "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
 MULTIPLAYER_LOCAL_TRANSPORT_HEADER = ROOT / "SolomonDarkModLoader/include/multiplayer_local_transport.h"
 MULTIPLAYER_SERVICE_LOOP = ROOT / "SolomonDarkModLoader/src/multiplayer_service_loop.cpp"
+NATIVE_ENEMY_LIFECYCLE_HEADER = ROOT / "SolomonDarkModLoader/include/native_enemy_lifecycle.h"
+NATIVE_ENEMY_LIFECYCLE = ROOT / "SolomonDarkModLoader/src/native_enemy_lifecycle.cpp"
 WORLD_SNAPSHOT_RECONCILIATION = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/world_snapshot_reconciliation.inl"
 )
@@ -4338,6 +4340,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     runtime_state_text = read_text(MULTIPLAYER_RUNTIME_STATE)
     transport_header_text = read_text(MULTIPLAYER_LOCAL_TRANSPORT_HEADER)
     transport_text = read_text(MULTIPLAYER_LOCAL_TRANSPORT)
+    native_enemy_lifecycle_header_text = read_text(NATIVE_ENEMY_LIFECYCLE_HEADER)
+    native_enemy_lifecycle_text = read_text(NATIVE_ENEMY_LIFECYCLE)
     world_snapshot_reconciliation_text = read_text(WORLD_SNAPSHOT_RECONCILIATION)
     service_loop_text = read_text(MULTIPLAYER_SERVICE_LOOP)
     lua_exec_pipe_text = read_text(LUA_EXEC_PIPE)
@@ -4397,6 +4401,14 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "LootSnapshot = 6"),
         (protocol_text, "EnemyDamageClaim = 7"),
         (protocol_text, "EnemyDamageResult = 8"),
+        (native_enemy_lifecycle_header_text, "TryTriggerRunEnemyDeath"),
+        (native_enemy_lifecycle_text, "ResolveGameAddressOrZero(kEnemyDeath)"),
+        (native_enemy_lifecycle_text, "kEnemyDeathHandledOffset"),
+        (native_enemy_lifecycle_text, "CallEnemyDeathSafe"),
+        (project_text, "include\\native_enemy_lifecycle.h"),
+        (project_text, "src\\native_enemy_lifecycle.cpp"),
+        (project_filters_text, "include\\native_enemy_lifecycle.h"),
+        (project_filters_text, "src\\native_enemy_lifecycle.cpp"),
         (protocol_text, "Gold = 1"),
         (protocol_text, "WorldActorSnapshotFlagLifecycleOwned"),
         (protocol_text, "WorldActorPresentationFlagAnimationDriveWord"),
@@ -4480,6 +4492,16 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "packet.presentation_flags & ~ParticipantPresentationFlagStaffVisualState"),
         (transport_text, "participant->runtime.attachment_staff_visual_state = 0"),
         (transport_text, "BuildLocalWorldSnapshotPacket"),
+        (transport_text, "TryTriggerRunEnemyDeath(target_actor.actor_address"),
+        (transport_text, "TryTriggerRunEnemyDeath(actor_address"),
+        (transport_text, "kRecentRunEnemyDeathSnapshotHoldMs"),
+        (transport_text, "RecentRunEnemyDeathSnapshot"),
+        (transport_text, "recent_run_enemy_deaths_by_network_id"),
+        (transport_text, "RecordRecentRunEnemyDeathSnapshot"),
+        (transport_text, "WorldActorSnapshotFlagDead |"),
+        (transport_text, "WorldActorSnapshotFlagTrackedEnemy |"),
+        (transport_text, "local_death_called"),
+        (transport_text, "(actor.dead || actor.hp > kEnemyDamageClaimHpEpsilon)"),
         (transport_text, "BuildLocalLootSnapshotPacket"),
         (transport_text, "PopulateWorldActorPresentationSnapshot"),
         (transport_text, "student_visual_state"),
@@ -4577,6 +4599,15 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "BindReplicatedRunActor"),
         (world_snapshot_reconciliation_text, "RecordWorldSnapshotBinding"),
         (world_snapshot_reconciliation_text, "ApplyReplicatedRunEnemyHealth"),
+        (world_snapshot_reconciliation_text, "kReplicatedRunEnemyDeathHpEpsilon"),
+        (world_snapshot_reconciliation_text, "kReplicatedRunEnemyRemoteDeathHoldMs"),
+        (world_snapshot_reconciliation_text, "g_replicated_run_pending_enemy_death_until_ms"),
+        (world_snapshot_reconciliation_text, "IsAuthoritativeRunTrackedEnemyDeadSnapshot"),
+        (world_snapshot_reconciliation_text, "ApplyAuthoritativeRemovedRunEnemyDeath"),
+        (world_snapshot_reconciliation_text, "triggered authoritative-removed run enemy death"),
+        (world_snapshot_reconciliation_text, "!IsAuthoritativeRunTrackedEnemyDeadSnapshot(authoritative_actor)"),
+        (world_snapshot_reconciliation_text, "TryTriggerRunEnemyDeath(actor_address"),
+        (world_snapshot_reconciliation_text, "triggered replicated run enemy death"),
         (world_snapshot_reconciliation_text, "kEnemyCurrentHpOffset"),
         (world_snapshot_reconciliation_text, "kEnemyMaxHpOffset"),
         (world_snapshot_reconciliation_text, "snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::SharedHub"),

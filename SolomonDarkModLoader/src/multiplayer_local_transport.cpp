@@ -13,6 +13,7 @@
 #include "mod_loader.h"
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_runtime_state.h"
+#include "native_enemy_lifecycle.h"
 #include "native_spell_stats.h"
 
 #include <algorithm>
@@ -55,6 +56,7 @@ constexpr std::uint64_t kLocalTransportWorldSnapshotIntervalMs = 100;
 constexpr std::uint64_t kLocalTransportLootSnapshotIntervalMs = 100;
 constexpr std::uint64_t kLocalCastInputUpdateIntervalMs = 50;
 constexpr std::uint64_t kClientHostRunFollowRetryMs = 1000;
+constexpr std::uint64_t kRecentRunEnemyDeathSnapshotHoldMs = 2500;
 constexpr float kEnemyDamageClaimHpEpsilon = 0.05f;
 constexpr float kEnemyDamageClaimMaxDistance = 2200.0f;
 constexpr float kEnemyDamageClaimMaxTargetDrift = 384.0f;
@@ -77,6 +79,18 @@ constexpr float kRenderDriveEffectTimerEpsilon = 0.001f;
 struct RenderDriveEffectState {
     float timer = 0.0f;
     float progress = 0.0f;
+};
+
+struct RecentRunEnemyDeathSnapshot {
+    std::uint64_t network_actor_id = 0;
+    std::uint32_t native_type_id = 0;
+    std::int32_t enemy_type = -1;
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    float radius = 0.0f;
+    float heading = 0.0f;
+    float max_hp = 0.0f;
+    std::uint64_t expires_ms = 0;
 };
 
 RenderDriveEffectState NormalizeRenderDriveEffectState(float timer, float progress) {
@@ -213,6 +227,7 @@ struct LocalTransportState {
     std::unordered_map<uintptr_t, std::uint64_t> hub_world_actor_ids_by_address;
     std::unordered_map<uintptr_t, std::uint64_t> run_host_local_world_actor_ids_by_address;
     std::unordered_map<uintptr_t, std::uint64_t> run_loot_drop_ids_by_address;
+    std::unordered_map<std::uint64_t, RecentRunEnemyDeathSnapshot> recent_run_enemy_deaths_by_network_id;
     std::unordered_map<std::uint64_t, float> last_enemy_claimed_hp_by_network_id;
     std::unordered_map<std::uint64_t, std::uint64_t> rejected_enemy_damage_retry_suppressed_until_ms;
     std::unordered_map<std::uint64_t, std::uint32_t> last_cast_sequence_by_participant;
@@ -607,11 +622,10 @@ bool ShouldReplicateWorldActor(
 
     if (scene_kind == ParticipantSceneIntentKind::Run) {
         return (actor.tracked_enemy &&
-                !actor.dead &&
                 std::isfinite(actor.hp) &&
                 std::isfinite(actor.max_hp) &&
                 actor.max_hp > 0.0f &&
-                actor.hp > kEnemyDamageClaimHpEpsilon) ||
+                (actor.dead || actor.hp > kEnemyDamageClaimHpEpsilon)) ||
                IsRunStaticLayoutActor(actor);
     }
 
@@ -659,6 +673,7 @@ void ClearHubWorldActorNetworkIds() {
 
 void ClearRunHostLocalWorldActorNetworkIds() {
     g_local_transport.run_host_local_world_actor_ids_by_address.clear();
+    g_local_transport.recent_run_enemy_deaths_by_network_id.clear();
     g_local_transport.next_run_host_local_world_actor_serial = 1;
 }
 
@@ -766,6 +781,46 @@ float ReadActorHeadingOrZero(uintptr_t actor_address) {
         return 0.0f;
     }
     return heading;
+}
+
+void PruneRecentRunEnemyDeathSnapshots(std::uint64_t now_ms) {
+    for (auto it = g_local_transport.recent_run_enemy_deaths_by_network_id.begin();
+         it != g_local_transport.recent_run_enemy_deaths_by_network_id.end();) {
+        if (it->second.expires_ms <= now_ms) {
+            it = g_local_transport.recent_run_enemy_deaths_by_network_id.erase(it);
+            continue;
+        }
+        ++it;
+    }
+}
+
+void RecordRecentRunEnemyDeathSnapshot(
+    std::uint64_t network_actor_id,
+    const SDModSceneActorState& actor,
+    std::uint64_t now_ms) {
+    if (network_actor_id == 0 ||
+        !actor.tracked_enemy ||
+        actor.actor_address == 0 ||
+        actor.object_type_id == 0 ||
+        !std::isfinite(actor.x) ||
+        !std::isfinite(actor.y) ||
+        !std::isfinite(actor.radius) ||
+        !std::isfinite(actor.max_hp) ||
+        actor.max_hp <= 0.0f) {
+        return;
+    }
+
+    RecentRunEnemyDeathSnapshot snapshot;
+    snapshot.network_actor_id = network_actor_id;
+    snapshot.native_type_id = actor.object_type_id;
+    snapshot.enemy_type = actor.enemy_type;
+    snapshot.position_x = actor.x;
+    snapshot.position_y = actor.y;
+    snapshot.radius = actor.radius;
+    snapshot.heading = ReadActorHeadingOrZero(actor.actor_address);
+    snapshot.max_hp = actor.max_hp;
+    snapshot.expires_ms = now_ms + kRecentRunEnemyDeathSnapshotHoldMs;
+    g_local_transport.recent_run_enemy_deaths_by_network_id[network_actor_id] = snapshot;
 }
 
 bool IsHubStudentActorType(std::uint32_t native_type_id) {
@@ -1234,6 +1289,11 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
     }
 
     const bool run_scene = scene_intent.kind == ParticipantSceneIntentKind::Run;
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (run_scene) {
+        PruneRecentRunEnemyDeathSnapshots(now_ms);
+    }
+    std::unordered_set<std::uint64_t> included_actor_ids;
     std::uint32_t total_actor_count = 0;
     for (const auto& actor : actors) {
         if (!ShouldReplicateWorldActor(actor, scene_intent.kind)) {
@@ -1254,6 +1314,7 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
         if (network_actor_id == 0) {
             continue;
         }
+        included_actor_ids.insert(network_actor_id);
         total_actor_count += 1;
         if (built.actor_count >= kWorldSnapshotMaxActors) {
             continue;
@@ -1291,6 +1352,40 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
             snapshot.flags |= WorldActorSnapshotFlagLifecycleOwned;
         }
         built.actor_count += 1;
+    }
+    if (run_scene) {
+        for (const auto& [network_actor_id, death_snapshot] :
+             g_local_transport.recent_run_enemy_deaths_by_network_id) {
+            if (network_actor_id == 0 ||
+                included_actor_ids.find(network_actor_id) != included_actor_ids.end() ||
+                death_snapshot.native_type_id == 0 ||
+                !std::isfinite(death_snapshot.max_hp) ||
+                death_snapshot.max_hp <= 0.0f) {
+                continue;
+            }
+            total_actor_count += 1;
+            if (built.actor_count >= kWorldSnapshotMaxActors) {
+                continue;
+            }
+
+            auto& snapshot = built.actors[built.actor_count];
+            snapshot.network_actor_id = network_actor_id;
+            snapshot.native_type_id = death_snapshot.native_type_id;
+            snapshot.enemy_type = death_snapshot.enemy_type;
+            snapshot.actor_slot = -1;
+            snapshot.world_slot = -1;
+            snapshot.flags =
+                WorldActorSnapshotFlagDead |
+                WorldActorSnapshotFlagTrackedEnemy |
+                WorldActorSnapshotFlagLifecycleOwned;
+            snapshot.position_x = death_snapshot.position_x;
+            snapshot.position_y = death_snapshot.position_y;
+            snapshot.radius = death_snapshot.radius;
+            snapshot.heading = death_snapshot.heading;
+            snapshot.hp = 0.0f;
+            snapshot.max_hp = death_snapshot.max_hp;
+            built.actor_count += 1;
+        }
     }
     built.actor_total_count = static_cast<std::uint8_t>((std::min<std::uint32_t>)(total_actor_count, 0xFFu));
     if (total_actor_count > built.actor_count) {
@@ -1464,57 +1559,6 @@ bool TryWriteRunEnemyHealth(uintptr_t actor_address, float hp, float max_hp) {
     }
 
     return wrote_enemy_fields || wrote_progression_fields;
-}
-
-int CaptureTransportSehCode(EXCEPTION_POINTERS* exception_pointers, DWORD* exception_code) {
-    if (exception_code != nullptr) {
-        *exception_code = 0;
-        if (exception_pointers != nullptr && exception_pointers->ExceptionRecord != nullptr) {
-            *exception_code = exception_pointers->ExceptionRecord->ExceptionCode;
-        }
-    }
-    return EXCEPTION_EXECUTE_HANDLER;
-}
-
-using EnemyDeathNativeFn = int(__fastcall*)(void* self, void* unused_edx);
-
-bool CallEnemyDeathSafe(uintptr_t actor_address, DWORD* exception_code) {
-    if (exception_code != nullptr) {
-        *exception_code = 0;
-    }
-    if (actor_address == 0) {
-        return false;
-    }
-
-    const auto enemy_death_address =
-        ProcessMemory::Instance().ResolveGameAddressOrZero(kEnemyDeath);
-    auto* enemy_death = reinterpret_cast<EnemyDeathNativeFn>(enemy_death_address);
-    if (enemy_death == nullptr) {
-        return false;
-    }
-
-    __try {
-        enemy_death(reinterpret_cast<void*>(actor_address), nullptr);
-        return true;
-    } __except (CaptureTransportSehCode(GetExceptionInformation(), exception_code)) {
-        return false;
-    }
-}
-
-bool TryTriggerHostRunEnemyDeath(uintptr_t actor_address, DWORD* exception_code) {
-    if (exception_code != nullptr) {
-        *exception_code = 0;
-    }
-    if (actor_address == 0 || kEnemyDeathHandledOffset == 0) {
-        return false;
-    }
-
-    std::uint8_t death_handled = 0;
-    if (ProcessMemory::Instance().TryReadField(actor_address, kEnemyDeathHandledOffset, &death_handled) &&
-        death_handled != 0) {
-        return true;
-    }
-    return CallEnemyDeathSafe(actor_address, exception_code);
 }
 
 bool TryFindHostRunEnemyByNetworkId(
@@ -1973,6 +2017,15 @@ void ApplyEnemyDamageCorrection(const EnemyDamageResultPacket& packet) {
             actor_address,
             packet.authoritative_hp,
             packet.authoritative_max_hp)) {
+        const bool accepted =
+            packet.result_code == static_cast<std::uint8_t>(EnemyDamageResultCode::Accepted);
+        const bool dead =
+            packet.dead != 0 || packet.authoritative_hp <= kEnemyDamageClaimHpEpsilon;
+        std::uint32_t death_exception_code = 0;
+        bool death_called = false;
+        if (accepted && dead) {
+            death_called = sdmod::TryTriggerRunEnemyDeath(actor_address, &death_exception_code);
+        }
         if (packet.result_code == static_cast<std::uint8_t>(EnemyDamageResultCode::Accepted)) {
             g_local_transport.last_enemy_claimed_hp_by_network_id[packet.target_network_actor_id] =
                 packet.authoritative_hp;
@@ -1989,7 +2042,9 @@ void ApplyEnemyDamageCorrection(const EnemyDamageResultPacket& packet) {
             std::to_string(packet.target_network_actor_id) +
             " result=" + std::to_string(static_cast<int>(packet.result_code)) +
             " hp=" + std::to_string(packet.authoritative_hp) +
-            " max_hp=" + std::to_string(packet.authoritative_max_hp));
+            " max_hp=" + std::to_string(packet.authoritative_max_hp) +
+            " death_called=" + std::to_string(death_called ? 1 : 0) +
+            " death_seh=" + HexString(static_cast<uintptr_t>(death_exception_code)));
     }
 }
 
@@ -2578,13 +2633,24 @@ bool SendLocalEnemyDamageClaim(
     for (const auto& endpoint : endpoints) {
         SendPacketToEndpoint(packet, endpoint);
     }
+    std::uint32_t local_death_exception_code = 0;
+    bool local_death_called = false;
+    if (packet.lethal != 0) {
+        const auto local_actor_address = FindReplicatedLocalActorAddress(network_actor_id);
+        if (local_actor_address != 0) {
+            local_death_called =
+                sdmod::TryTriggerRunEnemyDeath(local_actor_address, &local_death_exception_code);
+        }
+    }
     g_local_transport.last_enemy_claimed_hp_by_network_id[network_actor_id] = local_hp;
     Log(
         "Multiplayer enemy damage claim sent. target_network_actor_id=" +
         std::to_string(network_actor_id) +
         " sequence=" + std::to_string(packet.claim_sequence) +
         " damage=" + std::to_string(packet.claimed_damage) +
-        " after_hp=" + std::to_string(packet.client_after_hp));
+        " after_hp=" + std::to_string(packet.client_after_hp) +
+        " local_death_called=" + std::to_string(local_death_called ? 1 : 0) +
+        " local_death_seh=" + HexString(static_cast<uintptr_t>(local_death_exception_code)));
     return true;
 }
 
@@ -3502,10 +3568,16 @@ void ApplyEnemyDamageClaimPacket(
         target_actor.actor_address,
         accepted_hp,
         target_actor.max_hp);
-    DWORD death_exception_code = 0;
+    std::uint32_t death_exception_code = 0;
     bool death_called = false;
     if (wrote && accepted_hp <= kEnemyDamageClaimHpEpsilon) {
-        death_called = TryTriggerHostRunEnemyDeath(target_actor.actor_address, &death_exception_code);
+        death_called = sdmod::TryTriggerRunEnemyDeath(target_actor.actor_address, &death_exception_code);
+        if (death_called) {
+            RecordRecentRunEnemyDeathSnapshot(
+                packet.target_network_actor_id,
+                target_actor,
+                now_ms);
+        }
     }
 
     RememberEnemyDamageClaimSequence(packet);
@@ -3526,7 +3598,7 @@ void ApplyEnemyDamageClaimPacket(
         " after_hp=" + std::to_string(wrote ? accepted_hp : current_hp) +
         " lethal=" + std::to_string(accepted_hp <= kEnemyDamageClaimHpEpsilon ? 1 : 0) +
         " death_called=" + std::to_string(death_called ? 1 : 0) +
-        " death_seh=" + HexString(death_exception_code));
+        " death_seh=" + HexString(static_cast<uintptr_t>(death_exception_code)));
 }
 
 void ReceivePackets(std::uint64_t now_ms) {
