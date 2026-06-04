@@ -111,13 +111,43 @@ finished peer networking layer.
   drops are not global-RNG lockstep state: they are host-owned lifecycle
   entities with reliable spawn/despawn, pickup-request, and pickup-confirm/deny
   events. The local UDP transport now sends a run-only `LootSnapshot` metadata
-  slice for host gold drops (`0x7DC`) with a stable host drop id, amount, tier,
-  active byte, lifetime, and position, and exposes the client view through
-  `sd.world.get_replicated_loot()`. This deliberately does not spawn a stock
-  local gold actor on the client yet: stock pickup still credits the
-  process-global slot-0 gold scalar, so authoritative pickup must be hooked and
-  routed into participant-owned inventory/gold/book state first. This is a
-  development transport, not the final Steam P2P backend.
+  slice for host gold drops (`0x7DC`), health/mana orb drops (`0x7DB`), and
+  item/potion carrier drops (`0x7DD`) with a stable host drop id, reward
+  metadata, lifetime/radius/position, and held-item type/slot/stack metadata
+  where applicable. The client view is exposed through
+  `sd.world.get_replicated_loot()`. Protocol v27 carries `LootPickupRequest`
+  and `LootPickupResult`: a client can
+  call `sd.world.request_loot_pickup(id)`, the host checks run nonce, distance,
+  duplicate pickup state, and drop identity, then confirms or denies the
+  credit. Gold availability is derived from amount plus lifetime, not the
+  observed `+0x148` byte. Accepted gold pickups update only the requesting
+  participant's owned gold ledger, increment `gold_revision`, zero the host gold
+  actor amount, and suppress that drop id from later loot snapshots. Accepted
+  health/mana orb pickups apply the host-authored resource result to the
+  requesting participant's runtime vitals and to that client's local HP/MP
+  presentation. Accepted item/potion carrier pickups clear the host carrier's
+  held-item pointer and credit the requesting participant's replicated
+  inventory ledger by item type, slot, and stack count. This deliberately does
+  not spawn stock local pickup actors on the client yet: stock pickup still
+  credits slot-0/global state, so powerups, spellbook/statbook mutations, and
+  the later native per-participant inventory-root insertion path still need
+  their own seams.
+  The loader now exposes `sd.player.get_inventory_state()` as a read-only
+  audit surface for the stock scene-owned inventory root and visual sink helper
+  items, and `tools/verify_multiplayer_inventory_audit.py` proves both local
+  multiplayer clients can read their own native starter inventory shape.
+  Protocol v27 also mirrors compact participant-owned inventory item rows,
+  progression-book/statbook rows, and current ability loadout in `StatePacket`,
+  so peers can inspect each other's starter potion rows, active/visible native
+  skill-book entries, and primary/secondary loadout. This is not full inventory
+  ownership yet: item/potion pickup is still metadata-ledger credit rather than
+  native item-object insertion, and powerup pickup plus separate spellbook
+  content replication are still pending.
+  `StatePacket` carries each
+  participant's current owned gold and progression revision counters for live
+  verification of the participant ledger; stale state packets are
+  revision-guarded so they cannot overwrite a newer host-authorized pickup
+  result. This is a development transport, not the final Steam P2P backend.
 - `docs/multiplayer-participant-model.md` is the implementation-facing model
   for profiles, scene intent, Lua bots, and future remote players.
 - `docs/networking/world-sync-authority-plan.md` records the current hub NPC
@@ -136,7 +166,7 @@ finished peer networking layer.
 | Identity | Connection-bound. Host ignores client-declared player / actor IDs. |
 | Mod compatibility | **Exact** protocol version + mod-manifest hash. Mismatch refuses connect. |
 | Anti-cheat | None in the serious sense. Baseline hygiene only (see below). |
-| Loot | Synced host-owned run drops. Each participant owns their own inventory, gold, spellbook, and statbook state; stock slot-0/global pickup paths must be replaced or bypassed before pickups become authoritative. |
+| Loot | Synced host-owned run drops. Gold, health/mana orbs, and item/potion carriers have request/result authority slices; item/potion results currently credit the participant-owned inventory ledger by metadata rather than inserting real native item objects. Local inventory/equip roots now have a typed read-only audit API, and local UDP mirrors compact inventory rows, progression-book/statbook rows, and ability loadout in `StatePacket`. Powerup ownership, separate spellbook content sync, and real per-participant native inventory roots are still pending. |
 
 ## Tick rates
 
@@ -224,8 +254,21 @@ Sampling happens on the stock game thread after native updates — no extra sim 
   participant visibility, host-authoritative run entry, connected-client
   run-start blocking, idle movement/heading convergence, player/player
   collision push, and remote nameplate resolution.
-  `tools/verify_player_health_death_sync.py` is the focused live test for
-  host-to-client and client-to-host player HP/MP replication, HP-zero death
+	  `tools/verify_multiplayer_progression_ledger_sync.py` verifies bidirectional
+	  local UDP replication of participant-owned gold and gold revision state through
+	  `StatePacket`.
+	  `tools/verify_multiplayer_gold_pickup_authority.py` verifies the first
+	  pickup authority slice: a client requests host-owned gold, the host credits
+	  the requesting participant once, host global gold remains unchanged, the host
+	  drop is consumed, client metadata despawns, and duplicate pickup returns
+	  `AlreadyGone`.
+	  `tools/verify_multiplayer_orb_pickup_authority.py` verifies host-owned
+	  health and mana orbs: the client requests the replicated drop id, the host
+	  accepts once, the host participant vitals and client local vitals converge to
+	  the authority result, metadata despawns, and duplicate pickup returns
+	  `AlreadyGone`.
+	  `tools/verify_player_health_death_sync.py` is the focused live test for
+	  host-to-client and client-to-host player HP/MP replication, HP-zero death
   presentation, corpse inertness, and revive/resumed transform playback in a
   shared run.
 - `ITransport` abstraction + Steam `ISteamNetworkingSockets` impl
@@ -235,8 +278,9 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 - Enemy snapshot burst (20/30 Hz)
 - Cast / damage / death events
 - Wave + run lifecycle sync
-- Loot-drop spawn/despawn + pickup-request/confirm/deny
-- Progression-delta (XP / gold / level / spellbook / statbook / live loadout)
+- Loot-drop spawn/despawn + gold/orb pickup-request/confirm/deny
+- Progression-delta (XP / gold revision / level / spellbook / statbook / live
+  loadout)
 
 ### Phase 2 — Hardening
 

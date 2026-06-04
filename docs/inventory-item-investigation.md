@@ -98,7 +98,7 @@ This matches the live holder readback:
     - `drop + 0x13C` amount tier byte
     - `drop + 0x140` amount
     - `drop + 0x144` lifetime
-    - `drop + 0x148` active flag
+    - `drop + 0x148` state byte
   - stages them in a temporary pointer list
   - registers each into the live world through `ActorWorld_Register (0x0063F6D0)`
 - `0x005E13C0` -> `Gold_SetAmountTier`
@@ -108,7 +108,8 @@ This matches the live holder readback:
     - `<8` -> 2
     - else -> 3
 - loader-side reward support is narrower right now:
-  - `SpawnReward(...)` currently only supports gold
+  - `SpawnReward(...)` currently supports gold plus debug-spawned health/mana
+    orbs for multiplayer pickup verification
   - native reward function resolved through `kSpawnRewardGold`
 
 ## UI Surfaces
@@ -137,20 +138,57 @@ Current `sd.player.get_state()` exposes:
 - `secondary_visual_lane`
 - `attachment_visual_lane`
 
+Current `sd.player.get_inventory_state()` exposes a typed read-only inventory
+audit surface:
+
+- gameplay scene address and embedded `SdItemListRoot` address
+- item row count, item pointer array address, truncation flag, and up to 64
+  decoded item rows
+- item row fields: native item address, type id, slot/side field, and potion
+  stack count for potion rows (`0x1B59`)
+- gameplay-owned primary/secondary/attachment visual sink lanes, including the
+  current helper item type ids for robe/hat/staff
+- live verification maps the loader's `primary_visual_lane` field to the
+  `0x1428` sink and helper type `0x1B5D` (hat), while
+  `secondary_visual_lane` maps to the `0x142C` sink and helper type `0x1B5E`
+  (robe); this follows the existing loader offset labels, not the older prose
+  shorthand that called `0x1428` the secondary sink
+
 Current gaps:
 
-- no general item enumeration API
-- no inventory container dump API
-- no potion slot enumeration API
-- no equip inner-object decode beyond visual sink lanes
+- the inventory API is read-only instrumentation, not participant-owned sync
+- local UDP `StatePacket` protocol v27 carries a compact participant-owned
+  inventory snapshot with up to 16 decoded item rows and a total/truncated
+  marker, so peers can inspect each other's current native inventory item rows
+- `sd.player.get_progression_book_state()` reads the local native progression
+  table; the current verified starter state has 83 rows, and protocol v27
+  mirrors a compact 32-row participant-owned progression-book/statbook snapshot
+  plus total/truncated metadata
+- local UDP also mirrors the current ability loadout as participant-owned state
+- host-authorized item/potion carrier pickup now credits the requesting
+  participant's replicated inventory ledger by held item type, slot, and stack
+  count; real per-participant native item roots are still pending
+- no stock powerup pickup hook credits participant-owned roots yet
+- separate spellbook content and book/stat mutation sync are still pending
 
 Multiplayer exposure added for the first loot slice:
 
 - `sd.world.get_replicated_loot()` exposes host-owned run loot metadata received
-  by a client, starting with gold drops (`0x7DC`)
+  by a client, including gold drops (`0x7DC`), health/mana orbs (`0x7DB`), and
+  item/potion carrier drops (`0x7DD`)
+- `sd.world.request_loot_pickup(network_drop_id)` sends a reliable local UDP
+  pickup request for a host-owned replicated drop and exposes the last
+  `LootPickupResult` through the replicated loot view
 - `sd.runtime.get_multiplayer_state()` exposes each participant's
-  `ParticipantOwnedProgressionState`: initialized flag, gold, and
-  inventory/spellbook/statbook/loadout revision counters
+  `ParticipantOwnedProgressionState`: initialized flag, gold, gold revision,
+  compact inventory item rows, compact progression-book/statbook rows, current
+  ability loadout, and inventory/spellbook/statbook/loadout revision counters
+- `tools/verify_multiplayer_inventory_audit.py` launches a local host/client
+  pair, checks `sd.player.get_inventory_state()` on both clients for the native
+  starter inventory shape, checks `sd.player.get_progression_book_state()` for
+  the native book table, and verifies that each peer receives the other's
+  participant-owned starter potion rows, compact statbook rows, and ability
+  loadout
 
 ## Live Runtime Check
 
@@ -374,11 +412,13 @@ Participant inventory seam:
 - `0x005E66B0` -> `GoldActor_TickPickup`
   - vtable slot `+0x08` at `0x0079C924`
   - world actor type `0x7DC`
-  - fields:
-    - `+0x13C` amount tier byte
-    - `+0x140` amount
-    - `+0x144` lifetime
-    - `+0x148` active flag
+- fields:
+  - `+0x13C` amount tier byte
+  - `+0x140` amount
+  - `+0x144` lifetime
+  - `+0x148` state byte; live verification showed this is not a reliable
+    "available for pickup" predicate because newly spawned claimable gold can
+    report zero here while still carrying a positive amount
 - stock pickup also hard-codes local gameplay slot 0:
   - actor: `DAT_0081C264 + 0x1358`
   - progression handle: `DAT_0081C264 + 0x1654`
@@ -435,10 +475,11 @@ Current interpretation:
 
 - orbs are not inventory items; they are resource reward actors
 - powerups are also reward actors, not inventory roots
-- if participants need individual health / mana / powerup credit, hook these
-  tick paths separately from the item inventory hook
-- the orb tick is close to participant-aware for pull targeting, but not yet for
-  reward application
+- multiplayer request/result pickup now covers host-owned health/mana orbs
+  without relying on the stock slot-0 application branch
+- physical walk-over orb pickup still needs a stock tick hook if we want local
+  collision pickup to route through the same participant-owned authority path
+- powerups still need their own participant-owned reward path
 
 ### Drop selector and factory paths
 
@@ -545,23 +586,52 @@ the initial two-potion inventory state.
 `python3 tools/probe_run_reward_sync.py --attempts 3` is the current local UDP
 reward boundary probe. It confirmed that host-spawned gold rewards appear in
 the host actor list as type `0x7DC`, with amount tier at `+0x13C`, amount at
-`+0x140`, lifetime at `+0x144`, and active byte at `+0x148`. The same run client
-receives host-owned gold metadata through `sd.world.get_replicated_loot()` while
-still receiving zero local stock gold actors and zero `WorldSnapshot` gold
-actors.
+`+0x140`, lifetime at `+0x144`, and a state byte at `+0x148`. The same run
+client receives host-owned gold metadata through `sd.world.get_replicated_loot()`
+while still receiving zero local stock gold actors and zero `WorldSnapshot` gold
+actors. Later pickup-authority testing showed that `+0x148` is not a valid
+"available for pickup" predicate by itself: live, spawned gold can report state
+byte `0` while still carrying a valid amount and stable host network drop id.
 Spawning a pickup-range reward on the host changed the host global gold by the
 drop amount, proving that stock pickup still goes through the global slot-0 gold
 path.
 
 For multiplayer, synced loot is required, but pickup credit must be
 participant-owned. Gold, item, potion, orb, and powerup drops should be
-host-owned lifecycle objects. The current `LootSnapshot` slice is metadata only:
-clients can verify host drop identity and presentation fields, but they do not
-spawn a stock pickup actor yet. Clients can later request pickup, and the host
-should confirm or deny the request, then credit the owning participant's
-inventory, gold, spellbook, or statbook state. This keeps a joined client's
-primary single-player save isolated from the host's world and prevents
+host-owned lifecycle objects. The older `LootSnapshot` slice was metadata only:
+clients could verify host drop identity and presentation fields, but they did not
+spawn a stock pickup actor. Gold now has the first host-authoritative pickup
+slice: clients call `sd.world.request_loot_pickup(network_drop_id)`, the host
+sanity-checks run nonce, range, duplicate pickup state, and drop identity, then
+confirms or denies the request. Accepted gold pickup results credit the owning
+participant's gold ledger, advance `gold_revision`, zero the host gold actor
+amount, and suppress that drop id from later metadata snapshots. Duplicate
+requests return `AlreadyGone` and do not credit again. This keeps a joined
+client's primary single-player save isolated from the host's world and prevents
 client-local stock pickup from mutating the wrong process-global state.
+Health/mana orb pickup now uses the same request/result boundary. The host
+snapshots type `0x7DB` orbs from the transient actor list, including resource
+kind, raw value, lifetime, and position. Accepted orb pickup results apply the
+host-authored health or mana resource value to the requesting participant's
+runtime vitals and to the client's local HP/MP presentation. Item/potion
+carrier pickup now uses the same host request/result boundary for type `0x7DD`:
+the host snapshots `drop + 0x148` held-item metadata, clears that held-item
+pointer on accepted pickup, and credits the requesting participant's replicated
+inventory ledger by item type, slot, and stack count. Powerup, spellbook, and
+statbook results still need to credit the owning participant's state through the
+same participant-owned boundary. Real native item-object insertion into
+per-participant inventory roots is also still pending.
+
+`python3 tools/verify_multiplayer_gold_pickup_authority.py --attempts 3` is the
+focused proof for that gold slice. The latest run verified amount/tier identity,
+single client credit, host participant-ledger update, unchanged host process
+gold, consumed host actor amount, client metadata despawn, and duplicate
+rejection.
+
+`python3 tools/verify_multiplayer_orb_pickup_authority.py --attempts 3` is the
+focused proof for health/mana orb pickup authority. The latest run verified both
+resource kinds, accepted host resource deltas, host participant-vital update,
+client local HP/MP convergence, metadata despawn, and duplicate rejection.
 
 ### Remaining gaps after pickup pass
 
@@ -581,18 +651,22 @@ client-local stock pickup from mutating the wrong process-global state.
 
 ## Current Best Next Targets
 
-- define the reliable multiplayer loot-drop lifecycle packet/event contract
-  around host-owned drop IDs and pickup confirm/deny
+- extend the reliable multiplayer loot-drop lifecycle packet/event contract
+  beyond verified gold, health/mana orb, and item/potion carrier request/result
+  slices to powerup carriers
 - implement a loader-side participant inventory state object with an
   `SdItemListRoot`-compatible root and per-participant gold
 - extend that participant state object with spellbook and statbook ownership
   before rewards/progression can mutate those books in multiplayer
-- hook `ItemDropActor_TickPickup (0x005E6B50)` first, because it preserves both
-  the world drop actor and the held item pointer before ownership is lost
-- hook `GoldActor_TickPickup (0x005E66B0)` second, because it preserves the gold
-  actor and amount before global currency mutation
-- decide whether orbs and powerups should be participant-owned rewards; if yes,
-  hook `Orb_TickPickup (0x005E62E0)` and `Bonus_TickPickup (0x006039C0)`
+- replace the item/potion metadata ledger credit with real item-object insertion
+  once participant-owned `SdItemListRoot`-compatible roots exist
+- hook `GoldActor_TickPickup (0x005E66B0)` so physical walk-over pickup routes
+  through the verified request/result path instead of global currency mutation
+- hook `Orb_TickPickup (0x005E62E0)` only if physical walk-over orb pickup must
+  route through the same participant-owned request/result path; networked orb
+  request/result pickup is already verified
+- decide whether powerups should be participant-owned rewards; if yes, hook
+  `Bonus_TickPickup (0x006039C0)`
 - switch `InventoryScreen + 0x88` to the selected participant root when opening
   or changing the controlled participant inventory
 - only after pickup ownership works, spiderweb into shops / traders, where the

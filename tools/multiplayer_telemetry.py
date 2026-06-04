@@ -94,6 +94,7 @@ if mp and mp.participants then
     emit_num(prefix .. "mana_max", participant.mana_max or 0)
     local owned = participant.owned_progression
     emit(prefix .. "gold", owned and owned.gold or 0)
+    emit(prefix .. "gold_revision", owned and owned.gold_revision or 0)
     emit(prefix .. "inventory_revision", owned and owned.inventory_revision or 0)
     emit(prefix .. "spellbook_revision", owned and owned.spellbook_revision or 0)
     emit(prefix .. "statbook_revision", owned and owned.statbook_revision or 0)

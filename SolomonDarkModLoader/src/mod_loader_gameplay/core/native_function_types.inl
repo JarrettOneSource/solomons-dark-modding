@@ -44,6 +44,7 @@ using MovementCollisionTestCirclePlacementExtendedFn =
         std::uint32_t overlap_allow_mask);
 using ActorMoveByDeltaFn = void(__thiscall*)(void* self, float move_x, float move_y, int flags);
 using ActorAnimationAdvanceFn = void(__thiscall*)(void* self);
+using ActorWorldAttachFn = void(__thiscall*)(void* self, void* actor);
 using PlayerActorRefreshRuntimeHandlesFn = void(__thiscall*)(void* self);
 using ActorProgressionRefreshFn = void(__thiscall*)(void* self);
 using PlayerAppearanceApplyChoiceFn = void(__thiscall*)(void* progression, int choice_id, int ensure_assets);
@@ -69,6 +70,9 @@ using ScalarDeletingDestructorFn = void(__thiscall*)(void* self, int flags);
 using SpawnRewardGoldFn = void(__thiscall*)(void* self, std::uint32_t x_bits, std::uint32_t y_bits, int amount, int lifetime);
 using GameFreeFn = void(__cdecl*)(void* memory);
 using NativeRngInitializeFn = void(__thiscall*)(void* self, std::uint32_t seed);
+using OrbRewardInitializeFn = void(__thiscall*)(void* self, void* rng_state);
+using OrbPickupTickFn = void(__thiscall*)(void* self);
+using ItemDropPickupTickFn = void(__thiscall*)(void* self);
 using GameplayHudRenderDispatchFn = void(__thiscall*)(void* self, int render_case);
 
 struct NativeGameString {

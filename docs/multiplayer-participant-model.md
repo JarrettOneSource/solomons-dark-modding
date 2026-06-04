@@ -109,11 +109,43 @@ credit that mutable participant state, not `DAT_0081A388` global gold or
 
 The runtime now carries an explicit `ParticipantOwnedProgressionState` on each
 `ParticipantInfo`. The first fields are intentionally small: initialized flag,
-gold, and inventory/spellbook/statbook/loadout revision counters. Local UDP
-refresh populates the local participant's gold from live player state, and
+gold, a gold revision, compact inventory rows, compact progression-book/statbook
+rows, current ability loadout, and inventory/spellbook/statbook/loadout revision
+counters. Local UDP refresh populates the local participant's gold from live
+player state, advances the gold revision when that value changes, and
 `sd.runtime.get_multiplayer_state()` exposes the participant ledger so live
 tests can prove loot pickup work is targeting participant state instead of
 silently falling back to the stock global economy.
+
+The first concrete pickup paths are host-authorized gold, health/mana orbs, and
+item/potion carrier drops.
+A connected client sends `LootPickupRequest` for a host-owned drop id; the host
+validates run, distance, duplicate state, and drop identity, then sends
+`LootPickupResult`. Accepted gold results credit only the requesting
+participant's owned gold, advance that participant's `gold_revision`, consume
+the host drop, and leave the host process-global gold unchanged. Accepted orb
+results apply the host-authored health or mana resource result to the requesting
+participant's runtime vitals and to the client's local HP/MP presentation.
+Accepted item/potion carrier results clear the host carrier's held-item pointer
+and credit the requesting participant's replicated inventory ledger by item type,
+slot, and stack count. This is deliberately narrower than complete
+inventory/book mutation sync: powerups, spellbook/statbook mutations, and real
+per-participant native inventory roots still need their own participant storage
+and native seams.
+
+The loader now has a read-only native inventory audit surface at
+`sd.player.get_inventory_state()`. It decodes the local gameplay scene's
+embedded item list root, starter potion rows, and gameplay-owned visual sink
+helpers for hat/robe/staff. `sd.player.get_progression_book_state()` reads the
+local native progression table that currently exposes 83 book rows in the
+starter hub state. Local UDP protocol v27 mirrors compact participant-owned
+inventory rows in `StatePacket` plus compact progression-book/statbook rows and
+the current ability loadout. That currently proves inventory/book/loadout
+content visibility between peers, not native item-object insertion or upgrade
+mutation. Protocol v27 is the first pickup protocol that also mirrors accepted
+item/potion carrier metadata through `LootPickupResult`. Powerup pickup,
+spellbook/statbook mutation, and separate spellbook content replication are
+still pending.
 
 ## Scene Intent
 
@@ -207,8 +239,9 @@ gameplay events, progression deltas, and reconnect.
 The multiplayer service loop currently pumps Steam bootstrap/callback state every
 50 ms and mirrors readiness into `RuntimeState`. For rapid local development it
 can also pump a UDP loopback transport that exchanges `StatePacket` transform
-snapshots, host-owned `WorldSnapshot` actor snapshots, and host-owned run
-`LootSnapshot` metadata for gold drops. The host's `StatePacket` also owns the
+snapshots plus participant-owned gold/revision ledger values, host-owned
+`WorldSnapshot` actor snapshots, and host-owned run `LootSnapshot` metadata for
+gold drops. The host's `StatePacket` also owns the
 local UDP run-entry scene intent: connected clients cannot call
 `sd.hub.start_testrun` or directly switch themselves into the arena, but they
 queue the normal stock-safe hub-to-run transition when the configured host reports `in_run`.

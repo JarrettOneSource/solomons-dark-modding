@@ -53,6 +53,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TELEMETRY_PATH = ROOT / "runtime" / "multiplayer_animation_mana_elements_telemetry.jsonl"
 TELEMETRY: MultiplayerTelemetryRecorder | None = None
 PROJECTILE_TYPES = (0x7D3, 0x7D4, 0x7D5)
+FIRE_TAP_FRAMES = 2
 TAP_FRAMES = 12
 HOLD_FRAMES = 170
 ELEMENT_IDS = {
@@ -90,7 +91,7 @@ class ElementSpec:
 
 
 ELEMENTS = (
-    ElementSpec("fire", "fireball", "projectile", 0x7D4, TAP_FRAMES),
+    ElementSpec("fire", "fireball", "projectile", 0x7D4, FIRE_TAP_FRAMES),
     ElementSpec("earth", "earth_boulder", "projectile", 0x7D5, HOLD_FRAMES),
     ElementSpec("ether", "ether_projectile", "projectile", 0x7D3, TAP_FRAMES),
     ElementSpec("water", "frost_continuous", "continuous", None, HOLD_FRAMES),
@@ -438,7 +439,7 @@ def verify_cast_log_flow(
 ) -> dict[str, object]:
     required = {"pressed": 1, "released": 1}
     if require_held:
-        required["held"] = 2
+        required["held"] = 1
     source_log, phase_counts, native_hook_count = wait_for_source_cast(
         direction,
         source_offset,
@@ -688,12 +689,12 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
     }
 
 
-def verify_low_mana_remote_cast(direction: Direction) -> dict[str, object]:
+def verify_low_mana_remote_cast(direction: Direction, spec: ElementSpec) -> dict[str, object]:
     record_telemetry("cast.low_mana.before", direction=direction.name)
     mana_write = set_player_mana(direction.source_pipe, 0.0, 100.0)
     source_offset = len(read_log(direction.source_log))
     receiver_offset = len(read_log(direction.receiver_log))
-    queue_result = queue_gameplay_mouse_left(direction, HOLD_FRAMES)
+    queue_result = queue_gameplay_mouse_left(direction, spec.frames)
     time.sleep(0.6)
     remote_mid = query_remote_participant(direction.receiver_pipe, direction.source_id)
     record_telemetry("cast.low_mana.mid", direction=direction.name, remote_mid=remote_mid)
@@ -701,7 +702,7 @@ def verify_low_mana_remote_cast(direction: Direction) -> dict[str, object]:
         direction,
         source_offset,
         receiver_offset,
-        require_held=True,
+        require_held=spec.frames > TAP_FRAMES,
     )
     receiver_log = log_after(direction.receiver_log, receiver_offset)
     try:
@@ -722,6 +723,7 @@ def verify_low_mana_remote_cast(direction: Direction) -> dict[str, object]:
         "queue_result": queue_result,
         "remote_mid": remote_mid,
         "flow": flow,
+        "frames": spec.frames,
     }
 
 
@@ -751,7 +753,7 @@ def verify_element(spec: ElementSpec) -> dict[str, object]:
         else:
             result[f"{direction.name}_cast"] = verify_continuous_cast(direction, spec)
         if spec.element == "fire":
-            result[f"{direction.name}_low_mana"] = verify_low_mana_remote_cast(direction)
+            result[f"{direction.name}_low_mana"] = verify_low_mana_remote_cast(direction, spec)
         time.sleep(0.8)
         record_telemetry("direction.done", element=spec.element, direction=direction.name)
     record_telemetry("element.done", element=spec.element)

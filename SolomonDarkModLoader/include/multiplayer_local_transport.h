@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace sdmod::multiplayer {
 
@@ -31,5 +32,9 @@ void QueueLocalEnemyDamageClaim(
     float max_hp,
     float target_position_x,
     float target_position_y);
+bool QueueLocalLootPickupRequest(
+    std::uint64_t network_drop_id,
+    std::uint32_t* request_sequence,
+    std::string* error_message);
 
 }  // namespace sdmod::multiplayer

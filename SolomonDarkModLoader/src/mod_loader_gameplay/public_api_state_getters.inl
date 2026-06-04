@@ -286,6 +286,208 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     return true;
 }
 
+bool TryGetPlayerInventoryState(SDModInventoryState* state) {
+    if (state == nullptr) {
+        return false;
+    }
+
+    *state = SDModInventoryState{};
+    uintptr_t gameplay_address = 0;
+    if (!TryResolveCurrentGameplayScene(&gameplay_address) || gameplay_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const uintptr_t item_list_root = gameplay_address + kGameplayItemListRootOffset;
+    int item_count = 0;
+    uintptr_t item_array_address = 0;
+    if (!memory.IsReadableRange(item_list_root, kGameplayItemListItemsOffset + sizeof(uintptr_t)) ||
+        !memory.TryReadField(item_list_root, kGameplayItemListCountOffset, &item_count) ||
+        !memory.TryReadField(item_list_root, kGameplayItemListItemsOffset, &item_array_address) ||
+        item_count < 0 ||
+        item_count > 4096) {
+        return false;
+    }
+
+    state->valid = true;
+    state->gameplay_scene_address = gameplay_address;
+    state->item_list_root_address = item_list_root;
+    state->item_array_address = item_array_address;
+    state->item_count = item_count;
+    state->primary_visual_lane =
+        ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkPrimaryOffset);
+    state->secondary_visual_lane =
+        ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkSecondaryOffset);
+    state->attachment_visual_lane =
+        ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkAttachmentOffset);
+
+    if (item_count == 0) {
+        return true;
+    }
+    if (item_array_address == 0) {
+        return false;
+    }
+
+    const int enumerate_count =
+        item_count > static_cast<int>(kSDModInventorySnapshotMaxItems)
+            ? static_cast<int>(kSDModInventorySnapshotMaxItems)
+            : item_count;
+    state->truncated = item_count > enumerate_count;
+    if (!memory.IsReadableRange(
+            item_array_address,
+            static_cast<std::size_t>(enumerate_count) * sizeof(std::uint32_t))) {
+        return false;
+    }
+
+    state->items.reserve(static_cast<std::size_t>(enumerate_count));
+    constexpr std::uint32_t kPotionItemTypeId = 0x1B59;
+    for (int index = 0; index < enumerate_count; ++index) {
+        std::uint32_t raw_item_address = 0;
+        if (!memory.TryReadValue(
+                item_array_address + static_cast<std::size_t>(index) * sizeof(std::uint32_t),
+                &raw_item_address) ||
+            raw_item_address == 0) {
+            continue;
+        }
+
+        const uintptr_t item_address = static_cast<uintptr_t>(raw_item_address);
+        if (!memory.IsReadableRange(item_address, kItemSlotOffset + sizeof(int))) {
+            continue;
+        }
+
+        SDModInventoryItemState item{};
+        item.item_address = item_address;
+        if (!memory.TryReadField(item_address, kGameObjectTypeIdOffset, &item.type_id)) {
+            continue;
+        }
+        item.valid = true;
+        (void)memory.TryReadField(item_address, kItemSlotOffset, &item.slot);
+        if (item.type_id == kPotionItemTypeId &&
+            memory.IsReadableRange(item_address + kPotionStackCountOffset, sizeof(int))) {
+            (void)memory.TryReadField(item_address, kPotionStackCountOffset, &item.stack_count);
+        }
+        state->items.push_back(item);
+    }
+    state->enumerated_item_count = static_cast<int>(state->items.size());
+    return true;
+}
+
+bool TryGetPlayerProgressionBookState(SDModProgressionBookState* state) {
+    if (state == nullptr) {
+        return false;
+    }
+
+    *state = SDModProgressionBookState{};
+
+    SDModPlayerState player_state;
+    if (!TryGetPlayerState(&player_state) ||
+        !player_state.valid ||
+        player_state.progression_address == 0 ||
+        kStandaloneWizardProgressionTableBaseOffset == 0 ||
+        kStandaloneWizardProgressionTableCountOffset == 0 ||
+        kStandaloneWizardProgressionEntryStride == 0 ||
+        kStandaloneWizardProgressionEntryInternalIdOffset == 0 ||
+        kStandaloneWizardProgressionActiveFlagOffset == 0 ||
+        kStandaloneWizardProgressionVisibleFlagOffset == 0 ||
+        kStandaloneWizardProgressionEntryCategoryOffset == 0 ||
+        kStandaloneWizardProgressionEntryStatbookOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t entry_table_address = 0;
+    int entry_count = 0;
+    if (!memory.IsReadableRange(
+            player_state.progression_address + kStandaloneWizardProgressionTableBaseOffset,
+            sizeof(uintptr_t)) ||
+        !memory.IsReadableRange(
+            player_state.progression_address + kStandaloneWizardProgressionTableCountOffset,
+            sizeof(int)) ||
+        !memory.TryReadField(
+            player_state.progression_address,
+            kStandaloneWizardProgressionTableBaseOffset,
+            &entry_table_address) ||
+        !memory.TryReadField(
+            player_state.progression_address,
+            kStandaloneWizardProgressionTableCountOffset,
+            &entry_count) ||
+        entry_table_address == 0 ||
+        entry_count < 0 ||
+        entry_count > 4096) {
+        return false;
+    }
+
+    state->valid = true;
+    state->progression_address = player_state.progression_address;
+    state->entry_table_address = entry_table_address;
+    state->entry_count = entry_count;
+
+    const int enumerate_count =
+        entry_count > static_cast<int>(kSDModProgressionBookSnapshotMaxEntries)
+            ? static_cast<int>(kSDModProgressionBookSnapshotMaxEntries)
+            : entry_count;
+    state->truncated = entry_count > enumerate_count;
+    state->entries.reserve(static_cast<std::size_t>(enumerate_count));
+
+    const auto minimum_entry_size = (std::max)(
+        (std::max)(
+            kStandaloneWizardProgressionEntryInternalIdOffset + sizeof(int),
+            kStandaloneWizardProgressionActiveFlagOffset + sizeof(std::uint16_t)),
+        (std::max)(
+            kStandaloneWizardProgressionVisibleFlagOffset + sizeof(std::uint16_t),
+            (std::max)(
+                kStandaloneWizardProgressionEntryCategoryOffset + sizeof(std::uint16_t),
+                kStandaloneWizardProgressionEntryStatbookOffset + sizeof(uintptr_t))));
+    if (kStandaloneWizardProgressionEntryStride < minimum_entry_size) {
+        return false;
+    }
+
+    for (int index = 0; index < enumerate_count; ++index) {
+        const uintptr_t entry_address =
+            entry_table_address + static_cast<std::size_t>(index) * kStandaloneWizardProgressionEntryStride;
+        if (!memory.IsReadableRange(entry_address, minimum_entry_size)) {
+            continue;
+        }
+
+        SDModProgressionBookEntryState entry{};
+        entry.valid = true;
+        entry.entry_address = entry_address;
+        entry.entry_index = index;
+        if (!memory.TryReadField(
+                entry_address,
+                kStandaloneWizardProgressionEntryInternalIdOffset,
+                &entry.internal_id) ||
+            !memory.TryReadField(
+                entry_address,
+                kStandaloneWizardProgressionActiveFlagOffset,
+                &entry.active) ||
+            !memory.TryReadField(
+                entry_address,
+                kStandaloneWizardProgressionVisibleFlagOffset,
+                &entry.visible) ||
+            !memory.TryReadField(
+                entry_address,
+                kStandaloneWizardProgressionEntryCategoryOffset,
+                &entry.category) ||
+            !memory.TryReadField(
+                entry_address,
+                kStandaloneWizardProgressionEntryStatbookOffset,
+                &entry.statbook_address)) {
+            continue;
+        }
+
+        if (entry.statbook_address != 0 &&
+            kStatbookMaxLevelOffset != 0 &&
+            memory.IsReadableRange(entry.statbook_address + kStatbookMaxLevelOffset, sizeof(int))) {
+            (void)memory.TryReadField(entry.statbook_address, kStatbookMaxLevelOffset, &entry.statbook_max_level);
+        }
+        state->entries.push_back(entry);
+    }
+
+    state->enumerated_entry_count = static_cast<int>(state->entries.size());
+    return true;
+}
+
 bool TryGetWorldState(SDModWorldState* state) {
     if (state == nullptr) {
         return false;
@@ -522,6 +724,51 @@ bool TryBuildSceneActorState(
     return true;
 }
 
+void AppendTransientRewardActors(
+    const SceneContextSnapshot& scene_context,
+    std::unordered_set<uintptr_t>* seen,
+    std::vector<SDModSceneActorState>* actors) {
+    if (seen == nullptr ||
+        actors == nullptr ||
+        scene_context.world_address == 0 ||
+        kActorWorldTransientActorListOffset == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const uintptr_t transient_actor_list =
+        scene_context.world_address + kActorWorldTransientActorListOffset;
+    int count = 0;
+    uintptr_t items_address = 0;
+    if (!memory.TryReadField(transient_actor_list, kPointerListCountOffset, &count) ||
+        !memory.TryReadField(transient_actor_list, kPointerListItemsOffset, &items_address)) {
+        return;
+    }
+    if (count <= 0 || count > 1024 || items_address == 0 ||
+        !memory.IsReadableRange(items_address, static_cast<std::size_t>(count) * sizeof(std::uint32_t))) {
+        return;
+    }
+
+    for (int index = 0; index < count; ++index) {
+        uintptr_t actor_address = 0;
+        if (!memory.TryReadValue(
+                items_address + static_cast<std::size_t>(index) * sizeof(std::uint32_t),
+                &actor_address) ||
+            actor_address == 0 ||
+            !seen->insert(actor_address).second) {
+            continue;
+        }
+
+        SDModSceneActorState actor_state{};
+        if (!TryBuildSceneActorState(actor_address, scene_context, true, false, -1, &actor_state)) {
+            continue;
+        }
+        if (actor_state.object_type_id == 0x07DB) {
+            actors->push_back(actor_state);
+        }
+    }
+}
+
 bool TryListSceneActors(std::vector<SDModSceneActorState>* actors) {
     if (actors == nullptr) {
         return false;
@@ -559,6 +806,8 @@ bool TryListSceneActors(std::vector<SDModSceneActorState>* actors) {
             actors->push_back(actor_state);
         }
     }
+
+    AppendTransientRewardActors(scene_context, &seen, actors);
 
     std::vector<SDModTrackedEnemyState> tracked_enemies;
     GetRunLifecycleTrackedEnemies(&tracked_enemies);

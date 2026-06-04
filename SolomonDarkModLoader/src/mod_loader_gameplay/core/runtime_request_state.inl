@@ -57,6 +57,8 @@ struct GameplayKeyboardInjectionState {
     X86Hook actor_world_unregister_hook;
     X86Hook gameplay_switch_region_hook;
     X86Hook monster_pathfinding_refresh_target_hook;
+    X86Hook orb_pickup_hook;
+    X86Hook item_drop_pickup_hook;
     bool initialized = false;
     std::array<std::atomic<std::uint32_t>, 256> pending_scancodes{};
     std::atomic<bool> last_observed_mouse_left_down{false};

@@ -27,6 +27,54 @@ struct SDModEquipVisualLaneState {
     std::uint32_t current_object_type_id = 0;
 };
 
+constexpr std::size_t kSDModInventorySnapshotMaxItems = 64;
+
+struct SDModInventoryItemState {
+    bool valid = false;
+    uintptr_t item_address = 0;
+    std::uint32_t type_id = 0;
+    int slot = -1;
+    int stack_count = 0;
+};
+
+struct SDModInventoryState {
+    bool valid = false;
+    uintptr_t gameplay_scene_address = 0;
+    uintptr_t item_list_root_address = 0;
+    uintptr_t item_array_address = 0;
+    int item_count = 0;
+    int enumerated_item_count = 0;
+    bool truncated = false;
+    std::vector<SDModInventoryItemState> items;
+    SDModEquipVisualLaneState primary_visual_lane;
+    SDModEquipVisualLaneState secondary_visual_lane;
+    SDModEquipVisualLaneState attachment_visual_lane;
+};
+
+constexpr std::size_t kSDModProgressionBookSnapshotMaxEntries = 64;
+
+struct SDModProgressionBookEntryState {
+    bool valid = false;
+    uintptr_t entry_address = 0;
+    uintptr_t statbook_address = 0;
+    int entry_index = -1;
+    int internal_id = -1;
+    std::uint16_t active = 0;
+    std::uint16_t visible = 0;
+    std::uint16_t category = 0;
+    int statbook_max_level = -1;
+};
+
+struct SDModProgressionBookState {
+    bool valid = false;
+    uintptr_t progression_address = 0;
+    uintptr_t entry_table_address = 0;
+    int entry_count = 0;
+    int enumerated_entry_count = 0;
+    bool truncated = false;
+    std::vector<SDModProgressionBookEntryState> entries;
+};
+
 struct SDModPlayerState {
     bool valid = false;
     float hp = 0.0f;
@@ -319,6 +367,8 @@ void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies)
 bool TryGetRunLifecycleEnemySpawnSerial(uintptr_t enemy_address, std::uint32_t* spawn_serial);
 bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(std::uint32_t missing_enemy_count);
 bool TryGetPlayerState(SDModPlayerState* state);
+bool TryGetPlayerInventoryState(SDModInventoryState* state);
+bool TryGetPlayerProgressionBookState(SDModProgressionBookState* state);
 bool TryGetWorldState(SDModWorldState* state);
 bool TryGetGameplayCombatState(SDModGameplayCombatState* state);
 bool TryGetSceneState(SDModSceneState* state);

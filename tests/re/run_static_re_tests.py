@@ -4362,6 +4362,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     native_remote_playback_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/native_remote_playback.inl"
     )
+    orb_pickup_hook_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/orb_pickup_hook.inl"
+    )
+    item_drop_pickup_hook_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/item_drop_pickup_hook.inl"
+    )
     participant_collision_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/participant_collision_response.inl"
     )
@@ -4377,6 +4383,21 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     run_seed_verifier_text = read_text(RUN_ENEMY_SEED_VERIFIER)
     run_enemy_presentation_probe_text = read_text(RUN_ENEMY_PRESENTATION_PROBE)
     run_reward_sync_probe_text = read_text(RUN_REWARD_SYNC_PROBE)
+    progression_ledger_sync_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_progression_ledger_sync.py"
+    )
+    gold_pickup_authority_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_gold_pickup_authority.py"
+    )
+    orb_pickup_authority_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_orb_pickup_authority.py"
+    )
+    inventory_audit_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_inventory_audit.py"
+    )
+    item_potion_contract_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_item_potion_pickup_contract.py"
+    )
     lua_input_text = read_text(ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_input.cpp")
     lua_gameplay_text = read_text(ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp")
     lua_runtime_text = read_text(ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp")
@@ -4396,8 +4417,10 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 20;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 27;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
+        (protocol_text, "kParticipantInventorySnapshotMaxItems"),
+        (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
         (protocol_text, "kWorldSnapshotMaxActors"),
         (protocol_text, "kLootSnapshotMaxDrops"),
         (protocol_text, "kWorldActorStudentVisualStateBytes"),
@@ -4406,6 +4429,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "LootSnapshot = 6"),
         (protocol_text, "EnemyDamageClaim = 7"),
         (protocol_text, "EnemyDamageResult = 8"),
+        (protocol_text, "LootPickupRequest = 9"),
+        (protocol_text, "LootPickupResult = 10"),
         (native_enemy_lifecycle_header_text, "TryTriggerRunEnemyDeath"),
         (native_enemy_lifecycle_text, "ResolveGameAddressOrZero(kEnemyDeath)"),
         (native_enemy_lifecycle_text, "kEnemyDeathHandledOffset"),
@@ -4422,6 +4447,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (project_filters_text, "include\\native_enemy_lifecycle.h"),
         (project_filters_text, "src\\native_enemy_lifecycle.cpp"),
         (protocol_text, "Gold = 1"),
+        (protocol_text, "enum class LootPickupResultCode"),
+        (protocol_text, "struct LootPickupRequestPacket"),
+        (protocol_text, "struct LootPickupResultPacket"),
+        (protocol_text, "struct ParticipantInventoryItemPacketState"),
+        (protocol_text, "struct ParticipantProgressionBookEntryPacketState"),
+        (protocol_text, "Orb = 4"),
         (protocol_text, "WorldActorSnapshotFlagLifecycleOwned"),
         (protocol_text, "WorldActorPresentationFlagAnimationDriveWord"),
         (protocol_text, "WorldActorPresentationFlagStudentVisualState"),
@@ -4434,6 +4465,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "float life_max;"),
         (protocol_text, "float mana_current;"),
         (protocol_text, "float mana_max;"),
+        (protocol_text, "std::int32_t owned_gold;"),
+        (protocol_text, "std::uint32_t gold_revision;"),
+        (protocol_text, "std::uint16_t inventory_item_count;"),
+        (protocol_text, "ParticipantInventorySnapshotFlagTruncated"),
+        (protocol_text, "ParticipantProgressionBookSnapshotFlagTruncated"),
+        (protocol_text, "std::uint16_t progression_book_entry_count;"),
         (protocol_text, "ParticipantPresentationFlagAnimationDriveWord"),
         (protocol_text, "ParticipantPresentationFlagRenderDriveFloats"),
         (protocol_text, "ParticipantPresentationFlagStaffVisualState"),
@@ -4447,20 +4484,34 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "float render_drive_overlay_alpha;"),
         (protocol_text, "float render_drive_move_blend;"),
         (protocol_text, "display_name"),
-        (protocol_text, "static_assert(sizeof(StatePacket) == 276"),
+        (protocol_text, "static_assert(sizeof(ParticipantInventoryItemPacketState) == 12"),
+        (protocol_text, "static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20"),
+        (protocol_text, "static_assert(sizeof(StatePacket) == 1148"),
         (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 104"),
         (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 6688"),
-        (protocol_text, "static_assert(sizeof(LootSnapshotPacket) == 3104"),
+        (protocol_text, "static_assert(sizeof(LootDropSnapshotPacketState) == 64"),
+        (protocol_text, "static_assert(sizeof(LootSnapshotPacket) == 4128"),
+        (protocol_text, "static_assert(sizeof(LootPickupRequestPacket) == 56"),
+        (protocol_text, "static_assert(sizeof(LootPickupResultPacket) == 100"),
         (runtime_state_text, "LocalUdp"),
         (runtime_state_text, "ParticipantOwnedProgressionState"),
+        (runtime_state_text, "ParticipantInventoryItemState"),
+        (runtime_state_text, "ParticipantProgressionBookEntryState"),
+        (runtime_state_text, "inventory_item_total_count"),
+        (runtime_state_text, "std::vector<ParticipantInventoryItemState> inventory_items"),
+        (runtime_state_text, "progression_book_entry_total_count"),
+        (runtime_state_text, "std::vector<ParticipantProgressionBookEntryState> progression_book_entries"),
+        (runtime_state_text, "ability_loadout_valid"),
         (runtime_state_text, "WorldSnapshotRuntimeInfo"),
         (runtime_state_text, "LootSnapshotRuntimeInfo"),
+        (runtime_state_text, "LootPickupResultRuntimeInfo"),
         (runtime_state_text, "WorldSnapshotApplyRuntimeInfo"),
         (runtime_state_text, "WorldSnapshotActorBindingRuntimeInfo"),
         (runtime_state_text, "ParticipantTransformSample"),
         (runtime_state_text, "transform_history"),
         (runtime_state_text, "world_snapshot_history"),
         (runtime_state_text, "loot_snapshot"),
+        (runtime_state_text, "last_loot_pickup_result"),
         (runtime_state_text, "kParticipantTransformHistoryCapacity"),
         (runtime_state_text, "kWorldSnapshotHistoryCapacity"),
         (runtime_state_text, "TrySampleParticipantTransform"),
@@ -4468,6 +4519,13 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (runtime_state_text, "InterpolateHeadingDegrees"),
         (runtime_state_text, "float life_current"),
         (runtime_state_text, "float mana_current"),
+        (runtime_state_text, "std::uint32_t gold_revision"),
+        (runtime_state_text, "inventory_host_authoritative"),
+        (runtime_state_text, "float resource_delta"),
+        (runtime_state_text, "std::int32_t resource_kind"),
+        (runtime_state_text, "float resulting_life_current"),
+        (lua_runtime_text, "participant.runtime.position_x"),
+        (lua_runtime_text, "participant.runtime.position_y"),
         (runtime_state_text, "std::uint16_t presentation_flags"),
         (runtime_state_text, "float render_drive_effect_timer"),
         (runtime_state_text, "float render_drive_effect_progress"),
@@ -4488,6 +4546,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_header_text, "IsLocalTransportHost"),
         (transport_header_text, "IsLocalTransportClient"),
         (transport_header_text, "GetLocalTransportParticipantId"),
+        (transport_header_text, "QueueLocalLootPickupRequest"),
         (transport_text, "SDMOD_MULTIPLAYER_TRANSPORT"),
         (transport_text, "SDMOD_MULTIPLAYER_LOCAL_PORT"),
         (transport_text, "SDMOD_MULTIPLAYER_REMOTE_PORT"),
@@ -4520,6 +4579,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "TryGetRunLifecycleEnemySpawnSerial"),
         (transport_text, "kRunHostLocalWorldActorNetworkIdBase"),
         (transport_text, "kRunLootDropNetworkIdBase"),
+        (transport_text, "kOrbRewardNativeTypeId"),
+        (transport_text, "kItemDropNativeTypeId"),
         (transport_text, "kSolomonDigNativeTypeId"),
         (transport_text, "IsRunStaticLayoutActor"),
         (transport_text, "run_host_local_world_actor_ids_by_address"),
@@ -4529,6 +4590,17 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "PruneRunHostLocalWorldActorNetworkIds"),
         (transport_text, "PruneRunLootDropNetworkIds"),
         (transport_text, "kGoldRewardAmountOffset"),
+        (transport_text, "built.flags = built.amount > 0 && lifetime != 0 ? LootDropSnapshotFlagActive : 0"),
+        (transport_text, "return wrote_amount && wrote_lifetime;"),
+        (transport_text, "kOrbRewardValueOffset"),
+        (transport_text, "kOrbRewardResourceKindOffset"),
+        (transport_text, "kOrbHealthRewardScale"),
+        (transport_text, "kOrbManaRewardScale"),
+        (binary_layout_text, "actor_world_transient_actor_list=0x8B70"),
+        (gameplay_seams_header_text, "kActorWorldTransientActorListOffset"),
+        (gameplay_seams_size_bindings_text, "actor_world_transient_actor_list"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"), "AppendTransientRewardActors"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"), "0x07DB"),
         (transport_text, "assigned host-local run actor network id"),
         (transport_text, "BuildRunWorldActorNetworkId"),
         (transport_text, "ParticipantSceneIntentKind::SharedHub"),
@@ -4538,7 +4610,98 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "LootSnapshotFlagTruncated"),
         (transport_text, "ApplyWorldSnapshotPacket"),
         (transport_text, "ApplyLootSnapshotPacket"),
+        (transport_text, "ApplyLootPickupRequestPacket"),
+        (transport_text, "ApplyLootPickupResultPacket"),
+        (transport_text, "ValidateLootPickupRequest"),
+        (transport_text, "TryPopulateOrbLootDropSnapshot"),
+        (transport_text, "TryPopulateItemLootDropSnapshot"),
+        (transport_text, "TryReadItemDropHeldItemMetadata"),
+        (transport_text, "TryDeactivateHostOrbLootDrop"),
+        (transport_text, "TryDeactivateHostItemLootDrop"),
+        (transport_text, "TryBuildAcceptedOrbLootPickupPayload"),
+        (transport_text, "TryBuildAcceptedItemLootPickupPayload"),
+        (transport_text, "ApplyOwnedInventoryLootItem"),
+        (transport_text, "TryWriteLocalPlayerOrbResource"),
+        (protocol_text, "std::uint32_t item_type_id;"),
+        (protocol_text, "std::int32_t item_slot;"),
+        (protocol_text, "std::int32_t stack_count;"),
+        (protocol_text, "std::uint32_t inventory_revision;"),
+        (binary_layout_text, "orb_pickup=0x005E62E0"),
+        (gameplay_seams_header_text, "kOrbPickup"),
+        (gameplay_seams_bindings_text, '"orb_pickup", kOrbPickup'),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/native_function_types.inl"), "using OrbPickupTickFn"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/native_function_types.inl"), "using ItemDropPickupTickFn"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/gameplay_constants.inl"), "kOrbPickupHookMinimumPatchSize"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/gameplay_constants.inl"), "kItemDropPickupHookMinimumPatchSize"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/runtime_request_state.inl"), "orb_pickup_hook"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/runtime_request_state.inl"), "item_drop_pickup_hook"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl"), "HookOrbPickupTick"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl"), "RemoveX86Hook(&g_gameplay_keyboard_injection.orb_pickup_hook)"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl"), "HookItemDropPickupTick"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl"), "RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook)"),
+        (orb_pickup_hook_text, "ShouldSuppressRemoteParticipantOrbPickup"),
+        (orb_pickup_hook_text, "IsLocalTransportHost()"),
+        (orb_pickup_hook_text, "IsNativeRemoteParticipantBinding(&binding)"),
+        (orb_pickup_hook_text, "return false;"),
+        (orb_pickup_hook_text, "original(self);"),
+        (item_drop_pickup_hook_text, "ShouldSuppressRemoteParticipantItemDropPickup"),
+        (item_drop_pickup_hook_text, "kItemDropHeldItemOffset"),
+        (item_drop_pickup_hook_text, "IsNativeRemoteParticipantBinding(&binding)"),
+        (item_drop_pickup_hook_text, "original(self);"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_reward.inl"), "health_orb"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_reward.inl"), "mana_orb"),
+        (transport_text, "TryDeactivateHostGoldLootDrop"),
+        (transport_text, "TryWriteLocalGlobalGold"),
+        (transport_text, "accepted_loot_pickup_drop_ids"),
+        (transport_text, "RefreshOwnedInventoryFromSnapshot"),
+        (transport_text, "packet.inventory_item_count"),
+        (transport_text, "participant->owned_progression.inventory_items"),
+        (transport_text, "ParticipantInventorySnapshotFlagTruncated"),
+        (read_text(MOD_LOADER_HEADER), "SDModInventoryState"),
+        (read_text(MOD_LOADER_HEADER), "kSDModInventorySnapshotMaxItems"),
+        (read_text(MOD_LOADER_HEADER), "TryGetPlayerInventoryState"),
+        (binary_layout_text, "gameplay_item_list_root=0x13B8"),
+        (binary_layout_text, "gameplay_item_list_count=0x14"),
+        (binary_layout_text, "gameplay_item_list_items=0x20"),
+        (binary_layout_text, "item_slot=0x1C"),
+        (binary_layout_text, "potion_stack_count=0x88"),
+        (binary_layout_text, "item_drop_held_item=0x148"),
+        (gameplay_seams_header_text, "kGameplayItemListRootOffset"),
+        (gameplay_seams_header_text, "kPotionStackCountOffset"),
+        (gameplay_seams_header_text, "kItemDropHeldItemOffset"),
+        (gameplay_seams_size_bindings_text, "gameplay_item_list_root"),
+        (gameplay_seams_size_bindings_text, "item_drop_held_item"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"), "TryGetPlayerInventoryState"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"), "kGameplayItemListRootOffset"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"), "kSDModInventorySnapshotMaxItems"),
+        (lua_gameplay_text, "LuaPlayerGetInventoryState"),
+        (lua_gameplay_text, "\"get_inventory_state\""),
+        (inventory_audit_verifier_text, "Verify typed local inventory/equip audit"),
+        (inventory_audit_verifier_text, "POTION_TYPE_ID = 0x1B59"),
+        (inventory_audit_verifier_text, "STAFF_HELPER_TYPE_ID = 0x1B5C"),
+        (inventory_audit_verifier_text, "has_inventory_items"),
+        (inventory_audit_verifier_text, "assert_owned_inventory_rows"),
+        (inventory_audit_verifier_text, "inventory_item_count"),
+        (inventory_audit_verifier_text, "inventory_host_authoritative"),
+        (inventory_audit_verifier_text, "owned inventory missing potion slots"),
+        (item_potion_contract_verifier_text, "Verify the multiplayer item/potion pickup contract"),
+        (item_potion_contract_verifier_text, "item_drop_held_item=0x148"),
+        (item_potion_contract_verifier_text, "TryPopulateItemLootDropSnapshot"),
+        (item_potion_contract_verifier_text, "HookItemDropPickupTick"),
+        (inventory_audit_verifier_text, "assert_multiplayer_boundary"),
+        (lua_runtime_text, "\"inventory_items\""),
+        (lua_runtime_text, "\"inventory_item_total_count\""),
+        (lua_runtime_text, "\"inventory_host_authoritative\""),
+        (lua_gameplay_text, "\"item_type_id\""),
+        (lua_gameplay_text, "\"item_slot\""),
+        (lua_gameplay_text, "\"stack_count\""),
+        (lua_gameplay_text, "\"inventory_revision\""),
+        (lua_gameplay_text, "\"resource_kind\""),
+        (lua_gameplay_text, "\"resource_delta\""),
+        (lua_gameplay_text, "\"resulting_life_current\""),
+        (lua_gameplay_text, "\"resulting_mana_current\""),
         (transport_text, "SendLootSnapshot"),
+        (transport_text, "SendQueuedLootPickupRequests"),
         (transport_text, "packet.actor_count == 0 && scene_kind != WorldSceneKind::Run"),
         (transport_text, "MaybeQueueClientHostRunStart"),
         (transport_text, "kClientHostRunFollowRetryMs"),
@@ -4586,13 +4749,10 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "RemoveReplicatedCreatedSharedHubActorsForSceneSwitch(\"scene switch pre-dispatch\")"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "wizard_bot_sync_not_before_ms.store"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "pending_participant_sync_requests.clear()"),
-        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "PrepareMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")"),
-        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "AbandonMaterializedWizardBotsForSceneSwitch(\"scene switch post-dispatch\")"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "DematerializeAllMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "puppet_manager_delete_puppet skipped object delete during scene churn"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "CallActorWorldUnregisterSafe"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"), "DematerializeParticipantEntityNow(bot_id, false, reason)"),
-        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"), "prepared bot entity for scene switch"),
-        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"), "abandoned bot entity for scene switch"),
         (world_snapshot_reconciliation_text, "created_actor_total_count += counts.created_actor_count"),
         (world_snapshot_reconciliation_text, "TryRebindActorToOwnerWorld"),
         (world_snapshot_reconciliation_text, "kWorldSnapshotApplyStaleMs"),
@@ -4637,6 +4797,28 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "state.loot_snapshot"),
         (transport_text, "TryGetPlayerState"),
         (transport_text, "local->runtime.life_current = player_state.hp"),
+        (transport_text, "packet.owned_gold = local->owned_progression.gold"),
+        (transport_text, "participant->owned_progression.gold = packet.owned_gold"),
+        (transport_text, "packet.gold_revision >= participant->owned_progression.gold_revision"),
+        (transport_text, "local->owned_progression.gold_revision += 1"),
+        (transport_text, "RefreshOwnedProgressionBookFromSnapshot"),
+        (transport_text, "RefreshOwnedAbilityLoadoutFromProfile"),
+        (transport_text, "packet.progression_book_entry_count"),
+        (transport_text, "participant->owned_progression.progression_book_entries"),
+        (progression_ledger_sync_verifier_text, "verify_bidirectional_gold_ledger"),
+        (progression_ledger_sync_verifier_text, "wait_for_participant_gold"),
+        (progression_ledger_sync_verifier_text, "sd.debug.write_i32(address"),
+        (progression_ledger_sync_verifier_text, "gold_revision"),
+        (gold_pickup_authority_verifier_text, "request_loot_pickup"),
+        (gold_pickup_authority_verifier_text, "AlreadyGone"),
+        (gold_pickup_authority_verifier_text, "duplicate_rejected_without_second_credit"),
+        (orb_pickup_authority_verifier_text, "health_orb"),
+        (orb_pickup_authority_verifier_text, "mana_orb"),
+        (orb_pickup_authority_verifier_text, "resource_delta"),
+        (orb_pickup_authority_verifier_text, "resource_kind"),
+        (orb_pickup_authority_verifier_text, "duplicate_rejected_without_second_credit"),
+        (lua_gameplay_text, "request_loot_pickup"),
+        (lua_gameplay_text, "last_pickup_result"),
         (transport_text, "TryGetWorldState"),
         (transport_text, "packet.wave = local->runtime.wave"),
         (lua_input_text, "host-only while connected to a multiplayer session"),
@@ -4697,6 +4879,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (networking_doc_text, "WorldSnapshot"),
         (networking_doc_text, "LootSnapshot"),
         (networking_doc_text, "sd.world.get_replicated_loot()"),
+        (networking_doc_text, "Protocol v27"),
+        (networking_doc_text, "Gold, health/mana orbs, and item/potion carriers have request/result authority slices"),
         (networking_doc_text, "run-world"),
         (networking_doc_text, "tracked enemies"),
         (networking_doc_text, "bootstrap client wave activation"),
@@ -4714,8 +4898,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (networking_doc_text, "death-handled byte"),
         (networking_doc_text, "per-family allocation sizes"),
         (networking_doc_text, "Synced host-owned run drops"),
+        (networking_doc_text, "sd.player.get_inventory_state()"),
+        (networking_doc_text, "tools/verify_multiplayer_inventory_audit.py"),
+        (networking_doc_text, "Local inventory/equip roots now have a typed read-only audit API"),
         (networking_doc_text, "pickup-request / pickup-result"),
-        (networking_doc_text, "inventory, gold, spellbook, and statbook state"),
+        (networking_doc_text, "local UDP mirrors compact inventory rows, progression-book/statbook rows, and ability loadout in `StatePacket`"),
+        (networking_doc_text, "Gold, health/mana orbs, and item/potion carriers have request/result authority slices"),
         (world_sync_plan_text, "tools/probe_named_hub_npc_fields.py"),
         (world_sync_plan_text, "FUN_00502120"),
         (world_sync_plan_text, "larger player/Student render window"),
@@ -4773,17 +4961,31 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (participant_doc_text, "sd.bots.get_nameplate(actor_address)"),
         (participant_doc_text, "Participant-Owned Inventory And Books"),
         (participant_doc_text, "ParticipantOwnedProgressionState"),
+        (participant_doc_text, "gold revision"),
+        (participant_doc_text, "host-authorized gold, health/mana orbs, and"),
         (participant_doc_text, "configured host reports `in_run`"),
         (participant_doc_text, "sd.runtime.get_multiplayer_state()"),
         (participant_doc_text, "inventory root and equipment sinks"),
         (participant_doc_text, "spellbook unlock/upgrade state"),
         (participant_doc_text, "statbook allocation/upgrade state"),
+        (participant_doc_text, "sd.player.get_inventory_state()"),
+        (participant_doc_text, "sd.player.get_progression_book_state()"),
+        (participant_doc_text, "read-only native inventory audit surface"),
+        (participant_doc_text, "Local UDP protocol v27 mirrors compact participant-owned"),
         (inventory_item_doc_text, "tools/probe_run_reward_sync.py --attempts 3"),
         (inventory_item_doc_text, "sd.world.get_replicated_loot()"),
+        (inventory_item_doc_text, "sd.player.get_inventory_state()"),
+        (inventory_item_doc_text, "tools/verify_multiplayer_inventory_audit.py"),
+        (inventory_item_doc_text, "item row count, item pointer array address"),
+        (inventory_item_doc_text, "local UDP `StatePacket` protocol v27 carries a compact participant-owned"),
+        (inventory_item_doc_text, "mirrors a compact 32-row participant-owned progression-book/statbook snapshot"),
+        (inventory_item_doc_text, "participant-owned starter potion rows"),
         (inventory_item_doc_text, "metadata only"),
-        (inventory_item_doc_text, "ItemDropActor_TickPickup (0x005E6B50)"),
-        (inventory_item_doc_text, "credit the owning participant's"),
-        (inventory_item_doc_text, "gold, spellbook, or statbook state"),
+        (inventory_item_doc_text, "not a valid\n\"available for pickup\" predicate"),
+        (inventory_item_doc_text, "verify_multiplayer_orb_pickup_authority.py --attempts 3"),
+        (inventory_item_doc_text, "`0x005E6B50` -> `ItemDropActor_TickPickup`"),
+        (inventory_item_doc_text, "Powerup, spellbook, and"),
+        (inventory_item_doc_text, "host snapshots `drop + 0x148` held-item metadata"),
         (binary_layout_text, "item_drop_pickup=0x005E6B50"),
         (binary_layout_text, "native_global_rng_state=0x00818B08"),
         (binary_layout_text, "native_rng_initialize=0x00401120"),
@@ -4866,6 +5068,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         missing.append(
             "native remote participant snapshot guard before gameplay vitals write"
         )
+    if "built.flags = active != 0 ? LootDropSnapshotFlagActive : 0" in transport_text:
+        missing.append("gold loot availability must not use the +0x148 state byte")
     if missing:
         raise StaticReTestFailure(
             "local multiplayer transport wiring missing token(s): " + ", ".join(missing))
@@ -4905,18 +5109,18 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     if "tracked_standalone_scene_churn_actor" not in actor_lifecycle_text:
         raise StaticReTestFailure(
             "world_unregister hook must reset tracked standalone wizard bindings after any scene-churn unregister")
-    if "PrepareMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")" not in switch_region_body:
+    if "DematerializeAllMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")" not in switch_region_body:
         raise StaticReTestFailure(
-            "scene switch must quiesce materialized remote wizard bindings before native teardown")
-    if "DematerializeAllMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")" in switch_region_body:
+            "scene switch must unregister materialized remote wizard bindings before native teardown")
+    if "PrepareMaterializedWizardBotsForSceneSwitch(" in actor_lifecycle_text:
         raise StaticReTestFailure(
-            "scene switch must not unregister/destroy materialized remote wizard bindings before native teardown")
+            "scene switch must not leave materialized remote wizard bindings registered for native teardown")
     if "puppet_manager_delete_puppet skipped object delete during scene churn" not in actor_lifecycle_text:
         raise StaticReTestFailure(
             "tracked standalone remote wizard scene teardown must skip the native object delete/free path")
-    if "AbandonMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")" in switch_region_body:
+    if "AbandonMaterializedWizardBotsForSceneSwitch(" in actor_lifecycle_text:
         raise StaticReTestFailure(
-            "scene switch must not abandon materialized remote wizard bindings before native teardown")
+            "scene switch must not abandon materialized remote wizard bindings around native teardown")
     allow_focus_gate = script_text.find("if ($AllowFocusSteal) {")
     foreground_call = script_text.find(
         "[void][SolomonDarkWindowActivator]::SetForegroundWindow")

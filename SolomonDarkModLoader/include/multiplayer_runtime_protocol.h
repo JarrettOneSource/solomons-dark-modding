@@ -4,10 +4,12 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 20;
+constexpr std::uint16_t kProtocolVersion = 27;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
+constexpr std::uint32_t kParticipantInventorySnapshotMaxItems = 16;
+constexpr std::uint32_t kParticipantProgressionBookSnapshotMaxEntries = 32;
 constexpr std::uint32_t kWorldSnapshotMaxActors = 64;
 constexpr std::uint32_t kWorldActorStudentVisualStateBytes = 32;
 constexpr std::uint32_t kLootSnapshotMaxDrops = 64;
@@ -21,6 +23,8 @@ enum class PacketKind : std::uint16_t {
     LootSnapshot = 6,
     EnemyDamageClaim = 7,
     EnemyDamageResult = 8,
+    LootPickupRequest = 9,
+    LootPickupResult = 10,
 };
 
 enum class CastKind : std::uint8_t {
@@ -60,6 +64,15 @@ enum class LootDropKind : std::uint8_t {
     Powerup = 5,
 };
 
+enum class LootPickupResultCode : std::uint8_t {
+    Accepted = 1,
+    Rejected = 2,
+    AlreadyGone = 3,
+    OutOfRange = 4,
+    WrongRun = 5,
+    Unsupported = 6,
+};
+
 enum WorldActorSnapshotFlags : std::uint8_t {
     WorldActorSnapshotFlagDead = 1 << 0,
     WorldActorSnapshotFlagTrackedEnemy = 1 << 1,
@@ -94,12 +107,36 @@ enum ParticipantPresentationFlags : std::uint16_t {
     ParticipantPresentationFlagVisualLinkColorBlocks = 1 << 4,
 };
 
+enum ParticipantInventorySnapshotFlags : std::uint16_t {
+    ParticipantInventorySnapshotFlagTruncated = 1 << 0,
+};
+
+enum ParticipantProgressionBookSnapshotFlags : std::uint16_t {
+    ParticipantProgressionBookSnapshotFlagTruncated = 1 << 0,
+};
+
 #pragma pack(push, 1)
 struct PacketHeader {
     char magic[4];
     std::uint16_t version;
     std::uint16_t kind;
     std::uint32_t sequence;
+};
+
+struct ParticipantInventoryItemPacketState {
+    std::uint32_t type_id;
+    std::int32_t slot;
+    std::int32_t stack_count;
+};
+
+struct ParticipantProgressionBookEntryPacketState {
+    std::int32_t entry_index;
+    std::int32_t internal_id;
+    std::uint16_t active;
+    std::uint16_t visible;
+    std::uint16_t category;
+    std::uint16_t reserved = 0;
+    std::int32_t statbook_max_level;
 };
 
 struct StatePacket {
@@ -122,6 +159,23 @@ struct StatePacket {
     float mana_max;
     std::int32_t experience_current;
     std::int32_t experience_next;
+    std::int32_t owned_gold;
+    std::uint32_t gold_revision;
+    std::uint32_t inventory_revision;
+    std::uint32_t spellbook_revision;
+    std::uint32_t statbook_revision;
+    std::uint32_t loadout_revision;
+    std::uint16_t inventory_item_count;
+    std::uint16_t inventory_item_total_count;
+    std::uint16_t inventory_snapshot_flags;
+    std::uint16_t inventory_reserved;
+    ParticipantInventoryItemPacketState inventory_items[kParticipantInventorySnapshotMaxItems];
+    std::uint16_t progression_book_entry_count;
+    std::uint16_t progression_book_entry_total_count;
+    std::uint16_t progression_book_snapshot_flags;
+    std::uint16_t progression_book_reserved;
+    ParticipantProgressionBookEntryPacketState
+        progression_book_entries[kParticipantProgressionBookSnapshotMaxEntries];
     std::int32_t primary_entry_index;
     std::int32_t primary_combo_entry_index;
     std::int32_t queued_secondary_entry_indices[3];
@@ -242,6 +296,10 @@ struct LootDropSnapshotPacketState {
     std::uint16_t reserved = 0;
     std::int32_t amount;
     std::int32_t amount_tier;
+    float value;
+    std::uint32_t item_type_id;
+    std::int32_t item_slot;
+    std::int32_t stack_count;
     std::int32_t actor_slot;
     std::int32_t world_slot;
     std::uint32_t lifetime;
@@ -293,6 +351,45 @@ struct EnemyDamageResultPacket {
     float authoritative_hp;
     float authoritative_max_hp;
 };
+
+struct LootPickupRequestPacket {
+    PacketHeader header;
+    std::uint64_t participant_id;
+    std::uint32_t request_sequence;
+    std::uint32_t run_nonce;
+    std::uint64_t network_drop_id;
+    float requester_position_x;
+    float requester_position_y;
+    float drop_position_x;
+    float drop_position_y;
+    std::uint8_t request_flags;
+    std::uint8_t reserved[3] = {};
+};
+
+struct LootPickupResultPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t participant_id;
+    std::uint32_t request_sequence;
+    std::uint32_t run_nonce;
+    std::uint64_t network_drop_id;
+    std::uint8_t result_code;
+    std::uint8_t drop_kind;
+    std::uint16_t reserved = 0;
+    std::int32_t amount;
+    std::int32_t resulting_gold;
+    std::uint32_t gold_revision;
+    std::int32_t resource_kind;
+    float resource_delta;
+    float resulting_life_current;
+    float resulting_life_max;
+    float resulting_mana_current;
+    float resulting_mana_max;
+    std::uint32_t item_type_id;
+    std::int32_t item_slot;
+    std::int32_t stack_count;
+    std::uint32_t inventory_revision;
+};
 #pragma pack(pop)
 
 inline PacketHeader MakePacketHeader(PacketKind kind, std::uint32_t sequence) {
@@ -321,15 +418,19 @@ inline bool IsValidHeader(const PacketHeader& header, PacketKind expected_kind) 
 }
 
 static_assert(sizeof(PacketHeader) == 12, "Unexpected packet header size");
-static_assert(sizeof(StatePacket) == 276, "Unexpected state packet size");
+static_assert(sizeof(ParticipantInventoryItemPacketState) == 12, "Unexpected inventory item packet size");
+static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpected progression book entry packet size");
+static_assert(sizeof(StatePacket) == 1148, "Unexpected state packet size");
 static_assert(sizeof(LaunchPacket) == 56, "Unexpected launch packet size");
 static_assert(sizeof(CastPacket) == 100, "Unexpected cast packet size");
 static_assert(sizeof(ProgressionPacket) == 32, "Unexpected progression packet size");
 static_assert(sizeof(WorldActorSnapshotPacketState) == 104, "Unexpected world actor snapshot size");
 static_assert(sizeof(WorldSnapshotPacket) == 6688, "Unexpected world snapshot packet size");
-static_assert(sizeof(LootDropSnapshotPacketState) == 48, "Unexpected loot drop snapshot size");
-static_assert(sizeof(LootSnapshotPacket) == 3104, "Unexpected loot snapshot packet size");
+static_assert(sizeof(LootDropSnapshotPacketState) == 64, "Unexpected loot drop snapshot size");
+static_assert(sizeof(LootSnapshotPacket) == 4128, "Unexpected loot snapshot packet size");
 static_assert(sizeof(EnemyDamageClaimPacket) == 72, "Unexpected enemy damage claim packet size");
 static_assert(sizeof(EnemyDamageResultPacket) == 56, "Unexpected enemy damage result packet size");
+static_assert(sizeof(LootPickupRequestPacket) == 56, "Unexpected loot pickup request packet size");
+static_assert(sizeof(LootPickupResultPacket) == 100, "Unexpected loot pickup result packet size");
 
 }  // namespace sdmod::multiplayer

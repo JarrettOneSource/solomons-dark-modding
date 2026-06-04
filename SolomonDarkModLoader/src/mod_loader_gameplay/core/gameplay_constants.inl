@@ -33,6 +33,8 @@ constexpr int kWizardSourceActorFactoryTypeId = 0x1397;
 // stop exactly at the 8-byte boundary.
 constexpr std::size_t kActorAnimationAdvanceHookPatchSize = 8;
 constexpr std::size_t kMonsterPathfindingRefreshTargetHookMinimumPatchSize = 5;
+constexpr std::size_t kOrbPickupHookMinimumPatchSize = 5;
+constexpr std::size_t kItemDropPickupHookMinimumPatchSize = 5;
 constexpr int kArenaRegionIndex = 5;
 constexpr std::size_t kStandaloneWizardVisualRuntimeSize = 0x8E4;
 constexpr std::size_t kStandaloneWizardVisualLinkSize = 0xA8;

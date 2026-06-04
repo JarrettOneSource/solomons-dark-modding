@@ -105,13 +105,38 @@ struct ParticipantRuntimeInfo {
     ParticipantSceneIntent scene_intent;
 };
 
+struct ParticipantInventoryItemState {
+    std::uint32_t type_id = 0;
+    std::int32_t slot = -1;
+    std::int32_t stack_count = 0;
+};
+
+struct ParticipantProgressionBookEntryState {
+    std::int32_t entry_index = -1;
+    std::int32_t internal_id = -1;
+    std::uint16_t active = 0;
+    std::uint16_t visible = 0;
+    std::uint16_t category = 0;
+    std::int32_t statbook_max_level = -1;
+};
+
 struct ParticipantOwnedProgressionState {
     bool initialized = false;
     std::int32_t gold = 0;
+    std::uint32_t gold_revision = 0;
     std::uint32_t inventory_revision = 0;
     std::uint32_t spellbook_revision = 0;
     std::uint32_t statbook_revision = 0;
     std::uint32_t loadout_revision = 0;
+    bool inventory_host_authoritative = false;
+    std::uint16_t inventory_item_total_count = 0;
+    bool inventory_truncated = false;
+    std::vector<ParticipantInventoryItemState> inventory_items;
+    std::uint16_t progression_book_entry_total_count = 0;
+    bool progression_book_truncated = false;
+    std::vector<ParticipantProgressionBookEntryState> progression_book_entries;
+    bool ability_loadout_valid = false;
+    BotLoadoutInfo ability_loadout;
 };
 
 struct ParticipantTransformSample {
@@ -223,6 +248,10 @@ struct LootDropSnapshot {
     bool active = false;
     std::int32_t amount = 0;
     std::int32_t amount_tier = 0;
+    float value = 0.0f;
+    std::uint32_t item_type_id = 0;
+    std::int32_t item_slot = -1;
+    std::int32_t stack_count = 0;
     std::int32_t actor_slot = -1;
     std::int32_t world_slot = -1;
     std::uint32_t lifetime = 0;
@@ -242,6 +271,32 @@ struct LootSnapshotRuntimeInfo {
     bool truncated = false;
     ParticipantSceneIntent scene_intent;
     std::vector<LootDropSnapshot> drops;
+};
+
+struct LootPickupResultRuntimeInfo {
+    bool valid = false;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t participant_id = 0;
+    std::uint64_t received_ms = 0;
+    std::uint32_t sequence = 0;
+    std::uint32_t request_sequence = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint64_t network_drop_id = 0;
+    LootPickupResultCode result_code = LootPickupResultCode::Rejected;
+    LootDropKind drop_kind = LootDropKind::Unknown;
+    std::int32_t amount = 0;
+    std::int32_t resulting_gold = 0;
+    std::uint32_t gold_revision = 0;
+    std::int32_t resource_kind = -1;
+    float resource_delta = 0.0f;
+    float resulting_life_current = 0.0f;
+    float resulting_life_max = 0.0f;
+    float resulting_mana_current = 0.0f;
+    float resulting_mana_max = 0.0f;
+    std::uint32_t item_type_id = 0;
+    std::int32_t item_slot = -1;
+    std::int32_t stack_count = 0;
+    std::uint32_t inventory_revision = 0;
 };
 
 struct WorldSnapshotApplyRuntimeInfo {
@@ -298,6 +353,7 @@ struct RuntimeState {
     std::vector<WorldSnapshotRuntimeInfo> world_snapshot_history;
     WorldSnapshotApplyRuntimeInfo world_snapshot_apply;
     LootSnapshotRuntimeInfo loot_snapshot;
+    LootPickupResultRuntimeInfo last_loot_pickup_result;
 };
 
 constexpr std::uint64_t kLocalParticipantId = 1ull;
@@ -354,6 +410,7 @@ const char* ParticipantKindLabel(ParticipantKind kind);
 const char* ParticipantControllerKindLabel(ParticipantControllerKind kind);
 const char* ParticipantSceneIntentKindLabel(ParticipantSceneIntentKind kind);
 const char* LootDropKindLabel(LootDropKind kind);
+const char* LootPickupResultCodeLabel(LootPickupResultCode code);
 
 }  // namespace sdmod::multiplayer
 

@@ -1,4 +1,5 @@
 #include "lua_engine_bindings_internal.h"
+#include "lua_engine_parsers_internal.h"
 
 #include "multiplayer_runtime_state.h"
 
@@ -12,6 +13,36 @@
 
 namespace sdmod::detail {
 namespace {
+
+void PushOwnedProgressionBookEntry(
+    lua_State* state,
+    const multiplayer::ParticipantProgressionBookEntryState& entry) {
+    lua_createtable(state, 0, 6);
+    lua_pushinteger(state, static_cast<lua_Integer>(entry.entry_index));
+    lua_setfield(state, -2, "entry_index");
+    lua_pushinteger(state, static_cast<lua_Integer>(entry.internal_id));
+    lua_setfield(state, -2, "internal_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(entry.active));
+    lua_setfield(state, -2, "active");
+    lua_pushinteger(state, static_cast<lua_Integer>(entry.visible));
+    lua_setfield(state, -2, "visible");
+    lua_pushinteger(state, static_cast<lua_Integer>(entry.category));
+    lua_setfield(state, -2, "category");
+    lua_pushinteger(state, static_cast<lua_Integer>(entry.statbook_max_level));
+    lua_setfield(state, -2, "statbook_max_level");
+}
+
+void PushOwnedProgressionBookEntries(
+    lua_State* state,
+    const std::vector<multiplayer::ParticipantProgressionBookEntryState>& entries) {
+    lua_createtable(state, static_cast<int>(entries.size()), 0);
+    int lua_index = 1;
+    for (const auto& entry : entries) {
+        PushOwnedProgressionBookEntry(state, entry);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(lua_index));
+        ++lua_index;
+    }
+}
 
 int LuaRuntimeGetMod(lua_State* state) {
     const auto* mod = GetLoadedLuaMod(state);
@@ -47,11 +78,13 @@ int LuaRuntimeGetMod(lua_State* state) {
 void PushOwnedProgressionState(
     lua_State* state,
     const multiplayer::ParticipantOwnedProgressionState& progression) {
-    lua_createtable(state, 0, 6);
+    lua_createtable(state, 0, 17);
     lua_pushboolean(state, progression.initialized ? 1 : 0);
     lua_setfield(state, -2, "initialized");
     lua_pushinteger(state, static_cast<lua_Integer>(progression.gold));
     lua_setfield(state, -2, "gold");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.gold_revision));
+    lua_setfield(state, -2, "gold_revision");
     lua_pushinteger(state, static_cast<lua_Integer>(progression.inventory_revision));
     lua_setfield(state, -2, "inventory_revision");
     lua_pushinteger(state, static_cast<lua_Integer>(progression.spellbook_revision));
@@ -60,6 +93,47 @@ void PushOwnedProgressionState(
     lua_setfield(state, -2, "statbook_revision");
     lua_pushinteger(state, static_cast<lua_Integer>(progression.loadout_revision));
     lua_setfield(state, -2, "loadout_revision");
+    lua_pushboolean(state, progression.inventory_host_authoritative ? 1 : 0);
+    lua_setfield(state, -2, "inventory_host_authoritative");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.inventory_item_total_count));
+    lua_setfield(state, -2, "inventory_item_total_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.inventory_items.size()));
+    lua_setfield(state, -2, "inventory_item_count");
+    lua_pushboolean(state, progression.inventory_truncated ? 1 : 0);
+    lua_setfield(state, -2, "inventory_truncated");
+
+    lua_createtable(state, static_cast<int>(progression.inventory_items.size()), 0);
+    int lua_index = 1;
+    for (const auto& item : progression.inventory_items) {
+        lua_createtable(state, 0, 3);
+        lua_pushinteger(state, static_cast<lua_Integer>(item.type_id));
+        lua_setfield(state, -2, "type_id");
+        lua_pushinteger(state, static_cast<lua_Integer>(item.slot));
+        lua_setfield(state, -2, "slot");
+        lua_pushinteger(state, static_cast<lua_Integer>(item.stack_count));
+        lua_setfield(state, -2, "stack_count");
+        lua_rawseti(state, -2, static_cast<lua_Integer>(lua_index));
+        ++lua_index;
+    }
+    lua_setfield(state, -2, "inventory_items");
+
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.progression_book_entry_total_count));
+    lua_setfield(state, -2, "progression_book_entry_total_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.progression_book_entries.size()));
+    lua_setfield(state, -2, "progression_book_entry_count");
+    lua_pushboolean(state, progression.progression_book_truncated ? 1 : 0);
+    lua_setfield(state, -2, "progression_book_truncated");
+    PushOwnedProgressionBookEntries(state, progression.progression_book_entries);
+    lua_setfield(state, -2, "progression_book_entries");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.progression_book_entries.size()));
+    lua_setfield(state, -2, "statbook_entry_count");
+    PushOwnedProgressionBookEntries(state, progression.progression_book_entries);
+    lua_setfield(state, -2, "statbook_entries");
+
+    if (progression.ability_loadout_valid) {
+        parsers::PushLoadout(state, progression.ability_loadout);
+        lua_setfield(state, -2, "ability_loadout");
+    }
 }
 
 int LuaRuntimeGetMultiplayerState(lua_State* state) {
@@ -82,7 +156,7 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
     lua_createtable(state, static_cast<int>(runtime.participants.size()), 0);
     int lua_index = 1;
     for (const auto& participant : runtime.participants) {
-        lua_createtable(state, 0, 19);
+        lua_createtable(state, 0, 22);
         lua_pushinteger(state, static_cast<lua_Integer>(participant.participant_id));
         lua_setfield(state, -2, "participant_id");
         lua_pushinteger(state, static_cast<lua_Integer>(participant.steam_id));
@@ -119,6 +193,12 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         lua_setfield(state, -2, "mana_current");
         lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.mana_max));
         lua_setfield(state, -2, "mana_max");
+        lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.position_x));
+        lua_setfield(state, -2, "x");
+        lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.position_y));
+        lua_setfield(state, -2, "y");
+        lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.heading));
+        lua_setfield(state, -2, "heading");
         PushOwnedProgressionState(state, participant.owned_progression);
         lua_setfield(state, -2, "owned_progression");
         lua_rawseti(state, -2, static_cast<lua_Integer>(lua_index));

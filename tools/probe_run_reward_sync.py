@@ -144,6 +144,7 @@ if mp and mp.participants then
     emit(prefix .. "kind", participant.kind or "")
     emit(prefix .. "controller", participant.controller_kind or "")
     emit(prefix .. "gold", participant.owned_progression and participant.owned_progression.gold or 0)
+    emit(prefix .. "gold_revision", participant.owned_progression and participant.owned_progression.gold_revision or 0)
     emit(prefix .. "inventory_revision", participant.owned_progression and participant.owned_progression.inventory_revision or 0)
     emit(prefix .. "spellbook_revision", participant.owned_progression and participant.owned_progression.spellbook_revision or 0)
     emit(prefix .. "statbook_revision", participant.owned_progression and participant.owned_progression.statbook_revision or 0)

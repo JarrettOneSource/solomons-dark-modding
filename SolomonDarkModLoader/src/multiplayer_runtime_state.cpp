@@ -656,4 +656,23 @@ const char* LootDropKindLabel(LootDropKind kind) {
     return "Unknown";
 }
 
+const char* LootPickupResultCodeLabel(LootPickupResultCode code) {
+    switch (code) {
+    case LootPickupResultCode::Accepted:
+        return "Accepted";
+    case LootPickupResultCode::Rejected:
+        return "Rejected";
+    case LootPickupResultCode::AlreadyGone:
+        return "AlreadyGone";
+    case LootPickupResultCode::OutOfRange:
+        return "OutOfRange";
+    case LootPickupResultCode::WrongRun:
+        return "WrongRun";
+    case LootPickupResultCode::Unsupported:
+        return "Unsupported";
+    }
+
+    return "Unknown";
+}
+
 }  // namespace sdmod::multiplayer

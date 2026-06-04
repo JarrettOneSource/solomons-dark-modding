@@ -53,6 +53,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplaySwitchRegion);
     const auto monster_pathfinding_refresh_target =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kMonsterPathfindingRefreshTarget);
+    const auto orb_pickup = ProcessMemory::Instance().ResolveGameAddressOrZero(kOrbPickup);
+    const auto item_drop_pickup = ProcessMemory::Instance().ResolveGameAddressOrZero(kItemDropPickupCaller);
     if (mouse_helper == 0 || helper == 0 || player_actor_tick == 0 ||
         player_actor_progression_handle == 0 ||
         player_actor_apply_mana_delta == 0 ||
@@ -72,7 +74,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         pointer_list_delete_batch == 0 ||
         actor_world_unregister == 0 ||
         gameplay_switch_region == 0 ||
-        monster_pathfinding_refresh_target == 0) {
+        monster_pathfinding_refresh_target == 0 ||
+        orb_pickup == 0 ||
+        item_drop_pickup == 0) {
         if (error_message != nullptr) {
             *error_message = "Unable to resolve gameplay input, lifecycle, tracked actor, or native HUD text helpers.";
         }
@@ -444,8 +448,81 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(orb_pickup),
+            reinterpret_cast<void*>(&HookOrbPickupTick),
+            kOrbPickupHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.orb_pickup_hook,
+            &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_apply_mana_delta_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
+        g_pure_primary_post_builder_trampoline = nullptr;
+        RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_finalize_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_reset_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_action_builder_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
+        if (error_message != nullptr) {
+            *error_message = "Failed to install orb pickup hook: " + hook_error;
+        }
+        return false;
+    }
+
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(item_drop_pickup),
+            reinterpret_cast<void*>(&HookItemDropPickupTick),
+            kItemDropPickupHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.item_drop_pickup_hook,
+            &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.orb_pickup_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_apply_mana_delta_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
+        g_pure_primary_post_builder_trampoline = nullptr;
+        RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_finalize_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_reset_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_action_builder_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
+        if (error_message != nullptr) {
+            *error_message = "Failed to install item drop pickup hook: " + hook_error;
+        }
+        return false;
+    }
+
     std::string cast_gate_patch_error;
     if (!InstallNativeCastGatePatches(&cast_gate_patch_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.orb_pickup_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_apply_mana_delta_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
         g_pure_primary_post_builder_trampoline = nullptr;
@@ -524,7 +601,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " pointer_list_delete_batch=" + HexString(pointer_list_delete_batch) +
         " world_unregister=" + HexString(actor_world_unregister) +
         " gameplay_switch_region=" + HexString(gameplay_switch_region) +
-        " hostile_target_refresh=" + HexString(monster_pathfinding_refresh_target));
+        " hostile_target_refresh=" + HexString(monster_pathfinding_refresh_target) +
+        " orb_pickup=" + HexString(orb_pickup) +
+        " item_drop_pickup=" + HexString(item_drop_pickup));
     return true;
 }
 
@@ -553,6 +632,8 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.orb_pickup_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook);
     RestoreNativeCastGatePatches();
     for (auto& pending : g_gameplay_keyboard_injection.pending_scancodes) {
         pending.store(0, std::memory_order_release);

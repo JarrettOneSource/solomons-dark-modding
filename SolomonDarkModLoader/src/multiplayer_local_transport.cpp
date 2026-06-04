@@ -63,13 +63,26 @@ constexpr float kEnemyDamageClaimMaxTargetDrift = 384.0f;
 constexpr float kEnemyDamageClaimMaxHpFactor = 2.5f;
 constexpr float kEnemyDamageClaimAbsoluteCap = 20000.0f;
 constexpr std::uint64_t kEnemyDamageRejectedRetrySuppressMs = 500;
+constexpr float kLootPickupMaxDistance = 320.0f;
+constexpr float kLootPickupDropDriftMaxDistance = 160.0f;
+constexpr float kLootPickupResourceEpsilon = 0.001f;
+constexpr float kLootPickupMaxResourceDelta = 10000.0f;
+constexpr std::uint32_t kOrbRewardNativeTypeId = 0x07DB;
 constexpr std::uint32_t kGoldRewardNativeTypeId = 0x07DC;
+constexpr std::uint32_t kItemDropNativeTypeId = 0x07DD;
+constexpr std::uint32_t kPotionItemTypeId = 0x1B59;
 constexpr std::uint32_t kSolomonDigNativeTypeId = 0x1391;
 constexpr std::uint32_t kSolomonRunStaticNativeTypeId = 0x1392;
 constexpr std::size_t kGoldRewardAmountTierOffset = 0x13C;
 constexpr std::size_t kGoldRewardAmountOffset = 0x140;
 constexpr std::size_t kGoldRewardLifetimeOffset = 0x144;
 constexpr std::size_t kGoldRewardActiveOffset = 0x148;
+constexpr std::size_t kOrbRewardResourceKindOffset = 0x13C;
+constexpr std::size_t kOrbRewardValueOffset = 0x140;
+constexpr std::size_t kOrbRewardLifetimeOffset = 0x144;
+constexpr std::size_t kOrbRewardMotionOffset = 0x148;
+constexpr float kOrbHealthRewardScale = 25.0f;
+constexpr float kOrbManaRewardScale = 40.0f;
 constexpr std::size_t kAttachmentStaffVisualStateOffset = 0x84;
 constexpr std::size_t kVisualLinkColorBlockOffset = 0x88;
 constexpr std::uint32_t kAttachmentStaffItemTypeId = 0x1B5C;
@@ -91,6 +104,27 @@ struct RecentRunEnemyDeathSnapshot {
     float heading = 0.0f;
     float max_hp = 0.0f;
     std::uint64_t expires_ms = 0;
+};
+
+enum class LootOrbResourceKind : std::uint8_t {
+    Health = 0,
+    Mana = 1,
+};
+
+struct LootPickupResultPayload {
+    std::int32_t amount = 0;
+    std::int32_t resulting_gold = 0;
+    std::uint32_t gold_revision = 0;
+    std::int32_t resource_kind = -1;
+    float resource_delta = 0.0f;
+    float resulting_life_current = 0.0f;
+    float resulting_life_max = 0.0f;
+    float resulting_mana_current = 0.0f;
+    float resulting_mana_max = 0.0f;
+    std::uint32_t item_type_id = 0;
+    std::int32_t item_slot = -1;
+    std::int32_t stack_count = 0;
+    std::uint32_t inventory_revision = 0;
 };
 
 RenderDriveEffectState NormalizeRenderDriveEffectState(float timer, float progress) {
@@ -142,6 +176,225 @@ bool TryReadVisualLinkColorBlock(
     }
 
     *type_id = visual_lane.current_object_type_id;
+    return true;
+}
+
+std::uint16_t ClampInventoryCountForPacket(int value) {
+    if (value <= 0) {
+        return 0;
+    }
+    if (value > static_cast<int>((std::numeric_limits<std::uint16_t>::max)())) {
+        return (std::numeric_limits<std::uint16_t>::max)();
+    }
+    return static_cast<std::uint16_t>(value);
+}
+
+std::vector<ParticipantInventoryItemState> BuildOwnedInventoryItems(
+    const SDModInventoryState& inventory_state) {
+    std::vector<ParticipantInventoryItemState> items;
+    items.reserve(inventory_state.items.size());
+    for (const auto& item : inventory_state.items) {
+        if (!item.valid || item.type_id == 0) {
+            continue;
+        }
+        ParticipantInventoryItemState built;
+        built.type_id = item.type_id;
+        built.slot = item.slot;
+        built.stack_count = item.stack_count;
+        items.push_back(built);
+    }
+    return items;
+}
+
+bool InventoryItemsEqual(
+    const std::vector<ParticipantInventoryItemState>& left,
+    const std::vector<ParticipantInventoryItemState>& right) {
+    if (left.size() != right.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        if (left[index].type_id != right[index].type_id ||
+            left[index].slot != right[index].slot ||
+            left[index].stack_count != right[index].stack_count) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void RefreshOwnedInventoryFromSnapshot(
+    const SDModInventoryState& inventory_state,
+    ParticipantOwnedProgressionState* owned_progression) {
+    if (owned_progression == nullptr || !inventory_state.valid) {
+        return;
+    }
+
+    auto next_items = BuildOwnedInventoryItems(inventory_state);
+    const auto next_total_count = ClampInventoryCountForPacket(inventory_state.item_count);
+    const bool next_truncated =
+        inventory_state.truncated ||
+        inventory_state.item_count > static_cast<int>(next_items.size());
+    const bool changed =
+        owned_progression->inventory_item_total_count != next_total_count ||
+        owned_progression->inventory_truncated != next_truncated ||
+        !InventoryItemsEqual(owned_progression->inventory_items, next_items);
+    if (!changed) {
+        return;
+    }
+
+    owned_progression->inventory_item_total_count = next_total_count;
+    owned_progression->inventory_truncated = next_truncated;
+    owned_progression->inventory_items = std::move(next_items);
+    owned_progression->inventory_revision += 1;
+}
+
+std::uint16_t ClampProgressionBookEntryCountForPacket(int value) {
+    if (value <= 0) {
+        return 0;
+    }
+    if (value > static_cast<int>((std::numeric_limits<std::uint16_t>::max)())) {
+        return (std::numeric_limits<std::uint16_t>::max)();
+    }
+    return static_cast<std::uint16_t>(value);
+}
+
+std::vector<ParticipantProgressionBookEntryState> BuildOwnedProgressionBookEntries(
+    const SDModProgressionBookState& book_state) {
+    std::vector<ParticipantProgressionBookEntryState> entries;
+    entries.reserve(book_state.entries.size());
+    for (const auto& entry : book_state.entries) {
+        if (!entry.valid) {
+            continue;
+        }
+
+        ParticipantProgressionBookEntryState built;
+        built.entry_index = entry.entry_index;
+        built.internal_id = entry.internal_id;
+        built.active = entry.active;
+        built.visible = entry.visible;
+        built.category = entry.category;
+        built.statbook_max_level = entry.statbook_max_level;
+        entries.push_back(built);
+    }
+    return entries;
+}
+
+bool ProgressionBookEntriesEqual(
+    const std::vector<ParticipantProgressionBookEntryState>& left,
+    const std::vector<ParticipantProgressionBookEntryState>& right) {
+    if (left.size() != right.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        if (left[index].entry_index != right[index].entry_index ||
+            left[index].internal_id != right[index].internal_id ||
+            left[index].active != right[index].active ||
+            left[index].visible != right[index].visible ||
+            left[index].category != right[index].category ||
+            left[index].statbook_max_level != right[index].statbook_max_level) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void RefreshOwnedProgressionBookFromSnapshot(
+    const SDModProgressionBookState& book_state,
+    ParticipantOwnedProgressionState* owned_progression) {
+    if (owned_progression == nullptr || !book_state.valid) {
+        return;
+    }
+
+    auto next_entries = BuildOwnedProgressionBookEntries(book_state);
+    const auto next_total_count = ClampProgressionBookEntryCountForPacket(book_state.entry_count);
+    const bool next_truncated =
+        book_state.truncated ||
+        book_state.entry_count > static_cast<int>(next_entries.size());
+    const bool changed =
+        owned_progression->progression_book_entry_total_count != next_total_count ||
+        owned_progression->progression_book_truncated != next_truncated ||
+        !ProgressionBookEntriesEqual(owned_progression->progression_book_entries, next_entries);
+    if (!changed) {
+        return;
+    }
+
+    owned_progression->progression_book_entry_total_count = next_total_count;
+    owned_progression->progression_book_truncated = next_truncated;
+    owned_progression->progression_book_entries = std::move(next_entries);
+    owned_progression->statbook_revision += 1;
+}
+
+bool LoadoutsEqual(const BotLoadoutInfo& left, const BotLoadoutInfo& right) {
+    return left.primary_entry_index == right.primary_entry_index &&
+           left.primary_combo_entry_index == right.primary_combo_entry_index &&
+           left.secondary_entry_indices == right.secondary_entry_indices;
+}
+
+void RefreshOwnedAbilityLoadoutFromProfile(
+    const BotLoadoutInfo& loadout,
+    ParticipantOwnedProgressionState* owned_progression) {
+    if (owned_progression == nullptr) {
+        return;
+    }
+
+    const bool changed =
+        !owned_progression->ability_loadout_valid ||
+        !LoadoutsEqual(owned_progression->ability_loadout, loadout);
+    owned_progression->ability_loadout_valid = true;
+    owned_progression->ability_loadout = loadout;
+    if (changed) {
+        owned_progression->loadout_revision += 1;
+    }
+}
+
+std::int32_t NormalizeInventoryLootStackCount(std::uint32_t type_id, std::int32_t stack_count) {
+    if (type_id != kPotionItemTypeId) {
+        return stack_count > 0 ? stack_count : 0;
+    }
+    return (std::max)(stack_count, 1);
+}
+
+bool ApplyOwnedInventoryLootItem(
+    std::uint32_t type_id,
+    std::int32_t slot,
+    std::int32_t stack_count,
+    ParticipantOwnedProgressionState* owned_progression) {
+    if (owned_progression == nullptr || type_id == 0) {
+        return false;
+    }
+
+    const auto normalized_stack_count = NormalizeInventoryLootStackCount(type_id, stack_count);
+    if (type_id == kPotionItemTypeId) {
+        for (auto& item : owned_progression->inventory_items) {
+            if (item.type_id == type_id && item.slot == slot) {
+                const auto next_stack =
+                    static_cast<std::int64_t>(item.stack_count) +
+                    static_cast<std::int64_t>(normalized_stack_count);
+                item.stack_count = next_stack >
+                        static_cast<std::int64_t>((std::numeric_limits<std::int32_t>::max)())
+                    ? (std::numeric_limits<std::int32_t>::max)()
+                    : static_cast<std::int32_t>(next_stack);
+                owned_progression->inventory_item_total_count =
+                    ClampInventoryCountForPacket(
+                        static_cast<int>(owned_progression->inventory_items.size()));
+                owned_progression->inventory_truncated =
+                    owned_progression->inventory_items.size() > kParticipantInventorySnapshotMaxItems;
+                owned_progression->inventory_revision += 1;
+                return true;
+            }
+        }
+    }
+
+    ParticipantInventoryItemState item;
+    item.type_id = type_id;
+    item.slot = slot;
+    item.stack_count = normalized_stack_count;
+    owned_progression->inventory_items.push_back(item);
+    owned_progression->inventory_item_total_count =
+        ClampInventoryCountForPacket(static_cast<int>(owned_progression->inventory_items.size()));
+    owned_progression->inventory_truncated =
+        owned_progression->inventory_items.size() > kParticipantInventorySnapshotMaxItems;
+    owned_progression->inventory_revision += 1;
     return true;
 }
 
@@ -201,6 +454,11 @@ struct QueuedLocalEnemyDamageClaim {
     float target_position_y = 0.0f;
 };
 
+struct QueuedLocalLootPickupRequest {
+    std::uint64_t network_drop_id = 0;
+    std::uint32_t request_sequence = 0;
+};
+
 struct LocalTransportState {
     bool configured = false;
     bool initialized = false;
@@ -233,6 +491,8 @@ struct LocalTransportState {
     std::unordered_map<std::uint64_t, std::uint32_t> last_cast_sequence_by_participant;
     std::unordered_map<std::uint64_t, RemoteCastInputTracker> remote_cast_inputs_by_participant;
     std::unordered_map<std::uint64_t, std::uint32_t> last_enemy_claim_sequence_by_participant;
+    std::unordered_map<std::uint64_t, std::uint32_t> last_loot_pickup_request_sequence_by_participant;
+    std::unordered_set<std::uint64_t> accepted_loot_pickup_drop_ids;
     ActiveLocalCastInput active_local_cast_input;
     std::uint32_t next_hub_world_actor_serial = 1;
     std::uint32_t next_run_host_local_world_actor_serial = 1;
@@ -245,6 +505,8 @@ std::mutex g_local_transport_event_mutex;
 std::vector<QueuedLocalCastEvent> g_queued_local_cast_events;
 std::uint64_t g_next_local_cast_event_id = 1;
 std::vector<QueuedLocalEnemyDamageClaim> g_queued_local_enemy_damage_claims;
+std::vector<QueuedLocalLootPickupRequest> g_queued_local_loot_pickup_requests;
+std::uint32_t g_next_local_loot_pickup_request_sequence = 1;
 
 std::string ReadEnvironmentVariable(const char* name) {
     char* value = nullptr;
@@ -526,6 +788,24 @@ LootDropKind LootDropKindFromPacketValue(std::uint8_t kind) {
     }
 }
 
+LootPickupResultCode LootPickupResultCodeFromPacketValue(std::uint8_t code) {
+    switch (static_cast<LootPickupResultCode>(code)) {
+    case LootPickupResultCode::Accepted:
+        return LootPickupResultCode::Accepted;
+    case LootPickupResultCode::AlreadyGone:
+        return LootPickupResultCode::AlreadyGone;
+    case LootPickupResultCode::OutOfRange:
+        return LootPickupResultCode::OutOfRange;
+    case LootPickupResultCode::WrongRun:
+        return LootPickupResultCode::WrongRun;
+    case LootPickupResultCode::Unsupported:
+        return LootPickupResultCode::Unsupported;
+    case LootPickupResultCode::Rejected:
+    default:
+        return LootPickupResultCode::Rejected;
+    }
+}
+
 std::string BuildWorldSceneKey(const SDModSceneState& scene_state) {
     std::ostringstream stream;
     stream << scene_state.kind
@@ -632,13 +912,19 @@ bool ShouldReplicateWorldActor(
     return scene_kind == ParticipantSceneIntentKind::SharedHub;
 }
 
+bool IsReplicatedLootDropNativeType(std::uint32_t native_type_id) {
+    return native_type_id == kGoldRewardNativeTypeId ||
+           native_type_id == kOrbRewardNativeTypeId ||
+           native_type_id == kItemDropNativeTypeId;
+}
+
 bool ShouldReplicateLootDropActor(
     const SDModSceneActorState& actor,
     ParticipantSceneIntentKind scene_kind) {
     return scene_kind == ParticipantSceneIntentKind::Run &&
            actor.valid &&
            actor.actor_address != 0 &&
-           actor.object_type_id == kGoldRewardNativeTypeId &&
+           IsReplicatedLootDropNativeType(actor.object_type_id) &&
            std::isfinite(actor.x) &&
            std::isfinite(actor.y) &&
            std::isfinite(actor.radius) &&
@@ -679,6 +965,7 @@ void ClearRunHostLocalWorldActorNetworkIds() {
 
 void ClearRunLootDropNetworkIds() {
     g_local_transport.run_loot_drop_ids_by_address.clear();
+    g_local_transport.accepted_loot_pickup_drop_ids.clear();
     g_local_transport.next_run_loot_drop_serial = 1;
 }
 
@@ -933,13 +1220,103 @@ void PopulateWorldActorPresentationSnapshot(
     }
 }
 
+std::int32_t RoundRewardAmountToInt(float amount) {
+    if (!std::isfinite(amount) || amount <= 0.0f) {
+        return 0;
+    }
+    if (amount >= static_cast<float>((std::numeric_limits<std::int32_t>::max)())) {
+        return (std::numeric_limits<std::int32_t>::max)();
+    }
+    return static_cast<std::int32_t>(std::lround(amount));
+}
+
+bool TryResolveLootOrbResourceKind(std::int32_t resource_kind, LootOrbResourceKind* kind) {
+    if (kind == nullptr) {
+        return false;
+    }
+    switch (resource_kind) {
+    case static_cast<std::int32_t>(LootOrbResourceKind::Health):
+        *kind = LootOrbResourceKind::Health;
+        return true;
+    case static_cast<std::int32_t>(LootOrbResourceKind::Mana):
+        *kind = LootOrbResourceKind::Mana;
+        return true;
+    default:
+        return false;
+    }
+}
+
+float LootOrbScaleForResourceKind(LootOrbResourceKind kind) {
+    return kind == LootOrbResourceKind::Health ? kOrbHealthRewardScale : kOrbManaRewardScale;
+}
+
+float ComputeLootOrbResourceDelta(std::int32_t resource_kind, float raw_value) {
+    LootOrbResourceKind kind = LootOrbResourceKind::Health;
+    if (!TryResolveLootOrbResourceKind(resource_kind, &kind) ||
+        !std::isfinite(raw_value) ||
+        raw_value <= kLootPickupResourceEpsilon) {
+        return 0.0f;
+    }
+    const float delta = raw_value * LootOrbScaleForResourceKind(kind);
+    if (!std::isfinite(delta) || delta <= kLootPickupResourceEpsilon) {
+        return 0.0f;
+    }
+    return (std::min)(delta, kLootPickupMaxResourceDelta);
+}
+
+bool TryReadItemDropHeldItemMetadata(
+    uintptr_t drop_actor_address,
+    std::uint32_t* item_type_id,
+    std::int32_t* item_slot,
+    std::int32_t* stack_count) {
+    if (drop_actor_address == 0 ||
+        item_type_id == nullptr ||
+        item_slot == nullptr ||
+        stack_count == nullptr ||
+        kItemDropHeldItemOffset == 0 ||
+        kGameObjectTypeIdOffset == 0 ||
+        kItemSlotOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint32_t held_item_address = 0;
+    if (!memory.TryReadField(drop_actor_address, kItemDropHeldItemOffset, &held_item_address) ||
+        held_item_address == 0 ||
+        !memory.IsReadableRange(held_item_address + kGameObjectTypeIdOffset, sizeof(std::uint32_t)) ||
+        !memory.IsReadableRange(held_item_address + kItemSlotOffset, sizeof(std::int32_t))) {
+        return false;
+    }
+
+    std::uint32_t read_item_type_id = 0;
+    std::int32_t read_item_slot = -1;
+    if (!memory.TryReadField(held_item_address, kGameObjectTypeIdOffset, &read_item_type_id) ||
+        read_item_type_id == 0 ||
+        !memory.TryReadField(held_item_address, kItemSlotOffset, &read_item_slot)) {
+        return false;
+    }
+
+    std::int32_t read_stack_count = 0;
+    if (read_item_type_id == kPotionItemTypeId &&
+        kPotionStackCountOffset != 0 &&
+        memory.IsReadableRange(held_item_address + kPotionStackCountOffset, sizeof(std::int32_t))) {
+        (void)memory.TryReadField(held_item_address, kPotionStackCountOffset, &read_stack_count);
+    }
+
+    *item_type_id = read_item_type_id;
+    *item_slot = read_item_slot;
+    *stack_count = NormalizeInventoryLootStackCount(read_item_type_id, read_stack_count);
+    return true;
+}
+
 bool TryPopulateGoldLootDropSnapshot(
     const SDModSceneActorState& actor,
     std::uint64_t network_drop_id,
     LootDropSnapshotPacketState* snapshot) {
     if (snapshot == nullptr ||
         network_drop_id == 0 ||
-        !ShouldReplicateLootDropActor(actor, ParticipantSceneIntentKind::Run)) {
+        !ShouldReplicateLootDropActor(actor, ParticipantSceneIntentKind::Run) ||
+        actor.object_type_id != kGoldRewardNativeTypeId) {
         return false;
     }
 
@@ -947,11 +1324,9 @@ bool TryPopulateGoldLootDropSnapshot(
     std::uint8_t amount_tier = 0;
     std::uint32_t amount_raw = 0;
     std::uint32_t lifetime = 0;
-    std::uint8_t active = 0;
     if (!memory.TryReadField(actor.actor_address, kGoldRewardAmountTierOffset, &amount_tier) ||
         !memory.TryReadField(actor.actor_address, kGoldRewardAmountOffset, &amount_raw) ||
-        !memory.TryReadField(actor.actor_address, kGoldRewardLifetimeOffset, &lifetime) ||
-        !memory.TryReadField(actor.actor_address, kGoldRewardActiveOffset, &active)) {
+        !memory.TryReadField(actor.actor_address, kGoldRewardLifetimeOffset, &lifetime)) {
         return false;
     }
 
@@ -959,11 +1334,12 @@ bool TryPopulateGoldLootDropSnapshot(
     built.network_drop_id = network_drop_id;
     built.native_type_id = actor.object_type_id;
     built.drop_kind = static_cast<std::uint8_t>(LootDropKind::Gold);
-    built.flags = active != 0 ? LootDropSnapshotFlagActive : 0;
     built.amount = amount_raw <= static_cast<std::uint32_t>((std::numeric_limits<std::int32_t>::max)())
                        ? static_cast<std::int32_t>(amount_raw)
                        : (std::numeric_limits<std::int32_t>::max)();
+    built.flags = built.amount > 0 && lifetime != 0 ? LootDropSnapshotFlagActive : 0;
     built.amount_tier = amount_tier;
+    built.value = static_cast<float>(built.amount);
     built.actor_slot = actor.actor_slot;
     built.world_slot = actor.world_slot;
     built.lifetime = lifetime;
@@ -972,6 +1348,292 @@ bool TryPopulateGoldLootDropSnapshot(
     built.radius = actor.radius;
     *snapshot = built;
     return true;
+}
+
+bool TryPopulateOrbLootDropSnapshot(
+    const SDModSceneActorState& actor,
+    std::uint64_t network_drop_id,
+    LootDropSnapshotPacketState* snapshot) {
+    if (snapshot == nullptr ||
+        network_drop_id == 0 ||
+        !ShouldReplicateLootDropActor(actor, ParticipantSceneIntentKind::Run) ||
+        actor.object_type_id != kOrbRewardNativeTypeId) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t resource_kind = 0;
+    float raw_value = 0.0f;
+    std::uint32_t lifetime = 0;
+    float motion = 0.0f;
+    if (!memory.TryReadField(actor.actor_address, kOrbRewardResourceKindOffset, &resource_kind) ||
+        !memory.TryReadField(actor.actor_address, kOrbRewardValueOffset, &raw_value) ||
+        !memory.TryReadField(actor.actor_address, kOrbRewardLifetimeOffset, &lifetime) ||
+        !memory.TryReadField(actor.actor_address, kOrbRewardMotionOffset, &motion)) {
+        return false;
+    }
+
+    LootOrbResourceKind resolved_kind = LootOrbResourceKind::Health;
+    if (!TryResolveLootOrbResourceKind(resource_kind, &resolved_kind) ||
+        !std::isfinite(raw_value) ||
+        !std::isfinite(motion)) {
+        return false;
+    }
+
+    const float resource_delta = ComputeLootOrbResourceDelta(resource_kind, raw_value);
+    LootDropSnapshotPacketState built{};
+    built.network_drop_id = network_drop_id;
+    built.native_type_id = actor.object_type_id;
+    built.drop_kind = static_cast<std::uint8_t>(LootDropKind::Orb);
+    built.flags = lifetime != 0 && resource_delta > kLootPickupResourceEpsilon
+                      ? LootDropSnapshotFlagActive
+                      : 0;
+    built.amount = RoundRewardAmountToInt(resource_delta);
+    built.amount_tier = resource_kind;
+    built.value = raw_value;
+    built.actor_slot = actor.actor_slot;
+    built.world_slot = actor.world_slot;
+    built.lifetime = lifetime;
+    built.position_x = actor.x;
+    built.position_y = actor.y;
+    built.radius = actor.radius;
+    *snapshot = built;
+    return true;
+}
+
+bool TryPopulateItemLootDropSnapshot(
+    const SDModSceneActorState& actor,
+    std::uint64_t network_drop_id,
+    LootDropSnapshotPacketState* snapshot) {
+    if (snapshot == nullptr ||
+        network_drop_id == 0 ||
+        !ShouldReplicateLootDropActor(actor, ParticipantSceneIntentKind::Run) ||
+        actor.object_type_id != kItemDropNativeTypeId) {
+        return false;
+    }
+
+    std::uint32_t item_type_id = 0;
+    std::int32_t item_slot = -1;
+    std::int32_t stack_count = 0;
+    if (!TryReadItemDropHeldItemMetadata(
+            actor.actor_address,
+            &item_type_id,
+            &item_slot,
+            &stack_count)) {
+        return false;
+    }
+
+    LootDropSnapshotPacketState built{};
+    built.network_drop_id = network_drop_id;
+    built.native_type_id = actor.object_type_id;
+    built.drop_kind = static_cast<std::uint8_t>(
+        item_type_id == kPotionItemTypeId ? LootDropKind::Potion : LootDropKind::Item);
+    built.flags = LootDropSnapshotFlagActive;
+    built.amount = stack_count;
+    built.amount_tier = item_slot;
+    built.value = 0.0f;
+    built.item_type_id = item_type_id;
+    built.item_slot = item_slot;
+    built.stack_count = stack_count;
+    built.actor_slot = actor.actor_slot;
+    built.world_slot = actor.world_slot;
+    built.lifetime = 0;
+    built.position_x = actor.x;
+    built.position_y = actor.y;
+    built.radius = actor.radius;
+    *snapshot = built;
+    return true;
+}
+
+bool TryPopulateLootDropSnapshot(
+    const SDModSceneActorState& actor,
+    std::uint64_t network_drop_id,
+    LootDropSnapshotPacketState* snapshot) {
+    if (actor.object_type_id == kGoldRewardNativeTypeId) {
+        return TryPopulateGoldLootDropSnapshot(actor, network_drop_id, snapshot);
+    }
+    if (actor.object_type_id == kOrbRewardNativeTypeId) {
+        return TryPopulateOrbLootDropSnapshot(actor, network_drop_id, snapshot);
+    }
+    if (actor.object_type_id == kItemDropNativeTypeId) {
+        return TryPopulateItemLootDropSnapshot(actor, network_drop_id, snapshot);
+    }
+    return false;
+}
+
+bool TryFindHostRunLootDropByNetworkId(
+    std::uint64_t network_drop_id,
+    SDModSceneActorState* actor_out,
+    LootDropSnapshotPacketState* snapshot_out) {
+    if (actor_out != nullptr) {
+        *actor_out = {};
+    }
+    if (snapshot_out != nullptr) {
+        *snapshot_out = {};
+    }
+    if (network_drop_id == 0 || !g_local_transport.is_host) {
+        return false;
+    }
+
+    const auto scene_intent = SceneIntentFromLocalScene();
+    if (scene_intent.kind != ParticipantSceneIntentKind::Run) {
+        return false;
+    }
+
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        return false;
+    }
+
+    for (const auto& actor : actors) {
+        if (!ShouldReplicateLootDropActor(actor, scene_intent.kind)) {
+            continue;
+        }
+
+        const auto network_candidate = AllocateRunLootDropNetworkId(actor);
+        if (network_candidate != network_drop_id) {
+            continue;
+        }
+
+        LootDropSnapshotPacketState snapshot{};
+        if (!TryPopulateLootDropSnapshot(actor, network_candidate, &snapshot)) {
+            return false;
+        }
+
+        if (actor_out != nullptr) {
+            *actor_out = actor;
+        }
+        if (snapshot_out != nullptr) {
+            *snapshot_out = snapshot;
+        }
+        return true;
+    }
+    return false;
+}
+
+bool TryDeactivateHostGoldLootDrop(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const std::uint8_t inactive = 0;
+    const std::uint32_t zero_amount = 0;
+    const std::uint32_t expired_lifetime = 0;
+    (void)
+        memory.TryWriteField(actor_address, kGoldRewardActiveOffset, inactive);
+    const bool wrote_amount =
+        memory.TryWriteField(actor_address, kGoldRewardAmountOffset, zero_amount);
+    const bool wrote_lifetime =
+        memory.TryWriteField(actor_address, kGoldRewardLifetimeOffset, expired_lifetime);
+    return wrote_amount && wrote_lifetime;
+}
+
+bool TryDeactivateHostOrbLootDrop(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const float zero_value = 0.0f;
+    const std::uint32_t expired_lifetime = 0;
+    const float settled_motion = 0.0f;
+    const bool wrote_value =
+        memory.TryWriteField(actor_address, kOrbRewardValueOffset, zero_value);
+    const bool wrote_lifetime =
+        memory.TryWriteField(actor_address, kOrbRewardLifetimeOffset, expired_lifetime);
+    const bool wrote_motion =
+        memory.TryWriteField(actor_address, kOrbRewardMotionOffset, settled_motion);
+    return wrote_value && wrote_lifetime && wrote_motion;
+}
+
+bool TryDeactivateHostItemLootDrop(uintptr_t actor_address) {
+    if (actor_address == 0 || kItemDropHeldItemOffset == 0) {
+        return false;
+    }
+
+    const std::uint32_t no_held_item = 0;
+    return ProcessMemory::Instance().TryWriteField(actor_address, kItemDropHeldItemOffset, no_held_item);
+}
+
+bool TryDeactivateHostLootDrop(uintptr_t actor_address, LootDropKind kind) {
+    switch (kind) {
+    case LootDropKind::Gold:
+        return TryDeactivateHostGoldLootDrop(actor_address);
+    case LootDropKind::Orb:
+        return TryDeactivateHostOrbLootDrop(actor_address);
+    case LootDropKind::Item:
+    case LootDropKind::Potion:
+        return TryDeactivateHostItemLootDrop(actor_address);
+    default:
+        return false;
+    }
+}
+
+bool TryWriteLocalGlobalGold(std::int32_t gold) {
+    const auto address = ProcessMemory::Instance().ResolveGameAddressOrZero(kGoldGlobal);
+    return address != 0 && ProcessMemory::Instance().TryWriteValue(address, gold);
+}
+
+bool TryWriteLocalPlayerOrbResource(
+    std::int32_t resource_kind_value,
+    float life_current,
+    float life_max,
+    float mana_current,
+    float mana_max) {
+    SDModPlayerState player_state;
+    if (!TryGetPlayerState(&player_state) ||
+        !player_state.valid ||
+        player_state.progression_address == 0 ||
+        kProgressionHpOffset == 0 ||
+        kProgressionMaxHpOffset == 0 ||
+        kProgressionMpOffset == 0 ||
+        kProgressionMaxMpOffset == 0 ||
+        !std::isfinite(life_current) ||
+        !std::isfinite(life_max) ||
+        !std::isfinite(mana_current) ||
+        !std::isfinite(mana_max)) {
+        return false;
+    }
+
+    LootOrbResourceKind resource_kind = LootOrbResourceKind::Health;
+    if (!TryResolveLootOrbResourceKind(resource_kind_value, &resource_kind)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (resource_kind == LootOrbResourceKind::Health) {
+        if (life_max <= 0.0f) {
+            return false;
+        }
+        const float clamped_life = (std::clamp)(life_current, 0.0f, life_max);
+        return memory.TryWriteField(player_state.progression_address, kProgressionMaxHpOffset, life_max) &&
+               memory.TryWriteField(player_state.progression_address, kProgressionHpOffset, clamped_life);
+    }
+
+    if (mana_max <= 0.0f) {
+        return false;
+    }
+    const float clamped_mana = (std::clamp)(mana_current, 0.0f, mana_max);
+    return memory.TryWriteField(player_state.progression_address, kProgressionMaxMpOffset, mana_max) &&
+           memory.TryWriteField(player_state.progression_address, kProgressionMpOffset, clamped_mana);
+}
+
+bool IsLootPickupRequestSequenceDuplicate(const LootPickupRequestPacket& packet) {
+    const auto it =
+        g_local_transport.last_loot_pickup_request_sequence_by_participant.find(packet.participant_id);
+    if (it == g_local_transport.last_loot_pickup_request_sequence_by_participant.end() ||
+        packet.request_sequence == 0) {
+        return false;
+    }
+    return static_cast<std::int32_t>(packet.request_sequence - it->second) <= 0;
+}
+
+void RememberLootPickupRequestSequence(const LootPickupRequestPacket& packet) {
+    if (packet.request_sequence != 0) {
+        g_local_transport.last_loot_pickup_request_sequence_by_participant[packet.participant_id] =
+            packet.request_sequence;
+    }
 }
 
 bool TryApplyLivePlayerSelectionToProfile(
@@ -1065,6 +1727,12 @@ void RefreshLocalParticipantFromGameState() {
     const auto configured_name = ReadLocalDisplayName();
     SDModWorldState world_state;
     const bool have_world_state = TryGetWorldState(&world_state) && world_state.valid;
+    SDModInventoryState inventory_state;
+    const bool have_inventory_state =
+        TryGetPlayerInventoryState(&inventory_state) && inventory_state.valid;
+    SDModProgressionBookState progression_book_state;
+    const bool have_progression_book_state =
+        TryGetPlayerProgressionBookState(&progression_book_state) && progression_book_state.valid;
     UpdateRuntimeState([&](RuntimeState& state) {
         auto* local = UpsertLocalParticipant(state);
         if (local == nullptr) {
@@ -1078,11 +1746,15 @@ void RefreshLocalParticipantFromGameState() {
         if (have_selection_state) {
             const auto previous_element_id = local->character_profile.element_id;
             const auto previous_primary_entry = local->character_profile.loadout.primary_entry_index;
+            const auto previous_combo_entry = local->character_profile.loadout.primary_combo_entry_index;
+            const auto previous_secondary_entries = local->character_profile.loadout.secondary_entry_indices;
             if (TryApplyLivePlayerSelectionToProfile(selection_state, &local->character_profile)) {
                 local->character_profile.level = player_state.level;
                 local->character_profile.experience = player_state.xp;
                 if (local->character_profile.element_id != previous_element_id ||
-                    local->character_profile.loadout.primary_entry_index != previous_primary_entry) {
+                    local->character_profile.loadout.primary_entry_index != previous_primary_entry ||
+                    local->character_profile.loadout.primary_combo_entry_index != previous_combo_entry ||
+                    local->character_profile.loadout.secondary_entry_indices != previous_secondary_entries) {
                     Log(
                         "Multiplayer local character profile refreshed from live selection. element_id=" +
                         std::to_string(local->character_profile.element_id) +
@@ -1108,8 +1780,23 @@ void RefreshLocalParticipantFromGameState() {
         local->runtime.primary_entry_index = local->character_profile.loadout.primary_entry_index;
         local->runtime.primary_combo_entry_index = local->character_profile.loadout.primary_combo_entry_index;
         local->runtime.queued_secondary_entry_indices = local->character_profile.loadout.secondary_entry_indices;
+        const auto previous_owned_gold = local->owned_progression.gold;
+        const bool previous_owned_progression_initialized = local->owned_progression.initialized;
         local->owned_progression.initialized = true;
         local->owned_progression.gold = player_state.gold;
+        if (previous_owned_progression_initialized && previous_owned_gold != player_state.gold) {
+            local->owned_progression.gold_revision += 1;
+        }
+        if (scene_intent.kind != ParticipantSceneIntentKind::Run) {
+            local->owned_progression.inventory_host_authoritative = false;
+        }
+        if (have_inventory_state && !local->owned_progression.inventory_host_authoritative) {
+            RefreshOwnedInventoryFromSnapshot(inventory_state, &local->owned_progression);
+        }
+        if (have_progression_book_state) {
+            RefreshOwnedProgressionBookFromSnapshot(progression_book_state, &local->owned_progression);
+        }
+        RefreshOwnedAbilityLoadoutFromProfile(local->character_profile.loadout, &local->owned_progression);
         if (have_world_state) {
             local->runtime.wave = world_state.wave;
         }
@@ -1211,6 +1898,51 @@ StatePacket BuildLocalStatePacket() {
     packet.mana_max = local->runtime.mana_max;
     packet.experience_current = local->runtime.experience_current;
     packet.experience_next = local->runtime.experience_next;
+    packet.owned_gold = local->owned_progression.gold;
+    packet.gold_revision = local->owned_progression.gold_revision;
+    packet.inventory_revision = local->owned_progression.inventory_revision;
+    packet.spellbook_revision = local->owned_progression.spellbook_revision;
+    packet.statbook_revision = local->owned_progression.statbook_revision;
+    packet.loadout_revision = local->owned_progression.loadout_revision;
+    const auto inventory_packet_count =
+        (std::min)(
+            local->owned_progression.inventory_items.size(),
+            static_cast<std::size_t>(kParticipantInventorySnapshotMaxItems));
+    packet.inventory_item_count = static_cast<std::uint16_t>(inventory_packet_count);
+    packet.inventory_item_total_count = local->owned_progression.inventory_item_total_count;
+    packet.inventory_snapshot_flags =
+        local->owned_progression.inventory_truncated ||
+            local->owned_progression.inventory_items.size() > kParticipantInventorySnapshotMaxItems
+            ? ParticipantInventorySnapshotFlagTruncated
+            : 0;
+    for (std::size_t index = 0; index < inventory_packet_count; ++index) {
+        const auto& item = local->owned_progression.inventory_items[index];
+        packet.inventory_items[index].type_id = item.type_id;
+        packet.inventory_items[index].slot = item.slot;
+        packet.inventory_items[index].stack_count = item.stack_count;
+    }
+    const auto progression_book_packet_count =
+        (std::min)(
+            local->owned_progression.progression_book_entries.size(),
+            static_cast<std::size_t>(kParticipantProgressionBookSnapshotMaxEntries));
+    packet.progression_book_entry_count = static_cast<std::uint16_t>(progression_book_packet_count);
+    packet.progression_book_entry_total_count =
+        local->owned_progression.progression_book_entry_total_count;
+    packet.progression_book_snapshot_flags =
+        local->owned_progression.progression_book_truncated ||
+            local->owned_progression.progression_book_entries.size() >
+                kParticipantProgressionBookSnapshotMaxEntries
+            ? ParticipantProgressionBookSnapshotFlagTruncated
+            : 0;
+    for (std::size_t index = 0; index < progression_book_packet_count; ++index) {
+        const auto& entry = local->owned_progression.progression_book_entries[index];
+        packet.progression_book_entries[index].entry_index = entry.entry_index;
+        packet.progression_book_entries[index].internal_id = entry.internal_id;
+        packet.progression_book_entries[index].active = entry.active;
+        packet.progression_book_entries[index].visible = entry.visible;
+        packet.progression_book_entries[index].category = entry.category;
+        packet.progression_book_entries[index].statbook_max_level = entry.statbook_max_level;
+    }
     packet.primary_entry_index = local->character_profile.loadout.primary_entry_index;
     packet.primary_combo_entry_index = local->character_profile.loadout.primary_combo_entry_index;
     for (std::size_t index = 0; index < local->character_profile.loadout.secondary_entry_indices.size(); ++index) {
@@ -1442,9 +2174,13 @@ bool BuildLocalLootSnapshotPacket(LootSnapshotPacket* packet) {
         if (network_drop_id == 0) {
             continue;
         }
+        if (g_local_transport.accepted_loot_pickup_drop_ids.find(network_drop_id) !=
+            g_local_transport.accepted_loot_pickup_drop_ids.end()) {
+            continue;
+        }
 
         LootDropSnapshotPacketState snapshot{};
-        if (!TryPopulateGoldLootDropSnapshot(actor, network_drop_id, &snapshot)) {
+        if (!TryPopulateLootDropSnapshot(actor, network_drop_id, &snapshot)) {
             continue;
         }
 
@@ -2088,6 +2824,14 @@ void SendPacketToEndpoint(const EnemyDamageResultPacket& packet, const sockaddr_
     SendBufferToEndpoint(&packet, sizeof(packet), endpoint);
 }
 
+void SendPacketToEndpoint(const LootPickupRequestPacket& packet, const sockaddr_in& endpoint) {
+    SendBufferToEndpoint(&packet, sizeof(packet), endpoint);
+}
+
+void SendPacketToEndpoint(const LootPickupResultPacket& packet, const sockaddr_in& endpoint) {
+    SendBufferToEndpoint(&packet, sizeof(packet), endpoint);
+}
+
 void PublishWorldSnapshotRuntimeInfo(const WorldSnapshotPacket& packet, std::uint64_t now_ms);
 
 void SendLocalState(std::uint64_t now_ms) {
@@ -2146,6 +2890,93 @@ void SendLootSnapshot(std::uint64_t now_ms) {
     const auto endpoints = BuildKnownSendEndpoints();
     for (const auto& endpoint : endpoints) {
         SendPacketToEndpoint(packet, endpoint);
+    }
+}
+
+std::vector<QueuedLocalLootPickupRequest> TakeQueuedLocalLootPickupRequests() {
+    std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
+    std::vector<QueuedLocalLootPickupRequest> requests;
+    requests.swap(g_queued_local_loot_pickup_requests);
+    return requests;
+}
+
+const LootDropSnapshot* FindLootDropSnapshotByNetworkId(
+    const LootSnapshotRuntimeInfo& snapshot,
+    std::uint64_t network_drop_id) {
+    for (const auto& drop : snapshot.drops) {
+        if (drop.network_drop_id == network_drop_id) {
+            return &drop;
+        }
+    }
+    return nullptr;
+}
+
+void SendQueuedLootPickupRequests() {
+    if (!IsLocalTransportClient()) {
+        return;
+    }
+
+    auto requests = TakeQueuedLocalLootPickupRequests();
+    if (requests.empty()) {
+        return;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+    if (local == nullptr ||
+        !local->runtime.valid ||
+        !local->runtime.in_run ||
+        local->runtime.scene_intent.kind != ParticipantSceneIntentKind::Run ||
+        !runtime_state.loot_snapshot.valid ||
+        runtime_state.loot_snapshot.scene_intent.kind != ParticipantSceneIntentKind::Run) {
+        return;
+    }
+    if (runtime_state.loot_snapshot.run_nonce != 0 &&
+        local->runtime.run_nonce != 0 &&
+        runtime_state.loot_snapshot.run_nonce != local->runtime.run_nonce) {
+        return;
+    }
+
+    const auto endpoints = BuildKnownSendEndpoints();
+    if (endpoints.empty()) {
+        return;
+    }
+
+    for (const auto& request : requests) {
+        const auto* drop =
+            FindLootDropSnapshotByNetworkId(runtime_state.loot_snapshot, request.network_drop_id);
+        const bool have_recent_pickup_result =
+            runtime_state.last_loot_pickup_result.valid &&
+            runtime_state.last_loot_pickup_result.network_drop_id == request.network_drop_id;
+        if (drop == nullptr && !have_recent_pickup_result) {
+            Log(
+                "Multiplayer loot pickup request skipped; replicated drop not found. network_drop_id=" +
+                std::to_string(request.network_drop_id) +
+                " request_sequence=" + std::to_string(request.request_sequence));
+            continue;
+        }
+
+        LootPickupRequestPacket packet{};
+        packet.header = MakePacketHeader(PacketKind::LootPickupRequest, g_local_transport.next_sequence++);
+        packet.participant_id = g_local_transport.local_peer_id;
+        packet.request_sequence = request.request_sequence;
+        packet.run_nonce = local->runtime.run_nonce != 0
+                               ? local->runtime.run_nonce
+                               : runtime_state.loot_snapshot.run_nonce;
+        packet.network_drop_id = request.network_drop_id;
+        packet.requester_position_x = local->runtime.position_x;
+        packet.requester_position_y = local->runtime.position_y;
+        packet.drop_position_x = drop != nullptr ? drop->position_x : local->runtime.position_x;
+        packet.drop_position_y = drop != nullptr ? drop->position_y : local->runtime.position_y;
+
+        for (const auto& endpoint : endpoints) {
+            SendPacketToEndpoint(packet, endpoint);
+        }
+        Log(
+            "Multiplayer loot pickup request sent. participant_id=" +
+            std::to_string(packet.participant_id) +
+            " request_sequence=" + std::to_string(packet.request_sequence) +
+            " network_drop_id=" + std::to_string(packet.network_drop_id));
     }
 }
 
@@ -2970,6 +3801,77 @@ void ApplyRemoteStatePacket(const StatePacket& packet, const sockaddr_in& from, 
         participant->runtime.mana_max = packet.mana_max;
         participant->runtime.experience_current = packet.experience_current;
         participant->runtime.experience_next = packet.experience_next;
+        const bool should_apply_gold =
+            !participant->owned_progression.initialized ||
+            packet.gold_revision >= participant->owned_progression.gold_revision;
+        participant->owned_progression.initialized = true;
+        if (should_apply_gold) {
+            participant->owned_progression.gold = packet.owned_gold;
+            participant->owned_progression.gold_revision = packet.gold_revision;
+        }
+        const bool should_apply_inventory =
+            packet.inventory_revision >= participant->owned_progression.inventory_revision;
+        if (should_apply_inventory) {
+            participant->owned_progression.inventory_revision = packet.inventory_revision;
+            participant->owned_progression.inventory_item_total_count = packet.inventory_item_total_count;
+            participant->owned_progression.inventory_truncated =
+                (packet.inventory_snapshot_flags & ParticipantInventorySnapshotFlagTruncated) != 0;
+            participant->owned_progression.inventory_items.clear();
+            const auto packet_inventory_count =
+                (std::min)(
+                    static_cast<std::size_t>(packet.inventory_item_count),
+                    static_cast<std::size_t>(kParticipantInventorySnapshotMaxItems));
+            participant->owned_progression.inventory_items.reserve(packet_inventory_count);
+            for (std::size_t index = 0; index < packet_inventory_count; ++index) {
+                const auto& packet_item = packet.inventory_items[index];
+                if (packet_item.type_id == 0) {
+                    continue;
+                }
+                ParticipantInventoryItemState item;
+                item.type_id = packet_item.type_id;
+                item.slot = packet_item.slot;
+                item.stack_count = packet_item.stack_count;
+                participant->owned_progression.inventory_items.push_back(item);
+            }
+        }
+        const bool should_apply_progression_book =
+            packet.statbook_revision >= participant->owned_progression.statbook_revision;
+        if (should_apply_progression_book) {
+            participant->owned_progression.statbook_revision = packet.statbook_revision;
+            participant->owned_progression.progression_book_entry_total_count =
+                packet.progression_book_entry_total_count;
+            participant->owned_progression.progression_book_truncated =
+                (packet.progression_book_snapshot_flags & ParticipantProgressionBookSnapshotFlagTruncated) != 0;
+            participant->owned_progression.progression_book_entries.clear();
+            const auto packet_progression_book_count =
+                (std::min)(
+                    static_cast<std::size_t>(packet.progression_book_entry_count),
+                    static_cast<std::size_t>(kParticipantProgressionBookSnapshotMaxEntries));
+            participant->owned_progression.progression_book_entries.reserve(packet_progression_book_count);
+            for (std::size_t index = 0; index < packet_progression_book_count; ++index) {
+                const auto& packet_entry = packet.progression_book_entries[index];
+                if (packet_entry.entry_index < 0) {
+                    continue;
+                }
+                ParticipantProgressionBookEntryState entry;
+                entry.entry_index = packet_entry.entry_index;
+                entry.internal_id = packet_entry.internal_id;
+                entry.active = packet_entry.active;
+                entry.visible = packet_entry.visible;
+                entry.category = packet_entry.category;
+                entry.statbook_max_level = packet_entry.statbook_max_level;
+                participant->owned_progression.progression_book_entries.push_back(entry);
+            }
+        }
+        participant->owned_progression.spellbook_revision =
+            (std::max)(participant->owned_progression.spellbook_revision, packet.spellbook_revision);
+        const bool should_apply_loadout =
+            packet.loadout_revision >= participant->owned_progression.loadout_revision;
+        if (should_apply_loadout) {
+            participant->owned_progression.loadout_revision = packet.loadout_revision;
+            participant->owned_progression.ability_loadout_valid = true;
+            participant->owned_progression.ability_loadout = profile.loadout;
+        }
         participant->runtime.primary_entry_index = packet.primary_entry_index;
         participant->runtime.primary_combo_entry_index = packet.primary_combo_entry_index;
         for (std::size_t index = 0; index < participant->runtime.queued_secondary_entry_indices.size(); ++index) {
@@ -3351,22 +4253,30 @@ void ApplyLootSnapshotPacket(const LootSnapshotPacket& packet, const sockaddr_in
 
         for (std::uint8_t index = 0; index < drop_count; ++index) {
             const auto& packet_drop = packet.drops[index];
+            const auto drop_kind = LootDropKindFromPacketValue(packet_drop.drop_kind);
             if (packet_drop.network_drop_id == 0 ||
                 packet_drop.native_type_id == 0 ||
                 !std::isfinite(packet_drop.position_x) ||
                 !std::isfinite(packet_drop.position_y) ||
                 !std::isfinite(packet_drop.radius) ||
-                packet_drop.radius < 0.0f) {
+                packet_drop.radius < 0.0f ||
+                (drop_kind == LootDropKind::Orb && !std::isfinite(packet_drop.value)) ||
+                ((drop_kind == LootDropKind::Item || drop_kind == LootDropKind::Potion) &&
+                    packet_drop.item_type_id == 0)) {
                 continue;
             }
 
             LootDropSnapshot drop;
             drop.network_drop_id = packet_drop.network_drop_id;
             drop.native_type_id = packet_drop.native_type_id;
-            drop.drop_kind = LootDropKindFromPacketValue(packet_drop.drop_kind);
+            drop.drop_kind = drop_kind;
             drop.active = (packet_drop.flags & LootDropSnapshotFlagActive) != 0;
             drop.amount = packet_drop.amount;
             drop.amount_tier = packet_drop.amount_tier;
+            drop.value = packet_drop.value;
+            drop.item_type_id = packet_drop.item_type_id;
+            drop.item_slot = packet_drop.item_slot;
+            drop.stack_count = packet_drop.stack_count;
             drop.actor_slot = packet_drop.actor_slot;
             drop.world_slot = packet_drop.world_slot;
             drop.lifetime = packet_drop.lifetime;
@@ -3601,6 +4511,558 @@ void ApplyEnemyDamageClaimPacket(
         " death_seh=" + HexString(static_cast<uintptr_t>(death_exception_code)));
 }
 
+void PublishLootPickupResultRuntimeInfo(
+    const LootPickupResultPacket& packet,
+    std::uint64_t now_ms) {
+    UpdateRuntimeState([&](RuntimeState& state) {
+        LootPickupResultRuntimeInfo result;
+        result.valid = true;
+        result.authority_participant_id = packet.authority_participant_id;
+        result.participant_id = packet.participant_id;
+        result.received_ms = now_ms;
+        result.sequence = packet.header.sequence;
+        result.request_sequence = packet.request_sequence;
+        result.run_nonce = packet.run_nonce;
+        result.network_drop_id = packet.network_drop_id;
+        result.result_code = LootPickupResultCodeFromPacketValue(packet.result_code);
+        result.drop_kind = LootDropKindFromPacketValue(packet.drop_kind);
+        result.amount = packet.amount;
+        result.resulting_gold = packet.resulting_gold;
+        result.gold_revision = packet.gold_revision;
+        result.resource_kind = packet.resource_kind;
+        result.resource_delta = packet.resource_delta;
+        result.resulting_life_current = packet.resulting_life_current;
+        result.resulting_life_max = packet.resulting_life_max;
+        result.resulting_mana_current = packet.resulting_mana_current;
+        result.resulting_mana_max = packet.resulting_mana_max;
+        result.item_type_id = packet.item_type_id;
+        result.item_slot = packet.item_slot;
+        result.stack_count = packet.stack_count;
+        result.inventory_revision = packet.inventory_revision;
+        state.last_loot_pickup_result = result;
+
+        if (result.result_code != LootPickupResultCode::Accepted) {
+            return;
+        }
+
+        ParticipantInfo* participant = nullptr;
+        if (packet.participant_id == g_local_transport.local_peer_id) {
+            participant = FindLocalParticipant(state);
+        } else {
+            participant = FindParticipant(state, packet.participant_id);
+            if (participant == nullptr) {
+                participant = UpsertRemoteParticipant(
+                    state,
+                    packet.participant_id,
+                    ParticipantControllerKind::Native);
+            }
+        }
+        if (participant == nullptr) {
+            return;
+        }
+
+        if (result.drop_kind == LootDropKind::Gold) {
+            const bool should_apply =
+                !participant->owned_progression.initialized ||
+                packet.gold_revision >= participant->owned_progression.gold_revision;
+            if (!should_apply) {
+                return;
+            }
+            participant->owned_progression.initialized = true;
+            participant->owned_progression.gold = packet.resulting_gold;
+            participant->owned_progression.gold_revision = packet.gold_revision;
+            return;
+        }
+
+        if (result.drop_kind == LootDropKind::Orb) {
+            LootOrbResourceKind resource_kind = LootOrbResourceKind::Health;
+            if (!TryResolveLootOrbResourceKind(packet.resource_kind, &resource_kind)) {
+                return;
+            }
+            participant->runtime.valid = true;
+            if (resource_kind == LootOrbResourceKind::Health &&
+                std::isfinite(packet.resulting_life_current) &&
+                std::isfinite(packet.resulting_life_max) &&
+                packet.resulting_life_max > 0.0f) {
+                participant->runtime.life_max = packet.resulting_life_max;
+                participant->runtime.life_current =
+                    (std::clamp)(packet.resulting_life_current, 0.0f, packet.resulting_life_max);
+            } else if (resource_kind == LootOrbResourceKind::Mana &&
+                std::isfinite(packet.resulting_mana_current) &&
+                std::isfinite(packet.resulting_mana_max) &&
+                packet.resulting_mana_max > 0.0f) {
+                participant->runtime.mana_max = packet.resulting_mana_max;
+                participant->runtime.mana_current =
+                    (std::clamp)(packet.resulting_mana_current, 0.0f, packet.resulting_mana_max);
+            }
+            return;
+        }
+
+        if (result.drop_kind == LootDropKind::Item || result.drop_kind == LootDropKind::Potion) {
+            if (packet.item_type_id == 0 ||
+                packet.inventory_revision <= participant->owned_progression.inventory_revision) {
+                return;
+            }
+            participant->owned_progression.initialized = true;
+            participant->owned_progression.inventory_host_authoritative = true;
+            if (ApplyOwnedInventoryLootItem(
+                    packet.item_type_id,
+                    packet.item_slot,
+                    packet.stack_count,
+                    &participant->owned_progression)) {
+                participant->owned_progression.inventory_revision =
+                    (std::max)(
+                        participant->owned_progression.inventory_revision,
+                        packet.inventory_revision);
+            }
+        }
+    });
+}
+
+LootPickupResultPayload BuildLootPickupResultPayloadFromParticipant(const ParticipantInfo* participant) {
+    LootPickupResultPayload payload;
+    if (participant == nullptr) {
+        return payload;
+    }
+    payload.resulting_gold = participant->owned_progression.gold;
+    payload.gold_revision = participant->owned_progression.gold_revision;
+    payload.resulting_life_current = participant->runtime.life_current;
+    payload.resulting_life_max = participant->runtime.life_max;
+    payload.resulting_mana_current = participant->runtime.mana_current;
+    payload.resulting_mana_max = participant->runtime.mana_max;
+    payload.inventory_revision = participant->owned_progression.inventory_revision;
+    return payload;
+}
+
+bool TryBuildAcceptedOrbLootPickupPayload(
+    const LootDropSnapshotPacketState& drop,
+    const ParticipantInfo* participant,
+    LootPickupResultPayload* payload) {
+    if (participant == nullptr || payload == nullptr) {
+        return false;
+    }
+
+    LootOrbResourceKind resource_kind = LootOrbResourceKind::Health;
+    if (!TryResolveLootOrbResourceKind(drop.amount_tier, &resource_kind) ||
+        !participant->runtime.valid ||
+        !std::isfinite(participant->runtime.life_current) ||
+        !std::isfinite(participant->runtime.life_max) ||
+        !std::isfinite(participant->runtime.mana_current) ||
+        !std::isfinite(participant->runtime.mana_max) ||
+        participant->runtime.life_max <= 0.0f ||
+        participant->runtime.mana_max <= 0.0f) {
+        return false;
+    }
+
+    const float resource_delta = ComputeLootOrbResourceDelta(drop.amount_tier, drop.value);
+    if (resource_delta <= kLootPickupResourceEpsilon) {
+        return false;
+    }
+
+    *payload = BuildLootPickupResultPayloadFromParticipant(participant);
+    payload->amount = RoundRewardAmountToInt(resource_delta);
+    payload->resource_kind = drop.amount_tier;
+    payload->resource_delta = resource_delta;
+    if (resource_kind == LootOrbResourceKind::Health) {
+        payload->resulting_life_current =
+            (std::min)(participant->runtime.life_current + resource_delta, participant->runtime.life_max);
+    } else {
+        payload->resulting_mana_current =
+            (std::min)(participant->runtime.mana_current + resource_delta, participant->runtime.mana_max);
+    }
+    return true;
+}
+
+bool TryBuildAcceptedItemLootPickupPayload(
+    const LootDropSnapshotPacketState& drop,
+    const ParticipantInfo* participant,
+    LootPickupResultPayload* payload) {
+    if (participant == nullptr || payload == nullptr || drop.item_type_id == 0) {
+        return false;
+    }
+
+    *payload = BuildLootPickupResultPayloadFromParticipant(participant);
+    payload->amount = drop.item_type_id == kPotionItemTypeId
+        ? (std::max)(drop.stack_count, 1)
+        : 1;
+    payload->item_type_id = drop.item_type_id;
+    payload->item_slot = drop.item_slot;
+    payload->stack_count = NormalizeInventoryLootStackCount(drop.item_type_id, drop.stack_count);
+    return true;
+}
+
+void SendLootPickupResult(
+    const LootPickupRequestPacket& request,
+    const sockaddr_in& endpoint,
+    LootPickupResultCode result_code,
+    LootDropKind drop_kind,
+    const LootPickupResultPayload& payload) {
+    LootPickupResultPacket result{};
+    result.header = MakePacketHeader(PacketKind::LootPickupResult, g_local_transport.next_sequence++);
+    result.authority_participant_id = g_local_transport.local_peer_id;
+    result.participant_id = request.participant_id;
+    result.request_sequence = request.request_sequence;
+    result.run_nonce = request.run_nonce;
+    result.network_drop_id = request.network_drop_id;
+    result.result_code = static_cast<std::uint8_t>(result_code);
+    result.drop_kind = static_cast<std::uint8_t>(drop_kind);
+    result.amount = payload.amount;
+    result.resulting_gold = payload.resulting_gold;
+    result.gold_revision = payload.gold_revision;
+    result.resource_kind = payload.resource_kind;
+    result.resource_delta = payload.resource_delta;
+    result.resulting_life_current = payload.resulting_life_current;
+    result.resulting_life_max = payload.resulting_life_max;
+    result.resulting_mana_current = payload.resulting_mana_current;
+    result.resulting_mana_max = payload.resulting_mana_max;
+    result.item_type_id = payload.item_type_id;
+    result.item_slot = payload.item_slot;
+    result.stack_count = payload.stack_count;
+    result.inventory_revision = payload.inventory_revision;
+
+    SendPacketToEndpoint(result, endpoint);
+    RelayPacketToPeers(result, endpoint);
+    PublishLootPickupResultRuntimeInfo(
+        result,
+        static_cast<std::uint64_t>(GetTickCount64()));
+}
+
+bool ValidateLootPickupRequest(
+    const LootPickupRequestPacket& packet,
+    const ParticipantInfo* participant,
+    const LootDropSnapshotPacketState& drop,
+    std::string* reject_reason,
+    LootPickupResultCode* result_code) {
+    auto reject = [&](const char* reason, LootPickupResultCode code) {
+        if (reject_reason != nullptr) {
+            *reject_reason = reason;
+        }
+        if (result_code != nullptr) {
+            *result_code = code;
+        }
+        return false;
+    };
+
+    if (participant == nullptr ||
+        !IsRemoteParticipant(*participant) ||
+        !IsNativeControlledParticipant(*participant) ||
+        !participant->runtime.valid ||
+        !participant->runtime.in_run ||
+        participant->runtime.scene_intent.kind != ParticipantSceneIntentKind::Run) {
+        return reject("participant_not_active_run", LootPickupResultCode::Rejected);
+    }
+    if (packet.run_nonce != 0 &&
+        participant->runtime.run_nonce != 0 &&
+        packet.run_nonce != participant->runtime.run_nonce) {
+        return reject("participant_run_nonce_mismatch", LootPickupResultCode::WrongRun);
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+    if (local == nullptr ||
+        !local->runtime.valid ||
+        !local->runtime.in_run ||
+        local->runtime.scene_intent.kind != ParticipantSceneIntentKind::Run) {
+        return reject("host_not_active_run", LootPickupResultCode::WrongRun);
+    }
+    if (packet.run_nonce != 0 &&
+        local->runtime.run_nonce != 0 &&
+        packet.run_nonce != local->runtime.run_nonce) {
+        return reject("host_run_nonce_mismatch", LootPickupResultCode::WrongRun);
+    }
+
+    const auto drop_kind = LootDropKindFromPacketValue(drop.drop_kind);
+    if (drop_kind != LootDropKind::Gold &&
+        drop_kind != LootDropKind::Orb &&
+        drop_kind != LootDropKind::Item &&
+        drop_kind != LootDropKind::Potion) {
+        return reject("unsupported_drop_kind", LootPickupResultCode::Unsupported);
+    }
+    if (g_local_transport.accepted_loot_pickup_drop_ids.find(packet.network_drop_id) !=
+        g_local_transport.accepted_loot_pickup_drop_ids.end()) {
+        return reject("drop_already_gone", LootPickupResultCode::AlreadyGone);
+    }
+    if ((drop.flags & LootDropSnapshotFlagActive) == 0) {
+        return reject("drop_inactive", LootPickupResultCode::AlreadyGone);
+    }
+    if (drop_kind == LootDropKind::Gold && drop.amount <= 0) {
+        return reject("drop_empty", LootPickupResultCode::AlreadyGone);
+    }
+    if (drop_kind == LootDropKind::Orb) {
+        LootOrbResourceKind resource_kind = LootOrbResourceKind::Health;
+        if (!TryResolveLootOrbResourceKind(drop.amount_tier, &resource_kind)) {
+            return reject("unsupported_orb_resource_kind", LootPickupResultCode::Unsupported);
+        }
+        if (ComputeLootOrbResourceDelta(drop.amount_tier, drop.value) <= kLootPickupResourceEpsilon) {
+            return reject("orb_empty", LootPickupResultCode::AlreadyGone);
+        }
+    }
+    if (drop_kind == LootDropKind::Item || drop_kind == LootDropKind::Potion) {
+        if (drop.item_type_id == 0) {
+            return reject("item_missing_type", LootPickupResultCode::AlreadyGone);
+        }
+        if (drop_kind == LootDropKind::Potion && drop.item_type_id != kPotionItemTypeId) {
+            return reject("potion_type_mismatch", LootPickupResultCode::Rejected);
+        }
+        if (drop_kind == LootDropKind::Item && drop.item_type_id == kPotionItemTypeId) {
+            return reject("item_type_mismatch", LootPickupResultCode::Rejected);
+        }
+    }
+    if (!std::isfinite(packet.requester_position_x) ||
+        !std::isfinite(packet.requester_position_y) ||
+        !std::isfinite(packet.drop_position_x) ||
+        !std::isfinite(packet.drop_position_y) ||
+        !std::isfinite(drop.position_x) ||
+        !std::isfinite(drop.position_y) ||
+        (drop_kind == LootDropKind::Orb && !std::isfinite(drop.value))) {
+        return reject("invalid_positions", LootPickupResultCode::Rejected);
+    }
+
+    const float range_limit =
+        kLootPickupMaxDistance + (std::isfinite(drop.radius) && drop.radius > 0.0f ? drop.radius : 0.0f);
+    const float range_limit_sq = range_limit * range_limit;
+    const bool client_position_in_range =
+        DistanceSquared(
+            packet.requester_position_x,
+            packet.requester_position_y,
+            drop.position_x,
+            drop.position_y) <= range_limit_sq;
+    const bool host_observed_position_in_range =
+        DistanceSquared(
+            participant->runtime.position_x,
+            participant->runtime.position_y,
+            drop.position_x,
+            drop.position_y) <= range_limit_sq;
+    if (!client_position_in_range && !host_observed_position_in_range) {
+        return reject("distance_sanity", LootPickupResultCode::OutOfRange);
+    }
+
+    const float drift_limit_sq = kLootPickupDropDriftMaxDistance * kLootPickupDropDriftMaxDistance;
+    if (DistanceSquared(
+            packet.drop_position_x,
+            packet.drop_position_y,
+            drop.position_x,
+            drop.position_y) > drift_limit_sq) {
+        return reject("drop_position_drift", LootPickupResultCode::Rejected);
+    }
+
+    if (result_code != nullptr) {
+        *result_code = LootPickupResultCode::Accepted;
+    }
+    return true;
+}
+
+void ApplyLootPickupRequestPacket(
+    const LootPickupRequestPacket& packet,
+    const sockaddr_in& from,
+    std::uint64_t now_ms) {
+    if (!g_local_transport.is_host ||
+        packet.participant_id == 0 ||
+        packet.participant_id == g_local_transport.local_peer_id ||
+        packet.network_drop_id == 0 ||
+        packet.request_sequence == 0) {
+        return;
+    }
+
+    UpsertPeerEndpoint(from, packet.participant_id, now_ms);
+    if (IsLootPickupRequestSequenceDuplicate(packet)) {
+        return;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* participant = FindParticipant(runtime_state, packet.participant_id);
+
+    SDModSceneActorState actor;
+    LootDropSnapshotPacketState drop{};
+    if (!TryFindHostRunLootDropByNetworkId(packet.network_drop_id, &actor, &drop)) {
+        LootPickupResultPayload payload = BuildLootPickupResultPayloadFromParticipant(participant);
+        SendLootPickupResult(
+            packet,
+            from,
+            LootPickupResultCode::AlreadyGone,
+            LootDropKind::Unknown,
+            payload);
+        RememberLootPickupRequestSequence(packet);
+        Log(
+            "Multiplayer loot pickup rejected. reason=drop_not_found participant_id=" +
+            std::to_string(packet.participant_id) +
+            " network_drop_id=" + std::to_string(packet.network_drop_id));
+        return;
+    }
+
+    std::string reject_reason;
+    LootPickupResultCode result_code = LootPickupResultCode::Rejected;
+    if (!ValidateLootPickupRequest(packet, participant, drop, &reject_reason, &result_code)) {
+        LootPickupResultPayload payload = BuildLootPickupResultPayloadFromParticipant(participant);
+        SendLootPickupResult(
+            packet,
+            from,
+            result_code,
+            LootDropKindFromPacketValue(drop.drop_kind),
+            payload);
+        RememberLootPickupRequestSequence(packet);
+        Log(
+            "Multiplayer loot pickup rejected. reason=" + reject_reason +
+            " participant_id=" + std::to_string(packet.participant_id) +
+            " network_drop_id=" + std::to_string(packet.network_drop_id));
+        return;
+    }
+
+    const auto drop_kind = LootDropKindFromPacketValue(drop.drop_kind);
+    LootPickupResultPayload payload = BuildLootPickupResultPayloadFromParticipant(participant);
+    bool payload_ready = false;
+    if (drop_kind == LootDropKind::Gold) {
+        payload.amount = drop.amount;
+        payload_ready = drop.amount > 0;
+    } else if (drop_kind == LootDropKind::Orb) {
+        payload_ready = TryBuildAcceptedOrbLootPickupPayload(drop, participant, &payload);
+    } else if (drop_kind == LootDropKind::Item || drop_kind == LootDropKind::Potion) {
+        payload_ready = TryBuildAcceptedItemLootPickupPayload(drop, participant, &payload);
+    }
+
+    const bool deactivated = payload_ready && TryDeactivateHostLootDrop(actor.actor_address, drop_kind);
+    if (deactivated) {
+        g_local_transport.accepted_loot_pickup_drop_ids.insert(packet.network_drop_id);
+    }
+
+    UpdateRuntimeState([&](RuntimeState& state) {
+        if (!deactivated) {
+            return;
+        }
+        auto* mutable_participant = FindParticipant(state, packet.participant_id);
+        if (mutable_participant == nullptr) {
+            return;
+        }
+
+        if (drop_kind == LootDropKind::Gold) {
+            mutable_participant->owned_progression.initialized = true;
+            mutable_participant->owned_progression.gold += drop.amount;
+            mutable_participant->owned_progression.gold_revision += 1;
+            payload.resulting_gold = mutable_participant->owned_progression.gold;
+            payload.gold_revision = mutable_participant->owned_progression.gold_revision;
+            return;
+        }
+
+        if (drop_kind == LootDropKind::Orb) {
+            LootOrbResourceKind resource_kind = LootOrbResourceKind::Health;
+            if (!TryResolveLootOrbResourceKind(payload.resource_kind, &resource_kind)) {
+                return;
+            }
+            mutable_participant->runtime.valid = true;
+            if (resource_kind == LootOrbResourceKind::Health) {
+                mutable_participant->runtime.life_current = payload.resulting_life_current;
+                mutable_participant->runtime.life_max = payload.resulting_life_max;
+            } else {
+                mutable_participant->runtime.mana_current = payload.resulting_mana_current;
+                mutable_participant->runtime.mana_max = payload.resulting_mana_max;
+            }
+            return;
+        }
+
+        if (drop_kind == LootDropKind::Item || drop_kind == LootDropKind::Potion) {
+            mutable_participant->owned_progression.initialized = true;
+            mutable_participant->owned_progression.inventory_host_authoritative = true;
+            if (ApplyOwnedInventoryLootItem(
+                    payload.item_type_id,
+                    payload.item_slot,
+                    payload.stack_count,
+                    &mutable_participant->owned_progression)) {
+                payload.inventory_revision =
+                    mutable_participant->owned_progression.inventory_revision;
+            }
+        }
+    });
+
+    RememberLootPickupRequestSequence(packet);
+    SendLootPickupResult(
+        packet,
+        from,
+        deactivated ? LootPickupResultCode::Accepted : LootPickupResultCode::Rejected,
+        drop_kind,
+        deactivated ? payload : BuildLootPickupResultPayloadFromParticipant(participant));
+
+    Log(
+        "Multiplayer loot pickup " + std::string(deactivated ? "accepted" : "rejected") +
+        ". participant_id=" + std::to_string(packet.participant_id) +
+        " network_drop_id=" + std::to_string(packet.network_drop_id) +
+        " kind=" + LootDropKindLabel(drop_kind) +
+        " amount=" + std::to_string(deactivated ? payload.amount : 0) +
+        " resulting_gold=" + std::to_string(payload.resulting_gold) +
+        " gold_revision=" + std::to_string(payload.gold_revision) +
+        " resource_kind=" + std::to_string(payload.resource_kind) +
+        " resource_delta=" + std::to_string(deactivated ? payload.resource_delta : 0.0f) +
+        " resulting_life=" + std::to_string(payload.resulting_life_current) + "/" +
+        std::to_string(payload.resulting_life_max) +
+        " resulting_mana=" + std::to_string(payload.resulting_mana_current) + "/" +
+        std::to_string(payload.resulting_mana_max) +
+        " item_type_id=" + HexString(static_cast<uintptr_t>(payload.item_type_id)) +
+        " item_slot=" + std::to_string(payload.item_slot) +
+        " stack_count=" + std::to_string(payload.stack_count) +
+        " inventory_revision=" + std::to_string(payload.inventory_revision) +
+        " deactivated=" + std::to_string(deactivated ? 1 : 0));
+}
+
+void ApplyLootPickupResultPacket(
+    const LootPickupResultPacket& packet,
+    const sockaddr_in& from,
+    std::uint64_t now_ms) {
+    if (packet.authority_participant_id == 0 ||
+        packet.authority_participant_id == g_local_transport.local_peer_id ||
+        packet.participant_id == 0 ||
+        packet.network_drop_id == 0 ||
+        packet.request_sequence == 0) {
+        return;
+    }
+
+    UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
+    const auto result_code = LootPickupResultCodeFromPacketValue(packet.result_code);
+    const auto drop_kind = LootDropKindFromPacketValue(packet.drop_kind);
+    if (result_code == LootPickupResultCode::Accepted &&
+        packet.participant_id == g_local_transport.local_peer_id &&
+        drop_kind == LootDropKind::Gold) {
+        if (!TryWriteLocalGlobalGold(packet.resulting_gold)) {
+            Log(
+                "Multiplayer loot pickup result accepted but local gold write failed. resulting_gold=" +
+                std::to_string(packet.resulting_gold) +
+                " network_drop_id=" + std::to_string(packet.network_drop_id));
+        }
+    }
+    if (result_code == LootPickupResultCode::Accepted &&
+        packet.participant_id == g_local_transport.local_peer_id &&
+        drop_kind == LootDropKind::Orb) {
+        if (!TryWriteLocalPlayerOrbResource(
+                packet.resource_kind,
+                packet.resulting_life_current,
+                packet.resulting_life_max,
+                packet.resulting_mana_current,
+                packet.resulting_mana_max)) {
+            Log(
+                "Multiplayer loot pickup result accepted but local vitals write failed. resource_delta=" +
+                std::to_string(packet.resource_delta) +
+                " network_drop_id=" + std::to_string(packet.network_drop_id));
+        }
+    }
+
+    PublishLootPickupResultRuntimeInfo(packet, now_ms);
+    Log(
+        "Multiplayer loot pickup result applied. authority_participant_id=" +
+        std::to_string(packet.authority_participant_id) +
+        " participant_id=" + std::to_string(packet.participant_id) +
+        " request_sequence=" + std::to_string(packet.request_sequence) +
+        " network_drop_id=" + std::to_string(packet.network_drop_id) +
+        " result=" + LootPickupResultCodeLabel(result_code) +
+        " kind=" + LootDropKindLabel(drop_kind) +
+        " amount=" + std::to_string(packet.amount) +
+        " resulting_gold=" + std::to_string(packet.resulting_gold) +
+        " gold_revision=" + std::to_string(packet.gold_revision) +
+        " resource_kind=" + std::to_string(packet.resource_kind) +
+        " resource_delta=" + std::to_string(packet.resource_delta) +
+        " item_type_id=" + HexString(static_cast<uintptr_t>(packet.item_type_id)) +
+        " item_slot=" + std::to_string(packet.item_slot) +
+        " stack_count=" + std::to_string(packet.stack_count) +
+        " inventory_revision=" + std::to_string(packet.inventory_revision));
+}
+
 void ReceivePackets(std::uint64_t now_ms) {
     for (int packet_index = 0; packet_index < kMaxPacketsPerTick; ++packet_index) {
         std::array<char, sizeof(WorldSnapshotPacket)> packet_buffer{};
@@ -3695,6 +5157,28 @@ void ReceivePackets(std::uint64_t now_ms) {
             }
             g_local_transport.packets_received += 1;
             ApplyEnemyDamageCorrection(packet);
+            continue;
+        }
+
+        if (kind == PacketKind::LootPickupRequest && received == static_cast<int>(sizeof(LootPickupRequestPacket))) {
+            LootPickupRequestPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::LootPickupRequest)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLootPickupRequestPacket(packet, from, now_ms);
+            continue;
+        }
+
+        if (kind == PacketKind::LootPickupResult && received == static_cast<int>(sizeof(LootPickupResultPacket))) {
+            LootPickupResultPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::LootPickupResult)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLootPickupResultPacket(packet, from, now_ms);
         }
     }
 }
@@ -3780,6 +5264,8 @@ void ShutdownLocalTransport() {
     std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
     g_queued_local_cast_events.clear();
     g_queued_local_enemy_damage_claims.clear();
+    g_queued_local_loot_pickup_requests.clear();
+    g_next_local_loot_pickup_request_sequence = 1;
 }
 
 void TickLocalTransport(std::uint64_t now_ms) {
@@ -3793,6 +5279,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     SendActiveLocalCastInput(now_ms);
     SendQueuedCastEvents(now_ms);
     SendLocalEnemyDamageClaims();
+    SendQueuedLootPickupRequests();
     SendWorldSnapshot(now_ms);
     SendLootSnapshot(now_ms);
     PublishLocalTransportRuntimeState();
@@ -3903,6 +5390,68 @@ void QueueLocalEnemyDamageClaim(
     claim.target_position_x = target_position_x;
     claim.target_position_y = target_position_y;
     g_queued_local_enemy_damage_claims.push_back(claim);
+}
+
+bool QueueLocalLootPickupRequest(
+    std::uint64_t network_drop_id,
+    std::uint32_t* request_sequence,
+    std::string* error_message) {
+    if (request_sequence != nullptr) {
+        *request_sequence = 0;
+    }
+    auto fail = [&](const char* message) {
+        if (error_message != nullptr) {
+            *error_message = message;
+        }
+        return false;
+    };
+
+    if (!IsLocalTransportEnabled()) {
+        return fail("local transport is not enabled");
+    }
+    if (!IsLocalTransportClient()) {
+        return fail("loot pickup requests are currently client-to-host only");
+    }
+    if (network_drop_id == 0) {
+        return fail("network_drop_id must be non-zero");
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+    if (local == nullptr ||
+        !local->runtime.valid ||
+        !local->runtime.in_run ||
+        local->runtime.scene_intent.kind != ParticipantSceneIntentKind::Run) {
+        return fail("local participant is not in a run");
+    }
+    const bool present_in_loot_snapshot =
+        runtime_state.loot_snapshot.valid &&
+        runtime_state.loot_snapshot.scene_intent.kind == ParticipantSceneIntentKind::Run &&
+        FindLootDropSnapshotByNetworkId(runtime_state.loot_snapshot, network_drop_id) != nullptr;
+    const bool matches_recent_pickup_result =
+        runtime_state.last_loot_pickup_result.valid &&
+        runtime_state.last_loot_pickup_result.network_drop_id == network_drop_id;
+    if (!present_in_loot_snapshot && !matches_recent_pickup_result) {
+        return fail("network_drop_id is not present in the replicated loot snapshot");
+    }
+
+    std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
+    constexpr std::size_t kMaxQueuedLocalLootPickupRequests = 32;
+    if (g_queued_local_loot_pickup_requests.size() >= kMaxQueuedLocalLootPickupRequests) {
+        g_queued_local_loot_pickup_requests.erase(g_queued_local_loot_pickup_requests.begin());
+    }
+
+    QueuedLocalLootPickupRequest request;
+    request.network_drop_id = network_drop_id;
+    request.request_sequence = g_next_local_loot_pickup_request_sequence++;
+    if (g_next_local_loot_pickup_request_sequence == 0) {
+        g_next_local_loot_pickup_request_sequence = 1;
+    }
+    if (request_sequence != nullptr) {
+        *request_sequence = request.request_sequence;
+    }
+    g_queued_local_loot_pickup_requests.push_back(request);
+    return true;
 }
 
 }  // namespace sdmod::multiplayer

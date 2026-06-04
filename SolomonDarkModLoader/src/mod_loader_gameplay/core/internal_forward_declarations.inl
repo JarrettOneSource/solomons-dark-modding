@@ -170,4 +170,3 @@ bool DestroyLoaderOwnedWizardActor(
     bool raw_allocation,
     std::string* error_message);
 void DestroyParticipantEntityNow(std::uint64_t participant_id);
-void PrepareMaterializedWizardBotsForSceneSwitch(std::string_view reason);
