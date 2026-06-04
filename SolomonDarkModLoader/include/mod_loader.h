@@ -287,6 +287,7 @@ void ShutdownGameplayKeyboardInjection();
 bool IsGameplayKeyboardInjectionInitialized();
 bool QueueGameplayMouseLeftClick(std::string* error_message);
 bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_message);
+void ClearQueuedGameplayMouseLeft();
 std::uint64_t GetGameplayMouseLeftEdgeSerial();
 std::uint64_t GetGameplayMouseLeftEdgeTickMs();
 bool IsGameplayMouseLeftDown();

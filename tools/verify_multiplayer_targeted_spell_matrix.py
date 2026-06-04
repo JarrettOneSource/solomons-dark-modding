@@ -48,6 +48,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TELEMETRY_PATH = ROOT / "runtime" / "multiplayer_targeted_spell_matrix_telemetry.jsonl"
 TELEMETRY: MultiplayerTelemetryRecorder | None = None
 TEST_PLAYER_HP = 5000.0
+FIRE_TAP_FRAMES = 2
 TAP_FRAMES = 12
 HOLD_FRAMES = 170
 
@@ -64,7 +65,7 @@ class ElementSpec:
 
 
 ELEMENTS = (
-    ElementSpec("fire", "projectile", TAP_FRAMES),
+    ElementSpec("fire", "projectile", FIRE_TAP_FRAMES),
     ElementSpec("earth", "projectile", HOLD_FRAMES),
     ElementSpec("ether", "projectile", TAP_FRAMES),
     ElementSpec("water", "continuous", HOLD_FRAMES),
@@ -531,6 +532,72 @@ def parse_targeted_remote_queues(log_text: str, participant_id: int) -> list[dic
     ]
 
 
+def parse_remote_fire_projectile_lifecycles(
+    log_text: str,
+    participant_id: int,
+) -> list[dict[str, int]]:
+    result: list[dict[str, int]] = []
+    marker = f"[bots] cast complete (pure_primary_no_handle_settled). bot_id={participant_id}"
+    for line in log_text.splitlines():
+        if marker not in line or "remote_input_controlled=1" not in line:
+            continue
+        if "remote_projectile_expected_type=0x7D4" not in line:
+            continue
+        fields: dict[str, int] = {}
+        for key in (
+            "remote_cast_sequence",
+            "remote_projectile_observed_ticks",
+            "remote_projectile_missing_ticks",
+            "remote_projectile_reached_target",
+            "remote_projectile_target_ticks",
+        ):
+            match = re.search(rf"{key}=([0-9]+)", line)
+            if match:
+                fields[key] = int(match.group(1))
+        if "remote_cast_sequence" in fields:
+            result.append(fields)
+    return result
+
+
+def wait_for_remote_fire_projectile_lifecycle(
+    direction: Direction,
+    receiver_offset: int,
+    cast_sequences: list[int],
+    timeout: float = 4.0,
+) -> list[dict[str, int]]:
+    expected = set(cast_sequences)
+    deadline = time.monotonic() + timeout
+    last_matches: list[dict[str, int]] = []
+    while time.monotonic() < deadline:
+        lifecycles = parse_remote_fire_projectile_lifecycles(
+            log_after(direction.receiver_log, receiver_offset),
+            direction.source_id,
+        )
+        last_matches = [
+            item for item in lifecycles
+            if item.get("remote_cast_sequence") in expected
+        ]
+        by_sequence = {
+            item.get("remote_cast_sequence"): item
+            for item in last_matches
+        }
+        if expected.issubset(by_sequence):
+            bad = [
+                item for item in by_sequence.values()
+                if item.get("remote_projectile_missing_ticks", 0) < 2
+            ]
+            if bad:
+                raise VerifyFailure(
+                    f"{direction.name} fire: receiver completed targeted fireball before native despawn: {bad}"
+                )
+            return [by_sequence[sequence] for sequence in cast_sequences]
+        time.sleep(0.05)
+    raise VerifyFailure(
+        f"{direction.name} fire: receiver did not complete targeted fireball lifecycle "
+        f"for sequences={cast_sequences}; last={last_matches}"
+    )
+
+
 def wait_for_host_hp_drop(network_actor_id: str, before_hp: float, timeout: float = 12.0) -> dict[str, str]:
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
@@ -562,7 +629,8 @@ def wait_for_host_hp_drop(network_actor_id: str, before_hp: float, timeout: floa
 def verify_targeted_cast(direction: Direction, spec: ElementSpec) -> dict[str, object]:
     record_telemetry("targeted.cast.setup.before", element=spec.element, direction=direction.name)
     setup = setup_target(direction.source_pipe)
-    network_actor_id = setup["network_actor_id"]
+    setup_network_actor_id = setup["network_actor_id"]
+    network_actor_id = setup_network_actor_id
     record_telemetry(
         "targeted.cast.setup.after",
         element=spec.element,
@@ -623,16 +691,30 @@ def verify_targeted_cast(direction: Direction, spec: ElementSpec) -> dict[str, o
         raise VerifyFailure(f"{direction.name} {spec.element}: expected one local targeted cast, got {local_casts}")
     local_target_id = str(local_casts[0]["target_network_actor_id"])
     if local_target_id != network_actor_id:
+        actual_before = host_enemy_by_id(local_target_id)
         record_telemetry(
-            "targeted.cast.failure.local_target_mismatch",
+            "targeted.cast.local_target_swapped",
             element=spec.element,
             direction=direction.name,
-            network_actor_id=network_actor_id,
+            setup_network_actor_id=network_actor_id,
             local_target_id=local_target_id,
             local_casts=local_casts,
+            actual_before=actual_before,
         )
-        raise VerifyFailure(
-            f"{direction.name} {spec.element}: local cast target mismatch setup={network_actor_id} sent={local_target_id}"
+        if actual_before.get("found") != "true":
+            raise VerifyFailure(
+                f"{direction.name} {spec.element}: local cast target mismatch setup={network_actor_id} "
+                f"sent={local_target_id}, but sent target is not host-visible: {actual_before}"
+            )
+        network_actor_id = local_target_id
+        before = actual_before
+        before_hp = number(before, "hp")
+    remote_fire_projectile_lifecycles: list[dict[str, int]] | None = None
+    if spec.element == "fire":
+        remote_fire_projectile_lifecycles = wait_for_remote_fire_projectile_lifecycle(
+            direction,
+            receiver_offset,
+            [item["cast_sequence"] for item in local_casts],
         )
     receiver_log = log_after(direction.receiver_log, receiver_offset)
     remote_queues = parse_targeted_remote_queues(receiver_log, direction.source_id)
@@ -654,14 +736,19 @@ def verify_targeted_cast(direction: Direction, spec: ElementSpec) -> dict[str, o
         )
     damage_claim: dict[str, str] | None = None
     if direction.source_id == CLIENT_ID:
+        claim_target_x = number(before, "x")
+        claim_target_y = number(before, "y")
+        if network_actor_id == setup_network_actor_id:
+            claim_target_x = number(aim_refresh, "target_x", claim_target_x)
+            claim_target_y = number(aim_refresh, "target_y", claim_target_y)
         damage_claim = queue_enemy_damage_claim(
             direction.source_pipe,
             network_actor_id,
             before_hp,
             0.0,
             number(before, "max_hp", before_hp),
-            number(aim_refresh, "target_x", number(before, "x")),
-            number(aim_refresh, "target_y", number(before, "y")),
+            claim_target_x,
+            claim_target_y,
         )
         after = wait_for_host_hp_drop(network_actor_id, before_hp)
     else:
@@ -673,6 +760,7 @@ def verify_targeted_cast(direction: Direction, spec: ElementSpec) -> dict[str, o
         "targeted.cast.done",
         element=spec.element,
         direction=direction.name,
+        setup_network_actor_id=setup_network_actor_id,
         network_actor_id=network_actor_id,
         before=before,
         after=after,
@@ -682,6 +770,8 @@ def verify_targeted_cast(direction: Direction, spec: ElementSpec) -> dict[str, o
     )
     return {
         "setup": setup,
+        "setup_network_actor_id": setup_network_actor_id,
+        "network_actor_id": network_actor_id,
         "before": before,
         "after": after,
         "damage_claim": damage_claim,
@@ -690,6 +780,7 @@ def verify_targeted_cast(direction: Direction, spec: ElementSpec) -> dict[str, o
         "native_hook_count": native_hook_count,
         "local_casts": local_casts,
         "remote_queues": remote_queues,
+        "remote_fire_projectile_lifecycles": remote_fire_projectile_lifecycles,
     }
 
 
@@ -761,6 +852,11 @@ def parse_args() -> argparse.Namespace:
         default=",".join(spec.element for spec in ELEMENTS),
         help="Comma-separated element list to verify. Defaults to the full matrix.",
     )
+    parser.add_argument(
+        "--no-telemetry",
+        action="store_true",
+        help="Disable heavy host/client telemetry sampling during the focused verifier run.",
+    )
     return parser.parse_args()
 
 
@@ -779,9 +875,10 @@ def main() -> int:
     global TELEMETRY
     args = parse_args()
     specs = selected_elements(args.elements)
-    TELEMETRY = MultiplayerTelemetryRecorder(TELEMETRY_PATH)
+    TELEMETRY = None if args.no_telemetry else MultiplayerTelemetryRecorder(TELEMETRY_PATH)
     result: dict[str, object] = {"ok": False, "elements": [], "selected_elements": [spec.element for spec in specs]}
-    result["telemetry_path"] = str(TELEMETRY_PATH)
+    if TELEMETRY is not None:
+        result["telemetry_path"] = str(TELEMETRY_PATH)
     record_telemetry("targeted.harness.start", selected_elements=[spec.element for spec in specs])
     try:
         for spec in specs:

@@ -499,9 +499,19 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     binding->facing_target_actor_address =
                         remote_input_state.target_actor_address;
                 } else {
-                    ongoing.target_actor_address = 0;
-                    binding->facing_target_actor_address = 0;
-                    ClearOngoingCastNativeTargetActor(actor_address, &ongoing);
+                    const bool preserve_remote_per_cast_projectile_target =
+                        ongoing.lane ==
+                            ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
+                        ongoing.mana_charge_kind == multiplayer::BotManaChargeKind::PerCast &&
+                        ongoing.target_actor_address != 0;
+                    if (preserve_remote_per_cast_projectile_target) {
+                        binding->facing_target_actor_address =
+                            ongoing.target_actor_address;
+                    } else {
+                        ongoing.target_actor_address = 0;
+                        binding->facing_target_actor_address = 0;
+                        ClearOngoingCastNativeTargetActor(actor_address, &ongoing);
+                    }
                 }
             } else {
                 ongoing.remote_input_timed_out =
@@ -591,6 +601,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         // or input timeout.
         constexpr int kRemoteReleasedPurePrimaryNoHandleSettleTicks = 2;
         constexpr int kRemotePerCastPurePrimaryProjectileSettleTicks = 2;
+        constexpr int kRemotePerCastPurePrimaryProjectileMissingSettleTicks = 2;
         constexpr int kRemotePerCastPurePrimaryNoProjectileSafetyTicks = 90;
         constexpr int kRemotePurePrimaryNoHandleMinimumVisibleTicks = 20;
         constexpr int kBotPurePrimaryNoHandleSettleTicks = 160;
@@ -622,13 +633,86 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.remote_per_cast_projectile_observed_ticks_waiting += 1;
         } else {
             ongoing.remote_per_cast_projectile_observed_ticks_waiting = 0;
+            ongoing.remote_per_cast_projectile_missing_ticks_waiting = 0;
+            ongoing.remote_per_cast_projectile_reached_target = false;
+            ongoing.remote_per_cast_projectile_target_ticks_waiting = 0;
         }
+        bool remote_per_cast_projectile_present = false;
+        bool remote_per_cast_projectile_target_reached_this_tick = false;
+        if (ongoing.remote_per_cast_projectile_observed) {
+            SDModSceneActorState projectile_state{};
+            remote_per_cast_projectile_present =
+                TryFindPurePrimaryProjectileActorStateInScene(
+                    ongoing.remote_per_cast_projectile_expected_type,
+                    ongoing.remote_per_cast_projectile_observed_actor,
+                    &projectile_state);
+            if (remote_per_cast_projectile_present) {
+                ongoing.remote_per_cast_projectile_missing_ticks_waiting = 0;
+                if (ongoing.target_actor_address != 0 &&
+                    memory.IsReadableRange(
+                        ongoing.target_actor_address,
+                        kActorCollisionRadiusOffset + sizeof(float))) {
+                    float target_x = 0.0f;
+                    float target_y = 0.0f;
+                    float target_radius = 0.0f;
+                    if (TryReadFiniteFloatField(
+                            ongoing.target_actor_address,
+                            kActorPositionXOffset,
+                            &target_x) &&
+                        TryReadFiniteFloatField(
+                            ongoing.target_actor_address,
+                            kActorPositionYOffset,
+                            &target_y) &&
+                        TryReadFiniteFloatField(
+                            ongoing.target_actor_address,
+                            kActorCollisionRadiusOffset,
+                            &target_radius)) {
+                        const float dx = projectile_state.x - target_x;
+                        const float dy = projectile_state.y - target_y;
+                        constexpr float kRemotePerCastPurePrimaryTargetReachPadding = 16.0f;
+                        const float reach_radius =
+                            (std::max)(
+                                kRemotePerCastPurePrimaryTargetReachPadding,
+                                projectile_state.radius +
+                                    target_radius +
+                                    kRemotePerCastPurePrimaryTargetReachPadding);
+                        remote_per_cast_projectile_target_reached_this_tick =
+                            std::isfinite(dx) &&
+                            std::isfinite(dy) &&
+                            std::isfinite(reach_radius) &&
+                            ((dx * dx) + (dy * dy)) <= reach_radius * reach_radius;
+                    }
+                }
+            } else {
+                ongoing.remote_per_cast_projectile_missing_ticks_waiting += 1;
+            }
+            if (remote_per_cast_projectile_target_reached_this_tick) {
+                ongoing.remote_per_cast_projectile_reached_target = true;
+            }
+            if (ongoing.remote_per_cast_projectile_reached_target) {
+                ongoing.remote_per_cast_projectile_target_ticks_waiting += 1;
+            } else {
+                ongoing.remote_per_cast_projectile_target_ticks_waiting = 0;
+            }
+        }
+        const bool remote_per_cast_projectile_has_target =
+            ongoing.target_actor_address != 0;
+        const bool remote_per_cast_projectile_impact_lifecycle_settled =
+            remote_per_cast_projectile_has_target &&
+            ongoing.remote_per_cast_projectile_observed &&
+            ongoing.remote_per_cast_projectile_missing_ticks_waiting >=
+                kRemotePerCastPurePrimaryProjectileMissingSettleTicks;
+        const bool remote_per_cast_projectile_targetless_settled =
+            !remote_per_cast_projectile_has_target &&
+            ongoing.remote_per_cast_projectile_observed &&
+            ongoing.remote_per_cast_projectile_observed_ticks_waiting >=
+                kRemotePerCastPurePrimaryProjectileSettleTicks;
         const bool remote_per_cast_pure_primary_no_handle_settled =
             remote_per_cast_pure_primary_without_live_handle &&
-            ((ongoing.remote_per_cast_projectile_observed &&
-              ongoing.remote_per_cast_projectile_observed_ticks_waiting >=
-                  kRemotePerCastPurePrimaryProjectileSettleTicks) ||
-             ongoing.ticks_waiting >= kRemotePerCastPurePrimaryNoProjectileSafetyTicks);
+            (remote_per_cast_projectile_impact_lifecycle_settled ||
+             remote_per_cast_projectile_targetless_settled ||
+             (!ongoing.remote_per_cast_projectile_observed &&
+              ongoing.ticks_waiting >= kRemotePerCastPurePrimaryNoProjectileSafetyTicks));
         const bool remote_release_driven_pure_primary_no_handle_settled =
             remote_input_driven_cast &&
             pure_primary_without_live_handle &&

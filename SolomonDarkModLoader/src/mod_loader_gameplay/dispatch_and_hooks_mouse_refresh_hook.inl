@@ -65,6 +65,7 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
             ProcessMemory::Instance().TryWriteField(gameplay_address, kGameplayCastIntentOffset, pressed);
 
         if (wrote_mouse_button || wrote_cast_intent) {
+            g_gameplay_keyboard_injection.injected_mouse_left_active.store(true, std::memory_order_release);
             g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(true, std::memory_order_release);
             auto& pending_edge_events = g_gameplay_keyboard_injection.pending_mouse_left_edge_events;
             auto available_edge_events = pending_edge_events.load(std::memory_order_acquire);
@@ -86,6 +87,40 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
                 " cast_intent=" + std::to_string(wrote_cast_intent ? 1 : 0));
         }
         return;
+    }
+
+    if (g_gameplay_keyboard_injection.injected_mouse_left_active.load(std::memory_order_acquire)) {
+        int buffer_index = -1;
+        if (!ProcessMemory::Instance().TryReadField(
+                self_address,
+                kGameplayInputBufferIndexOffset,
+                &buffer_index) ||
+            buffer_index < 0) {
+            return;
+        }
+
+        const auto mouse_button_offset = static_cast<std::size_t>(
+            buffer_index * kGameplayInputBufferStride + kGameplayMouseLeftButtonOffset);
+        const std::uint8_t released = 0;
+        const bool wrote_mouse_button =
+            ProcessMemory::Instance().TryWriteField(self_address, mouse_button_offset, released);
+
+        uintptr_t gameplay_address = 0;
+        const bool have_gameplay_address =
+            TryResolveCurrentGameplayScene(&gameplay_address) && gameplay_address != 0;
+        const bool wrote_cast_intent =
+            have_gameplay_address &&
+            ProcessMemory::Instance().TryWriteField(gameplay_address, kGameplayCastIntentOffset, released);
+
+        if (wrote_mouse_button || wrote_cast_intent) {
+            g_gameplay_keyboard_injection.injected_mouse_left_active.store(false, std::memory_order_release);
+            g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
+            Log(
+                "Released injected gameplay mouse-left. input_state=" + HexString(self_address) +
+                " buffer_index=" + std::to_string(buffer_index) +
+                " gameplay=" + (have_gameplay_address ? HexString(gameplay_address) : std::string("0x00000000")) +
+                " cast_intent=" + std::to_string(wrote_cast_intent ? 1 : 0));
+        }
     }
 
 }

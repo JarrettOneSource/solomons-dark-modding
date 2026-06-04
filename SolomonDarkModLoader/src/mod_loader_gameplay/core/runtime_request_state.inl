@@ -64,6 +64,7 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint64_t> mouse_left_edge_tick_ms{0};
     std::atomic<std::uint32_t> pending_mouse_left_edge_events{0};
     std::atomic<std::uint32_t> pending_mouse_left_frames{0};
+    std::atomic<bool> injected_mouse_left_active{false};
     std::atomic<std::uint32_t> pending_hub_start_testrun_requests{0};
     std::atomic<std::uint32_t> pending_start_waves_requests{0};
     std::atomic<std::uint32_t> pending_enable_combat_prelude_requests{0};

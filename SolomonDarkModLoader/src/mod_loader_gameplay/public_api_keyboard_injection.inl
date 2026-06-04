@@ -480,6 +480,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.injected_mouse_left_active.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.gameplay_region_switch_not_before_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.scene_churn_not_before_ms.store(0, std::memory_order_release);
@@ -560,6 +562,7 @@ void ShutdownGameplayKeyboardInjection() {
     g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.injected_mouse_left_active.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_start_waves_requests.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_enable_combat_prelude_requests.store(0, std::memory_order_release);

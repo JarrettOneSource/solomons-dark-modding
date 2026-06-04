@@ -34,6 +34,7 @@ void __fastcall HookPlayerControlBrainUpdate(
     bool have_face_target = false;
     float face_target_x = 0.0f;
     float face_target_y = 0.0f;
+    bool sanitize_native_remote_idle_control_brain = false;
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);
@@ -99,6 +100,9 @@ void __fastcall HookPlayerControlBrainUpdate(
             }
             bot_id = binding->bot_id;
             startup = binding->ongoing_cast.startup_in_progress;
+            sanitize_native_remote_idle_control_brain =
+                IsNativeRemoteParticipantBinding(binding) &&
+                !binding->ongoing_cast.active;
             native_target_control_active =
                 binding->ongoing_cast.active &&
                 OngoingCastNeedsNativeTargetActor(binding->ongoing_cast);
@@ -259,12 +263,21 @@ void __fastcall HookPlayerControlBrainUpdate(
         }
     };
 
+    if (sanitize_native_remote_idle_control_brain) {
+        ClearIdleNativeRemoteCastReplayState(actor_address, selection_pointer);
+        (void)write_vector2(param2, 0.0f, 0.0f);
+    }
+
     // Stock attack/cast code consumes the face lane during its own update, so
     // provide the current target-facing vector before the original runs. Re-pin
     // after the original too because stock may clear the cached target fields.
     seed_selection_target();
     apply_face_control();
     original(self, param2, param3);
+    if (sanitize_native_remote_idle_control_brain) {
+        ClearIdleNativeRemoteCastReplayState(actor_address, selection_pointer);
+        (void)write_vector2(param2, 0.0f, 0.0f);
+    }
 
     float raw_move_x_after = 0.0f;
     float raw_move_y_after = 0.0f;

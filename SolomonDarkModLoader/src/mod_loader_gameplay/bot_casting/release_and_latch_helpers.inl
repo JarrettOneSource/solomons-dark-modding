@@ -304,6 +304,12 @@ void FinishBotCastNativeLifecycle(
             HexString(state.remote_per_cast_projectile_observed_actor) +
         " remote_projectile_observed_ticks=" +
             std::to_string(state.remote_per_cast_projectile_observed_ticks_waiting) +
+        " remote_projectile_missing_ticks=" +
+            std::to_string(state.remote_per_cast_projectile_missing_ticks_waiting) +
+        " remote_projectile_reached_target=" +
+            (state.remote_per_cast_projectile_reached_target ? std::string("1") : std::string("0")) +
+        " remote_projectile_target_ticks=" +
+            std::to_string(state.remote_per_cast_projectile_target_ticks_waiting) +
         " group_before=" + group_before_text +
         " slot_before=" + slot_before_text +
         " group_after=" + group_after_text +

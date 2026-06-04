@@ -261,6 +261,7 @@ def queue_gameplay_mouse_left(direction: Direction, frames: int) -> dict[str, st
         direction.source_pipe,
         f"""
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
+if sd.input.clear_mouse_left ~= nil then emit("clear_before", sd.input.clear_mouse_left()) end
 emit("mouse_left_frames", sd.input.hold_mouse_left_frames({frames}))
 """,
         timeout=5.0,

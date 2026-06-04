@@ -98,3 +98,35 @@ bool TryFindNewPurePrimaryProjectileActorInScene(
     }
     return false;
 }
+
+bool TryFindPurePrimaryProjectileActorStateInScene(
+    std::uint32_t expected_object_type_id,
+    uintptr_t actor_address,
+    SDModSceneActorState* projectile_state) {
+    if (projectile_state != nullptr) {
+        *projectile_state = SDModSceneActorState{};
+    }
+    if (actor_address == 0) {
+        return false;
+    }
+
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        return false;
+    }
+
+    for (const auto& actor : actors) {
+        const bool matches_expected_type =
+            expected_object_type_id == 0 ||
+            actor.object_type_id == expected_object_type_id;
+        if (matches_expected_type &&
+            IsPurePrimaryProjectileActorType(actor.object_type_id) &&
+            actor.actor_address == actor_address) {
+            if (projectile_state != nullptr) {
+                *projectile_state = actor;
+            }
+            return true;
+        }
+    }
+    return false;
+}

@@ -81,12 +81,10 @@ finished peer networking layer.
   snapshot, it accelerates its native wave-spawner timers to fill the local
   enemy pool through the stock path. Extra client-side hub NPCs from replicated
   factory-backed families are unregistered from the client world so the hub NPC
-  set converges to the host snapshot, and replicated hub NPCs created by the
-  client are unregistered before a native scene switch so hub-to-run teardown
-  does not leave loader-created actors in the outgoing world. Remote participant
-  wizard actors are also dematerialized before the native scene switch while the
-  outgoing world is still stable, then rematerialized as fresh participant
-  actors after scene churn settles. Host-authoritative
+  set converges to the host snapshot. During native scene switch, replicated hub
+  NPC bindings and remote participant wizard bindings are abandoned so the
+  outgoing world teardown remains the single actor-lifetime owner; fresh
+  participant actors are materialized after scene churn settles. Host-authoritative
   run entry is driven by the host's `StatePacket` scene intent: connected
   clients reject direct `sd.hub.start_testrun` calls and block direct arena
   `switch_region` attempts, then queue their local hub-to-run transition when

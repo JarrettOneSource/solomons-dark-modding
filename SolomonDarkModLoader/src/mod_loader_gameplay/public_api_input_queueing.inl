@@ -52,6 +52,20 @@ bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_m
     return true;
 }
 
+void ClearQueuedGameplayMouseLeft() {
+    g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
+    g_gameplay_keyboard_injection.injected_mouse_left_active.store(true, std::memory_order_release);
+
+    uintptr_t gameplay_address = 0;
+    if (TryResolveCurrentGameplayScene(&gameplay_address) && gameplay_address != 0) {
+        const std::uint8_t released = 0;
+        ProcessMemory::Instance().TryWriteField(gameplay_address, kGameplayCastIntentOffset, released);
+    }
+    Log("Cleared queued gameplay mouse-left input.");
+}
+
 bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();

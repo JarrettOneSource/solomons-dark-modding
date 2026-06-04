@@ -185,6 +185,12 @@ int LuaInputHoldMouseLeftFrames(lua_State* state) {
     return 1;
 }
 
+int LuaInputClearMouseLeft(lua_State* state) {
+    ClearQueuedGameplayMouseLeft();
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 int LuaInputQueueLocalSpellCast(lua_State* state) {
     const auto raw_skill_id = luaL_checkinteger(state, 1);
     if (raw_skill_id < 0) {
@@ -242,11 +248,12 @@ int LuaInputQueueLocalEnemyDamageClaim(lua_State* state) {
 }  // namespace
 
 void RegisterLuaInputBindings(lua_State* state) {
-    lua_createtable(state, 0, 6);
+    lua_createtable(state, 0, 7);
     RegisterFunction(state, &LuaInputPressKey, "press_key");
     RegisterFunction(state, &LuaInputPressScancode, "press_scancode");
     RegisterFunction(state, &LuaInputClickNormalized, "click_normalized");
     RegisterFunction(state, &LuaInputHoldMouseLeftFrames, "hold_mouse_left_frames");
+    RegisterFunction(state, &LuaInputClearMouseLeft, "clear_mouse_left");
     RegisterFunction(state, &LuaInputQueueLocalSpellCast, "queue_local_spell_cast");
     RegisterFunction(state, &LuaInputQueueLocalEnemyDamageClaim, "queue_local_enemy_damage_claim");
     lua_setfield(state, -2, "input");

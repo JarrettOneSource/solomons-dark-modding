@@ -1188,48 +1188,17 @@ void RemoveReplicatedCreatedSharedHubActorsForSceneSwitch(const char* reason) {
         return;
     }
 
-    std::vector<std::pair<std::uint64_t, uintptr_t>> created_actors;
-    created_actors.reserve(g_replicated_created_hub_actors.size());
-    for (const auto& entry : g_replicated_created_hub_actors) {
-        if (entry.first != 0 && entry.second != 0) {
-            created_actors.push_back(entry);
-        }
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    std::uint32_t removed_count = 0;
-    std::uint32_t failed_remove_count = 0;
-    DWORD last_exception_code = 0;
-    for (const auto& entry : created_actors) {
-        std::uint32_t native_type_id = 0;
-        if (!memory.TryReadField(entry.second, kGameObjectTypeIdOffset, &native_type_id) ||
-            !IsReplicatedSharedHubFactoryActorType(native_type_id)) {
-            ++failed_remove_count;
-            continue;
-        }
-
-        ReplicatedWorldActorLocalBinding binding;
-        binding.network_actor_id = entry.first;
-        binding.actor.actor_address = entry.second;
-        binding.actor.object_type_id = native_type_id;
-        DWORD exception_code = 0;
-        if (RemoveReplicatedSharedHubActor(binding, &exception_code)) {
-            ++removed_count;
-        } else {
-            ++failed_remove_count;
-            last_exception_code = exception_code;
-        }
-    }
-
+    const auto abandoned_count =
+        static_cast<std::uint32_t>(g_replicated_created_hub_actors.size());
+    // These actors are registered to the native hub world. During region switch
+    // the stock scene teardown owns their lifetime; unregistering them here can
+    // corrupt the world heap and then fault inside native switch_region.
     ClearReplicatedSharedHubActorBindings();
     g_replicated_created_hub_scene_epoch = 0;
     Log(
-        "world_snapshot: removed replicated hub actors for scene switch. reason=" +
+        "world_snapshot: abandoned replicated hub actor bindings for scene switch. reason=" +
         std::string(reason != nullptr ? reason : "unknown") +
-        " count=" + std::to_string(static_cast<std::uint32_t>(created_actors.size())) +
-        " removed=" + std::to_string(removed_count) +
-        " failed=" + std::to_string(failed_remove_count) +
-        " last_seh=" + HexString(last_exception_code));
+        " count=" + std::to_string(abandoned_count));
 }
 
 std::vector<ReplicatedWorldActorLocalBinding> BuildLocalReplicatedWorldActorBindings(

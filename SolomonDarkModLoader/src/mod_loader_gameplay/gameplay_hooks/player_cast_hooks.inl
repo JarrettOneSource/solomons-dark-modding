@@ -8,6 +8,71 @@ bool IsTrackedWizardParticipantActorForHud(uintptr_t actor_address) {
     return binding != nullptr && IsWizardParticipantKind(binding->kind);
 }
 
+bool IsIdleNativeRemoteParticipantActor(uintptr_t actor_address, std::uint64_t* out_bot_id = nullptr) {
+    if (out_bot_id != nullptr) {
+        *out_bot_id = 0;
+    }
+    if (actor_address == 0) {
+        return false;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    const auto* binding = FindParticipantEntityForActor(actor_address);
+    if (binding == nullptr ||
+        !IsNativeRemoteParticipantBinding(binding) ||
+        binding->ongoing_cast.active) {
+        return false;
+    }
+    if (out_bot_id != nullptr) {
+        *out_bot_id = binding->bot_id;
+    }
+    return true;
+}
+
+void ClearIdleNativeRemoteCastReplayState(uintptr_t actor_address, uintptr_t selection_pointer = 0) {
+    if (actor_address == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
+    (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPreviousSkillIdOffset, 0);
+    (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorPrimaryActionLatchE4Offset, 0);
+    (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorPrimaryActionLatchE8Offset, 0);
+    (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorPostGateActiveByteOffset, 0);
+    (void)memory.TryWriteField<std::uint8_t>(
+        actor_address,
+        kActorSpellTargetGroupByteOffset,
+        kTargetHandleGroupSentinel);
+    (void)memory.TryWriteField<std::uint16_t>(
+        actor_address,
+        kActorSpellTargetSlotShortOffset,
+        kTargetHandleSlotSentinel);
+
+    if (selection_pointer == 0) {
+        (void)memory.TryReadField(
+            actor_address,
+            kActorAnimationSelectionStateOffset,
+            &selection_pointer);
+    }
+    if (selection_pointer == 0) {
+        return;
+    }
+
+    (void)memory.TryWriteField<std::uint8_t>(
+        selection_pointer,
+        kActorControlBrainTargetSlotOffset,
+        kTargetHandleGroupSentinel);
+    (void)memory.TryWriteField<std::uint16_t>(
+        selection_pointer,
+        kActorControlBrainTargetHandleOffset,
+        kTargetHandleSlotSentinel);
+    (void)memory.TryWriteField<std::int32_t>(
+        selection_pointer,
+        kActorControlBrainActionBurstTicksOffset,
+        0);
+}
+
 void __fastcall HookPlayerActorVtable28(void* self, void* /*unused_edx*/) {
     const auto original =
         GetX86HookTrampoline<PlayerActorNoArgMethodFn>(g_gameplay_keyboard_injection.player_actor_vtable28_hook);
@@ -82,6 +147,11 @@ void __fastcall HookPlayerActorPurePrimaryGate(void* self, void* /*unused_edx*/)
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    if (IsIdleNativeRemoteParticipantActor(actor_address, nullptr)) {
+        ClearIdleNativeRemoteCastReplayState(actor_address);
+        return;
+    }
+
     bool log_this = false;
     std::uint64_t bot_id = 0;
     bool startup = false;
@@ -176,6 +246,11 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    if (IsIdleNativeRemoteParticipantActor(actor_address, nullptr)) {
+        ClearIdleNativeRemoteCastReplayState(actor_address);
+        return;
+    }
+
     bool log_this = false;
     std::uint64_t bot_id = 0;
     bool startup = false;

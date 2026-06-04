@@ -4546,13 +4546,13 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "pending_participant_sync_requests"),
         (world_snapshot_reconciliation_text, "CanMutateReplicatedSharedHubActors"),
         (world_snapshot_reconciliation_text, "RemoveReplicatedCreatedSharedHubActorsForSceneSwitch"),
-        (world_snapshot_reconciliation_text, "removed replicated hub actors for scene switch"),
+        (world_snapshot_reconciliation_text, "abandoned replicated hub actor bindings for scene switch"),
         (world_snapshot_reconciliation_text, "RemoveReplicatedSharedHubActor(binding, &exception_code)"),
-        (world_snapshot_reconciliation_text, "failed_remove_count"),
+        (world_snapshot_reconciliation_text, "abandoned_count"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "RemoveReplicatedCreatedSharedHubActorsForSceneSwitch(\"scene switch pre-dispatch\")"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "wizard_bot_sync_not_before_ms.store"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "pending_participant_sync_requests.clear()"),
-        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "DematerializeAllMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "AbandonMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "AbandonMaterializedWizardBotsForSceneSwitch(\"scene switch post-dispatch\")"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"), "DematerializeParticipantEntityNow(bot_id, false, reason)"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"), "abandoned bot entity for scene switch"),
@@ -4822,6 +4822,45 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     if missing:
         raise StaticReTestFailure(
             "local multiplayer transport wiring missing token(s): " + ", ".join(missing))
+    scene_switch_cleanup = re.search(
+        r"void\s+RemoveReplicatedCreatedSharedHubActorsForSceneSwitch\s*"
+        r"\([^)]*\)\s*\{(?P<body>.*?)\n\}",
+        world_snapshot_reconciliation_text,
+        re.DOTALL,
+    )
+    if scene_switch_cleanup is None:
+        raise StaticReTestFailure("scene-switch replicated hub actor cleanup function missing")
+    scene_switch_cleanup_body = scene_switch_cleanup.group("body")
+    forbidden_scene_switch_cleanup = [
+        token for token in (
+            "RemoveReplicatedSharedHubActor(",
+            "CallActorWorldUnregisterSafe",
+            "CallObjectDeleteSafe",
+        )
+        if token in scene_switch_cleanup_body
+    ]
+    if forbidden_scene_switch_cleanup:
+        raise StaticReTestFailure(
+            "scene-switch replicated hub cleanup must abandon bindings and let native teardown own actors: " +
+            ", ".join(forbidden_scene_switch_cleanup))
+    actor_lifecycle_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"
+    )
+    switch_region_hook = re.search(
+        r"void\s+__fastcall\s+HookGameplaySwitchRegion\s*"
+        r"\([^)]*\)\s*\{(?P<body>.*?)\n\}",
+        actor_lifecycle_text,
+        re.DOTALL,
+    )
+    if switch_region_hook is None:
+        raise StaticReTestFailure("gameplay switch-region hook missing")
+    switch_region_body = switch_region_hook.group("body")
+    if "AbandonMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")" not in switch_region_body:
+        raise StaticReTestFailure(
+            "scene switch must abandon materialized remote wizard bindings before native teardown")
+    if "DematerializeAllMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")" in switch_region_body:
+        raise StaticReTestFailure(
+            "scene switch must not world-unregister materialized remote wizard actors before native teardown")
     allow_focus_gate = script_text.find("if ($AllowFocusSteal) {")
     foreground_call = script_text.find(
         "[void][SolomonDarkWindowActivator]::SetForegroundWindow")
@@ -5995,9 +6034,16 @@ def test_remote_per_cast_primary_settles_without_waiting_for_release() -> str:
     player_control_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
     )
+    player_cast_text = read_text(PLAYER_CAST_HOOKS)
     transport_text = read_text(MULTIPLAYER_LOCAL_TRANSPORT)
     runtime_state_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/runtime_request_state.inl"
+    )
+    mouse_refresh_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_mouse_refresh_hook.inl"
+    )
+    input_queue_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_input_queueing.inl"
     )
     verifier_text = read_text(REAL_INPUT_SPELL_CAST_SYNC_VERIFIER)
     animation_element_verifier_text = read_text(
@@ -6010,6 +6056,10 @@ def test_remote_per_cast_primary_settles_without_waiting_for_release() -> str:
         "remote_per_cast_pure_primary_without_live_handle",
         "remote_per_cast_projectile_observed",
         "kRemotePerCastPurePrimaryProjectileSettleTicks",
+        "kRemotePerCastPurePrimaryProjectileMissingSettleTicks",
+        "remote_per_cast_projectile_impact_lifecycle_settled",
+        "remote_per_cast_projectile_targetless_settled",
+        "preserve_remote_per_cast_projectile_target",
         "kRemotePerCastPurePrimaryNoProjectileSafetyTicks",
         "remote_release_driven_pure_primary_no_handle_settled",
         "ongoing.mana_charge_kind != multiplayer::BotManaChargeKind::PerCast",
@@ -6040,11 +6090,17 @@ def test_remote_per_cast_primary_settles_without_waiting_for_release() -> str:
         (projectile_observation_text, "projectile_observation", "TryListSceneActors"),
         (projectile_observation_text, "projectile_observation", "TryFindNewPurePrimaryProjectileActorInScene("),
         (processing_text, "processing", "TryFindNewPurePrimaryProjectileActorInScene("),
+        (processing_text, "processing", "TryFindPurePrimaryProjectileActorStateInScene("),
         (processing_text, "processing", "ongoing.remote_per_cast_projectile_expected_type"),
         (processing_text, "processing", "remote_per_cast_projectile_observed_actor"),
+        (processing_text, "processing", "remote_per_cast_projectile_reached_target"),
+        (processing_text, "processing", "remote_per_cast_projectile_missing_ticks_waiting"),
+        (projectile_observation_text, "projectile_observation", "TryFindPurePrimaryProjectileActorStateInScene("),
         (release_text, "release", "remote_cast_sequence="),
         (release_text, "release", "remote_projectile_expected_type="),
         (release_text, "release", "remote_projectile_observed_actor="),
+        (release_text, "release", "remote_projectile_reached_target="),
+        (release_text, "release", "remote_projectile_missing_ticks="),
         (player_control_text, "player_control", "native_tick_ms="),
         (player_control_text, "player_control", "native_queue_id="),
         (player_control_text, "player_control", "s_last_multiplayer_primary_actor"),
@@ -6083,6 +6139,45 @@ def test_remote_per_cast_primary_settles_without_waiting_for_release() -> str:
     ):
         raise StaticReTestFailure(
             "remote cast startup must not reject stale non-finite actor aim-target cache fields")
+    if re.search(
+        r"remote_per_cast_pure_primary_no_handle_settled\s*=\s*"
+        r".*remote_per_cast_projectile_observed_ticks_waiting\s*>=\s*"
+        r"kRemotePerCastPurePrimaryProjectileSettleTicks",
+        processing_text,
+        re.S,
+    ):
+        raise StaticReTestFailure(
+            "targeted remote pure-primary projectiles must not settle solely from observed tick count")
+    if re.search(
+        r"remote_per_cast_projectile_impact_lifecycle_settled\s*=\s*"
+        r".*remote_per_cast_projectile_reached_target\s*&&",
+        processing_text,
+        re.S,
+    ):
+        raise StaticReTestFailure(
+            "targeted remote pure-primary projectiles must wait for native projectile disappearance, not target proximity")
+    impact_lifecycle_initializer = re.search(
+        r"remote_per_cast_projectile_impact_lifecycle_settled\s*=\s*(?P<body>.*?);",
+        processing_text,
+        re.S,
+    )
+    if (
+        impact_lifecycle_initializer is not None and
+        "remote_per_cast_projectile_observed_ticks_waiting" in
+        impact_lifecycle_initializer.group("body")
+    ):
+        raise StaticReTestFailure(
+            "targeted remote pure-primary projectiles must not settle from an observed-tick safety cap")
+    if not re.search(
+        r"preserve_remote_per_cast_projectile_target\s*=\s*"
+        r".*ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary"
+        r".*multiplayer::BotManaChargeKind::PerCast"
+        r".*ongoing\.target_actor_address\s*!=\s*0",
+        processing_text,
+        re.S,
+    ):
+        raise StaticReTestFailure(
+            "remote per-cast pure-primary casts must preserve the initial target through release updates")
 
     stale_click_tokens = [
         token for token in (
@@ -6115,6 +6210,78 @@ def test_remote_per_cast_primary_settles_without_waiting_for_release() -> str:
     if "Multiplayer local cast event dropped while gesture active" in transport_text:
         raise StaticReTestFailure(
             "held primary native restarts still use the old drop path while a gesture is active")
+    required_idle_remote_suppression_tokens = (
+        "sanitize_native_remote_idle_control_brain",
+        "ClearIdleNativeRemoteCastReplayState(actor_address, selection_pointer);",
+        "ClearIdleNativeRemoteCastReplayState(actor_address);",
+        "IsIdleNativeRemoteParticipantActor(actor_address, nullptr)",
+        "IsNativeRemoteParticipantBinding(binding) &&",
+        "!binding->ongoing_cast.active",
+        "kActorPrimaryActionLatchE4Offset",
+        "kActorPrimaryActionLatchE8Offset",
+        "kActorPostGateActiveByteOffset",
+        "(void)write_vector2(param2, 0.0f, 0.0f);",
+    )
+    missing_idle_remote_suppression_tokens = [
+        token for token in required_idle_remote_suppression_tokens
+        if token not in player_control_text and token not in player_cast_text
+    ]
+    if missing_idle_remote_suppression_tokens:
+        raise StaticReTestFailure(
+            "idle native-remote participants must not let stock control brain replay casts: " +
+            ", ".join(missing_idle_remote_suppression_tokens))
+    idle_remote_suppression = re.search(
+        r"if\s*\(\s*sanitize_native_remote_idle_control_brain\s*\)\s*\{(?P<body>.*?)\n\s*\}",
+        player_control_text,
+        re.S,
+    )
+    if idle_remote_suppression is None:
+        raise StaticReTestFailure("idle native-remote control-brain sanitation block is missing")
+    idle_remote_suppression_body = idle_remote_suppression.group("body")
+    if "return;" in idle_remote_suppression_body:
+        raise StaticReTestFailure(
+            "idle native-remote control-brain sanitation must not skip stock original()")
+    original_call = player_control_text.find("original(self, param2, param3);")
+    sanitation_before = player_control_text.find("if (sanitize_native_remote_idle_control_brain)")
+    sanitation_after = player_control_text.find(
+        "if (sanitize_native_remote_idle_control_brain)",
+        original_call + len("original(self, param2, param3);") if original_call != -1 else 0,
+    )
+    if (
+        original_call == -1 or
+        sanitation_before == -1 or
+        sanitation_after == -1 or
+        sanitation_before > original_call or
+        sanitation_after < original_call
+    ):
+        raise StaticReTestFailure(
+            "idle native-remote control-brain sanitation must scrub before and after stock original()")
+    for hook_name in ("HookPlayerActorPurePrimaryGate", "HookSpellCastDispatcher"):
+        hook_start = player_cast_text.find(f"void __fastcall {hook_name}")
+        if hook_start == -1:
+            raise StaticReTestFailure(f"{hook_name} is missing")
+        next_hook = player_cast_text.find("void __fastcall", hook_start + 1)
+        hook_body = player_cast_text[hook_start:next_hook if next_hook != -1 else len(player_cast_text)]
+        guard_pos = hook_body.find("IsIdleNativeRemoteParticipantActor(actor_address, nullptr)")
+        original_pos = hook_body.find("original(self)")
+        if guard_pos == -1 or original_pos == -1 or guard_pos > original_pos:
+            raise StaticReTestFailure(
+                f"{hook_name} must reject idle native-remote replay before stock cast execution")
+    required_mouse_release_tokens = (
+        (runtime_state_text, "runtime_state", "injected_mouse_left_active"),
+        (mouse_refresh_text, "mouse_refresh", "Released injected gameplay mouse-left"),
+        (mouse_refresh_text, "mouse_refresh", "kGameplayCastIntentOffset"),
+        (input_queue_text, "input_queue", "ClearQueuedGameplayMouseLeft"),
+        (input_queue_text, "input_queue", "pending_mouse_left_frames.store(0"),
+        (verifier_text, "real_input_verifier", "sd.input.clear_mouse_left"),
+    )
+    missing_mouse_release_tokens = [
+        f"{label}:{token}" for text, label, token in required_mouse_release_tokens if token not in text
+    ]
+    if missing_mouse_release_tokens:
+        raise StaticReTestFailure(
+            "queued gameplay mouse-left input must release its injected press/cast-intent state: " +
+            ", ".join(missing_mouse_release_tokens))
 
     if "remote_projectile_observed_count != native_hook_count" not in verifier_text:
         if "assert_sequence_counts" not in verifier_text:

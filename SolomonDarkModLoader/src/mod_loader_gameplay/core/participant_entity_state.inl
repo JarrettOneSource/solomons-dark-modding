@@ -188,6 +188,9 @@ struct ParticipantEntityBinding {
         bool remote_per_cast_projectile_observed = false;
         uintptr_t remote_per_cast_projectile_observed_actor = 0;
         int remote_per_cast_projectile_observed_ticks_waiting = 0;
+        int remote_per_cast_projectile_missing_ticks_waiting = 0;
+        bool remote_per_cast_projectile_reached_target = false;
+        int remote_per_cast_projectile_target_ticks_waiting = 0;
         bool saw_latch = false;
         bool saw_activity = false;
         bool saw_live_handle = false;
