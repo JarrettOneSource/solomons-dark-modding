@@ -154,6 +154,20 @@ void ShutdownPartialRuntime() {
     ShutdownBinaryLayout();
 }
 
+void RunShutdownStep(const char* name, void (*step)()) noexcept {
+    if (step == nullptr) {
+        return;
+    }
+
+    try {
+        step();
+    } catch (const std::exception& ex) {
+        Log(std::string("Shutdown step failed: ") + (name == nullptr ? "unknown" : name) + ": " + ex.what());
+    } catch (...) {
+        Log(std::string("Shutdown step failed: ") + (name == nullptr ? "unknown" : name) + ": unknown exception.");
+    }
+}
+
 }  // namespace
 
 void Initialize(HMODULE module_handle) {
@@ -409,24 +423,24 @@ void Shutdown() {
     }
 
     Log("SolomonDarkModLoader shutting down.");
-    StopLuaExecPipeServer();
-    ShutdownBackgroundFocusBypass();
-    ShutdownGameplayKeyboardInjection();
-    ShutdownRunLifecycleHooks();
-    StopRuntimeTickService();
-    RuntimeDebug_Shutdown();
-    ShutdownDebugUiOverlay();
-    ShutdownNativeMods();
-    multiplayer::ShutdownBotRuntime();
-    multiplayer::ShutdownFoundation();
-    ShutdownSteamBootstrap();
-    ShutdownLuaEngine();
-    ShutdownDebugUiOverlayConfig();
-    ShutdownGameplaySeams();
-    ShutdownBinaryLayout();
-    FlushLogger();
-    ShutdownCrashHandler();
-    ShutdownLogger();
+    RunShutdownStep("lua exec pipe", &StopLuaExecPipeServer);
+    RunShutdownStep("background focus bypass", &ShutdownBackgroundFocusBypass);
+    RunShutdownStep("gameplay keyboard injection", &ShutdownGameplayKeyboardInjection);
+    RunShutdownStep("run lifecycle hooks", &ShutdownRunLifecycleHooks);
+    RunShutdownStep("runtime tick service", &StopRuntimeTickService);
+    RunShutdownStep("runtime debug", &RuntimeDebug_Shutdown);
+    RunShutdownStep("debug ui overlay", &ShutdownDebugUiOverlay);
+    RunShutdownStep("native mods", &ShutdownNativeMods);
+    RunShutdownStep("bot runtime", &multiplayer::ShutdownBotRuntime);
+    RunShutdownStep("multiplayer foundation", &multiplayer::ShutdownFoundation);
+    RunShutdownStep("steam bootstrap", &ShutdownSteamBootstrap);
+    RunShutdownStep("lua engine", &ShutdownLuaEngine);
+    RunShutdownStep("debug ui overlay config", &ShutdownDebugUiOverlayConfig);
+    RunShutdownStep("gameplay seams", &ShutdownGameplaySeams);
+    RunShutdownStep("binary layout", &ShutdownBinaryLayout);
+    RunShutdownStep("logger flush", &FlushLogger);
+    RunShutdownStep("crash handler", &ShutdownCrashHandler);
+    RunShutdownStep("logger", &ShutdownLogger);
     g_module_handle = nullptr;
     g_project_root.clear();
 }

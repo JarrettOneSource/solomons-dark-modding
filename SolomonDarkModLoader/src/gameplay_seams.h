@@ -407,6 +407,7 @@ extern std::size_t kSourceProfileVariantTertiaryOffset;
 extern std::size_t kSourceProfileClothColorOffset;
 extern std::size_t kSourceProfileTrimColorOffset;
 extern std::size_t kEnemyDeathHandledOffset;
+extern std::size_t kEnemyDeathPresenterVtableSlotOffset;
 extern std::size_t kEnemyConfigOffset;
 extern std::size_t kEnemyTypeOffset;
 extern std::size_t kEnemyMaxHpOffset;

@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <exception>
 #include <limits>
 #include <sstream>
 #include <string>
@@ -467,14 +468,6 @@ void StopLuaExecPipeServer() {
         SetEvent(g_pipe_stop_event);
     }
     if (g_pipe_thread.joinable()) {
-        std::atomic<bool> keep_nudging = true;
-        std::thread nudge_thread([&keep_nudging]() {
-            while (keep_nudging.load(std::memory_order_acquire)) {
-                NudgePipeServerForShutdown();
-                Sleep(10);
-            }
-        });
-
         const BOOL canceled = CancelSynchronousIo(g_pipe_thread.native_handle());
         if (!canceled) {
             const DWORD error = GetLastError();
@@ -482,9 +475,14 @@ void StopLuaExecPipeServer() {
                 LogPipeWin32Failure("CancelSynchronousIo", error);
             }
         }
-        g_pipe_thread.join();
-        keep_nudging.store(false, std::memory_order_release);
-        nudge_thread.join();
+        NudgePipeServerForShutdown();
+        try {
+            g_pipe_thread.join();
+        } catch (const std::exception& ex) {
+            Log(std::string("[lua-exec-pipe] failed to join server thread during shutdown: ") + ex.what());
+        } catch (...) {
+            Log("[lua-exec-pipe] failed to join server thread during shutdown: unknown exception.");
+        }
     }
     if (g_pipe_stop_event != nullptr) {
         CloseHandle(g_pipe_stop_event);

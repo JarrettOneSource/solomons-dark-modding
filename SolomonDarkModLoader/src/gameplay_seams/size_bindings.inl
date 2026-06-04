@@ -242,6 +242,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "source_profile_cloth_color", kSourceProfileClothColorOffset),
         SDMOD_SIZE("gameplay.offsets", "source_profile_trim_color", kSourceProfileTrimColorOffset),
         SDMOD_SIZE("gameplay.offsets", "enemy_death_handled", kEnemyDeathHandledOffset),
+        SDMOD_SIZE("gameplay.offsets", "enemy_death_presenter_vtable_slot", kEnemyDeathPresenterVtableSlotOffset),
         SDMOD_SIZE("gameplay.offsets", "enemy_config", kEnemyConfigOffset),
         SDMOD_SIZE("gameplay.offsets", "enemy_type", kEnemyTypeOffset),
         SDMOD_SIZE("gameplay.offsets", "enemy_max_hp", kEnemyMaxHpOffset),

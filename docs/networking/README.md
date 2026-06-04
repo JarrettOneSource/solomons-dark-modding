@@ -82,9 +82,12 @@ finished peer networking layer.
   enemy pool through the stock path. Extra client-side hub NPCs from replicated
   factory-backed families are unregistered from the client world so the hub NPC
   set converges to the host snapshot. During native scene switch, replicated hub
-  NPC bindings and remote participant wizard bindings are abandoned so the
-  outgoing world teardown remains the single actor-lifetime owner; fresh
-  participant actors are materialized after scene churn settles. Host-authoritative
+  NPC bindings are abandoned, while remote participant wizard bindings stay
+  tracked through native unregister so loader-owned clones can be identified,
+  reset immediately after native unregister, and suppressed only for the known
+  unsafe `remove_from_container=1` scene-churn path; stale participant bindings
+  are abandoned after the switch returns.
+  Host-authoritative
   run entry is driven by the host's `StatePacket` scene intent: connected
   clients reject direct `sd.hub.start_testrun` calls and block direct arena
   `switch_region` attempts, then queue their local hub-to-run transition when

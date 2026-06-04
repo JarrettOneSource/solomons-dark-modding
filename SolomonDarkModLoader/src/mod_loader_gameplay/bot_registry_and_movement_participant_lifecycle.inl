@@ -310,6 +310,34 @@ void DematerializeAllMaterializedWizardBotsForSceneSwitch(std::string_view reaso
     }
 }
 
+void PrepareMaterializedWizardBotsForSceneSwitch(std::string_view reason) {
+    auto& memory = ProcessMemory::Instance();
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    for (auto& binding : g_participant_entities) {
+        if (!IsWizardParticipantKind(binding.kind) || binding.actor_address == 0) {
+            continue;
+        }
+
+        const auto actor_address = binding.actor_address;
+        uintptr_t owner_address = 0;
+        (void)memory.TryReadField(actor_address, kActorOwnerOffset, &owner_address);
+        StopWizardBotActorMotion(actor_address);
+        binding.controller_state = multiplayer::BotControllerState::Idle;
+        binding.movement_active = false;
+        binding.has_target = false;
+        binding.desired_heading_valid = false;
+        binding.next_scene_materialize_retry_ms = 0;
+        PublishParticipantGameplaySnapshot(binding);
+        Log(
+            "[bots] prepared bot entity for scene switch. bot_id=" + std::to_string(binding.bot_id) +
+            " slot=" + std::to_string(binding.gameplay_slot) +
+            " kind=" + std::to_string(static_cast<int>(binding.kind)) +
+            " actor=" + HexString(actor_address) +
+            " owner=" + HexString(owner_address) +
+            " reason=" + std::string(reason));
+    }
+}
+
 void AbandonMaterializedWizardBotsForSceneSwitch(std::string_view reason) {
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
     for (auto& binding : g_participant_entities) {

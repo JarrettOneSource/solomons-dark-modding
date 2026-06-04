@@ -117,10 +117,52 @@ void __fastcall HookPuppetManagerDeletePuppet(void* self, void* /*unused_edx*/, 
         return;
     }
 
+    const auto manager_address = reinterpret_cast<uintptr_t>(self);
+    const auto actor_address = reinterpret_cast<uintptr_t>(actor);
+    const auto now_ms = static_cast<std::uint64_t>(::GetTickCount64());
+    const auto scene_churn_until =
+        g_gameplay_keyboard_injection.scene_churn_not_before_ms.load(std::memory_order_acquire);
+    std::uint64_t scene_churn_bot_id = 0;
+    int scene_churn_gameplay_slot = -1;
+    if (actor_address != 0 &&
+        now_ms < scene_churn_until &&
+        TryCaptureTrackedStandaloneWizardBindingIdentity(
+            actor_address,
+            &scene_churn_bot_id,
+            &scene_churn_gameplay_slot)) {
+        auto& memory = ProcessMemory::Instance();
+        uintptr_t world_address = 0;
+        (void)memory.TryReadField(manager_address, kPuppetManagerOwnerRegionOffset, &world_address);
+        const auto unregister_address = memory.ResolveGameAddressOrZero(kActorWorldUnregister);
+        DWORD exception_code = 0;
+        bool unregistered = false;
+        if (world_address != 0 && unregister_address != 0) {
+            ++g_loader_owned_actor_destroy_unregister_depth;
+            unregistered = CallActorWorldUnregisterSafe(
+                unregister_address,
+                world_address,
+                actor_address,
+                0,
+                &exception_code);
+            --g_loader_owned_actor_destroy_unregister_depth;
+        }
+        MarkParticipantEntityWorldUnregistered(actor_address);
+        Log(
+            "[bots] puppet_manager_delete_puppet skipped object delete during scene churn. actor=" +
+            HexString(actor_address) +
+            " bot_id=" + std::to_string(scene_churn_bot_id) +
+            " slot=" + std::to_string(scene_churn_gameplay_slot) +
+            " manager=" + HexString(manager_address) +
+            " world=" + HexString(world_address) +
+            " unregister=" + std::to_string(unregistered ? 1 : 0) +
+            " unregister_seh=" + HexString(static_cast<uintptr_t>(exception_code)));
+        return;
+    }
+
     LogStandaloneWizardRegionDeleteEvent(
         "puppet_manager_delete_puppet enter",
-        reinterpret_cast<uintptr_t>(self),
-        reinterpret_cast<uintptr_t>(actor),
+        manager_address,
+        actor_address,
         reinterpret_cast<uintptr_t>(_ReturnAddress()));
     original(self, actor);
 }
@@ -184,8 +226,11 @@ void __fastcall HookActorWorldUnregister(
     const auto now_ms = static_cast<std::uint64_t>(::GetTickCount64());
     const auto scene_churn_until =
         g_gameplay_keyboard_injection.scene_churn_not_before_ms.load(std::memory_order_acquire);
+    const bool tracked_standalone_scene_churn_actor =
+        actor_address != 0 &&
+        now_ms < scene_churn_until &&
+        TryCaptureTrackedStandaloneWizardBindingIdentity(actor_address, nullptr, nullptr);
     if (actor_address != 0 &&
-        remove_from_container == 1 &&
         now_ms < scene_churn_until &&
         g_loader_owned_actor_destroy_unregister_depth == 0) {
         std::uint64_t bot_id = 0;
@@ -196,7 +241,8 @@ void __fastcall HookActorWorldUnregister(
                 HexString(actor_address) +
                 " bot_id=" + std::to_string(bot_id) +
                 " slot=" + std::to_string(gameplay_slot) +
-                " world=" + HexString(world_address));
+                " world=" + HexString(world_address) +
+                " arg=" + std::to_string(static_cast<int>(remove_from_container)));
             MarkParticipantEntityWorldUnregistered(actor_address);
             return;
         }
@@ -222,7 +268,8 @@ void __fastcall HookActorWorldUnregister(
     }
 
     original(self, actor, remove_from_container);
-    if (actor_address != 0 && remove_from_container == 1 && now_ms < scene_churn_until) {
+    if (tracked_standalone_scene_churn_actor ||
+        (actor_address != 0 && remove_from_container == 1 && now_ms < scene_churn_until)) {
         MarkParticipantEntityWorldUnregistered(actor_address);
     }
 }
@@ -256,7 +303,7 @@ void __fastcall HookGameplaySwitchRegion(void* self, void* /*unused_edx*/, int r
         g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();
     }
     RemoveReplicatedCreatedSharedHubActorsForSceneSwitch("scene switch pre-dispatch");
-    AbandonMaterializedWizardBotsForSceneSwitch("scene switch pre-dispatch");
+    PrepareMaterializedWizardBotsForSceneSwitch("scene switch pre-dispatch");
     Log(
         "[bots] gameplay switch-region hook. gameplay=" + HexString(gameplay_address) +
         " target_region=" + std::to_string(region_index));

@@ -390,6 +390,7 @@ std::size_t kSourceProfileVariantTertiaryOffset = 0;
 std::size_t kSourceProfileClothColorOffset = 0;
 std::size_t kSourceProfileTrimColorOffset = 0;
 std::size_t kEnemyDeathHandledOffset = 0;
+std::size_t kEnemyDeathPresenterVtableSlotOffset = 0;
 std::size_t kEnemyConfigOffset = 0;
 std::size_t kEnemyTypeOffset = 0;
 std::size_t kEnemyMaxHpOffset = 0;

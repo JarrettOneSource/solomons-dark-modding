@@ -4,11 +4,11 @@
 from __future__ import annotations
 
 import json
-import math
 import time
 
 from verify_local_multiplayer_sync import (
     CLIENT_PIPE,
+    ROOT,
     HOST_PIPE,
     VerifyFailure,
     disable_bots,
@@ -29,6 +29,7 @@ from verify_player_health_death_sync import set_local_player_vitals
 
 
 TEST_PLAYER_HP = 500.0
+HOST_LOG = ROOT / "runtime/instances/local-mp-host/stage/.sdmod/logs/solomondarkmodloader.log"
 
 
 CLIENT_SELECT_DAMAGE_LUA = r"""
@@ -156,6 +157,15 @@ emit("reason", "no_live_bound_enemy")
 HOST_ENEMY_BY_ID_LUA = r"""
 local target_id = tonumber("__NETWORK_ACTOR_ID__") or 0
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local death_handled_offset = sd.debug.layout_offset("enemy_death_handled")
+local function read_death_handled(address)
+  if death_handled_offset == nil or address == nil or address == 0 then return 0 end
+  local ok, value = pcall(function()
+    return sd.debug.read_u8(address + death_handled_offset)
+  end)
+  if not ok then return 0 end
+  return tonumber(value) or 0
+end
 local replicated = sd.world.get_replicated_actors and sd.world.get_replicated_actors() or nil
 if replicated == nil or replicated.actors == nil then
   emit("found", false)
@@ -199,9 +209,13 @@ for _, actor in ipairs(replicated.actors) do
       if best_live ~= nil and best_d2 ~= nil and best_d2 <= (96.0 * 96.0) then
         hp = tonumber(best_live.hp) or hp
         max_hp = tonumber(best_live.max_hp) or max_hp
+        emit("local_actor_address", best_live.actor_address or 0)
+        emit("death_handled", read_death_handled(tonumber(best_live.actor_address) or 0))
         if best_live.dead or (max_hp > 0 and hp <= 0) then
           dead = dead + 1
         end
+      else
+        emit("death_handled", 0)
       end
       emit("tracked", tracked)
       emit("live", live)
@@ -248,6 +262,7 @@ local replicated = sd.world.get_replicated_actors and sd.world.get_replicated_ac
 if replicated == nil or replicated.bindings == nil then
   local fallback_death = read_death_handled(target_address)
   emit("found", fallback_death ~= 0)
+  emit("binding_found", false)
   emit("address_fallback", target_address ~= 0)
   emit("death_handled", fallback_death)
   return
@@ -258,9 +273,11 @@ for _, binding in ipairs(replicated.bindings) do
     local actor = local_by_address[tonumber(binding.local_actor_address) or 0]
     if actor == nil then
       emit("found", false)
+      emit("binding_found", false)
       return
     end
     emit("found", true)
+    emit("binding_found", true)
     emit("hp", string.format("%.3f", tonumber(actor.hp) or 0))
     emit("max_hp", string.format("%.3f", tonumber(actor.max_hp) or 0))
     emit("dead", actor.dead or false)
@@ -273,12 +290,14 @@ end
 local fallback_death = read_death_handled(target_address)
 if fallback_death ~= 0 then
   emit("found", true)
+  emit("binding_found", false)
   emit("address_fallback", true)
   emit("local_actor_address", target_address)
   emit("death_handled", fallback_death)
   return
 end
 emit("found", false)
+emit("binding_found", false)
 """
 
 
@@ -291,6 +310,22 @@ def number(row: dict[str, str], key: str, default: float = 0.0) -> float:
         return float(row.get(key, default))
     except (TypeError, ValueError):
         return default
+
+
+def log_offset(path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
+
+
+def read_log_since(path, offset: int) -> str:
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            handle.seek(offset)
+            return handle.read()
+    except OSError:
+        return ""
 
 
 def damage_client_enemy(mode: str, preferred_network_id: str = "0") -> dict[str, str]:
@@ -346,13 +381,40 @@ def wait_for_host_enemy_killed(target: dict[str, str], timeout: float = 12.0) ->
         if last.get("found") == "true":
             hp = number(last, "hp")
             dead_flag = last.get("dead_flag") == "true"
-            if dead_flag or hp <= 0.25:
+            death_handled = int(number(last, "death_handled"))
+            if (dead_flag or hp <= 0.25) and death_handled != 0:
                 return last
         elif last.get("reason") != "replicated_snapshot_missing" and int(number(last, "tracked")) > 0:
             last["removed_after_kill"] = "true"
             return last
         time.sleep(0.15)
     raise VerifyFailure(f"host enemy did not die from client claim; target={target} last={last}")
+
+
+def wait_for_host_enemy_native_death_log(
+    target: dict[str, str],
+    start_offset: int,
+    timeout: float = 4.0,
+) -> dict[str, str]:
+    target_id = target["network_actor_id"]
+    deadline = time.monotonic() + timeout
+    last_text = ""
+    while time.monotonic() < deadline:
+        last_text = read_log_since(HOST_LOG, start_offset)
+        if (
+            "native enemy death presenter invoked." in last_text
+            and f"target_network_actor_id={target_id}" in last_text
+            and "lethal=1 death_called=1" in last_text
+        ):
+            return {
+                "presenter_invoked": "true",
+                "target_network_actor_id": target_id,
+            }
+        time.sleep(0.1)
+    raise VerifyFailure(
+        f"host accepted lethal client claim but did not log native death presentation; "
+        f"target={target} log_tail={last_text[-800:]}"
+    )
 
 
 def client_bound_enemy_query(network_actor_id: str, local_actor_address: str = "0") -> dict[str, str]:
@@ -383,7 +445,7 @@ def wait_for_client_enemy_removed(network_actor_id: str, timeout: float = 10.0) 
     last: dict[str, str] = {}
     while time.monotonic() < deadline:
         last = client_bound_enemy_query(network_actor_id)
-        if last.get("found") != "true":
+        if last.get("found") != "true" or last.get("binding_found") != "true":
             return {"found": "false", "network_actor_id": network_actor_id}
         time.sleep(0.15)
     raise VerifyFailure(
@@ -463,6 +525,7 @@ def main() -> int:
 
         result["move_client_near_for_kill"] = move_client_near(rejected_target)
         time.sleep(0.6)
+        host_log_before_kill = log_offset(HOST_LOG)
         result["client_kill"] = damage_client_enemy("kill", rejected_target["network_actor_id"])
         result["client_kill_predicted_death_handled"] = wait_for_client_enemy_death_handled(
             result["client_kill"]["network_actor_id"],
@@ -470,6 +533,10 @@ def main() -> int:
             timeout=3.0,
         )
         result["host_kill_accept"] = wait_for_host_enemy_killed(result["client_kill"])
+        result["host_kill_native_death_presentation_log"] = wait_for_host_enemy_native_death_log(
+            result["client_kill"],
+            host_log_before_kill,
+        )
         result["client_kill_death_handled"] = wait_for_client_enemy_death_handled(
             result["client_kill"]["network_actor_id"],
             result["client_kill"]["local_actor_address"],

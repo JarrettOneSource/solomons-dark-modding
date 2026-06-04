@@ -89,6 +89,7 @@ MULTIPLAYER_PARTICIPANT_MODEL_DOC = ROOT / "docs/multiplayer-participant-model.m
 LOCAL_MULTIPLAYER_PAIR_SCRIPT = ROOT / "scripts/Launch-LocalMultiplayerPair.ps1"
 LOCAL_MULTIPLAYER_SYNC_VERIFIER = ROOT / "tools/verify_local_multiplayer_sync.py"
 RUN_WORLD_SNAPSHOT_VERIFIER = ROOT / "tools/verify_run_world_snapshot.py"
+ENEMY_DAMAGE_CLAIM_SYNC_VERIFIER = ROOT / "tools/verify_enemy_damage_claim_sync.py"
 RUN_STATIC_LAYOUT_SYNC_VERIFIER = ROOT / "tools/verify_run_static_layout_sync.py"
 PLAYER_HEALTH_DEATH_SYNC_VERIFIER = ROOT / "tools/verify_player_health_death_sync.py"
 REAL_INPUT_SPELL_CAST_SYNC_VERIFIER = ROOT / "tools/verify_real_input_spell_cast_sync.py"
@@ -4370,6 +4371,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     script_text = read_text(LOCAL_MULTIPLAYER_PAIR_SCRIPT)
     verifier_text = read_text(LOCAL_MULTIPLAYER_SYNC_VERIFIER)
     run_snapshot_verifier_text = read_text(RUN_WORLD_SNAPSHOT_VERIFIER)
+    enemy_damage_claim_verifier_text = read_text(ENEMY_DAMAGE_CLAIM_SYNC_VERIFIER)
     run_static_layout_verifier_text = read_text(RUN_STATIC_LAYOUT_SYNC_VERIFIER)
     player_health_death_verifier_text = read_text(PLAYER_HEALTH_DEATH_SYNC_VERIFIER)
     run_seed_verifier_text = read_text(RUN_ENEMY_SEED_VERIFIER)
@@ -4385,6 +4387,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     gameplay_seams_header_text = read_text(ROOT / "SolomonDarkModLoader/src/gameplay_seams.h")
     gameplay_seams_bindings_text = read_text(
         ROOT / "SolomonDarkModLoader/src/gameplay_seams/state_and_address_bindings.inl"
+    )
+    gameplay_seams_size_bindings_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/gameplay_seams/size_bindings.inl"
     )
     run_generation_seed_helpers_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/run_generation_seed_helpers.inl"
@@ -4404,7 +4409,14 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (native_enemy_lifecycle_header_text, "TryTriggerRunEnemyDeath"),
         (native_enemy_lifecycle_text, "ResolveGameAddressOrZero(kEnemyDeath)"),
         (native_enemy_lifecycle_text, "kEnemyDeathHandledOffset"),
+        (native_enemy_lifecycle_text, "kEnemyDeathPresenterVtableSlotOffset"),
+        (native_enemy_lifecycle_text, "CallEnemyDeathPresenterVirtualSafe"),
         (native_enemy_lifecycle_text, "CallEnemyDeathSafe"),
+        (binary_layout_text, "enemy_death_presenter_vtable_slot=0x50"),
+        (gameplay_seams_header_text, "kEnemyDeathPresenterVtableSlotOffset"),
+        (gameplay_seams_size_bindings_text, "enemy_death_presenter_vtable_slot"),
+        (world_snapshot_reconciliation_text, "HoldReplicatedRunEnemyDeath"),
+        (enemy_damage_claim_verifier_text, "wait_for_host_enemy_native_death_log"),
         (project_text, "include\\native_enemy_lifecycle.h"),
         (project_text, "src\\native_enemy_lifecycle.cpp"),
         (project_filters_text, "include\\native_enemy_lifecycle.h"),
@@ -4574,9 +4586,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "RemoveReplicatedCreatedSharedHubActorsForSceneSwitch(\"scene switch pre-dispatch\")"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "wizard_bot_sync_not_before_ms.store"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "pending_participant_sync_requests.clear()"),
-        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "AbandonMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "PrepareMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "AbandonMaterializedWizardBotsForSceneSwitch(\"scene switch post-dispatch\")"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "puppet_manager_delete_puppet skipped object delete during scene churn"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "CallActorWorldUnregisterSafe"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"), "DematerializeParticipantEntityNow(bot_id, false, reason)"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"), "prepared bot entity for scene switch"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"), "abandoned bot entity for scene switch"),
         (world_snapshot_reconciliation_text, "created_actor_total_count += counts.created_actor_count"),
         (world_snapshot_reconciliation_text, "TryRebindActorToOwnerWorld"),
@@ -4603,8 +4618,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "kReplicatedRunEnemyRemoteDeathHoldMs"),
         (world_snapshot_reconciliation_text, "g_replicated_run_pending_enemy_death_until_ms"),
         (world_snapshot_reconciliation_text, "IsAuthoritativeRunTrackedEnemyDeadSnapshot"),
-        (world_snapshot_reconciliation_text, "ApplyAuthoritativeRemovedRunEnemyDeath"),
-        (world_snapshot_reconciliation_text, "triggered authoritative-removed run enemy death"),
+        (world_snapshot_reconciliation_text, "TryBindAuthoritativeDeadRunEnemyToLocalPool"),
+        (world_snapshot_reconciliation_text, "bound authoritative dead run enemy snapshot to local actor"),
+        (world_snapshot_reconciliation_text, "IsReplicatedRunEnemyDeathPending"),
         (world_snapshot_reconciliation_text, "!IsAuthoritativeRunTrackedEnemyDeadSnapshot(authoritative_actor)"),
         (world_snapshot_reconciliation_text, "TryTriggerRunEnemyDeath(actor_address"),
         (world_snapshot_reconciliation_text, "triggered replicated run enemy death"),
@@ -4886,12 +4902,21 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     if switch_region_hook is None:
         raise StaticReTestFailure("gameplay switch-region hook missing")
     switch_region_body = switch_region_hook.group("body")
-    if "AbandonMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")" not in switch_region_body:
+    if "tracked_standalone_scene_churn_actor" not in actor_lifecycle_text:
         raise StaticReTestFailure(
-            "scene switch must abandon materialized remote wizard bindings before native teardown")
+            "world_unregister hook must reset tracked standalone wizard bindings after any scene-churn unregister")
+    if "PrepareMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")" not in switch_region_body:
+        raise StaticReTestFailure(
+            "scene switch must quiesce materialized remote wizard bindings before native teardown")
     if "DematerializeAllMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")" in switch_region_body:
         raise StaticReTestFailure(
-            "scene switch must not world-unregister materialized remote wizard actors before native teardown")
+            "scene switch must not unregister/destroy materialized remote wizard bindings before native teardown")
+    if "puppet_manager_delete_puppet skipped object delete during scene churn" not in actor_lifecycle_text:
+        raise StaticReTestFailure(
+            "tracked standalone remote wizard scene teardown must skip the native object delete/free path")
+    if "AbandonMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")" in switch_region_body:
+        raise StaticReTestFailure(
+            "scene switch must not abandon materialized remote wizard bindings before native teardown")
     allow_focus_gate = script_text.find("if ($AllowFocusSteal) {")
     foreground_call = script_text.find(
         "[void][SolomonDarkWindowActivator]::SetForegroundWindow")

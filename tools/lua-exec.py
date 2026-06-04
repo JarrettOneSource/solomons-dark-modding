@@ -16,6 +16,7 @@ PIPE_PREFIX = "\\\\.\\pipe\\"
 PIPE_NAME_ENV = "SDMOD_LUA_EXEC_PIPE_NAME"
 BUFFER_SIZE = 4096
 MAX_MESSAGE_SIZE = 1024 * 1024
+DEFAULT_WSL_BRIDGE_TIMEOUT_SECONDS = 20.0
 
 ERROR_BROKEN_PIPE = 109
 ERROR_FILE_NOT_FOUND = 2
@@ -54,6 +55,17 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def _wsl_bridge_timeout_seconds() -> float:
+    raw = os.environ.get("SDMOD_LUA_EXEC_BRIDGE_TIMEOUT_SECONDS", "").strip()
+    if not raw:
+        return DEFAULT_WSL_BRIDGE_TIMEOUT_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_WSL_BRIDGE_TIMEOUT_SECONDS
+    return max(1.0, value)
+
+
 def _ensure_message_size(kind: str, size: int) -> None:
     if size <= 0:
         raise RuntimeError(f"ERROR: {kind} was empty.")
@@ -83,10 +95,15 @@ def _send_lua_wsl(code: str) -> str:
             text=True,
             encoding="utf-8",
             errors="replace",
+            timeout=_wsl_bridge_timeout_seconds(),
             check=False,
         )
     except FileNotFoundError as exc:
         raise RuntimeError("ERROR: powershell.exe was not found from WSL.") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"ERROR: PowerShell Lua exec bridge timed out after {_wsl_bridge_timeout_seconds():.1f}s."
+        ) from exc
 
     if result.returncode != 0:
         message = result.stderr.strip() or result.stdout.strip() or "ERROR: PowerShell Lua exec bridge failed."
