@@ -99,6 +99,8 @@ void PumpQueuedGameplayActions() {
     bool have_participant_sync_request = false;
     PendingGameplayRegionSwitchRequest region_switch_request;
     bool have_region_switch_request = false;
+    multiplayer::LootSnapshotRuntimeInfo replicated_loot_snapshot;
+    bool have_replicated_loot_snapshot = false;
     std::vector<std::uint64_t> destroy_requests;
     {
         std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
@@ -150,6 +152,12 @@ void PumpQueuedGameplayActions() {
             reward_request = std::move(g_gameplay_keyboard_injection.pending_reward_spawn_requests.front());
             g_gameplay_keyboard_injection.pending_reward_spawn_requests.pop_front();
             have_reward_request = true;
+        }
+        if (!g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.empty()) {
+            replicated_loot_snapshot =
+                std::move(g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.back());
+            g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.clear();
+            have_replicated_loot_snapshot = true;
         }
     }
 
@@ -232,6 +240,10 @@ void PumpQueuedGameplayActions() {
                 " y=" + std::to_string(reward_request.y) +
                 " error=" + error_message);
         }
+    }
+
+    if (have_replicated_loot_snapshot) {
+        ReconcileReplicatedLootSnapshotNow(replicated_loot_snapshot, now_ms);
     }
 
     RebuildNavGridSnapshotIfRequested_GameplayThread();

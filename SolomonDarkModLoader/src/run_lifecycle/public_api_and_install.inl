@@ -64,10 +64,11 @@ bool TryGetRunLifecycleEnemySpawnSerial(uintptr_t enemy_address, std::uint32_t* 
     return LookupEnemySpawnSerial(enemy_address, spawn_serial);
 }
 
-bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(std::uint32_t missing_enemy_count) {
+bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(int enemy_type, std::uint32_t missing_enemy_count) {
     if (missing_enemy_count == 0 || !IsCombatArenaActiveForEnemyTracking()) {
         return false;
     }
+
     constexpr std::int32_t kMaxReasonableEnemyPoolCatchUpBudget = 128;
 
     const auto spawner_address = g_state.last_wave_spawner.load(std::memory_order_acquire);
@@ -103,6 +104,7 @@ bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(std::uint32_t missing_enemy_c
         s_last_pool_accelerate_log_ms = now_ms;
         Log(
             "run.lifecycle enemy pool catch-up. spawner=" + HexString(spawner_address) +
+            " enemy_type=" + std::to_string(enemy_type) +
             " missing=" + std::to_string(missing_enemy_count) +
             " requested=" + std::to_string(requested) +
             " remaining_budget=" + std::to_string(remaining_budget));

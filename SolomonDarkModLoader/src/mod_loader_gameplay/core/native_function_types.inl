@@ -71,6 +71,7 @@ using SpawnRewardGoldFn = void(__thiscall*)(void* self, std::uint32_t x_bits, st
 using GameFreeFn = void(__cdecl*)(void* memory);
 using NativeRngInitializeFn = void(__thiscall*)(void* self, std::uint32_t seed);
 using OrbRewardInitializeFn = void(__thiscall*)(void* self, void* rng_state);
+using GoldPickupTickFn = void(__thiscall*)(void* self);
 using OrbPickupTickFn = void(__thiscall*)(void* self);
 using ItemDropPickupTickFn = void(__thiscall*)(void* self);
 using GameplayHudRenderDispatchFn = void(__thiscall*)(void* self, int render_case);

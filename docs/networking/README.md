@@ -110,13 +110,18 @@ finished peer networking layer.
   are still parked because the run enemy pool is stock-spawner owned. Run loot
   drops are not global-RNG lockstep state: they are host-owned lifecycle
   entities with reliable spawn/despawn, pickup-request, and pickup-confirm/deny
-  events. The local UDP transport now sends a run-only `LootSnapshot` metadata
+  events. The local UDP transport now sends a run-only `LootSnapshot`
   slice for host gold drops (`0x7DC`), health/mana orb drops (`0x7DB`), and
   item/potion carrier drops (`0x7DD`) with a stable host drop id, reward
   metadata, lifetime/radius/position, and held-item type/slot/stack metadata
-  where applicable. The client view is exposed through
-  `sd.world.get_replicated_loot()`. Protocol v27 carries `LootPickupRequest`
-  and `LootPickupResult`: a client can
+  where applicable. Connected clients materialize host-authored gold and
+  health/mana orb presentation actors from that snapshot; those client actors
+  are pickup-suppressed and exist only as mirrors of host-owned lifecycle
+  objects. The client view is exposed through
+  `sd.world.get_replicated_loot()`, including the local presentation actor
+  address when a drop is materialized. Protocol v28 carries loot presentation
+  state for host-authored gold plus health/mana orb motion/progress. Protocol
+  v27 introduced `LootPickupRequest` and `LootPickupResult`: a client can
   call `sd.world.request_loot_pickup(id)`, the host checks run nonce, distance,
   duplicate pickup state, and drop identity, then confirms or denies the
   credit. Gold availability is derived from amount plus lifetime, not the
@@ -136,7 +141,7 @@ finished peer networking layer.
   audit surface for the stock scene-owned inventory root and visual sink helper
   items, and `tools/verify_multiplayer_inventory_audit.py` proves both local
   multiplayer clients can read their own native starter inventory shape.
-  Protocol v27 also mirrors compact participant-owned inventory item rows,
+  Protocol v28 also mirrors compact participant-owned inventory item rows,
   progression-book/statbook rows, and current ability loadout in `StatePacket`,
   so peers can inspect each other's starter potion rows, active/visible native
   skill-book entries, and primary/secondary loadout. This is not full inventory

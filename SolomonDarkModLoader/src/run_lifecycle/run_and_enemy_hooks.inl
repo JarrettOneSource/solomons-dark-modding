@@ -1,3 +1,5 @@
+constexpr float kClientAuthoritativeRunParkBase = 100000.0f;
+
 void __fastcall HookCreateArena(void* self, void* unused_edx) {
     const auto original = GetX86HookTrampoline<RunStartedFn>(g_state.hooks[kHookCreateArena]);
     if (original == nullptr) return;
@@ -48,7 +50,7 @@ bool ShouldSuppressClientAuthoritativeRunWaveSpawner(std::uint64_t now_ms) {
         snapshot.authority_participant_id == 0 ||
         now_ms < snapshot.received_ms ||
         now_ms - snapshot.received_ms > 1000) {
-        return false;
+        return true;
     }
 
     std::uint32_t authoritative_live_enemies = 0;
@@ -74,6 +76,8 @@ bool ShouldSuppressClientAuthoritativeRunWaveSpawner(std::uint64_t now_ms) {
             actor.actor_address != 0 &&
             actor.tracked_enemy &&
             !actor.dead &&
+            actor.x < kClientAuthoritativeRunParkBase * 0.5f &&
+            actor.y < kClientAuthoritativeRunParkBase * 0.5f &&
             std::isfinite(actor.hp) &&
             std::isfinite(actor.max_hp) &&
             actor.max_hp > 0.0f &&

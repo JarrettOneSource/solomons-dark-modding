@@ -4,7 +4,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 27;
+constexpr std::uint16_t kProtocolVersion = 28;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -293,10 +293,13 @@ struct LootDropSnapshotPacketState {
     std::uint32_t native_type_id;
     std::uint8_t drop_kind;
     std::uint8_t flags;
-    std::uint16_t reserved = 0;
+    std::uint8_t presentation_state;
+    std::uint8_t reserved = 0;
     std::int32_t amount;
     std::int32_t amount_tier;
     float value;
+    float motion;
+    float progress;
     std::uint32_t item_type_id;
     std::int32_t item_slot;
     std::int32_t stack_count;
@@ -426,8 +429,8 @@ static_assert(sizeof(CastPacket) == 100, "Unexpected cast packet size");
 static_assert(sizeof(ProgressionPacket) == 32, "Unexpected progression packet size");
 static_assert(sizeof(WorldActorSnapshotPacketState) == 104, "Unexpected world actor snapshot size");
 static_assert(sizeof(WorldSnapshotPacket) == 6688, "Unexpected world snapshot packet size");
-static_assert(sizeof(LootDropSnapshotPacketState) == 64, "Unexpected loot drop snapshot size");
-static_assert(sizeof(LootSnapshotPacket) == 4128, "Unexpected loot snapshot packet size");
+static_assert(sizeof(LootDropSnapshotPacketState) == 72, "Unexpected loot drop snapshot size");
+static_assert(sizeof(LootSnapshotPacket) == 4640, "Unexpected loot snapshot packet size");
 static_assert(sizeof(EnemyDamageClaimPacket) == 72, "Unexpected enemy damage claim packet size");
 static_assert(sizeof(EnemyDamageResultPacket) == 56, "Unexpected enemy damage result packet size");
 static_assert(sizeof(LootPickupRequestPacket) == 56, "Unexpected loot pickup request packet size");

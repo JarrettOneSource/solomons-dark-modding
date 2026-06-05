@@ -28,6 +28,7 @@ std::uint32_t g_replicated_created_hub_scene_epoch = 0;
 std::unordered_map<std::uint64_t, uintptr_t> g_replicated_run_bindings_by_network_id;
 std::unordered_map<uintptr_t, std::uint64_t> g_replicated_run_network_ids_by_actor;
 std::unordered_map<std::uint64_t, std::uint64_t> g_replicated_run_pending_enemy_death_until_ms;
+std::unordered_set<std::uint64_t> g_replicated_run_enemy_death_hold_started_ids;
 std::uint32_t g_replicated_run_actor_scene_epoch = 0;
 uintptr_t g_run_entry_formation_world_address = 0;
 std::uint64_t g_run_entry_formation_authority_participant_id = 0;
@@ -710,6 +711,7 @@ void ClearReplicatedRunActorBindings() {
     g_replicated_run_bindings_by_network_id.clear();
     g_replicated_run_network_ids_by_actor.clear();
     g_replicated_run_pending_enemy_death_until_ms.clear();
+    g_replicated_run_enemy_death_hold_started_ids.clear();
 }
 
 void BindReplicatedRunActor(std::uint64_t network_actor_id, uintptr_t actor_address) {
@@ -732,12 +734,14 @@ void BindReplicatedRunActor(std::uint64_t network_actor_id, uintptr_t actor_addr
     g_replicated_run_bindings_by_network_id[network_actor_id] = actor_address;
     g_replicated_run_network_ids_by_actor[actor_address] = network_actor_id;
     g_replicated_run_pending_enemy_death_until_ms.erase(network_actor_id);
+    g_replicated_run_enemy_death_hold_started_ids.erase(network_actor_id);
 }
 
 void UnbindReplicatedRunActor(std::uint64_t network_actor_id, uintptr_t actor_address) {
     if (network_actor_id != 0) {
         g_replicated_run_bindings_by_network_id.erase(network_actor_id);
         g_replicated_run_pending_enemy_death_until_ms.erase(network_actor_id);
+        g_replicated_run_enemy_death_hold_started_ids.erase(network_actor_id);
     }
     if (actor_address != 0) {
         g_replicated_run_network_ids_by_actor.erase(actor_address);
@@ -1088,6 +1092,12 @@ bool IsReplicatedRunEnemyDeathPending(std::uint64_t network_actor_id, std::uint6
     return false;
 }
 
+bool HasReplicatedRunEnemyDeathPresentationStarted(std::uint64_t network_actor_id) {
+    return network_actor_id != 0 &&
+           g_replicated_run_enemy_death_hold_started_ids.find(network_actor_id) !=
+               g_replicated_run_enemy_death_hold_started_ids.end();
+}
+
 void HoldReplicatedRunEnemyDeath(std::uint64_t network_actor_id, std::uint64_t now_ms) {
     if (network_actor_id == 0) {
         return;
@@ -1098,6 +1108,30 @@ void HoldReplicatedRunEnemyDeath(std::uint64_t network_actor_id, std::uint64_t n
         pending_it->second < hold_until_ms) {
         g_replicated_run_pending_enemy_death_until_ms[network_actor_id] = hold_until_ms;
     }
+}
+
+void MarkReplicatedRunEnemyDeathPresentationStarted(std::uint64_t network_actor_id, std::uint64_t now_ms) {
+    if (network_actor_id == 0) {
+        return;
+    }
+    g_replicated_run_enemy_death_hold_started_ids.insert(network_actor_id);
+    HoldReplicatedRunEnemyDeath(network_actor_id, now_ms);
+}
+
+void ClearReplicatedRunEnemyDeathPresentationState(std::uint64_t network_actor_id) {
+    if (network_actor_id == 0) {
+        return;
+    }
+    g_replicated_run_pending_enemy_death_until_ms.erase(network_actor_id);
+    g_replicated_run_enemy_death_hold_started_ids.erase(network_actor_id);
+}
+
+bool TryBeginReplicatedRunEnemyDeathHold(std::uint64_t network_actor_id, std::uint64_t now_ms) {
+    if (network_actor_id == 0 || HasReplicatedRunEnemyDeathPresentationStarted(network_actor_id)) {
+        return false;
+    }
+    MarkReplicatedRunEnemyDeathPresentationStarted(network_actor_id, now_ms);
+    return true;
 }
 
 bool ApplyReplicatedRunEnemyHealth(
@@ -1124,11 +1158,16 @@ bool ApplyReplicatedRunEnemyHealth(
     }
     const bool authoritative_dead =
         authoritative_actor.dead || authoritative_hp <= kReplicatedRunEnemyDeathHpEpsilon;
+    if (multiplayer::IsLocalTransportClient() &&
+        !authoritative_dead &&
+        HasReplicatedRunEnemyDeathPresentationStarted(authoritative_actor.network_actor_id)) {
+        return false;
+    }
     const bool hp_changed = std::fabs(local_health.hp - authoritative_hp) > 0.01f;
     const bool max_hp_changed = std::fabs(local_health.max_hp - authoritative_max_hp) > 0.01f;
     const bool death_handled = IsRunEnemyNativeDeathHandled(actor_address);
     if (authoritative_dead && death_handled) {
-        HoldReplicatedRunEnemyDeath(authoritative_actor.network_actor_id, now_ms);
+        MarkReplicatedRunEnemyDeathPresentationStarted(authoritative_actor.network_actor_id, now_ms);
     }
     if (!hp_changed && !max_hp_changed && (!authoritative_dead || death_handled)) {
         return false;
@@ -1167,7 +1206,10 @@ bool ApplyReplicatedRunEnemyHealth(
             " death_called=" + std::to_string(death_called ? 1 : 0) +
             " death_seh=" + HexString(static_cast<uintptr_t>(death_exception_code)));
         if (death_called && authoritative_actor.network_actor_id != 0) {
-            HoldReplicatedRunEnemyDeath(authoritative_actor.network_actor_id, now_ms);
+            MarkReplicatedRunEnemyDeathPresentationStarted(authoritative_actor.network_actor_id, now_ms);
+        }
+        if (death_called && multiplayer::IsLocalTransportClient()) {
+            SuppressClientLocalLootActors("client_replicated_enemy_death_snapshot");
         }
         wrote = death_called || wrote;
     }
@@ -1317,6 +1359,10 @@ std::vector<ReplicatedWorldActorLocalBinding> BuildLocalReplicatedWorldActorBind
 }
 
 bool IsLocalRunCombatAlreadyActive() {
+    if (IsRunLifecycleActive() && GetRunLifecycleCurrentWave() > 0) {
+        return true;
+    }
+
     SDModGameplayCombatState combat_state;
     if (!TryGetGameplayCombatState(&combat_state) || !combat_state.valid) {
         return false;
@@ -1410,21 +1456,9 @@ std::uint32_t CountAuthoritativeTrackedRunEnemiesForScene(
     return count;
 }
 
-std::uint32_t CountLocalTrackedRunEnemyBindings(
-    const std::vector<ReplicatedWorldActorLocalBinding>& local_bindings) {
-    std::uint32_t count = 0;
-    for (const auto& binding : local_bindings) {
-        if (binding.actor.tracked_enemy &&
-            ShouldReconcileLocalWorldActor(binding.actor, multiplayer::ParticipantSceneIntentKind::Run)) {
-            count += 1;
-        }
-    }
-    return count;
-}
-
 void MaybeCatchUpRunEnemyPoolForAuthoritativeSnapshot(
     const multiplayer::WorldSnapshotRuntimeInfo& snapshot,
-    std::uint32_t local_tracked_enemy_count) {
+    const std::vector<ReplicatedWorldActorLocalBinding>& local_bindings) {
     if (snapshot.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run ||
         snapshot.truncated) {
         return;
@@ -1433,18 +1467,55 @@ void MaybeCatchUpRunEnemyPoolForAuthoritativeSnapshot(
         return;
     }
 
-    const auto authoritative_tracked_enemy_count = CountAuthoritativeTrackedRunEnemiesForScene(snapshot);
-    if (authoritative_tracked_enemy_count <= local_tracked_enemy_count) {
-        return;
+    std::unordered_map<int, std::uint32_t> authoritative_counts_by_enemy_type;
+    for (const auto& authoritative_actor : snapshot.actors) {
+        if (authoritative_actor.enemy_type < 0 ||
+            !authoritative_actor.tracked_enemy ||
+            !ShouldUseAuthoritativeWorldActorForScene(
+                authoritative_actor,
+                multiplayer::ParticipantSceneIntentKind::Run) ||
+            IsAuthoritativeRunTrackedEnemyDeadSnapshot(authoritative_actor)) {
+            continue;
+        }
+        authoritative_counts_by_enemy_type[authoritative_actor.enemy_type] += 1;
     }
 
-    (void)TryAccelerateRunLifecycleEnemyPoolForSnapshot(
-        authoritative_tracked_enemy_count - local_tracked_enemy_count);
+    std::unordered_map<int, std::uint32_t> local_counts_by_enemy_type;
+    for (const auto& binding : local_bindings) {
+        if (binding.actor.enemy_type < 0 ||
+            !binding.actor.tracked_enemy ||
+            binding.actor.dead ||
+            IsParkedReplicatedWorldActor(binding.actor) ||
+            !std::isfinite(binding.actor.hp) ||
+            !std::isfinite(binding.actor.max_hp) ||
+            binding.actor.max_hp <= 0.0f ||
+            binding.actor.hp <= kReplicatedRunEnemyDeathHpEpsilon ||
+            !ShouldReconcileLocalWorldActor(
+                binding.actor,
+                multiplayer::ParticipantSceneIntentKind::Run)) {
+            continue;
+        }
+        local_counts_by_enemy_type[binding.actor.enemy_type] += 1;
+    }
+
+    for (const auto& [enemy_type, authoritative_count] : authoritative_counts_by_enemy_type) {
+        const auto local_it = local_counts_by_enemy_type.find(enemy_type);
+        const auto local_count =
+            local_it != local_counts_by_enemy_type.end() ? local_it->second : 0;
+        if (authoritative_count <= local_count) {
+            continue;
+        }
+        (void)TryAccelerateRunLifecycleEnemyPoolForSnapshot(
+            enemy_type,
+            authoritative_count - local_count);
+    }
 }
 
 bool TryBindAuthoritativeRunActorToLocalPool(
     const multiplayer::WorldActorSnapshot& authoritative_actor,
+    const std::unordered_set<std::uint64_t>& authoritative_ids,
     std::vector<ReplicatedWorldActorLocalBinding>* local_bindings,
+    std::uint64_t now_ms,
     std::size_t* binding_index_out) {
     if (binding_index_out != nullptr) {
         *binding_index_out = 0;
@@ -1452,6 +1523,10 @@ bool TryBindAuthoritativeRunActorToLocalPool(
     if (local_bindings == nullptr ||
         authoritative_actor.network_actor_id == 0 ||
         authoritative_actor.native_type_id == 0) {
+        return false;
+    }
+    if (multiplayer::IsLocalTransportClient() &&
+        HasReplicatedRunEnemyDeathPresentationStarted(authoritative_actor.network_actor_id)) {
         return false;
     }
 
@@ -1463,9 +1538,25 @@ bool TryBindAuthoritativeRunActorToLocalPool(
             auto& binding = (*local_bindings)[index];
             if (binding.matched ||
                 binding.actor.actor_address == 0 ||
-                binding.network_actor_id != 0 ||
                 binding.actor.object_type_id != authoritative_actor.native_type_id) {
                 continue;
+            }
+            if (binding.network_actor_id != 0 &&
+                binding.network_actor_id != authoritative_actor.network_actor_id) {
+                if (authoritative_ids.find(binding.network_actor_id) != authoritative_ids.end() ||
+                    IsReplicatedRunEnemyDeathPending(binding.network_actor_id, now_ms) ||
+                    IsRunEnemyNativeDeathHandled(binding.actor.actor_address)) {
+                    continue;
+                }
+                const auto stale_network_actor_id = binding.network_actor_id;
+                UnbindReplicatedRunActor(stale_network_actor_id, binding.actor.actor_address);
+                binding.network_actor_id = 0;
+                Log(
+                    "world_snapshot: recycling stale local run enemy binding. actor=" +
+                    HexString(binding.actor.actor_address) +
+                    " stale_network_actor_id=" + std::to_string(stale_network_actor_id) +
+                    " replacement_network_actor_id=" +
+                    std::to_string(authoritative_actor.network_actor_id));
             }
             if (require_enemy_type &&
                 authoritative_actor.enemy_type >= 0 &&
@@ -1495,6 +1586,11 @@ bool TryBindAuthoritativeRunActorToLocalPool(
             return false;
         }
         auto& binding = (*local_bindings)[best_index];
+        const auto previous_network_actor_id = binding.network_actor_id;
+        if (previous_network_actor_id != 0 &&
+            previous_network_actor_id != authoritative_actor.network_actor_id) {
+            UnbindReplicatedRunActor(previous_network_actor_id, binding.actor.actor_address);
+        }
         BindReplicatedRunActor(authoritative_actor.network_actor_id, binding.actor.actor_address);
         binding.network_actor_id = authoritative_actor.network_actor_id;
         if (binding_index_out != nullptr) {
@@ -1520,6 +1616,9 @@ bool TryBindAuthoritativeDeadRunEnemyToLocalPool(
         authoritative_actor.native_type_id == 0 ||
         !authoritative_actor.lifecycle_owned ||
         !IsAuthoritativeRunTrackedEnemyDeadSnapshot(authoritative_actor)) {
+        return false;
+    }
+    if (HasReplicatedRunEnemyDeathPresentationStarted(authoritative_actor.network_actor_id)) {
         return false;
     }
 
@@ -1721,7 +1820,14 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
     MaybeQueueRunLifecycleForAuthoritativeSnapshot(snapshot, now_ms);
     if (snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::SharedHub &&
         g_replicated_created_hub_scene_epoch != snapshot.scene_epoch) {
-        ClearReplicatedSharedHubActorBindings();
+        if (g_replicated_created_hub_scene_epoch != 0 &&
+            !g_replicated_created_hub_actors.empty()) {
+            Log(
+                "world_snapshot: retained replicated hub actors across authority epoch change. old_epoch=" +
+                std::to_string(g_replicated_created_hub_scene_epoch) +
+                " new_epoch=" + std::to_string(snapshot.scene_epoch) +
+                " count=" + std::to_string(g_replicated_created_hub_actors.size()));
+        }
         g_replicated_created_hub_scene_epoch = snapshot.scene_epoch;
     }
     if (snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::Run &&
@@ -1733,9 +1839,7 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
     auto local_bindings = BuildLocalReplicatedWorldActorBindings(snapshot.scene_intent.kind);
     WorldSnapshotApplyCounts counts;
     counts.local_actor_count = static_cast<std::uint32_t>(local_bindings.size());
-    MaybeCatchUpRunEnemyPoolForAuthoritativeSnapshot(
-        snapshot,
-        CountLocalTrackedRunEnemyBindings(local_bindings));
+    MaybeCatchUpRunEnemyPoolForAuthoritativeSnapshot(snapshot, local_bindings);
 
     std::unordered_set<std::uint64_t> authoritative_ids;
     authoritative_ids.reserve(snapshot.actors.size());
@@ -1776,7 +1880,12 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
             authoritative_actor.lifecycle_owned &&
             !IsAuthoritativeRunTrackedEnemyDeadSnapshot(authoritative_actor)) {
             std::size_t binding_index = 0;
-            if (TryBindAuthoritativeRunActorToLocalPool(authoritative_actor, &local_bindings, &binding_index)) {
+            if (TryBindAuthoritativeRunActorToLocalPool(
+                    authoritative_actor,
+                    authoritative_ids,
+                    &local_bindings,
+                    now_ms,
+                    &binding_index)) {
                 local_by_network_id.emplace(authoritative_actor.network_actor_id, binding_index);
                 local_it = local_by_network_id.find(authoritative_actor.network_actor_id);
             }
@@ -1869,6 +1978,19 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
                     RecordWorldSnapshotBinding(&counts, binding, false, false, false);
                     continue;
                 }
+                if (removed_network_actor_id != 0 &&
+                    authoritative_ids.find(removed_network_actor_id) == authoritative_ids.end() &&
+                    binding.actor.tracked_enemy &&
+                    IsRunEnemyNativeDeathHandled(binding.actor.actor_address) &&
+                    TryBeginReplicatedRunEnemyDeathHold(removed_network_actor_id, now_ms)) {
+                    RecordWorldSnapshotBinding(&counts, binding, false, false, false);
+                    Log(
+                        "world_snapshot: holding local replicated run enemy death presentation. actor=" +
+                        HexString(binding.actor.actor_address) +
+                        " type=" + HexString(static_cast<uintptr_t>(binding.actor.object_type_id)) +
+                        " network_actor_id=" + std::to_string(removed_network_actor_id));
+                    continue;
+                }
                 if (binding.network_actor_id != 0 &&
                     authoritative_ids.find(binding.network_actor_id) == authoritative_ids.end()) {
                     UnbindReplicatedRunActor(binding.network_actor_id, binding.actor.actor_address);
@@ -1876,6 +1998,12 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
                 }
                 DWORD exception_code = 0;
                 const auto removed_actor_address = binding.actor.actor_address;
+                if (binding.actor.tracked_enemy &&
+                    removed_network_actor_id == 0 &&
+                    IsParkedReplicatedWorldActor(binding.actor)) {
+                    RecordWorldSnapshotBinding(&counts, binding, false, true, false);
+                    continue;
+                }
                 if (binding.actor.tracked_enemy && ParkReplicatedRunActor(binding)) {
                     counts.parked_actor_count += 1;
                     if (removed_network_actor_id != 0) {

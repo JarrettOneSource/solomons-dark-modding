@@ -37,6 +37,8 @@ MANA_DELTA = 40.0
 VITAL_TOLERANCE = 0.75
 POSITION_TOLERANCE = 260.0
 PICKUP_POSITION_TOLERANCE = 240.0
+PICKUP_SUPPRESSION_RADIUS = 335.0
+PICKUP_PARKING_MIN_DISTANCE = 520.0
 LOCAL_RUNTIME_PARTICIPANT_ID = 1
 RUN_SAFE_SPAWN_X = 2350.0
 RUN_SAFE_SPAWN_Y = 2850.0
@@ -539,6 +541,31 @@ emit(ok and "request_sequence" or "error", value or "")
     )
 
 
+def try_wait_for_client_pickup_result(
+    *,
+    network_drop_id: int,
+    request_sequence: int | None,
+    expected_result: str,
+    timeout: float,
+) -> dict[str, str] | None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        capture_values = capture(CLIENT_PIPE)
+        sequence_matches = (
+            request_sequence is None or
+            parse_int_text(capture_values.get("pickup.request_sequence"), 0) == request_sequence
+        )
+        if (
+            capture_values.get("pickup.valid") == "true"
+            and parse_int_text(capture_values.get("pickup.network_drop_id"), 0) == network_drop_id
+            and sequence_matches
+            and capture_values.get("pickup.result") == expected_result
+        ):
+            return capture_values
+        time.sleep(0.1)
+    return None
+
+
 def move_client_into_pickup_range(
     *,
     drop_x: float,
@@ -574,6 +601,81 @@ def move_client_into_pickup_range(
     )
 
 
+def move_client_out_of_pickup_range(
+    *,
+    drop_x: float,
+    drop_y: float,
+    timeout: float,
+) -> dict[str, Any]:
+    candidate_targets = [
+        (drop_x + 900.0, drop_y + 900.0),
+        (drop_x - 900.0, drop_y + 900.0),
+        (drop_x + 900.0, drop_y - 900.0),
+        (drop_x - 900.0, drop_y - 900.0),
+        (drop_x + 1200.0, drop_y),
+        (drop_x - 1200.0, drop_y),
+    ]
+    parking_x = candidate_targets[0][0]
+    parking_y = candidate_targets[0][1]
+    best_distance = -1.0
+    for candidate_x, candidate_y in candidate_targets:
+        try:
+            snap_x, snap_y = snap_to_nav(CLIENT_PIPE, candidate_x, candidate_y)
+        except Exception:
+            snap_x, snap_y = candidate_x, candidate_y
+        candidate_distance = distance(snap_x, snap_y, drop_x, drop_y)
+        if candidate_distance > best_distance:
+            best_distance = candidate_distance
+            parking_x = snap_x
+            parking_y = snap_y
+    if best_distance < PICKUP_PARKING_MIN_DISTANCE:
+        parking_x = drop_x + PICKUP_PARKING_MIN_DISTANCE + 128.0
+        parking_y = drop_y + PICKUP_PARKING_MIN_DISTANCE + 128.0
+
+    place = place_player(CLIENT_PIPE, parking_x, parking_y, 90.0)
+    deadline = time.monotonic() + timeout
+    last_client: dict[str, str] = {}
+    last_host: dict[str, str] = {}
+    host_row: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        last_client = capture(CLIENT_PIPE)
+        last_host = capture(HOST_PIPE)
+        client_distance = distance(
+            parse_float_text(last_client.get("player.x")),
+            parse_float_text(last_client.get("player.y")),
+            drop_x,
+            drop_y,
+        )
+        host_row = find_participant(last_host, CLIENT_ID)
+        host_distance = (
+            distance(host_row["x"], host_row["y"], drop_x, drop_y)
+            if host_row is not None else 0.0
+        )
+        if (
+            client_distance > PICKUP_SUPPRESSION_RADIUS and
+            host_row is not None and
+            host_distance > PICKUP_SUPPRESSION_RADIUS
+        ):
+            return {
+                "place": place,
+                "client_capture": last_client,
+                "host_capture": last_host,
+                "host_participant": host_row,
+                "drop_x": drop_x,
+                "drop_y": drop_y,
+                "parking_x": parking_x,
+                "parking_y": parking_y,
+                "client_distance": client_distance,
+                "host_distance": host_distance,
+            }
+        time.sleep(0.1)
+    raise VerifyFailure(
+        "client did not settle out of orb pickup range before spawn: "
+        f"drop=({drop_x:.3f},{drop_y:.3f}) host_row={host_row} "
+        f"client={last_client} host={last_host}"
+    )
+
+
 def wait_for_client_pickup_result(
     *,
     network_drop_id: int,
@@ -581,18 +683,15 @@ def wait_for_client_pickup_result(
     expected_result: str,
     timeout: float,
 ) -> dict[str, str]:
-    deadline = time.monotonic() + timeout
-    last: dict[str, str] = {}
-    while time.monotonic() < deadline:
-        last = capture(CLIENT_PIPE)
-        if (
-            last.get("pickup.valid") == "true"
-            and parse_int_text(last.get("pickup.network_drop_id"), 0) == network_drop_id
-            and parse_int_text(last.get("pickup.request_sequence"), 0) == request_sequence
-            and last.get("pickup.result") == expected_result
-        ):
-            return last
-        time.sleep(0.1)
+    accepted = try_wait_for_client_pickup_result(
+        network_drop_id=network_drop_id,
+        request_sequence=request_sequence,
+        expected_result=expected_result,
+        timeout=timeout,
+    )
+    if accepted is not None:
+        return accepted
+    last = capture(CLIENT_PIPE)
     raise VerifyFailure(
         "client did not receive expected orb pickup result: "
         f"drop={network_drop_id} request={request_sequence} expected={expected_result} last={last}"
@@ -739,6 +838,11 @@ def verify_one_orb_pickup(
     before_addresses = {row["address"] for row in orb_rows(capture(HOST_PIPE))}
     spawn_x = anchor_x
     spawn_y = anchor_y
+    result["client_pre_spawn_parking"] = move_client_out_of_pickup_range(
+        drop_x=spawn_x,
+        drop_y=spawn_y,
+        timeout=timeout,
+    )
     result["spawn"] = spawn_orb(kind, ORB_RAW_VALUE, spawn_x, spawn_y)
     result["host_spawned_orb"] = wait_for_spawned_host_orb(
         before_addresses=before_addresses,
@@ -763,28 +867,35 @@ def verify_one_orb_pickup(
     )
     result["pre_request_pair"] = capture_pair()
     network_drop_id = int(replicated_drop["network_id"])
-    try:
+    accepted = try_wait_for_client_pickup_result(
+        network_drop_id=network_drop_id,
+        request_sequence=None,
+        expected_result="Accepted",
+        timeout=min(1.5, timeout),
+    )
+    if accepted is not None:
+        request_sequence = parse_int_text(accepted.get("pickup.request_sequence"), 0)
+        result["request"] = {
+            "ok": "true",
+            "path": "client_proximity_hook",
+            "request_sequence": str(request_sequence),
+        }
+        result["accepted_result"] = accepted
+    else:
         request = request_pickup_when_ready(
             network_drop_id=network_drop_id,
             drop_x=float(replicated_drop["x"]),
             drop_y=float(replicated_drop["y"]),
             timeout=timeout,
         )
-    except VerifyFailure as exc:
-        result["request_failure"] = {
-            "error": str(exc),
-            "pair": capture_pair(),
-        }
-        RUNTIME_OUTPUT.write_text(json.dumps({"ok": False, "partial": result}, indent=2))
-        raise
-    request_sequence = parse_int_text(request.get("request_sequence"), 0)
-    result["request"] = request
-    result["accepted_result"] = wait_for_client_pickup_result(
-        network_drop_id=network_drop_id,
-        request_sequence=request_sequence,
-        expected_result="Accepted",
-        timeout=timeout,
-    )
+        request_sequence = parse_int_text(request.get("request_sequence"), 0)
+        result["request"] = request
+        result["accepted_result"] = wait_for_client_pickup_result(
+            network_drop_id=network_drop_id,
+            request_sequence=request_sequence,
+            expected_result="Accepted",
+            timeout=timeout,
+        )
     accepted = result["accepted_result"]
     expected_hp = parse_float_text(accepted.get("pickup.resulting_life_current"))
     expected_max_hp = parse_float_text(accepted.get("pickup.resulting_life_max"))

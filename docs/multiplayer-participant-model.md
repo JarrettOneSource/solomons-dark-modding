@@ -138,7 +138,7 @@ The loader now has a read-only native inventory audit surface at
 embedded item list root, starter potion rows, and gameplay-owned visual sink
 helpers for hat/robe/staff. `sd.player.get_progression_book_state()` reads the
 local native progression table that currently exposes 83 book rows in the
-starter hub state. Local UDP protocol v27 mirrors compact participant-owned
+starter hub state. Local UDP protocol v28 mirrors compact participant-owned
 inventory rows in `StatePacket` plus compact progression-book/statbook rows and
 the current ability loadout. That currently proves inventory/book/loadout
 content visibility between peers, not native item-object insertion or upgrade
@@ -240,8 +240,8 @@ The multiplayer service loop currently pumps Steam bootstrap/callback state ever
 50 ms and mirrors readiness into `RuntimeState`. For rapid local development it
 can also pump a UDP loopback transport that exchanges `StatePacket` transform
 snapshots plus participant-owned gold/revision ledger values, host-owned
-`WorldSnapshot` actor snapshots, and host-owned run `LootSnapshot` metadata for
-gold drops. The host's `StatePacket` also owns the
+`WorldSnapshot` actor snapshots, and host-owned run `LootSnapshot` data for
+gold/orb drop presentation plus pickup identity. The host's `StatePacket` also owns the
 local UDP run-entry scene intent: connected clients cannot call
 `sd.hub.start_testrun` or directly switch themselves into the arena, but they
 queue the normal stock-safe hub-to-run transition when the configured host reports `in_run`.

@@ -174,7 +174,7 @@ void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSna
 }
 
 void PushReplicatedLootDrop(lua_State* state, const multiplayer::LootDropSnapshot& drop) {
-    lua_createtable(state, 0, 22);
+    lua_createtable(state, 0, 25);
     lua_pushinteger(state, static_cast<lua_Integer>(drop.network_drop_id));
     lua_setfield(state, -2, "network_drop_id");
     lua_pushinteger(state, static_cast<lua_Integer>(drop.native_type_id));
@@ -187,6 +187,8 @@ void PushReplicatedLootDrop(lua_State* state, const multiplayer::LootDropSnapsho
     lua_setfield(state, -2, "kind");
     lua_pushboolean(state, drop.active ? 1 : 0);
     lua_setfield(state, -2, "active");
+    lua_pushinteger(state, static_cast<lua_Integer>(drop.presentation_state));
+    lua_setfield(state, -2, "presentation_state");
     lua_pushinteger(state, static_cast<lua_Integer>(drop.amount));
     lua_setfield(state, -2, "amount");
     lua_pushinteger(state, static_cast<lua_Integer>(drop.amount_tier));
@@ -195,6 +197,10 @@ void PushReplicatedLootDrop(lua_State* state, const multiplayer::LootDropSnapsho
     lua_setfield(state, -2, "resource_kind");
     lua_pushnumber(state, static_cast<lua_Number>(drop.value));
     lua_setfield(state, -2, "value");
+    lua_pushnumber(state, static_cast<lua_Number>(drop.motion));
+    lua_setfield(state, -2, "motion");
+    lua_pushnumber(state, static_cast<lua_Number>(drop.progress));
+    lua_setfield(state, -2, "progress");
     lua_pushinteger(state, static_cast<lua_Integer>(drop.item_type_id));
     lua_setfield(state, -2, "item_type_id");
     lua_pushinteger(state, static_cast<lua_Integer>(drop.item_slot));
@@ -215,6 +221,23 @@ void PushReplicatedLootDrop(lua_State* state, const multiplayer::LootDropSnapsho
     lua_setfield(state, -2, "radius");
     PushPositionTable(state, drop.position_x, drop.position_y);
     lua_setfield(state, -2, "position");
+
+    SDModReplicatedLootPresentationState presentation;
+    const bool materialized = TryGetReplicatedLootPresentationState(drop.network_drop_id, &presentation);
+    lua_pushboolean(state, materialized && presentation.actor_address != 0 ? 1 : 0);
+    lua_setfield(state, -2, "materialized");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(materialized ? presentation.actor_address : 0));
+    lua_setfield(state, -2, "presentation_actor_address");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(materialized ? presentation.actor_address : 0));
+    lua_setfield(state, -2, "local_actor_address");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(materialized ? presentation.last_seen_ms : 0));
+    lua_setfield(state, -2, "presentation_last_seen_ms");
 }
 
 void PushLootPickupResult(lua_State* state, const multiplayer::LootPickupResultRuntimeInfo& result) {

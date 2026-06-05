@@ -126,6 +126,8 @@ if loot and loot.drops then
       emit(prefix .. "amount_tier", drop.amount_tier or 0)
       emit(prefix .. "active", drop.active and 1 or 0)
       emit(prefix .. "lifetime", drop.lifetime or 0)
+      emit(prefix .. "materialized", drop.materialized and 1 or 0)
+      emit(prefix .. "local_actor_address", string.format("0x%08X", tonumber(drop.local_actor_address) or 0))
       emit(prefix .. "x", string.format("%.3f", tonumber(drop.x) or 0))
       emit(prefix .. "y", string.format("%.3f", tonumber(drop.y) or 0))
     end
@@ -236,6 +238,8 @@ def loot_gold_rows(capture_values: dict[str, str]) -> list[dict[str, Any]]:
             "amount_tier": parse_int(capture_values.get(row_prefix + "amount_tier")),
             "active": parse_int(capture_values.get(row_prefix + "active")),
             "lifetime": parse_int(capture_values.get(row_prefix + "lifetime")),
+            "materialized": parse_int(capture_values.get(row_prefix + "materialized")),
+            "local_actor_address": parse_int(capture_values.get(row_prefix + "local_actor_address")),
             "x": parse_float(capture_values.get(row_prefix + "x")),
             "y": parse_float(capture_values.get(row_prefix + "y")),
         })
@@ -428,6 +432,10 @@ def summarize_reward_boundary(
         "client_has_replicated_gold_reward": len(client_rep_rewards) > 0,
         "client_has_world_snapshot_gold_reward": len(client_rep_rewards) > 0,
         "client_has_replicated_loot_gold": len(client_loot_gold) > 0,
+        "client_materialized_replicated_loot_gold": (
+            selected_replicated_loot.get("materialized") == 1 and
+            selected_replicated_loot.get("local_actor_address", 0) != 0
+        ),
         "client_replicated_loot_amount_matches": (
             selected_replicated_loot.get("amount") == PROBE_GOLD_AMOUNT
         ),
@@ -544,9 +552,10 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
     result["ok"] = (
         reward_boundary["host_amount_matches"]
         and reward_boundary["host_tier_matches"]
-        and not reward_boundary["client_has_local_gold_reward"]
+        and reward_boundary["client_has_local_gold_reward"]
         and not reward_boundary["client_has_world_snapshot_gold_reward"]
         and reward_boundary["client_has_replicated_loot_gold"]
+        and reward_boundary["client_materialized_replicated_loot_gold"]
         and reward_boundary["client_replicated_loot_amount_matches"]
         and reward_boundary["client_replicated_loot_tier_matches"]
         and result["pickup"]["delta"] >= PROBE_GOLD_AMOUNT
@@ -565,8 +574,9 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             and reward_boundary["client_replicated_loot_amount_matches"]
             and reward_boundary["client_replicated_loot_tier_matches"]
         ),
-        "client_does_not_spawn_stock_loot_actor_today": (
-            not reward_boundary["client_has_local_gold_reward"]
+        "client_materializes_host_loot_actor": (
+            reward_boundary["client_has_local_gold_reward"]
+            and reward_boundary["client_materialized_replicated_loot_gold"]
         ),
         "stock_pickup_mutates_host_global_gold": result["pickup"]["delta"] >= PROBE_GOLD_AMOUNT,
         "replication_safe_without_pickup_hook": False,

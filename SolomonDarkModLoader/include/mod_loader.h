@@ -247,6 +247,24 @@ struct SDModGameplayNavGridState {
     std::vector<SDModGameplayNavCellState> cells;
 };
 
+struct SDModReplicatedLootPresentationState {
+    bool valid = false;
+    std::uint64_t network_drop_id = 0;
+    std::uint64_t authority_participant_id = 0;
+    std::uint32_t scene_epoch = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t native_type_id = 0;
+    multiplayer::LootDropKind drop_kind = multiplayer::LootDropKind::Unknown;
+    uintptr_t actor_address = 0;
+    bool active = false;
+    std::int32_t amount = 0;
+    std::int32_t amount_tier = 0;
+    float value = 0.0f;
+    float x = 0.0f;
+    float y = 0.0f;
+    std::uint64_t last_seen_ms = 0;
+};
+
 struct SDModParticipantGameplayState {
     bool available = false;
     bool entity_materialized = false;
@@ -365,7 +383,7 @@ void SetRunLifecycleCombatPreludeOnlySuppression(bool enabled);
 void SetRunLifecycleWaveStartEnemyTracking(bool enabled);
 void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies);
 bool TryGetRunLifecycleEnemySpawnSerial(uintptr_t enemy_address, std::uint32_t* spawn_serial);
-bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(std::uint32_t missing_enemy_count);
+bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(int enemy_type, std::uint32_t missing_enemy_count);
 bool TryGetPlayerState(SDModPlayerState* state);
 bool TryGetPlayerInventoryState(SDModInventoryState* state);
 bool TryGetPlayerProgressionBookState(SDModProgressionBookState* state);
@@ -391,5 +409,17 @@ bool TryGetGameplayHudParticipantDisplayNameForActor(
     std::uint64_t* participant_id = nullptr);
 bool RebindSceneActorCell(uintptr_t actor_address, std::string* error_message);
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);
+bool QueueReplicatedLootSnapshot(
+    const multiplayer::LootSnapshotRuntimeInfo& snapshot,
+    std::string* error_message);
+bool IsReplicatedLootPresentationActor(uintptr_t actor_address);
+bool TryGetReplicatedLootPresentationState(
+    std::uint64_t network_drop_id,
+    SDModReplicatedLootPresentationState* state);
+void GetReplicatedLootPresentationStates(std::vector<SDModReplicatedLootPresentationState>* states);
+void SuppressClientLocalLootActors(const char* reason);
+bool HasReplicatedRunEnemyDeathPresentation(std::uint64_t network_actor_id);
+void MarkReplicatedRunEnemyDeathPresented(std::uint64_t network_actor_id);
+void ClearReplicatedRunEnemyDeathPresentation(std::uint64_t network_actor_id);
 
 }  // namespace sdmod

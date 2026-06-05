@@ -157,11 +157,11 @@ audit surface:
 Current gaps:
 
 - the inventory API is read-only instrumentation, not participant-owned sync
-- local UDP `StatePacket` protocol v27 carries a compact participant-owned
+- local UDP `StatePacket` protocol v28 carries a compact participant-owned
   inventory snapshot with up to 16 decoded item rows and a total/truncated
   marker, so peers can inspect each other's current native inventory item rows
 - `sd.player.get_progression_book_state()` reads the local native progression
-  table; the current verified starter state has 83 rows, and protocol v27
+  table; the current verified starter state has 83 rows, and protocol v28
   mirrors a compact 32-row participant-owned progression-book/statbook snapshot
   plus total/truncated metadata
 - local UDP also mirrors the current ability loadout as participant-owned state
@@ -598,10 +598,13 @@ path.
 
 For multiplayer, synced loot is required, but pickup credit must be
 participant-owned. Gold, item, potion, orb, and powerup drops should be
-host-owned lifecycle objects. The older `LootSnapshot` slice was metadata only:
-clients could verify host drop identity and presentation fields, but they did not
-spawn a stock pickup actor. Gold now has the first host-authoritative pickup
-slice: clients call `sd.world.request_loot_pickup(network_drop_id)`, the host
+host-owned lifecycle objects. `LootSnapshot` now drives client-side
+presentation actors for host-owned gold and health/mana orb drops; those actors
+are marked as replicated presentations and stock pickup ticks are suppressed on
+the client so they cannot mutate local/global progression state. Item and potion
+carrier drops still expose identity and held-item metadata, but their visual
+materialization needs a separate native factory/setup pass. Gold has the first
+host-authoritative pickup slice: clients call `sd.world.request_loot_pickup(network_drop_id)`, the host
 sanity-checks run nonce, range, duplicate pickup state, and drop identity, then
 confirms or denies the request. Accepted gold pickup results credit the owning
 participant's gold ledger, advance `gold_revision`, zero the host gold actor

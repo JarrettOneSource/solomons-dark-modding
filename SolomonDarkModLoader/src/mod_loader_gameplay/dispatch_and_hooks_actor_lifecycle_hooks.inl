@@ -303,6 +303,7 @@ void __fastcall HookGameplaySwitchRegion(void* self, void* /*unused_edx*/, int r
         g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();
     }
     RemoveReplicatedCreatedSharedHubActorsForSceneSwitch("scene switch pre-dispatch");
+    ClearReplicatedLootPresentationBindingsForSceneSwitch("scene switch pre-dispatch");
     DematerializeAllMaterializedWizardBotsForSceneSwitch("scene switch pre-dispatch");
     Log(
         "[bots] gameplay switch-region hook. gameplay=" + HexString(gameplay_address) +

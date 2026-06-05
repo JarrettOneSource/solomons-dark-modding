@@ -144,6 +144,12 @@ bool SpawnReward(std::string_view kind, int amount, float x, float y, std::strin
         }
         return false;
     }
+    if (multiplayer::IsLocalTransportClient()) {
+        if (error_message != nullptr) {
+            *error_message = "spawn reward is host-authoritative while connected to multiplayer.";
+        }
+        return false;
+    }
 
     PendingRewardSpawnRequest request;
     request.kind = std::string(kind);

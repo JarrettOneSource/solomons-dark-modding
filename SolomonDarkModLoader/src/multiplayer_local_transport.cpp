@@ -81,6 +81,7 @@ constexpr std::size_t kOrbRewardResourceKindOffset = 0x13C;
 constexpr std::size_t kOrbRewardValueOffset = 0x140;
 constexpr std::size_t kOrbRewardLifetimeOffset = 0x144;
 constexpr std::size_t kOrbRewardMotionOffset = 0x148;
+constexpr std::size_t kOrbRewardProgressOffset = 0x14C;
 constexpr float kOrbHealthRewardScale = 25.0f;
 constexpr float kOrbManaRewardScale = 40.0f;
 constexpr std::size_t kAttachmentStaffVisualStateOffset = 0x84;
@@ -1322,11 +1323,13 @@ bool TryPopulateGoldLootDropSnapshot(
 
     auto& memory = ProcessMemory::Instance();
     std::uint8_t amount_tier = 0;
+    std::uint8_t presentation_state = 0;
     std::uint32_t amount_raw = 0;
     std::uint32_t lifetime = 0;
     if (!memory.TryReadField(actor.actor_address, kGoldRewardAmountTierOffset, &amount_tier) ||
         !memory.TryReadField(actor.actor_address, kGoldRewardAmountOffset, &amount_raw) ||
-        !memory.TryReadField(actor.actor_address, kGoldRewardLifetimeOffset, &lifetime)) {
+        !memory.TryReadField(actor.actor_address, kGoldRewardLifetimeOffset, &lifetime) ||
+        !memory.TryReadField(actor.actor_address, kGoldRewardActiveOffset, &presentation_state)) {
         return false;
     }
 
@@ -1338,6 +1341,7 @@ bool TryPopulateGoldLootDropSnapshot(
                        ? static_cast<std::int32_t>(amount_raw)
                        : (std::numeric_limits<std::int32_t>::max)();
     built.flags = built.amount > 0 && lifetime != 0 ? LootDropSnapshotFlagActive : 0;
+    built.presentation_state = presentation_state;
     built.amount_tier = amount_tier;
     built.value = static_cast<float>(built.amount);
     built.actor_slot = actor.actor_slot;
@@ -1366,17 +1370,20 @@ bool TryPopulateOrbLootDropSnapshot(
     float raw_value = 0.0f;
     std::uint32_t lifetime = 0;
     float motion = 0.0f;
+    float progress = 0.0f;
     if (!memory.TryReadField(actor.actor_address, kOrbRewardResourceKindOffset, &resource_kind) ||
         !memory.TryReadField(actor.actor_address, kOrbRewardValueOffset, &raw_value) ||
         !memory.TryReadField(actor.actor_address, kOrbRewardLifetimeOffset, &lifetime) ||
-        !memory.TryReadField(actor.actor_address, kOrbRewardMotionOffset, &motion)) {
+        !memory.TryReadField(actor.actor_address, kOrbRewardMotionOffset, &motion) ||
+        !memory.TryReadField(actor.actor_address, kOrbRewardProgressOffset, &progress)) {
         return false;
     }
 
     LootOrbResourceKind resolved_kind = LootOrbResourceKind::Health;
     if (!TryResolveLootOrbResourceKind(resource_kind, &resolved_kind) ||
         !std::isfinite(raw_value) ||
-        !std::isfinite(motion)) {
+        !std::isfinite(motion) ||
+        !std::isfinite(progress)) {
         return false;
     }
 
@@ -1391,6 +1398,8 @@ bool TryPopulateOrbLootDropSnapshot(
     built.amount = RoundRewardAmountToInt(resource_delta);
     built.amount_tier = resource_kind;
     built.value = raw_value;
+    built.motion = motion;
+    built.progress = progress;
     built.actor_slot = actor.actor_slot;
     built.world_slot = actor.world_slot;
     built.lifetime = lifetime;
@@ -2025,6 +2034,29 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
     if (run_scene) {
         PruneRecentRunEnemyDeathSnapshots(now_ms);
     }
+    std::uint32_t valid_recent_death_count = 0;
+    if (run_scene) {
+        for (const auto& [network_actor_id, death_snapshot] :
+             g_local_transport.recent_run_enemy_deaths_by_network_id) {
+            if (network_actor_id != 0 &&
+                death_snapshot.native_type_id != 0 &&
+                std::isfinite(death_snapshot.max_hp) &&
+                death_snapshot.max_hp > 0.0f) {
+                valid_recent_death_count += 1;
+            }
+        }
+    }
+    constexpr std::uint32_t kWorldSnapshotRecentDeathReservedSlots = 16;
+    const std::uint32_t reserved_recent_death_slots =
+        run_scene
+            ? (std::min<std::uint32_t>)(
+                  valid_recent_death_count,
+                  (std::min<std::uint32_t>)(kWorldSnapshotRecentDeathReservedSlots, kWorldSnapshotMaxActors))
+            : 0;
+    const std::uint32_t live_actor_snapshot_budget =
+        kWorldSnapshotMaxActors > reserved_recent_death_slots
+            ? kWorldSnapshotMaxActors - reserved_recent_death_slots
+            : 0;
     std::unordered_set<std::uint64_t> included_actor_ids;
     std::uint32_t total_actor_count = 0;
     for (const auto& actor : actors) {
@@ -2048,7 +2080,7 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
         }
         included_actor_ids.insert(network_actor_id);
         total_actor_count += 1;
-        if (built.actor_count >= kWorldSnapshotMaxActors) {
+        if (built.actor_count >= live_actor_snapshot_budget) {
             continue;
         }
 
@@ -2760,7 +2792,17 @@ void ApplyEnemyDamageCorrection(const EnemyDamageResultPacket& packet) {
         std::uint32_t death_exception_code = 0;
         bool death_called = false;
         if (accepted && dead) {
-            death_called = sdmod::TryTriggerRunEnemyDeath(actor_address, &death_exception_code);
+            const bool death_already_presented =
+                sdmod::HasReplicatedRunEnemyDeathPresentation(packet.target_network_actor_id);
+            if (!death_already_presented) {
+                death_called = sdmod::TryTriggerRunEnemyDeath(actor_address, &death_exception_code);
+            }
+            sdmod::MarkReplicatedRunEnemyDeathPresented(packet.target_network_actor_id);
+            if (death_called) {
+                sdmod::SuppressClientLocalLootActors("client_enemy_damage_correction_death");
+            }
+        } else {
+            sdmod::ClearReplicatedRunEnemyDeathPresentation(packet.target_network_actor_id);
         }
         if (packet.result_code == static_cast<std::uint8_t>(EnemyDamageResultCode::Accepted)) {
             g_local_transport.last_enemy_claimed_hp_by_network_id[packet.target_network_actor_id] =
@@ -3471,6 +3513,10 @@ bool SendLocalEnemyDamageClaim(
         if (local_actor_address != 0) {
             local_death_called =
                 sdmod::TryTriggerRunEnemyDeath(local_actor_address, &local_death_exception_code);
+            if (local_death_called) {
+                sdmod::MarkReplicatedRunEnemyDeathPresented(network_actor_id);
+                sdmod::SuppressClientLocalLootActors("client_local_enemy_death_claim");
+            }
         }
     }
     g_local_transport.last_enemy_claimed_hp_by_network_id[network_actor_id] = local_hp;
@@ -4271,9 +4317,12 @@ void ApplyLootSnapshotPacket(const LootSnapshotPacket& packet, const sockaddr_in
             drop.native_type_id = packet_drop.native_type_id;
             drop.drop_kind = drop_kind;
             drop.active = (packet_drop.flags & LootDropSnapshotFlagActive) != 0;
+            drop.presentation_state = packet_drop.presentation_state;
             drop.amount = packet_drop.amount;
             drop.amount_tier = packet_drop.amount_tier;
             drop.value = packet_drop.value;
+            drop.motion = packet_drop.motion;
+            drop.progress = packet_drop.progress;
             drop.item_type_id = packet_drop.item_type_id;
             drop.item_slot = packet_drop.item_slot;
             drop.stack_count = packet_drop.stack_count;
@@ -4288,6 +4337,9 @@ void ApplyLootSnapshotPacket(const LootSnapshotPacket& packet, const sockaddr_in
 
         state.loot_snapshot = std::move(snapshot);
     });
+
+    std::string queue_error;
+    (void)sdmod::QueueReplicatedLootSnapshot(SnapshotRuntimeState().loot_snapshot, &queue_error);
 }
 
 bool IsEnemyDamageClaimSequenceDuplicate(const EnemyDamageClaimPacket& packet) {

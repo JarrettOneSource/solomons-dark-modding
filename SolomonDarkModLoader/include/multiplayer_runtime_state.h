@@ -246,9 +246,12 @@ struct LootDropSnapshot {
     std::uint32_t native_type_id = 0;
     LootDropKind drop_kind = LootDropKind::Unknown;
     bool active = false;
+    std::uint8_t presentation_state = 0;
     std::int32_t amount = 0;
     std::int32_t amount_tier = 0;
     float value = 0.0f;
+    float motion = 0.0f;
+    float progress = 0.0f;
     std::uint32_t item_type_id = 0;
     std::int32_t item_slot = -1;
     std::int32_t stack_count = 0;

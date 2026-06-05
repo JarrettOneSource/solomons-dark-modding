@@ -57,6 +57,7 @@ struct GameplayKeyboardInjectionState {
     X86Hook actor_world_unregister_hook;
     X86Hook gameplay_switch_region_hook;
     X86Hook monster_pathfinding_refresh_target_hook;
+    X86Hook gold_pickup_hook;
     X86Hook orb_pickup_hook;
     X86Hook item_drop_pickup_hook;
     bool initialized = false;
@@ -79,6 +80,7 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint64_t> scene_churn_not_before_ms{0};
     std::mutex pending_gameplay_world_actions_mutex;
     std::deque<PendingRewardSpawnRequest> pending_reward_spawn_requests;
+    std::deque<multiplayer::LootSnapshotRuntimeInfo> pending_replicated_loot_snapshots;
     std::deque<PendingParticipantEntitySyncRequest> pending_participant_sync_requests;
     std::deque<PendingGameplayRegionSwitchRequest> pending_gameplay_region_switch_requests;
     std::deque<std::uint64_t> pending_participant_destroy_requests;

@@ -100,6 +100,16 @@ void __fastcall HookItemDropPickupTick(void* self, void* /*unused_edx*/) {
     }
 
     const auto drop_address = reinterpret_cast<uintptr_t>(self);
+    if (multiplayer::IsLocalTransportClient()) {
+        (void)RemoveUnboundClientLootActorNow(
+            drop_address,
+            multiplayer::LootDropKind::Item,
+            "client_item_drop_pickup_tick");
+        return;
+    }
+    if (IsReplicatedLootPresentationActorInternal(drop_address)) {
+        return;
+    }
     if (ShouldSuppressRemoteParticipantItemDropPickup(drop_address)) {
         return;
     }
