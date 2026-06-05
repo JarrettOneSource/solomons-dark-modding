@@ -99,63 +99,7 @@ void LogOverlayRenderElementsSummary(
     }
 }
 
-bool IsDarkCloudBrowserMultiplayerTabElement(const OverlayRenderElement& element) {
-    return element.surface_id == "dark_cloud_browser" &&
-           element.label == kDarkCloudBrowserMultiplayerTabLabel &&
-           element.action_id.empty();
-}
-
-void DrawDarkCloudBrowserMultiplayerTab(
-    IDirect3DDevice9* device,
-    const FontAtlas& atlas,
-    const OverlayRenderElement& element) {
-    const auto label = GetOverlayLabel(element);
-    const auto label_width = MeasureLabelWidth(atlas, label);
-    constexpr float kLabelScale = 1.28f;
-    const auto left = element.left;
-    const auto top = element.top;
-    const auto scaled_label_width = static_cast<float>(label_width) * kLabelScale;
-    const auto right = (std::max)(element.right, left + scaled_label_width + 18.0f);
-    const auto bottom = element.bottom;
-    if (right <= left || bottom <= top) {
-        return;
-    }
-
-    DrawFilledRect(device, left, top, right, bottom, kDarkCloudBrowserTabFillColor);
-    DrawFilledRect(device, left, top, right, (std::min)(bottom, top + 3.0f), kDarkCloudBrowserTabAccentColor);
-    DrawRectOutline(device, left, top, right, bottom, kDarkCloudBrowserTabOutlineColor);
-
-    if (!element.show_label || label.empty()) {
-        return;
-    }
-
-    const auto scaled_line_height = static_cast<float>(atlas.line_height) * kLabelScale;
-    const auto text_left = left + ((right - left) - scaled_label_width) * 0.5f;
-    const auto text_top = top + ((bottom - top) - scaled_line_height) * 0.5f - 1.0f;
-    DrawLabelTextScaled(
-        device,
-        atlas,
-        text_left + 1.0f,
-        (std::max)(0.0f, text_top + 1.0f),
-        label,
-        kLabelScale,
-        kDarkCloudBrowserTabTextShadowColor);
-    DrawLabelTextScaled(
-        device,
-        atlas,
-        text_left,
-        (std::max)(0.0f, text_top),
-        label,
-        kLabelScale,
-        kDarkCloudBrowserTabTextColor);
-}
-
 void DrawObservedOverlayElement(IDirect3DDevice9* device, const FontAtlas& atlas, const OverlayRenderElement& element) {
-    if (IsDarkCloudBrowserMultiplayerTabElement(element)) {
-        DrawDarkCloudBrowserMultiplayerTab(device, atlas, element);
-        return;
-    }
-
     const auto label = GetOverlayLabel(element);
     const auto label_width = MeasureLabelWidth(atlas, label);
     const auto box_left = element.left;

@@ -25,7 +25,12 @@ struct DebugUiOverlayConfig {
     uintptr_t ui_rect_dispatch_helper = 0;
     uintptr_t glyph_draw_helper = 0;
     uintptr_t text_quad_draw_helper = 0;
+    uintptr_t ui_render_context_color_helper = 0;
     uintptr_t dark_cloud_browser_render_helper = 0;
+    uintptr_t dark_cloud_browser_tab_render_helper = 0;
+    uintptr_t dark_cloud_browser_text_render_wrapper_helper = 0;
+    uintptr_t dark_cloud_browser_asset_global = 0;
+    uintptr_t dark_cloud_browser_text_object_global = 0;
     uintptr_t dark_cloud_browser_vftable = 0;
     uintptr_t settings_render_helper = 0;
     uintptr_t myquick_panel_render_helper = 0;
@@ -76,6 +81,8 @@ struct DebugUiOverlayConfig {
     size_t dark_cloud_browser_online_levels_tab_control_offset = 0;
     size_t dark_cloud_browser_my_levels_tab_control_offset = 0;
     size_t dark_cloud_browser_footer_action_control_offset = 0;
+    size_t dark_cloud_browser_tab_asset_offset = 0;
+    size_t dark_cloud_browser_text_object_offset = 0;
     size_t dark_cloud_browser_modal_button_rollout_offset = 0;
     size_t dark_cloud_browser_modal_header_group_left_offset = 0;
     size_t dark_cloud_browser_modal_header_group_top_offset = 0;

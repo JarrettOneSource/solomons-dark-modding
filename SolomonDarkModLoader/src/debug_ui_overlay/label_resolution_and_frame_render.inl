@@ -90,103 +90,6 @@ std::vector<OverlayRenderElement> TryBuildDarkCloudSearchOverlayRenderElements(
     return render_elements;
 }
 
-bool EqualsAsciiIgnoreCase(std::string_view left, std::string_view right) {
-    if (left.size() != right.size()) {
-        return false;
-    }
-
-    for (std::size_t index = 0; index < left.size(); ++index) {
-        const auto left_char = static_cast<unsigned char>(left[index]);
-        const auto right_char = static_cast<unsigned char>(right[index]);
-        if (std::tolower(left_char) != std::tolower(right_char)) {
-            return false;
-        }
-    }
-    return true;
-}
-
-void AddDarkCloudBrowserMultiplayerTabElement(
-    std::vector<OverlayRenderElement>* render_elements,
-    uintptr_t browser_address) {
-    if (render_elements == nullptr || browser_address == 0) {
-        return;
-    }
-
-    const auto find_tab = [&](std::string_view label) -> const OverlayRenderElement* {
-        const auto it = std::find_if(
-            render_elements->begin(),
-            render_elements->end(),
-            [&](const OverlayRenderElement& element) {
-                return element.surface_id == "dark_cloud_browser" && EqualsAsciiIgnoreCase(element.label, label);
-            });
-        return it != render_elements->end() ? &*it : nullptr;
-    };
-
-    if (find_tab(kDarkCloudBrowserMultiplayerTabLabel) != nullptr) {
-        return;
-    }
-
-    std::vector<const OverlayRenderElement*> native_tabs;
-    for (const auto& label : {"ONLINE LEVELS", "RECENT", "MY LEVELS"}) {
-        if (const auto* tab = find_tab(label); tab != nullptr && tab->right > tab->left && tab->bottom > tab->top) {
-            native_tabs.push_back(tab);
-        }
-    }
-    if (native_tabs.empty()) {
-        return;
-    }
-
-    std::sort(native_tabs.begin(), native_tabs.end(), [](const OverlayRenderElement* left, const OverlayRenderElement* right) {
-        return left->left < right->left;
-    });
-
-    const auto* rightmost_tab = native_tabs.back();
-    const auto reference_width = rightmost_tab->right - rightmost_tab->left;
-    const auto reference_height = rightmost_tab->bottom - rightmost_tab->top;
-
-    float gap = reference_height * 0.25f;
-    for (std::size_t index = 1; index < native_tabs.size(); ++index) {
-        const auto candidate_gap = native_tabs[index]->left - native_tabs[index - 1]->right;
-        if (candidate_gap > 1.0f) {
-            gap = (std::min)(gap, candidate_gap);
-        }
-    }
-    gap = (std::max)(4.0f, (std::min)(gap, 18.0f));
-
-    OverlayRenderElement element;
-    element.surface_id = "dark_cloud_browser";
-    element.surface_title = "Dark Cloud Browser";
-    element.label = std::string(kDarkCloudBrowserMultiplayerTabLabel);
-    element.source_object_ptr = 0;
-    element.surface_object_ptr = browser_address;
-    element.show_label = true;
-    element.left = rightmost_tab->right + gap;
-    element.top = rightmost_tab->top;
-    element.right = element.left + (std::max)(reference_width, rightmost_tab->right - rightmost_tab->left);
-    element.bottom = rightmost_tab->bottom;
-
-    const auto panel_it = std::find_if(
-        render_elements->begin(),
-        render_elements->end(),
-        [](const OverlayRenderElement& candidate) {
-            return candidate.surface_id == "dark_cloud_browser.panel" && candidate.right > candidate.left;
-        });
-    if (panel_it != render_elements->end()) {
-        const auto panel_right = panel_it->right - 8.0f;
-        if (element.right > panel_right) {
-            const auto width = element.right - element.left;
-            element.right = panel_right;
-            element.left = element.right - width;
-        }
-    }
-
-    if (element.right <= rightmost_tab->right + 2.0f || element.bottom <= element.top) {
-        return;
-    }
-
-    render_elements->push_back(std::move(element));
-}
-
 std::vector<OverlayRenderElement> TryBuildDarkCloudBrowserOverlayRenderElements(
     const std::vector<ObservedUiElement>& exact_text_elements,
     const std::vector<ObservedUiElement>& exact_control_elements,
@@ -233,8 +136,6 @@ std::vector<OverlayRenderElement> TryBuildDarkCloudBrowserOverlayRenderElements(
             element.surface_id != "dark_cloud_browser.panel" && !render_element.label.empty();
         render_elements.push_back(std::move(render_element));
     }
-
-    AddDarkCloudBrowserMultiplayerTabElement(&render_elements, browser_address);
 
     for (const auto& element : exact_text_elements) {
         if (element.surface_id != "dark_cloud_browser") {

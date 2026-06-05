@@ -106,6 +106,23 @@ using UiUnlabeledControlRenderFn = void(__cdecl*)(void* self, int arg2, int arg3
 using UiPanelRenderFn = void(__cdecl*)(float arg1, float arg2, float arg3, float arg4, float arg5);
 using UiRectDispatchFn = void(__thiscall*)(void* self, float arg2, float arg3, float arg4, float arg5);
 
+struct NativeUiString {
+    uintptr_t vtable = 0;
+    char* text = nullptr;
+    std::uint32_t unknown_08 = 0;
+    std::int32_t* ref_count = nullptr;
+    std::uint32_t length = 0;
+    std::uint8_t flags_14 = 0;
+    std::uint8_t flags_15 = 0;
+    std::uint16_t padding_16 = 0;
+    std::uint32_t unknown_18 = 0;
+};
+static_assert(sizeof(NativeUiString) == 0x1C, "Native UI string layout changed");
+
+using UiRenderContextColorFn = void(__thiscall*)(void* self, float red, float green, float blue, float alpha);
+using DarkCloudBrowserTabRenderFn = void(__thiscall*)(void* self, float left, float top, float width);
+using DarkCloudBrowserTextRenderFn = void(__thiscall*)(void* self, NativeUiString text, float x, float y);
+
 void (*g_reset_surface_registry_first_frame_flags)() = nullptr;
 
 constexpr D3DCOLOR kBoxColor = D3DCOLOR_ARGB(220, 64, 255, 160);
@@ -113,11 +130,13 @@ constexpr D3DCOLOR kLabelTextColor = D3DCOLOR_ARGB(255, 255, 255, 255);
 constexpr D3DCOLOR kLabelBackgroundColor = D3DCOLOR_ARGB(180, 0, 0, 0);
 constexpr D3DCOLOR kLabelOutlineColor = D3DCOLOR_ARGB(220, 0, 0, 0);
 constexpr std::string_view kDarkCloudBrowserMultiplayerTabLabel = "multiplayer";
-constexpr D3DCOLOR kDarkCloudBrowserTabFillColor = D3DCOLOR_ARGB(215, 20, 18, 12);
-constexpr D3DCOLOR kDarkCloudBrowserTabAccentColor = D3DCOLOR_ARGB(240, 232, 199, 87);
-constexpr D3DCOLOR kDarkCloudBrowserTabOutlineColor = D3DCOLOR_ARGB(245, 250, 220, 116);
-constexpr D3DCOLOR kDarkCloudBrowserTabTextShadowColor = D3DCOLOR_ARGB(210, 0, 0, 0);
-constexpr D3DCOLOR kDarkCloudBrowserTabTextColor = D3DCOLOR_ARGB(255, 240, 210, 112);
+constexpr float kDarkCloudBrowserInactiveTabTextRed = 0.850000024f;
+constexpr float kDarkCloudBrowserInactiveTabTextGreen = 0.730000019f;
+constexpr float kDarkCloudBrowserInactiveTabTextBlue = 0.439999998f;
+constexpr float kDarkCloudBrowserNativeMultiplayerTabGap = 0.0f;
+constexpr float kDarkCloudBrowserMultiplayerTabHorizontalPadding = 16.0f;
+constexpr float kDarkCloudBrowserInactiveTabTextYOffset = 52.0f;
+constexpr std::size_t kUiRenderContextDrawStateOffset = 0x1D0;
 constexpr std::size_t kTextDrawHookPatchSize = 6;
 constexpr std::size_t kStringAssignHookPatchSize = 5;
 constexpr std::size_t kDialogAddLineHookPatchSize = 7;
@@ -497,14 +516,6 @@ int MeasureLabelWidth(const FontAtlas& atlas, std::string_view label);
 void DrawFilledRect(IDirect3DDevice9* device, float left, float top, float right, float bottom, D3DCOLOR color);
 void DrawRectOutline(IDirect3DDevice9* device, float left, float top, float right, float bottom, D3DCOLOR color);
 void DrawLabelText(IDirect3DDevice9* device, const FontAtlas& atlas, float left, float top, std::string_view label, D3DCOLOR color);
-void DrawLabelTextScaled(
-    IDirect3DDevice9* device,
-    const FontAtlas& atlas,
-    float left,
-    float top,
-    std::string_view label,
-    float scale,
-    D3DCOLOR color);
 void ConfigureOverlayRenderState(IDirect3DDevice9* device);
 bool IsPlausibleDialogRect(float left, float top, float width, float height);
 std::string TrimAsciiWhitespace(std::string_view value);
@@ -643,6 +654,7 @@ std::string GetOverlaySurfaceRootId(std::string_view surface_id);
 #include "debug_ui_overlay/widget_geometry_readers.inl"
 #include "debug_ui_overlay/control_observers.inl"
 #include "debug_ui_overlay/tracked_surfaces_and_main_menu.inl"
+#include "debug_ui_overlay/dark_cloud_browser_native_tabs.inl"
 #include "debug_ui_overlay/dialog_tracking_and_snapshots.inl"
 #include "debug_ui_overlay/exact_text_capture_and_hooks.inl"
 #include "debug_ui_overlay/surface_render_hooks.inl"

@@ -121,6 +121,8 @@ void __fastcall HookDarkCloudBrowserRenderHelper(void* self, void* /*unused_edx*
         original(self);
     }
 
+    DrawNativeDarkCloudBrowserMultiplayerTab(browser_address, caller_address);
+
     std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
     auto& tracked_browser = g_debug_ui_overlay_state.dark_cloud_browser_render;
     if (tracked_browser.render_depth > 0) {

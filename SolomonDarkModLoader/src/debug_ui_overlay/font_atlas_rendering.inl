@@ -192,15 +192,8 @@ void DrawRectOutline(IDirect3DDevice9* device, float left, float top, float righ
     device->DrawPrimitiveUP(D3DPT_LINELIST, 4, vertices.data(), sizeof(ColorVertex));
 }
 
-void DrawLabelTextScaled(
-    IDirect3DDevice9* device,
-    const FontAtlas& atlas,
-    float left,
-    float top,
-    std::string_view label,
-    float scale,
-    D3DCOLOR color) {
-    if (atlas.texture == nullptr || label.empty() || scale <= 0.0f) {
+void DrawLabelText(IDirect3DDevice9* device, const FontAtlas& atlas, float left, float top, std::string_view label, D3DCOLOR color) {
+    if (atlas.texture == nullptr || label.empty()) {
         return;
     }
 
@@ -210,13 +203,13 @@ void DrawLabelTextScaled(
     float cursor_x = left;
     for (unsigned char ch : label) {
         if (ch < kFirstGlyph || ch > kLastGlyph) {
-            cursor_x += static_cast<float>(atlas.line_height / 2) * scale;
+            cursor_x += static_cast<float>(atlas.line_height / 2);
             continue;
         }
 
         const auto& glyph = atlas.glyphs[ch - kFirstGlyph];
-        const auto width = static_cast<float>((std::max)(glyph.width, 1)) * scale;
-        const auto height = static_cast<float>(atlas.line_height) * scale;
+        const auto width = static_cast<float>((std::max)(glyph.width, 1));
+        const auto height = static_cast<float>(atlas.line_height);
 
         const float right = cursor_x + width;
         const float bottom = top + height;
@@ -242,10 +235,6 @@ void DrawLabelTextScaled(
         static_cast<UINT>(vertices.size() / 3),
         vertices.data(),
         sizeof(TexturedVertex));
-}
-
-void DrawLabelText(IDirect3DDevice9* device, const FontAtlas& atlas, float left, float top, std::string_view label, D3DCOLOR color) {
-    DrawLabelTextScaled(device, atlas, left, top, label, 1.0f, color);
 }
 
 void ConfigureOverlayRenderState(IDirect3DDevice9* device) {
