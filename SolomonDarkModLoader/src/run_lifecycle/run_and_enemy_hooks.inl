@@ -33,7 +33,7 @@ void __cdecl HookRunEnded() {
     if (original == nullptr) return;
     g_state.run_active.store(false, std::memory_order_release);
     original();
-    CompleteRunLifecycleEnd("death", true);
+    CompleteRunLifecycleEnd("death", true, false);
 }
 
 bool ShouldSuppressClientAuthoritativeRunWaveSpawner(std::uint64_t now_ms) {
@@ -202,6 +202,13 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
     float x = 0.0f;
     float y = 0.0f;
     const bool have_position = TryReadActorPosition(self_address, &x, &y);
+    const bool already_handled_before_death =
+        have_already_handled && already_handled_byte != 0;
+    if (have_already_handled &&
+        !already_handled_before_death &&
+        IsCombatArenaActiveForEnemyTracking()) {
+        multiplayer::NotifyLocalRunEnemyDeath(self_address);
+    }
 
     const auto result = original(self, unused_edx);
     if (!have_enemy_type) {

@@ -97,6 +97,7 @@ struct RenderDriveEffectState {
 
 struct RecentRunEnemyDeathSnapshot {
     std::uint64_t network_actor_id = 0;
+    uintptr_t actor_address = 0;
     std::uint32_t native_type_id = 0;
     std::int32_t enemy_type = -1;
     float position_x = 0.0f;
@@ -1100,6 +1101,7 @@ void RecordRecentRunEnemyDeathSnapshot(
 
     RecentRunEnemyDeathSnapshot snapshot;
     snapshot.network_actor_id = network_actor_id;
+    snapshot.actor_address = actor.actor_address;
     snapshot.native_type_id = actor.object_type_id;
     snapshot.enemy_type = actor.enemy_type;
     snapshot.position_x = actor.x;
@@ -1109,6 +1111,20 @@ void RecordRecentRunEnemyDeathSnapshot(
     snapshot.max_hp = actor.max_hp;
     snapshot.expires_ms = now_ms + kRecentRunEnemyDeathSnapshotHoldMs;
     g_local_transport.recent_run_enemy_deaths_by_network_id[network_actor_id] = snapshot;
+}
+
+bool HasRecentRunEnemyDeathSnapshotForActor(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+    for (const auto& [ignored_network_actor_id, death_snapshot] :
+         g_local_transport.recent_run_enemy_deaths_by_network_id) {
+        (void)ignored_network_actor_id;
+        if (death_snapshot.actor_address == actor_address) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool IsHubStudentActorType(std::uint32_t native_type_id) {
@@ -2063,6 +2079,12 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
         if (!ShouldReplicateWorldActor(actor, scene_intent.kind)) {
             continue;
         }
+        if (run_scene &&
+            actor.tracked_enemy &&
+            actor.dead &&
+            HasRecentRunEnemyDeathSnapshotForActor(actor.actor_address)) {
+            continue;
+        }
         std::uint64_t network_actor_id = 0;
         if (run_scene) {
             std::uint32_t spawn_serial = 0;
@@ -2444,6 +2466,48 @@ bool TryGetLiveRunEnemyActorByAddress(
         if (actor.actor_address == actor_address &&
             ShouldReplicateWorldActor(actor, scene_intent.kind) &&
             actor.tracked_enemy) {
+            if (actor_out != nullptr) {
+                *actor_out = actor;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+bool TryGetRunEnemyActorForDeathSnapshotByAddress(
+    uintptr_t actor_address,
+    SDModSceneActorState* actor_out) {
+    if (actor_out != nullptr) {
+        *actor_out = {};
+    }
+    if (actor_address == 0) {
+        return false;
+    }
+
+    const auto scene_intent = SceneIntentFromLocalScene();
+    if (scene_intent.kind != ParticipantSceneIntentKind::Run) {
+        return false;
+    }
+
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        return false;
+    }
+
+    for (const auto& actor : actors) {
+        if (actor.actor_address == actor_address &&
+            actor.valid &&
+            actor.owner_address != 0 &&
+            actor.object_type_id != 0 &&
+            actor.object_type_id != 1 &&
+            actor.tracked_enemy &&
+            std::isfinite(actor.x) &&
+            std::isfinite(actor.y) &&
+            std::isfinite(actor.radius) &&
+            actor.radius >= 0.0f &&
+            std::isfinite(actor.max_hp) &&
+            actor.max_hp > 0.0f) {
             if (actor_out != nullptr) {
                 *actor_out = actor;
             }
@@ -5442,6 +5506,35 @@ void QueueLocalEnemyDamageClaim(
     claim.target_position_x = target_position_x;
     claim.target_position_y = target_position_y;
     g_queued_local_enemy_damage_claims.push_back(claim);
+}
+
+void NotifyLocalRunEnemyDeath(uintptr_t actor_address) {
+    if (!g_local_transport.initialized ||
+        !g_local_transport.is_host ||
+        actor_address == 0) {
+        return;
+    }
+
+    SDModSceneActorState actor;
+    if (!TryGetRunEnemyActorForDeathSnapshotByAddress(actor_address, &actor)) {
+        return;
+    }
+
+    const auto network_actor_id = ResolveLocalRunEnemyNetworkActorId(actor);
+    if (network_actor_id == 0) {
+        return;
+    }
+
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    RecordRecentRunEnemyDeathSnapshot(network_actor_id, actor, now_ms);
+    Log(
+        "world_snapshot: recorded host run enemy death snapshot from native hook. actor=" +
+        HexString(actor.actor_address) +
+        " network_actor_id=" + std::to_string(network_actor_id) +
+        " type=" + HexString(static_cast<uintptr_t>(actor.object_type_id)) +
+        " enemy_type=" + std::to_string(actor.enemy_type) +
+        " hp=" + std::to_string(actor.hp) +
+        " max_hp=" + std::to_string(actor.max_hp));
 }
 
 bool QueueLocalLootPickupRequest(

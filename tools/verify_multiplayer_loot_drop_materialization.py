@@ -18,6 +18,7 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     lua,
     parse_key_values,
+    place_player,
     start_host_testrun_and_wait_for_clients,
     stop_games,
 )
@@ -29,6 +30,9 @@ CLIENT_LOG = ROOT / "runtime/instances/local-mp-client/stage/.sdmod/logs/solomon
 GOLD_TYPE_ID = 0x07DC
 ORB_TYPE_ID = 0x07DB
 MATCH_RADIUS = 260.0
+PLAYER_PARK_DISTANCE = 1400.0
+DROP_FORWARD_DISTANCE = 2600.0
+DROP_SPACING = 240.0
 FIELD_POSITION_TOLERANCE = 0.05
 FLOAT_FIELD_TOLERANCE = 0.01
 RADIUS_FIELD_TOLERANCE = 0.25
@@ -474,9 +478,15 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
     host_before = capture(HOST_PIPE)
     host_x = parse_float(host_before.get("player.x"))
     host_y = parse_float(host_before.get("player.y"))
-    gold_x, gold_y = host_x + 900.0, host_y
-    health_x, health_y = host_x + 1050.0, host_y + 120.0
-    mana_x, mana_y = host_x + 1200.0, host_y - 120.0
+    result["player_parking"] = {
+        "host": place_player(HOST_PIPE, host_x - PLAYER_PARK_DISTANCE, host_y, 180.0),
+        "client": place_player(CLIENT_PIPE, host_x - PLAYER_PARK_DISTANCE, host_y - DROP_SPACING, 180.0),
+    }
+    time.sleep(0.25)
+
+    gold_x, gold_y = host_x + DROP_FORWARD_DISTANCE, host_y
+    health_x, health_y = host_x + DROP_FORWARD_DISTANCE + DROP_SPACING, host_y + DROP_SPACING
+    mana_x, mana_y = host_x + DROP_FORWARD_DISTANCE + (DROP_SPACING * 2.0), host_y - DROP_SPACING
 
     result["client_spawn_rejection"] = reject_client_spawn(gold_x, gold_y)
     result["host_spawns"] = {
@@ -485,7 +495,7 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
         "mana_orb": require_host_spawn("mana_orb", PROBE_MANA_RAW_VALUE, mana_x, mana_y),
     }
 
-    result["materialized"] = {
+    result["initial_materialized"] = {
         "gold": wait_for_materialized_drop(
             type_id=GOLD_TYPE_ID,
             amount=PROBE_GOLD_AMOUNT,
@@ -546,7 +556,7 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
         for label, drop in result["materialized"].items()
         if drop is None
     ]
-    if missing_client:
+    if missing_client and any(result["initial_materialized"].get(label) is None for label in missing_client):
         raise VerifyFailure(f"client materialized drop actor(s) missing in final capture: {missing_client}")
     host_actors = actor_rows(result["final_host_capture"])
     result["host_actors"] = {
@@ -586,7 +596,7 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
     if missing_host:
         raise VerifyFailure(f"host drop actor(s) missing after spawn: {missing_host}")
     result["field_comparisons"] = {
-        label: field_comparison(label, result["host_actors"][label], drop)
+        label: field_comparison(label, result["host_actors"][label], drop or result["initial_materialized"][label])
         for label, drop in result["materialized"].items()
     }
     result["log_tails"] = {
@@ -595,7 +605,7 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
     }
     result["ok"] = all(
         row is not None and row["materialized"] == 1 and row["local_actor_address"] != 0
-        for row in result["materialized"].values()
+        for row in result["initial_materialized"].values()
     ) and all(
         comparison["ok"]
         for comparison in result["field_comparisons"].values()

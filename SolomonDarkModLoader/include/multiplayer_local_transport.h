@@ -32,6 +32,7 @@ void QueueLocalEnemyDamageClaim(
     float max_hp,
     float target_position_x,
     float target_position_y);
+void NotifyLocalRunEnemyDeath(uintptr_t actor_address);
 bool QueueLocalLootPickupRequest(
     std::uint64_t network_drop_id,
     std::uint32_t* request_sequence,

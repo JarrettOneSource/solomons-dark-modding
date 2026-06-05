@@ -228,6 +228,7 @@ def summarize_capture(host: dict[str, str], client: dict[str, str]) -> dict[str,
     local_dead_mismatches = 0
     local_hp_mismatches = 0
     local_death_handled_dead = 0
+    snapshot_dead_total = 0
     snapshot_dead = 0
     snapshot_drive_word_present = 0
     snapshot_locomotion_present = 0
@@ -240,6 +241,8 @@ def summarize_capture(host: dict[str, str], client: dict[str, str]) -> dict[str,
     max_host_client_ordinal_hp_delta = 0.0
     for index in range(1, rep_count + 1):
         if parse_int(client.get(f"rep.{index}.has_local")) == 0:
+            if parse_int(client.get(f"rep.{index}.dead")):
+                snapshot_dead_total += 1
             continue
         compared += 1
         snapshot_drive = parse_int(client.get(f"rep.{index}.drive_byte"))
@@ -249,6 +252,7 @@ def summarize_capture(host: dict[str, str], client: dict[str, str]) -> dict[str,
         snapshot_dead_value = parse_int(client.get(f"rep.{index}.dead"))
         local_dead_value = parse_int(client.get(f"rep.{index}.local_dead"))
         if snapshot_dead_value:
+            snapshot_dead_total += 1
             snapshot_dead += 1
         if snapshot_dead_value != local_dead_value:
             local_dead_mismatches += 1
@@ -305,6 +309,7 @@ def summarize_capture(host: dict[str, str], client: dict[str, str]) -> dict[str,
         "max_locomotion_delta": round(max_locomotion_delta, 4),
         "client_drive_words_nonzero": client_drive_words_nonzero,
         "host_client_ordinal_drive_word_mismatches": host_client_ordinal_drive_word_mismatches,
+        "snapshot_dead_total": snapshot_dead_total,
         "snapshot_dead": snapshot_dead,
         "local_dead_mismatches": local_dead_mismatches,
         "local_death_handled_dead": local_death_handled_dead,
@@ -339,6 +344,7 @@ def aggregate_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
         "max_host_client_ordinal_drive_word_mismatches": max_value(
             "host_client_ordinal_drive_word_mismatches"
         ),
+        "max_snapshot_dead_total": max_value("snapshot_dead_total"),
         "max_snapshot_dead": max_value("snapshot_dead"),
         "max_local_dead_mismatches": max_value("local_dead_mismatches"),
         "max_local_death_handled_dead": max_value("local_death_handled_dead"),
@@ -374,7 +380,7 @@ def wait_for_dead_snapshot(timeout: float, interval: float) -> list[dict[str, An
         samples.append(sample)
         summary = sample["summary"]
         if (
-            summary.get("snapshot_dead", 0) > 0
+            summary.get("snapshot_dead_total", 0) > 0
             and summary.get("local_dead_mismatches", 0) == 0
             and summary.get("local_hp_mismatches", 0) == 0
         ):
@@ -445,7 +451,10 @@ def main() -> int:
                 args.skip_death
                 or (
                     result["death"]["max_snapshot_dead"] > 0
-                    and result["death"]["max_local_dead_mismatches"] == 0
+                    or result["death"]["max_snapshot_dead_total"] > 0
+                )
+                and (
+                    result["death"]["max_local_dead_mismatches"] == 0
                     and result["death"]["max_local_hp_mismatches"] == 0
                 )
             )

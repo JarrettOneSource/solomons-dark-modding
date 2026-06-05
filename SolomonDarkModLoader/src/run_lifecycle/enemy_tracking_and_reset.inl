@@ -118,18 +118,23 @@ void ClearRememberedEnemyTracking() {
     g_state.next_enemy_spawn_serial = 1;
 }
 
-void ResetRunLifecycleBookkeeping() {
+void ResetRunLifecycleBookkeeping(bool clear_enemy_tracking = true) {
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.last_wave_spawner.store(0, std::memory_order_release);
     g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
     g_state.run_start_tick_ms.store(0, std::memory_order_release);
     g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
     g_state.wave_start_enemy_tracking.store(false, std::memory_order_release);
-    ClearRememberedEnemyTracking();
+    if (clear_enemy_tracking) {
+        ClearRememberedEnemyTracking();
+    }
 }
 
-void CompleteRunLifecycleEnd(std::string_view reason, bool dispatch_lua) {
-    ResetRunLifecycleBookkeeping();
+void CompleteRunLifecycleEnd(
+    std::string_view reason,
+    bool dispatch_lua,
+    bool clear_enemy_tracking = true) {
+    ResetRunLifecycleBookkeeping(clear_enemy_tracking);
     multiplayer::SetAllBotSceneIntentsToSharedHub();
     if (dispatch_lua) {
         std::string reason_string;

@@ -3,6 +3,7 @@
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_state.h"
+#include "native_enemy_lifecycle.h"
 
 #include <string>
 
@@ -850,6 +851,15 @@ int LuaWorldRequestLootPickup(lua_State* state) {
     return 2;
 }
 
+int LuaWorldTriggerEnemyDeath(lua_State* state) {
+    const auto actor_address = static_cast<uintptr_t>(luaL_checkinteger(state, 1));
+    std::uint32_t exception_code = 0;
+    const bool triggered = sdmod::TryTriggerRunEnemyDeath(actor_address, &exception_code);
+    lua_pushboolean(state, triggered ? 1 : 0);
+    lua_pushinteger(state, static_cast<lua_Integer>(exception_code));
+    return 2;
+}
+
 }  // namespace
 
 void RegisterLuaGameplayBindings(lua_State* state) {
@@ -866,7 +876,7 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaPlayerGetProgressionBookState, "get_progression_book_state");
     lua_setfield(state, -2, "player");
 
-    lua_createtable(state, 0, 8);
+    lua_createtable(state, 0, 9);
     RegisterFunction(state, &LuaWorldGetState, "get_state");
     RegisterFunction(state, &LuaWorldGetScene, "get_scene");
     RegisterFunction(state, &LuaWorldListActors, "list_actors");
@@ -875,6 +885,7 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaWorldRequestLootPickup, "request_loot_pickup");
     RegisterFunction(state, &LuaWorldRebindActor, "rebind_actor");
     RegisterFunction(state, &LuaWorldSpawnReward, "spawn_reward");
+    RegisterFunction(state, &LuaWorldTriggerEnemyDeath, "trigger_enemy_death");
     lua_setfield(state, -2, "world");
 }
 
