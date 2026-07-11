@@ -1,4 +1,5 @@
 .codex
+.claude/
 .codex-venv/
 .venv-tools/
 .venv_capture/
