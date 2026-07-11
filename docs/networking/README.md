@@ -141,13 +141,20 @@ finished peer networking layer.
   audit surface for the stock scene-owned inventory root and visual sink helper
   items, and `tools/verify_multiplayer_inventory_audit.py` proves both local
   multiplayer clients can read their own native starter inventory shape.
-  Protocol v28 also mirrors compact participant-owned inventory item rows,
-  progression-book/statbook rows, and current ability loadout in `StatePacket`,
-  so peers can inspect each other's starter potion rows, active/visible native
-  skill-book entries, and primary/secondary loadout. This is not full inventory
-  ownership yet: item/potion pickup is still metadata-ledger credit rather than
-  native item-object insertion, and powerup pickup plus separate spellbook
-  content replication are still pending.
+  Protocol v30 also mirrors bounded full participant-owned inventory item rows,
+  progression-book/statbook/skillbook/spellbook rows, and current ability loadout
+  in `StatePacket`, so peers can inspect each other's starter potion rows,
+  active/visible native book entries, and primary/secondary loadout. This is not
+  full native inventory ownership yet: item/potion pickup is still
+  metadata-ledger credit rather than native item-object insertion, and powerup
+  pickup still needs its own seam.
+  Protocol v30 also adds host-authored `LevelUpOffer`, `LevelUpChoice`, and
+  `LevelUpChoiceResult` packets. The host advances shared XP/level, rolls each
+  participant's native skill-picker options against that participant's
+  materialized progression/book state, sends only that participant's offer, and
+  applies a returned choice only if it matches the issued offer. Connected
+  non-host clients suppress their local native level-up picker/event and expose
+  the active offer through `sd.runtime.get_multiplayer_state()`.
   `StatePacket` carries each
   participant's current owned gold and progression revision counters for live
   verification of the participant ledger; stale state packets are
@@ -171,7 +178,7 @@ finished peer networking layer.
 | Identity | Connection-bound. Host ignores client-declared player / actor IDs. |
 | Mod compatibility | **Exact** protocol version + mod-manifest hash. Mismatch refuses connect. |
 | Anti-cheat | None in the serious sense. Baseline hygiene only (see below). |
-| Loot | Synced host-owned run drops. Gold, health/mana orbs, and item/potion carriers have request/result authority slices; item/potion results currently credit the participant-owned inventory ledger by metadata rather than inserting real native item objects. Local inventory/equip roots now have a typed read-only audit API, and local UDP mirrors compact inventory rows, progression-book/statbook rows, and ability loadout in `StatePacket`. Powerup ownership, separate spellbook content sync, and real per-participant native inventory roots are still pending. |
+| Loot | Synced host-owned run drops. Gold, health/mana orbs, and item/potion carriers have request/result authority slices; item/potion results currently credit the participant-owned inventory ledger by metadata rather than inserting real native item objects. Local inventory/equip roots now have a typed read-only audit API, and local UDP mirrors bounded full participant-owned inventory rows, progression-book/statbook/skillbook/spellbook rows, and current ability loadout in `StatePacket`. Powerup ownership and real per-participant native inventory roots are still pending. |
 
 ## Tick rates
 
@@ -203,6 +210,9 @@ Sampling happens on the stock game thread after native updates — no extra sim 
   orb, and powerup carriers as each native pickup seam is proven
 - `pickup-request / pickup-result` — client intent, host sanity check, and
   per-participant inventory/spellbook/statbook credit
+- `level-up-offer / level-up-choice / level-up-result` — host-authored shared
+  level-up options, client-selected offer item, and host sanity-check/apply
+  result
 - `progression-delta` — XP, gold, level, spellbook, statbook, and live loadout
   mutation
 - `disconnect / reconnect`

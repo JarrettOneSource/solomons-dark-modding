@@ -6,9 +6,18 @@ void __fastcall HookCreateArena(void* self, void* unused_edx) {
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.run_active.store(true, std::memory_order_release);
     g_state.last_wave_spawner.store(0, std::memory_order_release);
+    g_state.last_wave_spawner_vtable.store(0, std::memory_order_release);
+    g_state.last_wave_spawner_tick_ms.store(0, std::memory_order_release);
+    g_state.last_arena_enemy_wave_spawner.store(0, std::memory_order_release);
+    g_state.last_arena_enemy_wave_spawner_vtable.store(0, std::memory_order_release);
+    g_state.last_arena_enemy_wave_spawner_tick_ms.store(0, std::memory_order_release);
     g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
     g_state.run_start_tick_ms.store(static_cast<std::uint64_t>(GetTickCount64()), std::memory_order_release);
     g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(g_state.wave_spawner_log_mutex);
+        g_state.logged_wave_spawners.clear();
+    }
     ClearRememberedEnemyTracking();
     original(self, unused_edx);
     DispatchLuaRunStarted();
@@ -20,9 +29,18 @@ void __fastcall HookStartGame(void* self, void* unused_edx) {
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.run_active.store(true, std::memory_order_release);
     g_state.last_wave_spawner.store(0, std::memory_order_release);
+    g_state.last_wave_spawner_vtable.store(0, std::memory_order_release);
+    g_state.last_wave_spawner_tick_ms.store(0, std::memory_order_release);
+    g_state.last_arena_enemy_wave_spawner.store(0, std::memory_order_release);
+    g_state.last_arena_enemy_wave_spawner_vtable.store(0, std::memory_order_release);
+    g_state.last_arena_enemy_wave_spawner_tick_ms.store(0, std::memory_order_release);
     g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
     g_state.run_start_tick_ms.store(static_cast<std::uint64_t>(GetTickCount64()), std::memory_order_release);
     g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(g_state.wave_spawner_log_mutex);
+        g_state.logged_wave_spawners.clear();
+    }
     ClearRememberedEnemyTracking();
     original(self, unused_edx);
     DispatchLuaRunStarted();
@@ -86,7 +104,332 @@ bool ShouldSuppressClientAuthoritativeRunWaveSpawner(std::uint64_t now_ms) {
         }
     }
 
-    return local_live_enemies >= authoritative_live_enemies;
+    (void)authoritative_live_enemies;
+    (void)local_live_enemies;
+    return true;
+}
+
+void ClearFrozenManualRunEnemyControlState(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    (void)memory.TryWriteField<uintptr_t>(
+        actor_address,
+        kActorCurrentTargetActorOffset,
+        0);
+    (void)memory.TryWriteField<std::int32_t>(
+        actor_address,
+        kActorCurrentTargetBucketDeltaOffset,
+        0);
+
+    uintptr_t control_brain_address = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorAnimationSelectionStateOffset,
+            &control_brain_address) ||
+        control_brain_address == 0) {
+        return;
+    }
+
+    constexpr std::int32_t kFrozenManualEnemyRetargetSuppressionTicks = 60;
+    (void)memory.TryWriteValue<std::uint8_t>(
+        control_brain_address + kActorControlBrainTargetSlotOffset,
+        0xFF);
+    (void)memory.TryWriteValue<std::uint16_t>(
+        control_brain_address + kActorControlBrainTargetHandleOffset,
+        0xFFFF);
+    (void)memory.TryWriteValue<std::int32_t>(
+        control_brain_address + kActorControlBrainRetargetTicksOffset,
+        kFrozenManualEnemyRetargetSuppressionTicks);
+    (void)memory.TryWriteValue<std::int32_t>(
+        control_brain_address + kActorControlBrainTargetCooldownTicksOffset,
+        0);
+    (void)memory.TryWriteValue<std::int32_t>(
+        control_brain_address + kActorControlBrainActionCooldownTicksOffset,
+        0);
+    (void)memory.TryWriteValue<std::int32_t>(
+        control_brain_address + kActorControlBrainActionBurstTicksOffset,
+        0);
+    (void)memory.TryWriteValue<std::int32_t>(
+        control_brain_address + kActorControlBrainHeadingLockTicksOffset,
+        0);
+    (void)memory.TryWriteValue<std::uint8_t>(
+        control_brain_address + kActorControlBrainFollowLeaderOffset,
+        0);
+    (void)memory.TryWriteValue<float>(
+        control_brain_address + kActorControlBrainMoveInputXOffset,
+        0.0f);
+    (void)memory.TryWriteValue<float>(
+        control_brain_address + kActorControlBrainMoveInputYOffset,
+        0.0f);
+}
+
+void PinFrozenManualRunEnemies() {
+    std::vector<std::pair<uintptr_t, FrozenManualRunEnemy>> frozen_enemies;
+    {
+        std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+        frozen_enemies.reserve(g_frozen_manual_run_enemies.size());
+        for (const auto& entry : g_frozen_manual_run_enemies) {
+            frozen_enemies.push_back(entry);
+        }
+    }
+
+    if (frozen_enemies.empty()) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::vector<uintptr_t> stale_enemies;
+    for (const auto& entry : frozen_enemies) {
+        const auto actor_address = entry.first;
+        const auto& freeze = entry.second;
+        float hp = 0.0f;
+        if (!memory.TryReadField(actor_address, kEnemyCurrentHpOffset, &hp) ||
+            !std::isfinite(hp) ||
+            hp <= 0.05f) {
+            stale_enemies.push_back(actor_address);
+            continue;
+        }
+        ClearFrozenManualRunEnemyControlState(actor_address);
+        (void)memory.TryWriteField(actor_address, kActorPositionXOffset, freeze.x);
+        (void)memory.TryWriteField(actor_address, kActorPositionYOffset, freeze.y);
+    }
+
+    if (stale_enemies.empty()) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+    for (const auto actor_address : stale_enemies) {
+        g_frozen_manual_run_enemies.erase(actor_address);
+    }
+}
+
+void PinManualRunEnemySpawnerTestModeArenaState() {
+    SDModGameplayCombatState combat_state;
+    if (!TryGetGameplayCombatState(&combat_state) || !combat_state.valid || combat_state.arena_address == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    (void)memory.TryWriteField<std::int32_t>(
+        combat_state.arena_address,
+        kArenaCombatWaveIndexOffset,
+        0);
+    (void)memory.TryWriteField<std::int32_t>(
+        combat_state.arena_address,
+        kArenaCombatWaveCounterOffset,
+        999999999);
+    (void)memory.TryWriteField<std::uint8_t>(
+        combat_state.arena_address,
+        kArenaCombatTransitionRequestedOffset,
+        static_cast<std::uint8_t>(1));
+    (void)memory.TryWriteField<std::uint8_t>(
+        combat_state.arena_address,
+        kArenaCombatStartedMusicOffset,
+        static_cast<std::uint8_t>(1));
+    (void)memory.TryWriteField<std::uint8_t>(
+        combat_state.arena_address,
+        kArenaCombatActiveFlagOffset,
+        static_cast<std::uint8_t>(1));
+    g_state.current_wave.store(0, std::memory_order_release);
+}
+
+void CompleteManualRunEnemySpawnFailure(
+    const ManualRunEnemySpawnRequest& request,
+    std::string_view error_message) {
+    SDModManualRunEnemySpawnResult result;
+    result.valid = true;
+    result.ok = false;
+    result.request_id = request.request_id;
+    result.type_id = request.type_id;
+    result.requested_x = request.x;
+    result.requested_y = request.y;
+    result.completed_tick_ms = static_cast<std::uint64_t>(GetTickCount64());
+    result.error_message = std::string(error_message);
+
+    std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+    g_last_manual_run_enemy_spawn_result = std::move(result);
+    if (g_have_active_manual_run_enemy_spawn &&
+        g_active_manual_run_enemy_spawn.request_id == request.request_id) {
+        g_have_active_manual_run_enemy_spawn = false;
+        g_active_manual_run_enemy_spawn = ManualRunEnemySpawnRequest{};
+    }
+}
+
+struct ManualRunEnemySpawnerDispatchException {
+    DWORD code = 0;
+};
+
+enum class ManualRunEnemySpawnerDispatchResult {
+    NoRequest = 0,
+    Handled,
+    RetryLater,
+};
+
+int CaptureManualRunEnemySpawnerDispatchException(
+    EXCEPTION_POINTERS* exception_pointers,
+    ManualRunEnemySpawnerDispatchException* exception) {
+    if (exception == nullptr || exception_pointers == nullptr || exception_pointers->ExceptionRecord == nullptr) {
+        return EXCEPTION_EXECUTE_HANDLER;
+    }
+
+    exception->code = exception_pointers->ExceptionRecord->ExceptionCode;
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+void RememberArenaEnemyWaveSpawner(uintptr_t spawner_address) {
+    if (spawner_address == 0) {
+        return;
+    }
+
+    uintptr_t spawner_vtable = 0;
+    if (!ProcessMemory::Instance().TryReadValue(spawner_address, &spawner_vtable) ||
+        spawner_vtable == 0) {
+        return;
+    }
+
+    g_state.last_arena_enemy_wave_spawner.store(spawner_address, std::memory_order_release);
+    g_state.last_arena_enemy_wave_spawner_vtable.store(spawner_vtable, std::memory_order_release);
+    g_state.last_arena_enemy_wave_spawner_tick_ms.store(
+        static_cast<std::uint64_t>(GetTickCount64()),
+        std::memory_order_release);
+}
+
+bool CallManualRunEnemySpawnerTickSafe(
+    WaveSpawnerTickFn original,
+    void* self,
+    void* unused_edx,
+    ManualRunEnemySpawnerDispatchException* exception) {
+    if (exception != nullptr) {
+        *exception = ManualRunEnemySpawnerDispatchException{};
+    }
+    __try {
+        original(self, unused_edx);
+        return true;
+    } __except (CaptureManualRunEnemySpawnerDispatchException(GetExceptionInformation(), exception)) {
+        return false;
+    }
+}
+
+ManualRunEnemySpawnerDispatchResult TryDispatchManualRunEnemySpawnFromSpawner(
+    void* self,
+    void* unused_edx,
+    WaveSpawnerTickFn original) {
+    if (self == nullptr || original == nullptr) {
+        return ManualRunEnemySpawnerDispatchResult::NoRequest;
+    }
+
+    ManualRunEnemySpawnRequest request;
+    {
+        std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+        const bool have_any_pending_request =
+            g_have_pending_manual_run_enemy_spawn || !g_queued_replicated_run_enemy_spawns.empty();
+        if (!have_any_pending_request || g_have_active_manual_run_enemy_spawn) {
+            return ManualRunEnemySpawnerDispatchResult::NoRequest;
+        }
+        if (g_have_pending_manual_run_enemy_spawn) {
+            request = g_pending_manual_run_enemy_spawn;
+            g_pending_manual_run_enemy_spawn = ManualRunEnemySpawnRequest{};
+            g_have_pending_manual_run_enemy_spawn = false;
+        } else {
+            request = g_queued_replicated_run_enemy_spawns.front();
+            g_queued_replicated_run_enemy_spawns.pop_front();
+        }
+        g_active_manual_run_enemy_spawn = request;
+        g_have_active_manual_run_enemy_spawn = true;
+    }
+
+    const auto spawner_address = reinterpret_cast<uintptr_t>(self);
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.IsReadableRange(spawner_address, kWaveSpawnerLongDelayCountdownOffset + sizeof(std::int32_t))) {
+        CompleteManualRunEnemySpawnFailure(request, "stock wave spawner is not readable.");
+        return ManualRunEnemySpawnerDispatchResult::Handled;
+    }
+
+    std::int32_t previous_budget = 0;
+    std::int32_t previous_spawn_delay = 0;
+    std::int32_t previous_long_delay = 0;
+    (void)memory.TryReadField(spawner_address, kWaveSpawnerRemainingBudgetOffset, &previous_budget);
+    (void)memory.TryReadField(spawner_address, kWaveSpawnerSpawnDelayCountdownOffset, &previous_spawn_delay);
+    (void)memory.TryReadField(spawner_address, kWaveSpawnerLongDelayCountdownOffset, &previous_long_delay);
+
+    const bool wrote_budget =
+        memory.TryWriteField(spawner_address, kWaveSpawnerRemainingBudgetOffset, kManualRunEnemySpawnerBudget);
+    const bool wrote_spawn_delay =
+        memory.TryWriteField(spawner_address, kWaveSpawnerSpawnDelayCountdownOffset, static_cast<std::int32_t>(0));
+    const bool wrote_long_delay =
+        memory.TryWriteField(spawner_address, kWaveSpawnerLongDelayCountdownOffset, kManualRunEnemySpawnerLongDelay);
+    if (!wrote_budget || !wrote_spawn_delay || !wrote_long_delay) {
+        CompleteManualRunEnemySpawnFailure(request, "failed to arm stock wave spawner for one manual enemy.");
+        return ManualRunEnemySpawnerDispatchResult::Handled;
+    }
+
+    Log(
+        "manual run enemy spawn: arming stock spawner. request_id=" +
+        std::to_string(request.request_id) +
+        " type_id=" + std::to_string(request.type_id) +
+        " spawner=" + HexString(spawner_address) +
+        " requested_pos=(" + std::to_string(request.x) + "," + std::to_string(request.y) + ")" +
+        " previous_budget=" + std::to_string(previous_budget) +
+        " previous_spawn_delay=" + std::to_string(previous_spawn_delay) +
+        " previous_long_delay=" + std::to_string(previous_long_delay));
+
+    const auto previous_tracking = g_state.wave_start_enemy_tracking.exchange(true, std::memory_order_acq_rel);
+    g_manual_run_enemy_spawner_tick_active = true;
+    g_manual_run_enemy_spawner_tick_address = spawner_address;
+    const auto previous_current_wave_spawner_tick_address = g_current_wave_spawner_tick_address;
+    g_current_wave_spawner_tick_address = spawner_address;
+
+    ManualRunEnemySpawnerDispatchException exception;
+    const bool tick_ok = CallManualRunEnemySpawnerTickSafe(original, self, unused_edx, &exception);
+
+    g_current_wave_spawner_tick_address = previous_current_wave_spawner_tick_address;
+    g_manual_run_enemy_spawner_tick_address = 0;
+    g_manual_run_enemy_spawner_tick_active = false;
+    g_state.wave_start_enemy_tracking.store(previous_tracking, std::memory_order_release);
+
+    bool still_active = false;
+    {
+        std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+        still_active =
+            g_have_active_manual_run_enemy_spawn &&
+            g_active_manual_run_enemy_spawn.request_id == request.request_id;
+    }
+
+    if (!tick_ok) {
+        CompleteManualRunEnemySpawnFailure(
+            request,
+            "stock wave spawner tick raised 0x" + HexString(exception.code) + ".");
+        return ManualRunEnemySpawnerDispatchResult::Handled;
+    }
+
+    if (still_active) {
+        const bool is_replicated_catchup_request =
+            request.network_actor_id != 0 &&
+            request.allow_active_waves &&
+            !request.freeze_on_spawn;
+        if (is_replicated_catchup_request &&
+            request.retry_count < kReplicatedCatchupSpawnRetryLimit) {
+            std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+            if (g_have_active_manual_run_enemy_spawn &&
+                g_active_manual_run_enemy_spawn.request_id == request.request_id) {
+                g_have_active_manual_run_enemy_spawn = false;
+                g_active_manual_run_enemy_spawn = ManualRunEnemySpawnRequest{};
+                request.retry_count += 1;
+                g_queued_replicated_run_enemy_spawns.push_front(request);
+            }
+            return ManualRunEnemySpawnerDispatchResult::RetryLater;
+        }
+
+        CompleteManualRunEnemySpawnFailure(
+            request,
+            "stock wave spawner tick completed without creating an enemy.");
+        return ManualRunEnemySpawnerDispatchResult::Handled;
+    }
+    return ManualRunEnemySpawnerDispatchResult::Handled;
 }
 
 void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
@@ -94,7 +437,69 @@ void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
     if (original == nullptr) return;
 
     const auto self_address = reinterpret_cast<uintptr_t>(self);
+    g_state.last_wave_spawner.store(self_address, std::memory_order_release);
+    uintptr_t self_vtable = 0;
+    const bool have_self_vtable =
+        self_address != 0 && ProcessMemory::Instance().TryReadValue(self_address, &self_vtable);
+    if (have_self_vtable) {
+        g_state.last_wave_spawner_vtable.store(self_vtable, std::memory_order_release);
+        g_state.last_wave_spawner_tick_ms.store(
+            static_cast<std::uint64_t>(GetTickCount64()),
+            std::memory_order_release);
+    }
+    bool should_log_spawner = false;
+    if (self_address != 0) {
+        std::lock_guard<std::mutex> lock(g_state.wave_spawner_log_mutex);
+        should_log_spawner = g_state.logged_wave_spawners.insert(self_address).second;
+    }
+    if (should_log_spawner) {
+        if (have_self_vtable) {
+            Log(
+                "WaveSpawner_Tick invoked. self=" + HexString(self_address) +
+                " vtable=" + HexString(self_vtable));
+        } else {
+            Log("WaveSpawner_Tick invoked. self=" + HexString(self_address) + " vtable=unreadable");
+        }
+    }
+
+    PinFrozenManualRunEnemies();
+
+    auto try_drain_manual_spawns = [&]() {
+        bool dispatched_any = false;
+        for (std::size_t index = 0; index < kReplicatedCatchupSpawnBurstPerSpawnerTick; ++index) {
+            const auto dispatch_result =
+                TryDispatchManualRunEnemySpawnFromSpawner(self, unused_edx, original);
+            if (dispatch_result == ManualRunEnemySpawnerDispatchResult::Handled) {
+                dispatched_any = true;
+                continue;
+            }
+            if (dispatch_result == ManualRunEnemySpawnerDispatchResult::RetryLater ||
+                dispatch_result == ManualRunEnemySpawnerDispatchResult::NoRequest) {
+                break;
+            }
+        }
+        return dispatched_any;
+    };
+
+    if (g_state.manual_enemy_spawner_test_mode.load(std::memory_order_acquire)) {
+        if (try_drain_manual_spawns()) {
+            PinManualRunEnemySpawnerTestModeArenaState();
+            return;
+        }
+        PinManualRunEnemySpawnerTestModeArenaState();
+        static std::uint64_t s_last_manual_test_suppress_log_ms = 0;
+        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        if (now_ms - s_last_manual_test_suppress_log_ms >= 1000) {
+            s_last_manual_test_suppress_log_ms = now_ms;
+            Log("WaveSpawner_Tick suppressed for manual enemy spawner test mode. self=" + HexString(self_address));
+        }
+        return;
+    }
+
     if (IsCombatPreludeOnlyActive()) {
+        if (try_drain_manual_spawns()) {
+            return;
+        }
         static std::uint64_t s_last_prelude_suppress_log_ms = 0;
         const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
         if (now_ms - s_last_prelude_suppress_log_ms >= 1000) {
@@ -104,20 +509,21 @@ void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
         return;
     }
 
-    const auto previous_self = g_state.last_wave_spawner.exchange(self_address, std::memory_order_acq_rel);
-    if (self_address != 0 && previous_self != self_address) {
-        uintptr_t self_vtable = 0;
-        if (ProcessMemory::Instance().TryReadValue(self_address, &self_vtable)) {
-            Log(
-                "WaveSpawner_Tick invoked. self=" + HexString(self_address) +
-                " vtable=" + HexString(self_vtable));
-        } else {
-            Log("WaveSpawner_Tick invoked. self=" + HexString(self_address) + " vtable=unreadable");
+    if (multiplayer::ShouldPauseGameplayForLevelUpSelection()) {
+        static std::uint64_t s_last_level_up_pause_suppress_log_ms = 0;
+        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        if (now_ms - s_last_level_up_pause_suppress_log_ms >= 1000) {
+            s_last_level_up_pause_suppress_log_ms = now_ms;
+            Log("WaveSpawner_Tick suppressed for multiplayer level-up wait. self=" + HexString(self_address));
         }
+        return;
     }
 
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
     if (ShouldSuppressClientAuthoritativeRunWaveSpawner(now_ms)) {
+        if (try_drain_manual_spawns()) {
+            return;
+        }
         static std::uint64_t s_last_authority_suppress_log_ms = 0;
         if (now_ms - s_last_authority_suppress_log_ms >= 1000) {
             s_last_authority_suppress_log_ms = now_ms;
@@ -126,7 +532,10 @@ void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
         return;
     }
 
+    const auto previous_current_wave_spawner_tick_address = g_current_wave_spawner_tick_address;
+    g_current_wave_spawner_tick_address = self_address;
     original(self, unused_edx);
+    g_current_wave_spawner_tick_address = previous_current_wave_spawner_tick_address;
 
     // Only dispatch wave events while a run is active.
     // The game calls WaveSpawner_Tick once more after Game_OnGameOver,
@@ -174,14 +583,126 @@ void* __fastcall HookEnemySpawned(
         return enemy;
     }
     RememberEnemyType(enemy_address, enemy_type);
+    std::uint32_t actor_object_type = 0;
+    const bool have_actor_object_type =
+        TryReadActorObjectTypeForRunLifecycle(enemy_address, &actor_object_type);
+    const bool arena_combat_actor_type =
+        have_actor_object_type &&
+        IsArenaCombatActorType(actor_object_type);
+    if (arena_combat_actor_type) {
+        RememberArenaEnemyWaveSpawner(g_current_wave_spawner_tick_address);
+    }
     Log(
         "enemy.spawned hook invoked. enemy=" + HexString(enemy_address) +
         " spawn_serial=" + std::to_string(spawn_serial) +
         " enemy_type=" + std::to_string(enemy_type) +
+        " actor_object_type=" + std::to_string(actor_object_type) +
         " pos=(" + std::to_string(x) + "," + std::to_string(y) + ")" +
         " run_active=" + std::to_string(IsRunActive() ? 1 : 0) +
         " wave_start_tracking=" +
         std::to_string(g_state.wave_start_enemy_tracking.load(std::memory_order_acquire) ? 1 : 0));
+
+    if (g_manual_run_enemy_spawner_tick_active && !arena_combat_actor_type) {
+        Log(
+            "manual run enemy spawn: ignored non-arena stock spawn during controlled tick. actor=" +
+            HexString(enemy_address) +
+            " spawn_serial=" + std::to_string(spawn_serial) +
+            " enemy_type=" + std::to_string(enemy_type) +
+            " actor_object_type=" + std::to_string(actor_object_type) +
+            " spawner=" + HexString(g_manual_run_enemy_spawner_tick_address));
+    } else if (g_manual_run_enemy_spawner_tick_active) {
+        ManualRunEnemySpawnRequest request;
+        bool complete_manual_request = false;
+        {
+            std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+            if (g_have_active_manual_run_enemy_spawn) {
+                request = g_active_manual_run_enemy_spawn;
+                g_have_active_manual_run_enemy_spawn = false;
+                g_active_manual_run_enemy_spawn = ManualRunEnemySpawnRequest{};
+                if (request.freeze_on_spawn) {
+                    g_frozen_manual_run_enemies[enemy_address] = FrozenManualRunEnemy{request.x, request.y};
+                }
+                complete_manual_request = true;
+            }
+        }
+
+        if (complete_manual_request) {
+            auto& memory = ProcessMemory::Instance();
+            const float native_x = x;
+            const float native_y = y;
+            const bool wrote_x = memory.TryWriteField(enemy_address, kActorPositionXOffset, request.x);
+            const bool wrote_y = memory.TryWriteField(enemy_address, kActorPositionYOffset, request.y);
+            float final_x = x;
+            float final_y = y;
+            (void)memory.TryReadField(enemy_address, kActorPositionXOffset, &final_x);
+            (void)memory.TryReadField(enemy_address, kActorPositionYOffset, &final_y);
+            std::string rebind_error_message;
+            const bool rebind_ok = RebindSceneActorCell(enemy_address, &rebind_error_message);
+
+            SDModManualRunEnemySpawnResult result;
+            result.valid = true;
+            result.ok = wrote_x && wrote_y && rebind_ok;
+            result.request_id = request.request_id;
+            result.type_id = enemy_type >= 0 ? enemy_type : request.type_id;
+            result.actor_address = enemy_address;
+            result.requested_x = request.x;
+            result.requested_y = request.y;
+            result.x = final_x;
+            result.y = final_y;
+            result.wrote_x = wrote_x && std::fabs(final_x - request.x) <= 0.01f;
+            result.wrote_y = wrote_y && std::fabs(final_y - request.y) <= 0.01f;
+            result.rebind_ok = rebind_ok;
+            result.completed_tick_ms = static_cast<std::uint64_t>(GetTickCount64());
+            if (!wrote_x || !wrote_y) {
+                result.error_message = "stock-spawned manual enemy was created but position write failed.";
+            } else if (!rebind_ok) {
+                result.error_message =
+                    "stock-spawned manual enemy was relocated but cell rebind failed: " +
+                    rebind_error_message;
+            }
+            x = final_x;
+            y = final_y;
+
+            {
+                std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+                g_last_manual_run_enemy_spawn_result = result;
+            }
+
+            if (g_manual_run_enemy_spawner_tick_address != 0) {
+                (void)memory.TryWriteField(
+                    g_manual_run_enemy_spawner_tick_address,
+                    kWaveSpawnerRemainingBudgetOffset,
+                    kManualRunEnemySpawnerBudget);
+                (void)memory.TryWriteField(
+                    g_manual_run_enemy_spawner_tick_address,
+                    kWaveSpawnerLongDelayCountdownOffset,
+                    kManualRunEnemySpawnerLongDelay);
+            }
+
+            Log(
+                "manual run enemy spawn: completed through stock spawner. request_id=" +
+                std::to_string(result.request_id) +
+                " requested_type_id=" + std::to_string(request.type_id) +
+                " actual_type_id=" + std::to_string(result.type_id) +
+                " actor=" + HexString(enemy_address) +
+                " spawn_serial=" + std::to_string(spawn_serial) +
+                " native_pos=(" + std::to_string(native_x) + "," + std::to_string(native_y) + ")" +
+                " final_pos=(" + std::to_string(final_x) + "," + std::to_string(final_y) + ")" +
+                " wrote_x=" + std::to_string(result.wrote_x ? 1 : 0) +
+                " wrote_y=" + std::to_string(result.wrote_y ? 1 : 0) +
+                " rebind_ok=" + std::to_string(result.rebind_ok ? 1 : 0) +
+                (rebind_error_message.empty()
+                    ? std::string()
+                    : " rebind_error=\"" + rebind_error_message + "\""));
+        } else {
+            Log(
+                "manual run enemy spawn: extra native spawn observed during controlled spawner tick. actor=" +
+                HexString(enemy_address) +
+                " spawn_serial=" + std::to_string(spawn_serial) +
+                " enemy_type=" + std::to_string(enemy_type));
+        }
+    }
+
     DispatchLuaEnemySpawned(enemy_type, x, y);
     return enemy;
 }
@@ -211,6 +732,10 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
     }
 
     const auto result = original(self, unused_edx);
+    {
+        std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+        g_frozen_manual_run_enemies.erase(self_address);
+    }
     if (!have_enemy_type) {
         Log("enemy.death native type unavailable. enemy=" + HexString(self_address));
         ForgetEnemyType(self_address);
@@ -298,7 +823,52 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
     int pending_before = 0;
     const bool have_pending_before = TryReadPendingLevelKind(&pending_before);
     const auto local_player_level_up = IsLocalPlayerProgressionForRunLifecycle(progression_address);
+    const bool suppress_client_local_level_up =
+        local_player_level_up && multiplayer::IsLocalTransportClient();
+    // Both host and client suppress the native modal skill picker for their own
+    // local-player level-up. The native picker monopolizes the gameplay thread
+    // until a human dismisses it, which deadlocks the loader-driven mirror/peer
+    // transform sync (the kill-loop convergence freeze). Writing non-local mode
+    // around the native routine preserves the level increment but routes
+    // selection through the loader's controlled, non-modal offer path for both
+    // roles: the client resolves through the host authority, while the host
+    // resolves its own offer locally via PublishLocalHostSelfLevelUpOffer.
+    const bool suppress_local_native_picker =
+        local_player_level_up &&
+        (multiplayer::IsLocalTransportClient() || multiplayer::IsLocalTransportHost());
+    std::uint8_t previous_progression_mode = kProgressionLocalPlayerModeValue;
+    const bool have_previous_progression_mode =
+        suppress_local_native_picker &&
+        memory.TryReadField<std::uint8_t>(
+            progression_address,
+            kProgressionNonLocalModeFlagOffset,
+            &previous_progression_mode);
+    const bool wrote_local_level_up_gate =
+        suppress_local_native_picker &&
+        memory.TryWriteField<std::uint8_t>(
+            progression_address,
+            kProgressionNonLocalModeFlagOffset,
+            kProgressionNonLocalModeValue);
+    if (suppress_local_native_picker && !wrote_local_level_up_gate) {
+        Log(
+            "level.up local gate failed to set non-local mode before native level-up. progression=" +
+            HexString(progression_address));
+    }
+
     original(self, unused_edx);
+    if (wrote_local_level_up_gate) {
+        const auto restore_mode =
+            have_previous_progression_mode ? previous_progression_mode : kProgressionLocalPlayerModeValue;
+        if (!memory.TryWriteField<std::uint8_t>(
+                progression_address,
+                kProgressionNonLocalModeFlagOffset,
+                restore_mode)) {
+            Log(
+                "level.up local gate failed to restore progression mode after native level-up. progression=" +
+                HexString(progression_address) +
+                " restore_mode=" + std::to_string(restore_mode));
+        }
+    }
     if (!IsRunActive()) {
         return;
     }
@@ -331,7 +901,7 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
             " level_after=" + std::to_string(level_after));
         return;
     }
-    if (!local_player_level_up) {
+    if (!local_player_level_up || suppress_client_local_level_up) {
         if (have_pending_before) {
             RestoreNonLocalPendingLevelKind(progression_address, pending_before, level_after, xp_after);
         } else {
@@ -341,9 +911,18 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
                 " level=" + std::to_string(level_after) +
                 " xp=" + std::to_string(xp_after));
         }
+        if (suppress_client_local_level_up) {
+            Log(
+                "level.up client local picker/event gated. progression=" +
+                HexString(progression_address) +
+                " level=" + std::to_string(level_after) +
+                " xp=" + std::to_string(xp_after));
+        }
         return;
     }
 
     multiplayer::SyncBotsToSharedLevelUp(level_after, xp_after, progression_address);
+    multiplayer::PublishHostLevelUpOffers(level_after, xp_after, progression_address);
+    multiplayer::PublishLocalHostSelfLevelUpOffer(level_after, xp_after, progression_address);
     DispatchLuaLevelUp(level_after, xp_after);
 }

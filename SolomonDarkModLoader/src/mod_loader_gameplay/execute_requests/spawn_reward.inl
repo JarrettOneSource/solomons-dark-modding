@@ -1,6 +1,7 @@
 namespace {
 
 constexpr std::uint32_t kDebugSpawnOrbRewardNativeTypeId = 0x07DB;
+constexpr std::size_t kDebugSpawnPotionDropVfuncOffset = 0x148;
 constexpr std::size_t kDebugSpawnOrbResourceKindOffset = 0x13C;
 constexpr std::size_t kDebugSpawnOrbValueOffset = 0x140;
 constexpr std::size_t kDebugSpawnOrbLifetimeOffset = 0x144;
@@ -48,6 +49,178 @@ bool CallOrbRewardInitializeSafe(
     } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
         return false;
     }
+}
+
+bool CallSpawnRewardGoldSafe(
+    uintptr_t spawn_reward_address,
+    uintptr_t arena_address,
+    float x,
+    float y,
+    int amount,
+    int lifetime,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    auto* spawn_reward = reinterpret_cast<SpawnRewardGoldFn>(spawn_reward_address);
+    if (spawn_reward == nullptr || arena_address == 0) {
+        return false;
+    }
+
+    __try {
+        spawn_reward(
+            reinterpret_cast<void*>(arena_address),
+            FloatToBits(x),
+            FloatToBits(y),
+            amount,
+            lifetime);
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool TryReadRewardSpawnVfunc(
+    uintptr_t object_address,
+    std::size_t vfunc_offset,
+    uintptr_t* function_address) {
+    if (function_address != nullptr) {
+        *function_address = 0;
+    }
+    if (function_address == nullptr || object_address == 0) {
+        return false;
+    }
+
+    uintptr_t vtable_address = 0;
+    if (!ProcessMemory::Instance().TryReadValue(object_address, &vtable_address) ||
+        vtable_address == 0) {
+        return false;
+    }
+
+    return ProcessMemory::Instance().TryReadField(vtable_address, vfunc_offset, function_address) &&
+           *function_address != 0;
+}
+
+bool CallDebugSpawnPotionDropSafe(
+    uintptr_t function_address,
+    uintptr_t arena_address,
+    float x,
+    float y,
+    int potion_slot,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    auto* spawn_potion = reinterpret_cast<SpawnPotionDropFn>(function_address);
+    if (spawn_potion == nullptr || arena_address == 0) {
+        return false;
+    }
+
+    __try {
+        spawn_potion(
+            reinterpret_cast<void*>(arena_address),
+            FloatToBits(x),
+            FloatToBits(y),
+            potion_slot);
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool ExecuteSpawnPotionRewardNow(
+    std::string_view kind,
+    int amount,
+    float x,
+    float y,
+    std::string* error_message) {
+    const bool is_health_potion = kind == "health_potion" || kind == "life_potion" || kind == "potion0";
+    const bool is_mana_potion = kind == "mana_potion" || kind == "mp_potion" || kind == "potion1" || kind == "potion";
+    if (!is_health_potion && !is_mana_potion) {
+        return false;
+    }
+
+    uintptr_t arena_address = 0;
+    if (!TryResolveArena(&arena_address) || arena_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Arena is not active.";
+        }
+        return true;
+    }
+
+    uintptr_t spawn_function_address = 0;
+    if (!TryReadRewardSpawnVfunc(
+            arena_address,
+            kDebugSpawnPotionDropVfuncOffset,
+            &spawn_function_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Unable to resolve the arena potion drop vfunc.";
+        }
+        return true;
+    }
+
+    int potion_slot = is_mana_potion ? 1 : 0;
+    if (amount == 0 || amount == 1) {
+        potion_slot = amount;
+    }
+    DWORD exception_code = 0;
+    if (!CallDebugSpawnPotionDropSafe(
+            spawn_function_address,
+            arena_address,
+            x,
+            y,
+            potion_slot,
+            &exception_code)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Potion reward spawn failed with 0x" +
+                HexString(static_cast<uintptr_t>(exception_code)) +
+                " arena=" + HexString(arena_address) +
+                " vfunc=" + HexString(spawn_function_address);
+        }
+        return true;
+    }
+
+    return true;
+}
+
+bool ExecuteSpawnGoldRewardNow(int amount, float x, float y, std::string* error_message) {
+    uintptr_t arena_address = 0;
+    if (!TryResolveArena(&arena_address) || arena_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Arena is not active.";
+        }
+        return false;
+    }
+
+    const auto spawn_reward_address = ProcessMemory::Instance().ResolveGameAddressOrZero(kSpawnRewardGold);
+    if (spawn_reward_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Unable to resolve the gold reward spawn function.";
+        }
+        return false;
+    }
+
+    DWORD exception_code = 0;
+    if (!CallSpawnRewardGoldSafe(
+            spawn_reward_address,
+            arena_address,
+            x,
+            y,
+            (std::max)(amount, 1),
+            kSpawnRewardDefaultLifetime,
+            &exception_code)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Gold reward native spawn failed with 0x" +
+                HexString(static_cast<uintptr_t>(exception_code)) +
+                " arena=" + HexString(arena_address) +
+                " function=" + HexString(spawn_reward_address);
+        }
+        return false;
+    }
+
+    return true;
 }
 
 bool ExecuteSpawnOrbRewardNow(
@@ -175,35 +348,17 @@ bool ExecuteSpawnRewardNow(std::string_view kind, int amount, float x, float y, 
     if (ExecuteSpawnOrbRewardNow(kind, amount, x, y, error_message)) {
         return error_message == nullptr || error_message->empty();
     }
+    if (ExecuteSpawnPotionRewardNow(kind, amount, x, y, error_message)) {
+        return error_message == nullptr || error_message->empty();
+    }
+    if (kind == "gold") {
+        return ExecuteSpawnGoldRewardNow(amount, x, y, error_message);
+    }
     if (kind != "gold") {
         if (error_message != nullptr) {
-            *error_message = "Only gold and health_orb/mana_orb rewards are supported right now.";
+            *error_message = "Only gold, health_orb/mana_orb, and health_potion/mana_potion rewards are supported right now.";
         }
         return false;
     }
-
-    uintptr_t arena_address = 0;
-    if (!TryResolveArena(&arena_address) || arena_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Arena is not active.";
-        }
-        return false;
-    }
-
-    const auto spawn_reward_address = ProcessMemory::Instance().ResolveGameAddressOrZero(kSpawnRewardGold);
-    if (spawn_reward_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Unable to resolve the gold reward spawn function.";
-        }
-        return false;
-    }
-
-    auto spawn_reward = reinterpret_cast<SpawnRewardGoldFn>(spawn_reward_address);
-    spawn_reward(
-        reinterpret_cast<void*>(arena_address),
-        FloatToBits(x),
-        FloatToBits(y),
-        amount,
-        kSpawnRewardDefaultLifetime);
-    return true;
+    return false;
 }

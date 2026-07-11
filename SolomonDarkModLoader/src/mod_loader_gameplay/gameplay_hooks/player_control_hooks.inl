@@ -1,3 +1,29 @@
+void ClearManualSpawnerSuppressedLocalPrimaryCastState(uintptr_t actor_address);
+bool IsUsableLocalPlayerCastAimTarget(
+    float position_x,
+    float position_y,
+    float aim_target_x,
+    float aim_target_y);
+
+bool IsManualSpawnerPrimaryCastControlGraceActive() {
+    const auto grace_until =
+        g_gameplay_keyboard_injection.manual_spawner_primary_cast_control_grace_until_ms.load(
+            std::memory_order_acquire);
+    return grace_until != 0 &&
+           static_cast<std::uint64_t>(GetTickCount64()) <= grace_until;
+}
+
+bool IsManualSpawnerPrimaryTargetActor(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    std::uint32_t object_type_id = 0;
+    auto& memory = ProcessMemory::Instance();
+    return memory.TryReadField(actor_address, kGameObjectTypeIdOffset, &object_type_id) &&
+           IsArenaCombatActorTypeInternal(object_type_id);
+}
+
 void __fastcall HookPlayerControlBrainUpdate(
     void* self,
     void* /*unused_edx*/,
@@ -11,6 +37,11 @@ void __fastcall HookPlayerControlBrainUpdate(
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    if (IsBoundReplicatedRunEnemyActorForLocalClient(actor_address)) {
+        (void)ApplyLatestReplicatedRunEnemyTargetForLocalActor(actor_address, false);
+        return;
+    }
+
     auto& memory = ProcessMemory::Instance();
     bool log_this = false;
     std::uint64_t bot_id = 0;
@@ -164,6 +195,45 @@ void __fastcall HookPlayerControlBrainUpdate(
         const auto wrote_y = memory.TryWriteValue<float>(address + sizeof(float), y);
         return wrote_x && wrote_y;
     };
+
+    uintptr_t current_gameplay_address = 0;
+    uintptr_t current_local_actor_address = 0;
+    const bool manual_spawner_test_mode =
+        IsRunLifecycleManualEnemySpawnerTestModeEnabled();
+    const bool current_actor_is_local_player =
+        manual_spawner_test_mode &&
+        TryResolveCurrentGameplayScene(&current_gameplay_address) &&
+        current_gameplay_address != 0 &&
+        TryResolvePlayerActorForSlot(current_gameplay_address, 0, &current_local_actor_address) &&
+        current_local_actor_address == actor_address;
+    const auto pending_manual_spawner_primary_allowances =
+        g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.load(
+            std::memory_order_acquire);
+    const bool manual_spawner_primary_grace_active =
+        IsManualSpawnerPrimaryCastControlGraceActive();
+    const bool manual_spawner_scripted_local_primary_control =
+        current_actor_is_local_player &&
+        (pending_manual_spawner_primary_allowances > 0 ||
+         manual_spawner_primary_grace_active);
+    const bool suppress_manual_spawner_local_control =
+        current_actor_is_local_player &&
+        pending_manual_spawner_primary_allowances == 0 &&
+        !manual_spawner_primary_grace_active;
+    if (suppress_manual_spawner_local_control) {
+        ClearManualSpawnerSuppressedLocalPrimaryCastState(actor_address);
+        (void)write_vector2(param2, 0.0f, 0.0f);
+        (void)write_vector2(param3, 0.0f, 0.0f);
+        static std::uint64_t s_last_suppressed_manual_spawner_control_log_ms = 0;
+        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        if (now_ms - s_last_suppressed_manual_spawner_control_log_ms >= 1000) {
+            s_last_suppressed_manual_spawner_control_log_ms = now_ms;
+            Log(
+                "manual run enemy spawn: suppressed local control-brain update before queued primary. actor=" +
+                HexString(actor_address));
+        }
+        return;
+    }
+
     float move_x_before = 0.0f;
     float move_y_before = 0.0f;
     float face_x_before = 0.0f;
@@ -263,6 +333,64 @@ void __fastcall HookPlayerControlBrainUpdate(
         }
     };
 
+    const auto apply_manual_spawner_local_primary_control = [&]() {
+        if (!manual_spawner_scripted_local_primary_control || selection_pointer == 0) {
+            return;
+        }
+
+        float position_x = 0.0f;
+        float position_y = 0.0f;
+        float aim_target_x = 0.0f;
+        float aim_target_y = 0.0f;
+        if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &position_x) ||
+            !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &position_y) ||
+            !TryReadFiniteFloatField(actor_address, kActorAimTargetXOffset, &aim_target_x) ||
+            !TryReadFiniteFloatField(actor_address, kActorAimTargetYOffset, &aim_target_y) ||
+            !IsUsableLocalPlayerCastAimTarget(position_x, position_y, aim_target_x, aim_target_y)) {
+            return;
+        }
+
+        const auto dx = aim_target_x - position_x;
+        const auto dy = aim_target_y - position_y;
+        const auto distance = std::sqrt((dx * dx) + (dy * dy));
+        if (!std::isfinite(distance) || distance <= 0.0001f) {
+            return;
+        }
+
+        const auto control_x = dx / distance;
+        const auto control_y = dy / distance;
+        if (!std::isfinite(control_x) || !std::isfinite(control_y)) {
+            return;
+        }
+
+        const auto desired_heading = NormalizeWizardActorHeadingForWrite(
+            static_cast<float>(std::atan2(control_y, control_x) * kWizardHeadingRadiansToDegrees + 90.0f));
+        (void)write_vector2(param2, 0.0f, 0.0f);
+        (void)write_vector2(param3, control_x, control_y);
+        ApplyWizardActorFacingState(actor_address, desired_heading);
+        (void)memory.TryWriteValue<float>(
+            selection_pointer + kActorControlBrainMoveInputXOffset,
+            control_x);
+        (void)memory.TryWriteValue<float>(
+            selection_pointer + kActorControlBrainMoveInputYOffset,
+            control_y);
+        (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, aim_target_x);
+        (void)memory.TryWriteField(actor_address, kActorAimTargetYOffset, aim_target_y);
+        (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
+        (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
+
+        static std::uint64_t s_last_manual_spawner_local_control_seed_log_ms = 0;
+        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        if (now_ms - s_last_manual_spawner_local_control_seed_log_ms >= 1000) {
+            s_last_manual_spawner_local_control_seed_log_ms = now_ms;
+            Log(
+                "manual run enemy spawn: seeded local scripted primary control. actor=" +
+                HexString(actor_address) +
+                " aim=(" + std::to_string(aim_target_x) + "," + std::to_string(aim_target_y) + ")" +
+                " control=(" + std::to_string(control_x) + "," + std::to_string(control_y) + ")");
+        }
+    };
+
     if (sanitize_native_remote_idle_control_brain) {
         ClearIdleNativeRemoteCastReplayState(actor_address, selection_pointer);
         (void)write_vector2(param2, 0.0f, 0.0f);
@@ -272,7 +400,20 @@ void __fastcall HookPlayerControlBrainUpdate(
     // provide the current target-facing vector before the original runs. Re-pin
     // after the original too because stock may clear the cached target fields.
     seed_selection_target();
+    apply_manual_spawner_local_primary_control();
     apply_face_control();
+    if (manual_spawner_scripted_local_primary_control) {
+        uintptr_t manual_spawner_target_actor = 0;
+        if (memory.TryReadField(
+                actor_address,
+                kActorCurrentTargetActorOffset,
+                &manual_spawner_target_actor) &&
+            IsManualSpawnerPrimaryTargetActor(manual_spawner_target_actor)) {
+            g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.store(
+                manual_spawner_target_actor,
+                std::memory_order_release);
+        }
+    }
     original(self, param2, param3);
     if (sanitize_native_remote_idle_control_brain) {
         ClearIdleNativeRemoteCastReplayState(actor_address, selection_pointer);
@@ -291,6 +432,7 @@ void __fastcall HookPlayerControlBrainUpdate(
         raw_face_x_after * raw_face_x_after + raw_face_y_after * raw_face_y_after;
 
     seed_selection_target();
+    apply_manual_spawner_local_primary_control();
     apply_face_control();
 
     float move_x_after = 0.0f;
@@ -353,6 +495,150 @@ bool IsUsableLocalPlayerCastAimTarget(
            distance <= kMaxCastAimDistance &&
            std::abs(aim_target_x) <= kMaxCastAimCoordinateMagnitude &&
            std::abs(aim_target_y) <= kMaxCastAimCoordinateMagnitude;
+}
+
+void ClearManualSpawnerSuppressedLocalPrimaryCastState(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return;
+    }
+
+    g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.manual_spawner_primary_cast_control_grace_until_ms.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
+    g_gameplay_keyboard_injection.injected_mouse_left_active.store(false, std::memory_order_release);
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t gameplay_address = 0;
+    if (TryResolveCurrentGameplayScene(&gameplay_address) && gameplay_address != 0) {
+        const std::uint8_t released = 0;
+        (void)memory.TryWriteField(gameplay_address, kGameplayCastIntentOffset, released);
+        int input_buffer_index = -1;
+        if (memory.TryReadField(gameplay_address, kGameplayInputBufferIndexOffset, &input_buffer_index) &&
+            input_buffer_index >= 0) {
+            for (int buffer_index = 0; buffer_index < 2; ++buffer_index) {
+                const auto mouse_left_offset = static_cast<std::size_t>(
+                    buffer_index * kGameplayInputBufferStride + kGameplayMouseLeftButtonOffset);
+                (void)memory.TryWriteField(gameplay_address, mouse_left_offset, released);
+            }
+        }
+    }
+
+    (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
+    (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPreviousSkillIdOffset, 0);
+    (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorPrimaryActionLatchE4Offset, 0);
+    (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorPrimaryActionLatchE8Offset, 0);
+    (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorPostGateActiveByteOffset, 0);
+    (void)memory.TryWriteField<std::uint8_t>(
+        actor_address,
+        kActorSpellTargetGroupByteOffset,
+        kTargetHandleGroupSentinel);
+    (void)memory.TryWriteField<std::uint16_t>(
+        actor_address,
+        kActorSpellTargetSlotShortOffset,
+        kTargetHandleSlotSentinel);
+    (void)memory.TryWriteField<uintptr_t>(actor_address, kActorCurrentTargetActorOffset, 0);
+    (void)memory.TryWriteField<std::int32_t>(actor_address, kActorCurrentTargetBucketDeltaOffset, 0);
+
+    uintptr_t selection_pointer = 0;
+    if (!memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &selection_pointer) ||
+        selection_pointer == 0) {
+        return;
+    }
+
+    constexpr std::int32_t kSuppressedLocalPrimaryRetargetTicks = 60;
+    (void)memory.TryWriteField<std::uint8_t>(
+        selection_pointer,
+        kActorControlBrainTargetSlotOffset,
+        kTargetHandleGroupSentinel);
+    (void)memory.TryWriteField<std::uint16_t>(
+        selection_pointer,
+        kActorControlBrainTargetHandleOffset,
+        kTargetHandleSlotSentinel);
+    (void)memory.TryWriteField<std::int32_t>(
+        selection_pointer,
+        kActorControlBrainRetargetTicksOffset,
+        kSuppressedLocalPrimaryRetargetTicks);
+    (void)memory.TryWriteField<std::int32_t>(
+        selection_pointer,
+        kActorControlBrainTargetCooldownTicksOffset,
+        0);
+    (void)memory.TryWriteField<std::int32_t>(
+        selection_pointer,
+        kActorControlBrainActionCooldownTicksOffset,
+        0);
+    (void)memory.TryWriteField<std::int32_t>(
+        selection_pointer,
+        kActorControlBrainActionBurstTicksOffset,
+        0);
+    (void)memory.TryWriteField<std::int32_t>(
+        selection_pointer,
+        kActorControlBrainHeadingLockTicksOffset,
+        0);
+    (void)memory.TryWriteField<float>(
+        selection_pointer,
+        kActorControlBrainMoveInputXOffset,
+        0.0f);
+    (void)memory.TryWriteField<float>(
+        selection_pointer,
+        kActorControlBrainMoveInputYOffset,
+        0.0f);
+}
+
+bool TryConsumeManualSpawnerPrimaryCastAllowance() {
+    auto& allowances = g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances;
+    auto available = allowances.load(std::memory_order_acquire);
+    while (available > 0) {
+        if (allowances.compare_exchange_weak(
+                available,
+                available - 1,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ShouldSuppressManualSpawnerTestLocalPurePrimary(uintptr_t actor_address) {
+    if (!IsRunLifecycleManualEnemySpawnerTestModeEnabled() ||
+        !IsActorCurrentLocalPlayerSlotZero(actor_address)) {
+        return false;
+    }
+
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (TryConsumeManualSpawnerPrimaryCastAllowance()) {
+        return false;
+    }
+
+    if (IsManualSpawnerPrimaryCastControlGraceActive()) {
+        static std::uint64_t s_last_grace_suppressed_manual_spawner_primary_log_ms = 0;
+        if (now_ms - s_last_grace_suppressed_manual_spawner_primary_log_ms >= 1000) {
+            s_last_grace_suppressed_manual_spawner_primary_log_ms = now_ms;
+            Log(
+                "manual run enemy spawn: suppressed extra local pure-primary start during scripted cast grace. actor=" +
+                HexString(actor_address));
+        }
+        return true;
+    }
+
+    ClearManualSpawnerSuppressedLocalPrimaryCastState(actor_address);
+    static std::uint64_t s_last_suppressed_manual_spawner_primary_log_ms = 0;
+    if (now_ms - s_last_suppressed_manual_spawner_primary_log_ms >= 1000) {
+        s_last_suppressed_manual_spawner_primary_log_ms = now_ms;
+        Log(
+            "manual run enemy spawn: suppressed unintentional local pure-primary start. actor=" +
+            HexString(actor_address));
+    }
+    return true;
 }
 
 bool QueueLocalPlayerPrimaryCastForMultiplayer(uintptr_t actor_address) {
@@ -455,6 +741,45 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    if (ShouldSuppressManualSpawnerTestLocalPurePrimary(actor_address)) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (IsRunLifecycleManualEnemySpawnerTestModeEnabled() &&
+        IsActorCurrentLocalPlayerSlotZero(actor_address) &&
+        IsManualSpawnerPrimaryCastControlGraceActive()) {
+        const auto manual_spawner_target_actor =
+            g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.load(
+                std::memory_order_acquire);
+        if (IsManualSpawnerPrimaryTargetActor(manual_spawner_target_actor)) {
+            uintptr_t current_target_actor = 0;
+            (void)memory.TryReadField(
+                actor_address,
+                kActorCurrentTargetActorOffset,
+                &current_target_actor);
+            if (current_target_actor != manual_spawner_target_actor) {
+                (void)memory.TryWriteField<uintptr_t>(
+                    actor_address,
+                    kActorCurrentTargetActorOffset,
+                    manual_spawner_target_actor);
+                (void)memory.TryWriteField<std::int32_t>(
+                    actor_address,
+                    kActorCurrentTargetBucketDeltaOffset,
+                    0);
+                static std::uint64_t s_last_manual_spawner_target_restore_log_ms = 0;
+                const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+                if (now_ms - s_last_manual_spawner_target_restore_log_ms >= 1000) {
+                    s_last_manual_spawner_target_restore_log_ms = now_ms;
+                    Log(
+                        "manual run enemy spawn: restored scripted primary target before native start. actor=" +
+                        HexString(actor_address) +
+                        " target=" + HexString(manual_spawner_target_actor));
+                }
+            }
+        }
+    }
+
     bool log_this = false;
     std::uint64_t bot_id = 0;
     bool startup = false;
@@ -501,7 +826,6 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
         }
     }
 
-    auto& memory = ProcessMemory::Instance();
     if (log_this) {
         uintptr_t actor_1fc_ptr = 0;
         const bool have_actor_1fc =

@@ -30,6 +30,38 @@ bool CallGameplayActorAttachSafe(
     }
 }
 
+bool CallGameplayActorDetachSafe(
+    uintptr_t gameplay_address,
+    uintptr_t actor_address,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (gameplay_address == 0 || actor_address == 0) {
+        return false;
+    }
+
+    __try {
+        const auto subobject_address = gameplay_address + kGameplayActorAttachSubobjectOffset;
+        const auto vtable = *reinterpret_cast<uintptr_t*>(subobject_address);
+        if (vtable == 0) {
+            return false;
+        }
+
+        const auto detach_address =
+            *reinterpret_cast<uintptr_t*>(vtable + kGameplayActorDetachVfuncOffset);
+        if (detach_address == 0) {
+            return false;
+        }
+
+        auto* detach_actor = reinterpret_cast<GameplayActorDetachFn>(detach_address);
+        detach_actor(reinterpret_cast<void*>(subobject_address), reinterpret_cast<void*>(actor_address));
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
 bool CallActorBuildRenderDescriptorFromSourceSafe(
     uintptr_t build_address,
     uintptr_t actor_address,

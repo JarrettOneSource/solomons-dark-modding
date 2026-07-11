@@ -119,7 +119,7 @@ void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
 }
 
 void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSnapshot& actor) {
-    lua_createtable(state, 0, 30);
+    lua_createtable(state, 0, 36);
     lua_pushinteger(state, static_cast<lua_Integer>(actor.network_actor_id));
     lua_setfield(state, -2, "network_actor_id");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.native_type_id));
@@ -130,6 +130,18 @@ void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSna
     lua_setfield(state, -2, "actor_slot");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.world_slot));
     lua_setfield(state, -2, "world_slot");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.target_participant_id));
+    lua_setfield(state, -2, "target_participant_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.target_native_type_id));
+    lua_setfield(state, -2, "target_native_type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.target_actor_slot));
+    lua_setfield(state, -2, "target_actor_slot");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.target_world_slot));
+    lua_setfield(state, -2, "target_world_slot");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.target_bucket_delta));
+    lua_setfield(state, -2, "target_bucket_delta");
+    lua_pushboolean(state, actor.target_authoritative ? 1 : 0);
+    lua_setfield(state, -2, "target_authoritative");
     lua_pushboolean(state, actor.dead ? 1 : 0);
     lua_setfield(state, -2, "dead");
     lua_pushboolean(state, actor.tracked_enemy ? 1 : 0);
@@ -294,7 +306,7 @@ void PushLootPickupResult(lua_State* state, const multiplayer::LootPickupResultR
 void PushReplicatedWorldActorBinding(
     lua_State* state,
     const multiplayer::WorldSnapshotActorBindingRuntimeInfo& binding) {
-    lua_createtable(state, 0, 7);
+    lua_createtable(state, 0, 8);
     lua_pushinteger(state, static_cast<lua_Integer>(binding.network_actor_id));
     lua_setfield(state, -2, "network_actor_id");
     lua_pushinteger(state, static_cast<lua_Integer>(binding.local_actor_address));
@@ -331,6 +343,28 @@ int LuaGameplayEnableCombatPrelude(lua_State* state) {
     return 1;
 }
 
+int LuaGameplaySetManualEnemySpawnerTestMode(lua_State* state) {
+    const bool enabled = lua_gettop(state) < 1 || lua_toboolean(state, 1) != 0;
+    SetRunLifecycleManualEnemySpawnerTestMode(enabled);
+    lua_pushboolean(state, 1);
+    lua_pushboolean(state, IsRunLifecycleManualEnemySpawnerTestModeEnabled() ? 1 : 0);
+    return 2;
+}
+
+int LuaGameplayGetManualEnemySpawnerState(lua_State* state) {
+    const auto spawner_address = GetRunLifecycleLastWaveSpawnerAddress();
+    lua_createtable(state, 0, 4);
+    lua_pushboolean(state, IsRunLifecycleManualEnemySpawnerTestModeEnabled() ? 1 : 0);
+    lua_setfield(state, -2, "manual_mode");
+    lua_pushboolean(state, IsRunLifecycleManualEnemySpawnerReady() ? 1 : 0);
+    lua_setfield(state, -2, "has_spawner");
+    lua_pushinteger(state, static_cast<lua_Integer>(spawner_address));
+    lua_setfield(state, -2, "spawner_address");
+    lua_pushstring(state, HexString(spawner_address).c_str());
+    lua_setfield(state, -2, "spawner_id");
+    return 1;
+}
+
 int LuaGameplayGetCombatState(lua_State* state) {
     SDModGameplayCombatState combat_state;
     if (!TryGetGameplayCombatState(&combat_state) || !combat_state.valid) {
@@ -359,6 +393,137 @@ int LuaGameplayGetCombatState(lua_State* state) {
     lua_setfield(state, -2, "transition_requested");
     lua_pushboolean(state, combat_state.combat_active != 0 ? 1 : 0);
     lua_setfield(state, -2, "active");
+    return 1;
+}
+
+void PushManualRunEnemySpawnResult(
+    lua_State* state,
+    const SDModManualRunEnemySpawnResult& result) {
+    lua_createtable(state, 0, 16);
+    lua_pushboolean(state, result.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushboolean(state, result.ok ? 1 : 0);
+    lua_setfield(state, -2, "ok");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.request_id));
+    lua_setfield(state, -2, "request_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.type_id));
+    lua_setfield(state, -2, "type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.actor_address));
+    lua_setfield(state, -2, "actor_address");
+    lua_pushstring(state, HexString(result.actor_address).c_str());
+    lua_setfield(state, -2, "actor_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            result.actor_address != 0
+                ? multiplayer::GetLocalRunEnemyNetworkActorId(result.actor_address)
+                : 0));
+    lua_setfield(state, -2, "network_actor_id");
+    lua_pushnumber(state, static_cast<lua_Number>(result.requested_x));
+    lua_setfield(state, -2, "requested_x");
+    lua_pushnumber(state, static_cast<lua_Number>(result.requested_y));
+    lua_setfield(state, -2, "requested_y");
+    lua_pushnumber(state, static_cast<lua_Number>(result.x));
+    lua_setfield(state, -2, "x");
+    lua_pushnumber(state, static_cast<lua_Number>(result.y));
+    lua_setfield(state, -2, "y");
+    lua_pushboolean(state, result.wrote_x ? 1 : 0);
+    lua_setfield(state, -2, "wrote_x");
+    lua_pushboolean(state, result.wrote_y ? 1 : 0);
+    lua_setfield(state, -2, "wrote_y");
+    lua_pushboolean(state, result.rebind_ok ? 1 : 0);
+    lua_setfield(state, -2, "rebind_ok");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.rebind_exception_code));
+    lua_setfield(state, -2, "rebind_exception_code");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.completed_tick_ms));
+    lua_setfield(state, -2, "completed_tick_ms");
+    lua_pushstring(state, result.error_message.c_str());
+    lua_setfield(state, -2, "error");
+}
+
+int LuaGameplaySpawnManualRunEnemy(lua_State* state) {
+    int type_id = 2012;
+    float x = 0.0f;
+    float y = 0.0f;
+    bool freeze_on_spawn = true;
+    if (lua_istable(state, 1)) {
+        lua_getfield(state, 1, "type_id");
+        if (!lua_isnil(state, -1)) {
+            type_id = static_cast<int>(luaL_checkinteger(state, -1));
+        }
+        lua_pop(state, 1);
+        lua_getfield(state, 1, "x");
+        x = static_cast<float>(luaL_checknumber(state, -1));
+        lua_pop(state, 1);
+        lua_getfield(state, 1, "y");
+        y = static_cast<float>(luaL_checknumber(state, -1));
+        lua_pop(state, 1);
+        lua_getfield(state, 1, "freeze_on_spawn");
+        if (!lua_isnil(state, -1)) {
+            freeze_on_spawn = lua_toboolean(state, -1) != 0;
+        }
+        lua_pop(state, 1);
+    } else {
+        type_id = static_cast<int>(luaL_checkinteger(state, 1));
+        x = static_cast<float>(luaL_checknumber(state, 2));
+        y = static_cast<float>(luaL_checknumber(state, 3));
+        if (lua_gettop(state) >= 4 && !lua_isnil(state, 4)) {
+            freeze_on_spawn = lua_toboolean(state, 4) != 0;
+        }
+    }
+
+    std::string error_message;
+    std::uint64_t request_id = 0;
+    if (!QueueManualRunEnemySpawn(
+            type_id,
+            x,
+            y,
+            freeze_on_spawn,
+            &error_message,
+            &request_id)) {
+        lua_pushboolean(state, 0);
+        lua_pushstring(state, error_message.c_str());
+        return 2;
+    }
+
+    lua_pushboolean(state, 1);
+    lua_pushnil(state);
+    lua_pushinteger(state, static_cast<lua_Integer>(request_id));
+    return 3;
+}
+
+int LuaGameplayGetLastManualRunEnemySpawn(lua_State* state) {
+    std::uint64_t request_id = 0;
+    if (lua_gettop(state) >= 1 && !lua_isnil(state, 1)) {
+        request_id = static_cast<std::uint64_t>(luaL_checkinteger(state, 1));
+    }
+
+    SDModManualRunEnemySpawnResult result;
+    if (!TryGetLastManualRunEnemySpawnResult(&result, request_id)) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    PushManualRunEnemySpawnResult(state, result);
+    return 1;
+}
+
+int LuaGameplayClearManualRunEnemyFreeze(lua_State* state) {
+    uintptr_t actor_address = 0;
+    if (lua_gettop(state) >= 1 && !lua_isnil(state, 1)) {
+        actor_address = static_cast<uintptr_t>(luaL_checkinteger(state, 1));
+    }
+    ClearManualRunEnemyFreeze(actor_address);
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaGameplaySetRunEnemyHealth(lua_State* state) {
+    const auto actor_address = static_cast<uintptr_t>(luaL_checkinteger(state, 1));
+    const auto hp = static_cast<float>(luaL_checknumber(state, 2));
+    const auto max_hp = static_cast<float>(luaL_checknumber(state, 3));
+    const bool wrote = multiplayer::TrySetRunEnemyHealth(actor_address, hp, max_hp);
+    lua_pushboolean(state, wrote ? 1 : 0);
     return 1;
 }
 
@@ -860,14 +1025,39 @@ int LuaWorldTriggerEnemyDeath(lua_State* state) {
     return 2;
 }
 
+int LuaWorldGetRunEnemyByNetworkId(lua_State* state) {
+    const auto raw_network_actor_id = luaL_checkinteger(state, 1);
+    if (raw_network_actor_id <= 0) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    SDModSceneActorState actor;
+    if (!multiplayer::TryFindLocalRunEnemyByNetworkId(
+            static_cast<std::uint64_t>(raw_network_actor_id),
+            &actor)) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    PushSceneActorState(state, actor);
+    return 1;
+}
+
 }  // namespace
 
 void RegisterLuaGameplayBindings(lua_State* state) {
-    lua_createtable(state, 0, 4);
+    lua_createtable(state, 0, 10);
     RegisterFunction(state, &LuaGameplayStartWaves, "start_waves");
     RegisterFunction(state, &LuaGameplayEnableCombatPrelude, "enable_combat_prelude");
+    RegisterFunction(state, &LuaGameplaySetManualEnemySpawnerTestMode, "set_manual_enemy_spawner_test_mode");
+    RegisterFunction(state, &LuaGameplayGetManualEnemySpawnerState, "get_manual_enemy_spawner_state");
     RegisterFunction(state, &LuaGameplayGetCombatState, "get_combat_state");
     RegisterFunction(state, &LuaGameplayGetSelectionDebugState, "get_selection_debug_state");
+    RegisterFunction(state, &LuaGameplaySpawnManualRunEnemy, "spawn_manual_run_enemy");
+    RegisterFunction(state, &LuaGameplayGetLastManualRunEnemySpawn, "get_last_manual_run_enemy_spawn");
+    RegisterFunction(state, &LuaGameplayClearManualRunEnemyFreeze, "clear_manual_run_enemy_freeze");
+    RegisterFunction(state, &LuaGameplaySetRunEnemyHealth, "set_run_enemy_health");
     lua_setfield(state, -2, "gameplay");
 
     lua_createtable(state, 0, 3);
@@ -876,11 +1066,12 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaPlayerGetProgressionBookState, "get_progression_book_state");
     lua_setfield(state, -2, "player");
 
-    lua_createtable(state, 0, 9);
+    lua_createtable(state, 0, 10);
     RegisterFunction(state, &LuaWorldGetState, "get_state");
     RegisterFunction(state, &LuaWorldGetScene, "get_scene");
     RegisterFunction(state, &LuaWorldListActors, "list_actors");
     RegisterFunction(state, &LuaWorldGetReplicatedActors, "get_replicated_actors");
+    RegisterFunction(state, &LuaWorldGetRunEnemyByNetworkId, "get_run_enemy_by_network_id");
     RegisterFunction(state, &LuaWorldGetReplicatedLoot, "get_replicated_loot");
     RegisterFunction(state, &LuaWorldRequestLootPickup, "request_loot_pickup");
     RegisterFunction(state, &LuaWorldRebindActor, "rebind_actor");

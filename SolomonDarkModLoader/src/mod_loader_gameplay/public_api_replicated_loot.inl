@@ -19,7 +19,7 @@ void GetReplicatedLootPresentationStates(std::vector<SDModReplicatedLootPresenta
 }
 
 void SuppressClientLocalLootActors(const char* reason) {
-    RemoveUnboundClientLootActors(reason);
+    QueueClientLocalLootSuppressionInternal(reason, kClientLocalLootSuppressionSettleDelayMs);
 }
 
 bool HasReplicatedRunEnemyDeathPresentation(std::uint64_t network_actor_id) {

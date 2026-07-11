@@ -66,6 +66,33 @@ void __fastcall HookMonsterPathfindingRefreshTarget(void* self, void* /*unused_e
         return;
     }
 
+    const auto hostile_actor_address = reinterpret_cast<uintptr_t>(self);
+    float frozen_x = 0.0f;
+    float frozen_y = 0.0f;
+    if (TryGetRunLifecycleManualEnemyFreezePosition(hostile_actor_address, &frozen_x, &frozen_y)) {
+        if (IsActorRuntimeDead(hostile_actor_address)) {
+            ClearRunLifecycleManualEnemyFreeze(hostile_actor_address);
+            return;
+        }
+        auto& memory = ProcessMemory::Instance();
+        (void)memory.TryWriteField(hostile_actor_address, kActorPositionXOffset, frozen_x);
+        (void)memory.TryWriteField(hostile_actor_address, kActorPositionYOffset, frozen_y);
+        (void)memory.TryWriteField<uintptr_t>(
+            hostile_actor_address,
+            kActorCurrentTargetActorOffset,
+            0);
+        (void)memory.TryWriteField<std::int32_t>(
+            hostile_actor_address,
+            kHostileTargetBucketDeltaOffset,
+            0);
+        return;
+    }
+
+    if (multiplayer::IsLocalTransportClient()) {
+        (void)ApplyLatestReplicatedRunEnemyTargetForLocalActor(hostile_actor_address, true);
+        return;
+    }
+
     original(self, nullptr);
 
     // The hostile-target widening path is only validated on stock wave-spawned
@@ -77,7 +104,6 @@ void __fastcall HookMonsterPathfindingRefreshTarget(void* self, void* /*unused_e
         return;
     }
 
-    const auto hostile_actor_address = reinterpret_cast<uintptr_t>(self);
     if (hostile_actor_address == 0) {
         return;
     }

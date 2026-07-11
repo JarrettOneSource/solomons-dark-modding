@@ -1,19 +1,63 @@
 bool QueueBotCast(const BotCastRequest& request) {
     std::scoped_lock lock(g_bot_runtime_mutex);
-    if (!g_bot_runtime_initialized || !IsValidCastRequest(request)) {
+    if (!g_bot_runtime_initialized) {
+        Log(
+            "[bots] cast queue rejected; runtime not initialized. bot_id=" +
+            std::to_string(request.bot_id) +
+            " skill_id=" + std::to_string(request.skill_id) +
+            " cast_sequence=" + std::to_string(request.cast_sequence) +
+            " remote_input_controlled=" +
+            (request.remote_input_controlled ? std::string("1") : std::string("0")));
+        return false;
+    }
+    if (!IsValidCastRequest(request)) {
+        Log(
+            "[bots] cast queue rejected; invalid request. bot_id=" +
+            std::to_string(request.bot_id) +
+            " skill_id=" + std::to_string(request.skill_id) +
+            " kind=" + (request.kind == BotCastKind::Primary ? std::string("primary") : std::string("secondary")) +
+            " slot=" + std::to_string(request.secondary_slot) +
+            " cast_sequence=" + std::to_string(request.cast_sequence) +
+            " remote_input_controlled=" +
+            (request.remote_input_controlled ? std::string("1") : std::string("0")));
         return false;
     }
 
     const RuntimeState runtime = SnapshotRuntimeState();
     const auto* participant = FindParticipant(runtime, request.bot_id);
-    if (participant == nullptr ||
-        (!IsLuaControlledParticipant(*participant) &&
-         !(IsRemoteParticipant(*participant) && IsNativeControlledParticipant(*participant)))) {
+    if (participant == nullptr) {
+        Log(
+            "[bots] cast queue rejected; participant missing. bot_id=" +
+            std::to_string(request.bot_id) +
+            " skill_id=" + std::to_string(request.skill_id) +
+            " cast_sequence=" + std::to_string(request.cast_sequence) +
+            " remote_input_controlled=" +
+            (request.remote_input_controlled ? std::string("1") : std::string("0")));
+        return false;
+    }
+    if (!IsLuaControlledParticipant(*participant) &&
+        !(IsRemoteParticipant(*participant) && IsNativeControlledParticipant(*participant))) {
+        Log(
+            "[bots] cast queue rejected; participant is not cast controlled. bot_id=" +
+            std::to_string(request.bot_id) +
+            " kind=" + std::to_string(static_cast<int>(participant->kind)) +
+            " controller=" + std::to_string(static_cast<int>(participant->controller_kind)) +
+            " skill_id=" + std::to_string(request.skill_id) +
+            " cast_sequence=" + std::to_string(request.cast_sequence) +
+            " remote_input_controlled=" +
+            (request.remote_input_controlled ? std::string("1") : std::string("0")));
         return false;
     }
     if (IsParticipantRuntimeDead(*participant)) {
         ClearDeadBotControlsLocked(*participant);
         RemoveBotCastInput(request.bot_id);
+        Log(
+            "[bots] cast queue rejected; participant runtime dead. bot_id=" +
+            std::to_string(request.bot_id) +
+            " skill_id=" + std::to_string(request.skill_id) +
+            " cast_sequence=" + std::to_string(request.cast_sequence) +
+            " remote_input_controlled=" +
+            (request.remote_input_controlled ? std::string("1") : std::string("0")));
         return false;
     }
     const bool remote_native_participant =
@@ -194,6 +238,14 @@ bool QueueBotCast(const BotCastRequest& request) {
         Log(
             "[bots] queued cast for bot id=" + std::to_string(request.bot_id) +
             " facing_preserved=" + std::to_string(desired_heading_valid ? 1 : 0));
+    } else {
+        Log(
+            "[bots] cast queue rejected; participant vanished during state update. bot_id=" +
+            std::to_string(request.bot_id) +
+            " skill_id=" + std::to_string(request.skill_id) +
+            " cast_sequence=" + std::to_string(request.cast_sequence) +
+            " remote_input_controlled=" +
+            (request.remote_input_controlled ? std::string("1") : std::string("0")));
     }
 
     return queued;

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 CHECKS = (
-    ("protocol version", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "kProtocolVersion = 28"),
+    ("protocol version", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "kProtocolVersion = 32"),
     ("drop item type", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "std::uint32_t item_type_id;"),
     ("drop item slot", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "std::int32_t item_slot;"),
     ("drop stack count", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "std::int32_t stack_count;"),
@@ -35,6 +35,12 @@ CHECKS = (
     ("item hook install", "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl", "HookItemDropPickupTick"),
     ("item hook cleanup", "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl", "item_drop_pickup_hook"),
     ("item hook body", "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/item_drop_pickup_hook.inl", "ShouldSuppressRemoteParticipantItemDropPickup"),
+    ("potion presentation type", "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl", "kReplicatedLootPotionItemTypeId = 0x1B59"),
+    ("potion presentation vfunc", "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl", "kArenaSpawnPotionDropVfuncOffset = 0x148"),
+    ("potion presentation spawn", "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl", "ExecuteSpawnReplicatedPotionDropNow"),
+    ("potion native spawn type", "SolomonDarkModLoader/src/mod_loader_gameplay/core/native_function_types.inl", "using SpawnPotionDropFn"),
+    ("potion presentation slot write", "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl", "memory.TryWriteField(held_item_address, kItemSlotOffset, potion_slot)"),
+    ("potion presentation stack write", "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl", "memory.TryWriteField(held_item_address, kPotionStackCountOffset, stack_count)"),
     ("loot lua item type", "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp", '"item_type_id"'),
     ("loot lua item slot", "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp", '"item_slot"'),
     ("loot lua stack", "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp", '"stack_count"'),

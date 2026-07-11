@@ -144,6 +144,7 @@
     <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution\owned_text_rects.inl" />
     <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution\public_rect_resolution.inl" />
     <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution\recorded_control_rects.inl" />
+    <ClInclude Include="src\debug_ui_overlay\dark_cloud_browser_native_tabs.inl" />
     <ClInclude Include="src\debug_ui_overlay\font_atlas_rendering.inl" />
     <ClInclude Include="src\debug_ui_overlay\install_hooks.inl" />
     <ClInclude Include="src\debug_ui_overlay\label_resolution_and_frame_render.inl" />
@@ -239,12 +240,15 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\pending_cast_preparation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\pending_cast_processing.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\processing_context.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\projectile_observation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\release_and_latch_helpers.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\resource_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\skill_selection_rules.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\targeting_and_facing.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\local_player_animation_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\locomotion_and_animation.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_playback.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\participant_collision_response.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\participant_scene_binding_ticks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\wizard_bot_movement_step.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_lifecycle.inl" />
@@ -262,6 +266,7 @@
     <ClInclude Include="src\mod_loader_gameplay\core\participant_entity_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\participant_kind_helpers.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\participant_snapshot_types.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\core\run_generation_seed_helpers.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\runtime_request_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\seh_safe_call_declarations.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\standalone_owner_repair.inl" />
@@ -286,6 +291,7 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\player_actor_tick_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\cast_probe_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\gameplay_hud_hooks.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\gold_pickup_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\input_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\item_drop_pickup_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\monster_pathfinding_hook.inl" />
@@ -300,7 +306,9 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_keyboard_injection.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_participant_queues.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_replicated_loot.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_state_getters.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\replicated_loot_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_actor_animation_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation_actor_runtime.inl" />
@@ -314,11 +322,13 @@
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_actor_render_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_debug_summaries.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_equip_visual_lanes.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_local_player_cast_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_selection_priming.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_slot_bot_creation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_slot_bot_destruction.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_clone_source.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_resources.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation.inl" />
     <ClInclude Include="src\runtime_debug\hde32_impl.inl" />
     <ClInclude Include="src\run_lifecycle\combat_prelude_and_sources.inl" />
     <ClInclude Include="src\run_lifecycle\enemy_tracking_and_reset.inl" />

@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <string>
 
@@ -17,14 +19,36 @@ namespace {
 
 using GameWindowProcFn = LRESULT(__stdcall*)(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
 
+// MyApp per-frame tick (FUN_0040d3c0), an __fastcall/__thiscall whose `this`
+// (the MyApp instance) arrives in ECX.
+using AppMainTickFn = void(__fastcall*)(void* app, void* edx);
+
 constexpr size_t kGameWindowProcMinimumPatchSize = 5;
+constexpr size_t kAppMainTickMinimumPatchSize = 5;
 constexpr double kDefaultWindowAspectRatio = 16.0 / 9.0;
 constexpr int kMinimumWindowClientWidth = 640;
 constexpr int kMinimumWindowClientHeight = 360;
 
+// Byte flags on the MyApp instance consumed by the per-frame tick. When the
+// window loses OS focus the game's WM_ACTIVATEAPP handler queues an activation
+// event whose consumer sets +0xc25 ("deactivated"); the tick then takes a pause
+// branch and skips the fixed-step simulation catch-up loop, freezing the sim
+// while backgrounded. The very first instruction of the tick is
+// `CMP [this+0xc25],0 / JZ <sim section>`, so forcing +0xc25 back to 0 each
+// frame routes execution straight into the simulation regardless of focus and
+// makes the +0xc23/+0xc24 pause flags unreachable (they are only read when
+// +0xc25 is non-zero). This is required for the local multiplayer stress test,
+// where two instances must both simulate even though only one window can be the
+// OS foreground at a time.
+constexpr std::size_t kAppDeactivatedFlagOffset = 0xc25;
+constexpr std::size_t kAppDeepPauseFlagOffset = 0xc23;
+constexpr std::size_t kAppLightPauseFlagOffset = 0xc24;
+
 struct BackgroundFocusBypassState {
     X86Hook window_proc_hook = {};
     GameWindowProcFn original_window_proc = nullptr;
+    X86Hook app_main_tick_hook = {};
+    AppMainTickFn original_app_main_tick = nullptr;
     bool initialized = false;
     bool aspect_initialized = false;
     bool input_scale_initialized = false;
@@ -35,6 +59,13 @@ struct BackgroundFocusBypassState {
     float last_input_scale_x = 1.0f;
     float last_input_scale_y = 1.0f;
     DWORD last_input_scale_log_tick = 0;
+    // Diagnostic: remember the last MyApp pause-flag triple we logged so the tick
+    // detour emits one line per change (documenting which flag the OS actually
+    // sets when the window is backgrounded) instead of spamming every frame.
+    bool app_pause_logged_state_valid = false;
+    std::uint8_t last_logged_deep_pause = 0;
+    std::uint8_t last_logged_light_pause = 0;
+    std::uint8_t last_logged_deactivated = 0;
 } g_background_focus_bypass_state;
 
 bool TryParseGraphicsResolutionLine(const std::string& line, int* width, int* height) {
@@ -402,6 +433,59 @@ LRESULT __stdcall DetourGameWindowProc(HWND hwnd, UINT message, WPARAM wparam, L
     return result;
 }
 
+// Per-frame MyApp tick detour. The native tick gates the fixed-step simulation
+// catch-up loop on the app-deactivated flag at +0xc25 (and, only when that is
+// set, on the +0xc23 deep-pause / +0xc24 light-pause flags). Forcing +0xc25 back
+// to 0 here — before the native tick reads it — routes execution straight into
+// the simulation regardless of OS window focus, which is what lets both local
+// multiplayer instances keep simulating when only one window can be foreground.
+// We also snapshot all three flags and log on change to document, from the live
+// process, which flag the OS actually sets when the window is backgrounded.
+void __fastcall DetourAppMainTick(void* app, void* edx) {
+    const auto app_address = reinterpret_cast<uintptr_t>(app);
+    if (app_address != 0) {
+        auto& memory = ProcessMemory::Instance();
+        std::uint8_t deep_pause = 0;
+        std::uint8_t light_pause = 0;
+        std::uint8_t deactivated = 0;
+        const bool read_flags =
+            memory.TryReadField(app_address, kAppDeepPauseFlagOffset, &deep_pause) &&
+            memory.TryReadField(app_address, kAppLightPauseFlagOffset, &light_pause) &&
+            memory.TryReadField(app_address, kAppDeactivatedFlagOffset, &deactivated);
+        if (read_flags) {
+            auto& state = g_background_focus_bypass_state;
+            const bool any_pause = deep_pause != 0 || light_pause != 0 || deactivated != 0;
+            const bool changed =
+                !state.app_pause_logged_state_valid ||
+                state.last_logged_deep_pause != deep_pause ||
+                state.last_logged_light_pause != light_pause ||
+                state.last_logged_deactivated != deactivated;
+            if (any_pause && changed) {
+                Log(
+                    "MyApp tick observed pause flags deep(+0xc23)=" +
+                    std::to_string(static_cast<int>(deep_pause)) +
+                    " light(+0xc24)=" + std::to_string(static_cast<int>(light_pause)) +
+                    " deactivated(+0xc25)=" + std::to_string(static_cast<int>(deactivated)) +
+                    "; forcing deactivated=0 to keep the simulation running while backgrounded.");
+            }
+            state.app_pause_logged_state_valid = true;
+            state.last_logged_deep_pause = deep_pause;
+            state.last_logged_light_pause = light_pause;
+            state.last_logged_deactivated = deactivated;
+
+            if (deactivated != 0) {
+                const std::uint8_t activated = 0;
+                memory.TryWriteField(app_address, kAppDeactivatedFlagOffset, activated);
+            }
+        }
+    }
+
+    const auto original = g_background_focus_bypass_state.original_app_main_tick;
+    if (original != nullptr) {
+        original(app, edx);
+    }
+}
+
 }  // namespace
 
 bool InitializeBackgroundFocusBypass(std::string* error_message) {
@@ -444,11 +528,49 @@ bool InitializeBackgroundFocusBypass(std::string* error_message) {
         return false;
     }
 
+    const auto resolved_app_main_tick = ProcessMemory::Instance().ResolveGameAddressOrZero(kAppMainTick);
+    if (resolved_app_main_tick == 0) {
+        RemoveX86Hook(&g_background_focus_bypass_state.window_proc_hook);
+        g_background_focus_bypass_state.original_window_proc = nullptr;
+        if (error_message != nullptr) {
+            *error_message = "Failed to resolve the MyApp tick for the background focus bypass.";
+        }
+        return false;
+    }
+
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(resolved_app_main_tick),
+            reinterpret_cast<void*>(&DetourAppMainTick),
+            kAppMainTickMinimumPatchSize,
+            &g_background_focus_bypass_state.app_main_tick_hook,
+            &hook_error)) {
+        RemoveX86Hook(&g_background_focus_bypass_state.window_proc_hook);
+        g_background_focus_bypass_state.original_window_proc = nullptr;
+        if (error_message != nullptr) {
+            *error_message = "Failed to install the MyApp tick hook for the background focus bypass: " + hook_error;
+        }
+        return false;
+    }
+
+    g_background_focus_bypass_state.original_app_main_tick =
+        GetX86HookTrampoline<AppMainTickFn>(g_background_focus_bypass_state.app_main_tick_hook);
+    if (g_background_focus_bypass_state.original_app_main_tick == nullptr) {
+        RemoveX86Hook(&g_background_focus_bypass_state.app_main_tick_hook);
+        RemoveX86Hook(&g_background_focus_bypass_state.window_proc_hook);
+        g_background_focus_bypass_state.original_window_proc = nullptr;
+        if (error_message != nullptr) {
+            *error_message = "MyApp tick hook installed without a valid trampoline.";
+        }
+        return false;
+    }
+
     g_background_focus_bypass_state.initialized = true;
     UpdateWindowInputScale(FindCurrentProcessMainWindow(), "initialize");
     Log(
         "Installed background focus bypass hook at " + HexString(resolved_window_proc) +
-        " patch=" + std::to_string(g_background_focus_bypass_state.window_proc_hook.patch_size) + ".");
+        " patch=" + std::to_string(g_background_focus_bypass_state.window_proc_hook.patch_size) +
+        "; MyApp tick hook at " + HexString(resolved_app_main_tick) +
+        " patch=" + std::to_string(g_background_focus_bypass_state.app_main_tick_hook.patch_size) + ".");
     return true;
 }
 
@@ -457,6 +579,9 @@ void ShutdownBackgroundFocusBypass() {
         return;
     }
 
+    RemoveX86Hook(&g_background_focus_bypass_state.app_main_tick_hook);
+    g_background_focus_bypass_state.original_app_main_tick = nullptr;
+    g_background_focus_bypass_state.app_pause_logged_state_valid = false;
     RemoveX86Hook(&g_background_focus_bypass_state.window_proc_hook);
     g_background_focus_bypass_state.original_window_proc = nullptr;
     g_background_focus_bypass_state.initialized = false;

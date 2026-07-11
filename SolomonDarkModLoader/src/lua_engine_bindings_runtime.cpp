@@ -1,6 +1,7 @@
 #include "lua_engine_bindings_internal.h"
 #include "lua_engine_parsers_internal.h"
 
+#include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_state.h"
 
 #include <algorithm>
@@ -78,7 +79,7 @@ int LuaRuntimeGetMod(lua_State* state) {
 void PushOwnedProgressionState(
     lua_State* state,
     const multiplayer::ParticipantOwnedProgressionState& progression) {
-    lua_createtable(state, 0, 17);
+    lua_createtable(state, 0, 26);
     lua_pushboolean(state, progression.initialized ? 1 : 0);
     lua_setfield(state, -2, "initialized");
     lua_pushinteger(state, static_cast<lua_Integer>(progression.gold));
@@ -129,6 +130,22 @@ void PushOwnedProgressionState(
     lua_setfield(state, -2, "statbook_entry_count");
     PushOwnedProgressionBookEntries(state, progression.progression_book_entries);
     lua_setfield(state, -2, "statbook_entries");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.progression_book_entry_total_count));
+    lua_setfield(state, -2, "skillbook_entry_total_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.progression_book_entries.size()));
+    lua_setfield(state, -2, "skillbook_entry_count");
+    lua_pushboolean(state, progression.progression_book_truncated ? 1 : 0);
+    lua_setfield(state, -2, "skillbook_truncated");
+    PushOwnedProgressionBookEntries(state, progression.progression_book_entries);
+    lua_setfield(state, -2, "skillbook_entries");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.progression_book_entry_total_count));
+    lua_setfield(state, -2, "spellbook_entry_total_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.progression_book_entries.size()));
+    lua_setfield(state, -2, "spellbook_entry_count");
+    lua_pushboolean(state, progression.progression_book_truncated ? 1 : 0);
+    lua_setfield(state, -2, "spellbook_truncated");
+    PushOwnedProgressionBookEntries(state, progression.progression_book_entries);
+    lua_setfield(state, -2, "spellbook_entries");
 
     if (progression.ability_loadout_valid) {
         parsers::PushLoadout(state, progression.ability_loadout);
@@ -136,10 +153,118 @@ void PushOwnedProgressionState(
     }
 }
 
+void PushLevelUpOptionState(
+    lua_State* state,
+    const multiplayer::LevelUpChoiceOptionState& option) {
+    lua_createtable(state, 0, 3);
+    lua_pushinteger(state, static_cast<lua_Integer>(option.option_id));
+    lua_setfield(state, -2, "id");
+    lua_pushinteger(state, static_cast<lua_Integer>(option.option_id));
+    lua_setfield(state, -2, "option_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(option.apply_count));
+    lua_setfield(state, -2, "apply_count");
+}
+
+void PushLevelUpOfferRuntimeInfo(
+    lua_State* state,
+    const multiplayer::LevelUpOfferRuntimeInfo& offer) {
+    lua_createtable(state, 0, 17);
+    lua_pushboolean(state, offer.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushboolean(state, offer.selection_submitted ? 1 : 0);
+    lua_setfield(state, -2, "selection_submitted");
+    lua_pushboolean(state, offer.native_picker_presented ? 1 : 0);
+    lua_setfield(state, -2, "native_picker_presented");
+    lua_pushboolean(state, offer.native_picker_options_pinned ? 1 : 0);
+    lua_setfield(state, -2, "native_picker_options_pinned");
+    lua_pushboolean(state, offer.native_picker_local_apply_observed ? 1 : 0);
+    lua_setfield(state, -2, "native_picker_local_apply_observed");
+    lua_pushinteger(state, static_cast<lua_Integer>(offer.authority_participant_id));
+    lua_setfield(state, -2, "authority_participant_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(offer.target_participant_id));
+    lua_setfield(state, -2, "target_participant_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(offer.offer_id));
+    lua_setfield(state, -2, "offer_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(offer.run_nonce));
+    lua_setfield(state, -2, "run_nonce");
+    lua_pushinteger(state, static_cast<lua_Integer>(offer.received_ms));
+    lua_setfield(state, -2, "received_ms");
+    lua_pushinteger(state, static_cast<lua_Integer>(offer.level));
+    lua_setfield(state, -2, "level");
+    lua_pushinteger(state, static_cast<lua_Integer>(offer.experience));
+    lua_setfield(state, -2, "experience");
+    lua_pushinteger(state, static_cast<lua_Integer>(offer.selected_option_index));
+    lua_setfield(state, -2, "selected_option_index");
+    lua_pushinteger(state, static_cast<lua_Integer>(offer.selected_option_id));
+    lua_setfield(state, -2, "selected_option_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(offer.options.size()));
+    lua_setfield(state, -2, "option_count");
+
+    lua_createtable(state, static_cast<int>(offer.options.size()), 0);
+    for (std::size_t index = 0; index < offer.options.size(); ++index) {
+        PushLevelUpOptionState(state, offer.options[index]);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+    lua_setfield(state, -2, "options");
+}
+
+void PushLevelUpChoiceResultRuntimeInfo(
+    lua_State* state,
+    const multiplayer::LevelUpChoiceResultRuntimeInfo& result) {
+    lua_createtable(state, 0, 13);
+    lua_pushboolean(state, result.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.authority_participant_id));
+    lua_setfield(state, -2, "authority_participant_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.target_participant_id));
+    lua_setfield(state, -2, "target_participant_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.offer_id));
+    lua_setfield(state, -2, "offer_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.run_nonce));
+    lua_setfield(state, -2, "run_nonce");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.received_ms));
+    lua_setfield(state, -2, "received_ms");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.level));
+    lua_setfield(state, -2, "level");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.experience));
+    lua_setfield(state, -2, "experience");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.option_index));
+    lua_setfield(state, -2, "option_index");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.option_id));
+    lua_setfield(state, -2, "option_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.apply_count));
+    lua_setfield(state, -2, "apply_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.result_code));
+    lua_setfield(state, -2, "result_code");
+}
+
+void PushLevelUpWaitStatusRuntimeInfo(
+    lua_State* state,
+    const multiplayer::LevelUpWaitStatusRuntimeInfo& status) {
+    lua_createtable(state, 0, 7);
+    lua_pushboolean(state, status.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushboolean(state, status.pause_active ? 1 : 0);
+    lua_setfield(state, -2, "pause_active");
+    lua_pushinteger(state, static_cast<lua_Integer>(status.authority_participant_id));
+    lua_setfield(state, -2, "authority_participant_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(status.received_ms));
+    lua_setfield(state, -2, "received_ms");
+    lua_pushinteger(state, static_cast<lua_Integer>(status.waiting_participant_ids.size()));
+    lua_setfield(state, -2, "waiting_count");
+
+    lua_createtable(state, static_cast<int>(status.waiting_participant_ids.size()), 0);
+    for (std::size_t index = 0; index < status.waiting_participant_ids.size(); ++index) {
+        lua_pushinteger(state, static_cast<lua_Integer>(status.waiting_participant_ids[index]));
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+    lua_setfield(state, -2, "waiting_participant_ids");
+}
+
 int LuaRuntimeGetMultiplayerState(lua_State* state) {
     const auto runtime = multiplayer::SnapshotRuntimeState();
 
-    lua_createtable(state, 0, 9);
+    lua_createtable(state, 0, 12);
     lua_pushboolean(state, runtime.foundation_ready ? 1 : 0);
     lua_setfield(state, -2, "foundation_ready");
     lua_pushboolean(state, runtime.transport_ready ? 1 : 0);
@@ -156,7 +281,7 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
     lua_createtable(state, static_cast<int>(runtime.participants.size()), 0);
     int lua_index = 1;
     for (const auto& participant : runtime.participants) {
-        lua_createtable(state, 0, 22);
+        lua_createtable(state, 0, 26);
         lua_pushinteger(state, static_cast<lua_Integer>(participant.participant_id));
         lua_setfield(state, -2, "participant_id");
         lua_pushinteger(state, static_cast<lua_Integer>(participant.steam_id));
@@ -183,6 +308,14 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         lua_setfield(state, -2, "in_run");
         lua_pushinteger(state, static_cast<lua_Integer>(participant.runtime.run_nonce));
         lua_setfield(state, -2, "run_nonce");
+        lua_pushinteger(state, static_cast<lua_Integer>(participant.runtime.level));
+        lua_setfield(state, -2, "level");
+        lua_pushinteger(state, static_cast<lua_Integer>(participant.runtime.wave));
+        lua_setfield(state, -2, "wave");
+        lua_pushinteger(state, static_cast<lua_Integer>(participant.runtime.experience_current));
+        lua_setfield(state, -2, "experience_current");
+        lua_pushinteger(state, static_cast<lua_Integer>(participant.runtime.experience_next));
+        lua_setfield(state, -2, "experience_next");
         lua_pushstring(state, multiplayer::ParticipantSceneIntentKindLabel(participant.runtime.scene_intent.kind));
         lua_setfield(state, -2, "scene_kind");
         lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.life_current));
@@ -205,7 +338,130 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         ++lua_index;
     }
     lua_setfield(state, -2, "participants");
+    PushLevelUpOfferRuntimeInfo(state, runtime.active_level_up_offer);
+    lua_setfield(state, -2, "active_level_up_offer");
+    PushLevelUpChoiceResultRuntimeInfo(state, runtime.last_level_up_choice_result);
+    lua_setfield(state, -2, "last_level_up_choice_result");
+    PushLevelUpWaitStatusRuntimeInfo(state, runtime.level_up_wait_status);
+    lua_setfield(state, -2, "level_up_wait_status");
 
+    return 1;
+}
+
+bool ReadOptionalLuaIntegerField(
+    lua_State* state,
+    int table_index,
+    const char* field_name,
+    lua_Integer* value) {
+    lua_getfield(state, table_index, field_name);
+    if (lua_isnil(state, -1)) {
+        lua_pop(state, 1);
+        return false;
+    }
+    if (!lua_isinteger(state, -1) && !lua_isnumber(state, -1)) {
+        lua_pop(state, 1);
+        return false;
+    }
+    *value = lua_tointeger(state, -1);
+    lua_pop(state, 1);
+    return true;
+}
+
+int LuaRuntimeChooseLevelUpOption(lua_State* state) {
+    std::uint64_t offer_id = 0;
+    std::int32_t option_index = -1;
+    std::int32_t option_id = -1;
+    if (lua_istable(state, 1)) {
+        lua_Integer value = 0;
+        if (ReadOptionalLuaIntegerField(state, 1, "offer_id", &value)) {
+            if (value < 0) {
+                return luaL_error(state, "sd.runtime.choose_level_up_option offer_id must be non-negative");
+            }
+            offer_id = static_cast<std::uint64_t>(value);
+        }
+        if (ReadOptionalLuaIntegerField(state, 1, "option_index", &value) ||
+            ReadOptionalLuaIntegerField(state, 1, "index", &value)) {
+            option_index = static_cast<std::int32_t>(value);
+        }
+        if (ReadOptionalLuaIntegerField(state, 1, "option_id", &value) ||
+            ReadOptionalLuaIntegerField(state, 1, "choice_id", &value) ||
+            ReadOptionalLuaIntegerField(state, 1, "id", &value)) {
+            option_id = static_cast<std::int32_t>(value);
+        }
+    } else {
+        if (!lua_isinteger(state, 1) && !lua_isnumber(state, 1)) {
+            return luaL_error(state, "sd.runtime.choose_level_up_option expects option_index or a table");
+        }
+        option_index = static_cast<std::int32_t>(lua_tointeger(state, 1));
+        if (lua_gettop(state) >= 2 && !lua_isnil(state, 2)) {
+            if (!lua_isinteger(state, 2) && !lua_isnumber(state, 2)) {
+                return luaL_error(state, "sd.runtime.choose_level_up_option offer_id must be an integer");
+            }
+            const auto value = lua_tointeger(state, 2);
+            if (value < 0) {
+                return luaL_error(state, "sd.runtime.choose_level_up_option offer_id must be non-negative");
+            }
+            offer_id = static_cast<std::uint64_t>(value);
+        }
+        if (lua_gettop(state) >= 3 && !lua_isnil(state, 3)) {
+            if (!lua_isinteger(state, 3) && !lua_isnumber(state, 3)) {
+                return luaL_error(state, "sd.runtime.choose_level_up_option option_id must be an integer");
+            }
+            option_id = static_cast<std::int32_t>(lua_tointeger(state, 3));
+        }
+    }
+
+    if (option_index <= 0 && option_id < 0) {
+        return luaL_error(state, "sd.runtime.choose_level_up_option requires option_index or option_id");
+    }
+
+    std::string error_message;
+    if (!multiplayer::QueueLocalLevelUpChoice(
+            offer_id,
+            option_index,
+            option_id,
+            &error_message)) {
+        return luaL_error(state, "%s", error_message.c_str());
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaRuntimeDebugPublishLevelUpOffer(lua_State* state) {
+    lua_Integer level = 0;
+    lua_Integer experience = 0;
+    if (lua_istable(state, 1)) {
+        if (!ReadOptionalLuaIntegerField(state, 1, "level", &level)) {
+            return luaL_error(state, "sd.runtime.debug_publish_level_up_offer table requires level");
+        }
+        if (!ReadOptionalLuaIntegerField(state, 1, "experience", &experience) &&
+            !ReadOptionalLuaIntegerField(state, 1, "xp", &experience)) {
+            return luaL_error(state, "sd.runtime.debug_publish_level_up_offer table requires experience");
+        }
+    } else {
+        if ((!lua_isinteger(state, 1) && !lua_isnumber(state, 1)) ||
+            (!lua_isinteger(state, 2) && !lua_isnumber(state, 2))) {
+            return luaL_error(state, "sd.runtime.debug_publish_level_up_offer expects (level, experience)");
+        }
+        level = lua_tointeger(state, 1);
+        experience = lua_tointeger(state, 2);
+    }
+    if (level <= 0) {
+        return luaL_error(state, "sd.runtime.debug_publish_level_up_offer level must be positive");
+    }
+    if (experience < 0) {
+        return luaL_error(state, "sd.runtime.debug_publish_level_up_offer experience must be non-negative");
+    }
+    if (!multiplayer::IsLocalTransportHost()) {
+        return luaL_error(state, "sd.runtime.debug_publish_level_up_offer requires the local transport host");
+    }
+
+    multiplayer::PublishHostLevelUpOffers(
+        static_cast<std::int32_t>(level),
+        static_cast<std::int32_t>(experience),
+        0);
+    lua_pushboolean(state, 1);
     return 1;
 }
 
@@ -376,9 +632,11 @@ int LuaEventsOn(lua_State* state) {
 }  // namespace
 
 void RegisterLuaRuntimeBindings(lua_State* state) {
-    lua_createtable(state, 0, 6);
+    lua_createtable(state, 0, 8);
     RegisterFunction(state, &LuaRuntimeGetMod, "get_mod");
     RegisterFunction(state, &LuaRuntimeGetMultiplayerState, "get_multiplayer_state");
+    RegisterFunction(state, &LuaRuntimeChooseLevelUpOption, "choose_level_up_option");
+    RegisterFunction(state, &LuaRuntimeDebugPublishLevelUpOffer, "debug_publish_level_up_offer");
     RegisterFunction(state, &LuaRuntimeHasCapability, "has_capability");
     RegisterFunction(state, &LuaRuntimeGetCapabilities, "get_capabilities");
     RegisterFunction(state, &LuaRuntimeGetEnvironmentVariable, "get_environment_variable");

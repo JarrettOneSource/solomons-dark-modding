@@ -97,6 +97,13 @@ through the same progression vtable `+0x74`, present that rolled option list to
 Lua, then apply the selected option with `PlayerAppearance_ApplyChoice` and
 `ActorProgressionRefresh` on the bot's own progression object.
 
+Multiplayer native clients use the same non-local guard for host-authored
+shared level-ups. A connected non-host suppresses its own local picker/event,
+accepts a host `LevelUpOffer`, and applies only the host-confirmed
+`LevelUpChoiceResult`. The host rolls the options through each participant's
+materialized progression/book state and rejects returned choices that were not
+part of the issued offer.
+
 ## Regression Harness
 
 Run the live bot skill-choice regression with:

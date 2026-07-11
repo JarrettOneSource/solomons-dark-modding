@@ -108,9 +108,10 @@ credit that mutable participant state, not `DAT_0081A388` global gold or
 `DAT_0081C264 + 0x13B8` as an unconditional slot-0 inventory root.
 
 The runtime now carries an explicit `ParticipantOwnedProgressionState` on each
-`ParticipantInfo`. The first fields are intentionally small: initialized flag,
-gold, a gold revision, compact inventory rows, compact progression-book/statbook
-rows, current ability loadout, and inventory/spellbook/statbook/loadout revision
+`ParticipantInfo`. The first fields are intentionally bounded: initialized flag,
+gold, a gold revision, full inventory rows,
+progression-book/statbook/skillbook/spellbook rows, current ability loadout, and
+inventory/spellbook/statbook/loadout revision
 counters. Local UDP refresh populates the local participant's gold from live
 player state, advances the gold revision when that value changes, and
 `sd.runtime.get_multiplayer_state()` exposes the participant ledger so live
@@ -129,23 +130,36 @@ participant's runtime vitals and to the client's local HP/MP presentation.
 Accepted item/potion carrier results clear the host carrier's held-item pointer
 and credit the requesting participant's replicated inventory ledger by item type,
 slot, and stack count. This is deliberately narrower than complete
-inventory/book mutation sync: powerups, spellbook/statbook mutations, and real
-per-participant native inventory roots still need their own participant storage
-and native seams.
+inventory/native-root mutation sync: powerups and real per-participant native
+inventory roots still need their own participant storage and native seams. The
+native progression table is mirrored into the participant ledger for peer-visible
+progression/stat/skill/spellbook state.
+
+Shared experience and level-up choices follow the same participant-owned rule.
+The host owns the shared XP/level event. When the host levels, it synchronizes
+each connected native participant's materialized progression to the shared level,
+rolls that participant's native skill-picker options against that participant's
+current book state, and sends a private `LevelUpOffer`. A non-host client
+suppresses its local native level-up picker/event while connected, exposes the
+host offer through `sd.runtime.get_multiplayer_state()`, and submits a selected
+option through `sd.runtime.choose_level_up_option(...)`. The host accepts only an
+option index/id that exists in the issued offer, applies it to that participant's
+materialized progression, and returns `LevelUpChoiceResult` for the client's
+local progression to apply.
 
 The loader now has a read-only native inventory audit surface at
 `sd.player.get_inventory_state()`. It decodes the local gameplay scene's
 embedded item list root, starter potion rows, and gameplay-owned visual sink
 helpers for hat/robe/staff. `sd.player.get_progression_book_state()` reads the
 local native progression table that currently exposes 83 book rows in the
-starter hub state. Local UDP protocol v28 mirrors compact participant-owned
-inventory rows in `StatePacket` plus compact progression-book/statbook rows and
-the current ability loadout. That currently proves inventory/book/loadout
-content visibility between peers, not native item-object insertion or upgrade
-mutation. Protocol v27 is the first pickup protocol that also mirrors accepted
-item/potion carrier metadata through `LootPickupResult`. Powerup pickup,
-spellbook/statbook mutation, and separate spellbook content replication are
-still pending.
+starter hub state. Local UDP protocol v30 mirrors bounded full participant-owned
+inventory rows in `StatePacket` plus up to 128
+progression-book/statbook/skillbook/spellbook rows and the current ability
+loadout. That proves inventory/book/loadout content
+visibility between peers, not native item-object insertion into a separate
+per-participant root. The pickup request/result protocol also mirrors accepted
+item/potion carrier metadata through `LootPickupResult`. Powerup pickup and real
+per-participant native inventory roots are still pending.
 
 ## Scene Intent
 
@@ -230,6 +244,8 @@ The current protocol header is still a small fixed-packet scaffold:
 - `LootSnapshotPacket`
 - reliable loot/pickup packets for host-owned drops and per-participant
   inventory/spellbook/statbook deltas
+- reliable level-up offer/choice/result packets for host-authored shared XP
+  level-up choices
 
 Those structs are useful for early shape checks, but the actual co-op design in
 `docs/networking/README.md` requires a broader reliable/unreliable packet family

@@ -145,6 +145,107 @@ bool CreateStandaloneWizardEquipWrapper(
     return true;
 }
 
+bool EnsureWizardActorEquipRuntimeHandles(
+    uintptr_t actor_address,
+    std::string_view context,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (actor_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Wizard actor equip runtime repair is missing the actor address.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t existing_wrapper_address = 0;
+    uintptr_t existing_runtime_address = 0;
+    if (!memory.TryReadField(actor_address, kActorEquipHandleOffset, &existing_wrapper_address) ||
+        !memory.TryReadField(actor_address, kActorEquipRuntimeStateOffset, &existing_runtime_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Wizard actor equip runtime fields are unreadable.";
+        }
+        return false;
+    }
+
+    if (existing_runtime_address != 0) {
+        return true;
+    }
+
+    if (existing_wrapper_address != 0) {
+        const auto existing_inner_address = ReadSmartPointerInnerObject(existing_wrapper_address);
+        if (existing_inner_address == 0) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Wizard actor equip wrapper has no readable inner object. wrapper=" +
+                    HexString(existing_wrapper_address) + ".";
+            }
+            return false;
+        }
+        if (!memory.TryWriteField(actor_address, kActorEquipRuntimeStateOffset, existing_inner_address)) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Wizard actor equip runtime cache write failed. wrapper=" +
+                    HexString(existing_wrapper_address) +
+                    " inner=" + HexString(existing_inner_address) + ".";
+            }
+            return false;
+        }
+        Log(
+            "[bots] wizard actor equip runtime cache repaired. context=" +
+            std::string(context) +
+            " actor=" + HexString(actor_address) +
+            " wrapper=" + HexString(existing_wrapper_address) +
+            " inner=" + HexString(existing_inner_address));
+        return true;
+    }
+
+    uintptr_t equip_wrapper_address = 0;
+    uintptr_t equip_inner_address = 0;
+    std::string equip_error;
+    if (!CreateStandaloneWizardEquipWrapper(
+            &equip_wrapper_address,
+            &equip_inner_address,
+            &equip_error)) {
+        if (error_message != nullptr) {
+            *error_message = equip_error;
+        }
+        return false;
+    }
+
+    DWORD exception_code = 0;
+    if (!AssignActorSmartPointerWrapperSafe(
+            actor_address,
+            kActorEquipHandleOffset,
+            kActorEquipRuntimeStateOffset,
+            equip_wrapper_address,
+            &exception_code)) {
+        ReleaseStandaloneWizardSmartPointerResource(
+            actor_address,
+            kActorEquipHandleOffset,
+            kActorEquipRuntimeStateOffset,
+            equip_wrapper_address,
+            equip_inner_address,
+            "equip");
+        if (error_message != nullptr) {
+            *error_message =
+                "Assigning the wizard actor equip handle failed with 0x" +
+                HexString(exception_code) + ".";
+        }
+        return false;
+    }
+
+    Log(
+        "[bots] wizard actor equip runtime handles created. context=" +
+        std::string(context) +
+        " actor=" + HexString(actor_address) +
+        " wrapper=" + HexString(equip_wrapper_address) +
+        " inner=" + HexString(equip_inner_address));
+    return true;
+}
+
 bool CreateStandaloneWizardProgressionWrapper(
     uintptr_t* wrapper_address,
     uintptr_t* inner_address,

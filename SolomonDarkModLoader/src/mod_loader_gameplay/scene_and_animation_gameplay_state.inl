@@ -121,21 +121,6 @@ bool TryWriteGameplaySelectionStateForSlot(
         return false;
     }
 
-    uintptr_t selection_global = 0;
-    if (slot_index == 0) {
-        selection_global = kPlayerSelectionState0Global;
-    } else if (slot_index == 1) {
-        selection_global = kPlayerSelectionState1Global;
-    }
-
-    if (selection_global != 0 &&
-        !TryWriteResolvedGlobalInt(selection_global, static_cast<std::int32_t>(selection_state))) {
-        if (error_message != nullptr) {
-            *error_message = "Failed to write the slot selection-state global.";
-        }
-        return false;
-    }
-
     return true;
 }
 

@@ -398,6 +398,9 @@
     <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution\recorded_control_rects.inl">
       <Filter>Header Files\Debug UI Overlay\Exact Widget Resolution</Filter>
     </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\dark_cloud_browser_native_tabs.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\font_atlas_rendering.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
@@ -581,6 +584,9 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\processing_context.inl">
       <Filter>Header Files\Gameplay\Bot Casting</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\projectile_observation.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\release_and_latch_helpers.inl">
       <Filter>Header Files\Gameplay\Bot Casting</Filter>
     </ClInclude>
@@ -597,6 +603,12 @@
       <Filter>Header Files\Gameplay\Bot Movement</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\locomotion_and_animation.inl">
+      <Filter>Header Files\Gameplay\Bot Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_playback.inl">
+      <Filter>Header Files\Gameplay\Bot Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\participant_collision_response.inl">
       <Filter>Header Files\Gameplay\Bot Movement</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\participant_scene_binding_ticks.inl">
@@ -648,6 +660,9 @@
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\core\participant_snapshot_types.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\run_generation_seed_helpers.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\core\runtime_request_state.inl">
@@ -722,6 +737,9 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\gameplay_hud_hooks.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\gold_pickup_hook.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\input_hooks.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
@@ -761,7 +779,13 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_participant_queues.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_replicated_loot.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_state_getters.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\replicated_loot_reconciliation.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation.inl">
@@ -803,6 +827,9 @@
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_equip_visual_lanes.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_local_player_cast_state.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_selection_priming.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -816,6 +843,9 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_resources.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\runtime_debug\hde32_impl.inl">

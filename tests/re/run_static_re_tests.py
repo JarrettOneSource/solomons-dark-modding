@@ -93,6 +93,10 @@ ENEMY_DAMAGE_CLAIM_SYNC_VERIFIER = ROOT / "tools/verify_enemy_damage_claim_sync.
 RUN_STATIC_LAYOUT_SYNC_VERIFIER = ROOT / "tools/verify_run_static_layout_sync.py"
 PLAYER_HEALTH_DEATH_SYNC_VERIFIER = ROOT / "tools/verify_player_health_death_sync.py"
 REAL_INPUT_SPELL_CAST_SYNC_VERIFIER = ROOT / "tools/verify_real_input_spell_cast_sync.py"
+PRIMARY_KILL_STRESS_VERIFIER = ROOT / "tools/verify_multiplayer_primary_kill_stress.py"
+LOCAL_PLAYER_CAST_STATE = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_local_player_cast_state.inl"
+)
 RUN_LIFECYCLE_SPELL_CAST_HOOKS = (
     ROOT / "SolomonDarkModLoader/src/run_lifecycle/spell_cast_hooks.inl"
 )
@@ -143,6 +147,15 @@ GAMEPLAY_CONSTANTS = ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/g
 PLAYER_CAST_HOOKS = ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_cast_hooks.inl"
 PLAYER_ACTOR_TICK_HOOK = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl"
+)
+SCENE_ANIMATION_GAMEPLAY_STATE = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_gameplay_state.inl"
+)
+PUBLIC_API_DEBUG_AND_SPAWN = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_debug_and_spawn.inl"
+)
+CAST_PROBE_STATE = (
+    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/cast_probe_state.inl"
 )
 ACTOR_ANIMATION_ADVANCE_HOOK = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/animation_advance_hook.inl"
@@ -1469,6 +1482,386 @@ def test_primary_build_skill_mapping_has_single_runtime_owner() -> str:
             "primary combo build-skill mapping is missing native builder token(s): " +
             ", ".join(missing_tokens))
     return "primary combo build-skill mapping is resolved from live Skills_Wizard output"
+
+
+def test_gameplay_selection_writes_do_not_corrupt_stock_run_placement_vector() -> str:
+    gameplay_state_text = read_text(SCENE_ANIMATION_GAMEPLAY_STATE)
+    debug_state_text = read_text(PUBLIC_API_DEBUG_AND_SPAWN)
+    cast_probe_text = read_text(CAST_PROBE_STATE)
+    selection_doc_text = read_text(ROOT / "docs/spell-cast-cleanup-chain.md")
+
+    required_tokens = (
+        (
+            gameplay_state_text,
+            "gameplay selection writer",
+            "memory.TryWriteValue(table_entry_address, static_cast<std::int32_t>(selection_state))",
+        ),
+        (
+            debug_state_text,
+            "selection debug state",
+            "state->player_selection_state_0 = state->slot_selection_entries[0];",
+        ),
+        (
+            debug_state_text,
+            "selection debug state",
+            "state->player_selection_state_1 = state->slot_selection_entries[1];",
+        ),
+        (
+            selection_doc_text,
+            "selection lifecycle doc",
+            "The globals at `0x00819EC4/0x00819EC8` are not a recovered bot selection API.",
+        ),
+    )
+    missing = [f"{label}: {token}" for text, label, token in required_tokens if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "selection-state vector-corruption guard is missing token(s): " +
+            ", ".join(missing))
+
+    forbidden_tokens = (
+        (gameplay_state_text, "gameplay selection writer", "TryWriteResolvedGlobalInt(selection_global"),
+        (gameplay_state_text, "gameplay selection writer", "kPlayerSelectionState0Global"),
+        (gameplay_state_text, "gameplay selection writer", "kPlayerSelectionState1Global"),
+        (debug_state_text, "selection debug state", "TryReadResolvedGlobalInt(kPlayerSelectionState0Global"),
+        (debug_state_text, "selection debug state", "TryReadResolvedGlobalInt(kPlayerSelectionState1Global"),
+        (cast_probe_text, "cast probe", "TryReadResolvedGlobalInt(kPlayerSelectionState0Global"),
+    )
+    present = [f"{label}: {token}" for text, label, token in forbidden_tokens if token in text]
+    if present:
+        raise StaticReTestFailure(
+            "selection-state code still touches stock run-placement vector global(s): " +
+            ", ".join(present))
+
+    return "gameplay selection writes stay on the slot table and do not touch stock vector globals"
+
+
+def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
+    verifier_text = read_text(PRIMARY_KILL_STRESS_VERIFIER)
+    runtime_state_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/runtime_request_state.inl")
+    input_queue_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_input_queueing.inl")
+    player_control_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl")
+    pump_loop_text = read_text(DISPATCH_PUMP_LOOP)
+    run_lifecycle_state_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/run_lifecycle/state_and_targets.inl")
+    run_lifecycle_hooks_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks.inl")
+    run_lifecycle_public_api_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/run_lifecycle/public_api_and_install.inl")
+    required_tokens = (
+        "sd.gameplay.enable_combat_prelude()",
+        "sd.gameplay.set_manual_enemy_spawner_test_mode(enabled)",
+        "parse_int(state.get(\"wave_index\")) == 0",
+        "parse_int(state.get(\"wave_counter\")) == 999999999",
+        "spawn_manual_run_enemy",
+        "sd.gameplay.set_run_enemy_health(actor_address, hp, hp)",
+        "PRIMARY_CAST_HOOK_MARKER",
+        "quiesce_gameplay_primary_input",
+        "clear_gameplay_mouse_left",
+        "PREPARE_AND_QUEUE_CASTER_LUA",
+        "MAX_SCRIPTED_PRIMARY_TARGET_DISTANCE",
+        "source_target_distance",
+        "transport_active_count",
+        "place_player_and_require_pair_views_at",
+        "FORCED_PICKUP_POSITION_TOLERANCE",
+        "select_forced_gold_location",
+        "FORCED_GOLD_MIN_PLAYER_DISTANCE",
+        "forced_gold_location",
+        "before_spawn",
+    )
+    missing = [token for token in required_tokens if token not in verifier_text]
+    if missing:
+        raise StaticReTestFailure(
+            "primary kill stress verifier is missing no-wave manual-spawn token(s): " +
+            ", ".join(missing))
+    native_required_tokens = (
+        (verifier_text, "primary kill verifier", "START_WAVES_LUA"),
+        (verifier_text, "primary kill verifier", "sd.gameplay.get_manual_enemy_spawner_state"),
+        (verifier_text, "primary kill verifier", "host_manual_spawner_ready"),
+        (verifier_text, "primary kill verifier", "client_manual_spawner_ready"),
+        (verifier_text, "primary kill verifier", "host native manual-spawner priming leaked stock enemies"),
+        (verifier_text, "primary kill verifier", "client native manual-spawner priming leaked stock enemies"),
+        (pump_loop_text, "gameplay pump", "PumpRunLifecycleManualEnemySpawnRequest(&manual_spawn_error)"),
+        (run_lifecycle_public_api_text, "run lifecycle API", "IsRunLifecycleManualEnemySpawnerReady()"),
+        (run_lifecycle_public_api_text, "run lifecycle API", "g_state.last_wave_spawner.load"),
+        (run_lifecycle_public_api_text, "run lifecycle API", "g_state.last_wave_spawner_vtable.load"),
+        (run_lifecycle_public_api_text, "run lifecycle API", "g_state.last_wave_spawner_tick_ms.load"),
+        (run_lifecycle_public_api_text, "run lifecycle API", "TryGetPreferredManualRunEnemySpawner"),
+        (run_lifecycle_public_api_text, "run lifecycle API", "IsRememberedWaveSpawnerVtableValid"),
+        (run_lifecycle_public_api_text, "run lifecycle API", "TryDispatchManualRunEnemySpawnFromSpawner("),
+        (run_lifecycle_public_api_text, "run lifecycle API", "manual run enemy spawn: pumped remembered stock spawner"),
+        (run_lifecycle_state_text, "run lifecycle state", "last_arena_enemy_wave_spawner"),
+        (run_lifecycle_state_text, "run lifecycle state", "g_current_wave_spawner_tick_address"),
+        (run_lifecycle_hooks_text, "run lifecycle hooks", "RememberArenaEnemyWaveSpawner"),
+        (run_lifecycle_hooks_text, "run lifecycle hooks", "TryReadActorObjectTypeForRunLifecycle(enemy_address, &actor_object_type)"),
+        (run_lifecycle_hooks_text, "run lifecycle hooks", "g_current_wave_spawner_tick_address = spawner_address"),
+        (run_lifecycle_hooks_text, "run lifecycle hooks", "g_current_wave_spawner_tick_address = self_address"),
+        (run_lifecycle_hooks_text, "run lifecycle hooks", "IsArenaCombatActorType(actor_object_type)"),
+        (run_lifecycle_hooks_text, "run lifecycle hooks", "actor_object_type="),
+        (run_lifecycle_hooks_text, "run lifecycle hooks", "manual run enemy spawn: ignored non-arena stock spawn during controlled tick"),
+        (runtime_state_text, "runtime request state", "manual_spawner_primary_cast_control_grace_until_ms"),
+        (input_queue_text, "input queue", "kManualSpawnerPrimaryCastControlGraceMinMs"),
+        (player_control_text, "player control hooks", "IsManualSpawnerPrimaryCastControlGraceActive()"),
+        (player_control_text, "player control hooks", "suppressed extra local pure-primary start during scripted cast grace"),
+        (player_control_text, "player control hooks", "manual_spawner_scripted_local_primary_control"),
+        (player_control_text, "player control hooks", "seeded local scripted primary control"),
+    )
+    native_missing = [
+        f"{label}: {token}"
+        for text, label, token in native_required_tokens
+        if token not in text
+    ]
+    if native_missing:
+        raise StaticReTestFailure(
+            "manual enemy spawn requests must be serviced by the gameplay action pump: " +
+            ", ".join(native_missing))
+    if "x=target_x + FORCED_GOLD_OFFSET_X" in verifier_text:
+        raise StaticReTestFailure(
+            "primary kill stress verifier regressed to a blind forced-gold offset instead of nav-aware selection")
+    active_gold_filter_tokens = (
+        "FORCED_GOLD_MIN_PLAYER_DISTANCE = 900.0",
+        "FORCED_GOLD_CANDIDATE_OFFSETS = (\n    (100.0, -1200.0)",
+        "(-960.0, -720.0)",
+        "(1280.0, FORCED_GOLD_OFFSET_Y)",
+        "def list_host_active_native_gold_addresses()",
+        "parse_int(row.get(\"amount\")) > 0",
+        "parse_int(row.get(\"lifetime\")) != 0",
+        "before_addresses = list_host_active_native_gold_addresses()",
+    )
+    missing_active_gold_filter_tokens = [
+        token for token in active_gold_filter_tokens if token not in verifier_text
+    ]
+    if missing_active_gold_filter_tokens:
+        raise StaticReTestFailure(
+            "primary kill stress verifier must only exclude active pre-existing gold drops: " +
+            ", ".join(missing_active_gold_filter_tokens))
+    source_lane_tokens = (
+        "def clear_lane_probe(target_x: float, target_y: float, pipe_name: str = HOST_PIPE)",
+        "result[\"pipe\"] = pipe_name",
+        "clear_lane_probe(planned_target_x, planned_target_y, pipe_name=direction.source_pipe)",
+        "pipe_name=direction.source_pipe",
+    )
+    missing_source_lane_tokens = [
+        token for token in source_lane_tokens if token not in verifier_text
+    ]
+    if missing_source_lane_tokens:
+        raise StaticReTestFailure(
+            "primary kill stress verifier must check clear cast lanes from the casting instance: " +
+            ", ".join(missing_source_lane_tokens))
+    return "primary kill stress verifier primes suppressed native spawners on both instances, then uses gameplay-pumped manual frozen spawns"
+
+
+def test_local_player_cast_prime_requires_equip_runtime_ready() -> str:
+    prime_text = read_text(LOCAL_PLAYER_CAST_STATE)
+    resources_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_wizard_resources.inl")
+    slot_creation_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_slot_bot_creation.inl")
+    required_tokens = (
+        "after_handle_refresh.equip_runtime == 0",
+        "EnsureWizardActorEquipRuntimeHandles(",
+        "\"local_player_run_cast_prime\"",
+        "[player-cast-prime] equip runtime repair failed.",
+        "after_equip_repair.equip_runtime == 0",
+        "[player-cast-prime] deferred until equip runtime is ready.",
+        "after.equip_runtime != 0",
+        "equip_runtime_ready",
+        "equip_inner",
+    )
+    missing = [token for token in required_tokens if token not in prime_text]
+    if missing:
+        raise StaticReTestFailure(
+            "local player cast prime is missing equip-runtime readiness guard token(s): " +
+            ", ".join(missing))
+    shared_required_tokens = (
+        (resources_text, "generic equip repair helper", "bool EnsureWizardActorEquipRuntimeHandles("),
+        (resources_text, "generic equip repair helper", "CreateStandaloneWizardEquipWrapper("),
+        (resources_text, "generic equip repair helper", "AssignActorSmartPointerWrapperSafe("),
+        (resources_text, "generic equip repair helper", "[bots] wizard actor equip runtime handles created."),
+        (slot_creation_text, "gameplay-slot equip repair wrapper", "\"gameplay_slot_bot\""),
+    )
+    shared_missing = [
+        f"{label}: {token}"
+        for text, label, token in shared_required_tokens
+        if token not in text
+    ]
+    if shared_missing:
+        raise StaticReTestFailure(
+            "local player cast prime is missing shared equip repair helper token(s): " +
+            ", ".join(shared_missing))
+    return "local player cast prime repairs missing wizard equip handles before requiring equip runtime"
+
+
+def test_hub_start_testrun_uses_gameplay_region_switch() -> str:
+    seams_header_text = read_text(ROOT / "SolomonDarkModLoader/src/gameplay_seams.h")
+    seam_address_text = read_text(ROOT / "SolomonDarkModLoader/src/gameplay_seams/address_storage.inl")
+    seam_binding_text = read_text(ROOT / "SolomonDarkModLoader/src/gameplay_seams/state_and_address_bindings.inl")
+    native_types_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/native_function_types.inl")
+    action_queue_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_gameplay_action_queues.inl")
+    dispatch_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_gameplay_thread_dispatch.inl")
+    actor_lifecycle_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl")
+    config_text = read_text(ROOT / "config/binary-layout.ini")
+    required_tokens = (
+        (action_queue_text, "Queued hub testrun request."),
+        (action_queue_text, "EnsureHostRunGenerationSeed(\"hub_start_testrun_queue\")"),
+        (dispatch_text, "ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplaySwitchRegion)"),
+        (dispatch_text, "CallGameplaySwitchRegionSafe("),
+        (dispatch_text, "ScopedHubRunSwitchAuthorization authorize_switch"),
+        (dispatch_text, "kArenaRegionIndex"),
+        (dispatch_text, "Hub testrun region switch completed."),
+        (actor_lifecycle_text, "PrepareGameplaySceneSwitchOnGameThread(\n        gameplay_address,\n        region_index,\n        \"gameplay_switch_region_pre_dispatch\")"),
+        (actor_lifecycle_text, "Blocked client run switch_region while connected to multiplayer"),
+        (config_text, "gameplay_switch_region=0x005CDDD0"),
+    )
+    missing = [token for text, token in required_tokens if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "hub start testrun is missing native region-switch token(s): " +
+            ", ".join(missing))
+    forbidden_tokens = (
+        "kHubStartTestrunNative",
+        "kHubStartTestrunRemoveChild",
+        "kHubStartTestrunPreviousChildGlobal",
+        "HubStartTestrunNativeFn",
+        "HubOwnerRemoveChildFn",
+        "CallHubOwnerRemoveChildSafe",
+        "CallHubStartTestrunNativeSafe",
+        "hub_start_testrun_native_builder",
+        "Hub testrun native builder completed.",
+        "start_testrun_native=0x005B6D50",
+        "start_testrun_remove_child=0x00428160",
+        "start_testrun_previous_child_global=0x0081993C",
+        "CallHubOwnerControlActionSafe",
+        "HubOwnerControlActionFn",
+        "kHubStartTestrunControlByteOffset",
+        "CallHubStartTestrunPrepareSafe",
+        "HubStartTestrunPrepareFn",
+        "kHubStartTestrunPrepare",
+        "start_testrun_prepare",
+    )
+    active_text = "\n".join((
+        seams_header_text,
+        seam_address_text,
+        seam_binding_text,
+        native_types_text,
+        dispatch_text,
+        config_text,
+    ))
+    present = [token for token in forbidden_tokens if token in active_text]
+    if present:
+        raise StaticReTestFailure(
+            "hub start testrun still references incomplete native UI/builder dispatch token(s): " +
+            ", ".join(present))
+    return "hub start testrun dispatches through native Gameplay_SwitchRegion"
+
+
+def test_hub_start_testrun_waits_for_frame_pump() -> str:
+    pump_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_pump_loop.inl")
+    pending_index = pump_text.find("pending_hub_start_testrun_requests.load")
+    frame_guard_index = pump_text.find("if (!g_allow_gameplay_action_pump_in_gameplay) {", pending_index)
+    dispatch_index = pump_text.find("TryDispatchHubStartTestrunOnGameThread()", pending_index)
+    gameplay_return_guard_index = pump_text.find(
+        "if (!g_allow_gameplay_action_pump_in_gameplay && gameplay_active)",
+        pending_index)
+    if pending_index < 0 or frame_guard_index < 0 or dispatch_index < 0:
+        raise StaticReTestFailure("hub start testrun pump no longer has frame-pump guarded dispatch")
+    if not (pending_index < frame_guard_index < dispatch_index < gameplay_return_guard_index):
+        raise StaticReTestFailure(
+            "hub start testrun dispatch must stay inside the frame-pump guard and before the "
+            "non-gameplay action return guard")
+    return "hub start testrun remains deferred out of the actor-tick gameplay pump"
+
+
+def test_primary_kill_stress_verifier_uses_native_hub_start() -> str:
+    verifier_text = read_text(PRIMARY_KILL_STRESS_VERIFIER)
+    local_sync_text = read_text(ROOT / "tools/verify_local_multiplayer_sync.py")
+    required_tokens = (
+        (verifier_text, "start_host_testrun_and_wait_for_clients(timeout=60.0)"),
+        (local_sync_text, "sd.hub.start_testrun()"),
+        (local_sync_text, "assert_client_start_testrun_blocked"),
+    )
+    missing = [token for text, token in required_tokens if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "primary kill stress verifier is missing native hub-start token(s): " +
+            ", ".join(missing))
+    return "primary kill stress verifier enters runs through the native hub start request"
+
+
+def test_unverified_play_boneyard_shortcut_is_not_exposed() -> str:
+    active_texts = {
+        "mod_loader_h": read_text(ROOT / "SolomonDarkModLoader/include/mod_loader.h"),
+        "input_bindings": read_text(ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_input.cpp"),
+        "local_sync": read_text(ROOT / "tools/verify_local_multiplayer_sync.py"),
+        "primary_kill_stress": read_text(PRIMARY_KILL_STRESS_VERIFIER),
+    }
+    forbidden = (
+        "QueueHubStartPlayBoneyard",
+        "start_play_boneyard",
+        "stage_play_boneyard",
+        "--boneyard-source",
+        "play-boneyard",
+    )
+    present = [
+        f"{name}:{token}"
+        for name, text in active_texts.items()
+        for token in forbidden
+        if token in text
+    ]
+    if present:
+        raise StaticReTestFailure(
+            "unverified play.boneyard shortcut is still exposed in active code: " +
+            ", ".join(present))
+    return "unverified play.boneyard shortcut remains out of active runtime and verifier code"
+
+
+def test_replicated_manual_run_enemy_materialization_is_client_bounded() -> str:
+    world_snapshot_text = read_text(WORLD_SNAPSHOT_RECONCILIATION)
+    run_lifecycle_api_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/run_lifecycle/public_api_and_install.inl")
+    run_lifecycle_hooks_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks.inl")
+    debug_spawn_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_debug_and_spawn.inl")
+    local_transport_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/multiplayer_local_transport.cpp")
+    local_transport_header_text = read_text(
+        ROOT / "SolomonDarkModLoader/include/multiplayer_local_transport.h")
+    required_tokens = (
+        "g_replicated_run_pending_enemy_materialization_until_ms",
+        "QueueReplicatedManualRunEnemyMaterialization",
+        "!multiplayer::IsLocalTransportClient()",
+        "QueueRunLifecycleReplicatedEnemyCatchupSpawn(",
+        "request.allow_active_waves = allow_active_waves",
+        "request.freeze_on_spawn = freeze_on_spawn",
+        "if (request.freeze_on_spawn) {",
+        "multiplayer::HasLocalPendingLethalEnemyDamageClaim(authoritative_actor.network_actor_id, now_ms)",
+        "if (IsRunLifecycleManualEnemySpawnerTestModeEnabled())",
+        "QueueRunLifecycleManualEnemySpawn(",
+        "(void)QueueReplicatedManualRunEnemyMaterialization(authoritative_actor, now_ms)",
+        "g_replicated_run_pending_enemy_materialization_until_ms.erase(network_actor_id)",
+        "pending_lethal_enemy_damage_claim_until_ms",
+        "kEnemyDamageLethalClaimPendingSuppressMs",
+        "HasLocalPendingLethalEnemyDamageClaim",
+        "manual run enemy spawn is host-authoritative while connected to multiplayer.",
+    )
+    haystacks = {
+        "world snapshot reconciliation": world_snapshot_text,
+        "run lifecycle API": run_lifecycle_api_text,
+        "run lifecycle hooks": run_lifecycle_hooks_text,
+        "debug spawn public API": debug_spawn_text,
+        "local transport": local_transport_text,
+        "local transport header": local_transport_header_text,
+    }
+    missing: list[str] = []
+    for token in required_tokens:
+        if not any(token in text for text in haystacks.values()):
+            missing.append(token)
+    if missing:
+        raise StaticReTestFailure(
+            "replicated manual enemy materialization is missing bounded-client token(s): " +
+            ", ".join(missing))
+    return "replicated manual run enemy materialization stays client/test-mode bounded and public API remains host-authoritative"
 
 
 def test_primary_mana_resolver_accepts_native_dispatcher_entry_ids() -> str:
@@ -3911,6 +4304,7 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
 def test_lua_bot_constants_are_semantic_or_documented() -> str:
     config_text = read_text(LUA_BOT_CONFIG)
     combat_text = read_text(LUA_BOT_COMBAT)
+    constants_text = read_text(GAMEPLAY_CONSTANTS)
     doc_text = read_text(LUA_BOT_CONSTANTS_RE_DOC)
     plan_text = read_text(NATIVE_SEAM_PLAN)
     public_state_text = read_text(
@@ -3956,6 +4350,15 @@ def test_lua_bot_constants_are_semantic_or_documented() -> str:
         raise StaticReTestFailure(
             "Lua enemy semantic producer is missing token(s): " +
             ", ".join(missing_public))
+    required_constants_tokens = (
+        "object_type_id == 1001 || object_type_id == 1002",
+        "stock wave-spawned enemy actor variants",
+    )
+    missing_constants = [token for token in required_constants_tokens if token not in constants_text]
+    if missing_constants:
+        raise StaticReTestFailure(
+            "native arena combat actor semantic owner is missing token(s): " +
+            ", ".join(missing_constants))
     forbidden_public_tokens = (
         "state.hp = 1.0f",
         "state.max_hp = 1.0f",
@@ -4365,8 +4768,14 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     orb_pickup_hook_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/orb_pickup_hook.inl"
     )
+    gold_pickup_hook_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/gold_pickup_hook.inl"
+    )
     item_drop_pickup_hook_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/item_drop_pickup_hook.inl"
+    )
+    replicated_loot_reconciliation_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl"
     )
     participant_collision_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/participant_collision_response.inl"
@@ -4385,6 +4794,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     run_reward_sync_probe_text = read_text(RUN_REWARD_SYNC_PROBE)
     progression_ledger_sync_verifier_text = read_text(
         ROOT / "tools/verify_multiplayer_progression_ledger_sync.py"
+    )
+    level_up_offer_sync_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_level_up_offer_sync.py"
     )
     gold_pickup_authority_verifier_text = read_text(
         ROOT / "tools/verify_multiplayer_gold_pickup_authority.py"
@@ -4412,12 +4824,22 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     gameplay_seams_size_bindings_text = read_text(
         ROOT / "SolomonDarkModLoader/src/gameplay_seams/size_bindings.inl"
     )
+    dispatch_thread_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_gameplay_thread_dispatch.inl"
+    )
+    dispatch_pump_loop_text = read_text(DISPATCH_PUMP_LOOP)
     run_generation_seed_helpers_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/run_generation_seed_helpers.inl"
     )
+    run_lifecycle_level_hooks_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks.inl"
+    )
+    participant_entity_lifecycle_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"
+    )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 27;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 33;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
@@ -4431,6 +4853,13 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "EnemyDamageResult = 8"),
         (protocol_text, "LootPickupRequest = 9"),
         (protocol_text, "LootPickupResult = 10"),
+        (protocol_text, "LevelUpOffer = 11"),
+        (protocol_text, "LevelUpChoice = 12"),
+        (protocol_text, "LevelUpChoiceResult = 13"),
+        (protocol_text, "kLevelUpWaitStatusMaxParticipants"),
+        (protocol_text, "std::uint8_t level_up_pause_active"),
+        (protocol_text, "std::uint8_t level_up_waiting_count"),
+        (protocol_text, "std::uint64_t level_up_waiting_participant_ids"),
         (native_enemy_lifecycle_header_text, "TryTriggerRunEnemyDeath"),
         (native_enemy_lifecycle_text, "ResolveGameAddressOrZero(kEnemyDeath)"),
         (native_enemy_lifecycle_text, "kEnemyDeathHandledOffset"),
@@ -4448,10 +4877,15 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (project_filters_text, "src\\native_enemy_lifecycle.cpp"),
         (protocol_text, "Gold = 1"),
         (protocol_text, "enum class LootPickupResultCode"),
+        (protocol_text, "enum class LevelUpChoiceResultCode"),
         (protocol_text, "struct LootPickupRequestPacket"),
         (protocol_text, "struct LootPickupResultPacket"),
+        (protocol_text, "struct LevelUpOfferPacket"),
+        (protocol_text, "struct LevelUpChoicePacket"),
+        (protocol_text, "struct LevelUpChoiceResultPacket"),
         (protocol_text, "struct ParticipantInventoryItemPacketState"),
         (protocol_text, "struct ParticipantProgressionBookEntryPacketState"),
+        (protocol_text, "struct LevelUpOfferOptionPacketState"),
         (protocol_text, "Orb = 4"),
         (protocol_text, "WorldActorSnapshotFlagLifecycleOwned"),
         (protocol_text, "WorldActorPresentationFlagAnimationDriveWord"),
@@ -4459,6 +4893,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "WorldActorPresentationFlagStudentVariantBytes"),
         (protocol_text, "WorldActorPresentationFlagLocomotionFloats"),
         (protocol_text, "WorldActorSnapshotFlagRunStatic"),
+        (protocol_text, "WorldActorSnapshotFlagTargetAuthoritative"),
+        (protocol_text, "std::uint64_t target_participant_id;"),
+        (protocol_text, "std::uint32_t target_native_type_id;"),
+        (protocol_text, "std::int32_t target_actor_slot;"),
+        (protocol_text, "std::int32_t target_world_slot;"),
+        (protocol_text, "std::int32_t target_bucket_delta;"),
         (protocol_text, "std::uint64_t participant_id;"),
         (protocol_text, "std::uint64_t target_network_actor_id;"),
         (protocol_text, "float life_current;"),
@@ -4486,13 +4926,16 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "display_name"),
         (protocol_text, "static_assert(sizeof(ParticipantInventoryItemPacketState) == 12"),
         (protocol_text, "static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20"),
-        (protocol_text, "static_assert(sizeof(StatePacket) == 1148"),
-        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 104"),
-        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 6688"),
-        (protocol_text, "static_assert(sizeof(LootDropSnapshotPacketState) == 64"),
-        (protocol_text, "static_assert(sizeof(LootSnapshotPacket) == 4128"),
+        (protocol_text, "static_assert(sizeof(StatePacket) == 3712"),
+        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 128"),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 8224"),
+        (protocol_text, "static_assert(sizeof(LootDropSnapshotPacketState) == 72"),
+        (protocol_text, "static_assert(sizeof(LootSnapshotPacket) == 4640"),
         (protocol_text, "static_assert(sizeof(LootPickupRequestPacket) == 56"),
         (protocol_text, "static_assert(sizeof(LootPickupResultPacket) == 100"),
+        (protocol_text, "static_assert(sizeof(LevelUpOfferPacket) == 116"),
+        (protocol_text, "static_assert(sizeof(LevelUpChoicePacket) == 40"),
+        (protocol_text, "static_assert(sizeof(LevelUpChoiceResultPacket) == 64"),
         (runtime_state_text, "LocalUdp"),
         (runtime_state_text, "ParticipantOwnedProgressionState"),
         (runtime_state_text, "ParticipantInventoryItemState"),
@@ -4512,6 +4955,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (runtime_state_text, "world_snapshot_history"),
         (runtime_state_text, "loot_snapshot"),
         (runtime_state_text, "last_loot_pickup_result"),
+        (runtime_state_text, "LevelUpOfferRuntimeInfo"),
+        (runtime_state_text, "LevelUpChoiceResultRuntimeInfo"),
+        (runtime_state_text, "LevelUpWaitStatusRuntimeInfo"),
+        (runtime_state_text, "active_level_up_offer"),
+        (runtime_state_text, "last_level_up_choice_result"),
+        (runtime_state_text, "level_up_wait_status"),
         (runtime_state_text, "kParticipantTransformHistoryCapacity"),
         (runtime_state_text, "kWorldSnapshotHistoryCapacity"),
         (runtime_state_text, "TrySampleParticipantTransform"),
@@ -4533,6 +4982,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (runtime_state_text, "float render_drive_move_blend"),
         (runtime_state_text, "actor_total_count"),
         (runtime_state_text, "truncated"),
+        (runtime_state_text, "target_authoritative"),
         (runtime_state_text, "created_actor_count"),
         (runtime_state_text, "created_actor_total_count"),
         (runtime_state_text, "presentation_write_count"),
@@ -4547,6 +4997,10 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_header_text, "IsLocalTransportClient"),
         (transport_header_text, "GetLocalTransportParticipantId"),
         (transport_header_text, "QueueLocalLootPickupRequest"),
+        (transport_header_text, "PublishHostLevelUpOffers"),
+        (transport_header_text, "QueueLocalLevelUpChoice"),
+        (transport_header_text, "ShouldPauseGameplayForLevelUpSelection"),
+        (transport_header_text, "TryBuildLevelUpWaitStatusText"),
         (transport_text, "SDMOD_MULTIPLAYER_TRANSPORT"),
         (transport_text, "SDMOD_MULTIPLAYER_LOCAL_PORT"),
         (transport_text, "SDMOD_MULTIPLAYER_REMOTE_PORT"),
@@ -4563,6 +5017,13 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "packet.presentation_flags & ~ParticipantPresentationFlagStaffVisualState"),
         (transport_text, "participant->runtime.attachment_staff_visual_state = 0"),
         (transport_text, "BuildLocalWorldSnapshotPacket"),
+        (transport_text, "ResolveRunEnemyTargetParticipantId"),
+        (transport_text, "target_native_type_id == 1"),
+        (transport_text, "target_actor_slot == 0"),
+        (transport_text, "PopulateRunEnemyNativeTargetSnapshot"),
+        (transport_text, "kActorCurrentTargetBucketDeltaOffset"),
+        (transport_text, "WorldActorSnapshotFlagTargetAuthoritative"),
+        (transport_text, "snapshot.target_participant_id = ResolveRunEnemyTargetParticipantId(actor.actor_address)"),
         (transport_text, "TryTriggerRunEnemyDeath(target_actor.actor_address"),
         (transport_text, "TryTriggerRunEnemyDeath(actor_address"),
         (transport_text, "kRecentRunEnemyDeathSnapshotHoldMs"),
@@ -4609,19 +5070,92 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "WorldSnapshotFlagTruncated"),
         (transport_text, "LootSnapshotFlagTruncated"),
         (transport_text, "ApplyWorldSnapshotPacket"),
+        (world_snapshot_reconciliation_text, "ResolveReplicatedRunEnemyTargetActor"),
+        (world_snapshot_reconciliation_text, "TryReadActorWorldTargetSlotState"),
+        (world_snapshot_reconciliation_text, "ApplyReplicatedRunEnemyTarget"),
+        (world_snapshot_reconciliation_text, "kActorCurrentTargetActorOffset"),
+        (world_snapshot_reconciliation_text, "kHostileTargetBucketDeltaOffset"),
+        (world_snapshot_reconciliation_text, "authoritative_actor.target_participant_id"),
+        (world_snapshot_reconciliation_text, "ApplyReplicatedRunEnemyTarget("),
+        (lua_gameplay_text, "target_participant_id"),
+        (lua_gameplay_text, "target_authoritative"),
+        (read_text(ROOT / "tools/verify_run_enemy_target_authority.py"), "replicated_target_participant_id"),
+        (read_text(ROOT / "tools/verify_run_enemy_target_authority.py"), "start_host_testrun_and_wait_for_clients(timeout=60.0)"),
         (transport_text, "ApplyLootSnapshotPacket"),
         (transport_text, "ApplyLootPickupRequestPacket"),
         (transport_text, "ApplyLootPickupResultPacket"),
+        (transport_text, "ApplyLevelUpOfferPacket"),
+        (transport_text, "ApplyLevelUpChoicePacket"),
+        (transport_text, "ApplyLevelUpChoiceResultPacket"),
+        (transport_text, "CollectUnresolvedLevelUpOfferParticipantIds"),
+        (transport_text, "BuildLevelUpWaitStatusTextFromIds"),
+        (transport_text, "PendingHostLevelUpOfferTarget"),
+        (transport_text, "pending_level_up_offer_targets_by_participant"),
+        (transport_text, "QueuePendingHostLevelUpOfferTarget"),
+        (transport_text, "ProcessPendingHostLevelUpOffers"),
+        (transport_text, "IsLevelUpOfferMaterializationPendingError"),
+        (transport_text, "Multiplayer level-up offer deferred; participant progression not materialized"),
+        (transport_text, "ClearLocalLevelUpPickerAfterProgrammaticChoice"),
+        (transport_text, "Multiplayer level-up native picker cleared after programmatic accepted choice"),
+        (transport_text, "kProgressionLevelUpPickerUiFlagOffset"),
+        (transport_text, "kProgressionLevelUpTemporaryPickerObjectOffset"),
+        (transport_text, "kProgressionLevelUpTemporaryPickerValueOffset"),
+        (transport_text, "TryApplyLocalProgrammaticLevelUpChoiceThroughNativePicker"),
+        (transport_text, "CallLevelUpScreenCloseSafe"),
+        (transport_text, "Multiplayer level-up native picker applied locally through programmatic choice"),
+        (transport_text, "RelayPacketToPeers(result, endpoint)"),
+        (transport_text, "ApplyParticipantSkillChoiceOption(\n                    packet.target_participant_id"),
+        (transport_text, "SendQueuedLevelUpChoices"),
+        (transport_text, "SyncParticipantProgressionToSharedLevelUpAndRollChoices"),
+        (transport_text, "ApplyParticipantSkillChoiceOption"),
+        (transport_text, "ApplyLocalPlayerSkillChoiceOption"),
+        (transport_text, "LevelUpChoiceResultCode::InvalidOption"),
+        (transport_text, "HasLocalLevelUpOfferAwaitingNativePresentation"),
+        (transport_text, "if (HasPendingLocalLevelUpChoice(runtime_state)) {\n        return true;\n    }"),
+        (dispatch_pump_loop_text, "allow_level_up_picker_create"),
+        (dispatch_pump_loop_text, "HasLocalLevelUpOfferAwaitingNativePresentation"),
+        (dispatch_pump_loop_text, "ReconcileLocalLevelUpOfferPresentation(\n            now_ms,\n            allow_level_up_picker_create)"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/skill_choices_api.inl"), "CaptureLocalSharedLevelUpVitals"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/skill_choices_api.inl"), "RestoreLocalSharedLevelUpVitals"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/skill_choices_api.inl"), "local shared level-up sync preserving live vitals"),
         (transport_text, "ValidateLootPickupRequest"),
         (transport_text, "TryPopulateOrbLootDropSnapshot"),
         (transport_text, "TryPopulateItemLootDropSnapshot"),
         (transport_text, "TryReadItemDropHeldItemMetadata"),
         (transport_text, "TryDeactivateHostOrbLootDrop"),
         (transport_text, "TryDeactivateHostItemLootDrop"),
+        (transport_text, "CallHostLootDropActorWorldUnregisterSafe"),
         (transport_text, "TryBuildAcceptedOrbLootPickupPayload"),
         (transport_text, "TryBuildAcceptedItemLootPickupPayload"),
         (transport_text, "ApplyOwnedInventoryLootItem"),
         (transport_text, "TryWriteLocalPlayerOrbResource"),
+        (transport_text, "last_synced_enemy_hp_by_network_id"),
+        (transport_text, "HasReplicatedRunEnemyDamageBaseline"),
+        (transport_text, "MarkReplicatedRunEnemyDamageBaseline"),
+        (transport_text, "ClearReplicatedRunEnemyDamageBaseline"),
+        (transport_text, "Multiplayer enemy damage claim suppressed until first authoritative HP baseline"),
+        (world_snapshot_reconciliation_text, "const bool has_damage_baseline"),
+        (
+            world_snapshot_reconciliation_text,
+            "has_damage_baseline &&\n        max_hp_synced &&\n        local_health.hp + 0.05f < authoritative_hp",
+        ),
+        (world_snapshot_reconciliation_text, "void ClearReplicatedRunActorBindings()"),
+        (world_snapshot_reconciliation_text, "void BindReplicatedRunActor"),
+        (world_snapshot_reconciliation_text, "void UnbindReplicatedRunActor"),
+        (
+            world_snapshot_reconciliation_text,
+            "for (const auto& binding : g_replicated_run_bindings_by_network_id) {\n        multiplayer::ClearReplicatedRunEnemyDamageBaseline(binding.first);",
+        ),
+        (world_snapshot_reconciliation_text, "multiplayer::ClearReplicatedRunEnemyDamageBaseline(previous_by_actor->second);"),
+        (replicated_loot_reconciliation_text, "kReplicatedLootPotionItemTypeId = 0x1B59"),
+        (replicated_loot_reconciliation_text, "kArenaSpawnPotionDropVfuncOffset = 0x148"),
+        (replicated_loot_reconciliation_text, "SpawnPotionDropFn"),
+        (replicated_loot_reconciliation_text, "ExecuteSpawnReplicatedPotionDropNow"),
+        (replicated_loot_reconciliation_text, "drop.drop_kind == multiplayer::LootDropKind::Potion"),
+        (replicated_loot_reconciliation_text, "held_item_type_id != kReplicatedLootPotionItemTypeId"),
+        (replicated_loot_reconciliation_text, "memory.TryWriteField(held_item_address, kItemSlotOffset, potion_slot)"),
+        (replicated_loot_reconciliation_text, "memory.TryWriteField(held_item_address, kPotionStackCountOffset, stack_count)"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/native_function_types.inl"), "using SpawnPotionDropFn"),
         (protocol_text, "std::uint32_t item_type_id;"),
         (protocol_text, "std::int32_t item_slot;"),
         (protocol_text, "std::int32_t stack_count;"),
@@ -4640,16 +5174,26 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl"), "HookItemDropPickupTick"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl"), "RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook)"),
         (orb_pickup_hook_text, "ShouldSuppressRemoteParticipantOrbPickup"),
+        (orb_pickup_hook_text, "TryQueueReplicatedLootPickupRequest"),
+        (orb_pickup_hook_text, "LootDropKind::Orb"),
         (orb_pickup_hook_text, "IsLocalTransportHost()"),
         (orb_pickup_hook_text, "IsNativeRemoteParticipantBinding(&binding)"),
         (orb_pickup_hook_text, "return false;"),
         (orb_pickup_hook_text, "original(self);"),
+        (gold_pickup_hook_text, "TryQueueReplicatedLootPickupRequest"),
+        (gold_pickup_hook_text, "LootDropKind::Gold"),
+        (gold_pickup_hook_text, "client_gold_pickup_tick"),
         (item_drop_pickup_hook_text, "ShouldSuppressRemoteParticipantItemDropPickup"),
         (item_drop_pickup_hook_text, "kItemDropHeldItemOffset"),
         (item_drop_pickup_hook_text, "IsNativeRemoteParticipantBinding(&binding)"),
         (item_drop_pickup_hook_text, "original(self);"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_reward.inl"), "health_orb"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_reward.inl"), "mana_orb"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_reward.inl"), "ExecuteSpawnGoldRewardNow"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_reward.inl"), "CallSpawnRewardGoldSafe"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_reward.inl"), "ResolveGameAddressOrZero(kSpawnRewardGold)"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_reward.inl"), "kSpawnRewardDefaultLifetime"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_reward.inl"), "CallRewardWorldAttachSafe"),
         (transport_text, "TryDeactivateHostGoldLootDrop"),
         (transport_text, "TryWriteLocalGlobalGold"),
         (transport_text, "accepted_loot_pickup_drop_ids"),
@@ -4680,6 +5224,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (inventory_audit_verifier_text, "POTION_TYPE_ID = 0x1B59"),
         (inventory_audit_verifier_text, "STAFF_HELPER_TYPE_ID = 0x1B5C"),
         (inventory_audit_verifier_text, "has_inventory_items"),
+        (inventory_audit_verifier_text, "has_skillbook_entries"),
+        (inventory_audit_verifier_text, "has_spellbook_entries"),
         (inventory_audit_verifier_text, "assert_owned_inventory_rows"),
         (inventory_audit_verifier_text, "inventory_item_count"),
         (inventory_audit_verifier_text, "inventory_host_authoritative"),
@@ -4746,13 +5292,17 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "abandoned replicated hub actor bindings for scene switch"),
         (world_snapshot_reconciliation_text, "RemoveReplicatedSharedHubActor(binding, &exception_code)"),
         (world_snapshot_reconciliation_text, "abandoned_count"),
-        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "RemoveReplicatedCreatedSharedHubActorsForSceneSwitch(\"scene switch pre-dispatch\")"),
-        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "wizard_bot_sync_not_before_ms.store"),
-        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "pending_participant_sync_requests.clear()"),
-        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "DematerializeAllMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")"),
+        (dispatch_thread_text, "PrepareGameplaySceneSwitchOnGameThread"),
+        (dispatch_thread_text, "RemoveReplicatedCreatedSharedHubActorsForSceneSwitch(source)"),
+        (dispatch_thread_text, "wizard_bot_sync_not_before_ms.store"),
+        (dispatch_thread_text, "pending_participant_sync_requests.clear()"),
+        (dispatch_thread_text, "DematerializeAllMaterializedWizardBotsForSceneSwitch(source)"),
+        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "PrepareGameplaySceneSwitchOnGameThread(\n        gameplay_address,\n        region_index,\n        \"gameplay_switch_region_pre_dispatch\")"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "puppet_manager_delete_puppet skipped object delete during scene churn"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "CallActorWorldUnregisterSafe"),
-        (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"), "DematerializeParticipantEntityNow(bot_id, false, reason)"),
+        (participant_entity_lifecycle_text, "ResetParticipantEntityMaterializationState(&binding)"),
+        (participant_entity_lifecycle_text, "PublishParticipantGameplaySnapshot(binding)"),
+        (participant_entity_lifecycle_text, "abandoned materialized bot entity for scene switch"),
         (world_snapshot_reconciliation_text, "created_actor_total_count += counts.created_actor_count"),
         (world_snapshot_reconciliation_text, "TryRebindActorToOwnerWorld"),
         (world_snapshot_reconciliation_text, "kWorldSnapshotApplyStaleMs"),
@@ -4766,11 +5316,15 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "MaybeCatchUpRunEnemyPoolForAuthoritativeSnapshot"),
         (world_snapshot_reconciliation_text, "TryAccelerateRunLifecycleEnemyPoolForSnapshot"),
         (world_snapshot_reconciliation_text, "CountAuthoritativeTrackedRunEnemiesForScene"),
-        (world_snapshot_reconciliation_text, "CountLocalTrackedRunEnemyBindings"),
+        (world_snapshot_reconciliation_text, "authoritative_counts_by_enemy_type"),
         (world_snapshot_reconciliation_text, "authoritative_actor.tracked_enemy &&"),
-        (world_snapshot_reconciliation_text, "authoritative_tracked_enemy_count - local_tracked_enemy_count"),
-        (world_snapshot_reconciliation_text, "CountLocalTrackedRunEnemyBindings(local_bindings)"),
+        (world_snapshot_reconciliation_text, "local_counts_by_enemy_type"),
+        (world_snapshot_reconciliation_text, "authoritative_count - local_count"),
         (world_snapshot_reconciliation_text, "TryBindAuthoritativeRunActorToLocalPool"),
+        (world_snapshot_reconciliation_text, "IsSameReplicatedRunEnemyKind"),
+        (world_snapshot_reconciliation_text, "bound arena run enemy variant"),
+        (world_snapshot_reconciliation_text, "arena-combat family is the binding key"),
+        (world_snapshot_reconciliation_text, "const bool prefer_nearest = authoritative_actor.run_static || authoritative_actor.tracked_enemy"),
         (world_snapshot_reconciliation_text, "BindReplicatedRunActor"),
         (world_snapshot_reconciliation_text, "RecordWorldSnapshotBinding"),
         (world_snapshot_reconciliation_text, "ApplyReplicatedRunEnemyHealth"),
@@ -4879,7 +5433,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (networking_doc_text, "WorldSnapshot"),
         (networking_doc_text, "LootSnapshot"),
         (networking_doc_text, "sd.world.get_replicated_loot()"),
-        (networking_doc_text, "Protocol v27"),
+        (networking_doc_text, "Protocol v30"),
         (networking_doc_text, "Gold, health/mana orbs, and item/potion carriers have request/result authority slices"),
         (networking_doc_text, "run-world"),
         (networking_doc_text, "tracked enemies"),
@@ -4902,7 +5456,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (networking_doc_text, "tools/verify_multiplayer_inventory_audit.py"),
         (networking_doc_text, "Local inventory/equip roots now have a typed read-only audit API"),
         (networking_doc_text, "pickup-request / pickup-result"),
-        (networking_doc_text, "local UDP mirrors compact inventory rows, progression-book/statbook rows, and ability loadout in `StatePacket`"),
+        (networking_doc_text, "bounded full participant-owned inventory item rows"),
+        (networking_doc_text, "progression-book/statbook/skillbook/spellbook rows"),
         (networking_doc_text, "Gold, health/mana orbs, and item/potion carriers have request/result authority slices"),
         (world_sync_plan_text, "tools/probe_named_hub_npc_fields.py"),
         (world_sync_plan_text, "FUN_00502120"),
@@ -4931,16 +5486,36 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (run_enemy_presentation_probe_text, "max_locomotion_mismatches"),
         (run_enemy_presentation_probe_text, "max_snapshot_dead"),
         (run_reward_sync_probe_text, "GOLD_REWARD_TYPE_ID = 0x07DC"),
-        (run_reward_sync_probe_text, "stock_pickup_mutates_host_global_gold"),
+        (run_reward_sync_probe_text, "park_players_away_from_reward"),
+        (run_reward_sync_probe_text, "STATIONARY_REWARD_MIN_PLAYER_DISTANCE"),
         (run_reward_sync_probe_text, "current_world_snapshot_excludes_gold_drops"),
         (run_reward_sync_probe_text, "client_receives_host_loot_metadata"),
+        (run_reward_sync_probe_text, "client_materializes_host_loot_actor"),
         (run_reward_sync_probe_text, "loot_gold.count"),
         (run_reward_sync_probe_text, "wait_for_client_replicated_loot"),
-        (run_reward_sync_probe_text, "replication_safe_without_pickup_hook"),
+        (run_reward_sync_probe_text, "pickup_authority_is_participant_owned"),
         (lua_gameplay_text, "LuaWorldGetReplicatedLoot"),
         (lua_gameplay_text, '"get_replicated_loot"'),
         (lua_runtime_text, "LuaRuntimeGetMultiplayerState"),
         (lua_runtime_text, '"get_multiplayer_state"'),
+        (lua_runtime_text, "PushLevelUpOfferRuntimeInfo"),
+        (lua_runtime_text, "PushLevelUpChoiceResultRuntimeInfo"),
+        (lua_runtime_text, "PushLevelUpWaitStatusRuntimeInfo"),
+        (lua_runtime_text, '"active_level_up_offer"'),
+        (lua_runtime_text, '"last_level_up_choice_result"'),
+        (lua_runtime_text, '"level_up_wait_status"'),
+        (lua_runtime_text, "LuaRuntimeChooseLevelUpOption"),
+        (lua_runtime_text, '"choose_level_up_option"'),
+        (lua_runtime_text, "LuaRuntimeDebugPublishLevelUpOffer"),
+        (lua_runtime_text, '"debug_publish_level_up_offer"'),
+        (level_up_offer_sync_verifier_text, "debug_publish_level_up_offer"),
+        (level_up_offer_sync_verifier_text, "choose_level_up_option"),
+        (level_up_offer_sync_verifier_text, "client_progression_mode"),
+        (level_up_offer_sync_verifier_text, "client_picker_screen"),
+        (level_up_offer_sync_verifier_text, "verify_level_up_offer_sync"),
+        (run_lifecycle_level_hooks_text, "suppress_client_local_level_up"),
+        (run_lifecycle_level_hooks_text, "kProgressionNonLocalModeValue"),
+        (run_lifecycle_level_hooks_text, "PublishHostLevelUpOffers"),
         (run_seed_verifier_text, "stock_run_enemy_lockstep_viable"),
         (run_seed_verifier_text, "global_seed_as_primary_sync_recommended"),
         (run_seed_verifier_text, "tracked_count_sequence_diverged"),
@@ -4971,16 +5546,16 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (participant_doc_text, "sd.player.get_inventory_state()"),
         (participant_doc_text, "sd.player.get_progression_book_state()"),
         (participant_doc_text, "read-only native inventory audit surface"),
-        (participant_doc_text, "Local UDP protocol v27 mirrors compact participant-owned"),
+        (participant_doc_text, "Local UDP protocol v30 mirrors bounded full participant-owned"),
         (inventory_item_doc_text, "tools/probe_run_reward_sync.py --attempts 3"),
         (inventory_item_doc_text, "sd.world.get_replicated_loot()"),
         (inventory_item_doc_text, "sd.player.get_inventory_state()"),
         (inventory_item_doc_text, "tools/verify_multiplayer_inventory_audit.py"),
         (inventory_item_doc_text, "item row count, item pointer array address"),
-        (inventory_item_doc_text, "local UDP `StatePacket` protocol v27 carries a compact participant-owned"),
-        (inventory_item_doc_text, "mirrors a compact 32-row participant-owned progression-book/statbook snapshot"),
+        (inventory_item_doc_text, "local UDP `StatePacket` protocol v30 carries a bounded full participant-owned"),
+        (inventory_item_doc_text, "participant-owned progression-book/statbook/skillbook/"),
         (inventory_item_doc_text, "participant-owned starter potion rows"),
-        (inventory_item_doc_text, "metadata only"),
+        (inventory_item_doc_text, "by held item type"),
         (inventory_item_doc_text, "not a valid\n\"available for pickup\" predicate"),
         (inventory_item_doc_text, "verify_multiplayer_orb_pickup_authority.py --attempts 3"),
         (inventory_item_doc_text, "`0x005E6B50` -> `ItemDropActor_TickPickup`"),
@@ -5056,6 +5631,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (player_health_death_verifier_text, "client_to_host"),
         (run_enemy_presentation_probe_text, "start_host_testrun_and_wait_for_clients"),
         (run_reward_sync_probe_text, "start_host_testrun_and_wait_for_clients"),
+        (transport_text, "std::fabs(local_actor.max_hp - authoritative_max_hp)"),
+        (world_snapshot_reconciliation_text, "max_hp_synced"),
     )
     missing = [token for text, token in required_pairs if token not in text]
     native_remote_vital_guard = participant_snapshot_text.find(
@@ -5070,6 +5647,19 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         )
     if "built.flags = active != 0 ? LootDropSnapshotFlagActive : 0" in transport_text:
         missing.append("gold loot availability must not use the +0x148 state byte")
+    item_drop_deactivate = re.search(
+        r"bool\s+TryDeactivateHostItemLootDrop\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}",
+        transport_text,
+        re.DOTALL,
+    )
+    if item_drop_deactivate is None:
+        missing.append("item/potion loot deactivation helper")
+    else:
+        item_drop_deactivate_body = item_drop_deactivate.group("body")
+        if "CallHostLootDropActorWorldUnregisterSafe" not in item_drop_deactivate_body:
+            missing.append("item/potion loot deactivation must unregister the native drop actor")
+        if "kItemDropHeldItemOffset" in item_drop_deactivate_body or "no_held_item" in item_drop_deactivate_body:
+            missing.append("item/potion loot deactivation must not null the native held-item pointer")
     if missing:
         raise StaticReTestFailure(
             "local multiplayer transport wiring missing token(s): " + ", ".join(missing))
@@ -5109,18 +5699,18 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     if "tracked_standalone_scene_churn_actor" not in actor_lifecycle_text:
         raise StaticReTestFailure(
             "world_unregister hook must reset tracked standalone wizard bindings after any scene-churn unregister")
-    if "DematerializeAllMaterializedWizardBotsForSceneSwitch(\"scene switch pre-dispatch\")" not in switch_region_body:
+    if "PrepareGameplaySceneSwitchOnGameThread(" not in switch_region_body:
         raise StaticReTestFailure(
-            "scene switch must unregister materialized remote wizard bindings before native teardown")
-    if "PrepareMaterializedWizardBotsForSceneSwitch(" in actor_lifecycle_text:
+            "scene switch must run the shared scene-switch preparation helper")
+    if "KeepMaterializedWizardBotsForNativeSceneTeardown" in actor_lifecycle_text:
         raise StaticReTestFailure(
-            "scene switch must not leave materialized remote wizard bindings registered for native teardown")
+            "scene switch must not preserve materialized remote wizard bindings for native teardown")
+    if "DematerializeAllMaterializedWizardBotsForSceneSwitch(source)" not in dispatch_thread_text:
+        raise StaticReTestFailure(
+            "shared scene-switch preparation must dematerialize materialized remote wizard bindings")
     if "puppet_manager_delete_puppet skipped object delete during scene churn" not in actor_lifecycle_text:
         raise StaticReTestFailure(
             "tracked standalone remote wizard scene teardown must skip the native object delete/free path")
-    if "AbandonMaterializedWizardBotsForSceneSwitch(" in actor_lifecycle_text:
-        raise StaticReTestFailure(
-            "scene switch must not abandon materialized remote wizard bindings around native teardown")
     allow_focus_gate = script_text.find("if ($AllowFocusSteal) {")
     foreground_call = script_text.find(
         "[void][SolomonDarkWindowActivator]::SetForegroundWindow")
@@ -5342,6 +5932,12 @@ def test_second_residual_runtime_and_trace_addresses_are_layout_backed() -> str:
     actor_world_calls_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_actor_calls/actor_world_and_visual_calls.inl"
     )
+    actor_lifecycle_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"
+    )
+    standalone_destruction_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_slot_bot_destruction.inl"
+    )
     player_cast_hooks_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_cast_hooks.inl"
     )
@@ -5364,6 +5960,8 @@ def test_second_residual_runtime_and_trace_addresses_are_layout_backed() -> str:
         "cast_diagnostic_vtable_callback=0x10",
         "object_vtable=0x00",
         "gameplay_actor_attach_vfunc=0x10",
+        "gameplay_actor_detach_vfunc=0x1C",
+        "actor_world_unregister_notify_vfunc=0x48",
         "skills_wizard_probe_vfunc=0x68",
         "actor_world_lookup_object_by_handle=0x0045ADE0",
         "trace_builder_entry=0x0044F5F0",
@@ -5393,6 +5991,13 @@ def test_second_residual_runtime_and_trace_addresses_are_layout_backed() -> str:
         (standalone_tracking_text, "standalone_tracking", "kObjectVtableOffset"),
         (public_state_getters_text, "public_state_getters", "kObjectVtableOffset"),
         (actor_world_calls_text, "actor_world_calls", "kGameplayActorAttachVfuncOffset"),
+        (actor_world_calls_text, "actor_world_calls", "kGameplayActorDetachVfuncOffset"),
+        (actor_lifecycle_text, "actor_lifecycle", "kActorWorldUnregisterNotifyVfuncOffset"),
+        (actor_lifecycle_text, "actor_lifecycle", "IsActorWorldUnregisterNotifyCallable"),
+        (actor_lifecycle_text, "actor_lifecycle", "skipped stale native teardown during scene churn"),
+        (standalone_destruction_text, "standalone_destruction", "DetachLoaderOwnedWizardActorFromGameplayActorList"),
+        (standalone_destruction_text, "standalone_destruction", "CallGameplayActorDetachSafe"),
+        (standalone_destruction_text, "standalone_destruction", "actor_address,\n            0,\n            &exception_code"),
         (player_cast_hooks_text, "player_cast_hooks", "kSkillsWizardProbeVfuncOffset"),
         (boulder_projection_text, "boulder_projection", "active_spell_state.release_base_damage"),
         (selection_text, "selection", "kActorControlBrainStateIdOffset"),
@@ -5422,6 +6027,7 @@ def test_second_residual_runtime_and_trace_addresses_are_layout_backed() -> str:
         (standalone_tracking_text, "standalone_tracking", r"(?:actor|self|deleter)_address,\s*0x00"),
         (public_state_getters_text, "public_state_getters", r"actor_address,\s*0x00"),
         (actor_world_calls_text, "actor_world_calls", r"vtable \+ 0x10"),
+        (actor_world_calls_text, "actor_world_calls", r"vtable \+ 0x1C"),
         (player_cast_hooks_text, "player_cast_hooks", r"chosen_runtime,\s*0|chosen_vtable \+ 0x68"),
         (boulder_projection_text, "boulder_projection", r"active_spell_snapshot\.object,\s*0x58|stat_vtable \+ 0x100"),
         (selection_text, "selection", r"selection_ptr \+ 0x(?:0|1C|20|24|28|2C|30|34)|actor_address,\s*0xDC|actor_dc_(?:ptr|vtable) \+ 0x10"),
@@ -6701,11 +7307,6 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "struct AnimationAdvanceContextScope",
         "~AnimationAdvanceContextScope()",
         "original(self);",
-        "IsTrackedWizardParticipantActorForHud(actor_address)",
-        "TryGetGameplayHudParticipantDisplayNameForActor(actor_address, &display_name, &participant_id)",
-        "DrawGameplayHudParticipantName(actor_address, display_name, &draw_x, &draw_y, &exception_code)",
-        "source=actor_callback",
-        "native gameplay HUD participant name draw",
     )
     missing_animation = [
         token for token in required_animation_tokens
@@ -6713,14 +7314,22 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
     ]
     if missing_animation:
         raise StaticReTestFailure(
-            "animation advance hook no longer matches native nameplate baseline commit 35378b3: " +
+            "animation advance hook no longer preserves context scope without owning HUD nameplate rendering: " +
             ", ".join(missing_animation))
 
-    original_pos = animation_text.find("original(self);")
-    draw_pos = animation_text.find("DrawGameplayHudParticipantName(actor_address, display_name, &draw_x, &draw_y, &exception_code)")
-    if original_pos < 0 or draw_pos < 0 or original_pos > draw_pos:
+    forbidden_animation_draw_tokens = (
+        "TryGetGameplayHudParticipantDisplayNameForActor(actor_address, &display_name, &participant_id)",
+        "DrawGameplayHudParticipantName(actor_address, display_name, &draw_x, &draw_y, &exception_code)",
+        "source=actor_callback",
+    )
+    present_animation_draw = [
+        token for token in forbidden_animation_draw_tokens
+        if token in animation_text
+    ]
+    if present_animation_draw:
         raise StaticReTestFailure(
-            "remote participant nameplate draw must run after the stock actor animation/render callback")
+            "animation advance hook must not render native nameplates outside the HUD render pass: " +
+            ", ".join(present_animation_draw))
 
     forbidden_hud_tokens = (
         "TryListGameplayParticipantNameplates(",
@@ -6751,6 +7360,12 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "std::string BuildGameplayNameplateExactText(const std::string& display_name)",
         "constexpr const char* kHalfScaleCommand = \"s(0.5)\"",
         "bool DrawGameplayHudParticipantName(",
+        "void DrawGameplayHudParticipantNamesForHudPass()",
+        "DrawGameplayHudParticipantNamesForHudPass();",
+        "source=hud_case100",
+        "native gameplay HUD participant name draw",
+        "TryGetGameplayHudParticipantDisplayNameForActor(actor_address, &display_name, &participant_id)",
+        "DrawGameplayHudParticipantName(actor_address, display_name, &draw_x, &draw_y, &exception_code)",
         "ResolveGameAddressOrZero(kGameplayStringAssign)",
         "ResolveGameAddressOrZero(kGameplayExactTextObjectRender)",
         "ResolveGameAddressOrZero(kGameplayExactTextObjectGlobal)",
@@ -6892,7 +7507,7 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         raise StaticReTestFailure(
             "player tick still publishes stale D3D nameplate overlay snapshots")
 
-    return "remote nameplates use native actor-callback exact text with direct native scaling"
+    return "remote nameplates use native HUD-pass exact text with direct native scaling"
 
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
@@ -6916,6 +7531,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("run-lifecycle spell hooks only forward local player casts", test_run_lifecycle_spell_hooks_only_forward_local_player_casts),
     ("multiplayer nameplates render through native scene passes", test_multiplayer_nameplates_render_from_native_scene_passes),
     ("primary build skill mapping has single runtime owner", test_primary_build_skill_mapping_has_single_runtime_owner),
+    ("gameplay selection writes preserve stock run-placement vector", test_gameplay_selection_writes_do_not_corrupt_stock_run_placement_vector),
+    ("primary kill stress verifier uses manual spawns without waves", test_primary_kill_stress_verifier_uses_manual_spawns_without_waves),
+    ("local player cast prime requires equip runtime ready", test_local_player_cast_prime_requires_equip_runtime_ready),
+    ("hub start testrun uses gameplay region switch", test_hub_start_testrun_uses_gameplay_region_switch),
+    ("hub start testrun waits for frame pump", test_hub_start_testrun_waits_for_frame_pump),
+    ("primary kill stress verifier uses native hub start", test_primary_kill_stress_verifier_uses_native_hub_start),
+    ("unverified play boneyard shortcut is not exposed", test_unverified_play_boneyard_shortcut_is_not_exposed),
+    ("replicated manual run enemy materialization is client bounded", test_replicated_manual_run_enemy_materialization_is_client_bounded),
     ("primary mana resolver accepts native dispatcher entry ids", test_primary_mana_resolver_accepts_native_dispatcher_entry_ids),
     ("primary selection mapping is native-backed", test_primary_selection_mapping_is_native_backed_not_static_table),
     ("primary attack window uses live native selection range", test_primary_attack_window_uses_live_native_selection_range),

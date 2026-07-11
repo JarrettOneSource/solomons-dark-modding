@@ -27,6 +27,7 @@ GameplaySeamState& GetGameplaySeamState() {
 const AddressBinding* GetAddressBindings(std::size_t* count) {
     static const AddressBinding bindings[] = {
         SDMOD_ADDR("background_focus.hooks", "game_window_proc", kGameWindowProc),
+        SDMOD_ADDR("background_focus.hooks", "app_main_tick", kAppMainTick),
         SDMOD_ADDR("background_focus.globals", "window_input_scale_x", kWindowInputScaleXGlobal),
         SDMOD_ADDR("background_focus.globals", "window_input_scale_y", kWindowInputScaleYGlobal),
 
@@ -162,8 +163,6 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.globals", "earth_boulder_release_growth_stop_min_charge", kEarthBoulderReleaseGrowthStopMinChargeGlobal),
         SDMOD_ADDR("gameplay.globals", "gameplay_exact_text_object", kGameplayExactTextObjectGlobal),
 
-        SDMOD_ADDR("hub", "backend_dispatcher", kHubBackendDispatcher),
-
         SDMOD_ADDR("run_lifecycle.hooks", "start_game", kStartGame),
         SDMOD_ADDR("run_lifecycle.hooks", "run_ended", kRunEnded),
         SDMOD_ADDR("run_lifecycle.hooks", "wave_spawner_tick", kWaveSpawnerTick),
@@ -181,6 +180,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_pure_primary", kSpellCastPurePrimary),
         SDMOD_ADDR("run_lifecycle.hooks", "gold_changed", kGoldChanged),
         SDMOD_ADDR("run_lifecycle.hooks", "level_up", kLevelUp),
+        SDMOD_ADDR("run_lifecycle.hooks", "level_up_screen_create", kLevelUpScreenCreate),
 
         SDMOD_ADDR("run_lifecycle.callers", "gold_pickup", kGoldPickupCaller),
         SDMOD_ADDR("run_lifecycle.callers", "item_drop_pickup", kItemDropPickupCaller),

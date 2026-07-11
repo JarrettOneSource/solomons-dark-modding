@@ -110,6 +110,61 @@ void __fastcall HookPlayerActorDtor(void* self, void* /*unused_edx*/, char free_
     }
 }
 
+bool TryReadActorWorldUnregisterNotifyVfunc(
+    uintptr_t actor_address,
+    uintptr_t* actor_vtable,
+    uintptr_t* notify_vfunc) {
+    if (actor_vtable != nullptr) {
+        *actor_vtable = 0;
+    }
+    if (notify_vfunc != nullptr) {
+        *notify_vfunc = 0;
+    }
+    if (actor_address == 0 || kActorWorldUnregisterNotifyVfuncOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t vtable = 0;
+    uintptr_t vfunc = 0;
+    if (!memory.TryReadValue(actor_address, &vtable) ||
+        vtable == 0 ||
+        !memory.TryReadValue(vtable + kActorWorldUnregisterNotifyVfuncOffset, &vfunc) ||
+        vfunc == 0) {
+        if (actor_vtable != nullptr) {
+            *actor_vtable = vtable;
+        }
+        if (notify_vfunc != nullptr) {
+            *notify_vfunc = vfunc;
+        }
+        return false;
+    }
+
+    if (actor_vtable != nullptr) {
+        *actor_vtable = vtable;
+    }
+    if (notify_vfunc != nullptr) {
+        *notify_vfunc = vfunc;
+    }
+    return true;
+}
+
+bool IsActorWorldUnregisterNotifyCallable(
+    uintptr_t actor_address,
+    uintptr_t* actor_vtable,
+    uintptr_t* notify_vfunc) {
+    uintptr_t vtable = 0;
+    uintptr_t vfunc = 0;
+    const bool resolved = TryReadActorWorldUnregisterNotifyVfunc(actor_address, &vtable, &vfunc);
+    if (actor_vtable != nullptr) {
+        *actor_vtable = vtable;
+    }
+    if (notify_vfunc != nullptr) {
+        *notify_vfunc = vfunc;
+    }
+    return resolved && ProcessMemory::Instance().IsExecutableRange(vfunc, 1);
+}
+
 void __fastcall HookPuppetManagerDeletePuppet(void* self, void* /*unused_edx*/, void* actor) {
     const auto original = GetX86HookTrampoline<PuppetManagerDeletePuppetFn>(
         g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
@@ -159,6 +214,38 @@ void __fastcall HookPuppetManagerDeletePuppet(void* self, void* /*unused_edx*/, 
         return;
     }
 
+    uintptr_t actor_vtable = 0;
+    uintptr_t actor_unregister_notify_vfunc = 0;
+    if (actor_address != 0 &&
+        now_ms < scene_churn_until &&
+        kActorWorldUnregisterNotifyVfuncOffset != 0 &&
+        !IsActorWorldUnregisterNotifyCallable(
+            actor_address,
+            &actor_vtable,
+            &actor_unregister_notify_vfunc)) {
+        uintptr_t current_gameplay = 0;
+        uintptr_t current_slot0_actor = 0;
+        const bool have_gameplay =
+            TryResolveCurrentGameplayScene(&current_gameplay) && current_gameplay != 0;
+        if (have_gameplay) {
+            (void)ProcessMemory::Instance().TryReadField(
+                current_gameplay,
+                kGameplayPlayerActorOffset,
+                &current_slot0_actor);
+        }
+        Log(
+            "[bots] puppet_manager_delete_puppet skipped stale native teardown during scene churn. actor=" +
+            HexString(actor_address) +
+            " manager=" + HexString(manager_address) +
+            " actor_vtable=" + HexString(actor_vtable) +
+            " actor_unregister_notify_vfunc=" + HexString(actor_unregister_notify_vfunc) +
+            " current_gameplay=" + (have_gameplay ? HexString(current_gameplay) : std::string("unresolved")) +
+            " current_slot0=" + HexString(current_slot0_actor) +
+            " caller=" + HexString(reinterpret_cast<uintptr_t>(_ReturnAddress())) +
+            " stack=" + CaptureStackTraceSummary(1, 5));
+        return;
+    }
+
     LogStandaloneWizardRegionDeleteEvent(
         "puppet_manager_delete_puppet enter",
         manager_address,
@@ -203,6 +290,67 @@ void __fastcall HookPointerListDeleteBatch(void* self, void* /*unused_edx*/, voi
     }
 }
 
+void LogSceneChurnActorWorldUnregisterCandidate(
+    uintptr_t actor_address,
+    uintptr_t world_address,
+    int remove_from_container,
+    uintptr_t caller_address) {
+    if (actor_address == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t actor_vtable = 0;
+    uintptr_t actor_vtable_48 = 0;
+    uintptr_t current_gameplay = 0;
+    uintptr_t current_slot0_actor = 0;
+    uintptr_t current_slot0_vtable = 0;
+    const bool have_gameplay =
+        TryResolveCurrentGameplayScene(&current_gameplay) && current_gameplay != 0;
+    if (have_gameplay) {
+        (void)memory.TryReadField(
+            current_gameplay,
+            kGameplayPlayerActorOffset,
+            &current_slot0_actor);
+        if (current_slot0_actor != 0) {
+            (void)memory.TryReadValue(current_slot0_actor, &current_slot0_vtable);
+        }
+    }
+
+    (void)memory.TryReadValue(actor_address, &actor_vtable);
+    if (actor_vtable != 0) {
+        (void)memory.TryReadValue(
+            actor_vtable + kActorWorldUnregisterNotifyVfuncOffset,
+            &actor_vtable_48);
+    }
+
+    std::uint64_t bot_id = 0;
+    int gameplay_slot = -1;
+    const bool tracked_standalone =
+        TryCaptureTrackedStandaloneWizardBindingIdentity(actor_address, &bot_id, &gameplay_slot);
+
+    Log(
+        "[bots] scene_churn_world_unregister_candidate actor=" + HexString(actor_address) +
+        " world=" + HexString(world_address) +
+        " arg=" + std::to_string(remove_from_container) +
+        " caller=" + HexString(caller_address) +
+        " tracked_standalone=" + std::to_string(tracked_standalone ? 1 : 0) +
+        " bot_id=" + std::to_string(bot_id) +
+        " binding_slot=" + std::to_string(gameplay_slot) +
+        " current_gameplay=" + (have_gameplay ? HexString(current_gameplay) : std::string("unresolved")) +
+        " current_slot0=" + HexString(current_slot0_actor) +
+        " current_slot0_vtable=" + HexString(current_slot0_vtable) +
+        " actor_is_current_slot0=" + std::to_string(actor_address == current_slot0_actor ? 1 : 0) +
+        " actor_vtable=" + HexString(actor_vtable) +
+        " actor_vtable48=" + HexString(actor_vtable_48) +
+        " owner=" + ReadPointerFieldText(actor_address, kActorOwnerOffset) +
+        " slot=" + ReadI8FieldText(actor_address, kActorSlotOffset) +
+        " progression_runtime=" + ReadPointerFieldText(actor_address, kActorProgressionRuntimeStateOffset) +
+        " equip_runtime=" + ReadPointerFieldText(actor_address, kActorEquipRuntimeStateOffset) +
+        " selection=" + ReadPointerFieldText(actor_address, kActorAnimationSelectionStateOffset) +
+        " stack=" + CaptureStackTraceSummary(1, 5));
+}
+
 void __fastcall HookActorWorldUnregister(
     void* self,
     void* /*unused_edx*/,
@@ -226,6 +374,13 @@ void __fastcall HookActorWorldUnregister(
     const auto now_ms = static_cast<std::uint64_t>(::GetTickCount64());
     const auto scene_churn_until =
         g_gameplay_keyboard_injection.scene_churn_not_before_ms.load(std::memory_order_acquire);
+    if (actor_address != 0 && now_ms < scene_churn_until) {
+        LogSceneChurnActorWorldUnregisterCandidate(
+            actor_address,
+            world_address,
+            static_cast<int>(remove_from_container),
+            reinterpret_cast<uintptr_t>(_ReturnAddress()));
+    }
     const bool tracked_standalone_scene_churn_actor =
         actor_address != 0 &&
         now_ms < scene_churn_until &&
@@ -289,22 +444,10 @@ void __fastcall HookGameplaySwitchRegion(void* self, void* /*unused_edx*/, int r
     }
 
     const auto gameplay_address = reinterpret_cast<uintptr_t>(self);
-    (void)ApplyPendingRunGenerationSeedForSceneSwitch(region_index, "gameplay_switch_region_pre_dispatch");
-    const auto scene_churn_until =
-        static_cast<std::uint64_t>(::GetTickCount64()) + kGameplaySceneChurnDelayMs;
-    g_gameplay_keyboard_injection.scene_churn_not_before_ms.store(
-        scene_churn_until,
-        std::memory_order_release);
-    g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.store(
-        scene_churn_until,
-        std::memory_order_release);
-    {
-        std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
-        g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();
-    }
-    RemoveReplicatedCreatedSharedHubActorsForSceneSwitch("scene switch pre-dispatch");
-    ClearReplicatedLootPresentationBindingsForSceneSwitch("scene switch pre-dispatch");
-    DematerializeAllMaterializedWizardBotsForSceneSwitch("scene switch pre-dispatch");
+    (void)PrepareGameplaySceneSwitchOnGameThread(
+        gameplay_address,
+        region_index,
+        "gameplay_switch_region_pre_dispatch");
     Log(
         "[bots] gameplay switch-region hook. gameplay=" + HexString(gameplay_address) +
         " target_region=" + std::to_string(region_index));

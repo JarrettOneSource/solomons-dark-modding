@@ -295,6 +295,29 @@ bool ReadParticipantSnapshot(std::uint64_t participant_id, BotSnapshot* snapshot
 void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintptr_t source_progression_address = 0);
 bool ReadBotSkillChoices(std::uint64_t bot_id, BotSkillChoiceSnapshot* snapshot);
 bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_message);
+bool SyncParticipantProgressionToSharedLevelUpAndRollChoices(
+    std::uint64_t participant_id,
+    std::int32_t level,
+    std::int32_t experience,
+    uintptr_t source_progression_address,
+    std::vector<BotSkillChoiceOption>* options,
+    std::string* error_message);
+bool SyncLocalPlayerProgressionToSharedLevelUp(
+    std::int32_t level,
+    std::int32_t experience,
+    std::string* error_message);
+bool SyncLocalPlayerProgressionToSharedLevelUpAndRollChoices(
+    std::int32_t level,
+    std::int32_t experience,
+    std::vector<BotSkillChoiceOption>* options,
+    std::string* error_message);
+bool ApplyParticipantSkillChoiceOption(
+    std::uint64_t participant_id,
+    const BotSkillChoiceOption& option,
+    std::string* error_message);
+bool ApplyLocalPlayerSkillChoiceOption(
+    const BotSkillChoiceOption& option,
+    std::string* error_message);
 std::size_t GetPendingBotCastCount();
 void SetAllBotSceneIntentsToRun();
 void SetAllBotSceneIntentsToSharedHub();

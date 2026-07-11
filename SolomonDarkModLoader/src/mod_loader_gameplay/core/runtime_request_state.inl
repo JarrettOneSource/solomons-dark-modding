@@ -17,6 +17,11 @@ struct PendingRewardSpawnRequest {
     float y = 0.0f;
 };
 
+struct PendingClientLocalLootSuppressionRequest {
+    std::string reason;
+    std::uint64_t not_before_ms = 0;
+};
+
 struct PendingParticipantEntitySyncRequest {
     std::uint64_t bot_id = 0;
     multiplayer::MultiplayerCharacterProfile character_profile;
@@ -67,6 +72,9 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint64_t> mouse_left_edge_tick_ms{0};
     std::atomic<std::uint32_t> pending_mouse_left_edge_events{0};
     std::atomic<std::uint32_t> pending_mouse_left_frames{0};
+    std::atomic<std::uint32_t> pending_manual_spawner_primary_cast_allowances{0};
+    std::atomic<std::uint64_t> manual_spawner_primary_cast_control_grace_until_ms{0};
+    std::atomic<uintptr_t> manual_spawner_primary_target_actor{0};
     std::atomic<bool> injected_mouse_left_active{false};
     std::atomic<std::uint32_t> pending_hub_start_testrun_requests{0};
     std::atomic<std::uint32_t> pending_start_waves_requests{0};
@@ -80,6 +88,7 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint64_t> scene_churn_not_before_ms{0};
     std::mutex pending_gameplay_world_actions_mutex;
     std::deque<PendingRewardSpawnRequest> pending_reward_spawn_requests;
+    std::deque<PendingClientLocalLootSuppressionRequest> pending_client_local_loot_suppression_requests;
     std::deque<multiplayer::LootSnapshotRuntimeInfo> pending_replicated_loot_snapshots;
     std::deque<PendingParticipantEntitySyncRequest> pending_participant_sync_requests;
     std::deque<PendingGameplayRegionSwitchRequest> pending_gameplay_region_switch_requests;

@@ -8,6 +8,9 @@ param(
     [switch]$Interactive,
 
     [Parameter(Mandatory = $false)]
+    [switch]$Daemon,
+
+    [Parameter(Mandatory = $false)]
     [string]$PipeName,
 
     [Parameter(ValueFromPipeline = $true)]
@@ -264,6 +267,55 @@ function Invoke-LuaExecInteractive {
     }
 }
 
+function Invoke-LuaExecDaemon {
+    # Persistent bridge: one long-lived powershell process serves an unbounded
+    # stream of requests for a single pipe, so the ~0.4s powershell+python
+    # process-spawn tax is paid once per run instead of once per call. Protocol
+    # is one base64 line in / one base64 line out, framing each request-response
+    # unambiguously regardless of payload newlines or content. Raw game response
+    # (or an "ERROR: ..." string on bridge failure) is shuttled back verbatim;
+    # all formatting/error-classification happens on the caller side via the
+    # shared _format_response, so there is exactly one formatter.
+    $stdoutStream = [Console]::Out
+    while ($true) {
+        $line = [Console]::In.ReadLine()
+        if ($null -eq $line) {
+            break
+        }
+
+        $line = $line.Trim()
+        if ($line.Length -eq 0) {
+            continue
+        }
+        if ($line -eq '__SDLUA_EXIT__') {
+            break
+        }
+
+        $raw = ''
+        try {
+            $code = $utf8.GetString([Convert]::FromBase64String($line))
+            $raw = Invoke-LuaExecCode -LuaCode $code
+            if ($null -eq $raw) {
+                $raw = ''
+            }
+        } catch {
+            $message = $_.Exception.Message
+            if ([string]::IsNullOrWhiteSpace($message)) {
+                $message = 'Lua exec failed.'
+            }
+            if (-not $message.StartsWith('ERROR:', [System.StringComparison]::OrdinalIgnoreCase)) {
+                $message = "ERROR: $message"
+            }
+            $raw = $message
+        }
+
+        $encoded = [Convert]::ToBase64String($utf8.GetBytes($raw))
+        $stdoutStream.Write($encoded)
+        $stdoutStream.Write("`n")
+        $stdoutStream.Flush()
+    }
+}
+
 function Invoke-LuaExecMain {
     [CmdletBinding()]
     param(
@@ -333,6 +385,16 @@ function Invoke-LuaExecMain {
         [Console]::Error.WriteLine($message)
         exit 1
     }
+}
+
+if ($Daemon) {
+    try {
+        Invoke-LuaExecDaemon
+    } catch {
+        [Console]::Error.WriteLine("ERROR: $($_.Exception.Message)")
+        exit 1
+    }
+    exit 0
 }
 
 $invokeParams = @{}

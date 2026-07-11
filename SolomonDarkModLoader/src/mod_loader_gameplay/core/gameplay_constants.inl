@@ -78,7 +78,13 @@ constexpr float kWizardBotPathFinalArrivalThreshold = 8.0f;
 constexpr std::uint64_t kWizardBotPathRetryDelayMs = 500;
 constexpr std::uint64_t kGameplayRegionSwitchRetryDelayMs = 250;
 constexpr std::uint64_t kGameplayRegionSwitchDispatchSpacingMs = 500;
-constexpr std::uint64_t kGameplaySceneChurnDelayMs = 1500;
+// Native region switches can expose a nonzero world before the stock actor
+// containers are safe for remote participant materialization. The local
+// multiplayer pair can hit this during create->hub startup; keep the churn
+// window long enough to defer clone/rematerialization work past that native
+// teardown/rebind window.
+constexpr std::uint64_t kGameplaySceneChurnDelayMs = 3000;
+constexpr std::uint64_t kRemoteParticipantSpawnSceneStableDelayMs = 1500;
 constexpr DWORD kHubStartTestrunDispatchCooldownMs = 5000;
 constexpr std::uint32_t kInjectedGameplayMouseClickFrames = 2;
 // FUN_0052C910 arms the stock control-brain action cooldown at +0x10 from
@@ -93,10 +99,10 @@ constexpr std::uint64_t kBotManaReserveRecoveryIntervalMs = 250;
 constexpr float kBotManaReserveRecoveryRatioPerSecond = 0.10f;
 
 bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id) {
-    // 1001 is the stock wave-spawned enemy actor type observed in arena runs.
-    // Solomon/NPC helper actors can look hostile while waves start, but they
-    // are not the wave combat targets the autonomous bot should attack.
-    return object_type_id == 1001;
+    // 1001 and 1002 are stock wave-spawned enemy actor variants observed in
+    // arena runs. Solomon/NPC helper actors can look hostile while waves start,
+    // but they are not the wave combat targets the autonomous bot should attack.
+    return object_type_id == 1001 || object_type_id == 1002;
 }
 constexpr std::size_t kQueuedGameplayWorldActionLimit = 64;
 constexpr int kSpawnRewardDefaultLifetime = 0;

@@ -109,10 +109,22 @@ void ResolveWizardParticipantActorCollisions() {
                 const bool native_player_pair =
                     (left.local_player && right.native_remote) ||
                     (right.local_player && left.native_remote);
-                const bool left_movable =
-                    native_player_pair ? left.local_player : left.movable;
-                const bool right_movable =
-                    native_player_pair ? right.local_player : right.movable;
+                // Never run loader collision response for a local-player vs
+                // native-remote-mirror pair. Pushing the local player creates a
+                // cross-instance feedback loop (each instance displaces its own
+                // player against the other's lagged mirror, which then replicates
+                // back) -> endless oscillation that never converges when the two
+                // players are near each other. Pushing the mirror instead leaves
+                // it permanently offset from the peer's true replicated position
+                // (by radius+radius+padding), breaking remote convergence. Real
+                // player separation is governed by the authoritative simulation
+                // and replication; the local mirror must faithfully reflect the
+                // peer's transform, so we skip the pair entirely here.
+                if (native_player_pair) {
+                    continue;
+                }
+                const bool left_movable = left.movable;
+                const bool right_movable = right.movable;
                 if (left.world_address != right.world_address ||
                     (!left_movable && !right_movable)) {
                     continue;

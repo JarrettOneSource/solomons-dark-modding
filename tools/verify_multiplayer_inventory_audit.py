@@ -136,6 +136,15 @@ if mp and mp.participants then
       emit(entry_prefix .. "category", entry.category or 0)
       emit(entry_prefix .. "statbook_max_level", entry.statbook_max_level or -1)
     end
+    local skillbook_entries = owned.skillbook_entries or {}
+    emit(prefix .. "skillbook_entry_count", #skillbook_entries)
+    emit(prefix .. "skillbook_entry_total_count", owned.skillbook_entry_total_count or 0)
+    emit(prefix .. "skillbook_truncated", owned.skillbook_truncated or false)
+    local spellbook_entries = owned.spellbook_entries or {}
+    emit(prefix .. "spellbook_entry_count", #spellbook_entries)
+    emit(prefix .. "spellbook_entry_total_count", owned.spellbook_entry_total_count or 0)
+    emit(prefix .. "spellbook_truncated", owned.spellbook_truncated or false)
+    emit(prefix .. "has_skillbook_entries", owned.skillbook_entries ~= nil)
     emit(prefix .. "has_spellbook_entries", owned.spellbook_entries ~= nil)
     emit(prefix .. "has_statbook_entries", owned.statbook_entries ~= nil)
     emit(prefix .. "has_ability_loadout", owned.ability_loadout ~= nil)
@@ -255,6 +264,13 @@ def participant_rows(values: dict[str, str]) -> list[dict[str, Any]]:
             "progression_book_truncated": bool_text(values.get(prefix + "progression_book_truncated")),
             "statbook_entry_count": statbook_count,
             "statbook_entries": statbook_entries,
+            "skillbook_entry_count": parse_int_text(values.get(prefix + "skillbook_entry_count"), 0),
+            "skillbook_entry_total_count": parse_int_text(values.get(prefix + "skillbook_entry_total_count"), 0),
+            "skillbook_truncated": bool_text(values.get(prefix + "skillbook_truncated")),
+            "spellbook_entry_count": parse_int_text(values.get(prefix + "spellbook_entry_count"), 0),
+            "spellbook_entry_total_count": parse_int_text(values.get(prefix + "spellbook_entry_total_count"), 0),
+            "spellbook_truncated": bool_text(values.get(prefix + "spellbook_truncated")),
+            "has_skillbook_entries": bool_text(values.get(prefix + "has_skillbook_entries")),
             "has_spellbook_entries": bool_text(values.get(prefix + "has_spellbook_entries")),
             "has_statbook_entries": bool_text(values.get(prefix + "has_statbook_entries")),
             "has_ability_loadout": bool_text(values.get(prefix + "has_ability_loadout")),
@@ -299,15 +315,26 @@ def assert_owned_inventory_rows(label: str, row: dict[str, Any]) -> None:
 def assert_owned_progression_rows(label: str, row: dict[str, Any]) -> None:
     if row["progression_book_entry_total_count"] <= 0 or row["statbook_entry_count"] <= 0:
         raise VerifyFailure(f"{label} owned progression book missing rows: {row}")
-    if row["progression_book_truncated"]:
-        if row["progression_book_entry_total_count"] <= row["statbook_entry_count"]:
-            raise VerifyFailure(f"{label} owned progression book has inconsistent truncation metadata: {row}")
-    elif row["progression_book_entry_total_count"] != row["statbook_entry_count"]:
+    if row["progression_book_truncated"] or row["skillbook_truncated"] or row["spellbook_truncated"]:
+        raise VerifyFailure(f"{label} owned progression book unexpectedly truncated: {row}")
+    if row["progression_book_entry_total_count"] != row["statbook_entry_count"]:
         raise VerifyFailure(f"{label} owned progression book count mismatch: {row}")
+    if row["skillbook_entry_total_count"] != row["progression_book_entry_total_count"]:
+        raise VerifyFailure(f"{label} owned skillbook total mismatch: {row}")
+    if row["skillbook_entry_count"] != row["progression_book_entry_count"]:
+        raise VerifyFailure(f"{label} owned skillbook row mismatch: {row}")
+    if row["spellbook_entry_total_count"] != row["progression_book_entry_total_count"]:
+        raise VerifyFailure(f"{label} owned spellbook total mismatch: {row}")
+    if row["spellbook_entry_count"] != row["progression_book_entry_count"]:
+        raise VerifyFailure(f"{label} owned spellbook row mismatch: {row}")
     if not row["has_statbook_entries"]:
         raise VerifyFailure(f"{label} owned progression does not expose statbook_entries: {row}")
-    if row["has_spellbook_entries"]:
-        raise VerifyFailure(f"{label} unexpectedly exposes spellbook_entries before spellbook sync exists: {row}")
+    if not row["has_skillbook_entries"]:
+        raise VerifyFailure(f"{label} owned progression does not expose skillbook_entries: {row}")
+    if not row["has_spellbook_entries"]:
+        raise VerifyFailure(f"{label} owned progression does not expose spellbook_entries: {row}")
+    if row["spellbook_revision"] != row["statbook_revision"]:
+        raise VerifyFailure(f"{label} skill/stat book revisions diverged: {row}")
     if not row["has_ability_loadout"]:
         raise VerifyFailure(f"{label} owned progression missing ability_loadout: {row}")
     ability = row["ability_loadout"]

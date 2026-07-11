@@ -415,10 +415,11 @@ plus host-confirmed pickup, not client-local pickup of mirrored stock actors.
 
 `tools/probe_run_reward_sync.py` is the focused local UDP probe for the first
 reward boundary. It launches a host/client run, disables Lua bots, starts host
-waves, spawns a host gold reward through `sd.world.spawn_reward`, and then
-captures `sd.world.list_actors()`, `sd.world.get_replicated_actors()`, and
-`sd.world.get_replicated_loot()` on both processes. The current local UDP
-slice is:
+waves, parks both players outside native pickup range, spawns a host gold
+reward through `sd.world.spawn_reward`, and then captures
+`sd.world.list_actors()`, `sd.world.get_replicated_actors()`, and
+`sd.world.get_replicated_loot()` on both processes. The current local UDP slice
+is:
 
 - host gold reward actors are visible as native type `0x7DC`
 - `+0x13C` carries the amount tier byte; amount `7` produced tier `2`
@@ -432,9 +433,10 @@ slice is:
   actors, by design
 - the client still had valid run enemy snapshots, so the gap is specific to
   reward pickup/lifecycle authority, not a broken world snapshot channel
-- spawning a gold drop at the host player position increased host global gold by
-  exactly the drop amount, proving stock pickup still routes through the global
-  slot-0 economy path
+- pickup authority is verified by
+  `tools/verify_multiplayer_gold_pickup_authority.py`: accepted requests credit
+  the owning participant ledger once, deactivate the host-native drop, leave the
+  host local gold unchanged for remote pickup, and reject duplicate requests
 
 The implementation target remains synced loot for all run drops, with each
 player owning independent inventory, gold, spellbook, and statbook state. The

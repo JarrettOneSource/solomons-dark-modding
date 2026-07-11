@@ -10,13 +10,6 @@ bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state) 
         return false;
     }
 
-    int player_selection_state_0 = 0;
-    int player_selection_state_1 = 0;
-    if (!TryReadResolvedGlobalInt(kPlayerSelectionState0Global, &player_selection_state_0) ||
-        !TryReadResolvedGlobalInt(kPlayerSelectionState1Global, &player_selection_state_1)) {
-        return false;
-    }
-
     state->valid = true;
     state->table_address = table_address;
     state->entry_count = entry_count;
@@ -28,8 +21,8 @@ bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state) 
         }
         state->slot_selection_entries[slot_index] = static_cast<std::int32_t>(value);
     }
-    state->player_selection_state_0 = static_cast<std::int32_t>(player_selection_state_0);
-    state->player_selection_state_1 = static_cast<std::int32_t>(player_selection_state_1);
+    state->player_selection_state_0 = state->slot_selection_entries[0];
+    state->player_selection_state_1 = state->slot_selection_entries[1];
     return true;
 }
 
@@ -135,6 +128,48 @@ bool RebindSceneActorCell(uintptr_t actor_address, std::string* error_message) {
             " exception=" + HexString(exception_code);
     }
     return false;
+}
+
+bool QueueManualRunEnemySpawn(
+    int type_id,
+    float x,
+    float y,
+    bool freeze_on_spawn,
+    std::string* error_message,
+    std::uint64_t* request_id) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message = "manual run enemy spawn: gameplay action pump is not initialized.";
+        }
+        return false;
+    }
+    if (multiplayer::IsLocalTransportClient()) {
+        if (error_message != nullptr) {
+            *error_message = "manual run enemy spawn is host-authoritative while connected to multiplayer.";
+        }
+        return false;
+    }
+
+    return QueueRunLifecycleManualEnemySpawn(
+        type_id,
+        x,
+        y,
+        freeze_on_spawn,
+        error_message,
+        request_id);
+}
+
+bool TryGetLastManualRunEnemySpawnResult(
+    SDModManualRunEnemySpawnResult* result,
+    std::uint64_t request_id) {
+    return TryGetRunLifecycleManualEnemySpawnResult(result, request_id);
+}
+
+void ClearManualRunEnemyFreeze(uintptr_t actor_address) {
+    ClearRunLifecycleManualEnemyFreeze(actor_address);
 }
 
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message) {

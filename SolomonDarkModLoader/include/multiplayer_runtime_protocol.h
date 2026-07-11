@@ -4,15 +4,17 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 28;
+constexpr std::uint16_t kProtocolVersion = 33;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
-constexpr std::uint32_t kParticipantInventorySnapshotMaxItems = 16;
-constexpr std::uint32_t kParticipantProgressionBookSnapshotMaxEntries = 32;
+constexpr std::uint32_t kParticipantInventorySnapshotMaxItems = 64;
+constexpr std::uint32_t kParticipantProgressionBookSnapshotMaxEntries = 128;
 constexpr std::uint32_t kWorldSnapshotMaxActors = 64;
 constexpr std::uint32_t kWorldActorStudentVisualStateBytes = 32;
 constexpr std::uint32_t kLootSnapshotMaxDrops = 64;
+constexpr std::uint32_t kLevelUpOfferMaxOptions = 8;
+constexpr std::uint32_t kLevelUpWaitStatusMaxParticipants = 8;
 
 enum class PacketKind : std::uint16_t {
     State = 1,
@@ -25,6 +27,9 @@ enum class PacketKind : std::uint16_t {
     EnemyDamageResult = 8,
     LootPickupRequest = 9,
     LootPickupResult = 10,
+    LevelUpOffer = 11,
+    LevelUpChoice = 12,
+    LevelUpChoiceResult = 13,
 };
 
 enum class CastKind : std::uint8_t {
@@ -73,11 +78,20 @@ enum class LootPickupResultCode : std::uint8_t {
     Unsupported = 6,
 };
 
+enum class LevelUpChoiceResultCode : std::uint8_t {
+    Accepted = 1,
+    Rejected = 2,
+    StaleOffer = 3,
+    InvalidOption = 4,
+    ApplyFailed = 5,
+};
+
 enum WorldActorSnapshotFlags : std::uint8_t {
     WorldActorSnapshotFlagDead = 1 << 0,
     WorldActorSnapshotFlagTrackedEnemy = 1 << 1,
     WorldActorSnapshotFlagLifecycleOwned = 1 << 2,
     WorldActorSnapshotFlagRunStatic = 1 << 3,
+    WorldActorSnapshotFlagTargetAuthoritative = 1 << 4,
 };
 
 enum WorldActorPresentationFlags : std::uint16_t {
@@ -139,6 +153,11 @@ struct ParticipantProgressionBookEntryPacketState {
     std::int32_t statbook_max_level;
 };
 
+struct LevelUpOfferOptionPacketState {
+    std::int32_t option_id;
+    std::int32_t apply_count;
+};
+
 struct StatePacket {
     PacketHeader header;
     std::uint64_t participant_id;
@@ -165,6 +184,10 @@ struct StatePacket {
     std::uint32_t spellbook_revision;
     std::uint32_t statbook_revision;
     std::uint32_t loadout_revision;
+    std::uint8_t level_up_pause_active;
+    std::uint8_t level_up_waiting_count;
+    std::uint16_t level_up_waiting_reserved = 0;
+    std::uint64_t level_up_waiting_participant_ids[kLevelUpWaitStatusMaxParticipants];
     std::uint16_t inventory_item_count;
     std::uint16_t inventory_item_total_count;
     std::uint16_t inventory_snapshot_flags;
@@ -249,12 +272,56 @@ struct ProgressionPacket {
     float experience_delta;
 };
 
+struct LevelUpOfferPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t target_participant_id;
+    std::uint64_t offer_id;
+    std::uint32_t run_nonce;
+    std::int32_t level;
+    std::int32_t experience;
+    std::uint8_t option_count;
+    std::uint8_t flags;
+    std::uint16_t reserved = 0;
+    LevelUpOfferOptionPacketState options[kLevelUpOfferMaxOptions];
+};
+
+struct LevelUpChoicePacket {
+    PacketHeader header;
+    std::uint64_t participant_id;
+    std::uint64_t offer_id;
+    std::uint32_t run_nonce;
+    std::int32_t option_index;
+    std::int32_t option_id;
+};
+
+struct LevelUpChoiceResultPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t target_participant_id;
+    std::uint64_t offer_id;
+    std::uint32_t run_nonce;
+    std::int32_t level;
+    std::int32_t experience;
+    std::int32_t option_index;
+    std::int32_t option_id;
+    std::int32_t apply_count;
+    std::uint8_t result_code;
+    std::uint8_t flags;
+    std::uint16_t reserved = 0;
+};
+
 struct WorldActorSnapshotPacketState {
     std::uint64_t network_actor_id;
     std::uint32_t native_type_id;
     std::int32_t enemy_type;
     std::int32_t actor_slot;
     std::int32_t world_slot;
+    std::uint64_t target_participant_id;
+    std::uint32_t target_native_type_id;
+    std::int32_t target_actor_slot;
+    std::int32_t target_world_slot;
+    std::int32_t target_bucket_delta;
     std::uint8_t flags;
     std::uint8_t anim_drive_state;
     std::uint16_t presentation_flags;
@@ -423,12 +490,16 @@ inline bool IsValidHeader(const PacketHeader& header, PacketKind expected_kind) 
 static_assert(sizeof(PacketHeader) == 12, "Unexpected packet header size");
 static_assert(sizeof(ParticipantInventoryItemPacketState) == 12, "Unexpected inventory item packet size");
 static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpected progression book entry packet size");
-static_assert(sizeof(StatePacket) == 1148, "Unexpected state packet size");
+static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
+static_assert(sizeof(StatePacket) == 3712, "Unexpected state packet size");
 static_assert(sizeof(LaunchPacket) == 56, "Unexpected launch packet size");
 static_assert(sizeof(CastPacket) == 100, "Unexpected cast packet size");
 static_assert(sizeof(ProgressionPacket) == 32, "Unexpected progression packet size");
-static_assert(sizeof(WorldActorSnapshotPacketState) == 104, "Unexpected world actor snapshot size");
-static_assert(sizeof(WorldSnapshotPacket) == 6688, "Unexpected world snapshot packet size");
+static_assert(sizeof(LevelUpOfferPacket) == 116, "Unexpected level-up offer packet size");
+static_assert(sizeof(LevelUpChoicePacket) == 40, "Unexpected level-up choice packet size");
+static_assert(sizeof(LevelUpChoiceResultPacket) == 64, "Unexpected level-up choice result packet size");
+static_assert(sizeof(WorldActorSnapshotPacketState) == 128, "Unexpected world actor snapshot size");
+static_assert(sizeof(WorldSnapshotPacket) == 8224, "Unexpected world snapshot packet size");
 static_assert(sizeof(LootDropSnapshotPacketState) == 72, "Unexpected loot drop snapshot size");
 static_assert(sizeof(LootSnapshotPacket) == 4640, "Unexpected loot snapshot packet size");
 static_assert(sizeof(EnemyDamageClaimPacket) == 72, "Unexpected enemy damage claim packet size");

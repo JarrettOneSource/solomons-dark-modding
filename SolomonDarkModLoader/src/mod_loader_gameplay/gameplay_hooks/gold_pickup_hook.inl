@@ -7,10 +7,17 @@ void __fastcall HookGoldPickupTick(void* self, void* /*unused_edx*/) {
 
     const auto gold_address = reinterpret_cast<uintptr_t>(self);
     if (multiplayer::IsLocalTransportClient()) {
-        (void)RemoveUnboundClientLootActorNow(
-            gold_address,
-            multiplayer::LootDropKind::Gold,
-            "client_gold_pickup_tick");
+        if (IsReplicatedLootPresentationActorInternal(gold_address)) {
+            (void)TryQueueReplicatedLootPickupRequest(
+                gold_address,
+                multiplayer::LootDropKind::Gold,
+                static_cast<std::uint64_t>(::GetTickCount64()),
+                "client_gold_pickup_tick");
+        } else {
+            QueueClientLocalLootSuppressionInternal(
+                "client_gold_pickup_tick",
+                kClientLocalLootSuppressionSettleDelayMs);
+        }
         return;
     }
     if (IsReplicatedLootPresentationActorInternal(gold_address)) {

@@ -293,19 +293,31 @@ void DematerializeParticipantEntityNow(std::uint64_t bot_id, bool forget_binding
 }
 
 void DematerializeAllMaterializedWizardBotsForSceneSwitch(std::string_view reason) {
-    std::vector<std::uint64_t> bot_ids;
-    {
-        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-        for (const auto& binding : g_participant_entities) {
-            if (!IsWizardParticipantKind(binding.kind) ||
-                binding.actor_address == 0) {
-                continue;
-            }
-            bot_ids.push_back(binding.bot_id);
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    for (auto& binding : g_participant_entities) {
+        if (!IsWizardParticipantKind(binding.kind) ||
+            binding.actor_address == 0) {
+            continue;
         }
-    }
 
-    for (const auto bot_id : bot_ids) {
-        DematerializeParticipantEntityNow(bot_id, false, reason);
+        const auto bot_id = binding.bot_id;
+        const auto actor_address = binding.actor_address;
+        const auto world_address = binding.materialized_world_address;
+        const auto gameplay_slot = binding.gameplay_slot;
+        const auto kind = binding.kind;
+
+        // Native scene teardown owns actors registered to the outgoing world.
+        // Manually unregistering/destroying them here can leave stale pointers
+        // for the stock switch_region path to walk during the same frame.
+        ResetParticipantEntityMaterializationState(&binding);
+        PublishParticipantGameplaySnapshot(binding);
+        Log(
+            "[bots] abandoned materialized bot entity for scene switch. bot_id=" +
+            std::to_string(bot_id) +
+            " slot=" + std::to_string(gameplay_slot) +
+            " kind=" + std::to_string(static_cast<int>(kind)) +
+            " actor=" + HexString(actor_address) +
+            " world=" + HexString(world_address) +
+            " reason=" + std::string(reason));
     }
 }

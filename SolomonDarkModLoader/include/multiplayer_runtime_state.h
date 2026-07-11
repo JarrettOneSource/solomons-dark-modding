@@ -139,6 +139,52 @@ struct ParticipantOwnedProgressionState {
     BotLoadoutInfo ability_loadout;
 };
 
+struct LevelUpChoiceOptionState {
+    std::int32_t option_id = -1;
+    std::int32_t apply_count = 1;
+};
+
+struct LevelUpOfferRuntimeInfo {
+    bool valid = false;
+    bool selection_submitted = false;
+    bool native_picker_presented = false;
+    bool native_picker_options_pinned = false;
+    bool native_picker_local_apply_observed = false;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t target_participant_id = 0;
+    std::uint64_t offer_id = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint64_t received_ms = 0;
+    std::int32_t level = 0;
+    std::int32_t experience = 0;
+    std::int32_t selected_option_index = -1;
+    std::int32_t selected_option_id = -1;
+    std::vector<LevelUpChoiceOptionState> options;
+};
+
+struct LevelUpChoiceResultRuntimeInfo {
+    bool valid = false;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t target_participant_id = 0;
+    std::uint64_t offer_id = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint64_t received_ms = 0;
+    std::int32_t level = 0;
+    std::int32_t experience = 0;
+    std::int32_t option_index = -1;
+    std::int32_t option_id = -1;
+    std::int32_t apply_count = 1;
+    LevelUpChoiceResultCode result_code = LevelUpChoiceResultCode::Rejected;
+};
+
+struct LevelUpWaitStatusRuntimeInfo {
+    bool valid = false;
+    bool pause_active = false;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t received_ms = 0;
+    std::vector<std::uint64_t> waiting_participant_ids;
+};
+
 struct ParticipantTransformSample {
     bool valid = false;
     std::uint64_t received_ms = 0;
@@ -195,10 +241,16 @@ struct WorldActorSnapshot {
     std::int32_t enemy_type = -1;
     std::int32_t actor_slot = -1;
     std::int32_t world_slot = -1;
+    std::uint64_t target_participant_id = 0;
+    std::uint32_t target_native_type_id = 0;
+    std::int32_t target_actor_slot = -1;
+    std::int32_t target_world_slot = -1;
+    std::int32_t target_bucket_delta = 0;
     bool dead = false;
     bool tracked_enemy = false;
     bool lifecycle_owned = false;
     bool run_static = false;
+    bool target_authoritative = false;
     std::uint8_t anim_drive_state = 0;
     std::uint16_t presentation_flags = 0;
     float position_x = 0.0f;
@@ -357,6 +409,9 @@ struct RuntimeState {
     WorldSnapshotApplyRuntimeInfo world_snapshot_apply;
     LootSnapshotRuntimeInfo loot_snapshot;
     LootPickupResultRuntimeInfo last_loot_pickup_result;
+    LevelUpOfferRuntimeInfo active_level_up_offer;
+    LevelUpChoiceResultRuntimeInfo last_level_up_choice_result;
+    LevelUpWaitStatusRuntimeInfo level_up_wait_status;
 };
 
 constexpr std::uint64_t kLocalParticipantId = 1ull;

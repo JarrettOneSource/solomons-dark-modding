@@ -14,6 +14,9 @@ void PumpQueuedGameplayActions() {
     const bool gameplay_active =
         TryResolveCurrentGameplayScene(&active_gameplay_address) &&
         active_gameplay_address != 0;
+    if (gameplay_active) {
+        PinRunLifecycleFrozenManualEnemies();
+    }
 
     // EndScene and HookPlayerActorTick both call this pump. Always drain
     // pipe-exec on the main thread. When gameplay is inactive, also emit
@@ -36,24 +39,31 @@ void PumpQueuedGameplayActions() {
 
     auto pending =
         g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.load(std::memory_order_acquire);
-    while (pending > 0) {
-        if (!g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.compare_exchange_weak(
-                pending,
-                pending - 1,
-                std::memory_order_acq_rel,
-                std::memory_order_acquire)) {
-            continue;
-        }
+    if (!g_allow_gameplay_action_pump_in_gameplay) {
+        while (pending > 0) {
+            if (!g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.compare_exchange_weak(
+                    pending,
+                    pending - 1,
+                    std::memory_order_acq_rel,
+                    std::memory_order_acquire)) {
+                continue;
+            }
 
-        if (!TryDispatchHubStartTestrunOnGameThread()) {
-            g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.fetch_add(
-                1,
-                std::memory_order_acq_rel);
+            if (!TryDispatchHubStartTestrunOnGameThread()) {
+                g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.fetch_add(
+                    1,
+                    std::memory_order_acq_rel);
+            }
+            break;
         }
-        break;
     }
 
     if (!g_allow_gameplay_action_pump_in_gameplay && gameplay_active) {
+        const bool allow_level_up_picker_create =
+            multiplayer::HasLocalLevelUpOfferAwaitingNativePresentation();
+        multiplayer::ReconcileLocalLevelUpOfferPresentation(
+            now_ms,
+            allow_level_up_picker_create);
         return;
     }
 
@@ -93,8 +103,28 @@ void PumpQueuedGameplayActions() {
         break;
     }
 
+    if (gameplay_active) {
+        static std::uint64_t s_last_manual_spawn_pump_failure_log_ms = 0;
+        constexpr std::size_t kManualSpawnPumpBurst = 4;
+        for (std::size_t index = 0; index < kManualSpawnPumpBurst; ++index) {
+            std::string manual_spawn_error;
+            if (PumpRunLifecycleManualEnemySpawnRequest(&manual_spawn_error)) {
+                continue;
+            }
+            if (!manual_spawn_error.empty()) {
+                const auto failure_now_ms = static_cast<std::uint64_t>(GetTickCount64());
+                if (failure_now_ms - s_last_manual_spawn_pump_failure_log_ms >= 1000) {
+                    s_last_manual_spawn_pump_failure_log_ms = failure_now_ms;
+                    Log("manual run enemy spawn: gameplay pump failed. error=" + manual_spawn_error);
+                }
+            }
+            break;
+        }
+    }
+
     PendingRewardSpawnRequest reward_request;
     bool have_reward_request = false;
+    std::vector<PendingClientLocalLootSuppressionRequest> client_local_loot_suppression_requests;
     PendingParticipantEntitySyncRequest participant_sync_request;
     bool have_participant_sync_request = false;
     PendingGameplayRegionSwitchRequest region_switch_request;
@@ -152,6 +182,21 @@ void PumpQueuedGameplayActions() {
             reward_request = std::move(g_gameplay_keyboard_injection.pending_reward_spawn_requests.front());
             g_gameplay_keyboard_injection.pending_reward_spawn_requests.pop_front();
             have_reward_request = true;
+        }
+        if (!g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.empty()) {
+            const auto pending_suppression_count =
+                g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.size();
+            for (std::size_t index = 0; index < pending_suppression_count; ++index) {
+                auto request = std::move(
+                    g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.front());
+                g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.pop_front();
+                if (request.not_before_ms <= now_ms) {
+                    client_local_loot_suppression_requests.push_back(std::move(request));
+                    continue;
+                }
+                g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.push_back(
+                    std::move(request));
+            }
         }
         if (!g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.empty()) {
             replicated_loot_snapshot =
@@ -246,5 +291,10 @@ void PumpQueuedGameplayActions() {
         ReconcileReplicatedLootSnapshotNow(replicated_loot_snapshot, now_ms);
     }
 
+    for (const auto& request : client_local_loot_suppression_requests) {
+        RemoveUnboundClientLootActors(request.reason.c_str());
+    }
+
+    multiplayer::ReconcileLocalLevelUpOfferPresentation(now_ms);
     RebuildNavGridSnapshotIfRequested_GameplayThread();
 }

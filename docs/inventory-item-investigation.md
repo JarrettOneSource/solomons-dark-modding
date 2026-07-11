@@ -157,19 +157,20 @@ audit surface:
 Current gaps:
 
 - the inventory API is read-only instrumentation, not participant-owned sync
-- local UDP `StatePacket` protocol v28 carries a compact participant-owned
-  inventory snapshot with up to 16 decoded item rows and a total/truncated
+- local UDP `StatePacket` protocol v30 carries a bounded full participant-owned
+  inventory snapshot with up to 64 decoded item rows and a total/truncated
   marker, so peers can inspect each other's current native inventory item rows
 - `sd.player.get_progression_book_state()` reads the local native progression
-  table; the current verified starter state has 83 rows, and protocol v28
-  mirrors a compact 32-row participant-owned progression-book/statbook snapshot
-  plus total/truncated metadata
+  table; the current verified starter state has 83 rows, and protocol v30
+  mirrors up to 128 participant-owned progression-book/statbook/skillbook/
+  spellbook rows plus total/truncated metadata
 - local UDP also mirrors the current ability loadout as participant-owned state
 - host-authorized item/potion carrier pickup now credits the requesting
   participant's replicated inventory ledger by held item type, slot, and stack
   count; real per-participant native item roots are still pending
 - no stock powerup pickup hook credits participant-owned roots yet
-- separate spellbook content and book/stat mutation sync are still pending
+- the native progression book is exposed as progression-book, statbook, skillbook,
+  and spellbook views so every instance can inspect the same owner-authored rows
 
 Multiplayer exposure added for the first loot slice:
 
@@ -588,13 +589,16 @@ reward boundary probe. It confirmed that host-spawned gold rewards appear in
 the host actor list as type `0x7DC`, with amount tier at `+0x13C`, amount at
 `+0x140`, lifetime at `+0x144`, and a state byte at `+0x148`. The same run
 client receives host-owned gold metadata through `sd.world.get_replicated_loot()`
-while still receiving zero local stock gold actors and zero `WorldSnapshot` gold
-actors. Later pickup-authority testing showed that `+0x148` is not a valid
+while still receiving zero `WorldSnapshot` gold actors. The probe now parks both
+players outside pickup range before checking materialization, because a
+pickup-range native gold actor can be zeroed by the stock tick before the next
+sample. Later pickup-authority testing showed that `+0x148` is not a valid
 "available for pickup" predicate by itself: live, spawned gold can report state
 byte `0` while still carrying a valid amount and stable host network drop id.
-Spawning a pickup-range reward on the host changed the host global gold by the
-drop amount, proving that stock pickup still goes through the global slot-0 gold
-path.
+`tools/verify_multiplayer_gold_pickup_authority.py` owns the pickup assertion:
+clients request the host-owned drop id, the host range-checks the request, the
+owning participant ledger is credited once, the host-native drop is deactivated,
+and duplicate pickup attempts are rejected without a second credit.
 
 For multiplayer, synced loot is required, but pickup credit must be
 participant-owned. Gold, item, potion, orb, and powerup drops should be

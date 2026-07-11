@@ -101,10 +101,23 @@ void __fastcall HookItemDropPickupTick(void* self, void* /*unused_edx*/) {
 
     const auto drop_address = reinterpret_cast<uintptr_t>(self);
     if (multiplayer::IsLocalTransportClient()) {
-        (void)RemoveUnboundClientLootActorNow(
-            drop_address,
-            multiplayer::LootDropKind::Item,
-            "client_item_drop_pickup_tick");
+        if (IsReplicatedLootPresentationActorInternal(drop_address)) {
+            const auto now_ms = static_cast<std::uint64_t>(::GetTickCount64());
+            (void)TryQueueReplicatedLootPickupRequest(
+                drop_address,
+                multiplayer::LootDropKind::Item,
+                now_ms,
+                "client_item_drop_pickup_tick");
+            (void)TryQueueReplicatedLootPickupRequest(
+                drop_address,
+                multiplayer::LootDropKind::Potion,
+                now_ms,
+                "client_item_drop_pickup_tick");
+        } else {
+            QueueClientLocalLootSuppressionInternal(
+                "client_item_drop_pickup_tick",
+                kClientLocalLootSuppressionSettleDelayMs);
+        }
         return;
     }
     if (IsReplicatedLootPresentationActorInternal(drop_address)) {

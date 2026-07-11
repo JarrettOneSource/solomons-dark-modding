@@ -1,6 +1,8 @@
 constexpr std::uint32_t kReplicatedLootOrbNativeTypeId = 0x07DB;
 constexpr std::uint32_t kReplicatedLootGoldNativeTypeId = 0x07DC;
 constexpr std::uint32_t kReplicatedLootItemDropNativeTypeId = 0x07DD;
+constexpr std::uint32_t kReplicatedLootPotionItemTypeId = 0x1B59;
+constexpr std::size_t kArenaSpawnPotionDropVfuncOffset = 0x148;
 constexpr std::size_t kReplicatedGoldAmountTierOffset = 0x13C;
 constexpr std::size_t kReplicatedGoldAmountOffset = 0x140;
 constexpr std::size_t kReplicatedGoldLifetimeOffset = 0x144;
@@ -13,6 +15,8 @@ constexpr std::size_t kReplicatedOrbProgressOffset = 0x14C;
 constexpr std::uint32_t kReplicatedLootDefaultLifetime = 900;
 constexpr float kReplicatedLootSpawnMatchMaxDistance = 192.0f;
 constexpr float kReplicatedLootParkBase = 900000.0f;
+constexpr std::uint64_t kClientLocalLootSuppressionSettleDelayMs = 150;
+constexpr int kReplicatedOrbPresentationSpawnAmount = 1;
 
 struct ReplicatedLootPresentationBinding {
     std::uint64_t network_drop_id = 0;
@@ -28,6 +32,11 @@ struct ReplicatedLootPresentationBinding {
     float value = 0.0f;
     float x = 0.0f;
     float y = 0.0f;
+    float radius = 0.0f;
+    std::uint32_t lifetime = 0;
+    float motion = 0.0f;
+    float progress = 0.0f;
+    std::uint8_t presentation_state = 0;
     std::uint64_t last_seen_ms = 0;
 };
 
@@ -36,6 +45,34 @@ std::vector<ReplicatedLootPresentationBinding> g_replicated_loot_presentations;
 std::unordered_set<uintptr_t> g_client_non_authoritative_loot_suppressed_actors;
 
 bool IsReplicatedLootPresentationActorInternal(uintptr_t actor_address);
+
+void QueueClientLocalLootSuppressionInternal(const char* reason, std::uint64_t delay_ms) {
+    if (!multiplayer::IsLocalTransportClient()) {
+        return;
+    }
+    const std::string reason_text = reason != nullptr ? reason : "unknown";
+    const auto due_ms = static_cast<std::uint64_t>(GetTickCount64()) + delay_ms;
+
+    std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
+    auto& pending = g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests;
+    for (auto& request : pending) {
+        if (request.reason == reason_text) {
+            request.not_before_ms = (std::min)(request.not_before_ms, due_ms);
+            return;
+        }
+    }
+    if (pending.size() >= kQueuedGameplayWorldActionLimit) {
+        Log(
+            "replicated_loot: dropped deferred client-local suppression; queue full. reason=" +
+            reason_text);
+        return;
+    }
+
+    PendingClientLocalLootSuppressionRequest request;
+    request.reason = reason_text;
+    request.not_before_ms = due_ms;
+    pending.push_back(std::move(request));
+}
 
 bool IsSupportedReplicatedLootPresentationKind(const multiplayer::LootDropSnapshot& drop) {
     if (!drop.active || drop.network_drop_id == 0) {
@@ -50,7 +87,59 @@ bool IsSupportedReplicatedLootPresentationKind(const multiplayer::LootDropSnapsh
                drop.value > 0.0f &&
                (drop.amount_tier == 0 || drop.amount_tier == 1);
     }
+    if (drop.drop_kind == multiplayer::LootDropKind::Potion) {
+        return drop.native_type_id == kReplicatedLootItemDropNativeTypeId &&
+               drop.item_type_id == kReplicatedLootPotionItemTypeId &&
+               drop.item_slot >= 0 &&
+               drop.item_slot <= 1 &&
+               drop.stack_count > 0;
+    }
     return false;
+}
+
+bool TryReadObjectVfunc(uintptr_t object_address, std::size_t vfunc_offset, uintptr_t* function_address) {
+    if (function_address != nullptr) {
+        *function_address = 0;
+    }
+    if (function_address == nullptr || object_address == 0) {
+        return false;
+    }
+
+    uintptr_t vtable_address = 0;
+    if (!ProcessMemory::Instance().TryReadValue(object_address, &vtable_address) ||
+        vtable_address == 0) {
+        return false;
+    }
+
+    return ProcessMemory::Instance().TryReadField(vtable_address, vfunc_offset, function_address) &&
+           *function_address != 0;
+}
+
+bool CallSpawnPotionDropSafe(
+    uintptr_t function_address,
+    uintptr_t arena_address,
+    float x,
+    float y,
+    int potion_slot,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    auto* spawn_potion = reinterpret_cast<SpawnPotionDropFn>(function_address);
+    if (spawn_potion == nullptr || arena_address == 0) {
+        return false;
+    }
+
+    __try {
+        spawn_potion(
+            reinterpret_cast<void*>(arena_address),
+            FloatToBits(x),
+            FloatToBits(y),
+            potion_slot);
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
 }
 
 bool IsLootDropNativeTypeId(std::uint32_t native_type_id) {
@@ -91,6 +180,11 @@ ReplicatedLootPresentationBinding ToReplicatedLootPresentationBinding(
     binding.value = drop.value;
     binding.x = drop.position_x;
     binding.y = drop.position_y;
+    binding.radius = drop.radius;
+    binding.lifetime = drop.lifetime;
+    binding.motion = drop.motion;
+    binding.progress = drop.progress;
+    binding.presentation_state = drop.presentation_state;
     binding.last_seen_ms = now_ms;
     return binding;
 }
@@ -112,6 +206,7 @@ SDModReplicatedLootPresentationState ToPublicReplicatedLootPresentationState(
     state.value = binding.value;
     state.x = binding.x;
     state.y = binding.y;
+    state.radius = binding.radius;
     state.last_seen_ms = binding.last_seen_ms;
     return state;
 }
@@ -193,7 +288,7 @@ bool WriteReplicatedLootDropFields(
         wrote = memory.TryWriteField(actor_address, kReplicatedGoldActiveOffset, presentation_state) && wrote;
     } else if (drop.drop_kind == multiplayer::LootDropKind::Orb) {
         const auto resource_kind = static_cast<std::uint8_t>(drop.amount_tier == 1 ? 1 : 0);
-        const float raw_value = (std::max)(drop.value, 1.0f);
+        const float raw_value = drop.value;
         const float motion = std::isfinite(drop.motion) ? drop.motion : 0.0f;
         const float progress = std::isfinite(drop.progress) ? drop.progress : 0.0f;
         wrote = memory.TryWriteField(actor_address, kReplicatedOrbResourceKindOffset, resource_kind) && wrote;
@@ -201,6 +296,26 @@ bool WriteReplicatedLootDropFields(
         wrote = memory.TryWriteField(actor_address, kReplicatedOrbLifetimeOffset, lifetime) && wrote;
         wrote = memory.TryWriteField(actor_address, kReplicatedOrbMotionOffset, motion) && wrote;
         wrote = memory.TryWriteField(actor_address, kReplicatedOrbProgressOffset, progress) && wrote;
+    } else if (drop.drop_kind == multiplayer::LootDropKind::Potion) {
+        uintptr_t held_item_address = 0;
+        std::uint32_t held_item_type_id = 0;
+        if (kItemDropHeldItemOffset == 0 ||
+            !memory.TryReadField(actor_address, kItemDropHeldItemOffset, &held_item_address) ||
+            held_item_address == 0 ||
+            !memory.TryReadField(held_item_address, kGameObjectTypeIdOffset, &held_item_type_id) ||
+            held_item_type_id != kReplicatedLootPotionItemTypeId) {
+            if (error_message != nullptr) {
+                *error_message = "replicated potion drop did not expose a native held potion item";
+            }
+            return false;
+        }
+
+        const auto potion_slot = static_cast<std::int32_t>((std::max)(0, (std::min)(1, drop.item_slot)));
+        const auto stack_count = static_cast<std::int32_t>((std::max)(1, drop.stack_count));
+        wrote = memory.TryWriteField(held_item_address, kItemSlotOffset, potion_slot) && wrote;
+        if (kPotionStackCountOffset != 0) {
+            wrote = memory.TryWriteField(held_item_address, kPotionStackCountOffset, stack_count) && wrote;
+        }
     }
 
     if (!wrote && error_message != nullptr) {
@@ -270,6 +385,51 @@ bool TryFindSpawnedReplicatedLootActor(
     return found;
 }
 
+bool ExecuteSpawnReplicatedPotionDropNow(
+    const multiplayer::LootDropSnapshot& drop,
+    std::string* error_message) {
+    uintptr_t arena_address = 0;
+    if (!TryResolveArena(&arena_address) || arena_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Arena is not active.";
+        }
+        return false;
+    }
+
+    uintptr_t spawn_function_address = 0;
+    if (!TryReadObjectVfunc(
+            arena_address,
+            kArenaSpawnPotionDropVfuncOffset,
+            &spawn_function_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Unable to resolve the arena potion drop vfunc.";
+        }
+        return false;
+    }
+
+    DWORD exception_code = 0;
+    const auto potion_slot =
+        static_cast<int>((std::max)(0, (std::min)(1, drop.item_slot)));
+    if (!CallSpawnPotionDropSafe(
+            spawn_function_address,
+            arena_address,
+            drop.position_x,
+            drop.position_y,
+            potion_slot,
+            &exception_code)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native potion drop spawn failed with 0x" +
+                HexString(static_cast<uintptr_t>(exception_code)) +
+                " arena=" + HexString(arena_address) +
+                " vfunc=" + HexString(spawn_function_address);
+        }
+        return false;
+    }
+
+    return true;
+}
+
 bool SpawnReplicatedLootPresentationActor(
     const multiplayer::LootDropSnapshot& drop,
     uintptr_t* actor_address,
@@ -295,25 +455,42 @@ bool SpawnReplicatedLootPresentationActor(
         }
     }
 
-    std::string spawn_kind;
-    int spawn_amount = 1;
-    if (drop.drop_kind == multiplayer::LootDropKind::Gold) {
-        spawn_kind = "gold";
-        spawn_amount = (std::max)(1, drop.amount);
-    } else {
-        spawn_kind = drop.amount_tier == 1 ? "mana_orb" : "health_orb";
-        spawn_amount = static_cast<int>((std::max)(1.0f, std::round(drop.value)));
-    }
-
     std::string spawn_error;
-    if (!ExecuteSpawnRewardNow(
-            spawn_kind,
-            spawn_amount,
-            drop.position_x,
-            drop.position_y,
-            &spawn_error)) {
+    if (drop.drop_kind == multiplayer::LootDropKind::Gold) {
+        if (!ExecuteSpawnRewardNow(
+                "gold",
+                (std::max)(1, drop.amount),
+                drop.position_x,
+                drop.position_y,
+                &spawn_error)) {
+            if (error_message != nullptr) {
+                *error_message = "native reward spawn failed: " + spawn_error;
+            }
+            return false;
+        }
+    } else if (drop.drop_kind == multiplayer::LootDropKind::Orb) {
+        const auto spawn_kind = drop.amount_tier == 1 ? "mana_orb" : "health_orb";
+        if (!ExecuteSpawnRewardNow(
+                spawn_kind,
+                kReplicatedOrbPresentationSpawnAmount,
+                drop.position_x,
+                drop.position_y,
+                &spawn_error)) {
+            if (error_message != nullptr) {
+                *error_message = "native reward spawn failed: " + spawn_error;
+            }
+            return false;
+        }
+    } else if (drop.drop_kind == multiplayer::LootDropKind::Potion) {
+        if (!ExecuteSpawnReplicatedPotionDropNow(drop, &spawn_error)) {
+            if (error_message != nullptr) {
+                *error_message = "native potion drop spawn failed: " + spawn_error;
+            }
+            return false;
+        }
+    } else {
         if (error_message != nullptr) {
-            *error_message = "native reward spawn failed: " + spawn_error;
+            *error_message = "unsupported replicated loot presentation kind";
         }
         return false;
     }

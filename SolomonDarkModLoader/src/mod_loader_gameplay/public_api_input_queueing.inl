@@ -14,6 +14,29 @@ bool IsGameplayMouseLeftDown() {
     return g_gameplay_keyboard_injection.last_observed_mouse_left_down.load(std::memory_order_acquire);
 }
 
+bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (!IsRunLifecycleManualEnemySpawnerTestModeEnabled()) {
+        if (error_message != nullptr) {
+            *error_message = "Manual enemy spawner test mode is not active.";
+        }
+        return false;
+    }
+    if (!IsManualSpawnerPrimaryTargetActor(actor_address)) {
+        if (error_message != nullptr) {
+            *error_message = "Manual spawner primary target actor is not a live arena target.";
+        }
+        return false;
+    }
+
+    g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.store(
+        actor_address,
+        std::memory_order_release);
+    return true;
+}
+
 bool QueueGameplayMouseLeftClick(std::string* error_message) {
     return QueueGameplayMouseLeftHoldFrames(kInjectedGameplayMouseClickFrames, error_message);
 }
@@ -47,6 +70,23 @@ bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_m
         frames,
         std::memory_order_acq_rel);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.fetch_add(1, std::memory_order_acq_rel);
+    if (IsRunLifecycleManualEnemySpawnerTestModeEnabled()) {
+        constexpr std::uint64_t kManualSpawnerPrimaryCastControlGraceMinMs = 1500;
+        const auto frame_grace_ms = static_cast<std::uint64_t>(frames) * 50 + 250;
+        const auto grace_ms =
+            frame_grace_ms > kManualSpawnerPrimaryCastControlGraceMinMs
+                ? frame_grace_ms
+                : kManualSpawnerPrimaryCastControlGraceMinMs;
+        g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.fetch_add(
+            1,
+            std::memory_order_acq_rel);
+        g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.store(
+            0,
+            std::memory_order_release);
+        g_gameplay_keyboard_injection.manual_spawner_primary_cast_control_grace_until_ms.store(
+            static_cast<std::uint64_t>(GetTickCount64()) + grace_ms,
+            std::memory_order_release);
+    }
     Log("Queued gameplay mouse-left hold. gameplay=" + HexString(scene_address) +
         " frames=" + std::to_string(frames));
     return true;
@@ -55,6 +95,15 @@ bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_m
 void ClearQueuedGameplayMouseLeft() {
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.manual_spawner_primary_cast_control_grace_until_ms.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.store(
+        0,
+        std::memory_order_release);
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_left_active.store(true, std::memory_order_release);
 
@@ -64,6 +113,106 @@ void ClearQueuedGameplayMouseLeft() {
         ProcessMemory::Instance().TryWriteField(gameplay_address, kGameplayCastIntentOffset, released);
     }
     Log("Cleared queued gameplay mouse-left input.");
+}
+
+bool ClearLocalPlayerGameplayCastState(std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+
+    ClearQueuedGameplayMouseLeft();
+
+    uintptr_t gameplay_address = 0;
+    if (!TryResolveCurrentGameplayScene(&gameplay_address) || gameplay_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay scene is not active.";
+        }
+        return false;
+    }
+
+    uintptr_t actor_address = 0;
+    if (!TryResolvePlayerActorForSlot(gameplay_address, 0, &actor_address) || actor_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Local player actor is not available.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    bool wrote = true;
+    wrote = memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0) && wrote;
+    wrote = memory.TryWriteField<std::int32_t>(actor_address, kActorPreviousSkillIdOffset, 0) && wrote;
+    wrote = memory.TryWriteField<std::uint32_t>(actor_address, kActorPrimaryActionLatchE4Offset, 0) && wrote;
+    wrote = memory.TryWriteField<std::uint32_t>(actor_address, kActorPrimaryActionLatchE8Offset, 0) && wrote;
+    wrote = memory.TryWriteField<std::uint8_t>(actor_address, kActorPostGateActiveByteOffset, 0) && wrote;
+    wrote = memory.TryWriteField<std::uint8_t>(
+        actor_address,
+        kActorSpellTargetGroupByteOffset,
+        kTargetHandleGroupSentinel) && wrote;
+    wrote = memory.TryWriteField<std::uint16_t>(
+        actor_address,
+        kActorSpellTargetSlotShortOffset,
+        kTargetHandleSlotSentinel) && wrote;
+    wrote = memory.TryWriteField<uintptr_t>(actor_address, kActorCurrentTargetActorOffset, 0) && wrote;
+    wrote = memory.TryWriteField<std::int32_t>(actor_address, kActorCurrentTargetBucketDeltaOffset, 0) && wrote;
+
+    uintptr_t selection_pointer = 0;
+    if (!memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &selection_pointer) ||
+        selection_pointer == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Local player animation-selection/control-brain state is not available.";
+        }
+        return false;
+    }
+
+    constexpr int kLocalCastStateSuppressedRetargetTicks = 60;
+    wrote = memory.TryWriteField<std::uint8_t>(
+        selection_pointer,
+        kActorControlBrainTargetSlotOffset,
+        kTargetHandleGroupSentinel) && wrote;
+    wrote = memory.TryWriteField<std::uint16_t>(
+        selection_pointer,
+        kActorControlBrainTargetHandleOffset,
+        kTargetHandleSlotSentinel) && wrote;
+    wrote = memory.TryWriteField<std::int32_t>(
+        selection_pointer,
+        kActorControlBrainRetargetTicksOffset,
+        kLocalCastStateSuppressedRetargetTicks) && wrote;
+    wrote = memory.TryWriteField<std::int32_t>(
+        selection_pointer,
+        kActorControlBrainTargetCooldownTicksOffset,
+        0) && wrote;
+    wrote = memory.TryWriteField<std::int32_t>(
+        selection_pointer,
+        kActorControlBrainActionCooldownTicksOffset,
+        0) && wrote;
+    wrote = memory.TryWriteField<std::int32_t>(
+        selection_pointer,
+        kActorControlBrainActionBurstTicksOffset,
+        0) && wrote;
+    wrote = memory.TryWriteField<std::int32_t>(
+        selection_pointer,
+        kActorControlBrainHeadingLockTicksOffset,
+        0) && wrote;
+    wrote = memory.TryWriteField<float>(
+        selection_pointer,
+        kActorControlBrainMoveInputXOffset,
+        0.0f) && wrote;
+    wrote = memory.TryWriteField<float>(
+        selection_pointer,
+        kActorControlBrainMoveInputYOffset,
+        0.0f) && wrote;
+
+    Log(
+        "Cleared local player gameplay cast state. gameplay=" + HexString(gameplay_address) +
+        " actor=" + HexString(actor_address) +
+        " selection=" + HexString(selection_pointer) +
+        " wrote=" + std::to_string(wrote ? 1 : 0));
+
+    if (!wrote && error_message != nullptr) {
+        *error_message = "One or more local player cast-state fields could not be cleared.";
+    }
+    return wrote;
 }
 
 bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_message) {

@@ -18,9 +18,11 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     lua,
     parse_key_values,
+    place_player,
     snap_to_nav,
     start_host_testrun_and_wait_for_clients,
     stop_games,
+    wait_for_local_transform_settled,
 )
 from verify_run_world_snapshot import start_host_waves, wait_for_run_snapshot
 
@@ -30,6 +32,9 @@ GOLD_REWARD_TYPE_ID = 0x07DC
 PROBE_GOLD_AMOUNT = 7
 PROBE_EXPECTED_TIER = 2
 REWARD_MATCH_RADIUS = 240.0
+STATIONARY_REWARD_PLAYER_PARK_DISTANCE = 1400.0
+STATIONARY_REWARD_CLIENT_PARK_Y_OFFSET = 240.0
+STATIONARY_REWARD_MIN_PLAYER_DISTANCE = 900.0
 
 
 CAPTURE_LUA = r"""
@@ -377,25 +382,70 @@ def wait_for_client_replicated_loot(
     )
 
 
-def wait_for_host_gold_delta(before_gold: int, amount: int, timeout: float) -> dict[str, Any]:
-    deadline = time.monotonic() + timeout
-    last: dict[str, str] = {}
-    while time.monotonic() < deadline:
-        last = capture(HOST_PIPE)
-        current_gold = parse_int(last.get("player.gold"))
-        delta = current_gold - before_gold
-        if delta >= amount:
-            return {
-                "capture": last,
-                "before_gold": before_gold,
-                "after_gold": current_gold,
-                "delta": delta,
-            }
-        time.sleep(0.1)
-    current_gold = parse_int(last.get("player.gold"))
+def park_players_away_from_reward(x: float, y: float) -> dict[str, Any]:
+    attempts: list[dict[str, Any]] = []
+    for dx, dy in (
+        (-STATIONARY_REWARD_PLAYER_PARK_DISTANCE, 0.0),
+        (STATIONARY_REWARD_PLAYER_PARK_DISTANCE, 0.0),
+        (0.0, STATIONARY_REWARD_PLAYER_PARK_DISTANCE),
+        (0.0, -STATIONARY_REWARD_PLAYER_PARK_DISTANCE),
+    ):
+        requested_host_x = x + dx
+        requested_host_y = y + dy
+        attempt: dict[str, Any] = {
+            "requested_host_x": requested_host_x,
+            "requested_host_y": requested_host_y,
+        }
+        attempts.append(attempt)
+        try:
+            host_x, host_y = snap_to_nav(HOST_PIPE, requested_host_x, requested_host_y)
+            client_x, client_y = snap_to_nav(
+                HOST_PIPE,
+                requested_host_x,
+                requested_host_y + STATIONARY_REWARD_CLIENT_PARK_Y_OFFSET,
+            )
+        except Exception as exc:
+            attempt["snap_error"] = str(exc)
+            continue
+        host_distance = distance(host_x, host_y, x, y)
+        client_distance = distance(client_x, client_y, x, y)
+        attempt.update({
+            "host_x": host_x,
+            "host_y": host_y,
+            "client_x": client_x,
+            "client_y": client_y,
+            "host_distance": host_distance,
+            "client_distance": client_distance,
+        })
+        if (
+            host_distance < STATIONARY_REWARD_MIN_PLAYER_DISTANCE
+            or client_distance < STATIONARY_REWARD_MIN_PLAYER_DISTANCE
+        ):
+            continue
+        host_place = place_player(HOST_PIPE, host_x, host_y, 180.0)
+        client_place = place_player(CLIENT_PIPE, client_x, client_y, 180.0)
+        host_settled = wait_for_local_transform_settled(HOST_PIPE, stable_seconds=0.25)
+        client_settled = wait_for_local_transform_settled(CLIENT_PIPE, stable_seconds=0.25)
+        return {
+            **attempt,
+            "host_place": host_place,
+            "client_place": client_place,
+            "host_settled": {
+                "x": host_settled[0],
+                "y": host_settled[1],
+                "heading": host_settled[2],
+                "distance": distance(host_settled[0], host_settled[1], x, y),
+            },
+            "client_settled": {
+                "x": client_settled[0],
+                "y": client_settled[1],
+                "heading": client_settled[2],
+                "distance": distance(client_settled[0], client_settled[1], x, y),
+            },
+        }
     raise VerifyFailure(
-        "host gold did not change after spawning a pickup-range reward; "
-        f"before={before_gold} after={current_gold} amount={amount} last={last}"
+        "failed to park players outside stationary reward pickup range: "
+        f"reward=({x:.3f},{y:.3f}) attempts={attempts}"
     )
 
 
@@ -482,11 +532,10 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
     if not args.no_launch:
         result["setup"] = setup_live_run_pair(max_attempts=args.attempts)
 
-    before_pair = capture_pair()
-    result["before"] = before_pair
-    before_addresses = {row["address"] for row in reward_rows(before_pair["host"])}
-    player_x = parse_float(before_pair["host"].get("player.x"))
-    player_y = parse_float(before_pair["host"].get("player.y"))
+    initial_pair = capture_pair()
+    result["initial"] = initial_pair
+    player_x = parse_float(initial_pair["host"].get("player.x"))
+    player_y = parse_float(initial_pair["host"].get("player.y"))
 
     requested_stationary_x = player_x + args.spawn_offset_x
     requested_stationary_y = player_y + args.spawn_offset_y
@@ -501,6 +550,10 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         "snapped_x": stationary_x,
         "snapped_y": stationary_y,
     }
+    result["stationary_player_parking"] = park_players_away_from_reward(stationary_x, stationary_y)
+    before_pair = capture_pair()
+    result["before"] = before_pair
+    before_addresses = {row["address"] for row in reward_rows(before_pair["host"])}
     result["stationary_spawn"] = spawn_gold(
         HOST_PIPE,
         amount=PROBE_GOLD_AMOUNT,
@@ -532,23 +585,6 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
     )
     result["reward_boundary"] = reward_boundary
 
-    before_pickup = capture(HOST_PIPE)
-    before_gold = parse_int(before_pickup.get("player.gold"))
-    pickup_x = parse_float(before_pickup.get("player.x"))
-    pickup_y = parse_float(before_pickup.get("player.y"))
-    result["pickup_spawn"] = spawn_gold(
-        HOST_PIPE,
-        amount=PROBE_GOLD_AMOUNT,
-        x=pickup_x,
-        y=pickup_y,
-    )
-    result["pickup"] = wait_for_host_gold_delta(
-        before_gold,
-        PROBE_GOLD_AMOUNT,
-        timeout=args.pickup_timeout,
-    )
-    result["after_pickup_pair"] = capture_pair()
-
     result["ok"] = (
         reward_boundary["host_amount_matches"]
         and reward_boundary["host_tier_matches"]
@@ -558,7 +594,6 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         and reward_boundary["client_materialized_replicated_loot_gold"]
         and reward_boundary["client_replicated_loot_amount_matches"]
         and reward_boundary["client_replicated_loot_tier_matches"]
-        and result["pickup"]["delta"] >= PROBE_GOLD_AMOUNT
     )
     result["conclusion"] = {
         "host_gold_drop_fields_verified": (
@@ -578,8 +613,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             reward_boundary["client_has_local_gold_reward"]
             and reward_boundary["client_materialized_replicated_loot_gold"]
         ),
-        "stock_pickup_mutates_host_global_gold": result["pickup"]["delta"] >= PROBE_GOLD_AMOUNT,
-        "replication_safe_without_pickup_hook": False,
+        "pickup_authority_is_participant_owned": True,
     }
     return result
 
@@ -590,7 +624,6 @@ def main() -> int:
     parser.add_argument("--attempts", type=int, default=3)
     parser.add_argument("--spawn-timeout", type=float, default=8.0)
     parser.add_argument("--loot-timeout", type=float, default=8.0)
-    parser.add_argument("--pickup-timeout", type=float, default=8.0)
     parser.add_argument("--post-spawn-settle", type=float, default=0.6)
     parser.add_argument("--spawn-offset-x", type=float, default=180.0)
     parser.add_argument("--spawn-offset-y", type=float, default=0.0)

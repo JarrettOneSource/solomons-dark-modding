@@ -8,6 +8,12 @@ struct GameplayPlayerProgressionSlotOwnerSnapshot {
     uintptr_t player_inner = 0;
 };
 
+struct GameplayPlayerActorSlotOwnerSnapshot {
+    uintptr_t gameplay_address = 0;
+    uintptr_t player_actor_entry = 0;
+    uintptr_t player_actor = 0;
+};
+
 thread_local int g_bot_progression_slot_context_depth = 0;
 
 bool EnsureActorProgressionRuntimeFieldFromHandle(
@@ -101,6 +107,26 @@ bool CaptureGameplayPlayerProgressionSlotOwner(
         return false;
     }
     captured.slot_inner = ReadSmartPointerInnerObject(captured.slot_wrapper);
+
+    *snapshot = captured;
+    return true;
+}
+
+bool CaptureGameplayPlayerActorSlotOwner(
+    uintptr_t gameplay_address,
+    GameplayPlayerActorSlotOwnerSnapshot* snapshot) {
+    if (snapshot == nullptr || gameplay_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    GameplayPlayerActorSlotOwnerSnapshot captured{};
+    captured.gameplay_address = gameplay_address;
+    captured.player_actor_entry = gameplay_address + kGameplayPlayerActorOffset;
+    if (!memory.TryReadValue(captured.player_actor_entry, &captured.player_actor) ||
+        captured.player_actor == 0) {
+        return false;
+    }
 
     *snapshot = captured;
     return true;
@@ -323,6 +349,110 @@ void InvokeWithStandaloneBotProgressionSlotContext(
     InvokeFn&& invoke,
     std::string* context_description = nullptr) {
     ScopedStandaloneBotProgressionSlotContext slot_context(actor_address, standalone_actor);
+    invoke();
+    slot_context.Restore();
+    if (context_description != nullptr) {
+        *context_description = slot_context.Describe();
+    }
+}
+
+struct ScopedGameplayPlayerActorSlotContext {
+    uintptr_t actor_address = 0;
+    bool requested = false;
+    bool active = false;
+    bool restore_attempted = false;
+    bool restored = true;
+    std::string status = "not_requested";
+    uintptr_t gameplay_address = 0;
+    uintptr_t player_actor_entry = 0;
+    uintptr_t original_player_actor = 0;
+
+    ScopedGameplayPlayerActorSlotContext(uintptr_t actor_address_in, bool requested_in)
+        : actor_address(actor_address_in), requested(requested_in) {
+        if (!requested) {
+            return;
+        }
+        Apply();
+    }
+
+    ScopedGameplayPlayerActorSlotContext(const ScopedGameplayPlayerActorSlotContext&) = delete;
+    ScopedGameplayPlayerActorSlotContext& operator=(
+        const ScopedGameplayPlayerActorSlotContext&) = delete;
+
+    ~ScopedGameplayPlayerActorSlotContext() {
+        Restore();
+    }
+
+    void Apply() {
+        if (actor_address == 0) {
+            status = "no_actor";
+            return;
+        }
+
+        GameplayPlayerActorSlotOwnerSnapshot owner{};
+        if (!TryReadResolvedGamePointerAbsolute(kGameObjectGlobal, &gameplay_address) ||
+            gameplay_address == 0 ||
+            !CaptureGameplayPlayerActorSlotOwner(gameplay_address, &owner)) {
+            status = "player_actor_slot_unreadable";
+            return;
+        }
+
+        player_actor_entry = owner.player_actor_entry;
+        original_player_actor = owner.player_actor;
+        if (original_player_actor == actor_address) {
+            status = "already_owned";
+            return;
+        }
+
+        if (!ProcessMemory::Instance().TryWriteValue<uintptr_t>(player_actor_entry, actor_address)) {
+            status = "player_actor_slot_write_failed";
+            return;
+        }
+
+        active = true;
+        restored = false;
+        status = "active";
+    }
+
+    void Restore() {
+        if (!active || restore_attempted) {
+            return;
+        }
+        restore_attempted = true;
+        active = false;
+        restored =
+            ProcessMemory::Instance().TryWriteValue<uintptr_t>(
+                player_actor_entry,
+                original_player_actor);
+        status = restored ? "restored" : "restore_failed";
+        if (!restored) {
+            Log(
+                "[bots] gameplay player actor slot context restore failed. actor=" +
+                HexString(actor_address) +
+                " player_actor_entry=" + HexString(player_actor_entry) +
+                " original_player_actor=" + HexString(original_player_actor));
+        }
+    }
+
+    std::string Describe() const {
+        return
+            "requested=" + std::to_string(requested ? 1 : 0) +
+            " status=" + status +
+            " gameplay=" + HexString(gameplay_address) +
+            " player_actor_entry=" + HexString(player_actor_entry) +
+            " original_player_actor=" + HexString(original_player_actor) +
+            " restore_attempted=" + std::to_string(restore_attempted ? 1 : 0) +
+            " restored=" + std::to_string(restored ? 1 : 0);
+    }
+};
+
+template <typename InvokeFn>
+void InvokeWithGameplayPlayerActorSlotContext(
+    uintptr_t actor_address,
+    bool swap_player_actor_slot,
+    InvokeFn&& invoke,
+    std::string* context_description = nullptr) {
+    ScopedGameplayPlayerActorSlotContext slot_context(actor_address, swap_player_actor_slot);
     invoke();
     slot_context.Restore();
     if (context_description != nullptr) {

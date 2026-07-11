@@ -23,6 +23,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <mutex>
 #include <sstream>
@@ -36,6 +38,9 @@
 #pragma comment(lib, "Ws2_32.lib")
 
 namespace sdmod::multiplayer {
+
+int CaptureLocalTransportSehCode(EXCEPTION_POINTERS* exception_pointers, DWORD* exception_code);
+
 namespace {
 
 constexpr const char* kTransportEnvironmentVariable = "SDMOD_MULTIPLAYER_TRANSPORT";
@@ -54,6 +59,7 @@ constexpr std::uint64_t kRunLootDropNetworkIdBase = 0x1002000000000ull;
 constexpr std::uint64_t kLocalTransportSendIntervalMs = 50;
 constexpr std::uint64_t kLocalTransportWorldSnapshotIntervalMs = 100;
 constexpr std::uint64_t kLocalTransportLootSnapshotIntervalMs = 100;
+constexpr std::uint64_t kLocalTransportAnimatedLootSnapshotIntervalMs = 16;
 constexpr std::uint64_t kLocalCastInputUpdateIntervalMs = 50;
 constexpr std::uint64_t kClientHostRunFollowRetryMs = 1000;
 constexpr std::uint64_t kRecentRunEnemyDeathSnapshotHoldMs = 2500;
@@ -63,6 +69,9 @@ constexpr float kEnemyDamageClaimMaxTargetDrift = 384.0f;
 constexpr float kEnemyDamageClaimMaxHpFactor = 2.5f;
 constexpr float kEnemyDamageClaimAbsoluteCap = 20000.0f;
 constexpr std::uint64_t kEnemyDamageRejectedRetrySuppressMs = 500;
+constexpr std::uint64_t kEnemyDamageLethalClaimPendingSuppressMs = 2500;
+constexpr std::int32_t kFireballExplodeProgressionEntryId = 18;
+constexpr float kFireballExplodeConfigFootToWorldUnits = 2.4f;
 constexpr float kLootPickupMaxDistance = 320.0f;
 constexpr float kLootPickupDropDriftMaxDistance = 160.0f;
 constexpr float kLootPickupResourceEpsilon = 0.001f;
@@ -89,6 +98,20 @@ constexpr std::size_t kVisualLinkColorBlockOffset = 0x88;
 constexpr std::uint32_t kAttachmentStaffItemTypeId = 0x1B5C;
 constexpr int kMaxPacketsPerTick = 64;
 constexpr float kRenderDriveEffectTimerEpsilon = 0.001f;
+constexpr std::size_t kProgressionLevelUpPendingChoiceCountOffset = 0x44;
+constexpr std::size_t kProgressionLevelUpIncomingChoiceCountOffset = 0x48;
+constexpr std::size_t kProgressionLevelUpPickerUiFlagOffset = 0x839;
+constexpr std::size_t kProgressionLevelUpTemporaryPickerObjectOffset = 0x860;
+constexpr std::size_t kProgressionLevelUpTemporaryPickerValueOffset = 0x864;
+constexpr std::size_t kLevelUpScreenDesiredChoiceCountOffset = 0x88;
+constexpr std::size_t kLevelUpScreenOptionValuesOffset = 0x90;
+constexpr std::size_t kLevelUpScreenOptionCountOffset = 0x94;
+constexpr std::size_t kLevelUpScreenSelectedOptionIndexOffset = 0x5F8;
+constexpr std::size_t kLevelUpScreenCloseVtableOffset = 0x18;
+
+using NativeLevelUpScreenCreateFn = void(__thiscall*)(void* progression, char preserve_existing_flag);
+using NativeLevelUpScreenCloseFn = void(__thiscall*)(void* screen);
+using NativeActorWorldUnregisterFn = void(__thiscall*)(void* self, void* actor, char remove_from_container);
 
 struct RenderDriveEffectState {
     float timer = 0.0f;
@@ -323,6 +346,7 @@ void RefreshOwnedProgressionBookFromSnapshot(
     owned_progression->progression_book_entry_total_count = next_total_count;
     owned_progression->progression_book_truncated = next_truncated;
     owned_progression->progression_book_entries = std::move(next_entries);
+    owned_progression->spellbook_revision += 1;
     owned_progression->statbook_revision += 1;
 }
 
@@ -459,6 +483,44 @@ struct QueuedLocalEnemyDamageClaim {
 struct QueuedLocalLootPickupRequest {
     std::uint64_t network_drop_id = 0;
     std::uint32_t request_sequence = 0;
+    bool has_pickup_positions = false;
+    float requester_position_x = 0.0f;
+    float requester_position_y = 0.0f;
+    float drop_position_x = 0.0f;
+    float drop_position_y = 0.0f;
+};
+
+struct IssuedLevelUpOffer {
+    std::uint64_t offer_id = 0;
+    std::uint64_t target_participant_id = 0;
+    std::uint32_t run_nonce = 0;
+    std::int32_t level = 0;
+    std::int32_t experience = 0;
+    std::vector<BotSkillChoiceOption> options;
+    bool resolved = false;
+    LevelUpChoiceResultCode result_code = LevelUpChoiceResultCode::Rejected;
+};
+
+struct PendingHostLevelUpOfferTarget {
+    std::uint64_t target_participant_id = 0;
+    std::uint32_t run_nonce = 0;
+    std::int32_t level = 0;
+    std::int32_t experience = 0;
+    uintptr_t source_progression_address = 0;
+    std::uint64_t requested_ms = 0;
+    std::uint64_t last_log_ms = 0;
+};
+
+struct QueuedLocalLevelUpChoice {
+    std::uint64_t offer_id = 0;
+    std::int32_t option_index = -1;
+    std::int32_t option_id = -1;
+};
+
+struct FireballExplodeEffectConfig {
+    bool loaded = false;
+    std::vector<float> damage_by_level;
+    std::vector<float> radius_feet_by_level;
 };
 
 struct LocalTransportState {
@@ -483,17 +545,23 @@ struct LocalTransportState {
     std::uint64_t packets_received = 0;
     std::uint32_t next_cast_sequence = 1;
     std::uint32_t next_enemy_damage_claim_sequence = 1;
+    std::uint64_t next_level_up_offer_id = 1;
     std::string world_scene_key;
     std::unordered_map<uintptr_t, std::uint64_t> hub_world_actor_ids_by_address;
     std::unordered_map<uintptr_t, std::uint64_t> run_host_local_world_actor_ids_by_address;
     std::unordered_map<uintptr_t, std::uint64_t> run_loot_drop_ids_by_address;
     std::unordered_map<std::uint64_t, RecentRunEnemyDeathSnapshot> recent_run_enemy_deaths_by_network_id;
+    std::unordered_map<std::uint64_t, float> last_synced_enemy_hp_by_network_id;
     std::unordered_map<std::uint64_t, float> last_enemy_claimed_hp_by_network_id;
+    std::unordered_map<std::uint64_t, std::uint64_t> pending_lethal_enemy_damage_claim_until_ms;
     std::unordered_map<std::uint64_t, std::uint64_t> rejected_enemy_damage_retry_suppressed_until_ms;
     std::unordered_map<std::uint64_t, std::uint32_t> last_cast_sequence_by_participant;
     std::unordered_map<std::uint64_t, RemoteCastInputTracker> remote_cast_inputs_by_participant;
     std::unordered_map<std::uint64_t, std::uint32_t> last_enemy_claim_sequence_by_participant;
     std::unordered_map<std::uint64_t, std::uint32_t> last_loot_pickup_request_sequence_by_participant;
+    std::unordered_set<std::uint32_t> local_cast_damage_claimed_sequences;
+    std::unordered_map<std::uint64_t, IssuedLevelUpOffer> issued_level_up_offers_by_id;
+    std::unordered_map<std::uint64_t, PendingHostLevelUpOfferTarget> pending_level_up_offer_targets_by_participant;
     std::unordered_set<std::uint64_t> accepted_loot_pickup_drop_ids;
     ActiveLocalCastInput active_local_cast_input;
     std::uint32_t next_hub_world_actor_serial = 1;
@@ -508,7 +576,10 @@ std::vector<QueuedLocalCastEvent> g_queued_local_cast_events;
 std::uint64_t g_next_local_cast_event_id = 1;
 std::vector<QueuedLocalEnemyDamageClaim> g_queued_local_enemy_damage_claims;
 std::vector<QueuedLocalLootPickupRequest> g_queued_local_loot_pickup_requests;
+std::vector<QueuedLocalLevelUpChoice> g_queued_local_level_up_choices;
 std::uint32_t g_next_local_loot_pickup_request_sequence = 1;
+FireballExplodeEffectConfig g_fireball_explode_effect_config;
+bool g_fireball_explode_effect_config_attempted = false;
 
 std::string ReadEnvironmentVariable(const char* name) {
     char* value = nullptr;
@@ -614,6 +685,198 @@ bool ResolveIpv4Endpoint(const std::string& host, std::uint16_t port, sockaddr_i
     return true;
 }
 
+std::filesystem::path ResolveRuntimeWizardSkillConfigPath(const wchar_t* file_name) {
+    if (file_name == nullptr || *file_name == L'\0') {
+        return {};
+    }
+
+    std::array<wchar_t, MAX_PATH> executable_path{};
+    const auto length =
+        GetModuleFileNameW(nullptr, executable_path.data(), static_cast<DWORD>(executable_path.size()));
+    if (length == 0 || length >= executable_path.size()) {
+        return {};
+    }
+
+    std::filesystem::path path(executable_path.data());
+    return path.parent_path() / "data" / "wizardskills" / file_name;
+}
+
+bool TryParseConfigFloatArray(
+    const std::string& text,
+    std::string_view key,
+    std::vector<float>* values) {
+    if (values == nullptr) {
+        return false;
+    }
+
+    values->clear();
+    const auto key_pos = text.find(std::string(key));
+    if (key_pos == std::string::npos) {
+        return false;
+    }
+    const auto open_brace = text.find('{', key_pos);
+    const auto close_brace =
+        open_brace == std::string::npos ? std::string::npos : text.find('}', open_brace + 1);
+    if (open_brace == std::string::npos || close_brace == std::string::npos || close_brace <= open_brace) {
+        return false;
+    }
+
+    std::string token;
+    const auto body = text.substr(open_brace + 1, close_brace - open_brace - 1);
+    auto FlushToken = [&]() {
+        if (token.empty()) {
+            return;
+        }
+        char* end = nullptr;
+        const float value = std::strtof(token.c_str(), &end);
+        if (end == token.c_str() || !std::isfinite(value)) {
+            values->clear();
+            token.clear();
+            return;
+        }
+        values->push_back(value);
+        token.clear();
+    };
+
+    for (const char ch : body) {
+        if ((ch >= '0' && ch <= '9') || ch == '-' || ch == '+' || ch == '.') {
+            token.push_back(ch);
+        } else {
+            FlushToken();
+            if (values->empty() && token.empty()) {
+                continue;
+            }
+        }
+    }
+    FlushToken();
+    return !values->empty();
+}
+
+const ParticipantProgressionBookEntryState* FindProgressionBookEntryById(
+    const ParticipantOwnedProgressionState& progression,
+    std::int32_t entry_id) {
+    for (const auto& entry : progression.progression_book_entries) {
+        if (entry.entry_index == entry_id) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+bool EnsureFireballExplodeEffectConfigLoaded(std::string* error_message = nullptr) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (g_fireball_explode_effect_config.loaded) {
+        return true;
+    }
+    if (g_fireball_explode_effect_config_attempted) {
+        if (error_message != nullptr) {
+            *error_message = "explode.cfg was already probed and is unavailable";
+        }
+        return false;
+    }
+    g_fireball_explode_effect_config_attempted = true;
+
+    const auto path = ResolveRuntimeWizardSkillConfigPath(L"explode.cfg");
+    if (path.empty()) {
+        if (error_message != nullptr) {
+            *error_message = "could not resolve runtime explode.cfg path";
+        }
+        return false;
+    }
+
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        if (error_message != nullptr) {
+            *error_message = "could not open " + path.string();
+        }
+        return false;
+    }
+
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    const auto text = buffer.str();
+
+    std::vector<float> damage_by_level;
+    std::vector<float> radius_feet_by_level;
+    if (!TryParseConfigFloatArray(text, "mDamage", &damage_by_level) ||
+        !TryParseConfigFloatArray(text, "mRadius", &radius_feet_by_level)) {
+        if (error_message != nullptr) {
+            *error_message = "failed to parse explode.cfg damage/radius arrays";
+        }
+        return false;
+    }
+
+    g_fireball_explode_effect_config.loaded = true;
+    g_fireball_explode_effect_config.damage_by_level = std::move(damage_by_level);
+    g_fireball_explode_effect_config.radius_feet_by_level = std::move(radius_feet_by_level);
+    return true;
+}
+
+bool TryResolveFireballExplodeSplashTuning(
+    const ParticipantOwnedProgressionState& progression,
+    float* splash_damage,
+    float* splash_radius_world,
+    std::string* error_message = nullptr) {
+    if (splash_damage != nullptr) {
+        *splash_damage = 0.0f;
+    }
+    if (splash_radius_world != nullptr) {
+        *splash_radius_world = 0.0f;
+    }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+
+    const auto* explode_entry =
+        FindProgressionBookEntryById(progression, kFireballExplodeProgressionEntryId);
+    if (explode_entry == nullptr || explode_entry->active <= 0) {
+        if (error_message != nullptr) {
+            *error_message = "explode upgrade is not active";
+        }
+        return false;
+    }
+
+    std::string config_error;
+    if (!EnsureFireballExplodeEffectConfigLoaded(&config_error)) {
+        if (error_message != nullptr) {
+            *error_message = config_error;
+        }
+        return false;
+    }
+
+    const auto active_level =
+        (std::max)(0, static_cast<int>(explode_entry->active));
+    const auto level_index = static_cast<std::size_t>(active_level);
+    const auto damage_index = (std::min)(
+        level_index,
+        g_fireball_explode_effect_config.damage_by_level.size() - 1);
+    const auto radius_index = (std::min)(
+        level_index,
+        g_fireball_explode_effect_config.radius_feet_by_level.size() - 1);
+    const float damage =
+        g_fireball_explode_effect_config.damage_by_level[damage_index];
+    const float radius_world =
+        g_fireball_explode_effect_config.radius_feet_by_level[radius_index] *
+        kFireballExplodeConfigFootToWorldUnits;
+    if (!std::isfinite(damage) || damage <= 0.0f ||
+        !std::isfinite(radius_world) || radius_world <= 0.0f) {
+        if (error_message != nullptr) {
+            *error_message = "explode tuning resolved non-positive damage/radius";
+        }
+        return false;
+    }
+
+    if (splash_damage != nullptr) {
+        *splash_damage = damage;
+    }
+    if (splash_radius_world != nullptr) {
+        *splash_radius_world = radius_world;
+    }
+    return true;
+}
+
 bool IsLocalUdpRequested() {
     const auto transport = ToLowerAscii(ReadEnvironmentVariable(kTransportEnvironmentVariable));
     return transport == "local_udp" || transport == "local-udp" || transport == "udp";
@@ -625,6 +888,8 @@ bool ConfigureLocalTransport() {
         std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
         g_queued_local_cast_events.clear();
         g_queued_local_enemy_damage_claims.clear();
+        g_queued_local_loot_pickup_requests.clear();
+        g_queued_local_level_up_choices.clear();
         return false;
     }
 
@@ -656,6 +921,8 @@ bool ConfigureLocalTransport() {
         std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
         g_queued_local_cast_events.clear();
         g_queued_local_enemy_damage_claims.clear();
+        g_queued_local_loot_pickup_requests.clear();
+        g_queued_local_level_up_choices.clear();
     }
     return true;
 }
@@ -806,6 +1073,39 @@ LootPickupResultCode LootPickupResultCodeFromPacketValue(std::uint8_t code) {
     default:
         return LootPickupResultCode::Rejected;
     }
+}
+
+LevelUpChoiceResultCode LevelUpChoiceResultCodeFromPacketValue(std::uint8_t code) {
+    switch (static_cast<LevelUpChoiceResultCode>(code)) {
+    case LevelUpChoiceResultCode::Accepted:
+        return LevelUpChoiceResultCode::Accepted;
+    case LevelUpChoiceResultCode::StaleOffer:
+        return LevelUpChoiceResultCode::StaleOffer;
+    case LevelUpChoiceResultCode::InvalidOption:
+        return LevelUpChoiceResultCode::InvalidOption;
+    case LevelUpChoiceResultCode::ApplyFailed:
+        return LevelUpChoiceResultCode::ApplyFailed;
+    case LevelUpChoiceResultCode::Rejected:
+    default:
+        return LevelUpChoiceResultCode::Rejected;
+    }
+}
+
+const char* LevelUpChoiceResultCodeLabel(LevelUpChoiceResultCode code) {
+    switch (code) {
+    case LevelUpChoiceResultCode::Accepted:
+        return "Accepted";
+    case LevelUpChoiceResultCode::Rejected:
+        return "Rejected";
+    case LevelUpChoiceResultCode::StaleOffer:
+        return "StaleOffer";
+    case LevelUpChoiceResultCode::InvalidOption:
+        return "InvalidOption";
+    case LevelUpChoiceResultCode::ApplyFailed:
+        return "ApplyFailed";
+    }
+
+    return "Unknown";
 }
 
 std::string BuildWorldSceneKey(const SDModSceneState& scene_state) {
@@ -962,6 +1262,11 @@ void ClearHubWorldActorNetworkIds() {
 void ClearRunHostLocalWorldActorNetworkIds() {
     g_local_transport.run_host_local_world_actor_ids_by_address.clear();
     g_local_transport.recent_run_enemy_deaths_by_network_id.clear();
+    g_local_transport.last_synced_enemy_hp_by_network_id.clear();
+    g_local_transport.last_enemy_claimed_hp_by_network_id.clear();
+    g_local_transport.pending_lethal_enemy_damage_claim_until_ms.clear();
+    g_local_transport.rejected_enemy_damage_retry_suppressed_until_ms.clear();
+    g_local_transport.local_cast_damage_claimed_sequences.clear();
     g_local_transport.next_run_host_local_world_actor_serial = 1;
 }
 
@@ -1070,6 +1375,120 @@ float ReadActorHeadingOrZero(uintptr_t actor_address) {
         return 0.0f;
     }
     return heading;
+}
+
+std::uint64_t ResolveRunEnemyTargetParticipantId(uintptr_t actor_address) {
+    if (actor_address == 0 || kActorCurrentTargetActorOffset == 0) {
+        return 0;
+    }
+
+    uintptr_t target_actor_address = 0;
+    if (!ProcessMemory::Instance().TryReadField(
+            actor_address,
+            kActorCurrentTargetActorOffset,
+            &target_actor_address) ||
+        target_actor_address == 0) {
+        return 0;
+    }
+
+    SDModPlayerState local_player;
+    if (TryGetPlayerState(&local_player) &&
+        local_player.actor_address == target_actor_address &&
+        g_local_transport.local_peer_id != 0) {
+        return g_local_transport.local_peer_id;
+    }
+
+    if (g_local_transport.local_peer_id != 0 &&
+        kGameObjectTypeIdOffset != 0 &&
+        kActorSlotOffset != 0 &&
+        ProcessMemory::Instance().IsReadableRange(
+            target_actor_address + kGameObjectTypeIdOffset,
+            sizeof(std::uint32_t))) {
+        std::uint32_t target_native_type_id = 0;
+        std::int8_t target_actor_slot = -1;
+        if (ProcessMemory::Instance().TryReadField(
+                target_actor_address,
+                kGameObjectTypeIdOffset,
+                &target_native_type_id) &&
+            target_native_type_id == 1 &&
+            ProcessMemory::Instance().TryReadField(
+                target_actor_address,
+                kActorSlotOffset,
+                &target_actor_slot) &&
+            target_actor_slot == 0) {
+            return g_local_transport.local_peer_id;
+        }
+    }
+
+    std::string ignored_display_name;
+    std::uint64_t target_participant_id = 0;
+    if (TryGetGameplayHudParticipantDisplayNameForActor(
+            target_actor_address,
+            &ignored_display_name,
+            &target_participant_id) &&
+        target_participant_id != 0) {
+        return target_participant_id;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    for (const auto& participant : runtime_state.participants) {
+        if (!IsRemoteParticipant(participant)) {
+            continue;
+        }
+        SDModParticipantGameplayState gameplay_state;
+        if (TryGetParticipantGameplayState(participant.participant_id, &gameplay_state) &&
+            gameplay_state.entity_materialized &&
+            gameplay_state.actor_address == target_actor_address) {
+            return participant.participant_id;
+        }
+    }
+
+    return 0;
+}
+
+bool PopulateRunEnemyNativeTargetSnapshot(
+    uintptr_t actor_address,
+    WorldActorSnapshotPacketState* snapshot) {
+    if (actor_address == 0 ||
+        snapshot == nullptr ||
+        kActorCurrentTargetActorOffset == 0 ||
+        kActorCurrentTargetBucketDeltaOffset == 0 ||
+        kGameObjectTypeIdOffset == 0 ||
+        kActorSlotOffset == 0 ||
+        kActorWorldSlotOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t target_actor_address = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorCurrentTargetActorOffset,
+            &target_actor_address) ||
+        target_actor_address == 0 ||
+        !memory.IsReadableRange(target_actor_address + kGameObjectTypeIdOffset, sizeof(std::uint32_t))) {
+        return false;
+    }
+
+    std::uint32_t target_native_type_id = 0;
+    std::int8_t target_actor_slot = -1;
+    std::int16_t target_world_slot = -1;
+    std::int32_t target_bucket_delta = 0;
+    if (!memory.TryReadField(target_actor_address, kGameObjectTypeIdOffset, &target_native_type_id) ||
+        target_native_type_id == 0 ||
+        !memory.TryReadField(target_actor_address, kActorSlotOffset, &target_actor_slot) ||
+        target_actor_slot < 0 ||
+        !memory.TryReadField(target_actor_address, kActorWorldSlotOffset, &target_world_slot) ||
+        target_world_slot < 0) {
+        return false;
+    }
+    (void)memory.TryReadField(actor_address, kActorCurrentTargetBucketDeltaOffset, &target_bucket_delta);
+
+    snapshot->target_native_type_id = target_native_type_id;
+    snapshot->target_actor_slot = static_cast<std::int32_t>(target_actor_slot);
+    snapshot->target_world_slot = static_cast<std::int32_t>(target_world_slot);
+    snapshot->target_bucket_delta = target_bucket_delta;
+    return true;
 }
 
 void PruneRecentRunEnemyDeathSnapshots(std::uint64_t now_ms) {
@@ -1572,13 +1991,56 @@ bool TryDeactivateHostOrbLootDrop(uintptr_t actor_address) {
     return wrote_value && wrote_lifetime && wrote_motion;
 }
 
-bool TryDeactivateHostItemLootDrop(uintptr_t actor_address) {
-    if (actor_address == 0 || kItemDropHeldItemOffset == 0) {
+bool CallHostLootDropActorWorldUnregisterSafe(
+    uintptr_t actor_address,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (actor_address == 0) {
         return false;
     }
 
-    const std::uint32_t no_held_item = 0;
-    return ProcessMemory::Instance().TryWriteField(actor_address, kItemDropHeldItemOffset, no_held_item);
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t world_address = 0;
+    if (kActorOwnerOffset == 0 ||
+        !memory.TryReadField(actor_address, kActorOwnerOffset, &world_address) ||
+        world_address == 0) {
+        return false;
+    }
+
+    const auto unregister_address = memory.ResolveGameAddressOrZero(kActorWorldUnregister);
+    auto* unregister_actor = reinterpret_cast<NativeActorWorldUnregisterFn>(unregister_address);
+    if (unregister_actor == nullptr) {
+        return false;
+    }
+
+    __try {
+        unregister_actor(
+            reinterpret_cast<void*>(world_address),
+            reinterpret_cast<void*>(actor_address),
+            1);
+        return true;
+    } __except (CaptureLocalTransportSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool TryDeactivateHostItemLootDrop(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    DWORD exception_code = 0;
+    const bool unregistered =
+        CallHostLootDropActorWorldUnregisterSafe(actor_address, &exception_code);
+    if (!unregistered) {
+        Log(
+            "Multiplayer loot item drop deactivation failed; native unregister unavailable. actor=" +
+            HexString(actor_address) +
+            " seh=" + HexString(static_cast<uintptr_t>(exception_code)));
+    }
+    return unregistered;
 }
 
 bool TryDeactivateHostLootDrop(uintptr_t actor_address, LootDropKind kind) {
@@ -1739,6 +2201,99 @@ std::vector<sockaddr_in> BuildKnownSendEndpoints() {
     return endpoints;
 }
 
+void AddUniqueLevelUpWaitParticipantId(
+    std::vector<std::uint64_t>* participant_ids,
+    std::uint64_t participant_id) {
+    if (participant_ids == nullptr || participant_id == 0) {
+        return;
+    }
+    if (std::find(
+            participant_ids->begin(),
+            participant_ids->end(),
+            participant_id) == participant_ids->end()) {
+        participant_ids->push_back(participant_id);
+    }
+}
+
+bool HasUnresolvedIssuedLevelUpOfferForParticipant(std::uint64_t participant_id) {
+    if (participant_id == 0) {
+        return false;
+    }
+    for (const auto& [offer_id, offer] : g_local_transport.issued_level_up_offers_by_id) {
+        (void)offer_id;
+        if (!offer.resolved && offer.target_participant_id == participant_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<std::uint64_t> CollectUnresolvedLevelUpOfferParticipantIds() {
+    std::vector<std::uint64_t> participant_ids;
+    if (!g_local_transport.initialized || !g_local_transport.is_host) {
+        return participant_ids;
+    }
+
+    participant_ids.reserve(
+        g_local_transport.issued_level_up_offers_by_id.size() +
+        g_local_transport.pending_level_up_offer_targets_by_participant.size());
+    for (const auto& [offer_id, offer] : g_local_transport.issued_level_up_offers_by_id) {
+        (void)offer_id;
+        if (offer.resolved || offer.target_participant_id == 0) {
+            continue;
+        }
+        AddUniqueLevelUpWaitParticipantId(&participant_ids, offer.target_participant_id);
+    }
+    for (const auto& [participant_id, pending] : g_local_transport.pending_level_up_offer_targets_by_participant) {
+        (void)participant_id;
+        AddUniqueLevelUpWaitParticipantId(&participant_ids, pending.target_participant_id);
+    }
+    std::sort(participant_ids.begin(), participant_ids.end());
+    return participant_ids;
+}
+
+bool HasPendingLocalLevelUpChoice(const RuntimeState& runtime_state) {
+    const auto& offer = runtime_state.active_level_up_offer;
+    return offer.valid &&
+           !offer.selection_submitted &&
+           offer.target_participant_id == g_local_transport.local_peer_id;
+}
+
+std::string ResolveParticipantNameForStatus(
+    const RuntimeState& runtime_state,
+    std::uint64_t participant_id) {
+    if (participant_id == g_local_transport.local_peer_id) {
+        const auto* local = FindLocalParticipant(runtime_state);
+        if (local != nullptr && !local->name.empty()) {
+            return local->name;
+        }
+        return "You";
+    }
+
+    const auto* participant = FindParticipant(runtime_state, participant_id);
+    if (participant != nullptr && !participant->name.empty()) {
+        return participant->name;
+    }
+    return "Player " + std::to_string(participant_id);
+}
+
+std::string BuildLevelUpWaitStatusTextFromIds(
+    const RuntimeState& runtime_state,
+    const std::vector<std::uint64_t>& participant_ids) {
+    if (participant_ids.empty()) {
+        return {};
+    }
+
+    std::string text = "Waiting for skill picks: ";
+    for (std::size_t index = 0; index < participant_ids.size(); ++index) {
+        if (index != 0) {
+            text += ", ";
+        }
+        text += ResolveParticipantNameForStatus(runtime_state, participant_ids[index]);
+    }
+    return text;
+}
+
 void RefreshLocalParticipantFromGameState() {
     SDModPlayerState player_state;
     if (!TryGetPlayerState(&player_state) || !player_state.valid) {
@@ -1796,6 +2351,21 @@ void RefreshLocalParticipantFromGameState() {
         local->runtime.transform_valid = true;
         local->runtime.in_run = scene_intent.kind == ParticipantSceneIntentKind::Run;
         local->runtime.scene_intent = scene_intent;
+        if (local->runtime.life_max > 0.0f &&
+            local->runtime.life_current > 0.0f &&
+            player_state.max_hp > 0.0f &&
+            player_state.hp <= 0.0f) {
+            Log(
+                "Multiplayer local participant vitals crossed to zero before state publish. participant_id=" +
+                std::to_string(g_local_transport.local_peer_id) +
+                " hp=" + std::to_string(player_state.hp) +
+                "/" + std::to_string(player_state.max_hp) +
+                " previous_hp=" + std::to_string(local->runtime.life_current) +
+                "/" + std::to_string(local->runtime.life_max) +
+                " level=" + std::to_string(player_state.level) +
+                " xp=" + std::to_string(player_state.xp) +
+                " progression=" + HexString(player_state.progression_address));
+        }
         local->runtime.life_current = player_state.hp;
         local->runtime.life_max = player_state.max_hp;
         local->runtime.mana_current = player_state.mp;
@@ -1929,6 +2499,18 @@ StatePacket BuildLocalStatePacket() {
     packet.spellbook_revision = local->owned_progression.spellbook_revision;
     packet.statbook_revision = local->owned_progression.statbook_revision;
     packet.loadout_revision = local->owned_progression.loadout_revision;
+    if (g_local_transport.is_host) {
+        const auto waiting_participant_ids = CollectUnresolvedLevelUpOfferParticipantIds();
+        packet.level_up_pause_active = waiting_participant_ids.empty() ? 0 : 1;
+        const auto waiting_count =
+            (std::min)(
+                waiting_participant_ids.size(),
+                static_cast<std::size_t>(kLevelUpWaitStatusMaxParticipants));
+        packet.level_up_waiting_count = static_cast<std::uint8_t>(waiting_count);
+        for (std::size_t index = 0; index < waiting_count; ++index) {
+            packet.level_up_waiting_participant_ids[index] = waiting_participant_ids[index];
+        }
+    }
     const auto inventory_packet_count =
         (std::min)(
             local->owned_progression.inventory_items.size(),
@@ -2112,6 +2694,13 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
         snapshot.enemy_type = actor.enemy_type;
         snapshot.actor_slot = actor.actor_slot;
         snapshot.world_slot = actor.world_slot;
+        snapshot.target_actor_slot = -1;
+        snapshot.target_world_slot = -1;
+        if (run_scene && actor.tracked_enemy) {
+            snapshot.flags |= WorldActorSnapshotFlagTargetAuthoritative;
+            snapshot.target_participant_id = ResolveRunEnemyTargetParticipantId(actor.actor_address);
+            (void)PopulateRunEnemyNativeTargetSnapshot(actor.actor_address, &snapshot);
+        }
         snapshot.anim_drive_state = actor.anim_drive_state;
         snapshot.position_x = actor.x;
         snapshot.position_y = actor.y;
@@ -2160,6 +2749,8 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
             snapshot.enemy_type = death_snapshot.enemy_type;
             snapshot.actor_slot = -1;
             snapshot.world_slot = -1;
+            snapshot.target_actor_slot = -1;
+            snapshot.target_world_slot = -1;
             snapshot.flags =
                 WorldActorSnapshotFlagDead |
                 WorldActorSnapshotFlagTrackedEnemy |
@@ -2237,6 +2828,9 @@ bool BuildLocalLootSnapshotPacket(LootSnapshotPacket* packet) {
         if (!TryPopulateLootDropSnapshot(actor, network_drop_id, &snapshot)) {
             continue;
         }
+        if ((snapshot.flags & LootDropSnapshotFlagActive) == 0) {
+            continue;
+        }
 
         total_drop_count += 1;
         if (built.drop_count >= kLootSnapshotMaxDrops) {
@@ -2254,6 +2848,21 @@ bool BuildLocalLootSnapshotPacket(LootSnapshotPacket* packet) {
 
     *packet = built;
     return true;
+}
+
+std::uint64_t LootSnapshotIntervalForPacket(const LootSnapshotPacket& packet) {
+    for (std::size_t index = 0; index < packet.drop_count; ++index) {
+        const auto& drop = packet.drops[index];
+        const auto drop_kind = LootDropKindFromPacketValue(drop.drop_kind);
+        const bool active = (drop.flags & LootDropSnapshotFlagActive) != 0;
+        if (!active) {
+            continue;
+        }
+        if (drop_kind == LootDropKind::Gold || drop_kind == LootDropKind::Orb) {
+            return kLocalTransportAnimatedLootSnapshotIntervalMs;
+        }
+    }
+    return kLocalTransportLootSnapshotIntervalMs;
 }
 
 float ClampEnemyHp(float hp, float max_hp) {
@@ -2546,7 +3155,7 @@ std::uint64_t ResolveLocalRunEnemyNetworkActorId(uintptr_t actor_address) {
     return ResolveLocalRunEnemyNetworkActorId(actor);
 }
 
-bool TryFindLocalRunEnemyByNetworkId(
+bool TryFindLocalRunEnemyByNetworkIdInternal(
     std::uint64_t network_actor_id,
     SDModSceneActorState* actor_out) {
     if (actor_out != nullptr) {
@@ -2861,6 +3470,7 @@ void ApplyEnemyDamageCorrection(const EnemyDamageResultPacket& packet) {
             if (!death_already_presented) {
                 death_called = sdmod::TryTriggerRunEnemyDeath(actor_address, &death_exception_code);
             }
+            sdmod::ClearManualRunEnemyFreeze(actor_address);
             sdmod::MarkReplicatedRunEnemyDeathPresented(packet.target_network_actor_id);
             if (death_called) {
                 sdmod::SuppressClientLocalLootActors("client_enemy_damage_correction_death");
@@ -2869,12 +3479,26 @@ void ApplyEnemyDamageCorrection(const EnemyDamageResultPacket& packet) {
             sdmod::ClearReplicatedRunEnemyDeathPresentation(packet.target_network_actor_id);
         }
         if (packet.result_code == static_cast<std::uint8_t>(EnemyDamageResultCode::Accepted)) {
-            g_local_transport.last_enemy_claimed_hp_by_network_id[packet.target_network_actor_id] =
-                packet.authoritative_hp;
+            if (dead) {
+                ClearReplicatedRunEnemyDamageBaseline(packet.target_network_actor_id);
+            } else {
+                MarkReplicatedRunEnemyDamageBaseline(
+                    packet.target_network_actor_id,
+                    packet.authoritative_hp);
+                g_local_transport.last_enemy_claimed_hp_by_network_id[packet.target_network_actor_id] =
+                    packet.authoritative_hp;
+            }
+            g_local_transport.pending_lethal_enemy_damage_claim_until_ms.erase(
+                packet.target_network_actor_id);
             g_local_transport.rejected_enemy_damage_retry_suppressed_until_ms.erase(
                 packet.target_network_actor_id);
         } else {
+            MarkReplicatedRunEnemyDamageBaseline(
+                packet.target_network_actor_id,
+                packet.authoritative_hp);
             g_local_transport.last_enemy_claimed_hp_by_network_id.erase(packet.target_network_actor_id);
+            g_local_transport.pending_lethal_enemy_damage_claim_until_ms.erase(
+                packet.target_network_actor_id);
             g_local_transport.rejected_enemy_damage_retry_suppressed_until_ms[packet.target_network_actor_id] =
                 static_cast<std::uint64_t>(GetTickCount64()) +
                 kEnemyDamageRejectedRetrySuppressMs;
@@ -2938,7 +3562,20 @@ void SendPacketToEndpoint(const LootPickupResultPacket& packet, const sockaddr_i
     SendBufferToEndpoint(&packet, sizeof(packet), endpoint);
 }
 
+void SendPacketToEndpoint(const LevelUpOfferPacket& packet, const sockaddr_in& endpoint) {
+    SendBufferToEndpoint(&packet, sizeof(packet), endpoint);
+}
+
+void SendPacketToEndpoint(const LevelUpChoicePacket& packet, const sockaddr_in& endpoint) {
+    SendBufferToEndpoint(&packet, sizeof(packet), endpoint);
+}
+
+void SendPacketToEndpoint(const LevelUpChoiceResultPacket& packet, const sockaddr_in& endpoint) {
+    SendBufferToEndpoint(&packet, sizeof(packet), endpoint);
+}
+
 void PublishWorldSnapshotRuntimeInfo(const WorldSnapshotPacket& packet, std::uint64_t now_ms);
+void PublishLootSnapshotRuntimeInfo(const LootSnapshotPacket& packet, std::uint64_t now_ms);
 
 void SendLocalState(std::uint64_t now_ms) {
     if (now_ms - g_local_transport.last_send_ms < kLocalTransportSendIntervalMs) {
@@ -2982,16 +3619,22 @@ void SendWorldSnapshot(std::uint64_t now_ms) {
 }
 
 void SendLootSnapshot(std::uint64_t now_ms) {
-    if (!g_local_transport.is_host ||
-        now_ms - g_local_transport.last_loot_snapshot_send_ms < kLocalTransportLootSnapshotIntervalMs) {
+    if (!g_local_transport.is_host) {
         return;
     }
-    g_local_transport.last_loot_snapshot_send_ms = now_ms;
 
     LootSnapshotPacket packet{};
     if (!BuildLocalLootSnapshotPacket(&packet)) {
         return;
     }
+
+    const auto send_interval_ms = LootSnapshotIntervalForPacket(packet);
+    if (now_ms - g_local_transport.last_loot_snapshot_send_ms < send_interval_ms) {
+        return;
+    }
+    g_local_transport.last_loot_snapshot_send_ms = now_ms;
+
+    PublishLootSnapshotRuntimeInfo(packet, now_ms);
 
     const auto endpoints = BuildKnownSendEndpoints();
     for (const auto& endpoint : endpoints) {
@@ -3070,10 +3713,18 @@ void SendQueuedLootPickupRequests() {
                                ? local->runtime.run_nonce
                                : runtime_state.loot_snapshot.run_nonce;
         packet.network_drop_id = request.network_drop_id;
-        packet.requester_position_x = local->runtime.position_x;
-        packet.requester_position_y = local->runtime.position_y;
-        packet.drop_position_x = drop != nullptr ? drop->position_x : local->runtime.position_x;
-        packet.drop_position_y = drop != nullptr ? drop->position_y : local->runtime.position_y;
+        packet.requester_position_x =
+            request.has_pickup_positions ? request.requester_position_x : local->runtime.position_x;
+        packet.requester_position_y =
+            request.has_pickup_positions ? request.requester_position_y : local->runtime.position_y;
+        packet.drop_position_x =
+            request.has_pickup_positions
+                ? request.drop_position_x
+                : (drop != nullptr ? drop->position_x : local->runtime.position_x);
+        packet.drop_position_y =
+            request.has_pickup_positions
+                ? request.drop_position_y
+                : (drop != nullptr ? drop->position_y : local->runtime.position_y);
 
         for (const auto& endpoint : endpoints) {
             SendPacketToEndpoint(packet, endpoint);
@@ -3082,7 +3733,173 @@ void SendQueuedLootPickupRequests() {
             "Multiplayer loot pickup request sent. participant_id=" +
             std::to_string(packet.participant_id) +
             " request_sequence=" + std::to_string(packet.request_sequence) +
-            " network_drop_id=" + std::to_string(packet.network_drop_id));
+            " network_drop_id=" + std::to_string(packet.network_drop_id) +
+            " requester_pos=(" + std::to_string(packet.requester_position_x) + "," +
+            std::to_string(packet.requester_position_y) + ")" +
+            " drop_pos=(" + std::to_string(packet.drop_position_x) + "," +
+            std::to_string(packet.drop_position_y) + ")" +
+            " captured_positions=" + std::to_string(request.has_pickup_positions ? 1 : 0));
+    }
+}
+
+template <typename Packet>
+void SendPacketToParticipantOrPeers(const Packet& packet, std::uint64_t participant_id) {
+    bool sent_to_target = false;
+    for (const auto& peer : g_local_transport.peers) {
+        if (peer.participant_id != participant_id) {
+            continue;
+        }
+        SendPacketToEndpoint(packet, peer.address);
+        sent_to_target = true;
+    }
+    if (sent_to_target) {
+        return;
+    }
+
+    const auto endpoints = BuildKnownSendEndpoints();
+    for (const auto& endpoint : endpoints) {
+        SendPacketToEndpoint(packet, endpoint);
+    }
+}
+
+std::vector<QueuedLocalLevelUpChoice> TakeQueuedLocalLevelUpChoices() {
+    std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
+    std::vector<QueuedLocalLevelUpChoice> choices;
+    choices.swap(g_queued_local_level_up_choices);
+    return choices;
+}
+
+bool TryResolveOfferedLevelUpOption(
+    const std::vector<LevelUpChoiceOptionState>& options,
+    std::int32_t option_index,
+    std::int32_t option_id,
+    LevelUpChoiceOptionState* resolved) {
+    if (resolved != nullptr) {
+        *resolved = LevelUpChoiceOptionState{};
+    }
+    if (option_index > 0) {
+        const auto zero_based_index = static_cast<std::size_t>(option_index - 1);
+        if (zero_based_index >= options.size()) {
+            return false;
+        }
+        if (option_id >= 0 && options[zero_based_index].option_id != option_id) {
+            return false;
+        }
+        if (resolved != nullptr) {
+            *resolved = options[zero_based_index];
+        }
+        return true;
+    }
+    if (option_id >= 0) {
+        const auto it = std::find_if(
+            options.begin(),
+            options.end(),
+            [&](const LevelUpChoiceOptionState& option) {
+                return option.option_id == option_id;
+            });
+        if (it == options.end()) {
+            return false;
+        }
+        if (resolved != nullptr) {
+            *resolved = *it;
+        }
+        return true;
+    }
+    return false;
+}
+
+LevelUpChoiceOptionState ToRuntimeLevelUpOption(const BotSkillChoiceOption& option) {
+    LevelUpChoiceOptionState state;
+    state.option_id = option.option_id;
+    state.apply_count = option.apply_count;
+    return state;
+}
+
+bool TryResolveIssuedLevelUpOption(
+    const IssuedLevelUpOffer& offer,
+    std::int32_t option_index,
+    std::int32_t option_id,
+    BotSkillChoiceOption* resolved) {
+    if (resolved != nullptr) {
+        *resolved = BotSkillChoiceOption{};
+    }
+    if (option_index > 0) {
+        const auto zero_based_index = static_cast<std::size_t>(option_index - 1);
+        if (zero_based_index >= offer.options.size()) {
+            return false;
+        }
+        if (option_id >= 0 && offer.options[zero_based_index].option_id != option_id) {
+            return false;
+        }
+        if (resolved != nullptr) {
+            *resolved = offer.options[zero_based_index];
+        }
+        return true;
+    }
+    if (option_id >= 0) {
+        const auto it = std::find_if(
+            offer.options.begin(),
+            offer.options.end(),
+            [&](const BotSkillChoiceOption& option) {
+                return option.option_id == option_id;
+            });
+        if (it == offer.options.end()) {
+            return false;
+        }
+        if (resolved != nullptr) {
+            *resolved = *it;
+        }
+        return true;
+    }
+    return false;
+}
+
+void SendQueuedLevelUpChoices() {
+    if (!IsLocalTransportClient()) {
+        return;
+    }
+
+    auto choices = TakeQueuedLocalLevelUpChoices();
+    if (choices.empty()) {
+        return;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto& offer = runtime_state.active_level_up_offer;
+    if (!offer.valid) {
+        return;
+    }
+
+    const auto endpoints = BuildKnownSendEndpoints();
+    if (endpoints.empty()) {
+        return;
+    }
+
+    for (const auto& choice : choices) {
+        if (choice.offer_id != offer.offer_id) {
+            Log(
+                "Multiplayer level-up choice skipped; offer id is stale. queued_offer_id=" +
+                std::to_string(choice.offer_id) +
+                " active_offer_id=" + std::to_string(offer.offer_id));
+            continue;
+        }
+
+        LevelUpChoicePacket packet{};
+        packet.header = MakePacketHeader(PacketKind::LevelUpChoice, g_local_transport.next_sequence++);
+        packet.participant_id = g_local_transport.local_peer_id;
+        packet.offer_id = choice.offer_id;
+        packet.run_nonce = offer.run_nonce;
+        packet.option_index = choice.option_index;
+        packet.option_id = choice.option_id;
+        for (const auto& endpoint : endpoints) {
+            SendPacketToEndpoint(packet, endpoint);
+        }
+        Log(
+            "Multiplayer level-up choice sent. participant_id=" +
+            std::to_string(packet.participant_id) +
+            " offer_id=" + std::to_string(packet.offer_id) +
+            " option_index=" + std::to_string(packet.option_index) +
+            " option_id=" + std::to_string(packet.option_id));
     }
 }
 
@@ -3123,7 +3940,7 @@ std::uint64_t ResolveLocalCastTargetNetworkActorId(
         event.has_aim_target ? event.aim_target_y : position_y + direction_y * 512.0f;
     if (event.target_network_actor_id != 0) {
         SDModSceneActorState target_actor;
-        if (TryFindLocalRunEnemyByNetworkId(event.target_network_actor_id, &target_actor) &&
+        if (TryFindLocalRunEnemyByNetworkIdInternal(event.target_network_actor_id, &target_actor) &&
             IsSaneExplicitCastTarget(target_actor, position_x, position_y)) {
             return event.target_network_actor_id;
         }
@@ -3337,6 +4154,214 @@ void SendCastPacketToEndpoints(const CastPacket& packet, const std::vector<socka
         " target_network_actor_id=" + std::to_string(packet.target_network_actor_id));
 }
 
+bool SendLocalEnemyDamageClaim(
+    const RuntimeState& runtime_state,
+    const ParticipantInfo& local,
+    std::uint64_t network_actor_id,
+    std::int32_t skill_id,
+    float authoritative_hp,
+    float local_hp,
+    float max_hp,
+    float target_position_x,
+    float target_position_y);
+
+bool TryResolveLocalPrimaryCastClaimDamage(
+    const ParticipantInfo& local,
+    const CastPacket& packet,
+    float authoritative_hp,
+    float authoritative_max_hp,
+    float* damage_out,
+    std::string* error_message) {
+    if (damage_out != nullptr) {
+        *damage_out = 0.0f;
+    }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    auto reject = [&](const char* reason) {
+        if (error_message != nullptr) {
+            *error_message = reason;
+        }
+        return false;
+    };
+
+    if (damage_out == nullptr) {
+        return reject("missing_damage_out");
+    }
+    if (static_cast<CastKind>(packet.cast_kind) != CastKind::Primary ||
+        static_cast<CastInputPhase>(packet.input_phase) != CastInputPhase::Pressed ||
+        packet.target_network_actor_id == 0 ||
+        !std::isfinite(authoritative_hp) ||
+        !std::isfinite(authoritative_max_hp) ||
+        authoritative_max_hp <= 0.0f ||
+        authoritative_hp <= kEnemyDamageClaimHpEpsilon) {
+        return reject("not_claimable_primary_cast");
+    }
+
+    SDModPlayerState player_state;
+    if (!TryGetPlayerState(&player_state) ||
+        !player_state.valid ||
+        player_state.progression_address == 0) {
+        return reject("local_progression_unavailable");
+    }
+
+    NativePrimarySpellSelection selection{};
+    std::string selection_error;
+    bool selection_resolved = false;
+    if (packet.skill_id > 0) {
+        selection_resolved = TryResolveNativePrimarySelectionFromSkillId(
+            player_state.progression_address,
+            packet.skill_id,
+            &selection,
+            &selection_error);
+    }
+    if (!selection_resolved) {
+        selection_error.clear();
+        selection_resolved =
+            TryResolveNativePrimarySelectionForProfile(local.character_profile, &selection);
+    }
+    if (!selection_resolved) {
+        if (error_message != nullptr) {
+            *error_message =
+                selection_error.empty()
+                    ? std::string("primary_selection_unresolved")
+                    : ("primary_selection_unresolved: " + selection_error);
+        }
+        return false;
+    }
+    if (!selection.pure_primary) {
+        return reject("primary_cast_not_pure_projectile");
+    }
+
+    NativePrimarySpellStats stats{};
+    std::string stats_error;
+    if (!TryResolveNativePrimarySpellStats(
+            player_state.progression_address,
+            selection,
+            &stats,
+            &stats_error)) {
+        if (error_message != nullptr) {
+            *error_message =
+                stats_error.empty()
+                    ? std::string("primary_native_stats_unresolved")
+                    : ("primary_native_stats_unresolved: " + stats_error);
+        }
+        return false;
+    }
+    if (!std::isfinite(stats.damage) || stats.damage <= kEnemyDamageClaimHpEpsilon) {
+        return reject("primary_native_damage_invalid");
+    }
+
+    *damage_out = stats.damage;
+    return true;
+}
+
+bool TrySendLocalCastEnemyDamageClaim(
+    const RuntimeState& runtime_state,
+    const ParticipantInfo& local,
+    const CastPacket& packet) {
+    if (!IsLocalTransportClient() ||
+        packet.cast_sequence == 0 ||
+        packet.target_network_actor_id == 0 ||
+        static_cast<CastInputPhase>(packet.input_phase) != CastInputPhase::Pressed ||
+        g_local_transport.local_cast_damage_claimed_sequences.find(packet.cast_sequence) !=
+            g_local_transport.local_cast_damage_claimed_sequences.end() ||
+        !runtime_state.world_snapshot.valid ||
+        runtime_state.world_snapshot.scene_intent.kind != ParticipantSceneIntentKind::Run) {
+        return false;
+    }
+
+    SDModSceneActorState local_target;
+    if (!TryFindLocalRunEnemyByNetworkIdInternal(packet.target_network_actor_id, &local_target) ||
+        !IsRunEnemyAlignedWithPlayerCastAim(
+            local_target,
+            packet.position_x,
+            packet.position_y,
+            packet.direction_x,
+            packet.direction_y,
+            packet.aim_target_x,
+            packet.aim_target_y)) {
+        Log(
+            "Multiplayer local cast damage claim skipped. reason=target_not_aligned"
+            " cast_sequence=" + std::to_string(packet.cast_sequence) +
+            " target_network_actor_id=" + std::to_string(packet.target_network_actor_id));
+        return false;
+    }
+
+    const auto* authoritative_actor = FindSnapshotActorByNetworkId(
+        runtime_state.world_snapshot,
+        packet.target_network_actor_id);
+    if (authoritative_actor == nullptr ||
+        !authoritative_actor->tracked_enemy ||
+        authoritative_actor->run_static ||
+        authoritative_actor->dead ||
+        !std::isfinite(authoritative_actor->hp) ||
+        !std::isfinite(authoritative_actor->max_hp) ||
+        authoritative_actor->max_hp <= 0.0f ||
+        authoritative_actor->hp <= kEnemyDamageClaimHpEpsilon) {
+        Log(
+            "Multiplayer local cast damage claim skipped. reason=authoritative_target_not_live"
+            " cast_sequence=" + std::to_string(packet.cast_sequence) +
+            " target_network_actor_id=" + std::to_string(packet.target_network_actor_id));
+        return false;
+    }
+
+    const float authoritative_hp =
+        ClampEnemyHp(authoritative_actor->hp, authoritative_actor->max_hp);
+    float claim_damage = 0.0f;
+    std::string damage_error;
+    if (!TryResolveLocalPrimaryCastClaimDamage(
+            local,
+            packet,
+            authoritative_hp,
+            authoritative_actor->max_hp,
+            &claim_damage,
+            &damage_error)) {
+        Log(
+            "Multiplayer local cast damage claim skipped. reason=" + damage_error +
+            " cast_sequence=" + std::to_string(packet.cast_sequence) +
+            " target_network_actor_id=" + std::to_string(packet.target_network_actor_id));
+        return false;
+    }
+
+    const float claimed_after_hp =
+        ClampEnemyHp(authoritative_hp - claim_damage, authoritative_actor->max_hp);
+    if (claimed_after_hp + kEnemyDamageClaimHpEpsilon >= authoritative_hp) {
+        return false;
+    }
+    if (!HasReplicatedRunEnemyDamageBaseline(packet.target_network_actor_id)) {
+        MarkReplicatedRunEnemyDamageBaseline(packet.target_network_actor_id, authoritative_hp);
+    }
+
+    const bool sent = SendLocalEnemyDamageClaim(
+        runtime_state,
+        local,
+        packet.target_network_actor_id,
+        packet.skill_id,
+        authoritative_hp,
+        claimed_after_hp,
+        authoritative_actor->max_hp,
+        authoritative_actor->position_x,
+        authoritative_actor->position_y);
+    if (!sent) {
+        return false;
+    }
+
+    g_local_transport.local_cast_damage_claimed_sequences.insert(packet.cast_sequence);
+    if (g_local_transport.local_cast_damage_claimed_sequences.size() > 256) {
+        g_local_transport.local_cast_damage_claimed_sequences.clear();
+        g_local_transport.local_cast_damage_claimed_sequences.insert(packet.cast_sequence);
+    }
+    Log(
+        "Multiplayer local cast damage claim sent from cast packet. cast_sequence=" +
+        std::to_string(packet.cast_sequence) +
+        " target_network_actor_id=" + std::to_string(packet.target_network_actor_id) +
+        " damage=" + std::to_string(claim_damage) +
+        " before_hp=" + std::to_string(authoritative_hp) +
+        " after_hp=" + std::to_string(claimed_after_hp));
+    return true;
+}
+
 void ReleaseActiveLocalCastInputForReplacement(
     const RuntimeState& runtime_state,
     const ParticipantInfo& local,
@@ -3417,6 +4442,7 @@ void SendQueuedCastEvents(std::uint64_t now_ms) {
         }
 
         SendCastPacketToEndpoints(packet, endpoints);
+        (void)TrySendLocalCastEnemyDamageClaim(runtime_state, *local, packet);
         if (event.native_queue_id != 0) {
             Log(
                 "Multiplayer local native cast sent. native_queue_id=" +
@@ -3524,8 +4550,20 @@ bool SendLocalEnemyDamageClaim(
 
     authoritative_hp = ClampEnemyHp(authoritative_hp, max_hp);
     local_hp = ClampEnemyHp(local_hp, max_hp);
+    if (IsLocalTransportClient() && !HasReplicatedRunEnemyDamageBaseline(network_actor_id)) {
+        if (local_hp + kEnemyDamageClaimHpEpsilon >= authoritative_hp) {
+            MarkReplicatedRunEnemyDamageBaseline(network_actor_id, authoritative_hp);
+        }
+        Log(
+            "Multiplayer enemy damage claim suppressed until first authoritative HP baseline. "
+            "target_network_actor_id=" + std::to_string(network_actor_id) +
+            " authoritative_hp=" + std::to_string(authoritative_hp) +
+            " local_hp=" + std::to_string(local_hp));
+        return false;
+    }
     if (local_hp + kEnemyDamageClaimHpEpsilon >= authoritative_hp) {
         g_local_transport.last_enemy_claimed_hp_by_network_id.erase(network_actor_id);
+        g_local_transport.pending_lethal_enemy_damage_claim_until_ms.erase(network_actor_id);
         g_local_transport.rejected_enemy_damage_retry_suppressed_until_ms.erase(network_actor_id);
         return false;
     }
@@ -3566,6 +4604,10 @@ bool SendLocalEnemyDamageClaim(
     packet.target_position_x = target_position_x;
     packet.target_position_y = target_position_y;
     packet.lethal = local_hp <= kEnemyDamageClaimHpEpsilon ? 1 : 0;
+    if (packet.lethal != 0) {
+        g_local_transport.pending_lethal_enemy_damage_claim_until_ms[network_actor_id] =
+            now_ms + kEnemyDamageLethalClaimPendingSuppressMs;
+    }
 
     for (const auto& endpoint : endpoints) {
         SendPacketToEndpoint(packet, endpoint);
@@ -3577,6 +4619,7 @@ bool SendLocalEnemyDamageClaim(
         if (local_actor_address != 0) {
             local_death_called =
                 sdmod::TryTriggerRunEnemyDeath(local_actor_address, &local_death_exception_code);
+            sdmod::ClearManualRunEnemyFreeze(local_actor_address);
             if (local_death_called) {
                 sdmod::MarkReplicatedRunEnemyDeathPresented(network_actor_id);
                 sdmod::SuppressClientLocalLootActors("client_local_enemy_death_claim");
@@ -3593,6 +4636,27 @@ bool SendLocalEnemyDamageClaim(
         " local_death_called=" + std::to_string(local_death_called ? 1 : 0) +
         " local_death_seh=" + HexString(static_cast<uintptr_t>(local_death_exception_code)));
     return true;
+}
+
+bool HasLocalPendingLethalEnemyDamageClaimInternal(
+    std::uint64_t network_actor_id,
+    std::uint64_t now_ms) {
+    if (!IsLocalTransportClient() || network_actor_id == 0) {
+        return false;
+    }
+    if (now_ms == 0) {
+        now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    }
+    const auto pending_it =
+        g_local_transport.pending_lethal_enemy_damage_claim_until_ms.find(network_actor_id);
+    if (pending_it == g_local_transport.pending_lethal_enemy_damage_claim_until_ms.end()) {
+        return false;
+    }
+    if (pending_it->second > now_ms) {
+        return true;
+    }
+    g_local_transport.pending_lethal_enemy_damage_claim_until_ms.erase(pending_it);
+    return false;
 }
 
 std::vector<QueuedLocalEnemyDamageClaim> TakeQueuedLocalEnemyDamageClaims() {
@@ -3647,6 +4711,9 @@ void SendLocalEnemyDamageClaims() {
             !binding.matched ||
             binding.parked ||
             binding.removed) {
+            if (binding.network_actor_id != 0 && (binding.parked || binding.removed)) {
+                ClearReplicatedRunEnemyDamageBaseline(binding.network_actor_id);
+            }
             continue;
         }
 
@@ -3660,7 +4727,7 @@ void SendLocalEnemyDamageClaims() {
             !std::isfinite(authoritative_actor->max_hp) ||
             authoritative_actor->max_hp <= 0.0f ||
             authoritative_actor->hp <= kEnemyDamageClaimHpEpsilon) {
-            g_local_transport.last_enemy_claimed_hp_by_network_id.erase(binding.network_actor_id);
+            ClearReplicatedRunEnemyDamageBaseline(binding.network_actor_id);
             continue;
         }
 
@@ -3677,8 +4744,19 @@ void SendLocalEnemyDamageClaims() {
         }
 
         const float local_hp = ClampEnemyHp(local_actor.hp, local_actor.max_hp);
+        const float authoritative_max_hp = authoritative_actor->max_hp;
+        if (std::fabs(local_actor.max_hp - authoritative_max_hp) > kEnemyDamageClaimHpEpsilon) {
+            ClearReplicatedRunEnemyDamageBaseline(binding.network_actor_id);
+            continue;
+        }
         const float authoritative_hp =
-            ClampEnemyHp(authoritative_actor->hp, authoritative_actor->max_hp);
+            ClampEnemyHp(authoritative_actor->hp, authoritative_max_hp);
+        if (!HasReplicatedRunEnemyDamageBaseline(binding.network_actor_id)) {
+            if (local_hp + kEnemyDamageClaimHpEpsilon >= authoritative_hp) {
+                MarkReplicatedRunEnemyDamageBaseline(binding.network_actor_id, authoritative_hp);
+            }
+            continue;
+        }
         if (local_hp + kEnemyDamageClaimHpEpsilon >= authoritative_hp) {
             g_local_transport.last_enemy_claimed_hp_by_network_id.erase(binding.network_actor_id);
             continue;
@@ -3879,8 +4957,30 @@ void ApplyRemoteStatePacket(const StatePacket& packet, const sockaddr_in& from, 
     const auto effect_state = NormalizeRenderDriveEffectState(
         packet.render_drive_effect_timer,
         packet.render_drive_effect_progress);
+    const bool packet_from_configured_authority =
+        IsLocalTransportClient() && IsConfiguredRemoteAuthorityEndpoint(from);
 
     UpdateRuntimeState([&](RuntimeState& state) {
+        if (packet_from_configured_authority) {
+            LevelUpWaitStatusRuntimeInfo wait_status;
+            wait_status.valid = true;
+            wait_status.pause_active = packet.level_up_pause_active != 0;
+            wait_status.authority_participant_id = packet.participant_id;
+            wait_status.received_ms = now_ms;
+            const auto waiting_count =
+                (std::min<std::size_t>)(
+                    packet.level_up_waiting_count,
+                    kLevelUpWaitStatusMaxParticipants);
+            wait_status.waiting_participant_ids.reserve(waiting_count);
+            for (std::size_t index = 0; index < waiting_count; ++index) {
+                const auto participant_id = packet.level_up_waiting_participant_ids[index];
+                if (participant_id != 0) {
+                    wait_status.waiting_participant_ids.push_back(participant_id);
+                }
+            }
+            state.level_up_wait_status = std::move(wait_status);
+        }
+
         auto* participant = UpsertRemoteParticipant(
             state,
             packet.participant_id,
@@ -3905,6 +5005,21 @@ void ApplyRemoteStatePacket(const StatePacket& packet, const sockaddr_in& from, 
         participant->runtime.scene_intent = scene_intent;
         participant->runtime.level = packet.level;
         participant->runtime.wave = packet.wave;
+        if (participant->runtime.life_max > 0.0f &&
+            participant->runtime.life_current > 0.0f &&
+            packet.life_max > 0.0f &&
+            packet.life_current <= 0.0f) {
+            Log(
+                "Multiplayer remote participant vitals crossed to zero from state packet. participant_id=" +
+                std::to_string(packet.participant_id) +
+                " hp=" + std::to_string(packet.life_current) +
+                "/" + std::to_string(packet.life_max) +
+                " previous_hp=" + std::to_string(participant->runtime.life_current) +
+                "/" + std::to_string(participant->runtime.life_max) +
+                " level=" + std::to_string(packet.level) +
+                " xp=" + std::to_string(packet.experience_current) +
+                " packet_sequence=" + std::to_string(packet.header.sequence));
+        }
         participant->runtime.life_current = packet.life_current;
         participant->runtime.life_max = packet.life_max;
         participant->runtime.mana_current = packet.mana_current;
@@ -3945,8 +5060,10 @@ void ApplyRemoteStatePacket(const StatePacket& packet, const sockaddr_in& from, 
             }
         }
         const bool should_apply_progression_book =
-            packet.statbook_revision >= participant->owned_progression.statbook_revision;
+            packet.statbook_revision >= participant->owned_progression.statbook_revision ||
+            packet.spellbook_revision >= participant->owned_progression.spellbook_revision;
         if (should_apply_progression_book) {
+            participant->owned_progression.spellbook_revision = packet.spellbook_revision;
             participant->owned_progression.statbook_revision = packet.statbook_revision;
             participant->owned_progression.progression_book_entry_total_count =
                 packet.progression_book_entry_total_count;
@@ -4090,6 +5207,17 @@ void ApplyRemoteStatePacket(const StatePacket& packet, const sockaddr_in& from, 
 }
 
 void ApplyRemoteCastPacket(const CastPacket& packet, const sockaddr_in& from, std::uint64_t now_ms) {
+    auto log_cast_drop = [&](const std::string& reason) {
+        Log(
+            "Multiplayer remote cast ignored. reason=" + reason +
+            " participant_id=" + std::to_string(packet.participant_id) +
+            " cast_sequence=" + std::to_string(packet.cast_sequence) +
+            " packet_sequence=" + std::to_string(packet.header.sequence) +
+            " phase=" + CastInputPhaseLabel(packet.input_phase) +
+            " skill_id=" + std::to_string(packet.skill_id) +
+            " run_nonce=" + std::to_string(packet.run_nonce));
+    };
+
     if (packet.participant_id == 0 ||
         packet.participant_id == kLocalParticipantId ||
         packet.participant_id == g_local_transport.local_peer_id ||
@@ -4101,6 +5229,7 @@ void ApplyRemoteCastPacket(const CastPacket& packet, const sockaddr_in& from, st
         !std::isfinite(packet.heading) ||
         !std::isfinite(packet.aim_target_x) ||
         !std::isfinite(packet.aim_target_y)) {
+        log_cast_drop("invalid_packet");
         return;
     }
 
@@ -4111,6 +5240,9 @@ void ApplyRemoteCastPacket(const CastPacket& packet, const sockaddr_in& from, st
         g_local_transport.last_cast_sequence_by_participant.find(packet.participant_id);
     if (last_sequence_it != g_local_transport.last_cast_sequence_by_participant.end() &&
         static_cast<std::int32_t>(packet.cast_sequence - last_sequence_it->second) < 0) {
+        log_cast_drop(
+            "stale_cast_sequence last_cast_sequence=" +
+            std::to_string(last_sequence_it->second));
         return;
     }
     auto& input_tracker = g_local_transport.remote_cast_inputs_by_participant[packet.participant_id];
@@ -4121,6 +5253,9 @@ void ApplyRemoteCastPacket(const CastPacket& packet, const sockaddr_in& from, st
             packet.cast_sequence;
     } else if (input_tracker.last_packet_sequence != 0 &&
                static_cast<std::int32_t>(packet.header.sequence - input_tracker.last_packet_sequence) <= 0) {
+        log_cast_drop(
+            "stale_packet_sequence last_packet_sequence=" +
+            std::to_string(input_tracker.last_packet_sequence));
         return;
     }
     input_tracker.last_packet_sequence = packet.header.sequence;
@@ -4128,15 +5263,42 @@ void ApplyRemoteCastPacket(const CastPacket& packet, const sockaddr_in& from, st
 
     const auto runtime_state = SnapshotRuntimeState();
     const auto* participant = FindParticipant(runtime_state, packet.participant_id);
-    if (participant == nullptr ||
-        !IsRemoteParticipant(*participant) ||
-        !IsNativeControlledParticipant(*participant) ||
-        !participant->runtime.valid ||
-        !participant->runtime.in_run ||
-        participant->runtime.scene_intent.kind != ParticipantSceneIntentKind::Run ||
-        (participant->runtime.run_nonce != 0 &&
-         packet.run_nonce != 0 &&
-         participant->runtime.run_nonce != packet.run_nonce)) {
+    if (participant == nullptr) {
+        log_cast_drop("participant_missing");
+        return;
+    }
+    if (!IsRemoteParticipant(*participant)) {
+        log_cast_drop(
+            "participant_not_remote kind=" +
+            std::to_string(static_cast<int>(participant->kind)));
+        return;
+    }
+    if (!IsNativeControlledParticipant(*participant)) {
+        log_cast_drop(
+            "participant_not_native_controlled controller=" +
+            std::to_string(static_cast<int>(participant->controller_kind)));
+        return;
+    }
+    if (!participant->runtime.valid) {
+        log_cast_drop("participant_runtime_invalid");
+        return;
+    }
+    if (!participant->runtime.in_run) {
+        log_cast_drop("participant_not_in_run");
+        return;
+    }
+    if (participant->runtime.scene_intent.kind != ParticipantSceneIntentKind::Run) {
+        log_cast_drop(
+            "participant_scene_not_run scene_intent=" +
+            std::to_string(static_cast<int>(participant->runtime.scene_intent.kind)));
+        return;
+    }
+    if (participant->runtime.run_nonce != 0 &&
+        packet.run_nonce != 0 &&
+        participant->runtime.run_nonce != packet.run_nonce) {
+        log_cast_drop(
+            "run_nonce_mismatch participant_run_nonce=" +
+            std::to_string(participant->runtime.run_nonce));
         return;
     }
 
@@ -4144,6 +5306,11 @@ void ApplyRemoteCastPacket(const CastPacket& packet, const sockaddr_in& from, st
     if (!TryGetParticipantGameplayState(packet.participant_id, &gameplay_state) ||
         !gameplay_state.entity_materialized ||
         gameplay_state.actor_address == 0) {
+        log_cast_drop(
+            "participant_not_materialized actor=" +
+            HexString(gameplay_state.actor_address) +
+            " entity_materialized=" +
+            std::to_string(gameplay_state.entity_materialized ? 1 : 0));
         return;
     }
 
@@ -4190,7 +5357,7 @@ void ApplyRemoteCastPacket(const CastPacket& packet, const sockaddr_in& from, st
     SDModSceneActorState cast_target;
     const bool resolved_target_by_id =
         packet.target_network_actor_id != 0 &&
-        TryFindLocalRunEnemyByNetworkId(packet.target_network_actor_id, &cast_target) &&
+        TryFindLocalRunEnemyByNetworkIdInternal(packet.target_network_actor_id, &cast_target) &&
         IsRunEnemyAlignedWithPlayerCastAim(
             cast_target,
             packet.position_x,
@@ -4235,20 +5402,24 @@ void ApplyRemoteCastPacket(const CastPacket& packet, const sockaddr_in& from, st
 
     request.cast_sequence = packet.cast_sequence;
     request.remote_input_controlled = true;
-    if (!input_tracker.start_queued && QueueBotCast(request)) {
-        input_tracker.start_queued = true;
-        Log(
-            "Multiplayer remote cast queued. participant_id=" +
-            std::to_string(packet.participant_id) +
-            " cast_sequence=" + std::to_string(packet.cast_sequence) +
-            " phase=" + CastInputPhaseLabel(packet.input_phase) +
-            " skill_id=" + std::to_string(packet.skill_id) +
-            " target_network_actor_id=" + std::to_string(packet.target_network_actor_id) +
-            " target_actor=" + HexString(request.target_actor_address) +
-            " target_source=" + std::string(
-                resolved_target_by_id
-                    ? "network_id"
-                    : (packet.target_network_actor_id != 0 ? "invalid_network_id" : "none")));
+    if (!input_tracker.start_queued) {
+        if (QueueBotCast(request)) {
+            input_tracker.start_queued = true;
+            Log(
+                "Multiplayer remote cast queued. participant_id=" +
+                std::to_string(packet.participant_id) +
+                " cast_sequence=" + std::to_string(packet.cast_sequence) +
+                " phase=" + CastInputPhaseLabel(packet.input_phase) +
+                " skill_id=" + std::to_string(packet.skill_id) +
+                " target_network_actor_id=" + std::to_string(packet.target_network_actor_id) +
+                " target_actor=" + HexString(request.target_actor_address) +
+                " target_source=" + std::string(
+                    resolved_target_by_id
+                        ? "network_id"
+                        : (packet.target_network_actor_id != 0 ? "invalid_network_id" : "none")));
+        } else {
+            log_cast_drop("queue_bot_cast_failed");
+        }
     }
 }
 
@@ -4287,10 +5458,17 @@ WorldSnapshotRuntimeInfo BuildWorldSnapshotRuntimeInfo(
         actor.enemy_type = packet_actor.enemy_type;
         actor.actor_slot = packet_actor.actor_slot;
         actor.world_slot = packet_actor.world_slot;
+        actor.target_participant_id = packet_actor.target_participant_id;
+        actor.target_native_type_id = packet_actor.target_native_type_id;
+        actor.target_actor_slot = packet_actor.target_actor_slot;
+        actor.target_world_slot = packet_actor.target_world_slot;
+        actor.target_bucket_delta = packet_actor.target_bucket_delta;
         actor.dead = (packet_actor.flags & WorldActorSnapshotFlagDead) != 0;
         actor.tracked_enemy = (packet_actor.flags & WorldActorSnapshotFlagTrackedEnemy) != 0;
         actor.lifecycle_owned = (packet_actor.flags & WorldActorSnapshotFlagLifecycleOwned) != 0;
         actor.run_static = (packet_actor.flags & WorldActorSnapshotFlagRunStatic) != 0;
+        actor.target_authoritative =
+            (packet_actor.flags & WorldActorSnapshotFlagTargetAuthoritative) != 0;
         actor.anim_drive_state = packet_actor.anim_drive_state;
         actor.presentation_flags = packet_actor.presentation_flags;
         actor.position_x = packet_actor.position_x;
@@ -4336,6 +5514,72 @@ void ApplyWorldSnapshotPacket(const WorldSnapshotPacket& packet, const sockaddr_
     PublishWorldSnapshotRuntimeInfo(packet, now_ms);
 }
 
+LootSnapshotRuntimeInfo BuildLootSnapshotRuntimeInfo(
+    const LootSnapshotPacket& packet,
+    std::uint64_t now_ms) {
+    const auto drop_count = static_cast<std::uint8_t>(
+        (std::min<std::uint32_t>)(packet.drop_count, kLootSnapshotMaxDrops));
+    const auto scene_kind = static_cast<WorldSceneKind>(packet.scene_kind);
+
+    LootSnapshotRuntimeInfo snapshot;
+    snapshot.valid = true;
+    snapshot.authority_participant_id = packet.authority_participant_id;
+    snapshot.received_ms = now_ms;
+    snapshot.sequence = packet.header.sequence;
+    snapshot.scene_epoch = packet.scene_epoch;
+    snapshot.run_nonce = packet.run_nonce;
+    snapshot.drop_total_count = packet.drop_total_count;
+    snapshot.truncated = (packet.snapshot_flags & LootSnapshotFlagTruncated) != 0;
+    snapshot.scene_intent = SceneIntentFromWorldSceneKind(scene_kind);
+    snapshot.drops.reserve(drop_count);
+
+    for (std::uint8_t index = 0; index < drop_count; ++index) {
+        const auto& packet_drop = packet.drops[index];
+        const auto drop_kind = LootDropKindFromPacketValue(packet_drop.drop_kind);
+        if (packet_drop.network_drop_id == 0 ||
+            packet_drop.native_type_id == 0 ||
+            !std::isfinite(packet_drop.position_x) ||
+            !std::isfinite(packet_drop.position_y) ||
+            !std::isfinite(packet_drop.radius) ||
+            packet_drop.radius < 0.0f ||
+            (drop_kind == LootDropKind::Orb && !std::isfinite(packet_drop.value)) ||
+            ((drop_kind == LootDropKind::Item || drop_kind == LootDropKind::Potion) &&
+                packet_drop.item_type_id == 0)) {
+            continue;
+        }
+
+        LootDropSnapshot drop;
+        drop.network_drop_id = packet_drop.network_drop_id;
+        drop.native_type_id = packet_drop.native_type_id;
+        drop.drop_kind = drop_kind;
+        drop.active = (packet_drop.flags & LootDropSnapshotFlagActive) != 0;
+        drop.presentation_state = packet_drop.presentation_state;
+        drop.amount = packet_drop.amount;
+        drop.amount_tier = packet_drop.amount_tier;
+        drop.value = packet_drop.value;
+        drop.motion = packet_drop.motion;
+        drop.progress = packet_drop.progress;
+        drop.item_type_id = packet_drop.item_type_id;
+        drop.item_slot = packet_drop.item_slot;
+        drop.stack_count = packet_drop.stack_count;
+        drop.actor_slot = packet_drop.actor_slot;
+        drop.world_slot = packet_drop.world_slot;
+        drop.lifetime = packet_drop.lifetime;
+        drop.position_x = packet_drop.position_x;
+        drop.position_y = packet_drop.position_y;
+        drop.radius = packet_drop.radius;
+        snapshot.drops.push_back(drop);
+    }
+
+    return snapshot;
+}
+
+void PublishLootSnapshotRuntimeInfo(const LootSnapshotPacket& packet, std::uint64_t now_ms) {
+    UpdateRuntimeState([&](RuntimeState& state) {
+        state.loot_snapshot = BuildLootSnapshotRuntimeInfo(packet, now_ms);
+    });
+}
+
 void ApplyLootSnapshotPacket(const LootSnapshotPacket& packet, const sockaddr_in& from, std::uint64_t now_ms) {
     if (g_local_transport.is_host ||
         packet.authority_participant_id == 0 ||
@@ -4343,64 +5587,8 @@ void ApplyLootSnapshotPacket(const LootSnapshotPacket& packet, const sockaddr_in
         return;
     }
 
-    const auto drop_count = static_cast<std::uint8_t>(
-        (std::min<std::uint32_t>)(packet.drop_count, kLootSnapshotMaxDrops));
     UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
-
-    const auto scene_kind = static_cast<WorldSceneKind>(packet.scene_kind);
-    UpdateRuntimeState([&](RuntimeState& state) {
-        LootSnapshotRuntimeInfo snapshot;
-        snapshot.valid = true;
-        snapshot.authority_participant_id = packet.authority_participant_id;
-        snapshot.received_ms = now_ms;
-        snapshot.sequence = packet.header.sequence;
-        snapshot.scene_epoch = packet.scene_epoch;
-        snapshot.run_nonce = packet.run_nonce;
-        snapshot.drop_total_count = packet.drop_total_count;
-        snapshot.truncated = (packet.snapshot_flags & LootSnapshotFlagTruncated) != 0;
-        snapshot.scene_intent = SceneIntentFromWorldSceneKind(scene_kind);
-        snapshot.drops.reserve(drop_count);
-
-        for (std::uint8_t index = 0; index < drop_count; ++index) {
-            const auto& packet_drop = packet.drops[index];
-            const auto drop_kind = LootDropKindFromPacketValue(packet_drop.drop_kind);
-            if (packet_drop.network_drop_id == 0 ||
-                packet_drop.native_type_id == 0 ||
-                !std::isfinite(packet_drop.position_x) ||
-                !std::isfinite(packet_drop.position_y) ||
-                !std::isfinite(packet_drop.radius) ||
-                packet_drop.radius < 0.0f ||
-                (drop_kind == LootDropKind::Orb && !std::isfinite(packet_drop.value)) ||
-                ((drop_kind == LootDropKind::Item || drop_kind == LootDropKind::Potion) &&
-                    packet_drop.item_type_id == 0)) {
-                continue;
-            }
-
-            LootDropSnapshot drop;
-            drop.network_drop_id = packet_drop.network_drop_id;
-            drop.native_type_id = packet_drop.native_type_id;
-            drop.drop_kind = drop_kind;
-            drop.active = (packet_drop.flags & LootDropSnapshotFlagActive) != 0;
-            drop.presentation_state = packet_drop.presentation_state;
-            drop.amount = packet_drop.amount;
-            drop.amount_tier = packet_drop.amount_tier;
-            drop.value = packet_drop.value;
-            drop.motion = packet_drop.motion;
-            drop.progress = packet_drop.progress;
-            drop.item_type_id = packet_drop.item_type_id;
-            drop.item_slot = packet_drop.item_slot;
-            drop.stack_count = packet_drop.stack_count;
-            drop.actor_slot = packet_drop.actor_slot;
-            drop.world_slot = packet_drop.world_slot;
-            drop.lifetime = packet_drop.lifetime;
-            drop.position_x = packet_drop.position_x;
-            drop.position_y = packet_drop.position_y;
-            drop.radius = packet_drop.radius;
-            snapshot.drops.push_back(drop);
-        }
-
-        state.loot_snapshot = std::move(snapshot);
-    });
+    PublishLootSnapshotRuntimeInfo(packet, now_ms);
 
     std::string queue_error;
     (void)sdmod::QueueReplicatedLootSnapshot(SnapshotRuntimeState().loot_snapshot, &queue_error);
@@ -4537,6 +5725,123 @@ bool ValidateEnemyDamageClaim(
     return true;
 }
 
+void ApplyHostAcceptedFireballExplodeSplash(
+    const EnemyDamageClaimPacket& packet,
+    const ParticipantInfo* participant,
+    std::uint64_t now_ms,
+    const SDModSceneActorState& primary_target) {
+    const int fire_primary_entry = ResolveNativePrimaryEntryForElement(0);
+    int participant_primary_entry = -1;
+    if (participant != nullptr) {
+        SDModParticipantGameplayState gameplay_state;
+        if (TryGetParticipantGameplayState(participant->participant_id, &gameplay_state) &&
+            gameplay_state.available) {
+            participant_primary_entry =
+                gameplay_state.character_profile.loadout.primary_entry_index >= 0
+                    ? gameplay_state.character_profile.loadout.primary_entry_index
+                    : ResolveNativePrimaryEntryForElement(gameplay_state.character_profile.element_id);
+        }
+        if (participant_primary_entry < 0) {
+            participant_primary_entry =
+                participant->runtime.primary_entry_index >= 0
+                    ? participant->runtime.primary_entry_index
+                    : participant->character_profile.loadout.primary_entry_index;
+        }
+    }
+    if (!g_local_transport.is_host ||
+        participant == nullptr ||
+        fire_primary_entry < 0 ||
+        participant_primary_entry != fire_primary_entry ||
+        packet.target_network_actor_id == 0 ||
+        !std::isfinite(primary_target.x) ||
+        !std::isfinite(primary_target.y)) {
+        return;
+    }
+
+    float splash_damage = 0.0f;
+    float splash_radius_world = 0.0f;
+    if (!TryResolveFireballExplodeSplashTuning(
+            participant->owned_progression,
+            &splash_damage,
+            &splash_radius_world)) {
+        return;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    if (!runtime_state.world_snapshot.valid) {
+        return;
+    }
+
+    for (const auto& snapshot_actor : runtime_state.world_snapshot.actors) {
+        if (snapshot_actor.network_actor_id == 0 ||
+            snapshot_actor.network_actor_id == packet.target_network_actor_id ||
+            !snapshot_actor.tracked_enemy ||
+            snapshot_actor.dead ||
+            snapshot_actor.run_static ||
+            !std::isfinite(snapshot_actor.position_x) ||
+            !std::isfinite(snapshot_actor.position_y) ||
+            !std::isfinite(snapshot_actor.hp) ||
+            !std::isfinite(snapshot_actor.max_hp) ||
+            snapshot_actor.max_hp <= 0.0f) {
+            continue;
+        }
+
+        SDModSceneActorState actor;
+        if (!TryFindHostRunEnemyByNetworkId(snapshot_actor.network_actor_id, &actor) ||
+            actor.actor_address == 0 ||
+            !actor.valid ||
+            actor.dead ||
+            !std::isfinite(actor.x) ||
+            !std::isfinite(actor.y)) {
+            continue;
+        }
+
+        const float dx = snapshot_actor.position_x - primary_target.x;
+        const float dy = snapshot_actor.position_y - primary_target.y;
+        if (!std::isfinite(dx) || !std::isfinite(dy) ||
+            (dx * dx) + (dy * dy) > splash_radius_world * splash_radius_world) {
+            continue;
+        }
+
+        const float current_hp = ClampEnemyHp(snapshot_actor.hp, snapshot_actor.max_hp);
+        const float new_hp = ClampEnemyHp(current_hp - splash_damage, snapshot_actor.max_hp);
+        if (new_hp + kEnemyDamageClaimHpEpsilon >= current_hp) {
+            continue;
+        }
+
+        const bool wrote =
+            TryWriteRunEnemyHealth(actor.actor_address, new_hp, snapshot_actor.max_hp);
+        std::uint32_t death_exception_code = 0;
+        bool death_called = false;
+        if (wrote && new_hp <= kEnemyDamageClaimHpEpsilon) {
+            death_called =
+                sdmod::TryTriggerRunEnemyDeath(actor.actor_address, &death_exception_code);
+            sdmod::ClearManualRunEnemyFreeze(actor.actor_address);
+            if (death_called) {
+                RecordRecentRunEnemyDeathSnapshot(
+                    snapshot_actor.network_actor_id,
+                    actor,
+                    now_ms);
+            }
+        }
+
+        Log(
+            "Multiplayer host explode splash applied. participant_id=" +
+            std::to_string(packet.participant_id) +
+            " primary_target_network_actor_id=" +
+            std::to_string(packet.target_network_actor_id) +
+            " splash_target_network_actor_id=" +
+            std::to_string(snapshot_actor.network_actor_id) +
+            " damage=" + std::to_string(splash_damage) +
+            " radius_world=" + std::to_string(splash_radius_world) +
+            " before_hp=" + std::to_string(current_hp) +
+            " after_hp=" + std::to_string(wrote ? new_hp : current_hp) +
+            " wrote=" + std::to_string(wrote ? 1 : 0) +
+            " death_called=" + std::to_string(death_called ? 1 : 0) +
+            " death_seh=" + HexString(static_cast<uintptr_t>(death_exception_code)));
+    }
+}
+
 void ApplyEnemyDamageClaimPacket(
     const EnemyDamageClaimPacket& packet,
     const sockaddr_in& from,
@@ -4598,12 +5903,16 @@ void ApplyEnemyDamageClaimPacket(
     bool death_called = false;
     if (wrote && accepted_hp <= kEnemyDamageClaimHpEpsilon) {
         death_called = sdmod::TryTriggerRunEnemyDeath(target_actor.actor_address, &death_exception_code);
+        sdmod::ClearManualRunEnemyFreeze(target_actor.actor_address);
         if (death_called) {
             RecordRecentRunEnemyDeathSnapshot(
                 packet.target_network_actor_id,
                 target_actor,
                 now_ms);
         }
+    }
+    if (wrote) {
+        ApplyHostAcceptedFireballExplodeSplash(packet, participant, now_ms, target_actor);
     }
 
     RememberEnemyDamageClaimSequence(packet);
@@ -4950,7 +6259,33 @@ bool ValidateLootPickupRequest(
             drop.position_x,
             drop.position_y) <= range_limit_sq;
     if (!client_position_in_range && !host_observed_position_in_range) {
-        return reject("distance_sanity", LootPickupResultCode::OutOfRange);
+        if (reject_reason != nullptr) {
+            const float packet_distance = std::sqrt(DistanceSquared(
+                packet.requester_position_x,
+                packet.requester_position_y,
+                drop.position_x,
+                drop.position_y));
+            const float host_observed_distance = std::sqrt(DistanceSquared(
+                participant->runtime.position_x,
+                participant->runtime.position_y,
+                drop.position_x,
+                drop.position_y));
+            std::ostringstream reason;
+            reason << "distance_sanity"
+                   << " packet_requester=(" << packet.requester_position_x << ","
+                   << packet.requester_position_y << ")"
+                   << " host_observed=(" << participant->runtime.position_x << ","
+                   << participant->runtime.position_y << ")"
+                   << " drop=(" << drop.position_x << "," << drop.position_y << ")"
+                   << " packet_distance=" << packet_distance
+                   << " host_observed_distance=" << host_observed_distance
+                   << " range_limit=" << range_limit;
+            *reject_reason = reason.str();
+        }
+        if (result_code != nullptr) {
+            *result_code = LootPickupResultCode::OutOfRange;
+        }
+        return false;
     }
 
     const float drift_limit_sq = kLootPickupDropDriftMaxDistance * kLootPickupDropDriftMaxDistance;
@@ -5179,6 +6514,425 @@ void ApplyLootPickupResultPacket(
         " inventory_revision=" + std::to_string(packet.inventory_revision));
 }
 
+void PublishLevelUpChoiceResultRuntimeInfo(
+    const LevelUpChoiceResultPacket& packet,
+    std::uint64_t now_ms) {
+    UpdateRuntimeState([&](RuntimeState& state) {
+        LevelUpChoiceResultRuntimeInfo result;
+        result.valid = true;
+        result.authority_participant_id = packet.authority_participant_id;
+        result.target_participant_id = packet.target_participant_id;
+        result.offer_id = packet.offer_id;
+        result.run_nonce = packet.run_nonce;
+        result.received_ms = now_ms;
+        result.level = packet.level;
+        result.experience = packet.experience;
+        result.option_index = packet.option_index;
+        result.option_id = packet.option_id;
+        result.apply_count = packet.apply_count;
+        result.result_code = LevelUpChoiceResultCodeFromPacketValue(packet.result_code);
+        state.last_level_up_choice_result = result;
+
+        if (state.active_level_up_offer.valid &&
+            state.active_level_up_offer.offer_id == packet.offer_id &&
+            state.active_level_up_offer.target_participant_id == packet.target_participant_id) {
+            state.active_level_up_offer.selection_submitted = true;
+            state.active_level_up_offer.selected_option_index = packet.option_index;
+            state.active_level_up_offer.selected_option_id = packet.option_id;
+            if (result.result_code == LevelUpChoiceResultCode::Accepted ||
+                result.result_code == LevelUpChoiceResultCode::InvalidOption ||
+                result.result_code == LevelUpChoiceResultCode::StaleOffer ||
+                result.result_code == LevelUpChoiceResultCode::ApplyFailed) {
+                state.active_level_up_offer.valid = false;
+            }
+        }
+
+        if (result.result_code != LevelUpChoiceResultCode::Accepted) {
+            return;
+        }
+
+        ParticipantInfo* participant = nullptr;
+        if (packet.target_participant_id == g_local_transport.local_peer_id) {
+            participant = FindLocalParticipant(state);
+        } else {
+            participant = FindParticipant(state, packet.target_participant_id);
+        }
+        if (participant == nullptr) {
+            return;
+        }
+        participant->character_profile.level = packet.level;
+        participant->character_profile.experience = packet.experience;
+        participant->runtime.level = packet.level;
+        participant->runtime.experience_current = packet.experience;
+        participant->owned_progression.initialized = true;
+        participant->owned_progression.spellbook_revision += 1;
+        participant->owned_progression.statbook_revision += 1;
+    });
+}
+
+bool ClearLocalLevelUpPickerAfterProgrammaticChoice(
+    std::uint64_t offer_id,
+    std::int32_t option_index,
+    std::int32_t option_id,
+    bool write_screen_selection) {
+    SDModPlayerState player_state;
+    if (!TryGetPlayerState(&player_state) ||
+        !player_state.valid ||
+        player_state.progression_address == 0 ||
+        kProgressionLocalSkillPickerScreenOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t screen_address = 0;
+    (void)memory.TryReadField(
+        player_state.progression_address,
+        kProgressionLocalSkillPickerScreenOffset,
+        &screen_address);
+
+    bool wrote = true;
+    if (write_screen_selection && screen_address != 0 && option_index > 0) {
+        const std::int32_t zero_based_selected_index = option_index - 1;
+        wrote = memory.TryWriteField(
+            screen_address,
+            kLevelUpScreenSelectedOptionIndexOffset,
+            zero_based_selected_index) && wrote;
+    }
+
+    const std::int32_t no_pending_choices = 0;
+    const std::int32_t no_incoming_choices = 0;
+    const std::uint8_t picker_ui_flag_cleared = 0;
+    const std::uint32_t no_temporary_picker_state = 0;
+    const uintptr_t no_screen = 0;
+    wrote = memory.TryWriteField(
+        player_state.progression_address,
+        kProgressionLevelUpPendingChoiceCountOffset,
+        no_pending_choices) && wrote;
+    wrote = memory.TryWriteField(
+        player_state.progression_address,
+        kProgressionLevelUpIncomingChoiceCountOffset,
+        no_incoming_choices) && wrote;
+    wrote = memory.TryWriteField(
+        player_state.progression_address,
+        kProgressionLevelUpPickerUiFlagOffset,
+        picker_ui_flag_cleared) && wrote;
+    wrote = memory.TryWriteField(
+        player_state.progression_address,
+        kProgressionLevelUpTemporaryPickerObjectOffset,
+        no_temporary_picker_state) && wrote;
+    wrote = memory.TryWriteField(
+        player_state.progression_address,
+        kProgressionLevelUpTemporaryPickerValueOffset,
+        no_temporary_picker_state) && wrote;
+    wrote = memory.TryWriteField(
+        player_state.progression_address,
+        kProgressionLocalSkillPickerScreenOffset,
+        no_screen) && wrote;
+
+    Log(
+        "Multiplayer level-up native picker cleared after programmatic accepted choice. offer_id=" +
+        std::to_string(offer_id) +
+        " option_index=" + std::to_string(option_index) +
+        " option_id=" + std::to_string(option_id) +
+        " progression=" + HexString(player_state.progression_address) +
+        " screen=" + HexString(screen_address) +
+        " wrote=" + std::to_string(wrote ? 1 : 0));
+    return wrote;
+}
+
+void SendLevelUpChoiceResult(
+    const LevelUpChoicePacket& request,
+    std::uint64_t target_participant_id,
+    std::uint32_t run_nonce,
+    std::int32_t level,
+    std::int32_t experience,
+    std::int32_t option_index,
+    const BotSkillChoiceOption& option,
+    LevelUpChoiceResultCode result_code,
+    const sockaddr_in& endpoint) {
+    LevelUpChoiceResultPacket result{};
+    result.header = MakePacketHeader(PacketKind::LevelUpChoiceResult, g_local_transport.next_sequence++);
+    result.authority_participant_id = g_local_transport.local_peer_id;
+    result.target_participant_id = target_participant_id;
+    result.offer_id = request.offer_id;
+    result.run_nonce = run_nonce;
+    result.level = level;
+    result.experience = experience;
+    result.option_index = option_index;
+    result.option_id = option.option_id;
+    result.apply_count = option.apply_count;
+    result.result_code = static_cast<std::uint8_t>(result_code);
+
+    SendPacketToEndpoint(result, endpoint);
+    RelayPacketToPeers(result, endpoint);
+    PublishLevelUpChoiceResultRuntimeInfo(
+        result,
+        static_cast<std::uint64_t>(GetTickCount64()));
+}
+
+void ApplyLevelUpOfferPacket(
+    const LevelUpOfferPacket& packet,
+    const sockaddr_in& from,
+    std::uint64_t now_ms) {
+    if (!IsLocalTransportClient() ||
+        packet.authority_participant_id == 0 ||
+        packet.authority_participant_id == g_local_transport.local_peer_id ||
+        packet.target_participant_id != g_local_transport.local_peer_id ||
+        packet.offer_id == 0 ||
+        packet.level <= 0 ||
+        packet.experience < 0 ||
+        packet.option_count == 0 ||
+        packet.option_count > kLevelUpOfferMaxOptions ||
+        !IsConfiguredRemoteAuthorityEndpoint(from)) {
+        return;
+    }
+
+    UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
+
+    std::vector<LevelUpChoiceOptionState> options;
+    options.reserve(packet.option_count);
+    for (std::size_t index = 0; index < packet.option_count; ++index) {
+        const auto& packet_option = packet.options[index];
+        if (packet_option.option_id < 0 || packet_option.apply_count <= 0) {
+            continue;
+        }
+        LevelUpChoiceOptionState option;
+        option.option_id = packet_option.option_id;
+        option.apply_count = packet_option.apply_count;
+        options.push_back(option);
+    }
+    if (options.empty()) {
+        return;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+    if (local != nullptr &&
+        local->runtime.run_nonce != 0 &&
+        packet.run_nonce != 0 &&
+        local->runtime.run_nonce != packet.run_nonce) {
+        Log(
+            "Multiplayer level-up offer ignored; run nonce mismatch. authority_participant_id=" +
+            std::to_string(packet.authority_participant_id) +
+            " offer_id=" + std::to_string(packet.offer_id) +
+            " local_run_nonce=" + std::to_string(local->runtime.run_nonce) +
+            " packet_run_nonce=" + std::to_string(packet.run_nonce));
+        return;
+    }
+
+    std::string sync_error;
+    if (!SyncLocalPlayerProgressionToSharedLevelUp(packet.level, packet.experience, &sync_error)) {
+        Log(
+            "Multiplayer level-up offer rejected; local progression sync failed. authority_participant_id=" +
+            std::to_string(packet.authority_participant_id) +
+            " offer_id=" + std::to_string(packet.offer_id) +
+            " level=" + std::to_string(packet.level) +
+            " xp=" + std::to_string(packet.experience) +
+            " error=" + sync_error);
+        return;
+    }
+
+    UpdateRuntimeState([&](RuntimeState& state) {
+        LevelUpOfferRuntimeInfo offer;
+        offer.valid = true;
+        offer.selection_submitted = false;
+        offer.authority_participant_id = packet.authority_participant_id;
+        offer.target_participant_id = packet.target_participant_id;
+        offer.offer_id = packet.offer_id;
+        offer.run_nonce = packet.run_nonce;
+        offer.received_ms = now_ms;
+        offer.level = packet.level;
+        offer.experience = packet.experience;
+        offer.options = options;
+        state.active_level_up_offer = std::move(offer);
+    });
+
+    Log(
+        "Multiplayer level-up offer accepted. authority_participant_id=" +
+        std::to_string(packet.authority_participant_id) +
+        " target_participant_id=" + std::to_string(packet.target_participant_id) +
+        " offer_id=" + std::to_string(packet.offer_id) +
+        " run_nonce=" + std::to_string(packet.run_nonce) +
+        " level=" + std::to_string(packet.level) +
+        " xp=" + std::to_string(packet.experience) +
+        " option_count=" + std::to_string(options.size()));
+}
+
+void ApplyLevelUpChoicePacket(
+    const LevelUpChoicePacket& packet,
+    const sockaddr_in& from,
+    std::uint64_t now_ms) {
+    if (!IsLocalTransportHost() ||
+        packet.participant_id == 0 ||
+        packet.participant_id == g_local_transport.local_peer_id ||
+        packet.offer_id == 0) {
+        return;
+    }
+
+    UpsertPeerEndpoint(from, packet.participant_id, now_ms);
+
+    auto offer_it = g_local_transport.issued_level_up_offers_by_id.find(packet.offer_id);
+    BotSkillChoiceOption selected_option{};
+    std::int32_t selected_index = packet.option_index;
+    std::int32_t level = 0;
+    std::int32_t experience = 0;
+    std::uint32_t run_nonce = packet.run_nonce;
+    LevelUpChoiceResultCode result_code = LevelUpChoiceResultCode::StaleOffer;
+    std::string error_message;
+
+    if (offer_it != g_local_transport.issued_level_up_offers_by_id.end()) {
+        auto& offer = offer_it->second;
+        level = offer.level;
+        experience = offer.experience;
+        run_nonce = offer.run_nonce;
+        if (offer.target_participant_id != packet.participant_id ||
+            (packet.run_nonce != 0 && offer.run_nonce != 0 && packet.run_nonce != offer.run_nonce)) {
+            result_code = LevelUpChoiceResultCode::Rejected;
+        } else if (offer.resolved) {
+            result_code = LevelUpChoiceResultCode::StaleOffer;
+        } else if (!TryResolveIssuedLevelUpOption(
+                       offer,
+                       packet.option_index,
+                       packet.option_id,
+                       &selected_option)) {
+            result_code = LevelUpChoiceResultCode::InvalidOption;
+            offer.resolved = true;
+            offer.result_code = result_code;
+        } else if (!ApplyParticipantSkillChoiceOption(
+                       packet.participant_id,
+                       selected_option,
+                       &error_message)) {
+            result_code = LevelUpChoiceResultCode::ApplyFailed;
+            offer.resolved = true;
+            offer.result_code = result_code;
+        } else {
+            result_code = LevelUpChoiceResultCode::Accepted;
+            offer.resolved = true;
+            offer.result_code = result_code;
+        }
+
+        if (selected_index <= 0 && selected_option.option_id >= 0) {
+            for (std::size_t index = 0; index < offer.options.size(); ++index) {
+                if (offer.options[index].option_id == selected_option.option_id) {
+                    selected_index = static_cast<std::int32_t>(index + 1);
+                    break;
+                }
+            }
+        }
+    }
+
+    SendLevelUpChoiceResult(
+        packet,
+        packet.participant_id,
+        run_nonce,
+        level,
+        experience,
+        selected_index,
+        selected_option,
+        result_code,
+        from);
+
+    Log(
+        "Multiplayer level-up choice " +
+        std::string(result_code == LevelUpChoiceResultCode::Accepted ? "accepted" : "rejected") +
+        ". participant_id=" + std::to_string(packet.participant_id) +
+        " offer_id=" + std::to_string(packet.offer_id) +
+        " run_nonce=" + std::to_string(run_nonce) +
+        " option_index=" + std::to_string(selected_index) +
+        " option_id=" + std::to_string(selected_option.option_id) +
+        " result=" + LevelUpChoiceResultCodeLabel(result_code) +
+        (error_message.empty() ? "" : " error=" + error_message));
+}
+
+void ApplyLevelUpChoiceResultPacket(
+    const LevelUpChoiceResultPacket& packet,
+    const sockaddr_in& from,
+    std::uint64_t now_ms) {
+    if (!IsLocalTransportClient() ||
+        packet.authority_participant_id == 0 ||
+        packet.authority_participant_id == g_local_transport.local_peer_id ||
+        packet.target_participant_id == 0 ||
+        packet.offer_id == 0 ||
+        !IsConfiguredRemoteAuthorityEndpoint(from)) {
+        return;
+    }
+
+    UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
+    const auto result_code = LevelUpChoiceResultCodeFromPacketValue(packet.result_code);
+    if (result_code == LevelUpChoiceResultCode::Accepted) {
+        BotSkillChoiceOption option;
+        option.option_id = packet.option_id;
+        option.apply_count = packet.apply_count;
+        if (packet.target_participant_id == g_local_transport.local_peer_id) {
+            const auto runtime_state = SnapshotRuntimeState();
+            const bool native_picker_already_applied =
+                runtime_state.active_level_up_offer.valid &&
+                runtime_state.active_level_up_offer.offer_id == packet.offer_id &&
+                runtime_state.active_level_up_offer.target_participant_id == packet.target_participant_id &&
+                runtime_state.active_level_up_offer.native_picker_local_apply_observed;
+            if (!native_picker_already_applied) {
+                std::string error_message;
+                if (!ApplyLocalPlayerSkillChoiceOption(option, &error_message)) {
+                    Log(
+                        "Multiplayer level-up choice result accepted but local apply failed. authority_participant_id=" +
+                        std::to_string(packet.authority_participant_id) +
+                        " offer_id=" + std::to_string(packet.offer_id) +
+                        " option_id=" + std::to_string(packet.option_id) +
+                        " error=" + error_message);
+                } else if (!ClearLocalLevelUpPickerAfterProgrammaticChoice(
+                               packet.offer_id,
+                               packet.option_index,
+                               packet.option_id,
+                               true)) {
+                    Log(
+                        "Multiplayer level-up choice result accepted but native picker cleanup failed. authority_participant_id=" +
+                        std::to_string(packet.authority_participant_id) +
+                        " offer_id=" + std::to_string(packet.offer_id) +
+                        " option_id=" + std::to_string(packet.option_id));
+                }
+            } else {
+                Log(
+                    "Multiplayer level-up choice result accepted; native picker had already applied locally. authority_participant_id=" +
+                    std::to_string(packet.authority_participant_id) +
+                    " offer_id=" + std::to_string(packet.offer_id) +
+                    " option_id=" + std::to_string(packet.option_id));
+            }
+        } else {
+            std::string error_message;
+            if (!ApplyParticipantSkillChoiceOption(
+                    packet.target_participant_id,
+                    option,
+                    &error_message)) {
+                Log(
+                    "Multiplayer level-up choice result accepted but remote participant apply failed. authority_participant_id=" +
+                    std::to_string(packet.authority_participant_id) +
+                    " target_participant_id=" + std::to_string(packet.target_participant_id) +
+                    " offer_id=" + std::to_string(packet.offer_id) +
+                    " option_id=" + std::to_string(packet.option_id) +
+                    " error=" + error_message);
+            } else {
+                Log(
+                    "Multiplayer level-up choice result accepted; remote participant progression applied. authority_participant_id=" +
+                    std::to_string(packet.authority_participant_id) +
+                    " target_participant_id=" + std::to_string(packet.target_participant_id) +
+                    " offer_id=" + std::to_string(packet.offer_id) +
+                    " option_id=" + std::to_string(packet.option_id));
+            }
+        }
+    }
+
+    PublishLevelUpChoiceResultRuntimeInfo(packet, now_ms);
+    Log(
+        "Multiplayer level-up choice result applied. authority_participant_id=" +
+        std::to_string(packet.authority_participant_id) +
+        " target_participant_id=" + std::to_string(packet.target_participant_id) +
+        " offer_id=" + std::to_string(packet.offer_id) +
+        " run_nonce=" + std::to_string(packet.run_nonce) +
+        " option_index=" + std::to_string(packet.option_index) +
+        " option_id=" + std::to_string(packet.option_id) +
+        " result=" + LevelUpChoiceResultCodeLabel(result_code));
+}
+
 void ReceivePackets(std::uint64_t now_ms) {
     for (int packet_index = 0; packet_index < kMaxPacketsPerTick; ++packet_index) {
         std::array<char, sizeof(WorldSnapshotPacket)> packet_buffer{};
@@ -5295,6 +7049,40 @@ void ReceivePackets(std::uint64_t now_ms) {
             }
             g_local_transport.packets_received += 1;
             ApplyLootPickupResultPacket(packet, from, now_ms);
+            continue;
+        }
+
+        if (kind == PacketKind::LevelUpOffer && received == static_cast<int>(sizeof(LevelUpOfferPacket))) {
+            LevelUpOfferPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::LevelUpOffer)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLevelUpOfferPacket(packet, from, now_ms);
+            continue;
+        }
+
+        if (kind == PacketKind::LevelUpChoice && received == static_cast<int>(sizeof(LevelUpChoicePacket))) {
+            LevelUpChoicePacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::LevelUpChoice)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLevelUpChoicePacket(packet, from, now_ms);
+            continue;
+        }
+
+        if (kind == PacketKind::LevelUpChoiceResult &&
+            received == static_cast<int>(sizeof(LevelUpChoiceResultPacket))) {
+            LevelUpChoiceResultPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::LevelUpChoiceResult)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLevelUpChoiceResultPacket(packet, from, now_ms);
         }
     }
 }
@@ -5313,10 +7101,72 @@ void PublishLocalTransportRuntimeState() {
                << " sent=" << g_local_transport.packets_sent
                << " received=" << g_local_transport.packets_received;
         state.status_text = status.str();
+        if (g_local_transport.is_host) {
+            LevelUpWaitStatusRuntimeInfo wait_status;
+            const auto waiting_participant_ids = CollectUnresolvedLevelUpOfferParticipantIds();
+            wait_status.valid = true;
+            wait_status.pause_active = !waiting_participant_ids.empty();
+            wait_status.authority_participant_id = g_local_transport.local_peer_id;
+            wait_status.received_ms = static_cast<std::uint64_t>(GetTickCount64());
+            wait_status.waiting_participant_ids = waiting_participant_ids;
+            state.level_up_wait_status = std::move(wait_status);
+        }
     });
 }
 
 }  // namespace
+
+void ProcessPendingHostLevelUpOffers(std::uint64_t now_ms);
+int CaptureLocalTransportSehCode(EXCEPTION_POINTERS* exception_pointers, DWORD* exception_code);
+
+bool TryFindLocalRunEnemyByNetworkId(
+    std::uint64_t network_actor_id,
+    SDModSceneActorState* actor_out) {
+    return TryFindLocalRunEnemyByNetworkIdInternal(network_actor_id, actor_out);
+}
+
+std::uint64_t GetLocalRunEnemyNetworkActorId(uintptr_t actor_address) {
+    return ResolveLocalRunEnemyNetworkActorId(actor_address);
+}
+
+bool HasLocalPendingLethalEnemyDamageClaim(
+    std::uint64_t network_actor_id,
+    std::uint64_t now_ms) {
+    return HasLocalPendingLethalEnemyDamageClaimInternal(network_actor_id, now_ms);
+}
+
+bool HasReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id) {
+    return IsLocalTransportClient() &&
+           network_actor_id != 0 &&
+           g_local_transport.last_synced_enemy_hp_by_network_id.find(network_actor_id) !=
+               g_local_transport.last_synced_enemy_hp_by_network_id.end();
+}
+
+void MarkReplicatedRunEnemyDamageBaseline(
+    std::uint64_t network_actor_id,
+    float authoritative_hp) {
+    if (!IsLocalTransportClient() ||
+        network_actor_id == 0 ||
+        !std::isfinite(authoritative_hp)) {
+        return;
+    }
+    g_local_transport.last_synced_enemy_hp_by_network_id[network_actor_id] =
+        (std::max)(0.0f, authoritative_hp);
+}
+
+void ClearReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id) {
+    if (network_actor_id == 0) {
+        return;
+    }
+    g_local_transport.last_synced_enemy_hp_by_network_id.erase(network_actor_id);
+    g_local_transport.last_enemy_claimed_hp_by_network_id.erase(network_actor_id);
+    g_local_transport.pending_lethal_enemy_damage_claim_until_ms.erase(network_actor_id);
+    g_local_transport.rejected_enemy_damage_retry_suppressed_until_ms.erase(network_actor_id);
+}
+
+bool TrySetRunEnemyHealth(uintptr_t actor_address, float hp, float max_hp) {
+    return TryWriteRunEnemyHealth(actor_address, hp, max_hp);
+}
 
 bool InitializeLocalTransport() {
     if (!ConfigureLocalTransport()) {
@@ -5381,6 +7231,7 @@ void ShutdownLocalTransport() {
     g_queued_local_cast_events.clear();
     g_queued_local_enemy_damage_claims.clear();
     g_queued_local_loot_pickup_requests.clear();
+    g_queued_local_level_up_choices.clear();
     g_next_local_loot_pickup_request_sequence = 1;
 }
 
@@ -5391,11 +7242,13 @@ void TickLocalTransport(std::uint64_t now_ms) {
 
     RefreshLocalParticipantFromGameState();
     ReceivePackets(now_ms);
+    ProcessPendingHostLevelUpOffers(now_ms);
     SendLocalState(now_ms);
     SendActiveLocalCastInput(now_ms);
     SendQueuedCastEvents(now_ms);
     SendLocalEnemyDamageClaims();
     SendQueuedLootPickupRequests();
+    SendQueuedLevelUpChoices();
     SendWorldSnapshot(now_ms);
     SendLootSnapshot(now_ms);
     PublishLocalTransportRuntimeState();
@@ -5415,6 +7268,64 @@ bool IsLocalTransportClient() {
 
 std::uint64_t GetLocalTransportParticipantId() {
     return g_local_transport.initialized ? g_local_transport.local_peer_id : 0;
+}
+
+bool ShouldPauseGameplayForLevelUpSelection() {
+    if (!g_local_transport.initialized) {
+        return false;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    if (HasPendingLocalLevelUpChoice(runtime_state)) {
+        return true;
+    }
+
+    if (g_local_transport.is_host) {
+        return !CollectUnresolvedLevelUpOfferParticipantIds().empty();
+    }
+
+    const auto& wait_status = runtime_state.level_up_wait_status;
+    return wait_status.valid &&
+           wait_status.pause_active &&
+           !wait_status.waiting_participant_ids.empty();
+}
+
+bool HasLocalLevelUpOfferAwaitingNativePresentation() {
+    if (!IsLocalTransportClient() && !IsLocalTransportHost()) {
+        return false;
+    }
+
+    return HasPendingLocalLevelUpChoice(SnapshotRuntimeState());
+}
+
+bool TryBuildLevelUpWaitStatusText(std::string* text) {
+    if (text != nullptr) {
+        text->clear();
+    }
+    if (text == nullptr || !g_local_transport.initialized) {
+        return false;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    if (HasPendingLocalLevelUpChoice(runtime_state)) {
+        *text = "Choose your skill upgrade";
+        return true;
+    }
+
+    std::vector<std::uint64_t> waiting_participant_ids;
+    if (g_local_transport.is_host) {
+        waiting_participant_ids = CollectUnresolvedLevelUpOfferParticipantIds();
+    } else if (runtime_state.level_up_wait_status.valid &&
+               runtime_state.level_up_wait_status.pause_active) {
+        waiting_participant_ids = runtime_state.level_up_wait_status.waiting_participant_ids;
+    }
+
+    if (waiting_participant_ids.empty()) {
+        return false;
+    }
+
+    *text = BuildLevelUpWaitStatusTextFromIds(runtime_state, waiting_participant_ids);
+    return !text->empty();
 }
 
 std::uint64_t QueueLocalSpellCastEvent(
@@ -5506,6 +7417,11 @@ void QueueLocalEnemyDamageClaim(
     claim.target_position_x = target_position_x;
     claim.target_position_y = target_position_y;
     g_queued_local_enemy_damage_claims.push_back(claim);
+    if (local_hp <= kEnemyDamageClaimHpEpsilon && IsLocalTransportClient()) {
+        g_local_transport.pending_lethal_enemy_damage_claim_until_ms[network_actor_id] =
+            static_cast<std::uint64_t>(GetTickCount64()) +
+            kEnemyDamageLethalClaimPendingSuppressMs;
+    }
 }
 
 void NotifyLocalRunEnemyDeath(uintptr_t actor_address) {
@@ -5540,7 +7456,8 @@ void NotifyLocalRunEnemyDeath(uintptr_t actor_address) {
 bool QueueLocalLootPickupRequest(
     std::uint64_t network_drop_id,
     std::uint32_t* request_sequence,
-    std::string* error_message) {
+    std::string* error_message,
+    const LootPickupRequestCapture* capture) {
     if (request_sequence != nullptr) {
         *request_sequence = 0;
     }
@@ -5569,10 +7486,12 @@ bool QueueLocalLootPickupRequest(
         local->runtime.scene_intent.kind != ParticipantSceneIntentKind::Run) {
         return fail("local participant is not in a run");
     }
-    const bool present_in_loot_snapshot =
+    const LootDropSnapshot* queued_drop =
         runtime_state.loot_snapshot.valid &&
-        runtime_state.loot_snapshot.scene_intent.kind == ParticipantSceneIntentKind::Run &&
-        FindLootDropSnapshotByNetworkId(runtime_state.loot_snapshot, network_drop_id) != nullptr;
+                runtime_state.loot_snapshot.scene_intent.kind == ParticipantSceneIntentKind::Run
+            ? FindLootDropSnapshotByNetworkId(runtime_state.loot_snapshot, network_drop_id)
+            : nullptr;
+    const bool present_in_loot_snapshot = queued_drop != nullptr;
     const bool matches_recent_pickup_result =
         runtime_state.last_loot_pickup_result.valid &&
         runtime_state.last_loot_pickup_result.network_drop_id == network_drop_id;
@@ -5592,11 +7511,984 @@ bool QueueLocalLootPickupRequest(
     if (g_next_local_loot_pickup_request_sequence == 0) {
         g_next_local_loot_pickup_request_sequence = 1;
     }
+    LootPickupRequestCapture resolved_capture{};
+    if (capture != nullptr && capture->valid) {
+        resolved_capture = *capture;
+    } else if (present_in_loot_snapshot) {
+        SDModPlayerState player_state;
+        if (TryGetPlayerState(&player_state) && player_state.valid) {
+            resolved_capture.valid = true;
+            resolved_capture.requester_position_x = player_state.x;
+            resolved_capture.requester_position_y = player_state.y;
+            resolved_capture.drop_position_x = queued_drop->position_x;
+            resolved_capture.drop_position_y = queued_drop->position_y;
+        }
+    }
+    if (resolved_capture.valid &&
+        std::isfinite(resolved_capture.requester_position_x) &&
+        std::isfinite(resolved_capture.requester_position_y) &&
+        std::isfinite(resolved_capture.drop_position_x) &&
+        std::isfinite(resolved_capture.drop_position_y)) {
+        request.has_pickup_positions = true;
+        request.requester_position_x = resolved_capture.requester_position_x;
+        request.requester_position_y = resolved_capture.requester_position_y;
+        request.drop_position_x = resolved_capture.drop_position_x;
+        request.drop_position_y = resolved_capture.drop_position_y;
+    }
     if (request_sequence != nullptr) {
         *request_sequence = request.request_sequence;
     }
     g_queued_local_loot_pickup_requests.push_back(request);
     return true;
+}
+
+enum class HostLevelUpOfferPublishResult {
+    Sent,
+    AlreadyIssued,
+    PendingMaterialization,
+    Failed,
+};
+
+bool IsLevelUpOfferMaterializationPendingError(const std::string& error_message) {
+    return error_message.find("materialized progression") != std::string::npos;
+}
+
+void QueuePendingHostLevelUpOfferTarget(
+    std::uint64_t target_participant_id,
+    std::uint32_t run_nonce,
+    std::int32_t level,
+    std::int32_t experience,
+    uintptr_t source_progression_address,
+    std::uint64_t now_ms,
+    const std::string& reason) {
+    if (target_participant_id == 0 || HasUnresolvedIssuedLevelUpOfferForParticipant(target_participant_id)) {
+        return;
+    }
+
+    auto [it, inserted] =
+        g_local_transport.pending_level_up_offer_targets_by_participant.try_emplace(target_participant_id);
+    auto& pending = it->second;
+    pending.target_participant_id = target_participant_id;
+    pending.run_nonce = run_nonce;
+    pending.level = level;
+    pending.experience = experience;
+    pending.source_progression_address = source_progression_address;
+    if (inserted || pending.requested_ms == 0) {
+        pending.requested_ms = now_ms;
+    }
+
+    if (inserted || now_ms - pending.last_log_ms >= 1000) {
+        pending.last_log_ms = now_ms;
+        Log(
+            "Multiplayer level-up offer deferred; participant progression not materialized. participant_id=" +
+            std::to_string(target_participant_id) +
+            " run_nonce=" + std::to_string(run_nonce) +
+            " level=" + std::to_string(level) +
+            " xp=" + std::to_string(experience) +
+            " reason=" + reason);
+    }
+}
+
+void IssueHostLevelUpOfferForParticipant(
+    std::uint64_t target_participant_id,
+    std::uint32_t run_nonce,
+    std::int32_t level,
+    std::int32_t experience,
+    std::vector<BotSkillChoiceOption> options) {
+    if (target_participant_id == 0 || options.empty()) {
+        return;
+    }
+    if (options.size() > kLevelUpOfferMaxOptions) {
+        options.resize(kLevelUpOfferMaxOptions);
+    }
+
+    const auto offer_id = g_local_transport.next_level_up_offer_id++;
+    if (g_local_transport.next_level_up_offer_id == 0) {
+        g_local_transport.next_level_up_offer_id = 1;
+    }
+
+    IssuedLevelUpOffer issued_offer;
+    issued_offer.offer_id = offer_id;
+    issued_offer.target_participant_id = target_participant_id;
+    issued_offer.run_nonce = run_nonce;
+    issued_offer.level = level;
+    issued_offer.experience = experience;
+    issued_offer.options = options;
+    g_local_transport.issued_level_up_offers_by_id[offer_id] = issued_offer;
+
+    LevelUpOfferPacket packet{};
+    packet.header = MakePacketHeader(PacketKind::LevelUpOffer, g_local_transport.next_sequence++);
+    packet.authority_participant_id = g_local_transport.local_peer_id;
+    packet.target_participant_id = target_participant_id;
+    packet.offer_id = offer_id;
+    packet.run_nonce = run_nonce;
+    packet.level = level;
+    packet.experience = experience;
+    packet.option_count = static_cast<std::uint8_t>(options.size());
+    for (std::size_t index = 0; index < options.size(); ++index) {
+        packet.options[index].option_id = options[index].option_id;
+        packet.options[index].apply_count = options[index].apply_count;
+    }
+
+    SendPacketToParticipantOrPeers(packet, target_participant_id);
+    Log(
+        "Multiplayer level-up offer sent. authority_participant_id=" +
+        std::to_string(packet.authority_participant_id) +
+        " target_participant_id=" + std::to_string(packet.target_participant_id) +
+        " offer_id=" + std::to_string(packet.offer_id) +
+        " run_nonce=" + std::to_string(packet.run_nonce) +
+        " level=" + std::to_string(packet.level) +
+        " xp=" + std::to_string(packet.experience) +
+        " option_count=" + std::to_string(packet.option_count));
+}
+
+HostLevelUpOfferPublishResult TryPublishHostLevelUpOfferForParticipant(
+    const ParticipantInfo& participant,
+    std::uint32_t run_nonce,
+    std::int32_t level,
+    std::int32_t experience,
+    uintptr_t source_progression_address,
+    bool queue_on_pending_materialization,
+    std::uint64_t now_ms) {
+    if (HasUnresolvedIssuedLevelUpOfferForParticipant(participant.participant_id)) {
+        return HostLevelUpOfferPublishResult::AlreadyIssued;
+    }
+    if (participant.runtime.valid &&
+        participant.runtime.in_run &&
+        run_nonce != 0 &&
+        participant.runtime.run_nonce != 0 &&
+        participant.runtime.run_nonce != run_nonce) {
+        Log(
+            "Multiplayer level-up offer skipped; participant run nonce mismatch. participant_id=" +
+            std::to_string(participant.participant_id) +
+            " host_run_nonce=" + std::to_string(run_nonce) +
+            " participant_run_nonce=" + std::to_string(participant.runtime.run_nonce));
+        return HostLevelUpOfferPublishResult::Failed;
+    }
+
+    std::vector<BotSkillChoiceOption> options;
+    std::string error_message;
+    if (!SyncParticipantProgressionToSharedLevelUpAndRollChoices(
+            participant.participant_id,
+            level,
+            experience,
+            source_progression_address,
+            &options,
+            &error_message)) {
+        if (IsLevelUpOfferMaterializationPendingError(error_message)) {
+            if (queue_on_pending_materialization) {
+                QueuePendingHostLevelUpOfferTarget(
+                    participant.participant_id,
+                    run_nonce,
+                    level,
+                    experience,
+                    source_progression_address,
+                    now_ms,
+                    error_message);
+            }
+            return HostLevelUpOfferPublishResult::PendingMaterialization;
+        }
+        Log(
+            "Multiplayer level-up offer skipped; participant roll failed. participant_id=" +
+            std::to_string(participant.participant_id) +
+            " level=" + std::to_string(level) +
+            " xp=" + std::to_string(experience) +
+            " error=" + error_message);
+        return HostLevelUpOfferPublishResult::Failed;
+    }
+
+    if (options.empty()) {
+        Log(
+            "Multiplayer level-up offer skipped; participant roll returned no options. participant_id=" +
+            std::to_string(participant.participant_id));
+        return HostLevelUpOfferPublishResult::Failed;
+    }
+
+    IssueHostLevelUpOfferForParticipant(
+        participant.participant_id,
+        run_nonce,
+        level,
+        experience,
+        std::move(options));
+    return HostLevelUpOfferPublishResult::Sent;
+}
+
+void ProcessPendingHostLevelUpOffers(std::uint64_t now_ms) {
+    if (!IsLocalTransportHost() ||
+        g_local_transport.pending_level_up_offer_targets_by_participant.empty()) {
+        return;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    for (auto it = g_local_transport.pending_level_up_offer_targets_by_participant.begin();
+         it != g_local_transport.pending_level_up_offer_targets_by_participant.end();) {
+        auto pending = it->second;
+        const auto* participant = FindParticipant(runtime_state, pending.target_participant_id);
+        if (participant == nullptr ||
+            !IsRemoteParticipant(*participant) ||
+            !IsNativeControlledParticipant(*participant) ||
+            !participant->transport_connected) {
+            Log(
+                "Multiplayer pending level-up offer dropped; target participant unavailable. participant_id=" +
+                std::to_string(pending.target_participant_id));
+            it = g_local_transport.pending_level_up_offer_targets_by_participant.erase(it);
+            continue;
+        }
+
+        const auto result = TryPublishHostLevelUpOfferForParticipant(
+            *participant,
+            pending.run_nonce,
+            pending.level,
+            pending.experience,
+            pending.source_progression_address,
+            false,
+            now_ms);
+        if (result == HostLevelUpOfferPublishResult::Sent ||
+            result == HostLevelUpOfferPublishResult::AlreadyIssued ||
+            result == HostLevelUpOfferPublishResult::Failed) {
+            it = g_local_transport.pending_level_up_offer_targets_by_participant.erase(it);
+            continue;
+        }
+
+        auto live_pending =
+            g_local_transport.pending_level_up_offer_targets_by_participant.find(
+                pending.target_participant_id);
+        if (live_pending != g_local_transport.pending_level_up_offer_targets_by_participant.end() &&
+            now_ms - live_pending->second.last_log_ms >= 1000) {
+            live_pending->second.last_log_ms = now_ms;
+            Log(
+                "Multiplayer pending level-up offer waiting for participant progression. participant_id=" +
+                std::to_string(live_pending->second.target_participant_id) +
+                " run_nonce=" + std::to_string(live_pending->second.run_nonce) +
+                " level=" + std::to_string(live_pending->second.level) +
+                " xp=" + std::to_string(live_pending->second.experience));
+        }
+        ++it;
+    }
+}
+
+void PublishHostLevelUpOffers(
+    std::int32_t level,
+    std::int32_t experience,
+    uintptr_t source_progression_address) {
+    if (!IsLocalTransportHost() || level <= 0 || experience < 0) {
+        return;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+    const std::uint32_t run_nonce =
+        local != nullptr && local->runtime.valid ? local->runtime.run_nonce : 0;
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+
+    for (const auto& participant : runtime_state.participants) {
+        if (!IsRemoteParticipant(participant) ||
+            !IsNativeControlledParticipant(participant) ||
+            !participant.transport_connected) {
+            continue;
+        }
+        const auto result = TryPublishHostLevelUpOfferForParticipant(
+            participant,
+            run_nonce,
+            level,
+            experience,
+            source_progression_address,
+            true,
+            now_ms);
+        if (result == HostLevelUpOfferPublishResult::Sent ||
+            result == HostLevelUpOfferPublishResult::AlreadyIssued ||
+            result == HostLevelUpOfferPublishResult::Failed) {
+            g_local_transport.pending_level_up_offer_targets_by_participant.erase(
+                participant.participant_id);
+        }
+    }
+
+    if (g_local_transport.issued_level_up_offers_by_id.size() > 64) {
+        for (auto it = g_local_transport.issued_level_up_offers_by_id.begin();
+             it != g_local_transport.issued_level_up_offers_by_id.end();) {
+            if (it->second.resolved) {
+                it = g_local_transport.issued_level_up_offers_by_id.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+}
+
+void PublishLocalHostSelfLevelUpOffer(
+    std::int32_t level,
+    std::int32_t experience,
+    uintptr_t source_progression_address) {
+    (void)source_progression_address;
+    if (!IsLocalTransportHost() || level <= 0 || experience < 0) {
+        return;
+    }
+    const auto local_peer_id = g_local_transport.local_peer_id;
+    if (local_peer_id == 0) {
+        return;
+    }
+    // The host is its own level-up authority. Mirror the client offer/choice
+    // flow for the host's own level-up so selection is routed through the
+    // loader's controlled, non-modal picker path instead of the native modal
+    // picker that monopolizes the gameplay thread. One unresolved self-offer at
+    // a time, matching the per-participant gating used for remote offers.
+    if (HasUnresolvedIssuedLevelUpOfferForParticipant(local_peer_id)) {
+        return;
+    }
+
+    std::vector<BotSkillChoiceOption> options;
+    std::string error_message;
+    if (!SyncLocalPlayerProgressionToSharedLevelUpAndRollChoices(
+            level,
+            experience,
+            &options,
+            &error_message)) {
+        Log(
+            "Multiplayer host-self level-up offer skipped; local roll failed. level=" +
+            std::to_string(level) +
+            " xp=" + std::to_string(experience) +
+            " error=" + error_message);
+        return;
+    }
+    if (options.empty()) {
+        Log(
+            "Multiplayer host-self level-up offer skipped; local roll returned no options. level=" +
+            std::to_string(level) +
+            " xp=" + std::to_string(experience));
+        return;
+    }
+    if (options.size() > kLevelUpOfferMaxOptions) {
+        options.resize(kLevelUpOfferMaxOptions);
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+    const std::uint32_t run_nonce =
+        local != nullptr && local->runtime.valid ? local->runtime.run_nonce : 0;
+
+    const auto offer_id = g_local_transport.next_level_up_offer_id++;
+    if (g_local_transport.next_level_up_offer_id == 0) {
+        g_local_transport.next_level_up_offer_id = 1;
+    }
+
+    IssuedLevelUpOffer issued_offer;
+    issued_offer.offer_id = offer_id;
+    issued_offer.target_participant_id = local_peer_id;
+    issued_offer.run_nonce = run_nonce;
+    issued_offer.level = level;
+    issued_offer.experience = experience;
+    issued_offer.options = options;
+    g_local_transport.issued_level_up_offers_by_id[offer_id] = issued_offer;
+
+    std::vector<LevelUpChoiceOptionState> offer_options;
+    offer_options.reserve(options.size());
+    for (const auto& option : options) {
+        LevelUpChoiceOptionState option_state;
+        option_state.option_id = option.option_id;
+        option_state.apply_count = option.apply_count;
+        offer_options.push_back(option_state);
+    }
+
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    UpdateRuntimeState([&](RuntimeState& state) {
+        LevelUpOfferRuntimeInfo offer;
+        offer.valid = true;
+        offer.selection_submitted = false;
+        offer.authority_participant_id = local_peer_id;
+        offer.target_participant_id = local_peer_id;
+        offer.offer_id = offer_id;
+        offer.run_nonce = run_nonce;
+        offer.received_ms = now_ms;
+        offer.level = level;
+        offer.experience = experience;
+        offer.options = std::move(offer_options);
+        state.active_level_up_offer = std::move(offer);
+    });
+
+    Log(
+        "Multiplayer host-self level-up offer issued. authority_participant_id=" +
+        std::to_string(local_peer_id) +
+        " offer_id=" + std::to_string(offer_id) +
+        " run_nonce=" + std::to_string(run_nonce) +
+        " level=" + std::to_string(level) +
+        " xp=" + std::to_string(experience) +
+        " option_count=" + std::to_string(options.size()));
+}
+
+bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (screen_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t vtable_address = 0;
+    uintptr_t close_address = 0;
+    if (!memory.TryReadValue(screen_address, &vtable_address) ||
+        vtable_address == 0 ||
+        !memory.TryReadValue(vtable_address + kLevelUpScreenCloseVtableOffset, &close_address) ||
+        close_address == 0) {
+        return false;
+    }
+
+    auto* close_screen = reinterpret_cast<NativeLevelUpScreenCloseFn>(close_address);
+    __try {
+        close_screen(reinterpret_cast<void*>(screen_address));
+        return true;
+    } __except (CaptureLocalTransportSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool TryApplyLocalProgrammaticLevelUpChoiceThroughNativePicker(
+    std::uint64_t offer_id,
+    std::int32_t option_index,
+    const LevelUpChoiceOptionState& selected_option,
+    std::string* error_message) {
+    auto fail = [&](std::string message) {
+        if (error_message != nullptr) {
+            *error_message = std::move(message);
+        }
+        return false;
+    };
+
+    if (option_index <= 0 || selected_option.option_id < 0) {
+        return fail("programmatic native level-up apply requires a resolved offered option");
+    }
+
+    SDModPlayerState player_state;
+    if (!TryGetPlayerState(&player_state) ||
+        !player_state.valid ||
+        player_state.progression_address == 0 ||
+        kProgressionLocalSkillPickerScreenOffset == 0) {
+        return fail("programmatic native level-up apply requires a live player picker progression");
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t screen_address = 0;
+    if (!memory.TryReadField(
+            player_state.progression_address,
+            kProgressionLocalSkillPickerScreenOffset,
+            &screen_address) ||
+        screen_address == 0) {
+        return fail("programmatic native level-up apply requires a presented native picker");
+    }
+
+    const std::int32_t zero_based_selected_index = option_index - 1;
+    (void)memory.TryWriteField(
+        screen_address,
+        kLevelUpScreenSelectedOptionIndexOffset,
+        zero_based_selected_index);
+
+    BotSkillChoiceOption option;
+    option.option_id = selected_option.option_id;
+    option.apply_count = selected_option.apply_count;
+
+    std::string apply_error;
+    if (!ApplyLocalPlayerSkillChoiceOption(option, &apply_error)) {
+        return fail("programmatic local skill choice apply failed: " + apply_error);
+    }
+
+    DWORD close_exception = 0;
+    const bool close_ok = CallLevelUpScreenCloseSafe(screen_address, &close_exception);
+    const bool cleanup_ok = ClearLocalLevelUpPickerAfterProgrammaticChoice(
+        offer_id,
+        option_index,
+        selected_option.option_id,
+        false);
+
+    Log(
+        "Multiplayer level-up native picker applied locally through programmatic choice. offer_id=" +
+        std::to_string(offer_id) +
+        " option_index=" + std::to_string(option_index) +
+        " option_id=" + std::to_string(selected_option.option_id) +
+        " screen=" + HexString(screen_address) +
+        " close_ok=" + std::to_string(close_ok ? 1 : 0) +
+        " close_seh=" + HexString(static_cast<uintptr_t>(close_exception)) +
+        " cleanup_ok=" + std::to_string(cleanup_ok ? 1 : 0));
+    return true;
+}
+
+bool ResolveHostSelfLevelUpChoice(
+    std::uint64_t offer_id,
+    std::int32_t resolved_option_index,
+    const LevelUpChoiceOptionState& selected_option,
+    std::string* error_message) {
+    auto fail = [&](std::string message) {
+        if (error_message != nullptr) {
+            *error_message = std::move(message);
+        }
+        return false;
+    };
+
+    // The host applies its own skill choice straight to the local player
+    // progression. Unlike the client path this does not require a presented
+    // native picker, so it is robust regardless of whether a controlled picker
+    // has been materialized yet -- never a silent no-op.
+    BotSkillChoiceOption option;
+    option.option_id = selected_option.option_id;
+    option.apply_count = selected_option.apply_count;
+
+    std::string apply_error;
+    if (!ApplyLocalPlayerSkillChoiceOption(option, &apply_error)) {
+        return fail("host-self level-up apply failed: " + apply_error);
+    }
+
+    // Close and clear any controlled picker that was presented for a human
+    // host; a no-op when the offer is resolved before a picker materializes.
+    SDModPlayerState player_state;
+    if (TryGetPlayerState(&player_state) &&
+        player_state.valid &&
+        player_state.progression_address != 0 &&
+        kProgressionLocalSkillPickerScreenOffset != 0) {
+        uintptr_t screen_address = 0;
+        if (ProcessMemory::Instance().TryReadField(
+                player_state.progression_address,
+                kProgressionLocalSkillPickerScreenOffset,
+                &screen_address) &&
+            screen_address != 0) {
+            DWORD close_exception = 0;
+            (void)CallLevelUpScreenCloseSafe(screen_address, &close_exception);
+        }
+    }
+    (void)ClearLocalLevelUpPickerAfterProgrammaticChoice(
+        offer_id,
+        resolved_option_index,
+        selected_option.option_id,
+        false);
+
+    // The host is its own authority: resolve the issued offer so the
+    // synchronized level-up pause clears for both peers, and retire the active
+    // offer locally without any wire round-trip.
+    auto issued = g_local_transport.issued_level_up_offers_by_id.find(offer_id);
+    if (issued != g_local_transport.issued_level_up_offers_by_id.end()) {
+        issued->second.resolved = true;
+        issued->second.result_code = LevelUpChoiceResultCode::Accepted;
+    }
+    g_local_transport.pending_level_up_offer_targets_by_participant.erase(
+        g_local_transport.local_peer_id);
+
+    UpdateRuntimeState([&](RuntimeState& state) {
+        if (state.active_level_up_offer.valid &&
+            state.active_level_up_offer.offer_id == offer_id) {
+            state.active_level_up_offer.selection_submitted = true;
+            state.active_level_up_offer.native_picker_local_apply_observed = true;
+            state.active_level_up_offer.selected_option_index = resolved_option_index;
+            state.active_level_up_offer.selected_option_id = selected_option.option_id;
+            state.active_level_up_offer.valid = false;
+        }
+    });
+
+    Log(
+        "Multiplayer host-self level-up choice resolved locally. offer_id=" +
+        std::to_string(offer_id) +
+        " option_index=" + std::to_string(resolved_option_index) +
+        " option_id=" + std::to_string(selected_option.option_id));
+    return true;
+}
+
+bool QueueLocalLevelUpChoiceInternal(
+    std::uint64_t offer_id,
+    std::int32_t option_index,
+    std::int32_t option_id,
+    bool native_picker_local_apply_observed,
+    std::string* error_message) {
+    auto fail = [&](const char* message) {
+        if (error_message != nullptr) {
+            *error_message = message;
+        }
+        return false;
+    };
+
+    const bool is_host_self = IsLocalTransportHost();
+    if (!IsLocalTransportClient() && !is_host_self) {
+        return fail("level-up choices require an active local transport role");
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto& offer = runtime_state.active_level_up_offer;
+    if (!offer.valid) {
+        return fail("no active level-up offer");
+    }
+    if (offer_id == 0) {
+        offer_id = offer.offer_id;
+    }
+    if (offer.offer_id != offer_id) {
+        return fail("level-up offer id is stale");
+    }
+    if (offer.target_participant_id != g_local_transport.local_peer_id) {
+        return fail("level-up offer target does not match the local participant");
+    }
+    if (offer.selection_submitted) {
+        return fail("level-up offer already has a submitted choice");
+    }
+
+    LevelUpChoiceOptionState selected_option;
+    if (!TryResolveOfferedLevelUpOption(
+            offer.options,
+            option_index,
+            option_id,
+            &selected_option)) {
+        return fail("level-up choice was not in the active offer");
+    }
+
+    std::int32_t resolved_option_index = option_index;
+    if (resolved_option_index <= 0) {
+        for (std::size_t index = 0; index < offer.options.size(); ++index) {
+            if (offer.options[index].option_id == selected_option.option_id) {
+                resolved_option_index = static_cast<std::int32_t>(index + 1);
+                break;
+            }
+        }
+    }
+    if (resolved_option_index <= 0) {
+        return fail("level-up choice index could not be resolved");
+    }
+
+    if (is_host_self) {
+        // The host owns the authority for its own offer: apply, clear the
+        // picker, and retire the offer locally with no client-to-host wire hop.
+        return ResolveHostSelfLevelUpChoice(
+            offer_id,
+            resolved_option_index,
+            selected_option,
+            error_message);
+    }
+
+    bool local_native_apply_observed = native_picker_local_apply_observed;
+    if (!local_native_apply_observed) {
+        std::string local_apply_error;
+        if (TryApplyLocalProgrammaticLevelUpChoiceThroughNativePicker(
+                offer_id,
+                resolved_option_index,
+                selected_option,
+                &local_apply_error)) {
+            local_native_apply_observed = true;
+        } else if (!local_apply_error.empty()) {
+            Log(
+                "Multiplayer level-up programmatic native picker local apply skipped. offer_id=" +
+                std::to_string(offer_id) +
+                " option_index=" + std::to_string(resolved_option_index) +
+                " option_id=" + std::to_string(selected_option.option_id) +
+                " error=" + local_apply_error);
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
+        constexpr std::size_t kMaxQueuedLocalLevelUpChoices = 8;
+        if (g_queued_local_level_up_choices.size() >= kMaxQueuedLocalLevelUpChoices) {
+            g_queued_local_level_up_choices.erase(g_queued_local_level_up_choices.begin());
+        }
+        QueuedLocalLevelUpChoice choice;
+        choice.offer_id = offer_id;
+        choice.option_index = resolved_option_index;
+        choice.option_id = selected_option.option_id;
+        g_queued_local_level_up_choices.push_back(choice);
+    }
+
+    UpdateRuntimeState([&](RuntimeState& state) {
+        if (!state.active_level_up_offer.valid ||
+            state.active_level_up_offer.offer_id != offer_id) {
+            return;
+        }
+        state.active_level_up_offer.selection_submitted = true;
+        state.active_level_up_offer.native_picker_local_apply_observed =
+            state.active_level_up_offer.native_picker_local_apply_observed ||
+            local_native_apply_observed;
+        state.active_level_up_offer.selected_option_index = resolved_option_index;
+        state.active_level_up_offer.selected_option_id = selected_option.option_id;
+    });
+    return true;
+}
+
+int CaptureLocalTransportSehCode(EXCEPTION_POINTERS* exception_pointers, DWORD* exception_code) {
+    if (exception_code != nullptr &&
+        exception_pointers != nullptr &&
+        exception_pointers->ExceptionRecord != nullptr) {
+        *exception_code = exception_pointers->ExceptionRecord->ExceptionCode;
+    }
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+bool CallLevelUpScreenCreateSafe(
+    uintptr_t progression_address,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    const auto create_address =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kLevelUpScreenCreate);
+    auto* create_screen = reinterpret_cast<NativeLevelUpScreenCreateFn>(create_address);
+    if (create_screen == nullptr || progression_address == 0) {
+        return false;
+    }
+
+    __try {
+        create_screen(reinterpret_cast<void*>(progression_address), 0);
+        return true;
+    } __except (CaptureLocalTransportSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool TryReadLocalLevelUpScreen(
+    uintptr_t progression_address,
+    uintptr_t* screen_address) {
+    if (screen_address != nullptr) {
+        *screen_address = 0;
+    }
+    if (screen_address == nullptr ||
+        progression_address == 0 ||
+        kProgressionLocalSkillPickerScreenOffset == 0) {
+        return false;
+    }
+
+    uintptr_t read_screen = 0;
+    if (!ProcessMemory::Instance().TryReadField(
+            progression_address,
+            kProgressionLocalSkillPickerScreenOffset,
+            &read_screen)) {
+        return false;
+    }
+    *screen_address = read_screen;
+    return read_screen != 0;
+}
+
+bool TryPresentLocalLevelUpPicker(
+    uintptr_t progression_address,
+    uintptr_t* screen_address,
+    DWORD* exception_code) {
+    if (screen_address != nullptr) {
+        *screen_address = 0;
+    }
+    if (progression_address == 0) {
+        return false;
+    }
+
+    uintptr_t existing_screen = 0;
+    if (TryReadLocalLevelUpScreen(progression_address, &existing_screen)) {
+        if (screen_address != nullptr) {
+            *screen_address = existing_screen;
+        }
+        return true;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const std::int32_t no_pending_choices = 0;
+    const std::int32_t one_incoming_choice = 1;
+    (void)memory.TryWriteField(
+        progression_address,
+        kProgressionLevelUpPendingChoiceCountOffset,
+        no_pending_choices);
+    (void)memory.TryWriteField(
+        progression_address,
+        kProgressionLevelUpIncomingChoiceCountOffset,
+        one_incoming_choice);
+
+    if (!CallLevelUpScreenCreateSafe(progression_address, exception_code)) {
+        return false;
+    }
+
+    return TryReadLocalLevelUpScreen(progression_address, screen_address);
+}
+
+bool TryPinLevelUpPickerOptions(
+    uintptr_t screen_address,
+    const std::vector<LevelUpChoiceOptionState>& options) {
+    if (screen_address == 0 || options.empty() || options.size() > kLevelUpOfferMaxOptions) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto desired_count = static_cast<std::int32_t>(options.size());
+    bool wrote =
+        memory.TryWriteField(
+            screen_address,
+            kLevelUpScreenDesiredChoiceCountOffset,
+            desired_count);
+
+    uintptr_t values_address = 0;
+    std::int32_t native_count = 0;
+    if (!memory.TryReadField(
+            screen_address,
+            kLevelUpScreenOptionValuesOffset,
+            &values_address) ||
+        !memory.TryReadField(
+            screen_address,
+            kLevelUpScreenOptionCountOffset,
+            &native_count) ||
+        values_address == 0 ||
+        native_count < desired_count) {
+        return false;
+    }
+
+    for (std::int32_t index = 0; index < desired_count; ++index) {
+        wrote = memory.TryWriteValue<std::int32_t>(
+            values_address + static_cast<std::size_t>(index) * sizeof(std::int32_t),
+            options[static_cast<std::size_t>(index)].option_id) && wrote;
+    }
+    wrote = memory.TryWriteField(
+        screen_address,
+        kLevelUpScreenOptionCountOffset,
+        desired_count) && wrote;
+    return wrote;
+}
+
+bool TryReadPinnedLevelUpPickerSelection(
+    uintptr_t screen_address,
+    const std::vector<LevelUpChoiceOptionState>& options,
+    std::int32_t* option_index,
+    std::int32_t* option_id) {
+    if (option_index != nullptr) {
+        *option_index = -1;
+    }
+    if (option_id != nullptr) {
+        *option_id = -1;
+    }
+    if (screen_address == 0 || options.empty() || option_index == nullptr || option_id == nullptr) {
+        return false;
+    }
+
+    std::int32_t zero_based_selection = -1;
+    if (!ProcessMemory::Instance().TryReadField(
+            screen_address,
+            kLevelUpScreenSelectedOptionIndexOffset,
+            &zero_based_selection) ||
+        zero_based_selection < 0 ||
+        static_cast<std::size_t>(zero_based_selection) >= options.size()) {
+        return false;
+    }
+
+    *option_index = zero_based_selection + 1;
+    *option_id = options[static_cast<std::size_t>(zero_based_selection)].option_id;
+    return true;
+}
+
+void UpdateActiveLevelUpOfferNativePresentation(
+    std::uint64_t offer_id,
+    bool picker_presented,
+    bool options_pinned,
+    bool local_apply_observed) {
+    UpdateRuntimeState([&](RuntimeState& state) {
+        if (!state.active_level_up_offer.valid ||
+            state.active_level_up_offer.offer_id != offer_id) {
+            return;
+        }
+        state.active_level_up_offer.native_picker_presented =
+            state.active_level_up_offer.native_picker_presented || picker_presented;
+        state.active_level_up_offer.native_picker_options_pinned =
+            state.active_level_up_offer.native_picker_options_pinned || options_pinned;
+        state.active_level_up_offer.native_picker_local_apply_observed =
+            state.active_level_up_offer.native_picker_local_apply_observed || local_apply_observed;
+    });
+}
+
+void ReconcileLocalLevelUpOfferPresentation(std::uint64_t now_ms, bool allow_native_create) {
+    if (!IsLocalTransportClient() && !IsLocalTransportHost()) {
+        return;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto offer = runtime_state.active_level_up_offer;
+    if (!offer.valid ||
+        offer.selection_submitted ||
+        offer.target_participant_id != g_local_transport.local_peer_id ||
+        offer.options.empty()) {
+        return;
+    }
+
+    SDModPlayerState player_state;
+    if (!TryGetPlayerState(&player_state) ||
+        !player_state.valid ||
+        player_state.progression_address == 0) {
+        return;
+    }
+
+    uintptr_t screen_address = 0;
+    bool picker_presented =
+        TryReadLocalLevelUpScreen(player_state.progression_address, &screen_address);
+    DWORD exception_code = 0;
+    if (!picker_presented && allow_native_create) {
+        picker_presented = TryPresentLocalLevelUpPicker(
+            player_state.progression_address,
+            &screen_address,
+            &exception_code);
+    }
+    if (!picker_presented || screen_address == 0) {
+        if (allow_native_create) {
+            Log(
+                "Multiplayer level-up native picker presentation pending. offer_id=" +
+                std::to_string(offer.offer_id) +
+                " progression=" + HexString(player_state.progression_address) +
+                " seh=" + HexString(static_cast<uintptr_t>(exception_code)) +
+                " now_ms=" + std::to_string(now_ms));
+        }
+        return;
+    }
+
+    const bool options_pinned = TryPinLevelUpPickerOptions(screen_address, offer.options);
+    UpdateActiveLevelUpOfferNativePresentation(
+        offer.offer_id,
+        true,
+        options_pinned,
+        false);
+
+    if (!options_pinned) {
+        return;
+    }
+
+    std::int32_t selected_option_index = -1;
+    std::int32_t selected_option_id = -1;
+    if (!TryReadPinnedLevelUpPickerSelection(
+            screen_address,
+            offer.options,
+            &selected_option_index,
+            &selected_option_id)) {
+        return;
+    }
+
+    std::string error_message;
+    if (QueueLocalLevelUpChoiceInternal(
+            offer.offer_id,
+            selected_option_index,
+            selected_option_id,
+            true,
+            &error_message)) {
+        UpdateActiveLevelUpOfferNativePresentation(
+            offer.offer_id,
+            true,
+            true,
+            true);
+        Log(
+            "Multiplayer level-up native picker choice queued. offer_id=" +
+            std::to_string(offer.offer_id) +
+            " option_index=" + std::to_string(selected_option_index) +
+            " option_id=" + std::to_string(selected_option_id));
+        return;
+    }
+
+    Log(
+        "Multiplayer level-up native picker choice rejected locally. offer_id=" +
+        std::to_string(offer.offer_id) +
+        " option_index=" + std::to_string(selected_option_index) +
+        " option_id=" + std::to_string(selected_option_id) +
+        " error=" + error_message);
+}
+
+bool QueueLocalLevelUpChoice(
+    std::uint64_t offer_id,
+    std::int32_t option_index,
+    std::int32_t option_id,
+    std::string* error_message) {
+    return QueueLocalLevelUpChoiceInternal(
+        offer_id,
+        option_index,
+        option_id,
+        false,
+        error_message);
 }
 
 }  // namespace sdmod::multiplayer

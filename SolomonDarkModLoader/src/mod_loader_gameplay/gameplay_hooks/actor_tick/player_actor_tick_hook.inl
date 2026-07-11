@@ -108,6 +108,36 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         gameplay_address_for_pump != 0 &&
         local_actor_address != 0 &&
         local_actor_address == actor_address;
+    const auto native_tick_now_ms = static_cast<std::uint64_t>(GetTickCount64());
+
+    if (multiplayer::ShouldPauseGameplayForLevelUpSelection()) {
+        static std::uint64_t s_last_level_up_pause_log_ms = 0;
+        const auto pause_now_ms = static_cast<std::uint64_t>(::GetTickCount64());
+        if (pause_now_ms - s_last_level_up_pause_log_ms >= 1000) {
+            s_last_level_up_pause_log_ms = pause_now_ms;
+            std::string wait_text;
+            (void)multiplayer::TryBuildLevelUpWaitStatusText(&wait_text);
+            Log(
+                "Multiplayer level-up wait pause suppressing actor tick. actor=" +
+                HexString(actor_address) +
+                " local_player=" + std::to_string(local_player_actor ? 1 : 0) +
+                " status=\"" + wait_text + "\"");
+        }
+        if (local_player_actor) {
+            TickParticipantSceneBindingsIfActive();
+            ApplyReplicatedWorldSnapshotIfActive(
+                gameplay_address_for_pump,
+                pause_now_ms);
+        }
+        return;
+    }
+
+    if (local_player_actor) {
+        (void)MaybePrimeLocalPlayerRunCastState(
+            gameplay_address_for_pump,
+            actor_address,
+            native_tick_now_ms);
+    }
 
     bool standalone_puppet_actor = false;
     bool gameplay_slot_wizard_actor = false;
@@ -124,7 +154,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     bool tracked_actor_dead = false;
     std::string tracked_path_error_message;
     std::string tracked_move_error_message;
-    const auto native_tick_now_ms = static_cast<std::uint64_t>(GetTickCount64());
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         if (auto* binding = FindParticipantEntityForActor(actor_address);

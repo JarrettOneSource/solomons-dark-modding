@@ -220,11 +220,18 @@ void __fastcall HookPlayerActorPurePrimaryGate(void* self, void* /*unused_edx*/)
             " startup_state={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     }
     std::string slot_owner_context;
+    std::string player_actor_owner_context;
     InvokeWithBotProgressionSlotOwnerContext(
         actor_address,
         pure_primary_bot_owner_context,
         [&] {
-            original(self);
+            InvokeWithGameplayPlayerActorSlotContext(
+                actor_address,
+                pure_primary_bot_owner_context,
+                [&] {
+                    original(self);
+                },
+                &player_actor_owner_context);
         },
         &slot_owner_context);
     if (log_this) {
@@ -232,6 +239,7 @@ void __fastcall HookPlayerActorPurePrimaryGate(void* self, void* /*unused_edx*/)
             "[bots] pure_primary_gate exit actor=" + HexString(actor_address) +
             " bot_id=" + std::to_string(bot_id) +
             " standalone_slot_owner_context={" + slot_owner_context + "}" +
+            " player_actor_slot_context={" + player_actor_owner_context + "}" +
             " startup_state={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     }
 }
@@ -388,11 +396,18 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
     }
 
     std::string slot_owner_context;
+    std::string player_actor_owner_context;
     InvokeWithBotProgressionSlotOwnerContext(
         actor_address,
         pure_primary_bot_owner_context,
         [&] {
-            original(self);
+            InvokeWithGameplayPlayerActorSlotContext(
+                actor_address,
+                pure_primary_bot_owner_context,
+                [&] {
+                    original(self);
+                },
+                &player_actor_owner_context);
         },
         &slot_owner_context);
 
@@ -401,6 +416,7 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
             "[bots] spell_dispatch exit actor=" + HexString(actor_address) +
             " bot_id=" + std::to_string(bot_id) +
             " standalone_slot_owner_context={" + slot_owner_context + "}" +
+            " player_actor_slot_context={" + player_actor_owner_context + "}" +
             " startup_state={" + DescribeGameplaySlotCastStartupWindow(actor_address) + "}");
     }
     g_spell_dispatch_probe = saved_probe;

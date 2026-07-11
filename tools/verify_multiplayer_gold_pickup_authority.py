@@ -38,6 +38,16 @@ from verify_local_multiplayer_sync import (
 
 RUNTIME_OUTPUT = ROOT / "runtime" / "multiplayer_gold_pickup_authority.json"
 POSITION_TOLERANCE = 260.0
+MIN_HOST_CLIENT_ANCHOR_DISTANCE = 520.0
+GOLD_SPAWN_OFFSET_FROM_CLIENT = 280.0
+GOLD_SPAWN_MAX_CLIENT_DISTANCE = 300.0
+GOLD_SPAWN_MIN_HOST_DISTANCE = 380.0
+PICKUP_POSITION_TOLERANCE = 240.0
+PICKUP_SUPPRESSION_RADIUS = 335.0
+PICKUP_PARKING_MIN_DISTANCE = 520.0
+LOCAL_RUNTIME_PARTICIPANT_ID = 1
+RUN_SAFE_SPAWN_X = 2350.0
+RUN_SAFE_SPAWN_Y = 2850.0
 
 
 CAPTURE_LUA = r"""
@@ -149,6 +159,10 @@ def parse_float_text(value: str | None, default: float = 0.0) -> float:
         return default
 
 
+def distance(ax: float, ay: float, bx: float, by: float) -> float:
+    return math.hypot(ax - bx, ay - by)
+
+
 def participant_rows(capture_values: dict[str, str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     count = parse_int_text(capture_values.get("mp.participant_count"), 0)
@@ -189,22 +203,44 @@ def wait_for_client_pickup_result(
     expected_result: str,
     timeout: float,
 ) -> dict[str, str]:
-    deadline = time.monotonic() + timeout
-    last: dict[str, str] = {}
-    while time.monotonic() < deadline:
-        last = capture(CLIENT_PIPE)
-        if (
-            last.get("pickup.valid") == "true"
-            and parse_int_text(last.get("pickup.network_drop_id"), 0) == network_drop_id
-            and parse_int_text(last.get("pickup.request_sequence"), 0) == request_sequence
-            and last.get("pickup.result") == expected_result
-        ):
-            return last
-        time.sleep(0.1)
+    accepted = try_wait_for_client_pickup_result(
+        network_drop_id=network_drop_id,
+        request_sequence=request_sequence,
+        expected_result=expected_result,
+        timeout=timeout,
+    )
+    if accepted is not None:
+        return accepted
+    last = capture(CLIENT_PIPE)
     raise VerifyFailure(
         "client did not receive expected loot pickup result: "
         f"drop={network_drop_id} request={request_sequence} expected={expected_result} last={last}"
     )
+
+
+def try_wait_for_client_pickup_result(
+    *,
+    network_drop_id: int,
+    request_sequence: int | None,
+    expected_result: str,
+    timeout: float,
+) -> dict[str, str] | None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        capture_values = capture(CLIENT_PIPE)
+        sequence_matches = (
+            request_sequence is None or
+            parse_int_text(capture_values.get("pickup.request_sequence"), 0) == request_sequence
+        )
+        if (
+            capture_values.get("pickup.valid") == "true"
+            and parse_int_text(capture_values.get("pickup.network_drop_id"), 0) == network_drop_id
+            and sequence_matches
+            and capture_values.get("pickup.result") == expected_result
+        ):
+            return capture_values
+        time.sleep(0.1)
+    return None
 
 
 def wait_for_host_client_gold(
@@ -305,46 +341,203 @@ def setup_live_run_pair_without_waves(max_attempts: int) -> dict[str, Any]:
     raise VerifyFailure(f"failed to prepare live run pair after {max_attempts} attempts: {last_error}")
 
 
+def move_client_into_pickup_range(
+    *,
+    drop_x: float,
+    drop_y: float,
+    timeout: float,
+) -> dict[str, Any]:
+    place = place_player(CLIENT_PIPE, drop_x, drop_y, 90.0)
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    last_row: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        last = capture(CLIENT_PIPE)
+        player_x = parse_float_text(last.get("player.x"))
+        player_y = parse_float_text(last.get("player.y"))
+        last_row = find_participant(last, LOCAL_RUNTIME_PARTICIPANT_ID)
+        player_in_range = distance(player_x, player_y, drop_x, drop_y) <= PICKUP_POSITION_TOLERANCE
+        runtime_in_range = (
+            last_row is not None
+            and distance(last_row["x"], last_row["y"], drop_x, drop_y) <= PICKUP_POSITION_TOLERANCE
+        )
+        if player_in_range and runtime_in_range:
+            return {
+                "place": place,
+                "capture": last,
+                "local_participant": last_row,
+                "drop_x": drop_x,
+                "drop_y": drop_y,
+            }
+        time.sleep(0.1)
+    raise VerifyFailure(
+        "client did not settle in gold pickup range before request: "
+        f"drop=({drop_x:.3f},{drop_y:.3f}) row={last_row} capture={last}"
+    )
+
+
+def move_client_out_of_pickup_range(
+    *,
+    drop_x: float,
+    drop_y: float,
+    timeout: float,
+) -> dict[str, Any]:
+    candidate_targets = [
+        (drop_x + 900.0, drop_y + 900.0),
+        (drop_x - 900.0, drop_y + 900.0),
+        (drop_x + 900.0, drop_y - 900.0),
+        (drop_x - 900.0, drop_y - 900.0),
+        (drop_x + 1200.0, drop_y),
+        (drop_x - 1200.0, drop_y),
+    ]
+    parking_x = candidate_targets[0][0]
+    parking_y = candidate_targets[0][1]
+    best_distance = -1.0
+    for candidate_x, candidate_y in candidate_targets:
+        try:
+            snap_x, snap_y = snap_to_nav(CLIENT_PIPE, candidate_x, candidate_y)
+        except Exception:
+            snap_x, snap_y = candidate_x, candidate_y
+        candidate_distance = distance(snap_x, snap_y, drop_x, drop_y)
+        if candidate_distance > best_distance:
+            best_distance = candidate_distance
+            parking_x = snap_x
+            parking_y = snap_y
+    if best_distance < PICKUP_PARKING_MIN_DISTANCE:
+        parking_x = drop_x + PICKUP_PARKING_MIN_DISTANCE + 128.0
+        parking_y = drop_y + PICKUP_PARKING_MIN_DISTANCE + 128.0
+
+    place = place_player(CLIENT_PIPE, parking_x, parking_y, 90.0)
+    deadline = time.monotonic() + timeout
+    last_client: dict[str, str] = {}
+    last_host: dict[str, str] = {}
+    host_row: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        last_client = capture(CLIENT_PIPE)
+        last_host = capture(HOST_PIPE)
+        client_distance = distance(
+            parse_float_text(last_client.get("player.x")),
+            parse_float_text(last_client.get("player.y")),
+            drop_x,
+            drop_y,
+        )
+        host_row = find_participant(last_host, CLIENT_ID)
+        host_distance = (
+            distance(host_row["x"], host_row["y"], drop_x, drop_y)
+            if host_row is not None else 0.0
+        )
+        if (
+            client_distance > PICKUP_SUPPRESSION_RADIUS
+            and host_row is not None
+            and host_distance > PICKUP_SUPPRESSION_RADIUS
+        ):
+            return {
+                "place": place,
+                "client_capture": last_client,
+                "host_capture": last_host,
+                "host_participant": host_row,
+                "drop_x": drop_x,
+                "drop_y": drop_y,
+                "parking_x": parking_x,
+                "parking_y": parking_y,
+                "client_distance": client_distance,
+                "host_distance": host_distance,
+            }
+        time.sleep(0.1)
+    raise VerifyFailure(
+        "client did not settle out of gold pickup range before spawn: "
+        f"drop=({drop_x:.3f},{drop_y:.3f}) host_row={host_row} "
+        f"client={last_client} host={last_host}"
+    )
+
+
 def select_remote_spawn_anchor(timeout: float) -> dict[str, Any]:
     before = capture_pair()
     client_x = parse_float_text(before["client"].get("player.x"))
     client_y = parse_float_text(before["client"].get("player.y"))
-    if not math.isfinite(client_x) or not math.isfinite(client_y):
-        raise VerifyFailure(f"client position unavailable: {before['client']}")
+    host_x = parse_float_text(before["host"].get("player.x"))
+    host_y = parse_float_text(before["host"].get("player.y"))
+    if (
+        not math.isfinite(client_x)
+        or not math.isfinite(client_y)
+        or not math.isfinite(host_x)
+        or not math.isfinite(host_y)
+    ):
+        raise VerifyFailure(f"player positions unavailable: before={before}")
 
-    target_x, target_y = snap_to_nav(HOST_PIPE, client_x + 900.0, client_y)
-    place = place_player(CLIENT_PIPE, target_x, target_y, 90.0)
-
+    candidate_offsets = (
+        (900.0, 0.0),
+        (-900.0, 0.0),
+        (0.0, 900.0),
+        (0.0, -900.0),
+        (700.0, 700.0),
+        (-700.0, 700.0),
+        (700.0, -700.0),
+        (-700.0, -700.0),
+        (1200.0, 0.0),
+        (-1200.0, 0.0),
+    )
+    attempts: list[dict[str, Any]] = []
     deadline = time.monotonic() + timeout
-    last_host: dict[str, str] = {}
-    last_row: dict[str, Any] | None = None
-    while time.monotonic() < deadline:
-        last_host = capture(HOST_PIPE)
-        last_row = find_participant(last_host, CLIENT_ID)
-        if (
-            last_row is not None
-            and math.hypot(last_row["x"] - target_x, last_row["y"] - target_y) <= POSITION_TOLERANCE
-        ):
-            return {
-                "before": before,
-                "target_x": target_x,
-                "target_y": target_y,
-                "place": place,
-                "host_participant": last_row,
-            }
-        time.sleep(0.1)
-    raise VerifyFailure(f"host did not observe moved client before gold test: row={last_row} capture={last_host}")
+    for offset_x, offset_y in candidate_offsets:
+        if time.monotonic() >= deadline:
+            break
+        requested_x = host_x + offset_x
+        requested_y = host_y + offset_y
+        try:
+            target_x, target_y = snap_to_nav(CLIENT_PIPE, requested_x, requested_y)
+        except Exception:
+            target_x, target_y = requested_x, requested_y
+        place = place_player(CLIENT_PIPE, target_x, target_y, 90.0)
+
+        settle_deadline = min(deadline, time.monotonic() + 4.0)
+        last_host: dict[str, str] = {}
+        last_row: dict[str, Any] | None = None
+        while time.monotonic() < settle_deadline:
+            last_host = capture(HOST_PIPE)
+            last_row = find_participant(last_host, CLIENT_ID)
+            if last_row is not None:
+                host_distance = math.hypot(last_row["x"] - host_x, last_row["y"] - host_y)
+                target_distance = math.hypot(last_row["x"] - target_x, last_row["y"] - target_y)
+                if (
+                    host_distance >= MIN_HOST_CLIENT_ANCHOR_DISTANCE
+                    and target_distance <= POSITION_TOLERANCE
+                ):
+                    return {
+                        "before": before,
+                        "host_x": host_x,
+                        "host_y": host_y,
+                        "requested_x": requested_x,
+                        "requested_y": requested_y,
+                        "snapped_x": target_x,
+                        "snapped_y": target_y,
+                        "target_x": last_row["x"],
+                        "target_y": last_row["y"],
+                        "place": place,
+                        "host_participant": last_row,
+                        "host_distance": host_distance,
+                        "target_distance": target_distance,
+                    }
+            time.sleep(0.1)
+        attempts.append({
+            "requested_x": requested_x,
+            "requested_y": requested_y,
+            "snapped_x": target_x,
+            "snapped_y": target_y,
+            "last_row": last_row,
+            "last_host": last_host,
+        })
+
+    raise VerifyFailure(f"host did not observe a separated moved client before gold test: attempts={attempts}")
 
 
 def select_spawn_point(timeout: float) -> dict[str, Any]:
-    anchor = select_remote_spawn_anchor(timeout)
-    requested_x = float(anchor["target_x"]) + 240.0
-    requested_y = float(anchor["target_y"])
+    before = capture_pair()
+    requested_x = RUN_SAFE_SPAWN_X
+    requested_y = RUN_SAFE_SPAWN_Y
     snapped_x, snapped_y = snap_to_nav(HOST_PIPE, requested_x, requested_y)
     return {
-        "anchor": anchor,
-        "client_anchor_x": float(anchor["target_x"]),
-        "client_anchor_y": float(anchor["target_y"]),
+        "before": before,
         "requested_x": requested_x,
         "requested_y": requested_y,
         "snapped_x": snapped_x,
@@ -371,6 +564,11 @@ def verify_gold_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:
 
     spawn_x = float(spawn_point["snapped_x"])
     spawn_y = float(spawn_point["snapped_y"])
+    result["client_pre_spawn_parking"] = move_client_out_of_pickup_range(
+        drop_x=spawn_x,
+        drop_y=spawn_y,
+        timeout=args.timeout,
+    )
     result["spawn"] = spawn_gold(
         HOST_PIPE,
         amount=PROBE_GOLD_AMOUNT,
@@ -391,16 +589,36 @@ def verify_gold_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:
         timeout=args.timeout,
     )
     network_drop_id = int(replicated["drop"]["network_id"])
-    request = request_pickup(network_drop_id)
-    request_sequence = parse_int_text(request.get("request_sequence"), 0)
     expected_client_gold = client_gold_before + PROBE_GOLD_AMOUNT
-    result["request"] = request
-    result["accepted_result"] = wait_for_client_pickup_result(
-        network_drop_id=network_drop_id,
-        request_sequence=request_sequence,
-        expected_result="Accepted",
+    result["client_pickup_position"] = move_client_into_pickup_range(
+        drop_x=float(replicated["drop"]["x"]),
+        drop_y=float(replicated["drop"]["y"]),
         timeout=args.timeout,
     )
+    accepted = try_wait_for_client_pickup_result(
+        network_drop_id=network_drop_id,
+        request_sequence=None,
+        expected_result="Accepted",
+        timeout=min(1.5, args.timeout),
+    )
+    if accepted is not None:
+        request_sequence = parse_int_text(accepted.get("pickup.request_sequence"), 0)
+        result["request"] = {
+            "ok": "true",
+            "path": "client_proximity_hook",
+            "request_sequence": str(request_sequence),
+        }
+        result["accepted_result"] = accepted
+    else:
+        request = request_pickup(network_drop_id)
+        request_sequence = parse_int_text(request.get("request_sequence"), 0)
+        result["request"] = request
+        result["accepted_result"] = wait_for_client_pickup_result(
+            network_drop_id=network_drop_id,
+            request_sequence=request_sequence,
+            expected_result="Accepted",
+            timeout=args.timeout,
+        )
     result["client_local_gold_after_accept"] = wait_for_client_local_gold(
         expected_gold=expected_client_gold,
         timeout=args.timeout,

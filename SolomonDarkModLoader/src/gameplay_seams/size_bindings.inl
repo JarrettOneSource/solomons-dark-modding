@@ -1,7 +1,5 @@
 const SizeBinding* GetSizeBindings(std::size_t* count) {
     static const SizeBinding bindings[] = {
-        SDMOD_SIZE("hub", "start_testrun_control_byte_offset", kHubStartTestrunControlByteOffset),
-
         SDMOD_SIZE("gameplay.offsets", "gameplay_exact_text_object", kGameplayExactTextObjectOffset),
         SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_table_base", kStandaloneWizardProgressionTableBaseOffset),
         SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_table_count", kStandaloneWizardProgressionTableCountOffset),
@@ -66,6 +64,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "actor_movement_speed_multiplier", kActorMovementSpeedMultiplierOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_animation_config_block", kActorAnimationConfigBlockOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_animation_drive_parameter", kActorAnimationDriveParameterOffset),
+        SDMOD_SIZE("gameplay.offsets", "actor_current_target_bucket_delta", kActorCurrentTargetBucketDeltaOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_current_target_actor", kActorCurrentTargetActorOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_target_repath_cadence", kActorTargetRepathCadenceOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_move_step_scale", kActorMoveStepScaleOffset),
@@ -131,6 +130,8 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "visual_lane_holder_current_object", kVisualLaneHolderCurrentObjectOffset),
         SDMOD_SIZE("gameplay.offsets", "object_vtable", kObjectVtableOffset),
         SDMOD_SIZE("gameplay.offsets", "gameplay_actor_attach_vfunc", kGameplayActorAttachVfuncOffset),
+        SDMOD_SIZE("gameplay.offsets", "gameplay_actor_detach_vfunc", kGameplayActorDetachVfuncOffset),
+        SDMOD_SIZE("gameplay.offsets", "actor_world_unregister_notify_vfunc", kActorWorldUnregisterNotifyVfuncOffset),
         SDMOD_SIZE("gameplay.offsets", "skills_wizard_probe_vfunc", kSkillsWizardProbeVfuncOffset),
         SDMOD_SIZE("gameplay.offsets", "game_object_type_id", kGameObjectTypeIdOffset),
         SDMOD_SIZE("gameplay.offsets", "object_position_x", kObjectPositionXOffset),
@@ -175,6 +176,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "progression_current_spell_id", kProgressionCurrentSpellIdOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_primary_stat_values", kProgressionPrimaryStatValuesOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_primary_stat_count", kProgressionPrimaryStatCountOffset),
+        SDMOD_SIZE("gameplay.offsets", "progression_local_skill_picker_screen", kProgressionLocalSkillPickerScreenOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_special_choice_argument", kProgressionSpecialChoiceArgumentOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_cast_charge_a", kProgressionCastChargeAOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_earth_charge_cap", kProgressionEarthChargeCapOffset),

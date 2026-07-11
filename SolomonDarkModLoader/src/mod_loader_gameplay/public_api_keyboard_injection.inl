@@ -598,12 +598,22 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.manual_spawner_primary_cast_control_grace_until_ms.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.store(
+        0,
+        std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_left_active.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.gameplay_region_switch_not_before_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.scene_churn_not_before_ms.store(0, std::memory_order_release);
     {
         std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
+        g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.clear();
         g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.clear();
         g_gameplay_keyboard_injection.pending_gameplay_region_switch_requests.clear();
         g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();
@@ -686,6 +696,15 @@ void ShutdownGameplayKeyboardInjection() {
     g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.manual_spawner_primary_cast_control_grace_until_ms.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.store(
+        0,
+        std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_left_active.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_start_waves_requests.store(0, std::memory_order_release);
@@ -700,6 +719,7 @@ void ShutdownGameplayKeyboardInjection() {
     {
         std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
         g_gameplay_keyboard_injection.pending_reward_spawn_requests.clear();
+        g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.clear();
         g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.clear();
         g_gameplay_keyboard_injection.pending_gameplay_region_switch_requests.clear();
         g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();

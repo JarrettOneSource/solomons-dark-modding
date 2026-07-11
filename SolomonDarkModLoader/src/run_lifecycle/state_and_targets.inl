@@ -42,16 +42,55 @@ struct RunLifecycleState {
     std::atomic<int> current_wave{0};
     std::atomic<bool> run_active{false};
     std::atomic<uintptr_t> last_wave_spawner{0};
+    std::atomic<uintptr_t> last_wave_spawner_vtable{0};
+    std::atomic<std::uint64_t> last_wave_spawner_tick_ms{0};
+    std::atomic<uintptr_t> last_arena_enemy_wave_spawner{0};
+    std::atomic<uintptr_t> last_arena_enemy_wave_spawner_vtable{0};
+    std::atomic<std::uint64_t> last_arena_enemy_wave_spawner_tick_ms{0};
     std::atomic<std::uint64_t> last_consumed_spell_click_serial{0};
     std::atomic<std::uint64_t> run_start_tick_ms{0};
     std::atomic<bool> combat_prelude_only_suppression{false};
     std::atomic<bool> wave_start_enemy_tracking{false};
+    std::atomic<bool> manual_enemy_spawner_test_mode{false};
     std::mutex enemy_type_mutex;
     std::unordered_map<uintptr_t, int> enemy_types_by_address;
     std::unordered_map<uintptr_t, std::uint32_t> enemy_spawn_serials_by_address;
     std::uint32_t next_enemy_spawn_serial = 1;
+    std::mutex wave_spawner_log_mutex;
+    std::unordered_set<uintptr_t> logged_wave_spawners;
     bool initialized = false;
 } g_state;
+
+struct ManualRunEnemySpawnRequest {
+    std::uint64_t request_id = 0;
+    std::uint64_t network_actor_id = 0;
+    int type_id = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    bool allow_active_waves = false;
+    bool freeze_on_spawn = true;
+    std::uint8_t retry_count = 0;
+};
+
+struct FrozenManualRunEnemy {
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
+std::mutex g_manual_run_enemy_spawn_mutex;
+ManualRunEnemySpawnRequest g_pending_manual_run_enemy_spawn;
+ManualRunEnemySpawnRequest g_active_manual_run_enemy_spawn;
+SDModManualRunEnemySpawnResult g_last_manual_run_enemy_spawn_result;
+bool g_have_pending_manual_run_enemy_spawn = false;
+bool g_have_active_manual_run_enemy_spawn = false;
+std::uint64_t g_next_manual_run_enemy_spawn_request_id = 1;
+std::deque<ManualRunEnemySpawnRequest> g_queued_replicated_run_enemy_spawns;
+std::unordered_map<uintptr_t, FrozenManualRunEnemy> g_frozen_manual_run_enemies;
+
+thread_local bool g_manual_run_enemy_spawner_tick_active = false;
+thread_local uintptr_t g_manual_run_enemy_spawner_tick_address = 0;
+thread_local uintptr_t g_current_wave_spawner_tick_address = 0;
+
 constexpr std::uint64_t kSpellCastClickWindowMs = 400;
 constexpr char kUnknownKillMethod[] = "unknown";
 constexpr char kGoldSourcePickup[] = "pickup";
@@ -62,6 +101,12 @@ constexpr char kDropKindGold[] = "gold";
 constexpr std::size_t kWaveSpawnerRemainingBudgetOffset = 0x20;
 constexpr std::size_t kWaveSpawnerSpawnDelayCountdownOffset = 0x24;
 constexpr std::size_t kWaveSpawnerLongDelayCountdownOffset = 0x2C;
+constexpr std::uint64_t kManualRunEnemySpawnerFreshnessWindowMs = 5000;
+constexpr std::int32_t kManualRunEnemySpawnerBudget = 2;
+constexpr std::int32_t kManualRunEnemySpawnerLongDelay = 2;
+constexpr std::size_t kQueuedReplicatedRunEnemySpawnLimit = 16;
+constexpr std::size_t kReplicatedCatchupSpawnBurstPerSpawnerTick = 8;
+constexpr std::uint8_t kReplicatedCatchupSpawnRetryLimit = 8;
 
 void BuildHookTargets(HookTarget* targets) {
     if (targets == nullptr) {

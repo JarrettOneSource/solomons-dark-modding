@@ -12,6 +12,7 @@ param(
     [switch]$DisableMultiplayerTransport,
     [switch]$UseSandboxPresetFlow,
     [switch]$TemporaryHostProfile,
+    [switch]$GodMode,
     [switch]$NoTileWindows,
     [switch]$NoKill,
     [switch]$AllowFocusSteal
@@ -241,6 +242,9 @@ function Start-MultiplayerInstance {
         SDMOD_LUA_EXEC_PIPE_NAME = "SolomonDarkModLoader_LuaExec_$Instance"
         SDMOD_HUD_ALLY_LABEL = $RemotePlayerName
     }
+    if ($GodMode) {
+        $env.SDMOD_MULTIPLAYER_GODMODE = "1"
+    }
     if (-not $DisableMultiplayerTransport) {
         $env.SDMOD_MULTIPLAYER_TRANSPORT = "local_udp"
         $env.SDMOD_MULTIPLAYER_ROLE = $Role
@@ -340,6 +344,79 @@ function Convert-KeyValueText {
         if ($line -match "^([^=]+)=(.*)$") {
             $values[$Matches[1]] = $Matches[2]
         }
+    }
+    return $values
+}
+
+function Enable-InstanceGodMode {
+    param([string]$PipeName)
+
+    $resultText = Invoke-InstanceLuaExec `
+        -PipeName $PipeName `
+        -Code @"
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+local function sustain()
+  local player = sd.player.get_state()
+  if type(player) ~= 'table' then
+    return false, 'player_unavailable'
+  end
+
+  local progression = tonumber(player.progression_address) or 0
+  if progression == 0 then
+    local actor = tonumber(player.actor_address) or 0
+    if actor ~= 0 and sd.debug and sd.debug.layout_offset and sd.debug.read_ptr then
+      local ok_offset, offset = pcall(sd.debug.layout_offset, 'actor_progression_runtime_state')
+      if ok_offset and tonumber(offset) ~= nil then
+        local ok_ptr, ptr = pcall(sd.debug.read_ptr, actor + tonumber(offset))
+        if ok_ptr then
+          progression = tonumber(ptr) or 0
+        end
+      end
+    end
+  end
+  if progression == 0 then
+    return false, 'progression_unavailable'
+  end
+
+  local ok_hp, hp_offset = pcall(sd.debug.layout_offset, 'progression_hp')
+  local ok_max_hp, max_hp_offset = pcall(sd.debug.layout_offset, 'progression_max_hp')
+  local ok_mp, mp_offset = pcall(sd.debug.layout_offset, 'progression_mp')
+  local ok_max_mp, max_mp_offset = pcall(sd.debug.layout_offset, 'progression_max_mp')
+  if not (ok_hp and ok_max_hp and ok_mp and ok_max_mp) then
+    return false, 'layout_unavailable'
+  end
+
+  local max_hp = tonumber(sd.debug.read_float(progression + max_hp_offset)) or tonumber(player.max_hp) or 0
+  local max_mp = tonumber(sd.debug.read_float(progression + max_mp_offset)) or tonumber(player.max_mp) or 0
+  if max_hp > 0 then
+    sd.debug.write_float(progression + hp_offset, max_hp)
+  end
+  if max_mp > 0 then
+    sd.debug.write_float(progression + mp_offset, max_mp)
+  end
+  return true, 'ok'
+end
+
+if not _G.__sdmod_launch_godmode_enabled then
+  local ok_register, err = pcall(function()
+    sd.events.on('runtime.tick', function()
+      sustain()
+    end)
+  end)
+  if not ok_register then
+    error('failed to register godmode tick: ' .. tostring(err))
+  end
+  _G.__sdmod_launch_godmode_enabled = true
+end
+
+local ok, status = sustain()
+emit('registered', true)
+emit('initial_apply', ok)
+emit('status', status)
+"@
+    $values = Convert-KeyValueText -Text $resultText
+    if ($values["registered"] -ne "true") {
+        throw "Failed to enable godmode on pipe $PipeName. Output: $resultText"
     }
     return $values
 }
@@ -811,6 +888,10 @@ $hostResult = Start-MultiplayerInstance `
     -PlayerName $HostName `
     -RemotePlayerName $ClientName
 
+if ($GodMode) {
+    Enable-InstanceGodMode -PipeName "SolomonDarkModLoader_LuaExec_local-mp-host" | Out-Null
+}
+
 if ($null -ne $hostSelection -and -not $UseSandboxPresetFlow) {
     Invoke-CreateSelection `
         -PipeName "SolomonDarkModLoader_LuaExec_local-mp-host" `
@@ -833,6 +914,10 @@ $clientResult = Start-MultiplayerInstance `
     -ParticipantId $ClientParticipantId `
     -PlayerName $ClientName `
     -RemotePlayerName $HostName
+
+if ($GodMode) {
+    Enable-InstanceGodMode -PipeName "SolomonDarkModLoader_LuaExec_local-mp-client" | Out-Null
+}
 
 if ($null -ne $clientSelection -and -not $UseSandboxPresetFlow) {
     Invoke-CreateSelection `
@@ -870,6 +955,7 @@ if (-not $NoTileWindows) {
     multiplayerTransportEnabled = -not $DisableMultiplayerTransport
     sandboxPresetFlowEnabled = [bool]$UseSandboxPresetFlow
     temporaryHostProfile = [bool]$TemporaryHostProfile
+    godModeEnabled = [bool]$GodMode
     allowFocusSteal = [bool]$AllowFocusSteal
     hostParticipantId = $HostParticipantId
     clientParticipantId = $ClientParticipantId

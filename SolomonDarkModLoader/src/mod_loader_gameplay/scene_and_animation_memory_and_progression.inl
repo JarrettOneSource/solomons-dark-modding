@@ -204,11 +204,109 @@ bool TryValidateRemoteParticipantSpawnReadiness(
         return false;
     }
 
+    struct StableSceneReadiness {
+        uintptr_t gameplay_address = 0;
+        uintptr_t world_address = 0;
+        int region_index = -1;
+        int region_type_id = -1;
+        std::uint64_t stable_since_ms = 0;
+    };
+    static StableSceneReadiness s_stable_scene_readiness;
+    const bool scene_identity_changed =
+        s_stable_scene_readiness.gameplay_address != snapshot.gameplay_scene_address ||
+        s_stable_scene_readiness.world_address != snapshot.world_address ||
+        s_stable_scene_readiness.region_index != snapshot.current_region_index ||
+        s_stable_scene_readiness.region_type_id != snapshot.region_type_id;
+    if (scene_identity_changed) {
+        s_stable_scene_readiness.gameplay_address = snapshot.gameplay_scene_address;
+        s_stable_scene_readiness.world_address = snapshot.world_address;
+        s_stable_scene_readiness.region_index = snapshot.current_region_index;
+        s_stable_scene_readiness.region_type_id = snapshot.region_type_id;
+        s_stable_scene_readiness.stable_since_ms = now_ms;
+        if (error_message != nullptr) {
+            *error_message = "Gameplay scene identity is not stable yet.";
+        }
+        return false;
+    }
+    if (now_ms - s_stable_scene_readiness.stable_since_ms <
+        kRemoteParticipantSpawnSceneStableDelayMs) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay scene identity is still settling.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
     uintptr_t local_actor_address = 0;
     if (!TryResolvePlayerActorForSlot(gameplay_address, 0, &local_actor_address) ||
         local_actor_address == 0) {
         if (error_message != nullptr) {
             *error_message = "Local slot-0 player actor is not ready.";
+        }
+        return false;
+    }
+
+    std::int8_t local_actor_slot = -1;
+    if (!memory.TryReadField(local_actor_address, kActorSlotOffset, &local_actor_slot) ||
+        local_actor_slot != 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Local slot-0 player actor has unexpected actor slot " +
+                std::to_string(static_cast<int>(local_actor_slot)) + ".";
+        }
+        return false;
+    }
+
+    uintptr_t local_actor_world = 0;
+    if (!memory.TryReadField(local_actor_address, kActorOwnerOffset, &local_actor_world) ||
+        local_actor_world != snapshot.world_address) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Local slot-0 player actor owner does not match scene world. actor_world=" +
+                HexString(local_actor_world) + " scene_world=" + HexString(snapshot.world_address) + ".";
+        }
+        return false;
+    }
+
+    float local_x = 0.0f;
+    float local_y = 0.0f;
+    if (!TryReadFiniteFloatField(local_actor_address, kActorPositionXOffset, &local_x) ||
+        !TryReadFiniteFloatField(local_actor_address, kActorPositionYOffset, &local_y)) {
+        if (error_message != nullptr) {
+            *error_message = "Local slot-0 player actor position is not readable.";
+        }
+        return false;
+    }
+
+    uintptr_t local_progression_address = 0;
+    if (!TryResolvePlayerProgressionForSlot(gameplay_address, 0, &local_progression_address) ||
+        local_progression_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Local slot-0 progression handle is not ready.";
+        }
+        return false;
+    }
+
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    float mp = 0.0f;
+    float max_mp = 0.0f;
+    if (!TryReadFiniteFloatField(local_progression_address, kProgressionHpOffset, &hp) ||
+        !TryReadFiniteFloatField(local_progression_address, kProgressionMaxHpOffset, &max_hp) ||
+        !TryReadFiniteFloatField(local_progression_address, kProgressionMpOffset, &mp) ||
+        !TryReadFiniteFloatField(local_progression_address, kProgressionMaxMpOffset, &max_mp) ||
+        max_hp <= 0.0f ||
+        max_mp <= 0.0f ||
+        max_hp > 1000000.0f ||
+        max_mp > 1000000.0f) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Local slot-0 progression vitals are not stable. progression=" +
+                HexString(local_progression_address) +
+                " hp=" + std::to_string(hp) +
+                " max_hp=" + std::to_string(max_hp) +
+                " mp=" + std::to_string(mp) +
+                " max_mp=" + std::to_string(max_mp) + ".";
         }
         return false;
     }

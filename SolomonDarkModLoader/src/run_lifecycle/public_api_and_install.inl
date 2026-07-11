@@ -90,11 +90,20 @@ bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(int enemy_type, std::uint32_t
 
     const auto requested = static_cast<std::int32_t>(
         (std::min<std::uint32_t>)(missing_enemy_count, static_cast<std::uint32_t>(remaining_budget)));
+    const auto accelerated_budget = static_cast<std::int32_t>(
+        (std::min<std::uint32_t>)(
+            missing_enemy_count,
+            static_cast<std::uint32_t>(kMaxReasonableEnemyPoolCatchUpBudget)));
+    const bool wrote_budget =
+        memory.TryWriteField(
+            spawner_address,
+            kWaveSpawnerRemainingBudgetOffset,
+            (std::max)(remaining_budget, accelerated_budget));
     const bool wrote_spawn_delay =
         memory.TryWriteField(spawner_address, kWaveSpawnerSpawnDelayCountdownOffset, static_cast<std::int32_t>(0));
     const bool wrote_long_delay =
         memory.TryWriteField(spawner_address, kWaveSpawnerLongDelayCountdownOffset, static_cast<std::int32_t>(0));
-    if (!wrote_spawn_delay || !wrote_long_delay) {
+    if (!wrote_budget || !wrote_spawn_delay || !wrote_long_delay) {
         return false;
     }
 
@@ -107,9 +116,369 @@ bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(int enemy_type, std::uint32_t
             " enemy_type=" + std::to_string(enemy_type) +
             " missing=" + std::to_string(missing_enemy_count) +
             " requested=" + std::to_string(requested) +
-            " remaining_budget=" + std::to_string(remaining_budget));
+            " remaining_budget=" + std::to_string(remaining_budget) +
+            " accelerated_budget=" + std::to_string(accelerated_budget));
     }
     return true;
+}
+
+uintptr_t GetRunLifecycleLastWaveSpawnerAddress() {
+    return g_state.last_wave_spawner.load(std::memory_order_acquire);
+}
+
+bool IsRememberedWaveSpawnerVtableValid(uintptr_t spawner_address, uintptr_t remembered_vtable) {
+    if (spawner_address == 0 || remembered_vtable == 0) {
+        return false;
+    }
+
+    uintptr_t current_vtable = 0;
+    return ProcessMemory::Instance().TryReadValue(spawner_address, &current_vtable) &&
+        current_vtable == remembered_vtable;
+}
+
+bool TryGetPreferredManualRunEnemySpawner(uintptr_t* spawner_address, uintptr_t* remembered_vtable) {
+    if (spawner_address == nullptr || remembered_vtable == nullptr) {
+        return false;
+    }
+
+    *spawner_address = 0;
+    *remembered_vtable = 0;
+
+    const auto arena_spawner =
+        g_state.last_arena_enemy_wave_spawner.load(std::memory_order_acquire);
+    const auto arena_vtable =
+        g_state.last_arena_enemy_wave_spawner_vtable.load(std::memory_order_acquire);
+    if (IsRememberedWaveSpawnerVtableValid(arena_spawner, arena_vtable)) {
+        *spawner_address = arena_spawner;
+        *remembered_vtable = arena_vtable;
+        return true;
+    }
+
+    const auto generic_spawner = g_state.last_wave_spawner.load(std::memory_order_acquire);
+    const auto generic_vtable = g_state.last_wave_spawner_vtable.load(std::memory_order_acquire);
+    const auto last_tick_ms = g_state.last_wave_spawner_tick_ms.load(std::memory_order_acquire);
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (last_tick_ms == 0 || now_ms - last_tick_ms > kManualRunEnemySpawnerFreshnessWindowMs) {
+        return false;
+    }
+    if (!IsRememberedWaveSpawnerVtableValid(generic_spawner, generic_vtable)) {
+        return false;
+    }
+
+    *spawner_address = generic_spawner;
+    *remembered_vtable = generic_vtable;
+    return true;
+}
+
+bool IsRunLifecycleManualEnemySpawnerReady() {
+    if (!g_state.manual_enemy_spawner_test_mode.load(std::memory_order_acquire)) {
+        return false;
+    }
+
+    uintptr_t spawner_address = 0;
+    uintptr_t remembered_vtable = 0;
+    return TryGetPreferredManualRunEnemySpawner(&spawner_address, &remembered_vtable);
+}
+
+bool QueueRunLifecycleEnemySpawnRequestInternal(
+    std::uint64_t network_actor_id,
+    int type_id,
+    float x,
+    float y,
+    bool allow_active_waves,
+    bool freeze_on_spawn,
+    std::string* error_message,
+    std::uint64_t* request_id) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (request_id != nullptr) {
+        *request_id = 0;
+    }
+    if (type_id <= 0) {
+        if (error_message != nullptr) {
+            *error_message = "manual run enemy spawn: invalid type_id.";
+        }
+        return false;
+    }
+    if (!std::isfinite(x) || !std::isfinite(y)) {
+        if (error_message != nullptr) {
+            *error_message = "manual run enemy spawn: position must be finite.";
+        }
+        return false;
+    }
+    if (!IsCombatArenaActiveForEnemyTracking()) {
+        if (error_message != nullptr) {
+            *error_message = "manual run enemy spawn: combat arena is not active.";
+        }
+        return false;
+    }
+
+    SDModGameplayCombatState combat_state;
+    if (!TryGetGameplayCombatState(&combat_state) || !combat_state.valid) {
+        if (error_message != nullptr) {
+            *error_message = "manual run enemy spawn: combat state is unavailable.";
+        }
+        return false;
+    }
+    if (combat_state.combat_wave_index > 0 && !allow_active_waves) {
+        if (error_message != nullptr) {
+            *error_message = "manual run enemy spawn: refusing while native waves are active.";
+        }
+        return false;
+    }
+
+    ManualRunEnemySpawnRequest request;
+    request.request_id = g_next_manual_run_enemy_spawn_request_id++;
+    request.network_actor_id = network_actor_id;
+    request.type_id = type_id;
+    request.x = x;
+    request.y = y;
+    request.allow_active_waves = allow_active_waves;
+    request.freeze_on_spawn = freeze_on_spawn;
+
+    std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+    if (!freeze_on_spawn && allow_active_waves) {
+        if (g_have_pending_manual_run_enemy_spawn &&
+            g_pending_manual_run_enemy_spawn.network_actor_id != 0 &&
+            g_pending_manual_run_enemy_spawn.network_actor_id == network_actor_id) {
+            if (request_id != nullptr) {
+                *request_id = g_pending_manual_run_enemy_spawn.request_id;
+            }
+            return true;
+        }
+        if (g_have_active_manual_run_enemy_spawn &&
+            g_active_manual_run_enemy_spawn.network_actor_id != 0 &&
+            g_active_manual_run_enemy_spawn.network_actor_id == network_actor_id) {
+            if (request_id != nullptr) {
+                *request_id = g_active_manual_run_enemy_spawn.request_id;
+            }
+            return true;
+        }
+        const auto already_queued = std::find_if(
+            g_queued_replicated_run_enemy_spawns.begin(),
+            g_queued_replicated_run_enemy_spawns.end(),
+            [&](const ManualRunEnemySpawnRequest& queued) {
+                return queued.network_actor_id != 0 &&
+                       queued.network_actor_id == network_actor_id;
+            });
+        if (already_queued != g_queued_replicated_run_enemy_spawns.end()) {
+            if (request_id != nullptr) {
+                *request_id = already_queued->request_id;
+            }
+            return true;
+        }
+        if (g_queued_replicated_run_enemy_spawns.size() >= kQueuedReplicatedRunEnemySpawnLimit) {
+            if (error_message != nullptr) {
+                *error_message = "manual run enemy spawn: replicated catch-up queue is full.";
+            }
+            return false;
+        }
+        g_queued_replicated_run_enemy_spawns.push_back(request);
+    } else {
+        if (g_have_pending_manual_run_enemy_spawn ||
+            g_have_active_manual_run_enemy_spawn ||
+            !g_queued_replicated_run_enemy_spawns.empty()) {
+            if (error_message != nullptr) {
+                *error_message = "manual run enemy spawn: a previous request is still pending.";
+            }
+            return false;
+        }
+        g_pending_manual_run_enemy_spawn = request;
+        g_have_pending_manual_run_enemy_spawn = true;
+    }
+
+    if (request_id != nullptr) {
+        *request_id = request.request_id;
+    }
+
+    Log(
+        "manual run enemy spawn: queued stock-spawner request. request_id=" +
+        std::to_string(request.request_id) +
+        " network_actor_id=" + std::to_string(request.network_actor_id) +
+        " type_id=" + std::to_string(type_id) +
+        " requested_pos=(" + std::to_string(x) + "," + std::to_string(y) + ")" +
+        " allow_active_waves=" + std::to_string(request.allow_active_waves ? 1 : 0) +
+        " freeze_on_spawn=" + std::to_string(request.freeze_on_spawn ? 1 : 0));
+    return true;
+}
+
+bool QueueRunLifecycleManualEnemySpawn(
+    int type_id,
+    float x,
+    float y,
+    bool freeze_on_spawn,
+    std::string* error_message,
+    std::uint64_t* request_id) {
+    return QueueRunLifecycleEnemySpawnRequestInternal(
+        0,
+        type_id,
+        x,
+        y,
+        g_state.manual_enemy_spawner_test_mode.load(std::memory_order_acquire),
+        freeze_on_spawn,
+        error_message,
+        request_id);
+}
+
+bool QueueRunLifecycleReplicatedEnemyCatchupSpawn(
+    std::uint64_t network_actor_id,
+    int type_id,
+    float x,
+    float y,
+    std::string* error_message,
+    std::uint64_t* request_id) {
+    return QueueRunLifecycleEnemySpawnRequestInternal(
+        network_actor_id,
+        type_id,
+        x,
+        y,
+        true,
+        false,
+        error_message,
+        request_id);
+}
+
+void CancelQueuedRunLifecycleReplicatedEnemyCatchupSpawn(std::uint64_t network_actor_id) {
+    if (network_actor_id == 0) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+    if (g_have_pending_manual_run_enemy_spawn &&
+        g_pending_manual_run_enemy_spawn.network_actor_id == network_actor_id &&
+        g_pending_manual_run_enemy_spawn.allow_active_waves &&
+        !g_pending_manual_run_enemy_spawn.freeze_on_spawn) {
+        g_pending_manual_run_enemy_spawn = ManualRunEnemySpawnRequest{};
+        g_have_pending_manual_run_enemy_spawn = false;
+    }
+    for (auto it = g_queued_replicated_run_enemy_spawns.begin();
+         it != g_queued_replicated_run_enemy_spawns.end();) {
+        if (it->network_actor_id == network_actor_id) {
+            it = g_queued_replicated_run_enemy_spawns.erase(it);
+            continue;
+        }
+        ++it;
+    }
+}
+
+bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+        const bool have_any_pending_request =
+            g_have_pending_manual_run_enemy_spawn || !g_queued_replicated_run_enemy_spawns.empty();
+        if (!have_any_pending_request || g_have_active_manual_run_enemy_spawn) {
+            return false;
+        }
+    }
+
+    uintptr_t spawner_address = 0;
+    uintptr_t remembered_vtable = 0;
+    if (!TryGetPreferredManualRunEnemySpawner(&spawner_address, &remembered_vtable)) {
+        const auto fallback_spawner = g_state.last_wave_spawner.load(std::memory_order_acquire);
+        const auto fallback_vtable = g_state.last_wave_spawner_vtable.load(std::memory_order_acquire);
+        const auto last_tick_ms = g_state.last_wave_spawner_tick_ms.load(std::memory_order_acquire);
+        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        if (fallback_spawner == 0) {
+            if (error_message != nullptr) {
+                *error_message = "manual run enemy spawn: no remembered stock wave spawner is available.";
+            }
+            return false;
+        }
+        if (fallback_vtable == 0) {
+            if (error_message != nullptr) {
+                *error_message = "manual run enemy spawn: remembered stock wave spawner has no verified vtable.";
+            }
+            return false;
+        }
+        if (last_tick_ms == 0 || now_ms - last_tick_ms > kManualRunEnemySpawnerFreshnessWindowMs) {
+            if (error_message != nullptr) {
+                *error_message = "manual run enemy spawn: remembered stock wave spawner is stale.";
+            }
+            return false;
+        }
+        if (error_message != nullptr) {
+            *error_message = "manual run enemy spawn: remembered stock wave spawner vtable changed.";
+        }
+        return false;
+    }
+
+    const auto original =
+        GetX86HookTrampoline<WaveSpawnerTickFn>(g_state.hooks[kHookWaveSpawnerTick]);
+    if (original == nullptr) {
+        if (error_message != nullptr) {
+            *error_message = "manual run enemy spawn: stock wave spawner trampoline is unavailable.";
+        }
+        return false;
+    }
+
+    const auto dispatch_result = TryDispatchManualRunEnemySpawnFromSpawner(
+        reinterpret_cast<void*>(spawner_address),
+        nullptr,
+        original);
+    if (dispatch_result == ManualRunEnemySpawnerDispatchResult::Handled) {
+        Log(
+            "manual run enemy spawn: pumped remembered stock spawner. spawner=" +
+            HexString(spawner_address));
+        return true;
+    }
+    if (dispatch_result == ManualRunEnemySpawnerDispatchResult::RetryLater) {
+        return false;
+    }
+    if (error_message != nullptr) {
+        *error_message = "manual run enemy spawn: remembered stock wave spawner did not accept the request.";
+    }
+    return false;
+}
+
+bool TryGetRunLifecycleManualEnemySpawnResult(
+    SDModManualRunEnemySpawnResult* result,
+    std::uint64_t request_id) {
+    if (result == nullptr) {
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+    if (!g_last_manual_run_enemy_spawn_result.valid ||
+        (request_id != 0 && g_last_manual_run_enemy_spawn_result.request_id != request_id)) {
+        *result = SDModManualRunEnemySpawnResult{};
+        return false;
+    }
+
+    *result = g_last_manual_run_enemy_spawn_result;
+    return true;
+}
+
+bool TryGetRunLifecycleManualEnemyFreezePosition(uintptr_t actor_address, float* x, float* y) {
+    if (actor_address == 0 || x == nullptr || y == nullptr) {
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+    const auto found = g_frozen_manual_run_enemies.find(actor_address);
+    if (found == g_frozen_manual_run_enemies.end()) {
+        return false;
+    }
+    *x = found->second.x;
+    *y = found->second.y;
+    return true;
+}
+
+void PinRunLifecycleFrozenManualEnemies() {
+    PinFrozenManualRunEnemies();
+}
+
+void ClearRunLifecycleManualEnemyFreeze(uintptr_t actor_address) {
+    std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+    if (actor_address == 0) {
+        g_frozen_manual_run_enemies.clear();
+        return;
+    }
+    g_frozen_manual_run_enemies.erase(actor_address);
 }
 
 void SetRunLifecycleCombatPreludeOnlySuppression(bool enabled) {
@@ -118,6 +487,17 @@ void SetRunLifecycleCombatPreludeOnlySuppression(bool enabled) {
 
 void SetRunLifecycleWaveStartEnemyTracking(bool enabled) {
     g_state.wave_start_enemy_tracking.store(enabled, std::memory_order_release);
+}
+
+void SetRunLifecycleManualEnemySpawnerTestMode(bool enabled) {
+    g_state.manual_enemy_spawner_test_mode.store(enabled, std::memory_order_release);
+    Log(
+        "manual run enemy spawn: stock-spawner test mode " +
+        std::string(enabled ? "enabled" : "disabled") + ".");
+}
+
+bool IsRunLifecycleManualEnemySpawnerTestModeEnabled() {
+    return g_state.manual_enemy_spawner_test_mode.load(std::memory_order_acquire);
 }
 
 bool InitializeRunLifecycleHooks(std::string* error_message) {

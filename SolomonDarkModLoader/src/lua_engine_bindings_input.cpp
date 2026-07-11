@@ -185,9 +185,51 @@ int LuaInputHoldMouseLeftFrames(lua_State* state) {
     return 1;
 }
 
+int LuaInputPinManualPrimaryTarget(lua_State* state) {
+    const auto raw = luaL_checkinteger(state, 1);
+    if (raw <= 0) {
+        return luaL_error(state, "sd.input.pin_manual_primary_target actor_address must be positive");
+    }
+
+    std::string error_message;
+    if (!PinManualSpawnerPrimaryTarget(static_cast<uintptr_t>(raw), &error_message)) {
+        return luaL_error(
+            state,
+            "sd.input.pin_manual_primary_target failed: %s",
+            error_message.c_str());
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 int LuaInputClearMouseLeft(lua_State* state) {
     ClearQueuedGameplayMouseLeft();
     lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaInputClearLocalCastState(lua_State* state) {
+    std::string error_message;
+    if (!ClearLocalPlayerGameplayCastState(&error_message)) {
+        return luaL_error(
+            state,
+            "sd.input.clear_local_cast_state failed: %s",
+            error_message.c_str());
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaInputGetMouseLeftState(lua_State* state) {
+    lua_createtable(state, 0, 3);
+    lua_pushboolean(state, IsGameplayMouseLeftDown() ? 1 : 0);
+    lua_setfield(state, -2, "down");
+    lua_pushinteger(state, static_cast<lua_Integer>(GetGameplayMouseLeftEdgeSerial()));
+    lua_setfield(state, -2, "edge_serial");
+    lua_pushinteger(state, static_cast<lua_Integer>(GetGameplayMouseLeftEdgeTickMs()));
+    lua_setfield(state, -2, "edge_tick_ms");
     return 1;
 }
 
@@ -248,12 +290,15 @@ int LuaInputQueueLocalEnemyDamageClaim(lua_State* state) {
 }  // namespace
 
 void RegisterLuaInputBindings(lua_State* state) {
-    lua_createtable(state, 0, 7);
+    lua_createtable(state, 0, 10);
     RegisterFunction(state, &LuaInputPressKey, "press_key");
     RegisterFunction(state, &LuaInputPressScancode, "press_scancode");
     RegisterFunction(state, &LuaInputClickNormalized, "click_normalized");
     RegisterFunction(state, &LuaInputHoldMouseLeftFrames, "hold_mouse_left_frames");
+    RegisterFunction(state, &LuaInputPinManualPrimaryTarget, "pin_manual_primary_target");
     RegisterFunction(state, &LuaInputClearMouseLeft, "clear_mouse_left");
+    RegisterFunction(state, &LuaInputClearLocalCastState, "clear_local_cast_state");
+    RegisterFunction(state, &LuaInputGetMouseLeftState, "get_mouse_left_state");
     RegisterFunction(state, &LuaInputQueueLocalSpellCast, "queue_local_spell_cast");
     RegisterFunction(state, &LuaInputQueueLocalEnemyDamageClaim, "queue_local_enemy_damage_claim");
     lua_setfield(state, -2, "input");

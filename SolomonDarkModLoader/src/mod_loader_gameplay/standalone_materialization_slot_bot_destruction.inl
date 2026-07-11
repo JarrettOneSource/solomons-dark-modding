@@ -80,6 +80,40 @@ bool DestroyGameplaySlotBotResources(
     return true;
 }
 
+bool DetachLoaderOwnedWizardActorFromGameplayActorList(
+    uintptr_t actor_address,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (actor_address == 0) {
+        return true;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto gameplay_global_address = memory.ResolveGameAddressOrZero(kGameplayRuntimeGlobal);
+    if (gameplay_global_address == 0) {
+        return true;
+    }
+
+    uintptr_t gameplay_address = 0;
+    if (!memory.TryReadValue(gameplay_global_address, &gameplay_address) ||
+        gameplay_address == 0) {
+        return true;
+    }
+
+    DWORD exception_code = 0;
+    if (!CallGameplayActorDetachSafe(gameplay_address, actor_address, &exception_code)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Gameplay actor-list detach failed with 0x" + HexString(exception_code) + ".";
+        }
+        return false;
+    }
+
+    return true;
+}
+
 bool DestroyLoaderOwnedWizardActor(
     uintptr_t actor_address,
     uintptr_t world_address,
@@ -100,6 +134,18 @@ bool DestroyLoaderOwnedWizardActor(
         world_address = live_owner_address;
     } else if (!raw_allocation || !live_owner_readable) {
         world_address = 0;
+    }
+
+    std::string detach_error;
+    if (!DetachLoaderOwnedWizardActorFromGameplayActorList(actor_address, &detach_error)) {
+        Log(
+            "[bots] destroy_loader_owned_actor gameplay_detach_failed actor=" +
+            HexString(actor_address) +
+            (detach_error.empty() ? std::string() : " detail=" + detach_error));
+        if (error_message != nullptr) {
+            *error_message = detach_error;
+        }
+        return false;
     }
 
     auto build_destroy_summary = [&](std::string_view stage) {
@@ -210,7 +256,7 @@ bool DestroyLoaderOwnedWizardActor(
             unregister_address,
             world_address,
             actor_address,
-            1,
+            0,
             &exception_code);
         --g_loader_owned_actor_destroy_unregister_depth;
         if (!unregistered) {
@@ -221,11 +267,12 @@ bool DestroyLoaderOwnedWizardActor(
             return false;
         }
 
-        // Matches DestroyWizardCloneSourceActor: factory-created world-owned
-        // actors treat ActorWorld_Unregister as the terminal owner transition.
-        // Following it with PuppetManager::DeletePuppet or Object_Delete causes
-        // an execute AV inside the scalar deleting destructor (verified in the
-        // 2026-04-19 crash at EIP=0x49C5E460 during the clone-bot dtor chain).
+        // Standalone wizard clones are PlayerActor-family objects and the
+        // stock scene-churn hook unregisters tracked standalone actors with
+        // remove_from_container=0.  The container-removal path aliases stock
+        // slot/player teardown state during hub->run churn, so keep this path
+        // aligned with the hook and treat unregister as the terminal owner
+        // transition for registered standalone clones.
         if (!raw_allocation) {
             return true;
         }

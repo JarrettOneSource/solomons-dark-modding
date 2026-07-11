@@ -118,8 +118,8 @@ Each write hit currently captures:
     - `table_address`
     - `entry_count`
     - `slot_selection_entries[1..4]`
-    - `player_selection_state_0`
-    - `player_selection_state_1`
+    - `player_selection_state_0` / `player_selection_state_1` as legacy aliases
+      for the first two `slot_selection_entries`; they are not direct globals
 
 `query_memory` now resolves game-image addresses the same way `trace_function` does. The returned table includes:
 - `requested_address`

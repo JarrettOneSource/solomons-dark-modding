@@ -1,7 +1,7 @@
 constexpr float kRemoteOrbPickupSuppressionDistance = 320.0f;
-constexpr std::uint64_t kReplicatedOrbPickupRequestRetryMs = 250;
+constexpr std::uint64_t kReplicatedLootPickupRequestRetryMs = 250;
 
-std::unordered_map<std::uint64_t, std::uint64_t> g_replicated_orb_pickup_request_not_before_ms;
+std::unordered_map<std::uint64_t, std::uint64_t> g_replicated_loot_pickup_request_not_before_ms;
 
 bool TryReadActorPositionAndRadius(uintptr_t actor_address, float* x, float* y, float* radius) {
     if (x == nullptr || y == nullptr || radius == nullptr) {
@@ -105,8 +105,14 @@ bool ShouldSuppressRemoteParticipantOrbPickup(uintptr_t orb_address) {
     return false;
 }
 
-bool TryQueueReplicatedOrbPickupRequest(uintptr_t orb_address, std::uint64_t now_ms) {
-    if (orb_address == 0 || !multiplayer::IsLocalTransportClient()) {
+bool TryQueueReplicatedLootPickupRequest(
+    uintptr_t actor_address,
+    multiplayer::LootDropKind drop_kind,
+    std::uint64_t now_ms,
+    const char* source_label) {
+    if (actor_address == 0 ||
+        drop_kind == multiplayer::LootDropKind::Unknown ||
+        !multiplayer::IsLocalTransportClient()) {
         return false;
     }
 
@@ -116,10 +122,10 @@ bool TryQueueReplicatedOrbPickupRequest(uintptr_t orb_address, std::uint64_t now
     GetReplicatedLootPresentationStatesInternal(&presentations);
     for (const auto& candidate : presentations) {
         if (candidate.valid &&
-            candidate.actor_address == orb_address &&
+            candidate.actor_address == actor_address &&
             candidate.network_drop_id != 0 &&
             candidate.active &&
-            candidate.drop_kind == multiplayer::LootDropKind::Orb) {
+            candidate.drop_kind == drop_kind) {
             presentation = candidate;
             found = true;
             break;
@@ -129,49 +135,76 @@ bool TryQueueReplicatedOrbPickupRequest(uintptr_t orb_address, std::uint64_t now
         return false;
     }
 
-    float orb_x = 0.0f;
-    float orb_y = 0.0f;
-    float orb_radius = 0.0f;
-    if (!TryReadActorPositionAndRadius(orb_address, &orb_x, &orb_y, &orb_radius)) {
+    float drop_x = 0.0f;
+    float drop_y = 0.0f;
+    float drop_radius = 0.0f;
+    if (!TryReadActorPositionAndRadius(actor_address, &drop_x, &drop_y, &drop_radius)) {
+        return false;
+    }
+    const float authoritative_drop_x = presentation.x;
+    const float authoritative_drop_y = presentation.y;
+    const float authoritative_drop_radius =
+        std::isfinite(presentation.radius) && presentation.radius > 0.0f
+            ? presentation.radius
+            : 0.0f;
+    if (!std::isfinite(authoritative_drop_x) || !std::isfinite(authoritative_drop_y)) {
         return false;
     }
 
     SDModPlayerState player_state;
     if (!TryGetPlayerState(&player_state) ||
         !player_state.valid ||
-        !IsWithinOrbPickupSuppressionRange(player_state.x, player_state.y, orb_x, orb_y, orb_radius)) {
+        !IsWithinOrbPickupSuppressionRange(
+            player_state.x,
+            player_state.y,
+            authoritative_drop_x,
+            authoritative_drop_y,
+            authoritative_drop_radius)) {
         return false;
     }
 
     const auto retry_it =
-        g_replicated_orb_pickup_request_not_before_ms.find(presentation.network_drop_id);
-    if (retry_it != g_replicated_orb_pickup_request_not_before_ms.end() &&
+        g_replicated_loot_pickup_request_not_before_ms.find(presentation.network_drop_id);
+    if (retry_it != g_replicated_loot_pickup_request_not_before_ms.end() &&
         now_ms < retry_it->second) {
         return true;
     }
 
     std::uint32_t request_sequence = 0;
     std::string error_message;
+    multiplayer::LootPickupRequestCapture pickup_capture;
+    pickup_capture.valid = true;
+    pickup_capture.requester_position_x = player_state.x;
+    pickup_capture.requester_position_y = player_state.y;
+    pickup_capture.drop_position_x = authoritative_drop_x;
+    pickup_capture.drop_position_y = authoritative_drop_y;
     if (multiplayer::QueueLocalLootPickupRequest(
             presentation.network_drop_id,
             &request_sequence,
-            &error_message)) {
-        g_replicated_orb_pickup_request_not_before_ms[presentation.network_drop_id] =
-            now_ms + kReplicatedOrbPickupRequestRetryMs;
+            &error_message,
+            &pickup_capture)) {
+        g_replicated_loot_pickup_request_not_before_ms[presentation.network_drop_id] =
+            now_ms + kReplicatedLootPickupRequestRetryMs;
         Log(
-            "replicated_loot: queued orb pickup request from presentation actor. network_drop_id=" +
+            "replicated_loot: queued pickup request from presentation actor. kind=" +
+            std::string(multiplayer::LootDropKindLabel(drop_kind)) +
+            " source=" + std::string(source_label != nullptr ? source_label : "unknown") +
+            " network_drop_id=" +
             std::to_string(presentation.network_drop_id) +
-            " actor=" + HexString(orb_address) +
+            " actor=" + HexString(actor_address) +
             " request_sequence=" + std::to_string(request_sequence));
         return true;
     }
 
-    g_replicated_orb_pickup_request_not_before_ms[presentation.network_drop_id] =
-        now_ms + kReplicatedOrbPickupRequestRetryMs;
+    g_replicated_loot_pickup_request_not_before_ms[presentation.network_drop_id] =
+        now_ms + kReplicatedLootPickupRequestRetryMs;
     Log(
-        "replicated_loot: failed to queue orb pickup request from presentation actor. network_drop_id=" +
+        "replicated_loot: failed to queue pickup request from presentation actor. kind=" +
+        std::string(multiplayer::LootDropKindLabel(drop_kind)) +
+        " source=" + std::string(source_label != nullptr ? source_label : "unknown") +
+        " network_drop_id=" +
         std::to_string(presentation.network_drop_id) +
-        " actor=" + HexString(orb_address) +
+        " actor=" + HexString(actor_address) +
         " error=" + error_message);
     return false;
 }
@@ -186,14 +219,15 @@ void __fastcall HookOrbPickupTick(void* self, void* /*unused_edx*/) {
     const auto orb_address = reinterpret_cast<uintptr_t>(self);
     if (multiplayer::IsLocalTransportClient()) {
         if (IsReplicatedLootPresentationActorInternal(orb_address)) {
-            (void)TryQueueReplicatedOrbPickupRequest(
-                orb_address,
-                static_cast<std::uint64_t>(::GetTickCount64()));
-        } else {
-            (void)RemoveUnboundClientLootActorNow(
+            (void)TryQueueReplicatedLootPickupRequest(
                 orb_address,
                 multiplayer::LootDropKind::Orb,
+                static_cast<std::uint64_t>(::GetTickCount64()),
                 "client_orb_pickup_tick");
+        } else {
+            QueueClientLocalLootSuppressionInternal(
+                "client_orb_pickup_tick",
+                kClientLocalLootSuppressionSettleDelayMs);
         }
         return;
     }

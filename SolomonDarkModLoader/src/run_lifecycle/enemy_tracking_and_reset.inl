@@ -28,6 +28,22 @@ bool TryReadEnemyTypeFromActor(uintptr_t enemy_address, int* enemy_type) {
            TryReadEnemyTypeFromConfig(config_address, enemy_type);
 }
 
+bool TryReadActorObjectTypeForRunLifecycle(uintptr_t actor_address, std::uint32_t* object_type_id) {
+    if (object_type_id == nullptr) {
+        return false;
+    }
+
+    *object_type_id = 0;
+    if (actor_address == 0) {
+        return false;
+    }
+
+    return ProcessMemory::Instance().TryReadField(
+        actor_address,
+        kGameObjectTypeIdOffset,
+        object_type_id);
+}
+
 bool TryReadRunLifecycleRoundedXp(uintptr_t progression_address, int* experience) {
     if (experience == nullptr) {
         return false;
@@ -121,10 +137,30 @@ void ClearRememberedEnemyTracking() {
 void ResetRunLifecycleBookkeeping(bool clear_enemy_tracking = true) {
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.last_wave_spawner.store(0, std::memory_order_release);
+    g_state.last_wave_spawner_vtable.store(0, std::memory_order_release);
+    g_state.last_wave_spawner_tick_ms.store(0, std::memory_order_release);
+    g_state.last_arena_enemy_wave_spawner.store(0, std::memory_order_release);
+    g_state.last_arena_enemy_wave_spawner_vtable.store(0, std::memory_order_release);
+    g_state.last_arena_enemy_wave_spawner_tick_ms.store(0, std::memory_order_release);
     g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
     g_state.run_start_tick_ms.store(0, std::memory_order_release);
     g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
     g_state.wave_start_enemy_tracking.store(false, std::memory_order_release);
+    g_state.manual_enemy_spawner_test_mode.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(g_state.wave_spawner_log_mutex);
+        g_state.logged_wave_spawners.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+        g_pending_manual_run_enemy_spawn = ManualRunEnemySpawnRequest{};
+        g_active_manual_run_enemy_spawn = ManualRunEnemySpawnRequest{};
+        g_last_manual_run_enemy_spawn_result = SDModManualRunEnemySpawnResult{};
+        g_have_pending_manual_run_enemy_spawn = false;
+        g_have_active_manual_run_enemy_spawn = false;
+        g_queued_replicated_run_enemy_spawns.clear();
+        g_frozen_manual_run_enemies.clear();
+    }
     if (clear_enemy_tracking) {
         ClearRememberedEnemyTracking();
     }

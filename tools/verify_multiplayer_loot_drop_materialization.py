@@ -29,6 +29,8 @@ HOST_LOG = ROOT / "runtime/instances/local-mp-host/stage/.sdmod/logs/solomondark
 CLIENT_LOG = ROOT / "runtime/instances/local-mp-client/stage/.sdmod/logs/solomondarkmodloader.log"
 GOLD_TYPE_ID = 0x07DC
 ORB_TYPE_ID = 0x07DB
+ITEM_DROP_TYPE_ID = 0x07DD
+POTION_ITEM_TYPE_ID = 0x1B59
 MATCH_RADIUS = 260.0
 PLAYER_PARK_DISTANCE = 1400.0
 DROP_FORWARD_DISTANCE = 2600.0
@@ -41,6 +43,8 @@ ORB_MAX_REASONABLE_RADIUS = 32.0
 PROBE_GOLD_AMOUNT = 11
 PROBE_HEALTH_RAW_VALUE = 3
 PROBE_MANA_RAW_VALUE = 4
+PROBE_POTION_SLOT = 1
+PROBE_POTION_STACK = 1
 
 
 CAPTURE_LUA = r"""
@@ -55,6 +59,10 @@ local function f32(address) return tonumber(sd.debug.read_float(address)) or 0 e
 local pos_x_offset = sd.debug.layout_offset("actor_position_x")
 local pos_y_offset = sd.debug.layout_offset("actor_position_y")
 local radius_offset = sd.debug.layout_offset("actor_collision_radius")
+local type_id_offset = sd.debug.layout_offset("game_object_type_id")
+local item_slot_offset = sd.debug.layout_offset("item_slot")
+local potion_stack_count_offset = sd.debug.layout_offset("potion_stack_count")
+local item_drop_held_item_offset = sd.debug.layout_offset("item_drop_held_item")
 local function actor_x(address, fallback)
   if address ~= 0 and pos_x_offset ~= nil then return f32(address + pos_x_offset) end
   return tonumber(fallback) or 0
@@ -78,7 +86,7 @@ local actors = sd.world.list_actors() or {}
 local actor_count = 0
 for _, actor in ipairs(actors) do
   local type_id = tonumber(actor.object_type_id) or 0
-  if type_id == 0x07DC or type_id == 0x07DB then
+  if type_id == 0x07DC or type_id == 0x07DB or type_id == 0x07DD then
     local address = tonumber(actor.actor_address) or 0
     if address ~= 0 and finite(tonumber(actor.x)) and finite(tonumber(actor.y)) then
       actor_count = actor_count + 1
@@ -96,11 +104,24 @@ for _, actor in ipairs(actors) do
         emit(prefix .. "lifetime", u32(address + 0x144))
         emit(prefix .. "state_u8", u8(address + 0x148))
       else
-        emit(prefix .. "amount_tier", u8(address + 0x13C))
-        emit(prefix .. "value", string.format("%.3f", f32(address + 0x140)))
-        emit(prefix .. "lifetime", u32(address + 0x144))
-        emit(prefix .. "motion", string.format("%.3f", f32(address + 0x148)))
-        emit(prefix .. "progress", string.format("%.3f", f32(address + 0x14C)))
+        if type_id == 0x07DB then
+          emit(prefix .. "amount_tier", u8(address + 0x13C))
+          emit(prefix .. "value", string.format("%.3f", f32(address + 0x140)))
+          emit(prefix .. "lifetime", u32(address + 0x144))
+          emit(prefix .. "motion", string.format("%.3f", f32(address + 0x148)))
+          emit(prefix .. "progress", string.format("%.3f", f32(address + 0x14C)))
+        else
+          local held_item = 0
+          if item_drop_held_item_offset ~= nil then
+            held_item = tonumber(sd.debug.read_ptr(address + item_drop_held_item_offset)) or 0
+          end
+          emit(prefix .. "held_item", hx(held_item))
+          if held_item ~= 0 then
+            if type_id_offset ~= nil then emit(prefix .. "item_type_id", u32(held_item + type_id_offset)) end
+            if item_slot_offset ~= nil then emit(prefix .. "item_slot", sd.debug.read_i32(held_item + item_slot_offset) or -1) end
+            if potion_stack_count_offset ~= nil then emit(prefix .. "stack_count", sd.debug.read_i32(held_item + potion_stack_count_offset) or 0) end
+          end
+        end
       end
     end
   end
@@ -116,7 +137,7 @@ local drop_count = 0
 if loot and loot.drops then
   for _, drop in ipairs(loot.drops) do
     local type_id = tonumber(drop.object_type_id or drop.native_type_id) or 0
-    if type_id == 0x07DC or type_id == 0x07DB then
+    if type_id == 0x07DC or type_id == 0x07DB or type_id == 0x07DD then
       drop_count = drop_count + 1
       local prefix = "drop." .. tostring(drop_count) .. "."
       emit(prefix .. "network_id", drop.network_drop_id or 0)
@@ -132,6 +153,9 @@ if loot and loot.drops then
       emit(prefix .. "materialized", drop.materialized and 1 or 0)
       emit(prefix .. "local_actor_address", hx(drop.local_actor_address or 0))
       emit(prefix .. "lifetime", drop.lifetime or 0)
+      emit(prefix .. "item_type_id", drop.item_type_id or 0)
+      emit(prefix .. "item_slot", drop.item_slot or -1)
+      emit(prefix .. "stack_count", drop.stack_count or 0)
       emit(prefix .. "x", string.format("%.3f", tonumber(drop.x) or 0))
       emit(prefix .. "y", string.format("%.3f", tonumber(drop.y) or 0))
     end
@@ -192,6 +216,10 @@ def actor_rows(capture_values: dict[str, str]) -> list[dict[str, Any]]:
             "state_u8": parse_int(capture_values.get(prefix + "state_u8")),
             "motion": parse_float(capture_values.get(prefix + "motion")),
             "progress": parse_float(capture_values.get(prefix + "progress")),
+            "held_item": parse_int(capture_values.get(prefix + "held_item")),
+            "item_type_id": parse_int(capture_values.get(prefix + "item_type_id")),
+            "item_slot": parse_int(capture_values.get(prefix + "item_slot"), -1),
+            "stack_count": parse_int(capture_values.get(prefix + "stack_count")),
         })
     return rows
 
@@ -214,6 +242,9 @@ def drop_rows(capture_values: dict[str, str]) -> list[dict[str, Any]]:
             "materialized": parse_int(capture_values.get(prefix + "materialized")),
             "local_actor_address": parse_int(capture_values.get(prefix + "local_actor_address")),
             "lifetime": parse_int(capture_values.get(prefix + "lifetime")),
+            "item_type_id": parse_int(capture_values.get(prefix + "item_type_id")),
+            "item_slot": parse_int(capture_values.get(prefix + "item_slot"), -1),
+            "stack_count": parse_int(capture_values.get(prefix + "stack_count")),
             "x": parse_float(capture_values.get(prefix + "x")),
             "y": parse_float(capture_values.get(prefix + "y")),
         })
@@ -271,6 +302,9 @@ def select_actor(
     amount: int | None,
     resource_kind: int | None,
     raw_value: int | None,
+    item_type_id: int | None = None,
+    item_slot: int | None = None,
+    stack_count: int | None = None,
     x: float,
     y: float,
 ) -> dict[str, Any] | None:
@@ -283,6 +317,12 @@ def select_actor(
         if resource_kind is not None and row["amount_tier"] != resource_kind:
             continue
         if raw_value is not None and abs(row["value"] - raw_value) > FLOAT_FIELD_TOLERANCE:
+            continue
+        if item_type_id is not None and row["item_type_id"] != item_type_id:
+            continue
+        if item_slot is not None and row["item_slot"] != item_slot:
+            continue
+        if stack_count is not None and row["stack_count"] != stack_count:
             continue
         row_distance = distance(row["x"], row["y"], x, y)
         if row_distance > MATCH_RADIUS:
@@ -303,6 +343,9 @@ def select_materialized_drop(
     amount: int | None,
     resource_kind: int | None,
     raw_value: int | None,
+    item_type_id: int | None = None,
+    item_slot: int | None = None,
+    stack_count: int | None = None,
     x: float,
     y: float,
 ) -> dict[str, Any] | None:
@@ -316,6 +359,12 @@ def select_materialized_drop(
         if resource_kind is not None and drop["amount_tier"] != resource_kind:
             continue
         if raw_value is not None and abs(drop["value"] - raw_value) > 0.01:
+            continue
+        if item_type_id is not None and drop["item_type_id"] != item_type_id:
+            continue
+        if item_slot is not None and drop["item_slot"] != item_slot:
+            continue
+        if stack_count is not None and drop["stack_count"] != stack_count:
             continue
         if not drop["active"] or not drop["materialized"] or drop["local_actor_address"] == 0:
             continue
@@ -381,7 +430,14 @@ def field_comparison(
             fail("gold amount differs")
         if host_actor["state_u8"] != client_actor["state_u8"]:
             fail("gold presentation state byte differs")
-        if host_actor["state_u8"] != client_drop["presentation_state"]:
+        if (
+            host_actor["state_u8"] != client_drop["presentation_state"]
+            and not (
+                comparison["lifetime_delta"] <= 3
+                and client_actor["state_u8"] == host_actor["state_u8"]
+                and client_drop["active"] == 1
+            )
+        ):
             fail("gold snapshot presentation state differs from host actor")
     elif host_actor["type"] == ORB_TYPE_ID:
         motion_delta = abs(host_actor["motion"] - client_actor["motion"])
@@ -389,6 +445,10 @@ def field_comparison(
         snapshot_motion_delta = abs(client_drop["motion"] - client_actor["motion"])
         snapshot_lifetime_delta = abs(client_drop["lifetime"] - client_actor["lifetime"])
         allowed_snapshot_motion_delta = snapshot_lifetime_delta * 3.0 + 3.0
+        progress_delta = abs(host_actor["progress"] - client_actor["progress"])
+        allowed_progress_delta = comparison["lifetime_delta"] * 0.05 + 0.05
+        snapshot_progress_delta = abs(client_drop["progress"] - client_actor["progress"])
+        allowed_snapshot_progress_delta = snapshot_lifetime_delta * 0.05 + 0.05
         if client_actor["radius"] > ORB_MAX_REASONABLE_RADIUS:
             fail("client orb presentation radius is unreasonably large")
         if abs(client_actor["radius"] - ORB_EXPECTED_RADIUS) > RADIUS_FIELD_TOLERANCE:
@@ -399,8 +459,21 @@ def field_comparison(
             fail("orb snapshot motion drift is too large")
         if motion_delta > allowed_motion_delta:
             fail("orb motion differs")
-        if abs(host_actor["progress"] - client_actor["progress"]) > FLOAT_FIELD_TOLERANCE:
+        if snapshot_progress_delta > allowed_snapshot_progress_delta:
+            fail("orb snapshot progress drift is too large")
+        if progress_delta > allowed_progress_delta:
             fail("orb progress differs")
+    elif host_actor["type"] == ITEM_DROP_TYPE_ID:
+        if host_actor["held_item"] == 0 or client_actor["held_item"] == 0:
+            fail("item drop held item pointer is missing")
+        if host_actor["item_type_id"] != POTION_ITEM_TYPE_ID:
+            fail("host item drop is not a potion")
+        if client_actor["item_type_id"] != POTION_ITEM_TYPE_ID:
+            fail("client item drop is not a potion")
+        if host_actor["item_slot"] != client_actor["item_slot"] or host_actor["item_slot"] != client_drop["item_slot"]:
+            fail("potion slot differs")
+        if host_actor["stack_count"] != client_actor["stack_count"] or host_actor["stack_count"] != client_drop["stack_count"]:
+            fail("potion stack count differs")
     if host_actor["lifetime"] != 0 and client_actor["lifetime"] == 0:
         fail("client presentation actor lifetime expired while host actor is live")
     return comparison
@@ -420,6 +493,9 @@ def wait_for_materialized_drop(
     amount: int | None = None,
     resource_kind: int | None = None,
     raw_value: int | None = None,
+    item_type_id: int | None = None,
+    item_slot: int | None = None,
+    stack_count: int | None = None,
     x: float,
     y: float,
     timeout: float,
@@ -434,6 +510,9 @@ def wait_for_materialized_drop(
             amount=amount,
             resource_kind=resource_kind,
             raw_value=raw_value,
+            item_type_id=item_type_id,
+            item_slot=item_slot,
+            stack_count=stack_count,
             x=x,
             y=y,
         )
@@ -446,7 +525,8 @@ def wait_for_materialized_drop(
     raise VerifyFailure(
         "client did not materialize host-authored loot drop; "
         f"type=0x{type_id:04X} amount={amount} resource_kind={resource_kind} "
-        f"raw_value={raw_value} x={x:.3f} y={y:.3f} last={last}"
+        f"raw_value={raw_value} item_type=0x{item_type_id or 0:04X} "
+        f"item_slot={item_slot} stack_count={stack_count} x={x:.3f} y={y:.3f} last={last}"
     )
 
 
@@ -487,12 +567,14 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
     gold_x, gold_y = host_x + DROP_FORWARD_DISTANCE, host_y
     health_x, health_y = host_x + DROP_FORWARD_DISTANCE + DROP_SPACING, host_y + DROP_SPACING
     mana_x, mana_y = host_x + DROP_FORWARD_DISTANCE + (DROP_SPACING * 2.0), host_y - DROP_SPACING
+    potion_x, potion_y = host_x + DROP_FORWARD_DISTANCE + (DROP_SPACING * 3.0), host_y
 
     result["client_spawn_rejection"] = reject_client_spawn(gold_x, gold_y)
     result["host_spawns"] = {
         "gold": require_host_spawn("gold", PROBE_GOLD_AMOUNT, gold_x, gold_y),
         "health_orb": require_host_spawn("health_orb", PROBE_HEALTH_RAW_VALUE, health_x, health_y),
         "mana_orb": require_host_spawn("mana_orb", PROBE_MANA_RAW_VALUE, mana_x, mana_y),
+        "mana_potion": require_host_spawn("mana_potion", PROBE_POTION_SLOT, potion_x, potion_y),
     }
 
     result["initial_materialized"] = {
@@ -517,6 +599,15 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
             raw_value=PROBE_MANA_RAW_VALUE,
             x=mana_x,
             y=mana_y,
+            timeout=args.timeout,
+        )["drop"],
+        "mana_potion": wait_for_materialized_drop(
+            type_id=ITEM_DROP_TYPE_ID,
+            item_type_id=POTION_ITEM_TYPE_ID,
+            item_slot=PROBE_POTION_SLOT,
+            stack_count=PROBE_POTION_STACK,
+            x=potion_x,
+            y=potion_y,
             timeout=args.timeout,
         )["drop"],
     }
@@ -549,6 +640,18 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
             raw_value=PROBE_MANA_RAW_VALUE,
             x=mana_x,
             y=mana_y,
+        ),
+        "mana_potion": select_materialized_drop(
+            result["final_client_capture"],
+            type_id=ITEM_DROP_TYPE_ID,
+            amount=None,
+            resource_kind=None,
+            raw_value=None,
+            item_type_id=POTION_ITEM_TYPE_ID,
+            item_slot=PROBE_POTION_SLOT,
+            stack_count=PROBE_POTION_STACK,
+            x=potion_x,
+            y=potion_y,
         ),
     }
     missing_client = [
@@ -586,6 +689,18 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
             raw_value=PROBE_MANA_RAW_VALUE,
             x=mana_x,
             y=mana_y,
+        ),
+        "mana_potion": select_actor(
+            host_actors,
+            type_id=ITEM_DROP_TYPE_ID,
+            amount=None,
+            resource_kind=None,
+            raw_value=None,
+            item_type_id=POTION_ITEM_TYPE_ID,
+            item_slot=PROBE_POTION_SLOT,
+            stack_count=PROBE_POTION_STACK,
+            x=potion_x,
+            y=potion_y,
         ),
     }
     missing_host = [

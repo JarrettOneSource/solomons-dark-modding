@@ -29,6 +29,125 @@ bool CallGameplaySwitchRegionSafe(
     }
 }
 
+struct ScopedHubRunSwitchAuthorization {
+    ScopedHubRunSwitchAuthorization() {
+        ++g_multiplayer_client_authorized_hub_run_switch_depth;
+    }
+
+    ~ScopedHubRunSwitchAuthorization() {
+        --g_multiplayer_client_authorized_hub_run_switch_depth;
+    }
+};
+
+void LogLocalPlayerSceneSwitchState(
+    std::string_view stage,
+    uintptr_t gameplay_address) {
+    if (gameplay_address == 0) {
+        Log("[bots] scene_switch_local stage=" + std::string(stage) + " gameplay=0x0");
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t local_actor_address = 0;
+    const bool have_local_actor =
+        TryResolvePlayerActorForSlot(gameplay_address, 0, &local_actor_address) &&
+        local_actor_address != 0;
+    const auto slot_actor_entry = gameplay_address + kGameplayPlayerActorOffset;
+    const auto slot_progression_entry = gameplay_address + kGameplayPlayerProgressionHandleOffset;
+
+    uintptr_t actor_vtable = 0;
+    uintptr_t actor_vtable_48 = 0;
+    uintptr_t local_progression_wrapper = 0;
+    uintptr_t local_progression_inner = 0;
+    uintptr_t local_equip_wrapper = 0;
+    uintptr_t local_equip_inner = 0;
+    uintptr_t slot_actor = 0;
+    uintptr_t slot_progression_wrapper = 0;
+    uintptr_t slot_progression_inner = 0;
+
+    (void)memory.TryReadValue(slot_actor_entry, &slot_actor);
+    (void)memory.TryReadValue(slot_progression_entry, &slot_progression_wrapper);
+    slot_progression_inner = ReadSmartPointerInnerObject(slot_progression_wrapper);
+
+    if (have_local_actor) {
+        (void)memory.TryReadValue(local_actor_address, &actor_vtable);
+        if (actor_vtable != 0) {
+            (void)memory.TryReadValue(
+                actor_vtable + kActorWorldUnregisterNotifyVfuncOffset,
+                &actor_vtable_48);
+        }
+        (void)memory.TryReadField(
+            local_actor_address,
+            kActorProgressionHandleOffset,
+            &local_progression_wrapper);
+        local_progression_inner = ReadSmartPointerInnerObject(local_progression_wrapper);
+        (void)memory.TryReadField(
+            local_actor_address,
+            kActorEquipHandleOffset,
+            &local_equip_wrapper);
+        local_equip_inner = ReadSmartPointerInnerObject(local_equip_wrapper);
+    }
+
+    Log(
+        "[bots] scene_switch_local stage=" + std::string(stage) +
+        " gameplay=" + HexString(gameplay_address) +
+        " local_actor=" + (have_local_actor ? HexString(local_actor_address) : std::string("unresolved")) +
+        " actor_vt=" + HexString(actor_vtable) +
+        " actor_vt48=" + HexString(actor_vtable_48) +
+        " slot_actor_entry=" + HexString(slot_actor_entry) +
+        " slot_actor=" + HexString(slot_actor) +
+        " slot_prog_entry=" + HexString(slot_progression_entry) +
+        " slot_prog_wrapper=" + HexString(slot_progression_wrapper) +
+        " slot_prog_inner=" + HexString(slot_progression_inner) +
+        " local_prog_wrapper=" + HexString(local_progression_wrapper) +
+        " local_prog_inner=" + HexString(local_progression_inner) +
+        " local_equip_wrapper=" + HexString(local_equip_wrapper) +
+        " local_equip_inner=" + HexString(local_equip_inner) +
+        " local_progression_runtime=" +
+            (have_local_actor
+                 ? ReadPointerFieldText(local_actor_address, kActorProgressionRuntimeStateOffset)
+                 : std::string("unresolved")) +
+        " local_equip_runtime=" +
+            (have_local_actor
+                 ? ReadPointerFieldText(local_actor_address, kActorEquipRuntimeStateOffset)
+                 : std::string("unresolved")) +
+        " local_selection=" +
+            (have_local_actor
+                 ? ReadPointerFieldText(local_actor_address, kActorAnimationSelectionStateOffset)
+                 : std::string("unresolved")));
+}
+
+bool PrepareGameplaySceneSwitchOnGameThread(
+    uintptr_t gameplay_address,
+    int region_index,
+    const char* source) {
+    const bool seeded = ApplyPendingRunGenerationSeedForSceneSwitch(region_index, source);
+    LogLocalPlayerSceneSwitchState("before_cleanup", gameplay_address);
+    const auto scene_churn_until =
+        static_cast<std::uint64_t>(::GetTickCount64()) + kGameplaySceneChurnDelayMs;
+    g_gameplay_keyboard_injection.scene_churn_not_before_ms.store(
+        scene_churn_until,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.store(
+        scene_churn_until,
+        std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
+        g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();
+    }
+    RemoveReplicatedCreatedSharedHubActorsForSceneSwitch(source);
+    ClearReplicatedLootPresentationBindingsForSceneSwitch(source);
+    LogLocalPlayerSceneSwitchState("before_wizard_dematerialize", gameplay_address);
+    DematerializeAllMaterializedWizardBotsForSceneSwitch(source);
+    LogLocalPlayerSceneSwitchState("after_wizard_dematerialize", gameplay_address);
+    Log(
+        "[bots] prepared gameplay scene switch. gameplay=" + HexString(gameplay_address) +
+        " target_region=" + std::to_string(region_index) +
+        " source=" + std::string(source != nullptr ? source : "unknown") +
+        " seeded=" + std::to_string(seeded ? 1 : 0));
+    return seeded;
+}
+
 bool TryDispatchGameplaySwitchRegionOnGameThread(int region_index, std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
@@ -395,14 +514,16 @@ bool TryDispatchHubStartTestrunOnGameThread() {
     uintptr_t arena_vtable = 0;
     const bool have_arena_vtable = memory.TryReadValue(arena_address, &arena_vtable);
 
-    DispatchException exception;
-    ++g_multiplayer_client_authorized_hub_run_switch_depth;
-    const bool switched = CallGameplaySwitchRegionSafe(
-        switch_region_address,
-        gameplay_address,
-        kArenaRegionIndex,
-        &exception);
-    --g_multiplayer_client_authorized_hub_run_switch_depth;
+    DispatchException start_exception;
+    bool switched = false;
+    {
+        ScopedHubRunSwitchAuthorization authorize_switch;
+        switched = CallGameplaySwitchRegionSafe(
+            switch_region_address,
+            gameplay_address,
+            kArenaRegionIndex,
+            &start_exception);
+    }
     if (!switched) {
         g_gameplay_keyboard_injection.hub_start_testrun_cooldown_until_ms.store(
             now_ms + kHubStartTestrunDispatchCooldownMs,
@@ -418,7 +539,7 @@ bool TryDispatchHubStartTestrunOnGameThread() {
             (arena_dispatch_address != 0 ? HexString(arena_dispatch_address) : std::string("unresolved")) +
             " testrun_mode_flag=" +
             (have_testrun_mode_flag ? std::to_string(static_cast<unsigned>(testrun_mode_flag)) : std::string("unreadable")) +
-            " exception_code=" + HexString(exception.code));
+            " exception_code=" + HexString(start_exception.code));
         return false;
     }
 

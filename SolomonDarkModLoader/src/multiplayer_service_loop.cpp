@@ -15,7 +15,7 @@
 namespace sdmod::multiplayer {
 namespace {
 
-constexpr std::uint32_t kServiceTickIntervalMs = 50;
+constexpr std::uint32_t kServiceTickIntervalMs = 16;
 
 std::atomic<bool> g_service_running = false;
 std::thread g_service_thread;

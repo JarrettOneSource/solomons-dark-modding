@@ -69,6 +69,10 @@ bool CallGameplayActorAttachSafe(
     uintptr_t gameplay_address,
     uintptr_t actor_address,
     DWORD* exception_code);
+bool CallGameplayActorDetachSafe(
+    uintptr_t gameplay_address,
+    uintptr_t actor_address,
+    DWORD* exception_code);
 bool CallStandaloneWizardVisualLinkAttachSafe(
     uintptr_t attach_address,
     uintptr_t self_address,
@@ -113,6 +117,14 @@ bool PrimeGameplaySlotBotSelectionState(
     uintptr_t progression_address,
     int slot_index,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
+    std::string* error_message);
+bool MaybePrimeLocalPlayerRunCastState(
+    uintptr_t gameplay_address,
+    uintptr_t actor_address,
+    std::uint64_t now_ms);
+bool EnsureWizardActorEquipRuntimeHandles(
+    uintptr_t actor_address,
+    std::string_view context,
     std::string* error_message);
 bool WireGameplaySlotBotRuntimeHandles(
     uintptr_t actor_address,

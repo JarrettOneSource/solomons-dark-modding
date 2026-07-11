@@ -1,50 +1,10 @@
 bool WireGameplaySlotBotRuntimeHandles(
     uintptr_t actor_address,
     std::string* error_message) {
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
-    if (actor_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Gameplay slot runtime handle wiring is missing the actor address.";
-        }
-        return false;
-    }
-
-    uintptr_t equip_wrapper_address = 0;
-    uintptr_t equip_inner_address = 0;
-    std::string equip_error;
-    if (!CreateStandaloneWizardEquipWrapper(
-            &equip_wrapper_address,
-            &equip_inner_address,
-            &equip_error)) {
-        if (error_message != nullptr) {
-            *error_message = equip_error;
-        }
-        return false;
-    }
-
-    DWORD exception_code = 0;
-    if (!AssignActorSmartPointerWrapperSafe(
-            actor_address,
-            kActorEquipHandleOffset,
-            kActorEquipRuntimeStateOffset,
-            equip_wrapper_address,
-            &exception_code)) {
-        ReleaseStandaloneWizardSmartPointerResource(
-            actor_address,
-            kActorEquipHandleOffset,
-            kActorEquipRuntimeStateOffset,
-            equip_wrapper_address,
-            equip_inner_address,
-            "equip");
-        if (error_message != nullptr) {
-            *error_message = "Assigning the equip handle failed with 0x" + HexString(exception_code) + ".";
-        }
-        return false;
-    }
-
-    return true;
+    return EnsureWizardActorEquipRuntimeHandles(
+        actor_address,
+        "gameplay_slot_bot",
+        error_message);
 }
 
 bool SeedWizardBotNativeCollisionStateFromSourceActor(

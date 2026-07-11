@@ -3,13 +3,18 @@
 
 from __future__ import annotations
 
+import atexit
+import base64
+import importlib.util
 import json
 import os
 import select
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
+from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -79,6 +84,8 @@ def launch_pair(
     host_preset: str | None = None,
     client_preset: str | None = None,
     temporary_host_profile: bool = True,
+    god_mode: bool = False,
+    tile_windows: bool = True,
 ) -> dict[str, object]:
     args = [
         "powershell.exe",
@@ -101,6 +108,10 @@ def launch_pair(
         args.extend(["-Preset", preset])
     if temporary_host_profile:
         args.append("-TemporaryHostProfile")
+    if god_mode:
+        args.append("-GodMode")
+    if not tile_windows:
+        args.append("-NoTileWindows")
     process = subprocess.Popen(
         args,
         cwd=ROOT,
@@ -123,6 +134,7 @@ def launch_pair(
     def query_scene_for_launch(pipe_name: str) -> str:
         env = os.environ.copy()
         env["SDMOD_LUA_EXEC_PIPE_NAME"] = pipe_name
+        env["SDMOD_LUA_EXEC_BRIDGE_TIMEOUT_SECONDS"] = "0.750"
         try:
             completed = subprocess.run(
                 [
@@ -135,7 +147,7 @@ def launch_pair(
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                timeout=2.0,
+                timeout=2.75,
                 check=False,
             )
         except subprocess.TimeoutExpired:
@@ -197,14 +209,152 @@ def launch_pair(
     raise VerifyFailure(f"timed out waiting for pair launcher JSON:\n{buffer}")
 
 
-def lua(pipe_name: str, code: str, timeout: float = 10.0) -> str:
+# A live multiplayer run issues tens of thousands of lua() calls. Spawning a
+# fresh python+powershell pair per call (the old path) cost ~0.4s each — pure
+# process-startup tax that dominated per-kill wall time. Instead we keep one
+# long-lived powershell "-Daemon" per pipe and shuttle requests over its
+# stdin/stdout, so that tax is paid once per pipe per run. The daemon speaks a
+# base64-line protocol (see Invoke-LuaExecDaemon); the raw game response is
+# decoded and formatted here through the SAME _format_response the one-shot
+# bridge uses, so behaviour and error semantics are identical — just faster.
+_lua_exec_spec = importlib.util.spec_from_file_location(
+    "sdmod_lua_exec_bridge", ROOT / "tools" / "lua-exec.py"
+)
+_lua_exec_module = importlib.util.module_from_spec(_lua_exec_spec)
+_lua_exec_spec.loader.exec_module(_lua_exec_module)
+_format_lua_response = _lua_exec_module._format_response
+
+_LUA_DAEMONS: dict[str, subprocess.Popen] = {}
+_LUA_DAEMON_LOCKS: dict[str, threading.Lock] = {}
+_LUA_DAEMON_REGISTRY_LOCK = threading.Lock()
+
+
+def _lua_daemon_lock(pipe_name: str) -> threading.Lock:
+    with _LUA_DAEMON_REGISTRY_LOCK:
+        lock = _LUA_DAEMON_LOCKS.get(pipe_name)
+        if lock is None:
+            lock = threading.Lock()
+            _LUA_DAEMON_LOCKS[pipe_name] = lock
+        return lock
+
+
+def _spawn_lua_daemon(pipe_name: str) -> subprocess.Popen:
     env = os.environ.copy()
     env["SDMOD_LUA_EXEC_PIPE_NAME"] = pipe_name
-    return run_command(
-        ["python3", "tools/lua-exec.py", code],
+    return subprocess.Popen(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-File",
+            "scripts/Invoke-LuaExec.ps1",
+            "-Daemon",
+            "-PipeName",
+            pipe_name,
+        ],
+        cwd=ROOT,
         env=env,
-        timeout=timeout,
-    ).strip()
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="ascii",
+        bufsize=1,
+    )
+
+
+def _get_lua_daemon(pipe_name: str) -> subprocess.Popen:
+    proc = _LUA_DAEMONS.get(pipe_name)
+    if proc is None or proc.poll() is not None:
+        proc = _spawn_lua_daemon(pipe_name)
+        _LUA_DAEMONS[pipe_name] = proc
+    return proc
+
+
+def _kill_lua_daemon(pipe_name: str) -> None:
+    proc = _LUA_DAEMONS.pop(pipe_name, None)
+    if proc is None:
+        return
+    for closer in (
+        lambda: proc.stdin and proc.stdin.close(),
+        proc.kill,
+    ):
+        try:
+            closer()
+        except (OSError, ValueError):
+            pass
+    try:
+        proc.wait(timeout=0.5)
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        pass
+
+
+def _lua_daemon_exit_detail(proc: subprocess.Popen) -> str:
+    try:
+        if proc.poll() is None or proc.stderr is None:
+            return ""
+        detail = proc.stderr.read().strip()
+        return detail
+    except (OSError, ValueError):
+        return ""
+
+
+@atexit.register
+def _shutdown_lua_daemons() -> None:
+    for pipe_name in list(_LUA_DAEMONS):
+        _kill_lua_daemon(pipe_name)
+
+
+def lua(pipe_name: str, code: str, timeout: float = 10.0) -> str:
+    deadline = max(0.05, float(timeout))
+    request = base64.b64encode(code.encode("utf-8")).decode("ascii")
+    lock = _lua_daemon_lock(pipe_name)
+    with lock:
+        proc = _get_lua_daemon(pipe_name)
+        try:
+            proc.stdin.write(request + "\n")
+            proc.stdin.flush()
+        except (BrokenPipeError, OSError) as exc:
+            _kill_lua_daemon(pipe_name)
+            raise VerifyFailure(
+                f"lua bridge daemon write failed for {pipe_name}: {exc}"
+            ) from exc
+
+        ready, _, _ = select.select([proc.stdout], [], [], deadline)
+        if not ready:
+            exit_detail = _lua_daemon_exit_detail(proc)
+            _kill_lua_daemon(pipe_name)
+            if exit_detail:
+                raise VerifyFailure(
+                    f"lua bridge daemon exited for {pipe_name}: {exit_detail}"
+                )
+            raise VerifyFailure(
+                f"lua bridge daemon timed out after {deadline:.1f}s for {pipe_name}: {code[:120]}"
+            )
+        line = proc.stdout.readline()
+
+    if not line:
+        exit_detail = _lua_daemon_exit_detail(proc)
+        _kill_lua_daemon(pipe_name)
+        if exit_detail:
+            raise VerifyFailure(
+                f"lua bridge daemon closed for {pipe_name}: {exit_detail}"
+            )
+        raise VerifyFailure(
+            f"lua bridge daemon closed unexpectedly for {pipe_name}: {code[:120]}"
+        )
+    try:
+        raw = base64.b64decode(line.strip()).decode("utf-8", "replace")
+    except ValueError as exc:
+        _kill_lua_daemon(pipe_name)
+        raise VerifyFailure(
+            f"lua bridge daemon returned a malformed frame for {pipe_name}: {line!r}"
+        ) from exc
+
+    stdout_text, stderr_text, exit_code = _format_lua_response(raw)
+    if exit_code != 0:
+        detail = stderr_text.strip() or stdout_text.strip() or "lua execution failed"
+        raise VerifyFailure(f"lua failed on {pipe_name}: {detail}")
+    return stdout_text.strip()
 
 
 def parse_key_values(text: str) -> dict[str, str]:
@@ -335,11 +485,99 @@ emit("replicated.actor_count", replicated and replicated.actor_count or 0)
 emit("replicated.actor_total_count", replicated and replicated.actor_total_count or 0)
 emit("replicated.authority_participant_id", replicated and replicated.authority_participant_id or 0)
 emit("replicated.apply_valid", replicated and replicated.apply_valid or false)
+-- Natural level-ups (crossing an XP threshold from real kills) open a
+-- host-coordinated skill picker that holds BOTH instances paused
+-- (level_up_wait_status.pause_active) until the target participant chooses an
+-- option. While paused, the gameplay-tick-driven transform publish freezes, so
+-- the peer's mirror stops updating and a pair can never converge. Carry the
+-- pause/offer signal on this existing snapshot so convergence can resolve the
+-- offer inline instead of timing out. The active offer is only "valid" on the
+-- instance that must choose (the target), so callers act on the pipe that
+-- reports levelup.offer_valid=true.
+local mp = sd.runtime and sd.runtime.get_multiplayer_state and sd.runtime.get_multiplayer_state() or nil
+local offer = mp and mp.active_level_up_offer or nil
+emit("levelup.offer_valid", offer and offer.valid or false)
+emit("levelup.offer_id", offer and offer.offer_id or 0)
+emit("levelup.offer_submitted", offer and offer.selection_submitted or false)
+emit("levelup.offer_option_count", offer and offer.option_count or 0)
+local wait = mp and mp.level_up_wait_status or nil
+emit("levelup.pause_active", wait and wait.pause_active or false)
+emit("levelup.waiting_count", wait and wait.waiting_count or 0)
 """
 
 
 def query(pipe_name: str) -> dict[str, str]:
     return parse_key_values(lua(pipe_name, QUERY_LUA))
+
+
+def pending_level_up_offer(values: dict[str, str]) -> dict[str, int] | None:
+    """Return the unresolved level-up offer this instance must choose, or None.
+
+    ``values`` is a :func:`query` result. A level-up offer is only ``valid`` on
+    the instance that is the offer target (the one whose skill picker is open),
+    so a non-None result means *this* pipe should submit the choice.
+    """
+    if values.get("levelup.offer_valid") != "true":
+        return None
+    if values.get("levelup.offer_submitted") == "true":
+        return None
+    return {
+        "offer_id": parse_int_text(values.get("levelup.offer_id"), 0),
+        "option_count": parse_int_text(values.get("levelup.offer_option_count"), 0),
+    }
+
+
+def submit_level_up_choice(
+    pipe_name: str,
+    offer_id: int,
+    option_index: int = 1,
+) -> dict[str, str]:
+    """Submit a level-up skill choice on ``pipe_name`` (the offer target's pipe)."""
+    code = f"""
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local ok, result = pcall(sd.runtime.choose_level_up_option, {{ offer_id = {offer_id}, option_index = {option_index} }})
+emit("pcall_ok", ok)
+emit("result", result)
+"""
+    values = parse_key_values(lua(pipe_name, code, timeout=5.0))
+    if values.get("pcall_ok") != "true" or values.get("result") != "true":
+        raise VerifyFailure(
+            f"failed to submit level-up choice on {pipe_name}: "
+            f"offer_id={offer_id} option_index={option_index} -> {values}"
+        )
+    return values
+
+
+def resolve_level_ups_from_snapshots(
+    host_values: dict[str, str],
+    client_values: dict[str, str],
+    *,
+    option_index: int = 1,
+) -> list[dict[str, Any]]:
+    """Resolve any pending level-up offers visible in the given host/client snapshots.
+
+    Chooses the first option on whichever pipe is the offer target, unblocking the
+    host-coordinated level-up pause. Returns one record per offer resolved (empty
+    if neither instance had a pending offer to act on). Picking the first option is
+    deterministic and always legal: the native picker only ever offers currently
+    valid choices, regenerating them each level.
+    """
+    resolved: list[dict[str, Any]] = []
+    for pipe_name, values in ((HOST_PIPE, host_values), (CLIENT_PIPE, client_values)):
+        pending = pending_level_up_offer(values)
+        if pending is None:
+            continue
+        offer_id = pending["offer_id"]
+        submit_level_up_choice(pipe_name, offer_id, option_index)
+        resolved.append(
+            {
+                "pipe": pipe_name,
+                "offer_id": offer_id,
+                "option_index": option_index,
+                "option_count": pending["option_count"],
+            }
+        )
+    return resolved
 
 
 def wait_for_remote(
@@ -387,7 +625,65 @@ local os = sd.debug.layout_offset("actor_animation_selection_state")
 local oha = sd.debug.layout_offset("actor_control_brain_heading_accumulator")
 local odf = sd.debug.layout_offset("actor_control_brain_desired_facing")
 local odfs = sd.debug.layout_offset("actor_control_brain_desired_facing_smoothed")
+local ost = sd.debug.layout_offset("actor_control_brain_state_id")
+local ots = sd.debug.layout_offset("actor_control_brain_target_slot")
+local oth = sd.debug.layout_offset("actor_control_brain_target_handle")
+local ort = sd.debug.layout_offset("actor_control_brain_retarget_ticks")
+local otc = sd.debug.layout_offset("actor_control_brain_target_cooldown_ticks")
+local oac = sd.debug.layout_offset("actor_control_brain_action_cooldown_ticks")
+local oab = sd.debug.layout_offset("actor_control_brain_action_burst_ticks")
+local ohl = sd.debug.layout_offset("actor_control_brain_heading_lock_ticks")
+local ofl = sd.debug.layout_offset("actor_control_brain_follow_leader")
+local omx = sd.debug.layout_offset("actor_control_brain_move_input_x")
+local omy = sd.debug.layout_offset("actor_control_brain_move_input_y")
+local owv = sd.debug.layout_offset("actor_animation_config_block")
+local owd = sd.debug.layout_offset("actor_animation_drive_parameter")
+local owc1 = sd.debug.layout_offset("actor_walk_cycle_primary")
+local owc2 = sd.debug.layout_offset("actor_walk_cycle_secondary")
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local function write_u32_if(actor, offset, value)
+  if offset ~= nil then return sd.debug.write_u32(actor + offset, value) end
+  return true
+end
+local function write_u16_if(actor, offset, value)
+  if offset ~= nil then return sd.debug.write_u16(actor + offset, value) end
+  return true
+end
+local function write_u8_if(actor, offset, value)
+  if offset ~= nil then return sd.debug.write_u8(actor + offset, value) end
+  return true
+end
+local function write_float_if(actor, offset, value)
+  if offset ~= nil then return sd.debug.write_float(actor + offset, value) end
+  return true
+end
+local function clear_control(actor)
+  local wrote = true
+  -- Zero the actor's own momentum integrator inputs FIRST (unconditionally, even
+  -- if there is no control brain) so a residual post-cast walk vector cannot keep
+  -- marching the participant after placement. The PlayerActorTick integrator
+  -- re-feeds these from input each tick, so this only sticks during a no-input
+  -- park phase (which is exactly when we place).
+  wrote = write_float_if(actor, owv, 0.0) and wrote
+  wrote = write_float_if(actor, owd, 0.0) and wrote
+  wrote = write_float_if(actor, owc1, 0.0) and wrote
+  wrote = write_float_if(actor, owc2, 0.0) and wrote
+  if os == nil then return wrote end
+  local control = sd.debug.read_u32(actor + os) or 0
+  if control == 0 then return wrote end
+  wrote = write_u32_if(control, ost, 0) and wrote
+  wrote = write_u8_if(control, ots, 0xFF) and wrote
+  wrote = write_u16_if(control, oth, 0xFFFF) and wrote
+  wrote = write_u32_if(control, ort, 0) and wrote
+  wrote = write_u32_if(control, otc, 0) and wrote
+  wrote = write_u32_if(control, oac, 0) and wrote
+  wrote = write_u32_if(control, oab, 0) and wrote
+  wrote = write_u32_if(control, ohl, 0) and wrote
+  wrote = write_u32_if(control, ofl, 0) and wrote
+  wrote = write_float_if(control, omx, 0.0) and wrote
+  wrote = write_float_if(control, omy, 0.0) and wrote
+  return wrote
+end
 local function write_facing(actor, heading)
   local wrote = sd.debug.write_float(actor + oh, heading)
   if os ~= nil and oha ~= nil and odf ~= nil and odfs ~= nil then
@@ -431,7 +727,65 @@ local os = sd.debug.layout_offset("actor_animation_selection_state")
 local oha = sd.debug.layout_offset("actor_control_brain_heading_accumulator")
 local odf = sd.debug.layout_offset("actor_control_brain_desired_facing")
 local odfs = sd.debug.layout_offset("actor_control_brain_desired_facing_smoothed")
+local ost = sd.debug.layout_offset("actor_control_brain_state_id")
+local ots = sd.debug.layout_offset("actor_control_brain_target_slot")
+local oth = sd.debug.layout_offset("actor_control_brain_target_handle")
+local ort = sd.debug.layout_offset("actor_control_brain_retarget_ticks")
+local otc = sd.debug.layout_offset("actor_control_brain_target_cooldown_ticks")
+local oac = sd.debug.layout_offset("actor_control_brain_action_cooldown_ticks")
+local oab = sd.debug.layout_offset("actor_control_brain_action_burst_ticks")
+local ohl = sd.debug.layout_offset("actor_control_brain_heading_lock_ticks")
+local ofl = sd.debug.layout_offset("actor_control_brain_follow_leader")
+local omx = sd.debug.layout_offset("actor_control_brain_move_input_x")
+local omy = sd.debug.layout_offset("actor_control_brain_move_input_y")
+local owv = sd.debug.layout_offset("actor_animation_config_block")
+local owd = sd.debug.layout_offset("actor_animation_drive_parameter")
+local owc1 = sd.debug.layout_offset("actor_walk_cycle_primary")
+local owc2 = sd.debug.layout_offset("actor_walk_cycle_secondary")
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local function write_u32_if(actor, offset, value)
+  if offset ~= nil then return sd.debug.write_u32(actor + offset, value) end
+  return true
+end
+local function write_u16_if(actor, offset, value)
+  if offset ~= nil then return sd.debug.write_u16(actor + offset, value) end
+  return true
+end
+local function write_u8_if(actor, offset, value)
+  if offset ~= nil then return sd.debug.write_u8(actor + offset, value) end
+  return true
+end
+local function write_float_if(actor, offset, value)
+  if offset ~= nil then return sd.debug.write_float(actor + offset, value) end
+  return true
+end
+local function clear_control(actor)
+  local wrote = true
+  -- Zero the actor's own momentum integrator inputs FIRST (unconditionally, even
+  -- if there is no control brain) so a residual post-cast walk vector cannot keep
+  -- marching the participant after placement. The PlayerActorTick integrator
+  -- re-feeds these from input each tick, so this only sticks during a no-input
+  -- park phase (which is exactly when we place).
+  wrote = write_float_if(actor, owv, 0.0) and wrote
+  wrote = write_float_if(actor, owd, 0.0) and wrote
+  wrote = write_float_if(actor, owc1, 0.0) and wrote
+  wrote = write_float_if(actor, owc2, 0.0) and wrote
+  if os == nil then return wrote end
+  local control = sd.debug.read_u32(actor + os) or 0
+  if control == 0 then return wrote end
+  wrote = write_u32_if(control, ost, 0) and wrote
+  wrote = write_u8_if(control, ots, 0xFF) and wrote
+  wrote = write_u16_if(control, oth, 0xFFFF) and wrote
+  wrote = write_u32_if(control, ort, 0) and wrote
+  wrote = write_u32_if(control, otc, 0) and wrote
+  wrote = write_u32_if(control, oac, 0) and wrote
+  wrote = write_u32_if(control, oab, 0) and wrote
+  wrote = write_u32_if(control, ohl, 0) and wrote
+  wrote = write_u32_if(control, ofl, 0) and wrote
+  wrote = write_float_if(control, omx, 0.0) and wrote
+  wrote = write_float_if(control, omy, 0.0) and wrote
+  return wrote
+end
 local function write_facing(actor, heading)
   local wrote = sd.debug.write_float(actor + oh, heading)
   if os ~= nil and oha ~= nil and odf ~= nil and odfs ~= nil then
@@ -449,6 +803,7 @@ if player == nil or player.actor_address == nil or player.actor_address == 0 the
 end
 emit("before.x", player.x)
 emit("before.y", player.y)
+emit("clear_control", clear_control(player.actor_address))
 emit("write.x", sd.debug.write_float(player.actor_address + ox, {x}))
 emit("write.y", sd.debug.write_float(player.actor_address + oy, {y}))
 emit("write.heading", write_facing(player.actor_address, {heading}))
@@ -825,7 +1180,7 @@ def wait_for_both_hub_settled(settle_seconds: float = 3.0, timeout: float = 15.0
 
 
 def start_host_testrun_and_wait_for_clients(timeout: float = 30.0) -> dict[str, object]:
-    wait_for_both_hub_settled()
+    wait_for_both_hub_settled(timeout=max(15.0, timeout))
     start_testrun(HOST_PIPE)
     wait_for_scene(HOST_PIPE, "testrun", timeout=timeout)
     wait_for_scene(CLIENT_PIPE, "testrun", timeout=timeout)

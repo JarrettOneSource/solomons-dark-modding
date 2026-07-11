@@ -51,7 +51,7 @@ struct SDModInventoryState {
     SDModEquipVisualLaneState attachment_visual_lane;
 };
 
-constexpr std::size_t kSDModProgressionBookSnapshotMaxEntries = 64;
+constexpr std::size_t kSDModProgressionBookSnapshotMaxEntries = 128;
 
 struct SDModProgressionBookEntryState {
     bool valid = false;
@@ -159,6 +159,24 @@ struct SDModGameplayCombatState {
     std::uint8_t combat_active = 0;
 };
 
+struct SDModManualRunEnemySpawnResult {
+    bool valid = false;
+    bool ok = false;
+    std::uint64_t request_id = 0;
+    int type_id = 0;
+    uintptr_t actor_address = 0;
+    float requested_x = 0.0f;
+    float requested_y = 0.0f;
+    float x = 0.0f;
+    float y = 0.0f;
+    bool wrote_x = false;
+    bool wrote_y = false;
+    bool rebind_ok = false;
+    DWORD rebind_exception_code = 0;
+    std::uint64_t completed_tick_ms = 0;
+    std::string error_message;
+};
+
 struct SDModSceneState {
     bool valid = false;
     std::string kind;
@@ -262,6 +280,7 @@ struct SDModReplicatedLootPresentationState {
     float value = 0.0f;
     float x = 0.0f;
     float y = 0.0f;
+    float radius = 0.0f;
     std::uint64_t last_seen_ms = 0;
 };
 
@@ -353,7 +372,9 @@ void ShutdownGameplayKeyboardInjection();
 bool IsGameplayKeyboardInjectionInitialized();
 bool QueueGameplayMouseLeftClick(std::string* error_message);
 bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_message);
+bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_message);
 void ClearQueuedGameplayMouseLeft();
+bool ClearLocalPlayerGameplayCastState(std::string* error_message);
 std::uint64_t GetGameplayMouseLeftEdgeSerial();
 std::uint64_t GetGameplayMouseLeftEdgeTickMs();
 bool IsGameplayMouseLeftDown();
@@ -381,14 +402,41 @@ int GetRunLifecycleCurrentWave();
 std::uint64_t GetRunLifecycleElapsedMilliseconds();
 void SetRunLifecycleCombatPreludeOnlySuppression(bool enabled);
 void SetRunLifecycleWaveStartEnemyTracking(bool enabled);
+void SetRunLifecycleManualEnemySpawnerTestMode(bool enabled);
+bool IsRunLifecycleManualEnemySpawnerTestModeEnabled();
 void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies);
 bool TryGetRunLifecycleEnemySpawnSerial(uintptr_t enemy_address, std::uint32_t* spawn_serial);
 bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(int enemy_type, std::uint32_t missing_enemy_count);
+uintptr_t GetRunLifecycleLastWaveSpawnerAddress();
+bool IsRunLifecycleManualEnemySpawnerReady();
+bool QueueRunLifecycleManualEnemySpawn(
+    int type_id,
+    float x,
+    float y,
+    bool freeze_on_spawn,
+    std::string* error_message,
+    std::uint64_t* request_id);
+bool QueueRunLifecycleReplicatedEnemyCatchupSpawn(
+    std::uint64_t network_actor_id,
+    int type_id,
+    float x,
+    float y,
+    std::string* error_message,
+    std::uint64_t* request_id);
+void CancelQueuedRunLifecycleReplicatedEnemyCatchupSpawn(std::uint64_t network_actor_id);
+bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message = nullptr);
+bool TryGetRunLifecycleManualEnemySpawnResult(
+    SDModManualRunEnemySpawnResult* result,
+    std::uint64_t request_id = 0);
+bool TryGetRunLifecycleManualEnemyFreezePosition(uintptr_t actor_address, float* x, float* y);
+void PinRunLifecycleFrozenManualEnemies();
+void ClearRunLifecycleManualEnemyFreeze(uintptr_t actor_address = 0);
 bool TryGetPlayerState(SDModPlayerState* state);
 bool TryGetPlayerInventoryState(SDModInventoryState* state);
 bool TryGetPlayerProgressionBookState(SDModProgressionBookState* state);
 bool TryGetWorldState(SDModWorldState* state);
 bool TryGetGameplayCombatState(SDModGameplayCombatState* state);
+bool IsArenaCombatActorType(std::uint32_t object_type_id);
 bool TryGetSceneState(SDModSceneState* state);
 bool TryListSceneActors(std::vector<SDModSceneActorState>* actors);
 bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state);
@@ -408,6 +456,17 @@ bool TryGetGameplayHudParticipantDisplayNameForActor(
     std::string* display_name,
     std::uint64_t* participant_id = nullptr);
 bool RebindSceneActorCell(uintptr_t actor_address, std::string* error_message);
+bool QueueManualRunEnemySpawn(
+    int type_id,
+    float x,
+    float y,
+    bool freeze_on_spawn,
+    std::string* error_message,
+    std::uint64_t* request_id = nullptr);
+bool TryGetLastManualRunEnemySpawnResult(
+    SDModManualRunEnemySpawnResult* result,
+    std::uint64_t request_id = 0);
+void ClearManualRunEnemyFreeze(uintptr_t actor_address = 0);
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);
 bool QueueReplicatedLootSnapshot(
     const multiplayer::LootSnapshotRuntimeInfo& snapshot,

@@ -96,8 +96,7 @@ std::string DescribeLocalPlayerCastProbeState(
     (void)TryReadGameplayIndexStateValue(
         static_cast<int>(kGameplayIndexStateActorSelectionBaseIndex),
         &slot0_selection_state);
-    int slot0_selection_global = kUnknownAnimationStateId;
-    (void)TryReadResolvedGlobalInt(kPlayerSelectionState0Global, &slot0_selection_global);
+    const int slot0_selection_global = slot0_selection_state;
     const auto actor_selection_state = ResolveActorAnimationStateId(actor_address);
     uintptr_t progression_handle = 0;
     const bool have_progression_handle =

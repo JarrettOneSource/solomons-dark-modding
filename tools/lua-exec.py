@@ -63,7 +63,7 @@ def _wsl_bridge_timeout_seconds() -> float:
         value = float(raw)
     except ValueError:
         return DEFAULT_WSL_BRIDGE_TIMEOUT_SECONDS
-    return max(1.0, value)
+    return max(0.05, value)
 
 
 def _ensure_message_size(kind: str, size: int) -> None:
