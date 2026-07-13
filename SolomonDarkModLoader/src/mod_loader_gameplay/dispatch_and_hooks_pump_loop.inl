@@ -125,6 +125,12 @@ void PumpQueuedGameplayActions() {
     PendingRewardSpawnRequest reward_request;
     bool have_reward_request = false;
     std::vector<PendingClientLocalLootSuppressionRequest> client_local_loot_suppression_requests;
+    std::vector<PendingMultiplayerDampenEffectRequest> multiplayer_dampen_effect_requests;
+    PendingLocalPlayerPoisonCorrection local_player_poison_correction;
+    bool have_local_player_poison_correction = false;
+    std::vector<PendingNativePoisonBehaviorProbe> native_poison_behavior_probes;
+    std::vector<PendingNativeMagicHitBehaviorProbe>
+        native_magic_hit_behavior_probes;
     PendingParticipantEntitySyncRequest participant_sync_request;
     bool have_participant_sync_request = false;
     PendingGameplayRegionSwitchRequest region_switch_request;
@@ -204,6 +210,193 @@ void PumpQueuedGameplayActions() {
             g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.clear();
             have_replicated_loot_snapshot = true;
         }
+        while (!g_gameplay_keyboard_injection
+                    .pending_multiplayer_dampen_effect_requests.empty()) {
+            multiplayer_dampen_effect_requests.push_back(
+                g_gameplay_keyboard_injection
+                    .pending_multiplayer_dampen_effect_requests.front());
+            g_gameplay_keyboard_injection
+                .pending_multiplayer_dampen_effect_requests.pop_front();
+        }
+        if (!g_gameplay_keyboard_injection
+                 .pending_local_player_poison_corrections.empty()) {
+            local_player_poison_correction = g_gameplay_keyboard_injection
+                                                 .pending_local_player_poison_corrections
+                                                 .back();
+            g_gameplay_keyboard_injection
+                .pending_local_player_poison_corrections.clear();
+            have_local_player_poison_correction = true;
+        }
+        while (!g_gameplay_keyboard_injection
+                    .pending_native_poison_behavior_probes.empty()) {
+            native_poison_behavior_probes.push_back(
+                g_gameplay_keyboard_injection
+                    .pending_native_poison_behavior_probes.front());
+            g_gameplay_keyboard_injection
+                .pending_native_poison_behavior_probes.pop_front();
+        }
+        while (!g_gameplay_keyboard_injection
+                    .pending_native_magic_hit_behavior_probes.empty()) {
+            native_magic_hit_behavior_probes.push_back(
+                g_gameplay_keyboard_injection
+                    .pending_native_magic_hit_behavior_probes.front());
+            g_gameplay_keyboard_injection
+                .pending_native_magic_hit_behavior_probes.pop_front();
+        }
+    }
+
+    if (have_local_player_poison_correction) {
+        SDModPlayerState player_state;
+        std::string poison_error;
+        bool applied = false;
+        if (!TryGetPlayerState(&player_state) ||
+            !player_state.valid ||
+            player_state.actor_address == 0) {
+            poison_error = "local player actor is unavailable";
+        } else {
+            std::uint8_t transient_flags = 0;
+            std::int32_t current_duration_ticks = 0;
+            uintptr_t poison_modifier = 0;
+            const bool have_transient_state =
+                TryReadWizardActorTransientStatusState(
+                    player_state.actor_address,
+                    &transient_flags,
+                    &current_duration_ticks,
+                    &poison_modifier);
+            const bool poison_active =
+                have_transient_state &&
+                (transient_flags &
+                 multiplayer::ParticipantTransientStatusFlagPoisoned) != 0 &&
+                poison_modifier != 0;
+            if (poison_active) {
+                auto& memory = ProcessMemory::Instance();
+                float current_damage_per_tick = 0.0f;
+                if (!memory.TryReadField(
+                        poison_modifier,
+                        kNativePoisonDamagePerTickOffset,
+                        &current_damage_per_tick) ||
+                    !std::isfinite(current_damage_per_tick) ||
+                    current_damage_per_tick < 0.0f) {
+                    current_damage_per_tick = 0.0f;
+                }
+                const auto corrected_duration =
+                    (std::max)(
+                        current_duration_ticks,
+                        local_player_poison_correction.duration_ticks);
+                const auto corrected_damage =
+                    (std::max)(
+                        current_damage_per_tick,
+                        local_player_poison_correction.damage_per_tick);
+                applied =
+                    memory.TryWriteField(
+                        poison_modifier,
+                        kNativeModifierDurationTicksOffset,
+                        corrected_duration) &&
+                    memory.TryWriteField(
+                        poison_modifier,
+                        kNativePoisonDamagePerTickOffset,
+                        corrected_damage);
+                if (!applied) {
+                    poison_error = "failed to refresh native poison modifier";
+                }
+            } else {
+                applied = InstallReplicatedPoisonModifier(
+                    player_state.actor_address,
+                    local_player_poison_correction.duration_ticks,
+                    &poison_error,
+                    local_player_poison_correction.damage_per_tick,
+                    0);
+            }
+        }
+
+        if (applied) {
+            Log(
+                "Multiplayer owner poison correction applied. duration_ticks=" +
+                std::to_string(local_player_poison_correction.duration_ticks) +
+                " damage_per_tick=" +
+                std::to_string(local_player_poison_correction.damage_per_tick));
+        } else {
+            Log(
+                "Multiplayer owner poison correction failed. duration_ticks=" +
+                std::to_string(local_player_poison_correction.duration_ticks) +
+                " damage_per_tick=" +
+                std::to_string(local_player_poison_correction.damage_per_tick) +
+                " error=" + poison_error);
+        }
+    }
+
+    for (const auto& request : native_poison_behavior_probes) {
+        uintptr_t actor_address = 0;
+        if (request.target_participant_id == 0) {
+            SDModPlayerState player_state;
+            if (TryGetPlayerState(&player_state) && player_state.valid) {
+                actor_address = player_state.actor_address;
+            }
+        } else {
+            const auto* binding =
+                FindParticipantEntity(request.target_participant_id);
+            if (binding != nullptr) {
+                actor_address = binding->actor_address;
+            }
+        }
+
+        std::string poison_error;
+        const bool applied =
+            actor_address != 0 &&
+            InstallReplicatedPoisonModifier(
+                actor_address,
+                request.duration_ticks,
+                &poison_error,
+                request.damage_per_tick,
+                request.source_slot,
+                false);
+        Log(
+            std::string("Native poison behavior probe ") +
+            (applied ? "applied" : "failed") +
+            ". target_participant_id=" +
+            std::to_string(request.target_participant_id) +
+            " actor=" + HexString(actor_address) +
+            " duration_ticks=" +
+            std::to_string(request.duration_ticks) +
+            " damage_per_tick=" +
+            std::to_string(request.damage_per_tick) +
+            " source_slot=" +
+            std::to_string(static_cast<int>(request.source_slot)) +
+            (poison_error.empty() ? std::string{} : " error=" + poison_error));
+    }
+
+    for (const auto& request : native_magic_hit_behavior_probes) {
+        std::string probe_error;
+        float hp_before = 0.0f;
+        float hp_after = 0.0f;
+        const bool applied =
+            ExecuteNativeMagicHitBehaviorProbe(
+                request,
+                &hp_before,
+                &hp_after,
+                &probe_error);
+        {
+            std::lock_guard<std::mutex> lock(
+                g_gameplay_keyboard_injection
+                    .pending_gameplay_world_actions_mutex);
+            auto& result = g_gameplay_keyboard_injection
+                               .native_magic_hit_behavior_probe_result;
+            result.request_serial = request.request_serial;
+            result.success = applied;
+            result.hp_before = hp_before;
+            result.hp_after = hp_after;
+            result.error = probe_error;
+        }
+        Log(
+            std::string("Native magic-hit behavior probe ") +
+            (applied ? "applied" : "failed") +
+            ". projectile_damage=" +
+            std::to_string(request.projectile_damage) +
+            " magic_damage=" + std::to_string(request.magic_damage) +
+            " attempts=" + std::to_string(request.attempts) +
+            " hp=" + std::to_string(hp_before) + "->" +
+            std::to_string(hp_after) +
+            (probe_error.empty() ? std::string{} : " error=" + probe_error));
     }
 
     for (const auto bot_id : destroy_requests) {
@@ -289,6 +482,17 @@ void PumpQueuedGameplayActions() {
 
     if (have_replicated_loot_snapshot) {
         ReconcileReplicatedLootSnapshotNow(replicated_loot_snapshot, now_ms);
+    }
+
+    for (const auto& request : multiplayer_dampen_effect_requests) {
+        std::string dampen_error;
+        if (!ExecuteMultiplayerDampenEffectNow(request, &dampen_error)) {
+            Log(
+                "Multiplayer Dampen behavior request failed. owner_participant_id=" +
+                std::to_string(request.owner_participant_id) +
+                " cast_sequence=" + std::to_string(request.cast_sequence) +
+                " error=" + dampen_error);
+        }
     }
 
     for (const auto& request : client_local_loot_suppression_requests) {

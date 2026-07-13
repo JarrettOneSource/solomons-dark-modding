@@ -39,6 +39,34 @@ ACTOR_MOVE_SPEED_SCALE_OFFSET = csp.read_runtime_layout_offset("actor_move_speed
 ACTOR_MOVEMENT_SPEED_MULTIPLIER_OFFSET = csp.read_runtime_layout_offset("actor_movement_speed_multiplier")
 ACTOR_MOVE_STEP_SCALE_OFFSET = csp.read_runtime_layout_offset("actor_move_step_scale")
 PROGRESSION_MOVE_SPEED_OFFSET = csp.read_runtime_layout_offset("progression_move_speed")
+PROGRESSION_TABLE_BASE_OFFSET = csp.read_runtime_layout_offset(
+    "standalone_wizard_progression_table_base"
+)
+PROGRESSION_TABLE_COUNT_OFFSET = csp.read_runtime_layout_offset(
+    "standalone_wizard_progression_table_count"
+)
+PROGRESSION_ENTRY_STRIDE = csp.read_runtime_layout_offset(
+    "standalone_wizard_progression_entry_stride"
+)
+PROGRESSION_ENTRY_ACTIVE_OFFSET = csp.read_runtime_layout_offset(
+    "standalone_wizard_progression_active_flag"
+)
+PROGRESSION_ENTRY_STATBOOK_OFFSET = csp.read_runtime_layout_offset(
+    "standalone_wizard_progression_entry_statbook"
+)
+STATBOOK_NUMERIC_PROPERTY_LIST_OFFSET = csp.read_runtime_layout_offset(
+    "statbook_numeric_property_list"
+)
+STATBOOK_NUMERIC_PROPERTY_VALUES_OFFSET = csp.read_runtime_layout_offset(
+    "statbook_numeric_property_values"
+)
+STATBOOK_NUMERIC_PROPERTY_VALUE_COUNT_OFFSET = csp.read_runtime_layout_offset(
+    "statbook_numeric_property_value_count"
+)
+POINTER_LIST_COUNT_OFFSET = csp.read_runtime_layout_offset("pointer_list_count")
+POINTER_LIST_ITEMS_OFFSET = csp.read_runtime_layout_offset("pointer_list_items")
+NATIVE_STRING_DATA_OFFSET = csp.read_runtime_layout_offset("native_string_data")
+NATIVE_STRING_LENGTH_OFFSET = csp.read_runtime_layout_offset("native_string_length")
 MOVEMENT_INPUT_ACCELERATION_DIVISOR_GLOBAL = csp.read_runtime_layout_offset(
     "movement_input_acceleration_divisor"
 )
@@ -115,6 +143,58 @@ if type(bot) ~= 'table' then
 end
 local actor = tonumber(bot.actor_address) or 0
 local progression = tonumber(bot.progression_runtime_state_address) or 0
+local function read_ranked_numeric_stat(entry_index, property_name)
+  if progression == 0 then return -1, nil end
+  local table_address = tonumber(sd.debug.read_u32(
+    progression + {PROGRESSION_TABLE_BASE_OFFSET})) or 0
+  local table_count = tonumber(sd.debug.read_i32(
+    progression + {PROGRESSION_TABLE_COUNT_OFFSET})) or 0
+  if table_address == 0 or entry_index < 0 or entry_index >= table_count then
+    return -1, nil
+  end
+  local entry = table_address + entry_index * {PROGRESSION_ENTRY_STRIDE}
+  local rank = tonumber(sd.debug.read_u16(
+    entry + {PROGRESSION_ENTRY_ACTIVE_OFFSET})) or 0
+  local statbook = tonumber(sd.debug.read_u32(
+    entry + {PROGRESSION_ENTRY_STATBOOK_OFFSET})) or 0
+  if statbook == 0 then return rank, nil end
+  local property_list = statbook + {STATBOOK_NUMERIC_PROPERTY_LIST_OFFSET}
+  local property_count = tonumber(sd.debug.read_i32(
+    property_list + {POINTER_LIST_COUNT_OFFSET})) or 0
+  local property_items = tonumber(sd.debug.read_u32(
+    property_list + {POINTER_LIST_ITEMS_OFFSET})) or 0
+  if property_count <= 0 or property_count > 64 or property_items == 0 then
+    return rank, nil
+  end
+  for index = 0, property_count - 1 do
+    local wrapper = tonumber(sd.debug.read_u32(property_items + index * 4)) or 0
+    local property = wrapper ~= 0 and
+      (tonumber(sd.debug.read_u32(wrapper)) or 0) or 0
+    if property ~= 0 then
+      local name_data = tonumber(sd.debug.read_u32(
+        property + {NATIVE_STRING_DATA_OFFSET})) or 0
+      local name_length = tonumber(sd.debug.read_i32(
+        property + {NATIVE_STRING_LENGTH_OFFSET})) or 0
+      local name = ''
+      if name_data ~= 0 and name_length > 0 and name_length <= 128 then
+        name = sd.debug.read_string(name_data, name_length + 1) or ''
+        name = string.sub(name, 1, name_length)
+      end
+      if name == property_name then
+        local values_address = tonumber(sd.debug.read_u32(
+          property + {STATBOOK_NUMERIC_PROPERTY_VALUES_OFFSET})) or 0
+        local value_count = tonumber(sd.debug.read_i32(
+          property + {STATBOOK_NUMERIC_PROPERTY_VALUE_COUNT_OFFSET})) or 0
+        if values_address == 0 or value_count <= 0 or value_count > 1024 then
+          return rank, nil
+        end
+        local resolved_rank = math.min(rank, value_count - 1)
+        return rank, sd.debug.read_float(values_address + resolved_rank * 4)
+      end
+    end
+  end
+  return rank, nil
+end
 emit('available', true)
 emit('bot_id', bot.id)
 emit('actor_address', actor)
@@ -131,6 +211,13 @@ if actor ~= 0 then
 end
 if progression ~= 0 then
   emit('progression_move_speed', sd.debug.read_float(progression + {PROGRESSION_MOVE_SPEED_OFFSET}))
+  local rush_rank, rush_speed_percent = read_ranked_numeric_stat(
+    {RUSH_OPTION_ID}, 'mValue')
+  emit('rush_rank', rush_rank)
+  emit('rush_speed_percent', rush_speed_percent)
+  if rush_speed_percent ~= nil then
+    emit('rush_speed_multiplier', 1.0 + rush_speed_percent / 100.0)
+  end
 end
 """,
         timeout_s=10.0,
@@ -150,7 +237,14 @@ def compute_native_speed_cap(motion: dict[str, Any], globals_state: dict[str, fl
     actor_multiplier = parse_float(motion.get("actor_movement_speed_multiplier"))
     actor_scale = parse_float(motion.get("actor_move_speed_scale"))
     progression_speed = parse_float(motion.get("progression_move_speed"))
-    cap = actor_multiplier * actor_scale * progression_speed * globals_state["speed_scalar"]
+    rush_multiplier = parse_float(motion.get("rush_speed_multiplier"))
+    cap = (
+        actor_multiplier
+        * actor_scale
+        * progression_speed
+        * rush_multiplier
+        * globals_state["speed_scalar"]
+    )
     if not math.isfinite(cap) or cap < 0.0:
         raise LiveBotNativeSpeedProbeFailure(
             f"invalid native speed cap from live fields: motion={motion} globals={globals_state}"
@@ -359,19 +453,48 @@ def choose_until_rush(
     )
 
 
-def launch_all_bots_run() -> dict[str, Any]:
+def launch_fire_bot_run() -> dict[str, Any]:
     result: dict[str, Any] = {"fresh_bundle": csp.ensure_launcher_bundle_fresh()}
     csp.stop_game()
     csp.clear_loader_log()
-    with stress.temporary_active_bots_config("all"):
+    # This probe needs one ranked Rush owner.  Keeping the fixture to a single
+    # Fire bot also leaves the limited remote gameplay slots deterministic.
+    with stress.temporary_active_bots_config("fire"):
         csp.launch_game()
         pid = csp.wait_for_game_process()
         result["pid"] = pid
         csp.wait_for_lua_pipe(timeout_s=60.0)
         result["hub_flow"] = csp.drive_new_game_flow(pid, element="ether", discipline="mind")
-        start_run = stress.lua_values("print('ok='..tostring(sd.hub.start_testrun()))")
-        if not lua_bool(start_run.get("ok")):
-            raise LiveBotNativeSpeedProbeFailure(f"sd.hub.start_testrun failed: {start_run}")
+        churn_deadline = time.monotonic() + 15.0
+        start_run: dict[str, str] = {}
+        last_churn_error = ""
+        while time.monotonic() < churn_deadline:
+            try:
+                start_run = stress.lua_values(
+                    "print('ok='..tostring(sd.hub.start_testrun()))"
+                )
+                if lua_bool(start_run.get("ok")):
+                    break
+                last_churn_error = str(start_run)
+            except Exception as exc:  # noqa: BLE001 - retry the known churn guard only.
+                transient_text = str(exc).lower()
+                transient_scene_guard = (
+                    "scene" in transient_text
+                    and any(
+                        token in transient_text
+                        for token in ("churn", "settling", "not stable")
+                    )
+                )
+                if not transient_scene_guard:
+                    raise
+                last_churn_error = str(exc)
+            time.sleep(0.25)
+        else:
+            raise LiveBotNativeSpeedProbeFailure(
+                "sd.hub.start_testrun remained blocked by scene churn: "
+                f"{last_churn_error}"
+            )
+        result["testrun_start"] = start_run
         csp.wait_for_scene("testrun", timeout_s=45.0)
         time.sleep(2.0)
         result["bot_summary"] = stress.wait_for_materialized_bots(timeout_s=90.0)
@@ -379,7 +502,7 @@ def launch_all_bots_run() -> dict[str, Any]:
 
 
 def run_probe(max_rush_steps: int) -> dict[str, Any]:
-    result = launch_all_bots_run()
+    result = launch_fire_bot_run()
     result["tick_gate"] = stress.set_lua_bot_tick_enabled(False)
 
     bot_summary = result["bot_summary"]
@@ -452,6 +575,57 @@ def run_probe(max_rush_steps: int) -> dict[str, Any]:
         tolerance=0.06,
     )
 
+    baseline_rank = parse_int(result["baseline_motion"].get("rush_rank"), -1)
+    post_rush_rank = parse_int(post_rush_motion.get("rush_rank"), -1)
+    post_rush_percent = parse_float(post_rush_motion.get("rush_speed_percent"))
+    post_rush_multiplier = parse_float(post_rush_motion.get("rush_speed_multiplier"))
+    expected_active = parse_int(rush_application["entry_after"].get("active"), -1)
+    if baseline_rank != 0:
+        raise LiveBotNativeSpeedProbeFailure(
+            f"baseline Fire bot unexpectedly already had Rush rank {baseline_rank}"
+        )
+    if post_rush_rank != expected_active or post_rush_rank <= 0:
+        raise LiveBotNativeSpeedProbeFailure(
+            "native Rush rank did not match the applied skill: "
+            f"rank={post_rush_rank} expected={expected_active}"
+        )
+    if not math.isfinite(post_rush_percent) or post_rush_percent <= 0.0:
+        raise LiveBotNativeSpeedProbeFailure(
+            f"native Rush mValue did not resolve to a positive speed bonus: {post_rush_motion}"
+        )
+    if not math.isclose(
+        post_rush_multiplier,
+        1.0 + post_rush_percent / 100.0,
+        rel_tol=1e-5,
+        abs_tol=1e-5,
+    ):
+        raise LiveBotNativeSpeedProbeFailure(
+            f"Rush multiplier did not match native mValue: {post_rush_motion}"
+        )
+
+    cap_ratio = post_rush_cap / baseline_cap
+    baseline_peak = float(result["baseline_observation"]["max_velocity"])
+    post_rush_peak = float(result["post_rush_observation"]["max_velocity"])
+    peak_velocity_ratio = post_rush_peak / baseline_peak
+    if cap_ratio < 1.05:
+        raise LiveBotNativeSpeedProbeFailure(
+            f"Rush did not increase the loader-owned native movement cap: ratio={cap_ratio:.6f}"
+        )
+    if peak_velocity_ratio < 1.04:
+        raise LiveBotNativeSpeedProbeFailure(
+            "Rush did not materially increase measured bot movement velocity: "
+            f"baseline={baseline_peak:.6f} post={post_rush_peak:.6f} "
+            f"ratio={peak_velocity_ratio:.6f}"
+        )
+    result["rush_behavior"] = {
+        "baseline_rank": baseline_rank,
+        "post_rush_rank": post_rush_rank,
+        "native_speed_percent": post_rush_percent,
+        "native_speed_multiplier": post_rush_multiplier,
+        "cap_ratio": cap_ratio,
+        "peak_velocity_ratio": peak_velocity_ratio,
+    }
+
     result["loader_log_tail"] = csp.tail_loader_log(220)
     result["passed"] = True
     return result
@@ -490,6 +664,7 @@ def main() -> int:
         rush = result["post_rush_observation"]
         print(
             "PASS: Fire bot movement stayed within the native live speed envelope "
+            "and accelerated after Rush "
             f"(baseline max={baseline['max_velocity']:.4f}/cap={baseline['native_cap']:.4f}, "
             f"low max={low['max_velocity']:.4f}/cap={low['native_cap']:.4f}, "
             f"post-rush max={rush['max_velocity']:.4f}/cap={rush['native_cap']:.4f})"

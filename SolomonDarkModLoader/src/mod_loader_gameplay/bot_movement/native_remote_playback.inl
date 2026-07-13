@@ -155,46 +155,6 @@ bool ApplyNativeRemoteParticipantStaffVisualState(
         binding->replicated_attachment_staff_visual_state);
 }
 
-bool ApplyNativeRemoteParticipantRenderSelectorBytes(
-    const ParticipantEntityBinding* binding,
-    uintptr_t actor_address) {
-    if (!IsNativeRemoteParticipantBinding(binding) ||
-        actor_address == 0 ||
-        (binding->replicated_presentation_flags &
-         multiplayer::ParticipantPresentationFlagRenderSelectorBytes) == 0 ||
-        kActorRenderVariantPrimaryOffset == 0 ||
-        kActorRenderVariantSecondaryOffset == 0 ||
-        kActorRenderWeaponTypeOffset == 0 ||
-        kActorRenderSelectionByteOffset == 0 ||
-        kActorRenderVariantTertiaryOffset == 0) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    bool wrote = false;
-    wrote = memory.TryWriteField(
-        actor_address,
-        kActorRenderVariantPrimaryOffset,
-        binding->replicated_render_variant_primary) || wrote;
-    wrote = memory.TryWriteField(
-        actor_address,
-        kActorRenderVariantSecondaryOffset,
-        binding->replicated_render_variant_secondary) || wrote;
-    wrote = memory.TryWriteField(
-        actor_address,
-        kActorRenderWeaponTypeOffset,
-        binding->replicated_render_weapon_type) || wrote;
-    wrote = memory.TryWriteField(
-        actor_address,
-        kActorRenderSelectionByteOffset,
-        binding->replicated_render_selection_byte) || wrote;
-    wrote = memory.TryWriteField(
-        actor_address,
-        kActorRenderVariantTertiaryOffset,
-        binding->replicated_render_variant_tertiary) || wrote;
-    return wrote;
-}
-
 bool TryApplyNativeRemoteParticipantVisualLinkColorBlockToLane(
     const SDModEquipVisualLaneState& lane,
     std::uint32_t replicated_type_id,
@@ -306,7 +266,13 @@ bool ApplyNativeRemoteParticipantPresentationState(
     }
 
     wrote = ApplyNativeRemoteParticipantStaffVisualState(binding, actor_address) || wrote;
-    wrote = ApplyNativeRemoteParticipantRenderSelectorBytes(binding, actor_address) || wrote;
+    // Render selector bytes are materialization-local. The sender reports
+    // bytes from its stock slot-0 actor, while this process owns a synthetic
+    // clone/gameplay-slot actor whose selector was built from the participant
+    // profile. Copying the sender bytes (notably Fire's stock 0 over the
+    // clone-built 1) makes the remote robe and hat disappear while the
+    // independent staff orb remains visible. Keep the packet values as
+    // diagnostics, but preserve the clone-built bytes on the local actor.
     wrote = ApplyNativeRemoteParticipantVisualLinkColorBlocks(binding, actor_address) || wrote;
 
     if ((binding->replicated_presentation_flags &
@@ -388,7 +354,7 @@ bool NativeRemoteParticipantPlaybackTargetIsMoving(
 }
 
 NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
-    const ParticipantEntityBinding* binding,
+    ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
     NativeRemoteVitalSyncResult result;
     if (!IsNativeRemoteParticipantBinding(binding) ||
@@ -427,6 +393,91 @@ NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
         return value;
     };
 
+    float native_hp = 0.0f;
+    float native_max_hp = 0.0f;
+    const bool native_health_readable =
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionHpOffset,
+            &native_hp) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionMaxHpOffset,
+            &native_max_hp);
+    std::uint8_t native_transient_flags = 0;
+    std::int32_t native_poison_remaining_ticks = 0;
+    uintptr_t native_poison_modifier = 0;
+    const bool native_transient_readable =
+        TryReadWizardActorTransientStatusState(
+            actor_address,
+            &native_transient_flags,
+            &native_poison_remaining_ticks,
+            &native_poison_modifier);
+    float native_poison_damage_per_tick = 0.0f;
+    const bool native_poison_damage_readable =
+        native_poison_modifier != 0 &&
+        memory.TryReadField(
+            native_poison_modifier,
+            kNativePoisonDamagePerTickOffset,
+            &native_poison_damage_per_tick) &&
+        std::isfinite(native_poison_damage_per_tick) &&
+        native_poison_damage_per_tick >= 0.0f &&
+        native_poison_damage_per_tick <= 10000.0f;
+    std::int8_t native_poison_source_slot = 1;
+    const bool native_poison_source_readable =
+        native_poison_modifier != 0 &&
+        memory.TryReadField(
+            native_poison_modifier,
+            kNativePoisonSourceSlotOffset,
+            &native_poison_source_slot);
+    const float expected_hp =
+        clamp_to_max(
+            participant->runtime.life_current,
+            participant->runtime.life_max);
+    const bool native_max_matches_last_write =
+        native_health_readable &&
+        binding->native_remote_vital_baseline_valid &&
+        std::isfinite(binding->native_remote_last_written_max_hp) &&
+        binding->native_remote_last_written_max_hp > 0.0f &&
+        std::fabs(
+            native_max_hp - binding->native_remote_last_written_max_hp) <=
+            (std::max)(
+                1.0f,
+                binding->native_remote_last_written_max_hp * 0.1f);
+    const bool replicated_life_increased_since_last_write =
+        binding->native_remote_vital_baseline_valid &&
+        expected_hp > binding->native_remote_last_written_hp + 0.0001f;
+    const float damage_reference_hp =
+        (std::min)(expected_hp, binding->native_remote_last_written_hp);
+    const bool native_damage_observed =
+        native_max_matches_last_write &&
+        !replicated_life_increased_since_last_write &&
+        native_hp >= 0.0f &&
+        native_hp + 0.05f < damage_reference_hp;
+    const bool native_poison_observed =
+        native_transient_readable &&
+        (native_transient_flags &
+         multiplayer::ParticipantTransientStatusFlagPoisoned) != 0 &&
+        (participant->runtime.transient_status_flags &
+         multiplayer::ParticipantTransientStatusFlagPoisoned) == 0 &&
+        native_poison_damage_readable &&
+        native_poison_source_readable &&
+        (native_poison_source_slot != 1 ||
+         native_poison_damage_per_tick > 0.000001f);
+    if (native_damage_observed || native_poison_observed) {
+        multiplayer::QueueHostParticipantVitalsCorrection(
+            binding->bot_id,
+            native_damage_observed ? native_hp : expected_hp,
+            native_max_matches_last_write
+                ? native_max_hp
+                : participant->runtime.life_max,
+            native_poison_observed ? native_transient_flags : 0,
+            native_poison_observed ? native_poison_remaining_ticks : 0,
+            native_poison_observed && native_poison_damage_readable
+                ? native_poison_damage_per_tick
+                : 0.0f);
+    }
+
     if (std::isfinite(participant->runtime.life_max) &&
         participant->runtime.life_max > 0.0f &&
         std::isfinite(participant->runtime.life_current) &&
@@ -437,6 +488,13 @@ NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
         result.wrote_health =
             memory.TryWriteField(progression_address, kProgressionMaxHpOffset, max_hp) &&
             memory.TryWriteField(progression_address, kProgressionHpOffset, hp);
+        if (result.wrote_health) {
+            binding->native_remote_vital_baseline_valid = true;
+            binding->native_remote_last_written_hp = hp;
+            binding->native_remote_last_written_max_hp = max_hp;
+        } else {
+            binding->native_remote_vital_baseline_valid = false;
+        }
         result.dead = result.wrote_health && hp <= 0.0f;
     }
 

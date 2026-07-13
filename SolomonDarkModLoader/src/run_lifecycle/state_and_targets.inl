@@ -5,6 +5,14 @@ using EnemySpawnedFn =
     void* (__fastcall*)(void* self, void* unused_edx, void* param_2, int enemy_config, void* param_4, int param_5, int param_6, char param_7);
 using EnemyDeathFn = int(__fastcall*)(void* self, void* unused_edx);
 using SpellCastFn = void(__fastcall*)(void* self, void* unused_edx);
+using AirLightningChainTargetFn =
+    void* (__thiscall*)(
+        void* self,
+        float source_x,
+        float source_y,
+        float radius,
+        std::uint32_t mask,
+        void* exclusions);
 using GoldChangedFn = int(__stdcall*)(int delta, char allow_negative);
 using DropSpawnedFn =
     void(__fastcall*)(void* self, void* unused_edx, std::uint32_t x_bits, std::uint32_t y_bits, int amount, int lifetime);
@@ -24,6 +32,7 @@ enum HookIndex : size_t {
     kHookEnemyDeath,
     kHookSpellCast3EB,
     kHookSpellCast018,
+    kHookAirLightningChainTarget,
     kHookSpellCast020,
     kHookSpellCast028,
     kHookSpellCast3EC,
@@ -121,6 +130,8 @@ void BuildHookTargets(HookTarget* targets) {
     targets[kHookEnemyDeath] = {kEnemyDeath, 10};
     targets[kHookSpellCast3EB] = {kSpellCast3EB, 8};
     targets[kHookSpellCast018] = {kSpellCast018, 8};
+    // Whole instructions: sub esp,18h (3) + fld [esp+24h] (4).
+    targets[kHookAirLightningChainTarget] = {kAirLightningChainTarget, 7};
     targets[kHookSpellCast020] = {kSpellCast020, 8};
     targets[kHookSpellCast028] = {kSpellCast028, 7};
     targets[kHookSpellCast3EC] = {kSpellCast3EC, 8};

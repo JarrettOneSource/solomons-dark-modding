@@ -20,6 +20,15 @@ using SkillsWizardBuildPrimarySpellFn = std::uint32_t(__thiscall*)(
     std::uint32_t reserved1,
     std::uint32_t reserved2,
     std::uint32_t reserved3);
+using SkillsWizardGetSecondaryManaCostFn = float(__thiscall*)(
+    void* self,
+    int entry_index,
+    int level_override);
+using StatBookComputeCostFn = float(__thiscall*)(
+    void* self,
+    float base_value,
+    int entry_index,
+    char apply_modifier);
 
 int CaptureNativeSpellStatsSehCode(EXCEPTION_POINTERS* exception_info, DWORD* exception_code) {
     if (exception_code != nullptr && exception_info != nullptr && exception_info->ExceptionRecord != nullptr) {
@@ -58,6 +67,73 @@ bool CallSkillsWizardBuildPrimarySpellSafe(
             0);
         if (output_spell_id != nullptr) {
             *output_spell_id = spell_id;
+        }
+        return true;
+    } __except (CaptureNativeSpellStatsSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool CallSkillsWizardGetSecondaryManaCostSafe(
+    uintptr_t resolver_address,
+    uintptr_t progression_address,
+    int entry_index,
+    float* output_cost,
+    DWORD* exception_code) {
+    auto* resolve_secondary_mana =
+        reinterpret_cast<SkillsWizardGetSecondaryManaCostFn>(resolver_address);
+    if (output_cost != nullptr) {
+        *output_cost = 0.0f;
+    }
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (resolve_secondary_mana == nullptr ||
+        progression_address == 0 ||
+        entry_index < 0) {
+        return false;
+    }
+
+    __try {
+        const auto cost = resolve_secondary_mana(
+            reinterpret_cast<void*>(progression_address),
+            entry_index,
+            -1);
+        if (output_cost != nullptr) {
+            *output_cost = cost;
+        }
+        return true;
+    } __except (CaptureNativeSpellStatsSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool CallStatBookComputeCostSafe(
+    uintptr_t compute_address,
+    uintptr_t progression_address,
+    float base_cost,
+    int entry_index,
+    float* output_cost,
+    DWORD* exception_code) {
+    auto* compute_cost = reinterpret_cast<StatBookComputeCostFn>(compute_address);
+    if (output_cost != nullptr) {
+        *output_cost = 0.0f;
+    }
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (compute_cost == nullptr || progression_address == 0) {
+        return false;
+    }
+
+    __try {
+        const auto cost = compute_cost(
+            reinterpret_cast<void*>(progression_address),
+            base_cost,
+            entry_index,
+            0);
+        if (output_cost != nullptr) {
+            *output_cost = cost;
         }
         return true;
     } __except (CaptureNativeSpellStatsSehCode(GetExceptionInformation(), exception_code)) {
@@ -161,6 +237,18 @@ void RestoreProgressionCurrentSpellIdIfNeeded(
 bool NativePrimaryManaOutputUsesDisplayScale(const NativePrimarySpellSelection& selection) {
     return selection.pure_primary &&
            selection.primary_entry_index != ResolveNativePrimaryEntryForElement(0);
+}
+
+constexpr std::size_t kMinimumNativePrimaryStatOutputCount = 2;
+
+std::size_t ResolveNativePrimaryManaOutputIndex(
+    const NativePrimarySpellSelection& selection) {
+    // Skills_Wizard emits the base spell's mStats fields first, followed by
+    // fields contributed by active upgrades. Every stock pure primary,
+    // including Ether/Magic Missile, exposes damage then mana. Mixed primaries
+    // expose two damage channels before mana. Upgrade fields therefore must
+    // not move the mana index merely because they grow the output array.
+    return selection.primary_entry_index == selection.combo_entry_index ? 1u : 2u;
 }
 
 bool TryReadNativePrimaryManaOutputScale(float* output_scale, std::string* error_message) {
@@ -325,355 +413,4 @@ std::uint32_t EncodeSkillsWizardSelectionArg(int selection_value) {
     return static_cast<std::uint32_t>(selection_value);
 }
 
-bool TryResolveNativePrimarySelectionFromPair(
-    int primary_entry_index,
-    int combo_entry_index,
-    NativePrimarySpellSelection* selection) {
-    if (selection == nullptr) {
-        return false;
-    }
-
-    return FillNativePrimarySelection(
-        primary_entry_index,
-        combo_entry_index,
-        -1,
-        selection);
-}
-
-bool TryResolveNativePrimarySelectionFromSkillId(
-    uintptr_t progression_runtime_address,
-    int skill_id,
-    NativePrimarySpellSelection* selection,
-    std::string* error_message) {
-    if (selection != nullptr) {
-        *selection = NativePrimarySpellSelection{};
-    }
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
-    if (selection == nullptr || skill_id <= 0) {
-        if (error_message != nullptr) {
-            *error_message = "native primary skill-id resolution requires a positive skill id";
-        }
-        return false;
-    }
-    if (progression_runtime_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "native primary skill-id resolution requires a live progression runtime";
-        }
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    const auto build_primary_spell_address =
-        memory.ResolveGameAddressOrZero(kSkillsWizardBuildPrimarySpell);
-    if (build_primary_spell_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "unable to resolve Skills_Wizard primary spell builder";
-        }
-        return false;
-    }
-
-    std::int32_t previous_current_spell_id = 0;
-    const bool have_previous_current_spell_id =
-        TryReadProgressionCurrentSpellId(
-            progression_runtime_address,
-            &previous_current_spell_id);
-
-    DWORD last_exception_code = 0;
-    for (std::size_t primary_index = 0;
-         primary_index < std::size(kNativePrimaryEntryIndices);
-         ++primary_index) {
-        for (std::size_t combo_index = primary_index;
-             combo_index < std::size(kNativePrimaryEntryIndices);
-             ++combo_index) {
-            const auto primary_entry = kNativePrimaryEntryIndices[primary_index];
-            const auto combo_entry = kNativePrimaryEntryIndices[combo_index];
-            std::uint32_t native_spell_id = 0;
-            DWORD exception_code = 0;
-            if (!CallSkillsWizardBuildPrimarySpellSafe(
-                    build_primary_spell_address,
-                    progression_runtime_address,
-                    EncodeSkillsWizardSelectionArg(primary_entry),
-                    EncodeSkillsWizardSelectionArg(combo_entry),
-                    &native_spell_id,
-                    &exception_code)) {
-                last_exception_code = exception_code;
-                continue;
-            }
-
-            if (native_spell_id == 0) {
-                std::int32_t current_spell_id = 0;
-                if (TryReadProgressionCurrentSpellId(
-                        progression_runtime_address,
-                        &current_spell_id)) {
-                    native_spell_id = static_cast<std::uint32_t>(current_spell_id);
-                }
-            }
-            if (native_spell_id == static_cast<std::uint32_t>(skill_id) &&
-                FillNativePrimarySelection(
-                    primary_entry,
-                    combo_entry,
-                    skill_id,
-                    selection)) {
-                RestoreProgressionCurrentSpellIdIfNeeded(
-                    progression_runtime_address,
-                    have_previous_current_spell_id,
-                    previous_current_spell_id);
-                return true;
-            }
-        }
-    }
-
-    RestoreProgressionCurrentSpellIdIfNeeded(
-        progression_runtime_address,
-        have_previous_current_spell_id,
-        previous_current_spell_id);
-    if (error_message != nullptr) {
-        *error_message =
-            last_exception_code == 0
-                ? "Skills_Wizard did not resolve the requested primary skill id"
-                : "Skills_Wizard primary skill-id scan failed with 0x" +
-                    std::to_string(last_exception_code);
-    }
-    return false;
-}
-
-bool TryResolveNativePrimarySelectionFromLiveProgression(
-    uintptr_t progression_runtime_address,
-    int primary_entry_index,
-    int combo_entry_index,
-    NativePrimarySpellSelection* selection,
-    std::string* error_message) {
-    if (selection != nullptr) {
-        *selection = NativePrimarySpellSelection{};
-    }
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
-    if (selection == nullptr ||
-        !IsNativePrimaryEntryIndex(primary_entry_index) ||
-        !IsNativePrimaryEntryIndex(combo_entry_index)) {
-        if (error_message != nullptr) {
-            *error_message = "native primary selection requires valid primary/combo entries";
-        }
-        return false;
-    }
-    if (progression_runtime_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "native primary selection requires a live progression runtime";
-        }
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    const auto build_primary_spell_address =
-        memory.ResolveGameAddressOrZero(kSkillsWizardBuildPrimarySpell);
-    if (build_primary_spell_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "unable to resolve Skills_Wizard primary spell builder";
-        }
-        return false;
-    }
-
-    std::int32_t previous_current_spell_id = 0;
-    const bool have_previous_current_spell_id =
-        TryReadProgressionCurrentSpellId(
-            progression_runtime_address,
-            &previous_current_spell_id);
-
-    std::uint32_t native_spell_id = 0;
-    DWORD exception_code = 0;
-    if (!CallSkillsWizardBuildPrimarySpellSafe(
-            build_primary_spell_address,
-            progression_runtime_address,
-            EncodeSkillsWizardSelectionArg(primary_entry_index),
-            EncodeSkillsWizardSelectionArg(combo_entry_index),
-            &native_spell_id,
-            &exception_code)) {
-        RestoreProgressionCurrentSpellIdIfNeeded(
-            progression_runtime_address,
-            have_previous_current_spell_id,
-            previous_current_spell_id);
-        if (error_message != nullptr) {
-            *error_message =
-                "Skills_Wizard primary selection failed with 0x" +
-                std::to_string(exception_code);
-        }
-        return false;
-    }
-    if (native_spell_id == 0) {
-        std::int32_t current_spell_id = 0;
-        if (TryReadProgressionCurrentSpellId(progression_runtime_address, &current_spell_id)) {
-            native_spell_id = static_cast<std::uint32_t>(current_spell_id);
-        }
-    }
-    RestoreProgressionCurrentSpellIdIfNeeded(
-        progression_runtime_address,
-        have_previous_current_spell_id,
-        previous_current_spell_id);
-
-    if (native_spell_id == 0 ||
-        !FillNativePrimarySelection(
-            primary_entry_index,
-            combo_entry_index,
-            static_cast<int>(native_spell_id),
-            selection)) {
-        if (error_message != nullptr) {
-            *error_message = "Skills_Wizard primary selection did not produce a spell id";
-        }
-        return false;
-    }
-    return true;
-}
-
-bool TryResolveNativePrimarySelectionForProfile(
-    const multiplayer::MultiplayerCharacterProfile& character_profile,
-    NativePrimarySpellSelection* selection) {
-    if (selection == nullptr) {
-        return false;
-    }
-
-    const auto default_entry = ResolveNativePrimaryEntryForElement(character_profile.element_id);
-    const auto primary_entry =
-        character_profile.loadout.primary_entry_index >= 0
-            ? character_profile.loadout.primary_entry_index
-            : default_entry;
-    const auto combo_entry =
-        character_profile.loadout.primary_combo_entry_index >= 0
-            ? character_profile.loadout.primary_combo_entry_index
-            : primary_entry;
-    return TryResolveNativePrimarySelectionFromPair(primary_entry, combo_entry, selection);
-}
-
-bool TryResolveNativePrimarySpellStats(
-    uintptr_t progression_runtime_address,
-    const NativePrimarySpellSelection& selection,
-    NativePrimarySpellStats* stats,
-    std::string* error_message) {
-    if (stats == nullptr) {
-        return false;
-    }
-
-    *stats = NativePrimarySpellStats{};
-    stats->selection = selection;
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
-    if (progression_runtime_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "native spell stats require a live progression runtime";
-        }
-        return false;
-    }
-    if (!IsNativePrimaryEntryIndex(selection.primary_entry_index) ||
-        !IsNativePrimaryEntryIndex(selection.combo_entry_index)) {
-        if (error_message != nullptr) {
-            *error_message = "native spell stats received an unresolved primary selection";
-        }
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    const auto build_primary_spell_address =
-        memory.ResolveGameAddressOrZero(kSkillsWizardBuildPrimarySpell);
-    if (build_primary_spell_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "unable to resolve Skills_Wizard primary spell builder";
-        }
-        return false;
-    }
-
-    std::uint32_t native_spell_id = 0;
-    DWORD exception_code = 0;
-    const bool build_succeeded = CallSkillsWizardBuildPrimarySpellSafe(
-        build_primary_spell_address,
-        progression_runtime_address,
-        EncodeSkillsWizardSelectionArg(selection.primary_entry_index),
-        EncodeSkillsWizardSelectionArg(selection.combo_entry_index),
-        &native_spell_id,
-        &exception_code);
-    if (!build_succeeded) {
-        stats->builder_seh_code = exception_code;
-        if (error_message != nullptr) {
-            *error_message =
-                "Skills_Wizard primary spell builder failed with 0x" +
-                std::to_string(exception_code);
-        }
-        return false;
-    }
-    stats->builder_seh_code = exception_code;
-    if (native_spell_id > 0) {
-        stats->selection.build_skill_id = static_cast<int>(native_spell_id);
-    }
-
-    const auto mana_output_index = selection.pure_primary ? 1u : 2u;
-    uintptr_t output_values_address = 0;
-    std::size_t output_count = 0;
-    if (!TryReadNativePrimaryStatOutputs(
-            progression_runtime_address,
-            mana_output_index + 1,
-            &output_values_address,
-            &output_count,
-            error_message)) {
-        return false;
-    }
-
-    stats->output_values_address = output_values_address;
-    stats->output_count = output_count;
-    if (!memory.TryReadValue(output_values_address, &stats->damage)) {
-        if (error_message != nullptr) {
-            *error_message = "native primary damage output read failed";
-        }
-        return false;
-    }
-    if (!selection.pure_primary && output_count > 1) {
-        if (!memory.TryReadValue(output_values_address + sizeof(float), &stats->secondary_damage)) {
-            if (error_message != nullptr) {
-                *error_message = "native primary secondary damage output read failed";
-            }
-            return false;
-        }
-        stats->secondary_damage_available = true;
-    }
-    if (!memory.TryReadValue(
-            output_values_address + static_cast<std::size_t>(mana_output_index) * sizeof(float),
-            &stats->mana_cost)) {
-        if (error_message != nullptr) {
-            *error_message = "native primary mana output read failed";
-        }
-        return false;
-    }
-    stats->mana_cost_available = true;
-    stats->mana_spend_cost = stats->mana_cost;
-    stats->mana_spend_cost_available = true;
-    if (NativePrimaryManaOutputUsesDisplayScale(selection)) {
-        float mana_output_scale = 1.0f;
-        if (!TryReadNativePrimaryManaOutputScale(&mana_output_scale, error_message)) {
-            return false;
-        }
-        stats->mana_output_scaled = true;
-        stats->mana_output_scale = mana_output_scale;
-        stats->mana_spend_cost = stats->mana_cost / mana_output_scale;
-    }
-    if (!TryReadProgressionCurrentSpellId(progression_runtime_address, &stats->current_spell_id)) {
-        if (error_message != nullptr) {
-            *error_message = "native current spell id read failed";
-        }
-        return false;
-    }
-    if (kProgressionLevelOffset == 0 ||
-        !memory.TryReadField(
-            progression_runtime_address,
-            kProgressionLevelOffset,
-            &stats->progression_level)) {
-        if (error_message != nullptr) {
-            *error_message = "native progression level read failed";
-        }
-        return false;
-    }
-    stats->resolved = true;
-    return true;
-}
-
-}  // namespace sdmod
+#include "native_spell_stats/primary_and_secondary_resolution.inl"

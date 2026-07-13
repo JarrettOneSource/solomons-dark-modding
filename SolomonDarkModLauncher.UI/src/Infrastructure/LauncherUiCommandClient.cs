@@ -13,9 +13,12 @@ internal sealed class LauncherUiCommandClient
 
     private string instanceName_ = "default";
     private bool debugUiEnabled_ = true;
+    private string lobbyId_ = string.Empty;
 
     public string InstanceName => instanceName_;
     public bool DebugUiEnabled => debugUiEnabled_;
+
+    public string LobbyId => lobbyId_;
 
     public void UpdateInstance(string? instanceName)
     {
@@ -25,6 +28,11 @@ internal sealed class LauncherUiCommandClient
     public void UpdateDebugUiEnabled(bool enabled)
     {
         debugUiEnabled_ = enabled;
+    }
+
+    public void UpdateLobbyId(string? lobbyId)
+    {
+        lobbyId_ = lobbyId?.Trim() ?? string.Empty;
     }
 
     public string BuildCommandPreview(LauncherUiCommandMode mode, string? targetModId = null)
@@ -123,6 +131,27 @@ internal sealed class LauncherUiCommandClient
             arguments.Add("loader.debug_ui=false");
         }
 
+        switch (mode)
+        {
+            case LauncherUiCommandMode.LaunchSinglePlayer:
+                arguments.Add("--multiplayer");
+                arguments.Add("off");
+                break;
+            case LauncherUiCommandMode.HostSteam:
+                arguments.Add("--multiplayer");
+                arguments.Add("host");
+                break;
+            case LauncherUiCommandMode.JoinSteam:
+                arguments.Add("--multiplayer");
+                arguments.Add("join");
+                if (!string.IsNullOrWhiteSpace(lobbyId_))
+                {
+                    arguments.Add("--lobby-id");
+                    arguments.Add(lobbyId_);
+                }
+                break;
+        }
+
         return arguments;
     }
 
@@ -130,7 +159,9 @@ internal sealed class LauncherUiCommandClient
     {
         return mode switch
         {
-            LauncherUiCommandMode.Launch => "launch",
+            LauncherUiCommandMode.LaunchSinglePlayer => "launch",
+            LauncherUiCommandMode.HostSteam => "launch",
+            LauncherUiCommandMode.JoinSteam => "launch",
             LauncherUiCommandMode.Stage => "stage",
             LauncherUiCommandMode.ListMods => "list-mods",
             LauncherUiCommandMode.EnableMod => "enable-mod",

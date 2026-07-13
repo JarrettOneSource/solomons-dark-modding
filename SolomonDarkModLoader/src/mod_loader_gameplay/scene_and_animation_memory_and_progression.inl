@@ -228,8 +228,12 @@ bool TryValidateRemoteParticipantSpawnReadiness(
         }
         return false;
     }
+    const auto required_scene_stable_delay_ms =
+        IsSharedHubSceneContext(snapshot)
+            ? kRemoteParticipantSpawnHubSceneStableDelayMs
+            : kRemoteParticipantSpawnSceneStableDelayMs;
     if (now_ms - s_stable_scene_readiness.stable_since_ms <
-        kRemoteParticipantSpawnSceneStableDelayMs) {
+        required_scene_stable_delay_ms) {
         if (error_message != nullptr) {
             *error_message = "Gameplay scene identity is still settling.";
         }

@@ -86,6 +86,75 @@ bool TryGetParticipantGameplayState(
     state->primary_visual_lane = it->primary_visual_lane;
     state->secondary_visual_lane = it->secondary_visual_lane;
     state->attachment_visual_lane = it->attachment_visual_lane;
+    (void)TryReadWizardActorPersistentStatusFlags(
+        state->actor_address,
+        &state->native_persistent_status_flags);
+    (void)TryReadWizardActorTransientStatusState(
+        state->actor_address,
+        &state->native_transient_status_flags,
+        &state->native_poison_remaining_ticks);
+    return true;
+}
+
+bool TryListRecentNativeSpellEffectActors(
+    std::vector<SDModNativeSpellEffectActorState>* actors) {
+    if (actors == nullptr) {
+        return false;
+    }
+    actors->clear();
+
+    constexpr std::uint64_t kRecentNativeSpellEffectHoldMs = 3000;
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    std::vector<SDModNativeSpellEffectActorState> recent;
+    {
+        std::lock_guard<std::mutex> lock(g_native_spell_effect_actor_mutex);
+        g_recent_native_spell_effect_actors.erase(
+            std::remove_if(
+                g_recent_native_spell_effect_actors.begin(),
+                g_recent_native_spell_effect_actors.end(),
+                [&](const SDModNativeSpellEffectActorState& actor) {
+                    return actor.actor_address == 0 ||
+                           now_ms < actor.created_ms ||
+                           now_ms - actor.created_ms >
+                               kRecentNativeSpellEffectHoldMs;
+                }),
+            g_recent_native_spell_effect_actors.end());
+        recent = g_recent_native_spell_effect_actors;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    actors->reserve(recent.size());
+    for (auto actor : recent) {
+        std::uint32_t live_type_id = 0;
+        std::int8_t actor_slot = -1;
+        if (!memory.TryReadField(
+                actor.actor_address,
+                kRegionObjectTypeIdOffset,
+                &live_type_id) ||
+            live_type_id != actor.native_type_id ||
+            !memory.TryReadField(
+                actor.actor_address,
+                kActorSlotOffset,
+                &actor_slot) ||
+            !TryReadFiniteFloatField(
+                actor.actor_address,
+                kActorPositionXOffset,
+                &actor.x) ||
+            !TryReadFiniteFloatField(
+                actor.actor_address,
+                kActorPositionYOffset,
+                &actor.y) ||
+            !TryReadFiniteFloatField(
+                actor.actor_address,
+                kActorCollisionRadiusOffset,
+                &actor.radius) ||
+            actor.radius < 0.0f) {
+            continue;
+        }
+        actor.valid = true;
+        actor.actor_slot = static_cast<int>(actor_slot);
+        actors->push_back(actor);
+    }
     return true;
 }
 
@@ -177,6 +246,7 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     float max_hp = 0.0f;
     float mp = 0.0f;
     float max_mp = 0.0f;
+    float move_speed = 0.0f;
     int xp = 0;
     int level = 0;
     float x = 0.0f;
@@ -186,6 +256,7 @@ bool TryGetPlayerState(SDModPlayerState* state) {
         !TryReadFiniteFloatField(progression_address, kProgressionMaxHpOffset, &max_hp) ||
         !TryReadFiniteFloatField(progression_address, kProgressionMpOffset, &mp) ||
         !TryReadFiniteFloatField(progression_address, kProgressionMaxMpOffset, &max_mp) ||
+        !TryReadFiniteFloatField(progression_address, kProgressionMoveSpeedOffset, &move_speed) ||
         !TryReadPlayerRoundedXp(progression_address, &xp) ||
         !memory.TryReadField(progression_address, kProgressionLevelOffset, &level) ||
         !TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &x) ||
@@ -199,6 +270,74 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     state->max_hp = max_hp;
     state->mp = mp;
     state->max_mp = max_mp;
+    state->move_speed = move_speed;
+    auto& derived = state->derived_stats;
+    derived.valid =
+        kProgressionCastSpeedMultiplierOffset != 0 &&
+        kProgressionManaRecoveryMultiplierOffset != 0 &&
+        kProgressionResistMagicFractionOffset != 0 &&
+        kProgressionResistPoisonFractionOffset != 0 &&
+        kProgressionDeflectChanceOffset != 0 &&
+        kProgressionStaffMeleeDamageAOffset != 0 &&
+        kProgressionStaffMeleeDamageBOffset != 0 &&
+        kProgressionPickupRangeOffset != 0 &&
+        kProgressionSecondaryRechargeMultiplierOffset != 0 &&
+        kProgressionOffensiveDamageMultiplierOffset != 0 &&
+        kProgressionOffensiveManaMultiplierOffset != 0 &&
+        kProgressionMeditationRecoveryBonusOffset != 0 &&
+        kProgressionMeditationIdleTicksOffset != 0 &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionCastSpeedMultiplierOffset,
+            &derived.cast_speed_multiplier) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionManaRecoveryMultiplierOffset,
+            &derived.mana_recovery_multiplier) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionResistMagicFractionOffset,
+            &derived.resist_magic_fraction) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionResistPoisonFractionOffset,
+            &derived.resist_poison_fraction) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionDeflectChanceOffset,
+            &derived.deflect_chance) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionStaffMeleeDamageAOffset,
+            &derived.staff_melee_damage_a) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionStaffMeleeDamageBOffset,
+            &derived.staff_melee_damage_b) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionPickupRangeOffset,
+            &derived.pickup_range) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionSecondaryRechargeMultiplierOffset,
+            &derived.secondary_recharge_multiplier) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionOffensiveDamageMultiplierOffset,
+            &derived.offensive_damage_multiplier) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionOffensiveManaMultiplierOffset,
+            &derived.offensive_mana_multiplier) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionMeditationRecoveryBonusOffset,
+            &derived.meditation_recovery_bonus) &&
+        memory.TryReadField(
+            progression_address,
+            kProgressionMeditationIdleTicksOffset,
+            &derived.meditation_idle_ticks);
     state->xp = xp;
     state->level = level;
     state->x = x;
@@ -206,6 +345,13 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     state->heading = heading;
     state->gold = gold;
     state->actor_address = actor_address;
+    (void)TryReadWizardActorPersistentStatusFlags(
+        actor_address,
+        &state->persistent_status_flags);
+    (void)TryReadWizardActorTransientStatusState(
+        actor_address,
+        &state->transient_status_flags,
+        &state->poison_remaining_ticks);
     state->render_subject_address = actor_address;
     state->world_address = world_address;
     state->progression_address = progression_address;
@@ -480,6 +626,21 @@ bool TryGetPlayerProgressionBookState(SDModProgressionBookState* state) {
             kStatbookMaxLevelOffset != 0 &&
             memory.IsReadableRange(entry.statbook_address + kStatbookMaxLevelOffset, sizeof(int))) {
             (void)memory.TryReadField(entry.statbook_address, kStatbookMaxLevelOffset, &entry.statbook_max_level);
+        }
+        // The stock table ends with three structural records after the real
+        // wizard-skill rows. Their category bytes are scratch/uninitialized
+        // data and differ between processes; the final record also points at a
+        // non-StatBook object whose +max-level bytes decode as float 1.0. Keep
+        // the rows for exact table cardinality, but normalize their meaningless
+        // metadata before it enters multiplayer snapshots or revision checks.
+        const bool structural_tail_record =
+            index >= entry_count - 3 &&
+            (entry.internal_id == 0xFFFF ||
+             entry.statbook_max_level < 0 ||
+             entry.statbook_max_level > 256);
+        if (structural_tail_record) {
+            entry.category = 0;
+            entry.statbook_max_level = 0;
         }
         state->entries.push_back(entry);
     }

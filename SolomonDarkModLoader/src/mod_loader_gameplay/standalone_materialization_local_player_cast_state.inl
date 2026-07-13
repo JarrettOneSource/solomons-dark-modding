@@ -307,6 +307,27 @@ bool MaybePrimeLocalPlayerRunCastState(
         return false;
     }
 
+    // The cast-state prime calls character-selection helpers and actor refresh
+    // routines that legitimately rebuild spell dispatch state, but those stock
+    // routines also rewrite progression active/visible flags as if a new
+    // character were being created. Preserve the live native book across the
+    // complete prime transaction so runtime upgrades are never collapsed back
+    // to their base selection levels.
+    std::vector<PrimaryBuildProgressionFlagSnapshot> cast_prime_progression_flags;
+    const bool have_cast_prime_progression_flags =
+        CapturePrimaryBuildProgressionFlags(
+            progression_runtime,
+            &cast_prime_progression_flags);
+    auto restore_cast_prime_progression_flags = [&](int* restored_entry_count) {
+        if (restored_entry_count != nullptr) {
+            *restored_entry_count = 0;
+        }
+        return !have_cast_prime_progression_flags ||
+               RestorePrimaryBuildProgressionFlags(
+                   cast_prime_progression_flags,
+                   restored_entry_count);
+    };
+
     std::string stage_error;
     if (!TryWriteGameplaySelectionStateForSlot(0, selection_state, &stage_error)) {
         if (now_ms - s_last_failure_log_ms >= 500) {
@@ -324,6 +345,7 @@ bool MaybePrimeLocalPlayerRunCastState(
             progression_runtime,
             selection_state,
             &stage_error)) {
+        (void)restore_cast_prime_progression_flags(nullptr);
         if (now_ms - s_last_failure_log_ms >= 500) {
             s_last_failure_log_ms = now_ms;
             Log(
@@ -337,6 +359,7 @@ bool MaybePrimeLocalPlayerRunCastState(
     const auto refresh_progression_address =
         memory.ResolveGameAddressOrZero(kActorProgressionRefresh);
     if (refresh_progression_address == 0) {
+        (void)restore_cast_prime_progression_flags(nullptr);
         if (now_ms - s_last_failure_log_ms >= 500) {
             s_last_failure_log_ms = now_ms;
             Log(
@@ -350,6 +373,7 @@ bool MaybePrimeLocalPlayerRunCastState(
             refresh_progression_address,
             actor_address,
             &exception_code)) {
+        (void)restore_cast_prime_progression_flags(nullptr);
         if (now_ms - s_last_failure_log_ms >= 500) {
             s_last_failure_log_ms = now_ms;
             Log(
@@ -366,6 +390,7 @@ bool MaybePrimeLocalPlayerRunCastState(
             profile,
             &resolved_primary_skill_id,
             &stage_error)) {
+        (void)restore_cast_prime_progression_flags(nullptr);
         if (now_ms - s_last_failure_log_ms >= 500) {
             s_last_failure_log_ms = now_ms;
             Log(
@@ -381,6 +406,7 @@ bool MaybePrimeLocalPlayerRunCastState(
             refresh_progression_address,
             actor_address,
             &exception_code)) {
+        (void)restore_cast_prime_progression_flags(nullptr);
         if (now_ms - s_last_failure_log_ms >= 500) {
             s_last_failure_log_ms = now_ms;
             Log(
@@ -389,6 +415,24 @@ bool MaybePrimeLocalPlayerRunCastState(
                 " before={" + DescribeLocalPlayerRunCastPrimeSnapshot(before) + "}");
         }
         return false;
+    }
+    int restored_cast_prime_entry_count = 0;
+    if (!restore_cast_prime_progression_flags(
+            &restored_cast_prime_entry_count)) {
+        if (now_ms - s_last_failure_log_ms >= 500) {
+            s_last_failure_log_ms = now_ms;
+            Log(
+                "[player-cast-prime] progression flags could not be restored after cast-state prime. "
+                "progression=" + HexString(progression_runtime));
+        }
+        return false;
+    }
+    if (restored_cast_prime_entry_count > 0) {
+        Log(
+            "[player-cast-prime] restored native progression flags after cast-state prime. progression=" +
+            HexString(progression_runtime) +
+            " restored_entries=" +
+            std::to_string(restored_cast_prime_entry_count));
     }
     (void)EnsureActorProgressionRuntimeFieldFromHandle(
         actor_address,

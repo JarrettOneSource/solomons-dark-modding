@@ -84,12 +84,14 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
 
     auto& memory = ProcessMemory::Instance();
     const auto render_probe_address = binding.actor_address;
+    std::int8_t native_actor_slot = -1;
     if (!memory.TryReadField(binding.actor_address, kActorOwnerOffset, &snapshot.world_address) ||
-        !memory.TryReadField(binding.actor_address, kActorSlotOffset, &snapshot.actor_slot)) {
+        !memory.TryReadField(binding.actor_address, kActorSlotOffset, &native_actor_slot)) {
         snapshot.entity_materialized = false;
         snapshot.actor_address = 0;
         return snapshot;
     }
+    snapshot.actor_slot = static_cast<int>(native_actor_slot);
     snapshot.slot_anim_state_index = ResolveActorAnimationStateSlotIndex(binding.actor_address);
     (void)memory.TryReadField(
         render_probe_address,

@@ -35,7 +35,7 @@ void PushEquipVisualLaneState(lua_State* state, const SDModEquipVisualLaneState&
 }
 
 void PushInventoryItemState(lua_State* state, const SDModInventoryItemState& item) {
-    lua_createtable(state, 0, 5);
+    lua_createtable(state, 0, 7);
     lua_pushboolean(state, item.valid ? 1 : 0);
     lua_setfield(state, -2, "valid");
     lua_pushinteger(state, static_cast<lua_Integer>(item.item_address));
@@ -254,7 +254,7 @@ void PushReplicatedLootDrop(lua_State* state, const multiplayer::LootDropSnapsho
 }
 
 void PushLootPickupResult(lua_State* state, const multiplayer::LootPickupResultRuntimeInfo& result) {
-    lua_createtable(state, 0, 22);
+    lua_createtable(state, 0, 10);
     lua_pushinteger(state, static_cast<lua_Integer>(result.authority_participant_id));
     lua_setfield(state, -2, "authority_participant_id");
     lua_pushinteger(state, static_cast<lua_Integer>(result.participant_id));
@@ -534,7 +534,7 @@ int LuaPlayerGetState(lua_State* state) {
         return 1;
     }
 
-    lua_createtable(state, 0, 58);
+    lua_createtable(state, 0, 59);
     lua_pushnumber(state, static_cast<lua_Number>(player_state.hp));
     lua_setfield(state, -2, "hp");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.max_hp));
@@ -543,6 +543,18 @@ int LuaPlayerGetState(lua_State* state) {
     lua_setfield(state, -2, "mp");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.max_mp));
     lua_setfield(state, -2, "max_mp");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(player_state.persistent_status_flags));
+    lua_setfield(state, -2, "persistent_status_flags");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(player_state.transient_status_flags));
+    lua_setfield(state, -2, "transient_status_flags");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(player_state.poison_remaining_ticks));
+    lua_setfield(state, -2, "poison_remaining_ticks");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.xp));
     lua_setfield(state, -2, "xp");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.level));
@@ -819,6 +831,32 @@ int LuaGameplayGetSelectionDebugState(lua_State* state) {
         lua_rawseti(state, -2, static_cast<lua_Integer>(slot_index + 1));
     }
     lua_setfield(state, -2, "slot_selection_entries");
+    lua_createtable(state, 4, 0);
+    for (int slot_index = 0; slot_index < 4; ++slot_index) {
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                debug_state.concentration_entries_a_by_slot[slot_index]));
+        lua_rawseti(state, -2, static_cast<lua_Integer>(slot_index + 1));
+    }
+    lua_setfield(state, -2, "concentration_entries_a_by_slot");
+    lua_createtable(state, 4, 0);
+    for (int slot_index = 0; slot_index < 4; ++slot_index) {
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                debug_state.concentration_entries_b_by_slot[slot_index]));
+        lua_rawseti(state, -2, static_cast<lua_Integer>(slot_index + 1));
+    }
+    lua_setfield(state, -2, "concentration_entries_b_by_slot");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(debug_state.concentration_entry_a));
+    lua_setfield(state, -2, "concentration_entry_a");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(debug_state.concentration_entry_b));
+    lua_setfield(state, -2, "concentration_entry_b");
     return 1;
 }
 
@@ -958,6 +996,428 @@ int LuaWorldGetReplicatedLoot(lua_State* state) {
     return 1;
 }
 
+int LuaWorldGetReplicatedSpellEffects(lua_State* state) {
+    const auto runtime = multiplayer::SnapshotRuntimeState();
+    lua_createtable(state, 0, 3);
+
+    lua_createtable(
+        state,
+        static_cast<int>(runtime.spell_effect_snapshots.size()),
+        0);
+    int snapshot_index = 1;
+    for (const auto& snapshot : runtime.spell_effect_snapshots) {
+        lua_createtable(state, 0, 9);
+        lua_pushboolean(state, snapshot.valid ? 1 : 0);
+        lua_setfield(state, -2, "valid");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(snapshot.owner_participant_id));
+        lua_setfield(state, -2, "owner_participant_id");
+        lua_pushinteger(state, static_cast<lua_Integer>(snapshot.received_ms));
+        lua_setfield(state, -2, "received_ms");
+        lua_pushinteger(state, static_cast<lua_Integer>(snapshot.sequence));
+        lua_setfield(state, -2, "sequence");
+        lua_pushinteger(state, static_cast<lua_Integer>(snapshot.run_nonce));
+        lua_setfield(state, -2, "run_nonce");
+        lua_pushinteger(state, static_cast<lua_Integer>(snapshot.scene_epoch));
+        lua_setfield(state, -2, "scene_epoch");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(snapshot.effect_total_count));
+        lua_setfield(state, -2, "effect_total_count");
+        lua_pushboolean(state, snapshot.truncated ? 1 : 0);
+        lua_setfield(state, -2, "truncated");
+
+        lua_createtable(state, static_cast<int>(snapshot.effects.size()), 0);
+        int effect_index = 1;
+        for (const auto& effect : snapshot.effects) {
+            lua_createtable(state, 0, 42);
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.effect_serial));
+            lua_setfield(state, -2, "effect_serial");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.cast_sequence));
+            lua_setfield(state, -2, "cast_sequence");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.native_type_id));
+            lua_setfield(state, -2, "native_type_id");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.effect_ordinal));
+            lua_setfield(state, -2, "effect_ordinal");
+            lua_pushboolean(state, effect.active ? 1 : 0);
+            lua_setfield(state, -2, "active");
+            lua_pushboolean(state, effect.terminal ? 1 : 0);
+            lua_setfield(state, -2, "terminal");
+            lua_pushboolean(state, effect.transform_valid ? 1 : 0);
+            lua_setfield(state, -2, "transform_valid");
+            lua_pushboolean(state, effect.motion_valid ? 1 : 0);
+            lua_setfield(state, -2, "motion_valid");
+            lua_pushboolean(state, effect.ember_runtime_valid ? 1 : 0);
+            lua_setfield(state, -2, "ember_runtime_valid");
+            lua_pushboolean(state, effect.firewalker_runtime_valid ? 1 : 0);
+            lua_setfield(state, -2, "firewalker_runtime_valid");
+            lua_pushnumber(state, effect.position_x);
+            lua_setfield(state, -2, "position_x");
+            lua_pushnumber(state, effect.position_y);
+            lua_setfield(state, -2, "position_y");
+            lua_pushnumber(state, effect.radius);
+            lua_setfield(state, -2, "radius");
+            lua_pushnumber(state, effect.heading);
+            lua_setfield(state, -2, "heading");
+            lua_pushnumber(state, effect.motion_x);
+            lua_setfield(state, -2, "motion_x");
+            lua_pushnumber(state, effect.motion_y);
+            lua_setfield(state, -2, "motion_y");
+            lua_pushnumber(state, effect.ember_vertical_position);
+            lua_setfield(state, -2, "ember_vertical_position");
+            lua_pushnumber(state, effect.ember_vertical_velocity);
+            lua_setfield(state, -2, "ember_vertical_velocity");
+            lua_pushnumber(state, effect.ember_damage);
+            lua_setfield(state, -2, "ember_damage");
+            lua_pushnumber(state, effect.ember_lifetime);
+            lua_setfield(state, -2, "ember_lifetime");
+            lua_pushnumber(state, effect.ember_initial_lifetime);
+            lua_setfield(state, -2, "ember_initial_lifetime");
+            lua_pushnumber(state, effect.ember_animation_progress);
+            lua_setfield(state, -2, "ember_animation_progress");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.ember_variant));
+            lua_setfield(state, -2, "ember_variant");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.ember_frame_interval));
+            lua_setfield(state, -2, "ember_frame_interval");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.ember_config_primary));
+            lua_setfield(state, -2, "ember_config_primary");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.ember_config_secondary));
+            lua_setfield(state, -2, "ember_config_secondary");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.ember_config_tertiary));
+            lua_setfield(state, -2, "ember_config_tertiary");
+            lua_pushnumber(state, effect.firewalker_collision_scale);
+            lua_setfield(state, -2, "firewalker_collision_scale");
+            lua_pushnumber(state, effect.firewalker_phase);
+            lua_setfield(state, -2, "firewalker_phase");
+            lua_pushnumber(state, effect.firewalker_phase_step);
+            lua_setfield(state, -2, "firewalker_phase_step");
+            lua_pushnumber(state, effect.firewalker_lifetime);
+            lua_setfield(state, -2, "firewalker_lifetime");
+            lua_pushnumber(state, effect.firewalker_fade);
+            lua_setfield(state, -2, "firewalker_fade");
+            lua_pushnumber(state, effect.firewalker_direction);
+            lua_setfield(state, -2, "firewalker_direction");
+            lua_pushnumber(state, effect.firewalker_visual_scale);
+            lua_setfield(state, -2, "firewalker_visual_scale");
+            lua_pushnumber(state, effect.firewalker_damage);
+            lua_setfield(state, -2, "firewalker_damage");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.firewalker_source_slot));
+            lua_setfield(state, -2, "firewalker_source_slot");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.firewalker_active));
+            lua_setfield(state, -2, "firewalker_active");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.firewalker_variant));
+            lua_setfield(state, -2, "firewalker_variant");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.firewalker_aux));
+            lua_setfield(state, -2, "firewalker_aux");
+            lua_pushinteger(state, static_cast<lua_Integer>(effect.firewalker_damage_mask));
+            lua_setfield(state, -2, "firewalker_damage_mask");
+            lua_rawseti(state, -2, static_cast<lua_Integer>(effect_index++));
+        }
+        lua_setfield(state, -2, "effects");
+        lua_rawseti(state, -2, static_cast<lua_Integer>(snapshot_index++));
+    }
+    lua_setfield(state, -2, "snapshots");
+
+    const auto& apply = runtime.spell_effect_apply;
+    lua_createtable(state, 0, 34);
+    lua_pushboolean(state, apply.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.applied_ms));
+    lua_setfield(state, -2, "applied_ms");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.reconcile_revision));
+    lua_setfield(state, -2, "reconcile_revision");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.snapshot_count));
+    lua_setfield(state, -2, "snapshot_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.effect_count));
+    lua_setfield(state, -2, "effect_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.matched_effect_count));
+    lua_setfield(state, -2, "matched_effect_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.matched_ember_effect_count));
+    lua_setfield(state, -2, "matched_ember_effect_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.matched_firewalker_effect_count));
+    lua_setfield(state, -2, "matched_firewalker_effect_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.created_ember_effect_count));
+    lua_setfield(state, -2, "created_ember_effect_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.created_firewalker_effect_count));
+    lua_setfield(state, -2, "created_firewalker_effect_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.terminal_effect_count));
+    lua_setfield(state, -2, "terminal_effect_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.max_matched_effect_count));
+    lua_setfield(state, -2, "max_matched_effect_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.max_matched_ember_effect_count));
+    lua_setfield(state, -2, "max_matched_ember_effect_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.max_matched_firewalker_effect_count));
+    lua_setfield(state, -2, "max_matched_firewalker_effect_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.transform_write_count));
+    lua_setfield(state, -2, "transform_write_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.motion_write_count));
+    lua_setfield(state, -2, "motion_write_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.ember_runtime_write_count));
+    lua_setfield(state, -2, "ember_runtime_write_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.firewalker_runtime_write_count));
+    lua_setfield(state, -2, "firewalker_runtime_write_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.terminal_write_count));
+    lua_setfield(state, -2, "terminal_write_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(apply.cumulative_transform_write_count));
+    lua_setfield(state, -2, "cumulative_transform_write_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(apply.cumulative_motion_write_count));
+    lua_setfield(state, -2, "cumulative_motion_write_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(apply.cumulative_ember_runtime_write_count));
+    lua_setfield(state, -2, "cumulative_ember_runtime_write_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(apply.cumulative_ember_create_count));
+    lua_setfield(state, -2, "cumulative_ember_create_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(apply.cumulative_firewalker_create_count));
+    lua_setfield(state, -2, "cumulative_firewalker_create_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(apply.cumulative_firewalker_runtime_write_count));
+    lua_setfield(state, -2, "cumulative_firewalker_runtime_write_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(apply.cumulative_terminal_write_count));
+    lua_setfield(state, -2, "cumulative_terminal_write_count");
+    lua_createtable(state, static_cast<int>(apply.bindings.size()), 0);
+    int binding_index = 1;
+    for (const auto& binding : apply.bindings) {
+        lua_createtable(state, 0, 20);
+        lua_pushinteger(state, static_cast<lua_Integer>(binding.owner_participant_id));
+        lua_setfield(state, -2, "owner_participant_id");
+        lua_pushinteger(state, static_cast<lua_Integer>(binding.owner_gameplay_slot));
+        lua_setfield(state, -2, "owner_gameplay_slot");
+        lua_pushinteger(state, static_cast<lua_Integer>(binding.owner_actor_slot));
+        lua_setfield(state, -2, "owner_actor_slot");
+        lua_pushinteger(state, static_cast<lua_Integer>(binding.effect_serial));
+        lua_setfield(state, -2, "effect_serial");
+        lua_pushinteger(state, static_cast<lua_Integer>(binding.cast_sequence));
+        lua_setfield(state, -2, "cast_sequence");
+        lua_pushinteger(state, static_cast<lua_Integer>(binding.native_type_id));
+        lua_setfield(state, -2, "native_type_id");
+        lua_pushinteger(state, static_cast<lua_Integer>(binding.effect_ordinal));
+        lua_setfield(state, -2, "effect_ordinal");
+        lua_pushinteger(state, static_cast<lua_Integer>(binding.local_actor_address));
+        lua_setfield(state, -2, "local_actor_address");
+        lua_pushinteger(state, static_cast<lua_Integer>(binding.local_actor_slot));
+        lua_setfield(state, -2, "local_actor_slot");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(binding.local_firewalker_source_slot));
+        lua_setfield(state, -2, "local_firewalker_source_slot");
+        lua_pushboolean(state, binding.matched ? 1 : 0);
+        lua_setfield(state, -2, "matched");
+        lua_pushboolean(state, binding.active ? 1 : 0);
+        lua_setfield(state, -2, "active");
+        lua_pushboolean(state, binding.terminal ? 1 : 0);
+        lua_setfield(state, -2, "terminal");
+        lua_pushnumber(state, binding.authoritative_x);
+        lua_setfield(state, -2, "authoritative_x");
+        lua_pushnumber(state, binding.authoritative_y);
+        lua_setfield(state, -2, "authoritative_y");
+        lua_pushnumber(state, binding.local_x);
+        lua_setfield(state, -2, "local_x");
+        lua_pushnumber(state, binding.local_y);
+        lua_setfield(state, -2, "local_y");
+        lua_pushnumber(state, binding.position_error);
+        lua_setfield(state, -2, "position_error");
+        lua_rawseti(state, -2, static_cast<lua_Integer>(binding_index++));
+    }
+    lua_setfield(state, -2, "bindings");
+    lua_setfield(state, -2, "apply");
+
+    std::vector<SDModNativeSpellEffectActorState> native_effects;
+    (void)TryListRecentNativeSpellEffectActors(&native_effects);
+    lua_createtable(state, static_cast<int>(native_effects.size()), 0);
+    int native_effect_index = 1;
+    for (const auto& effect : native_effects) {
+        lua_createtable(state, 0, 8);
+        lua_pushboolean(state, effect.valid ? 1 : 0);
+        lua_setfield(state, -2, "valid");
+        lua_pushinteger(state, static_cast<lua_Integer>(effect.actor_address));
+        lua_setfield(state, -2, "actor_address");
+        lua_pushinteger(state, static_cast<lua_Integer>(effect.native_type_id));
+        lua_setfield(state, -2, "native_type_id");
+        lua_pushinteger(state, static_cast<lua_Integer>(effect.created_ms));
+        lua_setfield(state, -2, "created_ms");
+        lua_pushinteger(state, static_cast<lua_Integer>(effect.actor_slot));
+        lua_setfield(state, -2, "actor_slot");
+        lua_pushnumber(state, effect.x);
+        lua_setfield(state, -2, "x");
+        lua_pushnumber(state, effect.y);
+        lua_setfield(state, -2, "y");
+        lua_pushnumber(state, effect.radius);
+        lua_setfield(state, -2, "radius");
+        lua_rawseti(state, -2, static_cast<lua_Integer>(native_effect_index++));
+    }
+    lua_setfield(state, -2, "native_effects");
+    return 1;
+}
+
+void PushAirChainTarget(
+    lua_State* state,
+    const multiplayer::AirChainTargetRuntimeInfo& target) {
+    lua_createtable(state, 0, 22);
+    lua_pushinteger(state, static_cast<lua_Integer>(target.ordinal));
+    lua_setfield(state, -2, "ordinal");
+    lua_pushinteger(state, static_cast<lua_Integer>(target.network_actor_id));
+    lua_setfield(state, -2, "network_actor_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(target.local_actor_address));
+    lua_setfield(state, -2, "local_actor_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(target.fallback_actor_address));
+    lua_setfield(state, -2, "fallback_actor_address");
+    lua_pushboolean(state, target.matched ? 1 : 0);
+    lua_setfield(state, -2, "matched");
+    lua_pushboolean(state, target.authoritative_null ? 1 : 0);
+    lua_setfield(state, -2, "authoritative_null");
+    lua_pushboolean(state, target.source_override_attempted ? 1 : 0);
+    lua_setfield(state, -2, "source_override_attempted");
+    lua_pushboolean(state, target.source_override_applied ? 1 : 0);
+    lua_setfield(state, -2, "source_override_applied");
+    lua_pushboolean(state, target.target_override_attempted ? 1 : 0);
+    lua_setfield(state, -2, "target_override_attempted");
+    lua_pushboolean(state, target.target_override_applied ? 1 : 0);
+    lua_setfield(state, -2, "target_override_applied");
+    lua_pushnumber(state, target.source_x);
+    lua_setfield(state, -2, "source_x");
+    lua_pushnumber(state, target.source_y);
+    lua_setfield(state, -2, "source_y");
+    lua_pushnumber(state, target.target_x);
+    lua_setfield(state, -2, "target_x");
+    lua_pushnumber(state, target.target_y);
+    lua_setfield(state, -2, "target_y");
+    lua_pushnumber(state, target.local_source_x);
+    lua_setfield(state, -2, "local_source_x");
+    lua_pushnumber(state, target.local_source_y);
+    lua_setfield(state, -2, "local_source_y");
+    lua_pushnumber(state, target.local_target_x);
+    lua_setfield(state, -2, "local_target_x");
+    lua_pushnumber(state, target.local_target_y);
+    lua_setfield(state, -2, "local_target_y");
+    lua_pushnumber(state, target.source_error);
+    lua_setfield(state, -2, "source_error");
+    lua_pushnumber(state, target.source_error_before_override);
+    lua_setfield(state, -2, "source_error_before_override");
+    lua_pushnumber(state, target.target_error);
+    lua_setfield(state, -2, "target_error");
+    lua_pushnumber(state, target.target_error_before_override);
+    lua_setfield(state, -2, "target_error_before_override");
+}
+
+void PushAirChainSnapshot(
+    lua_State* state,
+    const multiplayer::AirChainSnapshotRuntimeInfo& snapshot) {
+    lua_createtable(state, 0, 16);
+    lua_pushboolean(state, snapshot.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushboolean(state, snapshot.active ? 1 : 0);
+    lua_setfield(state, -2, "active");
+    lua_pushboolean(state, snapshot.terminal ? 1 : 0);
+    lua_setfield(state, -2, "terminal");
+    lua_pushboolean(state, snapshot.truncated ? 1 : 0);
+    lua_setfield(state, -2, "truncated");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.owner_participant_id));
+    lua_setfield(state, -2, "owner_participant_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.received_ms));
+    lua_setfield(state, -2, "received_ms");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.sequence));
+    lua_setfield(state, -2, "sequence");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.run_nonce));
+    lua_setfield(state, -2, "run_nonce");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.cast_sequence));
+    lua_setfield(state, -2, "cast_sequence");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.frame_sequence));
+    lua_setfield(state, -2, "frame_sequence");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.targets.size()));
+    lua_setfield(state, -2, "target_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.target_total_count));
+    lua_setfield(state, -2, "target_total_count");
+    lua_createtable(state, static_cast<int>(snapshot.targets.size()), 0);
+    int target_index = 1;
+    for (const auto& target : snapshot.targets) {
+        PushAirChainTarget(state, target);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(target_index++));
+    }
+    lua_setfield(state, -2, "targets");
+}
+
+void PushAirChainSnapshotList(
+    lua_State* state,
+    const std::vector<multiplayer::AirChainSnapshotRuntimeInfo>& snapshots) {
+    lua_createtable(state, static_cast<int>(snapshots.size()), 0);
+    int snapshot_index = 1;
+    for (const auto& snapshot : snapshots) {
+        PushAirChainSnapshot(state, snapshot);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(snapshot_index++));
+    }
+}
+
+int LuaWorldGetReplicatedAirChains(lua_State* state) {
+    const auto runtime = multiplayer::SnapshotRuntimeState();
+    lua_createtable(state, 0, 5);
+
+    PushAirChainSnapshot(state, runtime.local_air_chain_capture);
+    lua_setfield(state, -2, "local_capture");
+    PushAirChainSnapshotList(state, runtime.local_air_chain_history);
+    lua_setfield(state, -2, "local_history");
+    PushAirChainSnapshotList(state, runtime.air_chain_snapshots);
+    lua_setfield(state, -2, "snapshots");
+    PushAirChainSnapshotList(state, runtime.air_chain_snapshot_history);
+    lua_setfield(state, -2, "snapshot_history");
+
+    const auto& apply = runtime.air_chain_apply;
+    lua_createtable(state, 0, 16);
+    lua_pushboolean(state, apply.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.applied_ms));
+    lua_setfield(state, -2, "applied_ms");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.owner_participant_id));
+    lua_setfield(state, -2, "owner_participant_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.cast_sequence));
+    lua_setfield(state, -2, "cast_sequence");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.frame_sequence));
+    lua_setfield(state, -2, "frame_sequence");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.cumulative_override_attempt_count));
+    lua_setfield(state, -2, "cumulative_override_attempt_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.cumulative_override_success_count));
+    lua_setfield(state, -2, "cumulative_override_success_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.cumulative_authoritative_null_count));
+    lua_setfield(state, -2, "cumulative_authoritative_null_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.cumulative_missing_snapshot_fallback_count));
+    lua_setfield(state, -2, "cumulative_missing_snapshot_fallback_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.cumulative_stale_snapshot_fallback_count));
+    lua_setfield(state, -2, "cumulative_stale_snapshot_fallback_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.cumulative_unmapped_target_count));
+    lua_setfield(state, -2, "cumulative_unmapped_target_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.cumulative_source_override_success_count));
+    lua_setfield(state, -2, "cumulative_source_override_success_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.cumulative_source_override_failure_count));
+    lua_setfield(state, -2, "cumulative_source_override_failure_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.cumulative_target_override_success_count));
+    lua_setfield(state, -2, "cumulative_target_override_success_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.cumulative_target_override_failure_count));
+    lua_setfield(state, -2, "cumulative_target_override_failure_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.max_applied_target_count));
+    lua_setfield(state, -2, "max_applied_target_count");
+    lua_createtable(state, static_cast<int>(apply.bindings.size()), 0);
+    int binding_index = 1;
+    for (const auto& binding : apply.bindings) {
+        PushAirChainTarget(state, binding);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(binding_index++));
+    }
+    lua_setfield(state, -2, "bindings");
+    lua_setfield(state, -2, "apply");
+    return 1;
+}
+
 int LuaWorldRebindActor(lua_State* state) {
     const auto actor_address = static_cast<uintptr_t>(luaL_checkinteger(state, 1));
     std::string error_message;
@@ -1047,7 +1507,7 @@ int LuaWorldGetRunEnemyByNetworkId(lua_State* state) {
 }  // namespace
 
 void RegisterLuaGameplayBindings(lua_State* state) {
-    lua_createtable(state, 0, 10);
+    lua_createtable(state, 0, 11);
     RegisterFunction(state, &LuaGameplayStartWaves, "start_waves");
     RegisterFunction(state, &LuaGameplayEnableCombatPrelude, "enable_combat_prelude");
     RegisterFunction(state, &LuaGameplaySetManualEnemySpawnerTestMode, "set_manual_enemy_spawner_test_mode");
@@ -1066,13 +1526,15 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaPlayerGetProgressionBookState, "get_progression_book_state");
     lua_setfield(state, -2, "player");
 
-    lua_createtable(state, 0, 10);
+    lua_createtable(state, 0, 12);
     RegisterFunction(state, &LuaWorldGetState, "get_state");
     RegisterFunction(state, &LuaWorldGetScene, "get_scene");
     RegisterFunction(state, &LuaWorldListActors, "list_actors");
     RegisterFunction(state, &LuaWorldGetReplicatedActors, "get_replicated_actors");
     RegisterFunction(state, &LuaWorldGetRunEnemyByNetworkId, "get_run_enemy_by_network_id");
     RegisterFunction(state, &LuaWorldGetReplicatedLoot, "get_replicated_loot");
+    RegisterFunction(state, &LuaWorldGetReplicatedSpellEffects, "get_replicated_spell_effects");
+    RegisterFunction(state, &LuaWorldGetReplicatedAirChains, "get_replicated_air_chains");
     RegisterFunction(state, &LuaWorldRequestLootPickup, "request_loot_pickup");
     RegisterFunction(state, &LuaWorldRebindActor, "rebind_actor");
     RegisterFunction(state, &LuaWorldSpawnReward, "spawn_reward");

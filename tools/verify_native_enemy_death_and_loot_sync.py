@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import time
 from typing import Any
 
@@ -35,18 +36,22 @@ from verify_real_input_spell_cast_sync import (
     log_after,
     read_log,
 )
-from verify_run_world_snapshot import start_host_waves, wait_for_run_snapshot
 from verify_multiplayer_loot_drop_materialization import (
     GOLD_TYPE_ID,
     capture as capture_loot_snapshot,
     require_host_spawn,
     select_materialized_drop,
 )
+from verify_multiplayer_primary_kill_stress import (
+    cleanup_live_enemies,
+    enable_manual_stock_spawner_combat,
+    spawn_one_enemy,
+)
 
 
 RUNTIME_OUTPUT = ROOT / "runtime" / "native_enemy_death_and_loot_sync.json"
 TEST_PLAYER_HP = 5000.0
-CONTROLLED_TARGET_COUNT = 3
+CONTROLLED_TARGET_COUNT = 2
 LOW_TARGET_HP = 0.75
 TARGET_SPACING = 1200.0
 TARGET_FORWARD_DISTANCE = 176.0
@@ -58,6 +63,17 @@ CONTROL_TARGET_POSITIONS = (
     (2950.0, 1750.0),
 )
 FORCED_LOOT_GOLD_AMOUNT = 11
+
+
+PLAYER_POSITION_LUA = r"""
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
+emit("valid", player ~= nil and (tonumber(player.actor_address) or 0) ~= 0)
+if player == nil then return end
+emit("actor_address", player.actor_address or 0)
+emit("x", string.format("%.3f", tonumber(player.x) or 0))
+emit("y", string.format("%.3f", tonumber(player.y) or 0))
+"""
 
 
 def values(pipe_name: str, code: str, timeout: float = 8.0) -> dict[str, str]:
@@ -98,7 +114,15 @@ def kv_rows(row: dict[str, str], prefix: str, count_key: str) -> list[dict[str, 
     return rows
 
 
-def planned_target_positions() -> list[tuple[float, float]]:
+def planned_target_positions(
+    host_position: tuple[float, float] | None = None,
+    client_position: tuple[float, float] | None = None,
+) -> list[tuple[float, float]]:
+    if host_position is not None and client_position is not None:
+        return [
+            (host_position[0] - 220.0, host_position[1] - TARGET_FORWARD_DISTANCE),
+            (client_position[0] + 220.0, client_position[1] - TARGET_FORWARD_DISTANCE),
+        ]
     if len(CONTROL_TARGET_POSITIONS) >= CONTROLLED_TARGET_COUNT:
         return list(CONTROL_TARGET_POSITIONS[:CONTROLLED_TARGET_COUNT])
     positions: list[tuple[float, float]] = []
@@ -109,6 +133,15 @@ def planned_target_positions() -> list[tuple[float, float]]:
             CONTROL_TARGET_Y,
         ))
     return positions
+
+
+def local_player_position(pipe_name: str) -> tuple[float, float]:
+    state = values(pipe_name, PLAYER_POSITION_LUA)
+    x = parse_float(state.get("x"), math.nan)
+    y = parse_float(state.get("y"), math.nan)
+    if state.get("valid") != "true" or not math.isfinite(x) or not math.isfinite(y):
+        raise VerifyFailure(f"local player position unavailable on {pipe_name}: {state}")
+    return x, y
 
 
 CONTROL_HOST_TARGETS_LUA = r"""
@@ -380,6 +413,7 @@ end
 
 emit("exact_binding_found", exact ~= nil)
 local exact_actor = nil
+local exact_health_synced = false
 if exact ~= nil then
   local address = tonumber(exact.local_actor_address) or 0
   exact_actor = actors_by_address[address]
@@ -401,8 +435,17 @@ if exact ~= nil then
     emit("binding.actor_max_hp", string.format("%.3f", tonumber(exact_actor.max_hp) or 0))
     emit("binding.actor_dead", exact_actor.dead or false)
     emit("binding.distance_to_target", string.format("%.3f", math.sqrt(dx * dx + dy * dy)))
+    if snapshot ~= nil then
+      local actor_hp = tonumber(exact_actor.hp) or 0
+      local actor_max_hp = tonumber(exact_actor.max_hp) or 0
+      local snapshot_hp = tonumber(snapshot.hp) or 0
+      local snapshot_max_hp = tonumber(snapshot.max_hp) or 0
+      exact_health_synced = math.abs(actor_hp - snapshot_hp) <= 0.05 and
+        math.abs(actor_max_hp - snapshot_max_hp) <= 0.05
+    end
   end
 end
+emit("binding.health_synced", exact_health_synced)
 
 if nearest ~= nil then
   emit("nearest.network_id", string.format("%.0f", tonumber(nearest.binding.network_actor_id) or 0))
@@ -415,6 +458,7 @@ end
 
 local ok = snapshot ~= nil and exact ~= nil and exact_actor ~= nil and
   exact.matched and not exact.parked and not exact.removed and
+  exact_health_synced and
   not exact_actor.dead and (tonumber(exact_actor.max_hp) or 0) > 0 and
   (tonumber(exact_actor.hp) or 0) > 0.05
 emit("ok", ok)
@@ -677,10 +721,27 @@ def target_binding_status(pipe_name: str, target: dict[str, Any]) -> dict[str, s
 def wait_for_exact_target_binding(pipe_name: str, target: dict[str, Any], timeout: float = 8.0) -> dict[str, str]:
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
+    ready_since: float | None = None
+    ready_signature: tuple[str | None, ...] | None = None
     while time.monotonic() < deadline:
         last = target_binding_status(pipe_name, target)
         if last.get("ok") == "true":
-            return last
+            signature = (
+                last.get("binding.local_actor_address"),
+                last.get("snapshot.hp"),
+                last.get("snapshot.max_hp"),
+                last.get("binding.actor_hp"),
+                last.get("binding.actor_max_hp"),
+            )
+            now = time.monotonic()
+            if signature != ready_signature:
+                ready_signature = signature
+                ready_since = now
+            elif ready_since is not None and now - ready_since >= 0.25:
+                return last
+        else:
+            ready_signature = None
+            ready_since = None
         time.sleep(0.2)
     raise VerifyFailure(f"{pipe_name} never exact-bound target={target}: last={last}")
 
@@ -868,14 +929,50 @@ def verify_kill_loot(target: dict[str, Any], loot_amount: int) -> dict[str, Any]
     }
 
 
-def launch_run_pair() -> tuple[dict[str, object], dict[str, int]]:
+def spawn_controlled_targets() -> list[dict[str, Any]]:
+    targets: list[dict[str, Any]] = []
+    source_positions = (
+        local_player_position(HOST_PIPE),
+        local_player_position(CLIENT_PIPE),
+    )
+    positions = planned_target_positions(*source_positions)
+    for index, (x, y) in enumerate(positions):
+        spawned = spawn_one_enemy(
+            x,
+            y,
+            setup_hp=LOW_TARGET_HP,
+            freeze_on_spawn=True,
+        )
+        spawn_result = spawned["result"]
+        targets.append({
+            "network_id": parse_int(spawn_result.get("network_actor_id")),
+            "actor_address": int(spawned["actor_address"]),
+            "object_type_id": parse_int(spawn_result.get("type_id")),
+            "enemy_type": parse_int(spawn_result.get("type_id")),
+            "x": float(spawned["x"]),
+            "y": float(spawned["y"]),
+            "source_position": {
+                "x": source_positions[index][0],
+                "y": source_positions[index][1],
+            },
+            "seed_ok": True,
+            "spawn": spawned,
+        })
+    if len(targets) != CONTROLLED_TARGET_COUNT or any(
+            target["network_id"] == 0 for target in targets):
+        raise VerifyFailure(f"manual controlled target spawn was incomplete: {targets}")
+    return targets
+
+
+def launch_run_pair() -> tuple[dict[str, object], dict[str, int], list[dict[str, Any]]]:
     launch = launch_pair(preset="map_create_fire_mind_hub")
     disable_bots()
     run_entry = start_host_testrun_and_wait_for_clients(timeout=45.0)
     wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "testrun")
     wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "testrun")
-    start = start_host_waves()
-    snapshot = wait_for_run_snapshot(require_complete_lifecycle=True, stable_seconds=1.0)
+    combat = enable_manual_stock_spawner_combat()
+    cleanup = cleanup_live_enemies()
+    targets = spawn_controlled_targets()
     vitals = {
         "host": set_local_player_vitals(HOST_PIPE, TEST_PLAYER_HP, TEST_PLAYER_HP),
         "client": set_local_player_vitals(CLIENT_PIPE, TEST_PLAYER_HP, TEST_PLAYER_HP),
@@ -884,20 +981,19 @@ def launch_run_pair() -> tuple[dict[str, object], dict[str, int]]:
     return {
         "launch": launch,
         "run_entry": run_entry,
-        "start_waves": start,
-        "snapshot": snapshot,
+        "combat": combat,
+        "cleanup": cleanup,
         "vitals": vitals,
-    }, pids
+    }, pids, targets
 
 
 def run_verifier(*, keep_open: bool) -> dict[str, Any]:
     result: dict[str, Any] = {"ok": False}
     stop_games()
     try:
-        setup, pids = launch_run_pair()
+        setup, pids, targets = launch_run_pair()
         result["setup"] = setup
         result["pids"] = pids
-        targets = refresh_host_target_network_ids(control_host_targets())
         result["controlled_targets"] = targets
 
         for target in targets:
@@ -934,7 +1030,6 @@ def run_verifier(*, keep_open: bool) -> dict[str, Any]:
         }
         result["client_native_kill"] = kill_client_through_damage_claim(client_to_host, targets[1])
         result["client_native_loot"] = verify_kill_loot(targets[1], FORCED_LOOT_GOLD_AMOUNT)
-        result["remaining_control_target"] = targets[2]
         result["ok"] = True
         return result
     except Exception as exc:

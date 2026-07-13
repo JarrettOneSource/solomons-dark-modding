@@ -1,3 +1,5 @@
+using SolomonDarkModLauncher.Launch;
+
 namespace SolomonDarkModLauncher.Commands;
 
 internal sealed record LauncherCommand(
@@ -14,4 +16,8 @@ internal sealed record LauncherCommand(
     IReadOnlyList<string> RuntimeFlagOverrides,
     bool TemporaryProfile,
     string? SteamAppIdOverride,
-    string? SteamApiDllOverride);
+    string? SteamApiDllOverride,
+    MultiplayerLaunchMode MultiplayerMode,
+    ulong? SteamLobbyId,
+    int MultiplayerMaxParticipants,
+    bool OpenSteamInviteDialog);

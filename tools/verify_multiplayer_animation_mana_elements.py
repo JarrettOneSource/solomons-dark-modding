@@ -27,13 +27,13 @@ from verify_local_multiplayer_sync import (
     wait_for_remote,
 )
 from verify_player_health_death_sync import query_remote_participant
+from verify_multiplayer_primary_kill_stress import enable_manual_stock_spawner_combat
 from verify_real_input_spell_cast_sync import (
     CLIENT_LOG,
     HOST_LOG,
     Direction,
     count_lines,
     detect_instance_pids,
-    ensure_host_combat_started,
     ensure_testrun,
     log_after,
     parse_local_pressed_sequences,
@@ -41,7 +41,6 @@ from verify_real_input_spell_cast_sync import (
     parse_remote_prep_sequences,
     parse_remote_queue_sequences,
     parse_remote_settle_sequences,
-    queue_gameplay_mouse_left,
     read_log,
     sustain_pair_vitals,
     wait_for_source_cast,
@@ -50,6 +49,7 @@ from multiplayer_telemetry import MultiplayerTelemetryRecorder
 
 
 ROOT = Path(__file__).resolve().parent.parent
+OUTPUT_PATH = ROOT / "runtime" / "multiplayer_animation_mana_elements.json"
 TELEMETRY_PATH = ROOT / "runtime" / "multiplayer_animation_mana_elements_telemetry.jsonl"
 TELEMETRY: MultiplayerTelemetryRecorder | None = None
 PROJECTILE_TYPES = (0x7D3, 0x7D4, 0x7D5)
@@ -183,9 +183,9 @@ def launch_element_pair(spec: ElementSpec) -> dict[str, object]:
     run_profiles = wait_for_element_profile_sync(spec, "testrun")
     record_telemetry("element.run.ready", element=spec.element)
     disable_bots()
+    combat = enable_manual_stock_spawner_combat()
     vitals = sustain_pair_vitals()
     record_telemetry("element.vitals.sustained", element=spec.element)
-    combat = ensure_host_combat_started()
     record_telemetry("element.combat.started", element=spec.element, combat=combat)
     vitals_after_combat = sustain_pair_vitals()
     record_telemetry("element.combat.vitals_sustained", element=spec.element)
@@ -283,6 +283,61 @@ emit("after.max_mp", after and after.max_mp or -1)
     result = values(pipe_name, code)
     if result.get("write.max_mp") != "true" or result.get("write.mp") != "true":
         raise VerifyFailure(f"failed to set player mana on {pipe_name}: {result}")
+    return result
+
+
+def clear_local_cast_state(direction: Direction) -> dict[str, str]:
+    result = values(
+        direction.source_pipe,
+        "print('cleared=' .. tostring(sd.input.clear_local_cast_state()))",
+        timeout=5.0,
+    )
+    if result.get("cleared") != "true":
+        raise VerifyFailure(f"{direction.name}: failed to clear local cast state: {result}")
+    time.sleep(0.25)
+    return result
+
+
+def queue_deterministic_primary(direction: Direction, frames: int) -> dict[str, str]:
+    if frames <= 0:
+        raise VerifyFailure(f"{direction.name}: frames must be positive")
+    result = values(
+        direction.source_pipe,
+        f"""
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local player = sd.player.get_state()
+if player == nil or player.actor_address == nil or player.actor_address == 0 then
+  error("player actor unavailable")
+end
+local actor = tonumber(player.actor_address) or 0
+local ox = sd.debug.layout_offset("actor_position_x")
+local oy = sd.debug.layout_offset("actor_position_y")
+local oh = sd.debug.layout_offset("actor_heading")
+local oaimx = sd.debug.layout_offset("actor_aim_target_x")
+local oaimy = sd.debug.layout_offset("actor_aim_target_y")
+local oaux0 = sd.debug.layout_offset("actor_aim_target_aux0")
+local oaux1 = sd.debug.layout_offset("actor_aim_target_aux1")
+local x = sd.debug.read_float(actor + ox)
+local y = sd.debug.read_float(actor + oy)
+emit("write.heading", sd.debug.write_float(actor + oh, 90.0))
+emit("write.aim_x", sd.debug.write_float(actor + oaimx, x + 320.0))
+emit("write.aim_y", sd.debug.write_float(actor + oaimy, y))
+emit("write.aux0", sd.debug.write_u32(actor + oaux0, 0))
+emit("write.aux1", sd.debug.write_u32(actor + oaux1, 0))
+emit("mouse_left_frames", sd.input.hold_mouse_left_frames({frames}))
+""",
+        timeout=5.0,
+    )
+    required = (
+        "write.heading",
+        "write.aim_x",
+        "write.aim_y",
+        "write.aux0",
+        "write.aux1",
+        "mouse_left_frames",
+    )
+    if any(result.get(key) != "true" for key in required):
+        raise VerifyFailure(f"{direction.name}: failed to aim and queue primary cast: {result}")
     return result
 
 
@@ -436,6 +491,7 @@ def verify_cast_log_flow(
     receiver_offset: int,
     *,
     require_held: bool,
+    allow_targetless_air_defer: bool = False,
 ) -> dict[str, object]:
     required = {"pressed": 1, "released": 1}
     if require_held:
@@ -455,18 +511,46 @@ def verify_cast_log_flow(
         direction.source_id,
         observed_only=False,
     )
+    deferred_air_sequences = [
+        int(sequence)
+        for sequence in re.findall(
+            rf"Multiplayer remote Air cast start deferred until exact target resolves\. "
+            rf"participant_id={direction.source_id} cast_sequence=(\d+) "
+            rf"phase=(?:pressed|held) target_network_actor_id=0",
+            receiver_log,
+        )
+    ]
+    remote_release_sequences = [
+        int(sequence)
+        for sequence in re.findall(
+            rf"Multiplayer remote cast input release\. participant_id={direction.source_id} "
+            rf"cast_sequence=(\d+) skill_id=\d+",
+            receiver_log,
+        )
+    ]
     timeout_count = count_lines(receiver_log, "remote_input_timeout")
     if native_hook_count < 1 or not native_sequences:
         raise VerifyFailure(f"{direction.name}: no native cast hook/sequence observed")
-    if not set(native_sequences).intersection(remote_queue_sequences):
+    targetless_air_deferred = (
+        allow_targetless_air_defer
+        and set(native_sequences).issubset(set(deferred_air_sequences))
+    )
+    if not set(native_sequences).intersection(remote_queue_sequences) and not targetless_air_deferred:
         raise VerifyFailure(
             f"{direction.name}: remote queue did not include local sequence; "
-            f"native={native_sequences} queue={remote_queue_sequences}"
+            f"native={native_sequences} queue={remote_queue_sequences} "
+            f"air_deferred={deferred_air_sequences}"
         )
-    if not set(native_sequences).intersection(remote_prep_sequences):
+    if not set(native_sequences).intersection(remote_prep_sequences) and not targetless_air_deferred:
         raise VerifyFailure(
             f"{direction.name}: remote prep did not include local sequence; "
-            f"native={native_sequences} prep={remote_prep_sequences}"
+            f"native={native_sequences} prep={remote_prep_sequences} "
+            f"air_deferred={deferred_air_sequences}"
+        )
+    if targetless_air_deferred and not set(native_sequences).issubset(set(remote_release_sequences)):
+        raise VerifyFailure(
+            f"{direction.name}: targetless Air defer did not receive release; "
+            f"native={native_sequences} release={remote_release_sequences}"
         )
     if timeout_count:
         raise VerifyFailure(f"{direction.name}: remote cast timed out count={timeout_count}")
@@ -482,6 +566,9 @@ def verify_cast_log_flow(
         "remote_queue_sequences": remote_queue_sequences,
         "remote_prep_sequences": remote_prep_sequences,
         "remote_settle_sequences": remote_settle_sequences,
+        "deferred_air_sequences": deferred_air_sequences,
+        "remote_release_sequences": remote_release_sequences,
+        "targetless_air_deferred": targetless_air_deferred,
         "timeout_count": timeout_count,
     }
 
@@ -548,10 +635,11 @@ def verify_projectile_cast(direction: Direction, spec: ElementSpec) -> dict[str,
         direction=direction.name,
         projectile_type=f"0x{spec.projectile_type:X}",
     )
+    pre_clear = clear_local_cast_state(direction)
     source_offset = len(read_log(direction.source_log))
     receiver_offset = len(read_log(direction.receiver_log))
     before = sample_projectiles(direction.receiver_pipe, duration=0.2)
-    queue_result = queue_gameplay_mouse_left(direction, spec.frames)
+    queue_result = queue_deterministic_primary(direction, spec.frames)
     sample_telemetry_window(
         "cast.projectile.after_input",
         duration=0.6,
@@ -606,6 +694,7 @@ def verify_projectile_cast(direction: Direction, spec: ElementSpec) -> dict[str,
         runtime_observed_sequences=runtime_observed_sequences,
     )
     return {
+        "pre_clear": pre_clear,
         "queue_result": queue_result,
         "flow": flow,
         "before": before,
@@ -626,9 +715,10 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
         presentation=spec.presentation,
         direction=direction.name,
     )
+    pre_clear = clear_local_cast_state(direction)
     source_offset = len(read_log(direction.source_log))
     receiver_offset = len(read_log(direction.receiver_log))
-    queue_result = queue_gameplay_mouse_left(direction, spec.frames)
+    queue_result = queue_deterministic_primary(direction, spec.frames)
     active_seen = False
     anim_seen = False
     samples: list[dict[str, str]] = []
@@ -661,6 +751,7 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
         source_offset,
         receiver_offset,
         require_held=True,
+        allow_targetless_air_defer=spec.element == "air",
     )
     if not active_seen and not anim_seen:
         record_telemetry(
@@ -681,6 +772,7 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
             f"{direction.name} {spec.presentation}: remote proxy hit native mana depleted stop"
         )
     return {
+        "pre_clear": pre_clear,
         "queue_result": queue_result,
         "flow": flow,
         "active_seen": active_seen,
@@ -692,9 +784,10 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
 def verify_low_mana_remote_cast(direction: Direction, spec: ElementSpec) -> dict[str, object]:
     record_telemetry("cast.low_mana.before", direction=direction.name)
     mana_write = set_player_mana(direction.source_pipe, 0.0, 100.0)
+    pre_clear = clear_local_cast_state(direction)
     source_offset = len(read_log(direction.source_log))
     receiver_offset = len(read_log(direction.receiver_log))
-    queue_result = queue_gameplay_mouse_left(direction, spec.frames)
+    queue_result = queue_deterministic_primary(direction, spec.frames)
     time.sleep(0.6)
     remote_mid = query_remote_participant(direction.receiver_pipe, direction.source_id)
     record_telemetry("cast.low_mana.mid", direction=direction.name, remote_mid=remote_mid)
@@ -719,6 +812,7 @@ def verify_low_mana_remote_cast(direction: Direction, spec: ElementSpec) -> dict
         raise VerifyFailure(f"{direction.name}: low-mana remote proxy triggered native mana depleted stop")
     record_telemetry("cast.low_mana.after", direction=direction.name, flow=flow)
     return {
+        "pre_clear": pre_clear,
         "mana_write": mana_write,
         "queue_result": queue_result,
         "remote_mid": remote_mid,
@@ -767,6 +861,7 @@ def parse_args() -> argparse.Namespace:
         default=",".join(spec.element for spec in ELEMENTS),
         help="Comma-separated element list to verify. Defaults to the full matrix.",
     )
+    parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
     return parser.parse_args()
 
 
@@ -802,12 +897,16 @@ def main() -> int:
         result["ok"] = True
         result["telemetry_path"] = str(TELEMETRY_PATH)
         record_telemetry("harness.success")
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
     except Exception as exc:
         result["error"] = str(exc)
         result["telemetry_path"] = str(TELEMETRY_PATH)
         record_telemetry("harness.failure", error=str(exc))
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
         print(json.dumps(result, indent=2, sort_keys=True))
         return 1
 

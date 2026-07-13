@@ -6,9 +6,12 @@ constexpr std::size_t kPlayerActorApplyManaDeltaHookPatchSize = 5;
 constexpr std::size_t kPlayerActorDtorHookPatchSize = 12;
 constexpr bool kEnablePlayerActorDtorHook = false;
 constexpr std::size_t kPlayerActorVtable28HookPatchSize = 6;
+constexpr std::size_t kPlayerActorSecondarySpellCastHookMinimumPatchSize = 5;
 constexpr std::size_t kPlayerActorPurePrimaryGateHookMinimumPatchSize = 5;
 constexpr std::size_t kPlayerControlBrainUpdateHookMinimumPatchSize = 5;
 constexpr std::size_t kPurePrimarySpellStartHookMinimumPatchSize = 5;
+constexpr std::size_t kPurePrimaryAttackDispatchHookMinimumPatchSize = 5;
+constexpr std::size_t kFireEmberCtorHookMinimumPatchSize = 5;
 constexpr std::size_t kSpellCastDispatcherHookMinimumPatchSize = 5;
 // 0x0044F5F0 starts with two whole instructions:
 //   push -1           (2 bytes)
@@ -38,6 +41,23 @@ constexpr std::size_t kOrbPickupHookMinimumPatchSize = 5;
 constexpr std::size_t kItemDropPickupHookMinimumPatchSize = 5;
 constexpr int kArenaRegionIndex = 5;
 constexpr std::size_t kStandaloneWizardVisualRuntimeSize = 0x8E4;
+// PlayerActor::CastSecondary toggles these three persistent profile bytes for
+// Firewalker (row 0x17), Mindstar (0x4E), and Regenerate (0x4F).
+constexpr std::size_t kWizardProfileFirewalkerActiveOffset = 0x8DC;
+constexpr std::size_t kWizardProfileMindstarActiveOffset = 0x8DD;
+constexpr std::size_t kWizardProfileRegenerateActiveOffset = 0x8DE;
+// PlayerActor owns a PointerList<SmartPointer<Mod>> at +0x104. Its count and
+// storage lanes expose active stock modifiers without inventing parallel
+// status state. Mod_Poisoned is native type 0x1B72.
+constexpr std::size_t kActorModifierListOffset = 0x104;
+constexpr std::size_t kActorModifierListCountOffset = 0x10C;
+constexpr std::size_t kActorModifierListStorageOffset = 0x118;
+constexpr std::size_t kPointerListRemoveSmartPointerVtableOffset = 0x1C;
+constexpr std::size_t kNativeModifierTypeIdOffset = 0x08;
+constexpr std::size_t kNativeModifierDurationTicksOffset = 0x14;
+constexpr std::size_t kNativePoisonDamagePerTickOffset = 0x1C;
+constexpr std::size_t kNativePoisonSourceSlotOffset = 0x20;
+constexpr std::uint32_t kNativePoisonModifierTypeId = 0x1B72;
 constexpr std::size_t kStandaloneWizardVisualLinkSize = 0xA8;
 constexpr std::size_t kStandaloneWizardVisualLinkColorBlockOffset = 0x88;
 constexpr std::size_t kStandaloneWizardVisualLinkResetStateOffset = 0x1C;
@@ -60,12 +80,24 @@ constexpr std::uint32_t kStandaloneWizardStaffItemTypeId = 0x1B5C;
 // do not treat it as a transferable render node.
 constexpr std::size_t kActorAnimationConfigBlockSize = 0x0C;
 constexpr std::size_t kGameplayIndexStateActorSelectionBaseIndex = 0x0C;
+// Concentrate has two related stock representations. Progression refresh reads
+// the slot-0 entries at 16 and 20, so refreshing a remote native participant
+// must swap those two values transactionally. Runtime behaviors (for example
+// Fortunate Flailing at 0x00537AA0) instead read 16+actor_slot and
+// 20+actor_slot, so every materialized participant also needs persistent
+// per-gameplay-slot lanes.
+constexpr std::size_t kGameplayIndexStateConcentrationAIndex = 0x10;
+constexpr std::size_t kGameplayIndexStateConcentrationBIndex = 0x14;
+// Skills_Wizard row 0x43 is Rush. Its ranked mValue remains dynamic and is
+// intentionally not baked into progression+0x90 by the stock stat refresh.
+constexpr int kRushProgressionEntryIndex = 0x43;
 // Stock symbol note: +0x22C is a packed discrete frame offset/countdown field, not a pointer.
 constexpr std::size_t kActorHubVisualDescriptorBlockSize = 0x20;
 constexpr int kActorAnimationStateSlotBias = 0x0C;
 constexpr int kUnknownAnimationStateId = -1;
 constexpr std::uint8_t kDeadWizardBotCorpseDriveState = 1;
 constexpr float kWizardHeadingRadiansToDegrees = 57.2957795130823208767981548141051703f;
+constexpr int kGameplayInputBufferCount = 2;
 constexpr std::size_t kGameplayInputBufferStride = 0x203;
 constexpr std::uint64_t kWaveStartRetryDelayMs = 250;
 constexpr std::uint64_t kWizardBotSyncRetryDelayMs = 250;
@@ -85,6 +117,12 @@ constexpr std::uint64_t kGameplayRegionSwitchDispatchSpacingMs = 500;
 // teardown/rebind window.
 constexpr std::uint64_t kGameplaySceneChurnDelayMs = 3000;
 constexpr std::uint64_t kRemoteParticipantSpawnSceneStableDelayMs = 1500;
+// Initial hub construction can keep retiring stock UI/puppet allocations after
+// its world pointer and slot-0 vitals already look valid. Two additional peers
+// make that window long enough for a gameplay-slot actor to collide with stock
+// heap cleanup. Run transitions also carry kGameplaySceneChurnDelayMs, but the
+// create->hub path does not, so give shared-hub materialization its own gate.
+constexpr std::uint64_t kRemoteParticipantSpawnHubSceneStableDelayMs = 4500;
 constexpr DWORD kHubStartTestrunDispatchCooldownMs = 5000;
 constexpr std::uint32_t kInjectedGameplayMouseClickFrames = 2;
 // FUN_0052C910 arms the stock control-brain action cooldown at +0x10 from

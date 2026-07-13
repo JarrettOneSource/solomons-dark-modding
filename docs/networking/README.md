@@ -16,10 +16,20 @@ perform local movement and presentation immediately, then the host or dedicated
 authority accepts, corrects, or rejects the claim. Clients never own canonical
 HP, deaths, drops, XP, or wave state.
 
+Protocol v50 distinguishes automatically observed native enemy-damage claims
+from explicit damage requests. Native collision callbacks may report damage
+without asserting target-transform authority because their local knockback can
+precede the next world snapshot. The host still validates the participant, run,
+damage bounds, caster distance, and enemy lifecycle, and it only accepts a
+claimed target transform inside the normal drift guard. Explicit damage claims
+remain position-strict.
+
 ## Implementation boundary
 
-The current source has the multiplayer foundation and participant rail, not a
-finished peer networking layer.
+The current source has the multiplayer foundation, participant rail, and a
+friends-only Steam development transport. See
+[`steam-friend-playtest.md`](steam-friend-playtest.md) for the two-account
+Spacewar playtest flow and the remaining external verification boundary.
 
 - `multiplayer_runtime_state.h` defines the shared `ParticipantInfo`,
   `MultiplayerCharacterProfile`, `ParticipantSceneIntent`, and runtime snapshot
@@ -28,8 +38,8 @@ finished peer networking layer.
   50 ms and mirrors readiness into runtime state. It also pumps the local UDP
   development transport when `SDMOD_MULTIPLAYER_TRANSPORT=local_udp`.
 - `multiplayer_runtime_protocol.h` is a fixed-packet scaffold with
-  `State`, `Launch`, `Cast`, `Progression`, `WorldSnapshot`, and
-  `LootSnapshot` packets. The
+  `State`, `Launch`, `Cast`, `Progression`, `WorldSnapshot`, `LootSnapshot`,
+  and `SpellEffectSnapshot` packets. The
   packet families below describe the target co-op protocol, not what the
   current header fully implements.
 - `multiplayer_local_transport.cpp` is the first replication slice: two local
@@ -88,7 +98,12 @@ finished peer networking layer.
   unsafe `remove_from_container=1` scene-churn path; stale participant bindings
   are abandoned after the switch returns.
   Host-authoritative
-  run entry is driven by the host's `StatePacket` scene intent: connected
+  run entry is driven by the host's `StatePacket` scene intent. Protocol v38
+  carries an explicit `authority_participant_id`; the host stamps that identity
+  onto relayed client state, and clients only accept scene/pause authority when
+  the packet's participant and authority identities match. A second client's
+  relayed `in_run` or pause fields therefore cannot drive another client's
+  transition or overwrite the shared level-up wait state. Connected
   clients reject direct `sd.hub.start_testrun` calls and block direct arena
   `switch_region` attempts, then queue their local hub-to-run transition when
   the configured host reports `in_run`. The host stamps the run with a
@@ -155,11 +170,32 @@ finished peer networking layer.
   applies a returned choice only if it matches the issued offer. Connected
   non-host clients suppress their local native level-up picker/event and expose
   the active offer through `sd.runtime.get_multiplayer_state()`.
+  Protocol v36 adds owner-authored transient spell-effect snapshots. Native
+  Ether, Fireball, Water, and Ember objects still spawn through stock cast
+  playback on every peer; the new lane binds those observer objects by owner
+  actor slot and native type, then reconciles transform and motion. Ember
+  snapshots additionally carry the recovered vertical motion, damage/config,
+  lifetime, animation, variant/frame, and terminal status fields. Only the
+  presentation/runtime state is copied: the existing nonlocal projectile-group
+  gates continue to suppress observer-authored damage and claims. The current
+  Lua audit surface is `sd.world.get_replicated_spell_effects()`.
+  Protocol v37 adds owner-authored Air-chain snapshots. Each held Lightning
+  frame carries the ordered network enemy IDs and source/target endpoints
+  accepted by the owner's native Chaining loop. Observers substitute those
+  local enemy objects at the stock nearest-target seam. The observer also
+  applies the owner endpoint to the verified `SpellCast_018` caller-local
+  source vector before the stock arc builder consumes it; the hook validates
+  the return address and the original two floats before writing. Native arc
+  creation therefore keeps its normal rendering path while target identity,
+  both endpoints, and terminal cast state are directly auditable through
+  `sd.world.get_replicated_air_chains()`.
   `StatePacket` carries each
   participant's current owned gold and progression revision counters for live
   verification of the participant ledger; stale state packets are
   revision-guarded so they cannot overwrite a newer host-authorized pickup
-  result. This is a development transport, not the final Steam P2P backend.
+  result. The same fixed packet protocol now runs over authenticated Steam lobby
+  peers through Steam Networking Messages; loopback UDP remains the explicit
+  deterministic test backend.
 - `docs/multiplayer-participant-model.md` is the implementation-facing model
   for profiles, scene intent, Lua bots, and future remote players.
 - `docs/networking/world-sync-authority-plan.md` records the current hub NPC
@@ -171,7 +207,7 @@ finished peer networking layer.
 | Area | Decision |
 |---|---|
 | Authority | Host-authoritative-lite. Clients render local echo; hard-snap on host disagreement. |
-| Transport | `ISteamNetworkingSockets` + Steam Datagram Relay (SDR) only in v1. |
+| Transport | Steam friends-only lobbies + `ISteamNetworkingMessages` over the Steam Networking Sockets/SDR stack. |
 | Local dev transport | UDP loopback can be enabled with `SDMOD_MULTIPLAYER_TRANSPORT=local_udp` so two local stage instances can test connection and pose sync without two Steam accounts. |
 | Off-Steam transport | **Not in v1.** GameNetworkingSockets / ENet / direct-IP deferred. |
 | Dedicated server | **Not in v1.** P2P-host only for first ship. |
@@ -268,7 +304,8 @@ Sampling happens on the stock game thread after native updates — no extra sim 
   `tools/verify_local_multiplayer_sync.py` is the live smoke test for hub/run
   participant visibility, host-authoritative run entry, connected-client
   run-start blocking, idle movement/heading convergence, player/player
-  collision push, and remote nameplate resolution.
+  native-remote overlap stability without cross-instance push feedback, and
+  remote nameplate resolution.
 	  `tools/verify_multiplayer_progression_ledger_sync.py` verifies bidirectional
 	  local UDP replication of participant-owned gold and gold revision state through
 	  `StatePacket`.
@@ -286,9 +323,8 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 	  host-to-client and client-to-host player HP/MP replication, HP-zero death
   presentation, corpse inertness, and revive/resumed transform playback in a
   shared run.
-- `ITransport` abstraction + Steam `ISteamNetworkingSockets` impl
-- Steam lobby → transport handoff
-- `hello` + `manifest` handshake + `join/bootstrap` (chunked full-state)
+- Steam friends-only lobby → authenticated Steam Networking Messages handoff
+- Protocol/build/capability `hello` + acknowledgement handshake
 - Input stream + player pose snapshots at target rates
 - Enemy snapshot burst (20/30 Hz)
 - Cast / damage / death events
@@ -303,9 +339,8 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 - Admin tooling (kick / ban / adminlist)
 - Latency simulation + stress test
 - Soft reconciliation upgrade for hard-snap (interpolate to host pos over 100–200ms) if playtests show chatter
-- The local UDP development backend already uses snapshot interpolation for
-  remote player and world actor presentation; the later Steam backend should
-  reuse that boundary instead of reintroducing latest-packet playback.
+- Steam and local UDP share the same snapshot interpolation and gameplay
+  authority boundary, so transport selection does not fork simulation rules.
 
 ### Phase 3+ — Post-ship
 
@@ -352,8 +387,9 @@ host position over a short window.
 - Host can cheat in their own session (trusted-peer model)
 - Cross-region divergence (host sims one region; multi-region is later work)
 - Durable inventory/book persistence beyond one run (Phase 3+)
-- Non-gold item and potion materialization still need native pickup/factory RE,
-  but the multiplayer model no longer treats them as single-player-only state.
+- Item/potion pickup credits replicate into participant-owned state, but real
+  participant-owned native inventory insertion, powerups, and shop/trader
+  ownership remain incomplete.
 
 ## Run-identity object (replaces "save-provenance" from earlier drafts)
 

@@ -194,6 +194,11 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     if (request.has_origin_heading && std::isfinite(request.origin_heading)) {
         ApplyWizardActorFacingState(actor_address, request.origin_heading);
     }
+    if (request.kind == multiplayer::BotCastKind::Secondary &&
+        request.remote_input_controlled &&
+        IsNativeRemoteParticipantBinding(binding)) {
+        return ReplayPendingNativeSecondaryCast(binding, request, error_message);
+    }
 
     int requested_skill_id = request.skill_id;
     ResolvedPrimaryCastDescriptor primary_descriptor{};
@@ -486,7 +491,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
                 memory.TryWriteField<std::int32_t>(
                     ongoing.progression_runtime_address,
                     kProgressionCurrentSpellIdOffset,
-                    requested_skill_id);
+                    ongoing.skill_id);
         }
     }
     const auto cast_mana =
@@ -495,7 +500,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
             ongoing.progression_runtime_address,
             request.kind,
             request.secondary_slot,
-            request.skill_id);
+            ongoing.skill_id);
     if (!cast_mana.resolved) {
         Log(
             "[bots] mana rejected. bot_id=" + std::to_string(binding->bot_id) +

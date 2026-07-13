@@ -75,12 +75,34 @@ struct SDModProgressionBookState {
     std::vector<SDModProgressionBookEntryState> entries;
 };
 
+struct SDModDerivedProgressionStatState {
+    bool valid = false;
+    float cast_speed_multiplier = 0.0f;
+    float mana_recovery_multiplier = 0.0f;
+    float resist_magic_fraction = 0.0f;
+    float resist_poison_fraction = 0.0f;
+    float deflect_chance = 0.0f;
+    float staff_melee_damage_a = 0.0f;
+    float staff_melee_damage_b = 0.0f;
+    float pickup_range = 0.0f;
+    float secondary_recharge_multiplier = 0.0f;
+    float offensive_damage_multiplier = 0.0f;
+    float offensive_mana_multiplier = 0.0f;
+    float meditation_recovery_bonus = 0.0f;
+    std::int32_t meditation_idle_ticks = -1;
+};
+
 struct SDModPlayerState {
     bool valid = false;
+    std::uint8_t persistent_status_flags = 0;
+    std::uint8_t transient_status_flags = 0;
+    std::int32_t poison_remaining_ticks = 0;
     float hp = 0.0f;
     float max_hp = 0.0f;
     float mp = 0.0f;
     float max_mp = 0.0f;
+    float move_speed = 0.0f;
+    SDModDerivedProgressionStatState derived_stats;
     int xp = -1;
     int level = 0;
     float x = 0.0f;
@@ -217,6 +239,17 @@ struct SDModSceneActorState {
     int enemy_type = -1;
 };
 
+struct SDModNativeSpellEffectActorState {
+    bool valid = false;
+    uintptr_t actor_address = 0;
+    std::uint32_t native_type_id = 0;
+    std::uint64_t created_ms = 0;
+    int actor_slot = -1;
+    float x = 0.0f;
+    float y = 0.0f;
+    float radius = 0.0f;
+};
+
 struct SDModTrackedEnemyState {
     uintptr_t actor_address = 0;
     int enemy_type = -1;
@@ -227,6 +260,10 @@ struct SDModGameplaySelectionDebugState {
     uintptr_t table_address = 0;
     int entry_count = 0;
     std::int32_t slot_selection_entries[4] = {};
+    std::int32_t concentration_entries_a_by_slot[4] = {-1, -1, -1, -1};
+    std::int32_t concentration_entries_b_by_slot[4] = {-1, -1, -1, -1};
+    std::int32_t concentration_entry_a = -1;
+    std::int32_t concentration_entry_b = -1;
     std::int32_t player_selection_state_0 = 0;
     std::int32_t player_selection_state_1 = 0;
 };
@@ -312,6 +349,9 @@ struct SDModParticipantGameplayState {
     std::uint32_t hub_visual_descriptor_signature = 0;
     std::uint32_t render_drive_flags = 0;
     std::uint8_t anim_drive_state = 0;
+    std::uint8_t native_persistent_status_flags = 0;
+    std::uint8_t native_transient_status_flags = 0;
+    std::int32_t native_poison_remaining_ticks = 0;
     std::uint8_t no_interrupt = 0;
     std::uint8_t active_cast_group = 0xFF;
     std::uint16_t active_cast_slot = 0xFFFF;
@@ -372,6 +412,11 @@ void ShutdownGameplayKeyboardInjection();
 bool IsGameplayKeyboardInjectionInitialized();
 bool QueueGameplayMouseLeftClick(std::string* error_message);
 bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_message);
+bool QueueGameplayMovementHoldFrames(
+    float direction_x,
+    float direction_y,
+    std::uint32_t frames,
+    std::string* error_message);
 bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_message);
 void ClearQueuedGameplayMouseLeft();
 bool ClearLocalPlayerGameplayCastState(std::string* error_message);
@@ -385,6 +430,35 @@ bool QueueGameplayEnableCombatPrelude(std::string* error_message);
 bool QueueHubStartTestrun(std::string* error_message);
 bool SetPendingRunGenerationSeed(std::uint32_t seed, std::string* error_message);
 bool QueueGameplaySwitchRegion(int region_index, std::string* error_message);
+bool QueueMultiplayerDampenEffect(
+    std::uint64_t owner_participant_id,
+    std::uint32_t cast_sequence,
+    float position_x,
+    float position_y,
+    std::string* error_message);
+bool QueueLocalPlayerPoisonCorrection(
+    std::int32_t duration_ticks,
+    float damage_per_tick,
+    std::string* error_message);
+bool QueueNativePoisonBehaviorProbe(
+    std::uint64_t target_participant_id,
+    std::int32_t duration_ticks,
+    float damage_per_tick,
+    std::int8_t source_slot,
+    std::string* error_message);
+bool QueueNativeMagicHitBehaviorProbe(
+    float projectile_damage,
+    float magic_damage,
+    std::uint32_t attempts,
+    std::uint64_t* request_serial,
+    std::string* error_message);
+bool GetNativeMagicHitBehaviorProbeResult(
+    std::uint64_t request_serial,
+    bool* completed,
+    bool* success,
+    float* hp_before,
+    float* hp_after,
+    std::string* error_message);
 bool QueueParticipantEntitySync(
     std::uint64_t participant_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
@@ -409,76 +483,4 @@ bool TryGetRunLifecycleEnemySpawnSerial(uintptr_t enemy_address, std::uint32_t* 
 bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(int enemy_type, std::uint32_t missing_enemy_count);
 uintptr_t GetRunLifecycleLastWaveSpawnerAddress();
 bool IsRunLifecycleManualEnemySpawnerReady();
-bool QueueRunLifecycleManualEnemySpawn(
-    int type_id,
-    float x,
-    float y,
-    bool freeze_on_spawn,
-    std::string* error_message,
-    std::uint64_t* request_id);
-bool QueueRunLifecycleReplicatedEnemyCatchupSpawn(
-    std::uint64_t network_actor_id,
-    int type_id,
-    float x,
-    float y,
-    std::string* error_message,
-    std::uint64_t* request_id);
-void CancelQueuedRunLifecycleReplicatedEnemyCatchupSpawn(std::uint64_t network_actor_id);
-bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message = nullptr);
-bool TryGetRunLifecycleManualEnemySpawnResult(
-    SDModManualRunEnemySpawnResult* result,
-    std::uint64_t request_id = 0);
-bool TryGetRunLifecycleManualEnemyFreezePosition(uintptr_t actor_address, float* x, float* y);
-void PinRunLifecycleFrozenManualEnemies();
-void ClearRunLifecycleManualEnemyFreeze(uintptr_t actor_address = 0);
-bool TryGetPlayerState(SDModPlayerState* state);
-bool TryGetPlayerInventoryState(SDModInventoryState* state);
-bool TryGetPlayerProgressionBookState(SDModProgressionBookState* state);
-bool TryGetWorldState(SDModWorldState* state);
-bool TryGetGameplayCombatState(SDModGameplayCombatState* state);
-bool IsArenaCombatActorType(std::uint32_t object_type_id);
-bool TryGetSceneState(SDModSceneState* state);
-bool TryListSceneActors(std::vector<SDModSceneActorState>* actors);
-bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state);
-bool TryGetGameplayNavGridState(SDModGameplayNavGridState* state, int subdivisions = 1);
-void RequestNavGridSnapshotRebuild(int subdivisions);
-std::shared_ptr<const SDModGameplayNavGridState> GetLastNavGridSnapshotShared();
-void RebuildNavGridSnapshotIfRequested_GameplayThread();
-void FlushNavGridSnapshotOnSceneUnload();
-bool TryGetParticipantGameplayState(
-    std::uint64_t participant_id,
-    SDModParticipantGameplayState* state);
-bool TryRefreshParticipantGameplayState(
-    std::uint64_t participant_id,
-    SDModParticipantGameplayState* state);
-bool TryGetGameplayHudParticipantDisplayNameForActor(
-    uintptr_t actor_address,
-    std::string* display_name,
-    std::uint64_t* participant_id = nullptr);
-bool RebindSceneActorCell(uintptr_t actor_address, std::string* error_message);
-bool QueueManualRunEnemySpawn(
-    int type_id,
-    float x,
-    float y,
-    bool freeze_on_spawn,
-    std::string* error_message,
-    std::uint64_t* request_id = nullptr);
-bool TryGetLastManualRunEnemySpawnResult(
-    SDModManualRunEnemySpawnResult* result,
-    std::uint64_t request_id = 0);
-void ClearManualRunEnemyFreeze(uintptr_t actor_address = 0);
-bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);
-bool QueueReplicatedLootSnapshot(
-    const multiplayer::LootSnapshotRuntimeInfo& snapshot,
-    std::string* error_message);
-bool IsReplicatedLootPresentationActor(uintptr_t actor_address);
-bool TryGetReplicatedLootPresentationState(
-    std::uint64_t network_drop_id,
-    SDModReplicatedLootPresentationState* state);
-void GetReplicatedLootPresentationStates(std::vector<SDModReplicatedLootPresentationState>* states);
-void SuppressClientLocalLootActors(const char* reason);
-bool HasReplicatedRunEnemyDeathPresentation(std::uint64_t network_actor_id);
-void MarkReplicatedRunEnemyDeathPresented(std::uint64_t network_actor_id);
-void ClearReplicatedRunEnemyDeathPresentation(std::uint64_t network_actor_id);
-
-}  // namespace sdmod
+#include "mod_loader_gameplay_api.inl"

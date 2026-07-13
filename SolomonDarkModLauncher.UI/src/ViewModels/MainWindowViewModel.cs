@@ -21,15 +21,33 @@ internal sealed class MainWindowViewModel : ViewModelBase
     private string transcriptText_ = string.Empty;
     private string instanceName_;
     private bool debugUiEnabled_;
+    private string lobbyId_;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
         client_ = client;
         instanceName_ = client.InstanceName;
         debugUiEnabled_ = client.DebugUiEnabled;
+        lobbyId_ = client.LobbyId;
 
         RefreshCommand = new RelayCommand(_ => _ = RefreshAsync(), _ => CanInteract());
-        LaunchCommand = new RelayCommand(_ => _ = ExecuteActionAsync(LauncherUiCommandMode.Launch, "Launching game..."), _ => CanInteract());
+        HostSteamCommand = new RelayCommand(
+            _ => _ = ExecuteActionAsync(
+                LauncherUiCommandMode.HostSteam,
+                "Creating Steam lobby and launching host..."),
+            _ => CanInteract());
+        JoinSteamCommand = new RelayCommand(
+            _ => _ = ExecuteActionAsync(
+                LauncherUiCommandMode.JoinSteam,
+                string.IsNullOrWhiteSpace(LobbyId)
+                    ? "Launching and waiting for a Steam friend invite..."
+                    : $"Joining Steam lobby {LobbyId}..."),
+            _ => CanInteract());
+        LaunchSinglePlayerCommand = new RelayCommand(
+            _ => _ = ExecuteActionAsync(
+                LauncherUiCommandMode.LaunchSinglePlayer,
+                "Launching single player..."),
+            _ => CanInteract());
         StageCommand = new RelayCommand(_ => _ = ExecuteActionAsync(LauncherUiCommandMode.Stage, "Building stage..."), _ => CanInteract());
         ApplyInstanceCommand = new RelayCommand(_ => _ = ApplyInstanceAsync(), _ => CanInteract());
         OpenModsFolderCommand = new RelayCommand(_ => OpenFolder(lastResponse_?.Configuration?.ModsRoot), _ => CanOpenFolder(lastResponse_?.Configuration?.ModsRoot));
@@ -53,7 +71,7 @@ internal sealed class MainWindowViewModel : ViewModelBase
         {
             if (SetProperty(ref isBusy_, value))
             {
-                OnPropertyChanged(nameof(LaunchButtonText));
+                OnPropertyChanged(nameof(HostButtonText));
                 RaiseCommandStates();
             }
         }
@@ -126,7 +144,20 @@ internal sealed class MainWindowViewModel : ViewModelBase
         }
     }
 
-    public string LaunchButtonText => IsBusy ? "Working..." : "Launch Game";
+    public string LobbyId
+    {
+        get => lobbyId_;
+        set
+        {
+            if (SetProperty(ref lobbyId_, value))
+            {
+                client_.UpdateLobbyId(value);
+                UpdateLaunchPreview();
+            }
+        }
+    }
+
+    public string HostButtonText => IsBusy ? "Working..." : "Host & Invite Friends";
 
     public string WorkspaceRoot => lastResponse_?.Configuration?.WorkspaceRoot ?? "(unresolved)";
     public string GameDirectory => lastResponse_?.Configuration?.GameDirectory ?? "(unresolved)";
@@ -136,7 +167,9 @@ internal sealed class MainWindowViewModel : ViewModelBase
     public string RuntimeProfile => lastResponse_?.Configuration?.RuntimeProfile ?? "(unresolved)";
 
     public RelayCommand RefreshCommand { get; }
-    public RelayCommand LaunchCommand { get; }
+    public RelayCommand HostSteamCommand { get; }
+    public RelayCommand JoinSteamCommand { get; }
+    public RelayCommand LaunchSinglePlayerCommand { get; }
     public RelayCommand StageCommand { get; }
     public RelayCommand ApplyInstanceCommand { get; }
     public RelayCommand OpenModsFolderCommand { get; }
@@ -213,7 +246,11 @@ internal sealed class MainWindowViewModel : ViewModelBase
         {
             LauncherUiCommandMode.ListMods => "Catalog refreshed",
             LauncherUiCommandMode.Stage => "Stage completed",
-            LauncherUiCommandMode.Launch => "Game launch completed",
+            LauncherUiCommandMode.LaunchSinglePlayer => "Single-player game launched",
+            LauncherUiCommandMode.HostSteam => "Steam host launched; invite dialog opens in game",
+            LauncherUiCommandMode.JoinSteam => string.IsNullOrWhiteSpace(LobbyId)
+                ? "Steam client launched; waiting for friend invite"
+                : "Steam lobby join launched",
             LauncherUiCommandMode.EnableMod => "Mod enabled",
             LauncherUiCommandMode.DisableMod => "Mod disabled",
             _ => "Ready"
@@ -320,7 +357,9 @@ internal sealed class MainWindowViewModel : ViewModelBase
     private void RaiseCommandStates()
     {
         RefreshCommand.RaiseCanExecuteChanged();
-        LaunchCommand.RaiseCanExecuteChanged();
+        HostSteamCommand.RaiseCanExecuteChanged();
+        JoinSteamCommand.RaiseCanExecuteChanged();
+        LaunchSinglePlayerCommand.RaiseCanExecuteChanged();
         StageCommand.RaiseCanExecuteChanged();
         ApplyInstanceCommand.RaiseCanExecuteChanged();
         OpenModsFolderCommand.RaiseCanExecuteChanged();
@@ -331,6 +370,6 @@ internal sealed class MainWindowViewModel : ViewModelBase
 
     private void UpdateLaunchPreview()
     {
-        CommandPreviewText = client_.BuildCommandPreview(LauncherUiCommandMode.Launch);
+        CommandPreviewText = client_.BuildCommandPreview(LauncherUiCommandMode.HostSteam);
     }
 }

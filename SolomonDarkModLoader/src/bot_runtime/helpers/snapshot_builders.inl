@@ -27,6 +27,20 @@ void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) 
     snapshot->max_hp = participant.runtime.life_max;
     snapshot->mp = participant.runtime.mana_current;
     snapshot->max_mp = participant.runtime.mana_max;
+    snapshot->concentration_revision =
+        participant.owned_progression.concentration_revision;
+    snapshot->concentration_selection_valid =
+        participant.owned_progression.concentration_selection_valid;
+    snapshot->concentration_entry_a =
+        participant.owned_progression.concentration_entry_a;
+    snapshot->concentration_entry_b =
+        participant.owned_progression.concentration_entry_b;
+    snapshot->replicated_persistent_status_flags =
+        participant.runtime.persistent_status_flags;
+    snapshot->replicated_transient_status_flags =
+        participant.runtime.transient_status_flags;
+    snapshot->replicated_poison_remaining_ticks =
+        participant.runtime.poison_remaining_ticks;
     if (const auto* pending_cast = FindPendingCast(participant.participant_id); pending_cast != nullptr) {
         snapshot->cast_pending = true;
         snapshot->queued_cast_count = pending_cast->queued_cast_count;
@@ -106,6 +120,12 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
     snapshot->hub_visual_source_kind = gameplay_state.hub_visual_source_kind;
     snapshot->render_drive_flags = gameplay_state.render_drive_flags;
     snapshot->anim_drive_state = gameplay_state.anim_drive_state;
+    snapshot->native_persistent_status_flags =
+        gameplay_state.native_persistent_status_flags;
+    snapshot->native_transient_status_flags =
+        gameplay_state.native_transient_status_flags;
+    snapshot->native_poison_remaining_ticks =
+        gameplay_state.native_poison_remaining_ticks;
     snapshot->no_interrupt = gameplay_state.no_interrupt;
     snapshot->active_cast_group = gameplay_state.active_cast_group;
     snapshot->active_cast_slot = gameplay_state.active_cast_slot;

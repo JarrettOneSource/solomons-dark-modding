@@ -14,6 +14,7 @@ internal static class StageReportWriter
         int appliedOverlayCount,
         HudLabelAssetResult hudLabels,
         RuntimeMetadataStageResult runtimeMetadata,
+        MultiplayerCompatibilityStageResult multiplayerCompatibility,
         SteamStageBootstrapResult steamBootstrap)
     {
         var reportDirectory = Path.Combine(stageRootPath, ".sdmod");
@@ -43,6 +44,12 @@ internal static class StageReportWriter
                 stageApiDllPath = steamBootstrap.StageApiDllPath,
                 steamApiSourcePath = steamBootstrap.SteamApiSourcePath,
                 readyForInitialization = steamBootstrap.ReadyForInitialization
+            },
+            multiplayerCompatibility = new
+            {
+                multiplayerCompatibility.ProtocolVersion,
+                multiplayerCompatibility.FingerprintSha256,
+                multiplayerCompatibility.ManifestPath
             },
             hudLabels = new
             {

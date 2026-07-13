@@ -1,4 +1,3 @@
-constexpr float kRemoteOrbPickupSuppressionDistance = 320.0f;
 constexpr std::uint64_t kReplicatedLootPickupRequestRetryMs = 250;
 
 std::unordered_map<std::uint64_t, std::uint64_t> g_replicated_loot_pickup_request_not_before_ms;
@@ -27,17 +26,21 @@ bool TryReadActorPositionAndRadius(uintptr_t actor_address, float* x, float* y, 
     return true;
 }
 
-bool IsWithinOrbPickupSuppressionRange(
+bool IsWithinStockLootBehaviorRange(
     float actor_x,
     float actor_y,
-    float orb_x,
-    float orb_y,
-    float orb_radius) {
-    const float pickup_distance =
-        kRemoteOrbPickupSuppressionDistance + (std::max)(orb_radius, 0.0f);
-    const float dx = actor_x - orb_x;
-    const float dy = actor_y - orb_y;
-    return dx * dx + dy * dy <= pickup_distance * pickup_distance;
+    float drop_x,
+    float drop_y,
+    multiplayer::LootDropKind drop_kind,
+    float pickup_range) {
+    const float behavior_distance =
+        multiplayer::StockLootBehaviorDistance(drop_kind, pickup_range);
+    if (!std::isfinite(behavior_distance) || behavior_distance <= 0.0f) {
+        return false;
+    }
+    const float dx = actor_x - drop_x;
+    const float dy = actor_y - drop_y;
+    return dx * dx + dy * dy <= behavior_distance * behavior_distance;
 }
 
 bool ShouldSuppressRemoteParticipantOrbPickup(uintptr_t orb_address) {
@@ -64,7 +67,14 @@ bool ShouldSuppressRemoteParticipantOrbPickup(uintptr_t orb_address) {
     SDModPlayerState player_state;
     if (TryGetPlayerState(&player_state) &&
         player_state.valid &&
-        IsWithinOrbPickupSuppressionRange(player_state.x, player_state.y, orb_x, orb_y, orb_radius)) {
+        player_state.derived_stats.valid &&
+        IsWithinStockLootBehaviorRange(
+            player_state.x,
+            player_state.y,
+            orb_x,
+            orb_y,
+            multiplayer::LootDropKind::Orb,
+            player_state.derived_stats.pickup_range)) {
         return false;
     }
 
@@ -97,7 +107,15 @@ bool ShouldSuppressRemoteParticipantOrbPickup(uintptr_t orb_address) {
         if (!TryReadActorPositionAndRadius(binding.actor_address, &actor_x, &actor_y, &actor_radius)) {
             continue;
         }
-        if (IsWithinOrbPickupSuppressionRange(actor_x, actor_y, orb_x, orb_y, orb_radius)) {
+        const auto& derived = participant->owned_progression.derived_stats;
+        if (derived.valid &&
+            IsWithinStockLootBehaviorRange(
+                actor_x,
+                actor_y,
+                orb_x,
+                orb_y,
+                multiplayer::LootDropKind::Orb,
+                derived.pickup_range)) {
             return true;
         }
     }
@@ -143,10 +161,6 @@ bool TryQueueReplicatedLootPickupRequest(
     }
     const float authoritative_drop_x = presentation.x;
     const float authoritative_drop_y = presentation.y;
-    const float authoritative_drop_radius =
-        std::isfinite(presentation.radius) && presentation.radius > 0.0f
-            ? presentation.radius
-            : 0.0f;
     if (!std::isfinite(authoritative_drop_x) || !std::isfinite(authoritative_drop_y)) {
         return false;
     }
@@ -154,12 +168,14 @@ bool TryQueueReplicatedLootPickupRequest(
     SDModPlayerState player_state;
     if (!TryGetPlayerState(&player_state) ||
         !player_state.valid ||
-        !IsWithinOrbPickupSuppressionRange(
+        !player_state.derived_stats.valid ||
+        !IsWithinStockLootBehaviorRange(
             player_state.x,
             player_state.y,
             authoritative_drop_x,
             authoritative_drop_y,
-            authoritative_drop_radius)) {
+            drop_kind,
+            player_state.derived_stats.pickup_range)) {
         return false;
     }
 

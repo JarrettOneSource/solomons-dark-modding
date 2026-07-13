@@ -7,6 +7,11 @@ namespace SolomonDarkModLauncher.Launch;
 
 internal static class StagedGameLauncher
 {
+    internal const string TestSurvivalBoneyardOverrideEnvironmentVariable =
+        "SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE";
+    internal const string TestWaveOverrideEnvironmentVariable =
+        "SDMOD_TEST_WAVE_OVERRIDE";
+
     private static readonly string[] SandboxEnvironmentVariables =
     {
         "SDMOD_UI_SANDBOX_PRESET",
@@ -31,8 +36,11 @@ internal static class StagedGameLauncher
         StageBuildResult stage,
         LauncherConfiguration configuration,
         bool temporaryProfile = false,
+        MultiplayerLaunchOptions? multiplayer = null,
         LaunchOptions? options = null)
     {
+        ApplyTestSurvivalBoneyardOverride(stage);
+        ApplyTestWaveOverride(stage);
         options = IsolatedProfileBootstrapper.CreateLaunchOptions(
             configuration.Workspace,
             options?.EnvironmentOverrides,
@@ -43,6 +51,13 @@ internal static class StagedGameLauncher
             StageSandboxCompatibilityLinks.Materialize(stage.StageRootPath, options.SavegamesRootPath);
         }
         options = ApplySandboxEnvironment(configuration, options);
+        options = MultiplayerLaunchEnvironment.Apply(
+            options,
+            multiplayer ?? MultiplayerLaunchOptions.Create(
+                MultiplayerLaunchMode.Unspecified,
+                null,
+                MultiplayerLaunchOptions.DefaultMaxParticipants,
+                openInviteDialog: true));
         options = ApplySteamBootstrap(configuration, stage, options);
         var launchToken = Guid.NewGuid().ToString("N");
         options = ApplyLaunchToken(options, launchToken);
@@ -72,6 +87,14 @@ internal static class StagedGameLauncher
                 throw new InvalidOperationException(
                     $"SolomonDarkModLoader startup failed ({startupStatus.Code}): {startupStatus.Message}");
             }
+            if (multiplayer?.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join &&
+                (!startupStatus.SteamTransportReady ||
+                 !startupStatus.MultiplayerFoundationReady))
+            {
+                throw new InvalidOperationException(
+                    "Steam multiplayer did not initialize. Ensure the Steam client is running and logged in, " +
+                    $"then retry. Loader status: {startupStatus.Message}");
+            }
 
             return new InjectedGame(process.Id, loaderPath, startupStatus);
         }
@@ -80,6 +103,88 @@ internal static class StagedGameLauncher
             TryTerminate(process);
             throw;
         }
+    }
+
+    private static void ApplyTestSurvivalBoneyardOverride(StageBuildResult stage)
+    {
+        var sourcePath = Environment.GetEnvironmentVariable(
+            TestSurvivalBoneyardOverrideEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(sourcePath))
+        {
+            return;
+        }
+
+        sourcePath = Path.GetFullPath(sourcePath);
+        if (!File.Exists(sourcePath))
+        {
+            throw new FileNotFoundException(
+                "Test survival boneyard override was not found.",
+                sourcePath);
+        }
+        if (!string.Equals(
+                Path.GetExtension(sourcePath),
+                ".boneyard",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Test survival boneyard override must be a .boneyard file: {sourcePath}");
+        }
+
+        var targetPaths = new[]
+        {
+            Path.Combine(
+                stage.StageRootPath,
+                "data",
+                "levels",
+                "survival.boneyard"),
+            Path.Combine(
+                stage.StageRootPath,
+                "sandbox",
+                "DarkCloud",
+                "mylevels",
+                "New Boneyard 1.boneyard"),
+        };
+        foreach (var targetPath in targetPaths)
+        {
+            var targetDirectory = Path.GetDirectoryName(targetPath)
+                ?? throw new InvalidOperationException(
+                    $"Test survival boneyard target has no directory: {targetPath}");
+            Directory.CreateDirectory(targetDirectory);
+            File.Copy(sourcePath, targetPath, overwrite: true);
+        }
+    }
+
+    private static void ApplyTestWaveOverride(StageBuildResult stage)
+    {
+        var sourcePath = Environment.GetEnvironmentVariable(
+            TestWaveOverrideEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(sourcePath))
+        {
+            return;
+        }
+
+        sourcePath = Path.GetFullPath(sourcePath);
+        if (!File.Exists(sourcePath))
+        {
+            throw new FileNotFoundException(
+                "Test wave override was not found.",
+                sourcePath);
+        }
+        if (!string.Equals(
+                Path.GetExtension(sourcePath),
+                ".txt",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Test wave override must be a .txt file: {sourcePath}");
+        }
+
+        var targetPath = Path.Combine(stage.StageRootPath, "data", "wave.txt");
+        var targetDirectory = Path.GetDirectoryName(targetPath)
+            ?? throw new InvalidOperationException(
+                $"Test wave target has no directory: {targetPath}");
+        Directory.CreateDirectory(targetDirectory);
+        File.Copy(sourcePath, targetPath, overwrite: true);
     }
 
     private static void ApplyEnvironmentOverrides(
@@ -126,6 +231,8 @@ internal static class StagedGameLauncher
         environmentOverrides[SteamBootstrapConfiguration.EnableEnvironmentVariable] = configuration.Steam.Enabled ? "1" : "0";
         environmentOverrides[SteamBootstrapConfiguration.AppIdEnvironmentVariable] = configuration.Steam.AppId;
         environmentOverrides[SteamBootstrapConfiguration.AllowRestartEnvironmentVariable] = configuration.Steam.AllowRestartIfNecessary ? "1" : "0";
+        environmentOverrides[MultiplayerCompatibilityMaterializer.FingerprintEnvironmentVariable] =
+            stage.MultiplayerCompatibility.FingerprintSha256;
 
         if (!string.IsNullOrWhiteSpace(stage.SteamBootstrap.StageAppIdPath))
         {

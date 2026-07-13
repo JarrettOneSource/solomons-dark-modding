@@ -921,8 +921,12 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
         return;
     }
 
-    multiplayer::SyncBotsToSharedLevelUp(level_after, xp_after, progression_address);
-    multiplayer::PublishHostLevelUpOffers(level_after, xp_after, progression_address);
-    multiplayer::PublishLocalHostSelfLevelUpOffer(level_after, xp_after, progression_address);
-    DispatchLuaLevelUp(level_after, xp_after);
+    const bool suppress_debug_level_up_side_effects =
+        multiplayer::ShouldSuppressLocalLevelUpFanoutForDebug();
+    if (!suppress_debug_level_up_side_effects) {
+        multiplayer::SyncBotsToSharedLevelUp(level_after, xp_after, progression_address);
+        multiplayer::PublishHostLevelUpOffers(level_after, xp_after, progression_address);
+        multiplayer::PublishLocalHostSelfLevelUpOffer(level_after, xp_after, progression_address);
+        DispatchLuaLevelUp(level_after, xp_after);
+    }
 }

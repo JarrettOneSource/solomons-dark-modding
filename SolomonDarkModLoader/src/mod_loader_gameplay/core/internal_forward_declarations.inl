@@ -133,14 +133,11 @@ bool SeedWizardBotNativeCollisionStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t native_visual_actor_address,
     std::string* error_message);
-bool SeedWizardBotNativeSpellDispatchStateFromSourceActor(
-    uintptr_t actor_address,
-    uintptr_t native_visual_actor_address,
-    std::string* error_message);
 bool SeedGameplaySlotBotRenderStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t world_address,
     uintptr_t native_visual_actor_address,
+    std::uint64_t participant_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
@@ -152,16 +149,22 @@ bool PrimeGameplaySlotBotActor(
     int slot_index,
     uintptr_t actor_address,
     uintptr_t slot_progression_address,
+    std::uint64_t participant_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
     float heading,
     std::string* error_message);
 bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string* error_message);
+bool InvokeOriginalPlayerActorSecondarySpellCast(
+    uintptr_t actor_address,
+    int skill_entry_index,
+    std::uint8_t* result);
 bool CreateGameplaySlotBotActor(
     uintptr_t gameplay_address,
     uintptr_t world_address,
     int slot_index,
+    std::uint64_t participant_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,

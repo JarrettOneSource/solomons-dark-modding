@@ -267,6 +267,7 @@ bool CallNativeProgressionIntArg(
 bool CallNativePlayerAppearanceApplyChoice(
     uintptr_t progression_address,
     int choice_id,
+    bool publish_local_gameplay_side_effects,
     DWORD* exception_code) {
     if (exception_code != nullptr) {
         *exception_code = 0;
@@ -278,7 +279,16 @@ bool CallNativePlayerAppearanceApplyChoice(
     }
 
     __try {
-        apply_choice(reinterpret_cast<void*>(progression_address), choice_id, 1);
+        // The stock third argument publishes process-local gameplay state. For
+        // spells that includes HUD-belt insertion; for stat rows it includes
+        // the two process-global Concentrate selections. A remote participant
+        // has a real native progression object in this process, but must never
+        // mutate either kind of local participant state. Choice application
+        // and progression refresh still run when this argument is zero.
+        apply_choice(
+            reinterpret_cast<void*>(progression_address),
+            choice_id,
+            publish_local_gameplay_side_effects ? 1 : 0);
         return true;
     } __except (CaptureBotSkillChoiceSeh(GetExceptionInformation(), exception_code)) {
         return false;
@@ -400,6 +410,7 @@ bool ApplyNativeSpecialChoice(uintptr_t progression_address, DWORD* exception_co
 bool ApplyNativeSkillChoiceToProgression(
     uintptr_t progression_address,
     const BotSkillChoiceOption& option,
+    bool publish_local_gameplay_side_effects,
     DWORD* exception_code) {
     if (exception_code != nullptr) {
         *exception_code = 0;
@@ -408,12 +419,85 @@ bool ApplyNativeSkillChoiceToProgression(
         return false;
     }
 
+    auto read_choice_state = [&]
+        (std::uint16_t* active,
+         std::uint16_t* visible,
+         std::uint16_t* category) {
+        if (active == nullptr || visible == nullptr || category == nullptr) {
+            return false;
+        }
+        *active = 0;
+        *visible = 0;
+        *category = 0;
+        auto& memory = ProcessMemory::Instance();
+        uintptr_t table_address = 0;
+        std::int32_t entry_count = 0;
+        if (!memory.TryReadField(
+                progression_address,
+                kStandaloneWizardProgressionTableBaseOffset,
+                &table_address) ||
+            !memory.TryReadField(
+                progression_address,
+                kStandaloneWizardProgressionTableCountOffset,
+                &entry_count) ||
+            table_address == 0 ||
+            option.option_id >= entry_count) {
+            return false;
+        }
+        const uintptr_t entry_address =
+            table_address +
+            static_cast<std::size_t>(option.option_id) *
+                kStandaloneWizardProgressionEntryStride;
+        return memory.TryReadField(
+                   entry_address,
+                   kStandaloneWizardProgressionActiveFlagOffset,
+                   active) &&
+               memory.TryReadField(
+                   entry_address,
+                   kStandaloneWizardProgressionVisibleFlagOffset,
+                   visible) &&
+               memory.TryReadField(
+                   entry_address,
+                   kStandaloneWizardProgressionEntryCategoryOffset,
+                   category);
+    };
+
+    std::uint16_t active_before = 0;
+    std::uint16_t visible_before = 0;
+    std::uint16_t category_before = 0;
+    const bool state_before_read =
+        read_choice_state(&active_before, &visible_before, &category_before);
+    const bool effective_local_gameplay_side_effects =
+        publish_local_gameplay_side_effects;
+
     const auto apply_count = std::clamp(option.apply_count, 1, 2);
     for (int apply_index = 0; apply_index < apply_count; ++apply_index) {
-        if (!CallNativePlayerAppearanceApplyChoice(progression_address, option.option_id, exception_code)) {
+        // The third native argument publishes one-shot local gameplay side
+        // effects, including inserting a newly acquired secondary on the
+        // native belt.  A two-rank offer still represents one picker choice;
+        // publishing that side effect for both internal rank increments adds
+        // the same skill to two belt slots before the final refresh can mark
+        // it visible.  Preserve the stock side effect on the first increment
+        // and make any bonus increment progression-only.
+        const bool publish_this_increment =
+            effective_local_gameplay_side_effects && apply_index == 0;
+        if (!CallNativePlayerAppearanceApplyChoice(
+                progression_address,
+                option.option_id,
+                publish_this_increment,
+                exception_code)) {
             return false;
         }
     }
+
+    std::uint16_t active_after_choice = 0;
+    std::uint16_t visible_after_choice = 0;
+    std::uint16_t category_after_choice = 0;
+    const bool state_after_choice_read =
+        read_choice_state(
+            &active_after_choice,
+            &visible_after_choice,
+            &category_after_choice);
 
     const auto special_choice_id = NativeSpecialChoiceActivationId();
     if (option.option_id == special_choice_id) {
@@ -430,6 +514,45 @@ bool ApplyNativeSkillChoiceToProgression(
     if (!CallNativeActorProgressionRefresh(progression_address, exception_code)) {
         return false;
     }
+
+    std::uint16_t active_after_refresh = 0;
+    std::uint16_t visible_after_refresh = 0;
+    std::uint16_t category_after_refresh = 0;
+    const bool state_after_refresh_read =
+        read_choice_state(
+            &active_after_refresh,
+            &visible_after_refresh,
+            &category_after_refresh);
+    std::uint8_t progression_mode = 0xFF;
+    const bool mode_read = ProcessMemory::Instance().TryReadField<std::uint8_t>(
+        progression_address,
+        kProgressionNonLocalModeFlagOffset,
+        &progression_mode);
+    Log(
+        "[bots] native skill choice phases. progression=" +
+        HexString(progression_address) +
+        " choice_id=" + std::to_string(option.option_id) +
+        " apply_count=" + std::to_string(apply_count) +
+        " local_gameplay_side_effects=" +
+            std::to_string(effective_local_gameplay_side_effects ? 1 : 0) +
+        " requested_local_gameplay_side_effects=" +
+            std::to_string(publish_local_gameplay_side_effects ? 1 : 0) +
+        " category=" + std::to_string(category_before) +
+        " mode=" + (mode_read ? std::to_string(progression_mode) : "unreadable") +
+        " before=" +
+            (state_before_read
+                 ? std::to_string(active_before) + "/" + std::to_string(visible_before)
+                 : std::string("unreadable")) +
+        " after_choice=" +
+            (state_after_choice_read
+                 ? std::to_string(active_after_choice) + "/" +
+                       std::to_string(visible_after_choice)
+                 : std::string("unreadable")) +
+        " after_refresh=" +
+            (state_after_refresh_read
+                 ? std::to_string(active_after_refresh) + "/" +
+                       std::to_string(visible_after_refresh)
+                 : std::string("unreadable")));
 
     if (option.option_id == special_choice_id) {
         DWORD post_exception = 0;
@@ -493,119 +616,4 @@ bool TryReadProgressionNextXp(uintptr_t progression_address, int* next_experienc
     return true;
 }
 
-void UpdateBotLevelProfileState(
-    std::uint64_t bot_id,
-    int level,
-    int experience,
-    int next_experience) {
-    UpdateRuntimeState([&](RuntimeState& state) {
-        auto* participant = FindBot(state, bot_id);
-        if (participant == nullptr) {
-            return;
-        }
-        participant->character_profile.level = level;
-        participant->character_profile.experience = experience;
-        participant->runtime.level = level;
-        participant->runtime.experience_current = experience;
-        if (next_experience > 0) {
-            participant->runtime.experience_next = next_experience;
-        }
-    });
-}
-
-bool SyncNativeBotProgressionLevel(
-    uintptr_t progression_address,
-    uintptr_t source_progression_address,
-    int level,
-    int experience,
-    DWORD* exception_code) {
-    if (exception_code != nullptr) {
-        *exception_code = 0;
-    }
-    if (progression_address == 0 || level <= 0) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    if (!EnsureBotOwnedProgressionMode(progression_address)) {
-        return false;
-    }
-
-    std::int32_t level_before = 0;
-    float xp_before = 0.0f;
-    if (!memory.TryReadField(progression_address, kProgressionLevelOffset, &level_before) ||
-        !memory.TryReadField(progression_address, kProgressionXpOffset, &xp_before) ||
-        !std::isfinite(xp_before)) {
-        return false;
-    }
-
-    float target_xp = static_cast<float>(experience);
-    if (source_progression_address != 0) {
-        float source_xp = 0.0f;
-        if (!memory.TryReadField(source_progression_address, kProgressionXpOffset, &source_xp) ||
-            !std::isfinite(source_xp)) {
-            return false;
-        }
-        if (source_xp >= 0.0f && source_xp > target_xp) {
-            target_xp = source_xp;
-        }
-    }
-
-    if (experience >= 0 && target_xp >= 0.0f) {
-        (void)memory.TryWriteField<float>(progression_address, kProgressionXpOffset, target_xp);
-    }
-
-    if (level_before >= level) {
-        Log(
-            "[bots] native level_up sync skipped; progression already at target. progression=" +
-            HexString(progression_address) +
-            " level_before=" + std::to_string(level_before) +
-            " target_level=" + std::to_string(level) +
-            " xp_before=" + std::to_string(xp_before) +
-            " target_xp=" + std::to_string(target_xp));
-        return true;
-    }
-
-    constexpr int kMaxNativeLevelUpCalls = 256;
-    int level_after = level_before;
-    int calls = 0;
-    while (level_after < level && calls < kMaxNativeLevelUpCalls) {
-        const auto previous_level = level_after;
-        if (!CallNativeLevelUpSafe(progression_address, exception_code)) {
-            return false;
-        }
-
-        ++calls;
-        if (!memory.TryReadField(progression_address, kProgressionLevelOffset, &level_after)) {
-            return false;
-        }
-        if (level_after <= previous_level) {
-            break;
-        }
-    }
-
-    float xp_after = 0.0f;
-    float previous_threshold = 0.0f;
-    float next_threshold = 0.0f;
-    if (!memory.TryReadField(progression_address, kProgressionXpOffset, &xp_after) ||
-        !memory.TryReadField(progression_address, kProgressionPreviousXpThresholdOffset, &previous_threshold) ||
-        !memory.TryReadField(progression_address, kProgressionNextXpThresholdOffset, &next_threshold) ||
-        !std::isfinite(xp_after) ||
-        !std::isfinite(previous_threshold) ||
-        !std::isfinite(next_threshold)) {
-        return false;
-    }
-    const bool synced = level_after >= level;
-    Log(
-        "[bots] native level_up sync. progression=" + HexString(progression_address) +
-        " level_before=" + std::to_string(level_before) +
-        " level_after=" + std::to_string(level_after) +
-        " target_level=" + std::to_string(level) +
-        " calls=" + std::to_string(calls) +
-        " xp_before=" + std::to_string(xp_before) +
-        " xp_after=" + std::to_string(xp_after) +
-        " previous_threshold=" + std::to_string(previous_threshold) +
-        " next_threshold=" + std::to_string(next_threshold) +
-        " synced=" + std::to_string(synced ? 1 : 0));
-    return synced;
-}
+#include "skill_choice_level_sync.inl"

@@ -39,6 +39,40 @@ struct PendingGameplayRegionSwitchRequest {
     std::uint64_t next_attempt_ms = 0;
 };
 
+struct PendingMultiplayerDampenEffectRequest {
+    std::uint64_t owner_participant_id = 0;
+    std::uint32_t cast_sequence = 0;
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+};
+
+struct PendingLocalPlayerPoisonCorrection {
+    std::int32_t duration_ticks = 0;
+    float damage_per_tick = 0.0f;
+};
+
+struct PendingNativePoisonBehaviorProbe {
+    std::uint64_t target_participant_id = 0;
+    std::int32_t duration_ticks = 0;
+    float damage_per_tick = 0.0f;
+    std::int8_t source_slot = 0;
+};
+
+struct PendingNativeMagicHitBehaviorProbe {
+    std::uint64_t request_serial = 0;
+    float projectile_damage = 0.0f;
+    float magic_damage = 0.0f;
+    std::uint32_t attempts = 0;
+};
+
+struct NativeMagicHitBehaviorProbeResult {
+    std::uint64_t request_serial = 0;
+    bool success = false;
+    float hp_before = 0.0f;
+    float hp_after = 0.0f;
+    std::string error;
+};
+
 struct GameplayKeyboardInjectionState {
     X86Hook mouse_refresh_hook;
     X86Hook edge_hook;
@@ -47,9 +81,12 @@ struct GameplayKeyboardInjectionState {
     X86Hook player_actor_apply_mana_delta_hook;
     X86Hook player_actor_dtor_hook;
     X86Hook player_actor_vtable28_hook;
+    X86Hook player_actor_secondary_spell_cast_hook;
     X86Hook player_actor_pure_primary_gate_hook;
     X86Hook player_control_brain_update_hook;
     X86Hook pure_primary_spell_start_hook;
+    X86Hook pure_primary_attack_dispatch_hook;
+    X86Hook fire_ember_ctor_hook;
     X86Hook pure_primary_post_builder_hook;
     X86Hook spell_cast_dispatcher_hook;
     X86Hook spell_action_builder_hook;
@@ -72,6 +109,11 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint64_t> mouse_left_edge_tick_ms{0};
     std::atomic<std::uint32_t> pending_mouse_left_edge_events{0};
     std::atomic<std::uint32_t> pending_mouse_left_frames{0};
+    std::atomic<uintptr_t> input_state_address{0};
+    std::atomic<float> pending_movement_x{0.0f};
+    std::atomic<float> pending_movement_y{0.0f};
+    std::atomic<std::uint32_t> pending_movement_frames{0};
+    std::atomic<std::uint32_t> pending_injected_keyboard_control_frames{0};
     std::atomic<std::uint32_t> pending_manual_spawner_primary_cast_allowances{0};
     std::atomic<std::uint64_t> manual_spawner_primary_cast_control_grace_until_ms{0};
     std::atomic<uintptr_t> manual_spawner_primary_target_actor{0};
@@ -92,8 +134,15 @@ struct GameplayKeyboardInjectionState {
     std::deque<multiplayer::LootSnapshotRuntimeInfo> pending_replicated_loot_snapshots;
     std::deque<PendingParticipantEntitySyncRequest> pending_participant_sync_requests;
     std::deque<PendingGameplayRegionSwitchRequest> pending_gameplay_region_switch_requests;
+    std::deque<PendingMultiplayerDampenEffectRequest> pending_multiplayer_dampen_effect_requests;
+    std::deque<PendingLocalPlayerPoisonCorrection> pending_local_player_poison_corrections;
+    std::deque<PendingNativePoisonBehaviorProbe> pending_native_poison_behavior_probes;
+    std::deque<PendingNativeMagicHitBehaviorProbe> pending_native_magic_hit_behavior_probes;
+    std::uint64_t next_native_magic_hit_behavior_probe_serial = 1;
+    NativeMagicHitBehaviorProbeResult native_magic_hit_behavior_probe_result;
     std::deque<std::uint64_t> pending_participant_destroy_requests;
 } g_gameplay_keyboard_injection;
 
 thread_local std::uint32_t g_multiplayer_client_authorized_hub_run_switch_depth = 0;
 thread_local std::uint32_t g_loader_owned_actor_destroy_unregister_depth = 0;
+thread_local std::uint32_t g_remote_secondary_spell_dispatch_depth = 0;

@@ -574,30 +574,45 @@ def move_client_into_pickup_range(
 ) -> dict[str, Any]:
     place = place_player(CLIENT_PIPE, drop_x, drop_y, 90.0)
     deadline = time.monotonic() + timeout
-    last: dict[str, str] = {}
-    last_row: dict[str, Any] | None = None
+    next_reposition_at = time.monotonic() + 0.5
+    last_client: dict[str, str] = {}
+    last_host: dict[str, str] = {}
+    local_row: dict[str, Any] | None = None
+    host_row: dict[str, Any] | None = None
     while time.monotonic() < deadline:
-        last = capture(CLIENT_PIPE)
-        player_x = parse_float_text(last.get("player.x"))
-        player_y = parse_float_text(last.get("player.y"))
-        last_row = find_participant(last, LOCAL_RUNTIME_PARTICIPANT_ID)
+        last_client = capture(CLIENT_PIPE)
+        last_host = capture(HOST_PIPE)
+        player_x = parse_float_text(last_client.get("player.x"))
+        player_y = parse_float_text(last_client.get("player.y"))
+        local_row = find_participant(last_client, LOCAL_RUNTIME_PARTICIPANT_ID)
+        host_row = find_participant(last_host, CLIENT_ID)
         player_in_range = distance(player_x, player_y, drop_x, drop_y) <= PICKUP_POSITION_TOLERANCE
         runtime_in_range = (
-            last_row is not None
-            and distance(last_row["x"], last_row["y"], drop_x, drop_y) <= PICKUP_POSITION_TOLERANCE
+            local_row is not None
+            and distance(local_row["x"], local_row["y"], drop_x, drop_y) <= PICKUP_POSITION_TOLERANCE
         )
-        if player_in_range and runtime_in_range:
+        authority_in_range = (
+            host_row is not None
+            and distance(host_row["x"], host_row["y"], drop_x, drop_y) <= PICKUP_POSITION_TOLERANCE
+        )
+        if player_in_range and runtime_in_range and authority_in_range:
             return {
                 "place": place,
-                "capture": last,
-                "local_participant": last_row,
+                "client_capture": last_client,
+                "host_capture": last_host,
+                "local_participant": local_row,
+                "host_participant": host_row,
                 "drop_x": drop_x,
                 "drop_y": drop_y,
             }
+        if (not player_in_range or not runtime_in_range) and time.monotonic() >= next_reposition_at:
+            place = place_player(CLIENT_PIPE, drop_x, drop_y, 90.0)
+            next_reposition_at = time.monotonic() + 0.5
         time.sleep(0.1)
     raise VerifyFailure(
         "client did not settle in orb pickup range before request: "
-        f"drop=({drop_x:.3f},{drop_y:.3f}) row={last_row} capture={last}"
+        f"drop=({drop_x:.3f},{drop_y:.3f}) local_row={local_row} host_row={host_row} "
+        f"client={last_client} host={last_host}"
     )
 
 

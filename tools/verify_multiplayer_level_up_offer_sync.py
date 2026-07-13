@@ -43,6 +43,7 @@ from verify_real_input_spell_cast_sync import (
 
 
 ROOT = Path(__file__).resolve().parent.parent
+RUNTIME_OUTPUT = ROOT / "runtime" / "multiplayer_level_up_offer_sync.json"
 SKILL_CONFIG_DIR = ROOT / "runtime" / "stage" / "data" / "wizardskills"
 FIREBALL_BUILD_SKILL_ID = 0x3F3
 FIREBALL_PROJECTILE_TYPE = 0x7D4
@@ -161,6 +162,7 @@ emit("result.experience", result and result.experience or 0)
 emit("result.option_index", result and result.option_index or -1)
 emit("result.option_id", result and result.option_id or -1)
 emit("result.apply_count", result and result.apply_count or 0)
+emit("result.resulting_active", result and result.resulting_active or 0)
 emit("result.code", result and result.result_code or 0)
 
 local wait = mp and mp.level_up_wait_status or nil
@@ -1036,6 +1038,11 @@ def main() -> int:
         output["ok"] = True
     except (VerifyFailure, subprocess.TimeoutExpired) as exc:
         output["error"] = str(exc)
+        RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+        RUNTIME_OUTPUT.write_text(
+            json.dumps(output, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         if args.json:
             print(json.dumps(output, indent=2, sort_keys=True))
         else:
@@ -1045,6 +1052,11 @@ def main() -> int:
         if not args.keep_open:
             stop_games()
 
+    RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    RUNTIME_OUTPUT.write_text(
+        json.dumps(output, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     if args.json:
         print(json.dumps(output, indent=2, sort_keys=True))
     else:

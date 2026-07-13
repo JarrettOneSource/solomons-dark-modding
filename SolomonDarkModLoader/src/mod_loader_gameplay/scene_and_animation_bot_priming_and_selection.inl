@@ -4,6 +4,7 @@ bool PrimeGameplaySlotBotActor(
     int slot_index,
     uintptr_t actor_address,
     uintptr_t slot_progression_address,
+    std::uint64_t participant_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
@@ -161,19 +162,20 @@ bool PrimeGameplaySlotBotActor(
             }
             return false;
         }
-        if (!SeedWizardBotNativeSpellDispatchStateFromSourceActor(
-                actor_address,
-                native_visual_actor_address,
-                &stage_error)) {
-            if (error_message != nullptr) {
-                *error_message = stage_error;
-            }
-            return false;
-        }
+        // Gameplay_CreatePlayerSlot has already initialized this actor's
+        // player-dispatch state.  The old standalone-clone path copied the
+        // +0x28c..+0x2d8 block from slot 0, but those offsets are not a shared
+        // PlayerActor contract: on live local actors they contain unrelated
+        // text/pointers (for example ASCII-looking 0x74206C69).  Writing them
+        // into a fresh gameplay-slot actor corrupts the puppet objects that
+        // ActorWorld_RegisterGameplaySlotActor publishes on the next tick.
+        // Preserve the stock slot factory's state and seed only the verified
+        // collision and owner-authored render contracts here.
         if (!SeedGameplaySlotBotRenderStateFromSourceActor(
                 actor_address,
                 world_address,
                 native_visual_actor_address,
+                participant_id,
                 character_profile,
                 x,
                 y,
@@ -327,11 +329,26 @@ bool TryResolvePrimaryCastDescriptorFromSkillId(
         case 0x18:
         case 0x20:
         case 0x28:
-            return TryResolvePrimaryCastDescriptorFromSelectionPair(
-                skill_id,
-                skill_id,
-                -1,
-                descriptor);
+            // The packet/hook id selects the dispatcher, not the spellbook
+            // object. Resolve the same pair through Skills_Wizard so native
+            // stat/mana queries and progression current-spell state receive
+            // the real build id (for example Lightning 1013), not 0x18.
+            {
+                NativePrimarySpellSelection live_selection{};
+                std::string live_selection_error;
+                const bool have_live_build =
+                    TryResolveNativePrimarySelectionFromLiveProgression(
+                        progression_runtime_address,
+                        skill_id,
+                        skill_id,
+                        &live_selection,
+                        &live_selection_error);
+                return TryResolvePrimaryCastDescriptorFromSelectionPair(
+                    skill_id,
+                    skill_id,
+                    have_live_build ? live_selection.build_skill_id : -1,
+                    descriptor);
+            }
         default:
             return false;
         }
@@ -381,6 +398,105 @@ bool TryResolveProfilePrimaryCastDescriptor(
         requested_combo,
         build_skill_id,
         descriptor);
+}
+
+struct PrimaryBuildProgressionFlagSnapshot {
+    uintptr_t entry_address = 0;
+    std::uint16_t active = 0;
+    std::uint16_t visible = 0;
+};
+
+bool CapturePrimaryBuildProgressionFlags(
+    uintptr_t progression_address,
+    std::vector<PrimaryBuildProgressionFlagSnapshot>* snapshots) {
+    if (progression_address == 0 || snapshots == nullptr) {
+        return false;
+    }
+    snapshots->clear();
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t table_address = 0;
+    std::int32_t entry_count = 0;
+    if (!memory.TryReadField(
+            progression_address,
+            kStandaloneWizardProgressionTableBaseOffset,
+            &table_address) ||
+        !memory.TryReadField(
+            progression_address,
+            kStandaloneWizardProgressionTableCountOffset,
+            &entry_count) ||
+        table_address == 0 ||
+        entry_count <= 0 ||
+        entry_count > 256) {
+        return false;
+    }
+
+    snapshots->reserve(static_cast<std::size_t>(entry_count));
+    for (std::int32_t index = 0; index < entry_count; ++index) {
+        PrimaryBuildProgressionFlagSnapshot snapshot;
+        snapshot.entry_address =
+            table_address +
+            static_cast<std::size_t>(index) *
+                kStandaloneWizardProgressionEntryStride;
+        if (!memory.TryReadField(
+                snapshot.entry_address,
+                kStandaloneWizardProgressionActiveFlagOffset,
+                &snapshot.active) ||
+            !memory.TryReadField(
+                snapshot.entry_address,
+                kStandaloneWizardProgressionVisibleFlagOffset,
+                &snapshot.visible)) {
+            snapshots->clear();
+            return false;
+        }
+        snapshots->push_back(snapshot);
+    }
+    return true;
+}
+
+bool RestorePrimaryBuildProgressionFlags(
+    const std::vector<PrimaryBuildProgressionFlagSnapshot>& snapshots,
+    int* restored_entry_count) {
+    if (restored_entry_count != nullptr) {
+        *restored_entry_count = 0;
+    }
+    auto& memory = ProcessMemory::Instance();
+    bool complete = true;
+    int restored = 0;
+    for (const auto& snapshot : snapshots) {
+        std::uint16_t active = 0;
+        std::uint16_t visible = 0;
+        if (!memory.TryReadField(
+                snapshot.entry_address,
+                kStandaloneWizardProgressionActiveFlagOffset,
+                &active) ||
+            !memory.TryReadField(
+                snapshot.entry_address,
+                kStandaloneWizardProgressionVisibleFlagOffset,
+                &visible)) {
+            complete = false;
+            continue;
+        }
+        if (active == snapshot.active && visible == snapshot.visible) {
+            continue;
+        }
+        const bool active_written = memory.TryWriteField(
+            snapshot.entry_address,
+            kStandaloneWizardProgressionActiveFlagOffset,
+            snapshot.active);
+        const bool visible_written = memory.TryWriteField(
+            snapshot.entry_address,
+            kStandaloneWizardProgressionVisibleFlagOffset,
+            snapshot.visible);
+        complete = complete && active_written && visible_written;
+        if (active_written && visible_written) {
+            ++restored;
+        }
+    }
+    if (restored_entry_count != nullptr) {
+        *restored_entry_count = restored;
+    }
+    return complete;
 }
 
 bool ApplyProfilePrimaryLoadoutToSkillsWizard(
@@ -443,6 +559,17 @@ bool ApplyProfilePrimaryLoadoutToSkillsWizard(
         return false;
     }
 
+    // Skills_Wizard::BuildPrimarySpell also rewrites selected progression
+    // flags as a character-creation side effect. During runtime rebuilds that
+    // can silently collapse a leveled primary (for example Fireball active=2)
+    // back to its base active=1. The multiplayer/native progression book is
+    // the owner here, so bracket the builder and restore its exact flags before
+    // the caller's native stat refresh.
+    std::vector<PrimaryBuildProgressionFlagSnapshot> progression_flags;
+    const bool have_progression_flags = CapturePrimaryBuildProgressionFlags(
+        progression_address,
+        &progression_flags);
+
     std::uint32_t native_spell_id = 0;
     DWORD exception_code = 0;
     if (!CallSkillsWizardBuildPrimarySpellSafe(
@@ -458,6 +585,24 @@ bool ApplyProfilePrimaryLoadoutToSkillsWizard(
                 HexString(exception_code) + ".";
         }
         return false;
+    }
+    int restored_progression_entry_count = 0;
+    if (have_progression_flags &&
+        !RestorePrimaryBuildProgressionFlags(
+            progression_flags,
+            &restored_progression_entry_count)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Skills_Wizard primary spell builder progression flags could not be restored.";
+        }
+        return false;
+    }
+    if (restored_progression_entry_count > 0) {
+        Log(
+            "[bots] skills_wizard_loadout restored progression flags after native build. progression=" +
+            HexString(progression_address) +
+            " restored_entries=" +
+            std::to_string(restored_progression_entry_count));
     }
     if (resolved_skill_id != nullptr && native_spell_id > 0) {
         *resolved_skill_id = static_cast<int>(native_spell_id);

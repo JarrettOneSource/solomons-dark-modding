@@ -58,6 +58,121 @@ int LuaDebugCallThiscallU32RetU32(lua_State* state) {
     return 1;
 }
 
+// sd.debug.call_thiscall_ret_u32(function_address, this_ptr) -> integer|nil
+int LuaDebugCallThiscallRetU32(lua_State* state) {
+    const auto requested_function_address = CheckLuaAddress(state, 1, "function_address");
+    const auto this_ptr = CheckLuaAddress(state, 2, "this_ptr");
+
+    auto& memory = ProcessMemory::Instance();
+    const auto function_address = ResolveExecutableLuaAddress(memory, requested_function_address);
+    if (function_address == 0 || this_ptr == 0) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    using ThiscallRetU32Fn = std::uint32_t(__thiscall*)(void*);
+    auto* fn = reinterpret_cast<ThiscallRetU32Fn>(function_address);
+    std::uint32_t result = 0;
+    bool ok = false;
+    __try {
+        result = fn(reinterpret_cast<void*>(this_ptr));
+        ok = true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        ok = false;
+    }
+
+    if (!ok) {
+        lua_pushnil(state);
+        return 1;
+    }
+    lua_pushinteger(state, static_cast<lua_Integer>(result));
+    return 1;
+}
+
+// sd.debug.queue_native_poison_behavior_probe(participant_id, duration_ticks,
+//     damage_per_tick, source_slot) -> boolean, string
+// participant_id=0 targets the local player. The native factory/OnApply work
+// is deferred until after the Lua callback returns to avoid re-entering Lua
+// through retail object-factory hooks.
+int LuaDebugQueueNativePoisonBehaviorProbe(lua_State* state) {
+    const auto participant_id =
+        CheckLuaUnsignedInteger<std::uint64_t>(state, 1, "participant_id");
+    const auto duration_ticks =
+        CheckLuaSignedInteger<std::int32_t>(state, 2, "duration_ticks");
+    const auto damage_per_tick =
+        static_cast<float>(luaL_checknumber(state, 3));
+    const auto source_slot =
+        CheckLuaSignedInteger<std::int8_t>(state, 4, "source_slot");
+
+    std::string error_message;
+    const bool queued = QueueNativePoisonBehaviorProbe(
+        participant_id,
+        duration_ticks,
+        damage_per_tick,
+        source_slot,
+        &error_message);
+    lua_pushboolean(state, queued ? 1 : 0);
+    lua_pushlstring(state, error_message.c_str(), error_message.size());
+    return 2;
+}
+
+// sd.debug.queue_native_magic_hit_behavior_probe(projectile_damage,
+//     magic_damage, attempts)
+//     -> boolean, string, integer
+// The retail magic-hit work is deferred until after the Lua callback returns.
+int LuaDebugQueueNativeMagicHitBehaviorProbe(lua_State* state) {
+    const auto projectile_damage =
+        static_cast<float>(luaL_checknumber(state, 1));
+    const auto magic_damage = static_cast<float>(luaL_checknumber(state, 2));
+    const auto attempts =
+        CheckLuaUnsignedInteger<std::uint32_t>(state, 3, "attempts");
+
+    std::string error_message;
+    std::uint64_t request_serial = 0;
+    const bool queued = QueueNativeMagicHitBehaviorProbe(
+        projectile_damage,
+        magic_damage,
+        attempts,
+        &request_serial,
+        &error_message);
+    lua_pushboolean(state, queued ? 1 : 0);
+    lua_pushlstring(state, error_message.c_str(), error_message.size());
+    lua_pushinteger(state, static_cast<lua_Integer>(request_serial));
+    return 3;
+}
+
+// sd.debug.get_native_magic_hit_behavior_probe_result(request_serial)
+//     -> boolean, boolean, number, number, string
+int LuaDebugGetNativeMagicHitBehaviorProbeResult(lua_State* state) {
+    const auto request_serial =
+        CheckLuaUnsignedInteger<std::uint64_t>(state, 1, "request_serial");
+    bool completed = false;
+    bool success = false;
+    float hp_before = 0.0f;
+    float hp_after = 0.0f;
+    std::string error_message;
+    if (!GetNativeMagicHitBehaviorProbeResult(
+            request_serial,
+            &completed,
+            &success,
+            &hp_before,
+            &hp_after,
+            &error_message)) {
+        lua_pushboolean(state, 0);
+        lua_pushboolean(state, 0);
+        lua_pushnumber(state, 0.0);
+        lua_pushnumber(state, 0.0);
+        lua_pushliteral(state, "invalid request serial");
+        return 5;
+    }
+    lua_pushboolean(state, completed ? 1 : 0);
+    lua_pushboolean(state, success ? 1 : 0);
+    lua_pushnumber(state, static_cast<lua_Number>(hp_before));
+    lua_pushnumber(state, static_cast<lua_Number>(hp_after));
+    lua_pushlstring(state, error_message.c_str(), error_message.size());
+    return 5;
+}
+
 // sd.debug.call_thiscall_out_f32x4_u32(function_address, this_ptr, arg0) -> table|nil
 int LuaDebugCallThiscallOutF32x4U32(lua_State* state) {
     const auto requested_function_address = CheckLuaAddress(state, 1, "function_address");
@@ -226,5 +341,40 @@ int LuaDebugResolveNativePrimarySpellStats(lua_State* state) {
         lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
     }
     lua_setfield(state, -2, "outputs");
+    return 1;
+}
+
+// sd.debug.resolve_native_secondary_mana_stats(progression_runtime, entry_index) -> table
+int LuaDebugResolveNativeSecondaryManaStats(lua_State* state) {
+    const auto progression_runtime =
+        CheckLuaAddress(state, 1, "progression_runtime");
+    const auto entry_index =
+        CheckLuaSignedInteger<int>(state, 2, "entry_index");
+
+    lua_createtable(state, 0, 8);
+    lua_pushinteger(state, static_cast<lua_Integer>(progression_runtime));
+    lua_setfield(state, -2, "progression_runtime");
+    lua_pushinteger(state, static_cast<lua_Integer>(entry_index));
+    lua_setfield(state, -2, "entry_index");
+
+    NativeSecondarySpellManaStats stats{};
+    std::string error_message;
+    const bool resolved = TryResolveNativeSecondarySpellManaStats(
+        progression_runtime,
+        entry_index,
+        &stats,
+        &error_message);
+    lua_pushboolean(state, resolved ? 1 : 0);
+    lua_setfield(state, -2, "resolved");
+    lua_pushlstring(state, error_message.c_str(), error_message.size());
+    lua_setfield(state, -2, "error");
+    lua_pushinteger(state, static_cast<lua_Integer>(stats.progression_level));
+    lua_setfield(state, -2, "progression_level");
+    lua_pushnumber(state, static_cast<lua_Number>(stats.base_cost));
+    lua_setfield(state, -2, "base_cost");
+    lua_pushnumber(state, static_cast<lua_Number>(stats.spend_cost));
+    lua_setfield(state, -2, "spend_cost");
+    lua_pushinteger(state, static_cast<lua_Integer>(stats.resolver_seh_code));
+    lua_setfield(state, -2, "resolver_seh_code");
     return 1;
 }

@@ -136,6 +136,9 @@ void ResetParticipantEntityMaterializationState(ParticipantEntityBinding* bindin
     binding->stock_tick_facing_origin_x = 0.0f;
     binding->stock_tick_facing_origin_y = 0.0f;
     binding->death_transition_stock_tick_seen = false;
+    binding->native_remote_vital_baseline_valid = false;
+    binding->native_remote_last_written_hp = 0.0f;
+    binding->native_remote_last_written_max_hp = 0.0f;
     binding->replicated_transform_valid = false;
     binding->replicated_target_x = 0.0f;
     binding->replicated_target_y = 0.0f;

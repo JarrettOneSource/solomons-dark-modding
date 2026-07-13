@@ -100,6 +100,20 @@ bool TryFindOpenGameplayBotSlot(uintptr_t gameplay_address, int* target_slot) {
         return false;
     }
 
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t local_actor_address = 0;
+    uintptr_t current_world_address = 0;
+    if (TryResolvePlayerActorForSlot(
+            gameplay_address,
+            0,
+            &local_actor_address) &&
+        local_actor_address != 0) {
+        (void)memory.TryReadField(
+            local_actor_address,
+            kActorOwnerOffset,
+            &current_world_address);
+    }
+
     for (int candidate = kFirstWizardBotSlot;
          candidate < static_cast<int>(kGameplayPlayerSlotCount);
          ++candidate) {
@@ -111,17 +125,62 @@ bool TryFindOpenGameplayBotSlot(uintptr_t gameplay_address, int* target_slot) {
             }
             return true;
         }
+
+        uintptr_t existing_world_address = 0;
+        const bool existing_world_readable =
+            memory.TryReadField(
+                existing_actor,
+                kActorOwnerOffset,
+                &existing_world_address);
+        if (current_world_address != 0 &&
+            (!existing_world_readable ||
+             existing_world_address == 0 ||
+             existing_world_address != current_world_address)) {
+            const auto actor_slot_offset =
+                kGameplayPlayerActorOffset +
+                static_cast<std::size_t>(candidate) *
+                    kGameplayPlayerSlotStride;
+            const auto progression_slot_offset =
+                kGameplayPlayerProgressionHandleOffset +
+                static_cast<std::size_t>(candidate) *
+                    kGameplayPlayerSlotStride;
+            const bool actor_cleared =
+                memory.TryWriteField<uintptr_t>(
+                    gameplay_address,
+                    actor_slot_offset,
+                    0);
+            const bool progression_cleared =
+                memory.TryWriteField<uintptr_t>(
+                    gameplay_address,
+                    progression_slot_offset,
+                    0);
+            if (actor_cleared && progression_cleared) {
+                Log(
+                    "[bots] reclaimed stale gameplay participant slot. slot=" +
+                    std::to_string(candidate) +
+                    " actor=" + HexString(existing_actor) +
+                    " actor_world=" + HexString(existing_world_address) +
+                    " current_world=" + HexString(current_world_address));
+                if (target_slot != nullptr) {
+                    *target_slot = candidate;
+                }
+                return true;
+            }
+        }
     }
 
     return false;
 }
 
 bool ShouldUseGameplaySlotBotParticipantRail(uintptr_t gameplay_address, const SceneContextSnapshot& scene_context) {
-    // Arena scenes expose the gameplay player-slot array (slots 1..3) that the
-    // stock hostile pathfinder scans for targets via HookMonsterPathfindingRefreshTarget.
-    // Routing arena bots through Gameplay_CreatePlayerSlot + ActorWorld_RegisterGameplaySlotActor
-    // places them in slots 1..3 so enemies actually aggro them. The stock scene
-    // only has three non-local slots, so overflow arena bots intentionally use
-    // the standalone wizard rail and are added to the widened hostile selector.
-    return IsArenaSceneContext(scene_context) && TryFindOpenGameplayBotSlot(gameplay_address, nullptr);
+    (void)gameplay_address;
+    // A network participant is a stock player-slot wizard in every shared
+    // gameplay scene. Keeping the same ownership/equip/progression shape in the
+    // hub and arena avoids the incomplete standalone-clone progression object
+    // and makes body/equipment presentation deterministic before run entry.
+    // The supported four-player model maps exactly onto slot 0 plus slots 1..3;
+    // a full slot array is an explicit materialization failure, not a request to
+    // silently downgrade a participant onto a different native object model.
+    return IsSharedHubSceneContext(scene_context) ||
+           IsArenaSceneContext(scene_context);
 }

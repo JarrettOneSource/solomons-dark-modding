@@ -35,6 +35,15 @@ struct NativePrimarySpellStats {
     std::uint32_t builder_seh_code = 0;
 };
 
+struct NativeSecondarySpellManaStats {
+    bool resolved = false;
+    int entry_index = -1;
+    int progression_level = 1;
+    float base_cost = 0.0f;
+    float spend_cost = 0.0f;
+    std::uint32_t resolver_seh_code = 0;
+};
+
 bool TryResolveNativePrimaryEntryForElement(int element_id, int* primary_entry);
 int ResolveNativePrimaryEntryForElement(int element_id);
 std::uint32_t EncodeSkillsWizardSelectionArg(int selection_value);
@@ -60,6 +69,11 @@ bool TryResolveNativePrimarySpellStats(
     uintptr_t progression_runtime_address,
     const NativePrimarySpellSelection& selection,
     NativePrimarySpellStats* stats,
+    std::string* error_message = nullptr);
+bool TryResolveNativeSecondarySpellManaStats(
+    uintptr_t progression_runtime_address,
+    int entry_index,
+    NativeSecondarySpellManaStats* stats,
     std::string* error_message = nullptr);
 
 }  // namespace sdmod

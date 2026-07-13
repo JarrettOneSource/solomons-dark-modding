@@ -14,6 +14,7 @@ from verify_local_multiplayer_sync import (
     HOST_ID,
     HOST_NAME,
     HOST_PIPE,
+    ROOT,
     VerifyFailure,
     disable_bots,
     distance,
@@ -27,6 +28,9 @@ from verify_local_multiplayer_sync import (
 )
 
 
+RUNTIME_OUTPUT = ROOT / "runtime" / "multiplayer_player_health_death_sync.json"
+
+
 DEAD_CORPSE_DRIVE_STATE = 1
 ALIVE_TEST_HP = 375.0
 ALIVE_TEST_MAX_HP = 500.0
@@ -38,7 +42,18 @@ def lua_id(participant_id: int) -> str:
     return f"0x{participant_id:X}"
 
 
-def set_local_player_vitals(pipe_name: str, hp: float, max_hp: float = 50.0) -> dict[str, str]:
+def set_local_player_vitals(
+    pipe_name: str,
+    hp: float,
+    max_hp: float = 50.0,
+    *,
+    mp: float | None = None,
+    max_mp: float | None = None,
+) -> dict[str, str]:
+    if max_mp is None:
+        max_mp = max_hp
+    if mp is None:
+        mp = max_mp
     code = f"""
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
 local player = sd.player.get_state()
@@ -62,8 +77,8 @@ emit("before.hp", sd.debug.read_float(progression + ohp))
 emit("before.max_hp", sd.debug.read_float(progression + omaxhp))
 emit("write.max_hp", sd.debug.write_float(progression + omaxhp, {max_hp}))
 emit("write.hp", sd.debug.write_float(progression + ohp, {hp}))
-emit("write.max_mp", sd.debug.write_float(progression + omaxmp, {max_hp}))
-emit("write.mp", sd.debug.write_float(progression + omp, {max_hp}))
+emit("write.max_mp", sd.debug.write_float(progression + omaxmp, {max_mp}))
+emit("write.mp", sd.debug.write_float(progression + omp, {mp}))
 local after = sd.player.get_state()
 emit("after.hp", after and after.hp or -1)
 emit("after.max_hp", after and after.max_hp or -1)
@@ -71,8 +86,9 @@ emit("after.mp", after and after.mp or -1)
 emit("after.max_mp", after and after.max_mp or -1)
 """
     values = parse_key_values(lua(pipe_name, code))
-    if values.get("write.max_hp") != "true" or values.get("write.hp") != "true":
-        raise VerifyFailure(f"failed to set player HP on {pipe_name}: {values}")
+    write_keys = ("write.max_hp", "write.hp", "write.max_mp", "write.mp")
+    if any(values.get(key) != "true" for key in write_keys):
+        raise VerifyFailure(f"failed to set player vitals on {pipe_name}: {values}")
     return values
 
 
@@ -333,10 +349,14 @@ def main() -> int:
         )
 
         result["ok"] = True
+        RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+        RUNTIME_OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
     except Exception as exc:
         result["error"] = str(exc)
+        RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+        RUNTIME_OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(json.dumps(result, indent=2, sort_keys=True))
         return 1
     finally:

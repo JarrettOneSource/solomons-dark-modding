@@ -24,6 +24,69 @@ bool IsManualSpawnerPrimaryTargetActor(uintptr_t actor_address) {
            IsArenaCombatActorTypeInternal(object_type_id);
 }
 
+bool ApplyManualSpawnerPrimaryTargetState(
+    uintptr_t actor_address,
+    uintptr_t selection_pointer,
+    uintptr_t target_actor_address) {
+    if (actor_address == 0 || selection_pointer == 0 ||
+        !IsManualSpawnerPrimaryTargetActor(target_actor_address)) {
+        return false;
+    }
+
+    std::uint8_t target_group = kTargetHandleGroupSentinel;
+    std::uint16_t target_slot = kTargetHandleSlotSentinel;
+    if (!TryResolveSameWorldTargetHandle(
+            actor_address,
+            target_actor_address,
+            &target_group,
+            &target_slot)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    constexpr std::int32_t kManualSpawnerTargetHoldTicks = 60;
+    return memory.TryWriteField<uintptr_t>(
+               actor_address,
+               kActorCurrentTargetActorOffset,
+               target_actor_address) &&
+           memory.TryWriteField<std::int32_t>(
+               actor_address,
+               kActorCurrentTargetBucketDeltaOffset,
+               0) &&
+           memory.TryWriteField<std::uint8_t>(
+               actor_address,
+               kActorSpellTargetGroupByteOffset,
+               target_group) &&
+           memory.TryWriteField<std::uint16_t>(
+               actor_address,
+               kActorSpellTargetSlotShortOffset,
+               target_slot) &&
+           memory.TryWriteField<std::uint8_t>(
+               selection_pointer,
+               kActorControlBrainTargetSlotOffset,
+               target_group) &&
+           memory.TryWriteField<std::uint16_t>(
+               selection_pointer,
+               kActorControlBrainTargetHandleOffset,
+               target_slot) &&
+           memory.TryWriteField<std::int32_t>(
+               selection_pointer,
+               kActorControlBrainRetargetTicksOffset,
+               kManualSpawnerTargetHoldTicks) &&
+           memory.TryWriteField<std::int32_t>(
+               selection_pointer,
+               kActorControlBrainTargetCooldownTicksOffset,
+               0) &&
+           memory.TryWriteField<std::int32_t>(
+               selection_pointer,
+               kActorControlBrainActionCooldownTicksOffset,
+               0) &&
+           memory.TryWriteField<std::int32_t>(
+               selection_pointer,
+               kActorControlBrainActionBurstTicksOffset,
+               0);
+}
+
 void __fastcall HookPlayerControlBrainUpdate(
     void* self,
     void* /*unused_edx*/,
@@ -211,6 +274,13 @@ void __fastcall HookPlayerControlBrainUpdate(
             std::memory_order_acquire);
     const bool manual_spawner_primary_grace_active =
         IsManualSpawnerPrimaryCastControlGraceActive();
+    const auto pending_scripted_movement_frames =
+        g_gameplay_keyboard_injection.pending_movement_frames.load(
+            std::memory_order_acquire);
+    auto& injected_keyboard_control_frames =
+        g_gameplay_keyboard_injection.pending_injected_keyboard_control_frames;
+    const auto pending_injected_keyboard_control_frames =
+        injected_keyboard_control_frames.load(std::memory_order_acquire);
     const bool manual_spawner_scripted_local_primary_control =
         current_actor_is_local_player &&
         (pending_manual_spawner_primary_allowances > 0 ||
@@ -218,7 +288,9 @@ void __fastcall HookPlayerControlBrainUpdate(
     const bool suppress_manual_spawner_local_control =
         current_actor_is_local_player &&
         pending_manual_spawner_primary_allowances == 0 &&
-        !manual_spawner_primary_grace_active;
+        !manual_spawner_primary_grace_active &&
+        pending_scripted_movement_frames == 0 &&
+        pending_injected_keyboard_control_frames == 0;
     if (suppress_manual_spawner_local_control) {
         ClearManualSpawnerSuppressedLocalPrimaryCastState(actor_address);
         (void)write_vector2(param2, 0.0f, 0.0f);
@@ -232,6 +304,17 @@ void __fastcall HookPlayerControlBrainUpdate(
                 HexString(actor_address));
         }
         return;
+    }
+
+    if (current_actor_is_local_player && pending_injected_keyboard_control_frames > 0) {
+        auto available = pending_injected_keyboard_control_frames;
+        while (available > 0 &&
+               !injected_keyboard_control_frames.compare_exchange_weak(
+                   available,
+                   available - 1,
+                   std::memory_order_acq_rel,
+                   std::memory_order_acquire)) {
+        }
     }
 
     float move_x_before = 0.0f;
@@ -338,6 +421,14 @@ void __fastcall HookPlayerControlBrainUpdate(
             return;
         }
 
+        const auto manual_spawner_target_actor =
+            g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.load(
+                std::memory_order_acquire);
+        const bool target_state_seeded = ApplyManualSpawnerPrimaryTargetState(
+            actor_address,
+            selection_pointer,
+            manual_spawner_target_actor);
+
         float position_x = 0.0f;
         float position_y = 0.0f;
         float aim_target_x = 0.0f;
@@ -386,6 +477,8 @@ void __fastcall HookPlayerControlBrainUpdate(
             Log(
                 "manual run enemy spawn: seeded local scripted primary control. actor=" +
                 HexString(actor_address) +
+                " target=" + HexString(manual_spawner_target_actor) +
+                " target_state_seeded=" + std::to_string(target_state_seeded ? 1 : 0) +
                 " aim=(" + std::to_string(aim_target_x) + "," + std::to_string(aim_target_y) + ")" +
                 " control=(" + std::to_string(control_x) + "," + std::to_string(control_y) + ")");
         }
@@ -434,6 +527,43 @@ void __fastcall HookPlayerControlBrainUpdate(
     seed_selection_target();
     apply_manual_spawner_local_primary_control();
     apply_face_control();
+
+    // Deterministic held movement is injected at the control-brain output.
+    // It intentionally exercises the standing movement envelope, collision,
+    // transform publication, and replication, but it is downstream of ranked
+    // input modifiers such as Rush. Ranked behavior tests must validate that
+    // native lane separately instead of treating this as raw keyboard input.
+    uintptr_t movement_gameplay_address = 0;
+    uintptr_t movement_local_actor_address = 0;
+    const bool movement_actor_is_local_player =
+        TryResolveCurrentGameplayScene(&movement_gameplay_address) &&
+        movement_gameplay_address != 0 &&
+        TryResolvePlayerActorForSlot(
+            movement_gameplay_address,
+            0,
+            &movement_local_actor_address) &&
+        movement_local_actor_address == actor_address;
+    if (movement_actor_is_local_player) {
+        auto& pending_frames =
+            g_gameplay_keyboard_injection.pending_movement_frames;
+        auto available = pending_frames.load(std::memory_order_acquire);
+        while (available > 0) {
+            if (pending_frames.compare_exchange_weak(
+                    available,
+                    available - 1,
+                    std::memory_order_acq_rel,
+                    std::memory_order_acquire)) {
+                const auto movement_x =
+                    g_gameplay_keyboard_injection.pending_movement_x.load(
+                        std::memory_order_acquire);
+                const auto movement_y =
+                    g_gameplay_keyboard_injection.pending_movement_y.load(
+                        std::memory_order_acquire);
+                (void)write_vector2(param2, movement_x, movement_y);
+                break;
+            }
+        }
+    }
 
     float move_x_after = 0.0f;
     float move_y_after = 0.0f;
@@ -524,7 +654,7 @@ void ClearManualSpawnerSuppressedLocalPrimaryCastState(uintptr_t actor_address) 
         int input_buffer_index = -1;
         if (memory.TryReadField(gameplay_address, kGameplayInputBufferIndexOffset, &input_buffer_index) &&
             input_buffer_index >= 0) {
-            for (int buffer_index = 0; buffer_index < 2; ++buffer_index) {
+            for (int buffer_index = 0; buffer_index < kGameplayInputBufferCount; ++buffer_index) {
                 const auto mouse_left_offset = static_cast<std::size_t>(
                     buffer_index * kGameplayInputBufferStride + kGameplayMouseLeftButtonOffset);
                 (void)memory.TryWriteField(gameplay_address, mouse_left_offset, released);
@@ -753,26 +883,24 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
             g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.load(
                 std::memory_order_acquire);
         if (IsManualSpawnerPrimaryTargetActor(manual_spawner_target_actor)) {
-            uintptr_t current_target_actor = 0;
-            (void)memory.TryReadField(
+            uintptr_t selection_pointer = 0;
+            const bool have_selection_pointer = memory.TryReadField(
                 actor_address,
-                kActorCurrentTargetActorOffset,
-                &current_target_actor);
-            if (current_target_actor != manual_spawner_target_actor) {
-                (void)memory.TryWriteField<uintptr_t>(
+                kActorAnimationSelectionStateOffset,
+                &selection_pointer);
+            const bool target_state_seeded =
+                have_selection_pointer &&
+                ApplyManualSpawnerPrimaryTargetState(
                     actor_address,
-                    kActorCurrentTargetActorOffset,
+                    selection_pointer,
                     manual_spawner_target_actor);
-                (void)memory.TryWriteField<std::int32_t>(
-                    actor_address,
-                    kActorCurrentTargetBucketDeltaOffset,
-                    0);
+            if (target_state_seeded) {
                 static std::uint64_t s_last_manual_spawner_target_restore_log_ms = 0;
                 const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
                 if (now_ms - s_last_manual_spawner_target_restore_log_ms >= 1000) {
                     s_last_manual_spawner_target_restore_log_ms = now_ms;
                     Log(
-                        "manual run enemy spawn: restored scripted primary target before native start. actor=" +
+                        "manual run enemy spawn: restored scripted primary target and native handle before native start. actor=" +
                         HexString(actor_address) +
                         " target=" + HexString(manual_spawner_target_actor));
                 }

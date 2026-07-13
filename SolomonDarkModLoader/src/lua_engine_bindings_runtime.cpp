@@ -79,7 +79,7 @@ int LuaRuntimeGetMod(lua_State* state) {
 void PushOwnedProgressionState(
     lua_State* state,
     const multiplayer::ParticipantOwnedProgressionState& progression) {
-    lua_createtable(state, 0, 26);
+    lua_createtable(state, 0, 32);
     lua_pushboolean(state, progression.initialized ? 1 : 0);
     lua_setfield(state, -2, "initialized");
     lua_pushinteger(state, static_cast<lua_Integer>(progression.gold));
@@ -94,6 +94,47 @@ void PushOwnedProgressionState(
     lua_setfield(state, -2, "statbook_revision");
     lua_pushinteger(state, static_cast<lua_Integer>(progression.loadout_revision));
     lua_setfield(state, -2, "loadout_revision");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.concentration_revision));
+    lua_setfield(state, -2, "concentration_revision");
+    lua_pushboolean(state, progression.concentration_selection_valid ? 1 : 0);
+    lua_setfield(state, -2, "concentration_selection_valid");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.concentration_entry_a));
+    lua_setfield(state, -2, "concentration_entry_a");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.concentration_entry_b));
+    lua_setfield(state, -2, "concentration_entry_b");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.derived_stat_revision));
+    lua_setfield(state, -2, "derived_stat_revision");
+    if (progression.derived_stats.valid) {
+        const auto& derived = progression.derived_stats;
+        lua_createtable(state, 0, 13);
+        lua_pushnumber(state, static_cast<lua_Number>(derived.cast_speed_multiplier));
+        lua_setfield(state, -2, "cast_speed_multiplier");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.mana_recovery_multiplier));
+        lua_setfield(state, -2, "mana_recovery_multiplier");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.resist_magic_fraction));
+        lua_setfield(state, -2, "resist_magic_fraction");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.resist_poison_fraction));
+        lua_setfield(state, -2, "resist_poison_fraction");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.deflect_chance));
+        lua_setfield(state, -2, "deflect_chance");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.staff_melee_damage_a));
+        lua_setfield(state, -2, "staff_melee_damage_a");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.staff_melee_damage_b));
+        lua_setfield(state, -2, "staff_melee_damage_b");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.pickup_range));
+        lua_setfield(state, -2, "pickup_range");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.secondary_recharge_multiplier));
+        lua_setfield(state, -2, "secondary_recharge_multiplier");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.offensive_damage_multiplier));
+        lua_setfield(state, -2, "offensive_damage_multiplier");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.offensive_mana_multiplier));
+        lua_setfield(state, -2, "offensive_mana_multiplier");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.meditation_recovery_bonus));
+        lua_setfield(state, -2, "meditation_recovery_bonus");
+        lua_pushinteger(state, static_cast<lua_Integer>(derived.meditation_idle_ticks));
+        lua_setfield(state, -2, "meditation_idle_ticks");
+        lua_setfield(state, -2, "derived_stats");
+    }
     lua_pushboolean(state, progression.inventory_host_authoritative ? 1 : 0);
     lua_setfield(state, -2, "inventory_host_authoritative");
     lua_pushinteger(state, static_cast<lua_Integer>(progression.inventory_item_total_count));
@@ -179,6 +220,8 @@ void PushLevelUpOfferRuntimeInfo(
     lua_setfield(state, -2, "native_picker_options_pinned");
     lua_pushboolean(state, offer.native_picker_local_apply_observed ? 1 : 0);
     lua_setfield(state, -2, "native_picker_local_apply_observed");
+    lua_pushboolean(state, offer.suppress_native_picker ? 1 : 0);
+    lua_setfield(state, -2, "suppress_native_picker");
     lua_pushinteger(state, static_cast<lua_Integer>(offer.authority_participant_id));
     lua_setfield(state, -2, "authority_participant_id");
     lua_pushinteger(state, static_cast<lua_Integer>(offer.target_participant_id));
@@ -211,7 +254,7 @@ void PushLevelUpOfferRuntimeInfo(
 void PushLevelUpChoiceResultRuntimeInfo(
     lua_State* state,
     const multiplayer::LevelUpChoiceResultRuntimeInfo& result) {
-    lua_createtable(state, 0, 13);
+    lua_createtable(state, 0, 14);
     lua_pushboolean(state, result.valid ? 1 : 0);
     lua_setfield(state, -2, "valid");
     lua_pushinteger(state, static_cast<lua_Integer>(result.authority_participant_id));
@@ -234,6 +277,8 @@ void PushLevelUpChoiceResultRuntimeInfo(
     lua_setfield(state, -2, "option_id");
     lua_pushinteger(state, static_cast<lua_Integer>(result.apply_count));
     lua_setfield(state, -2, "apply_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.resulting_active));
+    lua_setfield(state, -2, "resulting_active");
     lua_pushinteger(state, static_cast<lua_Integer>(result.result_code));
     lua_setfield(state, -2, "result_code");
 }
@@ -326,6 +371,23 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         lua_setfield(state, -2, "mana_current");
         lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.mana_max));
         lua_setfield(state, -2, "mana_max");
+        lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.move_speed));
+        lua_setfield(state, -2, "move_speed");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                participant.runtime.persistent_status_flags));
+        lua_setfield(state, -2, "persistent_status_flags");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                participant.runtime.transient_status_flags));
+        lua_setfield(state, -2, "transient_status_flags");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                participant.runtime.poison_remaining_ticks));
+        lua_setfield(state, -2, "poison_remaining_ticks");
         lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.position_x));
         lua_setfield(state, -2, "x");
         lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.position_y));
@@ -348,306 +410,4 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
     return 1;
 }
 
-bool ReadOptionalLuaIntegerField(
-    lua_State* state,
-    int table_index,
-    const char* field_name,
-    lua_Integer* value) {
-    lua_getfield(state, table_index, field_name);
-    if (lua_isnil(state, -1)) {
-        lua_pop(state, 1);
-        return false;
-    }
-    if (!lua_isinteger(state, -1) && !lua_isnumber(state, -1)) {
-        lua_pop(state, 1);
-        return false;
-    }
-    *value = lua_tointeger(state, -1);
-    lua_pop(state, 1);
-    return true;
-}
-
-int LuaRuntimeChooseLevelUpOption(lua_State* state) {
-    std::uint64_t offer_id = 0;
-    std::int32_t option_index = -1;
-    std::int32_t option_id = -1;
-    if (lua_istable(state, 1)) {
-        lua_Integer value = 0;
-        if (ReadOptionalLuaIntegerField(state, 1, "offer_id", &value)) {
-            if (value < 0) {
-                return luaL_error(state, "sd.runtime.choose_level_up_option offer_id must be non-negative");
-            }
-            offer_id = static_cast<std::uint64_t>(value);
-        }
-        if (ReadOptionalLuaIntegerField(state, 1, "option_index", &value) ||
-            ReadOptionalLuaIntegerField(state, 1, "index", &value)) {
-            option_index = static_cast<std::int32_t>(value);
-        }
-        if (ReadOptionalLuaIntegerField(state, 1, "option_id", &value) ||
-            ReadOptionalLuaIntegerField(state, 1, "choice_id", &value) ||
-            ReadOptionalLuaIntegerField(state, 1, "id", &value)) {
-            option_id = static_cast<std::int32_t>(value);
-        }
-    } else {
-        if (!lua_isinteger(state, 1) && !lua_isnumber(state, 1)) {
-            return luaL_error(state, "sd.runtime.choose_level_up_option expects option_index or a table");
-        }
-        option_index = static_cast<std::int32_t>(lua_tointeger(state, 1));
-        if (lua_gettop(state) >= 2 && !lua_isnil(state, 2)) {
-            if (!lua_isinteger(state, 2) && !lua_isnumber(state, 2)) {
-                return luaL_error(state, "sd.runtime.choose_level_up_option offer_id must be an integer");
-            }
-            const auto value = lua_tointeger(state, 2);
-            if (value < 0) {
-                return luaL_error(state, "sd.runtime.choose_level_up_option offer_id must be non-negative");
-            }
-            offer_id = static_cast<std::uint64_t>(value);
-        }
-        if (lua_gettop(state) >= 3 && !lua_isnil(state, 3)) {
-            if (!lua_isinteger(state, 3) && !lua_isnumber(state, 3)) {
-                return luaL_error(state, "sd.runtime.choose_level_up_option option_id must be an integer");
-            }
-            option_id = static_cast<std::int32_t>(lua_tointeger(state, 3));
-        }
-    }
-
-    if (option_index <= 0 && option_id < 0) {
-        return luaL_error(state, "sd.runtime.choose_level_up_option requires option_index or option_id");
-    }
-
-    std::string error_message;
-    if (!multiplayer::QueueLocalLevelUpChoice(
-            offer_id,
-            option_index,
-            option_id,
-            &error_message)) {
-        return luaL_error(state, "%s", error_message.c_str());
-    }
-
-    lua_pushboolean(state, 1);
-    return 1;
-}
-
-int LuaRuntimeDebugPublishLevelUpOffer(lua_State* state) {
-    lua_Integer level = 0;
-    lua_Integer experience = 0;
-    if (lua_istable(state, 1)) {
-        if (!ReadOptionalLuaIntegerField(state, 1, "level", &level)) {
-            return luaL_error(state, "sd.runtime.debug_publish_level_up_offer table requires level");
-        }
-        if (!ReadOptionalLuaIntegerField(state, 1, "experience", &experience) &&
-            !ReadOptionalLuaIntegerField(state, 1, "xp", &experience)) {
-            return luaL_error(state, "sd.runtime.debug_publish_level_up_offer table requires experience");
-        }
-    } else {
-        if ((!lua_isinteger(state, 1) && !lua_isnumber(state, 1)) ||
-            (!lua_isinteger(state, 2) && !lua_isnumber(state, 2))) {
-            return luaL_error(state, "sd.runtime.debug_publish_level_up_offer expects (level, experience)");
-        }
-        level = lua_tointeger(state, 1);
-        experience = lua_tointeger(state, 2);
-    }
-    if (level <= 0) {
-        return luaL_error(state, "sd.runtime.debug_publish_level_up_offer level must be positive");
-    }
-    if (experience < 0) {
-        return luaL_error(state, "sd.runtime.debug_publish_level_up_offer experience must be non-negative");
-    }
-    if (!multiplayer::IsLocalTransportHost()) {
-        return luaL_error(state, "sd.runtime.debug_publish_level_up_offer requires the local transport host");
-    }
-
-    multiplayer::PublishHostLevelUpOffers(
-        static_cast<std::int32_t>(level),
-        static_cast<std::int32_t>(experience),
-        0);
-    lua_pushboolean(state, 1);
-    return 1;
-}
-
-int LuaRuntimeHasCapability(lua_State* state) {
-    const auto* mod = GetLoadedLuaMod(state);
-    const auto* capability = luaL_checkstring(state, 1);
-    if (mod == nullptr || capability == nullptr) {
-        lua_pushboolean(state, 0);
-        return 1;
-    }
-
-    const auto capability_name = std::string(capability);
-    const auto found = std::find(mod->capabilities.begin(), mod->capabilities.end(), capability_name);
-    lua_pushboolean(state, found != mod->capabilities.end() ? 1 : 0);
-    return 1;
-}
-
-int LuaRuntimeGetCapabilities(lua_State* state) {
-    const auto* mod = GetLoadedLuaMod(state);
-    if (mod == nullptr) {
-        lua_newtable(state);
-        return 1;
-    }
-
-    lua_createtable(state, static_cast<int>(mod->capabilities.size()), 0);
-    for (std::size_t index = 0; index < mod->capabilities.size(); ++index) {
-        lua_pushstring(state, mod->capabilities[index].c_str());
-        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
-    }
-    return 1;
-}
-
-int LuaRuntimeGetEnvironmentVariable(lua_State* state) {
-    const auto* variable_name = luaL_checkstring(state, 1);
-    if (variable_name == nullptr || *variable_name == '\0') {
-        lua_pushnil(state);
-        return 1;
-    }
-
-    char* value = nullptr;
-    std::size_t value_length = 0;
-    if (_dupenv_s(&value, &value_length, variable_name) != 0 || value == nullptr) {
-        lua_pushnil(state);
-        return 1;
-    }
-
-    lua_pushstring(state, value);
-    free(value);
-    return 1;
-}
-
-bool IsSafeRelativeModPath(const std::filesystem::path& path) {
-    if (path.empty() || path.is_absolute() || path.has_root_name() || path.has_root_directory()) {
-        return false;
-    }
-
-    for (const auto& component : path) {
-        if (component == "..") {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-int LuaRuntimeGetModTextFile(lua_State* state) {
-    const auto* mod = GetLoadedLuaMod(state);
-    const auto* relative_path_text = luaL_checkstring(state, 1);
-    if (mod == nullptr || relative_path_text == nullptr || *relative_path_text == '\0') {
-        lua_pushnil(state);
-        return 1;
-    }
-
-    const std::filesystem::path relative_path(relative_path_text);
-    if (!IsSafeRelativeModPath(relative_path)) {
-        lua_pushnil(state);
-        return 1;
-    }
-
-    const auto file_path = (mod->descriptor.root_path / relative_path).lexically_normal();
-    std::ifstream stream(file_path, std::ios::binary);
-    if (!stream) {
-        lua_pushnil(state);
-        return 1;
-    }
-
-    std::string contents((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
-    lua_pushlstring(state, contents.data(), contents.size());
-    return 1;
-}
-
-bool IsSupportedLuaEventName(std::string_view event_name) {
-    return event_name == kRuntimeTickEventName || event_name == kRunStartedEventName ||
-        event_name == kRunEndedEventName || event_name == kWaveStartedEventName ||
-        event_name == kWaveCompletedEventName || event_name == kEnemyDeathEventName ||
-        event_name == kEnemySpawnedEventName || event_name == kSpellCastEventName ||
-        event_name == kGoldChangedEventName || event_name == kDropSpawnedEventName ||
-        event_name == kLevelUpEventName;
-}
-
-void MarkLuaEventRegistered(LoadedLuaMod* mod, std::string_view event_name) {
-    if (mod == nullptr) {
-        return;
-    }
-
-    if (event_name == kRuntimeTickEventName) {
-        mod->runtime_tick_registered = true;
-    } else if (event_name == kRunStartedEventName) {
-        mod->run_started_registered = true;
-    } else if (event_name == kRunEndedEventName) {
-        mod->run_ended_registered = true;
-    } else if (event_name == kWaveStartedEventName) {
-        mod->wave_started_registered = true;
-    } else if (event_name == kWaveCompletedEventName) {
-        mod->wave_completed_registered = true;
-    } else if (event_name == kEnemyDeathEventName) {
-        mod->enemy_death_registered = true;
-    } else if (event_name == kEnemySpawnedEventName) {
-        mod->enemy_spawned_registered = true;
-    } else if (event_name == kSpellCastEventName) {
-        mod->spell_cast_registered = true;
-    } else if (event_name == kGoldChangedEventName) {
-        mod->gold_changed_registered = true;
-    } else if (event_name == kDropSpawnedEventName) {
-        mod->drop_spawned_registered = true;
-    } else if (event_name == kLevelUpEventName) {
-        mod->level_up_registered = true;
-    }
-}
-
-int LuaEventsOn(lua_State* state) {
-    auto* mod = GetLoadedLuaMod(state);
-    const auto* event_name = luaL_checkstring(state, 1);
-    luaL_checktype(state, 2, LUA_TFUNCTION);
-    if (mod == nullptr || event_name == nullptr) {
-        return luaL_error(state, "sd.events.on is unavailable");
-    }
-
-    const std::string_view event_name_view(event_name);
-    if (!IsSupportedLuaEventName(event_name_view)) {
-        return luaL_error(state, "unsupported event: %s", event_name);
-    }
-
-    lua_getfield(state, LUA_REGISTRYINDEX, kLuaEventHandlersRegistryKey);
-    if (!lua_istable(state, -1)) {
-        lua_pop(state, 1);
-        return luaL_error(state, "event registry is unavailable");
-    }
-
-    lua_getfield(state, -1, event_name);
-    if (!lua_istable(state, -1)) {
-        lua_pop(state, 1);
-        lua_createtable(state, 0, 0);
-        lua_pushvalue(state, -1);
-        lua_setfield(state, -3, event_name);
-    }
-
-    const auto next_index = lua_rawlen(state, -1) + 1;
-    lua_pushvalue(state, 2);
-    lua_rawseti(state, -2, static_cast<lua_Integer>(next_index));
-    lua_pop(state, 2);
-
-    MarkLuaEventRegistered(mod, event_name_view);
-    lua_pushboolean(state, 1);
-    return 1;
-}
-
-}  // namespace
-
-void RegisterLuaRuntimeBindings(lua_State* state) {
-    lua_createtable(state, 0, 8);
-    RegisterFunction(state, &LuaRuntimeGetMod, "get_mod");
-    RegisterFunction(state, &LuaRuntimeGetMultiplayerState, "get_multiplayer_state");
-    RegisterFunction(state, &LuaRuntimeChooseLevelUpOption, "choose_level_up_option");
-    RegisterFunction(state, &LuaRuntimeDebugPublishLevelUpOffer, "debug_publish_level_up_offer");
-    RegisterFunction(state, &LuaRuntimeHasCapability, "has_capability");
-    RegisterFunction(state, &LuaRuntimeGetCapabilities, "get_capabilities");
-    RegisterFunction(state, &LuaRuntimeGetEnvironmentVariable, "get_environment_variable");
-    RegisterFunction(state, &LuaRuntimeGetModTextFile, "get_mod_text_file");
-    lua_setfield(state, -2, "runtime");
-}
-
-void RegisterLuaEventBindings(lua_State* state) {
-    lua_createtable(state, 0, 1);
-    RegisterFunction(state, &LuaEventsOn, "on");
-    lua_setfield(state, -2, "events");
-}
-
-}  // namespace sdmod::detail
+#include "lua_engine_bindings_runtime/level_up_and_runtime_api.inl"

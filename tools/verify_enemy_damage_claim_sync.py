@@ -26,9 +26,17 @@ from verify_local_multiplayer_sync import (
 )
 from verify_run_world_snapshot import start_host_waves, wait_for_run_snapshot
 from verify_player_health_death_sync import set_local_player_vitals
+from verify_multiplayer_primary_kill_stress import (
+    cleanup_live_enemies,
+    enable_manual_stock_spawner_combat,
+    spawn_one_enemy,
+)
 
 
 TEST_PLAYER_HP = 500.0
+TEST_TARGET_HP = 100.0
+TEST_TARGET_X = 650.0
+TEST_TARGET_Y = 1750.0
 HOST_LOG = ROOT / "runtime/instances/local-mp-host/stage/.sdmod/logs/solomondarkmodloader.log"
 
 
@@ -58,9 +66,11 @@ for _, actor in ipairs(replicated.actors) do
   end
 end
 local hp_offset = sd.debug.layout_offset("enemy_current_hp")
-if hp_offset == nil then
+local position_x_offset = sd.debug.layout_offset("actor_position_x")
+local position_y_offset = sd.debug.layout_offset("actor_position_y")
+if hp_offset == nil or position_x_offset == nil or position_y_offset == nil then
   emit("ok", false)
-  emit("reason", "hp_offset_missing")
+  emit("reason", "actor_layout_offset_missing")
   return
 end
 local player = sd.player.get_state and sd.player.get_state() or nil
@@ -130,6 +140,17 @@ if best ~= nil then
   if mode == "select" then
     emit("write_hp", "skipped")
     return
+  end
+  if mode == "damage_position" then
+    local claim_x = best.x + 64.0
+    local claim_y = best.y
+    emit("claim_x", string.format("%.3f", claim_x))
+    emit("claim_y", string.format("%.3f", claim_y))
+    emit("write_position_x", sd.debug.write_float(best.local_address + position_x_offset, claim_x))
+    emit("write_position_y", sd.debug.write_float(best.local_address + position_y_offset, claim_y))
+    if sd.world ~= nil and sd.world.rebind_actor ~= nil then
+      emit("rebind_position", sd.world.rebind_actor(best.local_address))
+    end
   end
   if mode == "damage_drift" then
     if sd.input == nil or sd.input.queue_local_enemy_damage_claim == nil then
@@ -340,6 +361,26 @@ def damage_client_enemy(mode: str, preferred_network_id: str = "0") -> dict[str,
     return result
 
 
+def wait_to_damage_any_client_enemy(mode: str, timeout: float = 8.0) -> dict[str, str]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    requested_more_waves = False
+    while time.monotonic() < deadline:
+        last = values(
+            CLIENT_PIPE,
+            CLIENT_SELECT_DAMAGE_LUA
+            .replace("__MODE__", mode)
+            .replace("__PREFERRED_NETWORK_ID__", "0"),
+        )
+        if last.get("ok") == "true" and last.get("write_hp") == "true":
+            return last
+        if last.get("reason") == "no_live_bound_enemy" and not requested_more_waves:
+            start_host_waves()
+            requested_more_waves = True
+        time.sleep(0.15)
+    raise VerifyFailure(f"failed to damage any client enemy mode={mode}: {last}")
+
+
 def select_client_enemy(preferred_network_id: str = "0") -> dict[str, str]:
     result = values(
         CLIENT_PIPE,
@@ -384,7 +425,10 @@ def wait_for_host_enemy_killed(target: dict[str, str], timeout: float = 12.0) ->
             death_handled = int(number(last, "death_handled"))
             if (dead_flag or hp <= 0.25) and death_handled != 0:
                 return last
-        elif last.get("reason") != "replicated_snapshot_missing" and int(number(last, "tracked")) > 0:
+        elif (
+            last.get("reason") != "replicated_snapshot_missing"
+            and int(number(last, "live")) == 0
+        ):
             last["removed_after_kill"] = "true"
             return last
         time.sleep(0.15)
@@ -414,6 +458,36 @@ def wait_for_host_enemy_native_death_log(
     raise VerifyFailure(
         f"host accepted lethal client claim but did not log native death presentation; "
         f"target={target} log_tail={last_text[-800:]}"
+    )
+
+
+def wait_for_host_position_accept_log(
+    target: dict[str, str],
+    start_offset: int,
+    timeout: float = 6.0,
+) -> dict[str, str]:
+    target_id = target["network_actor_id"]
+    deadline = time.monotonic() + timeout
+    last_text = ""
+    while time.monotonic() < deadline:
+        last_text = read_log_since(HOST_LOG, start_offset)
+        matching_lines = [
+            line
+            for line in last_text.splitlines()
+            if "Multiplayer enemy damage claim accepted." in line
+            and f"target_network_actor_id={target_id}" in line
+        ]
+        if any("position_applied=1" in line for line in matching_lines):
+            return {
+                "position_applied": "true",
+                "target_network_actor_id": target_id,
+                "claim_x": target.get("claim_x", ""),
+                "claim_y": target.get("claim_y", ""),
+            }
+        time.sleep(0.1)
+    raise VerifyFailure(
+        "host accepted client damage without applying its in-bounds hit position; "
+        f"target={target} log_tail={last_text[-1000:]}"
     )
 
 
@@ -495,16 +569,30 @@ def main() -> int:
         wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "testrun")
         result["initial_host_vitals"] = set_local_player_vitals(HOST_PIPE, TEST_PLAYER_HP, TEST_PLAYER_HP)
         result["initial_client_vitals"] = set_local_player_vitals(CLIENT_PIPE, TEST_PLAYER_HP, TEST_PLAYER_HP)
-        result["start_waves"] = start_host_waves()
+        result["combat_bootstrap"] = enable_manual_stock_spawner_combat()
+        result["initial_cleanup"] = cleanup_live_enemies()
         result["wave_host_vitals"] = set_local_player_vitals(HOST_PIPE, TEST_PLAYER_HP, TEST_PLAYER_HP)
         result["wave_client_vitals"] = set_local_player_vitals(CLIENT_PIPE, TEST_PLAYER_HP, TEST_PLAYER_HP)
+        result["host_park"] = place_player(HOST_PIPE, TEST_TARGET_X - 320.0, TEST_TARGET_Y, 0.0)
+        result["client_park"] = place_player(CLIENT_PIPE, TEST_TARGET_X - 160.0, TEST_TARGET_Y, 0.0)
+        result["manual_target"] = spawn_one_enemy(
+            TEST_TARGET_X,
+            TEST_TARGET_Y,
+            setup_hp=TEST_TARGET_HP,
+            freeze_on_spawn=True,
+        )
         result["snapshot"] = wait_for_run_snapshot(require_complete_lifecycle=True)
 
-        result["client_damage"] = damage_client_enemy("damage")
+        host_log_before_position_damage = log_offset(HOST_LOG)
+        result["client_damage"] = damage_client_enemy("damage_position")
         damage_target = result["client_damage"]
         result["host_damage_accept"] = wait_for_host_enemy_hp(
             damage_target,
             number(damage_target, "target_hp"),
+        )
+        result["host_position_accept"] = wait_for_host_position_accept_log(
+            damage_target,
+            host_log_before_position_damage,
         )
 
         result["rejected_target_seed"] = select_client_enemy()
@@ -526,7 +614,7 @@ def main() -> int:
         result["move_client_near_for_kill"] = move_client_near(rejected_target)
         time.sleep(0.6)
         host_log_before_kill = log_offset(HOST_LOG)
-        result["client_kill"] = damage_client_enemy("kill", rejected_target["network_actor_id"])
+        result["client_kill"] = wait_to_damage_any_client_enemy("kill")
         result["client_kill_predicted_death_handled"] = wait_for_client_enemy_death_handled(
             result["client_kill"]["network_actor_id"],
             result["client_kill"]["local_actor_address"],
@@ -541,11 +629,10 @@ def main() -> int:
             result["client_kill"]["network_actor_id"],
             result["client_kill"]["local_actor_address"],
         )
-        result["post_kill_snapshot"] = wait_for_run_snapshot(
-            require_complete_lifecycle=True,
-            stable_seconds=2.0,
-        )
         result["client_kill_removed"] = wait_for_client_enemy_removed(
+            result["client_kill"]["network_actor_id"],
+        )
+        result["post_kill_host"] = host_enemy_by_id(
             result["client_kill"]["network_actor_id"],
         )
         result["ok"] = True

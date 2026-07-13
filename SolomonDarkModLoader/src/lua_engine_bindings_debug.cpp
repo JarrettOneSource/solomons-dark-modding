@@ -1,5 +1,6 @@
 #include "lua_engine_bindings_internal.h"
 #include "binary_layout.h"
+#include "d3d9_end_scene_hook.h"
 #include "gameplay_seams.h"
 #include "memory_access.h"
 #include "mod_loader.h"
@@ -42,7 +43,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 62);
+    lua_createtable(state, 0, 63);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -96,6 +97,19 @@ void RegisterLuaDebugBindings(lua_State* state) {
     RegisterFunction(state, &LuaDebugWritePtr, "write_ptr");
     RegisterFunction(state, &LuaDebugCallThiscallU32, "call_thiscall_u32");
     RegisterFunction(state, &LuaDebugCallThiscallU32RetU32, "call_thiscall_u32_ret_u32");
+    RegisterFunction(state, &LuaDebugCallThiscallRetU32, "call_thiscall_ret_u32");
+    RegisterFunction(
+        state,
+        &LuaDebugQueueNativePoisonBehaviorProbe,
+        "queue_native_poison_behavior_probe");
+    RegisterFunction(
+        state,
+        &LuaDebugQueueNativeMagicHitBehaviorProbe,
+        "queue_native_magic_hit_behavior_probe");
+    RegisterFunction(
+        state,
+        &LuaDebugGetNativeMagicHitBehaviorProbeResult,
+        "get_native_magic_hit_behavior_probe_result");
     RegisterFunction(state, &LuaDebugCallThiscallOutF32x4U32, "call_thiscall_out_f32x4_u32");
     RegisterFunction(state, &LuaDebugGetNavGrid, "get_nav_grid");
     RegisterFunction(state, &LuaDebugGetGameNpcMotion, "get_gamenpc_motion");
@@ -110,6 +124,8 @@ void RegisterLuaDebugBindings(lua_State* state) {
     RegisterFunction(state, &LuaDebugWriteFieldU32, "write_field_u32");
     RegisterFunction(state, &LuaDebugWriteFieldFloat, "write_field_float");
     RegisterFunction(state, &LuaDebugResolveNativePrimarySpellStats, "resolve_native_primary_spell_stats");
+    RegisterFunction(state, &LuaDebugResolveNativeSecondaryManaStats, "resolve_native_secondary_mana_stats");
+    RegisterFunction(state, &LuaDebugCaptureBackBuffer, "capture_backbuffer");
     lua_setfield(state, -2, "debug");
 }
 

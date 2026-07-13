@@ -128,6 +128,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             ApplyReplicatedWorldSnapshotIfActive(
                 gameplay_address_for_pump,
                 pause_now_ms);
+            ApplyReplicatedSpellEffectSnapshotsIfActive(pause_now_ms);
         }
         return;
     }
@@ -371,7 +372,37 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 actor_address,
                 "pre_bot_stock_tick_progression_runtime");
         }
-        original(self);
+        uintptr_t remote_firewalker_profile = 0;
+        std::uint8_t remote_firewalker_active = 0;
+        const bool remote_firewalker_suppressed =
+            native_remote_binding &&
+            TryResolveWizardActorProfileAddress(
+                actor_address,
+                &remote_firewalker_profile) &&
+            memory.TryReadField(
+                remote_firewalker_profile,
+                kWizardProfileFirewalkerActiveOffset,
+                &remote_firewalker_active) &&
+            remote_firewalker_active != 0 &&
+            memory.TryWriteField<std::uint8_t>(
+                remote_firewalker_profile,
+                kWizardProfileFirewalkerActiveOffset,
+                0);
+        InvokeWithParticipantConcentrationContext(
+            binding,
+            [&] {
+                original(self);
+            });
+        if (remote_firewalker_suppressed &&
+            !memory.TryWriteField(
+                remote_firewalker_profile,
+                kWizardProfileFirewalkerActiveOffset,
+                remote_firewalker_active)) {
+            Log(
+                "[bots] remote Firewalker stock-tick mask restore failed. actor=" +
+                HexString(actor_address) +
+                " profile=" + HexString(remote_firewalker_profile));
+        }
         if (bot_stock_tick_uses_actor_progression_cache) {
             (void)EnsureActorProgressionRuntimeFieldFromHandle(
                 actor_address,
@@ -546,6 +577,12 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     }
                 }
                 (void)ProcessPendingBotCast(binding, &cast_error_message);
+                (void)ReconcileNativeRemoteParticipantPersistentStatuses(
+                    binding,
+                    native_tick_now_ms);
+                (void)ReconcileNativeRemoteParticipantTransientStatuses(
+                    binding,
+                    native_tick_now_ms);
                 if (playback.presentation_valid) {
                     (void)ApplyNativeRemoteParticipantPresentationState(binding, actor_address);
                 }
@@ -662,6 +699,12 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     if (binding->ongoing_cast.active || prepared_cast || cast_active_before) {
                         (void)ProcessPendingBotCast(binding, &native_remote_cast_error);
                     }
+                    (void)ReconcileNativeRemoteParticipantPersistentStatuses(
+                        binding,
+                        native_tick_now_ms);
+                    (void)ReconcileNativeRemoteParticipantTransientStatuses(
+                        binding,
+                        native_tick_now_ms);
                     const auto playback =
                         ApplyNativeRemoteParticipantPlayback(binding, actor_address, native_tick_now_ms);
                     if (!playback.presentation_valid) {
@@ -760,6 +803,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         ResolveWizardParticipantActorCollisions();
         TickParticipantSceneBindingsIfActive();
         ApplyReplicatedWorldSnapshotIfActive(gameplay_address_for_pump, static_cast<std::uint64_t>(::GetTickCount64()));
+        ApplyReplicatedSpellEffectSnapshotsIfActive(
+            static_cast<std::uint64_t>(::GetTickCount64()));
     }
     LogLocalPlayerAnimationProbe();
 }

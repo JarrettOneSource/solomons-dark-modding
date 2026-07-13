@@ -2,17 +2,24 @@ param(
     [string]$Preset = "map_create_fire_mind_hub",
     [string]$HostPreset = "",
     [string]$ClientPreset = "",
+    [string]$ThirdPreset = "",
     [UInt16]$HostPort = 47770,
     [UInt16]$ClientPort = 47771,
+    [UInt16]$ThirdPort = 47772,
     [string]$RemoteHost = "127.0.0.1",
     [string]$HostParticipantId = "0x2000000000001001",
     [string]$ClientParticipantId = "0x2000000000001002",
+    [string]$ThirdParticipantId = "0x2000000000001003",
     [string]$HostName = "Host Player",
     [string]$ClientName = "Client Player",
+    [string]$ThirdName = "Observer Player",
+    [switch]$EnableThird,
     [switch]$DisableMultiplayerTransport,
     [switch]$UseSandboxPresetFlow,
     [switch]$TemporaryHostProfile,
     [switch]$GodMode,
+    [string]$TestSurvivalBoneyardOverride = "",
+    [string]$TestWaveOverride = "",
     [switch]$NoTileWindows,
     [switch]$NoKill,
     [switch]$AllowFocusSteal
@@ -26,6 +33,7 @@ $launcher = Join-Path $root "dist\launcher\SolomonDarkModLauncher.exe"
 $launcherDir = Split-Path $launcher -Parent
 $luaExecScript = Join-Path $PSScriptRoot "Invoke-LuaExec.ps1"
 $clickWindowScript = Join-Path $PSScriptRoot "click_window.py"
+$launcherProcessHelpers = Join-Path $PSScriptRoot "LocalMultiplayerLauncher.Process.ps1"
 
 if (-not (Test-Path $launcher)) {
     throw "Launcher was not found at $launcher. Build and stage the launcher first."
@@ -35,6 +43,31 @@ if (-not (Test-Path $luaExecScript)) {
 }
 if (-not (Test-Path $clickWindowScript)) {
     throw "Window click helper was not found at $clickWindowScript."
+}
+if (-not (Test-Path $launcherProcessHelpers)) {
+    throw "Launcher process helpers were not found at $launcherProcessHelpers."
+}
+
+. $launcherProcessHelpers
+
+$resolvedTestSurvivalBoneyardOverride = ""
+if (-not [string]::IsNullOrWhiteSpace($TestSurvivalBoneyardOverride)) {
+    $resolvedOverrideItem = Get-Item -LiteralPath $TestSurvivalBoneyardOverride -ErrorAction Stop
+    if ($resolvedOverrideItem.PSIsContainer -or
+        $resolvedOverrideItem.Extension -notmatch '^\.boneyard$') {
+        throw "Test survival boneyard override must be a .boneyard file: $TestSurvivalBoneyardOverride"
+    }
+    $resolvedTestSurvivalBoneyardOverride = $resolvedOverrideItem.FullName
+}
+
+$resolvedTestWaveOverride = ""
+if (-not [string]::IsNullOrWhiteSpace($TestWaveOverride)) {
+    $resolvedWaveOverrideItem = Get-Item -LiteralPath $TestWaveOverride -ErrorAction Stop
+    if ($resolvedWaveOverrideItem.PSIsContainer -or
+        $resolvedWaveOverrideItem.Extension -notmatch '^\.txt$') {
+        throw "Test wave override must be a .txt file: $TestWaveOverride"
+    }
+    $resolvedTestWaveOverride = $resolvedWaveOverrideItem.FullName
 }
 
 if (-not $NoKill) {
@@ -65,166 +98,6 @@ public static class SolomonDarkWindowActivator {
 
 Add-Type -AssemblyName System.Windows.Forms
 
-function ConvertTo-ProcessArgument {
-    param([string]$Value)
-
-    if ($null -eq $Value -or $Value.Length -eq 0) {
-        return '""'
-    }
-    if ($Value -notmatch '[\s"]') {
-        return $Value
-    }
-
-    $builder = New-Object System.Text.StringBuilder
-    [void]$builder.Append('"')
-    $backslashes = 0
-    foreach ($character in $Value.ToCharArray()) {
-        if ($character -eq '\') {
-            $backslashes += 1
-            continue
-        }
-        if ($character -eq '"') {
-            [void]$builder.Append(('\' * (($backslashes * 2) + 1)))
-            [void]$builder.Append('"')
-            $backslashes = 0
-            continue
-        }
-        if ($backslashes -gt 0) {
-            [void]$builder.Append(('\' * $backslashes))
-            $backslashes = 0
-        }
-        [void]$builder.Append($character)
-    }
-    if ($backslashes -gt 0) {
-        [void]$builder.Append(('\' * ($backslashes * 2)))
-    }
-    [void]$builder.Append('"')
-    return $builder.ToString()
-}
-
-function ConvertFrom-FirstJsonObject {
-    param([string]$Text)
-
-    if ([string]::IsNullOrWhiteSpace($Text)) {
-        return $null
-    }
-
-    $start = $Text.IndexOf('{')
-    if ($start -lt 0) {
-        return $null
-    }
-
-    $depth = 0
-    $inString = $false
-    $escaped = $false
-    for ($index = $start; $index -lt $Text.Length; $index += 1) {
-        $character = $Text[$index]
-        if ($inString) {
-            if ($escaped) {
-                $escaped = $false
-            } elseif ($character -eq '\') {
-                $escaped = $true
-            } elseif ($character -eq '"') {
-                $inString = $false
-            }
-            continue
-        }
-
-        if ($character -eq '"') {
-            $inString = $true
-            continue
-        }
-        if ($character -eq '{') {
-            $depth += 1
-            continue
-        }
-        if ($character -eq '}') {
-            $depth -= 1
-            if ($depth -eq 0) {
-                $candidate = $Text.Substring($start, ($index - $start) + 1)
-                try {
-                    return $candidate | ConvertFrom-Json -ErrorAction Stop
-                } catch {
-                    return $null
-                }
-            }
-        }
-    }
-
-    return $null
-}
-
-function Invoke-LauncherWithEnvironment {
-    param(
-        [hashtable]$Environment,
-        [string[]]$Arguments
-    )
-
-    $previous = @{}
-    $stdoutPath = [System.IO.Path]::GetTempFileName()
-    $stderrPath = [System.IO.Path]::GetTempFileName()
-    foreach ($key in $Environment.Keys) {
-        $previous[$key] = [Environment]::GetEnvironmentVariable($key, "Process")
-        [Environment]::SetEnvironmentVariable($key, [string]$Environment[$key], "Process")
-    }
-
-    try {
-        $process = Start-Process `
-            -FilePath $launcher `
-            -ArgumentList (($Arguments | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join " ") `
-            -WorkingDirectory $launcherDir `
-            -RedirectStandardOutput $stdoutPath `
-            -RedirectStandardError $stderrPath `
-            -PassThru
-
-        $result = $null
-        $stdout = ""
-        $stderr = ""
-        $deadline = (Get-Date).AddSeconds(60)
-        while ((Get-Date) -lt $deadline) {
-            $process.Refresh()
-            $stdout = Get-Content -Path $stdoutPath -Raw -ErrorAction SilentlyContinue
-            $stderr = Get-Content -Path $stderrPath -Raw -ErrorAction SilentlyContinue
-            if (-not [string]::IsNullOrWhiteSpace($stdout)) {
-                $result = ConvertFrom-FirstJsonObject -Text $stdout
-                if ($null -ne $result) {
-                    break
-                }
-            }
-            if ($process.HasExited -and $process.ExitCode -ne 0) {
-                break
-            }
-            Start-Sleep -Milliseconds 200
-        }
-
-        $exitCode = $null
-        if ($process.HasExited) {
-            $exitCode = $process.ExitCode
-        }
-        if ($null -ne $exitCode -and "$exitCode" -ne "" -and $exitCode -ne 0) {
-            throw "Launcher failed with exit code $exitCode. Output: $stdout Error: $stderr"
-        }
-        if ([string]::IsNullOrWhiteSpace($stdout)) {
-            throw "Launcher produced no JSON output. Error: $stderr"
-        }
-        if ($null -eq $result) {
-            throw "Launcher did not produce parseable JSON output before timeout. Output: $stdout Error: $stderr"
-        }
-        if (-not $result.success) {
-            throw "Launcher reported failure: $($result.error)"
-        }
-        if (-not $process.HasExited) {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-        }
-        return $result
-    } finally {
-        foreach ($key in $Environment.Keys) {
-            [Environment]::SetEnvironmentVariable($key, $previous[$key], "Process")
-        }
-        Remove-Item $stdoutPath, $stderrPath -ErrorAction SilentlyContinue
-    }
-}
-
 function Start-MultiplayerInstance {
     param(
         [string]$Instance,
@@ -244,6 +117,12 @@ function Start-MultiplayerInstance {
     }
     if ($GodMode) {
         $env.SDMOD_MULTIPLAYER_GODMODE = "1"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($resolvedTestSurvivalBoneyardOverride)) {
+        $env.SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE = $resolvedTestSurvivalBoneyardOverride
+    }
+    if (-not [string]::IsNullOrWhiteSpace($resolvedTestWaveOverride)) {
+        $env.SDMOD_TEST_WAVE_OVERRIDE = $resolvedTestWaveOverride
     }
     if (-not $DisableMultiplayerTransport) {
         $env.SDMOD_MULTIPLAYER_TRANSPORT = "local_udp"
@@ -273,7 +152,11 @@ function Start-MultiplayerInstance {
         $args += "--temporary-profile"
     }
 
-    Invoke-LauncherWithEnvironment -Environment $env -Arguments $args
+    Invoke-LauncherWithEnvironment `
+        -LauncherPath $launcher `
+        -WorkingDirectory $launcherDir `
+        -Environment $env `
+        -Arguments $args
 }
 
 function Test-PresetWaitsForHub {
@@ -652,7 +535,12 @@ function Invoke-CreateWindowClick {
 }
 
 function Get-CreateSelectionState {
-    param([string]$PipeName)
+    param(
+        [string]$PipeName,
+        [string]$ActionId = ""
+    )
+
+    $escapedActionId = $ActionId.Replace("\", "\\").Replace("'", "\'")
 
     $resultText = Invoke-InstanceLuaExec `
         -PipeName $PipeName `
@@ -680,12 +568,21 @@ local function read_u8(offset)
   if value == nil then return nil end
   return value % 256
 end
+local action_id = '$escapedActionId'
+local action = nil
+if action_id ~= '' and type(sd.ui) == 'table' and type(sd.ui.find_action) == 'function' then
+  action = sd.ui.find_action(action_id, 'create')
+end
 emit('scene', scene and (scene.name or scene.kind) or '')
 emit('ui', snap and snap.surface_id or '')
 emit('owner', owner)
+emit('element_enabled', read_u8(0x18C))
 emit('element_selected', read_u32(0x1A4))
 emit('discipline_enabled', read_u8(0x228))
 emit('discipline_selected', read_u32(0x22C))
+emit('action_found', action ~= nil)
+emit('action_enabled', action and action.enabled or false)
+emit('action_interactive', action and action.interactive or false)
 "@
     return Convert-KeyValueText -Text $resultText
 }
@@ -695,6 +592,44 @@ function Test-CreateSelectionUnset {
 
     $text = [string]$Value
     return [string]::IsNullOrWhiteSpace($text) -or $text -eq "-1" -or $text -eq "4294967295"
+}
+
+function Wait-CreateSelectionReady {
+    param(
+        [string]$PipeName,
+        [ValidateSet("element", "discipline")][string]$Phase,
+        [string]$ActionId,
+        [int]$TimeoutSeconds = 30
+    )
+
+    $enabledKey = if ($Phase -eq "element") { "element_enabled" } else { "discipline_enabled" }
+    $selectedKey = if ($Phase -eq "element") { "element_selected" } else { "discipline_selected" }
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $lastState = $null
+    while ((Get-Date) -lt $deadline) {
+        $state = Get-CreateSelectionState -PipeName $PipeName -ActionId $ActionId
+        $lastState = $state
+        $owner = 0L
+        $enabled = 0L
+        $ownerReady = [long]::TryParse([string]$state["owner"], [ref]$owner) -and $owner -ne 0
+        $phaseEnabled = [long]::TryParse([string]$state[$enabledKey], [ref]$enabled) -and $enabled -ne 0
+        $selectionUnset = Test-CreateSelectionUnset -Value $state[$selectedKey]
+        if ($ownerReady -and
+            $phaseEnabled -and
+            $selectionUnset -and
+            $state["ui"] -eq "create" -and
+            $state["action_found"] -eq "true") {
+            return $state
+        }
+        Start-Sleep -Milliseconds 250
+    }
+
+    $lastStateJson = if ($null -ne $lastState) {
+        $lastState | ConvertTo-Json -Compress
+    } else {
+        "{}"
+    }
+    throw "Timed out waiting for native create $Phase selection readiness for '$ActionId' on $PipeName. Last state: $lastStateJson"
 }
 
 function Wait-CreateElementLatched {
@@ -820,6 +755,10 @@ function Invoke-CreateSelection {
     $elementActionId = "create.select_element_$Element"
     $elementLatched = $false
     for ($attempt = 1; $attempt -le 3 -and -not $elementLatched; $attempt += 1) {
+        [void](Wait-CreateSelectionReady `
+            -PipeName $PipeName `
+            -Phase "element" `
+            -ActionId $elementActionId)
         Invoke-UiActionAndWait `
             -PipeName $PipeName `
             -ActionId $elementActionId `
@@ -837,6 +776,10 @@ function Invoke-CreateSelection {
     $disciplineActionId = "create.select_discipline_$Discipline"
     $disciplineAccepted = $false
     for ($attempt = 1; $attempt -le 3 -and -not $disciplineAccepted; $attempt += 1) {
+        [void](Wait-CreateSelectionReady `
+            -PipeName $PipeName `
+            -Phase "discipline" `
+            -ActionId $disciplineActionId)
         Invoke-UiActionAndWait `
             -PipeName $PipeName `
             -ActionId $disciplineActionId `
@@ -860,23 +803,44 @@ function Wait-InstanceHub {
         -ExpectedValue "hub" `
         -TimeoutSeconds 45 `
         -Code "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')"
+
+    # The stock create scene reports `hub` before its outgoing UI/preview
+    # objects have finished their deferred destruction.  Starting the live
+    # verifiers at that first sample makes their native visual/world queries
+    # overlap the allocator cleanup window (and has produced repeatable
+    # RtlFreeHeap failures before any remote actor was materialized).  Give the
+    # game thread a quiet window, then prove that the destination scene is still
+    # alive before returning ownership of the Lua pipe to the verifier.
+    Start-Sleep -Milliseconds 3500
+    Wait-InstanceLuaValue `
+        -PipeName $PipeName `
+        -ExpectedValue "hub" `
+        -TimeoutSeconds 10 `
+        -Code "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')"
 }
 
 $effectiveHostPreset = if ([string]::IsNullOrWhiteSpace($HostPreset)) { $Preset } else { $HostPreset }
 $effectiveClientPreset = if ([string]::IsNullOrWhiteSpace($ClientPreset)) { $Preset } else { $ClientPreset }
+$effectiveThirdPreset = if ([string]::IsNullOrWhiteSpace($ThirdPreset)) { $Preset } else { $ThirdPreset }
 
 $hostSelection = Resolve-CreateSelection -PresetName $effectiveHostPreset
 $clientSelection = Resolve-CreateSelection -PresetName $effectiveClientPreset
+$thirdSelection = Resolve-CreateSelection -PresetName $effectiveThirdPreset
 $hostLaunchPreset = $effectiveHostPreset
 $clientLaunchPreset = $effectiveClientPreset
+$thirdLaunchPreset = $effectiveThirdPreset
 if ($null -ne $hostSelection -and -not $UseSandboxPresetFlow) {
     $hostLaunchPreset = "create_manual"
 }
 if ($null -ne $clientSelection -and -not $UseSandboxPresetFlow) {
     $clientLaunchPreset = "create_manual"
 }
+if ($null -ne $thirdSelection -and -not $UseSandboxPresetFlow) {
+    $thirdLaunchPreset = "create_manual"
+}
 $hostWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveHostPreset) -or ($null -ne $hostSelection)
 $clientWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveClientPreset) -or ($null -ne $clientSelection)
+$thirdWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveThirdPreset) -or ($null -ne $thirdSelection)
 
 $hostResult = Start-MultiplayerInstance `
     -Instance "local-mp-host" `
@@ -930,6 +894,36 @@ if ($clientWaitForHub) {
     Wait-InstanceHub -PipeName "SolomonDarkModLoader_LuaExec_local-mp-client"
 }
 
+$thirdResult = $null
+if ($EnableThird) {
+    Start-Sleep -Seconds 2
+
+    $thirdResult = Start-MultiplayerInstance `
+        -Instance "local-mp-third" `
+        -InstanceLaunchPreset $thirdLaunchPreset `
+        -Role "client" `
+        -LocalPort $ThirdPort `
+        -RemotePort $HostPort `
+        -ParticipantId $ThirdParticipantId `
+        -PlayerName $ThirdName `
+        -RemotePlayerName $HostName
+
+    if ($GodMode) {
+        Enable-InstanceGodMode -PipeName "SolomonDarkModLoader_LuaExec_local-mp-third" | Out-Null
+    }
+
+    if ($null -ne $thirdSelection -and -not $UseSandboxPresetFlow) {
+        Invoke-CreateSelection `
+            -PipeName "SolomonDarkModLoader_LuaExec_local-mp-third" `
+            -Element $thirdSelection.Element `
+            -Discipline $thirdSelection.Discipline `
+            -ProcessId ([int]$thirdResult.launch.processId)
+    }
+    if ($thirdWaitForHub) {
+        Wait-InstanceHub -PipeName "SolomonDarkModLoader_LuaExec_local-mp-third"
+    }
+}
+
 $windowLayout = $null
 $windowLayoutError = $null
 if (-not $NoTileWindows) {
@@ -946,25 +940,36 @@ if (-not $NoTileWindows) {
     preset = $Preset
     hostPreset = $effectiveHostPreset
     clientPreset = $effectiveClientPreset
+    thirdPreset = if ($EnableThird) { $effectiveThirdPreset } else { $null }
     hostLaunchPreset = $hostLaunchPreset
     clientLaunchPreset = $clientLaunchPreset
+    thirdLaunchPreset = if ($EnableThird) { $thirdLaunchPreset } else { $null }
     hostProcessId = $hostResult.launch.processId
     clientProcessId = $clientResult.launch.processId
+    thirdProcessId = if ($null -ne $thirdResult) { $thirdResult.launch.processId } else { $null }
     hostPort = $HostPort
     clientPort = $ClientPort
+    thirdPort = if ($EnableThird) { $ThirdPort } else { $null }
+    thirdEnabled = [bool]$EnableThird
     multiplayerTransportEnabled = -not $DisableMultiplayerTransport
     sandboxPresetFlowEnabled = [bool]$UseSandboxPresetFlow
     temporaryHostProfile = [bool]$TemporaryHostProfile
     godModeEnabled = [bool]$GodMode
+    testSurvivalBoneyardOverride = $resolvedTestSurvivalBoneyardOverride
+    testWaveOverride = $resolvedTestWaveOverride
     allowFocusSteal = [bool]$AllowFocusSteal
     hostParticipantId = $HostParticipantId
     clientParticipantId = $ClientParticipantId
+    thirdParticipantId = if ($EnableThird) { $ThirdParticipantId } else { $null }
     hostName = $HostName
     clientName = $ClientName
+    thirdName = if ($EnableThird) { $ThirdName } else { $null }
     hostLuaPipe = "SolomonDarkModLoader_LuaExec_local-mp-host"
     clientLuaPipe = "SolomonDarkModLoader_LuaExec_local-mp-client"
+    thirdLuaPipe = if ($EnableThird) { "SolomonDarkModLoader_LuaExec_local-mp-third" } else { $null }
     hostLog = $hostResult.launch.startupLogPath
     clientLog = $clientResult.launch.startupLogPath
+    thirdLog = if ($null -ne $thirdResult) { $thirdResult.launch.startupLogPath } else { $null }
     graphicsResolution = $stagedGraphicsResolution
     windowLayout = $windowLayout
     windowLayoutError = $windowLayoutError

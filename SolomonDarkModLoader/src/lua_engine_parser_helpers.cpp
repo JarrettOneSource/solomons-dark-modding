@@ -239,7 +239,7 @@ bool ReadLoadoutField(
 
         const auto length = lua_rawlen(state, -1);
         if (length > loadout->secondary_entry_indices.size()) {
-            *error_message = "loadout.secondary_entry_indices supports at most three entries";
+            *error_message = "loadout.secondary_entry_indices supports at most eight entries";
             lua_pop(state, 2);
             return false;
         }

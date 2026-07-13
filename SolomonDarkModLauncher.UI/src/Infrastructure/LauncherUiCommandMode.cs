@@ -2,7 +2,9 @@ namespace SolomonDarkModLauncher.UI.Infrastructure;
 
 internal enum LauncherUiCommandMode
 {
-    Launch,
+    LaunchSinglePlayer,
+    HostSteam,
+    JoinSteam,
     Stage,
     ListMods,
     EnableMod,

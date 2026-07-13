@@ -3,5 +3,10 @@ already ship one:
 
   assets/steam/win32/steam_api.dll
 
-The launcher stages steam_appid.txt automatically with AppID 3362180 by default and
-will copy this x86 steam_api.dll into the staged game root when needed.
+The launcher stages steam_appid.txt automatically with AppID 3362180 for normal
+launches and Spacewar AppID 480 for --multiplayer host/join development launches.
+It copies this x86 steam_api.dll into the staged game root when needed.
+
+For local development, the launcher also checks STEAMWORKS_SDK_PATH and the local
+SteamVR win32 runtime. The DLL is copied only into the disposable runtime stage;
+no Steam credentials or account data are copied or packaged.

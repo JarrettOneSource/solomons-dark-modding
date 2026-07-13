@@ -41,6 +41,59 @@ bool QueueGameplayMouseLeftClick(std::string* error_message) {
     return QueueGameplayMouseLeftHoldFrames(kInjectedGameplayMouseClickFrames, error_message);
 }
 
+bool QueueGameplayMovementHoldFrames(
+    float direction_x,
+    float direction_y,
+    std::uint32_t frames,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay input injection is not initialized.";
+        }
+        return false;
+    }
+    if (frames == 0 || frames > 3600) {
+        if (error_message != nullptr) {
+            *error_message = "Movement hold frames must be in the range 1..3600.";
+        }
+        return false;
+    }
+    const auto magnitude = std::sqrt(
+        direction_x * direction_x + direction_y * direction_y);
+    if (!std::isfinite(magnitude) || magnitude <= 0.0001f) {
+        if (error_message != nullptr) {
+            *error_message = "Movement direction must be finite and non-zero.";
+        }
+        return false;
+    }
+    if (magnitude > 1.0f) {
+        direction_x /= magnitude;
+        direction_y /= magnitude;
+    }
+
+    uintptr_t scene_address = 0;
+    if (!TryResolveCurrentGameplayScene(&scene_address) || scene_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay scene is not active.";
+        }
+        return false;
+    }
+
+    g_gameplay_keyboard_injection.pending_movement_x.store(
+        direction_x,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_movement_y.store(
+        direction_y,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_movement_frames.fetch_add(
+        frames,
+        std::memory_order_acq_rel);
+    return true;
+}
+
 bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
@@ -107,12 +160,19 @@ void ClearQueuedGameplayMouseLeft() {
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_left_active.store(true, std::memory_order_release);
 
+    const auto input_state_address =
+        g_gameplay_keyboard_injection.input_state_address.load(std::memory_order_acquire);
+    const bool cleared_raw_mouse_left = ClearRawGameplayMouseLeft(input_state_address);
+
     uintptr_t gameplay_address = 0;
     if (TryResolveCurrentGameplayScene(&gameplay_address) && gameplay_address != 0) {
         const std::uint8_t released = 0;
         ProcessMemory::Instance().TryWriteField(gameplay_address, kGameplayCastIntentOffset, released);
     }
-    Log("Cleared queued gameplay mouse-left input.");
+    Log(
+        "Cleared queued gameplay mouse-left input. input_state=" +
+        (input_state_address != 0 ? HexString(input_state_address) : std::string("0x00000000")) +
+        " raw_mouse_left=" + std::to_string(cleared_raw_mouse_left ? 1 : 0));
 }
 
 bool ClearLocalPlayerGameplayCastState(std::string* error_message) {
@@ -233,6 +293,16 @@ bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_messa
     }
 
     g_gameplay_keyboard_injection.pending_scancodes[scancode].fetch_add(1, std::memory_order_acq_rel);
+    // Manual-spawner mode normally suppresses the local control-brain update
+    // so idle test players cannot emit accidental primary casts.  A queued
+    // keyboard edge is explicit test input and needs a brief control window of
+    // its own; otherwise the edge is consumed but belt/menu actions never reach
+    // the native dispatcher.  Store rather than accumulate so a fast producer
+    // cannot leave manual mode unsuppressed indefinitely.
+    constexpr std::uint32_t kInjectedKeyboardControlFrames = 3;
+    g_gameplay_keyboard_injection.pending_injected_keyboard_control_frames.store(
+        kInjectedKeyboardControlFrames,
+        std::memory_order_release);
     return true;
 }
 

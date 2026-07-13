@@ -20,9 +20,9 @@ void LogProtocolSummary() {
             << " magic=SDMP"
             << " sizes{header=" << sizeof(PacketHeader)
             << ",state=" << sizeof(StatePacket)
-            << ",launch=" << sizeof(LaunchPacket)
+            << ",hello=" << sizeof(SessionHelloPacket)
             << ",cast=" << sizeof(CastPacket)
-            << ",progression=" << sizeof(ProgressionPacket)
+            << ",hello_ack=" << sizeof(SessionHelloAckPacket)
             << ",world_snapshot=" << sizeof(WorldSnapshotPacket)
             << "} service_tick_ms=" << GetServiceTickIntervalMs();
     Log(message.str());

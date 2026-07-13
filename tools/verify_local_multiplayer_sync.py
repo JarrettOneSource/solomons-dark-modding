@@ -20,10 +20,22 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 HOST_ID = 0x2000000000001001
 CLIENT_ID = 0x2000000000001002
+THIRD_ID = 0x2000000000001003
 HOST_NAME = "Host Player"
 CLIENT_NAME = "Client Player"
+THIRD_NAME = "Observer Player"
 HOST_PIPE = "SolomonDarkModLoader_LuaExec_local-mp-host"
 CLIENT_PIPE = "SolomonDarkModLoader_LuaExec_local-mp-client"
+THIRD_PIPE = "SolomonDarkModLoader_LuaExec_local-mp-third"
+REMOTE_PRIMARY_VISUAL_TYPE_ID = 0x1B5E
+REMOTE_SECONDARY_VISUAL_TYPE_ID = 0x1B5D
+REMOTE_RENDER_SELECTION_BY_ELEMENT = {
+    0: 1,  # Fire
+    1: 3,  # Water
+    2: 4,  # Earth
+    3: 2,  # Air
+    4: 0,  # Ether
+}
 
 
 class VerifyFailure(RuntimeError):
@@ -46,6 +58,25 @@ def run_command(args: list[str], *, env: dict[str, str] | None = None, timeout: 
             f"command failed ({completed.returncode}): {' '.join(args)}\n{completed.stdout}"
         )
     return completed.stdout
+
+
+def path_for_powershell(path: Path) -> str:
+    resolved = path.resolve()
+    if os.name == "nt":
+        return str(resolved)
+    completed = subprocess.run(
+        ["wslpath", "-w", str(resolved)],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=5.0,
+        check=False,
+    )
+    converted = completed.stdout.strip()
+    if completed.returncode != 0 or not converted:
+        raise VerifyFailure(f"could not convert path for PowerShell: {resolved}: {completed.stdout}")
+    return converted
 
 
 def stop_games() -> None:
@@ -86,6 +117,10 @@ def launch_pair(
     temporary_host_profile: bool = True,
     god_mode: bool = False,
     tile_windows: bool = True,
+    test_survival_boneyard_override: Path | None = None,
+    test_wave_override: Path | None = None,
+    third_player: bool = False,
+    third_preset: str | None = None,
 ) -> dict[str, object]:
     args = [
         "powershell.exe",
@@ -108,8 +143,30 @@ def launch_pair(
         args.extend(["-Preset", preset])
     if temporary_host_profile:
         args.append("-TemporaryHostProfile")
+    if third_player:
+        args.extend(
+            [
+                "-EnableThird",
+                "-ThirdParticipantId",
+                f"0x{THIRD_ID:X}",
+                "-ThirdName",
+                THIRD_NAME,
+            ]
+        )
+        if third_preset is not None:
+            args.extend(["-ThirdPreset", third_preset])
     if god_mode:
         args.append("-GodMode")
+    if test_survival_boneyard_override is not None:
+        args.extend([
+            "-TestSurvivalBoneyardOverride",
+            path_for_powershell(test_survival_boneyard_override),
+        ])
+    if test_wave_override is not None:
+        args.extend([
+            "-TestWaveOverride",
+            path_for_powershell(test_wave_override),
+        ])
     if not tile_windows:
         args.append("-NoTileWindows")
     process = subprocess.Popen(
@@ -156,7 +213,15 @@ def launch_pair(
             return ""
         return completed.stdout.strip()
 
-    deadline = time.monotonic() + 120.0
+    launch_started = time.monotonic()
+    deadline = launch_started + (180.0 if third_player else 120.0)
+    # The PowerShell launcher owns the Lua pipes while it is driving the two
+    # native create screens. Probing those same single-consumer pipes from this
+    # wrapper can race its element/discipline actions and leave the stock game
+    # transitioning with half-consumed UI state. The launcher now has explicit
+    # create-screen readiness checks, so reserve this scene-only fallback for a
+    # genuinely wedged launcher instead of competing during normal startup.
+    fallback_probe_after = launch_started + (120.0 if third_player else 75.0)
     buffer = ""
     last_hub_probe = 0.0
     hub_ready_since: float | None = None
@@ -185,11 +250,15 @@ def launch_pair(
             break
 
         now = time.monotonic()
-        if now - last_hub_probe >= 1.0:
+        if now >= fallback_probe_after and now - last_hub_probe >= 1.0:
             last_hub_probe = now
             if (
                 query_scene_for_launch(HOST_PIPE) == "hub"
                 and query_scene_for_launch(CLIENT_PIPE) == "hub"
+                and (
+                    not third_player
+                    or query_scene_for_launch(THIRD_PIPE) == "hub"
+                )
             ):
                 if hub_ready_since is None:
                     hub_ready_since = now
@@ -199,14 +268,327 @@ def launch_pair(
                         "fallbackReady": True,
                         "hostLuaPipe": HOST_PIPE,
                         "clientLuaPipe": CLIENT_PIPE,
+                        "thirdLuaPipe": THIRD_PIPE if third_player else None,
                         "hostName": HOST_NAME,
                         "clientName": CLIENT_NAME,
+                        "thirdName": THIRD_NAME if third_player else None,
                     }
             else:
                 hub_ready_since = None
 
     terminate_launcher()
     raise VerifyFailure(f"timed out waiting for pair launcher JSON:\n{buffer}")
+
+
+def launch_trio(
+    preset: str = "map_create_fire_mind_hub",
+    *,
+    host_preset: str | None = None,
+    client_preset: str | None = None,
+    third_preset: str | None = None,
+    temporary_host_profile: bool = True,
+    god_mode: bool = False,
+    tile_windows: bool = True,
+    test_survival_boneyard_override: Path | None = None,
+    test_wave_override: Path | None = None,
+) -> dict[str, object]:
+    """Launch the host plus two independent clients through the host relay."""
+    return launch_pair(
+        preset,
+        host_preset=host_preset,
+        client_preset=client_preset,
+        temporary_host_profile=temporary_host_profile,
+        god_mode=god_mode,
+        tile_windows=tile_windows,
+        test_survival_boneyard_override=test_survival_boneyard_override,
+        test_wave_override=test_wave_override,
+        third_player=True,
+        third_preset=third_preset,
+    )
+
+
+def launch_additional_client(
+    *,
+    instance: str = "local-mp-third",
+    preset: str = "create_manual",
+    local_port: int = 47772,
+    participant_id: int = THIRD_ID,
+    player_name: str = THIRD_NAME,
+    god_mode: bool = False,
+    test_survival_boneyard_override: Path | None = None,
+    test_wave_override: Path | None = None,
+) -> dict[str, object]:
+    """Launch one client without stopping or relaunching an existing session."""
+    args = [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "scripts/Launch-LocalMultiplayerAdditionalClient.ps1",
+        "-Instance",
+        instance,
+        "-Preset",
+        preset,
+        "-LocalPort",
+        str(local_port),
+        "-ParticipantId",
+        f"0x{participant_id:X}",
+        "-PlayerName",
+        player_name,
+        "-HostName",
+        HOST_NAME,
+    ]
+    if god_mode:
+        args.append("-GodMode")
+    if test_survival_boneyard_override is not None:
+        args.extend(
+            [
+                "-TestSurvivalBoneyardOverride",
+                path_for_powershell(test_survival_boneyard_override),
+            ]
+        )
+    if test_wave_override is not None:
+        args.extend(
+            [
+                "-TestWaveOverride",
+                path_for_powershell(test_wave_override),
+            ]
+        )
+    process = subprocess.Popen(
+        args,
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
+    )
+    assert process.stdout is not None
+    buffer = ""
+    deadline = time.monotonic() + 75.0
+    try:
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([process.stdout], [], [], 0.1)
+            if ready:
+                line = process.stdout.readline()
+                if line:
+                    buffer += line
+                    parsed = extract_json(buffer)
+                    if parsed is not None:
+                        if not parsed.get("success"):
+                            raise VerifyFailure(
+                                f"additional-client launcher reported failure: {parsed}"
+                            )
+                        return parsed
+                elif process.poll() is not None:
+                    break
+            if process.poll() is not None:
+                remainder = process.stdout.read()
+                if remainder:
+                    buffer += remainder
+                parsed = extract_json(buffer)
+                if parsed is not None and parsed.get("success"):
+                    return parsed
+                break
+        raise VerifyFailure(
+            f"timed out waiting for additional-client launcher JSON: {buffer}"
+        )
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=3.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+
+
+CREATE_ELEMENT_IDS = {
+    "ether": 0,
+    "fire": 1,
+    "air": 2,
+    "water": 3,
+    "earth": 4,
+}
+CREATE_DISCIPLINE_IDS = {
+    "mind": 0,
+    "body": 1,
+    "arcane": 2,
+}
+
+
+def query_native_create_state(pipe_name: str, action_id: str = "") -> dict[str, str]:
+    code = f"""
+local function emit(key, value) print(key .. '=' .. tostring(value == nil and '' or value)) end
+local scene = sd.world.get_scene()
+local snap = sd.ui.get_snapshot()
+local owner = 0
+if type(snap) == 'table' then
+  for _, element in ipairs(snap.elements or {{}}) do
+    if element.surface_id == 'create' or element.surface_root_id == 'create' then
+      owner = tonumber(element.surface_object_ptr) or 0
+      break
+    end
+  end
+end
+local function read_u32(offset)
+  if owner == 0 then return nil end
+  local ok, value = pcall(sd.debug.read_u32, owner + offset)
+  if ok then return tonumber(value) end
+  return nil
+end
+local function read_u8(offset)
+  local value = read_u32(offset)
+  if value == nil then return nil end
+  return value % 256
+end
+local action_id = {json.dumps(action_id)}
+local action = nil
+if action_id ~= '' and sd.ui.find_action ~= nil then
+  action = sd.ui.find_action(action_id, 'create')
+end
+emit('scene', scene and (scene.name or scene.kind) or '')
+emit('ui', snap and snap.surface_id or '')
+emit('owner', owner)
+emit('element_enabled', read_u8(0x18C))
+emit('element_selected', read_u32(0x1A4))
+emit('discipline_enabled', read_u8(0x228))
+emit('discipline_selected', read_u32(0x22C))
+emit('action_found', action ~= nil)
+emit('action_enabled', action and action.enabled or false)
+emit('action_interactive', action and action.interactive or false)
+"""
+    return parse_key_values(lua(pipe_name, code, timeout=5.0))
+
+
+def activate_native_ui_action(
+    pipe_name: str,
+    action_id: str,
+    surface_id: str,
+) -> dict[str, str]:
+    requested = parse_key_values(
+        lua(
+            pipe_name,
+            f"""
+local ok, request = sd.ui.activate_action({json.dumps(action_id)}, {json.dumps(surface_id)})
+print('ok=' .. tostring(ok))
+print('request=' .. tostring(request))
+""",
+            timeout=5.0,
+        )
+    )
+    if requested.get("ok") != "true":
+        raise VerifyFailure(
+            f"native UI action was rejected on {pipe_name}: {action_id} -> {requested}"
+        )
+    request_id = parse_int_text(requested.get("request"), 0)
+    deadline = time.monotonic() + 10.0
+    last: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = parse_key_values(
+            lua(
+                pipe_name,
+                f"""
+local d = sd.ui.get_action_dispatch({request_id})
+print('status=' .. tostring(d and d.status or ''))
+print('error=' .. tostring(d and d.error_message or ''))
+""",
+                timeout=5.0,
+            )
+        )
+        status = last.get("status", "")
+        if status == "failed":
+            raise VerifyFailure(
+                f"native UI action failed on {pipe_name}: {action_id} -> {last}"
+            )
+        if status not in ("", "queued", "dispatching"):
+            return {**requested, **last}
+        time.sleep(0.1)
+    raise VerifyFailure(
+        f"native UI action dispatch timed out on {pipe_name}: {action_id} -> {last}"
+    )
+
+
+def complete_native_create(
+    pipe_name: str,
+    *,
+    element: str,
+    discipline: str,
+    timeout: float = 45.0,
+) -> dict[str, object]:
+    if element not in CREATE_ELEMENT_IDS:
+        raise VerifyFailure(f"unknown create element {element!r}")
+    if discipline not in CREATE_DISCIPLINE_IDS:
+        raise VerifyFailure(f"unknown create discipline {discipline!r}")
+
+    actions: list[dict[str, str]] = []
+    phase_specs = (
+        (
+            "element",
+            f"create.select_element_{element}",
+            "element_enabled",
+            "element_selected",
+            CREATE_ELEMENT_IDS[element],
+        ),
+        (
+            "discipline",
+            f"create.select_discipline_{discipline}",
+            "discipline_enabled",
+            "discipline_selected",
+            CREATE_DISCIPLINE_IDS[discipline],
+        ),
+    )
+    for phase, action_id, enabled_key, selected_key, expected_id in phase_specs:
+        deadline = time.monotonic() + timeout
+        last: dict[str, str] = {}
+        while time.monotonic() < deadline:
+            last = query_native_create_state(pipe_name, action_id)
+            selected = parse_int_text(last.get(selected_key), -1)
+            if last.get("scene") in ("hub", "testrun"):
+                break
+            if (
+                last.get("ui") == "create"
+                and parse_int_text(last.get("owner"), 0) != 0
+                and parse_int_text(last.get(enabled_key), 0) != 0
+                and selected in (-1, 0xFFFFFFFF)
+                and last.get("action_found") == "true"
+            ):
+                actions.append(
+                    activate_native_ui_action(pipe_name, action_id, "create")
+                )
+                break
+            time.sleep(0.1)
+        else:
+            raise VerifyFailure(
+                f"native create {phase} never became ready on {pipe_name}: {last}"
+            )
+
+        latch_deadline = time.monotonic() + 12.0
+        while time.monotonic() < latch_deadline:
+            last = query_native_create_state(pipe_name)
+            if last.get("scene") in ("hub", "testrun"):
+                break
+            if parse_int_text(last.get(selected_key), -1) == expected_id:
+                break
+            time.sleep(0.1)
+        else:
+            raise VerifyFailure(
+                f"native create {phase} did not latch id={expected_id} on {pipe_name}: {last}"
+            )
+
+    deadline = time.monotonic() + timeout
+    last_scene = ""
+    while time.monotonic() < deadline:
+        last_scene = lua(
+            pipe_name,
+            "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')",
+            timeout=5.0,
+        ).strip()
+        if last_scene in ("hub", "testrun"):
+            return {"scene": last_scene, "actions": actions}
+        time.sleep(0.1)
+    raise VerifyFailure(
+        f"native create selection did not reach hub/run on {pipe_name}; last={last_scene!r}"
+    )
 
 
 # A live multiplayer run issues tens of thousands of lua() calls. Spawning a
@@ -402,11 +784,18 @@ emit("player.x", player and player.x or 0)
 emit("player.y", player and player.y or 0)
 emit("player.heading", player and player.heading or 0)
 local radius_offset = sd.debug.layout_offset("actor_collision_radius")
+local animation_drive_offset = sd.debug.layout_offset("actor_animation_drive_state_byte")
 local function actor_radius(actor_address)
   if actor_address == nil or actor_address == 0 or radius_offset == nil then
     return 0
   end
   return sd.debug.read_float(actor_address + radius_offset) or 0
+end
+local function actor_animation_drive(actor_address)
+  if actor_address == nil or actor_address == 0 or animation_drive_offset == nil then
+    return 0
+  end
+  return sd.debug.read_u8(actor_address + animation_drive_offset) or 0
 end
 local function staff_visual_state(lane)
   if lane == nil or lane.current_object_address == nil or lane.current_object_address == 0 then
@@ -443,6 +832,7 @@ local function render_selector(state)
   }, ",")
 end
 emit("player.radius", player and actor_radius(player.actor_address) or 0)
+emit("player.animation_drive", player and actor_animation_drive(player.actor_address) or 0)
 emit("player.staff_visual_state", player and staff_visual_state(player.attachment_visual_lane) or 0)
 emit("player.render_selector", render_selector(player))
 emit("player.primary_visual_type", player and visual_link_type(player.primary_visual_lane) or 0)
@@ -456,6 +846,7 @@ for i, peer in ipairs(peers) do
   emit(prefix .. "name", peer.name)
   emit(prefix .. "kind", peer.participant_kind)
   emit(prefix .. "controller", peer.controller_kind)
+  emit(prefix .. "element_id", peer.profile and peer.profile.element_id or -1)
   emit(prefix .. "materialized", peer.entity_materialized)
   emit(prefix .. "transform", peer.transform_valid)
   emit(prefix .. "actor", peer.actor_address)
@@ -463,6 +854,7 @@ for i, peer in ipairs(peers) do
   emit(prefix .. "y", peer.y)
   emit(prefix .. "heading", peer.heading)
   emit(prefix .. "radius", actor_radius(peer.actor_address))
+  emit(prefix .. "animation_drive", actor_animation_drive(peer.actor_address))
   emit(prefix .. "staff_visual_state", staff_visual_state(peer.attachment_visual_lane))
   emit(prefix .. "render_selector", render_selector(peer))
   emit(prefix .. "primary_visual_type", visual_link_type(peer.primary_visual_lane))
@@ -717,6 +1109,45 @@ emit("after.heading", after and after.heading or 0)
     return values
 
 
+def hold_player_heading(pipe_name: str, heading: float | None) -> dict[str, str]:
+    desired = "nil" if heading is None else f"{heading:.6f}"
+    code = f"""
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+local function apply_held_heading()
+  local desired = tonumber(_G.__sdmod_mp_test_held_heading)
+  if desired == nil then return true end
+  local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
+  local actor = player and tonumber(player.actor_address) or 0
+  if actor == 0 then return false end
+  local heading_offset = sd.debug.layout_offset('actor_heading')
+  local selection_offset = sd.debug.layout_offset('actor_animation_selection_state')
+  local accumulator_offset = sd.debug.layout_offset('actor_control_brain_heading_accumulator')
+  local desired_offset = sd.debug.layout_offset('actor_control_brain_desired_facing')
+  local smoothed_offset = sd.debug.layout_offset('actor_control_brain_desired_facing_smoothed')
+  local wrote = sd.debug.write_float(actor + heading_offset, desired)
+  local control = selection_offset ~= nil and tonumber(sd.debug.read_u32(actor + selection_offset)) or 0
+  if control ~= 0 then
+    if accumulator_offset ~= nil then wrote = sd.debug.write_float(control + accumulator_offset, desired) and wrote end
+    if desired_offset ~= nil then wrote = sd.debug.write_float(control + desired_offset, desired) and wrote end
+    if smoothed_offset ~= nil then wrote = sd.debug.write_float(control + smoothed_offset, desired) and wrote end
+  end
+  return wrote
+end
+if not _G.__sdmod_mp_test_heading_hold_registered then
+  sd.events.on('runtime.tick', apply_held_heading)
+  _G.__sdmod_mp_test_heading_hold_registered = true
+end
+_G.__sdmod_mp_test_held_heading = {desired}
+emit('registered', _G.__sdmod_mp_test_heading_hold_registered)
+emit('enabled', _G.__sdmod_mp_test_held_heading ~= nil)
+emit('apply', apply_held_heading())
+"""
+    values = parse_key_values(lua(pipe_name, code, timeout=5.0))
+    if values.get("registered") != "true" or values.get("apply") != "true":
+        raise VerifyFailure(f"failed to configure player heading hold on {pipe_name}: {values}")
+    return values
+
+
 def place_player(pipe_name: str, x: float, y: float, heading: float) -> dict[str, str]:
     code = f"""
 local player = sd.player.get_state()
@@ -968,7 +1399,7 @@ def wait_for_remote_convergence(
     )
 
 
-def wait_for_local_collision_push(
+def wait_for_native_remote_overlap_stability(
     *,
     scene_name: str,
     anchor_pipe: str,
@@ -981,8 +1412,10 @@ def wait_for_local_collision_push(
     mover_x: float,
     mover_y: float,
     mover_heading: float,
-    timeout: float = 12.0,
+    timeout: float = 8.0,
 ) -> dict[str, object]:
+    hold_player_heading(anchor_pipe, anchor_heading)
+    hold_player_heading(mover_pipe, mover_heading)
     place_player(anchor_pipe, anchor_x, anchor_y, anchor_heading)
     wait_for_remote_convergence(
         mover_pipe,
@@ -994,48 +1427,75 @@ def wait_for_local_collision_push(
     )
     mover_start = place_player(mover_pipe, mover_x, mover_y, mover_heading)
     mover_start_xy = (float(mover_start["after.x"]), float(mover_start["after.y"]))
-    peer_prefix = f"peer.{mover_peer_id}."
+    anchor_on_mover_prefix = f"peer.{mover_peer_id}."
+    # The caller passes anchor_id as the anchor's identity and mover_peer_id as
+    # the same identity from the mover's point of view. Resolve the mover's id
+    # from the two known local test pipes for the reverse observation.
+    mover_id = HOST_ID if mover_pipe == HOST_PIPE else CLIENT_ID
+    mover_on_anchor_prefix = f"peer.{mover_id}."
     deadline = time.monotonic() + timeout
-    last: dict[str, str] = {}
+    stable_since: float | None = None
+    last: dict[str, object] = {}
     while time.monotonic() < deadline:
-        last = query(mover_pipe)
-        if last.get("scene") != scene_name:
+        mover_view = query(mover_pipe)
+        anchor_view = query(anchor_pipe)
+        if mover_view.get("scene") != scene_name or anchor_view.get("scene") != scene_name:
+            stable_since = None
             time.sleep(0.15)
             continue
 
-        mover_player = (float(last["player.x"]), float(last["player.y"]))
-        peer = (
-            float(last.get(peer_prefix + "x", "nan")),
-            float(last.get(peer_prefix + "y", "nan")),
+        mover_player = (float(mover_view["player.x"]), float(mover_view["player.y"]))
+        anchor_mirror = (
+            float(mover_view.get(anchor_on_mover_prefix + "x", "nan")),
+            float(mover_view.get(anchor_on_mover_prefix + "y", "nan")),
         )
-        mover_radius = float(last.get("player.radius", "0") or "0")
-        peer_radius = float(last.get(peer_prefix + "radius", "0") or "0")
-        min_separation = max(8.0, mover_radius + peer_radius - 1.0)
+        mover_mirror = (
+            float(anchor_view.get(mover_on_anchor_prefix + "x", "nan")),
+            float(anchor_view.get(mover_on_anchor_prefix + "y", "nan")),
+        )
+        mover_radius = float(mover_view.get("player.radius", "0") or "0")
+        peer_radius = float(mover_view.get(anchor_on_mover_prefix + "radius", "0") or "0")
+        overlap_threshold = max(8.0, mover_radius + peer_radius - 1.0)
+        mover_drift = distance(*mover_player, *mover_start_xy)
+        replicated_delta = distance(*mover_player, *mover_mirror)
+        overlap_distance = distance(*mover_player, *anchor_mirror)
+        last = {
+            "mover_pipe": mover_pipe,
+            "mover_start": list(mover_start_xy),
+            "mover_player": list(mover_player),
+            "mover_mirror": list(mover_mirror),
+            "anchor_mirror": list(anchor_mirror),
+            "mover_drift": mover_drift,
+            "replicated_delta": replicated_delta,
+            "overlap_distance": overlap_distance,
+            "overlap_threshold": overlap_threshold,
+        }
 
         if (
-            distance(*mover_player, *mover_start_xy) >= 1.0
-            and distance(*mover_player, *peer) >= min_separation
+            mover_drift <= 0.75
+            and replicated_delta <= 3.0
+            and overlap_distance < overlap_threshold
         ):
-            return {
-                "mover_pipe": mover_pipe,
-                "mover_start": list(mover_start_xy),
-                "mover_after_push": list(mover_player),
-                "peer_after_push": list(peer),
-                "min_separation": min_separation,
-            }
+            if stable_since is None:
+                stable_since = time.monotonic()
+            elif time.monotonic() - stable_since >= 1.0:
+                last["stable_seconds"] = time.monotonic() - stable_since
+                return last
+        else:
+            stable_since = None
         time.sleep(0.15)
 
     raise VerifyFailure(
-        f"local player on {mover_pipe} did not push away from peer {mover_peer_id} "
+        f"local/native-remote overlap did not remain stable and converged on {mover_pipe} "
         f"in {scene_name}; last={last}"
     )
 
 
-def wait_for_collision_push(scene_name: str) -> dict[str, object]:
+def verify_native_remote_overlap_policy(scene_name: str) -> dict[str, object]:
     host_before = query(HOST_PIPE)
     base_x = float(host_before["player.x"])
     base_y = float(host_before["player.y"])
-    client_push = wait_for_local_collision_push(
+    client_overlap = wait_for_native_remote_overlap_stability(
         scene_name=scene_name,
         anchor_pipe=HOST_PIPE,
         anchor_id=HOST_ID,
@@ -1048,7 +1508,7 @@ def wait_for_collision_push(scene_name: str) -> dict[str, object]:
         mover_y=base_y,
         mover_heading=270.0,
     )
-    host_push = wait_for_local_collision_push(
+    host_overlap = wait_for_native_remote_overlap_stability(
         scene_name=scene_name,
         anchor_pipe=CLIENT_PIPE,
         anchor_id=CLIENT_ID,
@@ -1062,8 +1522,9 @@ def wait_for_collision_push(scene_name: str) -> dict[str, object]:
         mover_heading=90.0,
     )
     return {
-        "client_push": client_push,
-        "host_push": host_push,
+        "policy": "skip_local_native_remote_push_to_avoid_replication_feedback",
+        "client_overlap": client_overlap,
+        "host_overlap": host_overlap,
     }
 
 
@@ -1261,18 +1722,47 @@ def verify_scene(scene_name: str) -> dict[str, object]:
     client_source_selector = client_seen.get("player.render_selector", "")
     host_remote_selector = host_seen.get(f"peer.{CLIENT_ID}.render_selector", "")
     client_remote_selector = client_seen.get(f"peer.{HOST_ID}.render_selector", "")
-    if host_remote_selector != client_source_selector:
-        raise VerifyFailure(
-            "host remote render selector does not mirror client source: "
-            f"remote={host_remote_selector!r} source={client_source_selector!r}")
-    if client_remote_selector != host_source_selector:
-        raise VerifyFailure(
-            "client remote render selector does not mirror host source: "
-            f"remote={client_remote_selector!r} source={host_source_selector!r}")
+    remote_selector_checks = (
+        ("host remote", host_seen, CLIENT_ID, host_remote_selector),
+        ("client remote", client_seen, HOST_ID, client_remote_selector),
+    )
+    for label, values, participant_id, selector_text in remote_selector_checks:
+        element_id = parse_int_text(
+            values.get(f"peer.{participant_id}.element_id"), -1)
+        expected_selection = REMOTE_RENDER_SELECTION_BY_ELEMENT.get(element_id)
+        try:
+            selector_parts = [int(part, 0) for part in selector_text.split(",")]
+        except ValueError:
+            selector_parts = []
+        if (
+            expected_selection is None or
+            len(selector_parts) != 5 or
+            selector_parts[3] != expected_selection
+        ):
+            raise VerifyFailure(
+                f"{label} did not preserve its profile-built render selection: "
+                f"element={element_id} expected={expected_selection} "
+                f"selector={selector_text!r}")
     client_source_visual_blocks = visual_blocks_by_type(client_seen, "player")
     host_source_visual_blocks = visual_blocks_by_type(host_seen, "player")
     host_remote_visual_blocks = visual_blocks_by_type(host_seen, f"peer.{CLIENT_ID}")
     client_remote_visual_blocks = visual_blocks_by_type(client_seen, f"peer.{HOST_ID}")
+    remote_visual_lane_checks = (
+        ("host remote", host_seen, CLIENT_ID),
+        ("client remote", client_seen, HOST_ID),
+    )
+    for label, values, participant_id in remote_visual_lane_checks:
+        primary_type = parse_int_text(
+            values.get(f"peer.{participant_id}.primary_visual_type"), 0)
+        secondary_type = parse_int_text(
+            values.get(f"peer.{participant_id}.secondary_visual_type"), 0)
+        if (
+            primary_type != REMOTE_PRIMARY_VISUAL_TYPE_ID or
+            secondary_type != REMOTE_SECONDARY_VISUAL_TYPE_ID
+        ):
+            raise VerifyFailure(
+                f"{label} actor-owned helper lane mismatch: "
+                f"primary=0x{primary_type:04X} secondary=0x{secondary_type:04X}")
     for type_id, source_block in client_source_visual_blocks.items():
         remote_block = host_remote_visual_blocks.get(type_id, "")
         if remote_block != source_block:
@@ -1291,10 +1781,21 @@ def verify_scene(scene_name: str) -> dict[str, object]:
     base_y = float(host_player_before["player.y"])
     host_place_x, host_place_y = snap_to_nav(HOST_PIPE, base_x - 120.0, base_y)
     client_place_x, client_place_y = snap_to_nav(HOST_PIPE, base_x + 120.0, base_y)
+    hold_player_heading(HOST_PIPE, 90.0)
+    hold_player_heading(CLIENT_PIPE, 270.0)
     host_place = place_player(HOST_PIPE, host_place_x, host_place_y, 90.0)
     client_place = place_player(CLIENT_PIPE, client_place_x, client_place_y, 270.0)
     host_idle_x, host_idle_y, host_idle_heading = wait_for_local_transform_settled(HOST_PIPE)
     client_idle_x, client_idle_y, client_idle_heading = wait_for_local_transform_settled(CLIENT_PIPE)
+    # Settling the second process can overlap a late run-entry placement or
+    # native collision correction in the first.  Refresh the owner's actual
+    # transform immediately before asking its observer to converge; otherwise
+    # the verifier can compare a correct mirror against a stale pre-correction
+    # coordinate captured several seconds earlier.
+    host_idle_x, host_idle_y, host_idle_heading = wait_for_local_transform_settled(
+        HOST_PIPE,
+        stable_seconds=0.75,
+    )
     client_seen = wait_for_remote_convergence(
         CLIENT_PIPE,
         HOST_ID,
@@ -1325,6 +1826,7 @@ def verify_scene(scene_name: str) -> dict[str, object]:
         float(client_seen[f"peer.{HOST_ID}.y"]),
     )
 
+    hold_player_heading(HOST_PIPE, 135.0)
     host_move = nudge_player(HOST_PIPE, 90.0, 0.0, 135.0)
     time.sleep(0.2)
     host_x, host_y, host_heading = wait_for_local_transform_settled(HOST_PIPE, stable_seconds=0.25)
@@ -1343,6 +1845,7 @@ def verify_scene(scene_name: str) -> dict[str, object]:
         host_heading,
     )
 
+    hold_player_heading(CLIENT_PIPE, 225.0)
     client_move = nudge_player(CLIENT_PIPE, -70.0, 30.0, 225.0)
     time.sleep(0.2)
     client_x, client_y, client_heading = wait_for_local_transform_settled(CLIENT_PIPE, stable_seconds=0.25)
@@ -1360,7 +1863,11 @@ def verify_scene(scene_name: str) -> dict[str, object]:
         client_y,
         client_heading,
     )
-    collision = wait_for_collision_push(scene_name)
+    participant_overlap = verify_native_remote_overlap_policy(scene_name)
+    heading_hold_release = {
+        "host": hold_player_heading(HOST_PIPE, None),
+        "client": hold_player_heading(CLIENT_PIPE, None),
+    }
 
     return {
         "scene": scene_name,
@@ -1371,6 +1878,12 @@ def verify_scene(scene_name: str) -> dict[str, object]:
         "host_remote_render_selector": host_remote_selector,
         "client_source_render_selector": client_source_selector,
         "host_remote_visual_link_types": sorted(host_remote_visual_blocks),
+        "host_remote_visual_lane_types": {
+            "primary": parse_int_text(
+                host_seen.get(f"peer.{CLIENT_ID}.primary_visual_type"), 0),
+            "secondary": parse_int_text(
+                host_seen.get(f"peer.{CLIENT_ID}.secondary_visual_type"), 0),
+        },
         "client_remote_name": client_seen[f"peer.{HOST_ID}.name"],
         "client_remote_nameplate": client_seen[f"peer.{HOST_ID}.nameplate"],
         "client_remote_staff_visual_state": f"0x{client_remote_staff_visual_state:08X}",
@@ -1378,6 +1891,12 @@ def verify_scene(scene_name: str) -> dict[str, object]:
         "client_remote_render_selector": client_remote_selector,
         "host_source_render_selector": host_source_selector,
         "client_remote_visual_link_types": sorted(client_remote_visual_blocks),
+        "client_remote_visual_lane_types": {
+            "primary": parse_int_text(
+                client_seen.get(f"peer.{HOST_ID}.primary_visual_type"), 0),
+            "secondary": parse_int_text(
+                client_seen.get(f"peer.{HOST_ID}.secondary_visual_type"), 0),
+        },
         "host_moved_to": [host_x, host_y],
         "client_observed_host_before": list(client_observed_host_before),
         "client_observed_host_at": [
@@ -1400,7 +1919,8 @@ def verify_scene(scene_name: str) -> dict[str, object]:
             float(host_after_client_settled[f"peer.{CLIENT_ID}.y"]),
         ],
         "host_observed_client_heading": float(host_after_client_move[f"peer.{CLIENT_ID}.heading"]),
-        "collision": collision,
+        "participant_overlap": participant_overlap,
+        "heading_hold_release": heading_hold_release,
     }
 
 

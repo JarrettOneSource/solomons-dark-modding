@@ -6,11 +6,13 @@
 #include "mod_loader.h"
 #include "mod_loader_internal.h"
 #include "multiplayer_local_transport.h"
+#include "multiplayer_runtime_protocol.h"
 #include "x86_hook.h"
 
 #include <intrin.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstdint>

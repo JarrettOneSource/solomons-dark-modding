@@ -70,6 +70,18 @@ int LuaDebugGetTraceHits(lua_State* state) {
         lua_setfield(state, -2, "arg7");
         lua_pushinteger(state, static_cast<lua_Integer>(hit.arg8));
         lua_setfield(state, -2, "arg8");
+        lua_pushboolean(state, hit.ecx_words_valid ? 1 : 0);
+        lua_setfield(state, -2, "ecx_words_valid");
+        if (hit.ecx_words_valid) {
+            lua_createtable(state, 24, 0);
+            for (std::size_t word_index = 0; word_index < 24; ++word_index) {
+                lua_pushinteger(
+                    state,
+                    static_cast<lua_Integer>(hit.ecx_words[word_index]));
+                lua_rawseti(state, -2, static_cast<lua_Integer>(word_index + 1));
+            }
+            lua_setfield(state, -2, "ecx_words");
+        }
         lua_pushboolean(state, hit.arg3_words_valid ? 1 : 0);
         lua_setfield(state, -2, "arg3_words_valid");
         if (hit.arg3_words_valid) {

@@ -1,11 +1,46 @@
+bool ClearRawGameplayMouseLeft(uintptr_t input_state_address) {
+    if (input_state_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t mouse_button_mask = 0;
+    if (!memory.TryReadField(
+            input_state_address,
+            kGameplayInputMouseButtonMaskOffset,
+            &mouse_button_mask)) {
+        return false;
+    }
+
+    constexpr std::uint8_t kMouseLeftMask = 1;
+    const auto released_mask = static_cast<std::uint8_t>(mouse_button_mask & ~kMouseLeftMask);
+    return released_mask == mouse_button_mask ||
+           memory.TryWriteField(
+               input_state_address,
+               kGameplayInputMouseButtonMaskOffset,
+               released_mask);
+}
+
 void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
+    const auto self_address = reinterpret_cast<uintptr_t>(self);
+    if (self_address != 0) {
+        g_gameplay_keyboard_injection.input_state_address.store(
+            self_address,
+            std::memory_order_release);
+        if (g_gameplay_keyboard_injection.injected_mouse_left_active.load(
+                std::memory_order_acquire) &&
+            g_gameplay_keyboard_injection.pending_mouse_left_frames.load(
+                std::memory_order_acquire) == 0) {
+            (void)ClearRawGameplayMouseLeft(self_address);
+        }
+    }
+
     const auto original =
         GetX86HookTrampoline<GameplayMouseRefreshFn>(g_gameplay_keyboard_injection.mouse_refresh_hook);
     if (original != nullptr) {
         original(self, unused_edx);
     }
 
-    const auto self_address = reinterpret_cast<uintptr_t>(self);
     if (self_address == 0) {
         return;
     }
@@ -99,11 +134,18 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
             return;
         }
 
-        const auto mouse_button_offset = static_cast<std::size_t>(
-            buffer_index * kGameplayInputBufferStride + kGameplayMouseLeftButtonOffset);
         const std::uint8_t released = 0;
-        const bool wrote_mouse_button =
-            ProcessMemory::Instance().TryWriteField(self_address, mouse_button_offset, released);
+        bool wrote_mouse_button = false;
+        for (int index = 0; index < kGameplayInputBufferCount; ++index) {
+            const auto mouse_button_offset = static_cast<std::size_t>(
+                index * kGameplayInputBufferStride + kGameplayMouseLeftButtonOffset);
+            wrote_mouse_button =
+                ProcessMemory::Instance().TryWriteField(
+                    self_address,
+                    mouse_button_offset,
+                    released) ||
+                wrote_mouse_button;
+        }
 
         uintptr_t gameplay_address = 0;
         const bool have_gameplay_address =
@@ -117,7 +159,8 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
             g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
             Log(
                 "Released injected gameplay mouse-left. input_state=" + HexString(self_address) +
-                " buffer_index=" + std::to_string(buffer_index) +
+                " live_buffer_index=" + std::to_string(buffer_index) +
+                " cleared_buffer_count=" + std::to_string(kGameplayInputBufferCount) +
                 " gameplay=" + (have_gameplay_address ? HexString(gameplay_address) : std::string("0x00000000")) +
                 " cast_intent=" + std::to_string(wrote_cast_intent ? 1 : 0));
         }

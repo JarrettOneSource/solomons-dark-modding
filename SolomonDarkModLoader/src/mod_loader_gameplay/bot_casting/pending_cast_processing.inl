@@ -603,6 +603,8 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         constexpr int kRemotePerCastPurePrimaryProjectileSettleTicks = 2;
         constexpr int kRemotePerCastPurePrimaryProjectileMissingSettleTicks = 2;
         constexpr int kRemotePerCastPurePrimaryNoProjectileSafetyTicks = 90;
+        constexpr int kRemotePerCastPurePrimaryProjectileSafetyTicks =
+            ParticipantEntityBinding::OngoingCastState::kMaxTicksWaiting * 3;
         constexpr int kRemotePurePrimaryNoHandleMinimumVisibleTicks = 20;
         constexpr int kBotPurePrimaryNoHandleSettleTicks = 160;
         const bool remote_input_release_or_timeout =
@@ -648,6 +650,16 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     &projectile_state);
             if (remote_per_cast_projectile_present) {
                 ongoing.remote_per_cast_projectile_missing_ticks_waiting = 0;
+                if (!ongoing.remote_per_cast_projectile_trajectory_valid) {
+                    ongoing.remote_per_cast_projectile_trajectory_valid = true;
+                    ongoing.remote_per_cast_projectile_first_x = projectile_state.x;
+                    ongoing.remote_per_cast_projectile_first_y = projectile_state.y;
+                    ongoing.remote_per_cast_projectile_min_target_distance =
+                        (std::numeric_limits<float>::max)();
+                }
+                ongoing.remote_per_cast_projectile_last_x = projectile_state.x;
+                ongoing.remote_per_cast_projectile_last_y = projectile_state.y;
+                ongoing.remote_per_cast_projectile_trajectory_samples += 1;
                 if (ongoing.target_actor_address != 0 &&
                     memory.IsReadableRange(
                         ongoing.target_actor_address,
@@ -669,6 +681,14 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                             &target_radius)) {
                         const float dx = projectile_state.x - target_x;
                         const float dy = projectile_state.y - target_y;
+                        const float target_distance_squared = (dx * dx) + (dy * dy);
+                        if (std::isfinite(target_distance_squared) &&
+                            target_distance_squared >= 0.0f) {
+                            ongoing.remote_per_cast_projectile_min_target_distance =
+                                (std::min)(
+                                    ongoing.remote_per_cast_projectile_min_target_distance,
+                                    std::sqrt(target_distance_squared));
+                        }
                         constexpr float kRemotePerCastPurePrimaryTargetReachPadding = 16.0f;
                         const float reach_radius =
                             (std::max)(
@@ -680,7 +700,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                             std::isfinite(dx) &&
                             std::isfinite(dy) &&
                             std::isfinite(reach_radius) &&
-                            ((dx * dx) + (dy * dy)) <= reach_radius * reach_radius;
+                            target_distance_squared <= reach_radius * reach_radius;
                     }
                 }
             } else {
@@ -970,10 +990,23 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         const bool remote_input_active_without_release =
             remote_input_driven_cast &&
             !remote_input_release_or_timeout;
+        // A per-cast primary releases its actor latch before its stock projectile
+        // finishes flying. The generic action watchdog is therefore not its
+        // lifecycle boundary: telemetry-heavy playback can legitimately keep a
+        // Fireball alive beyond 300 action ticks. Continue observing the stock
+        // projectile until it disappears, while retaining a larger dedicated
+        // watchdog for a genuinely stuck scene actor.
+        const bool remote_per_cast_projectile_lifecycle_pending =
+            remote_per_cast_pure_primary_without_live_handle &&
+            ongoing.remote_per_cast_projectile_observed &&
+            remote_per_cast_projectile_present &&
+            ongoing.ticks_waiting <
+                kRemotePerCastPurePrimaryProjectileSafetyTicks;
         const bool safety_cap_hit =
             !remote_input_active_without_release &&
             !bounded_native_charge_observable &&
             !bounded_release_window_pending &&
+            !remote_per_cast_projectile_lifecycle_pending &&
             ongoing.ticks_waiting >=
                 ParticipantEntityBinding::OngoingCastState::kMaxTicksWaiting;
         const bool bounded_held_release_requested_safety_cap =

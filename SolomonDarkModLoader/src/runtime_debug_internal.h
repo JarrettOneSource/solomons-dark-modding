@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iomanip>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -103,6 +104,8 @@ struct TraceHitRecord {
     std::uint32_t arg6 = 0;
     std::uint32_t arg7 = 0;
     std::uint32_t arg8 = 0;
+    bool ecx_words_valid = false;
+    std::uint32_t ecx_words[24] = {};
     bool arg3_words_valid = false;
     std::uint32_t arg3_word0 = 0;
     std::uint32_t arg3_word1 = 0;

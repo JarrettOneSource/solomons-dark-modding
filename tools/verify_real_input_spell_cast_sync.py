@@ -198,6 +198,8 @@ def detect_instance_pids() -> dict[str, int]:
             result["host"] = process_id
         elif "local-mp-client" in command_line:
             result["client"] = process_id
+        elif "local-mp-third" in command_line:
+            result["third"] = process_id
     if "host" not in result or "client" not in result:
         raise VerifyFailure(f"could not resolve host/client SolomonDark PIDs from {rows}")
     return result
@@ -226,12 +228,30 @@ def windows_path(path: Path) -> str:
     return run(["wslpath", "-w", str(path)], timeout=5.0).strip()
 
 
-def click_process(pid: int, *, hold_ms: int = 90) -> subprocess.Popen[str]:
+def release_global_mouse_button(button: str = "left") -> str:
+    if button not in ("left", "right"):
+        raise VerifyFailure(f"unsupported mouse button: {button}")
+    script = windows_path(CLICK_WINDOW)
+    command = f"py -3 {json.dumps(script)} --release-only --button {button}"
+    return run(
+        ["powershell.exe", "-NoProfile", "-Command", command],
+        timeout=5.0,
+    ).strip()
+
+
+def click_process(
+    pid: int,
+    *,
+    hold_ms: int = 90,
+    button: str = "left",
+) -> subprocess.Popen[str]:
+    if button not in ("left", "right"):
+        raise VerifyFailure(f"unsupported mouse button: {button}")
     script = windows_path(CLICK_WINDOW)
     command = (
         f"py -3 {json.dumps(script)} --pid {pid} --relative --x 0.72 --y 0.50 "
         f"--activate --activation-delay-ms 250 --post-delay-ms 80 "
-        f"--hold-ms {hold_ms} --global-only"
+        f"--hold-ms {hold_ms} --button {button} --global-only"
     )
     return subprocess.Popen(
         ["powershell.exe", "-NoProfile", "-Command", command],
@@ -266,6 +286,19 @@ emit("mouse_left_frames", sd.input.hold_mouse_left_frames({frames}))
 """,
         timeout=5.0,
     )
+
+
+def clear_gameplay_mouse_left(direction: Direction) -> dict[str, str]:
+    result = values(
+        direction.source_pipe,
+        "print('cleared=' .. tostring(sd.input.clear_mouse_left()))",
+        timeout=5.0,
+    )
+    if result.get("cleared") != "true":
+        raise VerifyFailure(f"{direction.name}: failed to clear mouse-left input: {result}")
+    # ClearQueuedGameplayMouseLeft is consumed by the next native input refresh.
+    time.sleep(0.25)
+    return result
 
 
 def parse_phase_counts(log_text: str, source_id: int) -> dict[str, int]:
@@ -399,7 +432,51 @@ def wait_for_source_cast(
     )
 
 
+def wait_for_balanced_source_casts(
+    direction: Direction,
+    source_offset: int,
+    timeout: float = 3.0,
+    stable_duration: float = 0.25,
+) -> tuple[str, dict[str, int], int]:
+    deadline = time.monotonic() + timeout
+    balanced_since: float | None = None
+    balanced_signature: tuple[int, int, int] | None = None
+    last_log = ""
+    last_counts: dict[str, int] = {}
+    last_native_hook_count = 0
+    while time.monotonic() < deadline:
+        last_log = log_after(direction.source_log, source_offset)
+        last_counts = parse_phase_counts(last_log, direction.source_id)
+        last_native_hook_count = count_local_native_queues(last_log)
+        signature = (
+            last_native_hook_count,
+            last_counts.get("pressed", 0),
+            last_counts.get("released", 0),
+        )
+        balanced = (
+            last_native_hook_count >= 1
+            and signature[1] == last_native_hook_count
+            and signature[2] == last_native_hook_count
+        )
+        now = time.monotonic()
+        if balanced:
+            if signature != balanced_signature:
+                balanced_signature = signature
+                balanced_since = now
+            elif balanced_since is not None and now - balanced_since >= stable_duration:
+                return last_log, last_counts, last_native_hook_count
+        else:
+            balanced_signature = None
+            balanced_since = None
+        time.sleep(0.05)
+    raise VerifyFailure(
+        f"{direction.name}: source cast lifecycle did not balance. "
+        f"native_hooks={last_native_hook_count} phases={last_counts}"
+    )
+
+
 def verify_single_click(direction: Direction) -> dict[str, object]:
+    pre_clear = clear_gameplay_mouse_left(direction)
     source_offset = len(read_log(direction.source_log))
     receiver_offset = len(read_log(direction.receiver_log))
     before_fire = sample_remote_fire(direction.receiver_pipe, duration=0.15)
@@ -411,10 +488,11 @@ def verify_single_click(direction: Direction) -> dict[str, object]:
         timeout=4.0,
     )
     observed_fire = sample_remote_fire(direction.receiver_pipe, duration=2.2)
-    source_log = log_after(direction.source_log, source_offset)
+    source_log, phase_counts, native_hook_count = wait_for_balanced_source_casts(
+        direction,
+        source_offset,
+    )
     receiver_log = log_after(direction.receiver_log, receiver_offset)
-    phase_counts = parse_phase_counts(source_log, direction.source_id)
-    native_hook_count = count_local_native_queues(source_log)
     native_sequences = parse_local_pressed_sequences(source_log, direction.source_id)
     remote_queue_sequences = parse_remote_queue_sequences(receiver_log, direction.source_id)
     remote_prep_sequences = parse_remote_prep_sequences(receiver_log, direction.source_id)
@@ -465,6 +543,7 @@ def verify_single_click(direction: Direction) -> dict[str, object]:
         remote_observed_sequences,
     )
     return {
+        "pre_clear": pre_clear,
         "input_output": input_output,
         "native_hook_count": native_hook_count,
         "native_sequences": native_sequences,
@@ -483,6 +562,7 @@ def verify_single_click(direction: Direction) -> dict[str, object]:
 
 
 def verify_rapid_clicks(direction: Direction, click_count: int = 5) -> dict[str, object]:
+    pre_clear = clear_gameplay_mouse_left(direction)
     source_offset = len(read_log(direction.source_log))
     receiver_offset = len(read_log(direction.receiver_log))
     before_fire = sample_remote_fire(direction.receiver_pipe, duration=0.15)
@@ -491,10 +571,11 @@ def verify_rapid_clicks(direction: Direction, click_count: int = 5) -> dict[str,
         input_outputs.append(queue_gameplay_mouse_left(direction, TAP_FRAMES))
         time.sleep(0.65)
     observed_fire = sample_remote_fire(direction.receiver_pipe, duration=2.5)
-    source_log = log_after(direction.source_log, source_offset)
+    source_log, phase_counts, native_hook_count = wait_for_balanced_source_casts(
+        direction,
+        source_offset,
+    )
     receiver_log = log_after(direction.receiver_log, receiver_offset)
-    phase_counts = parse_phase_counts(source_log, direction.source_id)
-    native_hook_count = count_local_native_queues(source_log)
     native_sequences = parse_local_pressed_sequences(source_log, direction.source_id)
     remote_queue_sequences = parse_remote_queue_sequences(receiver_log, direction.source_id)
     remote_settle_sequences = parse_remote_settle_sequences(
@@ -536,6 +617,7 @@ def verify_rapid_clicks(direction: Direction, click_count: int = 5) -> dict[str,
         remote_observed_sequences,
     )
     return {
+        "pre_clear": pre_clear,
         "input_outputs": input_outputs,
         "native_hook_count": native_hook_count,
         "native_sequences": native_sequences,
@@ -552,6 +634,7 @@ def verify_rapid_clicks(direction: Direction, click_count: int = 5) -> dict[str,
 
 
 def verify_hold(direction: Direction) -> dict[str, object]:
+    pre_clear = clear_gameplay_mouse_left(direction)
     source_offset = len(read_log(direction.source_log))
     receiver_offset = len(read_log(direction.receiver_log))
     before_fire = sample_remote_fire(direction.receiver_pipe, duration=0.15)
@@ -590,10 +673,11 @@ local bot = sd.bots and sd.bots.get_participant_state and sd.bots.get_participan
             break
         time.sleep(0.05)
     observed_fire = held_fire | sample_remote_fire(direction.receiver_pipe, duration=2.2)
-    source_log = log_after(direction.source_log, source_offset)
+    source_log, phase_counts, native_hook_count = wait_for_balanced_source_casts(
+        direction,
+        source_offset,
+    )
     receiver_log = log_after(direction.receiver_log, receiver_offset)
-    phase_counts = parse_phase_counts(source_log, direction.source_id)
-    native_hook_count = count_local_native_queues(source_log)
     native_sequences = parse_local_pressed_sequences(source_log, direction.source_id)
     new_fire = observed_fire - before_fire
     release_count = count_lines(
@@ -612,8 +696,6 @@ local bot = sd.bots and sd.bots.get_participant_state and sd.bots.get_participan
         observed_only=True,
     )
     timeout_count = count_lines(receiver_log, "remote_input_timeout")
-    if phase_counts.get("pressed", 0) < 1 or phase_counts.get("released", 0) < 1:
-        raise VerifyFailure(f"{direction.name}: hold expected at least one pressed/released packet, got {phase_counts}")
     if native_hook_count < 1:
         raise VerifyFailure(f"{direction.name}: hold produced no native primary hooks")
     if len(native_sequences) != native_hook_count:
@@ -621,7 +703,14 @@ local bot = sd.bots and sd.bots.get_participant_state and sd.bots.get_participan
             f"{direction.name}: hold source sequence/native hook mismatch "
             f"hooks={native_hook_count} sequences={native_sequences}"
         )
-    if phase_counts.get("held", 0) < 2 or not held_seen:
+    if phase_counts.get("pressed", 0) != native_hook_count or phase_counts.get("released", 0) != native_hook_count:
+        raise VerifyFailure(
+            f"{direction.name}: hold phase counts mismatch hooks={native_hook_count} phases={phase_counts}"
+        )
+    # A Lua receiver sample can consume the entire short observation window on
+    # slower WSL/PowerShell bridges. The final source log is authoritative: it
+    # proves the held stream even when the polling loop did not observe it live.
+    if phase_counts.get("held", 0) < 2:
         raise VerifyFailure(f"{direction.name}: hold did not stream held packets: {phase_counts}")
     matched_queue_sequences = assert_sequence_counts(
         direction.name,
@@ -647,6 +736,7 @@ local bot = sd.bots and sd.bots.get_participant_state and sd.bots.get_participan
             f"release={release_count} hooks={native_hook_count} timeout={timeout_count}"
         )
     return {
+        "pre_clear": pre_clear,
         "input_output": input_output,
         "native_hook_count": native_hook_count,
         "native_sequences": native_sequences,
@@ -667,6 +757,7 @@ local bot = sd.bots and sd.bots.get_participant_state and sd.bots.get_participan
 def main() -> int:
     result: dict[str, object] = {"ok": False}
     try:
+        result["global_mouse_reset"] = release_global_mouse_button()
         pids, run_entry = ensure_pair_and_testrun(result)
         result["pids"] = pids
         result["run_entry"] = run_entry

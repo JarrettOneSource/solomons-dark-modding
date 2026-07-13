@@ -110,13 +110,131 @@ bool LoadSteamApiExports(SteamBootstrapState* state) {
         LoadRequiredExport(state, &state->restart_app_if_necessary, "SteamAPI_RestartAppIfNecessary") &&
         LoadOptionalInitExport(state) &&
         LoadRequiredExport(state, &state->shutdown, "SteamAPI_Shutdown") &&
-        LoadRequiredExport(state, &state->run_callbacks, "SteamAPI_RunCallbacks") &&
+        LoadRequiredExport(state, &state->get_pipe, "SteamAPI_GetHSteamPipe") &&
+        LoadRequiredExport(state, &state->manual_dispatch_init, "SteamAPI_ManualDispatch_Init") &&
+        LoadRequiredExport(state, &state->manual_dispatch_run_frame, "SteamAPI_ManualDispatch_RunFrame") &&
+        LoadRequiredExport(
+            state,
+            &state->manual_dispatch_get_next_callback,
+            "SteamAPI_ManualDispatch_GetNextCallback") &&
+        LoadRequiredExport(
+            state,
+            &state->manual_dispatch_free_last_callback,
+            "SteamAPI_ManualDispatch_FreeLastCallback") &&
+        LoadRequiredExport(
+            state,
+            &state->manual_dispatch_get_api_call_result,
+            "SteamAPI_ManualDispatch_GetAPICallResult") &&
         LoadRequiredExport(state, &state->steam_friends_v017, "SteamAPI_SteamFriends_v017") &&
         LoadRequiredExport(state, &state->steam_matchmaking_v009, "SteamAPI_SteamMatchmaking_v009") &&
-        LoadRequiredExport(state, &state->steam_networking_v006, "SteamAPI_SteamNetworking_v006") &&
+        LoadRequiredExport(
+            state,
+            &state->steam_networking_messages_v002,
+            "SteamAPI_SteamNetworkingMessages_SteamAPI_v002") &&
         LoadRequiredExport(state, &state->steam_user_v023, "SteamAPI_SteamUser_v023") &&
+        LoadRequiredExport(state, &state->steam_utils_v010, "SteamAPI_SteamUtils_v010") &&
         LoadRequiredExport(state, &state->friends_get_persona_name, "SteamAPI_ISteamFriends_GetPersonaName") &&
-        LoadRequiredExport(state, &state->user_get_steam_id, "SteamAPI_ISteamUser_GetSteamID");
+        LoadRequiredExport(
+            state,
+            &state->friends_get_friend_persona_name,
+            "SteamAPI_ISteamFriends_GetFriendPersonaName") &&
+        LoadRequiredExport(
+            state,
+            &state->friends_activate_game_overlay_invite_dialog,
+            "SteamAPI_ISteamFriends_ActivateGameOverlayInviteDialog") &&
+        LoadRequiredExport(
+            state,
+            &state->friends_set_rich_presence,
+            "SteamAPI_ISteamFriends_SetRichPresence") &&
+        LoadRequiredExport(state, &state->user_get_steam_id, "SteamAPI_ISteamUser_GetSteamID") &&
+        LoadRequiredExport(
+            state,
+            &state->utils_is_overlay_enabled,
+            "SteamAPI_ISteamUtils_IsOverlayEnabled") &&
+        LoadRequiredExport(
+            state,
+            &state->matchmaking_create_lobby,
+            "SteamAPI_ISteamMatchmaking_CreateLobby") &&
+        LoadRequiredExport(
+            state,
+            &state->matchmaking_join_lobby,
+            "SteamAPI_ISteamMatchmaking_JoinLobby") &&
+        LoadRequiredExport(
+            state,
+            &state->matchmaking_leave_lobby,
+            "SteamAPI_ISteamMatchmaking_LeaveLobby") &&
+        LoadRequiredExport(
+            state,
+            &state->matchmaking_request_lobby_data,
+            "SteamAPI_ISteamMatchmaking_RequestLobbyData") &&
+        LoadRequiredExport(
+            state,
+            &state->matchmaking_set_lobby_joinable,
+            "SteamAPI_ISteamMatchmaking_SetLobbyJoinable") &&
+        LoadRequiredExport(
+            state,
+            &state->matchmaking_set_lobby_data,
+            "SteamAPI_ISteamMatchmaking_SetLobbyData") &&
+        LoadRequiredExport(
+            state,
+            &state->matchmaking_get_lobby_data,
+            "SteamAPI_ISteamMatchmaking_GetLobbyData") &&
+        LoadRequiredExport(
+            state,
+            &state->matchmaking_set_lobby_member_data,
+            "SteamAPI_ISteamMatchmaking_SetLobbyMemberData") &&
+        LoadRequiredExport(
+            state,
+            &state->matchmaking_get_lobby_member_data,
+            "SteamAPI_ISteamMatchmaking_GetLobbyMemberData") &&
+        LoadRequiredExport(
+            state,
+            &state->matchmaking_get_lobby_owner,
+            "SteamAPI_ISteamMatchmaking_GetLobbyOwner") &&
+        LoadRequiredExport(
+            state,
+            &state->matchmaking_get_num_lobby_members,
+            "SteamAPI_ISteamMatchmaking_GetNumLobbyMembers") &&
+        LoadRequiredExport(
+            state,
+            &state->matchmaking_get_lobby_member_by_index,
+            "SteamAPI_ISteamMatchmaking_GetLobbyMemberByIndex") &&
+        LoadRequiredExport(
+            state,
+            &state->identity_clear,
+            "SteamAPI_SteamNetworkingIdentity_Clear") &&
+        LoadRequiredExport(
+            state,
+            &state->identity_set_steam_id64,
+            "SteamAPI_SteamNetworkingIdentity_SetSteamID64") &&
+        LoadRequiredExport(
+            state,
+            &state->identity_get_steam_id64,
+            "SteamAPI_SteamNetworkingIdentity_GetSteamID64") &&
+        LoadRequiredExport(
+            state,
+            &state->networking_messages_send,
+            "SteamAPI_ISteamNetworkingMessages_SendMessageToUser") &&
+        LoadRequiredExport(
+            state,
+            &state->networking_messages_receive,
+            "SteamAPI_ISteamNetworkingMessages_ReceiveMessagesOnChannel") &&
+        LoadRequiredExport(
+            state,
+            &state->networking_messages_accept,
+            "SteamAPI_ISteamNetworkingMessages_AcceptSessionWithUser") &&
+        LoadRequiredExport(
+            state,
+            &state->networking_messages_close,
+            "SteamAPI_ISteamNetworkingMessages_CloseSessionWithUser") &&
+        LoadRequiredExport(
+            state,
+            &state->networking_messages_get_session_info,
+            "SteamAPI_ISteamNetworkingMessages_GetSessionConnectionInfo") &&
+        LoadRequiredExport(
+            state,
+            &state->networking_message_release,
+            "SteamAPI_SteamNetworkingMessage_t_Release");
     state->snapshot.exports_loaded = success;
     return success;
 }

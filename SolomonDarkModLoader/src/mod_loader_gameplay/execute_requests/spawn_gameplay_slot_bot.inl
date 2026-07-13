@@ -75,6 +75,7 @@ bool TrySpawnGameplaySlotBotParticipantEntity(
             gameplay_address,
             world_address,
             target_slot,
+            request.bot_id,
             request.character_profile,
             x,
             y,

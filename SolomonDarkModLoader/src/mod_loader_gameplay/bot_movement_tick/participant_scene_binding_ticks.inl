@@ -44,6 +44,19 @@ void SyncWizardBotMovementIntent(ParticipantEntityBinding* binding) {
     binding->distance_to_target = intent.distance_to_target;
 }
 
+void ApplyBotSnapshotProgressionContextToBinding(
+    const multiplayer::BotSnapshot& snapshot,
+    ParticipantEntityBinding* binding) {
+    if (binding == nullptr) {
+        return;
+    }
+    binding->concentration_revision = snapshot.concentration_revision;
+    binding->concentration_selection_valid =
+        snapshot.concentration_selection_valid;
+    binding->concentration_entry_a = snapshot.concentration_entry_a;
+    binding->concentration_entry_b = snapshot.concentration_entry_b;
+}
+
 void TickParticipantSceneBindings(uintptr_t gameplay_address, std::uint64_t now_ms) {
     const auto scene_churn_until =
         g_gameplay_keyboard_injection.scene_churn_not_before_ms.load(std::memory_order_acquire);
@@ -64,6 +77,7 @@ void TickParticipantSceneBindings(uintptr_t gameplay_address, std::uint64_t now_
             if (multiplayer::ReadParticipantSnapshot(binding.bot_id, &bot_snapshot) && bot_snapshot.available) {
                 binding.character_profile = bot_snapshot.character_profile;
                 binding.scene_intent = bot_snapshot.scene_intent;
+                ApplyBotSnapshotProgressionContextToBinding(bot_snapshot, &binding);
             }
             const bool should_be_materialized =
                 have_scene_context && ShouldBotBeMaterializedInScene(binding, scene_context);

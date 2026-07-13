@@ -234,23 +234,26 @@ solid and the bot-owned actor yields.
 
 ## Networking Boundary
 
-The current protocol header is still a small fixed-packet scaffold:
+The current protocol uses fixed-layout packets shared by both Steam Networking
+Messages and the explicit local-UDP test backend:
 
+- `SessionHelloPacket`, `SessionHelloAckPacket`, and `SessionGoodbyePacket`
 - `StatePacket`
-- `LaunchPacket`
 - `CastPacket`
 - `ProgressionPacket`
 - `WorldSnapshotPacket`
 - `LootSnapshotPacket`
+- `SpellEffectSnapshotPacket` and `AirChainSnapshotPacket`
 - reliable loot/pickup packets for host-owned drops and per-participant
   inventory/spellbook/statbook deltas
 - reliable level-up offer/choice/result packets for host-authored shared XP
   level-up choices
 
-Those structs are useful for early shape checks, but the actual co-op design in
-`docs/networking/README.md` requires a broader reliable/unreliable packet family
-for manifest handshake, join/bootstrap, entity lifecycle, input, snapshots,
-gameplay events, progression deltas, and reconnect.
+Protocol v50 authenticates Steam lobby members with the lobby ID, Steam identity,
+session nonce, required capability bits, and deterministic staged-build manifest
+hash before gameplay packets are admitted. The host remains authoritative for
+world, loot, progression choices, and relaying participant-authored state and
+casts.
 
 The multiplayer service loop currently pumps Steam bootstrap/callback state every
 50 ms and mirrors readiness into `RuntimeState`. For rapid local development it
@@ -261,9 +264,11 @@ gold/orb drop presentation plus pickup identity. The host's `StatePacket` also o
 local UDP run-entry scene intent: connected clients cannot call
 `sd.hub.start_testrun` or directly switch themselves into the arena, but they
 queue the normal stock-safe hub-to-run transition when the configured host reports `in_run`.
-The UDP path is a development backend for the same
-participant and replication boundary that Steam P2P and a later dedicated
-server should use.
+Protocol v38 identifies that host explicitly in direct and relayed state
+packets, so a relayed non-host participant cannot impersonate run-entry or
+shared-pause authority merely because its datagram arrived from the host endpoint.
+The UDP path remains a development backend for the same participant and
+replication boundary used by Steam P2P.
 
 ## Invariants
 

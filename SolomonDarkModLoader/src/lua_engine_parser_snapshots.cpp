@@ -75,6 +75,36 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "max_mp");
     lua_pushboolean(state, snapshot.mana_reserve_active ? 1 : 0);
     lua_setfield(state, -2, "mana_reserve_active");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.replicated_persistent_status_flags));
+    lua_setfield(state, -2, "replicated_persistent_status_flags");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.native_persistent_status_flags));
+    lua_setfield(state, -2, "native_persistent_status_flags");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.replicated_transient_status_flags));
+    lua_setfield(state, -2, "replicated_transient_status_flags");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.native_transient_status_flags));
+    lua_setfield(state, -2, "native_transient_status_flags");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.replicated_poison_remaining_ticks));
+    lua_setfield(state, -2, "replicated_poison_remaining_ticks");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.native_poison_remaining_ticks));
+    lua_setfield(state, -2, "native_poison_remaining_ticks");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.actor_address));
     lua_setfield(state, -2, "actor_address");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.world_address));

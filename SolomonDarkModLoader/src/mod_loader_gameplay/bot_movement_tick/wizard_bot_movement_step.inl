@@ -36,6 +36,7 @@ bool TryResolveWizardBotNativeMovementEnvelope(
     }
 
     float progression_move_speed = 1.0f;
+    float ranked_rush_speed_multiplier = 1.0f;
     if (IsStandaloneWizardKind(binding->kind) || IsGameplaySlotWizardKind(binding->kind)) {
         uintptr_t progression_address = 0;
         if (!TryResolveActorProgressionRuntime(actor_address, &progression_address) ||
@@ -58,6 +59,30 @@ bool TryResolveWizardBotNativeMovementEnvelope(
         if (!std::isfinite(progression_move_speed) || progression_move_speed < 0.0f) {
             if (error_message != nullptr) {
                 *error_message = "Bot progression has invalid native move speed.";
+            }
+            return false;
+        }
+
+        float rush_speed_percent = 0.0f;
+        int rush_rank = 0;
+        if (!TryReadProgressionRankedNumericStat(
+                progression_address,
+                kRushProgressionEntryIndex,
+                "mValue",
+                &rush_speed_percent,
+                &rush_rank)) {
+            if (error_message != nullptr) {
+                *error_message = "Bot progression Rush rank value is unreadable.";
+            }
+            return false;
+        }
+        ranked_rush_speed_multiplier = 1.0f + rush_speed_percent / 100.0f;
+        if (rush_rank < 0 ||
+            !std::isfinite(ranked_rush_speed_multiplier) ||
+            ranked_rush_speed_multiplier <= 0.0f ||
+            ranked_rush_speed_multiplier > 16.0f) {
+            if (error_message != nullptr) {
+                *error_message = "Bot progression Rush speed multiplier is invalid.";
             }
             return false;
         }
@@ -87,6 +112,7 @@ bool TryResolveWizardBotNativeMovementEnvelope(
         actor_movement_speed_multiplier *
         actor_move_speed_scale *
         progression_move_speed *
+        ranked_rush_speed_multiplier *
         speed_scalar;
     if (!std::isfinite(*speed_cap) || *speed_cap < 0.0f) {
         if (error_message != nullptr) {

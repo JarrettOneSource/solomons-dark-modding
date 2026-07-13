@@ -177,7 +177,17 @@ struct BotSnapshot {
     float max_hp = 0.0f;
     float mp = 0.0f;
     float max_mp = 0.0f;
+    std::uint32_t concentration_revision = 0;
+    bool concentration_selection_valid = false;
+    std::int32_t concentration_entry_a = -1;
+    std::int32_t concentration_entry_b = -1;
     bool mana_reserve_active = false;
+    std::uint8_t replicated_persistent_status_flags = 0;
+    std::uint8_t native_persistent_status_flags = 0;
+    std::uint8_t replicated_transient_status_flags = 0;
+    std::uint8_t native_transient_status_flags = 0;
+    std::int32_t replicated_poison_remaining_ticks = 0;
+    std::int32_t native_poison_remaining_ticks = 0;
     bool entity_materialized = false;
     uintptr_t actor_address = 0;
     uintptr_t world_address = 0;
@@ -295,6 +305,12 @@ bool ReadParticipantSnapshot(std::uint64_t participant_id, BotSnapshot* snapshot
 void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintptr_t source_progression_address = 0);
 bool ReadBotSkillChoices(std::uint64_t bot_id, BotSkillChoiceSnapshot* snapshot);
 bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_message);
+bool SyncParticipantProgressionToSharedLevelUp(
+    std::uint64_t participant_id,
+    std::int32_t level,
+    std::int32_t experience,
+    uintptr_t source_progression_address,
+    std::string* error_message);
 bool SyncParticipantProgressionToSharedLevelUpAndRollChoices(
     std::uint64_t participant_id,
     std::int32_t level,

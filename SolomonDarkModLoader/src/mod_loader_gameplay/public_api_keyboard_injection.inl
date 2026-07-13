@@ -19,12 +19,18 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorApplyManaDelta);
     const auto player_actor_dtor = ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorDtor);
     const auto player_actor_vtable28 = ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorVtable28);
+    const auto player_actor_secondary_spell_cast =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorSecondarySpellCast);
     const auto player_actor_pure_primary_gate =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorPurePrimaryGate);
     const auto player_control_brain_update =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerControlBrainUpdate);
     const auto pure_primary_spell_start =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kSpellCastPurePrimary);
+    const auto pure_primary_attack_dispatch =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kPurePrimaryAttackDispatch);
+    const auto fire_ember_ctor =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kFireEmberCtor);
     const auto pure_primary_post_builder =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPurePrimaryPostBuilder);
     const auto spell_cast_dispatcher =
@@ -61,9 +67,12 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         player_actor_apply_mana_delta == 0 ||
         player_actor_dtor == 0 ||
         player_actor_vtable28 == 0 ||
+        player_actor_secondary_spell_cast == 0 ||
         player_actor_pure_primary_gate == 0 ||
         player_control_brain_update == 0 ||
         pure_primary_spell_start == 0 ||
+        pure_primary_attack_dispatch == 0 ||
+        fire_ember_ctor == 0 ||
         spell_cast_dispatcher == 0 ||
         gameplay_hud_render_dispatch == 0 ||
         gameplay_string_assign == 0 ||
@@ -558,8 +567,88 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(pure_primary_attack_dispatch),
+            reinterpret_cast<void*>(&HookPurePrimaryAttackDispatch),
+            kPurePrimaryAttackDispatchHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.pure_primary_attack_dispatch_hook,
+            &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.orb_pickup_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gold_pickup_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_apply_mana_delta_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
+        g_pure_primary_post_builder_trampoline = nullptr;
+        RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_finalize_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_reset_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_action_builder_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
+        if (error_message != nullptr) {
+            *error_message =
+                "Failed to install pure-primary attack dispatch hook: " + hook_error;
+        }
+        return false;
+    }
+
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(fire_ember_ctor),
+            reinterpret_cast<void*>(&HookFireEmberCtor),
+            kFireEmberCtorHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.fire_ember_ctor_hook,
+            &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_attack_dispatch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.orb_pickup_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gold_pickup_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_apply_mana_delta_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
+        g_pure_primary_post_builder_trampoline = nullptr;
+        RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_finalize_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_reset_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_action_builder_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
+        if (error_message != nullptr) {
+            *error_message = "Failed to install Fire Ember constructor hook: " + hook_error;
+        }
+        return false;
+    }
+
     std::string cast_gate_patch_error;
     if (!InstallNativeCastGatePatches(&cast_gate_patch_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.fire_ember_ctor_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_attack_dispatch_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.orb_pickup_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gold_pickup_hook);
@@ -592,12 +681,34 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(player_actor_secondary_spell_cast),
+            reinterpret_cast<void*>(&HookPlayerActorSecondarySpellCast),
+            kPlayerActorSecondarySpellCastHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.player_actor_secondary_spell_cast_hook,
+            &hook_error)) {
+        ShutdownGameplayKeyboardInjection();
+        if (error_message != nullptr) {
+            *error_message =
+                "Failed to install player secondary-spell dispatcher hook: " +
+                hook_error;
+        }
+        return false;
+    }
+
     g_gameplay_keyboard_injection.initialized = true;
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.input_state_address.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_movement_x.store(0.0f, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_movement_y.store(0.0f, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_movement_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_injected_keyboard_control_frames.store(
+        0,
+        std::memory_order_release);
     g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.store(
         0,
         std::memory_order_release);
@@ -617,6 +728,12 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.clear();
         g_gameplay_keyboard_injection.pending_gameplay_region_switch_requests.clear();
         g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();
+        g_gameplay_keyboard_injection.pending_multiplayer_dampen_effect_requests.clear();
+        g_gameplay_keyboard_injection.pending_local_player_poison_corrections.clear();
+        g_gameplay_keyboard_injection.pending_native_poison_behavior_probes.clear();
+        g_gameplay_keyboard_injection.pending_native_magic_hit_behavior_probes.clear();
+        g_gameplay_keyboard_injection.next_native_magic_hit_behavior_probe_serial = 1;
+        g_gameplay_keyboard_injection.native_magic_hit_behavior_probe_result = {};
         g_gameplay_keyboard_injection.pending_participant_destroy_requests.clear();
     }
     g_participant_entities.clear();
@@ -634,9 +751,12 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " mana_delta=" + HexString(player_actor_apply_mana_delta) +
         " player_dtor=" + HexString(player_actor_dtor) +
         " player_vslot28=" + HexString(player_actor_vtable28) +
+        " secondary_spell_cast=" + HexString(player_actor_secondary_spell_cast) +
         " pure_primary_gate=" + HexString(player_actor_pure_primary_gate) +
         " control_brain_update=" + HexString(player_control_brain_update) +
         " pure_primary_start=" + HexString(pure_primary_spell_start) +
+        " pure_primary_attack_dispatch=" + HexString(pure_primary_attack_dispatch) +
+        " fire_ember_ctor=" + HexString(fire_ember_ctor) +
         " pure_primary_post_builder=" + HexString(pure_primary_post_builder) +
         " spell_dispatcher=" + HexString(spell_cast_dispatcher) +
         " spell_action_builder=" + HexString(spell_action_builder) +
@@ -661,6 +781,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
 
 void ShutdownGameplayKeyboardInjection() {
     SetD3d9FrameActionPump(nullptr);
+    ClearReplicatedSpellEffectBindings();
     RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
@@ -668,9 +789,12 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_apply_mana_delta_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_secondary_spell_cast_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_attack_dispatch_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.fire_ember_ctor_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
     g_pure_primary_post_builder_trampoline = nullptr;
     RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
@@ -688,6 +812,10 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.orb_pickup_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook);
     RestoreNativeCastGatePatches();
+    {
+        std::lock_guard<std::mutex> lock(g_native_spell_effect_actor_mutex);
+        g_recent_native_spell_effect_actors.clear();
+    }
     for (auto& pending : g_gameplay_keyboard_injection.pending_scancodes) {
         pending.store(0, std::memory_order_release);
     }
@@ -696,6 +824,13 @@ void ShutdownGameplayKeyboardInjection() {
     g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.input_state_address.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_movement_x.store(0.0f, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_movement_y.store(0.0f, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_movement_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_injected_keyboard_control_frames.store(
+        0,
+        std::memory_order_release);
     g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.store(
         0,
         std::memory_order_release);
@@ -723,6 +858,12 @@ void ShutdownGameplayKeyboardInjection() {
         g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.clear();
         g_gameplay_keyboard_injection.pending_gameplay_region_switch_requests.clear();
         g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();
+        g_gameplay_keyboard_injection.pending_multiplayer_dampen_effect_requests.clear();
+        g_gameplay_keyboard_injection.pending_local_player_poison_corrections.clear();
+        g_gameplay_keyboard_injection.pending_native_poison_behavior_probes.clear();
+        g_gameplay_keyboard_injection.pending_native_magic_hit_behavior_probes.clear();
+        g_gameplay_keyboard_injection.next_native_magic_hit_behavior_probe_serial = 1;
+        g_gameplay_keyboard_injection.native_magic_hit_behavior_probe_result = {};
         g_gameplay_keyboard_injection.pending_participant_destroy_requests.clear();
     }
     ClearReplicatedLootPresentationBindingsForSceneSwitch("gameplay injection shutdown");

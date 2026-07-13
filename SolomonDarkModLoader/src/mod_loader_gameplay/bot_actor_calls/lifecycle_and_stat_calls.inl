@@ -132,6 +132,174 @@ bool CallActorGetProfileSafe(
     }
 }
 
+bool TryResolveWizardActorProfileAddress(
+    uintptr_t actor_address,
+    uintptr_t* profile_address) {
+    if (profile_address == nullptr || actor_address == 0 || kActorGetProfile == 0) {
+        return false;
+    }
+    *profile_address = 0;
+
+    DWORD exception_code = 0;
+    return CallActorGetProfileSafe(
+               ProcessMemory::Instance().ResolveGameAddressOrZero(kActorGetProfile),
+               actor_address,
+               &exception_code,
+               profile_address) &&
+           *profile_address != 0;
+}
+
+bool TryReadWizardActorPersistentStatusFlags(
+    uintptr_t actor_address,
+    std::uint8_t* status_flags) {
+    if (status_flags == nullptr || actor_address == 0 || kActorGetProfile == 0) {
+        return false;
+    }
+    *status_flags = 0;
+
+    uintptr_t profile_address = 0;
+    if (!TryResolveWizardActorProfileAddress(
+            actor_address,
+            &profile_address)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t firewalker_active = 0;
+    std::uint8_t mindstar_active = 0;
+    std::uint8_t regenerate_active = 0;
+    if (!memory.TryReadField(
+            profile_address,
+            kWizardProfileFirewalkerActiveOffset,
+            &firewalker_active) ||
+        !memory.TryReadField(
+            profile_address,
+            kWizardProfileMindstarActiveOffset,
+            &mindstar_active) ||
+        !memory.TryReadField(
+            profile_address,
+            kWizardProfileRegenerateActiveOffset,
+            &regenerate_active)) {
+        return false;
+    }
+
+    std::uint8_t flags =
+        multiplayer::ParticipantPersistentStatusFlagSnapshotValid;
+    if (firewalker_active != 0) {
+        flags |= multiplayer::ParticipantPersistentStatusFlagFirewalker;
+    }
+    if (mindstar_active != 0) {
+        flags |= multiplayer::ParticipantPersistentStatusFlagMindstar;
+    }
+    if (regenerate_active != 0) {
+        flags |= multiplayer::ParticipantPersistentStatusFlagRegenerate;
+    }
+    *status_flags = flags;
+    return true;
+}
+
+bool TryReadWizardActorTransientStatusState(
+    uintptr_t actor_address,
+    std::uint8_t* status_flags,
+    std::int32_t* poison_remaining_ticks,
+    uintptr_t* poison_modifier_address = nullptr,
+    uintptr_t* poison_control_block_address = nullptr) {
+    if (status_flags == nullptr ||
+        poison_remaining_ticks == nullptr ||
+        actor_address == 0) {
+        return false;
+    }
+    *status_flags = 0;
+    *poison_remaining_ticks = 0;
+    if (poison_modifier_address != nullptr) {
+        *poison_modifier_address = 0;
+    }
+    if (poison_control_block_address != nullptr) {
+        *poison_control_block_address = 0;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::int32_t modifier_count = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorModifierListCountOffset,
+            &modifier_count) ||
+        modifier_count < 0 ||
+        modifier_count > 512) {
+        return false;
+    }
+
+    std::uint8_t flags =
+        multiplayer::ParticipantTransientStatusFlagSnapshotValid;
+    if (modifier_count == 0) {
+        *status_flags = flags;
+        return true;
+    }
+
+    uintptr_t modifier_storage = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorModifierListStorageOffset,
+            &modifier_storage) ||
+        modifier_storage == 0) {
+        return false;
+    }
+
+    std::int32_t longest_poison_duration = 0;
+    uintptr_t poison_modifier = 0;
+    uintptr_t poison_control_block = 0;
+    for (std::int32_t index = 0; index < modifier_count; ++index) {
+        uintptr_t control_block = 0;
+        uintptr_t modifier = 0;
+        std::uint32_t type_id = 0;
+        if (!memory.TryReadValue(
+                modifier_storage +
+                    static_cast<std::size_t>(index) * sizeof(uintptr_t),
+                &control_block) ||
+            control_block == 0 ||
+            !memory.TryReadValue(control_block, &modifier) ||
+            modifier == 0 ||
+            !memory.TryReadField(
+                modifier,
+                kNativeModifierTypeIdOffset,
+                &type_id) ||
+            type_id != kNativePoisonModifierTypeId) {
+            continue;
+        }
+
+        std::int32_t duration_ticks = 0;
+        if (!memory.TryReadField(
+                modifier,
+                kNativeModifierDurationTicksOffset,
+                &duration_ticks)) {
+            return false;
+        }
+        if (poison_modifier == 0 ||
+            duration_ticks > longest_poison_duration) {
+            poison_modifier = modifier;
+            poison_control_block = control_block;
+            longest_poison_duration = duration_ticks;
+        }
+    }
+
+    if (poison_modifier != 0) {
+        if (poison_modifier_address != nullptr) {
+            *poison_modifier_address = poison_modifier;
+        }
+        if (poison_control_block_address != nullptr) {
+            *poison_control_block_address = poison_control_block;
+        }
+        if (longest_poison_duration > 0) {
+            flags |= multiplayer::ParticipantTransientStatusFlagPoisoned;
+            *poison_remaining_ticks = (std::min)(
+                longest_poison_duration,
+                multiplayer::kParticipantPoisonMaxDurationTicks);
+        }
+    }
+    *status_flags = flags;
+    return true;
+}
+
 bool CallProfileResolveStatEntrySafe(
     uintptr_t fn_address,
     uintptr_t container_address,

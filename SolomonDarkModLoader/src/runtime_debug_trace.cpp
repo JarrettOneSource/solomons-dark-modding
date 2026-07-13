@@ -34,6 +34,13 @@ void LogTraceHit(FunctionTrace* trace, const TraceEntryFrame* frame) {
         hit.arg6 = stack_words[7];
         hit.arg7 = stack_words[8];
         hit.arg8 = stack_words[9];
+        if (frame->ecx != 0 &&
+            sdmod::ProcessMemory::Instance().TryRead(
+                frame->ecx,
+                hit.ecx_words,
+                sizeof(hit.ecx_words))) {
+            hit.ecx_words_valid = true;
+        }
         std::uint32_t arg3_words[4] = {};
         if (stack_words[4] != 0 &&
             sdmod::ProcessMemory::Instance().TryRead(stack_words[4], arg3_words, sizeof(arg3_words))) {
@@ -428,6 +435,11 @@ void RuntimeDebug_ListTraceHits(std::vector<RuntimeDebugTraceHitInfo>* hits, con
         info.arg6 = hit.arg6;
         info.arg7 = hit.arg7;
         info.arg8 = hit.arg8;
+        info.ecx_words_valid = hit.ecx_words_valid;
+        std::copy(
+            std::begin(hit.ecx_words),
+            std::end(hit.ecx_words),
+            std::begin(info.ecx_words));
         info.arg3_words_valid = hit.arg3_words_valid;
         info.arg3_word0 = hit.arg3_word0;
         info.arg3_word1 = hit.arg3_word1;

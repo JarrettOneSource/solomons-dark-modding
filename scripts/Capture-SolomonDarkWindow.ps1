@@ -1,8 +1,10 @@
 param(
     [string]$ProcessName = "SolomonDark",
+    [int]$ProcessId = 0,
     [string]$OutputPath = "runtime/window_capture_bot2.png",
     [int]$DelaySeconds = 0,
-    [int]$StartupTimeoutSeconds = 30
+    [int]$StartupTimeoutSeconds = 30,
+    [switch]$ForceScreenCapture
 )
 
 if ($DelaySeconds -gt 0) {
@@ -70,9 +72,15 @@ function Test-IsMostlyBlack {
 $deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
 $process = $null
 while ((Get-Date) -lt $deadline) {
-    $process = Get-Process $ProcessName -ErrorAction SilentlyContinue |
-        Where-Object { $_.MainWindowHandle -ne 0 } |
-        Select-Object -First 1
+    if ($ProcessId -gt 0) {
+        $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue |
+            Where-Object { $_.MainWindowHandle -ne 0 } |
+            Select-Object -First 1
+    } else {
+        $process = Get-Process $ProcessName -ErrorAction SilentlyContinue |
+            Where-Object { $_.MainWindowHandle -ne 0 } |
+            Select-Object -First 1
+    }
     if ($process) {
         break
     }
@@ -81,7 +89,8 @@ while ((Get-Date) -lt $deadline) {
 }
 
 if (-not $process) {
-    throw "Process '$ProcessName' was not found within ${StartupTimeoutSeconds}s."
+    $processDescription = if ($ProcessId -gt 0) { "PID $ProcessId" } else { "name '$ProcessName'" }
+    throw "Process with $processDescription was not found within ${StartupTimeoutSeconds}s."
 }
 
 $rect = New-Object WindowCaptureNative+RECT
@@ -107,13 +116,15 @@ $shell = New-Object -ComObject WScript.Shell
 [void]$shell.AppActivate($process.Id)
 Start-Sleep -Milliseconds 500
 
-$hdc = $graphics.GetHdc()
 $printWindowOk = $false
-try {
-    $printWindowOk = [WindowCaptureNative]::PrintWindow($process.MainWindowHandle, $hdc, 2)
-}
-finally {
-    $graphics.ReleaseHdc($hdc)
+if (-not $ForceScreenCapture) {
+    $hdc = $graphics.GetHdc()
+    try {
+        $printWindowOk = [WindowCaptureNative]::PrintWindow($process.MainWindowHandle, $hdc, 2)
+    }
+    finally {
+        $graphics.ReleaseHdc($hdc)
+    }
 }
 
 if ((-not $printWindowOk) -or (Test-IsMostlyBlack -Bitmap $bitmap)) {

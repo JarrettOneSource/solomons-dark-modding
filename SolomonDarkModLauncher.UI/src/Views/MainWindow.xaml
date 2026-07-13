@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         Title="Solomon Dark Mod Manager"
         Width="720"
-        Height="860"
+        Height="930"
         MinWidth="560"
         MinHeight="620"
         WindowStartupLocation="CenterScreen"
@@ -227,12 +227,38 @@
                        Foreground="{StaticResource TextMutedBrush}"
                        Text="{Binding ModSummaryText}" />
 
-            <Button Grid.Row="4"
-                    Margin="0,20,0,0"
-                    HorizontalAlignment="Center"
-                    Command="{Binding LaunchCommand}"
-                    Content="{Binding LaunchButtonText}"
-                    Style="{StaticResource PrimaryButtonStyle}" />
+            <StackPanel Grid.Row="4" Margin="0,20,0,0">
+                <WrapPanel HorizontalAlignment="Center">
+                    <Button Command="{Binding HostSteamCommand}"
+                            Content="{Binding HostButtonText}"
+                            Style="{StaticResource PrimaryButtonStyle}" />
+                    <Button Command="{Binding JoinSteamCommand}"
+                            Content="Join Friend"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button Command="{Binding LaunchSinglePlayerCommand}"
+                            Content="Single Player"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Margin="0" />
+                </WrapPanel>
+
+                <DockPanel Margin="72,12,72,0">
+                    <TextBlock DockPanel.Dock="Left"
+                               Margin="0,0,10,0"
+                               VerticalAlignment="Center"
+                               FontSize="12"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               Text="Lobby ID (optional)" />
+                    <TextBox VerticalContentAlignment="Center"
+                             Text="{Binding LobbyId, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Leave blank to launch first and accept a Steam friend invite in game."
+                             Style="{StaticResource DarkTextBoxStyle}" />
+                </DockPanel>
+                <TextBlock Margin="72,6,72,0"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           Text="For the most reliable Spacewar test, the friend clicks Join Friend first, then accepts the host's invite while Solomon Dark is open. The host opens Steam's invite dialog when the overlay is active; Steam Friends and lobby IDs are fallbacks."
+                           TextWrapping="Wrap" />
+            </StackPanel>
 
             <Expander Grid.Row="5"
                       Margin="0,16,0,0"

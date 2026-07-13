@@ -180,16 +180,21 @@ bool ProcessMemory::IsRangeAccessible(uintptr_t address, size_t size, bool requi
             return false;
         }
 
-        if (!region.committed || region.guarded || region.no_access) {
-            return false;
-        }
-
-        if (require_write) {
-            if (!region.writable) {
+        const auto has_required_access = [&](const MemoryRegionInfo& candidate) {
+            if (!candidate.committed || candidate.guarded || candidate.no_access) {
                 return false;
             }
-        } else if (!region.readable) {
-            return false;
+            return require_write ? candidate.writable : candidate.readable;
+        };
+
+        if (!has_required_access(region)) {
+            // VirtualAlloc/HeapAlloc can commit a page inside a range that was
+            // previously cached as MEM_RESERVE. A cached inaccessible region
+            // is therefore only a hint: refresh it before returning a false
+            // negative for a newly created native game object.
+            if (!RefreshRegion(current, &region) || !has_required_access(region)) {
+                return false;
+            }
         }
 
         if (current < region.base || current >= region.end) {
@@ -229,8 +234,18 @@ bool ProcessMemory::IsExecutableRange(uintptr_t address, size_t size) {
             return false;
         }
 
-        if (!region.committed || region.guarded || region.no_access || !region.executable) {
-            return false;
+        const auto is_executable = [](const MemoryRegionInfo& candidate) {
+            return candidate.committed &&
+                   !candidate.guarded &&
+                   !candidate.no_access &&
+                   candidate.executable;
+        };
+        if (!is_executable(region)) {
+            // Executable trampolines can likewise be committed inside a
+            // formerly reserved range after that range was cached.
+            if (!RefreshRegion(current, &region) || !is_executable(region)) {
+                return false;
+            }
         }
 
         if (current < region.base || current >= region.end) {

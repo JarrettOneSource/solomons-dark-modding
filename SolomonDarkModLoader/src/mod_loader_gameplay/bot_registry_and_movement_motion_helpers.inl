@@ -5,6 +5,8 @@
 #include "bot_casting/native_cast_gate_patches.inl"
 #include "bot_casting/skill_selection_rules.inl"
 #include "bot_casting/projectile_observation.inl"
+#include "bot_casting/native_secondary_cast_replay.inl"
+#include "bot_casting/transient_status_reconciliation.inl"
 #include "bot_casting/pending_cast_preparation.inl"
 #include "bot_casting/processing_context.inl"
 #include "bot_casting/native_active_spell_object_state.inl"

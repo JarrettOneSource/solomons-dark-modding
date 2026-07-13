@@ -89,103 +89,11 @@ bool SeedWizardBotNativeCollisionStateFromSourceActor(
     return true;
 }
 
-bool SeedWizardBotNativeSpellDispatchStateFromSourceActor(
-    uintptr_t actor_address,
-    uintptr_t native_visual_actor_address,
-    std::string* error_message) {
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
-    if (actor_address == 0 || native_visual_actor_address == 0) {
-        if (error_message != nullptr) {
-            *error_message =
-                "Gameplay-slot spell dispatch seeding requires a live bot actor and native visual source.";
-        }
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    std::string failed_seed_field;
-    auto copy_u32 = [&](const char* label, std::size_t offset) -> bool {
-        std::uint32_t value = 0;
-        if (!memory.TryReadField(native_visual_actor_address, offset, &value)) {
-            failed_seed_field =
-                std::string(label) + " read failed at +" + HexString(offset);
-            return false;
-        }
-        if (!memory.TryWriteField(actor_address, offset, value)) {
-            failed_seed_field =
-                std::string(label) + " write failed at +" + HexString(offset) +
-                " value=" + HexString(value);
-            return false;
-        }
-        return true;
-    };
-    auto copy_float = [&](const char* label, std::size_t offset) -> bool {
-        float value = 0.0f;
-        if (!memory.TryReadField(native_visual_actor_address, offset, &value)) {
-            failed_seed_field =
-                std::string(label) + " read failed at +" + HexString(offset);
-            return false;
-        }
-        if (!std::isfinite(value)) {
-            failed_seed_field =
-                std::string(label) + " non-finite at +" + HexString(offset) +
-                " value=" + std::to_string(value);
-            return false;
-        }
-        if (!memory.TryWriteField(actor_address, offset, value)) {
-            failed_seed_field =
-                std::string(label) + " write failed at +" + HexString(offset) +
-                " value=" + std::to_string(value);
-            return false;
-        }
-        return true;
-    };
-
-    if (!copy_u32("startup_counter", kActorStartupCounterOffset) ||
-        !copy_float("spell_config_28c", kActorSpellConfig28cOffset) ||
-        !copy_float("spell_config_290", kActorSpellConfig290Offset) ||
-        !copy_float("spell_config_294", kActorSpellConfig294Offset) ||
-        !copy_u32("spell_config_298", kActorSpellConfig298Offset) ||
-        !copy_float("spell_config_29c", kActorSpellConfig29cOffset) ||
-        !copy_float("spell_config_2a0", kActorSpellConfig2a0Offset) ||
-        !copy_float("spell_config_2a4", kActorSpellConfig2a4Offset) ||
-        !copy_u32("spell_config_2c8", kActorSpellConfig2c8Offset) ||
-        !copy_float("spell_config_2cc", kActorSpellConfig2ccOffset) ||
-        !copy_float("spell_config_2d0", kActorSpellConfig2d0Offset) ||
-        !copy_float("spell_config_2d4", kActorSpellConfig2d4Offset) ||
-        !copy_float("spell_config_2d8", kActorSpellConfig2d8Offset)) {
-        if (error_message != nullptr) {
-            *error_message = failed_seed_field.empty()
-                ? "Failed to seed wizard bot native spell dispatch fields."
-                : "Failed to seed wizard bot native spell dispatch fields: " + failed_seed_field + ".";
-        }
-        return false;
-    }
-
-    std::uint32_t startup_counter = 0;
-    std::uint32_t config_298 = 0;
-    std::uint32_t config_2c8 = 0;
-    float config_2d8 = 0.0f;
-    (void)memory.TryReadField(actor_address, kActorStartupCounterOffset, &startup_counter);
-    (void)memory.TryReadField(actor_address, kActorSpellConfig298Offset, &config_298);
-    (void)memory.TryReadField(actor_address, kActorSpellConfig2c8Offset, &config_2c8);
-    (void)memory.TryReadField(actor_address, kActorSpellConfig2d8Offset, &config_2d8);
-    Log(
-        "[bots] wizard bot native spell dispatch seeded. actor=" + HexString(actor_address) +
-        " source=" + HexString(native_visual_actor_address) +
-        " startup=" + HexString(startup_counter) +
-        " config298=" + HexString(config_298) +
-        " config2c8=" + HexString(config_2c8) +
-        " config2d8=" + std::to_string(config_2d8));
-    return true;
-}
-
 bool SeedGameplaySlotBotRenderStateFromSourceActor(
     uintptr_t actor_address,
     uintptr_t world_address,
     uintptr_t native_visual_actor_address,
+    std::uint64_t participant_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
@@ -194,62 +102,104 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
     if (error_message != nullptr) {
         error_message->clear();
     }
-    if (actor_address == 0 || world_address == 0 || native_visual_actor_address == 0) {
+    if (actor_address == 0 || world_address == 0 ||
+        native_visual_actor_address == 0 || participant_id == 0) {
         if (error_message != nullptr) {
             *error_message =
                 "Gameplay-slot render seeding requires a live actor, world, and native visual source.";
         }
         return false;
     }
+    (void)x;
+    (void)y;
+    (void)heading;
 
     auto& memory = ProcessMemory::Instance();
-    const auto primary_visual_link_ctor_address =
+    // 0x00461F70 constructs the robe (0x1B5E) and the actor-owned equip
+    // runtime's +0x1C lane accepts it. 0x00461ED0 constructs the hat (0x1B5D)
+    // and +0x18 accepts it. The local-player inventory audit exposes
+    // scene-owned sinks under older primary/secondary labels in the opposite
+    // order, so name these constructors for their concrete objects here.
+    const auto robe_visual_link_ctor_address =
         memory.ResolveGameAddressOrZero(kStandaloneWizardVisualLinkPrimaryCtor);
-    const auto secondary_visual_link_ctor_address =
+    const auto hat_visual_link_ctor_address =
         memory.ResolveGameAddressOrZero(kStandaloneWizardVisualLinkSecondaryCtor);
-    if (primary_visual_link_ctor_address == 0 ||
-        secondary_visual_link_ctor_address == 0) {
+    if (robe_visual_link_ctor_address == 0 ||
+        hat_visual_link_ctor_address == 0) {
         if (error_message != nullptr) {
             *error_message = "Unable to resolve the stock helper constructors.";
         }
         return false;
     }
 
-    uintptr_t source_actor_address = 0;
-    std::string stage_error;
-    if (!CreateWizardCloneSourceActor(
-            world_address,
-            native_visual_actor_address,
-            character_profile,
-            x,
-            y,
-            heading,
-            &source_actor_address,
-            &stage_error)) {
+    // A stock 0x1397 actor is a short-lived create-wizard preview, not a safe
+    // participant-side descriptor scratch object. The transport already owns
+    // the remote player's native robe/hat helper payload, so use that payload
+    // as the materialization seed and avoid creating a preview actor at all.
+    const auto runtime_state = multiplayer::SnapshotRuntimeState();
+    const auto* participant = multiplayer::FindParticipant(runtime_state, participant_id);
+    if (participant == nullptr ||
+        !multiplayer::IsRemoteParticipant(*participant)) {
         if (error_message != nullptr) {
-            *error_message = std::move(stage_error);
+            *error_message = "Gameplay-slot participant visual state is unavailable.";
         }
         return false;
     }
 
-    auto cleanup_source = [&]() {
-        std::string cleanup_error;
-        if (source_actor_address != 0) {
-            (void)DestroyWizardCloneSourceActor(source_actor_address, &cleanup_error);
+    ActorRenderBuildSnapshot built_snapshot;
+    static_assert(
+        multiplayer::kParticipantVisualLinkColorBlockBytes ==
+        kActorHubVisualDescriptorBlockSize);
+    std::string stage_error;
+    if (multiplayer::IsNativeControlledParticipant(*participant)) {
+        const bool have_visual_payload =
+            (participant->runtime.presentation_flags &
+             multiplayer::ParticipantPresentationFlagVisualLinkColorBlocks) != 0 &&
+            participant->runtime.primary_visual_link_type_id != 0;
+        if (!have_visual_payload) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Remote participant visual helper payload is not ready.";
+            }
+            return false;
         }
-        if (!cleanup_error.empty()) {
-            Log("[bots] source actor cleanup detail: " + cleanup_error);
+        std::copy(
+            participant->runtime.primary_visual_link_color_block.begin(),
+            participant->runtime.primary_visual_link_color_block.end(),
+            built_snapshot.descriptor.begin());
+        built_snapshot.variant_primary = 1;
+        built_snapshot.variant_secondary = 1;
+        built_snapshot.weapon_type = 0;
+        built_snapshot.render_selection = static_cast<std::uint8_t>(
+            ResolveStandaloneWizardRenderSelectionIndex(
+                character_profile.element_id));
+        built_snapshot.variant_tertiary = 0;
+    } else if (multiplayer::IsLuaControlledParticipant(*participant)) {
+        if (!SeedWizardCloneSourceActorFromNativeDerivedProfile(
+                actor_address,
+                native_visual_actor_address,
+                character_profile,
+                x,
+                y,
+                heading,
+                &stage_error)) {
+            if (error_message != nullptr) {
+                *error_message = stage_error;
+            }
+            return false;
         }
-    };
+        built_snapshot = CaptureActorRenderBuildSnapshot(actor_address);
+    } else {
+        if (error_message != nullptr) {
+            *error_message = "Unsupported gameplay-slot participant controller.";
+        }
+        return false;
+    }
 
-    constexpr bool kKeepSourceActorAliveDiagnostic = false;
-
-    auto built_snapshot = CaptureActorRenderBuildSnapshot(source_actor_address);
     if (!ApplySourceActorRenderSelectorsToTargetActor(
             actor_address,
             built_snapshot,
             &stage_error)) {
-        cleanup_source();
         if (error_message != nullptr) {
             *error_message = stage_error;
         }
@@ -260,18 +210,17 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
     if (!AttachBuiltDescriptorToEquipVisualLane(
             actor_address,
             kActorEquipRuntimeVisualLinkPrimaryOffset,
-            primary_visual_link_ctor_address,
+            robe_visual_link_ctor_address,
             built_descriptor,
             "primary",
             &stage_error) ||
         !AttachBuiltDescriptorToEquipVisualLane(
             actor_address,
             kActorEquipRuntimeVisualLinkSecondaryOffset,
-            secondary_visual_link_ctor_address,
+            hat_visual_link_ctor_address,
             built_descriptor,
             "secondary",
             &stage_error)) {
-        cleanup_source();
         if (error_message != nullptr) {
             *error_message = stage_error;
         }
@@ -279,22 +228,12 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
     }
 
     if (!AttachGameplaySlotBotStaffItem(actor_address, &stage_error)) {
-        cleanup_source();
         if (error_message != nullptr) {
             *error_message = stage_error;
         }
         return false;
     }
 
-    if constexpr (kKeepSourceActorAliveDiagnostic) {
-        if (source_actor_address != 0) {
-            (void)memory.TryWriteField(source_actor_address, kActorPositionXOffset, 100000.0f);
-            (void)memory.TryWriteField(source_actor_address, kActorPositionYOffset, 100000.0f);
-            Log("[bots] source actor diagnostic park. actor=" + HexString(source_actor_address));
-        }
-    } else {
-        cleanup_source();
-    }
     NormalizeGameplaySlotBotSyntheticVisualState(actor_address);
     if constexpr (kEnableWizardBotHotPathDiagnostics) {
         Log(
@@ -308,6 +247,7 @@ bool CreateGameplaySlotBotActor(
     uintptr_t gameplay_address,
     uintptr_t world_address,
     int slot_index,
+    std::uint64_t participant_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     float x,
     float y,
@@ -421,6 +361,7 @@ bool CreateGameplaySlotBotActor(
             slot_index,
             slot_actor_address,
             slot_progression_address,
+            participant_id,
             character_profile,
             x,
             y,

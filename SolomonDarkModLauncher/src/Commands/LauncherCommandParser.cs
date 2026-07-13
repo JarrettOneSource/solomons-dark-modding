@@ -1,4 +1,5 @@
 using SolomonDarkModLauncher.Workspace;
+using SolomonDarkModLauncher.Launch;
 
 namespace SolomonDarkModLauncher.Commands;
 
@@ -20,6 +21,10 @@ internal static class LauncherCommandParser
         var temporaryProfile = false;
         string? steamAppId = null;
         string? steamApiDll = null;
+        var multiplayerMode = MultiplayerLaunchMode.Unspecified;
+        ulong? steamLobbyId = null;
+        var multiplayerMaxParticipants = MultiplayerLaunchOptions.DefaultMaxParticipants;
+        var openSteamInviteDialog = true;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -109,8 +114,39 @@ internal static class LauncherCommandParser
                 continue;
             }
 
+            if (arg == "--multiplayer")
+            {
+                multiplayerMode = ParseMultiplayerMode(ReadValue(args, ref index, arg));
+                continue;
+            }
+
+            if (arg == "--lobby-id")
+            {
+                steamLobbyId = ParseLobbyId(ReadValue(args, ref index, arg));
+                continue;
+            }
+
+            if (arg == "--max-players")
+            {
+                multiplayerMaxParticipants = ParseMaxParticipants(
+                    ReadValue(args, ref index, arg));
+                continue;
+            }
+
+            if (arg == "--no-invite-dialog")
+            {
+                openSteamInviteDialog = false;
+                continue;
+            }
+
             throw new InvalidOperationException($"Unknown argument: {arg}");
         }
+
+        var multiplayer = MultiplayerLaunchOptions.Create(
+            multiplayerMode,
+            steamLobbyId,
+            multiplayerMaxParticipants,
+            openSteamInviteDialog);
 
         return new LauncherCommand(
             mode,
@@ -126,7 +162,11 @@ internal static class LauncherCommandParser
             runtimeFlagOverrides,
             temporaryProfile,
             steamAppId,
-            steamApiDll);
+            steamApiDll,
+            multiplayer.Mode,
+            multiplayer.LobbyId,
+            multiplayer.MaxParticipants,
+            multiplayer.OpenInviteDialog);
     }
 
     private static LauncherMode ParseMode(string value)
@@ -151,5 +191,34 @@ internal static class LauncherCommandParser
 
         index++;
         return args[index];
+    }
+
+    private static MultiplayerLaunchMode ParseMultiplayerMode(string value)
+    {
+        return value.ToLowerInvariant() switch
+        {
+            "off" => MultiplayerLaunchMode.Off,
+            "host" => MultiplayerLaunchMode.Host,
+            "join" => MultiplayerLaunchMode.Join,
+            _ => throw new InvalidOperationException(
+                $"Unsupported multiplayer mode '{value}'. Expected off, host, or join.")
+        };
+    }
+
+    private static ulong ParseLobbyId(string value)
+    {
+        return ulong.TryParse(value, out var lobbyId) && lobbyId != 0
+            ? lobbyId
+            : throw new InvalidOperationException(
+                $"Steam lobby id must be a positive unsigned integer: {value}");
+    }
+
+    private static int ParseMaxParticipants(string value)
+    {
+        return int.TryParse(value, out var count) &&
+               count is >= 2 and <= MultiplayerLaunchOptions.MaximumSupportedParticipants
+            ? count
+            : throw new InvalidOperationException(
+                $"--max-players must be between 2 and {MultiplayerLaunchOptions.MaximumSupportedParticipants}: {value}");
     }
 }

@@ -8,6 +8,10 @@ std::uint8_t __fastcall HookGameplayKeyboardEdge(void* self, void* /*unused_edx*
                     available - 1,
                     std::memory_order_acq_rel,
                     std::memory_order_acquire)) {
+                Log(
+                    "Consumed queued gameplay keyboard edge. scancode=" +
+                    std::to_string(scancode) +
+                    " remaining=" + std::to_string(available - 1));
                 return 1;
             }
         }

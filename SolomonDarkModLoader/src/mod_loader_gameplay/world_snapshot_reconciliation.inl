@@ -8,6 +8,10 @@ constexpr std::uint64_t kHubAnimationDrivePhaseUnitsPerSecond = 150;
 constexpr std::uint64_t kRunEntryAuthoritySnapshotStaleMs = 3000;
 constexpr float kWorldSnapshotSettleDistance = 0.05f;
 constexpr float kReplicatedRunEnemyDeathHpEpsilon = 0.05f;
+// Keep client-authored native hit reactions when they remain close to the
+// host snapshot.  Larger presentation drift must not invalidate otherwise
+// legitimate damage; fall back to the authoritative position instead.
+constexpr float kLocalEnemyDamageClaimPositionPreserveDistance = 96.0f;
 constexpr float kWorldSnapshotParkBase = 100000.0f;
 constexpr float kRunEntryFormationSpacing = 64.0f;
 constexpr float kRunEntryFormationNavSnapMaxDistance = 48.0f;
@@ -169,6 +173,17 @@ void OverlayLatestWorldSnapshotPresentation(
             &actor,
             *it->second,
             sampled_snapshot->scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run);
+        if (actor.player_created && it->second->player_created) {
+            // Player-created autonomous actors continue simulating locally.
+            // Interpolating an already-moving remote golem 150 ms behind the
+            // authority lets the two AI paths visibly diverge, so consume the
+            // freshest authoritative transform for this small explicit class.
+            actor.position_x = it->second->position_x;
+            actor.position_y = it->second->position_y;
+            actor.heading = it->second->heading;
+            actor.hp = it->second->hp;
+            actor.max_hp = it->second->max_hp;
+        }
         if ((actor.presentation_flags & multiplayer::WorldActorPresentationFlagAnimationDriveWord) != 0 &&
             IsReplicatedHubPhaseAdvancingActorSnapshot(actor)) {
             actor.anim_drive_state_word = AdvanceHubAnimationDrivePhase(
@@ -563,6 +578,8 @@ void ApplyHostAuthoritativeRunEntryFormationIfNeeded(
         (rebound ? "" : " rebind_error=" + rebind_error));
 }
 
+bool IsReplicatedSharedHubFactoryActorType(std::uint32_t native_type_id);
+
 bool ShouldReconcileLocalWorldActor(
     const SDModSceneActorState& actor,
     multiplayer::ParticipantSceneIntentKind scene_kind) {
@@ -585,10 +602,13 @@ bool ShouldReconcileLocalWorldActor(
                 actor.max_hp > 0.0f) ||
                (!actor.tracked_enemy &&
                 (actor.object_type_id == kSolomonDigNativeTypeId ||
-                 actor.object_type_id == kSolomonRunStaticNativeTypeId));
+                 actor.object_type_id == kSolomonRunStaticNativeTypeId ||
+                 multiplayer::IsReplicatedRunPlayerCreatedActorType(
+                     actor.object_type_id)));
     }
 
-    return scene_kind == multiplayer::ParticipantSceneIntentKind::SharedHub;
+    return scene_kind == multiplayer::ParticipantSceneIntentKind::SharedHub &&
+           IsReplicatedSharedHubFactoryActorType(actor.object_type_id);
 }
 
 bool ShouldUseAuthoritativeWorldActorForScene(
@@ -608,10 +628,14 @@ bool ShouldUseAuthoritativeWorldActorForScene(
                  (actor.dead || actor.hp > kReplicatedRunEnemyDeathHpEpsilon)) ||
                 (actor.run_static &&
                  (actor.native_type_id == kSolomonDigNativeTypeId ||
-                  actor.native_type_id == kSolomonRunStaticNativeTypeId)));
+                  actor.native_type_id == kSolomonRunStaticNativeTypeId)) ||
+                (actor.player_created &&
+                 multiplayer::IsReplicatedRunPlayerCreatedActorType(
+                     actor.native_type_id)));
     }
 
-    return scene_kind == multiplayer::ParticipantSceneIntentKind::SharedHub;
+    return scene_kind == multiplayer::ParticipantSceneIntentKind::SharedHub &&
+           IsReplicatedSharedHubFactoryActorType(actor.native_type_id);
 }
 
 bool IsSameReplicatedRunEnemyKind(
@@ -1230,14 +1254,35 @@ bool ApplyReplicatedRunEnemyHealth(
         has_damage_baseline &&
         max_hp_synced &&
         local_health.hp + 0.05f < authoritative_hp) {
+        float claimed_target_x = authoritative_actor.position_x;
+        float claimed_target_y = authoritative_actor.position_y;
+        // Preserve native hit reactions (notably Fortunate Flailing knockback)
+        // before this snapshot rolls the client back to the host transform. The
+        // host independently bounds this position against its authoritative
+        // target before accepting either the damage or the transform.
+        float local_target_x = authoritative_actor.position_x;
+        float local_target_y = authoritative_actor.position_y;
+        if (TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &local_target_x) &&
+            TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &local_target_y)) {
+            const float position_dx = local_target_x - authoritative_actor.position_x;
+            const float position_dy = local_target_y - authoritative_actor.position_y;
+            const float preserve_distance =
+                kLocalEnemyDamageClaimPositionPreserveDistance;
+            if (position_dx * position_dx + position_dy * position_dy <=
+                preserve_distance * preserve_distance) {
+                claimed_target_x = local_target_x;
+                claimed_target_y = local_target_y;
+            }
+        }
         multiplayer::QueueLocalEnemyDamageClaim(
             authoritative_actor.network_actor_id,
             0,
             authoritative_hp,
             local_health.hp,
             authoritative_max_hp,
-            authoritative_actor.position_x,
-            authoritative_actor.position_y);
+            claimed_target_x,
+            claimed_target_y,
+            true);
     }
 
     auto& memory = ProcessMemory::Instance();
@@ -2141,7 +2186,10 @@ bool TryBindAuthoritativeRunActorToLocalPool(
         return true;
     };
 
-    const bool prefer_nearest = authoritative_actor.run_static || authoritative_actor.tracked_enemy;
+    const bool prefer_nearest =
+        authoritative_actor.run_static ||
+        authoritative_actor.tracked_enemy ||
+        authoritative_actor.player_created;
     return choose_binding(true, prefer_nearest) || choose_binding(false, prefer_nearest);
 }
 
@@ -2236,7 +2284,8 @@ bool TryBindAuthoritativeSharedHubActorToLocalPool(
     }
     if (local_bindings == nullptr ||
         authoritative_actor.network_actor_id == 0 ||
-        authoritative_actor.native_type_id == 0) {
+        !IsReplicatedSharedHubFactoryActorType(
+            authoritative_actor.native_type_id)) {
         return false;
     }
 
@@ -2508,6 +2557,15 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
         if (authoritative_actor.dead) {
             counts.dead_actor_count += 1;
         }
+        // Sample client-owned native damage and its post-hit target position
+        // before applying the authoritative transform. ApplyReplicatedRunEnemyHealth
+        // queues a validated damage claim; the host then rebroadcasts the
+        // accepted position in its next world snapshot.
+        if (snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::Run &&
+            authoritative_actor.tracked_enemy &&
+            ApplyReplicatedRunEnemyHealth(binding.actor.actor_address, authoritative_actor, now_ms)) {
+            counts.health_write_count += 1;
+        }
         if (ApplyReplicatedWorldActorTransform(binding.actor.actor_address, authoritative_actor, false)) {
             counts.transform_write_count += 1;
         }
@@ -2522,11 +2580,6 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
                 snapshot.scene_intent)) {
             counts.presentation_write_count += 1;
         }
-        if (snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::Run &&
-            authoritative_actor.tracked_enemy &&
-            ApplyReplicatedRunEnemyHealth(binding.actor.actor_address, authoritative_actor, now_ms)) {
-            counts.health_write_count += 1;
-        }
         RecordWorldSnapshotBinding(&counts, authoritative_actor, binding.actor.actor_address, true, false);
     }
 
@@ -2539,6 +2592,25 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
             }
             if (snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::Run) {
                 const auto removed_network_actor_id = binding.network_actor_id;
+                if (multiplayer::IsReplicatedRunPlayerCreatedActorType(
+                        binding.actor.object_type_id)) {
+                    // Summons are owned by the stock spell implementation on
+                    // every machine. Reconciliation may align and bind them,
+                    // but must never unregister one: doing so bypasses the
+                    // summon's native teardown and can leave its AI/effect
+                    // owners with a dangling actor pointer. Once authority no
+                    // longer publishes the summon, release only our network
+                    // identity and let the matching stock lifetime finish.
+                    if (removed_network_actor_id != 0 &&
+                        authoritative_ids.find(removed_network_actor_id) == authoritative_ids.end()) {
+                        UnbindReplicatedRunActor(
+                            removed_network_actor_id,
+                            binding.actor.actor_address);
+                        binding.network_actor_id = 0;
+                    }
+                    RecordWorldSnapshotBinding(&counts, binding, false, false, false);
+                    continue;
+                }
                 if (removed_network_actor_id != 0 &&
                     authoritative_ids.find(removed_network_actor_id) == authoritative_ids.end() &&
                     IsReplicatedRunEnemyDeathPending(removed_network_actor_id, now_ms)) {

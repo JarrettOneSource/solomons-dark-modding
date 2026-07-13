@@ -152,9 +152,11 @@ if mp and mp.participants then
     emit(prefix .. "ability.primary_entry_index", ability.primary_entry_index or -1)
     emit(prefix .. "ability.primary_combo_entry_index", ability.primary_combo_entry_index or -1)
     local secondaries = ability.secondary_entry_indices or {}
-    emit(prefix .. "ability.secondary_entry_index_1", secondaries[1] or -1)
-    emit(prefix .. "ability.secondary_entry_index_2", secondaries[2] or -1)
-    emit(prefix .. "ability.secondary_entry_index_3", secondaries[3] or -1)
+    for slot = 1, 8 do
+      emit(
+        prefix .. "ability.secondary_entry_index_" .. tostring(slot),
+        secondaries[slot] or -1)
+    end
   end
 end
 """
@@ -281,9 +283,13 @@ def participant_rows(values: dict[str, str]) -> list[dict[str, Any]]:
                     -1,
                 ),
                 "secondary_entry_indices": [
-                    parse_int_text(values.get(prefix + "ability.secondary_entry_index_1"), -1),
-                    parse_int_text(values.get(prefix + "ability.secondary_entry_index_2"), -1),
-                    parse_int_text(values.get(prefix + "ability.secondary_entry_index_3"), -1),
+                    parse_int_text(
+                        values.get(
+                            prefix + f"ability.secondary_entry_index_{slot}"
+                        ),
+                        -1,
+                    )
+                    for slot in range(1, 9)
                 ],
             },
         })

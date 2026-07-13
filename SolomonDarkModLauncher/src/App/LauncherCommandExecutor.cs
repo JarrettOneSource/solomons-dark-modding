@@ -3,6 +3,7 @@ using SolomonDarkModLauncher.Launch;
 using SolomonDarkModLauncher.Manager;
 using SolomonDarkModLauncher.Mods;
 using SolomonDarkModLauncher.Staging;
+using SolomonDarkModLauncher.Steam;
 using SolomonDarkModLauncher.Target;
 
 namespace SolomonDarkModLauncher.App;
@@ -20,7 +21,7 @@ internal static class LauncherCommandExecutor
             command.InstanceName,
             command.RuntimeProfileOverride,
             command.RuntimeFlagOverrides,
-            command.SteamAppIdOverride,
+            ResolveSteamAppId(command),
             command.SteamApiDllOverride);
 
         var manager = new ModManagerService(configuration);
@@ -52,10 +53,23 @@ internal static class LauncherCommandExecutor
         ModCatalog catalog)
     {
         var stageResult = StageBuilder.Build(configuration, catalog);
+        var multiplayer = MultiplayerLaunchOptions.Create(
+            command.MultiplayerMode,
+            command.SteamLobbyId,
+            command.MultiplayerMaxParticipants,
+            command.OpenSteamInviteDialog);
+        if (multiplayer.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join &&
+            !stageResult.SteamBootstrap.ReadyForInitialization)
+        {
+            throw new InvalidOperationException(
+                "Steam multiplayer requires an x86 steam_api.dll. Install the Steamworks SDK runtime, " +
+                "place it under assets/steam/win32, or pass --steam-api-dll <path>.");
+        }
         var launchedGame = StagedGameLauncher.Launch(
             stageResult,
             configuration,
-            command.TemporaryProfile);
+            command.TemporaryProfile,
+            multiplayer);
         return new LauncherCommandExecution(
             command,
             configuration,
@@ -82,5 +96,17 @@ internal static class LauncherCommandExecutor
             configuration,
             catalog,
             ModStateChange: new LauncherModStateChange(command.TargetModId, enabled, manager.StatePath));
+    }
+
+    private static string? ResolveSteamAppId(LauncherCommand command)
+    {
+        if (!string.IsNullOrWhiteSpace(command.SteamAppIdOverride))
+        {
+            return command.SteamAppIdOverride;
+        }
+
+        return command.MultiplayerMode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join
+            ? SteamBootstrapConfiguration.SpacewarDevelopmentAppId
+            : null;
     }
 }

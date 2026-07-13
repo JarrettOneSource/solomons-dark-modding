@@ -89,7 +89,11 @@ TARGET_FORWARD_DISTANCE = 176.0
 MAX_SCRIPTED_PRIMARY_TARGET_DISTANCE = 260.0
 RECEIVER_PARK_DISTANCE = 320.0
 HOST_TARGET = (650.0, 1750.0)
-CLIENT_TARGET = (2950.0, 1750.0)
+# Keep the client-owned lane in the central, projectile-safe region of the
+# flat fixture.  The old x=2950 lane was nav-walkable, but native Fireball
+# projectiles fail their stricter world-bounds check there and are deleted
+# before the actor-hit query runs.
+CLIENT_TARGET = (1800.0, 1750.0)
 PLAYER_SPAWN_PARK_DISTANCE = 2800.0
 PLAYER_SPAWN_PARK_SPACING = 360.0
 PLAYER_HEADING_EAST = 90.0
@@ -2432,11 +2436,17 @@ def place_player_and_require_pair_views_at(
     )
 
 
-def place_pair_for_direction(direction: Direction, target_x: float, target_y: float) -> dict[str, Any]:
+def place_pair_for_direction(
+    direction: Direction,
+    target_x: float,
+    target_y: float,
+    *,
+    receiver_y_offset: float = RECEIVER_PARK_DISTANCE,
+) -> dict[str, Any]:
     source_x = target_x - TARGET_FORWARD_DISTANCE
     source_y = target_y
     receiver_x = source_x
-    receiver_y = target_y + RECEIVER_PARK_DISTANCE
+    receiver_y = target_y + receiver_y_offset
     if direction.source_pipe == HOST_PIPE:
         host_pos = place_player(HOST_PIPE, source_x, source_y, PLAYER_HEADING_EAST)
         client_pos = place_player(CLIENT_PIPE, receiver_x, receiver_y, PLAYER_HEADING_EAST)
@@ -2579,7 +2589,12 @@ def select_forced_gold_location(
     )
 
 
-def place_pair_on_clear_lane(direction: Direction, anchor: tuple[float, float]) -> dict[str, Any]:
+def place_pair_on_clear_lane(
+    direction: Direction,
+    anchor: tuple[float, float],
+    *,
+    receiver_y_offset: float = RECEIVER_PARK_DISTANCE,
+) -> dict[str, Any]:
     attempts: list[dict[str, Any]] = []
     for planned_target_x, planned_target_y in lane_candidates(anchor):
         planned_probe = clear_lane_probe(planned_target_x, planned_target_y, pipe_name=direction.source_pipe)
@@ -2591,7 +2606,12 @@ def place_pair_on_clear_lane(direction: Direction, anchor: tuple[float, float]) 
         attempts.append(attempt)
         if planned_probe.get("ok") != "true" or parse_int(planned_probe.get("blocker_count")) != 0:
             continue
-        placement = place_pair_for_direction(direction, planned_target_x, planned_target_y)
+        placement = place_pair_for_direction(
+            direction,
+            planned_target_x,
+            planned_target_y,
+            receiver_y_offset=receiver_y_offset,
+        )
         source_x, source_y = source_settled_position(direction, placement)
         target_x = source_x + TARGET_FORWARD_DISTANCE
         target_y = source_y

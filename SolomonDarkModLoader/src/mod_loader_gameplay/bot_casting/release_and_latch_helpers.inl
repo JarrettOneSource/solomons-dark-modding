@@ -298,6 +298,10 @@ void FinishBotCastNativeLifecycle(
             HexString(static_cast<uintptr_t>(state.remote_per_cast_projectile_expected_type)) +
         " remote_projectile_before=" +
             std::to_string(state.remote_per_cast_projectile_count_before) +
+        " remote_projectile_emission_latched=" +
+            (state.remote_per_cast_projectile_emission_latched ? std::string("1") : std::string("0")) +
+        " remote_duplicate_dispatches_suppressed=" +
+            std::to_string(state.remote_per_cast_duplicate_dispatches_suppressed) +
         " remote_projectile_observed=" +
             (state.remote_per_cast_projectile_observed ? std::string("1") : std::string("0")) +
         " remote_projectile_observed_actor=" +
@@ -310,6 +314,18 @@ void FinishBotCastNativeLifecycle(
             (state.remote_per_cast_projectile_reached_target ? std::string("1") : std::string("0")) +
         " remote_projectile_target_ticks=" +
             std::to_string(state.remote_per_cast_projectile_target_ticks_waiting) +
+        " remote_projectile_trajectory_valid=" +
+            (state.remote_per_cast_projectile_trajectory_valid ? std::string("1") : std::string("0")) +
+        " remote_projectile_first=(" +
+            std::to_string(state.remote_per_cast_projectile_first_x) + "," +
+            std::to_string(state.remote_per_cast_projectile_first_y) + ")" +
+        " remote_projectile_last=(" +
+            std::to_string(state.remote_per_cast_projectile_last_x) + "," +
+            std::to_string(state.remote_per_cast_projectile_last_y) + ")" +
+        " remote_projectile_min_target_distance=" +
+            std::to_string(state.remote_per_cast_projectile_min_target_distance) +
+        " remote_projectile_trajectory_samples=" +
+            std::to_string(state.remote_per_cast_projectile_trajectory_samples) +
         " group_before=" + group_before_text +
         " slot_before=" + slot_before_text +
         " group_after=" + group_after_text +

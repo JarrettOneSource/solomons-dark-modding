@@ -16,13 +16,18 @@ void InvokeBotCastWithNativeActorSlot(
     auto& memory = *context.memory;
     const auto actor_address = context.actor_address;
     std::string slot_owner_context;
-    InvokeWithStandaloneBotProgressionSlotContext(
-        actor_address,
-        context.binding != nullptr && IsStandaloneWizardKind(context.binding->kind),
+    InvokeWithParticipantConcentrationContext(
+        context.binding,
         [&] {
-            invoke();
+            InvokeWithStandaloneBotProgressionSlotContext(
+                actor_address,
+                context.binding != nullptr && IsStandaloneWizardKind(context.binding->kind),
+                [&] {
+                    invoke();
+                },
+                &slot_owner_context);
         },
-        &slot_owner_context);
+        nullptr);
     std::uint8_t actor_slot = 0xFE;
     uintptr_t progression_runtime = 0;
     uintptr_t actor_progression_handle = 0;
@@ -58,13 +63,18 @@ void InvokeBotCastCleanupWithNativeOwnerContext(
     const BotCastProcessingContext& context,
     InvokeFn&& invoke,
     std::string* context_description = nullptr) {
-    InvokeWithBotProgressionSlotOwnerContext(
-        context.actor_address,
-        context.binding != nullptr && IsWizardParticipantKind(context.binding->kind),
+    InvokeWithParticipantConcentrationContext(
+        context.binding,
         [&] {
-            invoke();
+            InvokeWithBotProgressionSlotOwnerContext(
+                context.actor_address,
+                context.binding != nullptr && IsWizardParticipantKind(context.binding->kind),
+                [&] {
+                    invoke();
+                },
+                context_description);
         },
-        context_description);
+        nullptr);
 }
 
 void RestoreBotCastAim(

@@ -25,6 +25,10 @@ struct ParticipantEntityBinding {
     multiplayer::MultiplayerCharacterProfile character_profile;
     multiplayer::ParticipantSceneIntent scene_intent;
     multiplayer::ParticipantControllerKind controller_kind = multiplayer::ParticipantControllerKind::LuaBrain;
+    std::uint32_t concentration_revision = 0;
+    bool concentration_selection_valid = false;
+    std::int32_t concentration_entry_a = -1;
+    std::int32_t concentration_entry_b = -1;
     uintptr_t actor_address = 0;
     int gameplay_slot = -1;
     Kind kind = Kind::PlaceholderEnemy;
@@ -111,9 +115,15 @@ struct ParticipantEntityBinding {
     float stock_tick_facing_origin_x = 0.0f;
     float stock_tick_facing_origin_y = 0.0f;
     bool death_transition_stock_tick_seen = false;
+    bool native_remote_vital_baseline_valid = false;
+    float native_remote_last_written_hp = 0.0f;
+    float native_remote_last_written_max_hp = 0.0f;
     std::uint64_t mana_recovery_not_before_ms = 0;
     std::uint64_t last_mana_recovery_log_ms = 0;
     std::uint64_t last_mana_reserve_cleanup_log_ms = 0;
+    std::uint8_t persistent_status_reconcile_desired_flags = 0;
+    std::uint64_t persistent_status_reconcile_desired_since_ms = 0;
+    std::uint64_t persistent_status_reconcile_not_before_ms = 0;
 
     // Ongoing cast state. The loader primes the cast once and keeps a stock-owned
     // startup/watch state alive across ticks. Native slot gates are unlocked at
@@ -185,12 +195,21 @@ struct ParticipantEntityBinding {
         std::uint32_t remote_per_cast_projectile_expected_type = 0;
         int remote_per_cast_projectile_count_before = 0;
         std::vector<uintptr_t> remote_per_cast_projectile_addresses_before;
+        bool remote_per_cast_projectile_emission_latched = false;
+        int remote_per_cast_duplicate_dispatches_suppressed = 0;
         bool remote_per_cast_projectile_observed = false;
         uintptr_t remote_per_cast_projectile_observed_actor = 0;
         int remote_per_cast_projectile_observed_ticks_waiting = 0;
         int remote_per_cast_projectile_missing_ticks_waiting = 0;
         bool remote_per_cast_projectile_reached_target = false;
         int remote_per_cast_projectile_target_ticks_waiting = 0;
+        bool remote_per_cast_projectile_trajectory_valid = false;
+        float remote_per_cast_projectile_first_x = 0.0f;
+        float remote_per_cast_projectile_first_y = 0.0f;
+        float remote_per_cast_projectile_last_x = 0.0f;
+        float remote_per_cast_projectile_last_y = 0.0f;
+        float remote_per_cast_projectile_min_target_distance = 0.0f;
+        int remote_per_cast_projectile_trajectory_samples = 0;
         bool saw_latch = false;
         bool saw_activity = false;
         bool saw_live_handle = false;

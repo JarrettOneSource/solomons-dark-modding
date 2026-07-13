@@ -33,7 +33,6 @@ from verify_real_input_spell_cast_sync import (
     HOST_LOG,
     Direction,
     detect_instance_pids,
-    ensure_host_combat_started,
     log_after,
     queue_gameplay_mouse_left,
     read_log,
@@ -41,14 +40,28 @@ from verify_real_input_spell_cast_sync import (
     wait_for_source_cast,
 )
 from multiplayer_telemetry import MultiplayerTelemetryRecorder
-from verify_run_world_snapshot import wait_for_run_snapshot
+from verify_multiplayer_primary_kill_stress import (
+    cleanup_live_enemies,
+    enable_manual_stock_spawner_combat,
+    find_target,
+    prepare_and_queue_caster,
+    spawn_one_enemy,
+)
 
 
 ROOT = Path(__file__).resolve().parent.parent
 TELEMETRY_PATH = ROOT / "runtime" / "multiplayer_targeted_spell_matrix_telemetry.jsonl"
+OUTPUT_PATH = ROOT / "runtime" / "multiplayer_targeted_spell_matrix.json"
+FLAT_BONEYARD = ROOT / "tests" / "fixtures" / "boneyards" / "flat_multiplayer_test.boneyard"
 TELEMETRY: MultiplayerTelemetryRecorder | None = None
 TEST_PLAYER_HP = 5000.0
-FIRE_TAP_FRAMES = 2
+TEST_ENEMY_HP = 5000.0
+TEST_ENEMY_POSITION = (1800.0, 1750.0)
+# Two-process native Fireball playback needs the same sustained press proven by
+# the primary-kill and Fire upgrade verifiers. A two-frame tap can emit the
+# owner cast packet without giving the observer's stock projectile lifecycle
+# enough time to materialize and reach its exact target.
+FIRE_TAP_FRAMES = 64
 TAP_FRAMES = 12
 HOLD_FRAMES = 170
 
@@ -184,9 +197,9 @@ end
 local target_actor = tonumber(best.actor_address) or 0
 local target_x = tonumber(best.x) or 0
 local target_y = tonumber(best.y) or 0
-local caster_x = target_x
-local caster_y = target_y + 176.0
-local heading = 0.0
+local caster_x = target_x - 176.0
+local caster_y = target_y
+local heading = 90.0
 local ox = sd.debug.layout_offset("actor_position_x")
 local oy = sd.debug.layout_offset("actor_position_y")
 local oh = sd.debug.layout_offset("actor_heading")
@@ -264,17 +277,50 @@ for _, snapshot in ipairs(replicated.actors) do
     local hp = tonumber(snapshot.hp) or 0
     local max_hp = tonumber(snapshot.max_hp) or 0
     local dead = snapshot.dead or false
-    for _, actor in ipairs(actors) do
-      local actor_type = tonumber(actor.object_type_id) or 0
-      if actor.tracked_enemy and actor_type == stype then
-        local dx = (tonumber(actor.x) or 0) - sx
-        local dy = (tonumber(actor.y) or 0) - sy
-        if dx * dx + dy * dy <= (128.0 * 128.0) then
+    local bound_address = 0
+    if replicated.bindings ~= nil then
+      for _, binding in ipairs(replicated.bindings) do
+        if tonumber(binding.network_actor_id) == target_id and
+           binding.matched and not binding.parked and not binding.removed then
+          bound_address = tonumber(binding.local_actor_address) or 0
+          break
+        end
+      end
+    end
+    local resolved = false
+    if bound_address ~= 0 then
+      for _, actor in ipairs(actors) do
+        if tonumber(actor.actor_address) == bound_address then
           hp = tonumber(actor.hp) or hp
           max_hp = tonumber(actor.max_hp) or max_hp
           dead = actor.dead or dead
+          resolved = true
           break
         end
+      end
+    end
+    -- Older snapshots may not publish bindings.  Retain the spatial fallback
+    -- only for that case; clustered tests must never substitute a neighbour
+    -- for an exact network actor identity.
+    if not resolved and bound_address == 0 then
+      local best_actor = nil
+      local best_d2 = nil
+      for _, actor in ipairs(actors) do
+        local actor_type = tonumber(actor.object_type_id) or 0
+        if actor.tracked_enemy and actor_type == stype then
+          local dx = (tonumber(actor.x) or 0) - sx
+          local dy = (tonumber(actor.y) or 0) - sy
+          local d2 = dx * dx + dy * dy
+          if d2 <= (128.0 * 128.0) and (best_d2 == nil or d2 < best_d2) then
+            best_actor = actor
+            best_d2 = d2
+          end
+        end
+      end
+      if best_actor ~= nil then
+        hp = tonumber(best_actor.hp) or hp
+        max_hp = tonumber(best_actor.max_hp) or max_hp
+        dead = best_actor.dead or dead
       end
     end
     emit("found", true)
@@ -320,28 +366,27 @@ end
 
 local sx = tonumber(snapshot.x) or 0
 local sy = tonumber(snapshot.y) or 0
-local stype = tonumber(snapshot.native_type_id or snapshot.object_type_id) or 0
-local best_actor = 0
-local best_d2 = nil
-local actors = sd.world.list_actors and sd.world.list_actors() or {}
-for _, actor in ipairs(actors) do
-  local actor_type = tonumber(actor.object_type_id) or 0
-  local actor_address = tonumber(actor.actor_address) or 0
-  if actor_address ~= 0 and actor.tracked_enemy and actor_type == stype and not actor.dead then
-    local dx = (tonumber(actor.x) or 0) - sx
-    local dy = (tonumber(actor.y) or 0) - sy
-    local d2 = dx * dx + dy * dy
-    if d2 <= (192.0 * 192.0) and (best_d2 == nil or d2 < best_d2) then
-      best_actor = actor_address
-      best_d2 = d2
+local best_actor = tonumber("__TARGET_ACTOR__") or 0
+if best_actor == 0 and replicated.bindings ~= nil then
+  for _, binding in ipairs(replicated.bindings) do
+    if tonumber(binding.network_actor_id) == target_id and
+       binding.matched and not binding.parked and not binding.removed then
+      best_actor = tonumber(binding.local_actor_address) or 0
+      break
     end
   end
 end
+if best_actor == 0 then
+  emit("ok", false)
+  emit("reason", "exact_target_binding_missing")
+  return
+end
+local actors = sd.world.list_actors and sd.world.list_actors() or {}
 
 local player_actor = tonumber(player.actor_address) or 0
-local caster_x = sx
-local caster_y = sy + 176.0
-local heading = 0.0
+local caster_x = sx - 176.0
+local caster_y = sy
+local heading = 90.0
 local ox = sd.debug.layout_offset("actor_position_x")
 local oy = sd.debug.layout_offset("actor_position_y")
 local oh = sd.debug.layout_offset("actor_heading")
@@ -458,24 +503,42 @@ def host_enemy_by_id(network_actor_id: str) -> dict[str, str]:
     )
 
 
-def refresh_target_aim(pipe_name: str, network_actor_id: str) -> dict[str, str]:
-    result = values(
-        pipe_name,
-        TARGET_REFRESH_LUA.replace("__NETWORK_ACTOR_ID__", network_actor_id),
-        timeout=5.0,
-    )
+def refresh_target_aim(
+    pipe_name: str,
+    network_actor_id: str,
+    *,
+    target_actor_address: int = 0,
+) -> dict[str, str]:
     required_writes = (
         "write.player_x",
         "write.player_y",
         "write.target_x",
         "write.target_y",
         "write.heading",
+        "write.current_target",
         "write.aim_x",
         "write.aim_y",
     )
-    if result.get("ok") != "true" or any(result.get(key) != "true" for key in required_writes):
-        raise VerifyFailure(f"target aim refresh failed on {pipe_name}: network_actor_id={network_actor_id} result={result}")
-    return result
+    code = (
+        TARGET_REFRESH_LUA
+        .replace("__NETWORK_ACTOR_ID__", network_actor_id)
+        .replace("__TARGET_ACTOR__", str(target_actor_address))
+    )
+    deadline = time.monotonic() + 5.0
+    result: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        result = values(pipe_name, code, timeout=5.0)
+        if result.get("ok") == "true" and all(
+            result.get(key) == "true" for key in required_writes
+        ):
+            return result
+        if result.get("reason") != "exact_target_binding_missing":
+            break
+        time.sleep(0.05)
+    raise VerifyFailure(
+        f"target aim refresh failed on {pipe_name}: "
+        f"network_actor_id={network_actor_id} result={result}"
+    )
 
 
 def queue_enemy_damage_claim(
@@ -507,7 +570,8 @@ def queue_enemy_damage_claim(
 def parse_targeted_local_casts(log_text: str, participant_id: int) -> list[dict[str, int]]:
     pattern = re.compile(
         rf"Multiplayer local cast sent\. participant_id={participant_id} "
-        rf"cast_sequence=(\d+) phase=pressed skill_id=\d+ target_network_actor_id=(\d+)"
+        rf"cast_sequence=(\d+)(?: kind=[a-z_]+ secondary_slot=-?\d+)? "
+        rf"phase=pressed skill_id=\d+ target_network_actor_id=(\d+)"
     )
     return [
         {"cast_sequence": int(sequence), "target_network_actor_id": int(target_id)}
@@ -627,6 +691,29 @@ def wait_for_host_hp_drop(network_actor_id: str, before_hp: float, timeout: floa
 
 
 def verify_targeted_cast(direction: Direction, spec: ElementSpec) -> dict[str, object]:
+    cleanup = cleanup_live_enemies()
+    enemy = spawn_one_enemy(
+        TEST_ENEMY_POSITION[0],
+        TEST_ENEMY_POSITION[1],
+        setup_hp=TEST_ENEMY_HP,
+        freeze_on_spawn=True,
+    )
+    network_actor_id = str(enemy["result"]["network_actor_id"])
+    exact_bindings = {
+        "host": find_target(
+            HOST_PIPE,
+            TEST_ENEMY_POSITION[0],
+            TEST_ENEMY_POSITION[1],
+            int(network_actor_id),
+            require_local_binding=False,
+        ),
+        "client": find_target(
+            CLIENT_PIPE,
+            TEST_ENEMY_POSITION[0],
+            TEST_ENEMY_POSITION[1],
+            int(network_actor_id),
+        ),
+    }
     record_telemetry("targeted.cast.setup.before", element=spec.element, direction=direction.name)
     setup = setup_target(direction.source_pipe)
     setup_network_actor_id = setup["network_actor_id"]
@@ -659,8 +746,22 @@ def verify_targeted_cast(direction: Direction, spec: ElementSpec) -> dict[str, o
         network_actor_id=network_actor_id,
         before=before,
     )
-    aim_refresh = refresh_target_aim(direction.source_pipe, network_actor_id)
-    queue_result = queue_gameplay_mouse_left(direction, spec.frames)
+    aim_refresh = refresh_target_aim(
+        direction.source_pipe,
+        network_actor_id,
+        target_actor_address=(
+            int(enemy["actor_address"])
+            if direction.source_id == HOST_ID
+            else 0
+        ),
+    )
+    queue_result = prepare_and_queue_caster(
+        direction,
+        int(aim_refresh["target_actor"]),
+        number(aim_refresh, "target_x"),
+        number(aim_refresh, "target_y"),
+        spec.frames,
+    )
     sample_telemetry_window(
         "targeted.cast.input.after",
         duration=0.7,
@@ -769,6 +870,9 @@ def verify_targeted_cast(direction: Direction, spec: ElementSpec) -> dict[str, o
         remote_queues=remote_queues,
     )
     return {
+        "manual_enemy_cleanup": cleanup,
+        "manual_enemy": enemy,
+        "exact_bindings": exact_bindings,
         "setup": setup,
         "setup_network_actor_id": setup_network_actor_id,
         "network_actor_id": network_actor_id,
@@ -786,26 +890,27 @@ def verify_targeted_cast(direction: Direction, spec: ElementSpec) -> dict[str, o
 
 def launch_element_pair(spec: ElementSpec) -> dict[str, object]:
     record_telemetry("targeted.element.launch.start", element=spec.element, preset=spec.preset)
-    launch = launch_pair(preset=spec.preset)
+    launch = launch_pair(
+        preset=spec.preset,
+        test_survival_boneyard_override=FLAT_BONEYARD,
+    )
     record_telemetry("targeted.element.launch.ready", element=spec.element, launch=launch)
     pids = detect_instance_pids()
-    wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
-    wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")
+    wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub", timeout=30.0)
+    wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub", timeout=30.0)
     record_telemetry("targeted.element.hub.ready", element=spec.element, pids=pids)
+    disable_bots()
     run_entry = start_host_testrun_and_wait_for_clients()
     record_telemetry("targeted.element.run_entry.dispatched", element=spec.element, run_entry=run_entry)
     wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "testrun")
     wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "testrun")
     record_telemetry("targeted.element.run.ready", element=spec.element)
-    disable_bots()
     vitals = sustain_pair_vitals()
     record_telemetry("targeted.element.vitals.sustained", element=spec.element)
-    combat = ensure_host_combat_started()
+    combat = enable_manual_stock_spawner_combat()
     record_telemetry("targeted.element.combat.started", element=spec.element, combat=combat)
     vitals_after_combat = sustain_pair_vitals()
     record_telemetry("targeted.element.combat.vitals_sustained", element=spec.element)
-    snapshot = wait_for_run_snapshot(require_complete_lifecycle=True)
-    record_telemetry("targeted.element.snapshot.ready", element=spec.element)
     return {
         "launch": launch,
         "pids": pids,
@@ -813,7 +918,6 @@ def launch_element_pair(spec: ElementSpec) -> dict[str, object]:
         "vitals": vitals,
         "combat": combat,
         "vitals_after_combat": vitals_after_combat,
-        "snapshot": snapshot,
     }
 
 
@@ -857,6 +961,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable heavy host/client telemetry sampling during the focused verifier run.",
     )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=OUTPUT_PATH,
+        help="Write the complete matrix evidence to this JSON file.",
+    )
     return parser.parse_args()
 
 
@@ -871,33 +981,93 @@ def selected_elements(raw: str) -> tuple[ElementSpec, ...]:
     return tuple(ELEMENT_BY_NAME[name] for name in names)
 
 
+def retryable_element_startup_failure(exc: Exception) -> bool:
+    message = str(exc)
+    return any(
+        marker in message
+        for marker in (
+            "did not reach scene",
+            "did not remain hub-settled",
+            "not visible on",
+            "lua bridge daemon timed out",
+            "failed to disable bots",
+            "multiplayer pair did not",
+        )
+    )
+
+
 def main() -> int:
     global TELEMETRY
     args = parse_args()
     specs = selected_elements(args.elements)
     TELEMETRY = None if args.no_telemetry else MultiplayerTelemetryRecorder(TELEMETRY_PATH)
-    result: dict[str, object] = {"ok": False, "elements": [], "selected_elements": [spec.element for spec in specs]}
+    result: dict[str, object] = {
+        "ok": False,
+        "elements": [],
+        "element_retries": [],
+        "selected_elements": [spec.element for spec in specs],
+    }
     if TELEMETRY is not None:
         result["telemetry_path"] = str(TELEMETRY_PATH)
     record_telemetry("targeted.harness.start", selected_elements=[spec.element for spec in specs])
     try:
         for spec in specs:
-            try:
-                result["elements"].append(verify_element(spec))
-            finally:
-                record_telemetry("targeted.element.cleanup", element=spec.element)
-                stop_games()
+            for attempt in range(1, 3):
+                try:
+                    element_result = verify_element(spec)
+                    element_result["attempt"] = attempt
+                    result["elements"].append(element_result)
+                    break
+                except Exception as exc:
+                    if attempt >= 2 or not retryable_element_startup_failure(exc):
+                        raise
+                    result["element_retries"].append(
+                        {
+                            "element": spec.element,
+                            "attempt": attempt,
+                            "error": str(exc),
+                        }
+                    )
+                    record_telemetry(
+                        "targeted.element.retry",
+                        element=spec.element,
+                        attempt=attempt,
+                        error=str(exc),
+                    )
+                    time.sleep(1.0)
+                finally:
+                    record_telemetry("targeted.element.cleanup", element=spec.element)
+                    stop_games()
+                    time.sleep(0.75)
         result["ok"] = True
         record_telemetry("targeted.harness.success")
-        print(json.dumps(result, indent=2, sort_keys=True))
-        return 0
+        return_code = 0
     except Exception as exc:
         result["error"] = str(exc)
         record_telemetry("targeted.harness.failure", error=str(exc))
-        print(json.dumps(result, indent=2, sort_keys=True))
-        return 1
+        return_code = 1
     finally:
         stop_games()
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
+        json.dumps(result, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        json.dumps(
+            {
+                "ok": result.get("ok", False),
+                "error": result.get("error"),
+                "selected_elements": result.get("selected_elements", []),
+                "completed_element_count": len(result.get("elements", [])),
+                "output": str(args.output),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return return_code
 
 
 if __name__ == "__main__":

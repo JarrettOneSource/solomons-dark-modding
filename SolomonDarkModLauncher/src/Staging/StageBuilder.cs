@@ -26,6 +26,16 @@ internal static class StageBuilder
             catalog.EnabledMods,
             configuration.Runtime);
         var steamBootstrap = SteamBootstrapMaterializer.Materialize(configuration);
+        var stageExecutablePath = Path.Combine(
+            configuration.Workspace.StageRootPath,
+            configuration.Game.ExecutableName);
+        var multiplayerCompatibility = MultiplayerCompatibilityMaterializer.Materialize(
+            configuration.Workspace.StageRootPath,
+            stageExecutablePath,
+            runtimeConfig.StageBinaryLayoutPath,
+            runtimeMetadata,
+            catalog.EnabledMods,
+            Path.Combine(AppContext.BaseDirectory, "SolomonDarkModLoader.dll"));
 
         var reportPath = StageReportWriter.Write(
             configuration.Workspace.StageRootPath,
@@ -35,11 +45,12 @@ internal static class StageBuilder
             appliedOverlayCount,
             hudLabels,
             runtimeMetadata,
+            multiplayerCompatibility,
             steamBootstrap);
 
         return new StageBuildResult(
             configuration.Workspace.StageRootPath,
-            Path.Combine(configuration.Workspace.StageRootPath, configuration.Game.ExecutableName),
+            stageExecutablePath,
             reportPath,
             runtimeConfig.StageConfigRootPath,
             runtimeConfig.StageBinaryLayoutPath,
@@ -49,6 +60,7 @@ internal static class StageBuilder
             runtimeMetadata.RuntimeFlagsPath,
             stageMirror,
             runtimeMetadata,
+            multiplayerCompatibility,
             steamBootstrap,
             hudLabels,
             catalog.EnabledMods.Count,

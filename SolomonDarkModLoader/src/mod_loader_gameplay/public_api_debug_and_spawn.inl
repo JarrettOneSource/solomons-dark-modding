@@ -4,6 +4,16 @@ bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state) 
     }
 
     *state = SDModGameplaySelectionDebugState{};
+    std::scoped_lock concentration_context_lock(
+        g_participant_concentration_context_mutex);
+    if (g_participant_concentration_context_depth.load(
+            std::memory_order_acquire) != 0) {
+        // A native callback may re-enter this getter on the same thread while
+        // a remote participant context is installed.  Treat that frame as an
+        // unavailable snapshot; the next transport tick will read the restored
+        // local lanes.
+        return false;
+    }
     uintptr_t table_address = 0;
     int entry_count = 0;
     if (!TryResolveGameplayIndexState(&table_address, &entry_count) || table_address == 0 || entry_count <= 0) {
@@ -20,9 +30,156 @@ bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state) 
             (void)TryReadGameplayIndexStateValue(table_index, &value);
         }
         state->slot_selection_entries[slot_index] = static_cast<std::int32_t>(value);
+        std::int32_t concentration_a = -1;
+        std::int32_t concentration_b = -1;
+        (void)TryReadGameplayConcentrationStateForSlot(
+            slot_index,
+            &concentration_a,
+            &concentration_b);
+        state->concentration_entries_a_by_slot[slot_index] = concentration_a;
+        state->concentration_entries_b_by_slot[slot_index] = concentration_b;
     }
+    state->concentration_entry_a = state->concentration_entries_a_by_slot[0];
+    state->concentration_entry_b = state->concentration_entries_b_by_slot[0];
     state->player_selection_state_0 = state->slot_selection_entries[0];
     state->player_selection_state_1 = state->slot_selection_entries[1];
+    return true;
+}
+
+bool TryReconcileParticipantConcentrationRuntimeSelections(
+    std::uint64_t participant_id,
+    std::int32_t entry_a,
+    std::int32_t entry_b,
+    std::string* error_message) {
+    auto fail = [&](std::string message) {
+        if (error_message != nullptr) {
+            *error_message = std::move(message);
+        }
+        return false;
+    };
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (participant_id == 0 || entry_a < -1 || entry_b < -1) {
+        return fail("Concentrate runtime-lane reconcile received invalid participant state.");
+    }
+
+    SDModParticipantGameplayState gameplay_state;
+    if (!TryGetParticipantGameplayState(participant_id, &gameplay_state) ||
+        !gameplay_state.available ||
+        !gameplay_state.entity_materialized ||
+        gameplay_state.gameplay_slot < 0 ||
+        gameplay_state.gameplay_slot >= static_cast<int>(kGameplayPlayerSlotCount)) {
+        return fail(
+            "Concentrate runtime-lane reconcile requires a materialized gameplay-slot participant.");
+    }
+    if (!TryWriteGameplayConcentrationStateForSlot(
+            gameplay_state.gameplay_slot,
+            entry_a,
+            entry_b,
+            error_message)) {
+        return false;
+    }
+    return true;
+}
+
+bool TryApplyParticipantConcentrationSelections(
+    std::uint64_t participant_id,
+    std::int32_t entry_a,
+    std::int32_t entry_b,
+    std::string* error_message) {
+    auto fail = [&](std::string message) {
+        if (error_message != nullptr) {
+            *error_message = std::move(message);
+        }
+        return false;
+    };
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (participant_id == 0) {
+        return fail("Concentration-state apply requires a participant id.");
+    }
+    if (entry_a < -1 || entry_b < -1) {
+        return fail("Concentration entries must be -1 or valid progression rows.");
+    }
+
+    SDModParticipantGameplayState gameplay_state;
+    if (!TryGetParticipantGameplayState(participant_id, &gameplay_state) ||
+        !gameplay_state.available ||
+        !gameplay_state.entity_materialized ||
+        gameplay_state.actor_address == 0 ||
+        gameplay_state.progression_runtime_state_address == 0 ||
+        gameplay_state.gameplay_slot < 0 ||
+        gameplay_state.gameplay_slot >= static_cast<int>(kGameplayPlayerSlotCount)) {
+        return fail(
+            "Concentration-state apply requires a materialized gameplay-slot participant.");
+    }
+
+    std::int32_t progression_entry_count = 0;
+    if (!ProcessMemory::Instance().TryReadField(
+            gameplay_state.progression_runtime_state_address,
+            kStandaloneWizardProgressionTableCountOffset,
+            &progression_entry_count) ||
+        progression_entry_count <= 0 ||
+        progression_entry_count > 4096) {
+        return fail("Unable to validate Concentrate entries against the participant progression.");
+    }
+    if (entry_a >= progression_entry_count || entry_b >= progression_entry_count) {
+        return fail("A Concentrate entry is outside the participant progression table.");
+    }
+
+    const auto concentration_a_index =
+        static_cast<int>(kGameplayIndexStateConcentrationAIndex);
+    const auto concentration_b_index =
+        static_cast<int>(kGameplayIndexStateConcentrationBIndex);
+    ScopedParticipantConcentrationSamplingSuppression sampling_suppression;
+    int previous_a = -1;
+    int previous_b = -1;
+    if (!TryReadGameplayIndexStateValue(concentration_a_index, &previous_a) ||
+        !TryReadGameplayIndexStateValue(concentration_b_index, &previous_b)) {
+        return fail("Unable to snapshot the process Concentrate state.");
+    }
+    DWORD exception_code = 0;
+    bool refresh_ok = false;
+    bool restore_ok = false;
+    std::string restore_error;
+    if (!TryWriteGameplayConcentrationState(entry_a, entry_b, error_message)) {
+        return false;
+    }
+
+    const auto refresh_address =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kActorProgressionRefresh);
+    refresh_ok =
+        refresh_address != 0 &&
+        CallActorProgressionRefreshSafe(
+            refresh_address,
+            gameplay_state.actor_address,
+            &exception_code);
+    restore_ok = TryWriteGameplayConcentrationState(
+        static_cast<std::int32_t>(previous_a),
+        static_cast<std::int32_t>(previous_b),
+        &restore_error);
+    if (!refresh_ok) {
+        return fail(
+            "Participant progression refresh after Concentrate sync failed with 0x" +
+            HexString(exception_code) + ".");
+    }
+    if (!restore_ok) {
+        return fail(
+            "Participant progression refresh succeeded but restoring the local "
+            "Concentrate context failed: " + restore_error);
+    }
+    std::string runtime_lane_error;
+    if (!TryReconcileParticipantConcentrationRuntimeSelections(
+            participant_id,
+            entry_a,
+            entry_b,
+            &runtime_lane_error)) {
+        return fail(
+            "Participant progression refreshed but its gameplay-slot Concentrate "
+            "runtime lanes failed to reconcile: " + runtime_lane_error);
+    }
     return true;
 }
 

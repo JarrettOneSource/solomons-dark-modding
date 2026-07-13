@@ -27,7 +27,8 @@ struct BotLoadoutInfo {
     // that later resolve to the concrete spell id at runtime.
     std::int32_t primary_entry_index = -1;
     std::int32_t primary_combo_entry_index = -1;
-    std::array<std::int32_t, 3> secondary_entry_indices = {-1, -1, -1};
+    std::array<std::int32_t, kSecondaryLoadoutSlotCount> secondary_entry_indices = {
+        -1, -1, -1, -1, -1, -1, -1, -1};
 };
 
 enum class CharacterDisciplineId : std::int32_t {
@@ -72,15 +73,20 @@ struct ParticipantRuntimeInfo {
     float life_max = 0.0f;
     float mana_current = 0.0f;
     float mana_max = 0.0f;
+    float move_speed = 0.0f;
     std::int32_t experience_current = 0;
     std::int32_t experience_next = 0;
     std::int32_t primary_entry_index = -1;
     std::int32_t primary_combo_entry_index = -1;
-    std::array<std::int32_t, 3> queued_secondary_entry_indices = {-1, -1, -1};
+    std::array<std::int32_t, kSecondaryLoadoutSlotCount> queued_secondary_entry_indices = {
+        -1, -1, -1, -1, -1, -1, -1, -1};
     float position_x = 0.0f;
     float position_y = 0.0f;
     float heading = 0.0f;
     std::uint8_t anim_drive_state = 0;
+    std::uint8_t persistent_status_flags = 0;
+    std::uint8_t transient_status_flags = 0;
+    std::int32_t poison_remaining_ticks = 0;
     std::uint16_t presentation_flags = 0;
     std::uint32_t attachment_staff_visual_state = 0;
     std::uint8_t render_variant_primary = 0;
@@ -120,6 +126,23 @@ struct ParticipantProgressionBookEntryState {
     std::int32_t statbook_max_level = -1;
 };
 
+struct ParticipantDerivedStatState {
+    bool valid = false;
+    float cast_speed_multiplier = 0.0f;
+    float mana_recovery_multiplier = 0.0f;
+    float resist_magic_fraction = 0.0f;
+    float resist_poison_fraction = 0.0f;
+    float deflect_chance = 0.0f;
+    float staff_melee_damage_a = 0.0f;
+    float staff_melee_damage_b = 0.0f;
+    float pickup_range = 0.0f;
+    float secondary_recharge_multiplier = 0.0f;
+    float offensive_damage_multiplier = 0.0f;
+    float offensive_mana_multiplier = 0.0f;
+    float meditation_recovery_bonus = 0.0f;
+    std::int32_t meditation_idle_ticks = -1;
+};
+
 struct ParticipantOwnedProgressionState {
     bool initialized = false;
     std::int32_t gold = 0;
@@ -128,6 +151,12 @@ struct ParticipantOwnedProgressionState {
     std::uint32_t spellbook_revision = 0;
     std::uint32_t statbook_revision = 0;
     std::uint32_t loadout_revision = 0;
+    std::uint32_t concentration_revision = 0;
+    bool concentration_selection_valid = false;
+    std::int32_t concentration_entry_a = -1;
+    std::int32_t concentration_entry_b = -1;
+    std::uint32_t derived_stat_revision = 0;
+    ParticipantDerivedStatState derived_stats;
     bool inventory_host_authoritative = false;
     std::uint16_t inventory_item_total_count = 0;
     bool inventory_truncated = false;
@@ -150,6 +179,7 @@ struct LevelUpOfferRuntimeInfo {
     bool native_picker_presented = false;
     bool native_picker_options_pinned = false;
     bool native_picker_local_apply_observed = false;
+    bool suppress_native_picker = false;
     std::uint64_t authority_participant_id = 0;
     std::uint64_t target_participant_id = 0;
     std::uint64_t offer_id = 0;
@@ -174,6 +204,7 @@ struct LevelUpChoiceResultRuntimeInfo {
     std::int32_t option_index = -1;
     std::int32_t option_id = -1;
     std::int32_t apply_count = 1;
+    std::uint16_t resulting_active = 0;
     LevelUpChoiceResultCode result_code = LevelUpChoiceResultCode::Rejected;
 };
 
@@ -250,6 +281,7 @@ struct WorldActorSnapshot {
     bool tracked_enemy = false;
     bool lifecycle_owned = false;
     bool run_static = false;
+    bool player_created = false;
     bool target_authoritative = false;
     std::uint8_t anim_drive_state = 0;
     std::uint16_t presentation_flags = 0;
@@ -328,148 +360,110 @@ struct LootSnapshotRuntimeInfo {
     std::vector<LootDropSnapshot> drops;
 };
 
-struct LootPickupResultRuntimeInfo {
+struct SpellEffectSnapshot {
+    std::uint32_t effect_serial = 0;
+    std::uint32_t cast_sequence = 0;
+    std::uint32_t native_type_id = 0;
+    std::uint16_t effect_ordinal = 0;
+    bool active = false;
+    bool terminal = false;
+    bool transform_valid = false;
+    bool motion_valid = false;
+    bool ember_runtime_valid = false;
+    bool firewalker_runtime_valid = false;
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    float radius = 0.0f;
+    float heading = 0.0f;
+    float motion_x = 0.0f;
+    float motion_y = 0.0f;
+    float ember_vertical_position = 0.0f;
+    float ember_vertical_velocity = 0.0f;
+    float ember_damage = 0.0f;
+    float ember_lifetime = 0.0f;
+    float ember_initial_lifetime = 0.0f;
+    float ember_animation_progress = 0.0f;
+    std::uint32_t ember_variant = 0;
+    std::uint32_t ember_frame_interval = 0;
+    std::uint16_t ember_config_primary = 0;
+    std::uint16_t ember_config_secondary = 0;
+    std::uint16_t ember_config_tertiary = 0;
+    float firewalker_collision_scale = 0.0f;
+    float firewalker_phase = 0.0f;
+    float firewalker_phase_step = 0.0f;
+    float firewalker_lifetime = 0.0f;
+    float firewalker_fade = 0.0f;
+    float firewalker_direction = 0.0f;
+    float firewalker_visual_scale = 0.0f;
+    float firewalker_damage = 0.0f;
+    std::int8_t firewalker_source_slot = -1;
+    std::uint8_t firewalker_active = 0;
+    std::uint8_t firewalker_variant = 0;
+    std::int32_t firewalker_aux = 0;
+    std::uint32_t firewalker_damage_mask = 0;
+};
+
+struct SpellEffectSnapshotRuntimeInfo {
     bool valid = false;
-    std::uint64_t authority_participant_id = 0;
-    std::uint64_t participant_id = 0;
+    std::uint64_t owner_participant_id = 0;
     std::uint64_t received_ms = 0;
     std::uint32_t sequence = 0;
-    std::uint32_t request_sequence = 0;
     std::uint32_t run_nonce = 0;
-    std::uint64_t network_drop_id = 0;
-    LootPickupResultCode result_code = LootPickupResultCode::Rejected;
-    LootDropKind drop_kind = LootDropKind::Unknown;
-    std::int32_t amount = 0;
-    std::int32_t resulting_gold = 0;
-    std::uint32_t gold_revision = 0;
-    std::int32_t resource_kind = -1;
-    float resource_delta = 0.0f;
-    float resulting_life_current = 0.0f;
-    float resulting_life_max = 0.0f;
-    float resulting_mana_current = 0.0f;
-    float resulting_mana_max = 0.0f;
-    std::uint32_t item_type_id = 0;
-    std::int32_t item_slot = -1;
-    std::int32_t stack_count = 0;
-    std::uint32_t inventory_revision = 0;
+    std::uint32_t scene_epoch = 0;
+    std::uint32_t effect_total_count = 0;
+    bool truncated = false;
+    std::vector<SpellEffectSnapshot> effects;
 };
 
-struct WorldSnapshotApplyRuntimeInfo {
+struct SpellEffectBindingRuntimeInfo {
+    std::uint64_t owner_participant_id = 0;
+    std::int32_t owner_gameplay_slot = -1;
+    std::int32_t owner_actor_slot = -1;
+    std::uint32_t effect_serial = 0;
+    std::uint32_t cast_sequence = 0;
+    std::uint32_t native_type_id = 0;
+    std::uint16_t effect_ordinal = 0;
+    uintptr_t local_actor_address = 0;
+    std::int32_t local_actor_slot = -1;
+    std::int32_t local_firewalker_source_slot = -1;
+    bool matched = false;
+    bool active = false;
+    bool terminal = false;
+    float authoritative_x = 0.0f;
+    float authoritative_y = 0.0f;
+    float local_x = 0.0f;
+    float local_y = 0.0f;
+    float position_error = 0.0f;
+};
+
+struct SpellEffectApplyRuntimeInfo {
     bool valid = false;
     std::uint64_t applied_ms = 0;
-    std::uint32_t sequence = 0;
-    std::uint32_t scene_epoch = 0;
-    std::uint32_t local_actor_count = 0;
-    std::uint32_t matched_actor_count = 0;
-    std::uint32_t created_actor_count = 0;
-    std::uint32_t created_actor_total_count = 0;
+    std::uint64_t reconcile_revision = 0;
+    std::uint32_t snapshot_count = 0;
+    std::uint32_t effect_count = 0;
+    std::uint32_t matched_effect_count = 0;
+    std::uint32_t matched_ember_effect_count = 0;
+    std::uint32_t matched_firewalker_effect_count = 0;
+    std::uint32_t created_ember_effect_count = 0;
+    std::uint32_t created_firewalker_effect_count = 0;
+    std::uint32_t terminal_effect_count = 0;
+    std::uint32_t max_matched_effect_count = 0;
+    std::uint32_t max_matched_ember_effect_count = 0;
+    std::uint32_t max_matched_firewalker_effect_count = 0;
     std::uint32_t transform_write_count = 0;
-    std::uint32_t presentation_write_count = 0;
-    std::uint32_t health_write_count = 0;
-    std::uint32_t dead_actor_count = 0;
-    std::uint32_t parked_actor_count = 0;
-    std::uint32_t removed_actor_count = 0;
-    std::uint32_t failed_remove_actor_count = 0;
-    std::vector<WorldSnapshotActorBindingRuntimeInfo> actor_bindings;
+    std::uint32_t motion_write_count = 0;
+    std::uint32_t ember_runtime_write_count = 0;
+    std::uint32_t firewalker_runtime_write_count = 0;
+    std::uint32_t terminal_write_count = 0;
+    std::uint64_t cumulative_transform_write_count = 0;
+    std::uint64_t cumulative_motion_write_count = 0;
+    std::uint64_t cumulative_ember_runtime_write_count = 0;
+    std::uint64_t cumulative_ember_create_count = 0;
+    std::uint64_t cumulative_firewalker_create_count = 0;
+    std::uint64_t cumulative_firewalker_runtime_write_count = 0;
+    std::uint64_t cumulative_terminal_write_count = 0;
+    std::vector<SpellEffectBindingRuntimeInfo> bindings;
 };
 
-enum class SessionStatus {
-    Idle,
-    Ready,
-    Error,
-};
-
-enum class SessionTransportKind {
-    None,
-    Steam,
-    LocalUdp,
-};
-
-struct RuntimeState {
-    bool shutting_down = false;
-    bool foundation_ready = false;
-    bool service_loop_running = false;
-    bool steam_requested = false;
-    bool steam_available = false;
-    bool steam_transport_ready = false;
-    bool transport_ready = false;
-    std::uint64_t local_steam_id = 0;
-    std::uint64_t service_tick_count = 0;
-    std::uint64_t last_service_tick_ms = 0;
-    std::uint64_t steam_callback_pump_count = 0;
-    std::uint64_t last_steam_callback_pump_ms = 0;
-    std::uint32_t next_outbound_sequence = 1;
-    SessionStatus session_status = SessionStatus::Idle;
-    SessionTransportKind session_transport = SessionTransportKind::None;
-    std::string status_text;
-    std::string error_text;
-    std::vector<ParticipantInfo> participants;
-    WorldSnapshotRuntimeInfo world_snapshot;
-    std::vector<WorldSnapshotRuntimeInfo> world_snapshot_history;
-    WorldSnapshotApplyRuntimeInfo world_snapshot_apply;
-    LootSnapshotRuntimeInfo loot_snapshot;
-    LootPickupResultRuntimeInfo last_loot_pickup_result;
-    LevelUpOfferRuntimeInfo active_level_up_offer;
-    LevelUpChoiceResultRuntimeInfo last_level_up_choice_result;
-    LevelUpWaitStatusRuntimeInfo level_up_wait_status;
-};
-
-constexpr std::uint64_t kLocalParticipantId = 1ull;
-constexpr std::uint64_t kFirstLuaControlledParticipantId = 0x1000000000001000ull;
-constexpr std::size_t kParticipantTransformHistoryCapacity = 8;
-constexpr std::size_t kWorldSnapshotHistoryCapacity = 8;
-
-MultiplayerCharacterProfile DefaultCharacterProfile();
-bool IsValidCharacterProfile(const MultiplayerCharacterProfile& profile);
-bool IsValidParticipantSceneIntent(const ParticipantSceneIntent& scene_intent);
-ParticipantSceneIntent DefaultParticipantSceneIntent();
-bool SameParticipantSceneIntent(const ParticipantSceneIntent& left, const ParticipantSceneIntent& right);
-float InterpolateHeadingDegrees(float from_degrees, float to_degrees, float alpha);
-
-void InitializeRuntimeState();
-void ShutdownRuntimeState();
-void MarkRuntimeShuttingDown();
-
-template <typename Fn>
-void UpdateRuntimeState(Fn&& updater);
-
-RuntimeState SnapshotRuntimeState();
-void ApplySteamSnapshotToRuntime(std::uint64_t now_ms, const SteamBootstrapSnapshot& steam_snapshot);
-
-ParticipantInfo* FindParticipant(RuntimeState& state, std::uint64_t participant_id);
-const ParticipantInfo* FindParticipant(const RuntimeState& state, std::uint64_t participant_id);
-ParticipantInfo* FindLocalParticipant(RuntimeState& state);
-const ParticipantInfo* FindLocalParticipant(const RuntimeState& state);
-ParticipantInfo* UpsertLocalParticipant(RuntimeState& state);
-ParticipantInfo* UpsertRemoteParticipant(
-    RuntimeState& state,
-    std::uint64_t participant_id,
-    ParticipantControllerKind controller_kind);
-void AppendParticipantTransformSample(ParticipantInfo* participant, const ParticipantTransformSample& sample);
-bool TrySampleParticipantTransform(
-    const ParticipantInfo& participant,
-    std::uint64_t now_ms,
-    std::uint64_t interpolation_delay_ms,
-    ParticipantTransformSample* sample);
-void AppendWorldSnapshot(RuntimeState* state, WorldSnapshotRuntimeInfo snapshot);
-bool TrySampleWorldSnapshot(
-    const RuntimeState& state,
-    std::uint64_t now_ms,
-    std::uint64_t interpolation_delay_ms,
-    WorldSnapshotRuntimeInfo* snapshot);
-bool IsLocalHumanParticipant(const ParticipantInfo& participant);
-bool IsRemoteParticipant(const ParticipantInfo& participant);
-bool IsLuaControlledParticipant(const ParticipantInfo& participant);
-bool IsNativeControlledParticipant(const ParticipantInfo& participant);
-
-const char* SessionStatusLabel(SessionStatus status);
-const char* SessionTransportLabel(SessionTransportKind kind);
-const char* ParticipantKindLabel(ParticipantKind kind);
-const char* ParticipantControllerKindLabel(ParticipantControllerKind kind);
-const char* ParticipantSceneIntentKindLabel(ParticipantSceneIntentKind kind);
-const char* LootDropKindLabel(LootDropKind kind);
-const char* LootPickupResultCodeLabel(LootPickupResultCode code);
-
-}  // namespace sdmod::multiplayer
-
-#include "multiplayer_runtime_state.inl"
+#include "multiplayer_runtime_effect_state.inl"
