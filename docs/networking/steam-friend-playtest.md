@@ -10,9 +10,12 @@ disposable stage. It never copies or stores Steam credentials.
 
 - A Release host launch initializes Steam under AppID 480, creates a
   friends-only four-player lobby, publishes protocol/build metadata, and reaches
-  `Ready`.
+  `LobbyReady`. The launcher waits for that milestone, returns the real lobby ID,
+  and accurately reports whether the overlay invite dialog opened.
 - A Release join launch initializes Steam under AppID 480 and reaches
-  `WaitingForInvite` without a lobby ID.
+  `WaitingForInvite` without a lobby ID. Redirected CLI launches also return at
+  that milestone while the game remains running, which is the path used by the
+  desktop UI.
 - Protocol v50 statically covers lobby membership checks, host ownership,
   compatibility handshake, authenticated gameplay routing, goodbye/timeout
   cleanup, automatic re-handshake after silent route loss, and no host
@@ -54,18 +57,24 @@ instead of this development launcher.
    `WaitingForInvite`.
 3. On the hosting PC, open the same launcher UI and click
    **Host & Invite Friends**.
-4. If the Steam overlay invite panel opens, select the already-waiting friend.
-   If the overlay is unavailable, use **Invite to Game** from the Steam Friends
-   window. The host remains in a valid inviteable lobby either way.
+4. Wait for the UI to report that the lobby is ready. It fills the
+   **Lobby ID (optional)** box with the created lobby ID. If the Steam overlay
+   invite panel opens, select the already-waiting friend. If the overlay is
+   unavailable, use **Invite to Game** from the Steam Friends window or share
+   that lobby ID privately. The host remains in a valid inviteable lobby either
+   way.
 5. The joiner accepts the invite while their join-wait game is still open.
 6. Do not begin the run until both players are visible in the shared hub and
    both runtimes report an authenticated peer.
 
 ## Lobby-ID fallback
 
-The host lobby ID appears in the host loader log after
-`Steam multiplayer lobby ready`. Share it privately, enter it into the launcher's
-**Lobby ID (optional)** box on the joining PC, and click **Join Friend**.
+The launcher UI fills its **Lobby ID (optional)** box once the host reaches
+`LobbyReady`. The CLI reports the same value at
+`launch.multiplayerSession.lobbyId`, and the host loader log records it after
+`Steam multiplayer lobby ready`. Share it privately, enter it on the joining
+PC, and click **Join Friend**. A lobby-ID join does not return success until the
+host compatibility handshake authenticates.
 
 The equivalent command-line launches are:
 
@@ -102,10 +111,15 @@ profile for a one-off run.
 Each stage writes:
 
 - `.sdmod\startup-status.json`
+- `.sdmod\multiplayer-session-status.json`
 - `.sdmod\stage-report.json`
 - `.sdmod\logs\solomondarkmodloader.log`
 
-Healthy host milestones are `CreatingLobby`, `lobby ready`, then `Ready`.
+The structured multiplayer status is bound to the same per-launch token as the
+startup status and reports phase, AppID, lobby ID, capacity, authenticated peer
+count, overlay/invite state, SDR route/ping, and any terminal error. Healthy
+host milestones are `CreatingLobby`, `lobby ready`, then `LobbyReady` (runtime
+status `Ready`).
 Healthy join milestones are `WaitingForInvite`, `JoiningLobby`,
 `Handshaking`, then `Connected`. A protocol version, build fingerprint, AppID,
 lobby-owner, capability, or membership mismatch must fail closed instead of

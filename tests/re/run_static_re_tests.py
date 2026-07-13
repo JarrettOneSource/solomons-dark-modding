@@ -6218,6 +6218,30 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     steam_materializer_text = read_text(
         ROOT / "SolomonDarkModLauncher/src/Steam/SteamBootstrapMaterializer.cs"
     )
+    startup_status_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/startup_status.cpp"
+    )
+    session_monitor_text = read_text(
+        ROOT / "SolomonDarkModLauncher/src/Launch/MultiplayerSessionStatusMonitor.cs"
+    )
+    launcher_json_text = read_text(
+        ROOT / "SolomonDarkModLauncher/src/App/LauncherJsonConsole.cs"
+    )
+    launcher_output_text = read_text(
+        ROOT / "SolomonDarkModLauncher/src/App/LauncherOutputFormatter.cs"
+    )
+    ui_response_text = read_text(
+        ROOT / "SolomonDarkModLauncher.UI/src/Infrastructure/LauncherCliResponse.cs"
+    )
+    ui_view_model_text = read_text(
+        ROOT / "SolomonDarkModLauncher.UI/src/ViewModels/MainWindowViewModel.cs"
+    )
+    ui_command_client_text = read_text(
+        ROOT / "SolomonDarkModLauncher.UI/src/Infrastructure/LauncherUiCommandClient.cs"
+    )
+    ui_response_reader_text = read_text(
+        ROOT / "SolomonDarkModLauncher.UI/src/Infrastructure/LauncherJsonResponseReader.cs"
+    )
 
     required_pairs = (
         (protocol_text, "constexpr std::uint16_t kProtocolVersion = 50;"),
@@ -6247,6 +6271,19 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
         (launch_environment_text, 'environment[TransportVariable] = "steam";'),
         (launch_executor_text, "SteamBootstrapConfiguration.SpacewarDevelopmentAppId"),
         (steam_materializer_text, "reader.PEHeaders.CoffHeader.Machine == Machine.I386"),
+        (startup_status_text, 'L"multiplayer-session-status.json"'),
+        (session_text, "WriteMultiplayerSessionStatus("),
+        (session_text, "g_session.overlay_enabled = SteamIsOverlayEnabled()"),
+        (session_monitor_text, "WaitForHostReady("),
+        (session_monitor_text, "WaitForConnectedJoin("),
+        (session_monitor_text, "expectedLaunchToken"),
+        (launcher_json_text, "MultiplayerSession ="),
+        (launcher_output_text, "Steam lobby id:"),
+        (ui_response_text, "LauncherCliMultiplayerSession"),
+        (ui_view_model_text, "LobbyId = multiplayer.LobbyId.ToString();"),
+        (ui_command_client_text, "LauncherJsonResponseReader.ReadAsync("),
+        (ui_response_reader_text, "ReadLineAsync(cancellationToken)"),
+        (ui_response_reader_text, 'TryGetProperty("success"'),
     )
     missing = [token for text, token in required_pairs if token not in text]
     if missing:
@@ -6262,9 +6299,14 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
             "Steam host session bypasses friends-only or host-authenticated routing: " +
             ", ".join(present)
         )
+    if "ReadToEndAsync" in ui_command_client_text:
+        raise StaticReTestFailure(
+            "WPF launcher still waits for inherited game pipe EOF instead of the CLI JSON response"
+        )
     return (
         "Steam friends-only lobby, authenticated v50 handshake, owner-checked gameplay "
-        "routing, Spacewar launch, and x86 runtime staging are wired"
+        "routing, Spacewar launch, x86 runtime staging, and launch-token-bound lobby "
+        "status reporting are wired"
     )
 
 

@@ -67,6 +67,24 @@ internal sealed class LauncherCliLaunch
     public string StartupCode { get; set; } = string.Empty;
     public string StartupMessage { get; set; } = string.Empty;
     public string? StartupLogPath { get; set; }
+    public LauncherCliMultiplayerSession? MultiplayerSession { get; set; }
+}
+
+internal sealed class LauncherCliMultiplayerSession
+{
+    public bool Enabled { get; set; }
+    public bool IsHost { get; set; }
+    public string Phase { get; set; } = string.Empty;
+    public uint AppId { get; set; }
+    public ulong LobbyId { get; set; }
+    public uint MaxParticipants { get; set; }
+    public uint AuthenticatedPeerCount { get; set; }
+    public bool OverlayEnabled { get; set; }
+    public bool InviteDialogOpened { get; set; }
+    public bool RouteRelayed { get; set; }
+    public int RoutePingMs { get; set; }
+    public string StatusText { get; set; } = string.Empty;
+    public string ErrorText { get; set; } = string.Empty;
 }
 
 internal sealed class LauncherCliModStateChange

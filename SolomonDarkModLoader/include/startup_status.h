@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 
@@ -28,10 +29,35 @@ struct StartupStatusSnapshot {
     bool runtime_tick_service_running = false;
 };
 
+struct MultiplayerSessionStatusSnapshot {
+    std::string launch_token;
+    bool enabled = false;
+    bool is_host = false;
+    std::string phase;
+    std::uint32_t app_id = 0;
+    std::uint64_t lobby_id = 0;
+    std::uint64_t host_steam_id = 0;
+    std::uint32_t max_participants = 0;
+    std::uint32_t authenticated_peer_count = 0;
+    bool overlay_enabled = false;
+    bool invite_dialog_opened = false;
+    bool route_relayed = false;
+    std::int32_t route_ping_ms = 0;
+    std::string status_text;
+    std::string error_text;
+};
+
 std::filesystem::path GetStartupStatusPath(const std::filesystem::path& stage_runtime_directory);
 void ResetStartupStatus(const std::filesystem::path& stage_runtime_directory);
 void WriteStartupStatus(
     const std::filesystem::path& stage_runtime_directory,
     const StartupStatusSnapshot& snapshot);
+std::filesystem::path GetMultiplayerSessionStatusPath(
+    const std::filesystem::path& stage_runtime_directory);
+void ResetMultiplayerSessionStatus(
+    const std::filesystem::path& stage_runtime_directory);
+void WriteMultiplayerSessionStatus(
+    const std::filesystem::path& stage_runtime_directory,
+    const MultiplayerSessionStatusSnapshot& snapshot);
 
 }  // namespace sdmod

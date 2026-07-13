@@ -256,7 +256,7 @@
                 <TextBlock Margin="72,6,72,0"
                            FontSize="11"
                            Foreground="{StaticResource TextMutedBrush}"
-                           Text="For the most reliable Spacewar test, the friend clicks Join Friend first, then accepts the host's invite while Solomon Dark is open. The host opens Steam's invite dialog when the overlay is active; Steam Friends and lobby IDs are fallbacks."
+                           Text="For the most reliable Spacewar test, the friend clicks Join Friend first, then accepts the host's invite while Solomon Dark is open. Hosting fills in the Lobby ID above. The invite dialog opens when Steam's overlay is active; otherwise share that ID or invite through Steam Friends."
                            TextWrapping="Wrap" />
             </StackPanel>
 

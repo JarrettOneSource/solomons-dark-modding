@@ -178,6 +178,28 @@ internal static class LauncherOutputFormatter
         builder.AppendLine($"Loader startup code: {launchedGame.StartupStatus.Code}");
         builder.AppendLine($"Loader startup message: {launchedGame.StartupStatus.Message}");
         builder.AppendLine($"Loader log: {launchedGame.StartupStatus.LogPath ?? "(unknown)"}");
+        if (launchedGame.MultiplayerSessionStatus is { } session)
+        {
+            builder.AppendLine($"Steam session phase: {session.Phase}");
+            builder.AppendLine($"Steam AppID: {session.AppId}");
+            builder.AppendLine($"Steam lobby id: {session.LobbyId}");
+            builder.AppendLine(
+                $"Steam authenticated peers: {session.AuthenticatedPeerCount}; " +
+                $"lobby capacity: {session.MaxParticipants}");
+            builder.AppendLine(
+                $"Steam overlay: {(session.OverlayEnabled ? "enabled" : "disabled")}; " +
+                $"invite dialog: {(session.InviteDialogOpened ? "opened" : "not opened")}");
+            builder.AppendLine(
+                session.AuthenticatedPeerCount == 0
+                    ? "Steam route: pending (no authenticated peer)"
+                    : $"Steam route: {(session.RouteRelayed ? "SDR relay" : "direct-or-pending")}; " +
+                      $"ping: {session.RoutePingMs} ms");
+            builder.AppendLine($"Steam session status: {session.StatusText}");
+            if (!string.IsNullOrWhiteSpace(session.ErrorText))
+            {
+                builder.AppendLine($"Steam session error: {session.ErrorText}");
+            }
+        }
         builder.AppendLine();
     }
 }

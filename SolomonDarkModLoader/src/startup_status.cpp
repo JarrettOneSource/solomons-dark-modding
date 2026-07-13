@@ -11,6 +11,8 @@ namespace sdmod {
 namespace {
 
 constexpr wchar_t kStartupStatusFileName[] = L"startup-status.json";
+constexpr wchar_t kMultiplayerSessionStatusFileName[] =
+    L"multiplayer-session-status.json";
 
 std::string EscapeJsonString(const std::string& value) {
     std::string escaped;
@@ -111,6 +113,68 @@ void WriteStartupStatus(
            << (snapshot.runtime_tick_service_enabled ? "true" : "false") << ",\n";
     stream << "  \"runtimeTickServiceRunning\": "
            << (snapshot.runtime_tick_service_running ? "true" : "false") << "\n";
+    stream << "}\n";
+}
+
+std::filesystem::path GetMultiplayerSessionStatusPath(
+    const std::filesystem::path& stage_runtime_directory) {
+    return stage_runtime_directory / kMultiplayerSessionStatusFileName;
+}
+
+void ResetMultiplayerSessionStatus(
+    const std::filesystem::path& stage_runtime_directory) {
+    std::error_code error;
+    std::filesystem::remove(
+        GetMultiplayerSessionStatusPath(stage_runtime_directory),
+        error);
+}
+
+void WriteMultiplayerSessionStatus(
+    const std::filesystem::path& stage_runtime_directory,
+    const MultiplayerSessionStatusSnapshot& snapshot) {
+    const auto status_path =
+        GetMultiplayerSessionStatusPath(stage_runtime_directory);
+    std::error_code create_error;
+    std::filesystem::create_directories(
+        status_path.parent_path(),
+        create_error);
+
+    std::ofstream stream(status_path, std::ios::binary | std::ios::trunc);
+    if (!stream.is_open()) {
+        Log("Failed to write multiplayer session status: " +
+            status_path.string());
+        return;
+    }
+
+    stream << "{\n";
+    stream << "  \"updatedAtUtc\": \""
+           << EscapeJsonString(MakeUtcTimestamp()) << "\",\n";
+    stream << "  \"launchToken\": \""
+           << EscapeJsonString(snapshot.launch_token) << "\",\n";
+    stream << "  \"enabled\": "
+           << (snapshot.enabled ? "true" : "false") << ",\n";
+    stream << "  \"isHost\": "
+           << (snapshot.is_host ? "true" : "false") << ",\n";
+    stream << "  \"phase\": \""
+           << EscapeJsonString(snapshot.phase) << "\",\n";
+    stream << "  \"appId\": " << snapshot.app_id << ",\n";
+    stream << "  \"lobbyId\": " << snapshot.lobby_id << ",\n";
+    stream << "  \"hostSteamId\": " << snapshot.host_steam_id << ",\n";
+    stream << "  \"maxParticipants\": "
+           << snapshot.max_participants << ",\n";
+    stream << "  \"authenticatedPeerCount\": "
+           << snapshot.authenticated_peer_count << ",\n";
+    stream << "  \"overlayEnabled\": "
+           << (snapshot.overlay_enabled ? "true" : "false") << ",\n";
+    stream << "  \"inviteDialogOpened\": "
+           << (snapshot.invite_dialog_opened ? "true" : "false") << ",\n";
+    stream << "  \"routeRelayed\": "
+           << (snapshot.route_relayed ? "true" : "false") << ",\n";
+    stream << "  \"routePingMs\": " << snapshot.route_ping_ms << ",\n";
+    stream << "  \"statusText\": \""
+           << EscapeJsonString(snapshot.status_text) << "\",\n";
+    stream << "  \"errorText\": \""
+           << EscapeJsonString(snapshot.error_text) << "\"\n";
     stream << "}\n";
 }
 

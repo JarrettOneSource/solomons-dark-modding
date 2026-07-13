@@ -64,27 +64,12 @@ internal sealed class LauncherUiCommandClient
         using var process = new Process { StartInfo = startInfo };
         process.Start();
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
-        var rawPayload = string.IsNullOrWhiteSpace(stdout) ? stderr : stdout;
-
-        LauncherCliResponse? response = null;
+        var readResult = await LauncherJsonResponseReader.ReadAsync(
+            process,
+            JsonOptions,
+            cancellationToken);
+        var response = readResult.Response;
         string? errorMessage = null;
-        if (!string.IsNullOrWhiteSpace(rawPayload))
-        {
-            try
-            {
-                response = JsonSerializer.Deserialize<LauncherCliResponse>(rawPayload, JsonOptions);
-            }
-            catch (JsonException ex)
-            {
-                errorMessage = $"Failed to parse launcher response: {ex.Message}";
-            }
-        }
 
         if (response?.Success == true && process.ExitCode == 0)
         {
@@ -99,14 +84,18 @@ internal sealed class LauncherUiCommandClient
         if (string.IsNullOrWhiteSpace(errorMessage))
         {
             errorMessage = process.ExitCode == 0
-                ? "Launcher returned no response."
+                ? "Launcher returned no JSON response."
                 : $"Launcher exited with code {process.ExitCode}.";
+            if (!string.IsNullOrWhiteSpace(readResult.Diagnostics))
+            {
+                errorMessage += $" Output: {readResult.Diagnostics}";
+            }
         }
 
         return new LauncherUiInvocationResult(
             arguments,
             response,
-            response?.Transcript ?? rawPayload.Trim(),
+            response?.Transcript ?? readResult.RawPayload,
             errorMessage);
     }
 

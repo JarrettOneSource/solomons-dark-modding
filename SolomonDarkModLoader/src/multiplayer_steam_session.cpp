@@ -1,9 +1,11 @@
 #include "multiplayer_steam_session.h"
 
 #include "logger.h"
+#include "mod_loader.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_runtime_state.h"
+#include "startup_status.h"
 #include "steam_bootstrap.h"
 
 #include <Windows.h>
@@ -33,6 +35,7 @@ constexpr const char* kLobbyIdEnvironmentVariable = "SDMOD_STEAM_LOBBY_ID";
 constexpr const char* kManifestEnvironmentVariable = "SDMOD_MULTIPLAYER_MANIFEST_SHA256";
 constexpr const char* kMaxParticipantsEnvironmentVariable = "SDMOD_MULTIPLAYER_MAX_PARTICIPANTS";
 constexpr const char* kOpenInviteEnvironmentVariable = "SDMOD_STEAM_OPEN_INVITE";
+constexpr const char* kLaunchTokenEnvironmentVariable = "SDMOD_LAUNCH_TOKEN";
 
 constexpr const char* kLobbyProtocolKey = "sdmod_protocol";
 constexpr const char* kLobbyManifestKey = "sdmod_manifest";
@@ -51,6 +54,7 @@ constexpr std::uint64_t kHelloRetryIntervalMs = 1000;
 constexpr std::uint64_t kAuthenticatedPeerTimeoutMs = 10000;
 constexpr std::uint64_t kLobbyReconcileIntervalMs = 500;
 constexpr std::uint64_t kRouteStatusIntervalMs = 1000;
+constexpr std::uint64_t kSessionStatusWriteIntervalMs = 1000;
 constexpr std::int32_t kReceiveBatchSize = 64;
 
 enum class SteamSessionPhase {
@@ -63,6 +67,28 @@ enum class SteamSessionPhase {
     Connected,
     Error,
 };
+
+const char* SteamSessionPhaseLabel(SteamSessionPhase phase) {
+    switch (phase) {
+    case SteamSessionPhase::WaitingForInvite:
+        return "WaitingForInvite";
+    case SteamSessionPhase::CreatingLobby:
+        return "CreatingLobby";
+    case SteamSessionPhase::JoiningLobby:
+        return "JoiningLobby";
+    case SteamSessionPhase::Handshaking:
+        return "Handshaking";
+    case SteamSessionPhase::LobbyReady:
+        return "LobbyReady";
+    case SteamSessionPhase::Connected:
+        return "Connected";
+    case SteamSessionPhase::Error:
+        return "Error";
+    case SteamSessionPhase::Disabled:
+    default:
+        return "Disabled";
+    }
+}
 
 struct SteamSessionPeer {
     std::uint64_t steam_id = 0;
@@ -79,7 +105,9 @@ struct SteamSessionState {
     bool initialized = false;
     bool is_host = false;
     bool open_invite_dialog = true;
+    bool invite_fallback_logged = false;
     bool invite_dialog_opened = false;
+    bool overlay_enabled = false;
     SteamSessionPhase phase = SteamSessionPhase::Disabled;
     std::uint32_t app_id = 0;
     std::uint32_t max_participants = kDefaultMaxParticipants;
@@ -93,8 +121,11 @@ struct SteamSessionState {
     std::uint64_t last_hello_send_ms = 0;
     std::uint64_t last_lobby_reconcile_ms = 0;
     std::uint64_t last_route_status_ms = 0;
+    std::uint64_t last_status_write_ms = 0;
     std::array<std::uint8_t, 32> manifest_sha256{};
     std::string manifest_sha256_text;
+    std::string launch_token;
+    std::string last_status_signature;
     std::string error_text;
     std::unordered_set<std::uint64_t> lobby_members;
     std::unordered_map<std::uint64_t, SteamSessionPeer> peers;
@@ -504,6 +535,42 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         maximum_ping = (std::max)(maximum_ping, peer.network_status.ping_ms);
     }
 
+    std::ostringstream status;
+    switch (g_session.phase) {
+    case SteamSessionPhase::WaitingForInvite:
+        status << "Steam multiplayer waiting for a lobby invite.";
+        break;
+    case SteamSessionPhase::CreatingLobby:
+        status << "Creating friends-only Steam lobby.";
+        break;
+    case SteamSessionPhase::JoiningLobby:
+        status << "Joining Steam lobby " << g_session.desired_lobby_id << '.';
+        break;
+    case SteamSessionPhase::Handshaking:
+        status << "Steam lobby " << g_session.lobby_id
+               << " joined; validating host build identity.";
+        break;
+    case SteamSessionPhase::LobbyReady:
+        status << "Steam lobby " << g_session.lobby_id
+               << " ready for invites; authenticated peers="
+               << authenticated_count;
+        break;
+    case SteamSessionPhase::Connected:
+        status << "Steam lobby " << g_session.lobby_id
+               << " connected; authenticated peers=" << authenticated_count
+               << " route=" << (any_relayed ? "SDR" : "direct-or-pending")
+               << " ping_ms=" << maximum_ping;
+        break;
+    case SteamSessionPhase::Error:
+        status << "Steam multiplayer error: " << g_session.error_text;
+        break;
+    case SteamSessionPhase::Disabled:
+    default:
+        status << "Steam multiplayer disabled.";
+        break;
+    }
+    const auto status_text = status.str();
+
     UpdateRuntimeState([&](RuntimeState& state) {
         state.session_transport = SessionTransportKind::Steam;
         state.session_is_host = g_session.is_host;
@@ -544,40 +611,7 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
             break;
         }
 
-        std::ostringstream status;
-        switch (g_session.phase) {
-        case SteamSessionPhase::WaitingForInvite:
-            status << "Steam multiplayer waiting for a lobby invite.";
-            break;
-        case SteamSessionPhase::CreatingLobby:
-            status << "Creating friends-only Steam lobby.";
-            break;
-        case SteamSessionPhase::JoiningLobby:
-            status << "Joining Steam lobby " << g_session.desired_lobby_id << '.';
-            break;
-        case SteamSessionPhase::Handshaking:
-            status << "Steam lobby " << g_session.lobby_id
-                   << " joined; validating host build identity.";
-            break;
-        case SteamSessionPhase::LobbyReady:
-            status << "Steam lobby " << g_session.lobby_id
-                   << " ready for invites; authenticated peers=" << authenticated_count;
-            break;
-        case SteamSessionPhase::Connected:
-            status << "Steam lobby " << g_session.lobby_id
-                   << " connected; authenticated peers=" << authenticated_count
-                   << " route=" << (any_relayed ? "SDR" : "direct-or-pending")
-                   << " ping_ms=" << maximum_ping;
-            break;
-        case SteamSessionPhase::Error:
-            status << "Steam multiplayer error: " << g_session.error_text;
-            break;
-        case SteamSessionPhase::Disabled:
-        default:
-            status << "Steam multiplayer disabled.";
-            break;
-        }
-        state.status_text = status.str();
+        state.status_text = status_text;
         state.error_text = g_session.phase == SteamSessionPhase::Error
             ? g_session.error_text
             : std::string{};
@@ -609,6 +643,44 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
             }
         }
     });
+
+    std::ostringstream signature;
+    signature << SteamSessionPhaseLabel(g_session.phase) << '|'
+              << g_session.lobby_id << '|'
+              << g_session.host_steam_id << '|'
+              << authenticated_count << '|'
+              << (g_session.overlay_enabled ? 1 : 0) << '|'
+              << (g_session.invite_dialog_opened ? 1 : 0) << '|'
+              << (any_relayed ? 1 : 0) << '|'
+              << maximum_ping << '|'
+              << g_session.error_text;
+    const auto status_signature = signature.str();
+    if (status_signature != g_session.last_status_signature ||
+        g_session.last_status_write_ms == 0 ||
+        now_ms >= g_session.last_status_write_ms +
+            kSessionStatusWriteIntervalMs) {
+        MultiplayerSessionStatusSnapshot snapshot;
+        snapshot.launch_token = g_session.launch_token;
+        snapshot.enabled = g_session.configured;
+        snapshot.is_host = g_session.is_host;
+        snapshot.phase = SteamSessionPhaseLabel(g_session.phase);
+        snapshot.app_id = g_session.app_id;
+        snapshot.lobby_id = g_session.lobby_id;
+        snapshot.host_steam_id = g_session.host_steam_id;
+        snapshot.max_participants = g_session.max_participants;
+        snapshot.authenticated_peer_count = authenticated_count;
+        snapshot.overlay_enabled = g_session.overlay_enabled;
+        snapshot.invite_dialog_opened = g_session.invite_dialog_opened;
+        snapshot.route_relayed = any_relayed;
+        snapshot.route_ping_ms = maximum_ping;
+        snapshot.status_text = status_text;
+        snapshot.error_text = g_session.error_text;
+        WriteMultiplayerSessionStatus(
+            GetStageRuntimeDirectory(),
+            snapshot);
+        g_session.last_status_signature = status_signature;
+        g_session.last_status_write_ms = now_ms;
+    }
 }
 
 bool BeginJoinLobby(std::uint64_t lobby_id) {
@@ -633,6 +705,28 @@ bool BeginJoinLobby(std::uint64_t lobby_id) {
     g_session.error_text.clear();
     Log("Steam multiplayer joining lobby_id=" + std::to_string(lobby_id));
     return true;
+}
+
+void RefreshOverlayAndInviteDialog() {
+    g_session.overlay_enabled = SteamIsOverlayEnabled();
+    if (!g_session.is_host ||
+        !g_session.open_invite_dialog ||
+        g_session.lobby_id == 0 ||
+        g_session.invite_dialog_opened) {
+        return;
+    }
+    if (g_session.overlay_enabled) {
+        SteamOpenLobbyInviteDialog(g_session.lobby_id);
+        g_session.invite_dialog_opened = true;
+        Log("Steam multiplayer opened the lobby invite dialog in the Steam overlay.");
+        return;
+    }
+    if (!g_session.invite_fallback_logged) {
+        g_session.invite_fallback_logged = true;
+        Log(
+            "Steam multiplayer lobby is inviteable, but the overlay is not active. "
+            "Invite or join through the Steam Friends window, or share the lobby id.");
+    }
 }
 
 void OnHostLobbyReady(std::uint64_t lobby_id, std::uint64_t now_ms) {
@@ -661,17 +755,7 @@ void OnHostLobbyReady(std::uint64_t lobby_id, std::uint64_t now_ms) {
     SteamSetRichPresence("status", "Hosting Solomon Dark multiplayer");
     const auto connect = "+connect_lobby " + std::to_string(lobby_id);
     SteamSetRichPresence("connect", connect.c_str());
-    if (g_session.open_invite_dialog && !g_session.invite_dialog_opened) {
-        if (SteamIsOverlayEnabled()) {
-            SteamOpenLobbyInviteDialog(lobby_id);
-            Log("Steam multiplayer opened the lobby invite dialog in the Steam overlay.");
-        } else {
-            Log(
-                "Steam multiplayer lobby is inviteable, but the overlay is not active. "
-                "Invite or join through the Steam Friends window, or share the lobby id.");
-        }
-        g_session.invite_dialog_opened = true;
-    }
+    RefreshOverlayAndInviteDialog();
     Log("Steam multiplayer lobby ready. lobby_id=" + std::to_string(lobby_id));
 }
 
@@ -1106,38 +1190,44 @@ void SendGoodbyeToAuthenticatedPeers(SessionGoodbyeReason reason) {
 
 bool InitializeSteamSession() {
     const auto transport = ToLowerAscii(TrimAscii(ReadEnvironmentVariable(kTransportEnvironmentVariable)));
+    ResetMultiplayerSessionStatus(GetStageRuntimeDirectory());
+    g_session = SteamSessionState{};
+    g_session.launch_token =
+        TrimAscii(ReadEnvironmentVariable(kLaunchTokenEnvironmentVariable));
     if (transport != "steam") {
-        g_session = SteamSessionState{};
         return true;
     }
 
-    const auto steam = GetSteamBootstrapSnapshot();
-    g_session = SteamSessionState{};
+    const auto mode = ToLowerAscii(TrimAscii(ReadEnvironmentVariable(kSessionModeEnvironmentVariable)));
+    const auto role = ToLowerAscii(TrimAscii(ReadEnvironmentVariable(kRoleEnvironmentVariable)));
     g_session.configured = true;
-    if (!steam.transport_interfaces_ready || steam.local_steam_id == 0) {
-        SetError("Steam transport was requested but SteamAPI is not ready.", false);
-        return false;
-    }
-    g_session.app_id = steam.app_id;
-    g_session.local_steam_id = steam.local_steam_id;
+    g_session.is_host = mode == "host" ||
+        (mode.empty() && (role.empty() || role == "host" || role == "server"));
     g_session.max_participants = ReadMaxParticipants();
     g_session.open_invite_dialog = ReadBooleanEnvironmentVariable(
         kOpenInviteEnvironmentVariable,
         true);
+
+    const auto steam = GetSteamBootstrapSnapshot();
+    g_session.app_id = steam.app_id;
+    g_session.local_steam_id = steam.local_steam_id;
+    if (!steam.transport_interfaces_ready || steam.local_steam_id == 0) {
+        SetError("Steam transport was requested but SteamAPI is not ready.", false);
+        PublishSessionRuntime(GetTickCount64());
+        return false;
+    }
     g_session.manifest_sha256_text = ToLowerAscii(TrimAscii(
         ReadEnvironmentVariable(kManifestEnvironmentVariable)));
     if (!ParseSha256(
             g_session.manifest_sha256_text,
             &g_session.manifest_sha256)) {
         SetError("Missing or invalid multiplayer build fingerprint.", false);
+        PublishSessionRuntime(GetTickCount64());
         return false;
     }
 
-    const auto mode = ToLowerAscii(TrimAscii(ReadEnvironmentVariable(kSessionModeEnvironmentVariable)));
-    const auto role = ToLowerAscii(TrimAscii(ReadEnvironmentVariable(kRoleEnvironmentVariable)));
-    g_session.is_host = mode == "host" ||
-        (mode.empty() && (role.empty() || role == "host" || role == "server"));
     g_session.initialized = true;
+    g_session.overlay_enabled = SteamIsOverlayEnabled();
     g_session.local_session_nonce = GenerateSessionNonce();
 
     if (g_session.is_host) {
@@ -1145,6 +1235,7 @@ bool InitializeSteamSession() {
             static_cast<std::int32_t>(g_session.max_participants));
         if (g_session.pending_api_call == 0) {
             SetError("Steam rejected the CreateLobby request before it was queued.", false);
+            PublishSessionRuntime(GetTickCount64());
             return false;
         }
         g_session.phase = SteamSessionPhase::CreatingLobby;
@@ -1212,6 +1303,7 @@ void TickSteamSession(std::uint64_t now_ms) {
         PublishSessionRuntime(now_ms);
         return;
     }
+    RefreshOverlayAndInviteDialog();
     SendClientHello(now_ms);
     PumpNetworkMessages(now_ms);
     ExpireInactivePeers(now_ms);

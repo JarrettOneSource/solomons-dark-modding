@@ -70,6 +70,7 @@ internal static class StagedGameLauncher
         };
         ApplyEnvironmentOverrides(startInfo, options.EnvironmentOverrides);
         LoaderStartupStatusMonitor.Reset(stage.StageRootPath);
+        MultiplayerSessionStatusMonitor.Reset(stage.StageRootPath);
 
         var process = Process.Start(startInfo);
         if (process is null)
@@ -96,7 +97,33 @@ internal static class StagedGameLauncher
                     $"then retry. Loader status: {startupStatus.Message}");
             }
 
-            return new InjectedGame(process.Id, loaderPath, startupStatus);
+            MultiplayerSessionStatus? multiplayerSessionStatus = null;
+            if (multiplayer?.Mode == MultiplayerLaunchMode.Host)
+            {
+                multiplayerSessionStatus =
+                    MultiplayerSessionStatusMonitor.WaitForHostReady(
+                        stage.StageRootPath,
+                        launchToken,
+                        process);
+            }
+            else if (multiplayer?.Mode == MultiplayerLaunchMode.Join)
+            {
+                multiplayerSessionStatus = multiplayer.LobbyId.HasValue
+                    ? MultiplayerSessionStatusMonitor.WaitForConnectedJoin(
+                        stage.StageRootPath,
+                        launchToken,
+                        process)
+                    : MultiplayerSessionStatusMonitor.WaitForInvite(
+                        stage.StageRootPath,
+                        launchToken,
+                        process);
+            }
+
+            return new InjectedGame(
+                process.Id,
+                loaderPath,
+                startupStatus,
+                multiplayerSessionStatus);
         }
         catch
         {

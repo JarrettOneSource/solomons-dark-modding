@@ -80,7 +80,25 @@ internal static class LauncherJsonConsole
                     LoaderPath = execution.LaunchedGame.LoaderPath,
                     StartupCode = execution.LaunchedGame.StartupStatus.Code,
                     StartupMessage = execution.LaunchedGame.StartupStatus.Message,
-                    StartupLogPath = execution.LaunchedGame.StartupStatus.LogPath
+                    StartupLogPath = execution.LaunchedGame.StartupStatus.LogPath,
+                    MultiplayerSession = execution.LaunchedGame.MultiplayerSessionStatus is { } session
+                        ? new LauncherJsonMultiplayerSession
+                        {
+                            Enabled = session.Enabled,
+                            IsHost = session.IsHost,
+                            Phase = session.Phase,
+                            AppId = session.AppId,
+                            LobbyId = session.LobbyId,
+                            MaxParticipants = session.MaxParticipants,
+                            AuthenticatedPeerCount = session.AuthenticatedPeerCount,
+                            OverlayEnabled = session.OverlayEnabled,
+                            InviteDialogOpened = session.InviteDialogOpened,
+                            RouteRelayed = session.RouteRelayed,
+                            RoutePingMs = session.RoutePingMs,
+                            StatusText = session.StatusText,
+                            ErrorText = session.ErrorText
+                        }
+                        : null
                 },
             ModStateChange = execution.ModStateChange is null
                 ? null
@@ -197,6 +215,24 @@ internal static class LauncherJsonConsole
         public required string StartupCode { get; init; }
         public required string StartupMessage { get; init; }
         public required string? StartupLogPath { get; init; }
+        public required LauncherJsonMultiplayerSession? MultiplayerSession { get; init; }
+    }
+
+    private sealed class LauncherJsonMultiplayerSession
+    {
+        public required bool Enabled { get; init; }
+        public required bool IsHost { get; init; }
+        public required string Phase { get; init; }
+        public required uint AppId { get; init; }
+        public required ulong LobbyId { get; init; }
+        public required uint MaxParticipants { get; init; }
+        public required uint AuthenticatedPeerCount { get; init; }
+        public required bool OverlayEnabled { get; init; }
+        public required bool InviteDialogOpened { get; init; }
+        public required bool RouteRelayed { get; init; }
+        public required int RoutePingMs { get; init; }
+        public required string StatusText { get; init; }
+        public required string ErrorText { get; init; }
     }
 
     private sealed class LauncherJsonModStateChange

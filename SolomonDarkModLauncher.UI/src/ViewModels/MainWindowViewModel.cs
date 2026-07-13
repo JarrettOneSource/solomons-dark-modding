@@ -242,20 +242,49 @@ internal sealed class MainWindowViewModel : ViewModelBase
         ClearError();
         lastResponse_ = invocation.Response;
         UpdateFromResponse(invocation.Response);
+        var multiplayer = invocation.Response.Launch?.MultiplayerSession;
+        if (mode == LauncherUiCommandMode.HostSteam && multiplayer?.LobbyId > 0)
+        {
+            LobbyId = multiplayer.LobbyId.ToString();
+        }
         StatusText = mode switch
         {
             LauncherUiCommandMode.ListMods => "Catalog refreshed",
             LauncherUiCommandMode.Stage => "Stage completed",
             LauncherUiCommandMode.LaunchSinglePlayer => "Single-player game launched",
-            LauncherUiCommandMode.HostSteam => "Steam host launched; invite dialog opens in game",
-            LauncherUiCommandMode.JoinSteam => string.IsNullOrWhiteSpace(LobbyId)
-                ? "Steam client launched; waiting for friend invite"
-                : "Steam lobby join launched",
+            LauncherUiCommandMode.HostSteam => DescribeSteamHost(multiplayer),
+            LauncherUiCommandMode.JoinSteam => DescribeSteamJoin(multiplayer),
             LauncherUiCommandMode.EnableMod => "Mod enabled",
             LauncherUiCommandMode.DisableMod => "Mod disabled",
             _ => "Ready"
         };
         IsBusy = false;
+    }
+
+    private static string DescribeSteamHost(LauncherCliMultiplayerSession? multiplayer)
+    {
+        if (multiplayer is null || multiplayer.LobbyId == 0)
+        {
+            return "Steam host launched";
+        }
+        if (multiplayer.InviteDialogOpened)
+        {
+            return $"Steam lobby {multiplayer.LobbyId} ready; invite dialog opened";
+        }
+        return multiplayer.OverlayEnabled
+            ? $"Steam lobby {multiplayer.LobbyId} ready; invite dialog did not open, " +
+              "so share the Lobby ID or use Steam Friends"
+            : $"Steam lobby {multiplayer.LobbyId} ready; Steam overlay unavailable, " +
+              "so share the Lobby ID or use Steam Friends";
+    }
+
+    private static string DescribeSteamJoin(LauncherCliMultiplayerSession? multiplayer)
+    {
+        if (multiplayer?.Phase == "WaitingForInvite")
+        {
+            return "Steam client launched; waiting for a friend invite";
+        }
+        return multiplayer?.StatusText ?? "Steam lobby join launched";
     }
 
     private void UpdateFromResponse(LauncherCliResponse response)
