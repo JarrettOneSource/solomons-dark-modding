@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text;
+using SolomonDarkModding.Distribution;
 
 namespace SolomonDarkModLauncher.UI.Infrastructure;
 
@@ -11,14 +12,33 @@ internal sealed class LauncherUiCommandClient
         PropertyNameCaseInsensitive = true
     };
 
+    private readonly LauncherUiSettingsStore settingsStore_ = new();
+    private readonly string? runtimeRoot_;
     private string instanceName_ = "default";
     private bool debugUiEnabled_ = true;
     private string lobbyId_ = string.Empty;
+    private string gameDirectory_;
+
+    public LauncherUiCommandClient()
+    {
+        var workspaceRoot = WorkspaceRootLocator.FindRootPath(AppContext.BaseDirectory);
+        gameDirectory_ = settingsStore_.LoadGameDirectory() ??
+            FindDevelopmentGameDirectory(workspaceRoot) ??
+            string.Empty;
+        var portableMarkerPath = Path.Combine(
+            workspaceRoot,
+            DistributionLayout.PortableRootMarkerFileName);
+        runtimeRoot_ = File.Exists(portableMarkerPath)
+            ? settingsStore_.RuntimeRoot
+            : null;
+    }
 
     public string InstanceName => instanceName_;
     public bool DebugUiEnabled => debugUiEnabled_;
 
     public string LobbyId => lobbyId_;
+
+    public string GameDirectory => gameDirectory_;
 
     public void UpdateInstance(string? instanceName)
     {
@@ -33,6 +53,14 @@ internal sealed class LauncherUiCommandClient
     public void UpdateLobbyId(string? lobbyId)
     {
         lobbyId_ = lobbyId?.Trim() ?? string.Empty;
+    }
+
+    public void UpdateGameDirectory(string gameDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gameDirectory);
+        var normalizedPath = Path.GetFullPath(gameDirectory.Trim());
+        gameDirectory_ = normalizedPath;
+        settingsStore_.SaveGameDirectory(normalizedPath);
     }
 
     public string BuildCommandPreview(LauncherUiCommandMode mode, string? targetModId = null)
@@ -120,6 +148,18 @@ internal sealed class LauncherUiCommandClient
             arguments.Add("loader.debug_ui=false");
         }
 
+        if (!string.IsNullOrWhiteSpace(gameDirectory_))
+        {
+            arguments.Add("--game-dir");
+            arguments.Add(gameDirectory_);
+        }
+
+        if (!string.IsNullOrWhiteSpace(runtimeRoot_))
+        {
+            arguments.Add("--runtime-root");
+            arguments.Add(runtimeRoot_);
+        }
+
         switch (mode)
         {
             case LauncherUiCommandMode.LaunchSinglePlayer:
@@ -201,6 +241,17 @@ internal sealed class LauncherUiCommandClient
         }
 
         return builder.ToString();
+    }
+
+    private static string? FindDevelopmentGameDirectory(string workspaceRoot)
+    {
+        var candidate = Path.GetFullPath(Path.Combine(
+            workspaceRoot,
+            "..",
+            "SolomonDarkAbandonware"));
+        return File.Exists(Path.Combine(candidate, "SolomonDark.exe"))
+            ? candidate
+            : null;
     }
 
     private static string QuoteArgument(string value)

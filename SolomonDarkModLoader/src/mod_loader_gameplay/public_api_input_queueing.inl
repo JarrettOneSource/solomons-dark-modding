@@ -94,6 +94,30 @@ bool QueueGameplayMovementHoldFrames(
     return true;
 }
 
+bool SetGameplayNativeControlAllowanceFrames(
+    std::uint32_t frames,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay input injection is not initialized.";
+        }
+        return false;
+    }
+    if (frames > 3600) {
+        if (error_message != nullptr) {
+            *error_message = "Native control allowance frames must be in the range 0..3600.";
+        }
+        return false;
+    }
+    g_gameplay_keyboard_injection.pending_injected_keyboard_control_frames.store(
+        frames,
+        std::memory_order_release);
+    return true;
+}
+
 bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();

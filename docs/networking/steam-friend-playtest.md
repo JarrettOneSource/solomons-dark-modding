@@ -16,7 +16,7 @@ disposable stage. It never copies or stores Steam credentials.
   `WaitingForInvite` without a lobby ID. Redirected CLI launches also return at
   that milestone while the game remains running, which is the path used by the
   desktop UI.
-- Protocol v51 statically covers lobby membership checks, host ownership,
+- Protocol v52 statically covers lobby membership checks, host ownership,
   compatibility handshake, authenticated gameplay routing, goodbye/timeout
   cleanup, automatic re-handshake after silent route loss, and no host
   migration.
@@ -40,6 +40,13 @@ disposable stage. It never copies or stores Steam credentials.
   fallback-materialization convergence, and Air Chaining against five victims
   with identical ordered target IDs and source/target endpoints for every
   captured frame.
+- The local two-process barrier pass verifies that every player pauses for the
+  same level-up cohort, resolved players see the exact remaining-player count,
+  all accepted choices apply before resume, and an unresolved player receives a
+  host-authored auto-pick after the measured 60-second deadline.
+- Accepted client-owned potion pickups now increase the owning client's real
+  stock native inventory stack and converge back to the host's participant view
+  exactly once.
 
 A genuine cross-account Steam peer handshake has been exercised on this
 machine with a Windows host and a WSLg/Proton joiner. The joiner waited without
@@ -96,8 +103,10 @@ PULSE_SERVER=unix:/dev/null SDL_AUDIODRIVER=dummy ~/.steam/debian-installation/s
    fingerprints must match exactly.
 2. Both players run the Steam desktop client, sign into different accounts, and
    add each other as Steam friends.
-3. Both players have the Solomon Dark game files and this launcher workspace.
-4. Build once on each checkout:
+3. Both players have the original Solomon Dark 0.72.5 game files and extract
+   the same beta ZIP to a normal folder.
+4. Release users run `SolomonDarkMultiplayerBeta.exe` directly; no build tools
+   or separate .NET runtime are required. Developers building from source use:
 
    ```powershell
    .\scripts\Build-All.ps1 -Configuration Release
@@ -110,9 +119,8 @@ matters while using the shared Spacewar AppID: accepting an invite while no
 Solomon Dark process is active can cause Steam to start Valve's Spacewar sample
 instead of this development launcher.
 
-1. On the joining PC, open
-   `SolomonDarkModLauncher.UI\bin\Release\net8.0-windows\SolomonDarkModLauncher.UI.exe`
-   and click **Join Friend** with the lobby ID box empty.
+1. On the joining PC, open `SolomonDarkMultiplayerBeta.exe` and click
+   **Join Friend** with the lobby ID box empty.
 2. Wait until Solomon Dark is open. Its runtime should report
    `WaitingForInvite`.
 3. On the hosting PC, open the same launcher UI and click
@@ -139,8 +147,8 @@ host compatibility handshake authenticates.
 The equivalent command-line launches are:
 
 ```powershell
-.\SolomonDarkModLauncher\bin\Release\net8.0-windows\win-x86\SolomonDarkModLauncher.exe launch --multiplayer host
-.\SolomonDarkModLauncher\bin\Release\net8.0-windows\win-x86\SolomonDarkModLauncher.exe launch --multiplayer join --lobby-id <lobby-id>
+.\launcher\SolomonDarkModLauncher.exe launch --multiplayer host
+.\launcher\SolomonDarkModLauncher.exe launch --multiplayer join --lobby-id <lobby-id>
 ```
 
 Use `--instance <name>` when preserving separate staged/profile state for
@@ -154,9 +162,11 @@ profile for a one-off run.
 - Movement, heading, HP/MP, death, and revive are visible in both directions.
 - Each player casts every base element once. The observer sees the native cast
   animation/effect and the owner pays the matching mana cost.
-- Level once on each participant. The level-up pause is shared, only the offered
-  participant can choose, and both peers see the resulting book/stat/loadout
-  revision.
+- Trigger a shared level-up cohort. Every participant pauses and receives a
+  picker; after choosing, that player sees `Waiting on N players`. Nobody
+  resumes until all choices are accepted. In a timeout check, leave one picker
+  untouched for 60 seconds and confirm the host auto-picks before resuming all
+  peers.
 - Verify Fire Embers and Explode for each owner, including projectile/explosion
   position and terminal status.
 - Verify Air Chaining for each owner against at least five targets. Every peer
@@ -194,11 +204,14 @@ the valid lobby returns to `Handshaking` with a fresh session nonce.
 
 ## Current boundary
 
-Inventory/book/loadout rows and item/potion pickup credits are replicated as
-participant-owned state, but arbitrary participant-owned native inventory
-objects are not complete. Powerup insertion and shop/trader ownership are also
-unfinished. Do not treat a peer-visible ledger row as proof that every stock
-inventory UI or merchant path owns a real local native object yet.
+Inventory/book/loadout rows are replicated as participant-owned state. The
+verified potion slice also inserts or stacks a real native potion object in the
+owning client's stock inventory. Arbitrary item/equipment insertion, powerup
+ownership, and shop/trader transfers are still unfinished; do not treat a
+peer-visible row as proof that those stock UI or merchant paths own a native
+object yet.
 
-Spacewar AppID 480 is a shared development namespace, not a shipping product
-identity. Replace it with the project's assigned Steam AppID before distribution.
+Spacewar AppID 480 is a shared development namespace, not a production product
+identity. This public beta deliberately uses it only for development
+playtesting; replace it with the project's assigned Steam AppID before a
+production release.

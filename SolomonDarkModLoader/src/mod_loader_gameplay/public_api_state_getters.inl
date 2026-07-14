@@ -391,11 +391,28 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveEffectProgressOffset, &state->render_drive_effect_progress);
     (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveOverlayAlphaOffset, &state->render_drive_overlay_alpha);
     (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveMoveBlendOffset, &state->render_drive_move_blend);
-    if (resolved_gameplay_address) {
+    if (state->equip_runtime_state_address != 0) {
+        state->primary_visual_lane = ReadEquipVisualLaneState(
+            state->equip_runtime_state_address,
+            kActorEquipRuntimeVisualLinkPrimaryOffset);
+        state->secondary_visual_lane = ReadEquipVisualLaneState(
+            state->equip_runtime_state_address,
+            kActorEquipRuntimeVisualLinkSecondaryOffset);
+        state->attachment_visual_lane = ReadEquipVisualLaneState(
+            state->equip_runtime_state_address,
+            kActorEquipRuntimeVisualLinkAttachmentOffset);
+    }
+    if (resolved_gameplay_address && state->equip_runtime_state_address == 0) {
         state->primary_visual_lane =
             ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkPrimaryOffset);
         state->secondary_visual_lane =
             ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkSecondaryOffset);
+        state->attachment_visual_lane =
+            ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkAttachmentOffset);
+    } else if (resolved_gameplay_address &&
+               state->attachment_visual_lane.current_object_address == 0) {
+        // Local run casting uses an actor-owned robe/hat runtime, while the
+        // stock player staff remains in the gameplay-owned attachment sink.
         state->attachment_visual_lane =
             ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkAttachmentOffset);
     }

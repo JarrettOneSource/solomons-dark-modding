@@ -764,6 +764,9 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\animation_advance_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\ranked_rush_movement_scale.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\player_actor_tick_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
     </ClInclude>
@@ -822,6 +825,12 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_state_getters.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\native_inventory_reconciliation.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\test_blank_boneyard_reconciliation.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\replicated_loot_reconciliation.inl">
@@ -914,13 +923,31 @@
     <ClInclude Include="src\multiplayer_local_transport\enemy_damage_target_position.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\incoming_cast_packet_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\incoming_packet_dispatch.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\incoming_snapshot_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\level_up_authority.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\level_up_barrier_authority.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\level_up_barrier_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\level_up_choice_and_picker.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\level_up_debug_authority.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\level_up_packet_sync.inl">
@@ -935,6 +962,9 @@
     <ClInclude Include="src\multiplayer_local_transport\local_state_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\local_snapshot_packet_builders.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_authority.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -947,7 +977,19 @@
     <ClInclude Include="src\multiplayer_local_transport\outgoing_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\outgoing_cast_packet_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_api.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_queue_api.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\remote_peer_lifecycle.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\run_exit_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\skill_config_and_packet_helpers.inl">

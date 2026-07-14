@@ -891,6 +891,9 @@ def main() -> int:
         output["launch"] = launch_pair(
             god_mode=True,
             test_survival_boneyard_override=args.test_boneyard_override,
+            test_blank_boneyard=(
+                args.test_boneyard_override.resolve() == FLAT_BONEYARD.resolve()
+            ),
         )
         disable_bots()
         output["hub_ready"] = {
@@ -909,8 +912,8 @@ def main() -> int:
             if args.limit <= 0:
                 raise VerifyFailure("--limit must be positive")
             entries = entries[: args.limit]
-        output["run_entry"] = start_host_testrun_and_wait_for_clients(timeout=args.timeout)
         output["quiet_progression_test_mode"] = enable_quiet_progression_test_mode()
+        output["run_entry"] = start_host_testrun_and_wait_for_clients(timeout=args.timeout)
         output["post_run_progression_ready"] = wait_for_post_run_progression_ready(
             args.timeout
         )

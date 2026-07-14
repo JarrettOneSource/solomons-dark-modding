@@ -37,7 +37,7 @@ from verify_player_health_death_sync import set_local_player_vitals
 from verify_real_input_spell_cast_sync import (
     CLIENT_LOG,
     HOST_LOG,
-    ensure_host_combat_started,
+    clear_local_cast_state,
     queue_gameplay_mouse_left,
     read_log,
 )
@@ -46,7 +46,7 @@ from verify_real_input_spell_cast_sync import (
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "runtime/multiplayer_faster_caster_behavior_sync.json"
 FASTER_CASTER_ROW = 70
-PRIMARY_HOLD_FRAMES = 3600
+PRIMARY_HOLD_FRAMES_PER_CAST = 180
 TRIAL_COUNT = 5
 
 
@@ -87,20 +87,6 @@ def local_cast_ticks(direction: Direction, offset: int) -> list[int]:
     ]
 
 
-def clear_primary_input(direction: Direction) -> dict[str, str]:
-    values = parse_key_values(
-        lua(
-            direction.source_pipe,
-            "local function emit(k,v) print(k .. '=' .. tostring(v)) end; "
-            "emit('cleared', sd.input.clear_mouse_left())",
-            timeout=5.0,
-        )
-    )
-    if values.get("cleared") != "true":
-        raise VerifyFailure(f"{direction.name} primary input clear failed: {values}")
-    return values
-
-
 def wait_for_remote_delivery(
     direction: Direction,
     observer_offset: int,
@@ -123,15 +109,44 @@ def wait_for_remote_delivery(
     )
 
 
+def arm_cadence_burst(
+    direction: Direction,
+    required_casts: int,
+) -> dict[str, Any]:
+    """Queue one continuous hold with one manual-combat allowance per cast."""
+    initial = queue_gameplay_mouse_left(direction, PRIMARY_HOLD_FRAMES_PER_CAST)
+    additional = parse_key_values(
+        lua(
+            direction.source_pipe,
+            f"""
+local function emit(k,v) print(k .. '=' .. tostring(v)) end
+local ok = true
+for _ = 2, {required_casts} do
+  ok = sd.input.hold_mouse_left_frames({PRIMARY_HOLD_FRAMES_PER_CAST}) and ok
+end
+emit('ok', ok)
+emit('allowances', {required_casts})
+emit('frames_per_allowance', {PRIMARY_HOLD_FRAMES_PER_CAST})
+""",
+            timeout=5.0,
+        )
+    )
+    if additional.get("ok") != "true":
+        raise VerifyFailure(
+            f"{direction.name} could not arm sustained primary allowances: "
+            f"{additional}"
+        )
+    return {"initial": initial, "additional": additional}
+
+
 def measure_cadence(direction: Direction, timeout: float) -> dict[str, Any]:
     resources = set_local_player_vitals(direction.source_pipe, 10000.0, 10000.0)
+    pre_clear = clear_local_cast_state(direction)
     source_offset = len(read_log(direction.source_log))
     observer_offset = len(read_log(direction.observer_log))
 
-    queued = queue_gameplay_mouse_left(direction, PRIMARY_HOLD_FRAMES)
-    if queued.get("mouse_left_frames") != "true":
-        raise VerifyFailure(f"{direction.name} primary input queue failed: {queued}")
     required_casts = TRIAL_COUNT + 1
+    queued = arm_cadence_burst(direction, required_casts)
     deadline = time.monotonic() + timeout
     ticks: list[int] = []
     while time.monotonic() < deadline:
@@ -139,7 +154,7 @@ def measure_cadence(direction: Direction, timeout: float) -> dict[str, Any]:
         if len(ticks) >= required_casts:
             break
         time.sleep(0.02)
-    cleared = clear_primary_input(direction)
+    cleared = clear_local_cast_state(direction)
     if len(ticks) < required_casts:
         raise VerifyFailure(
             f"{direction.name} sustained primary produced {len(ticks)}/{required_casts} "
@@ -160,6 +175,7 @@ def measure_cadence(direction: Direction, timeout: float) -> dict[str, Any]:
     snapshot = query_progression_snapshot(direction.source_pipe)
     return {
         "resources": resources,
+        "pre_clear": pre_clear,
         "input_queue": queued,
         "input_clear": cleared,
         "native_tick_ms": sample_ticks,
@@ -206,21 +222,21 @@ def run_cadence_phase(
     upgraded: bool,
     retire_pair: bool = True,
 ) -> dict[str, Any]:
-    """Measure a clean normal-combat phase for both participant owners.
+    """Measure a clean manual-spawner combat phase for both participant owners.
 
-    Upgrades are applied before waves begin so background enemy XP cannot trip
-    the targeted-progression isolation assertions. Baseline and upgraded
-    cadence therefore use fresh profiles but the same stock combat path.
+    The stock wave state is primed without ambient enemies. This keeps native
+    primary control available while preventing one owner's acquired target from
+    contaminating the next owner's cadence or targeted-progression assertions.
     """
     phase: dict[str, Any] = {"upgraded": upgraded}
     try:
         startup = launch_pair_ready(
             timeout,
             god_mode=False,
-            manual_combat=False,
-            boneyard_override=None,
+            manual_combat=True,
         )
         phase["launch"] = startup["launch"]
+        phase["manual_combat"] = startup["manual_combat"]
         phase["post_run_progression_ready"] = wait_for_post_run_progression_ready(
             timeout
         )
@@ -245,7 +261,6 @@ def run_cadence_phase(
                 )
                 for direction in DIRECTIONS
             }
-        phase["combat"] = ensure_host_combat_started()
         phase["cadence"] = {
             direction.name: measure_cadence(direction, timeout)
             for direction in DIRECTIONS

@@ -6,12 +6,14 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>SolomonDarkModLauncher.UI</RootNamespace>
-    <AssemblyName>SolomonDarkModLauncher.UI</AssemblyName>
+    <AssemblyName>SolomonDarkMultiplayerBeta</AssemblyName>
     <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\Shared\DistributionLayout.cs" Link="Shared\DistributionLayout.cs" />
     <ProjectReference Include="..\SolomonDarkModLauncher\SolomonDarkModLauncher.csproj"
+                      Condition="'$(RuntimeIdentifier)' == ''"
                       ReferenceOutputAssembly="false"
                       Private="false" />
   </ItemGroup>

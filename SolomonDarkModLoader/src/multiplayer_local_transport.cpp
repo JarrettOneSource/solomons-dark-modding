@@ -7,6 +7,7 @@
 #include "multiplayer_local_transport.h"
 
 #include "bot_runtime.h"
+#include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
 #include "logger.h"
 #include "memory_access.h"
@@ -75,6 +76,10 @@ constexpr std::uint64_t kRecentLocalCastAssociationWindowMs = 3000;
 constexpr std::uint64_t kLocalCastInputUpdateIntervalMs = 50;
 constexpr std::uint64_t kClientHostRunFollowRetryMs = 1000;
 constexpr std::uint64_t kClientHostRunAuthorizationFreshnessMs = 3000;
+constexpr std::uint64_t kClientHostRunExitFollowExpiryMs = 15000;
+constexpr std::uint64_t kClientHostRunExitMenuRetryMs = 2500;
+constexpr std::uint64_t kClientHostRunExitActionRetryMs = 500;
+constexpr std::uint32_t kClientHostRunExitMenuMaxAttempts = 3;
 constexpr std::uint64_t kNativeProgressionReconcileRetryMs = 250;
 constexpr std::uint64_t kNativeProgressionReconcileAuditMs = 1000;
 constexpr int kNativeProgressionReconcileMaxApplyCallsPerTick = 8;
@@ -350,8 +355,40 @@ struct IssuedLevelUpOffer {
     std::int32_t level = 0;
     std::int32_t experience = 0;
     std::vector<BotSkillChoiceOption> options;
+    std::uint64_t barrier_id = 0;
+    std::uint64_t issued_ms = 0;
     bool resolved = false;
+    bool auto_picked = false;
     LevelUpChoiceResultCode result_code = LevelUpChoiceResultCode::Rejected;
+};
+
+struct HostLevelUpBarrierParticipant {
+    std::uint64_t participant_id = 0;
+    std::uint64_t offer_id = 0;
+    std::uint64_t last_offer_attempt_ms = 0;
+    std::int32_t option_index = -1;
+    std::int32_t option_id = -1;
+    std::int32_t apply_count = 0;
+    std::uint16_t resulting_active = 0;
+    bool resolved = false;
+    bool auto_picked = false;
+    bool disconnected = false;
+};
+
+struct HostLevelUpBarrierState {
+    bool active = false;
+    bool timed_out = false;
+    std::uint64_t barrier_id = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t revision = 0;
+    std::int32_t level = 0;
+    std::int32_t experience = 0;
+    uintptr_t source_progression_address = 0;
+    std::uint64_t started_ms = 0;
+    std::uint64_t deadline_ms = 0;
+    std::uint64_t last_broadcast_ms = 0;
+    std::uint64_t resume_broadcast_until_ms = 0;
+    std::vector<HostLevelUpBarrierParticipant> participants;
 };
 
 struct PendingHostLevelUpOfferTarget {
@@ -452,6 +489,16 @@ struct ClientHostRunAuthorization {
     std::uint64_t received_ms = 0;
 };
 
+struct ClientHostRunExitFollow {
+    bool active = false;
+    std::uint32_t run_nonce = 0;
+    std::uint64_t received_ms = 0;
+    std::uint64_t last_menu_request_ms = 0;
+    std::uint64_t last_action_attempt_ms = 0;
+    std::uint64_t action_request_id = 0;
+    std::uint32_t menu_request_count = 0;
+};
+
 struct LocalTransportState {
     bool configured = false;
     bool initialized = false;
@@ -471,6 +518,7 @@ struct LocalTransportState {
     std::uint64_t last_loot_snapshot_send_ms = 0;
     std::uint64_t last_spell_effect_snapshot_send_ms = 0;
     std::uint64_t last_client_host_run_request_ms = 0;
+    ClientHostRunExitFollow client_host_run_exit_follow;
     std::uint32_t next_sequence = 1;
     std::uint32_t world_scene_epoch = 0;
     std::uint64_t packets_sent = 0;
@@ -489,6 +537,7 @@ struct LocalTransportState {
     bool spell_effect_snapshot_had_effects = false;
     std::uint32_t next_enemy_damage_claim_sequence = 1;
     std::uint64_t next_level_up_offer_id = 1;
+    std::uint64_t next_level_up_barrier_id = 1;
     std::string world_scene_key;
     std::unordered_map<uintptr_t, std::uint64_t> hub_world_actor_ids_by_address;
     std::unordered_map<uintptr_t, std::uint64_t> run_host_local_world_actor_ids_by_address;
@@ -502,6 +551,7 @@ struct LocalTransportState {
         recent_local_air_chain_target_until_ms;
     std::unordered_map<std::uint64_t, std::uint64_t> pending_lethal_enemy_damage_claim_until_ms;
     std::unordered_map<std::uint64_t, std::uint64_t> rejected_enemy_damage_retry_suppressed_until_ms;
+    std::unordered_map<std::uint64_t, std::uint32_t> last_state_packet_sequence_by_participant;
     std::unordered_map<std::uint64_t, std::uint32_t> last_cast_sequence_by_participant;
     std::unordered_map<std::uint64_t, std::uint32_t>
         last_spell_effect_packet_sequence_by_participant;
@@ -521,6 +571,7 @@ struct LocalTransportState {
     std::unordered_map<std::uint64_t, std::uint32_t> last_loot_pickup_request_sequence_by_participant;
     std::unordered_map<std::uint64_t, IssuedLevelUpOffer> issued_level_up_offers_by_id;
     std::unordered_map<std::uint64_t, PendingHostLevelUpOfferTarget> pending_level_up_offer_targets_by_participant;
+    HostLevelUpBarrierState host_level_up_barrier;
     std::unordered_map<std::uint64_t, NativeProgressionReconcileCheckpoint>
         native_progression_reconcile_by_participant;
     std::unordered_set<std::uint64_t> native_applied_level_up_result_offer_ids;
@@ -534,6 +585,7 @@ struct LocalTransportState {
 };
 
 LocalTransportState g_local_transport;
+std::atomic<std::uint32_t> g_local_run_exit_latched_nonce{0};
 std::atomic<std::uint64_t>
     g_remote_native_progression_reconcile_suppressed_for_test{0};
 std::mutex g_local_transport_event_mutex;
@@ -696,14 +748,37 @@ std::filesystem::path ResolveRuntimeWizardSkillConfigPath(const wchar_t* file_na
     return path.parent_path() / "data" / "wizardskills" / file_name;
 }
 
+void PopulateHostLevelUpBarrierStatePacket(
+    StatePacket* packet,
+    std::uint64_t now_ms);
+bool ApplyAuthoritativeLevelUpWaitStatus(
+    std::uint64_t authority_participant_id,
+    std::uint64_t barrier_id,
+    std::uint32_t revision,
+    std::uint32_t deadline_remaining_ms,
+    bool pause_active,
+    bool timed_out,
+    std::vector<std::uint64_t> waiting_participant_ids,
+    std::uint64_t now_ms);
+void MarkHostLevelUpBarrierParticipantResolved(
+    const LevelUpChoiceResultPacket& result,
+    bool auto_picked,
+    std::uint64_t now_ms);
+
 #include "multiplayer_local_transport/skill_config_and_packet_helpers.inl"
+#include "multiplayer_local_transport/run_exit_sync.inl"
 #include "multiplayer_local_transport/world_snapshot_capture.inl"
 #include "multiplayer_local_transport/loot_snapshot_capture.inl"
 #include "multiplayer_local_transport/local_state_packet_sync.inl"
+#include "multiplayer_local_transport/local_snapshot_packet_builders.inl"
 #include "multiplayer_local_transport/cast_target_resolution.inl"
 #include "multiplayer_local_transport/outgoing_packet_sync.inl"
+#include "multiplayer_local_transport/outgoing_cast_packet_sync.inl"
 #include "multiplayer_local_transport/client_enemy_damage_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_sync.inl"
+#include "multiplayer_local_transport/incoming_cast_packet_sync.inl"
+#include "multiplayer_local_transport/incoming_snapshot_packet_sync.inl"
+#include "multiplayer_local_transport/incoming_packet_dispatch.inl"
 #include "multiplayer_local_transport/native_progression_sync.inl"
 #include "multiplayer_local_transport/remote_peer_lifecycle.inl"
 
@@ -756,19 +831,48 @@ void PublishLocalTransportRuntimeState() {
         state.air_chain_snapshot_history = std::move(air_chain_snapshot_history);
         state.air_chain_apply = std::move(air_chain_apply);
         if (g_local_transport.is_host) {
-            LevelUpWaitStatusRuntimeInfo wait_status;
-            const auto waiting_participant_ids = CollectUnresolvedLevelUpOfferParticipantIds();
-            wait_status.valid = true;
-            wait_status.pause_active = !waiting_participant_ids.empty();
-            wait_status.authority_participant_id = g_local_transport.local_peer_id;
-            wait_status.received_ms = static_cast<std::uint64_t>(GetTickCount64());
-            wait_status.waiting_participant_ids = waiting_participant_ids;
-            state.level_up_wait_status = std::move(wait_status);
+            state.level_up_wait_status = BuildHostLevelUpWaitStatusRuntimeInfo(
+                static_cast<std::uint64_t>(GetTickCount64()));
         }
     });
 }
 
 }  // namespace
+
+void NotifyLocalRunEnded(std::string_view reason) {
+    if (!g_local_transport.initialized) {
+        return;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+    const auto current_nonce =
+        local != nullptr && local->runtime.run_nonce != 0
+            ? local->runtime.run_nonce
+            : g_local_run_exit_latched_nonce.load(std::memory_order_acquire);
+    if (g_local_transport.is_host && current_nonce != 0) {
+        g_local_run_exit_latched_nonce.store(current_nonce, std::memory_order_release);
+    }
+
+    UpdateRuntimeState([&](RuntimeState& state) {
+        auto* mutable_local = FindLocalParticipant(state);
+        if (mutable_local == nullptr) {
+            return;
+        }
+        mutable_local->runtime.in_run = false;
+        mutable_local->runtime.transform_valid = false;
+        mutable_local->runtime.scene_intent = DefaultParticipantSceneIntent();
+        if (g_local_transport.is_host && current_nonce != 0) {
+            mutable_local->runtime.run_nonce = current_nonce;
+        }
+    });
+
+    Log(
+        "Multiplayer local run exit latched. role=" +
+        std::string(g_local_transport.is_host ? "host" : "client") +
+        " run_nonce=" + std::to_string(current_nonce) +
+        " reason=" + std::string(reason));
+}
 
 bool SetRemoteNativeProgressionReconcileSuppressedForTest(
     std::uint64_t participant_id,
@@ -793,11 +897,15 @@ bool SetRemoteNativeProgressionReconcileSuppressedForTest(
 }
 
 void ProcessPendingHostLevelUpOffers(std::uint64_t now_ms);
+void ProcessHostLevelUpBarrier(std::uint64_t now_ms);
 int CaptureLocalTransportSehCode(EXCEPTION_POINTERS* exception_pointers, DWORD* exception_code);
 
 #include "multiplayer_local_transport/public_cast_loot_api.inl"
+#include "multiplayer_local_transport/public_cast_loot_queue_api.inl"
 
 #include "multiplayer_local_transport/level_up_authority.inl"
+#include "multiplayer_local_transport/level_up_debug_authority.inl"
+#include "multiplayer_local_transport/level_up_barrier_authority.inl"
 
 bool QueueLocalLevelUpChoice(
     std::uint64_t offer_id,

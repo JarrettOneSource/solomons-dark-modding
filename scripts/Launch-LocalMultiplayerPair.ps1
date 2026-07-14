@@ -19,6 +19,7 @@ param(
     [switch]$TemporaryHostProfile,
     [switch]$GodMode,
     [string]$TestSurvivalBoneyardOverride = "",
+    [switch]$TestBlankBoneyard,
     [string]$TestWaveOverride = "",
     [switch]$NoTileWindows,
     [switch]$NoKill,
@@ -120,6 +121,9 @@ function Start-MultiplayerInstance {
     }
     if (-not [string]::IsNullOrWhiteSpace($resolvedTestSurvivalBoneyardOverride)) {
         $env.SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE = $resolvedTestSurvivalBoneyardOverride
+    }
+    if ($TestBlankBoneyard) {
+        $env.SDMOD_TEST_BLANK_BONEYARD = "1"
     }
     if (-not [string]::IsNullOrWhiteSpace($resolvedTestWaveOverride)) {
         $env.SDMOD_TEST_WAVE_OVERRIDE = $resolvedTestWaveOverride
@@ -956,6 +960,7 @@ if (-not $NoTileWindows) {
     temporaryHostProfile = [bool]$TemporaryHostProfile
     godModeEnabled = [bool]$GodMode
     testSurvivalBoneyardOverride = $resolvedTestSurvivalBoneyardOverride
+    testBlankBoneyardEnabled = [bool]$TestBlankBoneyard
     testWaveOverride = $resolvedTestWaveOverride
     allowFocusSteal = [bool]$AllowFocusSteal
     hostParticipantId = $HostParticipantId

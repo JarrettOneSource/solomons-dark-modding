@@ -87,6 +87,28 @@ function ConvertFrom-MultiplayerLauncherJson {
     return $null
 }
 
+function Read-MultiplayerProcessOutput {
+    param([string]$Path)
+
+    $stream = $null
+    $reader = $null
+    try {
+        $stream = [System.IO.FileStream]::new(
+            $Path,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::Read,
+            [System.IO.FileShare]::ReadWrite)
+        $reader = [System.IO.StreamReader]::new($stream)
+        return $reader.ReadToEnd()
+    } finally {
+        if ($null -ne $reader) {
+            $reader.Dispose()
+        } elseif ($null -ne $stream) {
+            $stream.Dispose()
+        }
+    }
+}
+
 function Invoke-LauncherWithEnvironment {
     param(
         [Parameter(Mandatory = $true)]
@@ -103,6 +125,7 @@ function Invoke-LauncherWithEnvironment {
     $previous = @{}
     $stdoutPath = [System.IO.Path]::GetTempFileName()
     $stderrPath = [System.IO.Path]::GetTempFileName()
+    $process = $null
     foreach ($key in $Environment.Keys) {
         $previous[$key] = [Environment]::GetEnvironmentVariable($key, "Process")
         [Environment]::SetEnvironmentVariable($key, [string]$Environment[$key], "Process")
@@ -123,15 +146,24 @@ function Invoke-LauncherWithEnvironment {
         $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
         while ((Get-Date) -lt $deadline) {
             $process.Refresh()
-            $stdout = Get-Content -Path $stdoutPath -Raw -ErrorAction SilentlyContinue
-            $stderr = Get-Content -Path $stderrPath -Raw -ErrorAction SilentlyContinue
+            $stdout = Read-MultiplayerProcessOutput -Path $stdoutPath
+            $stderr = Read-MultiplayerProcessOutput -Path $stderrPath
             if (-not [string]::IsNullOrWhiteSpace($stdout)) {
                 $result = ConvertFrom-MultiplayerLauncherJson -Text $stdout
                 if ($null -ne $result) {
                     break
                 }
             }
-            if ($process.HasExited -and $process.ExitCode -ne 0) {
+            if ($process.HasExited) {
+                # WaitForExit also drains the redirected streams. Without it,
+                # a fast launcher exit can leave only the first buffered chunk
+                # visible here, producing a valid-but-truncated JSON document.
+                $process.WaitForExit()
+                $stdout = Read-MultiplayerProcessOutput -Path $stdoutPath
+                $stderr = Read-MultiplayerProcessOutput -Path $stderrPath
+                if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+                    $result = ConvertFrom-MultiplayerLauncherJson -Text $stdout
+                }
                 break
             }
             Start-Sleep -Milliseconds 200
@@ -158,6 +190,9 @@ function Invoke-LauncherWithEnvironment {
         }
         return $result
     } finally {
+        if ($null -ne $process -and -not $process.HasExited) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        }
         foreach ($key in $Environment.Keys) {
             [Environment]::SetEnvironmentVariable($key, $previous[$key], "Process")
         }

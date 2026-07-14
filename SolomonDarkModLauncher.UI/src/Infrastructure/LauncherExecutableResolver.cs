@@ -1,4 +1,5 @@
 using System.Reflection;
+using SolomonDarkModding.Distribution;
 
 namespace SolomonDarkModLauncher.UI.Infrastructure;
 
@@ -14,6 +15,8 @@ internal static class LauncherExecutableResolver
 
         var candidates = new[]
         {
+            Path.Combine(uiBaseDirectory, DistributionLayout.LauncherDirectoryName, "SolomonDarkModLauncher.exe"),
+            Path.Combine(workspaceRoot, DistributionLayout.LauncherDirectoryName, "SolomonDarkModLauncher.exe"),
             Path.Combine(workspaceRoot, "SolomonDarkModLauncher", "bin", configuration, "net8.0-windows", "SolomonDarkModLauncher.exe"),
             Path.Combine(workspaceRoot, "SolomonDarkModLauncher", "bin", configuration, "net8.0-windows", "win-x86", "SolomonDarkModLauncher.exe"),
             Path.Combine(workspaceRoot, "dist", "launcher", "SolomonDarkModLauncher.exe")

@@ -160,13 +160,23 @@ int LuaRuntimeDebugPublishLevelUpOffer(lua_State* state) {
         return 1;
     }
 
-    if (target_self) {
-        multiplayer::PublishLocalHostSelfLevelUpOffer(
-            static_cast<std::int32_t>(level),
-            static_cast<std::int32_t>(experience),
-            0);
+    if (target_self || has_target_participant_id) {
+        if (!target_self && target_participant_id <= 0) {
+            return luaL_error(state, "sd.runtime.debug_publish_level_up_offer target must be positive");
+        }
+        const auto target_id = target_self
+            ? multiplayer::GetLocalTransportParticipantId()
+            : static_cast<std::uint64_t>(target_participant_id);
+        std::string error_message;
+        if (!multiplayer::DebugPublishHostNaturalLevelUpOffer(
+                target_id,
+                static_cast<std::int32_t>(level),
+                static_cast<std::int32_t>(experience),
+                &error_message)) {
+            return luaL_error(state, "%s", error_message.c_str());
+        }
     } else {
-        multiplayer::PublishHostLevelUpOffers(
+        multiplayer::PublishHostLevelUpBarrierOffers(
             static_cast<std::int32_t>(level),
             static_cast<std::int32_t>(experience),
             0);

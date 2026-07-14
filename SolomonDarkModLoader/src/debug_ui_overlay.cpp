@@ -8,6 +8,7 @@
 #include "lua_engine_events.h"
 #include "memory_access.h"
 #include "mod_loader.h"
+#include "multiplayer_local_transport.h"
 #include "x86_hook.h"
 
 #include <Windows.h>

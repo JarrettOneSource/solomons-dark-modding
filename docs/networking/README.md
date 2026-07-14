@@ -16,7 +16,7 @@ perform local movement and presentation immediately, then the host or dedicated
 authority accepts, corrects, or rejects the claim. Clients never own canonical
 HP, deaths, drops, XP, or wave state.
 
-Protocol v51 distinguishes automatically observed native enemy-damage claims
+Protocol v52 distinguishes automatically observed native enemy-damage claims
 from explicit damage requests. Native collision callbacks may report damage
 without asserting target-transform authority because their local knockback can
 precede the next world snapshot. The host still validates the participant, run,
@@ -149,11 +149,13 @@ Spacewar playtest flow and the remaining external verification boundary.
   requesting participant's runtime vitals and to that client's local HP/MP
   presentation. Accepted item/potion carrier pickups clear the host carrier's
   held-item pointer and credit the requesting participant's replicated
-  inventory ledger by item type, slot, and stack count. This deliberately does
-  not spawn stock local pickup actors on the client yet: stock pickup still
-  credits slot-0/global state, so powerups, spellbook/statbook mutations, and
-  the later native per-participant inventory-root insertion path still need
-  their own seams.
+  inventory state by item type, slot, and stack count. For the verified
+  health/mana potion type, the owning client now transfers a native held-item
+  object through the stock `Inventory_InsertOrStackItem` path, verifies that
+  the requested native potion stack increased, and deduplicates the credit by
+  run/drop identity. Arbitrary item types, powerups, and merchant ownership
+  still need their own native insertion seams; their peer-visible rows remain
+  replication evidence rather than proof of stock inventory ownership.
   The loader now exposes `sd.player.get_inventory_state()` as a read-only
   audit surface for the stock scene-owned inventory root and visual sink helper
   items, and `tools/verify_multiplayer_inventory_audit.py` proves both local
@@ -162,9 +164,9 @@ Spacewar playtest flow and the remaining external verification boundary.
   progression-book/statbook/skillbook/spellbook rows, and current ability loadout
   in `StatePacket`, so peers can inspect each other's starter potion rows,
   active/visible native book entries, and primary/secondary loadout. This is not
-  full native inventory ownership yet: item/potion pickup is still
-  metadata-ledger credit rather than native item-object insertion, and powerup
-  pickup still needs its own seam.
+  full native inventory ownership yet: the proven native mutation slice is
+  potion insertion/stacking for the owning client; arbitrary item equipment,
+  powerup pickup, and shop/trader transfer remain incomplete.
   Protocol v30 also adds host-authored `LevelUpOffer`, `LevelUpChoice`, and
   `LevelUpChoiceResult` packets. The host advances shared XP/level, rolls each
   participant's native skill-picker options against that participant's
@@ -172,6 +174,12 @@ Spacewar playtest flow and the remaining external verification boundary.
   applies a returned choice only if it matches the issued offer. Connected
   non-host clients suppress their local native level-up picker/event and expose
   the active offer through `sd.runtime.get_multiplayer_state()`.
+  Protocol v52 groups every connected participant's offer into one revisioned
+  host barrier. All peers pause together, resolved players see
+  `Waiting on N players`, and no peer resumes until every participant has an
+  accepted choice. The host auto-picks the first valid rolled option for any
+  unresolved participant after 60 seconds, then repeats the accepted results
+  and final resume state so packet loss cannot strand one client in the picker.
   Protocol v36 adds owner-authored transient spell-effect snapshots. Native
   Ether, Fireball, Water, and Ember objects still spawn through stock cast
   playback on every peer; the new lane binds those observer objects by owner
@@ -216,7 +224,7 @@ Spacewar playtest flow and the remaining external verification boundary.
 | Identity | Connection-bound. Host ignores client-declared player / actor IDs. |
 | Mod compatibility | **Exact** protocol version + mod-manifest hash. Mismatch refuses connect. |
 | Anti-cheat | None in the serious sense. Baseline hygiene only (see below). |
-| Loot | Synced host-owned run drops. Gold, health/mana orbs, and item/potion carriers have request/result authority slices; item/potion results currently credit the participant-owned inventory ledger by metadata rather than inserting real native item objects. Local inventory/equip roots now have a typed read-only audit API, and local UDP mirrors bounded full participant-owned inventory rows, progression-book/statbook/skillbook/spellbook rows, and current ability loadout in `StatePacket`. Powerup ownership and real per-participant native inventory roots are still pending. |
+| Loot | Synced host-owned run drops. Gold, health/mana orbs, and item/potion carriers have request/result authority slices. Accepted health/mana potions enter the owning client's stock native inventory through the verified insert/stack ABI and converge back into participant-owned rows. Local inventory/equip roots have a typed read-only audit API, and local UDP mirrors bounded full inventory, progression-book/statbook/skillbook/spellbook, and loadout rows in `StatePacket`. Arbitrary item/equipment transfer, powerups, and shop/trader ownership are still pending. |
 
 ## Tick rates
 
@@ -389,9 +397,9 @@ host position over a short window.
 - Host can cheat in their own session (trusted-peer model)
 - Cross-region divergence (host sims one region; multi-region is later work)
 - Durable inventory/book persistence beyond one run (Phase 3+)
-- Item/potion pickup credits replicate into participant-owned state, but real
-  participant-owned native inventory insertion, powerups, and shop/trader
-  ownership remain incomplete.
+- Potion pickup credits now enter the owning client's native inventory, but
+  arbitrary item/equipment insertion, powerups, and shop/trader ownership
+  remain incomplete.
 
 ## Run-identity object (replaces "save-provenance" from earlier drafts)
 

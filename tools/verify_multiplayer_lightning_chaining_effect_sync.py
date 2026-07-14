@@ -1982,6 +1982,7 @@ def launch_pair_ready(timeout: float) -> dict[str, Any]:
                 preset=AIR_PRESET,
                 god_mode=True,
                 test_survival_boneyard_override=FLAT_BONEYARD,
+                test_blank_boneyard=True,
             )
             disable_bots()
             hub_ready = {

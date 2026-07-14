@@ -86,6 +86,7 @@ def prepare_progression_session(
         timeout,
         god_mode=False,
         manual_combat=False,
+        prearm_manual_spawner=True,
         wave_override=wave_override,
     )
     quiet = enable_quiet_progression_test_mode()

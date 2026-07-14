@@ -29,6 +29,7 @@
 #include <cwctype>
 #include <deque>
 #include <filesystem>
+#include <functional>
 #include <fstream>
 #include <limits>
 #include <malloc.h>

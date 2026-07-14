@@ -185,12 +185,31 @@ table.sort(static_actors, function(a, b)
   end
   return false
 end)
+-- World slots are process-local container indices and legitimately differ when
+-- participant or helper actors occupy different insertion slots. Compare the
+-- replicated actor's semantic state, while retaining the complete local row as
+-- a diagnostic digest below.
 local actor_values = {#static_actors}
+local local_actor_values = {#static_actors}
 for _, actor in ipairs(static_actors) do
-  for _, value in ipairs(actor) do table.insert(actor_values, value) end
+  table.insert(actor_values, actor[1])
+  table.insert(actor_values, actor[2])
+  table.insert(actor_values, actor[3])
+  table.insert(actor_values, actor[4])
+  table.insert(actor_values, actor[6])
+  for _, value in ipairs(actor) do table.insert(local_actor_values, value) end
 end
 emit("static_actor_count", #static_actors)
 emit("static_actor_digest", hx(digest_values(actor_values)))
+emit("static_actor_local_digest", hx(digest_values(local_actor_values)))
+for index, actor in ipairs(static_actors) do
+  emit("static." .. index .. ".type_id", actor[1])
+  emit("static." .. index .. ".x_q10", actor[2])
+  emit("static." .. index .. ".y_q10", actor[3])
+  emit("static." .. index .. ".radius_q10", actor[4])
+  emit("static." .. index .. ".world_slot", actor[5])
+  emit("static." .. index .. ".anim_drive_state", actor[6])
+end
 
 local replicated = sd.world.get_replicated_actors and sd.world.get_replicated_actors() or nil
 local replicated_run_static_count = 0

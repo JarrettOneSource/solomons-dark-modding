@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace sdmod {
 struct SDModSceneActorState;
@@ -16,6 +17,7 @@ void TickLocalTransport(std::uint64_t now_ms);
 bool IsLocalTransportEnabled();
 bool IsLocalTransportHost();
 bool IsLocalTransportClient();
+void NotifyLocalRunEnded(std::string_view reason);
 bool TryAuthorizeLocalClientRunSwitch(std::string* error_message);
 std::uint64_t GetLocalTransportParticipantId();
 bool IsSteamGameplayTransportEnabled();
@@ -152,6 +154,11 @@ bool QueueLocalLootPickupRequest(
     std::uint32_t* request_sequence,
     std::string* error_message,
     const LootPickupRequestCapture* capture = nullptr);
+bool MarkLocalInventoryNativeConverged(std::uint32_t inventory_revision);
+void PublishHostLevelUpBarrierOffers(
+    std::int32_t level,
+    std::int32_t experience,
+    uintptr_t source_progression_address);
 void PublishHostLevelUpOffers(
     std::int32_t level,
     std::int32_t experience,
@@ -160,6 +167,11 @@ void PublishLocalHostSelfLevelUpOffer(
     std::int32_t level,
     std::int32_t experience,
     uintptr_t source_progression_address);
+bool DebugPublishHostNaturalLevelUpOffer(
+    std::uint64_t target_participant_id,
+    std::int32_t level,
+    std::int32_t experience,
+    std::string* error_message);
 bool DebugPublishHostLevelUpOffer(
     std::uint64_t target_participant_id,
     std::int32_t level,

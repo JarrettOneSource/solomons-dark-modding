@@ -10,6 +10,7 @@ bin/
 obj/
 obj_manual/
 dist/
+artifacts/
 runtime/
 screenshots/
 tools/procdump/

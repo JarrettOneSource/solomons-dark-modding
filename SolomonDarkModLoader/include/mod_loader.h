@@ -418,6 +418,9 @@ bool QueueGameplayMovementHoldFrames(
     float direction_y,
     std::uint32_t frames,
     std::string* error_message);
+bool SetGameplayNativeControlAllowanceFrames(
+    std::uint32_t frames,
+    std::string* error_message);
 bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_message);
 void ClearQueuedGameplayMouseLeft();
 bool ClearLocalPlayerGameplayCastState(std::string* error_message);
@@ -486,17 +489,4 @@ bool QueueParticipantEntitySync(
     float heading,
     std::string* error_message);
 bool QueueParticipantDestroy(std::uint64_t participant_id, std::string* error_message);
-bool IsRunLifecycleActive();
-bool EndRunLifecycleFromExternal(std::string_view reason);
-int GetRunLifecycleCurrentWave();
-std::uint64_t GetRunLifecycleElapsedMilliseconds();
-void SetRunLifecycleCombatPreludeOnlySuppression(bool enabled);
-void SetRunLifecycleWaveStartEnemyTracking(bool enabled);
-void SetRunLifecycleManualEnemySpawnerTestMode(bool enabled);
-bool IsRunLifecycleManualEnemySpawnerTestModeEnabled();
-void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies);
-bool TryGetRunLifecycleEnemySpawnSerial(uintptr_t enemy_address, std::uint32_t* spawn_serial);
-bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(int enemy_type, std::uint32_t missing_enemy_count);
-uintptr_t GetRunLifecycleLastWaveSpawnerAddress();
-bool IsRunLifecycleManualEnemySpawnerReady();
 #include "mod_loader_gameplay_api.inl"

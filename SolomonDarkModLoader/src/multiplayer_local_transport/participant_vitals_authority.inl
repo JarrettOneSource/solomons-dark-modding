@@ -245,8 +245,7 @@ void ApplyParticipantVitalsCorrectionPacket(
             packet.authority_participant_id);
     if (last_it !=
             g_local_transport.last_participant_vitals_correction_sequence_by_authority.end() &&
-        static_cast<std::int32_t>(
-            packet.correction_sequence - last_it->second) <= 0) {
+        !IsPacketSequenceNewer(packet.correction_sequence, last_it->second)) {
         return;
     }
 

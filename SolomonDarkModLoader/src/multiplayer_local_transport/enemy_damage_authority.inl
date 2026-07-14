@@ -6,7 +6,7 @@ bool IsEnemyDamageClaimSequenceDuplicate(const EnemyDamageClaimPacket& packet) {
         packet.claim_sequence == 0) {
         return false;
     }
-    return static_cast<std::int32_t>(packet.claim_sequence - it->second) <= 0;
+    return !IsPacketSequenceNewer(packet.claim_sequence, it->second);
 }
 
 void RememberEnemyDamageClaimSequence(const EnemyDamageClaimPacket& packet) {

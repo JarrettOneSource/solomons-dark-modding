@@ -4,7 +4,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 51;
+constexpr std::uint16_t kProtocolVersion = 52;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -38,6 +38,7 @@ enum class PacketKind : std::uint16_t {
     ParticipantVitalsCorrection = 16,
     SessionGoodbye = 17,
     SessionKeepalive = 18,
+    LevelUpBarrier = 19,
 };
 
 enum class SessionPeerRole : std::uint8_t {
@@ -307,9 +308,13 @@ struct StatePacket {
     std::int32_t concentration_entry_b;
     std::uint32_t derived_stat_revision;
     ParticipantDerivedStatPacketState derived_stats;
+    std::uint64_t level_up_barrier_id;
+    std::uint32_t level_up_barrier_revision;
+    std::uint32_t level_up_deadline_remaining_ms;
     std::uint8_t level_up_pause_active;
     std::uint8_t level_up_waiting_count;
-    std::uint16_t level_up_waiting_reserved = 0;
+    std::uint8_t level_up_barrier_flags;
+    std::uint8_t level_up_waiting_reserved = 0;
     std::uint64_t level_up_waiting_participant_ids[kLevelUpWaitStatusMaxParticipants];
     std::uint16_t inventory_item_count;
     std::uint16_t inventory_item_total_count;
@@ -467,6 +472,40 @@ struct LevelUpChoiceResultPacket {
     std::uint8_t result_code;
     std::uint8_t flags;
     std::uint16_t resulting_active;
+};
+
+constexpr std::uint8_t kLevelUpChoiceResultFlagAutoPicked = 1u << 0;
+
+constexpr std::uint8_t kLevelUpBarrierFlagActive = 1u << 0;
+constexpr std::uint8_t kLevelUpBarrierFlagTimedOut = 1u << 1;
+constexpr std::uint8_t kLevelUpBarrierParticipantFlagResolved = 1u << 0;
+constexpr std::uint8_t kLevelUpBarrierParticipantFlagAutoPicked = 1u << 1;
+constexpr std::uint8_t kLevelUpBarrierParticipantFlagDisconnected = 1u << 2;
+
+struct LevelUpBarrierParticipantPacketState {
+    std::uint64_t participant_id;
+    std::uint64_t offer_id;
+    std::int32_t option_index;
+    std::int32_t option_id;
+    std::int32_t apply_count;
+    std::uint16_t resulting_active;
+    std::uint8_t flags;
+    std::uint8_t reserved = 0;
+};
+
+struct LevelUpBarrierPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t barrier_id;
+    std::uint32_t run_nonce;
+    std::uint32_t revision;
+    std::uint32_t deadline_remaining_ms;
+    std::int32_t level;
+    std::int32_t experience;
+    std::uint8_t participant_count;
+    std::uint8_t flags;
+    std::uint16_t reserved = 0;
+    LevelUpBarrierParticipantPacketState participants[kLevelUpWaitStatusMaxParticipants];
 };
 
 struct WorldActorSnapshotPacketState {
@@ -729,6 +768,17 @@ inline PacketHeader MakePacketHeader(PacketKind kind, std::uint32_t sequence) {
     return header;
 }
 
+// Packet counters are uint32_t and may wrap during a long-running session.
+// Treat a candidate within the forward half of the sequence space as newer;
+// callers keep their own "have a baseline" bit by only comparing entries that
+// already exist in their per-stream maps.
+constexpr bool IsPacketSequenceNewer(
+    std::uint32_t candidate,
+    std::uint32_t baseline) noexcept {
+    return candidate != baseline &&
+           static_cast<std::uint32_t>(candidate - baseline) < 0x80000000u;
+}
+
 inline bool IsValidPacketHeader(const PacketHeader& header) {
     return header.magic[0] == kProtocolMagic[0] &&
            header.magic[1] == kProtocolMagic[1] &&
@@ -743,11 +793,19 @@ inline bool IsValidHeader(const PacketHeader& header, PacketKind expected_kind) 
 }
 
 static_assert(sizeof(PacketHeader) == 12, "Unexpected packet header size");
+static_assert(IsPacketSequenceNewer(2u, 1u), "Packet sequence must advance normally");
+static_assert(!IsPacketSequenceNewer(1u, 1u), "Duplicate packet sequence must not advance");
+static_assert(
+    IsPacketSequenceNewer(0u, 0xFFFFFFFFu),
+    "Packet sequence comparison must accept uint32 wraparound");
+static_assert(
+    !IsPacketSequenceNewer(0xFFFFFFFFu, 0u),
+    "Packet sequence comparison must reject pre-wrap packets after wraparound");
 static_assert(sizeof(ParticipantInventoryItemPacketState) == 12, "Unexpected inventory item packet size");
 static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpected progression book entry packet size");
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 56, "Unexpected derived stat packet size");
-static_assert(sizeof(StatePacket) == 3832, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 3848, "Unexpected state packet size");
 static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");
 static_assert(sizeof(CastPacket) == 120, "Unexpected cast packet size");
 static_assert(sizeof(SessionHelloAckPacket) == 92, "Unexpected session hello acknowledgement packet size");
@@ -757,6 +815,10 @@ static_assert(sizeof(SessionKeepalivePacket) == 52,
 static_assert(sizeof(LevelUpOfferPacket) == 116, "Unexpected level-up offer packet size");
 static_assert(sizeof(LevelUpChoicePacket) == 40, "Unexpected level-up choice packet size");
 static_assert(sizeof(LevelUpChoiceResultPacket) == 64, "Unexpected level-up choice result packet size");
+static_assert(sizeof(LevelUpBarrierParticipantPacketState) == 32,
+              "Unexpected level-up barrier participant state size");
+static_assert(sizeof(LevelUpBarrierPacket) == 308,
+              "Unexpected level-up barrier packet size");
 static_assert(sizeof(WorldActorSnapshotPacketState) == 128, "Unexpected world actor snapshot size");
 static_assert(sizeof(WorldSnapshotPacket) == 8224, "Unexpected world snapshot packet size");
 static_assert(sizeof(LootDropSnapshotPacketState) == 72, "Unexpected loot drop snapshot size");

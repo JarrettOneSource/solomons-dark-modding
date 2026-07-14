@@ -202,6 +202,7 @@ bool TrySampleParticipantTransform(
     std::uint64_t interpolation_delay_ms,
     ParticipantTransformSample* sample);
 void AppendWorldSnapshot(RuntimeState* state, WorldSnapshotRuntimeInfo snapshot);
+bool AppendLootSnapshot(RuntimeState* state, LootSnapshotRuntimeInfo snapshot);
 bool TrySampleWorldSnapshot(
     const RuntimeState& state,
     std::uint64_t now_ms,

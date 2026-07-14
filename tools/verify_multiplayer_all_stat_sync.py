@@ -1190,6 +1190,9 @@ def main() -> int:
             preset="map_create_fire_mind_hub",
             god_mode=False,
             test_survival_boneyard_override=args.test_boneyard_override,
+            test_blank_boneyard=(
+                args.test_boneyard_override.resolve() == FLAT_BONEYARD.resolve()
+            ),
         )
         disable_bots()
         output["hub_ready"] = {
@@ -1202,8 +1205,8 @@ def main() -> int:
         output["catalog_summary"] = {
             key: value for key, value in catalog_result.items() if key != "catalog"
         }
-        output["run_entry"] = start_host_testrun_and_wait_for_clients(timeout=args.timeout)
         output["quiet_progression_test_mode"] = enable_quiet_progression_test_mode()
+        output["run_entry"] = start_host_testrun_and_wait_for_clients(timeout=args.timeout)
         output["post_run_progression_ready"] = wait_for_post_run_progression_ready(args.timeout)
 
         initial_by_target = {

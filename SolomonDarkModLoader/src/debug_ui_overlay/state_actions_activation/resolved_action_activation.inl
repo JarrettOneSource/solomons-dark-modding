@@ -35,9 +35,14 @@ bool TryActivateResolvedUiAction(
         return false;
     }
 
-    if (action_id == "pause_menu.leave_game") {
-        DispatchLuaRunEnded("leave_game");
-    }
+    const auto complete_successful_dispatch = [&](bool dispatched) {
+        if (dispatched && action_id == "pause_menu.leave_game" &&
+            !EndRunLifecycleFromExternal("leave_game")) {
+            multiplayer::NotifyLocalRunEnded("leave_game");
+            DispatchLuaRunEnded("leave_game");
+        }
+        return dispatched;
+    };
 
     if (surface_root_id == "main_menu" && action_id == "main_menu.new_game") {
         if (!TryPrepareMainMenuNewGameSaveReset(resolved_owner_address, error_message)) {
@@ -69,7 +74,7 @@ bool TryActivateResolvedUiAction(
             " dispatch_kind=owner_noarg owner=" + HexString(resolved_owner_address) +
             " handler=" + HexString(expectation.expected_handler_address));
         StoreActiveSemanticUiActionDispatchResolution(resolved_owner_address, 0, "owner_noarg");
-        return TryInvokeOwnerNoArgAction(
+        return complete_successful_dispatch(TryInvokeOwnerNoArgAction(
             resolved_owner_address,
             expectation.expected_vftable_address,
             expectation.expected_handler_address,
@@ -77,7 +82,7 @@ bool TryActivateResolvedUiAction(
             owner_context_binding_value,
             expectation.owner_name,
             action_id,
-            error_message);
+            error_message));
     }
 
     if (expectation.dispatch_kind == "owner_point_click") {
@@ -154,7 +159,7 @@ bool TryActivateResolvedUiAction(
             " x=" + std::to_string(point_x) + " (" + std::to_string(point_x_float) + "f)" +
             " y=" + std::to_string(point_y) + " (" + std::to_string(point_y_float) + "f)");
         StoreActiveSemanticUiActionDispatchResolution(resolved_owner_address, point_address, "owner_point_click");
-        return TryInvokeOwnerPointClickAction(
+        return complete_successful_dispatch(TryInvokeOwnerPointClickAction(
             resolved_owner_address,
             expectation.expected_vftable_address,
             expectation.expected_handler_address,
@@ -164,7 +169,7 @@ bool TryActivateResolvedUiAction(
             point_y,
             expectation.owner_name,
             action_id,
-            error_message);
+            error_message));
     }
 
     if (expectation.dispatch_kind == "control_child" ||
@@ -243,7 +248,7 @@ bool TryActivateResolvedUiAction(
                 0.0f,
                 0.0f);
         }
-        return TryInvokeOwnerControlActionByControlAddress(
+        return complete_successful_dispatch(TryInvokeOwnerControlActionByControlAddress(
             dispatch_owner_address,
             expectation.expected_vftable_address,
             expectation.expected_handler_address,
@@ -252,7 +257,7 @@ bool TryActivateResolvedUiAction(
             resolved_child_control_address,
             expectation.owner_name,
             action_id,
-            error_message);
+            error_message));
     }
 
     if (expectation.dispatch_kind == "control_noarg") {
@@ -262,12 +267,12 @@ bool TryActivateResolvedUiAction(
             " dispatch_kind=control_noarg control=" + HexString(resolved_owner_address) +
             " handler=" + HexString(expectation.expected_handler_address));
         StoreActiveSemanticUiActionDispatchResolution(0, resolved_owner_address, "control_noarg");
-        return TryInvokeControlNoArgAction(
+        return complete_successful_dispatch(TryInvokeControlNoArgAction(
             resolved_owner_address,
             expectation.expected_vftable_address,
             expectation.expected_handler_address,
             action_id,
-            error_message);
+            error_message));
     }
 
     if (expectation.dispatch_kind == "direct_write") {
@@ -330,7 +335,7 @@ bool TryActivateResolvedUiAction(
             " confirm_byte=" + HexString(confirm_byte_offset) +
             " owner=" + HexString(resolved_owner_address));
         StoreActiveSemanticUiActionDispatchResolution(resolved_owner_address, 0, "direct_write");
-        return true;
+        return complete_successful_dispatch(true);
     }
 
     uintptr_t resolved_control_address = 0;
@@ -370,7 +375,7 @@ bool TryActivateResolvedUiAction(
             error_message)) {
         return false;
     }
-    return TryInvokeOwnerControlActionByControlAddress(
+    return complete_successful_dispatch(TryInvokeOwnerControlActionByControlAddress(
         resolved_owner_address,
         expectation.expected_vftable_address,
         expectation.expected_handler_address,
@@ -379,5 +384,5 @@ bool TryActivateResolvedUiAction(
         resolved_control_address,
         expectation.owner_name,
         action_id,
-        error_message);
+        error_message));
 }

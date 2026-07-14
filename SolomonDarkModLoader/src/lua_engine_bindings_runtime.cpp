@@ -254,7 +254,7 @@ void PushLevelUpOfferRuntimeInfo(
 void PushLevelUpChoiceResultRuntimeInfo(
     lua_State* state,
     const multiplayer::LevelUpChoiceResultRuntimeInfo& result) {
-    lua_createtable(state, 0, 14);
+    lua_createtable(state, 0, 15);
     lua_pushboolean(state, result.valid ? 1 : 0);
     lua_setfield(state, -2, "valid");
     lua_pushinteger(state, static_cast<lua_Integer>(result.authority_participant_id));
@@ -279,6 +279,8 @@ void PushLevelUpChoiceResultRuntimeInfo(
     lua_setfield(state, -2, "apply_count");
     lua_pushinteger(state, static_cast<lua_Integer>(result.resulting_active));
     lua_setfield(state, -2, "resulting_active");
+    lua_pushboolean(state, result.auto_picked ? 1 : 0);
+    lua_setfield(state, -2, "auto_picked");
     lua_pushinteger(state, static_cast<lua_Integer>(result.result_code));
     lua_setfield(state, -2, "result_code");
 }
@@ -286,17 +288,32 @@ void PushLevelUpChoiceResultRuntimeInfo(
 void PushLevelUpWaitStatusRuntimeInfo(
     lua_State* state,
     const multiplayer::LevelUpWaitStatusRuntimeInfo& status) {
-    lua_createtable(state, 0, 7);
+    lua_createtable(state, 0, 13);
     lua_pushboolean(state, status.valid ? 1 : 0);
     lua_setfield(state, -2, "valid");
     lua_pushboolean(state, status.pause_active ? 1 : 0);
     lua_setfield(state, -2, "pause_active");
+    lua_pushboolean(state, status.timed_out ? 1 : 0);
+    lua_setfield(state, -2, "timed_out");
     lua_pushinteger(state, static_cast<lua_Integer>(status.authority_participant_id));
     lua_setfield(state, -2, "authority_participant_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(status.barrier_id));
+    lua_setfield(state, -2, "barrier_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(status.revision));
+    lua_setfield(state, -2, "revision");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(status.deadline_remaining_ms));
+    lua_setfield(state, -2, "deadline_remaining_ms");
     lua_pushinteger(state, static_cast<lua_Integer>(status.received_ms));
     lua_setfield(state, -2, "received_ms");
     lua_pushinteger(state, static_cast<lua_Integer>(status.waiting_participant_ids.size()));
     lua_setfield(state, -2, "waiting_count");
+
+    std::string display_text;
+    (void)multiplayer::TryBuildLevelUpWaitStatusText(&display_text);
+    lua_pushlstring(state, display_text.data(), display_text.size());
+    lua_setfield(state, -2, "display_text");
 
     lua_createtable(state, static_cast<int>(status.waiting_participant_ids.size()), 0);
     for (std::size_t index = 0; index < status.waiting_participant_ids.size(); ++index) {

@@ -145,7 +145,11 @@ host offer through `sd.runtime.get_multiplayer_state()`, and submits a selected
 option through `sd.runtime.choose_level_up_option(...)`. The host accepts only an
 option index/id that exists in the issued offer, applies it to that participant's
 materialized progression, and returns `LevelUpChoiceResult` for the client's
-local progression to apply.
+local progression to apply. Protocol v52 wraps those private offers in one
+host-authored cohort barrier: every participant pauses together, accepted
+choosers wait on the remaining count, the host auto-picks unresolved offers at
+60 seconds, and repeated final result/resume packets keep every peer on the same
+pause revision.
 
 The loader now has a read-only native inventory audit surface at
 `sd.player.get_inventory_state()`. It decodes the local gameplay scene's
@@ -155,11 +159,12 @@ local native progression table that currently exposes 83 book rows in the
 starter hub state. Local UDP protocol v30 mirrors bounded full participant-owned
 inventory rows in `StatePacket` plus up to 128
 progression-book/statbook/skillbook/spellbook rows and the current ability
-loadout. That proves inventory/book/loadout content
-visibility between peers, not native item-object insertion into a separate
-per-participant root. The pickup request/result protocol also mirrors accepted
-item/potion carrier metadata through `LootPickupResult`. Powerup pickup and real
-per-participant native inventory roots are still pending.
+loadout. That proves inventory/book/loadout content visibility between peers.
+The pickup request/result protocol also mirrors accepted item/potion carrier
+metadata through `LootPickupResult`; for verified health/mana potions, the
+owning client now transfers the native held item through the stock inventory
+insert/stack ABI and publishes the resulting row. Arbitrary item/equipment
+insertion, powerup pickup, and shop/trader ownership are still pending.
 
 ## Scene Intent
 

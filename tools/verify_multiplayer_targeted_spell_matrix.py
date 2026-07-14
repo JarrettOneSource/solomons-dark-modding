@@ -45,6 +45,7 @@ from verify_multiplayer_primary_kill_stress import (
     enable_manual_stock_spawner_combat,
     find_target,
     prepare_and_queue_caster,
+    set_manual_spawner_test_mode,
     spawn_one_enemy,
 )
 
@@ -893,6 +894,7 @@ def launch_element_pair(spec: ElementSpec) -> dict[str, object]:
     launch = launch_pair(
         preset=spec.preset,
         test_survival_boneyard_override=FLAT_BONEYARD,
+        test_blank_boneyard=True,
     )
     record_telemetry("targeted.element.launch.ready", element=spec.element, launch=launch)
     pids = detect_instance_pids()
@@ -900,6 +902,15 @@ def launch_element_pair(spec: ElementSpec) -> dict[str, object]:
     wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub", timeout=30.0)
     record_telemetry("targeted.element.hub.ready", element=spec.element, pids=pids)
     disable_bots()
+    manual_spawner_prearm = {
+        "host": set_manual_spawner_test_mode(HOST_PIPE, True),
+        "client": set_manual_spawner_test_mode(CLIENT_PIPE, True),
+    }
+    for label, state in manual_spawner_prearm.items():
+        if state.get("ok") != "true" or state.get("active") != "true":
+            raise VerifyFailure(
+                f"failed to prearm {label} manual spawner mode: {state}"
+            )
     run_entry = start_host_testrun_and_wait_for_clients()
     record_telemetry("targeted.element.run_entry.dispatched", element=spec.element, run_entry=run_entry)
     wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "testrun")
@@ -914,6 +925,7 @@ def launch_element_pair(spec: ElementSpec) -> dict[str, object]:
     return {
         "launch": launch,
         "pids": pids,
+        "manual_spawner_prearm": manual_spawner_prearm,
         "run_entry": run_entry,
         "vitals": vitals,
         "combat": combat,

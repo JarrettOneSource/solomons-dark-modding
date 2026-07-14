@@ -292,6 +292,7 @@ void ApplyReplicatedSpellEffectSnapshotsIfActive(std::uint64_t now_ms) {
                     matched_actor_address == 0 &&
                     ShouldMaterializeMissingReplicatedSpellEffect(
                         snapshot.owner_participant_id,
+                        owner_gameplay.progression_runtime_state_address,
                         effect,
                         now_ms);
                 if (should_materialize &&

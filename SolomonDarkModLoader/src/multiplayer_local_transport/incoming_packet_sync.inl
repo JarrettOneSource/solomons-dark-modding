@@ -195,7 +195,6 @@ void ApplyRemoteStatePacket(
     }
 
     UpsertPeerEndpoint(from, packet.participant_id, now_ms);
-    RelayStatePacketToPeers(packet, from);
 
     MultiplayerCharacterProfile profile;
     profile.element_id = packet.element_id;
@@ -213,6 +212,20 @@ void ApplyRemoteStatePacket(
     if (!IsValidCharacterProfile(profile)) {
         return;
     }
+
+    const auto last_state_sequence_it =
+        g_local_transport.last_state_packet_sequence_by_participant.find(
+            packet.participant_id);
+    if (last_state_sequence_it !=
+            g_local_transport.last_state_packet_sequence_by_participant.end() &&
+        !IsPacketSequenceNewer(
+            packet.header.sequence,
+            last_state_sequence_it->second)) {
+        return;
+    }
+    g_local_transport.last_state_packet_sequence_by_participant[
+        packet.participant_id] = packet.header.sequence;
+    RelayStatePacketToPeers(packet, from);
 
     const auto scene_intent = SceneIntentFromPacket(packet);
     const auto display_name = PacketDisplayName(packet);
@@ -252,9 +265,11 @@ void ApplyRemoteStatePacket(
             const auto& correction = pending_it->second.packet;
             const bool life_acknowledged =
                 packet.participant_vitals_correction_ack_sequence != 0 &&
-                static_cast<std::int32_t>(
-                    packet.participant_vitals_correction_ack_sequence -
-                    correction.correction_sequence) >= 0;
+                (packet.participant_vitals_correction_ack_sequence ==
+                     correction.correction_sequence ||
+                 IsPacketSequenceNewer(
+                     packet.participant_vitals_correction_ack_sequence,
+                     correction.correction_sequence));
             const bool correction_poisoned =
                 (correction.transient_status_flags &
                  ParticipantTransientStatusFlagPoisoned) != 0;
@@ -292,26 +307,33 @@ void ApplyRemoteStatePacket(
     const bool packet_from_configured_authority =
         IsAuthoritativeHostStatePacket(packet, from);
 
-    UpdateRuntimeState([&](RuntimeState& state) {
-        if (packet_from_configured_authority) {
-            LevelUpWaitStatusRuntimeInfo wait_status;
-            wait_status.valid = true;
-            wait_status.pause_active = packet.level_up_pause_active != 0;
-            wait_status.authority_participant_id = packet.authority_participant_id;
-            wait_status.received_ms = now_ms;
-            const auto waiting_count =
-                (std::min<std::size_t>)(
-                    packet.level_up_waiting_count,
-                    kLevelUpWaitStatusMaxParticipants);
-            wait_status.waiting_participant_ids.reserve(waiting_count);
-            for (std::size_t index = 0; index < waiting_count; ++index) {
-                const auto participant_id = packet.level_up_waiting_participant_ids[index];
-                if (participant_id != 0) {
-                    wait_status.waiting_participant_ids.push_back(participant_id);
-                }
+    if (packet_from_configured_authority) {
+        std::vector<std::uint64_t> waiting_participant_ids;
+        const auto waiting_count =
+            (std::min<std::size_t>)(
+                packet.level_up_waiting_count,
+                kLevelUpWaitStatusMaxParticipants);
+        waiting_participant_ids.reserve(waiting_count);
+        for (std::size_t index = 0; index < waiting_count; ++index) {
+            const auto participant_id =
+                packet.level_up_waiting_participant_ids[index];
+            if (participant_id != 0) {
+                waiting_participant_ids.push_back(participant_id);
             }
-            state.level_up_wait_status = std::move(wait_status);
         }
+        (void)ApplyAuthoritativeLevelUpWaitStatus(
+            packet.authority_participant_id,
+            packet.level_up_barrier_id,
+            packet.level_up_barrier_revision,
+            packet.level_up_deadline_remaining_ms,
+            packet.level_up_pause_active != 0,
+            (packet.level_up_barrier_flags &
+             kLevelUpBarrierFlagTimedOut) != 0,
+            std::move(waiting_participant_ids),
+            now_ms);
+    }
+
+    UpdateRuntimeState([&](RuntimeState& state) {
 
         auto* participant = UpsertRemoteParticipant(
             state,
@@ -542,6 +564,10 @@ void ApplyRemoteStatePacket(
     });
 
     MaybeQueueClientHostRunStart(packet, scene_intent, from, now_ms);
+    StageClientHostRunExitFollow(
+        packet,
+        packet_from_configured_authority,
+        now_ms);
 
     SDModParticipantGameplayState gameplay_state;
     const bool participant_materialized =
@@ -562,796 +588,5 @@ void ApplyRemoteStatePacket(
             packet.position_y,
             packet.heading,
             &sync_error);
-    }
-}
-
-void ApplyRemoteCastPacket(
-    const CastPacket& packet,
-    const TransportPeerEndpoint& from,
-    std::uint64_t now_ms) {
-    const auto cast_kind = static_cast<CastKind>(packet.cast_kind);
-    const auto input_phase = static_cast<CastInputPhase>(packet.input_phase);
-    auto log_cast_drop = [&](const std::string& reason) {
-        Log(
-            "Multiplayer remote cast ignored. reason=" + reason +
-            " participant_id=" + std::to_string(packet.participant_id) +
-            " cast_sequence=" + std::to_string(packet.cast_sequence) +
-            " packet_sequence=" + std::to_string(packet.header.sequence) +
-            " phase=" + CastInputPhaseLabel(packet.input_phase) +
-            " skill_id=" + std::to_string(packet.skill_id) +
-            " run_nonce=" + std::to_string(packet.run_nonce));
-    };
-
-    if (packet.participant_id == 0 ||
-        packet.participant_id == kLocalParticipantId ||
-        packet.participant_id == g_local_transport.local_peer_id ||
-        packet.cast_sequence == 0 ||
-        packet.skill_id < 0 ||
-        (cast_kind != CastKind::Primary && cast_kind != CastKind::Secondary) ||
-        !IsCastInputPhaseValue(packet.input_phase) ||
-        (cast_kind == CastKind::Primary && packet.secondary_slot != -1) ||
-        (cast_kind == CastKind::Secondary &&
-         (packet.secondary_slot < 0 ||
-          packet.secondary_slot >=
-              static_cast<std::int32_t>(kSecondaryLoadoutSlotCount) ||
-          input_phase != CastInputPhase::Pressed)) ||
-        !std::isfinite(packet.position_x) ||
-        !std::isfinite(packet.position_y) ||
-        !std::isfinite(packet.heading) ||
-        !std::isfinite(packet.aim_target_x) ||
-        !std::isfinite(packet.aim_target_y)) {
-        log_cast_drop("invalid_packet");
-        return;
-    }
-
-    UpsertPeerEndpoint(from, packet.participant_id, now_ms);
-    RelayPacketToPeers(packet, from);
-
-    const auto last_sequence_it =
-        g_local_transport.last_cast_sequence_by_participant.find(packet.participant_id);
-    if (last_sequence_it != g_local_transport.last_cast_sequence_by_participant.end() &&
-        static_cast<std::int32_t>(packet.cast_sequence - last_sequence_it->second) < 0) {
-        log_cast_drop(
-            "stale_cast_sequence last_cast_sequence=" +
-            std::to_string(last_sequence_it->second));
-        return;
-    }
-    auto& input_tracker = g_local_transport.remote_cast_inputs_by_participant[packet.participant_id];
-    if (input_tracker.cast_sequence != packet.cast_sequence) {
-        input_tracker = RemoteCastInputTracker{};
-        input_tracker.cast_sequence = packet.cast_sequence;
-        g_local_transport.last_cast_sequence_by_participant[packet.participant_id] =
-            packet.cast_sequence;
-    } else if (input_tracker.last_packet_sequence != 0 &&
-               static_cast<std::int32_t>(packet.header.sequence - input_tracker.last_packet_sequence) <= 0) {
-        log_cast_drop(
-            "stale_packet_sequence last_packet_sequence=" +
-            std::to_string(input_tracker.last_packet_sequence));
-        return;
-    }
-    input_tracker.last_packet_sequence = packet.header.sequence;
-    input_tracker.last_packet_ms = now_ms;
-
-    const auto runtime_state = SnapshotRuntimeState();
-    const auto* participant = FindParticipant(runtime_state, packet.participant_id);
-    if (participant == nullptr) {
-        log_cast_drop("participant_missing");
-        return;
-    }
-    if (!IsRemoteParticipant(*participant)) {
-        log_cast_drop(
-            "participant_not_remote kind=" +
-            std::to_string(static_cast<int>(participant->kind)));
-        return;
-    }
-    if (!IsNativeControlledParticipant(*participant)) {
-        log_cast_drop(
-            "participant_not_native_controlled controller=" +
-            std::to_string(static_cast<int>(participant->controller_kind)));
-        return;
-    }
-    if (!participant->runtime.valid) {
-        log_cast_drop("participant_runtime_invalid");
-        return;
-    }
-    if (!participant->runtime.in_run) {
-        log_cast_drop("participant_not_in_run");
-        return;
-    }
-    if (participant->runtime.scene_intent.kind != ParticipantSceneIntentKind::Run) {
-        log_cast_drop(
-            "participant_scene_not_run scene_intent=" +
-            std::to_string(static_cast<int>(participant->runtime.scene_intent.kind)));
-        return;
-    }
-    if (participant->runtime.run_nonce != 0 &&
-        packet.run_nonce != 0 &&
-        participant->runtime.run_nonce != packet.run_nonce) {
-        log_cast_drop(
-            "run_nonce_mismatch participant_run_nonce=" +
-            std::to_string(participant->runtime.run_nonce));
-        return;
-    }
-    if (cast_kind == CastKind::Secondary) {
-        const auto secondary_slot = static_cast<std::size_t>(packet.secondary_slot);
-        const auto* owned_entry =
-            FindProgressionBookEntryById(
-                participant->owned_progression,
-                packet.skill_id);
-        if (packet.queued_secondary_entry_indices[secondary_slot] != packet.skill_id ||
-            owned_entry == nullptr ||
-            owned_entry->active == 0) {
-            log_cast_drop("secondary_skill_not_owned_by_packet_and_progression");
-            return;
-        }
-    }
-
-    SDModParticipantGameplayState gameplay_state;
-    if (!TryGetParticipantGameplayState(packet.participant_id, &gameplay_state) ||
-        !gameplay_state.entity_materialized ||
-        gameplay_state.actor_address == 0) {
-        log_cast_drop(
-            "participant_not_materialized actor=" +
-            HexString(gameplay_state.actor_address) +
-            " entity_materialized=" +
-            std::to_string(gameplay_state.entity_materialized ? 1 : 0));
-        return;
-    }
-
-    UpdateRuntimeState([&](RuntimeState& state) {
-        auto* live_participant = FindParticipant(state, packet.participant_id);
-        if (live_participant == nullptr) {
-            return;
-        }
-        live_participant->runtime.transform_valid = true;
-        live_participant->runtime.position_x = packet.position_x;
-        live_participant->runtime.position_y = packet.position_y;
-        live_participant->runtime.heading = packet.heading;
-        if (cast_kind == CastKind::Secondary) {
-            const auto secondary_slot =
-                static_cast<std::size_t>(packet.secondary_slot);
-            // A native belt edit and its cast can occur between consecutive
-            // 20 Hz state packets. The hook's live belt snapshot is therefore
-            // the freshest authenticated state for this one slot.
-            live_participant->character_profile.loadout
-                .secondary_entry_indices[secondary_slot] = packet.skill_id;
-            live_participant->runtime
-                .queued_secondary_entry_indices[secondary_slot] = packet.skill_id;
-        }
-
-        ParticipantTransformSample sample;
-        sample.valid = true;
-        sample.received_ms = now_ms;
-        sample.sequence = packet.header.sequence;
-        sample.run_nonce = packet.run_nonce;
-        sample.scene_intent = live_participant->runtime.scene_intent;
-        sample.position_x = packet.position_x;
-        sample.position_y = packet.position_y;
-        sample.heading = packet.heading;
-        AppendParticipantTransformSample(live_participant, sample);
-    });
-
-    if (cast_kind == CastKind::Secondary && packet.skill_id == 0x33) {
-        std::string dampen_error;
-        if (!QueueMultiplayerDampenEffect(
-                packet.participant_id,
-                packet.cast_sequence,
-                packet.position_x,
-                packet.position_y,
-                &dampen_error)) {
-            log_cast_drop("dampen_behavior_queue_failed error=" + dampen_error);
-            return;
-        }
-    }
-
-    BotCastRequest request;
-    request.bot_id = packet.participant_id;
-    request.kind = cast_kind == CastKind::Secondary
-                       ? BotCastKind::Secondary
-                       : BotCastKind::Primary;
-    request.secondary_slot = packet.secondary_slot;
-    request.skill_id = packet.skill_id;
-    request.has_origin_transform = true;
-    request.origin_position_x = packet.position_x;
-    request.origin_position_y = packet.position_y;
-    request.has_origin_heading = true;
-    request.origin_heading = packet.heading;
-    request.has_aim_target = true;
-    request.aim_target_x = packet.aim_target_x;
-    request.aim_target_y = packet.aim_target_y;
-    request.has_aim_angle = true;
-    request.aim_angle = packet.heading;
-
-    SDModSceneActorState cast_target;
-    const bool resolved_target_by_id =
-        packet.target_network_actor_id != 0 &&
-        TryFindLocalRunEnemyByNetworkIdInternal(packet.target_network_actor_id, &cast_target) &&
-        IsSaneExplicitCastTarget(cast_target, packet.position_x, packet.position_y);
-    uintptr_t resolved_target_actor_address = 0;
-    if (resolved_target_by_id) {
-        resolved_target_actor_address = cast_target.actor_address;
-        request.target_actor_address = resolved_target_actor_address;
-        request.aim_target_x = cast_target.x;
-        request.aim_target_y = cast_target.y;
-    }
-
-    const auto phase = input_phase;
-    const bool release_phase = phase == CastInputPhase::Released;
-    request.cast_sequence = packet.cast_sequence;
-    request.remote_input_controlled = true;
-    if (cast_kind == CastKind::Secondary) {
-        if (!input_tracker.start_queued) {
-            if (QueueBotCast(request)) {
-                input_tracker.start_queued = true;
-                Log(
-                    "Multiplayer remote secondary cast queued. participant_id=" +
-                    std::to_string(packet.participant_id) +
-                    " cast_sequence=" + std::to_string(packet.cast_sequence) +
-                    " skill_id=" + std::to_string(packet.skill_id) +
-                    " secondary_slot=" + std::to_string(packet.secondary_slot) +
-                    " target_network_actor_id=" +
-                    std::to_string(packet.target_network_actor_id) +
-                    " target_actor=" + HexString(request.target_actor_address));
-            } else {
-                log_cast_drop("queue_secondary_bot_cast_failed");
-            }
-        }
-        return;
-    }
-
-    BotCastInputState cast_input_state{};
-    cast_input_state.bot_id = packet.participant_id;
-    cast_input_state.active = !release_phase;
-    cast_input_state.release_requested = release_phase;
-    cast_input_state.cast_sequence = packet.cast_sequence;
-    cast_input_state.last_update_ms = now_ms;
-    cast_input_state.has_aim_target = true;
-    cast_input_state.aim_target_x = request.aim_target_x;
-    cast_input_state.aim_target_y = request.aim_target_y;
-    cast_input_state.has_aim_angle = true;
-    cast_input_state.aim_angle = packet.heading;
-    cast_input_state.target_actor_address = resolved_target_actor_address;
-    (void)UpdateBotCastInput(cast_input_state);
-
-    if (release_phase) {
-        input_tracker.release_seen = true;
-        Log(
-            "Multiplayer remote cast input release. participant_id=" +
-            std::to_string(packet.participant_id) +
-            " cast_sequence=" + std::to_string(packet.cast_sequence) +
-            " skill_id=" + std::to_string(packet.skill_id));
-        return;
-    }
-
-    // Lightning can kill its initial target inside the stock pressed-frame
-    // dispatcher before the post-dispatch cast hook publishes the packet. The
-    // receiver may therefore see one or more packets whose exact network target
-    // is already dead or not materialized yet, followed by a held packet for a
-    // live target. Starting remote playback before that target resolves leaves
-    // Lightning's native target validation false for the whole action, so an
-    // upgraded cast never enters Chaining's extra-target loop on observers.
-    // Other elements retain their targetless directional/projectile behavior.
-    const bool air_primary_packet =
-        packet.element_id == 3 &&
-        (packet.primary_entry_index == 0x18 || packet.skill_id == 0x18);
-    if (!input_tracker.start_queued && air_primary_packet && !resolved_target_by_id) {
-        input_tracker.deferred_start_packet_count += 1;
-        if (input_tracker.deferred_start_packet_count <= 3 ||
-            input_tracker.deferred_start_packet_count % 10 == 0) {
-            Log(
-                "Multiplayer remote Air cast start deferred until exact target resolves. participant_id=" +
-                std::to_string(packet.participant_id) +
-                " cast_sequence=" + std::to_string(packet.cast_sequence) +
-                " phase=" + CastInputPhaseLabel(packet.input_phase) +
-                " target_network_actor_id=" + std::to_string(packet.target_network_actor_id) +
-                " deferred_packets=" + std::to_string(input_tracker.deferred_start_packet_count));
-        }
-        return;
-    }
-    if (!input_tracker.start_queued) {
-        if (QueueBotCast(request)) {
-            input_tracker.start_queued = true;
-            Log(
-                "Multiplayer remote cast queued. participant_id=" +
-                std::to_string(packet.participant_id) +
-                " cast_sequence=" + std::to_string(packet.cast_sequence) +
-                " phase=" + CastInputPhaseLabel(packet.input_phase) +
-                " skill_id=" + std::to_string(packet.skill_id) +
-                " target_network_actor_id=" + std::to_string(packet.target_network_actor_id) +
-                " target_actor=" + HexString(request.target_actor_address) +
-                " target_source=" + std::string(
-                    resolved_target_by_id
-                        ? "network_id"
-                        : (packet.target_network_actor_id != 0 ? "invalid_network_id" : "none")));
-        } else {
-            log_cast_drop("queue_bot_cast_failed");
-        }
-    }
-}
-
-WorldSnapshotRuntimeInfo BuildWorldSnapshotRuntimeInfo(
-    const WorldSnapshotPacket& packet,
-    std::uint64_t now_ms) {
-    const auto actor_count = static_cast<std::uint8_t>(
-        (std::min<std::uint32_t>)(packet.actor_count, kWorldSnapshotMaxActors));
-    const auto scene_kind = static_cast<WorldSceneKind>(packet.scene_kind);
-    WorldSnapshotRuntimeInfo snapshot;
-    snapshot.valid = true;
-    snapshot.authority_participant_id = packet.authority_participant_id;
-    snapshot.received_ms = now_ms;
-    snapshot.sequence = packet.header.sequence;
-    snapshot.scene_epoch = packet.scene_epoch;
-    snapshot.run_nonce = packet.run_nonce;
-    snapshot.actor_total_count = packet.actor_total_count;
-    snapshot.truncated = (packet.snapshot_flags & WorldSnapshotFlagTruncated) != 0;
-    snapshot.scene_intent = SceneIntentFromWorldSceneKind(scene_kind);
-    snapshot.actors.reserve(actor_count);
-
-    for (std::uint8_t index = 0; index < actor_count; ++index) {
-        const auto& packet_actor = packet.actors[index];
-        if (packet_actor.network_actor_id == 0 ||
-            packet_actor.native_type_id == 0 ||
-            !std::isfinite(packet_actor.position_x) ||
-            !std::isfinite(packet_actor.position_y) ||
-            !std::isfinite(packet_actor.radius) ||
-            packet_actor.radius < 0.0f) {
-            continue;
-        }
-
-        WorldActorSnapshot actor;
-        actor.network_actor_id = packet_actor.network_actor_id;
-        actor.native_type_id = packet_actor.native_type_id;
-        actor.enemy_type = packet_actor.enemy_type;
-        actor.actor_slot = packet_actor.actor_slot;
-        actor.world_slot = packet_actor.world_slot;
-        actor.target_participant_id = packet_actor.target_participant_id;
-        actor.target_native_type_id = packet_actor.target_native_type_id;
-        actor.target_actor_slot = packet_actor.target_actor_slot;
-        actor.target_world_slot = packet_actor.target_world_slot;
-        actor.target_bucket_delta = packet_actor.target_bucket_delta;
-        actor.dead = (packet_actor.flags & WorldActorSnapshotFlagDead) != 0;
-        actor.tracked_enemy = (packet_actor.flags & WorldActorSnapshotFlagTrackedEnemy) != 0;
-        actor.lifecycle_owned = (packet_actor.flags & WorldActorSnapshotFlagLifecycleOwned) != 0;
-        actor.run_static = (packet_actor.flags & WorldActorSnapshotFlagRunStatic) != 0;
-        actor.player_created =
-            (packet_actor.flags & WorldActorSnapshotFlagPlayerCreated) != 0;
-        actor.target_authoritative =
-            (packet_actor.flags & WorldActorSnapshotFlagTargetAuthoritative) != 0;
-        actor.anim_drive_state = packet_actor.anim_drive_state;
-        actor.presentation_flags = packet_actor.presentation_flags;
-        actor.position_x = packet_actor.position_x;
-        actor.position_y = packet_actor.position_y;
-        actor.radius = packet_actor.radius;
-        actor.heading = std::isfinite(packet_actor.heading) ? packet_actor.heading : 0.0f;
-        actor.hp = std::isfinite(packet_actor.hp) ? packet_actor.hp : 0.0f;
-        actor.max_hp = std::isfinite(packet_actor.max_hp) ? packet_actor.max_hp : 0.0f;
-        actor.anim_drive_state_word = packet_actor.anim_drive_state_word;
-        actor.walk_cycle_primary =
-            std::isfinite(packet_actor.walk_cycle_primary) ? packet_actor.walk_cycle_primary : 0.0f;
-        actor.walk_cycle_secondary =
-            std::isfinite(packet_actor.walk_cycle_secondary) ? packet_actor.walk_cycle_secondary : 0.0f;
-        actor.render_variant_primary = packet_actor.render_variant_primary;
-        actor.render_variant_secondary = packet_actor.render_variant_secondary;
-        actor.render_weapon_type = packet_actor.render_weapon_type;
-        actor.render_selection_byte = packet_actor.render_selection_byte;
-        actor.render_variant_tertiary = packet_actor.render_variant_tertiary;
-        std::memcpy(
-            actor.student_visual_state.data(),
-            packet_actor.student_visual_state,
-            actor.student_visual_state.size());
-        snapshot.actors.push_back(actor);
-    }
-
-    return snapshot;
-}
-
-void PublishWorldSnapshotRuntimeInfo(const WorldSnapshotPacket& packet, std::uint64_t now_ms) {
-    UpdateRuntimeState([&](RuntimeState& state) {
-        AppendWorldSnapshot(&state, BuildWorldSnapshotRuntimeInfo(packet, now_ms));
-    });
-}
-
-void ApplyWorldSnapshotPacket(
-    const WorldSnapshotPacket& packet,
-    const TransportPeerEndpoint& from,
-    std::uint64_t now_ms) {
-    if (g_local_transport.is_host ||
-        packet.authority_participant_id == 0 ||
-        packet.authority_participant_id == g_local_transport.local_peer_id) {
-        return;
-    }
-
-    UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
-    PublishWorldSnapshotRuntimeInfo(packet, now_ms);
-}
-
-LootSnapshotRuntimeInfo BuildLootSnapshotRuntimeInfo(
-    const LootSnapshotPacket& packet,
-    std::uint64_t now_ms) {
-    const auto drop_count = static_cast<std::uint8_t>(
-        (std::min<std::uint32_t>)(packet.drop_count, kLootSnapshotMaxDrops));
-    const auto scene_kind = static_cast<WorldSceneKind>(packet.scene_kind);
-
-    LootSnapshotRuntimeInfo snapshot;
-    snapshot.valid = true;
-    snapshot.authority_participant_id = packet.authority_participant_id;
-    snapshot.received_ms = now_ms;
-    snapshot.sequence = packet.header.sequence;
-    snapshot.scene_epoch = packet.scene_epoch;
-    snapshot.run_nonce = packet.run_nonce;
-    snapshot.drop_total_count = packet.drop_total_count;
-    snapshot.truncated = (packet.snapshot_flags & LootSnapshotFlagTruncated) != 0;
-    snapshot.scene_intent = SceneIntentFromWorldSceneKind(scene_kind);
-    snapshot.drops.reserve(drop_count);
-
-    for (std::uint8_t index = 0; index < drop_count; ++index) {
-        const auto& packet_drop = packet.drops[index];
-        const auto drop_kind = LootDropKindFromPacketValue(packet_drop.drop_kind);
-        if (packet_drop.network_drop_id == 0 ||
-            packet_drop.native_type_id == 0 ||
-            !std::isfinite(packet_drop.position_x) ||
-            !std::isfinite(packet_drop.position_y) ||
-            !std::isfinite(packet_drop.radius) ||
-            packet_drop.radius < 0.0f ||
-            (drop_kind == LootDropKind::Orb && !std::isfinite(packet_drop.value)) ||
-            ((drop_kind == LootDropKind::Item || drop_kind == LootDropKind::Potion) &&
-                packet_drop.item_type_id == 0)) {
-            continue;
-        }
-
-        LootDropSnapshot drop;
-        drop.network_drop_id = packet_drop.network_drop_id;
-        drop.native_type_id = packet_drop.native_type_id;
-        drop.drop_kind = drop_kind;
-        drop.active = (packet_drop.flags & LootDropSnapshotFlagActive) != 0;
-        drop.presentation_state = packet_drop.presentation_state;
-        drop.amount = packet_drop.amount;
-        drop.amount_tier = packet_drop.amount_tier;
-        drop.value = packet_drop.value;
-        drop.motion = packet_drop.motion;
-        drop.progress = packet_drop.progress;
-        drop.item_type_id = packet_drop.item_type_id;
-        drop.item_slot = packet_drop.item_slot;
-        drop.stack_count = packet_drop.stack_count;
-        drop.actor_slot = packet_drop.actor_slot;
-        drop.world_slot = packet_drop.world_slot;
-        drop.lifetime = packet_drop.lifetime;
-        drop.position_x = packet_drop.position_x;
-        drop.position_y = packet_drop.position_y;
-        drop.radius = packet_drop.radius;
-        snapshot.drops.push_back(drop);
-    }
-
-    return snapshot;
-}
-
-void PublishLootSnapshotRuntimeInfo(const LootSnapshotPacket& packet, std::uint64_t now_ms) {
-    UpdateRuntimeState([&](RuntimeState& state) {
-        state.loot_snapshot = BuildLootSnapshotRuntimeInfo(packet, now_ms);
-    });
-}
-
-void ApplyLootSnapshotPacket(
-    const LootSnapshotPacket& packet,
-    const TransportPeerEndpoint& from,
-    std::uint64_t now_ms) {
-    if (g_local_transport.is_host ||
-        packet.authority_participant_id == 0 ||
-        packet.authority_participant_id == g_local_transport.local_peer_id) {
-        return;
-    }
-
-    UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
-    PublishLootSnapshotRuntimeInfo(packet, now_ms);
-
-    std::string queue_error;
-    (void)sdmod::QueueReplicatedLootSnapshot(SnapshotRuntimeState().loot_snapshot, &queue_error);
-}
-
-#include "multiplayer_local_transport/enemy_damage_authority.inl"
-
-#include "multiplayer_local_transport/loot_pickup_authority.inl"
-
-#include "multiplayer_local_transport/level_up_packet_sync.inl"
-
-#include "multiplayer_local_transport/spell_effect_sync.inl"
-#include "multiplayer_local_transport/air_chain_sync.inl"
-#include "multiplayer_local_transport/participant_vitals_authority.inl"
-
-using TransportPacketBuffer = std::array<char, sizeof(WorldSnapshotPacket)>;
-
-template <typename Packet, typename OwnerAccessor>
-bool SteamPacketOwnerMatches(
-    const void* data,
-    std::size_t size,
-    std::uint64_t sender_steam_id,
-    OwnerAccessor owner_accessor) {
-    if (size != sizeof(Packet)) {
-        return false;
-    }
-    Packet packet{};
-    std::memcpy(&packet, data, sizeof(packet));
-    return owner_accessor(packet) == sender_steam_id;
-}
-
-bool IsAuthorizedSteamGameplayPacket(
-    std::uint64_t sender_steam_id,
-    const void* data,
-    std::size_t size) {
-    if (data == nullptr || size < sizeof(PacketHeader)) {
-        return false;
-    }
-
-    if (!g_local_transport.is_host) {
-        return g_local_transport.configured_remote_valid &&
-               g_local_transport.configured_remote.backend ==
-                   GameplayTransportBackend::Steam &&
-               g_local_transport.configured_remote.steam_id == sender_steam_id;
-    }
-
-    PacketHeader header{};
-    std::memcpy(&header, data, sizeof(header));
-    switch (static_cast<PacketKind>(header.kind)) {
-    case PacketKind::State:
-        return SteamPacketOwnerMatches<StatePacket>(
-            data,
-            size,
-            sender_steam_id,
-            [](const StatePacket& packet) {
-                return packet.authority_participant_id == 0
-                    ? packet.participant_id
-                    : std::uint64_t{0};
-            });
-    case PacketKind::Cast:
-        return SteamPacketOwnerMatches<CastPacket>(
-            data,
-            size,
-            sender_steam_id,
-            [](const CastPacket& packet) { return packet.participant_id; });
-    case PacketKind::SpellEffectSnapshot:
-        return SteamPacketOwnerMatches<SpellEffectSnapshotPacket>(
-            data,
-            size,
-            sender_steam_id,
-            [](const SpellEffectSnapshotPacket& packet) {
-                return packet.owner_participant_id;
-            });
-    case PacketKind::AirChainSnapshot:
-        return SteamPacketOwnerMatches<AirChainSnapshotPacket>(
-            data,
-            size,
-            sender_steam_id,
-            [](const AirChainSnapshotPacket& packet) {
-                return packet.owner_participant_id;
-            });
-    case PacketKind::EnemyDamageClaim:
-        return SteamPacketOwnerMatches<EnemyDamageClaimPacket>(
-            data,
-            size,
-            sender_steam_id,
-            [](const EnemyDamageClaimPacket& packet) {
-                return packet.participant_id;
-            });
-    case PacketKind::LootPickupRequest:
-        return SteamPacketOwnerMatches<LootPickupRequestPacket>(
-            data,
-            size,
-            sender_steam_id,
-            [](const LootPickupRequestPacket& packet) {
-                return packet.participant_id;
-            });
-    case PacketKind::LevelUpChoice:
-        return SteamPacketOwnerMatches<LevelUpChoicePacket>(
-            data,
-            size,
-            sender_steam_id,
-            [](const LevelUpChoicePacket& packet) {
-                return packet.participant_id;
-            });
-    default:
-        return false;
-    }
-}
-
-void DispatchReceivedPacket(
-    const TransportPacketBuffer& packet_buffer,
-    int received,
-    const TransportPeerEndpoint& from,
-    std::uint64_t now_ms) {
-    do {
-        if (received < static_cast<int>(sizeof(PacketHeader))) {
-            continue;
-        }
-
-        PacketHeader header{};
-        std::memcpy(&header, packet_buffer.data(), sizeof(header));
-        if (!IsValidPacketHeader(header)) {
-            continue;
-        }
-
-        const auto kind = static_cast<PacketKind>(header.kind);
-        if (kind == PacketKind::State && received == static_cast<int>(sizeof(StatePacket))) {
-            StatePacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::State)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyRemoteStatePacket(packet, from, now_ms);
-            continue;
-        }
-
-        if (kind == PacketKind::Cast && received == static_cast<int>(sizeof(CastPacket))) {
-            CastPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::Cast)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyRemoteCastPacket(packet, from, now_ms);
-            continue;
-        }
-
-        if (kind == PacketKind::SpellEffectSnapshot &&
-            received == static_cast<int>(sizeof(SpellEffectSnapshotPacket))) {
-            SpellEffectSnapshotPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::SpellEffectSnapshot)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplySpellEffectSnapshotPacket(packet, from, now_ms);
-            continue;
-        }
-
-        if (kind == PacketKind::AirChainSnapshot &&
-            received == static_cast<int>(sizeof(AirChainSnapshotPacket))) {
-            AirChainSnapshotPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::AirChainSnapshot)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyAirChainSnapshotPacket(packet, from, now_ms);
-            continue;
-        }
-
-        if (kind == PacketKind::ParticipantVitalsCorrection &&
-            received == static_cast<int>(sizeof(ParticipantVitalsCorrectionPacket))) {
-            ParticipantVitalsCorrectionPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(
-                    packet.header,
-                    PacketKind::ParticipantVitalsCorrection)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyParticipantVitalsCorrectionPacket(packet, from, now_ms);
-            continue;
-        }
-
-        if (kind == PacketKind::WorldSnapshot && received == static_cast<int>(sizeof(WorldSnapshotPacket))) {
-            WorldSnapshotPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::WorldSnapshot)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyWorldSnapshotPacket(packet, from, now_ms);
-            continue;
-        }
-
-        if (kind == PacketKind::LootSnapshot && received == static_cast<int>(sizeof(LootSnapshotPacket))) {
-            LootSnapshotPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::LootSnapshot)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyLootSnapshotPacket(packet, from, now_ms);
-            continue;
-        }
-
-        if (kind == PacketKind::EnemyDamageClaim && received == static_cast<int>(sizeof(EnemyDamageClaimPacket))) {
-            EnemyDamageClaimPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::EnemyDamageClaim)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyEnemyDamageClaimPacket(packet, from, now_ms);
-            continue;
-        }
-
-        if (kind == PacketKind::EnemyDamageResult && received == static_cast<int>(sizeof(EnemyDamageResultPacket))) {
-            EnemyDamageResultPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::EnemyDamageResult)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyEnemyDamageCorrection(packet);
-            continue;
-        }
-
-        if (kind == PacketKind::LootPickupRequest && received == static_cast<int>(sizeof(LootPickupRequestPacket))) {
-            LootPickupRequestPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::LootPickupRequest)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyLootPickupRequestPacket(packet, from, now_ms);
-            continue;
-        }
-
-        if (kind == PacketKind::LootPickupResult && received == static_cast<int>(sizeof(LootPickupResultPacket))) {
-            LootPickupResultPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::LootPickupResult)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyLootPickupResultPacket(packet, from, now_ms);
-            continue;
-        }
-
-        if (kind == PacketKind::LevelUpOffer && received == static_cast<int>(sizeof(LevelUpOfferPacket))) {
-            LevelUpOfferPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::LevelUpOffer)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyLevelUpOfferPacket(packet, from, now_ms);
-            continue;
-        }
-
-        if (kind == PacketKind::LevelUpChoice && received == static_cast<int>(sizeof(LevelUpChoicePacket))) {
-            LevelUpChoicePacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::LevelUpChoice)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyLevelUpChoicePacket(packet, from, now_ms);
-            continue;
-        }
-
-        if (kind == PacketKind::LevelUpChoiceResult &&
-            received == static_cast<int>(sizeof(LevelUpChoiceResultPacket))) {
-            LevelUpChoiceResultPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::LevelUpChoiceResult)) {
-                continue;
-            }
-            g_local_transport.packets_received += 1;
-            ApplyLevelUpChoiceResultPacket(packet, from, now_ms);
-        }
-    } while (false);
-}
-
-void ReceivePackets(std::uint64_t now_ms) {
-    if (g_local_transport.backend != GameplayTransportBackend::LocalUdp) {
-        return;
-    }
-    for (int packet_index = 0; packet_index < kMaxPacketsPerTick; ++packet_index) {
-        TransportPacketBuffer packet_buffer{};
-        sockaddr_in udp_from{};
-        int from_length = sizeof(udp_from);
-        const int received = recvfrom(
-            g_local_transport.socket_handle,
-            packet_buffer.data(),
-            static_cast<int>(packet_buffer.size()),
-            0,
-            reinterpret_cast<sockaddr*>(&udp_from),
-            &from_length);
-        if (received == SOCKET_ERROR) {
-            return;
-        }
-        TransportPeerEndpoint from;
-        from.backend = GameplayTransportBackend::LocalUdp;
-        from.udp_address = udp_from;
-        DispatchReceivedPacket(packet_buffer, received, from, now_ms);
     }
 }

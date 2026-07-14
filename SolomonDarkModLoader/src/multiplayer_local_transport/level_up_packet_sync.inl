@@ -17,20 +17,22 @@ void PublishLevelUpChoiceResultRuntimeInfo(
         result.option_id = packet.option_id;
         result.apply_count = packet.apply_count;
         result.resulting_active = packet.resulting_active;
+        result.auto_picked =
+            (packet.flags & kLevelUpChoiceResultFlagAutoPicked) != 0;
         result.result_code = LevelUpChoiceResultCodeFromPacketValue(packet.result_code);
         state.last_level_up_choice_result = result;
 
         if (state.active_level_up_offer.valid &&
             state.active_level_up_offer.offer_id == packet.offer_id &&
             state.active_level_up_offer.target_participant_id == packet.target_participant_id) {
-            state.active_level_up_offer.selection_submitted = true;
             state.active_level_up_offer.selected_option_index = packet.option_index;
             state.active_level_up_offer.selected_option_id = packet.option_id;
             if (result.result_code == LevelUpChoiceResultCode::Accepted ||
-                result.result_code == LevelUpChoiceResultCode::InvalidOption ||
-                result.result_code == LevelUpChoiceResultCode::StaleOffer ||
-                result.result_code == LevelUpChoiceResultCode::ApplyFailed) {
+                result.result_code == LevelUpChoiceResultCode::StaleOffer) {
+                state.active_level_up_offer.selection_submitted = true;
                 state.active_level_up_offer.valid = false;
+            } else {
+                state.active_level_up_offer.selection_submitted = false;
             }
         }
 
@@ -52,8 +54,6 @@ void PublishLevelUpChoiceResultRuntimeInfo(
         participant->runtime.level = packet.level;
         participant->runtime.experience_current = packet.experience;
         participant->owned_progression.initialized = true;
-        participant->owned_progression.spellbook_revision += 1;
-        participant->owned_progression.statbook_revision += 1;
     });
 }
 
@@ -190,7 +190,8 @@ LevelUpChoiceResultPacket BuildLevelUpChoiceResultPacket(
     std::int32_t option_index,
     const BotSkillChoiceOption& option,
     LevelUpChoiceResultCode result_code,
-    std::uint16_t resulting_active) {
+    std::uint16_t resulting_active,
+    bool auto_picked = false) {
     LevelUpChoiceResultPacket result{};
     result.header = MakePacketHeader(PacketKind::LevelUpChoiceResult, g_local_transport.next_sequence++);
     result.authority_participant_id = g_local_transport.local_peer_id;
@@ -203,11 +204,12 @@ LevelUpChoiceResultPacket BuildLevelUpChoiceResultPacket(
     result.option_id = option.option_id;
     result.apply_count = option.apply_count;
     result.result_code = static_cast<std::uint8_t>(result_code);
+    result.flags = auto_picked ? kLevelUpChoiceResultFlagAutoPicked : 0;
     result.resulting_active = resulting_active;
     return result;
 }
 
-void SendLevelUpChoiceResult(
+LevelUpChoiceResultPacket SendLevelUpChoiceResult(
     const LevelUpChoicePacket& request,
     std::uint64_t target_participant_id,
     std::uint32_t run_nonce,
@@ -240,6 +242,7 @@ void SendLevelUpChoiceResult(
     PublishLevelUpChoiceResultRuntimeInfo(
         result,
         static_cast<std::uint64_t>(GetTickCount64()));
+    return result;
 }
 
 void ApplyLevelUpOfferPacket(
@@ -370,14 +373,12 @@ void ApplyLevelUpChoicePacket(
                        packet.option_id,
                        &selected_option)) {
             result_code = LevelUpChoiceResultCode::InvalidOption;
-            offer.resolved = true;
             offer.result_code = result_code;
         } else if (!ApplyParticipantSkillChoiceOption(
                        packet.participant_id,
                        selected_option,
                        &error_message)) {
             result_code = LevelUpChoiceResultCode::ApplyFailed;
-            offer.resolved = true;
             offer.result_code = result_code;
         } else {
             result_code = LevelUpChoiceResultCode::Accepted;
@@ -395,7 +396,7 @@ void ApplyLevelUpChoicePacket(
         }
     }
 
-    SendLevelUpChoiceResult(
+    const auto result = SendLevelUpChoiceResult(
         packet,
         packet.participant_id,
         run_nonce,
@@ -405,6 +406,9 @@ void ApplyLevelUpChoicePacket(
         selected_option,
         result_code,
         from);
+    if (result_code == LevelUpChoiceResultCode::Accepted) {
+        MarkHostLevelUpBarrierParticipantResolved(result, false, now_ms);
+    }
 
     Log(
         "Multiplayer level-up choice " +
@@ -557,5 +561,8 @@ void ApplyLevelUpChoiceResultPacket(
         " option_index=" + std::to_string(packet.option_index) +
         " option_id=" + std::to_string(packet.option_id) +
         " resulting_active=" + std::to_string(packet.resulting_active) +
+        " auto_picked=" +
+            std::to_string(
+                (packet.flags & kLevelUpChoiceResultFlagAutoPicked) != 0 ? 1 : 0) +
         " result=" + LevelUpChoiceResultCodeLabel(result_code));
 }

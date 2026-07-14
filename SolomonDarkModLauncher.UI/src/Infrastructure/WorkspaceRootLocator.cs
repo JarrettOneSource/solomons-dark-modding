@@ -1,3 +1,5 @@
+using SolomonDarkModding.Distribution;
+
 namespace SolomonDarkModLauncher.UI.Infrastructure;
 
 internal static class WorkspaceRootLocator
@@ -9,6 +11,14 @@ internal static class WorkspaceRootLocator
         var current = new DirectoryInfo(Path.GetFullPath(launcherBaseDirectory));
         while (current is not null)
         {
+            var portableMarkerPath = Path.Combine(
+                current.FullName,
+                DistributionLayout.PortableRootMarkerFileName);
+            if (File.Exists(portableMarkerPath))
+            {
+                return current.FullName;
+            }
+
             var solutionPath = Path.Combine(current.FullName, SolutionFileName);
             if (File.Exists(solutionPath))
             {
@@ -19,6 +29,7 @@ internal static class WorkspaceRootLocator
         }
 
         throw new DirectoryNotFoundException(
-            $"Could not locate {SolutionFileName} by walking up from {launcherBaseDirectory}");
+            $"Could not locate {DistributionLayout.PortableRootMarkerFileName} or " +
+            $"{SolutionFileName} by walking up from {launcherBaseDirectory}");
     }
 }

@@ -145,6 +145,20 @@ std::vector<std::uint64_t> CollectUnresolvedLevelUpOfferParticipantIds() {
         return participant_ids;
     }
 
+    if (g_local_transport.host_level_up_barrier.active) {
+        participant_ids.reserve(
+            g_local_transport.host_level_up_barrier.participants.size());
+        for (const auto& participant :
+             g_local_transport.host_level_up_barrier.participants) {
+            if (!participant.resolved && !participant.disconnected &&
+                participant.participant_id != 0) {
+                participant_ids.push_back(participant.participant_id);
+            }
+        }
+        std::sort(participant_ids.begin(), participant_ids.end());
+        return participant_ids;
+    }
+
     participant_ids.reserve(
         g_local_transport.issued_level_up_offers_by_id.size() +
         g_local_transport.pending_level_up_offer_targets_by_participant.size());
@@ -170,39 +184,13 @@ bool HasPendingLocalLevelUpChoice(const RuntimeState& runtime_state) {
            offer.target_participant_id == g_local_transport.local_peer_id;
 }
 
-std::string ResolveParticipantNameForStatus(
-    const RuntimeState& runtime_state,
-    std::uint64_t participant_id) {
-    if (participant_id == g_local_transport.local_peer_id) {
-        const auto* local = FindLocalParticipant(runtime_state);
-        if (local != nullptr && !local->name.empty()) {
-            return local->name;
-        }
-        return "You";
-    }
-
-    const auto* participant = FindParticipant(runtime_state, participant_id);
-    if (participant != nullptr && !participant->name.empty()) {
-        return participant->name;
-    }
-    return "Player " + std::to_string(participant_id);
-}
-
 std::string BuildLevelUpWaitStatusTextFromIds(
-    const RuntimeState& runtime_state,
     const std::vector<std::uint64_t>& participant_ids) {
     if (participant_ids.empty()) {
         return {};
     }
-
-    std::string text = "Waiting for skill picks: ";
-    for (std::size_t index = 0; index < participant_ids.size(); ++index) {
-        if (index != 0) {
-            text += ", ";
-        }
-        text += ResolveParticipantNameForStatus(runtime_state, participant_ids[index]);
-    }
-    return text;
+    return "Waiting on " + std::to_string(participant_ids.size()) +
+           (participant_ids.size() == 1 ? " player" : " players");
 }
 
 void RefreshLocalParticipantFromGameState() {
@@ -215,6 +203,10 @@ void RefreshLocalParticipantFromGameState() {
     const bool have_selection_state =
         TryGetGameplaySelectionDebugState(&selection_state) && selection_state.valid;
     const auto scene_intent = SceneIntentFromLocalScene();
+    if (scene_intent.kind == ParticipantSceneIntentKind::SharedHub) {
+        g_local_run_exit_latched_nonce.store(0, std::memory_order_release);
+        g_local_transport.client_host_run_exit_follow = ClientHostRunExitFollow{};
+    }
     const auto configured_name = ReadLocalDisplayName();
     SDModWorldState world_state;
     const bool have_world_state = TryGetWorldState(&world_state) && world_state.valid;
@@ -464,18 +456,9 @@ StatePacket BuildLocalStatePacket() {
         local->owned_progression,
         &packet.derived_stat_revision,
         &packet.derived_stats);
-    if (g_local_transport.is_host) {
-        const auto waiting_participant_ids = CollectUnresolvedLevelUpOfferParticipantIds();
-        packet.level_up_pause_active = waiting_participant_ids.empty() ? 0 : 1;
-        const auto waiting_count =
-            (std::min)(
-                waiting_participant_ids.size(),
-                static_cast<std::size_t>(kLevelUpWaitStatusMaxParticipants));
-        packet.level_up_waiting_count = static_cast<std::uint8_t>(waiting_count);
-        for (std::size_t index = 0; index < waiting_count; ++index) {
-            packet.level_up_waiting_participant_ids[index] = waiting_participant_ids[index];
-        }
-    }
+    PopulateHostLevelUpBarrierStatePacket(
+        &packet,
+        static_cast<std::uint64_t>(GetTickCount64()));
     const auto inventory_packet_count =
         (std::min)(
             local->owned_progression.inventory_items.size(),
@@ -552,325 +535,12 @@ StatePacket BuildLocalStatePacket() {
     packet.render_drive_effect_progress = local->runtime.render_drive_effect_progress;
     packet.render_drive_overlay_alpha = local->runtime.render_drive_overlay_alpha;
     packet.render_drive_move_blend = local->runtime.render_drive_move_blend;
+    const auto run_exit_nonce =
+        g_local_run_exit_latched_nonce.load(std::memory_order_acquire);
+    if (g_local_transport.is_host && run_exit_nonce != 0) {
+        packet.in_run = 0;
+        packet.transform_valid = 0;
+        packet.run_nonce = run_exit_nonce;
+    }
     return packet;
-}
-
-bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
-    if (packet == nullptr || !g_local_transport.is_host) {
-        return false;
-    }
-
-    SDModSceneState scene_state;
-    if (!TryGetSceneState(&scene_state) || !scene_state.valid) {
-        return false;
-    }
-
-    std::vector<SDModSceneActorState> actors;
-    if (!TryListSceneActors(&actors)) {
-        return false;
-    }
-
-    const auto scene_intent = SceneIntentFromLocalScene();
-    if (scene_intent.kind != ParticipantSceneIntentKind::SharedHub &&
-        scene_intent.kind != ParticipantSceneIntentKind::Run) {
-        return false;
-    }
-
-    RefreshWorldSceneTracking(scene_state);
-    PruneHubWorldActorNetworkIds(actors, scene_intent.kind);
-    PruneRunHostLocalWorldActorNetworkIds(actors, scene_intent.kind);
-
-    WorldSnapshotPacket built{};
-    built.header = MakePacketHeader(PacketKind::WorldSnapshot, g_local_transport.next_sequence++);
-    built.authority_participant_id = g_local_transport.local_peer_id;
-    built.scene_epoch = g_local_transport.world_scene_epoch;
-    built.scene_kind = static_cast<std::uint8_t>(WorldSceneKindFromSceneIntent(scene_intent));
-
-    const auto runtime_state = SnapshotRuntimeState();
-    const auto* local = FindLocalParticipant(runtime_state);
-    if (local != nullptr) {
-        built.run_nonce = local->runtime.run_nonce;
-    }
-
-    const bool run_scene = scene_intent.kind == ParticipantSceneIntentKind::Run;
-    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-    if (run_scene) {
-        PruneRecentRunEnemyDeathSnapshots(now_ms);
-    }
-    std::uint32_t valid_recent_death_count = 0;
-    if (run_scene) {
-        for (const auto& [network_actor_id, death_snapshot] :
-             g_local_transport.recent_run_enemy_deaths_by_network_id) {
-            if (network_actor_id != 0 &&
-                death_snapshot.native_type_id != 0 &&
-                std::isfinite(death_snapshot.max_hp) &&
-                death_snapshot.max_hp > 0.0f) {
-                valid_recent_death_count += 1;
-            }
-        }
-    }
-    constexpr std::uint32_t kWorldSnapshotRecentDeathReservedSlots = 16;
-    const std::uint32_t reserved_recent_death_slots =
-        run_scene
-            ? (std::min<std::uint32_t>)(
-                  valid_recent_death_count,
-                  (std::min<std::uint32_t>)(kWorldSnapshotRecentDeathReservedSlots, kWorldSnapshotMaxActors))
-            : 0;
-    const std::uint32_t live_actor_snapshot_budget =
-        kWorldSnapshotMaxActors > reserved_recent_death_slots
-            ? kWorldSnapshotMaxActors - reserved_recent_death_slots
-            : 0;
-    std::unordered_set<std::uint64_t> included_actor_ids;
-    std::uint32_t total_actor_count = 0;
-    for (const auto& actor : actors) {
-        if (!ShouldReplicateWorldActor(actor, scene_intent.kind)) {
-            continue;
-        }
-        if (run_scene &&
-            actor.tracked_enemy &&
-            actor.dead &&
-            HasRecentRunEnemyDeathSnapshotForActor(actor.actor_address)) {
-            continue;
-        }
-        std::uint64_t network_actor_id = 0;
-        if (run_scene) {
-            std::uint32_t spawn_serial = 0;
-            if (TryGetRunLifecycleEnemySpawnSerial(actor.actor_address, &spawn_serial)) {
-                g_local_transport.run_host_local_world_actor_ids_by_address.erase(actor.actor_address);
-                network_actor_id = BuildRunWorldActorNetworkId(spawn_serial);
-            } else {
-                network_actor_id = AllocateRunHostLocalWorldActorNetworkId(actor);
-            }
-        } else {
-            network_actor_id = AllocateHubWorldActorNetworkId(actor);
-        }
-        if (network_actor_id == 0) {
-            continue;
-        }
-        included_actor_ids.insert(network_actor_id);
-        total_actor_count += 1;
-        if (built.actor_count >= live_actor_snapshot_budget) {
-            continue;
-        }
-
-        auto& snapshot = built.actors[built.actor_count];
-        snapshot.network_actor_id = network_actor_id;
-        snapshot.native_type_id = actor.object_type_id;
-        snapshot.enemy_type = actor.enemy_type;
-        snapshot.actor_slot = actor.actor_slot;
-        snapshot.world_slot = actor.world_slot;
-        snapshot.target_actor_slot = -1;
-        snapshot.target_world_slot = -1;
-        if (run_scene && actor.tracked_enemy) {
-            snapshot.flags |= WorldActorSnapshotFlagTargetAuthoritative;
-            snapshot.target_participant_id = ResolveRunEnemyTargetParticipantId(actor.actor_address);
-            (void)PopulateRunEnemyNativeTargetSnapshot(actor.actor_address, &snapshot);
-        }
-        snapshot.anim_drive_state = actor.anim_drive_state;
-        snapshot.position_x = actor.x;
-        snapshot.position_y = actor.y;
-        snapshot.radius = actor.radius;
-        snapshot.heading = ReadActorHeadingOrZero(actor.actor_address);
-        snapshot.hp = std::isfinite(actor.hp) ? actor.hp : 0.0f;
-        snapshot.max_hp = std::isfinite(actor.max_hp) ? actor.max_hp : 0.0f;
-        PopulateWorldActorPresentationSnapshot(
-            actor.actor_address,
-            actor.object_type_id,
-            scene_intent.kind,
-            actor.tracked_enemy,
-            &snapshot);
-        if (actor.dead) {
-            snapshot.flags |= WorldActorSnapshotFlagDead;
-        }
-        if (actor.tracked_enemy) {
-            snapshot.flags |= WorldActorSnapshotFlagTrackedEnemy;
-        }
-        if (run_scene && IsRunStaticLayoutActor(actor)) {
-            snapshot.flags |= WorldActorSnapshotFlagRunStatic;
-        }
-        if (run_scene &&
-            IsReplicatedRunPlayerCreatedActorType(actor.object_type_id)) {
-            snapshot.flags |= WorldActorSnapshotFlagPlayerCreated;
-        }
-        if (run_scene) {
-            snapshot.flags |= WorldActorSnapshotFlagLifecycleOwned;
-        }
-        built.actor_count += 1;
-    }
-    if (run_scene) {
-        for (const auto& [network_actor_id, death_snapshot] :
-             g_local_transport.recent_run_enemy_deaths_by_network_id) {
-            if (network_actor_id == 0 ||
-                included_actor_ids.find(network_actor_id) != included_actor_ids.end() ||
-                death_snapshot.native_type_id == 0 ||
-                !std::isfinite(death_snapshot.max_hp) ||
-                death_snapshot.max_hp <= 0.0f) {
-                continue;
-            }
-            total_actor_count += 1;
-            if (built.actor_count >= kWorldSnapshotMaxActors) {
-                continue;
-            }
-
-            auto& snapshot = built.actors[built.actor_count];
-            snapshot.network_actor_id = network_actor_id;
-            snapshot.native_type_id = death_snapshot.native_type_id;
-            snapshot.enemy_type = death_snapshot.enemy_type;
-            snapshot.actor_slot = -1;
-            snapshot.world_slot = -1;
-            snapshot.target_actor_slot = -1;
-            snapshot.target_world_slot = -1;
-            snapshot.flags =
-                WorldActorSnapshotFlagDead |
-                WorldActorSnapshotFlagTrackedEnemy |
-                WorldActorSnapshotFlagLifecycleOwned;
-            snapshot.position_x = death_snapshot.position_x;
-            snapshot.position_y = death_snapshot.position_y;
-            snapshot.radius = death_snapshot.radius;
-            snapshot.heading = death_snapshot.heading;
-            snapshot.hp = 0.0f;
-            snapshot.max_hp = death_snapshot.max_hp;
-            built.actor_count += 1;
-        }
-    }
-    built.actor_total_count = static_cast<std::uint8_t>((std::min<std::uint32_t>)(total_actor_count, 0xFFu));
-    if (total_actor_count > built.actor_count) {
-        built.snapshot_flags |= WorldSnapshotFlagTruncated;
-    }
-
-    *packet = built;
-    return true;
-}
-
-bool BuildLocalLootSnapshotPacket(LootSnapshotPacket* packet) {
-    if (packet == nullptr || !g_local_transport.is_host) {
-        return false;
-    }
-
-    SDModSceneState scene_state;
-    if (!TryGetSceneState(&scene_state) || !scene_state.valid) {
-        return false;
-    }
-
-    std::vector<SDModSceneActorState> actors;
-    if (!TryListSceneActors(&actors)) {
-        return false;
-    }
-
-    const auto scene_intent = SceneIntentFromLocalScene();
-    if (scene_intent.kind != ParticipantSceneIntentKind::Run) {
-        PruneRunLootDropNetworkIds(actors, scene_intent.kind);
-        return false;
-    }
-
-    RefreshWorldSceneTracking(scene_state);
-    PruneRunLootDropNetworkIds(actors, scene_intent.kind);
-
-    LootSnapshotPacket built{};
-    built.header = MakePacketHeader(PacketKind::LootSnapshot, g_local_transport.next_sequence++);
-    built.authority_participant_id = g_local_transport.local_peer_id;
-    built.scene_epoch = g_local_transport.world_scene_epoch;
-    built.scene_kind = static_cast<std::uint8_t>(WorldSceneKindFromSceneIntent(scene_intent));
-
-    const auto runtime_state = SnapshotRuntimeState();
-    const auto* local = FindLocalParticipant(runtime_state);
-    if (local != nullptr) {
-        built.run_nonce = local->runtime.run_nonce;
-    }
-
-    std::uint32_t total_drop_count = 0;
-    for (const auto& actor : actors) {
-        if (!ShouldReplicateLootDropActor(actor, scene_intent.kind)) {
-            continue;
-        }
-
-        const auto network_drop_id = AllocateRunLootDropNetworkId(actor);
-        if (network_drop_id == 0) {
-            continue;
-        }
-        if (g_local_transport.accepted_loot_pickup_drop_ids.find(network_drop_id) !=
-            g_local_transport.accepted_loot_pickup_drop_ids.end()) {
-            continue;
-        }
-
-        LootDropSnapshotPacketState snapshot{};
-        if (!TryPopulateLootDropSnapshot(actor, network_drop_id, &snapshot)) {
-            continue;
-        }
-        if ((snapshot.flags & LootDropSnapshotFlagActive) == 0) {
-            continue;
-        }
-
-        total_drop_count += 1;
-        if (built.drop_count >= kLootSnapshotMaxDrops) {
-            continue;
-        }
-
-        built.drops[built.drop_count] = snapshot;
-        built.drop_count += 1;
-    }
-
-    built.drop_total_count = static_cast<std::uint8_t>((std::min<std::uint32_t>)(total_drop_count, 0xFFu));
-    if (total_drop_count > built.drop_count) {
-        built.snapshot_flags |= LootSnapshotFlagTruncated;
-    }
-
-    *packet = built;
-    return true;
-}
-
-std::uint64_t LootSnapshotIntervalForPacket(const LootSnapshotPacket& packet) {
-    for (std::size_t index = 0; index < packet.drop_count; ++index) {
-        const auto& drop = packet.drops[index];
-        const auto drop_kind = LootDropKindFromPacketValue(drop.drop_kind);
-        const bool active = (drop.flags & LootDropSnapshotFlagActive) != 0;
-        if (!active) {
-            continue;
-        }
-        if (drop_kind == LootDropKind::Gold || drop_kind == LootDropKind::Orb) {
-            return kLocalTransportAnimatedLootSnapshotIntervalMs;
-        }
-    }
-    return kLocalTransportLootSnapshotIntervalMs;
-}
-
-float ClampEnemyHp(float hp, float max_hp) {
-    if (!std::isfinite(hp)) {
-        return 0.0f;
-    }
-    if (hp < 0.0f) {
-        return 0.0f;
-    }
-    if (std::isfinite(max_hp) && max_hp > 0.0f && hp > max_hp) {
-        return max_hp;
-    }
-    return hp;
-}
-
-float DistanceSquared(float ax, float ay, float bx, float by) {
-    const float dx = ax - bx;
-    const float dy = ay - by;
-    return dx * dx + dy * dy;
-}
-
-bool TryWriteRunEnemyHealth(uintptr_t actor_address, float hp, float max_hp) {
-    if (actor_address == 0 ||
-        kEnemyCurrentHpOffset == 0 ||
-        kEnemyMaxHpOffset == 0 ||
-        !std::isfinite(max_hp) ||
-        max_hp <= 0.0f) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    const float clamped_hp = ClampEnemyHp(hp, max_hp);
-    // Run enemies own health directly on their arena-actor object.  Do not
-    // probe the wizard-only actor+0x200 progression seam here: on stock enemy
-    // classes that field has unrelated meaning, and a readable pointer is not
-    // proof that it names a progression object.  Writing HP through that
-    // pointer corrupted native callbacks/heap metadata with values such as
-    // 0x42200000 (40.0f) during clustered spell tests.
-    return
-        memory.TryWriteField(actor_address, kEnemyMaxHpOffset, max_hp) &&
-        memory.TryWriteField(actor_address, kEnemyCurrentHpOffset, clamped_hp);
 }

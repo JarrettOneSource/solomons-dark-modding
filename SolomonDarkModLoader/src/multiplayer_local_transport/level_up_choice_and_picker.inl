@@ -71,7 +71,8 @@ bool ResolveHostSelfLevelUpChoice(
     std::uint64_t offer_id,
     std::int32_t resolved_option_index,
     const LevelUpChoiceOptionState& selected_option,
-    std::string* error_message) {
+    std::string* error_message,
+    bool auto_picked = false) {
     auto fail = [&](std::string message) {
         if (error_message != nullptr) {
             *error_message = std::move(message);
@@ -126,6 +127,7 @@ bool ResolveHostSelfLevelUpChoice(
     // synchronized level-up pause clears for both peers, and retire the active
     // offer locally without any wire round-trip.
     issued->second.resolved = true;
+    issued->second.auto_picked = auto_picked;
     issued->second.result_code = LevelUpChoiceResultCode::Accepted;
     g_local_transport.pending_level_up_offer_targets_by_participant.erase(
         g_local_transport.local_peer_id);
@@ -160,7 +162,8 @@ bool ResolveHostSelfLevelUpChoice(
         resolved_option_index,
         option,
         LevelUpChoiceResultCode::Accepted,
-        resulting_active);
+        resulting_active,
+        auto_picked);
     const auto endpoints = BuildKnownSendEndpoints();
     for (const auto& endpoint : endpoints) {
         SendPacketToEndpoint(result, endpoint);
@@ -168,12 +171,17 @@ bool ResolveHostSelfLevelUpChoice(
     PublishLevelUpChoiceResultRuntimeInfo(
         result,
         static_cast<std::uint64_t>(GetTickCount64()));
+    MarkHostLevelUpBarrierParticipantResolved(
+        result,
+        auto_picked,
+        static_cast<std::uint64_t>(GetTickCount64()));
 
     Log(
         "Multiplayer host-self level-up choice resolved and broadcast. offer_id=" +
         std::to_string(offer_id) +
         " option_index=" + std::to_string(resolved_option_index) +
         " option_id=" + std::to_string(selected_option.option_id) +
+        " auto_picked=" + std::to_string(auto_picked ? 1 : 0) +
         " peer_endpoint_count=" + std::to_string(endpoints.size()));
     return true;
 }

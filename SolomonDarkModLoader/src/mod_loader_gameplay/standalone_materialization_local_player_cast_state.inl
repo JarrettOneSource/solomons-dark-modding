@@ -88,6 +88,141 @@ std::string DescribeLocalPlayerRunCastPrimeSnapshot(
                 : UnreadableMemoryFieldText());
 }
 
+bool LocalPlayerRunEquipVisualLanesReady(uintptr_t equip_runtime_address) {
+    if (equip_runtime_address == 0) {
+        return false;
+    }
+
+    const auto primary = ReadEquipVisualLaneState(
+        equip_runtime_address,
+        kActorEquipRuntimeVisualLinkPrimaryOffset);
+    const auto secondary = ReadEquipVisualLaneState(
+        equip_runtime_address,
+        kActorEquipRuntimeVisualLinkSecondaryOffset);
+    return
+        primary.current_object_type_id == kStandaloneWizardRobeVisualTypeId &&
+        secondary.current_object_type_id == kStandaloneWizardHatVisualTypeId;
+}
+
+bool EnsureLocalPlayerRunEquipVisualLanes(
+    uintptr_t gameplay_address,
+    uintptr_t actor_address,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (gameplay_address == 0 || actor_address == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Local run visual repair requires a live gameplay scene and actor.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t equip_runtime_address = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorEquipRuntimeStateOffset,
+            &equip_runtime_address) ||
+        equip_runtime_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Local run actor has no equip runtime.";
+        }
+        return false;
+    }
+    if (LocalPlayerRunEquipVisualLanesReady(equip_runtime_address)) {
+        return true;
+    }
+
+    const auto gameplay_primary = ReadEquipVisualLaneState(
+        gameplay_address,
+        kGameplayVisualSinkPrimaryOffset);
+    const auto gameplay_secondary = ReadEquipVisualLaneState(
+        gameplay_address,
+        kGameplayVisualSinkSecondaryOffset);
+    uintptr_t descriptor_source = 0;
+    for (const auto* lane : {&gameplay_primary, &gameplay_secondary}) {
+        if (lane->current_object_address != 0 &&
+            (lane->current_object_type_id == kStandaloneWizardHatVisualTypeId ||
+             lane->current_object_type_id == kStandaloneWizardRobeVisualTypeId)) {
+            descriptor_source = lane->current_object_address;
+            break;
+        }
+    }
+    if (descriptor_source == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Gameplay-owned local robe/hat descriptor is unavailable.";
+        }
+        return false;
+    }
+
+    std::array<std::uint8_t, kActorHubVisualDescriptorBlockSize> descriptor{};
+    if (!memory.TryRead(
+            descriptor_source + kStandaloneWizardVisualLinkColorBlockOffset,
+            descriptor.data(),
+            descriptor.size())) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay-owned local visual descriptor is unreadable.";
+        }
+        return false;
+    }
+
+    const auto robe_ctor =
+        memory.ResolveGameAddressOrZero(kStandaloneWizardVisualLinkPrimaryCtor);
+    const auto hat_ctor =
+        memory.ResolveGameAddressOrZero(kStandaloneWizardVisualLinkSecondaryCtor);
+    if (robe_ctor == 0 || hat_ctor == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Local run robe/hat constructors are unavailable.";
+        }
+        return false;
+    }
+
+    auto primary = ReadEquipVisualLaneState(
+        equip_runtime_address,
+        kActorEquipRuntimeVisualLinkPrimaryOffset);
+    auto secondary = ReadEquipVisualLaneState(
+        equip_runtime_address,
+        kActorEquipRuntimeVisualLinkSecondaryOffset);
+    if (primary.current_object_type_id != kStandaloneWizardRobeVisualTypeId &&
+        !AttachBuiltDescriptorToEquipVisualLane(
+            actor_address,
+            kActorEquipRuntimeVisualLinkPrimaryOffset,
+            robe_ctor,
+            descriptor,
+            "local_player_primary",
+            error_message)) {
+        return false;
+    }
+    if (secondary.current_object_type_id != kStandaloneWizardHatVisualTypeId &&
+        !AttachBuiltDescriptorToEquipVisualLane(
+            actor_address,
+            kActorEquipRuntimeVisualLinkSecondaryOffset,
+            hat_ctor,
+            descriptor,
+            "local_player_secondary",
+            error_message)) {
+        return false;
+    }
+
+    if (!LocalPlayerRunEquipVisualLanesReady(equip_runtime_address)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Local run actor robe/hat lanes remained incomplete after native attach.";
+        }
+        return false;
+    }
+
+    Log(
+        "[player-cast-prime] hydrated local run equip visual lanes. actor=" +
+        HexString(actor_address) +
+        " equip_runtime=" + HexString(equip_runtime_address) +
+        " descriptor_source=" + HexString(descriptor_source));
+    return true;
+}
+
 multiplayer::MultiplayerCharacterProfile BuildLocalPlayerRunCastProfile(
     const multiplayer::ParticipantInfo& local_participant) {
     auto profile = local_participant.character_profile;
@@ -172,9 +307,12 @@ bool MaybePrimeLocalPlayerRunCastState(
         before.progression_spell_id > 0;
     const bool equip_runtime_ready =
         before.equip_runtime != 0;
+    const bool equip_visual_lanes_ready =
+        LocalPlayerRunEquipVisualLanesReady(before.equip_runtime);
     if (!signature_changed &&
         progression_cache_ready &&
         equip_runtime_ready &&
+        equip_visual_lanes_ready &&
         selection_ready &&
         spell_ready) {
         return false;
@@ -270,6 +408,23 @@ bool MaybePrimeLocalPlayerRunCastState(
                 "} after_refresh={" +
                 DescribeLocalPlayerRunCastPrimeSnapshot(after_handle_refresh) +
                 "} after_repair={" +
+                DescribeLocalPlayerRunCastPrimeSnapshot(after_equip_ready) + "}");
+        }
+        return false;
+    }
+
+    std::string equip_visual_error;
+    if (!EnsureLocalPlayerRunEquipVisualLanes(
+            gameplay_address,
+            actor_address,
+            &equip_visual_error)) {
+        if (now_ms - s_last_failure_log_ms >= 500) {
+            s_last_failure_log_ms = now_ms;
+            Log(
+                "[player-cast-prime] local equip visual hydration failed. error=" +
+                equip_visual_error +
+                " before={" + DescribeLocalPlayerRunCastPrimeSnapshot(before) +
+                "} after_equip={" +
                 DescribeLocalPlayerRunCastPrimeSnapshot(after_equip_ready) + "}");
         }
         return false;
@@ -443,6 +598,7 @@ bool MaybePrimeLocalPlayerRunCastState(
         after.progression_inner != 0 &&
         after.progression_runtime == after.progression_inner &&
         after.equip_runtime != 0 &&
+        LocalPlayerRunEquipVisualLanesReady(after.equip_runtime) &&
         after.selection_pointer != 0 &&
         after.actor_selection_state == selection_state &&
         after.progression_spell_readable &&

@@ -269,6 +269,7 @@ def main() -> int:
             args.timeout,
             god_mode=True,
             manual_combat=False,
+            prearm_manual_spawner=True,
             wave_override=PHYSICAL_WAVE,
         )
         output["launch"] = startup["launch"]

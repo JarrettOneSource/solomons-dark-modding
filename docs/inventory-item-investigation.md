@@ -624,10 +624,12 @@ runtime vitals and to the client's local HP/MP presentation. Item/potion
 carrier pickup now uses the same host request/result boundary for type `0x7DD`:
 the host snapshots `drop + 0x148` held-item metadata, clears that held-item
 pointer on accepted pickup, and credits the requesting participant's replicated
-inventory ledger by item type, slot, and stack count. Powerup, spellbook, and
-statbook results still need to credit the owning participant's state through the
-same participant-owned boundary. Real native item-object insertion into
-per-participant inventory roots is also still pending.
+inventory state by item type, slot, and stack count. The verified potion path
+now transfers a native held potion into the owning client's active inventory
+through `Inventory_InsertOrStackItem`, confirms the native stack delta, and
+deduplicates by run/drop identity. Powerup, arbitrary item/equipment,
+spellbook, and statbook reward paths still need their own participant-owned
+native mutation seams.
 
 `python3 tools/verify_multiplayer_gold_pickup_authority.py --attempts 3` is the
 focused proof for that gold slice. The latest run verified amount/tier identity,
@@ -640,17 +642,17 @@ focused proof for health/mana orb pickup authority. The latest run verified both
 resource kinds, accepted host resource deltas, host participant-vital update,
 client local HP/MP convergence, metadata despawn, and duplicate rejection.
 
-### Remaining gaps after pickup pass
+### Remaining gaps after native potion insertion
 
-- exact item materialization behind the owner vtable method at `+0x140` remains
-  unresolved
-- exact potion drop factory behind the owner vtable method at `+0x148` remains
-  unresolved
-- participant inventory implementation still needs a storage / lifetime contract
-  for per-participant `SdItemListRoot` instances and equip sinks
-- participant spellbook and statbook state need the same storage / lifetime
-  contract as inventory, because loot and progression can mutate those books
-  independently per player
+- arbitrary item materialization/insertion behind the owner vtable method at
+  `+0x140` remains unresolved; the potion carrier/factory and stock potion
+  insert/stack path are now proven
+- remote observer/host views still use replicated rows rather than a second
+  stock-native inventory root; ownership-sensitive UI/equip code must stay on
+  the owning client's real root
+- per-run owner-authored spellbook/statbook rows and native participant-clone
+  reconciliation are verified; durable storage/lifetime rules are still needed
+  before loot or progression can mutate those books independently across runs
 - shop / trader purchase paths still need a separate economy ownership pass;
   `0x0056BF70` is already visible as a likely future seam because it spends
   global gold through `Gold_ChangeGlobal(-price, 0)` and inserts into the active
@@ -661,12 +663,13 @@ client local HP/MP convergence, metadata despawn, and duplicate rejection.
 - extend the reliable multiplayer loot-drop lifecycle packet/event contract
   beyond verified gold, health/mana orb, and item/potion carrier request/result
   slices to powerup carriers
-- implement a loader-side participant inventory state object with an
-  `SdItemListRoot`-compatible root and per-participant gold
-- extend that participant state object with spellbook and statbook ownership
-  before rewards/progression can mutate those books in multiplayer
-- replace the item/potion metadata ledger credit with real item-object insertion
-  once participant-owned `SdItemListRoot`-compatible roots exist
+- generalize the proven owner-client potion transfer into typed native
+  insertion policies for real equipment/item classes, without treating a
+  replicated row as a native object
+- extend the verified per-run spellbook/statbook ownership into durable reward
+  and persistence rules before new loot paths mutate those books
+- preserve the verified potion insert/stack path while adding exact native
+  object construction, ownership, and lifetime rules for non-potion items
 - hook `GoldActor_TickPickup (0x005E66B0)` so physical walk-over pickup routes
   through the verified request/result path instead of global currency mutation
 - hook `Orb_TickPickup (0x005E62E0)` only if physical walk-over orb pickup must

@@ -13,6 +13,7 @@ from PIL import Image
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
 EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
@@ -149,21 +150,54 @@ def activate_window(hwnd: int, delay_ms: int) -> None:
         wintypes.UINT,
     ]
     user32.SetWindowPos.restype = wintypes.BOOL
+    kernel32.GetCurrentThreadId.argtypes = []
+    kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+    user32.AttachThreadInput.restype = wintypes.BOOL
+    user32.SetFocus.argtypes = [wintypes.HWND]
+    user32.SetFocus.restype = wintypes.HWND
+    user32.SetActiveWindow.argtypes = [wintypes.HWND]
+    user32.SetActiveWindow.restype = wintypes.HWND
 
     hwnd_topmost = wintypes.HWND(-1)
     swp_nosize = 0x0001
     swp_nomove = 0x0002
     swp_showwindow = 0x0040
 
+    current_thread = kernel32.GetCurrentThreadId()
     foreground = user32.GetForegroundWindow()
-    if foreground and foreground != hwnd:
-        user32.ShowWindow(foreground, 6)
-
-    user32.ShowWindow(hwnd, 9)
-    user32.BringWindowToTop(hwnd)
-    user32.SetWindowPos(hwnd, hwnd_topmost, 0, 0, 0, 0, swp_nomove | swp_nosize | swp_showwindow)
-    user32.SetForegroundWindow(hwnd)
+    foreground_thread = (
+        user32.GetWindowThreadProcessId(foreground, None) if foreground else 0
+    )
+    target_thread = user32.GetWindowThreadProcessId(hwnd, None)
+    attached_threads: list[int] = []
+    for thread_id in (foreground_thread, target_thread):
+        if thread_id and thread_id != current_thread and thread_id not in attached_threads:
+            if user32.AttachThreadInput(current_thread, thread_id, True):
+                attached_threads.append(thread_id)
+    try:
+        user32.ShowWindow(hwnd, 9)
+        user32.BringWindowToTop(hwnd)
+        user32.SetWindowPos(
+            hwnd,
+            hwnd_topmost,
+            0,
+            0,
+            0,
+            0,
+            swp_nomove | swp_nosize | swp_showwindow,
+        )
+        user32.SetActiveWindow(hwnd)
+        user32.SetFocus(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        for thread_id in reversed(attached_threads):
+            user32.AttachThreadInput(current_thread, thread_id, False)
     time.sleep(max(0, delay_ms) / 1000.0)
+    if user32.GetForegroundWindow() != hwnd:
+        raise RuntimeError(f"Windows refused to activate window handle {hwnd}.")
 
 
 def capture_window_from_screen(window: WindowInfo, output_path: pathlib.Path) -> None:

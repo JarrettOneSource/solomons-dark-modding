@@ -317,7 +317,7 @@ void ApplyAirChainSnapshotPacket(
         g_local_transport.last_air_chain_packet_sequence_by_participant[
             packet.owner_participant_id];
     if (last_sequence != 0 &&
-        static_cast<std::int32_t>(packet.header.sequence - last_sequence) <= 0) {
+        !IsPacketSequenceNewer(packet.header.sequence, last_sequence)) {
         return;
     }
     last_sequence = packet.header.sequence;

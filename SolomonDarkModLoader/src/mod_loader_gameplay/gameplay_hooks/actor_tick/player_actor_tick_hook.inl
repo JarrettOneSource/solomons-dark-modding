@@ -76,6 +76,75 @@ bool PumpQueuedBotNativeActionManager(
     return pumped;
 }
 
+void RepairInvalidNativeMeditationTransientState(uintptr_t actor_address) {
+    if (actor_address == 0 ||
+        kActorProgressionRuntimeStateOffset == 0 ||
+        kProgressionMeditationIdleTicksOffset == 0 ||
+        kProgressionMeditationIdleElapsedTicksOffset == 0 ||
+        kProgressionMeditationRecoveryRampTicksOffset == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t progression_address = 0;
+    std::int32_t idle_ticks = -1;
+    std::int32_t idle_elapsed_ticks = 0;
+    std::int32_t recovery_ramp_ticks = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorProgressionRuntimeStateOffset,
+            &progression_address) ||
+        progression_address == 0 ||
+        !memory.TryReadField(
+            progression_address,
+            kProgressionMeditationIdleTicksOffset,
+            &idle_ticks) ||
+        !memory.TryReadField(
+            progression_address,
+            kProgressionMeditationIdleElapsedTicksOffset,
+            &idle_elapsed_ticks) ||
+        !memory.TryReadField(
+            progression_address,
+            kProgressionMeditationRecoveryRampTicksOffset,
+            &recovery_ramp_ticks) ||
+        idle_ticks < -1 ||
+        idle_ticks > 1000000) {
+        return;
+    }
+
+    const auto maximum_ramp_ticks = (std::max)(idle_ticks, 0);
+    const bool repair_idle_elapsed = idle_elapsed_ticks < 0;
+    const bool repair_recovery_ramp =
+        recovery_ramp_ticks < 0 || recovery_ramp_ticks > maximum_ramp_ticks;
+    if (!repair_idle_elapsed && !repair_recovery_ramp) {
+        return;
+    }
+
+    bool repaired = true;
+    if (repair_idle_elapsed) {
+        repaired = memory.TryWriteField<std::int32_t>(
+                       progression_address,
+                       kProgressionMeditationIdleElapsedTicksOffset,
+                       0) &&
+                   repaired;
+    }
+    if (repair_recovery_ramp) {
+        repaired = memory.TryWriteField<std::int32_t>(
+                       progression_address,
+                       kProgressionMeditationRecoveryRampTicksOffset,
+                       0) &&
+                   repaired;
+    }
+    Log(
+        "[gameplay] Meditation transient state repair. actor=" +
+        HexString(actor_address) +
+        " progression=" + HexString(progression_address) +
+        " idle_ticks=" + std::to_string(idle_ticks) +
+        " idle_elapsed_before=" + std::to_string(idle_elapsed_ticks) +
+        " ramp_before=" + std::to_string(recovery_ramp_ticks) +
+        " ok=" + std::to_string(repaired ? 1 : 0));
+}
+
 void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     const auto original =
         GetX86HookTrampoline<PlayerActorTickFn>(g_gameplay_keyboard_injection.player_actor_tick_hook);
@@ -109,6 +178,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         local_actor_address != 0 &&
         local_actor_address == actor_address;
     const auto native_tick_now_ms = static_cast<std::uint64_t>(GetTickCount64());
+
+    RepairInvalidNativeMeditationTransientState(actor_address);
 
     if (multiplayer::ShouldPauseGameplayForLevelUpSelection()) {
         static std::uint64_t s_last_level_up_pause_log_ms = 0;
@@ -796,8 +867,11 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
 
     if (local_player_actor) {
         MaybeLogLocalPlayerCastProbe(gameplay_address_for_pump, actor_address, false);
+        ScopedLocalPlayerRushMovementScale rush_movement_scale(actor_address);
+        original(self);
+    } else {
+        original(self);
     }
-    original(self);
     if (local_player_actor) {
         MaybeLogLocalPlayerCastProbe(gameplay_address_for_pump, actor_address, true);
         ResolveWizardParticipantActorCollisions();

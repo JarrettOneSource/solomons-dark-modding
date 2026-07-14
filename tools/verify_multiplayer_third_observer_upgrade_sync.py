@@ -911,6 +911,7 @@ def main() -> int:
             god_mode=True,
             tile_windows=False,
             test_survival_boneyard_override=FLAT_BONEYARD,
+            test_blank_boneyard=True,
         )
         output["hub_ready"] = wait_for_all_relationships("hub", args.timeout)
         output["bots_disabled"] = disable_all_bots(args.timeout)

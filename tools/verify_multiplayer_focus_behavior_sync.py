@@ -390,6 +390,21 @@ emit('wave_counter', state and state.wave_counter or 0)
             for state in last.values()
         ):
             result["states"] = last
+            result["manual_spawner_release"] = {}
+            release_code = """
+local function emit(k,v) print(k .. '=' .. tostring(v)) end
+local ok, active = sd.gameplay.set_manual_enemy_spawner_test_mode(false)
+emit('ok', ok)
+emit('active', active)
+"""
+            for label, pipe_name in (("host", HOST_PIPE), ("client", CLIENT_PIPE)):
+                release = parse_key_values(lua(pipe_name, release_code, timeout=8.0))
+                if release.get("ok") != "true" or release.get("active") != "false":
+                    raise VerifyFailure(
+                        f"{label} could not release manual-spawner control "
+                        f"suppression after combat prelude: {release}"
+                    )
+                result["manual_spawner_release"][label] = release
             return result
         time.sleep(0.1)
     raise VerifyFailure(f"native combat prelude did not activate: {last}")
@@ -410,6 +425,7 @@ def main() -> int:
             args.timeout,
             god_mode=False,
             manual_combat=False,
+            prearm_manual_spawner=True,
         )
         output["launch"] = startup["launch"]
         output["combat_prelude"] = enable_unsuppressed_combat_prelude(args.timeout)

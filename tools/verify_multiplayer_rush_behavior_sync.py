@@ -56,6 +56,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "runtime/multiplayer_rush_behavior_sync.json"
 NATIVE_RUSH_EVIDENCE = ROOT / "runtime/live_bot_native_speed_probe.json"
 RELEASE_LOADER = ROOT / "bin/Release/Win32/SolomonDarkModLoader.dll"
+SEND_WINDOW_KEYS = ROOT / "scripts/send_window_keys.py"
 RUSH_ROW = 67
 RUSH_MAX_RANK = 8
 RUSH_MAX_SPEED_PERCENT = 50.0
@@ -67,9 +68,10 @@ COMBINED_MAX_SPEED_MULTIPLIER = (
 )
 RUSH_BATCH_SIZE = 2
 DRIVE_TICKS = 40
+KEYBOARD_HOLD_MS = 2200
 START_X = 621.5
 START_Y = 3512.1
-PARK_X = 1000.0
+PARK_X = 1500.0
 PARK_Y = 3300.0
 
 
@@ -103,6 +105,44 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def windows_path(path: Path) -> str:
+    completed = subprocess.run(
+        ["wslpath", "-w", str(path)],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=5.0,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise VerifyFailure(f"wslpath failed for {path}: {completed.stdout}")
+    return completed.stdout.strip()
+
+
+def hold_real_key(pid: int, key: str, hold_ms: int, timeout: float) -> str:
+    script = windows_path(SEND_WINDOW_KEYS)
+    command = (
+        f"py -3 {json.dumps(script)} --pid {pid} --activate "
+        f"--activation-delay-ms 300 --hold-ms {hold_ms} --post-delay-ms 100 {key}"
+    )
+    completed = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", command],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=timeout,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise VerifyFailure(
+            f"real keyboard helper failed for pid {pid} ({completed.returncode}): "
+            f"{completed.stdout}"
+        )
+    return completed.stdout.strip()
+
+
 def load_native_rush_evidence(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise VerifyFailure(f"native Rush evidence is missing: {path}")
@@ -113,6 +153,16 @@ def load_native_rush_evidence(path: Path) -> dict[str, Any]:
     behavior = evidence.get("rush_behavior") or {}
     application = evidence.get("rush_application") or {}
     fresh_bundle = evidence.get("fresh_bundle") or {}
+    native_globals = evidence.get("native_globals") or {}
+    native_global_values = {
+        "input_acceleration_divisor": float(
+            native_globals.get("input_acceleration_divisor", math.nan)
+        ),
+        "speed_scalar": float(native_globals.get("speed_scalar", math.nan)),
+        "velocity_damping": float(
+            native_globals.get("velocity_damping", math.nan)
+        ),
+    }
     checks = {
         "probe_passed": evidence.get("passed") is True,
         "fresh_bundle_matched": fresh_bundle.get("matches") is True,
@@ -146,6 +196,18 @@ def load_native_rush_evidence(path: Path) -> dict[str, Any]:
             rel_tol=0.0,
             abs_tol=0.003,
         ),
+        "native_acceleration_divisor_valid": (
+            math.isfinite(native_global_values["input_acceleration_divisor"])
+            and native_global_values["input_acceleration_divisor"] > 0.0
+        ),
+        "native_speed_scalar_valid": (
+            math.isfinite(native_global_values["speed_scalar"])
+            and native_global_values["speed_scalar"] > 0.0
+        ),
+        "native_velocity_damping_valid": (
+            math.isfinite(native_global_values["velocity_damping"])
+            and 0.0 < native_global_values["velocity_damping"] < 1.0
+        ),
     }
     failed = [name for name, passed in checks.items() if not passed]
     if failed:
@@ -160,8 +222,42 @@ def load_native_rush_evidence(path: Path) -> dict[str, Any]:
         "path": evidence_path,
         "checks": checks,
         "rush_behavior": behavior,
+        "native_globals": native_global_values,
         "release_loader_hash": fresh_bundle["release_hash"],
     }
+
+
+def expected_native_post_tick_peak_velocity(
+    runtime: dict[str, str],
+    rush_multiplier: float,
+    native_globals: dict[str, float],
+) -> float:
+    actor_multiplier = parse_float_text(
+        runtime.get("actor_movement_speed_multiplier"), math.nan
+    )
+    actor_scale = parse_float_text(runtime.get("actor_move_speed_scale"), math.nan)
+    progression_speed = parse_float_text(
+        runtime.get("progression_move_speed"), math.nan
+    )
+    acceleration_divisor = native_globals["input_acceleration_divisor"]
+    speed_scalar = native_globals["speed_scalar"]
+    damping = native_globals["velocity_damping"]
+    speed_cap = (
+        actor_multiplier
+        * actor_scale
+        * progression_speed
+        * rush_multiplier
+        * speed_scalar
+    )
+    unconstrained_pre_damping_peak = (1.0 / acceleration_divisor) / (1.0 - damping)
+    peak = min(speed_cap, unconstrained_pre_damping_peak) * damping
+    if not math.isfinite(peak) or peak <= 0.0:
+        raise VerifyFailure(
+            "invalid expected native keyboard velocity envelope: "
+            f"runtime={runtime} rush_multiplier={rush_multiplier} "
+            f"native_globals={native_globals}"
+        )
+    return peak
 
 
 def apply_rush_batch(
@@ -465,6 +561,189 @@ def run_movement_trial(direction: Direction, label: str, timeout: float) -> dict
     }
 
 
+def arm_keyboard_movement_monitor(pipe_name: str) -> dict[str, str]:
+    code = """
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+if not _G.__sdmod_mp_rush_keyboard_monitor_registered then
+  sd.events.on('runtime.tick', function()
+    local trial = _G.__sdmod_mp_rush_keyboard_trial
+    if type(trial) ~= 'table' or not trial.active then return end
+    local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
+    local actor = player and tonumber(player.actor_address) or 0
+    local scene = sd.world and sd.world.get_scene and sd.world.get_scene() or nil
+    local gameplay = scene and tonumber(scene.id) or 0
+    if actor == 0 or gameplay == 0 then return end
+    local function off(name) return sd.debug.layout_offset(name) end
+    local vx = tonumber(sd.debug.read_float(
+      actor + off('actor_animation_config_block'))) or 0
+    local vy = tonumber(sd.debug.read_float(
+      actor + off('actor_animation_drive_parameter'))) or 0
+    local input_x = tonumber(sd.debug.read_float(
+      gameplay + off('gameplay_local_movement_input_x'))) or 0
+    local input_y = tonumber(sd.debug.read_float(
+      gameplay + off('gameplay_local_movement_input_y'))) or 0
+    local selection = tonumber(sd.debug.read_u32(
+      actor + off('actor_animation_selection_state'))) or 0
+    local control_x = selection ~= 0 and tonumber(sd.debug.read_float(
+      selection + off('actor_control_brain_move_input_x'))) or 0
+    local control_y = selection ~= 0 and tonumber(sd.debug.read_float(
+      selection + off('actor_control_brain_move_input_y'))) or 0
+    local speed = math.sqrt(vx * vx + vy * vy)
+    local input_magnitude = math.sqrt(input_x * input_x + input_y * input_y)
+    local control_magnitude = math.sqrt(control_x * control_x + control_y * control_y)
+    trial.samples = trial.samples + 1
+    trial.peak_velocity = math.max(trial.peak_velocity, speed)
+    trial.peak_input = math.max(trial.peak_input, input_magnitude)
+    trial.peak_control = math.max(trial.peak_control, control_magnitude)
+    trial.min_x = math.min(trial.min_x, tonumber(player.x) or trial.min_x)
+    trial.max_x = math.max(trial.max_x, tonumber(player.x) or trial.max_x)
+    trial.min_y = math.min(trial.min_y, tonumber(player.y) or trial.min_y)
+    trial.max_y = math.max(trial.max_y, tonumber(player.y) or trial.max_y)
+    if input_magnitude > 0.01 then
+      trial.input_frames = trial.input_frames + 1
+    end
+  end)
+  _G.__sdmod_mp_rush_keyboard_monitor_registered = true
+end
+_G.__sdmod_mp_rush_keyboard_trial = {
+  active = true,
+  samples = 0,
+  input_frames = 0,
+  peak_input = 0.0,
+  peak_control = 0.0,
+  peak_velocity = 0.0,
+  min_x = math.huge,
+  max_x = -math.huge,
+  min_y = math.huge,
+  max_y = -math.huge,
+}
+local allowance_ok, allowance_result = pcall(
+  sd.input.set_native_control_allowance_frames, 3600)
+emit('registered', _G.__sdmod_mp_rush_keyboard_monitor_registered)
+emit('active', _G.__sdmod_mp_rush_keyboard_trial.active)
+emit('allowance_ok', allowance_ok and allowance_result == true)
+"""
+    result = parse_key_values(lua(pipe_name, code, timeout=8.0))
+    if (
+        result.get("registered") != "true"
+        or result.get("active") != "true"
+        or result.get("allowance_ok") != "true"
+    ):
+        raise VerifyFailure(f"failed to arm real keyboard movement monitor: {result}")
+    return result
+
+
+def finish_keyboard_movement_monitor(pipe_name: str) -> dict[str, str]:
+    code = """
+local function emit(key, value)
+  print(key .. '=' .. tostring(value == nil and '' or value))
+end
+local trial = _G.__sdmod_mp_rush_keyboard_trial or {}
+trial.active = false
+local allowance_ok, allowance_result = pcall(
+  sd.input.set_native_control_allowance_frames, 0)
+for _, key in ipairs({
+  'samples','input_frames','peak_input','peak_control','peak_velocity',
+  'min_x','max_x','min_y','max_y'
+}) do
+  emit(key, trial[key])
+end
+emit('active', trial.active)
+emit('allowance_cleared', allowance_ok and allowance_result == true)
+"""
+    result = parse_key_values(lua(pipe_name, code, timeout=8.0))
+    if result.get("active") != "false":
+        raise VerifyFailure(f"failed to stop real keyboard movement monitor: {result}")
+    if result.get("allowance_cleared") != "true":
+        raise VerifyFailure(f"failed to clear native control allowance: {result}")
+    if parse_int_text(result.get("samples"), 0) <= 0:
+        raise VerifyFailure(f"real keyboard movement monitor captured no samples: {result}")
+    if parse_int_text(result.get("input_frames"), 0) <= 0:
+        raise VerifyFailure(f"stock gameplay never observed held keyboard input: {result}")
+    return result
+
+
+def run_real_keyboard_movement_trial(
+    direction: Direction,
+    pid: int,
+    label: str,
+    timeout: float,
+) -> dict[str, Any]:
+    place_player(direction.other_pipe, PARK_X, PARK_Y, 180.0)
+    placement = place_player(direction.owner_pipe, START_X, START_Y, 0.0)
+    start_x, start_y, start_heading = wait_for_local_transform_settled(
+        direction.owner_pipe,
+        timeout=min(timeout, 10.0),
+        stable_seconds=0.45,
+    )
+    wait_for_remote_convergence(
+        direction.observer_pipe,
+        direction.participant_id,
+        start_x,
+        start_y,
+        start_heading,
+        timeout=timeout,
+    )
+    before_runtime = query_native_movement_runtime(direction.owner_pipe)
+    monitor_start = arm_keyboard_movement_monitor(direction.owner_pipe)
+    key_output = hold_real_key(pid, "d", KEYBOARD_HOLD_MS, timeout)
+    settled_x, settled_y, settled_heading = wait_for_local_transform_settled(
+        direction.owner_pipe,
+        timeout=min(timeout, 10.0),
+        stable_seconds=0.7,
+    )
+    monitor = finish_keyboard_movement_monitor(direction.owner_pipe)
+    observer = wait_for_remote_convergence(
+        direction.observer_pipe,
+        direction.participant_id,
+        settled_x,
+        settled_y,
+        settled_heading,
+        timeout=timeout,
+    )
+    prefix = f"peer.{direction.participant_id}."
+    observer_x = parse_float_text(observer.get(prefix + "x"), math.nan)
+    observer_y = parse_float_text(observer.get(prefix + "y"), math.nan)
+    displacement = distance(start_x, start_y, settled_x, settled_y)
+    forward_displacement = settled_x - start_x
+    cross_axis_displacement = abs(settled_y - start_y)
+    peak_velocity = parse_float_text(monitor.get("peak_velocity"), math.nan)
+    if not math.isfinite(displacement) or displacement <= 20.0:
+        raise VerifyFailure(
+            f"{direction.name} {label} real keyboard movement was too small: "
+            f"start=({start_x},{start_y}) final=({settled_x},{settled_y}) "
+            f"monitor={monitor}"
+        )
+    if not math.isfinite(peak_velocity) or peak_velocity <= 0.01:
+        raise VerifyFailure(
+            f"{direction.name} {label} real keyboard velocity was not observed: {monitor}"
+        )
+    return {
+        "direction": direction.name,
+        "label": label,
+        "process_id": pid,
+        "placement": placement,
+        "before_runtime": before_runtime,
+        "after_runtime": query_native_movement_runtime(direction.owner_pipe),
+        "monitor_start": monitor_start,
+        "monitor": monitor,
+        "key_helper_output": key_output,
+        "hold_ms": KEYBOARD_HOLD_MS,
+        "requested_start": {"x": START_X, "y": START_Y},
+        "start": {"x": start_x, "y": start_y, "heading": start_heading},
+        "final": {"x": settled_x, "y": settled_y, "heading": settled_heading},
+        "displacement": displacement,
+        "forward_displacement": forward_displacement,
+        "cross_axis_displacement": cross_axis_displacement,
+        "peak_velocity": peak_velocity,
+        "observer": {
+            "x": observer_x,
+            "y": observer_y,
+            "position_error": distance(settled_x, settled_y, observer_x, observer_y),
+        },
+    }
+
+
 def compact_rush_view(
     snapshot: dict[str, Any],
     ranked_stat: dict[str, Any],
@@ -590,6 +869,16 @@ def main() -> int:
             "the 25%% Concentrate skill"
         ),
     )
+    parser.add_argument(
+        "--minimum-ranked-rush-velocity-ratio",
+        type=float,
+        default=1.30,
+        help=(
+            "minimum real-keyboard peak-velocity gain attributable to ranked "
+            "Rush after removing the independently measured Concentrate gain; "
+            "the measured peaks must also match the live native envelope"
+        ),
+    )
     parser.add_argument("--keep-open", action="store_true")
     parser.add_argument("--output", type=Path, default=OUTPUT)
     parser.add_argument(
@@ -612,15 +901,26 @@ def main() -> int:
             preset="map_create_fire_mind_hub",
             god_mode=True,
             test_survival_boneyard_override=FLAT_BONEYARD,
+            test_blank_boneyard=True,
+            allow_focus_steal=True,
         )
+        process_ids = {
+            "host_owned": int(output["launch"]["hostProcessId"]),
+            "client_owned": int(output["launch"]["clientProcessId"]),
+        }
         disable_bots()
         output["hub_ready"] = {
             "host": wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub", args.timeout),
             "client": wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub", args.timeout),
         }
-        output["run_entry"] = start_host_testrun_and_wait_for_clients(args.timeout)
         output["quiet_progression_test_mode"] = enable_quiet_progression_test_mode()
+        output["run_entry"] = start_host_testrun_and_wait_for_clients(args.timeout)
         output["post_run_progression_ready"] = wait_for_post_run_progression_ready(args.timeout)
+        from verify_multiplayer_primary_kill_stress import (
+            enable_manual_stock_spawner_combat,
+        )
+
+        output["combat_prelude"] = enable_manual_stock_spawner_combat()
         output["baseline_rush_contexts"] = assert_rush_contexts(
             0,
             0.0,
@@ -629,6 +929,15 @@ def main() -> int:
 
         output["baseline"] = {
             direction.name: run_movement_trial(direction, "baseline", args.timeout)
+            for direction in DIRECTIONS
+        }
+        output["real_keyboard_baseline"] = {
+            direction.name: run_real_keyboard_movement_trial(
+                direction,
+                process_ids[direction.name],
+                "baseline",
+                args.timeout,
+            )
             for direction in DIRECTIONS
         }
         output["rush_applications"] = {
@@ -642,6 +951,15 @@ def main() -> int:
         )
         output["upgraded"] = {
             direction.name: run_movement_trial(direction, "max_rush", args.timeout)
+            for direction in DIRECTIONS
+        }
+        output["real_keyboard_upgraded"] = {
+            direction.name: run_real_keyboard_movement_trial(
+                direction,
+                process_ids[direction.name],
+                "max_rush",
+                args.timeout,
+            )
             for direction in DIRECTIONS
         }
 
@@ -673,7 +991,9 @@ def main() -> int:
             "standing_speed_ratios": standing_speed_ratios,
             "motion_measurement_scope": (
                 "scripted local input is downstream of the ranked Rush evaluator; "
-                "this trial measures Concentrate movement plus position replication"
+                "that trial measures Concentrate movement plus position replication. "
+                "The real-keyboard trial enters through stock input and separately "
+                "proves ranked Rush."
             ),
             "ranked_behavior_evidence": output["native_rush_evidence"],
         }
@@ -695,6 +1015,103 @@ def main() -> int:
                 f"host/client Concentrate motion ratios diverged: {motion_ratios}"
             )
         output["concentrate_motion_ratios"] = motion_ratios
+
+        keyboard_contract: dict[str, dict[str, float]] = {}
+        ranked_velocity_ratios: dict[str, float] = {}
+        native_globals = output["native_rush_evidence"]["native_globals"]
+        for direction in DIRECTIONS:
+            baseline_trial = output["real_keyboard_baseline"][direction.name]
+            upgraded_trial = output["real_keyboard_upgraded"][direction.name]
+            displacement_ratio = (
+                float(upgraded_trial["displacement"])
+                / float(baseline_trial["displacement"])
+            )
+            peak_velocity_ratio = (
+                float(upgraded_trial["peak_velocity"])
+                / float(baseline_trial["peak_velocity"])
+            )
+            ranked_velocity_ratio = (
+                peak_velocity_ratio / CONCENTRATE_SPEED_MULTIPLIER
+            )
+            expected_baseline_peak = expected_native_post_tick_peak_velocity(
+                baseline_trial["before_runtime"],
+                1.0,
+                native_globals,
+            )
+            expected_upgraded_peak = expected_native_post_tick_peak_velocity(
+                upgraded_trial["before_runtime"],
+                RUSH_MAX_SPEED_MULTIPLIER,
+                native_globals,
+            )
+            expected_peak_velocity_ratio = (
+                expected_upgraded_peak / expected_baseline_peak
+            )
+            expected_ranked_velocity_ratio = (
+                expected_peak_velocity_ratio / CONCENTRATE_SPEED_MULTIPLIER
+            )
+            keyboard_contract[direction.name] = {
+                "displacement_ratio": displacement_ratio,
+                "peak_velocity_ratio": peak_velocity_ratio,
+                "concentrate_multiplier": CONCENTRATE_SPEED_MULTIPLIER,
+                "ranked_rush_velocity_ratio": ranked_velocity_ratio,
+                "expected_ranked_rush_multiplier": RUSH_MAX_SPEED_MULTIPLIER,
+                "expected_baseline_peak_velocity": expected_baseline_peak,
+                "expected_upgraded_peak_velocity": expected_upgraded_peak,
+                "expected_peak_velocity_ratio": expected_peak_velocity_ratio,
+                "expected_ranked_rush_velocity_ratio": expected_ranked_velocity_ratio,
+            }
+            ranked_velocity_ratios[direction.name] = ranked_velocity_ratio
+            if not math.isclose(
+                float(baseline_trial["peak_velocity"]),
+                expected_baseline_peak,
+                rel_tol=0.0,
+                abs_tol=0.015,
+            ):
+                raise VerifyFailure(
+                    f"{direction.name} baseline keyboard velocity diverged from the native envelope: "
+                    f"measured={baseline_trial['peak_velocity']:.6f} "
+                    f"expected={expected_baseline_peak:.6f}"
+                )
+            if not math.isclose(
+                float(upgraded_trial["peak_velocity"]),
+                expected_upgraded_peak,
+                rel_tol=0.0,
+                abs_tol=0.015,
+            ):
+                raise VerifyFailure(
+                    f"{direction.name} upgraded keyboard velocity diverged from the native envelope: "
+                    f"measured={upgraded_trial['peak_velocity']:.6f} "
+                    f"expected={expected_upgraded_peak:.6f}"
+                )
+            if not math.isclose(
+                ranked_velocity_ratio,
+                expected_ranked_velocity_ratio,
+                rel_tol=0.0,
+                abs_tol=0.02,
+            ):
+                raise VerifyFailure(
+                    f"{direction.name} ranked Rush velocity ratio diverged from the native envelope: "
+                    f"measured={ranked_velocity_ratio:.6f} "
+                    f"expected={expected_ranked_velocity_ratio:.6f}"
+                )
+            if ranked_velocity_ratio < args.minimum_ranked_rush_velocity_ratio:
+                raise VerifyFailure(
+                    f"{direction.name} stock keyboard movement did not apply ranked Rush: "
+                    f"baseline_peak={baseline_trial['peak_velocity']:.6f} "
+                    f"upgraded_peak={upgraded_trial['peak_velocity']:.6f} "
+                    f"combined_ratio={peak_velocity_ratio:.6f} "
+                    f"ranked_ratio={ranked_velocity_ratio:.6f} "
+                    f"minimum={args.minimum_ranked_rush_velocity_ratio:.6f}"
+                )
+        if abs(
+            ranked_velocity_ratios["host_owned"]
+            - ranked_velocity_ratios["client_owned"]
+        ) > 0.08:
+            raise VerifyFailure(
+                "host/client real-keyboard ranked Rush velocity ratios diverged: "
+                f"{ranked_velocity_ratios}"
+            )
+        output["real_keyboard_contract"] = keyboard_contract
 
         crashes = new_crash_artifacts(started_at)
         output["new_crash_artifacts"] = crashes
@@ -720,6 +1137,7 @@ def main() -> int:
                 "ok": output.get("ok", False),
                 "error": output.get("error"),
                 "concentrate_motion_ratios": output.get("concentrate_motion_ratios"),
+                "real_keyboard_contract": output.get("real_keyboard_contract"),
                 "speed_contract": output.get("speed_contract"),
                 "new_crash_artifacts": output.get("new_crash_artifacts", []),
                 "output": str(args.output),

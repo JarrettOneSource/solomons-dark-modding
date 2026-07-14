@@ -566,6 +566,26 @@ void ApplyLootPickupResultPacket(
     }
 
     PublishLootPickupResultRuntimeInfo(packet, now_ms);
+    if (result_code == LootPickupResultCode::Accepted &&
+        packet.participant_id == g_local_transport.local_peer_id &&
+        drop_kind == LootDropKind::Potion) {
+        std::string native_inventory_error;
+        if (!QueueNativePotionInventoryCredit(
+                packet.authority_participant_id,
+                packet.run_nonce,
+                packet.network_drop_id,
+                packet.item_type_id,
+                packet.item_slot,
+                packet.stack_count,
+                packet.inventory_revision,
+                &native_inventory_error)) {
+            Log(
+                "Multiplayer potion pickup accepted but native inventory credit was not queued. "
+                "network_drop_id=" + std::to_string(packet.network_drop_id) +
+                " inventory_revision=" + std::to_string(packet.inventory_revision) +
+                " error=" + native_inventory_error);
+        }
+    }
     Log(
         "Multiplayer loot pickup result applied. authority_participant_id=" +
         std::to_string(packet.authority_participant_id) +

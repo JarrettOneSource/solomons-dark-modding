@@ -52,7 +52,7 @@ constexpr std::size_t kWizardProfileRegenerateActiveOffset = 0x8DE;
 constexpr std::size_t kActorModifierListOffset = 0x104;
 constexpr std::size_t kActorModifierListCountOffset = 0x10C;
 constexpr std::size_t kActorModifierListStorageOffset = 0x118;
-constexpr std::size_t kPointerListRemoveSmartPointerVtableOffset = 0x1C;
+constexpr std::size_t kPointerListRemoveValueVtableOffset = 0x1C;
 constexpr std::size_t kNativeModifierTypeIdOffset = 0x08;
 constexpr std::size_t kNativeModifierDurationTicksOffset = 0x14;
 constexpr std::size_t kNativePoisonDamagePerTickOffset = 0x1C;
@@ -62,6 +62,8 @@ constexpr std::size_t kStandaloneWizardVisualLinkSize = 0xA8;
 constexpr std::size_t kStandaloneWizardVisualLinkColorBlockOffset = 0x88;
 constexpr std::size_t kStandaloneWizardVisualLinkResetStateOffset = 0x1C;
 constexpr std::size_t kStandaloneWizardVisualLinkActiveFlagOffset = 0x58;
+constexpr std::uint32_t kStandaloneWizardHatVisualTypeId = 0x1B5D;
+constexpr std::uint32_t kStandaloneWizardRobeVisualTypeId = 0x1B5E;
 constexpr int kStandaloneWizardHiddenSelectionState = -2;
 constexpr std::size_t kGameplayRegionStride = 4;
 constexpr std::size_t kGameplayPlayerSlotStride = 4;
@@ -143,6 +145,9 @@ bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id) {
     return object_type_id == 1001 || object_type_id == 1002;
 }
 constexpr std::size_t kQueuedGameplayWorldActionLimit = 64;
+constexpr std::uint64_t kNativeInventoryCreditRetryDelayMs = 100;
+constexpr std::uint64_t kNativeInventoryCreditExpiryMs = 15000;
+constexpr std::uint32_t kNativeInventoryCreditMaxAttempts = 100;
 constexpr int kSpawnRewardDefaultLifetime = 0;
 constexpr int kUnknownXpSentinel = -1;
 constexpr int kFirstWizardBotSlot = 1;

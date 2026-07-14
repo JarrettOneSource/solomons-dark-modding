@@ -410,7 +410,7 @@ bool IsLootPickupRequestSequenceDuplicate(const LootPickupRequestPacket& packet)
         packet.request_sequence == 0) {
         return false;
     }
-    return static_cast<std::int32_t>(packet.request_sequence - it->second) <= 0;
+    return !IsPacketSequenceNewer(packet.request_sequence, it->second);
 }
 
 void RememberLootPickupRequestSequence(const LootPickupRequestPacket& packet) {

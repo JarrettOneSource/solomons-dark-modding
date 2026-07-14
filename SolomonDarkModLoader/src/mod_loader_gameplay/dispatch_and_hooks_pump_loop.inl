@@ -15,6 +15,9 @@ void PumpQueuedGameplayActions() {
         TryResolveCurrentGameplayScene(&active_gameplay_address) &&
         active_gameplay_address != 0;
     if (gameplay_active) {
+        ReconcileExplicitTestBlankBoneyard(
+            active_gameplay_address,
+            now_ms);
         PinRunLifecycleFrozenManualEnemies();
     }
 
@@ -125,6 +128,8 @@ void PumpQueuedGameplayActions() {
     PendingRewardSpawnRequest reward_request;
     bool have_reward_request = false;
     std::vector<PendingClientLocalLootSuppressionRequest> client_local_loot_suppression_requests;
+    PendingNativePotionInventoryCredit native_inventory_credit;
+    bool have_native_inventory_credit = false;
     std::vector<PendingMultiplayerDampenEffectRequest> multiplayer_dampen_effect_requests;
     PendingLocalPlayerPoisonCorrection local_player_poison_correction;
     bool have_local_player_poison_correction = false;
@@ -204,6 +209,23 @@ void PumpQueuedGameplayActions() {
                 }
                 g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.push_back(
                     std::move(request));
+            }
+        }
+        if (!g_gameplay_keyboard_injection.pending_native_potion_inventory_credits.empty()) {
+            const auto pending_credit_count =
+                g_gameplay_keyboard_injection.pending_native_potion_inventory_credits.size();
+            for (std::size_t index = 0; index < pending_credit_count; ++index) {
+                auto request = g_gameplay_keyboard_injection
+                                   .pending_native_potion_inventory_credits.front();
+                g_gameplay_keyboard_injection
+                    .pending_native_potion_inventory_credits.pop_front();
+                if (!have_native_inventory_credit && request.next_attempt_ms <= now_ms) {
+                    native_inventory_credit = request;
+                    have_native_inventory_credit = true;
+                    continue;
+                }
+                g_gameplay_keyboard_injection
+                    .pending_native_potion_inventory_credits.push_back(request);
             }
         }
         if (!g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.empty()) {
@@ -520,6 +542,83 @@ void PumpQueuedGameplayActions() {
                 " x=" + std::to_string(reward_request.x) +
                 " y=" + std::to_string(reward_request.y) +
                 " error=" + error_message);
+        }
+    }
+
+    if (have_native_inventory_credit) {
+        native_inventory_credit.attempts += 1;
+        std::string credit_error;
+        NativePotionInventoryCreditOutcome credit_outcome =
+            NativePotionInventoryCreditOutcome::FailedBeforeApply;
+        const bool expired_before_attempt =
+            native_inventory_credit.attempts > kNativeInventoryCreditMaxAttempts ||
+            now_ms - native_inventory_credit.queued_ms > kNativeInventoryCreditExpiryMs;
+        if (expired_before_attempt) {
+            credit_error = "native potion inventory credit expired before it could be applied";
+        } else {
+            credit_outcome = ExecuteNativePotionInventoryCreditNow(
+                native_inventory_credit,
+                &credit_error);
+        }
+
+        bool requeued = false;
+        bool stale_run = false;
+        {
+            std::lock_guard<std::mutex> lock(
+                g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
+            auto& state = g_gameplay_keyboard_injection;
+            stale_run =
+                state.native_inventory_credit_run_nonce != native_inventory_credit.run_nonce;
+            if (!stale_run &&
+                credit_outcome == NativePotionInventoryCreditOutcome::Retry &&
+                native_inventory_credit.attempts < kNativeInventoryCreditMaxAttempts &&
+                now_ms - native_inventory_credit.queued_ms <=
+                    kNativeInventoryCreditExpiryMs) {
+                native_inventory_credit.next_attempt_ms =
+                    now_ms + kNativeInventoryCreditRetryDelayMs;
+                state.pending_native_potion_inventory_credits.push_back(
+                    native_inventory_credit);
+                requeued = true;
+            } else if (!stale_run) {
+                state.pending_native_inventory_credit_drop_ids.erase(
+                    native_inventory_credit.network_drop_id);
+                if (credit_outcome == NativePotionInventoryCreditOutcome::Applied ||
+                    credit_outcome ==
+                        NativePotionInventoryCreditOutcome::ApplyStateUnknown) {
+                    state.completed_native_inventory_credit_drop_ids.insert(
+                        native_inventory_credit.network_drop_id);
+                }
+            }
+        }
+
+        if (stale_run) {
+            Log(
+                "native_inventory: discarded completed work from an inactive run. "
+                "network_drop_id=" +
+                std::to_string(native_inventory_credit.network_drop_id));
+        } else if (requeued) {
+            if (native_inventory_credit.attempts == 1 ||
+                native_inventory_credit.attempts % 10 == 0) {
+                Log(
+                    "native_inventory: deferred authoritative potion pickup. "
+                    "network_drop_id=" +
+                    std::to_string(native_inventory_credit.network_drop_id) +
+                    " attempt=" +
+                    std::to_string(native_inventory_credit.attempts) +
+                    " error=" + credit_error);
+            }
+        } else if (credit_outcome != NativePotionInventoryCreditOutcome::Applied) {
+            Log(
+                std::string("native_inventory: authoritative potion pickup ") +
+                (credit_outcome ==
+                         NativePotionInventoryCreditOutcome::ApplyStateUnknown
+                     ? "ended with unknown native apply state"
+                     : "failed before native apply") +
+                ". network_drop_id=" +
+                std::to_string(native_inventory_credit.network_drop_id) +
+                " attempts=" +
+                std::to_string(native_inventory_credit.attempts) +
+                " error=" + credit_error);
         }
     }
 

@@ -1,6 +1,8 @@
 #include "dispatch_and_hooks_request_queues.inl"
 #include "dispatch_and_hooks_execute_requests.inl"
 #include "replicated_loot_reconciliation.inl"
+#include "native_inventory_reconciliation.inl"
+#include "test_blank_boneyard_reconciliation.inl"
 #include "world_snapshot_reconciliation.inl"
 #include "spell_effect_reconciliation.inl"
 #include "native_defense_behavior_probes.inl"

@@ -186,6 +186,7 @@ def main() -> int:
             preset="create_manual",
             god_mode=True,
             test_survival_boneyard_override=FLAT_BONEYARD,
+            test_blank_boneyard=True,
         )
         output["late_join_create"] = complete_native_create(
             THIRD_PIPE,

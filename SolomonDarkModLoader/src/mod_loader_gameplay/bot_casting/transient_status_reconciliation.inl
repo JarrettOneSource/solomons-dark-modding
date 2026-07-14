@@ -49,23 +49,23 @@ bool CallPointerListAddSmartPointerSafe(
     }
 }
 
-bool CallPointerListRemoveSmartPointerSafe(
+bool CallPointerListRemoveValueSafe(
     uintptr_t remove_address,
     uintptr_t list_address,
-    uintptr_t control_block_address,
+    uintptr_t value,
     DWORD* exception_code) {
     if (exception_code != nullptr) {
         *exception_code = 0;
     }
-    auto* remove = reinterpret_cast<PointerListRemoveSmartPointerFn>(
+    auto* remove = reinterpret_cast<PointerListRemoveValueFn>(
         remove_address);
-    if (remove == nullptr || list_address == 0 || control_block_address == 0) {
+    if (remove == nullptr || list_address == 0 || value == 0) {
         return false;
     }
     __try {
         remove(
             reinterpret_cast<void*>(list_address),
-            control_block_address);
+            value);
         return true;
     } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
         return false;
@@ -421,11 +421,11 @@ bool ReconcileNativeRemoteParticipantTransientStatuses(
             modifier_list_vtable != 0 &&
             memory.TryReadValue(
                 modifier_list_vtable +
-                    kPointerListRemoveSmartPointerVtableOffset,
+                    kPointerListRemoveValueVtableOffset,
                 &remove_address) &&
             remove_address != 0 &&
             memory.IsExecutableRange(remove_address, 1) &&
-            CallPointerListRemoveSmartPointerSafe(
+            CallPointerListRemoveValueSafe(
                 remove_address,
                 modifier_list_address,
                 poison_control_block,

@@ -263,6 +263,7 @@ def main() -> int:
             preset="map_create_fire_mind_hub",
             god_mode=True,
             test_survival_boneyard_override=FLAT_BONEYARD,
+            test_blank_boneyard=True,
         )
         disable_bots()
         output["hub_ready"] = {
@@ -273,8 +274,8 @@ def main() -> int:
                 CLIENT_PIPE, HOST_ID, HOST_NAME, "hub", args.timeout
             ),
         }
-        output["run_entry"] = start_host_testrun_and_wait_for_clients(args.timeout)
         output["quiet_progression_test_mode"] = enable_quiet_progression_test_mode()
+        output["run_entry"] = start_host_testrun_and_wait_for_clients(args.timeout)
         output["post_run_progression_ready"] = wait_for_post_run_progression_ready(
             args.timeout
         )

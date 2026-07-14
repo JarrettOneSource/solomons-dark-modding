@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Reflection;
 using System.Text;
+using Microsoft.Win32;
 using SolomonDarkModLauncher.UI.Infrastructure;
 
 namespace SolomonDarkModLauncher.UI.ViewModels;
@@ -22,6 +24,8 @@ internal sealed class MainWindowViewModel : ViewModelBase
     private string instanceName_;
     private bool debugUiEnabled_;
     private string lobbyId_;
+    private string gameDirectory_;
+    private bool isGameReady_;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
@@ -29,40 +33,52 @@ internal sealed class MainWindowViewModel : ViewModelBase
         instanceName_ = client.InstanceName;
         debugUiEnabled_ = client.DebugUiEnabled;
         lobbyId_ = client.LobbyId;
+        gameDirectory_ = client.GameDirectory;
 
         RefreshCommand = new RelayCommand(_ => _ = RefreshAsync(), _ => CanInteract());
         HostSteamCommand = new RelayCommand(
             _ => _ = ExecuteActionAsync(
                 LauncherUiCommandMode.HostSteam,
                 "Creating Steam lobby and launching host..."),
-            _ => CanInteract());
+            _ => CanLaunch());
         JoinSteamCommand = new RelayCommand(
             _ => _ = ExecuteActionAsync(
                 LauncherUiCommandMode.JoinSteam,
                 string.IsNullOrWhiteSpace(LobbyId)
                     ? "Launching and waiting for a Steam friend invite..."
                     : $"Joining Steam lobby {LobbyId}..."),
-            _ => CanInteract());
+            _ => CanLaunch());
         LaunchSinglePlayerCommand = new RelayCommand(
             _ => _ = ExecuteActionAsync(
                 LauncherUiCommandMode.LaunchSinglePlayer,
                 "Launching single player..."),
-            _ => CanInteract());
-        StageCommand = new RelayCommand(_ => _ = ExecuteActionAsync(LauncherUiCommandMode.Stage, "Building stage..."), _ => CanInteract());
+            _ => CanLaunch());
+        StageCommand = new RelayCommand(_ => _ = ExecuteActionAsync(LauncherUiCommandMode.Stage, "Building stage..."), _ => CanLaunch());
         ApplyInstanceCommand = new RelayCommand(_ => _ = ApplyInstanceAsync(), _ => CanInteract());
+        ChooseGameFolderCommand = new RelayCommand(_ => ChooseGameFolder(), _ => CanInteract());
         OpenModsFolderCommand = new RelayCommand(_ => OpenFolder(lastResponse_?.Configuration?.ModsRoot), _ => CanOpenFolder(lastResponse_?.Configuration?.ModsRoot));
         OpenStageFolderCommand = new RelayCommand(_ => OpenFolder(lastResponse_?.Configuration?.StageRoot), _ => CanOpenFolder(lastResponse_?.Configuration?.StageRoot));
         OpenProfileFolderCommand = new RelayCommand(_ => OpenFolder(lastResponse_?.Configuration?.ProfileRoot), _ => CanOpenFolder(lastResponse_?.Configuration?.ProfileRoot));
-        OpenGameFolderCommand = new RelayCommand(_ => OpenFolder(lastResponse_?.Configuration?.GameDirectory), _ => CanOpenFolder(lastResponse_?.Configuration?.GameDirectory));
+        OpenGameFolderCommand = new RelayCommand(_ => OpenFolder(GameDirectory), _ => CanOpenFolder(GameDirectory));
 
         UpdateLaunchPreview();
-        _ = RefreshAsync();
+        if (string.IsNullOrWhiteSpace(GameDirectory))
+        {
+            StatusText = "Choose your Solomon Dark 0.72.5 folder to get started";
+        }
+        else
+        {
+            _ = RefreshAsync();
+        }
     }
 
     public ObservableCollection<ModItemViewModel> Mods { get; } = [];
 
-    public string Title => "Solomon Dark Mod Manager";
-    public string Subtitle => "Standalone wrapper over the launcher CLI.";
+    public string Title => "Solomon Dark Multiplayer Beta";
+    public string Version =>
+        Assembly.GetEntryAssembly()?
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion ?? "development";
 
     public bool IsBusy
     {
@@ -160,7 +176,26 @@ internal sealed class MainWindowViewModel : ViewModelBase
     public string HostButtonText => IsBusy ? "Working..." : "Host & Invite Friends";
 
     public string WorkspaceRoot => lastResponse_?.Configuration?.WorkspaceRoot ?? "(unresolved)";
-    public string GameDirectory => lastResponse_?.Configuration?.GameDirectory ?? "(unresolved)";
+    public string GameDirectory
+    {
+        get => gameDirectory_;
+        private set
+        {
+            if (SetProperty(ref gameDirectory_, value))
+            {
+                OnPropertyChanged(nameof(GameDirectorySummary));
+                OnPropertyChanged(nameof(GameSetupAction));
+            }
+        }
+    }
+
+    public string GameDirectorySummary => string.IsNullOrWhiteSpace(GameDirectory)
+        ? "No game folder selected"
+        : GameDirectory;
+
+    public string GameSetupAction => string.IsNullOrWhiteSpace(GameDirectory)
+        ? "Choose Game Folder"
+        : "Change Game Folder";
     public string ModsRoot => lastResponse_?.Configuration?.ModsRoot ?? "(unresolved)";
     public string StageRoot => lastResponse_?.Configuration?.StageRoot ?? "(unresolved)";
     public string ProfileRoot => lastResponse_?.Configuration?.ProfileRoot ?? "(unresolved)";
@@ -172,12 +207,48 @@ internal sealed class MainWindowViewModel : ViewModelBase
     public RelayCommand LaunchSinglePlayerCommand { get; }
     public RelayCommand StageCommand { get; }
     public RelayCommand ApplyInstanceCommand { get; }
+    public RelayCommand ChooseGameFolderCommand { get; }
     public RelayCommand OpenModsFolderCommand { get; }
     public RelayCommand OpenStageFolderCommand { get; }
     public RelayCommand OpenProfileFolderCommand { get; }
     public RelayCommand OpenGameFolderCommand { get; }
 
     private bool CanInteract() => !IsBusy;
+
+    private bool CanLaunch() => CanInteract() && isGameReady_;
+
+    private void ChooseGameFolder()
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Choose the Solomon Dark 0.72.5 folder containing SolomonDark.exe",
+            Multiselect = false
+        };
+        if (!string.IsNullOrWhiteSpace(GameDirectory) && Directory.Exists(GameDirectory))
+        {
+            dialog.InitialDirectory = GameDirectory;
+        }
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            client_.UpdateGameDirectory(dialog.FolderName);
+        }
+        catch (Exception ex)
+        {
+            SetError(ex.Message);
+            return;
+        }
+
+        GameDirectory = client_.GameDirectory;
+        isGameReady_ = false;
+        RaiseCommandStates();
+        _ = RefreshAsync();
+    }
 
     private async Task RefreshAsync()
     {
@@ -233,6 +304,11 @@ internal sealed class MainWindowViewModel : ViewModelBase
 
         if (!invocation.Succeeded || invocation.Response is null)
         {
+            if (mode == LauncherUiCommandMode.ListMods)
+            {
+                isGameReady_ = false;
+                RaiseCommandStates();
+            }
             SetError(invocation.ErrorMessage ?? "Launcher command failed.");
             StatusText = "Command failed";
             IsBusy = false;
@@ -240,6 +316,7 @@ internal sealed class MainWindowViewModel : ViewModelBase
         }
 
         ClearError();
+        isGameReady_ = true;
         lastResponse_ = invocation.Response;
         UpdateFromResponse(invocation.Response);
         var multiplayer = invocation.Response.Launch?.MultiplayerSession;
@@ -309,11 +386,16 @@ internal sealed class MainWindowViewModel : ViewModelBase
         var instance = response.Configuration?.Instance ?? client_.InstanceName;
         var runtimeProfile = response.Configuration?.RuntimeProfile ?? "(unresolved)";
         DebugUiEnabled = response.Configuration?.LoaderDebugUi ?? true;
+        var resolvedGameDirectory = response.Configuration?.GameDirectory;
+        if (!string.IsNullOrWhiteSpace(resolvedGameDirectory))
+        {
+            GameDirectory = resolvedGameDirectory;
+            client_.UpdateGameDirectory(resolvedGameDirectory);
+        }
         InstanceSummaryText =
             $"Instance {instance}  ·  runtime profile {runtimeProfile}  ·  debug UI {(DebugUiEnabled ? "on" : "off")}";
 
         OnPropertyChanged(nameof(WorkspaceRoot));
-        OnPropertyChanged(nameof(GameDirectory));
         OnPropertyChanged(nameof(ModsRoot));
         OnPropertyChanged(nameof(StageRoot));
         OnPropertyChanged(nameof(ProfileRoot));
@@ -391,6 +473,7 @@ internal sealed class MainWindowViewModel : ViewModelBase
         LaunchSinglePlayerCommand.RaiseCanExecuteChanged();
         StageCommand.RaiseCanExecuteChanged();
         ApplyInstanceCommand.RaiseCanExecuteChanged();
+        ChooseGameFolderCommand.RaiseCanExecuteChanged();
         OpenModsFolderCommand.RaiseCanExecuteChanged();
         OpenStageFolderCommand.RaiseCanExecuteChanged();
         OpenProfileFolderCommand.RaiseCanExecuteChanged();

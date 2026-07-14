@@ -1,9 +1,13 @@
+using System.Security.Cryptography;
+
 namespace SolomonDarkModLauncher.Target;
 
 internal sealed class GameInstallation
 {
-    public const string DefaultInstallDirectory = @"D:\SteamLibrary\steamapps\common\Solomon Dark Hideous Retro Edition";
+    public const string LegacyVersionName = "Solomon Dark 0.72.5";
     public const string DefaultExecutableName = "SolomonDark.exe";
+    public const string SupportedExecutableSha256 =
+        "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3";
 
     public required string InstallDirectory { get; init; }
     public required string ExecutableName { get; init; }
@@ -15,13 +19,36 @@ internal sealed class GameInstallation
 
         if (!Directory.Exists(installDirectory))
         {
-            throw new DirectoryNotFoundException($"Game directory not found: {installDirectory}");
+            throw new DirectoryNotFoundException(
+                $"{LegacyVersionName} folder not found: {installDirectory}. " +
+                "Choose the folder containing SolomonDark.exe in the desktop launcher.");
         }
 
         var executablePath = Path.Combine(installDirectory, DefaultExecutableName);
         if (!File.Exists(executablePath))
         {
-            throw new FileNotFoundException("Game executable not found.", executablePath);
+            var remakeExecutablePath = Path.Combine(installDirectory, "SB.exe");
+            if (File.Exists(remakeExecutablePath))
+            {
+                throw new InvalidOperationException(
+                    "The selected folder contains the current Solomon's Boneyard remake (SB.exe). " +
+                    $"This beta supports only the legacy {LegacyVersionName} build containing SolomonDark.exe.");
+            }
+
+            throw new FileNotFoundException(
+                $"{LegacyVersionName} executable not found. Choose the folder containing SolomonDark.exe.",
+                executablePath);
+        }
+
+        var executableSha256 = HashFile(executablePath);
+        if (!string.Equals(
+                executableSha256,
+                SupportedExecutableSha256,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Unsupported SolomonDark.exe build. This beta requires {LegacyVersionName} " +
+                $"(SHA-256 {SupportedExecutableSha256}); the selected file is {executableSha256}.");
         }
 
         return new GameInstallation
@@ -61,7 +88,15 @@ internal sealed class GameInstallation
             return localReplicaPath;
         }
 
-        return DefaultInstallDirectory;
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            LegacyVersionName);
+    }
+
+    private static string HashFile(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
     private static bool LooksLikeWindowsDrivePath(string value)

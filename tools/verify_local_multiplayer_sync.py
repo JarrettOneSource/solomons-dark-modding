@@ -118,9 +118,11 @@ def launch_pair(
     god_mode: bool = False,
     tile_windows: bool = True,
     test_survival_boneyard_override: Path | None = None,
+    test_blank_boneyard: bool = False,
     test_wave_override: Path | None = None,
     third_player: bool = False,
     third_preset: str | None = None,
+    allow_focus_steal: bool = False,
 ) -> dict[str, object]:
     args = [
         "powershell.exe",
@@ -162,6 +164,8 @@ def launch_pair(
             "-TestSurvivalBoneyardOverride",
             path_for_powershell(test_survival_boneyard_override),
         ])
+    if test_blank_boneyard:
+        args.append("-TestBlankBoneyard")
     if test_wave_override is not None:
         args.extend([
             "-TestWaveOverride",
@@ -169,6 +173,8 @@ def launch_pair(
         ])
     if not tile_windows:
         args.append("-NoTileWindows")
+    if allow_focus_steal:
+        args.append("-AllowFocusSteal")
     process = subprocess.Popen(
         args,
         cwd=ROOT,
@@ -290,6 +296,7 @@ def launch_trio(
     god_mode: bool = False,
     tile_windows: bool = True,
     test_survival_boneyard_override: Path | None = None,
+    test_blank_boneyard: bool = False,
     test_wave_override: Path | None = None,
 ) -> dict[str, object]:
     """Launch the host plus two independent clients through the host relay."""
@@ -301,6 +308,7 @@ def launch_trio(
         god_mode=god_mode,
         tile_windows=tile_windows,
         test_survival_boneyard_override=test_survival_boneyard_override,
+        test_blank_boneyard=test_blank_boneyard,
         test_wave_override=test_wave_override,
         third_player=True,
         third_preset=third_preset,
@@ -316,6 +324,7 @@ def launch_additional_client(
     player_name: str = THIRD_NAME,
     god_mode: bool = False,
     test_survival_boneyard_override: Path | None = None,
+    test_blank_boneyard: bool = False,
     test_wave_override: Path | None = None,
 ) -> dict[str, object]:
     """Launch one client without stopping or relaunching an existing session."""
@@ -348,6 +357,8 @@ def launch_additional_client(
                 path_for_powershell(test_survival_boneyard_override),
             ]
         )
+    if test_blank_boneyard:
+        args.append("-TestBlankBoneyard")
     if test_wave_override is not None:
         args.extend(
             [
@@ -1238,6 +1249,12 @@ emit("clear_control", clear_control(player.actor_address))
 emit("write.x", sd.debug.write_float(player.actor_address + ox, {x}))
 emit("write.y", sd.debug.write_float(player.actor_address + oy, {y}))
 emit("write.heading", write_facing(player.actor_address, {heading}))
+local rebind_ok, rebind_error = true, ""
+if sd.world ~= nil and sd.world.rebind_actor ~= nil then
+  rebind_ok, rebind_error = sd.world.rebind_actor(player.actor_address)
+end
+emit("rebind", rebind_ok)
+emit("rebind_error", rebind_error or "")
 local after = sd.player.get_state()
 emit("after.x", after and after.x or 0)
 emit("after.y", after and after.y or 0)

@@ -14,6 +14,7 @@ $uiDist = Join-Path $root "dist/ui"
 $loaderOutputDirectory = Join-Path $root "bin/$Configuration/Win32"
 $loaderOutput = Join-Path $loaderOutputDirectory "SolomonDarkModLoader.dll"
 $loaderIntermediateDirectory = Join-Path $root "SolomonDarkModLoader/build/$Configuration/Win32"
+$uiExecutableName = "SolomonDarkMultiplayerBeta.exe"
 
 function Resolve-MSBuild {
     $command = Get-Command MSBuild.exe -ErrorAction SilentlyContinue
@@ -112,7 +113,7 @@ if (-not (Test-Path $launcherExecutable)) {
 
 Write-Host "Build completed."
 Write-Host "Launcher: $launcherExecutable"
-Write-Host "Launcher UI: $(Join-Path $uiDist 'SolomonDarkModLauncher.UI.exe')"
+Write-Host "Launcher UI: $(Join-Path $uiDist $uiExecutableName)"
 if (Test-Path $loaderOutput) {
     Write-Host "Loader: $loaderOutput"
 }

@@ -114,6 +114,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "native_rng_initialize", kNativeRngInitialize),
         SDMOD_ADDR("gameplay.hooks", "orb_reward_initialize", kOrbRewardInitialize),
         SDMOD_ADDR("gameplay.hooks", "orb_pickup", kOrbPickup),
+        SDMOD_ADDR("gameplay.hooks", "inventory_insert_or_stack_item", kInventoryInsertOrStackItem),
         SDMOD_ADDR("gameplay.hooks", "cast_active_handle_cleanup", kCastActiveHandleCleanup),
         SDMOD_ADDR("gameplay.cast_gate_patches", "player_actor_apply_mana_delta_local_actor_gate_branch", kPlayerActorApplyManaDeltaLocalActorGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "cast_active_handle_cleanup_slot_gate_branch", kCastCleanupSlotGateBranch),

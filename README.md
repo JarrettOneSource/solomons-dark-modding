@@ -4,6 +4,10 @@ A modding framework for `SolomonDark.exe`. Stages a local game copy, applies fil
 
 The repository excludes original game files, staged runtime output, and local editor state. Keep a local Solomon's Dark copy outside this repository and point the launcher at it.
 
+The friend-playtest beta is distributed as a self-contained ZIP. Extract it,
+run `SolomonDarkMultiplayerBeta.exe`, and choose the original Solomon Dark
+0.72.5 folder; release users do not need Visual Studio or a .NET installation.
+
 ## Components
 
 - `SolomonDarkModLauncher/` — CLI launcher. Discovers mods, tracks enable/disable state, mirrors the retail tree into `runtime/stage/`, stages runtime manifests, launches the staged copy, and injects the loader.
@@ -84,10 +88,27 @@ CLI (defaults to `../SolomonDarkAbandonware` when present):
 GUI:
 
 ```powershell
-./dist/ui/SolomonDarkModLauncher.UI.exe
+./dist/ui/SolomonDarkMultiplayerBeta.exe
 ```
 
 Visual Studio: open `SolomonDarkModding.sln`, set `SolomonDarkModLauncher.UI` as the startup project, `F5`.
+
+## Beta package
+
+Build and verify the portable prerelease artifact:
+
+```powershell
+.\scripts\New-BetaReleasePackage.ps1
+py -3 .\tools\verify_beta_release_artifact.py
+```
+
+The result is
+`artifacts\SolomonDarkMultiplayerBeta-v0.1.0-beta.1.zip` plus
+`artifacts\SHA256SUMS.txt`. The archive includes the self-contained desktop and
+x86 launchers, loader, config, sample mods, and the x86 Steam runtime; it does
+not include Solomon's Dark or Steam credentials. See
+`docs/networking/steam-friend-playtest.md` for the host/join sequence and
+current beta limits.
 
 ## Runtime helpers
 

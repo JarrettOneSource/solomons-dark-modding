@@ -44,6 +44,11 @@ std::mutex g_replicated_loot_presentation_mutex;
 std::vector<ReplicatedLootPresentationBinding> g_replicated_loot_presentations;
 std::unordered_set<uintptr_t> g_client_non_authoritative_loot_suppressed_actors;
 
+void ClearNativeInventoryCreditState();
+bool IsNativeInventoryCreditCompleted(
+    std::uint32_t run_nonce,
+    std::uint64_t network_drop_id);
+
 bool IsReplicatedLootPresentationActorInternal(uintptr_t actor_address);
 
 void QueueClientLocalLootSuppressionInternal(const char* reason, std::uint64_t delay_ms) {
@@ -141,6 +146,7 @@ bool CallSpawnPotionDropSafe(
         return false;
     }
 }
+
 
 bool IsLootDropNativeTypeId(std::uint32_t native_type_id) {
     return native_type_id == kReplicatedLootGoldNativeTypeId ||
@@ -576,6 +582,7 @@ void ClearReplicatedLootPresentationBindingsForSceneSwitch(const char* reason) {
             std::string(reason != nullptr ? reason : "unknown") +
             " count=" + std::to_string(count));
     }
+    ClearNativeInventoryCreditState();
 }
 
 void RemoveAllReplicatedLootPresentationActors(const char* reason) {
@@ -723,6 +730,7 @@ bool RemoveUnboundClientLootActorNow(
     return false;
 }
 
+
 void ReconcileReplicatedLootSnapshotNow(
     const multiplayer::LootSnapshotRuntimeInfo& snapshot,
     std::uint64_t now_ms) {
@@ -731,6 +739,7 @@ void ReconcileReplicatedLootSnapshotNow(
         snapshot.authority_participant_id == 0 ||
         snapshot.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run) {
         RemoveAllReplicatedLootPresentationActors("snapshot_not_run");
+        ClearNativeInventoryCreditState();
         return;
     }
 
@@ -743,7 +752,8 @@ void ReconcileReplicatedLootSnapshotNow(
 
     std::unordered_set<std::uint64_t> active_drop_ids;
     for (const auto& drop : snapshot.drops) {
-        if (IsSupportedReplicatedLootPresentationKind(drop)) {
+        if (IsSupportedReplicatedLootPresentationKind(drop) &&
+            !IsNativeInventoryCreditCompleted(snapshot.run_nonce, drop.network_drop_id)) {
             active_drop_ids.insert(drop.network_drop_id);
         }
     }
@@ -782,7 +792,8 @@ void ReconcileReplicatedLootSnapshotNow(
     RemoveUnboundClientLootActors("pre_reconcile");
 
     for (const auto& drop : snapshot.drops) {
-        if (!IsSupportedReplicatedLootPresentationKind(drop)) {
+        if (!IsSupportedReplicatedLootPresentationKind(drop) ||
+            IsNativeInventoryCreditCompleted(snapshot.run_nonce, drop.network_drop_id)) {
             continue;
         }
 
@@ -864,6 +875,7 @@ bool QueueReplicatedLootSnapshotInternal(
     g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.push_back(snapshot);
     return true;
 }
+
 
 bool IsReplicatedLootPresentationActorInternal(uintptr_t actor_address) {
     if (actor_address == 0) {

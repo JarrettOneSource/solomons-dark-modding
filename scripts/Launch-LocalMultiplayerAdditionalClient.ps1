@@ -9,6 +9,7 @@ param(
     [UInt16]$HostPort = 47770,
     [switch]$GodMode,
     [string]$TestSurvivalBoneyardOverride = "",
+    [switch]$TestBlankBoneyard,
     [string]$TestWaveOverride = ""
 )
 
@@ -66,6 +67,9 @@ if ($GodMode) {
 if (-not [string]::IsNullOrWhiteSpace($resolvedOverride)) {
     $environment.SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE = $resolvedOverride
 }
+if ($TestBlankBoneyard) {
+    $environment.SDMOD_TEST_BLANK_BONEYARD = "1"
+}
 if (-not [string]::IsNullOrWhiteSpace($resolvedWaveOverride)) {
     $environment.SDMOD_TEST_WAVE_OVERRIDE = $resolvedWaveOverride
 }
@@ -95,5 +99,6 @@ $result = Invoke-LauncherWithEnvironment `
     luaPipe = $pipeName
     startupLogPath = $result.launch.startupLogPath
     testSurvivalBoneyardOverride = $resolvedOverride
+    testBlankBoneyardEnabled = [bool]$TestBlankBoneyard
     testWaveOverride = $resolvedWaveOverride
 } | ConvertTo-Json -Depth 4 -Compress

@@ -31,7 +31,6 @@ from verify_local_multiplayer_sync import (
 from verify_multiplayer_all_stat_sync import (
     compact_snapshot,
     load_stat_contract_values,
-    query_target_views,
     wait_for_derived_parity,
 )
 from verify_multiplayer_all_upgrade_sync import (
@@ -214,8 +213,10 @@ if progression == 0 or mp_offset == nil or idle_elapsed_offset == nil or
   return
 end
 local write_ok = sd.debug.write_float(progression + mp_offset, 0.0)
+local write_idle_ok = sd.debug.write_i32(
+  progression + idle_elapsed_offset, 0)
 _G.__sdmod_meditation_monitor = {{
-  active = write_ok == true,
+  active = write_ok == true and write_idle_ok == true,
   done = false,
   error = '',
   moving = {moving_text},
@@ -232,11 +233,16 @@ _G.__sdmod_meditation_monitor = {{
   samples = {{}},
 }}
 emit('write_mp', write_ok)
+emit('write_idle_elapsed', write_idle_ok)
 emit('started', _G.__sdmod_meditation_monitor.active)
 emit('moving', {moving_text})
 """
     result = parse_key_values(lua(pipe_name, code, timeout=8.0))
-    if result.get("started") != "true" or result.get("write_mp") != "true":
+    if (
+        result.get("started") != "true"
+        or result.get("write_mp") != "true"
+        or result.get("write_idle_elapsed") != "true"
+    ):
         raise VerifyFailure(f"Meditation monitor start failed on {pipe_name}: {result}")
     return result
 
@@ -448,11 +454,58 @@ def window_rate(samples: list[dict[str, float | int]], start: float, end: float)
     return (float(selected[-1]["mp"]) - float(selected[0]["mp"])) / elapsed
 
 
-def compact_network_sample(owner: dict[str, Any], observer: dict[str, Any]) -> dict[str, float]:
+def query_mana_view(
+    pipe_name: str,
+    participant_id: int | None,
+) -> dict[str, float]:
+    participant_selector = "nil" if participant_id is None else str(participant_id)
+    values = parse_key_values(
+        lua(
+            pipe_name,
+            f"""
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+local requested = {participant_selector}
+local player = sd.player.get_state()
+local bot = requested ~= nil and sd.bots.get_participant_state(requested) or nil
+local progression = requested == nil and tonumber(player and player.progression_address) or
+  tonumber(bot and bot.progression_runtime_state_address)
+local multiplayer = sd.runtime.get_multiplayer_state()
+local participant = nil
+for _, candidate in ipairs(multiplayer and multiplayer.participants or {{}}) do
+  if (requested == nil and candidate.is_owner) or
+     (requested ~= nil and tonumber(candidate.participant_id) == requested) then
+    participant = candidate
+    break
+  end
+end
+emit('available', progression ~= nil and progression ~= 0 and participant ~= nil)
+emit('runtime_mp', participant and participant.mana_current or 0)
+emit('native_mp', progression and sd.debug.read_float(
+  progression + sd.debug.layout_offset('progression_mp')) or 0)
+""",
+            timeout=5.0,
+        )
+    )
+    if values.get("available") != "true":
+        raise VerifyFailure(
+            f"live mana view unavailable pipe={pipe_name} "
+            f"participant_id={participant_id}: {values}"
+        )
     return {
-        "owner_mp": float(owner["native"]["mp"]),
-        "observer_native_mp": float(observer["native"]["mp"]),
-        "observer_runtime_mp": float(observer["runtime"]["mana_current"]),
+        "native_mp": parse_float_text(values.get("native_mp")),
+        "runtime_mp": parse_float_text(values.get("runtime_mp")),
+    }
+
+
+def compact_network_sample(
+    direction: Direction,
+) -> dict[str, float]:
+    owner = query_mana_view(direction.owner_pipe, None)
+    observer = query_mana_view(direction.observer_pipe, direction.participant_id)
+    return {
+        "owner_mp": owner["native_mp"],
+        "observer_native_mp": observer["native_mp"],
+        "observer_runtime_mp": observer["runtime_mp"],
     }
 
 
@@ -489,6 +542,29 @@ def run_trial(
         if interrupt_with_cast
         else None
     )
+    post_interrupt_placement = None
+    if idle_interrupt is not None:
+        cleanup_live_enemies()
+        place_player(direction.other_pipe, PARK_X, PARK_Y, 180.0)
+        post_interrupt_placement = place_player(
+            direction.owner_pipe,
+            direction.start_x,
+            direction.start_y,
+            0.0,
+        )
+        initial_x, initial_y, initial_heading = wait_for_local_transform_settled(
+            direction.owner_pipe,
+            timeout=min(timeout, 10.0),
+            stable_seconds=0.35,
+        )
+        wait_for_remote_convergence(
+            direction.observer_pipe,
+            direction.participant_id,
+            initial_x,
+            initial_y,
+            initial_heading,
+            timeout=timeout,
+        )
     registration = ensure_monitor_registered(direction.owner_pipe)
     monitor_start = start_monitor(direction.owner_pipe, moving=moving)
 
@@ -500,8 +576,7 @@ def run_trial(
         last_status = query_monitor_status(direction.owner_pipe)
         now = time.monotonic()
         if now >= next_network_sample:
-            owner, observer = query_target_views(direction.participant_id)
-            network_samples.append(compact_network_sample(owner, observer))
+            network_samples.append(compact_network_sample(direction))
             next_network_sample = now + 0.20
         if last_status.get("error"):
             raise VerifyFailure(f"{direction.name} {label} monitor failed: {last_status}")
@@ -600,6 +675,7 @@ def run_trial(
             "heading": initial_heading,
         },
         "idle_interrupt": idle_interrupt,
+        "post_interrupt_placement": post_interrupt_placement,
         "monitor_registration": registration,
         "monitor_start": monitor_start,
         "monitor": monitor,

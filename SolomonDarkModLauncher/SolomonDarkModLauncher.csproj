@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\Shared\DistributionLayout.cs" Link="Shared\DistributionLayout.cs" />
     <Compile Remove="SolomonDarkModLauncher.UI\**\*.cs" />
     <None Remove="SolomonDarkModLauncher.UI\**\*" />
     <Content Include="assets\**\*">

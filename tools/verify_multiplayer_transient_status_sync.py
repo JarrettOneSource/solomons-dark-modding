@@ -377,6 +377,7 @@ def main() -> int:
             args.timeout,
             god_mode=False,
             manual_combat=False,
+            prearm_manual_spawner=True,
         )
         output["directions"] = {
             direction.name: run_direction(direction, args.timeout)

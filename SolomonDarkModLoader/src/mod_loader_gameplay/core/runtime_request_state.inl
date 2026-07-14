@@ -22,6 +22,19 @@ struct PendingClientLocalLootSuppressionRequest {
     std::uint64_t not_before_ms = 0;
 };
 
+struct PendingNativePotionInventoryCredit {
+    std::uint64_t authority_participant_id = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint64_t network_drop_id = 0;
+    std::uint32_t item_type_id = 0;
+    std::int32_t item_slot = -1;
+    std::int32_t stack_count = 0;
+    std::uint32_t inventory_revision = 0;
+    std::uint32_t attempts = 0;
+    std::uint64_t queued_ms = 0;
+    std::uint64_t next_attempt_ms = 0;
+};
+
 struct PendingParticipantEntitySyncRequest {
     std::uint64_t bot_id = 0;
     multiplayer::MultiplayerCharacterProfile character_profile;
@@ -147,6 +160,10 @@ struct GameplayKeyboardInjectionState {
     std::mutex pending_gameplay_world_actions_mutex;
     std::deque<PendingRewardSpawnRequest> pending_reward_spawn_requests;
     std::deque<PendingClientLocalLootSuppressionRequest> pending_client_local_loot_suppression_requests;
+    std::deque<PendingNativePotionInventoryCredit> pending_native_potion_inventory_credits;
+    std::unordered_set<std::uint64_t> pending_native_inventory_credit_drop_ids;
+    std::unordered_set<std::uint64_t> completed_native_inventory_credit_drop_ids;
+    std::uint32_t native_inventory_credit_run_nonce = 0;
     std::deque<multiplayer::LootSnapshotRuntimeInfo> pending_replicated_loot_snapshots;
     std::deque<PendingParticipantEntitySyncRequest> pending_participant_sync_requests;
     std::deque<PendingGameplayRegionSwitchRequest> pending_gameplay_region_switch_requests;

@@ -194,6 +194,7 @@ struct LevelUpOfferRuntimeInfo {
 
 struct LevelUpChoiceResultRuntimeInfo {
     bool valid = false;
+    bool auto_picked = false;
     std::uint64_t authority_participant_id = 0;
     std::uint64_t target_participant_id = 0;
     std::uint64_t offer_id = 0;
@@ -211,7 +212,11 @@ struct LevelUpChoiceResultRuntimeInfo {
 struct LevelUpWaitStatusRuntimeInfo {
     bool valid = false;
     bool pause_active = false;
+    bool timed_out = false;
     std::uint64_t authority_participant_id = 0;
+    std::uint64_t barrier_id = 0;
+    std::uint32_t revision = 0;
+    std::uint32_t deadline_remaining_ms = 0;
     std::uint64_t received_ms = 0;
     std::vector<std::uint64_t> waiting_participant_ids;
 };

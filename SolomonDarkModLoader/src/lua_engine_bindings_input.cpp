@@ -206,6 +206,23 @@ int LuaInputHoldMovementFrames(lua_State* state) {
     return 1;
 }
 
+int LuaInputSetNativeControlAllowanceFrames(lua_State* state) {
+    const auto raw_frames = luaL_checkinteger(state, 1);
+    std::string error_message;
+    if (raw_frames < 0 || raw_frames > 3600 ||
+        !SetGameplayNativeControlAllowanceFrames(
+            static_cast<std::uint32_t>(raw_frames),
+            &error_message)) {
+        return luaL_error(
+            state,
+            "sd.input.set_native_control_allowance_frames failed: %s",
+            error_message.c_str());
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 int LuaInputPinManualPrimaryTarget(lua_State* state) {
     const auto raw = luaL_checkinteger(state, 1);
     if (raw <= 0) {
@@ -311,12 +328,16 @@ int LuaInputQueueLocalEnemyDamageClaim(lua_State* state) {
 }  // namespace
 
 void RegisterLuaInputBindings(lua_State* state) {
-    lua_createtable(state, 0, 11);
+    lua_createtable(state, 0, 12);
     RegisterFunction(state, &LuaInputPressKey, "press_key");
     RegisterFunction(state, &LuaInputPressScancode, "press_scancode");
     RegisterFunction(state, &LuaInputClickNormalized, "click_normalized");
     RegisterFunction(state, &LuaInputHoldMouseLeftFrames, "hold_mouse_left_frames");
     RegisterFunction(state, &LuaInputHoldMovementFrames, "hold_movement_frames");
+    RegisterFunction(
+        state,
+        &LuaInputSetNativeControlAllowanceFrames,
+        "set_native_control_allowance_frames");
     RegisterFunction(state, &LuaInputPinManualPrimaryTarget, "pin_manual_primary_target");
     RegisterFunction(state, &LuaInputClearMouseLeft, "clear_mouse_left");
     RegisterFunction(state, &LuaInputClearLocalCastState, "clear_local_cast_state");

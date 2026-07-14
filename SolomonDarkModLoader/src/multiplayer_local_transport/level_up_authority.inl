@@ -61,6 +61,17 @@ void IssueHostLevelUpOfferForParticipant(
         options.resize(kLevelUpOfferMaxOptions);
     }
 
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (!BeginOrExtendHostLevelUpBarrier(
+            {target_participant_id},
+            run_nonce,
+            level,
+            experience,
+            0,
+            now_ms)) {
+        return;
+    }
+
     const auto offer_id = g_local_transport.next_level_up_offer_id++;
     if (g_local_transport.next_level_up_offer_id == 0) {
         g_local_transport.next_level_up_offer_id = 1;
@@ -73,7 +84,14 @@ void IssueHostLevelUpOfferForParticipant(
     issued_offer.level = level;
     issued_offer.experience = experience;
     issued_offer.options = options;
+    issued_offer.barrier_id =
+        g_local_transport.host_level_up_barrier.barrier_id;
+    issued_offer.issued_ms = now_ms;
     g_local_transport.issued_level_up_offers_by_id[offer_id] = issued_offer;
+    AttachHostLevelUpOfferToBarrier(
+        target_participant_id,
+        offer_id,
+        now_ms);
 
     LevelUpOfferPacket packet{};
     packet.header = MakePacketHeader(PacketKind::LevelUpOffer, g_local_transport.next_sequence++);
@@ -193,6 +211,9 @@ void ProcessPendingHostLevelUpOffers(std::uint64_t now_ms) {
             Log(
                 "Multiplayer pending level-up offer dropped; target participant unavailable. participant_id=" +
                 std::to_string(pending.target_participant_id));
+            MarkHostLevelUpBarrierParticipantDisconnected(
+                pending.target_participant_id,
+                now_ms);
             it = g_local_transport.pending_level_up_offer_targets_by_participant.erase(it);
             continue;
         }
@@ -245,6 +266,25 @@ void PublishHostLevelUpOffers(
     const std::uint32_t run_nonce =
         local != nullptr && local->runtime.valid ? local->runtime.run_nonce : 0;
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+
+    std::vector<std::uint64_t> remote_participant_ids;
+    for (const auto& participant : runtime_state.participants) {
+        if (IsRemoteParticipant(participant) &&
+            IsNativeControlledParticipant(participant) &&
+            participant.transport_connected) {
+            remote_participant_ids.push_back(participant.participant_id);
+        }
+    }
+    if (!remote_participant_ids.empty() &&
+        !BeginOrExtendHostLevelUpBarrier(
+            remote_participant_ids,
+            run_nonce,
+            level,
+            experience,
+            source_progression_address,
+            now_ms)) {
+        return;
+    }
 
     for (const auto& participant : runtime_state.participants) {
         if (!IsRemoteParticipant(participant) ||
@@ -317,6 +357,16 @@ bool IssueLocalHostSelfLevelUpOffer(
     const auto* local = FindLocalParticipant(runtime_state);
     const std::uint32_t run_nonce =
         local != nullptr && local->runtime.valid ? local->runtime.run_nonce : 0;
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (!BeginOrExtendHostLevelUpBarrier(
+            {local_peer_id},
+            run_nonce,
+            level,
+            experience,
+            0,
+            now_ms)) {
+        return fail("host-self level-up barrier could not be started");
+    }
 
     const auto offer_id = g_local_transport.next_level_up_offer_id++;
     if (g_local_transport.next_level_up_offer_id == 0) {
@@ -330,7 +380,11 @@ bool IssueLocalHostSelfLevelUpOffer(
     issued_offer.level = level;
     issued_offer.experience = experience;
     issued_offer.options = options;
+    issued_offer.barrier_id =
+        g_local_transport.host_level_up_barrier.barrier_id;
+    issued_offer.issued_ms = now_ms;
     g_local_transport.issued_level_up_offers_by_id[offer_id] = issued_offer;
+    AttachHostLevelUpOfferToBarrier(local_peer_id, offer_id, now_ms);
 
     std::vector<LevelUpChoiceOptionState> offer_options;
     offer_options.reserve(options.size());
@@ -341,7 +395,6 @@ bool IssueLocalHostSelfLevelUpOffer(
         offer_options.push_back(option_state);
     }
 
-    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
     UpdateRuntimeState([&](RuntimeState& state) {
         LevelUpOfferRuntimeInfo offer;
         offer.valid = true;
@@ -373,7 +426,6 @@ void PublishLocalHostSelfLevelUpOffer(
     std::int32_t level,
     std::int32_t experience,
     uintptr_t source_progression_address) {
-    (void)source_progression_address;
     if (!IsLocalTransportHost() ||
         g_local_transport.suppress_local_level_up_fanout_for_debug ||
         level <= 0 ||
@@ -383,6 +435,21 @@ void PublishLocalHostSelfLevelUpOffer(
     const auto local_peer_id = g_local_transport.local_peer_id;
     if (local_peer_id == 0 ||
         HasUnresolvedIssuedLevelUpOfferForParticipant(local_peer_id)) {
+        return;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+    const std::uint32_t run_nonce =
+        local != nullptr && local->runtime.valid ? local->runtime.run_nonce : 0;
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (!BeginOrExtendHostLevelUpBarrier(
+            {local_peer_id},
+            run_nonce,
+            level,
+            experience,
+            source_progression_address,
+            now_ms)) {
         return;
     }
 
@@ -417,157 +484,3 @@ void PublishLocalHostSelfLevelUpOffer(
             " error=" + error_message);
     }
 }
-
-bool DebugPublishHostLevelUpOffer(
-    std::uint64_t target_participant_id,
-    std::int32_t level,
-    std::int32_t experience,
-    std::int32_t option_id,
-    std::int32_t apply_count,
-    std::string* error_message) {
-    auto fail = [&](std::string message) {
-        if (error_message != nullptr) {
-            *error_message = std::move(message);
-        }
-        return false;
-    };
-
-    if (!IsLocalTransportHost()) {
-        return fail("deterministic level-up offer requires the local transport host");
-    }
-    if (target_participant_id == 0) {
-        return fail("deterministic level-up offer requires a target participant id");
-    }
-    if (level <= 0 || experience < 0) {
-        return fail("deterministic level-up offer requires valid progression values");
-    }
-    if (option_id < 0 || apply_count <= 0 || apply_count > 2) {
-        return fail("deterministic level-up offer requires a valid option and apply_count 1..2");
-    }
-    if (HasUnresolvedIssuedLevelUpOfferForParticipant(target_participant_id)) {
-        return fail("target participant already has an unresolved level-up offer");
-    }
-
-    const auto runtime_state = SnapshotRuntimeState();
-    const bool target_self = target_participant_id == g_local_transport.local_peer_id;
-    const auto* participant = target_self
-        ? FindLocalParticipant(runtime_state)
-        : FindParticipant(runtime_state, target_participant_id);
-    if (participant == nullptr) {
-        return fail("deterministic level-up offer target participant is unavailable");
-    }
-    if (!participant->transport_connected) {
-        return fail("deterministic level-up offer target transport is disconnected");
-    }
-    if (!participant->owned_progression.initialized) {
-        return fail("deterministic level-up offer target progression is uninitialized");
-    }
-    if (participant->owned_progression.progression_book_truncated) {
-        return fail("deterministic level-up offer target progression book is truncated");
-    }
-    if (!target_self &&
-        (!IsRemoteParticipant(*participant) ||
-         !IsNativeControlledParticipant(*participant))) {
-        return fail("deterministic level-up offer target is not a native remote participant");
-    }
-
-    const auto* entry = FindProgressionBookEntryById(
-        participant->owned_progression,
-        option_id);
-    if (entry == nullptr) {
-        return fail("deterministic level-up offer option is outside the native progression book");
-    }
-    if (entry->statbook_max_level > 0 &&
-        static_cast<std::int32_t>(entry->active) + apply_count >
-            entry->statbook_max_level) {
-        return fail("deterministic level-up offer option would exceed its native max level");
-    }
-
-    std::string sync_error;
-    if (target_self) {
-        const bool previous_suppression =
-            g_local_transport.suppress_local_level_up_fanout_for_debug;
-        g_local_transport.suppress_local_level_up_fanout_for_debug = true;
-        const bool synchronized = SyncLocalPlayerProgressionToSharedLevelUp(
-                level,
-                experience,
-                &sync_error);
-        g_local_transport.suppress_local_level_up_fanout_for_debug =
-            previous_suppression;
-        if (!synchronized) {
-            return fail("deterministic host-self progression sync failed: " + sync_error);
-        }
-    } else if (!SyncParticipantProgressionToSharedLevelUp(
-                   target_participant_id,
-                   level,
-                   experience,
-                   0,
-                   &sync_error)) {
-        return fail("deterministic remote progression sync failed: " + sync_error);
-    }
-
-    BotSkillChoiceOption option;
-    option.option_id = option_id;
-    option.apply_count = apply_count;
-    std::vector<BotSkillChoiceOption> options = {option};
-    if (target_self) {
-        return IssueLocalHostSelfLevelUpOffer(
-            level,
-            experience,
-            std::move(options),
-            true,
-            error_message);
-    }
-
-    const auto* local = FindLocalParticipant(runtime_state);
-    const std::uint32_t run_nonce =
-        local != nullptr && local->runtime.valid ? local->runtime.run_nonce : 0;
-    IssueHostLevelUpOfferForParticipant(
-        target_participant_id,
-        run_nonce,
-        level,
-        experience,
-        std::move(options),
-        true);
-    Log(
-        "Multiplayer deterministic level-up offer issued. target_participant_id=" +
-        std::to_string(target_participant_id) +
-        " level=" + std::to_string(level) +
-        " xp=" + std::to_string(experience) +
-        " option_id=" + std::to_string(option_id) +
-        " apply_count=" + std::to_string(apply_count));
-    return true;
-}
-
-bool ShouldSuppressLocalLevelUpFanoutForDebug() {
-    return g_local_transport.suppress_local_level_up_fanout_for_debug;
-}
-
-bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code) {
-    if (exception_code != nullptr) {
-        *exception_code = 0;
-    }
-    if (screen_address == 0) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    uintptr_t vtable_address = 0;
-    uintptr_t close_address = 0;
-    if (!memory.TryReadValue(screen_address, &vtable_address) ||
-        vtable_address == 0 ||
-        !memory.TryReadValue(vtable_address + kLevelUpScreenCloseVtableOffset, &close_address) ||
-        close_address == 0) {
-        return false;
-    }
-
-    auto* close_screen = reinterpret_cast<NativeLevelUpScreenCloseFn>(close_address);
-    __try {
-        close_screen(reinterpret_cast<void*>(screen_address));
-        return true;
-    } __except (CaptureLocalTransportSehCode(GetExceptionInformation(), exception_code)) {
-        return false;
-    }
-}
-
-#include "level_up_choice_and_picker.inl"

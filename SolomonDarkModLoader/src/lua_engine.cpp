@@ -14,6 +14,7 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <deque>
 #include <filesystem>
@@ -40,9 +41,22 @@ std::atomic<std::uint64_t> g_last_lua_locked_ms{0};
 namespace detail {
 namespace {
 
+enum class LuaExecRequestState {
+    Pending,
+    Executing,
+    Canceled,
+    Finished,
+};
+
 struct PendingLuaExecRequest {
     std::string code;
     std::promise<LuaExecResult> promise;
+    std::atomic<LuaExecRequestState> state{LuaExecRequestState::Pending};
+};
+
+struct QueuedLuaExecRequest {
+    std::shared_ptr<PendingLuaExecRequest> request;
+    std::future<LuaExecResult> future;
 };
 
 std::mutex& LuaExecQueueMutex() {
@@ -50,29 +64,51 @@ std::mutex& LuaExecQueueMutex() {
     return mutex;
 }
 
-std::deque<PendingLuaExecRequest>& LuaExecQueueStorage() {
-    static std::deque<PendingLuaExecRequest> storage;
+std::deque<std::shared_ptr<PendingLuaExecRequest>>& LuaExecQueueStorage() {
+    static std::deque<std::shared_ptr<PendingLuaExecRequest>> storage;
     return storage;
 }
 
-std::future<LuaExecResult> EnqueueLuaExecRequest(std::string code) {
-    std::promise<LuaExecResult> promise;
-    auto future = promise.get_future();
+QueuedLuaExecRequest EnqueueLuaExecRequest(std::string code) {
+    auto request = std::make_shared<PendingLuaExecRequest>();
+    request->code = std::move(code);
+    auto future = request->promise.get_future();
     {
         std::lock_guard<std::mutex> lock(LuaExecQueueMutex());
-        PendingLuaExecRequest request;
-        request.code = std::move(code);
-        request.promise = std::move(promise);
-        LuaExecQueueStorage().emplace_back(std::move(request));
+        LuaExecQueueStorage().emplace_back(request);
     }
-    return future;
+    return QueuedLuaExecRequest{std::move(request), std::move(future)};
 }
 
-std::deque<PendingLuaExecRequest> DrainLuaExecQueue() {
+std::deque<std::shared_ptr<PendingLuaExecRequest>> DrainLuaExecQueue() {
     std::lock_guard<std::mutex> lock(LuaExecQueueMutex());
-    std::deque<PendingLuaExecRequest> drained;
+    std::deque<std::shared_ptr<PendingLuaExecRequest>> drained;
     std::swap(drained, LuaExecQueueStorage());
     return drained;
+}
+
+bool TryClaimLuaExecRequest(const std::shared_ptr<PendingLuaExecRequest>& request) {
+    if (request == nullptr) {
+        return false;
+    }
+    auto expected = LuaExecRequestState::Pending;
+    return request->state.compare_exchange_strong(
+        expected,
+        LuaExecRequestState::Executing,
+        std::memory_order_acq_rel,
+        std::memory_order_acquire);
+}
+
+bool TryCancelLuaExecRequest(const std::shared_ptr<PendingLuaExecRequest>& request) {
+    if (request == nullptr) {
+        return false;
+    }
+    auto expected = LuaExecRequestState::Pending;
+    return request->state.compare_exchange_strong(
+        expected,
+        LuaExecRequestState::Canceled,
+        std::memory_order_acq_rel,
+        std::memory_order_acquire);
 }
 
 void SetPromiseValueSafely(std::promise<LuaExecResult>& promise, LuaExecResult result) {
@@ -84,11 +120,26 @@ void SetPromiseValueSafely(std::promise<LuaExecResult>& promise, LuaExecResult r
     }
 }
 
-void ResolveDrainedAsError(std::deque<PendingLuaExecRequest>& drained, const char* reason) {
-    for (auto& request : drained) {
+void FinishLuaExecRequest(
+    const std::shared_ptr<PendingLuaExecRequest>& request,
+    LuaExecResult result) {
+    if (request == nullptr) {
+        return;
+    }
+    SetPromiseValueSafely(request->promise, std::move(result));
+    request->state.store(LuaExecRequestState::Finished, std::memory_order_release);
+}
+
+void ResolveDrainedAsError(
+    std::deque<std::shared_ptr<PendingLuaExecRequest>>& drained,
+    const char* reason) {
+    for (const auto& request : drained) {
+        if (!TryClaimLuaExecRequest(request)) {
+            continue;
+        }
         LuaExecResult result;
         result.error = reason == nullptr ? "Lua engine is unavailable." : reason;
-        SetPromiseValueSafely(request.promise, std::move(result));
+        FinishLuaExecRequest(request, std::move(result));
     }
 }
 
@@ -465,34 +516,51 @@ LuaExecResult QueueLuaExecRequestAndWait(const std::string& code, std::uint32_t 
     // invert any lock order: ProcessLuaExecQueueOnMainThread releases
     // the queue mutex before acquiring LuaEngineMutex, so the two are
     // never held simultaneously in the opposite direction.
-    std::future<LuaExecResult> future;
+    detail::QueuedLuaExecRequest queued;
     {
         std::scoped_lock lock(detail::LuaEngineMutex());
         if (!detail::LuaEngineInitializedFlag()) {
             result.error = "Lua engine is not initialized.";
             return result;
         }
-        future = detail::EnqueueLuaExecRequest(code);
+        queued = detail::EnqueueLuaExecRequest(code);
     }
-    const auto wait_status = future.wait_for(std::chrono::milliseconds(timeout_ms));
-    if (wait_status != std::future_status::ready) {
-        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-        const auto endscene_ms = lua_exec_diag::g_last_endscene_ms.load(std::memory_order_acquire);
-        const auto pump_enter_ms = lua_exec_diag::g_last_pump_enter_ms.load(std::memory_order_acquire);
-        const auto pump_locked_ms = lua_exec_diag::g_last_pump_locked_ms.load(std::memory_order_acquire);
-        const auto lua_locked_ms = lua_exec_diag::g_last_lua_locked_ms.load(std::memory_order_acquire);
-        Log(
-            "[lua-exec-diag] timeout. now_ms=" + std::to_string(now_ms) +
-            " endscene_ago_ms=" + std::to_string(endscene_ms == 0 ? -1LL : static_cast<std::int64_t>(now_ms - endscene_ms)) +
-            " pump_enter_ago_ms=" + std::to_string(pump_enter_ms == 0 ? -1LL : static_cast<std::int64_t>(now_ms - pump_enter_ms)) +
-            " pump_locked_ago_ms=" + std::to_string(pump_locked_ms == 0 ? -1LL : static_cast<std::int64_t>(now_ms - pump_locked_ms)) +
-            " lua_locked_ago_ms=" + std::to_string(lua_locked_ms == 0 ? -1LL : static_cast<std::int64_t>(now_ms - lua_locked_ms)));
-        result.error = "Lua exec request timed out waiting for gameplay thread.";
-        return result;
+    bool ready =
+        queued.future.wait_for(std::chrono::milliseconds(timeout_ms)) ==
+        std::future_status::ready;
+    if (!ready) {
+        const bool canceled = detail::TryCancelLuaExecRequest(queued.request);
+        if (!canceled) {
+            // Completion can race the timeout. Prefer the completed result if
+            // the gameplay thread published it before this second check.
+            ready = queued.future.wait_for(std::chrono::milliseconds(0)) ==
+                std::future_status::ready;
+        }
+        if (!ready) {
+            const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+            const auto endscene_ms =
+                lua_exec_diag::g_last_endscene_ms.load(std::memory_order_acquire);
+            const auto pump_enter_ms =
+                lua_exec_diag::g_last_pump_enter_ms.load(std::memory_order_acquire);
+            const auto pump_locked_ms =
+                lua_exec_diag::g_last_pump_locked_ms.load(std::memory_order_acquire);
+            const auto lua_locked_ms =
+                lua_exec_diag::g_last_lua_locked_ms.load(std::memory_order_acquire);
+            Log(
+                "[lua-exec-diag] timeout. now_ms=" + std::to_string(now_ms) +
+                " endscene_ago_ms=" + std::to_string(endscene_ms == 0 ? -1LL : static_cast<std::int64_t>(now_ms - endscene_ms)) +
+                " pump_enter_ago_ms=" + std::to_string(pump_enter_ms == 0 ? -1LL : static_cast<std::int64_t>(now_ms - pump_enter_ms)) +
+                " pump_locked_ago_ms=" + std::to_string(pump_locked_ms == 0 ? -1LL : static_cast<std::int64_t>(now_ms - pump_locked_ms)) +
+                " lua_locked_ago_ms=" + std::to_string(lua_locked_ms == 0 ? -1LL : static_cast<std::int64_t>(now_ms - lua_locked_ms)));
+            result.error = canceled
+                ? "Lua exec request timed out and was canceled before gameplay-thread execution."
+                : "Lua exec request timed out after gameplay-thread execution began.";
+            return result;
+        }
     }
 
     try {
-        return future.get();
+        return queued.future.get();
     } catch (const std::future_error& e) {
         result.error = std::string("Lua exec promise error: ") + e.what();
         return result;
@@ -531,9 +599,12 @@ void ProcessLuaExecQueueOnMainThread() {
     lua_State* shared_state =
         (mods.empty() || mods.front() == nullptr) ? nullptr : mods.front()->state;
 
-    for (auto& request : drained) {
-        LuaExecResult result = ExecuteLuaCodeOnLockedState(shared_state, request.code);
-        SetPromiseValueSafely(request.promise, std::move(result));
+    for (const auto& request : drained) {
+        if (!TryClaimLuaExecRequest(request)) {
+            continue;
+        }
+        LuaExecResult result = ExecuteLuaCodeOnLockedState(shared_state, request->code);
+        FinishLuaExecRequest(request, std::move(result));
     }
 }
 

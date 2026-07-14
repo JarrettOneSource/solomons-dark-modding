@@ -1,3 +1,17 @@
+bool IsRunLifecycleActive();
+bool EndRunLifecycleFromExternal(std::string_view reason);
+int GetRunLifecycleCurrentWave();
+std::uint64_t GetRunLifecycleElapsedMilliseconds();
+void SetRunLifecycleCombatPreludeOnlySuppression(bool enabled);
+void SetRunLifecycleWaveStartEnemyTracking(bool enabled);
+void SetRunLifecycleManualEnemySpawnerTestMode(bool enabled);
+bool IsRunLifecycleManualEnemySpawnerTestModeEnabled();
+void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies);
+bool TryGetRunLifecycleEnemySpawnSerial(uintptr_t enemy_address, std::uint32_t* spawn_serial);
+bool TryAccelerateRunLifecycleEnemyPoolForSnapshot(int enemy_type, std::uint32_t missing_enemy_count);
+uintptr_t GetRunLifecycleLastWaveSpawnerAddress();
+bool IsRunLifecycleManualEnemySpawnerReady();
+
 bool QueueRunLifecycleManualEnemySpawn(
     int type_id,
     float x,
@@ -75,6 +89,15 @@ void ClearManualRunEnemyFreeze(uintptr_t actor_address = 0);
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);
 bool QueueReplicatedLootSnapshot(
     const multiplayer::LootSnapshotRuntimeInfo& snapshot,
+    std::string* error_message);
+bool QueueNativePotionInventoryCredit(
+    std::uint64_t authority_participant_id,
+    std::uint32_t run_nonce,
+    std::uint64_t network_drop_id,
+    std::uint32_t item_type_id,
+    std::int32_t item_slot,
+    std::int32_t stack_count,
+    std::uint32_t inventory_revision,
     std::string* error_message);
 bool IsReplicatedLootPresentationActor(uintptr_t actor_address);
 bool TryGetReplicatedLootPresentationState(

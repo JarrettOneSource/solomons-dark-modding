@@ -660,6 +660,7 @@ def run_verifier(timeout: float, *, owner: str = "client") -> dict[str, Any]:
     output["startup"] = {"attempt": startup["attempt"]}
     output["launch"] = startup["launch"]
     output["hub_ready"] = startup["hub_ready"]
+    output["manual_spawner_prearm"] = startup["manual_spawner_prearm"]
     output["run_entry"] = startup["run_entry"]
     output["run_ready"] = startup["run_ready"]
     output["manual_combat"] = startup["manual_combat"]

@@ -43,6 +43,7 @@ from verify_multiplayer_primary_kill_stress import (
     place_pair_on_clear_lane,
     prepare_and_queue_caster,
     primary_input_released,
+    set_manual_spawner_test_mode,
     spawn_one_enemy,
     wait_for_cast_runtime_ready,
     values,
@@ -880,6 +881,7 @@ def launch_pair_ready(
     preset: str = FIRE_PRESET,
     god_mode: bool = True,
     manual_combat: bool = True,
+    prearm_manual_spawner: bool = False,
     boneyard_override: Path | None = FLAT_BONEYARD,
     wave_override: Path | None = None,
 ) -> dict[str, Any]:
@@ -891,6 +893,10 @@ def launch_pair_ready(
                 preset=preset,
                 god_mode=god_mode,
                 test_survival_boneyard_override=boneyard_override,
+                test_blank_boneyard=(
+                    boneyard_override is not None
+                    and boneyard_override.resolve() == FLAT_BONEYARD.resolve()
+                ),
                 test_wave_override=wave_override,
             )
             disable_bots()
@@ -898,6 +904,17 @@ def launch_pair_ready(
                 "host_observes_client": wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub"),
                 "client_observes_host": wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub"),
             }
+            manual_spawner_prearm = None
+            if manual_combat or prearm_manual_spawner:
+                manual_spawner_prearm = {
+                    "host": set_manual_spawner_test_mode(HOST_PIPE, True),
+                    "client": set_manual_spawner_test_mode(CLIENT_PIPE, True),
+                }
+                for label, state in manual_spawner_prearm.items():
+                    if state.get("ok") != "true" or state.get("active") != "true":
+                        raise VerifyFailure(
+                            f"failed to prearm {label} manual spawner mode: {state}"
+                        )
             run_entry = start_host_testrun_and_wait_for_clients(timeout=timeout)
             run_ready = {
                 "host_observes_client": wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "testrun"),
@@ -914,6 +931,7 @@ def launch_pair_ready(
                 "attempt": attempt,
                 "launch": launch,
                 "hub_ready": hub_ready,
+                "manual_spawner_prearm": manual_spawner_prearm,
                 "run_entry": run_entry,
                 "run_ready": run_ready,
                 "manual_combat": manual_combat_state,
@@ -933,6 +951,7 @@ def run_verifier(timeout: float, *, owner: str = "client") -> dict[str, Any]:
     output["startup"] = {"attempt": startup["attempt"]}
     output["launch"] = startup["launch"]
     output["hub_ready"] = startup["hub_ready"]
+    output["manual_spawner_prearm"] = startup["manual_spawner_prearm"]
     output["run_entry"] = startup["run_entry"]
     output["run_ready"] = startup["run_ready"]
     output["manual_combat"] = startup["manual_combat"]

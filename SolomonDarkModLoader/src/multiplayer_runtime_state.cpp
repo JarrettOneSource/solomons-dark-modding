@@ -46,10 +46,7 @@ bool IsFiniteTransform(float x, float y, float heading) {
 }
 
 bool IsOlderSequence(std::uint32_t candidate, std::uint32_t latest) {
-    if (candidate == 0 || latest == 0 || candidate == latest) {
-        return false;
-    }
-    return static_cast<std::int32_t>(candidate - latest) < 0;
+    return candidate != latest && !IsPacketSequenceNewer(candidate, latest);
 }
 
 float NormalizeHeadingDegrees(float degrees) {
@@ -68,6 +65,17 @@ float NormalizeHeadingDegrees(float degrees) {
 bool SameWorldSnapshotTimeline(
     const WorldSnapshotRuntimeInfo& left,
     const WorldSnapshotRuntimeInfo& right) {
+    return left.valid &&
+           right.valid &&
+           left.authority_participant_id == right.authority_participant_id &&
+           left.scene_epoch == right.scene_epoch &&
+           left.run_nonce == right.run_nonce &&
+           SameParticipantSceneIntent(left.scene_intent, right.scene_intent);
+}
+
+bool SameLootSnapshotTimeline(
+    const LootSnapshotRuntimeInfo& left,
+    const LootSnapshotRuntimeInfo& right) {
     return left.valid &&
            right.valid &&
            left.authority_participant_id == right.authority_participant_id &&
@@ -508,6 +516,21 @@ void AppendWorldSnapshot(RuntimeState* state, WorldSnapshotRuntimeInfo snapshot)
     if (history.size() > kWorldSnapshotHistoryCapacity) {
         history.erase(history.begin(), history.begin() + (history.size() - kWorldSnapshotHistoryCapacity));
     }
+}
+
+bool AppendLootSnapshot(RuntimeState* state, LootSnapshotRuntimeInfo snapshot) {
+    if (state == nullptr || !snapshot.valid) {
+        return false;
+    }
+
+    const auto& latest = state->loot_snapshot;
+    if (SameLootSnapshotTimeline(latest, snapshot) &&
+        !IsPacketSequenceNewer(snapshot.sequence, latest.sequence)) {
+        return false;
+    }
+
+    state->loot_snapshot = std::move(snapshot);
+    return true;
 }
 
 bool TrySampleWorldSnapshot(

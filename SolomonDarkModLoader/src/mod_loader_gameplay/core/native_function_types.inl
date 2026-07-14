@@ -74,7 +74,7 @@ using ActorBuildRenderDescriptorFromSourceFn = void(__thiscall*)(void* self);
 using ScalarDeletingDestructorFn = void(__thiscall*)(void* self, int flags);
 using NativeModifierApplyFn = std::uint32_t(__thiscall*)(void* self, void* actor);
 using PointerListAddSmartPointerFn = void(__thiscall*)(void* self, uintptr_t control_block);
-using PointerListRemoveSmartPointerFn = void(__thiscall*)(void* self, uintptr_t control_block);
+using PointerListRemoveValueFn = void(__thiscall*)(void* self, uintptr_t value);
 using SpawnRewardGoldFn = void(__thiscall*)(void* self, std::uint32_t x_bits, std::uint32_t y_bits, int amount, int lifetime);
 using SpawnPotionDropFn = void(__thiscall*)(void* self, std::uint32_t x_bits, std::uint32_t y_bits, int potion_slot);
 using GameFreeFn = void(__cdecl*)(void* memory);
@@ -83,6 +83,11 @@ using OrbRewardInitializeFn = void(__thiscall*)(void* self, void* rng_state);
 using GoldPickupTickFn = void(__thiscall*)(void* self);
 using OrbPickupTickFn = void(__thiscall*)(void* self);
 using ItemDropPickupTickFn = void(__thiscall*)(void* self);
+using InventoryInsertOrStackItemFn = void(__thiscall*)(
+    void* inventory_root,
+    void* item,
+    std::uint8_t allow_potion_stacking,
+    std::uint8_t remove_placeholder);
 using GameplayHudRenderDispatchFn = void(__thiscall*)(void* self, int render_case);
 
 struct NativeGameString {

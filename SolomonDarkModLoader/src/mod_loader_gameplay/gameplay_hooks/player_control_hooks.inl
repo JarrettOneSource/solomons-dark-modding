@@ -360,6 +360,9 @@ void __fastcall HookPlayerControlBrainUpdate(
         g_gameplay_keyboard_injection.pending_injected_keyboard_control_frames;
     const auto pending_injected_keyboard_control_frames =
         injected_keyboard_control_frames.load(std::memory_order_acquire);
+    const bool manual_spawner_native_keyboard_control_active =
+        current_actor_is_local_player &&
+        pending_injected_keyboard_control_frames > 0;
     const bool manual_spawner_scripted_local_primary_control =
         current_actor_is_local_player &&
         (pending_manual_spawner_primary_allowances > 0 ||
@@ -590,6 +593,35 @@ void __fastcall HookPlayerControlBrainUpdate(
     if (sanitize_native_remote_idle_control_brain) {
         ClearIdleNativeRemoteCastReplayState(actor_address, selection_pointer);
         (void)write_vector2(param2, 0.0f, 0.0f);
+    }
+
+    // Manual-spawner mode normally owns and suppresses local control so combat
+    // fixtures remain deterministic. An explicit native-control allowance is
+    // used by real-key behavior tests: forward only the movement vector that
+    // the stock input sampler actually observed, leaving acceleration, speed
+    // limiting, collision, and replication on the native path.
+    if (manual_spawner_native_keyboard_control_active) {
+        float native_move_x = 0.0f;
+        float native_move_y = 0.0f;
+        if (TryReadFiniteFloatField(
+                current_gameplay_address,
+                kGameplayLocalMovementInputXOffset,
+                &native_move_x) &&
+            TryReadFiniteFloatField(
+                current_gameplay_address,
+                kGameplayLocalMovementInputYOffset,
+                &native_move_y)) {
+            const auto magnitude_squared =
+                native_move_x * native_move_x + native_move_y * native_move_y;
+            if (std::isfinite(magnitude_squared) && magnitude_squared > 0.000001f) {
+                if (magnitude_squared > 1.0f) {
+                    const auto inverse_magnitude = 1.0f / std::sqrt(magnitude_squared);
+                    native_move_x *= inverse_magnitude;
+                    native_move_y *= inverse_magnitude;
+                }
+                (void)write_vector2(param2, native_move_x, native_move_y);
+            }
+        }
     }
 
     float raw_move_x_after = 0.0f;

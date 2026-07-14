@@ -4,6 +4,7 @@ import ctypes
 import os
 import sys
 import time
+from ctypes import wintypes
 
 from capture_window import activate_window, find_window
 
@@ -52,40 +53,82 @@ KEY_CODES = {
 
 class KEYBDINPUT(ctypes.Structure):
     _fields_ = [
-        ("wVk", ctypes.c_ushort),
-        ("wScan", ctypes.c_ushort),
-        ("dwFlags", ctypes.c_ulong),
-        ("time", ctypes.c_ulong),
-        ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong)),
+        ("wVk", wintypes.WORD),
+        ("wScan", wintypes.WORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", wintypes.WPARAM),
+    ]
+
+
+class MOUSEINPUT(ctypes.Structure):
+    _fields_ = [
+        ("dx", wintypes.LONG),
+        ("dy", wintypes.LONG),
+        ("mouseData", wintypes.DWORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", wintypes.WPARAM),
+    ]
+
+
+class HARDWAREINPUT(ctypes.Structure):
+    _fields_ = [
+        ("uMsg", wintypes.DWORD),
+        ("wParamL", wintypes.WORD),
+        ("wParamH", wintypes.WORD),
+    ]
+
+
+class INPUT_UNION(ctypes.Union):
+    _fields_ = [
+        ("mi", MOUSEINPUT),
+        ("ki", KEYBDINPUT),
+        ("hi", HARDWAREINPUT),
     ]
 
 
 class INPUT(ctypes.Structure):
-    class _INPUT_UNION(ctypes.Union):
-        _fields_ = [("ki", KEYBDINPUT), ("padding", ctypes.c_byte * 24)]
-    _anonymous_ = ("_union",)
-    _fields_ = [("type", ctypes.c_ulong), ("_union", _INPUT_UNION)]
+    _anonymous_ = ("data",)
+    _fields_ = [("type", wintypes.DWORD), ("data", INPUT_UNION)]
+
+
+user32.SendInput.argtypes = [
+    wintypes.UINT,
+    ctypes.POINTER(INPUT),
+    ctypes.c_int,
+]
+user32.SendInput.restype = wintypes.UINT
+
+
+def send_key_event(vk_code: int, *, key_up: bool) -> None:
+    scan_code = user32.MapVirtualKeyW(vk_code, MAPVK_VK_TO_VSC) & 0xFF
+    event = INPUT(
+        type=INPUT_KEYBOARD,
+        ki=KEYBDINPUT(
+            wVk=0,
+            wScan=scan_code,
+            dwFlags=KEYEVENTF_SCANCODE | (KEYEVENTF_KEYUP if key_up else 0),
+            time=0,
+            dwExtraInfo=0,
+        ),
+    )
+    events = (INPUT * 1)(event)
+    if user32.SendInput(1, events, ctypes.sizeof(INPUT)) != 1:
+        raise ctypes.WinError(ctypes.get_last_error())
 
 
 def send_key(vk_code: int) -> None:
-    scan_code = user32.MapVirtualKeyW(vk_code, MAPVK_VK_TO_VSC) & 0xFFFF
+    send_key_event(vk_code, key_up=False)
+    send_key_event(vk_code, key_up=True)
 
-    inputs = (INPUT * 2)()
-    inputs[0].type = INPUT_KEYBOARD
-    inputs[0].ki.wVk = 0
-    inputs[0].ki.wScan = scan_code
-    inputs[0].ki.dwFlags = KEYEVENTF_SCANCODE
-    inputs[0].ki.time = 0
-    inputs[0].ki.dwExtraInfo = None
 
-    inputs[1].type = INPUT_KEYBOARD
-    inputs[1].ki.wVk = 0
-    inputs[1].ki.wScan = scan_code
-    inputs[1].ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP
-    inputs[1].ki.time = 0
-    inputs[1].ki.dwExtraInfo = None
-
-    user32.SendInput(2, ctypes.byref(inputs), ctypes.sizeof(INPUT))
+def hold_key(vk_code: int, hold_ms: int) -> None:
+    send_key_event(vk_code, key_up=False)
+    try:
+        time.sleep(max(0, hold_ms) / 1000.0)
+    finally:
+        send_key_event(vk_code, key_up=True)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -113,6 +156,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Delay after sending the final key before exiting. Default: 150.",
     )
     parser.add_argument(
+        "--hold-ms",
+        type=int,
+        default=0,
+        help="Hold one key down for this many milliseconds before releasing it.",
+    )
+    parser.add_argument(
         "keys",
         nargs="+",
         help="Keys to send in order. Supported: " + ", ".join(sorted(KEY_CODES.keys())),
@@ -131,16 +180,23 @@ def main() -> int:
     unknown_keys = [key for key in args.keys if key.casefold() not in KEY_CODES]
     if unknown_keys:
         parser.error("Unsupported keys: " + ", ".join(unknown_keys))
+    if args.hold_ms < 0:
+        parser.error("--hold-ms cannot be negative")
+    if args.hold_ms > 0 and len(args.keys) != 1:
+        parser.error("--hold-ms requires exactly one key")
 
     window = find_window(args.title, args.exact_title, args.pid)
     if args.activate:
         activate_window(window.hwnd, args.activation_delay_ms)
         window = find_window(args.title, args.exact_title, args.pid)
 
-    for index, key in enumerate(args.keys):
-        send_key(KEY_CODES[key.casefold()])
-        if index + 1 != len(args.keys):
-            time.sleep(max(0, args.interval_ms) / 1000.0)
+    if args.hold_ms > 0:
+        hold_key(KEY_CODES[args.keys[0].casefold()], args.hold_ms)
+    else:
+        for index, key in enumerate(args.keys):
+            send_key(KEY_CODES[key.casefold()])
+            if index + 1 != len(args.keys):
+                time.sleep(max(0, args.interval_ms) / 1000.0)
 
     time.sleep(max(0, args.post_delay_ms) / 1000.0)
     print(f"sent keys to {window.title}: {' '.join(args.keys)}")

@@ -448,6 +448,7 @@ def main() -> int:
             args.timeout,
             god_mode=False,
             manual_combat=False,
+            prearm_manual_spawner=True,
         )
         output["launch"] = startup["launch"]
         output["combat_prelude"] = enable_unsuppressed_combat_prelude(

@@ -32,12 +32,10 @@ from verify_real_input_spell_cast_sync import (
     CLIENT_LOG,
     HOST_LOG,
     Direction,
+    enable_progression_neutral_combat,
     log_after,
     parse_local_pressed_sequences,
-    queue_gameplay_mouse_left,
     read_log,
-    wait_for_source_cast,
-    ensure_host_combat_started,
     sustain_pair_vitals,
 )
 
@@ -164,12 +162,18 @@ emit("result.option_id", result and result.option_id or -1)
 emit("result.apply_count", result and result.apply_count or 0)
 emit("result.resulting_active", result and result.resulting_active or 0)
 emit("result.code", result and result.result_code or 0)
+emit("result.auto_picked", result and result.auto_picked or false)
 
 local wait = mp and mp.level_up_wait_status or nil
 emit("wait.valid", wait and wait.valid or false)
 emit("wait.pause_active", wait and wait.pause_active or false)
+emit("wait.timed_out", wait and wait.timed_out or false)
 emit("wait.authority", wait and wait.authority_participant_id or 0)
+emit("wait.barrier_id", wait and wait.barrier_id or 0)
+emit("wait.revision", wait and wait.revision or 0)
+emit("wait.deadline_remaining_ms", wait and wait.deadline_remaining_ms or 0)
 emit("wait.waiting_count", wait and wait.waiting_count or 0)
+emit("wait.display_text", wait and wait.display_text or "")
 if wait and wait.waiting_participant_ids then
   for index, participant_id in ipairs(wait.waiting_participant_ids) do
     emit("wait.participant." .. tostring(index), participant_id or 0)
@@ -557,6 +561,12 @@ def verify_client_fireball_cast_on_host(
     expected_min_level: int | None = None,
     baseline_cost: float | None = None,
 ) -> dict[str, Any]:
+    from verify_multiplayer_fireball_explode_effect_sync import (
+        build_manual_pair,
+        cast_fireball_pair,
+    )
+    from verify_multiplayer_primary_kill_stress import cleanup_live_enemies
+
     direction = Direction(
         label,
         CLIENT_ID,
@@ -567,15 +577,25 @@ def verify_client_fireball_cast_on_host(
         HOST_PIPE,
         HOST_LOG,
     )
+    cleanup = cleanup_live_enemies()
+    pair = build_manual_pair(
+        direction,
+        320.0,
+        0.0,
+        target_hp=5000.0,
+        include_secondary=False,
+    )
     source_offset = len(read_log(CLIENT_LOG))
     receiver_offset = len(read_log(HOST_LOG))
-    queue_result = queue_gameplay_mouse_left(direction, FIREBALL_CAST_FRAMES)
-    source_log, phase_counts, native_hook_count = wait_for_source_cast(
+    cast = cast_fireball_pair(
         direction,
-        source_offset,
-        {"pressed": 1, "released": 1},
-        timeout=6.0,
+        pair,
+        f"level_up_offer.{label}",
+        resource_value=5000.0,
     )
+    source_log = log_after(CLIENT_LOG, source_offset)
+    phase_counts = cast["phase_counts"]
+    native_hook_count = cast["native_hook_count"]
     native_sequences = parse_local_pressed_sequences(source_log, CLIENT_ID)
     if native_hook_count != 1 or len(native_sequences) != 1:
         raise VerifyFailure(
@@ -583,7 +603,7 @@ def verify_client_fireball_cast_on_host(
             f"hooks={native_hook_count} sequences={native_sequences} phases={phase_counts}"
         )
 
-    deadline = time.monotonic() + 8.0
+    deadline = time.monotonic() + 4.0
     prepared_matches: list[dict[str, Any]] = []
     projectile_sequences: list[int] = []
     receiver_log = ""
@@ -600,7 +620,7 @@ def verify_client_fireball_cast_on_host(
             skill_id=FIREBALL_BUILD_SKILL_ID,
             expected_projectile_type=FIREBALL_PROJECTILE_TYPE,
         )
-        if prepared_matches and set(native_sequences).issubset(set(projectile_sequences)):
+        if prepared_matches:
             break
         time.sleep(0.05)
 
@@ -609,11 +629,11 @@ def verify_client_fireball_cast_on_host(
             f"{label}: host never prepared the client's remote Fireball cast; "
             f"native_sequences={native_sequences} receiver_tail={receiver_log[-4000:]}"
         )
-    if not set(native_sequences).issubset(set(projectile_sequences)):
+    replicated_delivery = cast["replicated_cast_delivery"]
+    if not replicated_delivery["ok"]:
         raise VerifyFailure(
-            f"{label}: host did not observe the client's remote Fireball projectile lifecycle; "
-            f"native_sequences={native_sequences} projectile_sequences={projectile_sequences} "
-            f"receiver_tail={receiver_log[-4000:]}"
+            f"{label}: host did not queue and prepare the client's remote Fireball; "
+            f"delivery={replicated_delivery} receiver_tail={receiver_log[-4000:]}"
         )
 
     prepared = prepared_matches[-1]
@@ -624,7 +644,9 @@ def verify_client_fireball_cast_on_host(
         )
 
     return {
-        "queue_result": queue_result,
+        "cleanup": cleanup,
+        "pair": pair,
+        "cast": cast,
         "phase_counts": phase_counts,
         "native_hook_count": native_hook_count,
         "native_sequences": native_sequences,
@@ -640,6 +662,7 @@ def verify_client_fireball_cast_on_host(
             else None
         ),
         "projectile_sequences": projectile_sequences,
+        "replicated_cast_delivery": replicated_delivery,
     }
 
 
@@ -674,7 +697,7 @@ def wait_for_pair_ready(timeout: float) -> dict[str, Any]:
 def publish_offer(level: int, experience: int) -> dict[str, str]:
     code = f"""
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
-local ok, result = pcall(sd.runtime.debug_publish_level_up_offer, {{ level = {level}, experience = {experience} }})
+local ok, result = pcall(sd.runtime.debug_publish_level_up_offer, {{ level = {level}, experience = {experience}, target_participant_id = {CLIENT_ID} }})
 emit("pcall_ok", ok)
 emit("result", result)
 """
@@ -684,15 +707,33 @@ emit("result", result)
     return values
 
 
-def wait_for_client_offer(level: int, timeout: float) -> dict[str, Any]:
+def publish_barrier_offer(level: int, experience: int) -> dict[str, str]:
+    code = f"""
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local ok, result = pcall(sd.runtime.debug_publish_level_up_offer, {{ level = {level}, experience = {experience} }})
+emit("pcall_ok", ok)
+emit("result", result)
+"""
+    values = parse_key_values(lua(HOST_PIPE, code, timeout=5.0))
+    if values.get("pcall_ok") != "true" or values.get("result") != "true":
+        raise VerifyFailure(f"host failed to publish all-player level-up offer: {values}")
+    return values
+
+
+def wait_for_local_offer(
+    pipe_name: str,
+    participant_id: int,
+    level: int,
+    timeout: float,
+) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
     while time.monotonic() < deadline:
-        last = capture(CLIENT_PIPE)
+        last = capture(pipe_name)
         if (
             last.get("offer.valid") == "true"
             and parse_int_text(last.get("offer.authority"), 0) == HOST_ID
-            and parse_int_text(last.get("offer.target"), 0) == CLIENT_ID
+            and parse_int_text(last.get("offer.target"), 0) == participant_id
             and parse_int_text(last.get("offer.level"), 0) == level
             and parse_int_text(last.get("offer.option_count"), 0) > 0
             and parse_int_text(last.get("player.skill_picker_screen"), 0) != 0
@@ -728,7 +769,18 @@ def wait_for_client_offer(level: int, timeout: float) -> dict[str, Any]:
                 "picker_selected_index": parse_int_text(last.get("picker.selected_index"), -1),
             }
         time.sleep(0.1)
-    raise VerifyFailure(f"client did not receive level-up offer: {last}")
+    raise VerifyFailure(
+        "local participant did not receive level-up offer: "
+        f"participant_id={participant_id} last={last}"
+    )
+
+
+def wait_for_client_offer(level: int, timeout: float) -> dict[str, Any]:
+    return wait_for_local_offer(CLIENT_PIPE, CLIENT_ID, level, timeout)
+
+
+def wait_for_host_offer(level: int, timeout: float) -> dict[str, Any]:
+    return wait_for_local_offer(HOST_PIPE, HOST_ID, level, timeout)
 
 
 def wait_for_wait_status(
@@ -783,49 +835,180 @@ def wait_for_wait_status(
     )
 
 
-def choose_client_option(offer_id: int, option_index: int) -> dict[str, str]:
-    code = f"""
-local function emit(key, value) print(key .. "=" .. tostring(value)) end
-local ok, result = pcall(sd.runtime.choose_level_up_option, {{ offer_id = {offer_id}, option_index = {option_index} }})
-emit("pcall_ok", ok)
-emit("result", result)
-"""
-    values = parse_key_values(lua(CLIENT_PIPE, code, timeout=5.0))
-    if values.get("pcall_ok") != "true" or values.get("result") != "true":
-        raise VerifyFailure(f"client failed to submit level-up choice: {values}")
-    return values
-
-
-def wait_for_choice_result(offer_id: int, level: int, timeout: float) -> dict[str, Any]:
+def wait_for_waiting_ids(
+    expected_participant_ids: set[int],
+    timeout: float,
+    *,
+    host_display_text: str | None = None,
+    require_timed_out: bool | None = None,
+) -> dict[str, dict[str, str]]:
     deadline = time.monotonic() + timeout
     last_host: dict[str, str] = {}
     last_client: dict[str, str] = {}
     while time.monotonic() < deadline:
         last_host = capture(HOST_PIPE)
         last_client = capture(CLIENT_PIPE)
+        snapshots = (last_host, last_client)
+        observed_sets: list[set[int]] = []
+        for snapshot in snapshots:
+            waiting_count = parse_int_text(snapshot.get("wait.waiting_count"), 0)
+            observed_sets.append(
+                {
+                    parse_int_text(
+                        snapshot.get(f"wait.participant.{index}"),
+                        0,
+                    )
+                    for index in range(1, waiting_count + 1)
+                }
+                - {0}
+            )
+        same_barrier = (
+            parse_int_text(last_host.get("wait.barrier_id"), 0) != 0
+            and last_host.get("wait.barrier_id")
+            == last_client.get("wait.barrier_id")
+        )
+        expected_pause = bool(expected_participant_ids)
+        pause_matches = all(
+            (snapshot.get("wait.pause_active") == "true")
+            == expected_pause
+            for snapshot in snapshots
+        )
+        timeout_matches = (
+            require_timed_out is None
+            or all(
+                (snapshot.get("wait.timed_out") == "true")
+                == require_timed_out
+                for snapshot in snapshots
+            )
+        )
+        display_matches = (
+            host_display_text is None
+            or last_host.get("wait.display_text") == host_display_text
+        )
+        if (
+            same_barrier
+            and pause_matches
+            and timeout_matches
+            and display_matches
+            and all(
+                observed == expected_participant_ids
+                for observed in observed_sets
+            )
+        ):
+            return {"host": last_host, "client": last_client}
+        time.sleep(0.1)
+    raise VerifyFailure(
+        "level-up barrier waiting set did not converge: "
+        f"expected={sorted(expected_participant_ids)} "
+        f"host_display_text={host_display_text!r} "
+        f"require_timed_out={require_timed_out} "
+        f"last_host={last_host} last_client={last_client}"
+    )
+
+
+def choose_local_option(
+    pipe_name: str,
+    offer_id: int,
+    option_index: int,
+) -> dict[str, str]:
+    code = f"""
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local ok, result = pcall(sd.runtime.choose_level_up_option, {{ offer_id = {offer_id}, option_index = {option_index} }})
+emit("pcall_ok", ok)
+emit("result", result)
+"""
+    values = parse_key_values(lua(pipe_name, code, timeout=5.0))
+    if values.get("pcall_ok") != "true" or values.get("result") != "true":
+        raise VerifyFailure(
+            f"local participant failed to submit level-up choice: {values}"
+        )
+    return values
+
+
+def choose_client_option(offer_id: int, option_index: int) -> dict[str, str]:
+    return choose_local_option(CLIENT_PIPE, offer_id, option_index)
+
+
+def choose_host_option(offer_id: int, option_index: int) -> dict[str, str]:
+    return choose_local_option(HOST_PIPE, offer_id, option_index)
+
+
+def wait_for_choice_result(
+    offer_id: int,
+    level: int,
+    timeout: float,
+    *,
+    target_participant_id: int = CLIENT_ID,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last_host: dict[str, str] = {}
+    last_client: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last_host = capture(HOST_PIPE)
+        last_client = capture(CLIENT_PIPE)
+        local_values = (
+            last_host
+            if target_participant_id == HOST_ID
+            else last_client
+        )
         host_code = parse_int_text(last_host.get("result.code"), 0)
         client_code = parse_int_text(last_client.get("result.code"), 0)
         if (
             parse_int_text(last_host.get("result.offer_id"), 0) == offer_id
             and parse_int_text(last_client.get("result.offer_id"), 0) == offer_id
+            and parse_int_text(last_host.get("result.target"), 0)
+            == target_participant_id
+            and parse_int_text(last_client.get("result.target"), 0)
+            == target_participant_id
             and host_code == 1
             and client_code == 1
-            and parse_int_text(last_client.get("result.level"), 0) == level
-            and last_client.get("offer.valid") == "false"
-            and parse_int_text(last_client.get("player.skill_picker_screen"), 0) == 0
+            and parse_int_text(local_values.get("result.level"), 0) == level
+            and local_values.get("offer.valid") == "false"
+            and parse_int_text(
+                local_values.get("player.skill_picker_screen"),
+                0,
+            ) == 0
         ):
             return {
                 "host": last_host,
                 "client": last_client,
                 "host_remote_client": participant_row(last_host, CLIENT_ID),
-                "client_progression_mode": parse_int_text(last_client.get("player.progression_mode"), -1),
-                "client_player_level": parse_int_text(last_client.get("player.level"), 0),
-                "client_picker_screen": parse_int_text(last_client.get("player.skill_picker_screen"), 0),
-                "result_option_id": parse_int_text(last_client.get("result.option_id"), -1),
+                "client_observes_host": participant_row(last_client, HOST_ID),
+                "client_progression_mode": parse_int_text(
+                    last_client.get("player.progression_mode"),
+                    -1,
+                ),
+                "client_player_level": parse_int_text(
+                    last_client.get("player.level"),
+                    0,
+                ),
+                "client_picker_screen": parse_int_text(
+                    last_client.get("player.skill_picker_screen"),
+                    0,
+                ),
+                "local_progression_mode": parse_int_text(
+                    local_values.get("player.progression_mode"),
+                    -1,
+                ),
+                "local_player_level": parse_int_text(
+                    local_values.get("player.level"),
+                    0,
+                ),
+                "local_picker_screen": parse_int_text(
+                    local_values.get("player.skill_picker_screen"),
+                    0,
+                ),
+                "result_option_id": parse_int_text(
+                    local_values.get("result.option_id"),
+                    -1,
+                ),
+                "auto_picked":
+                    local_values.get("result.auto_picked") == "true",
             }
         time.sleep(0.1)
     raise VerifyFailure(
         "accepted level-up choice result did not arrive: "
+        f"target_participant_id={target_participant_id} "
         f"last_host={last_host} last_client={last_client}"
     )
 
@@ -837,7 +1020,7 @@ def verify_level_up_offer_sync(timeout: float) -> dict[str, Any]:
         "client_observes_host": wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "testrun"),
     }
     vitals_before_combat = sustain_pair_vitals()
-    combat = ensure_host_combat_started()
+    combat = enable_progression_neutral_combat()
     vitals_after_combat = sustain_pair_vitals()
     baseline_fireball_cast = verify_client_fireball_cast_on_host(
         "client_to_host_baseline_fireball"
@@ -868,12 +1051,13 @@ def verify_level_up_offer_sync(timeout: float) -> dict[str, Any]:
             ) + 10.0
         )
 
-        publish = publish_offer(target_level, target_experience)
+        publish = publish_barrier_offer(target_level, target_experience)
+        host_offer = wait_for_host_offer(target_level, timeout)
         offer = wait_for_client_offer(target_level, timeout)
-        wait_active = wait_for_wait_status(
-            participant_id=CLIENT_ID,
-            pause_active=True,
-            timeout=timeout,
+        wait_active = wait_for_waiting_ids(
+            {HOST_ID, CLIENT_ID},
+            timeout,
+            require_timed_out=False,
         )
         if offer["progression_mode"] != 0:
             raise VerifyFailure(f"client progression mode was not restored after offer sync: {offer}")
@@ -899,12 +1083,25 @@ def verify_level_up_offer_sync(timeout: float) -> dict[str, Any]:
             CLIENT_PIPE,
             option_id=selected_option_id,
         )
+        host_choice = choose_host_option(host_offer["offer_id"], 1)
+        host_result = wait_for_choice_result(
+            host_offer["offer_id"],
+            target_level,
+            timeout,
+            target_participant_id=HOST_ID,
+        )
+        wait_for_client = wait_for_waiting_ids(
+            {CLIENT_ID},
+            timeout,
+            host_display_text="Waiting on 1 player",
+            require_timed_out=False,
+        )
         choice = choose_client_option(offer["offer_id"], selected_option_index)
         result = wait_for_choice_result(offer["offer_id"], target_level, timeout)
-        wait_cleared = wait_for_wait_status(
-            participant_id=CLIENT_ID,
-            pause_active=False,
-            timeout=timeout,
+        wait_cleared = wait_for_waiting_ids(
+            set(),
+            timeout,
+            require_timed_out=False,
         )
         if result["client_progression_mode"] != 0:
             raise VerifyFailure(f"client progression mode was not restored after choice result: {result}")
@@ -931,6 +1128,11 @@ def verify_level_up_offer_sync(timeout: float) -> dict[str, Any]:
                 "client": client_stats,
             },
             "publish": publish,
+            "host_offer": {
+                "offer_id": host_offer["offer_id"],
+                "option_count": host_offer["option_count"],
+                "option_ids": host_offer["option_ids"],
+            },
             "offer": {
                 "offer_id": offer["offer_id"],
                 "option_count": offer["option_count"],
@@ -944,6 +1146,26 @@ def verify_level_up_offer_sync(timeout: float) -> dict[str, Any]:
             "wait_active": {
                 "host_waiting_count": parse_int_text(wait_active["host"].get("wait.waiting_count"), 0),
                 "client_waiting_count": parse_int_text(wait_active["client"].get("wait.waiting_count"), 0),
+            },
+            "host_choice": host_choice,
+            "host_result": {
+                "result_option_id": host_result["result_option_id"],
+                "local_player_level": host_result["local_player_level"],
+                "local_picker_screen": host_result["local_picker_screen"],
+            },
+            "wait_for_client": {
+                "host_waiting_count": parse_int_text(
+                    wait_for_client["host"].get("wait.waiting_count"),
+                    0,
+                ),
+                "host_display_text": wait_for_client["host"].get(
+                    "wait.display_text",
+                    "",
+                ),
+                "client_waiting_count": parse_int_text(
+                    wait_for_client["client"].get("wait.waiting_count"),
+                    0,
+                ),
             },
             "choice": choice,
             "result": {
@@ -1032,6 +1254,14 @@ def main() -> int:
         output["hub_ready"] = {
             "host_observes_client": wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub"),
             "client_observes_host": wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub"),
+        }
+        from verify_multiplayer_primary_kill_stress import (
+            set_manual_spawner_test_mode,
+        )
+
+        output["manual_spawner_prearm"] = {
+            "host": set_manual_spawner_test_mode(HOST_PIPE, True),
+            "client": set_manual_spawner_test_mode(CLIENT_PIPE, True),
         }
         output["run_entry"] = start_host_testrun_and_wait_for_clients(timeout=args.timeout)
         output["level_up_offer_sync"] = verify_level_up_offer_sync(timeout=args.timeout)

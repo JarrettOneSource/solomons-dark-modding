@@ -494,6 +494,7 @@ def main() -> int:
             args.timeout,
             god_mode=False,
             manual_combat=False,
+            prearm_manual_spawner=True,
         )
         output["quiet_progression_test_mode"] = enable_quiet_progression_test_mode()
         output["post_run_progression_ready"] = wait_for_post_run_progression_ready(

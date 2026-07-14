@@ -1,7 +1,11 @@
 constexpr std::uint64_t kReplicatedEmberNaturalReplayGraceMs = 16;
+constexpr std::uint64_t kReplicatedEmberRemoteReplaySettleGraceMs = 1750;
+constexpr std::int32_t kFireEmbersProgressionEntryIndex = 17;
 
 std::unordered_map<std::uint64_t, std::unordered_map<std::uint32_t, std::uint64_t>>
     g_pending_replicated_spell_effect_materialization;
+std::unordered_map<std::uint64_t, std::unordered_map<std::uint32_t, std::uint64_t>>
+    g_recent_remote_spell_effect_replay_activity;
 
 bool HasPendingReplicatedSpellEffectMaterialization() {
     return !g_pending_replicated_spell_effect_materialization.empty();
@@ -19,6 +23,7 @@ bool IsPendingReplicatedSpellEffectMaterialization(
 
 void ClearPendingReplicatedSpellEffectMaterialization() {
     g_pending_replicated_spell_effect_materialization.clear();
+    g_recent_remote_spell_effect_replay_activity.clear();
 }
 
 void ForgetPendingReplicatedSpellEffectMaterialization(
@@ -65,26 +70,108 @@ bool IsValidReplicatedFirewalkerRuntime(
            effect.firewalker_lifetime > 0.0f;
 }
 
-bool IsMatchingRemoteCastReplayInFlight(
+bool TryReadNativeProgressionEntryActive(
+    uintptr_t progression_address,
+    std::int32_t entry_index,
+    bool* active) {
+    if (active == nullptr ||
+        progression_address == 0 ||
+        entry_index < 0 ||
+        kStandaloneWizardProgressionTableBaseOffset == 0 ||
+        kStandaloneWizardProgressionTableCountOffset == 0 ||
+        kStandaloneWizardProgressionEntryStride == 0 ||
+        kStandaloneWizardProgressionActiveFlagOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t table_address = 0;
+    std::int32_t table_count = 0;
+    if (!memory.TryReadField(
+            progression_address,
+            kStandaloneWizardProgressionTableBaseOffset,
+            &table_address) ||
+        !memory.TryReadField(
+            progression_address,
+            kStandaloneWizardProgressionTableCountOffset,
+            &table_count) ||
+        table_address == 0 ||
+        entry_index >= table_count ||
+        table_count > 4096) {
+        return false;
+    }
+
+    std::uint16_t active_count = 0;
+    const auto entry_address =
+        table_address +
+        static_cast<std::size_t>(entry_index) *
+            kStandaloneWizardProgressionEntryStride;
+    if (!memory.TryReadField(
+            entry_address,
+            kStandaloneWizardProgressionActiveFlagOffset,
+            &active_count)) {
+        return false;
+    }
+    *active = active_count != 0;
+    return true;
+}
+
+bool ShouldDeferForMatchingRemoteCastReplay(
     std::uint64_t owner_participant_id,
-    const multiplayer::SpellEffectSnapshot& effect) {
+    uintptr_t owner_progression_address,
+    const multiplayer::SpellEffectSnapshot& effect,
+    std::uint64_t now_ms) {
     if (owner_participant_id == 0 || effect.cast_sequence == 0) {
         return false;
     }
 
-    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-    const auto* binding = FindParticipantEntity(owner_participant_id);
-    if (binding == nullptr) {
+    bool native_embers_active = false;
+    if (TryReadNativeProgressionEntryActive(
+            owner_progression_address,
+            kFireEmbersProgressionEntryIndex,
+            &native_embers_active) &&
+        !native_embers_active) {
         return false;
     }
-    const auto& cast = binding->ongoing_cast;
-    return cast.active &&
-           cast.remote_input_controlled &&
-           cast.remote_input_cast_sequence == effect.cast_sequence;
+
+    bool replay_active = false;
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    const auto* binding = FindParticipantEntity(owner_participant_id);
+    if (binding != nullptr) {
+        const auto& cast = binding->ongoing_cast;
+        replay_active =
+            cast.active &&
+            cast.remote_input_controlled &&
+            cast.remote_input_cast_sequence == effect.cast_sequence;
+    }
+
+    auto& activity_by_sequence =
+        g_recent_remote_spell_effect_replay_activity[owner_participant_id];
+    if (replay_active) {
+        activity_by_sequence[effect.cast_sequence] = now_ms;
+        return true;
+    }
+
+    const auto activity_it = activity_by_sequence.find(effect.cast_sequence);
+    if (activity_it == activity_by_sequence.end()) {
+        return false;
+    }
+    if (now_ms >= activity_it->second &&
+        now_ms - activity_it->second <
+            kReplicatedEmberRemoteReplaySettleGraceMs) {
+        return true;
+    }
+    activity_by_sequence.erase(activity_it);
+    if (activity_by_sequence.empty()) {
+        g_recent_remote_spell_effect_replay_activity.erase(
+            owner_participant_id);
+    }
+    return false;
 }
 
 bool ShouldMaterializeMissingReplicatedSpellEffect(
     std::uint64_t owner_participant_id,
+    uintptr_t owner_progression_address,
     const multiplayer::SpellEffectSnapshot& effect,
     std::uint64_t now_ms) {
     if (owner_participant_id == 0 ||
@@ -127,12 +214,19 @@ bool ShouldMaterializeMissingReplicatedSpellEffect(
         it->second = now_ms;
         return false;
     }
-    // A replicated Fireball cast normally creates its own Ember children on
-    // impact. Keep the snapshot pending until that exact replay finishes so
-    // reconciliation can bind those native children instead of creating a
-    // duplicate set ahead of the impact. If replay produces no children, the
-    // pending snapshot materializes them on the following gameplay tick.
-    if (IsMatchingRemoteCastReplayInFlight(owner_participant_id, effect)) {
+    // A replicated Fireball normally creates its own Ember children on impact.
+    // Remote projectile replay can briefly leave the cast state between native
+    // phases while the projectile is still in flight, so retain a short grace
+    // after the last matching replay activity. This lets reconciliation bind
+    // the natural children instead of racing them with duplicate snapshot
+    // materialization.
+    // If the observer's native Embers entry is inactive, no children are
+    // expected and authoritative snapshot materialization remains immediate.
+    if (ShouldDeferForMatchingRemoteCastReplay(
+            owner_participant_id,
+            owner_progression_address,
+            effect,
+            now_ms)) {
         return false;
     }
     return now_ms - it->second >= kReplicatedEmberNaturalReplayGraceMs;

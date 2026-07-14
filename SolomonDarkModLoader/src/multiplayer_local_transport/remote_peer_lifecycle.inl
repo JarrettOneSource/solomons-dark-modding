@@ -1,6 +1,9 @@
 void ResetRemoteParticipantSessionEpoch(
     std::uint64_t participant_id,
     bool configured_authority_disconnected) {
+    MarkHostLevelUpBarrierParticipantDisconnected(
+        participant_id,
+        static_cast<std::uint64_t>(GetTickCount64()));
     SDModParticipantGameplayState gameplay_state;
     if (TryGetParticipantGameplayState(participant_id, &gameplay_state) &&
         gameplay_state.entity_materialized) {
@@ -13,6 +16,7 @@ void ResetRemoteParticipantSessionEpoch(
         }
     }
 
+    g_local_transport.last_state_packet_sequence_by_participant.erase(participant_id);
     g_local_transport.last_cast_sequence_by_participant.erase(participant_id);
     g_local_transport.last_spell_effect_packet_sequence_by_participant.erase(
         participant_id);
