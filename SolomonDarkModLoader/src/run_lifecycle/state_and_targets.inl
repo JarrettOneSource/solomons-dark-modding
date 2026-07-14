@@ -1,4 +1,5 @@
 using RunStartedFn = void(__fastcall*)(void* self, void* unused_edx);
+using MainMenuRunTransitionFn = void(__fastcall*)(void* self, void* unused_edx);
 using RunEndedFn = void(__cdecl*)();
 using WaveSpawnerTickFn = void(__fastcall*)(void* self, void* unused_edx);
 using EnemySpawnedFn =
@@ -25,6 +26,7 @@ struct HookTarget {
 
 enum HookIndex : size_t {
     kHookCreateArena = 0,
+    kHookMainMenuRunTransition,
     kHookStartGame,
     kHookRunEnded,
     kHookWaveSpawnerTick,
@@ -123,6 +125,8 @@ void BuildHookTargets(HookTarget* targets) {
     }
 
     targets[kHookCreateArena] = {kArenaCreate, 6};      // "Create New ARENA" virtual method
+    // MainMenu transition dispatcher: one complete MOV EAX,[ECX+0x46C].
+    targets[kHookMainMenuRunTransition] = {kMainMenuRunTransition, 6};
     targets[kHookStartGame] = {kStartGame, 7};          // "on START GAME" menu-initiated
     targets[kHookRunEnded] = {kRunEnded, 7};            // GameOver trigger (__cdecl)
     targets[kHookWaveSpawnerTick] = {kWaveSpawnerTick, 6};

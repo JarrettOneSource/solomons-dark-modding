@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 import time
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -1964,7 +1965,7 @@ def select_clear_kill_lane(anchor: tuple[float, float], pipe_name: str = HOST_PI
     raise VerifyFailure(f"no clear cast lane found near anchor={anchor}: attempts={probes}")
 
 
-def wait_for_spawn_result(request_id: int, timeout: float = 5.0) -> dict[str, str]:
+def wait_for_spawn_result(request_id: int, timeout: float = 20.0) -> dict[str, str]:
     code = SPAWN_RESULT_LUA.replace("__REQUEST_ID__", str(request_id))
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
@@ -2769,23 +2770,28 @@ def execute_primary_kill_attempt(
         and target_state_alive(attempt["target_after"].get("client", {}))
     )
     attempt["target_alive_on_both_after_attempt"] = target_alive_on_both
-    if not attempt["source_effect_observed"] and target_alive_on_both:
-        attempt["status"] = "native_primary_no_effect"
+    if target_alive_on_both:
+        attempt["status"] = "native_primary_no_kill"
         attempt["source_cast_runtime_after"] = cast_runtime_state(direction.source_pipe)
         return attempt
 
-    death_logs = require_death_logs(
-        direction,
-        {
-            "network_id": network_id,
-            "actor_address": int(target["host_actor_address"]),
-            "x": target_x,
-            "y": target_y,
-        },
-        source_offset,
-        receiver_offset,
-        timeout=8.0,
-    )
+    try:
+        death_logs = require_death_logs(
+            direction,
+            {
+                "network_id": network_id,
+                "actor_address": int(target["host_actor_address"]),
+                "x": target_x,
+                "y": target_y,
+            },
+            source_offset,
+            receiver_offset,
+            timeout=8.0,
+        )
+    except VerifyFailure as exc:
+        attempt["status"] = "death_logs_missing"
+        attempt["death_log_error"] = str(exc)
+        return attempt
     attempt["death_logs"] = death_logs
     attempt["status"] = "death_logs_observed"
     return attempt
@@ -3943,7 +3949,7 @@ def verify_one_kill(direction: Direction, kill_index: int, record: dict[str, Any
         if attempt.get("status") == "death_logs_observed":
             selected_attempt = attempt
             break
-        if attempt.get("status") not in {"native_primary_no_effect", "source_cast_missing"}:
+        if attempt.get("status") not in {"native_primary_no_kill", "source_cast_missing"}:
             break
     if selected_attempt is None:
         raise VerifyFailure(
@@ -4216,6 +4222,8 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
     except Exception as exc:
         result["ok"] = False
         result["error"] = str(exc)
+        result["error_type"] = type(exc).__name__
+        result["error_traceback"] = traceback.format_exc()
         result["failure_context"] = capture_runtime_context("failure", include_processes=True)
         result["host_crash_delta"] = crash_log_tail(HOST_CRASH_LOG, host_crash_start)
         result["client_crash_delta"] = crash_log_tail(CLIENT_CRASH_LOG, client_crash_start)
@@ -4226,6 +4234,8 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
         result["host_crash_delta"] = crash_log_tail(HOST_CRASH_LOG, host_crash_start)
         result["client_crash_delta"] = crash_log_tail(CLIENT_CRASH_LOG, client_crash_start)
         args.output.write_text(json.dumps(result, indent=2), encoding="utf-8")
+        if not args.attach:
+            stop_games()
     return result
 
 

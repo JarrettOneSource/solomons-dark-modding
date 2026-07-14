@@ -36,6 +36,7 @@ internal static class LauncherOutputFormatter
             "  --steam-api-dll <path>  Override the x86 steam_api.dll used when the mirrored game does not already ship one.",
             "  --multiplayer <mode>    Select off, host, or join. Host/join use Spacewar AppID 480 unless --steam-appid is set.",
             "  --lobby-id <id>         Join a specific Steam lobby; otherwise join mode waits for a friend invite.",
+            "  --invite-steam-id <id>  Host development option: send a real lobby invite when the overlay is unavailable.",
             "  --max-players <2-4>     Set the host lobby capacity. Default: 4.",
             "  --no-invite-dialog      Host without automatically opening Steam's friend invite dialog.",
             "  --help                  Show this help text.",

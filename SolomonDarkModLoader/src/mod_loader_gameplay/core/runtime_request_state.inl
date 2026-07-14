@@ -73,6 +73,21 @@ struct NativeMagicHitBehaviorProbeResult {
     std::string error;
 };
 
+struct PendingNativeStaffEffectProbe {
+    std::uint64_t request_serial = 0;
+    uintptr_t source_actor = 0;
+    uintptr_t target_actor = 0;
+    std::uint32_t variant = 0;
+};
+
+struct NativeStaffEffectProbeResult {
+    std::uint64_t request_serial = 0;
+    bool success = false;
+    float hp_before = 0.0f;
+    float hp_after = 0.0f;
+    std::string error;
+};
+
 struct GameplayKeyboardInjectionState {
     X86Hook mouse_refresh_hook;
     X86Hook edge_hook;
@@ -123,6 +138,7 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint32_t> pending_enable_combat_prelude_requests{0};
     std::atomic<std::uint32_t> pending_run_generation_seed{0};
     std::atomic<std::uint8_t> pending_run_generation_seed_valid{0};
+    std::atomic<std::uint32_t> applied_run_generation_seed{0};
     std::atomic<std::uint64_t> hub_start_testrun_cooldown_until_ms{0};
     std::atomic<std::uint64_t> start_waves_retry_not_before_ms{0};
     std::atomic<std::uint64_t> wizard_bot_sync_not_before_ms{0};
@@ -140,6 +156,9 @@ struct GameplayKeyboardInjectionState {
     std::deque<PendingNativeMagicHitBehaviorProbe> pending_native_magic_hit_behavior_probes;
     std::uint64_t next_native_magic_hit_behavior_probe_serial = 1;
     NativeMagicHitBehaviorProbeResult native_magic_hit_behavior_probe_result;
+    std::deque<PendingNativeStaffEffectProbe> pending_native_staff_effect_probes;
+    std::uint64_t next_native_staff_effect_probe_serial = 1;
+    NativeStaffEffectProbeResult native_staff_effect_probe_result;
     std::deque<std::uint64_t> pending_participant_destroy_requests;
 } g_gameplay_keyboard_injection;
 

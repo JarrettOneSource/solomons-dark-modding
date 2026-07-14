@@ -234,6 +234,15 @@ void SendAirChainSnapshots(std::uint64_t now_ms) {
                 return terminal.expires_ms <= now_ms;
             }),
         g_local_transport.pending_air_chain_terminals.end());
+    for (auto it =
+             g_local_transport.recent_local_air_chain_target_until_ms.begin();
+         it != g_local_transport.recent_local_air_chain_target_until_ms.end();) {
+        if (it->second < now_ms) {
+            it = g_local_transport.recent_local_air_chain_target_until_ms.erase(it);
+        } else {
+            ++it;
+        }
+    }
 
     QueuedLocalAirChainFrame frame;
     if (!TakeQueuedLocalAirChainFrame(&frame)) {
@@ -270,6 +279,11 @@ void SendAirChainSnapshots(std::uint64_t now_ms) {
         target.source_y = captured.source_y;
         target.target_x = captured.target_x;
         target.target_y = captured.target_y;
+        if (captured.network_actor_id != 0) {
+            g_local_transport.recent_local_air_chain_target_until_ms[
+                captured.network_actor_id] =
+                now_ms + kRecentLocalCastAssociationWindowMs;
+        }
     }
     for (const auto& endpoint : endpoints) {
         SendPacketToEndpoint(packet, endpoint);

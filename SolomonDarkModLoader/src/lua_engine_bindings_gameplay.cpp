@@ -351,6 +351,21 @@ int LuaGameplaySetManualEnemySpawnerTestMode(lua_State* state) {
     return 2;
 }
 
+int LuaGameplaySetRemoteProgressionReconcileSuppressedForTest(
+    lua_State* state) {
+    const auto participant_id =
+        static_cast<std::uint64_t>(luaL_checkinteger(state, 1));
+    const bool suppressed = lua_toboolean(state, 2) != 0;
+    lua_pushboolean(
+        state,
+        multiplayer::SetRemoteNativeProgressionReconcileSuppressedForTest(
+            participant_id,
+            suppressed)
+            ? 1
+            : 0);
+    return 1;
+}
+
 int LuaGameplayGetManualEnemySpawnerState(lua_State* state) {
     const auto spawner_address = GetRunLifecycleLastWaveSpawnerAddress();
     lua_createtable(state, 0, 4);
@@ -372,7 +387,7 @@ int LuaGameplayGetCombatState(lua_State* state) {
         return 1;
     }
 
-    lua_createtable(state, 0, 11);
+    lua_createtable(state, 0, 12);
     lua_pushstring(state, HexString(combat_state.arena_address).c_str());
     lua_setfield(state, -2, "arena_id");
     lua_pushinteger(state, static_cast<lua_Integer>(combat_state.combat_section_index));
@@ -1511,6 +1526,10 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaGameplayStartWaves, "start_waves");
     RegisterFunction(state, &LuaGameplayEnableCombatPrelude, "enable_combat_prelude");
     RegisterFunction(state, &LuaGameplaySetManualEnemySpawnerTestMode, "set_manual_enemy_spawner_test_mode");
+    RegisterFunction(
+        state,
+        &LuaGameplaySetRemoteProgressionReconcileSuppressedForTest,
+        "set_remote_progression_reconcile_suppressed_for_test");
     RegisterFunction(state, &LuaGameplayGetManualEnemySpawnerState, "get_manual_enemy_spawner_state");
     RegisterFunction(state, &LuaGameplayGetCombatState, "get_combat_state");
     RegisterFunction(state, &LuaGameplayGetSelectionDebugState, "get_selection_debug_state");

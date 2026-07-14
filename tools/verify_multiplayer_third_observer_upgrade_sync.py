@@ -50,7 +50,7 @@ from verify_multiplayer_all_upgrade_sync import (
 from verify_multiplayer_lightning_chaining_effect_sync import (
     AIR_LIGHTNING_CHAIN_COUNT_OFFSET,
     CHAINING_OPTION_ID,
-    NATURAL_CLUSTER_PATTERNS,
+    CLUSTER_PATTERNS,
     PARK_LOCAL_OBSERVER_LUA,
     TARGET_HP,
     build_air_chain_sync_evidence,
@@ -839,7 +839,7 @@ def verify_owner_behavior(
     # progressively tighter deterministic clusters, retaining each miss, and
     # require one real non-null authoritative target on both observers.
     prior_attempts: list[dict[str, Any]] = []
-    for pattern_index, offsets in enumerate(NATURAL_CLUSTER_PATTERNS, start=1):
+    for pattern_index, offsets in enumerate(CLUSTER_PATTERNS, start=1):
         try:
             record = run_owner_behavior_attempt(
                 owner,

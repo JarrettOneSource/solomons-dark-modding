@@ -113,6 +113,15 @@ Each write hit currently captures:
 - `sd.debug.call_cdecl_u32_u32(function_address, arg0, arg1)`
 
 ### Gameplay-specific typed helpers
+- `sd.debug.queue_native_staff_effect_probe(source_actor, target_actor, variant)`
+  - queues the retail Staff effect resolver for the next gameplay-action pump;
+    it does not invoke an effect-producing native function from inside the
+    current Lua callback
+  - returns `queued, error, request_serial`
+- `sd.debug.get_native_staff_effect_probe_result(request_serial)`
+  - returns `completed, success, hp_before, hp_after, error`
+  - `hp_before` and `hp_after` are sampled in the same deferred native call so
+    multiplayer snapshot reconciliation cannot hide the immediate hit result
 - `sd.gameplay.get_selection_debug_state()`
   - returns:
     - `table_address`

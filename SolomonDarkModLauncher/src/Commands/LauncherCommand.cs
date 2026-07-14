@@ -19,5 +19,6 @@ internal sealed record LauncherCommand(
     string? SteamApiDllOverride,
     MultiplayerLaunchMode MultiplayerMode,
     ulong? SteamLobbyId,
+    ulong? InviteSteamId,
     int MultiplayerMaxParticipants,
     bool OpenSteamInviteDialog);

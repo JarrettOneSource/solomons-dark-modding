@@ -130,12 +130,6 @@ std::string_view ResolveUiActionDispatchTiming(
     return "overlay_frame";
 }
 
-bool ShouldDispatchUiActionViaOverlayFrame(
-    std::string_view surface_root_id,
-    std::string_view action_id) {
-    return ResolveUiActionDispatchTiming(surface_root_id, action_id) == "overlay_frame";
-}
-
 struct UiActionDispatchExpectation {
     uintptr_t expected_vftable_address = 0;
     uintptr_t expected_handler_address = 0;

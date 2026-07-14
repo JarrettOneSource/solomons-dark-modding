@@ -139,37 +139,31 @@ local function find_entry()
   if table_address == 0 or table_count <= option_id then return 0 end
   return table_address + (option_id * entry_stride)
 end
-local function force_baseline_embers()
-  if not _G.__sdmod_force_observer_native_embers_off then return end
-  local entry = find_entry()
-  if entry == 0 then return end
-  local active_offset =
-      sd.debug.layout_offset('standalone_wizard_progression_active_flag')
-  sd.debug.write_u16(entry + active_offset, 0)
-end
 local entry = find_entry()
 local active_offset =
     sd.debug.layout_offset('standalone_wizard_progression_active_flag')
+local reconcile_ok = false
 if enabled then
+  reconcile_ok = sd.gameplay.set_remote_progression_reconcile_suppressed_for_test(
+      owner_id, true)
+  if not reconcile_ok then error('failed to suppress native progression reconcile') end
   if entry ~= 0 then
     _G.__sdmod_force_observer_native_embers_saved_active =
         tonumber(sd.debug.read_u16(entry + active_offset)) or 0
+    sd.debug.write_u16(entry + active_offset, 0)
   end
   _G.__sdmod_force_observer_native_embers_off = true
-  if not _G.__sdmod_force_observer_native_embers_registered then
-    sd.events.on('runtime.tick', force_baseline_embers)
-    _G.__sdmod_force_observer_native_embers_registered = true
-  end
-  force_baseline_embers()
 else
-  _G.__sdmod_force_observer_native_embers_off = false
   local saved =
       tonumber(_G.__sdmod_force_observer_native_embers_saved_active) or 0
   if entry ~= 0 then sd.debug.write_u16(entry + active_offset, saved) end
+  reconcile_ok = sd.gameplay.set_remote_progression_reconcile_suppressed_for_test(
+      owner_id, false)
+  _G.__sdmod_force_observer_native_embers_off = false
 end
 emit('entry', entry)
 emit('enabled', _G.__sdmod_force_observer_native_embers_off == true)
-emit('registered', _G.__sdmod_force_observer_native_embers_registered == true)
+emit('reconcile_suppression', reconcile_ok)
 emit('active', entry ~= 0 and sd.debug.read_u16(entry + active_offset) or -1)
 emit('saved_active', _G.__sdmod_force_observer_native_embers_saved_active or -1)
 """,
@@ -470,10 +464,14 @@ def run_fragment_phase(
 
     def capture_effect_sync() -> dict[str, Any]:
         nonlocal effect_sync
+        # This callback starts when the Fireball is dispatched, not when it
+        # reaches the target.  The deterministic Steam fixture can take a
+        # little over two seconds to impact, so leave enough time to observe
+        # the following reconciliation tick as well as the fragment creation.
         effect_sync = wait_for_replicated_ember_sync(
             direction.receiver_pipe,
             direction.source_id,
-            timeout=2.0 if phase != "baseline" else 0.35,
+            timeout=4.0 if phase != "baseline" else 0.35,
             required=phase != "baseline",
         )
         return effect_sync

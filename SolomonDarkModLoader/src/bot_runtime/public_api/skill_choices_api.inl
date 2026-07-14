@@ -288,15 +288,24 @@ bool SyncParticipantProgressionToSharedLevelUp(
     const auto live_vitals_before =
         CaptureLocalSharedLevelUpVitals(gameplay_state.progression_runtime_state_address);
     DWORD sync_exception = 0;
-    if (!SyncNativeBotProgressionLevel(
-            gameplay_state.progression_runtime_state_address,
-            source_progression_address,
-            level,
-            experience,
-            &sync_exception)) {
+    std::string concentration_error;
+    if (!RunWithParticipantConcentrationContext(
+            participant_id,
+            [&]() {
+                return SyncNativeBotProgressionLevel(
+                    gameplay_state.progression_runtime_state_address,
+                    source_progression_address,
+                    level,
+                    experience,
+                    &sync_exception);
+            },
+            &concentration_error)) {
         return fail(
-            "participant native level sync failed exception=0x" +
-            HexString(sync_exception));
+            concentration_error.empty()
+                ? "participant native level sync failed exception=0x" +
+                      HexString(sync_exception)
+                : "participant native level sync Concentrate isolation failed: " +
+                      concentration_error);
     }
     if (!RestoreLocalSharedLevelUpVitals(
             gameplay_state.progression_runtime_state_address,
@@ -523,14 +532,23 @@ bool ApplyParticipantSkillChoiceOption(
     }
 
     DWORD apply_exception = 0;
-    if (!ApplyNativeSkillChoiceToProgression(
-            gameplay_state.progression_runtime_state_address,
-            option,
-            false,
-            &apply_exception)) {
+    std::string concentration_error;
+    if (!RunWithParticipantConcentrationContext(
+            participant_id,
+            [&]() {
+                return ApplyNativeSkillChoiceToProgression(
+                    gameplay_state.progression_runtime_state_address,
+                    option,
+                    false,
+                    &apply_exception);
+            },
+            &concentration_error)) {
         return fail(
-            "participant native skill choice apply failed exception=0x" +
-            HexString(apply_exception));
+            concentration_error.empty()
+                ? "participant native skill choice apply failed exception=0x" +
+                      HexString(apply_exception)
+                : "participant native skill choice Concentrate isolation failed: " +
+                      concentration_error);
     }
 
     int level = 0;
@@ -549,6 +567,47 @@ bool ApplyParticipantSkillChoiceOption(
         return fail("participant native skill choice next-xp read failed");
     }
     UpdateParticipantLevelProfileState(participant_id, level, experience, next_experience);
+    return true;
+}
+
+bool RefreshParticipantNativeProgression(
+    std::uint64_t participant_id,
+    std::string* error_message) {
+    auto fail = [&](std::string message) {
+        if (error_message != nullptr) {
+            *error_message = std::move(message);
+        }
+        return false;
+    };
+
+    if (participant_id == 0) {
+        return fail("participant progression refresh requires a participant id");
+    }
+
+    SDModParticipantGameplayState gameplay_state;
+    if (!TryGetParticipantGameplayState(participant_id, &gameplay_state) ||
+        !gameplay_state.available ||
+        gameplay_state.progression_runtime_state_address == 0) {
+        return fail("participant progression refresh requires a materialized progression");
+    }
+
+    DWORD refresh_exception = 0;
+    std::string concentration_error;
+    if (!RunWithParticipantConcentrationContext(
+            participant_id,
+            [&]() {
+                return CallNativeActorProgressionRefresh(
+                    gameplay_state.progression_runtime_state_address,
+                    &refresh_exception);
+            },
+            &concentration_error)) {
+        return fail(
+            concentration_error.empty()
+                ? "participant native progression refresh failed exception=0x" +
+                      HexString(refresh_exception)
+                : "participant native progression refresh Concentrate isolation failed: " +
+                      concentration_error);
+    }
     return true;
 }
 

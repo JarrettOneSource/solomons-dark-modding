@@ -4,7 +4,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 50;
+constexpr std::uint16_t kProtocolVersion = 51;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -37,6 +37,7 @@ enum class PacketKind : std::uint16_t {
     AirChainSnapshot = 15,
     ParticipantVitalsCorrection = 16,
     SessionGoodbye = 17,
+    SessionKeepalive = 18,
 };
 
 enum class SessionPeerRole : std::uint8_t {
@@ -420,6 +421,15 @@ struct SessionGoodbyePacket {
     std::uint8_t reserved[7] = {};
 };
 
+struct SessionKeepalivePacket {
+    PacketHeader header;
+    std::uint64_t lobby_id;
+    std::uint64_t participant_id;
+    std::uint64_t steam_id;
+    std::uint64_t target_steam_id;
+    std::uint64_t session_nonce;
+};
+
 struct LevelUpOfferPacket {
     PacketHeader header;
     std::uint64_t authority_participant_id;
@@ -742,6 +752,8 @@ static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packe
 static_assert(sizeof(CastPacket) == 120, "Unexpected cast packet size");
 static_assert(sizeof(SessionHelloAckPacket) == 92, "Unexpected session hello acknowledgement packet size");
 static_assert(sizeof(SessionGoodbyePacket) == 44, "Unexpected session goodbye packet size");
+static_assert(sizeof(SessionKeepalivePacket) == 52,
+              "Unexpected session keepalive packet size");
 static_assert(sizeof(LevelUpOfferPacket) == 116, "Unexpected level-up offer packet size");
 static_assert(sizeof(LevelUpChoicePacket) == 40, "Unexpected level-up choice packet size");
 static_assert(sizeof(LevelUpChoiceResultPacket) == 64, "Unexpected level-up choice result packet size");

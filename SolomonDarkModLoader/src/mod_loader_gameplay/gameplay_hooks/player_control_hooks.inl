@@ -87,6 +87,59 @@ bool ApplyManualSpawnerPrimaryTargetState(
                0);
 }
 
+bool IsPlayerActorPublishedInCurrentGameplaySlot(
+    uintptr_t actor_address,
+    uintptr_t* gameplay_address,
+    int* actor_slot,
+    uintptr_t* published_actor_address) {
+    if (gameplay_address != nullptr) {
+        *gameplay_address = 0;
+    }
+    if (actor_slot != nullptr) {
+        *actor_slot = -1;
+    }
+    if (published_actor_address != nullptr) {
+        *published_actor_address = 0;
+    }
+    if (actor_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::int8_t live_actor_slot = -1;
+    if (!memory.TryReadField(actor_address, kActorSlotOffset, &live_actor_slot)) {
+        return false;
+    }
+    if (actor_slot != nullptr) {
+        *actor_slot = static_cast<int>(live_actor_slot);
+    }
+    if (live_actor_slot < 0 ||
+        live_actor_slot >= static_cast<std::int8_t>(kGameplayPlayerSlotCount)) {
+        return false;
+    }
+
+    uintptr_t live_gameplay_address = 0;
+    if (!TryResolveCurrentGameplayScene(&live_gameplay_address) ||
+        live_gameplay_address == 0) {
+        return false;
+    }
+    if (gameplay_address != nullptr) {
+        *gameplay_address = live_gameplay_address;
+    }
+
+    uintptr_t live_published_actor_address = 0;
+    if (!TryResolvePlayerActorForSlot(
+            live_gameplay_address,
+            static_cast<int>(live_actor_slot),
+            &live_published_actor_address)) {
+        return false;
+    }
+    if (published_actor_address != nullptr) {
+        *published_actor_address = live_published_actor_address;
+    }
+    return live_published_actor_address == actor_address;
+}
+
 void __fastcall HookPlayerControlBrainUpdate(
     void* self,
     void* /*unused_edx*/,
@@ -102,6 +155,32 @@ void __fastcall HookPlayerControlBrainUpdate(
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
     if (IsBoundReplicatedRunEnemyActorForLocalClient(actor_address)) {
         (void)ApplyLatestReplicatedRunEnemyTargetForLocalActor(actor_address, false);
+        return;
+    }
+
+    // FUN_0052C910 indexes gameplay+0x1358 with actor+0x5C and immediately
+    // dereferences the resulting player actor. During native scene creation a
+    // slot-assigned PlayerActor can enter the world tick before the gameplay
+    // slot table publishes it. Letting that half-created actor reach the stock
+    // routine turns a null slot entry into a read at 0x18. A published slot is
+    // therefore a hard precondition for both local and replicated players.
+    uintptr_t publication_gameplay_address = 0;
+    uintptr_t published_actor_address = 0;
+    int publication_actor_slot = -1;
+    static std::atomic<bool> s_logged_unpublished_actor{false};
+    if (!IsPlayerActorPublishedInCurrentGameplaySlot(
+            actor_address,
+            &publication_gameplay_address,
+            &publication_actor_slot,
+            &published_actor_address)) {
+        if (!s_logged_unpublished_actor.exchange(true, std::memory_order_acq_rel)) {
+            Log(
+                "[bots] control_brain skipped unpublished player actor during scene transition. actor=" +
+                HexString(actor_address) +
+                " slot=" + std::to_string(publication_actor_slot) +
+                " gameplay=" + HexString(publication_gameplay_address) +
+                " published_actor=" + HexString(published_actor_address));
+        }
         return;
     }
 

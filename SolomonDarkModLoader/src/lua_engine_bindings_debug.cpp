@@ -110,6 +110,14 @@ void RegisterLuaDebugBindings(lua_State* state) {
         state,
         &LuaDebugGetNativeMagicHitBehaviorProbeResult,
         "get_native_magic_hit_behavior_probe_result");
+    RegisterFunction(
+        state,
+        &LuaDebugQueueNativeStaffEffectProbe,
+        "queue_native_staff_effect_probe");
+    RegisterFunction(
+        state,
+        &LuaDebugGetNativeStaffEffectProbeResult,
+        "get_native_staff_effect_probe_result");
     RegisterFunction(state, &LuaDebugCallThiscallOutF32x4U32, "call_thiscall_out_f32x4_u32");
     RegisterFunction(state, &LuaDebugGetNavGrid, "get_nav_grid");
     RegisterFunction(state, &LuaDebugGetGameNpcMotion, "get_gamenpc_motion");

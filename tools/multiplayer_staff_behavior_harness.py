@@ -40,7 +40,6 @@ ROOT = Path(__file__).resolve().parent.parent
 PHYSICAL_WAVE = ROOT / "tests/fixtures/waves/physical_stat_test.txt"
 
 NATIVE_APPLY_DAMAGE = 0x0063E7D0
-STAFF_EFFECT_RESOLVER = 0x0053B9F0
 STAFF_EFFECT_DAMAGE_RETURN = 0x0053C269
 
 ARENA_PARK_X = 1050.0
@@ -417,12 +416,14 @@ def run_native_staff_resolver_trial(
     variant: int = 0,
     target_offsets: tuple[tuple[float, float], ...] = ((50.0, 0.0),),
 ) -> dict[str, Any]:
-    """Invoke the stock staff effect resolver and verify authoritative damage.
+    """Queue the stock staff effect resolver and verify authoritative damage.
 
     This deliberately isolates staff effect semantics from the separate
     collision/chance/action gate.  Address 0x53B9F0 is the stock animation
     event resolver: it performs the native nearby-target scan, reads Enchant
-    Staff's ``mDamage``, applies damage, and dispatches variants 0..4.
+    Staff's ``mDamage``, applies damage, and dispatches variants 0..4.  The
+    loader executes it only after the Lua callback returns so native effect
+    allocation cannot re-enter the active Lua execution frame.
     """
 
     if variant < 0 or variant > 4:
@@ -495,24 +496,18 @@ for index, target in ipairs(targets) do
   emit('target.' .. tostring(index) .. '.hp_before', hp_before[index])
 end
 emit('resolved_damage_return', sd.debug.resolve_game_address({STAFF_EFFECT_DAMAGE_RETURN}))
-local ok, result = pcall(
-  sd.debug.call_thiscall_u32,
-  {STAFF_EFFECT_RESOLVER},
-  {source_actor},
-  {variant})
-emit('pcall_ok', ok)
-emit('call_ok', ok and result == true)
-emit('error', ok and '' or tostring(result))
-for index, target in ipairs(targets) do
-  local hp_after = sd.debug.read_float(target + hp_offset)
-  emit('target.' .. tostring(index) .. '.hp_after', hp_after)
-  emit('target.' .. tostring(index) .. '.damage', hp_before[index] - hp_after)
-end
+local queued, queue_error, request_serial =
+  sd.debug.queue_native_staff_effect_probe(
+    {source_actor}, {local_targets[0]}, {variant})
+emit('queued', queued)
+emit('request_serial', request_serial or 0)
+emit('error', queue_error or '')
 """,
     )
-    if call.get("call_ok") != "true":
+    request_serial = parse_int_text(call.get("request_serial"), 0)
+    if call.get("queued") != "true" or request_serial == 0:
         raise VerifyFailure(
-            f"{direction.name} {label} native staff resolver failed: {call}"
+            f"{direction.name} {label} native staff resolver did not queue: {call}"
         )
     if any(
         call.get(key) != "true"
@@ -526,6 +521,68 @@ end
         raise VerifyFailure(
             f"{direction.name} {label} atomic point-blank placement failed: {call}"
         )
+    probe_result: dict[str, str] = {}
+    probe_deadline = time.monotonic() + 10.0
+    while time.monotonic() < probe_deadline:
+        probe_result = values(
+            direction.source_pipe,
+            f"""
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+local completed, success, hp_before, hp_after, probe_error =
+  sd.debug.get_native_staff_effect_probe_result({request_serial})
+emit('completed', completed)
+emit('success', success)
+emit('hp_before', hp_before)
+emit('hp_after', hp_after)
+emit('error', probe_error or '')
+""",
+        )
+        if probe_result.get("completed") == "true":
+            break
+        time.sleep(0.02)
+    if (
+        probe_result.get("completed") != "true"
+        or probe_result.get("success") != "true"
+    ):
+        raise VerifyFailure(
+            f"{direction.name} {label} native staff resolver failed: "
+            f"queue={call} result={probe_result}"
+        )
+    immediate = values(
+        direction.source_pipe,
+        f"""
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+local targets = {local_target_table}
+local hp_offset = sd.debug.layout_offset('enemy_current_hp')
+for index, target in ipairs(targets) do
+  emit('target.' .. tostring(index) .. '.hp_after', sd.debug.read_float(target + hp_offset))
+end
+""",
+    )
+    call["probe_completed"] = probe_result["completed"]
+    call["probe_success"] = probe_result["success"]
+    call["probe_error"] = probe_result.get("error", "")
+    for index in range(1, len(local_targets) + 1):
+        if index == 1:
+            hp_before = parse_float(probe_result.get("hp_before"), math.nan)
+            hp_after = parse_float(probe_result.get("hp_after"), math.nan)
+            call[f"target.{index}.hp_before"] = probe_result.get(
+                "hp_before", "<nil>"
+            )
+            call[f"target.{index}.hp_after"] = probe_result.get(
+                "hp_after", "<nil>"
+            )
+        else:
+            hp_before = parse_float(
+                call.get(f"target.{index}.hp_before"), math.nan
+            )
+            hp_after = parse_float(
+                immediate.get(f"target.{index}.hp_after"), math.nan
+            )
+            call[f"target.{index}.hp_after"] = immediate.get(
+                f"target.{index}.hp_after", "<nil>"
+            )
+        call[f"target.{index}.damage"] = str(hp_before - hp_after)
     clear_gameplay_mouse_left(direction.source_pipe)
     time.sleep(0.35)
     damage_trace = finish_native_damage_trace(

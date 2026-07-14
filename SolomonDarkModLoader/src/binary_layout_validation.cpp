@@ -7,7 +7,7 @@ namespace sdmod {
 namespace {
 
 bool IsKnownDispatchTiming(std::string_view value) {
-    return value.empty() || value == "overlay_frame";
+    return value.empty() || value == "overlay_frame" || value == "app_tick";
 }
 
 bool IsKnownDispatchKind(std::string_view value) {

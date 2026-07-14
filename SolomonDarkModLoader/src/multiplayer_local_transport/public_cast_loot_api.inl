@@ -91,8 +91,27 @@ void ClearReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id) {
     }
     g_local_transport.last_synced_enemy_hp_by_network_id.erase(network_actor_id);
     g_local_transport.last_enemy_claimed_hp_by_network_id.erase(network_actor_id);
+    g_local_transport.observed_enemy_damage_by_network_id.erase(network_actor_id);
     g_local_transport.pending_lethal_enemy_damage_claim_until_ms.erase(network_actor_id);
     g_local_transport.rejected_enemy_damage_retry_suppressed_until_ms.erase(network_actor_id);
+}
+
+void ObserveReplicatedRunEnemyDamage(
+    std::uint64_t network_actor_id,
+    float authoritative_hp,
+    float local_hp,
+    float max_hp,
+    float target_position_x,
+    float target_position_y,
+    bool target_position_optional) {
+    ObserveReplicatedRunEnemyDamageInternal(
+        network_actor_id,
+        authoritative_hp,
+        local_hp,
+        max_hp,
+        target_position_x,
+        target_position_y,
+        target_position_optional);
 }
 
 bool TrySetRunEnemyHealth(uintptr_t actor_address, float hp, float max_hp) {
@@ -172,6 +191,13 @@ void ShutdownLocalTransport() {
         WSACleanup();
     }
     g_local_transport = LocalTransportState{};
+    g_remote_native_progression_reconcile_suppressed_for_test.store(
+        0,
+        std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(g_client_host_run_authorization_mutex);
+        g_client_host_run_authorization = ClientHostRunAuthorization{};
+    }
     {
         std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
         g_queued_local_cast_events.clear();
@@ -221,6 +247,41 @@ bool IsLocalTransportClient() {
     return g_local_transport.initialized && !g_local_transport.is_host;
 }
 
+bool TryAuthorizeLocalClientRunSwitch(std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (!IsLocalTransportClient()) {
+        if (error_message != nullptr) {
+            *error_message = "The local participant is not a multiplayer client.";
+        }
+        return false;
+    }
+
+    ClientHostRunAuthorization authorization;
+    {
+        std::lock_guard<std::mutex> lock(g_client_host_run_authorization_mutex);
+        authorization = g_client_host_run_authorization;
+    }
+
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (!authorization.valid ||
+        authorization.authority_participant_id == 0 ||
+        authorization.run_nonce == 0 ||
+        authorization.received_ms == 0 ||
+        now_ms > authorization.received_ms + kClientHostRunAuthorizationFreshnessMs) {
+        if (error_message != nullptr) {
+            *error_message = "No fresh authenticated host run intent is available.";
+        }
+        return false;
+    }
+
+    if (!SetPendingRunGenerationSeed(authorization.run_nonce, error_message)) {
+        return false;
+    }
+    return true;
+}
+
 std::uint64_t GetLocalTransportParticipantId() {
     return g_local_transport.initialized ? g_local_transport.local_peer_id : 0;
 }
@@ -251,9 +312,16 @@ bool RegisterSteamGameplayPeer(
 }
 
 void UnregisterSteamGameplayPeer(std::uint64_t steam_id) {
-    if (!IsSteamGameplayTransportEnabled() || steam_id == 0) {
+    if (!IsSteamGameplayTransportEnabled() ||
+        steam_id == 0 ||
+        steam_id == g_local_transport.local_peer_id) {
         return;
     }
+    const bool configured_authority_disconnected =
+        g_local_transport.configured_remote_valid &&
+        g_local_transport.configured_remote.backend ==
+            GameplayTransportBackend::Steam &&
+        g_local_transport.configured_remote.steam_id == steam_id;
     g_local_transport.peers.erase(
         std::remove_if(
             g_local_transport.peers.begin(),
@@ -263,17 +331,15 @@ void UnregisterSteamGameplayPeer(std::uint64_t steam_id) {
                        peer.endpoint.steam_id == steam_id;
             }),
         g_local_transport.peers.end());
-    if (g_local_transport.configured_remote_valid &&
-        g_local_transport.configured_remote.backend == GameplayTransportBackend::Steam &&
-        g_local_transport.configured_remote.steam_id == steam_id) {
+    ResetRemoteParticipantSessionEpoch(
+        steam_id,
+        configured_authority_disconnected);
+    if (configured_authority_disconnected) {
         g_local_transport.configured_remote = TransportPeerEndpoint{};
         g_local_transport.configured_remote_valid = false;
+        std::lock_guard<std::mutex> lock(g_client_host_run_authorization_mutex);
+        g_client_host_run_authorization = ClientHostRunAuthorization{};
     }
-    UpdateRuntimeState([&](RuntimeState& state) {
-        if (auto* participant = FindParticipant(state, steam_id); participant != nullptr) {
-            participant->transport_connected = false;
-        }
-    });
 }
 
 bool SubmitSteamGameplayPacket(

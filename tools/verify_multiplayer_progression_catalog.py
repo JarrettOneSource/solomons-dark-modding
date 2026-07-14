@@ -219,11 +219,40 @@ def build_and_verify_catalog(
         row["entry_index"]: row["skill_file"]
         for row in catalog
     }
+    owner_view_by_label = {
+        "host_local": "host_local",
+        "client_remote_host": "host_local",
+        "client_local": "client_local",
+        "host_remote_client": "client_local",
+    }
     for label, snapshot in views.items():
         native_rows = snapshot["native"]["entries"]
         ledger_rows = snapshot["ledger"]["entries"]
-        native_mismatches = compare_book_rows(canonical_rows, native_rows)
-        ledger_mismatches = compare_book_rows(canonical_rows, ledger_rows)
+        owner_label = owner_view_by_label.get(label, label)
+        owner_rows = views.get(owner_label, snapshot)["native"]["entries"]
+        native_mismatches = compare_book_rows(owner_rows, native_rows)
+        ledger_mismatches = compare_book_rows(native_rows, ledger_rows)
+        catalog_metadata_mismatches = []
+        for index in range(entry_count):
+            expected = canonical_rows.get(index, {})
+            actual = native_rows.get(index, {})
+            fields = (
+                "internal_id",
+                "category",
+                "statbook_max_level",
+            )
+            differences = {
+                field: {
+                    "expected": expected.get(field),
+                    "actual": actual.get(field),
+                }
+                for field in fields
+                if expected.get(field) != actual.get(field)
+            }
+            if differences:
+                catalog_metadata_mismatches.append(
+                    {"entry_index": index, "fields": differences}
+                )
         mapping_mismatches = [
             {
                 "entry_index": index,
@@ -240,13 +269,20 @@ def build_and_verify_catalog(
             ] != [canonical_files[index]]
         ]
         parity[label] = {
+            "owner_view": owner_label,
             "native_mismatches": native_mismatches,
             "ledger_mismatches": ledger_mismatches,
+            "catalog_metadata_mismatches": catalog_metadata_mismatches,
             "mapping_mismatches": mapping_mismatches,
             "native_entry_count": snapshot["native"]["entry_count"],
             "ledger_entry_count": snapshot["ledger"]["entry_count"],
         }
-        if native_mismatches or ledger_mismatches or mapping_mismatches:
+        if (
+            native_mismatches
+            or ledger_mismatches
+            or catalog_metadata_mismatches
+            or mapping_mismatches
+        ):
             raise VerifyFailure(f"progression catalog parity failed for {label}: {parity[label]}")
 
     structural_tail: list[dict[str, Any]] = []

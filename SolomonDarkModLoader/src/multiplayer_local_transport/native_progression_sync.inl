@@ -97,6 +97,52 @@ bool TryReadNativeProgressionBookEntry(
     return true;
 }
 
+bool TryHydrateAuthoritativeRemoteProgressionRankAfterNativeNoOp(
+    std::uint64_t participant_id,
+    const NativeProgressionBookTableView& table,
+    const ParticipantProgressionBookEntryState& desired,
+    std::uint16_t active_before,
+    std::uint16_t rank_step,
+    NativeProgressionBookEntryView* native,
+    std::string* error_message) {
+    auto fail = [&](std::string message) {
+        if (error_message != nullptr) {
+            *error_message = std::move(message);
+        }
+        return false;
+    };
+    if (native == nullptr ||
+        participant_id == 0 ||
+        rank_step == 0 ||
+        active_before >= desired.active) {
+        return fail("authoritative rank hydration received invalid state");
+    }
+
+    const auto hydrated_active = static_cast<std::uint16_t>(
+        (std::min)(
+            static_cast<std::uint32_t>(desired.active),
+            static_cast<std::uint32_t>(active_before) + rank_step));
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.TryWriteField(
+            native->entry_address,
+            kStandaloneWizardProgressionActiveFlagOffset,
+            hydrated_active)) {
+        return fail("authoritative rank write failed");
+    }
+
+    std::string refresh_error;
+    if (!RefreshParticipantNativeProgression(participant_id, &refresh_error)) {
+        return fail("authoritative rank refresh failed: " + refresh_error);
+    }
+    if (!TryReadNativeProgressionBookEntry(table, desired.entry_index, native) ||
+        native->internal_id != desired.internal_id ||
+        native->category != desired.category ||
+        native->active != hydrated_active) {
+        return fail("authoritative rank did not survive native refresh");
+    }
+    return true;
+}
+
 bool ApplyAuthoritativeParticipantDerivedStats(
     uintptr_t progression_address,
     const ParticipantDerivedStatState& desired,
@@ -213,6 +259,10 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
             continue;
         }
         live_remote_participant_ids.insert(participant.participant_id);
+        if (g_remote_native_progression_reconcile_suppressed_for_test.load(
+                std::memory_order_acquire) == participant.participant_id) {
+            continue;
+        }
 
         SDModParticipantGameplayState gameplay_state;
         if (!TryGetParticipantGameplayState(participant.participant_id, &gameplay_state) ||
@@ -284,6 +334,7 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
         bool concentration_synchronized = false;
         bool derived_stats_synchronized = false;
         int applied_entry_count = 0;
+        int hydrated_entry_count = 0;
         int visibility_write_count = 0;
         int derived_stat_write_count = 0;
 
@@ -409,11 +460,43 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
                         break;
                     }
                     ++apply_calls;
-                    ++applied_entry_count;
-                    if (!TryReadNativeProgressionBookEntry(table, desired.entry_index, &native) ||
-                        native.active <= active_before) {
+                    if (!TryReadNativeProgressionBookEntry(
+                            table,
+                            desired.entry_index,
+                            &native)) {
                         complete = false;
                         break;
+                    }
+                    if (native.active <= active_before) {
+                        std::string hydration_error;
+                        if (!TryHydrateAuthoritativeRemoteProgressionRankAfterNativeNoOp(
+                                participant.participant_id,
+                                table,
+                                desired,
+                                active_before,
+                                static_cast<std::uint16_t>(option.apply_count),
+                                &native,
+                                &hydration_error)) {
+                            complete = false;
+                            Log(
+                                "Multiplayer authoritative native progression rank hydration deferred. participant_id=" +
+                                std::to_string(participant.participant_id) +
+                                " entry_index=" + std::to_string(desired.entry_index) +
+                                " desired_active=" + std::to_string(desired.active) +
+                                " native_active=" + std::to_string(active_before) +
+                                " error=" + hydration_error);
+                            break;
+                        }
+                        ++hydrated_entry_count;
+                        Log(
+                            "Multiplayer authoritative native progression rank hydrated after native no-op. participant_id=" +
+                            std::to_string(participant.participant_id) +
+                            " entry_index=" + std::to_string(desired.entry_index) +
+                            " desired_active=" + std::to_string(desired.active) +
+                            " previous_active=" + std::to_string(active_before) +
+                            " hydrated_active=" + std::to_string(native.active));
+                    } else {
+                        ++applied_entry_count;
                     }
                 }
 
@@ -450,7 +533,7 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
             std::string concentration_error;
             const bool refresh_concentration_derived_state =
                 target_changed || !was_complete || applied_entry_count > 0 ||
-                level_synchronized;
+                hydrated_entry_count > 0 || level_synchronized;
             const bool concentration_ok = refresh_concentration_derived_state
                 ? TryApplyParticipantConcentrationSelections(
                       participant.participant_id,
@@ -504,6 +587,7 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
             concentration_synchronized ||
             derived_stat_write_count > 0 ||
             applied_entry_count > 0 ||
+            hydrated_entry_count > 0 ||
             visibility_write_count > 0 ||
             (!was_complete && complete)) {
             Log(
@@ -527,6 +611,7 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
                 " derived_stat_revision=" +
                     std::to_string(participant.owned_progression.derived_stat_revision) +
                 " applied_entries=" + std::to_string(applied_entry_count) +
+                " hydrated_entries=" + std::to_string(hydrated_entry_count) +
                 " visibility_writes=" + std::to_string(visibility_write_count) +
                 " spellbook_revision=" +
                     std::to_string(participant.owned_progression.spellbook_revision) +

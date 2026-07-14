@@ -46,6 +46,44 @@ bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state) 
     return true;
 }
 
+bool RunWithParticipantConcentrationContext(
+    std::uint64_t participant_id,
+    const std::function<bool()>& operation,
+    std::string* error_message) {
+    auto fail = [&](std::string message) {
+        if (error_message != nullptr) {
+            *error_message = std::move(message);
+        }
+        return false;
+    };
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (participant_id == 0 || !operation) {
+        return fail("Participant Concentrate context requires an operation and participant id.");
+    }
+
+    auto* binding = FindParticipantEntity(participant_id);
+    if (binding == nullptr ||
+        binding->controller_kind != multiplayer::ParticipantControllerKind::Native ||
+        !binding->concentration_selection_valid) {
+        return fail(
+            "Participant Concentrate context requires a materialized native participant selection.");
+    }
+
+    ScopedParticipantConcentrationContext context(binding);
+    if (!context.active) {
+        return fail("Unable to install the participant Concentrate context: " + context.status);
+    }
+
+    const bool operation_succeeded = operation();
+    context.Restore();
+    if (!context.restored) {
+        return fail("Unable to restore the local Concentrate context: " + context.status);
+    }
+    return operation_succeeded;
+}
+
 bool TryReconcileParticipantConcentrationRuntimeSelections(
     std::uint64_t participant_id,
     std::int32_t entry_a,

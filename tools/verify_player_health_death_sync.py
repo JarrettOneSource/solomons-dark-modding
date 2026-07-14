@@ -84,6 +84,7 @@ emit("after.hp", after and after.hp or -1)
 emit("after.max_hp", after and after.max_hp or -1)
 emit("after.mp", after and after.mp or -1)
 emit("after.max_mp", after and after.max_mp or -1)
+emit("after.anim_drive_state", after and after.anim_drive_state or -1)
 """
     values = parse_key_values(lua(pipe_name, code))
     write_keys = ("write.max_hp", "write.hp", "write.max_mp", "write.mp")
@@ -107,6 +108,7 @@ emit("mp", player.mp or 0)
 emit("max_mp", player.max_mp or 0)
 emit("actor", player.actor_address or 0)
 emit("progression", player.progression_address or 0)
+emit("anim_drive_state", player.anim_drive_state or -1)
 """
     return parse_key_values(lua(pipe_name, code))
 
@@ -279,6 +281,17 @@ def verify_one_direction(
     observer_pipe: str,
     participant_id: int,
 ) -> dict[str, object]:
+    owner_before = query_local_player_vitals(owner_pipe)
+    if (
+        float(owner_before.get("hp", "0")) <= 0.001
+        or int(float(owner_before.get("anim_drive_state", "-1")))
+        == DEAD_CORPSE_DRIVE_STATE
+    ):
+        raise VerifyFailure(
+            f"owner on {owner_pipe} was not gameplay-alive before the destructive "
+            f"death presentation probe: {owner_before}"
+        )
+
     alive = set_local_player_vitals(owner_pipe, ALIVE_TEST_HP, ALIVE_TEST_MAX_HP)
     alive_seen = wait_for_remote_matches_owner_health(
         owner_pipe,
@@ -311,8 +324,13 @@ def verify_one_direction(
         observer_pipe,
         participant_id,
     )
+    owner_after = query_local_player_vitals(owner_pipe)
+    owner_drive_state = int(float(owner_after.get("anim_drive_state", "-1")))
+    owner_requires_scene_reset = owner_drive_state == DEAD_CORPSE_DRIVE_STATE
 
     return {
+        "contract": "remote_representation_death_and_positive_hp_recovery",
+        "owner_before": owner_before,
         "owner": owner_name,
         "alive_write": alive,
         "alive_seen": alive_seen,
@@ -322,6 +340,11 @@ def verify_one_direction(
         "restored_write": restored,
         "restored_seen": restored_seen,
         "restored_motion": restored_motion,
+        "owner_after": owner_after,
+        # Positive HP revives the replicated remote representation. It is not
+        # the stock local-player revive path: a forced local HP-zero actor can
+        # remain in corpse drive state until the scene is recreated.
+        "owner_gameplay_actor_requires_scene_reset": owner_requires_scene_reset,
     }
 
 

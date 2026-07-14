@@ -52,6 +52,10 @@ using SteamMatchmakingJoinLobbyFn = std::uint64_t(__cdecl*)(void*, std::uint64_t
 using SteamMatchmakingLeaveLobbyFn = void(__cdecl*)(void*, std::uint64_t);
 using SteamMatchmakingRequestLobbyDataFn = bool(__cdecl*)(void*, std::uint64_t);
 using SteamMatchmakingSetLobbyJoinableFn = bool(__cdecl*)(void*, std::uint64_t, bool);
+using SteamMatchmakingInviteUserToLobbyFn = bool(__cdecl*)(
+    void*,
+    std::uint64_t,
+    std::uint64_t);
 using SteamMatchmakingSetLobbyDataFn = bool(__cdecl*)(void*, std::uint64_t, const char*, const char*);
 using SteamMatchmakingGetLobbyDataFn = const char*(__cdecl*)(void*, std::uint64_t, const char*);
 using SteamMatchmakingSetLobbyMemberDataFn = void(__cdecl*)(void*, std::uint64_t, const char*, const char*);
@@ -123,6 +127,7 @@ struct SteamBootstrapState {
     SteamMatchmakingLeaveLobbyFn matchmaking_leave_lobby = nullptr;
     SteamMatchmakingRequestLobbyDataFn matchmaking_request_lobby_data = nullptr;
     SteamMatchmakingSetLobbyJoinableFn matchmaking_set_lobby_joinable = nullptr;
+    SteamMatchmakingInviteUserToLobbyFn matchmaking_invite_user_to_lobby = nullptr;
     SteamMatchmakingSetLobbyDataFn matchmaking_set_lobby_data = nullptr;
     SteamMatchmakingGetLobbyDataFn matchmaking_get_lobby_data = nullptr;
     SteamMatchmakingSetLobbyMemberDataFn matchmaking_set_lobby_member_data = nullptr;

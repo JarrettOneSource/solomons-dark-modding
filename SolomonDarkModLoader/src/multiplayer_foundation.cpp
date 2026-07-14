@@ -23,6 +23,7 @@ void LogProtocolSummary() {
             << ",hello=" << sizeof(SessionHelloPacket)
             << ",cast=" << sizeof(CastPacket)
             << ",hello_ack=" << sizeof(SessionHelloAckPacket)
+            << ",keepalive=" << sizeof(SessionKeepalivePacket)
             << ",world_snapshot=" << sizeof(WorldSnapshotPacket)
             << "} service_tick_ms=" << GetServiceTickIntervalMs();
     Log(message.str());

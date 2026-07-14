@@ -31,6 +31,7 @@ uintptr_t kActorBuildRenderDescriptorFromSource = 0;
 uintptr_t kPlayerActorMoveStep = 0;
 uintptr_t kPlayerActorSecondarySpellCast = 0;
 uintptr_t kPlayerActorMagicDamage = 0;
+uintptr_t kStaffEffectResolver = 0;
 uintptr_t kActorGetProfile = 0;
 uintptr_t kProfileResolveStatEntry = 0;
 uintptr_t kStatBookComputeValue = 0;
@@ -140,6 +141,7 @@ uintptr_t kEarthBoulderReleaseDamageCapScaleGlobal = 0;
 uintptr_t kEarthBoulderReleaseGrowthStopMinChargeGlobal = 0;
 uintptr_t kGameplayExactTextObjectGlobal = 0;
 
+uintptr_t kMainMenuRunTransition = 0;
 uintptr_t kStartGame = 0;
 uintptr_t kRunEnded = 0;
 uintptr_t kWaveSpawnerTick = 0;

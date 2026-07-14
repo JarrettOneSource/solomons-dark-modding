@@ -89,9 +89,9 @@ void ClearRunHostLocalWorldActorNetworkIds() {
     g_local_transport.recent_run_enemy_deaths_by_network_id.clear();
     g_local_transport.last_synced_enemy_hp_by_network_id.clear();
     g_local_transport.last_enemy_claimed_hp_by_network_id.clear();
+    g_local_transport.observed_enemy_damage_by_network_id.clear();
     g_local_transport.pending_lethal_enemy_damage_claim_until_ms.clear();
     g_local_transport.rejected_enemy_damage_retry_suppressed_until_ms.clear();
-    g_local_transport.local_cast_damage_claimed_sequences.clear();
     g_local_transport.next_run_host_local_world_actor_serial = 1;
 }
 
@@ -118,8 +118,10 @@ void RefreshWorldSceneTracking(const SDModSceneState& scene_state) {
     g_local_transport.last_air_chain_packet_sequence_by_participant.clear();
     g_local_transport.pending_air_chain_terminals.clear();
     g_local_transport.recent_local_cast_sequence = 0;
+    g_local_transport.recent_local_cast_skill_id = -1;
     g_local_transport.recent_local_cast_ms = 0;
     g_local_transport.recent_local_cast_target_network_actor_id = 0;
+    g_local_transport.recent_local_air_chain_target_until_ms.clear();
     g_local_transport.last_local_explode_splash_cast_sequence = 0;
     g_local_transport.host_local_explode_cast_baseline = {};
     {

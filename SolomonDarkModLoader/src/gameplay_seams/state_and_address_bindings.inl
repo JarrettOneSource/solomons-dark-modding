@@ -59,6 +59,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "player_actor_move_step", kPlayerActorMoveStep),
         SDMOD_ADDR("gameplay.hooks", "player_actor_secondary_spell_cast", kPlayerActorSecondarySpellCast),
         SDMOD_ADDR("gameplay.hooks", "player_actor_magic_damage", kPlayerActorMagicDamage),
+        SDMOD_ADDR("gameplay.hooks", "staff_effect_resolver", kStaffEffectResolver),
         SDMOD_ADDR("gameplay.hooks", "actor_get_profile", kActorGetProfile),
         SDMOD_ADDR("gameplay.hooks", "profile_resolve_stat_entry", kProfileResolveStatEntry),
         SDMOD_ADDR("gameplay.hooks", "stat_book_compute_value", kStatBookComputeValue),
@@ -175,6 +176,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.globals", "earth_boulder_release_growth_stop_min_charge", kEarthBoulderReleaseGrowthStopMinChargeGlobal),
         SDMOD_ADDR("gameplay.globals", "gameplay_exact_text_object", kGameplayExactTextObjectGlobal),
 
+        SDMOD_ADDR("run_lifecycle.hooks", "main_menu_run_transition", kMainMenuRunTransition),
         SDMOD_ADDR("run_lifecycle.hooks", "start_game", kStartGame),
         SDMOD_ADDR("run_lifecycle.hooks", "run_ended", kRunEnded),
         SDMOD_ADDR("run_lifecycle.hooks", "wave_spawner_tick", kWaveSpawnerTick),

@@ -131,6 +131,8 @@ void PumpQueuedGameplayActions() {
     std::vector<PendingNativePoisonBehaviorProbe> native_poison_behavior_probes;
     std::vector<PendingNativeMagicHitBehaviorProbe>
         native_magic_hit_behavior_probes;
+    std::vector<PendingNativeStaffEffectProbe>
+        native_staff_effect_probes;
     PendingParticipantEntitySyncRequest participant_sync_request;
     bool have_participant_sync_request = false;
     PendingGameplayRegionSwitchRequest region_switch_request;
@@ -242,6 +244,14 @@ void PumpQueuedGameplayActions() {
                     .pending_native_magic_hit_behavior_probes.front());
             g_gameplay_keyboard_injection
                 .pending_native_magic_hit_behavior_probes.pop_front();
+        }
+        while (!g_gameplay_keyboard_injection
+                    .pending_native_staff_effect_probes.empty()) {
+            native_staff_effect_probes.push_back(
+                g_gameplay_keyboard_injection
+                    .pending_native_staff_effect_probes.front());
+            g_gameplay_keyboard_injection
+                .pending_native_staff_effect_probes.pop_front();
         }
     }
 
@@ -394,6 +404,39 @@ void PumpQueuedGameplayActions() {
             std::to_string(request.projectile_damage) +
             " magic_damage=" + std::to_string(request.magic_damage) +
             " attempts=" + std::to_string(request.attempts) +
+            " hp=" + std::to_string(hp_before) + "->" +
+            std::to_string(hp_after) +
+            (probe_error.empty() ? std::string{} : " error=" + probe_error));
+    }
+
+    for (const auto& request : native_staff_effect_probes) {
+        std::string probe_error;
+        float hp_before = 0.0f;
+        float hp_after = 0.0f;
+        const bool applied =
+            ExecuteNativeStaffEffectProbe(
+                request,
+                &hp_before,
+                &hp_after,
+                &probe_error);
+        {
+            std::lock_guard<std::mutex> lock(
+                g_gameplay_keyboard_injection
+                    .pending_gameplay_world_actions_mutex);
+            auto& result = g_gameplay_keyboard_injection
+                               .native_staff_effect_probe_result;
+            result.request_serial = request.request_serial;
+            result.success = applied;
+            result.hp_before = hp_before;
+            result.hp_after = hp_after;
+            result.error = probe_error;
+        }
+        Log(
+            std::string("Native staff-effect probe ") +
+            (applied ? "applied" : "failed") +
+            ". source_actor=" + HexString(request.source_actor) +
+            " target_actor=" + HexString(request.target_actor) +
+            " variant=" + std::to_string(request.variant) +
             " hp=" + std::to_string(hp_before) + "->" +
             std::to_string(hp_after) +
             (probe_error.empty() ? std::string{} : " error=" + probe_error));

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -24,6 +25,7 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     parse_key_values,
     start_host_testrun_and_wait_for_clients,
+    stop_games,
     wait_for_remote,
 )
 from verify_player_health_death_sync import set_local_player_vitals
@@ -72,6 +74,16 @@ emit("fire_addresses", table.concat(fire, ","))
 """
 
 
+COMBAT_STATE_LUA = """
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local state = sd.gameplay and sd.gameplay.get_combat_state and sd.gameplay.get_combat_state() or nil
+emit("combat_active", state and state.combat_active or false)
+emit("music_started", state and state.music_started or false)
+emit("wave_index", state and state.wave_index or 0)
+emit("wave_counter", state and state.wave_counter or 0)
+"""
+
+
 def run(args: list[str], *, env: dict[str, str] | None = None, timeout: float = 30.0) -> str:
     completed = subprocess.run(
         args,
@@ -96,47 +108,6 @@ def lua(pipe_name: str, code: str, timeout: float = 5.0) -> str:
 
 def values(pipe_name: str, code: str, timeout: float = 5.0) -> dict[str, str]:
     return parse_key_values(lua(pipe_name, code, timeout=timeout))
-
-
-def read_log(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8", errors="replace")
-    except FileNotFoundError:
-        return ""
-
-
-def log_after(path: Path, offset: int) -> str:
-    return read_log(path)[offset:]
-
-
-def query_scene(pipe_name: str) -> str:
-    return lua(
-        pipe_name,
-        "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')",
-    ).strip()
-
-
-def ensure_testrun() -> dict[str, object]:
-    host_scene = query_scene(HOST_PIPE)
-    client_scene = query_scene(CLIENT_PIPE)
-    if host_scene == "testrun" and client_scene == "testrun":
-        return {"already_testrun": True}
-    if host_scene != "hub":
-        raise VerifyFailure(f"host is not in hub or testrun: {host_scene!r}")
-    result = start_host_testrun_and_wait_for_clients()
-    wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "testrun")
-    wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "testrun")
-    return result
-
-
-COMBAT_STATE_LUA = """
-local function emit(key, value) print(key .. "=" .. tostring(value)) end
-local state = sd.gameplay and sd.gameplay.get_combat_state and sd.gameplay.get_combat_state() or nil
-emit("combat_active", state and state.combat_active or false)
-emit("music_started", state and state.music_started or false)
-emit("wave_index", state and state.wave_index or 0)
-emit("wave_counter", state and state.wave_counter or 0)
-"""
 
 
 def combat_active(state: dict[str, str]) -> bool:
@@ -170,11 +141,51 @@ def ensure_host_combat_started() -> dict[str, object]:
     raise VerifyFailure(f"host combat did not become active after start_waves: last={last}")
 
 
+def read_log(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        return ""
+
+
+def log_after(path: Path, offset: int) -> str:
+    return read_log(path)[offset:]
+
+
+def query_scene(pipe_name: str) -> str:
+    return lua(
+        pipe_name,
+        "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')",
+    ).strip()
+
+
+def ensure_testrun() -> dict[str, object]:
+    host_scene = query_scene(HOST_PIPE)
+    client_scene = query_scene(CLIENT_PIPE)
+    if host_scene == "testrun" and client_scene == "testrun":
+        return {"already_testrun": True}
+    if host_scene != "hub":
+        raise VerifyFailure(f"host is not in hub or testrun: {host_scene!r}")
+    result = start_host_testrun_and_wait_for_clients()
+    wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "testrun")
+    wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "testrun")
+    return result
+
+
 def sustain_pair_vitals() -> dict[str, dict[str, str]]:
     return {
         "host": set_local_player_vitals(HOST_PIPE, TEST_PLAYER_HP, TEST_PLAYER_HP),
         "client": set_local_player_vitals(CLIENT_PIPE, TEST_PLAYER_HP, TEST_PLAYER_HP),
     }
+
+
+def enable_progression_neutral_combat() -> dict[str, object]:
+    # The stress harness imports this module's cast-log helpers, so importing its
+    # combat bootstrap at module load time would form a cycle. Runtime lookup is
+    # safe after this module has finished defining those helpers.
+    from verify_multiplayer_primary_kill_stress import enable_manual_stock_spawner_combat
+
+    return enable_manual_stock_spawner_combat()
 
 
 def detect_instance_pids() -> dict[str, int]:
@@ -277,15 +288,38 @@ def wait_click(process: subprocess.Popen[str], timeout: float = 5.0) -> str:
 def queue_gameplay_mouse_left(direction: Direction, frames: int) -> dict[str, str]:
     if frames <= 0:
         raise VerifyFailure(f"{direction.name}: frames must be positive")
-    return values(
+    result = values(
         direction.source_pipe,
         f"""
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
 if sd.input.clear_mouse_left ~= nil then emit("clear_before", sd.input.clear_mouse_left()) end
+local player = sd.player.get_state()
+if player == nil or player.actor_address == nil or player.actor_address == 0 then
+  error("player actor unavailable")
+end
+local actor = tonumber(player.actor_address) or 0
+local x = sd.debug.read_float(actor + sd.debug.layout_offset("actor_position_x"))
+local y = sd.debug.read_float(actor + sd.debug.layout_offset("actor_position_y"))
+emit("write.heading", sd.debug.write_float(actor + sd.debug.layout_offset("actor_heading"), 90.0))
+emit("write.aim_x", sd.debug.write_float(actor + sd.debug.layout_offset("actor_aim_target_x"), x + 320.0))
+emit("write.aim_y", sd.debug.write_float(actor + sd.debug.layout_offset("actor_aim_target_y"), y))
+emit("write.aux0", sd.debug.write_u32(actor + sd.debug.layout_offset("actor_aim_target_aux0"), 0))
+emit("write.aux1", sd.debug.write_u32(actor + sd.debug.layout_offset("actor_aim_target_aux1"), 0))
 emit("mouse_left_frames", sd.input.hold_mouse_left_frames({frames}))
 """,
         timeout=5.0,
     )
+    required = (
+        "write.heading",
+        "write.aim_x",
+        "write.aim_y",
+        "write.aux0",
+        "write.aux1",
+        "mouse_left_frames",
+    )
+    if any(result.get(key) != "true" for key in required):
+        raise VerifyFailure(f"{direction.name}: failed to aim and queue mouse-left input: {result}")
+    return result
 
 
 def clear_gameplay_mouse_left(direction: Direction) -> dict[str, str]:
@@ -301,6 +335,18 @@ def clear_gameplay_mouse_left(direction: Direction) -> dict[str, str]:
     return result
 
 
+def clear_local_cast_state(direction: Direction) -> dict[str, str]:
+    result = values(
+        direction.source_pipe,
+        "print('cleared=' .. tostring(sd.input.clear_local_cast_state()))",
+        timeout=5.0,
+    )
+    if result.get("cleared") != "true":
+        raise VerifyFailure(f"{direction.name}: failed to clear local cast state: {result}")
+    time.sleep(0.25)
+    return result
+
+
 def parse_phase_counts(log_text: str, source_id: int) -> dict[str, int]:
     pattern = re.compile(
         rf"Multiplayer local cast sent\. participant_id={source_id} .*?phase=([a-z_]+).*?skill_id=\d+"
@@ -309,6 +355,17 @@ def parse_phase_counts(log_text: str, source_id: int) -> dict[str, int]:
     for phase in pattern.findall(log_text):
         counts[phase] = counts.get(phase, 0) + 1
     return counts
+
+
+def parse_phase_sequences(log_text: str, source_id: int) -> dict[str, list[int]]:
+    pattern = re.compile(
+        rf"Multiplayer local cast sent\. participant_id={source_id} "
+        rf"cast_sequence=(\d+) .*?phase=([a-z_]+).*?skill_id=\d+"
+    )
+    sequences: dict[str, list[int]] = {}
+    for cast_sequence, phase in pattern.findall(log_text):
+        sequences.setdefault(phase, []).append(int(cast_sequence))
+    return sequences
 
 
 def parse_unique_fire(values_dict: dict[str, str]) -> set[str]:
@@ -440,23 +497,40 @@ def wait_for_balanced_source_casts(
 ) -> tuple[str, dict[str, int], int]:
     deadline = time.monotonic() + timeout
     balanced_since: float | None = None
-    balanced_signature: tuple[int, int, int] | None = None
+    balanced_signature: tuple[tuple[tuple[int, int], ...], ...] | None = None
     last_log = ""
     last_counts: dict[str, int] = {}
     last_native_hook_count = 0
     while time.monotonic() < deadline:
         last_log = log_after(direction.source_log, source_offset)
-        last_counts = parse_phase_counts(last_log, direction.source_id)
-        last_native_hook_count = count_local_native_queues(last_log)
+        native_sequences = parse_local_pressed_sequences(last_log, direction.source_id)
+        native_counts = Counter(native_sequences)
+        expected_sequences = set(native_counts)
+        phase_sequences = parse_phase_sequences(last_log, direction.source_id)
+        filtered_phase_counts = {
+            phase: Counter(
+                sequence
+                for sequence in sequences
+                if sequence in expected_sequences
+            )
+            for phase, sequences in phase_sequences.items()
+        }
+        pressed_counts = filtered_phase_counts.get("pressed", Counter())
+        released_counts = filtered_phase_counts.get("released", Counter())
+        last_counts = {
+            phase: sum(counts.values())
+            for phase, counts in filtered_phase_counts.items()
+        }
+        last_native_hook_count = len(native_sequences)
         signature = (
-            last_native_hook_count,
-            last_counts.get("pressed", 0),
-            last_counts.get("released", 0),
+            tuple(sorted(native_counts.items())),
+            tuple(sorted(pressed_counts.items())),
+            tuple(sorted(released_counts.items())),
         )
         balanced = (
-            last_native_hook_count >= 1
-            and signature[1] == last_native_hook_count
-            and signature[2] == last_native_hook_count
+            bool(native_counts)
+            and pressed_counts == native_counts
+            and released_counts == native_counts
         )
         now = time.monotonic()
         if balanced:
@@ -476,7 +550,7 @@ def wait_for_balanced_source_casts(
 
 
 def verify_single_click(direction: Direction) -> dict[str, object]:
-    pre_clear = clear_gameplay_mouse_left(direction)
+    pre_clear = clear_local_cast_state(direction)
     source_offset = len(read_log(direction.source_log))
     receiver_offset = len(read_log(direction.receiver_log))
     before_fire = sample_remote_fire(direction.receiver_pipe, duration=0.15)
@@ -562,7 +636,7 @@ def verify_single_click(direction: Direction) -> dict[str, object]:
 
 
 def verify_rapid_clicks(direction: Direction, click_count: int = 5) -> dict[str, object]:
-    pre_clear = clear_gameplay_mouse_left(direction)
+    pre_clear = clear_local_cast_state(direction)
     source_offset = len(read_log(direction.source_log))
     receiver_offset = len(read_log(direction.receiver_log))
     before_fire = sample_remote_fire(direction.receiver_pipe, duration=0.15)
@@ -634,11 +708,38 @@ def verify_rapid_clicks(direction: Direction, click_count: int = 5) -> dict[str,
 
 
 def verify_hold(direction: Direction) -> dict[str, object]:
-    pre_clear = clear_gameplay_mouse_left(direction)
-    source_offset = len(read_log(direction.source_log))
-    receiver_offset = len(read_log(direction.receiver_log))
-    before_fire = sample_remote_fire(direction.receiver_pipe, duration=0.15)
-    input_output = queue_gameplay_mouse_left(direction, HOLD_FRAMES)
+    input_attempts: list[dict[str, object]] = []
+    for arm_attempt in range(1, 3):
+        pre_clear = clear_local_cast_state(direction)
+        source_offset = len(read_log(direction.source_log))
+        receiver_offset = len(read_log(direction.receiver_log))
+        before_fire = sample_remote_fire(direction.receiver_pipe, duration=0.15)
+        input_output = queue_gameplay_mouse_left(direction, HOLD_FRAMES)
+        try:
+            wait_for_source_cast(
+                direction,
+                source_offset,
+                {"pressed": 1},
+                timeout=1.5,
+            )
+        except VerifyFailure as exc:
+            input_attempts.append({
+                "attempt": arm_attempt,
+                "input_output": input_output,
+                "error": str(exc),
+            })
+            continue
+        input_attempts.append({
+            "attempt": arm_attempt,
+            "input_output": input_output,
+            "armed": True,
+        })
+        break
+    else:
+        raise VerifyFailure(
+            f"{direction.name}: hold input did not arm a native primary cast: "
+            f"attempts={input_attempts}"
+        )
     active_seen = False
     held_seen = False
     held_fire: set[str] = set()
@@ -738,6 +839,7 @@ local bot = sd.bots and sd.bots.get_participant_state and sd.bots.get_participan
     return {
         "pre_clear": pre_clear,
         "input_output": input_output,
+        "input_attempts": input_attempts,
         "native_hook_count": native_hook_count,
         "native_sequences": native_sequences,
         "phase_counts": phase_counts,
@@ -755,6 +857,9 @@ local bot = sd.bots and sd.bots.get_participant_state and sd.bots.get_participan
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.parse_args()
+
     result: dict[str, object] = {"ok": False}
     try:
         result["global_mouse_reset"] = release_global_mouse_button()
@@ -763,7 +868,7 @@ def main() -> int:
         result["run_entry"] = run_entry
         disable_bots()
         result["vitals_before_combat"] = sustain_pair_vitals()
-        result["combat"] = ensure_host_combat_started()
+        result["combat"] = enable_progression_neutral_combat()
         result["vitals_after_combat"] = sustain_pair_vitals()
         directions = [
             Direction("host_to_client", HOST_ID, HOST_NAME, HOST_PIPE, HOST_LOG, pids["host"], CLIENT_PIPE, CLIENT_LOG),
@@ -786,6 +891,9 @@ def main() -> int:
         result["error"] = str(exc)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 1
+    finally:
+        release_global_mouse_button()
+        stop_games()
 
 
 if __name__ == "__main__":

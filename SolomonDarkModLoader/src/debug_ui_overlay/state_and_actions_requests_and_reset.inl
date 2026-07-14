@@ -417,19 +417,32 @@ bool TryQueueSemanticUiElementRequest(
     return true;
 }
 
-void DispatchPendingSemanticUiActionRequest() {
+void DispatchPendingSemanticUiActionRequest(
+    std::string_view expected_dispatch_timing,
+    std::string_view dispatch_context) {
     PendingSemanticUiActionRequest request;
     DebugUiSurfaceSnapshot snapshot;
     {
         std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+        if (!g_debug_ui_overlay_state.pending_semantic_ui_action.active) {
+            return;
+        }
+
+        const auto pending_surface_root_id =
+            GetOverlaySurfaceRootId(g_debug_ui_overlay_state.pending_semantic_ui_action.surface_id);
+        if (ResolveUiActionDispatchTiming(
+                pending_surface_root_id,
+                g_debug_ui_overlay_state.pending_semantic_ui_action.action_id) !=
+            expected_dispatch_timing) {
+            return;
+        }
+
         const auto pending_skips_snapshot_match = [&]() {
-            if (!g_debug_ui_overlay_state.pending_semantic_ui_action.active) return false;
             const auto* def = FindUiActionDefinition(g_debug_ui_overlay_state.pending_semantic_ui_action.action_id);
             return def != nullptr &&
                    (def->dispatch_kind == "direct_write" || def->dispatch_kind == "owner_point_click");
         }();
         if (g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.active ||
-            !g_debug_ui_overlay_state.pending_semantic_ui_action.active ||
             (!pending_skips_snapshot_match &&
              !IsUsableDebugUiSurfaceSnapshot(g_debug_ui_overlay_state.latest_surface_snapshot))) {
             return;
@@ -451,20 +464,6 @@ void DispatchPendingSemanticUiActionRequest() {
 
     const auto surface_root_id = GetOverlaySurfaceRootId(request.surface_id);
     const auto dispatch_identity = !request.action_id.empty() ? request.action_id : request.target_label;
-    if (!ShouldDispatchUiActionViaOverlayFrame(surface_root_id, request.action_id)) {
-        const auto dispatch_timing = std::string(ResolveUiActionDispatchTiming(surface_root_id, request.action_id));
-        const auto error_message =
-            "UI action '" + dispatch_identity + "' uses unsupported dispatch timing '" + dispatch_timing + "'.";
-        {
-            std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
-            StoreCompletedSemanticUiActionDispatchUnlocked(&g_debug_ui_overlay_state, "failed", error_message);
-        }
-        Log(
-            "Debug UI overlay failed to dispatch semantic UI action on the render thread. request=" +
-            std::to_string(request.request_id) + " target=" + dispatch_identity + " surface=" + request.surface_id +
-            " reason=" + error_message);
-        return;
-    }
 
     DebugUiSnapshotElement resolved_snapshot_element;
     const DebugUiSnapshotElement* snapshot_element = nullptr;
@@ -497,7 +496,8 @@ void DispatchPendingSemanticUiActionRequest() {
             StoreCompletedSemanticUiActionDispatchUnlocked(&g_debug_ui_overlay_state, "failed", error_message);
         }
         Log(
-            "Debug UI overlay failed to dispatch semantic UI action on the render thread. request=" +
+            "Debug UI overlay failed to dispatch semantic UI action on the " + std::string(dispatch_context) +
+            ". request=" +
             std::to_string(request.request_id) + " target=" + dispatch_identity + " surface=" + request.surface_id +
             " reason=" + error_message);
         return;
@@ -516,14 +516,16 @@ void DispatchPendingSemanticUiActionRequest() {
 
     if (dispatched) {
         Log(
-            "Debug UI overlay dispatched semantic UI action on the render thread. request=" +
+            "Debug UI overlay dispatched semantic UI action on the " + std::string(dispatch_context) +
+            ". request=" +
             std::to_string(request.request_id) + " target=" + dispatch_identity +
             " surface=" + request.surface_id);
         return;
     }
 
     Log(
-        "Debug UI overlay failed to dispatch semantic UI action on the render thread. request=" +
+        "Debug UI overlay failed to dispatch semantic UI action on the " + std::string(dispatch_context) +
+        ". request=" +
         std::to_string(request.request_id) + " target=" + dispatch_identity +
         " surface=" + request.surface_id + " reason=" + dispatch_error);
 }

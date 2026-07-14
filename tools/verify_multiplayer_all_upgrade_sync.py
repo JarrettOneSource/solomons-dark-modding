@@ -43,6 +43,7 @@ from verify_multiplayer_progression_catalog import (
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "runtime" / "multiplayer_all_upgrade_sync.json"
 FLAT_BONEYARD = ROOT / "tests" / "fixtures" / "boneyards" / "flat_multiplayer_test.boneyard"
+MAX_NATIVE_PROGRESSION_LEVEL = 75
 
 
 LEVEL_STATE_LUA = r"""
@@ -508,9 +509,7 @@ def wait_for_target_parity(
                 "level",
                 "previous_xp_threshold",
                 "next_xp_threshold",
-                "hp",
                 "max_hp",
-                "mp",
                 "max_mp",
                 "move_speed",
             ),
@@ -748,6 +747,14 @@ def run_matrix(
                 )
                 continue
             target_level = int(before["native"]["level"]) + 1
+            if target_level > MAX_NATIVE_PROGRESSION_LEVEL:
+                raise VerifyFailure(
+                    "upgrade matrix exhausted the stock level curve before all "
+                    f"requested rows were exercised: target={target_id} "
+                    f"current_level={before['native']['level']} row={entry_index}. "
+                    "Run the matrix from a fresh temporary profile instead of "
+                    "reusing a progression consumed by another rank matrix."
+                )
             # Native level_up advances according to the XP thresholds, and can
             # cross multiple levels if fed an oversized value. Use the current
             # exact next threshold so each offer advances one native level.

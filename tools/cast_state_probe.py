@@ -906,79 +906,17 @@ def drive_hub_flow(
     )
 
 
-def drive_new_game_flow(process_id: int, *, element: str, discipline: str) -> None:
-    play_clicked = False
-    new_game_clicked = False
-    create_selected = False
-    deadline = time.time() + 60.0
-    while time.time() < deadline:
-        scene = query_scene_state()
-        if scene.get("available") == "true" and scene.get("name") == "hub" and scene.get("transitioning") == "false":
-            return
-
-        snapshot = query_ui_snapshot()
-        surface_id = snapshot.get("surface_id")
-        if surface_id == "dialog" and snapshot.get("element.2.action_id") == "dialog.primary":
-            activate_or_click_snapshot_action(process_id, snapshot, "dialog.primary", "dialog")
-            time.sleep(0.75)
-            continue
-
-        if surface_id == "main_menu":
-            action_ids = {
-                snapshot.get(f"element.{index}.action_id"): index
-                for index in range(1, 9)
-                if snapshot.get(f"element.{index}.action_id")
-            }
-            if not play_clicked and "main_menu.play" in action_ids:
-                activate_or_click_snapshot_action(process_id, snapshot, "main_menu.play", "main_menu")
-                play_clicked = True
-                time.sleep(0.75)
-                continue
-            if not new_game_clicked and "main_menu.new_game" in action_ids:
-                activate_or_click_snapshot_action(process_id, snapshot, "main_menu.new_game", "main_menu")
-                new_game_clicked = True
-                branch = resolve_new_game_branch_after_activation(process_id, [])
-                if is_settled_scene(branch, "hub"):
-                    return
-                choose_create_options(process_id, element=element, discipline=discipline)
-                create_selected = True
-                wait_for_scene("hub", timeout_s=45.0)
-                return
-
-        if surface_id == "create" and not create_selected:
-            choose_create_options(process_id, element=element, discipline=discipline)
-            create_selected = True
-            wait_for_scene("hub", timeout_s=45.0)
-            return
-
-        time.sleep(0.25)
-
-    final_scene = query_scene_state()
-    final_snapshot = query_ui_snapshot()
-    final_surface = final_snapshot.get("surface_id")
-    if final_surface == "main_menu":
-        final_action_ids = {
-            final_snapshot.get(f"element.{index}.action_id"): index
-            for index in range(1, 9)
-            if final_snapshot.get(f"element.{index}.action_id")
-        }
-        if "main_menu.new_game" in final_action_ids:
-            activate_or_click_snapshot_action(process_id, final_snapshot, "main_menu.new_game", "main_menu")
-            branch = resolve_new_game_branch_after_activation(process_id, ["main_menu.new_game"])
-            if is_settled_scene(branch, "hub"):
-                return
-            choose_create_options(process_id, element=element, discipline=discipline)
-            wait_for_scene("hub", timeout_s=45.0)
-            return
-    if final_surface == "create":
-        choose_create_options(process_id, element=element, discipline=discipline)
-        wait_for_scene("hub", timeout_s=45.0)
-        return
-
-    raise ProbeFailure(
-        "Timed out driving new-game flow. "
-        f"Last scene={final_scene} last_ui={final_snapshot} "
-        f"play_clicked={play_clicked} new_game_clicked={new_game_clicked} create_selected={create_selected}"
+def drive_new_game_flow(
+    process_id: int,
+    *,
+    element: str,
+    discipline: str,
+) -> dict[str, object]:
+    return drive_hub_flow(
+        process_id,
+        element=element,
+        discipline=discipline,
+        prefer_resume=False,
     )
 
 

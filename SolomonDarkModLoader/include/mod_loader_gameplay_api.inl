@@ -31,6 +31,10 @@ bool TryListSceneActors(std::vector<SDModSceneActorState>* actors);
 bool TryListRecentNativeSpellEffectActors(
     std::vector<SDModNativeSpellEffectActorState>* actors);
 bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state);
+bool RunWithParticipantConcentrationContext(
+    std::uint64_t participant_id,
+    const std::function<bool()>& operation,
+    std::string* error_message);
 bool TryApplyParticipantConcentrationSelections(
     std::uint64_t participant_id,
     std::int32_t entry_a,

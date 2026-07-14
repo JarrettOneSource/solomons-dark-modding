@@ -1417,15 +1417,29 @@ def wait_for_native_remote_overlap_stability(
     hold_player_heading(anchor_pipe, anchor_heading)
     hold_player_heading(mover_pipe, mover_heading)
     place_player(anchor_pipe, anchor_x, anchor_y, anchor_heading)
+    # Arena collision/nav correction can move the owner immediately after a
+    # raw placement. Converge the mirror against the settled owner, then keep
+    # the requested mover offset relative to that settled position.
+    settled_anchor_x, settled_anchor_y, settled_anchor_heading = (
+        wait_for_local_transform_settled(
+            anchor_pipe,
+            stable_seconds=0.5,
+        )
+    )
     wait_for_remote_convergence(
         mover_pipe,
         anchor_id,
-        anchor_x,
-        anchor_y,
-        anchor_heading,
+        settled_anchor_x,
+        settled_anchor_y,
+        settled_anchor_heading,
         timeout=8.0,
     )
-    mover_start = place_player(mover_pipe, mover_x, mover_y, mover_heading)
+    mover_start = place_player(
+        mover_pipe,
+        settled_anchor_x + (mover_x - anchor_x),
+        settled_anchor_y + (mover_y - anchor_y),
+        mover_heading,
+    )
     mover_start_xy = (float(mover_start["after.x"]), float(mover_start["after.y"]))
     anchor_on_mover_prefix = f"peer.{mover_peer_id}."
     # The caller passes anchor_id as the anchor's identity and mover_peer_id as
@@ -1461,6 +1475,7 @@ def wait_for_native_remote_overlap_stability(
         overlap_distance = distance(*mover_player, *anchor_mirror)
         last = {
             "mover_pipe": mover_pipe,
+            "settled_anchor": [settled_anchor_x, settled_anchor_y],
             "mover_start": list(mover_start_xy),
             "mover_player": list(mover_player),
             "mover_mirror": list(mover_mirror),
@@ -1642,7 +1657,25 @@ def wait_for_both_hub_settled(settle_seconds: float = 3.0, timeout: float = 15.0
 
 def start_host_testrun_and_wait_for_clients(timeout: float = 30.0) -> dict[str, object]:
     wait_for_both_hub_settled(timeout=max(15.0, timeout))
-    start_testrun(HOST_PIPE)
+    # Spawn readiness keeps its own scene-identity stability window. The first
+    # request after a fresh create->hub transition intentionally initializes
+    # that window and returns a transient error, even if the semantic scene has
+    # already read as hub for several seconds. Retry rejected requests; a
+    # successful request is queued exactly once and exits this loop.
+    start_deadline = time.monotonic() + timeout
+    last_start_error = ""
+    while time.monotonic() < start_deadline:
+        try:
+            start_testrun(HOST_PIPE)
+            break
+        except (VerifyFailure, subprocess.TimeoutExpired) as exc:
+            last_start_error = str(exc)
+            time.sleep(0.25)
+    else:
+        raise VerifyFailure(
+            "host testrun request never reached spawn readiness: "
+            f"{last_start_error}"
+        )
     wait_for_scene(HOST_PIPE, "testrun", timeout=timeout)
     wait_for_scene(CLIENT_PIPE, "testrun", timeout=timeout)
     return {

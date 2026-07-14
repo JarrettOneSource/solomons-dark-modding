@@ -635,25 +635,52 @@ def verify_projectile_cast(direction: Direction, spec: ElementSpec) -> dict[str,
         direction=direction.name,
         projectile_type=f"0x{spec.projectile_type:X}",
     )
-    pre_clear = clear_local_cast_state(direction)
-    source_offset = len(read_log(direction.source_log))
-    receiver_offset = len(read_log(direction.receiver_log))
-    before = sample_projectiles(direction.receiver_pipe, duration=0.2)
-    queue_result = queue_deterministic_primary(direction, spec.frames)
-    sample_telemetry_window(
-        "cast.projectile.after_input",
-        duration=0.6,
-        interval=0.2,
-        element=spec.element,
-        direction=direction.name,
-    )
-    observed = sample_projectiles(direction.receiver_pipe, duration=3.0)
-    flow = verify_cast_log_flow(
-        direction,
-        source_offset,
-        receiver_offset,
-        require_held=spec.frames > TAP_FRAMES,
-    )
+    input_attempts: list[dict[str, object]] = []
+    for input_attempt in range(1, 3):
+        pre_clear = clear_local_cast_state(direction)
+        source_offset = len(read_log(direction.source_log))
+        receiver_offset = len(read_log(direction.receiver_log))
+        before = sample_projectiles(direction.receiver_pipe, duration=0.2)
+        queue_result = queue_deterministic_primary(direction, spec.frames)
+        sample_telemetry_window(
+            "cast.projectile.after_input",
+            duration=0.6,
+            interval=0.2,
+            element=spec.element,
+            direction=direction.name,
+            input_attempt=input_attempt,
+        )
+        observed = sample_projectiles(direction.receiver_pipe, duration=3.0)
+        try:
+            flow = verify_cast_log_flow(
+                direction,
+                source_offset,
+                receiver_offset,
+                require_held=spec.frames > TAP_FRAMES,
+            )
+        except VerifyFailure as exc:
+            input_attempts.append({
+                "attempt": input_attempt,
+                "queue_result": queue_result,
+                "error": str(exc),
+            })
+            if (
+                spec.frames <= TAP_FRAMES
+                or "source cast did not reach native hook/phases" not in str(exc)
+            ):
+                raise
+            continue
+        input_attempts.append({
+            "attempt": input_attempt,
+            "queue_result": queue_result,
+            "armed": True,
+        })
+        break
+    else:
+        raise VerifyFailure(
+            f"{direction.name} {spec.presentation}: long primary input did not produce "
+            f"the required held phase: attempts={input_attempts}"
+        )
     type_key = f"0x{spec.projectile_type:X}"
     runtime_observed_sequences = wait_for_remote_projectile_spawn_sequences(
         direction,
@@ -696,6 +723,7 @@ def verify_projectile_cast(direction: Direction, spec: ElementSpec) -> dict[str,
     return {
         "pre_clear": pre_clear,
         "queue_result": queue_result,
+        "input_attempts": input_attempts,
         "flow": flow,
         "before": before,
         "observed": observed,
@@ -715,44 +743,68 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
         presentation=spec.presentation,
         direction=direction.name,
     )
-    pre_clear = clear_local_cast_state(direction)
-    source_offset = len(read_log(direction.source_log))
-    receiver_offset = len(read_log(direction.receiver_log))
-    queue_result = queue_deterministic_primary(direction, spec.frames)
-    active_seen = False
-    anim_seen = False
-    samples: list[dict[str, str]] = []
-    deadline = time.monotonic() + 3.0
-    while time.monotonic() < deadline:
-        proxy = read_proxy_animation(direction.receiver_pipe, direction.source_id)
-        samples.append(proxy)
-        active_seen = active_seen or proxy.get("cast_active") == "true"
+    input_attempts: list[dict[str, object]] = []
+    for input_attempt in range(1, 3):
+        pre_clear = clear_local_cast_state(direction)
+        source_offset = len(read_log(direction.source_log))
+        receiver_offset = len(read_log(direction.receiver_log))
+        queue_result = queue_deterministic_primary(direction, spec.frames)
+        active_seen = False
+        anim_seen = False
+        samples: list[dict[str, str]] = []
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline:
+            proxy = read_proxy_animation(direction.receiver_pipe, direction.source_id)
+            samples.append(proxy)
+            active_seen = active_seen or proxy.get("cast_active") == "true"
+            try:
+                anim_seen = (
+                    anim_seen
+                    or int(float(proxy.get("anim_drive_state", "0"))) != 0
+                    or abs(float(proxy.get("render_advance_phase", "0") or 0.0)) > 0.001
+                    or abs(float(proxy.get("render_drive_move_blend", "0") or 0.0)) > 0.001
+                    or abs(float(proxy.get("render_drive_overlay_alpha", "0") or 0.0)) > 0.001
+                )
+            except ValueError:
+                pass
+            time.sleep(0.05)
+        record_telemetry(
+            "cast.continuous.after_input",
+            element=spec.element,
+            presentation=spec.presentation,
+            direction=direction.name,
+            input_attempt=input_attempt,
+            active_seen=active_seen,
+            anim_seen=anim_seen,
+        )
         try:
-            anim_seen = (
-                anim_seen
-                or int(float(proxy.get("anim_drive_state", "0"))) != 0
-                or abs(float(proxy.get("render_advance_phase", "0") or 0.0)) > 0.001
-                or abs(float(proxy.get("render_drive_move_blend", "0") or 0.0)) > 0.001
-                or abs(float(proxy.get("render_drive_overlay_alpha", "0") or 0.0)) > 0.001
+            flow = verify_cast_log_flow(
+                direction,
+                source_offset,
+                receiver_offset,
+                require_held=True,
+                allow_targetless_air_defer=spec.element == "air",
             )
-        except ValueError:
-            pass
-        time.sleep(0.05)
-    record_telemetry(
-        "cast.continuous.after_input",
-        element=spec.element,
-        presentation=spec.presentation,
-        direction=direction.name,
-        active_seen=active_seen,
-        anim_seen=anim_seen,
-    )
-    flow = verify_cast_log_flow(
-        direction,
-        source_offset,
-        receiver_offset,
-        require_held=True,
-        allow_targetless_air_defer=spec.element == "air",
-    )
+        except VerifyFailure as exc:
+            input_attempts.append({
+                "attempt": input_attempt,
+                "queue_result": queue_result,
+                "error": str(exc),
+            })
+            if "source cast did not reach native hook/phases" not in str(exc):
+                raise
+            continue
+        input_attempts.append({
+            "attempt": input_attempt,
+            "queue_result": queue_result,
+            "armed": True,
+        })
+        break
+    else:
+        raise VerifyFailure(
+            f"{direction.name} {spec.presentation}: long primary input did not produce "
+            f"the required held phase: attempts={input_attempts}"
+        )
     if not active_seen and not anim_seen:
         record_telemetry(
             "cast.continuous.failure",
@@ -774,6 +826,7 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
     return {
         "pre_clear": pre_clear,
         "queue_result": queue_result,
+        "input_attempts": input_attempts,
         "flow": flow,
         "active_seen": active_seen,
         "anim_seen": anim_seen,

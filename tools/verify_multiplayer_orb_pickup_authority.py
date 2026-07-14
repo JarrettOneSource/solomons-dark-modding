@@ -36,7 +36,7 @@ HEALTH_DELTA = 25.0
 MANA_DELTA = 40.0
 VITAL_TOLERANCE = 0.75
 POSITION_TOLERANCE = 260.0
-PICKUP_POSITION_TOLERANCE = 240.0
+PICKUP_POSITION_TOLERANCE = 60.0
 PICKUP_SUPPRESSION_RADIUS = 335.0
 PICKUP_PARKING_MIN_DISTANCE = 520.0
 LOCAL_RUNTIME_PARTICIPANT_ID = 1
@@ -517,7 +517,7 @@ if not found then
   emit("error", "drop_missing")
   return
 end
-if dist > 320.0 then
+if dist > {PICKUP_POSITION_TOLERANCE:.3f} then
   emit("ok", false)
   emit("error", "player_out_of_range")
   return
@@ -1001,7 +1001,7 @@ def verify_orb_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:
         resource_kind=MANA_RESOURCE_KIND,
         expected_delta=MANA_DELTA,
         anchor_x=anchor_x,
-        anchor_y=anchor_y + 64.0,
+        anchor_y=anchor_y,
         timeout=args.timeout,
     )
     result["ok"] = (

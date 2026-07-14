@@ -16,6 +16,7 @@ void TickLocalTransport(std::uint64_t now_ms);
 bool IsLocalTransportEnabled();
 bool IsLocalTransportHost();
 bool IsLocalTransportClient();
+bool TryAuthorizeLocalClientRunSwitch(std::string* error_message);
 std::uint64_t GetLocalTransportParticipantId();
 bool IsSteamGameplayTransportEnabled();
 bool RegisterSteamGameplayPeer(
@@ -56,6 +57,14 @@ std::uint64_t QueueLocalSecondarySpellCastEvent(
 void QueueLocalEnemyDamageClaim(
     std::uint64_t network_actor_id,
     std::int32_t skill_id,
+    float authoritative_hp,
+    float local_hp,
+    float max_hp,
+    float target_position_x,
+    float target_position_y,
+    bool target_position_optional = false);
+void ObserveReplicatedRunEnemyDamage(
+    std::uint64_t network_actor_id,
     float authoritative_hp,
     float local_hp,
     float max_hp,
@@ -158,6 +167,12 @@ bool DebugPublishHostLevelUpOffer(
     std::int32_t option_id,
     std::int32_t apply_count,
     std::string* error_message);
+// Deterministic live-test seam for proving snapshot recovery when a remote
+// native progression object intentionally lacks an owned upgrade. Only one
+// participant may be suppressed at a time, and shutdown always clears it.
+bool SetRemoteNativeProgressionReconcileSuppressedForTest(
+    std::uint64_t participant_id,
+    bool suppressed);
 bool ShouldSuppressLocalLevelUpFanoutForDebug();
 bool QueueLocalLevelUpChoice(
     std::uint64_t offer_id,

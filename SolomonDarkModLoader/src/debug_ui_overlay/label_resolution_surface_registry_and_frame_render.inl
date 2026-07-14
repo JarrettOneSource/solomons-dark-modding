@@ -178,7 +178,7 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
         }
     }
 
-    DispatchPendingSemanticUiActionRequest();
+    DispatchPendingSemanticUiActionRequest("overlay_frame", "render thread");
 
     if (render_elements.empty()) {
         if (!clear_generation_log.empty()) {

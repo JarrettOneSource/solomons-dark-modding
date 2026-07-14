@@ -173,6 +173,64 @@ int LuaDebugGetNativeMagicHitBehaviorProbeResult(lua_State* state) {
     return 5;
 }
 
+// sd.debug.queue_native_staff_effect_probe(source_actor, target_actor, variant)
+//     -> boolean, string, integer
+// The resolver applies damage and can allocate native effects, so it must run
+// after the current Lua callback has returned to the gameplay action pump.
+int LuaDebugQueueNativeStaffEffectProbe(lua_State* state) {
+    const auto source_actor =
+        CheckLuaAddress(state, 1, "source_actor");
+    const auto target_actor =
+        CheckLuaAddress(state, 2, "target_actor");
+    const auto variant =
+        CheckLuaUnsignedInteger<std::uint32_t>(state, 3, "variant");
+
+    std::string error_message;
+    std::uint64_t request_serial = 0;
+    const bool queued = QueueNativeStaffEffectProbe(
+        source_actor,
+        target_actor,
+        variant,
+        &request_serial,
+        &error_message);
+    lua_pushboolean(state, queued ? 1 : 0);
+    lua_pushlstring(state, error_message.c_str(), error_message.size());
+    lua_pushinteger(state, static_cast<lua_Integer>(request_serial));
+    return 3;
+}
+
+// sd.debug.get_native_staff_effect_probe_result(request_serial)
+//     -> boolean, boolean, number, number, string
+int LuaDebugGetNativeStaffEffectProbeResult(lua_State* state) {
+    const auto request_serial =
+        CheckLuaUnsignedInteger<std::uint64_t>(state, 1, "request_serial");
+    bool completed = false;
+    bool success = false;
+    float hp_before = 0.0f;
+    float hp_after = 0.0f;
+    std::string error_message;
+    if (!GetNativeStaffEffectProbeResult(
+            request_serial,
+            &completed,
+            &success,
+            &hp_before,
+            &hp_after,
+            &error_message)) {
+        lua_pushboolean(state, 0);
+        lua_pushboolean(state, 0);
+        lua_pushnumber(state, 0.0);
+        lua_pushnumber(state, 0.0);
+        lua_pushliteral(state, "invalid request serial");
+        return 5;
+    }
+    lua_pushboolean(state, completed ? 1 : 0);
+    lua_pushboolean(state, success ? 1 : 0);
+    lua_pushnumber(state, static_cast<lua_Number>(hp_before));
+    lua_pushnumber(state, static_cast<lua_Number>(hp_after));
+    lua_pushlstring(state, error_message.c_str(), error_message.size());
+    return 5;
+}
+
 // sd.debug.call_thiscall_out_f32x4_u32(function_address, this_ptr, arg0) -> table|nil
 int LuaDebugCallThiscallOutF32x4U32(lua_State* state) {
     const auto requested_function_address = CheckLuaAddress(state, 1, "function_address");

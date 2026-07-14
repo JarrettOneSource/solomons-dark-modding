@@ -1,3 +1,7 @@
+void DispatchPendingDebugUiActionOnAppTick() {
+    DispatchPendingSemanticUiActionRequest("app_tick", "app update thread");
+}
+
 bool TryGetDebugUiActionDispatchSnapshot(std::uint64_t request_id, DebugUiActionDispatchSnapshot* snapshot) {
     if (snapshot == nullptr) {
         return false;

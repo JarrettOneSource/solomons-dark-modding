@@ -240,6 +240,41 @@ bool ApplyNativeRemoteParticipantVisualLinkColorBlocks(
     return wrote;
 }
 
+bool ApplyNativeRemoteParticipantProfileRenderSelectors(
+    const ParticipantEntityBinding* binding,
+    uintptr_t actor_address) {
+    if (!IsNativeRemoteParticipantBinding(binding) || actor_address == 0) {
+        return false;
+    }
+
+    ActorRenderBuildSnapshot expected;
+    expected.variant_primary = 1;
+    expected.variant_secondary = 1;
+    expected.weapon_type = 0;
+    expected.render_selection = static_cast<std::uint8_t>(
+        ResolveStandaloneWizardRenderSelectionIndex(
+            binding->character_profile.element_id));
+    expected.variant_tertiary = 0;
+
+    const auto current = CaptureActorRenderBuildSnapshot(actor_address);
+    if (current.variant_primary == expected.variant_primary &&
+        current.variant_secondary == expected.variant_secondary &&
+        current.weapon_type == expected.weapon_type &&
+        current.render_selection == expected.render_selection &&
+        current.variant_tertiary == expected.variant_tertiary) {
+        return false;
+    }
+
+    // The remote actor's stock cast path can mutate these bytes after
+    // materialization. Reassert the local profile-built selector; the sender's
+    // slot-0 selector is deliberately not authoritative for a gameplay-slot
+    // clone (Fire is 0 on the sender but 1 on the clone).
+    return ApplySourceActorRenderSelectorsToTargetActor(
+        actor_address,
+        expected,
+        nullptr);
+}
+
 bool ApplyNativeRemoteParticipantPresentationState(
     const ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
@@ -268,11 +303,12 @@ bool ApplyNativeRemoteParticipantPresentationState(
     wrote = ApplyNativeRemoteParticipantStaffVisualState(binding, actor_address) || wrote;
     // Render selector bytes are materialization-local. The sender reports
     // bytes from its stock slot-0 actor, while this process owns a synthetic
-    // clone/gameplay-slot actor whose selector was built from the participant
-    // profile. Copying the sender bytes (notably Fire's stock 0 over the
-    // clone-built 1) makes the remote robe and hat disappear while the
-    // independent staff orb remains visible. Keep the packet values as
-    // diagnostics, but preserve the clone-built bytes on the local actor.
+    // clone/gameplay-slot actor whose selector is built from the participant
+    // profile. Keep the packet values as diagnostics and reassert the local profile selector
+    // if stock remote-cast playback mutates it.
+    wrote = ApplyNativeRemoteParticipantProfileRenderSelectors(
+        binding,
+        actor_address) || wrote;
     wrote = ApplyNativeRemoteParticipantVisualLinkColorBlocks(binding, actor_address) || wrote;
 
     if ((binding->replicated_presentation_flags &

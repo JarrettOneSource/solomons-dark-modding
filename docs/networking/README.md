@@ -16,7 +16,7 @@ perform local movement and presentation immediately, then the host or dedicated
 authority accepts, corrects, or rejects the claim. Clients never own canonical
 HP, deaths, drops, XP, or wave state.
 
-Protocol v50 distinguishes automatically observed native enemy-damage claims
+Protocol v51 distinguishes automatically observed native enemy-damage claims
 from explicit damage requests. Native collision callbacks may report damage
 without asserting target-transform authority because their local knockback can
 precede the next world snapshot. The host still validates the participant, run,
@@ -42,7 +42,9 @@ Spacewar playtest flow and the remaining external verification boundary.
   and `SpellEffectSnapshot` packets. The
   packet families below describe the target co-op protocol, not what the
   current header fully implements.
-- `multiplayer_local_transport.cpp` is the first replication slice: two local
+- `multiplayer_local_transport.cpp` and its cohesive
+  `multiplayer_local_transport/*.inl` implementation files provide the first
+  replication slice: two local
   processes exchange `StatePacket` movement/heading/vital snapshots over UDP
   and materialize the peer as `RemoteParticipant + Native`. Remote player
   packets are kept in a short transform history; gameplay samples that history

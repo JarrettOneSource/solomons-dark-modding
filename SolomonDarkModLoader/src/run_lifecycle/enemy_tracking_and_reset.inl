@@ -171,6 +171,7 @@ void CompleteRunLifecycleEnd(
     bool dispatch_lua,
     bool clear_enemy_tracking = true) {
     ResetRunLifecycleBookkeeping(clear_enemy_tracking);
+    ClearLocalRunGenerationSeed();
     multiplayer::SetAllBotSceneIntentsToSharedHub();
     if (dispatch_lua) {
         std::string reason_string;

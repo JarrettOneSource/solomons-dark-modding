@@ -93,6 +93,7 @@ internal static class LauncherJsonConsole
                             AuthenticatedPeerCount = session.AuthenticatedPeerCount,
                             OverlayEnabled = session.OverlayEnabled,
                             InviteDialogOpened = session.InviteDialogOpened,
+                            InviteSent = session.InviteSent,
                             RouteRelayed = session.RouteRelayed,
                             RoutePingMs = session.RoutePingMs,
                             StatusText = session.StatusText,
@@ -229,6 +230,7 @@ internal static class LauncherJsonConsole
         public required uint AuthenticatedPeerCount { get; init; }
         public required bool OverlayEnabled { get; init; }
         public required bool InviteDialogOpened { get; init; }
+        public required bool InviteSent { get; init; }
         public required bool RouteRelayed { get; init; }
         public required int RoutePingMs { get; init; }
         public required string StatusText { get; init; }

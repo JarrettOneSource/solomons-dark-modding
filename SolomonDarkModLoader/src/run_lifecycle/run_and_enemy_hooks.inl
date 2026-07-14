@@ -1,8 +1,60 @@
 constexpr float kClientAuthoritativeRunParkBase = 100000.0f;
 
+bool PrepareMultiplayerRunStart(const char* source) {
+    std::string run_generation_error;
+    if (PrepareArenaRunGenerationSeed(source, &run_generation_error)) {
+        return true;
+    }
+    Log(
+        "Blocked multiplayer run start without a host-authoritative run seed. source=" +
+        std::string(source != nullptr ? source : "unknown") +
+        " error=" + run_generation_error);
+    return false;
+}
+
+void __fastcall HookMainMenuRunTransition(void* self, void* unused_edx) {
+    const auto original = GetX86HookTrampoline<MainMenuRunTransitionFn>(
+        g_state.hooks[kHookMainMenuRunTransition]);
+    if (original == nullptr) {
+        return;
+    }
+
+    constexpr std::size_t kMainMenuTransitionKindOffset = 0x46C;
+    constexpr std::int32_t kMainMenuNewGameTransition = 3;
+    constexpr std::int32_t kMainMenuLastGameTransition = 4;
+    std::int32_t transition_kind = 0;
+    const auto owner_address = reinterpret_cast<uintptr_t>(self);
+    if (owner_address != 0 &&
+        ProcessMemory::Instance().TryReadField(
+            owner_address,
+            kMainMenuTransitionKindOffset,
+            &transition_kind) &&
+        transition_kind == kMainMenuLastGameTransition &&
+        (multiplayer::IsLocalTransportClient() ||
+         multiplayer::IsLocalTransportHost())) {
+        if (!ProcessMemory::Instance().TryWriteField<std::int32_t>(
+                owner_address,
+                kMainMenuTransitionKindOffset,
+                kMainMenuNewGameTransition)) {
+            Log(
+                "Blocked connected multiplayer Last Game transition because the "
+                "canonical shared-hub character setup redirect could not be written.");
+            return;
+        }
+        Log(
+            "Redirected connected multiplayer Last Game transition to canonical "
+            "shared-hub character setup.");
+    }
+
+    original(self, unused_edx);
+}
+
 void __fastcall HookCreateArena(void* self, void* unused_edx) {
     const auto original = GetX86HookTrampoline<RunStartedFn>(g_state.hooks[kHookCreateArena]);
     if (original == nullptr) return;
+    if (!PrepareMultiplayerRunStart("arena_create")) {
+        return;
+    }
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.run_active.store(true, std::memory_order_release);
     g_state.last_wave_spawner.store(0, std::memory_order_release);
@@ -26,6 +78,9 @@ void __fastcall HookCreateArena(void* self, void* unused_edx) {
 void __fastcall HookStartGame(void* self, void* unused_edx) {
     const auto original = GetX86HookTrampoline<RunStartedFn>(g_state.hooks[kHookStartGame]);
     if (original == nullptr) return;
+    if (!PrepareMultiplayerRunStart("start_game")) {
+        return;
+    }
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.run_active.store(true, std::memory_order_release);
     g_state.last_wave_spawner.store(0, std::memory_order_release);

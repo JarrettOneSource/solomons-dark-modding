@@ -48,6 +48,7 @@ extern uintptr_t kActorBuildRenderDescriptorFromSource;
 extern uintptr_t kPlayerActorMoveStep;
 extern uintptr_t kPlayerActorSecondarySpellCast;
 extern uintptr_t kPlayerActorMagicDamage;
+extern uintptr_t kStaffEffectResolver;
 extern uintptr_t kActorGetProfile;
 extern uintptr_t kProfileResolveStatEntry;
 extern uintptr_t kStatBookComputeValue;
@@ -157,6 +158,7 @@ extern uintptr_t kEarthBoulderReleaseDamageCapScaleGlobal;
 extern uintptr_t kEarthBoulderReleaseGrowthStopMinChargeGlobal;
 extern uintptr_t kGameplayExactTextObjectGlobal;
 
+extern uintptr_t kMainMenuRunTransition;
 extern uintptr_t kStartGame;
 extern uintptr_t kRunEnded;
 extern uintptr_t kWaveSpawnerTick;

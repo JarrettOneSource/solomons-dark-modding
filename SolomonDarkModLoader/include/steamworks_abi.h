@@ -34,6 +34,7 @@ constexpr std::int32_t kNetworkingConnectionProblemDetectedLocally = 5;
 constexpr std::int32_t kNetworkConnectionInfoRelayed = 0x10;
 
 constexpr std::int32_t kNetworkingSendUnreliableNoNagle = 1;
+constexpr std::int32_t kNetworkingSendUnreliableNoDelay = 5;
 constexpr std::int32_t kNetworkingSendReliable = 8;
 constexpr std::int32_t kNetworkingSendReliableNoNagle = 9;
 
@@ -170,6 +171,38 @@ struct LobbyChatUpdate {
 };
 #pragma pack(pop)
 
+// Steam's callback ABI uses 4-byte packing when a Win32 game runs through
+// Proton and 8-byte packing on native 32-bit Windows. Most callback fields
+// retain the same offsets, but the total sizes differ; LobbyCreated also moves
+// its SteamId. Keep both layouts explicit so manual dispatch can decode the
+// payload size reported by the active Steam client.
+#pragma pack(push, 4)
+struct LobbyCreatedSmall {
+    std::int32_t result = 0;
+    SteamId lobby_id = 0;
+};
+
+struct LobbyEnterSmall {
+    SteamId lobby_id = 0;
+    std::uint32_t chat_permissions = 0;
+    std::uint8_t locked = 0;
+    std::uint32_t response = 0;
+};
+
+struct LobbyDataUpdateSmall {
+    SteamId lobby_id = 0;
+    SteamId member_id = 0;
+    std::uint8_t success = 0;
+};
+
+struct LobbyChatUpdateSmall {
+    SteamId lobby_id = 0;
+    SteamId changed_user_id = 0;
+    SteamId making_change_user_id = 0;
+    std::uint32_t state_change = 0;
+};
+#pragma pack(pop)
+
 #pragma pack(push, 1)
 struct NetworkingMessagesSessionRequest {
     NetworkingIdentity remote_identity;
@@ -193,6 +226,14 @@ static_assert(sizeof(GameRichPresenceJoinRequested) == 264,
 static_assert(sizeof(LobbyInvite) == 24, "LobbyInvite_t ABI changed");
 static_assert(sizeof(LobbyDataUpdate) == 24, "LobbyDataUpdate_t ABI changed");
 static_assert(sizeof(LobbyChatUpdate) == 32, "LobbyChatUpdate_t ABI changed");
+static_assert(sizeof(LobbyCreatedSmall) == 12,
+              "small-pack LobbyCreated_t ABI changed");
+static_assert(sizeof(LobbyEnterSmall) == 20,
+              "small-pack LobbyEnter_t ABI changed");
+static_assert(sizeof(LobbyDataUpdateSmall) == 20,
+              "small-pack LobbyDataUpdate_t ABI changed");
+static_assert(sizeof(LobbyChatUpdateSmall) == 28,
+              "small-pack LobbyChatUpdate_t ABI changed");
 static_assert(sizeof(NetworkingMessagesSessionRequest) == 136,
               "SteamNetworkingMessagesSessionRequest_t ABI changed");
 static_assert(sizeof(NetworkingMessagesSessionFailed) == 696,

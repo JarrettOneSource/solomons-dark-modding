@@ -121,6 +121,14 @@ std::uint32_t EnsureHostRunGenerationSeed(const char* source) {
         return pending;
     }
 
+    const auto runtime_state = multiplayer::SnapshotRuntimeState();
+    if (const auto* local = multiplayer::FindLocalParticipant(runtime_state);
+        local != nullptr && local->runtime.run_nonce != 0) {
+        const auto published = NormalizeRunGenerationSeed(local->runtime.run_nonce);
+        (void)SetPendingRunGenerationSeedInternal(published, source);
+        return published;
+    }
+
     const auto seed = BuildHostRunGenerationSeed();
     (void)SetPendingRunGenerationSeedInternal(seed, source);
     return seed;
@@ -129,6 +137,11 @@ std::uint32_t EnsureHostRunGenerationSeed(const char* source) {
 bool ApplyPendingRunGenerationSeedForSceneSwitch(int region_index, const char* source) {
     if (region_index != kArenaRegionIndex) {
         return false;
+    }
+
+    if (g_gameplay_keyboard_injection.applied_run_generation_seed.load(
+            std::memory_order_acquire) != 0) {
+        return true;
     }
 
     if (multiplayer::IsLocalTransportHost()) {
@@ -144,5 +157,11 @@ bool ApplyPendingRunGenerationSeedForSceneSwitch(int region_index, const char* s
     }
 
     PublishLocalRunNonce(seed);
-    return InitializeNativeGlobalRngForRunGeneration(seed, source);
+    if (!InitializeNativeGlobalRngForRunGeneration(seed, source)) {
+        return false;
+    }
+    g_gameplay_keyboard_injection.applied_run_generation_seed.store(
+        seed,
+        std::memory_order_release);
+    return true;
 }

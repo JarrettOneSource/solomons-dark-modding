@@ -486,6 +486,36 @@ void ApplyEnemyDamageCorrection(const EnemyDamageResultPacket& packet) {
         return;
     }
 
+    const bool accepted =
+        packet.result_code == static_cast<std::uint8_t>(EnemyDamageResultCode::Accepted);
+    const bool dead =
+        packet.dead != 0 || packet.authoritative_hp <= kEnemyDamageClaimHpEpsilon;
+    const auto observed_it =
+        g_local_transport.observed_enemy_damage_by_network_id.find(
+            packet.target_network_actor_id);
+    if (observed_it !=
+        g_local_transport.observed_enemy_damage_by_network_id.end()) {
+        auto& observed = observed_it->second;
+        const bool matches_in_flight =
+            observed.in_flight_claim_sequence != 0 &&
+            (packet.claim_sequence == observed.in_flight_claim_sequence ||
+             (accepted &&
+              packet.authoritative_hp <=
+                  observed.in_flight_after_hp + kEnemyDamageClaimHpEpsilon));
+        if (matches_in_flight) {
+            observed.in_flight_claim_sequence = 0;
+            observed.in_flight_sent_ms = 0;
+            observed.in_flight_before_hp = 0.0f;
+            observed.in_flight_after_hp = 0.0f;
+            observed.latest_authoritative_hp = packet.authoritative_hp;
+            observed.max_hp = packet.authoritative_max_hp;
+            observed.reference_hp_valid = accepted && !dead;
+            observed.reference_hp = accepted && !dead
+                                        ? packet.authoritative_hp
+                                        : 0.0f;
+        }
+    }
+
     const auto actor_address = FindReplicatedLocalActorAddress(packet.target_network_actor_id);
     if (actor_address == 0) {
         return;
@@ -495,10 +525,6 @@ void ApplyEnemyDamageCorrection(const EnemyDamageResultPacket& packet) {
             actor_address,
             packet.authoritative_hp,
             packet.authoritative_max_hp)) {
-        const bool accepted =
-            packet.result_code == static_cast<std::uint8_t>(EnemyDamageResultCode::Accepted);
-        const bool dead =
-            packet.dead != 0 || packet.authoritative_hp <= kEnemyDamageClaimHpEpsilon;
         std::uint32_t death_exception_code = 0;
         bool death_called = false;
         if (accepted && dead) {
@@ -544,6 +570,7 @@ void ApplyEnemyDamageCorrection(const EnemyDamageResultPacket& packet) {
             "Multiplayer enemy damage correction applied. target_network_actor_id=" +
             std::to_string(packet.target_network_actor_id) +
             " result=" + std::to_string(static_cast<int>(packet.result_code)) +
+            " claim_sequence=" + std::to_string(packet.claim_sequence) +
             " hp=" + std::to_string(packet.authoritative_hp) +
             " max_hp=" + std::to_string(packet.authoritative_max_hp) +
             " death_called=" + std::to_string(death_called ? 1 : 0) +

@@ -92,7 +92,7 @@ MAX_LEVEL_STEPS = 25
 PIN_INTERVAL = 0.05
 TARGET_REFRESH_DURATION = 1.8
 MAX_AIR_CHAIN_ENDPOINT_ERROR = 2.0
-NATURAL_CLUSTER_PATTERNS = (
+CLUSTER_PATTERNS = (
     ((72.0, 36.0), (72.0, -36.0), (144.0, 36.0), (144.0, -36.0)),
     ((60.0, 36.0), (60.0, -36.0), (120.0, 36.0), (120.0, -36.0)),
     ((48.0, 36.0), (48.0, -36.0), (108.0, 36.0), (108.0, -36.0)),
@@ -993,23 +993,13 @@ def wait_for_client_manual_target(
     network_id: int,
     timeout: float = 8.0,
 ) -> dict[str, str]:
-    deadline = time.monotonic() + timeout
-    last: dict[str, str] = {}
-    while time.monotonic() < deadline:
-        last = find_target(
-            CLIENT_PIPE,
-            x,
-            y,
-            network_id=network_id,
-            timeout=1.5,
-            require_local_binding=True,
-        )
-        if last.get("local.found") == "true":
-            return last
-        time.sleep(0.12)
-    raise VerifyFailure(
-        "client Lightning target never reached a local binding state: "
-        f"network_id={network_id} x={x} y={y} last={last}"
+    return find_target(
+        CLIENT_PIPE,
+        x,
+        y,
+        network_id=network_id,
+        timeout=timeout,
+        require_local_binding=True,
     )
 
 
@@ -1448,12 +1438,12 @@ def run_pattern_search(
     phase: str,
     pattern_limit: int | None = None,
     primary_only: bool = False,
-    manual_cluster: bool = False,
+    natural_cluster: bool = False,
     scripted_manual_control: bool = False,
 ) -> dict[str, Any]:
     attempts: list[dict[str, Any]] = []
     skipped_patterns: list[dict[str, Any]] = []
-    patterns = ((),) if primary_only else NATURAL_CLUSTER_PATTERNS
+    patterns = ((),) if primary_only else CLUSTER_PATTERNS
     if pattern_limit is not None:
         patterns = patterns[:max(pattern_limit, 1)]
     for offsets in patterns:
@@ -1461,11 +1451,11 @@ def run_pattern_search(
         cast: dict[str, Any] | None = None
         cluster: dict[str, Any] | None = None
         for cast_attempt in range(1, 3):
-            if manual_cluster:
+            if natural_cluster:
+                cluster = build_natural_cluster(direction, offsets)
+            else:
                 cleanup_live_enemies()
                 cluster = build_manual_cluster(direction, offsets)
-            else:
-                cluster = build_natural_cluster(direction, offsets)
             try:
                 cast = cast_lightning_cluster(
                     direction,
@@ -2027,7 +2017,7 @@ def run_verifier(
     baseline_only: bool = False,
     upgrade_only: bool = False,
     primary_only: bool = False,
-    manual_cluster: bool = False,
+    natural_cluster: bool = False,
     require_chain_evidence: bool = True,
 ) -> dict[str, Any]:
     output: dict[str, Any] = {"ok": False}
@@ -2042,13 +2032,13 @@ def run_verifier(
     output["hub_ready"] = startup["hub_ready"]
     output["run_entry"] = startup["run_entry"]
     output["run_ready"] = startup["run_ready"]
-    if manual_cluster:
-        output["manual_combat"] = enable_flat_manual_cluster_combat()
-        scripted_manual_control = True
-    else:
+    if natural_cluster:
         output["combat"] = ensure_host_combat_started()
         output["natural_enemy_population"] = wait_for_natural_enemy_population(5)
         scripted_manual_control = False
+    else:
+        output["manual_combat"] = enable_flat_manual_cluster_combat()
+        scripted_manual_control = True
 
     pids = detect_instance_pids()
     if owner == "host":
@@ -2099,7 +2089,7 @@ def run_verifier(
             phase="baseline",
             pattern_limit=pattern_limit,
             primary_only=primary_only,
-            manual_cluster=manual_cluster,
+            natural_cluster=natural_cluster,
             scripted_manual_control=scripted_manual_control,
         )
         baseline_attempts = output["baseline_pattern_search"]["attempts"]
@@ -2136,7 +2126,7 @@ def run_verifier(
         output["baseline_only"] = True
         return output
 
-    if manual_cluster:
+    if not natural_cluster:
         output["pre_upgrade_cleanup"] = cleanup_live_enemies()
     output["upgrade"] = (
         wait_for_host_target_upgrade(timeout)
@@ -2162,7 +2152,7 @@ def run_verifier(
         phase="upgraded",
         pattern_limit=pattern_limit,
         primary_only=primary_only,
-        manual_cluster=manual_cluster,
+        natural_cluster=natural_cluster,
         scripted_manual_control=scripted_manual_control,
     )
     upgraded_attempts = output["upgraded_pattern_search"]["attempts"]
@@ -2295,7 +2285,14 @@ def main() -> int:
     parser.add_argument("--baseline-only", action="store_true")
     parser.add_argument("--upgrade-only", action="store_true")
     parser.add_argument("--primary-only", action="store_true")
-    parser.add_argument("--manual-cluster", action="store_true")
+    parser.add_argument(
+        "--natural-cluster",
+        action="store_true",
+        help=(
+            "diagnostic: reuse the finite natural-wave population instead of "
+            "the deterministic flat-boneyard stock-spawner cluster"
+        ),
+    )
     parser.add_argument(
         "--diagnostic-allow-missing-chain-evidence",
         "--diagnostic-allow-missing-arcs",
@@ -2316,7 +2313,7 @@ def main() -> int:
             baseline_only=args.baseline_only,
             upgrade_only=args.upgrade_only,
             primary_only=args.primary_only,
-            manual_cluster=args.manual_cluster,
+            natural_cluster=args.natural_cluster,
             require_chain_evidence=not args.diagnostic_allow_missing_chain_evidence,
         )
     except Exception as exc:

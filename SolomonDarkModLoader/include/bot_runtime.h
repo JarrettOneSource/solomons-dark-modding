@@ -331,6 +331,9 @@ bool ApplyParticipantSkillChoiceOption(
     std::uint64_t participant_id,
     const BotSkillChoiceOption& option,
     std::string* error_message);
+bool RefreshParticipantNativeProgression(
+    std::uint64_t participant_id,
+    std::string* error_message);
 bool ApplyLocalPlayerSkillChoiceOption(
     const BotSkillChoiceOption& option,
     std::string* error_message);

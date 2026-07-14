@@ -84,6 +84,59 @@ bool SetPendingRunGenerationSeed(std::uint32_t seed, std::string* error_message)
     return true;
 }
 
+bool PrepareArenaRunGenerationSeed(const char* source, std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (!multiplayer::IsLocalTransportEnabled()) {
+        return true;
+    }
+
+    if (g_gameplay_keyboard_injection.applied_run_generation_seed.load(
+            std::memory_order_acquire) != 0) {
+        return true;
+    }
+
+    const char* const seed_source = source != nullptr ? source : "run_start";
+
+    if (multiplayer::IsLocalTransportClient()) {
+        if (!multiplayer::TryAuthorizeLocalClientRunSwitch(error_message)) {
+            return false;
+        }
+    } else {
+        (void)EnsureHostRunGenerationSeed(seed_source);
+    }
+
+    if (!ApplyPendingRunGenerationSeedForSceneSwitch(
+            kArenaRegionIndex,
+            seed_source)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "The host-authoritative run generation seed could not be applied.";
+        }
+        return false;
+    }
+    return true;
+}
+
+void ClearLocalRunGenerationSeed() {
+    g_gameplay_keyboard_injection.pending_run_generation_seed.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_run_generation_seed_valid.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.applied_run_generation_seed.store(
+        0,
+        std::memory_order_release);
+    multiplayer::UpdateRuntimeState([](multiplayer::RuntimeState& state) {
+        if (auto* local = multiplayer::UpsertLocalParticipant(state);
+            local != nullptr) {
+            local->runtime.run_nonce = 0;
+        }
+    });
+}
+
 bool QueueGameplaySwitchRegion(int region_index, std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
@@ -380,6 +433,117 @@ bool GetNativeMagicHitBehaviorProbeResult(
         g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
     const auto& result = g_gameplay_keyboard_injection
                              .native_magic_hit_behavior_probe_result;
+    if (result.request_serial != request_serial) {
+        return true;
+    }
+    if (completed != nullptr) {
+        *completed = true;
+    }
+    if (success != nullptr) {
+        *success = result.success;
+    }
+    if (hp_before != nullptr) {
+        *hp_before = result.hp_before;
+    }
+    if (hp_after != nullptr) {
+        *hp_after = result.hp_after;
+    }
+    if (error_message != nullptr) {
+        *error_message = result.error;
+    }
+    return true;
+}
+
+bool QueueNativeStaffEffectProbe(
+    uintptr_t source_actor,
+    uintptr_t target_actor,
+    std::uint32_t variant,
+    std::uint64_t* request_serial,
+    std::string* error_message) {
+    if (request_serial != nullptr) {
+        *request_serial = 0;
+    }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay action pump is not initialized.";
+        }
+        return false;
+    }
+    if (source_actor == 0 ||
+        target_actor == 0 ||
+        kEnemyCurrentHpOffset == 0 ||
+        variant > 4 ||
+        !ProcessMemory::Instance().IsReadableRange(source_actor, sizeof(uintptr_t)) ||
+        !ProcessMemory::Instance().IsReadableRange(
+            target_actor + kEnemyCurrentHpOffset,
+            sizeof(float))) {
+        if (error_message != nullptr) {
+            *error_message = "Native staff-effect probe is invalid.";
+        }
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(
+        g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
+    auto& pending =
+        g_gameplay_keyboard_injection.pending_native_staff_effect_probes;
+    if (pending.size() >= kQueuedGameplayWorldActionLimit) {
+        if (error_message != nullptr) {
+            *error_message = "The native staff-effect probe queue is full.";
+        }
+        return false;
+    }
+
+    PendingNativeStaffEffectProbe request{};
+    request.request_serial = g_gameplay_keyboard_injection
+                                 .next_native_staff_effect_probe_serial++;
+    if (g_gameplay_keyboard_injection
+            .next_native_staff_effect_probe_serial == 0) {
+        g_gameplay_keyboard_injection.next_native_staff_effect_probe_serial = 1;
+    }
+    request.source_actor = source_actor;
+    request.target_actor = target_actor;
+    request.variant = variant;
+    pending.push_back(request);
+    if (request_serial != nullptr) {
+        *request_serial = request.request_serial;
+    }
+    return true;
+}
+
+bool GetNativeStaffEffectProbeResult(
+    std::uint64_t request_serial,
+    bool* completed,
+    bool* success,
+    float* hp_before,
+    float* hp_after,
+    std::string* error_message) {
+    if (completed != nullptr) {
+        *completed = false;
+    }
+    if (success != nullptr) {
+        *success = false;
+    }
+    if (hp_before != nullptr) {
+        *hp_before = 0.0f;
+    }
+    if (hp_after != nullptr) {
+        *hp_after = 0.0f;
+    }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (request_serial == 0) {
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(
+        g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
+    const auto& result =
+        g_gameplay_keyboard_injection.native_staff_effect_probe_result;
     if (result.request_serial != request_serial) {
         return true;
     }

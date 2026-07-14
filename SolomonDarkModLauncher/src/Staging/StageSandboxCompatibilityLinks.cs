@@ -27,6 +27,12 @@ internal static class StageSandboxCompatibilityLinks
 
     private static void RecreateDirectoryJunction(string linkPath, string targetPath)
     {
+        if (IsWineRuntime())
+        {
+            RecreateDirectoryMirror(linkPath, targetPath);
+            return;
+        }
+
         if (Directory.Exists(linkPath) || File.Exists(linkPath))
         {
             DeleteExistingPath(linkPath);
@@ -65,6 +71,44 @@ internal static class StageSandboxCompatibilityLinks
                 Environment.NewLine +
                 standardOutput +
                 standardError);
+        }
+    }
+
+    private static bool IsWineRuntime() =>
+        OperatingSystem.IsWindows() &&
+        (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WINEPREFIX")) ||
+         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WINELOADERNOEXEC")));
+
+    private static void RecreateDirectoryMirror(string directoryPath, string sourcePath)
+    {
+        DeleteExistingPath(directoryPath);
+
+        // Wine's `mklink /J` implementation on a DrvFs workspace materializes
+        // this malformed sibling instead of a usable Windows junction.
+        var malformedWineJunctionPath = directoryPath + "?";
+        DeleteExistingPath(malformedWineJunctionPath);
+
+        Directory.CreateDirectory(directoryPath);
+        CopyDirectoryContents(sourcePath, directoryPath);
+    }
+
+    private static void CopyDirectoryContents(string sourcePath, string destinationPath)
+    {
+        foreach (var sourceDirectoryPath in Directory.EnumerateDirectories(sourcePath))
+        {
+            var destinationDirectoryPath = Path.Combine(
+                destinationPath,
+                Path.GetFileName(sourceDirectoryPath));
+            Directory.CreateDirectory(destinationDirectoryPath);
+            CopyDirectoryContents(sourceDirectoryPath, destinationDirectoryPath);
+        }
+
+        foreach (var sourceFilePath in Directory.EnumerateFiles(sourcePath))
+        {
+            File.Copy(
+                sourceFilePath,
+                Path.Combine(destinationPath, Path.GetFileName(sourceFilePath)),
+                overwrite: true);
         }
     }
 

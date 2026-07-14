@@ -836,6 +836,9 @@
     <ClInclude Include="src\mod_loader_gameplay\native_defense_behavior_probes.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\native_staff_behavior_probe.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -902,10 +905,16 @@
     <ClInclude Include="src\multiplayer_local_transport\cast_target_resolution.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\client_enemy_damage_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\enemy_damage_authority.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\enemy_damage_target_position.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\incoming_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\level_up_authority.inl">
@@ -923,6 +932,9 @@
     <ClInclude Include="src\multiplayer_local_transport\loot_snapshot_capture.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\local_state_packet_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_authority.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -930,6 +942,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\owned_progression_state.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\outgoing_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_api.inl">
@@ -942,6 +957,18 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\world_snapshot_capture.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_steam_session\lobby_and_events.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_steam_session\network_messages.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_steam_session\public_lifecycle.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_steam_session\state_and_helpers.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_runtime\level_up_and_runtime_api.inl">

@@ -23,6 +23,7 @@ internal static class LauncherCommandParser
         string? steamApiDll = null;
         var multiplayerMode = MultiplayerLaunchMode.Unspecified;
         ulong? steamLobbyId = null;
+        ulong? inviteSteamId = null;
         var multiplayerMaxParticipants = MultiplayerLaunchOptions.DefaultMaxParticipants;
         var openSteamInviteDialog = true;
 
@@ -133,6 +134,12 @@ internal static class LauncherCommandParser
                 continue;
             }
 
+            if (arg == "--invite-steam-id")
+            {
+                inviteSteamId = ParseSteamId(ReadValue(args, ref index, arg));
+                continue;
+            }
+
             if (arg == "--no-invite-dialog")
             {
                 openSteamInviteDialog = false;
@@ -145,6 +152,7 @@ internal static class LauncherCommandParser
         var multiplayer = MultiplayerLaunchOptions.Create(
             multiplayerMode,
             steamLobbyId,
+            inviteSteamId,
             multiplayerMaxParticipants,
             openSteamInviteDialog);
 
@@ -165,6 +173,7 @@ internal static class LauncherCommandParser
             steamApiDll,
             multiplayer.Mode,
             multiplayer.LobbyId,
+            multiplayer.InviteSteamId,
             multiplayer.MaxParticipants,
             multiplayer.OpenInviteDialog);
     }
@@ -211,6 +220,14 @@ internal static class LauncherCommandParser
             ? lobbyId
             : throw new InvalidOperationException(
                 $"Steam lobby id must be a positive unsigned integer: {value}");
+    }
+
+    private static ulong ParseSteamId(string value)
+    {
+        return ulong.TryParse(value, out var steamId) && steamId != 0
+            ? steamId
+            : throw new InvalidOperationException(
+                $"Steam invite user id must be a positive unsigned integer: {value}");
     }
 
     private static int ParseMaxParticipants(string value)

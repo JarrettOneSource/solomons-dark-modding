@@ -439,8 +439,14 @@ void __fastcall HookGameplaySwitchRegion(void* self, void* /*unused_edx*/, int r
     if (region_index == kArenaRegionIndex &&
         multiplayer::IsLocalTransportClient() &&
         g_multiplayer_client_authorized_hub_run_switch_depth == 0) {
-        Log("Blocked client run switch_region while connected to multiplayer; waiting for host run intent.");
-        return;
+        std::string authorization_error;
+        if (!multiplayer::TryAuthorizeLocalClientRunSwitch(&authorization_error)) {
+            Log(
+                "Blocked client run switch_region while connected to multiplayer; waiting for host run intent. error=" +
+                authorization_error);
+            return;
+        }
+        Log("Authorized client run switch_region from fresh authenticated host intent.");
     }
 
     const auto gameplay_address = reinterpret_cast<uintptr_t>(self);

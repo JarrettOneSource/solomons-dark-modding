@@ -524,6 +524,7 @@ bool InitializeRunLifecycleHooks(std::string* error_message) {
 
     void* detours[] = {
         reinterpret_cast<void*>(&HookCreateArena),
+        reinterpret_cast<void*>(&HookMainMenuRunTransition),
         reinterpret_cast<void*>(&HookStartGame),
         reinterpret_cast<void*>(&HookRunEnded),
         reinterpret_cast<void*>(&HookWaveSpawnerTick),
@@ -545,6 +546,7 @@ bool InitializeRunLifecycleHooks(std::string* error_message) {
     };
     const char* names[] = {
         "create_arena",
+        "main_menu.run_transition",
         "start_game",
         "run.ended",
         "wave.spawner_tick",

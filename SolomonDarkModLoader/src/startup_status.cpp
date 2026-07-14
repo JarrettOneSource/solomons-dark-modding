@@ -168,6 +168,8 @@ void WriteMultiplayerSessionStatus(
            << (snapshot.overlay_enabled ? "true" : "false") << ",\n";
     stream << "  \"inviteDialogOpened\": "
            << (snapshot.invite_dialog_opened ? "true" : "false") << ",\n";
+    stream << "  \"inviteSent\": "
+           << (snapshot.invite_sent ? "true" : "false") << ",\n";
     stream << "  \"routeRelayed\": "
            << (snapshot.route_relayed ? "true" : "false") << ",\n";
     stream << "  \"routePingMs\": " << snapshot.route_ping_ms << ",\n";

@@ -65,6 +65,24 @@ bool IsValidReplicatedFirewalkerRuntime(
            effect.firewalker_lifetime > 0.0f;
 }
 
+bool IsMatchingRemoteCastReplayInFlight(
+    std::uint64_t owner_participant_id,
+    const multiplayer::SpellEffectSnapshot& effect) {
+    if (owner_participant_id == 0 || effect.cast_sequence == 0) {
+        return false;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    const auto* binding = FindParticipantEntity(owner_participant_id);
+    if (binding == nullptr) {
+        return false;
+    }
+    const auto& cast = binding->ongoing_cast;
+    return cast.active &&
+           cast.remote_input_controlled &&
+           cast.remote_input_cast_sequence == effect.cast_sequence;
+}
+
 bool ShouldMaterializeMissingReplicatedSpellEffect(
     std::uint64_t owner_participant_id,
     const multiplayer::SpellEffectSnapshot& effect,
@@ -107,6 +125,14 @@ bool ShouldMaterializeMissingReplicatedSpellEffect(
     }
     if (now_ms < it->second) {
         it->second = now_ms;
+        return false;
+    }
+    // A replicated Fireball cast normally creates its own Ember children on
+    // impact. Keep the snapshot pending until that exact replay finishes so
+    // reconciliation can bind those native children instead of creating a
+    // duplicate set ahead of the impact. If replay produces no children, the
+    // pending snapshot materializes them on the following gameplay tick.
+    if (IsMatchingRemoteCastReplayInFlight(owner_participant_id, effect)) {
         return false;
     }
     return now_ms - it->second >= kReplicatedEmberNaturalReplayGraceMs;

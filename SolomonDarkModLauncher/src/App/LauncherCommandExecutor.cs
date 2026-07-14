@@ -56,6 +56,7 @@ internal static class LauncherCommandExecutor
         var multiplayer = MultiplayerLaunchOptions.Create(
             command.MultiplayerMode,
             command.SteamLobbyId,
+            command.InviteSteamId,
             command.MultiplayerMaxParticipants,
             command.OpenSteamInviteDialog);
         if (multiplayer.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join &&

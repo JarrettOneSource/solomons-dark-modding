@@ -69,6 +69,7 @@ struct SteamNetworkMessage {
 
 enum class SteamNetworkSendMode {
     UnreliableNoNagle,
+    UnreliableNoDelay,
     ReliableNoNagle,
 };
 
@@ -83,6 +84,7 @@ std::uint64_t SteamJoinLobby(std::uint64_t lobby_id);
 void SteamLeaveLobby(std::uint64_t lobby_id);
 bool SteamRequestLobbyData(std::uint64_t lobby_id);
 bool SteamSetLobbyJoinable(std::uint64_t lobby_id, bool joinable);
+bool SteamInviteUserToLobby(std::uint64_t lobby_id, std::uint64_t steam_id);
 bool SteamSetLobbyData(std::uint64_t lobby_id, const char* key, const char* value);
 std::string SteamGetLobbyData(std::uint64_t lobby_id, const char* key);
 void SteamSetLobbyMemberData(std::uint64_t lobby_id, const char* key, const char* value);

@@ -64,6 +64,7 @@ STOCK_GOLD_RANGE_SCALE = 30.0
 TRIAL_DISTANCE = 120.0
 TRIAL_DISTANCE_TOLERANCE = 24.0
 OTHER_PLAYER_MIN_DISTANCE = 520.0
+MIN_NAV_EDGE_CLEARANCE = 100.0
 BASELINE_HOLD_SECONDS = 1.5
 GOLD_AMOUNTS = {HOST_ID: 11, CLIENT_ID: 13}
 
@@ -134,6 +135,7 @@ def select_geometry() -> dict[str, Any]:
         (-700.0, -700.0),
     )
     attempts: list[dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
     for requested_drop_x, requested_drop_y in requested_drops:
         drop_x, drop_y = snap_to_nav(HOST_PIPE, requested_drop_x, requested_drop_y)
         for offset_x, offset_y in approach_offsets:
@@ -153,8 +155,17 @@ def select_geometry() -> dict[str, Any]:
             for far_dx, far_dy in far_offsets:
                 far_x, far_y = snap_to_nav(HOST_PIPE, drop_x + far_dx, drop_y + far_dy)
                 far_distance = distance(far_x, far_y, drop_x, drop_y)
-                if far_distance >= OTHER_PLAYER_MIN_DISTANCE:
-                    return {
+                edge_clearance = min(
+                    far_x - float(nav["min_x"]),
+                    float(nav["max_x"]) - far_x,
+                    far_y - float(nav["min_y"]),
+                    float(nav["max_y"]) - far_y,
+                )
+                if (
+                    far_distance >= OTHER_PLAYER_MIN_DISTANCE
+                    and edge_clearance >= MIN_NAV_EDGE_CLEARANCE
+                ):
+                    candidates.append({
                         "nav": nav,
                         "drop": {"x": drop_x, "y": drop_y},
                         "approach": {
@@ -162,8 +173,18 @@ def select_geometry() -> dict[str, Any]:
                             "y": approach_y,
                             "distance": approach_distance,
                         },
-                        "far": {"x": far_x, "y": far_y, "distance": far_distance},
-                    }
+                        "far": {
+                            "x": far_x,
+                            "y": far_y,
+                            "distance": far_distance,
+                            "edge_clearance": edge_clearance,
+                        },
+                    })
+    if candidates:
+        return max(
+            candidates,
+            key=lambda candidate: float(candidate["far"]["edge_clearance"]),
+        )
     raise VerifyFailure(f"flat arena could not provide Telekinesis geometry: {attempts}")
 
 

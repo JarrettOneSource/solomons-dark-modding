@@ -1,6 +1,7 @@
 #include "logger.h"
 #include "memory_access.h"
 #include "mod_loader.h"
+#include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
 #include "mod_loader_internal.h"
 #include "x86_hook.h"
@@ -442,6 +443,11 @@ LRESULT __stdcall DetourGameWindowProc(HWND hwnd, UINT message, WPARAM wparam, L
 // We also snapshot all three flags and log on change to document, from the live
 // process, which flag the OS actually sets when the window is backgrounded.
 void __fastcall DetourAppMainTick(void* app, void* edx) {
+    // Native UI callbacks normally run on the same update thread that owns
+    // CPU/menu lifetimes. Dispatch update-owned semantic actions before the
+    // stock loop so a screen cannot be destroyed concurrently with its tick.
+    DispatchPendingDebugUiActionOnAppTick();
+
     const auto app_address = reinterpret_cast<uintptr_t>(app);
     if (app_address != 0) {
         auto& memory = ProcessMemory::Instance();

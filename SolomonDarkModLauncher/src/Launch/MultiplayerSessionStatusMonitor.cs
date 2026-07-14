@@ -14,6 +14,7 @@ internal sealed record MultiplayerSessionStatus(
     uint AuthenticatedPeerCount,
     bool OverlayEnabled,
     bool InviteDialogOpened,
+    bool InviteSent,
     bool RouteRelayed,
     int RoutePingMs,
     string StatusText,

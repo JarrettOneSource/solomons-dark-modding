@@ -127,11 +127,15 @@ def parse_config_scalar(path: Path, field: str) -> float:
     return float(match.group(1))
 
 
-def load_stat_contract_values(catalog: list[dict[str, Any]]) -> dict[int, dict[str, list[float]]]:
-    config_root = (
-        ROOT
-        / "runtime/instances/local-mp-host/stage/data/wizardskills"
-    )
+def load_stat_contract_values(
+    catalog: list[dict[str, Any]],
+    config_root: Path | None = None,
+) -> dict[int, dict[str, list[float]]]:
+    if config_root is None:
+        config_root = (
+            ROOT
+            / "runtime/instances/local-mp-host/stage/data/wizardskills"
+        )
     fields_by_row = {
         56: ("mValue",),
         57: ("mValue",),

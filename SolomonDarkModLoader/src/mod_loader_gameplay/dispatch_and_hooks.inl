@@ -4,6 +4,7 @@
 #include "world_snapshot_reconciliation.inl"
 #include "spell_effect_reconciliation.inl"
 #include "native_defense_behavior_probes.inl"
+#include "native_staff_behavior_probe.inl"
 #include "dispatch_and_hooks_gameplay_thread_dispatch.inl"
 #include "dispatch_and_hooks_pump_loop.inl"
 #include "dispatch_and_hooks_mouse_refresh_hook.inl"

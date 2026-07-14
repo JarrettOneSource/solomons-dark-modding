@@ -570,13 +570,23 @@ def cast_fireball_pair(
         timeout=8.0,
     )
     post_source_cast = after_source_cast() if after_source_cast is not None else None
-    receiver_log = read_log(direction.receiver_log)[receiver_offset:]
-    receiver_cast_queued = (
-        f"Multiplayer remote cast queued. participant_id={direction.source_id}" in receiver_log
-    )
-    receiver_cast_prepped = (
-        f"[bots] wizard cast prepped. bot_id={direction.source_id}" in receiver_log
-    )
+    receiver_log = ""
+    receiver_cast_queued = False
+    receiver_cast_prepped = False
+    delivery_deadline = time.monotonic() + 8.0
+    while time.monotonic() < delivery_deadline:
+        receiver_log = read_log(direction.receiver_log)[receiver_offset:]
+        receiver_cast_queued = (
+            f"Multiplayer remote cast queued. participant_id={direction.source_id}"
+            in receiver_log
+        )
+        receiver_cast_prepped = (
+            f"[bots] wizard cast prepped. bot_id={direction.source_id}"
+            in receiver_log
+        )
+        if receiver_cast_queued and receiver_cast_prepped:
+            break
+        time.sleep(0.05)
     damage = observe_pair_damage(
         pair["primary_network_id"],
         pair["secondary_network_id"],

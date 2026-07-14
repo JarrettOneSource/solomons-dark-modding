@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -429,6 +430,8 @@ bool QueueGameplayStartWaves(std::string* error_message);
 bool QueueGameplayEnableCombatPrelude(std::string* error_message);
 bool QueueHubStartTestrun(std::string* error_message);
 bool SetPendingRunGenerationSeed(std::uint32_t seed, std::string* error_message);
+bool PrepareArenaRunGenerationSeed(const char* source, std::string* error_message);
+void ClearLocalRunGenerationSeed();
 bool QueueGameplaySwitchRegion(int region_index, std::string* error_message);
 bool QueueMultiplayerDampenEffect(
     std::uint64_t owner_participant_id,
@@ -453,6 +456,19 @@ bool QueueNativeMagicHitBehaviorProbe(
     std::uint64_t* request_serial,
     std::string* error_message);
 bool GetNativeMagicHitBehaviorProbeResult(
+    std::uint64_t request_serial,
+    bool* completed,
+    bool* success,
+    float* hp_before,
+    float* hp_after,
+    std::string* error_message);
+bool QueueNativeStaffEffectProbe(
+    uintptr_t source_actor,
+    uintptr_t target_actor,
+    std::uint32_t variant,
+    std::uint64_t* request_serial,
+    std::string* error_message);
+bool GetNativeStaffEffectProbeResult(
     std::uint64_t request_serial,
     bool* completed,
     bool* success,

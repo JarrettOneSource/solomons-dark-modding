@@ -8,6 +8,7 @@ constexpr std::uint64_t kHubAnimationDrivePhaseUnitsPerSecond = 150;
 constexpr std::uint64_t kRunEntryAuthoritySnapshotStaleMs = 3000;
 constexpr float kWorldSnapshotSettleDistance = 0.05f;
 constexpr float kReplicatedRunEnemyDeathHpEpsilon = 0.05f;
+constexpr float kReplicatedRunEnemyDamageObservationEpsilon = 0.0001f;
 // Keep client-authored native hit reactions when they remain close to the
 // host snapshot.  Larger presentation drift must not invalidate otherwise
 // legitimate damage; fall back to the authoritative position instead.
@@ -1225,7 +1226,6 @@ bool ApplyReplicatedRunEnemyHealth(
          multiplayer::HasLocalPendingLethalEnemyDamageClaim(authoritative_actor.network_actor_id, now_ms))) {
         return false;
     }
-    const bool hp_changed = std::fabs(local_health.hp - authoritative_hp) > 0.01f;
     const bool max_hp_changed = std::fabs(local_health.max_hp - authoritative_max_hp) > 0.01f;
     const bool max_hp_synced =
         std::fabs(local_health.max_hp - authoritative_max_hp) <= 0.05f;
@@ -1245,17 +1245,27 @@ bool ApplyReplicatedRunEnemyHealth(
             authoritative_actor.network_actor_id,
             authoritative_hp);
     }
+    const bool observed_local_damage =
+        multiplayer::IsLocalTransportClient() &&
+        authoritative_actor.network_actor_id != 0 &&
+        !authoritative_dead &&
+        has_damage_baseline &&
+        max_hp_synced &&
+        local_health.hp + kReplicatedRunEnemyDamageObservationEpsilon < authoritative_hp;
+    // Every observed client-native damage sample must be followed by an
+    // authoritative write. Otherwise a sub-centi-HP tick would remain local
+    // for several snapshots and its cumulative value would be counted more
+    // than once by the damage accumulator.
+    const bool hp_changed =
+        observed_local_damage ||
+        std::fabs(local_health.hp - authoritative_hp) > 0.01f;
     if (!hp_changed && !max_hp_changed && (!authoritative_dead || death_handled)) {
         return false;
     }
 
-    if (multiplayer::IsLocalTransportClient() &&
-        authoritative_actor.network_actor_id != 0 &&
-        has_damage_baseline &&
-        max_hp_synced &&
-        local_health.hp + 0.05f < authoritative_hp) {
-        float claimed_target_x = authoritative_actor.position_x;
-        float claimed_target_y = authoritative_actor.position_y;
+    float claimed_target_x = authoritative_actor.position_x;
+    float claimed_target_y = authoritative_actor.position_y;
+    if (observed_local_damage) {
         // Preserve native hit reactions (notably Fortunate Flailing knockback)
         // before this snapshot rolls the client back to the host transform. The
         // host independently bounds this position against its authoritative
@@ -1274,15 +1284,6 @@ bool ApplyReplicatedRunEnemyHealth(
                 claimed_target_y = local_target_y;
             }
         }
-        multiplayer::QueueLocalEnemyDamageClaim(
-            authoritative_actor.network_actor_id,
-            0,
-            authoritative_hp,
-            local_health.hp,
-            authoritative_max_hp,
-            claimed_target_x,
-            claimed_target_y,
-            true);
     }
 
     auto& memory = ProcessMemory::Instance();
@@ -1299,6 +1300,28 @@ bool ApplyReplicatedRunEnemyHealth(
         if (authoritative_dead) {
             multiplayer::ClearReplicatedRunEnemyDamageBaseline(authoritative_actor.network_actor_id);
         } else {
+            if (observed_local_damage) {
+                if (local_health.hp + 0.05f < authoritative_hp) {
+                    multiplayer::QueueLocalEnemyDamageClaim(
+                        authoritative_actor.network_actor_id,
+                        0,
+                        authoritative_hp,
+                        local_health.hp,
+                        authoritative_max_hp,
+                        claimed_target_x,
+                        claimed_target_y,
+                        true);
+                } else {
+                    multiplayer::ObserveReplicatedRunEnemyDamage(
+                        authoritative_actor.network_actor_id,
+                        authoritative_hp,
+                        local_health.hp,
+                        authoritative_max_hp,
+                        claimed_target_x,
+                        claimed_target_y,
+                        true);
+                }
+            }
             multiplayer::MarkReplicatedRunEnemyDamageBaseline(
                 authoritative_actor.network_actor_id,
                 authoritative_hp);

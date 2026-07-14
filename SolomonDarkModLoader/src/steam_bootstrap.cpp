@@ -84,6 +84,75 @@ bool CopyCallbackPayload(
     return true;
 }
 
+bool DecodeLobbyCreatedPayload(
+    const void* source,
+    std::size_t source_size,
+    steamabi::LobbyCreated* payload) {
+    if (CopyCallbackPayload(source, source_size, payload)) {
+        return true;
+    }
+    steamabi::LobbyCreatedSmall packed{};
+    if (!CopyCallbackPayload(source, source_size, &packed)) {
+        return false;
+    }
+    payload->result = packed.result;
+    payload->lobby_id = packed.lobby_id;
+    return true;
+}
+
+bool DecodeLobbyEnterPayload(
+    const void* source,
+    std::size_t source_size,
+    steamabi::LobbyEnter* payload) {
+    if (CopyCallbackPayload(source, source_size, payload)) {
+        return true;
+    }
+    steamabi::LobbyEnterSmall packed{};
+    if (!CopyCallbackPayload(source, source_size, &packed)) {
+        return false;
+    }
+    payload->lobby_id = packed.lobby_id;
+    payload->chat_permissions = packed.chat_permissions;
+    payload->locked = packed.locked;
+    payload->response = packed.response;
+    return true;
+}
+
+bool DecodeLobbyDataUpdatePayload(
+    const void* source,
+    std::size_t source_size,
+    steamabi::LobbyDataUpdate* payload) {
+    if (CopyCallbackPayload(source, source_size, payload)) {
+        return true;
+    }
+    steamabi::LobbyDataUpdateSmall packed{};
+    if (!CopyCallbackPayload(source, source_size, &packed)) {
+        return false;
+    }
+    payload->lobby_id = packed.lobby_id;
+    payload->member_id = packed.member_id;
+    payload->success = packed.success;
+    return true;
+}
+
+bool DecodeLobbyChatUpdatePayload(
+    const void* source,
+    std::size_t source_size,
+    steamabi::LobbyChatUpdate* payload) {
+    if (CopyCallbackPayload(source, source_size, payload)) {
+        return true;
+    }
+    steamabi::LobbyChatUpdateSmall packed{};
+    if (!CopyCallbackPayload(source, source_size, &packed)) {
+        return false;
+    }
+    payload->lobby_id = packed.lobby_id;
+    payload->changed_user_id = packed.changed_user_id;
+    payload->making_change_user_id = packed.making_change_user_id;
+    payload->state_change = packed.state_change;
+    return true;
+}
+
 void DecodeSteamCallback(
     detail::SteamBootstrapState& state,
     std::int32_t callback_id,
@@ -93,7 +162,7 @@ void DecodeSteamCallback(
     switch (callback_id) {
     case steamabi::kCallbackLobbyCreated: {
         steamabi::LobbyCreated callback{};
-        if (!CopyCallbackPayload(payload, payload_size, &callback)) {
+        if (!DecodeLobbyCreatedPayload(payload, payload_size, &callback)) {
             return;
         }
         SteamEvent event;
@@ -107,7 +176,7 @@ void DecodeSteamCallback(
     }
     case steamabi::kCallbackLobbyEnter: {
         steamabi::LobbyEnter callback{};
-        if (!CopyCallbackPayload(payload, payload_size, &callback)) {
+        if (!DecodeLobbyEnterPayload(payload, payload_size, &callback)) {
             return;
         }
         SteamEvent event;
@@ -160,7 +229,7 @@ void DecodeSteamCallback(
     }
     case steamabi::kCallbackLobbyDataUpdate: {
         steamabi::LobbyDataUpdate callback{};
-        if (!CopyCallbackPayload(payload, payload_size, &callback)) {
+        if (!DecodeLobbyDataUpdatePayload(payload, payload_size, &callback)) {
             return;
         }
         SteamEvent event;
@@ -173,7 +242,7 @@ void DecodeSteamCallback(
     }
     case steamabi::kCallbackLobbyChatUpdate: {
         steamabi::LobbyChatUpdate callback{};
-        if (!CopyCallbackPayload(payload, payload_size, &callback)) {
+        if (!DecodeLobbyChatUpdatePayload(payload, payload_size, &callback)) {
             return;
         }
         SteamEvent event;
@@ -226,10 +295,25 @@ void DecodeApiCallCompleted(
     if (!CopyCallbackPayload(
             callback.parameter,
             static_cast<std::size_t>(callback.parameter_size),
-            &completed) ||
-        completed.call == steamabi::kInvalidApiCall ||
+            &completed)) {
+        Log(
+            "Steam API completion payload mismatch. expected=" +
+            std::to_string(sizeof(completed)) +
+            " actual=" + std::to_string(callback.parameter_size));
+        return;
+    }
+    if (completed.call == steamabi::kInvalidApiCall ||
         completed.parameter_size == 0 ||
         completed.parameter_size > kMaxCallResultBytes) {
+        Log(
+            "Steam API completion was invalid. callback=" +
+            std::to_string(completed.callback_id) +
+            " bytes=" + std::to_string(completed.parameter_size));
+        return;
+    }
+
+    if (completed.callback_id != steamabi::kCallbackLobbyCreated &&
+        completed.callback_id != steamabi::kCallbackLobbyEnter) {
         return;
     }
 
@@ -243,6 +327,10 @@ void DecodeApiCallCompleted(
             completed.callback_id,
             &failed) ||
         failed) {
+        Log(
+            "Steam API completion read failed. callback=" +
+            std::to_string(completed.callback_id) +
+            " failed=" + (failed ? std::string("1") : std::string("0")));
         SteamEvent event;
         event.api_call = completed.call;
         event.result_code = -1;

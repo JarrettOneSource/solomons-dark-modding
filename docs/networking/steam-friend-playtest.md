@@ -16,7 +16,7 @@ disposable stage. It never copies or stores Steam credentials.
   `WaitingForInvite` without a lobby ID. Redirected CLI launches also return at
   that milestone while the game remains running, which is the path used by the
   desktop UI.
-- Protocol v50 statically covers lobby membership checks, host ownership,
+- Protocol v51 statically covers lobby membership checks, host ownership,
   compatibility handshake, authenticated gameplay routing, goodbye/timeout
   cleanup, automatic re-handshake after silent route loss, and no host
   migration.
@@ -24,11 +24,71 @@ disposable stage. It never copies or stores Steam credentials.
   UDP backend, including player visibility, both player ownership directions,
   all native stat and upgrade entries, level-up choices, late join, Embers,
   Fireball Explode, Air Chaining, deaths, drops, and pickup authority.
+- The same-machine two-account Steam run exercised real friend invites twice,
+  native character onboarding, shared run entry, full remote wizard bodies,
+  movement/animation/status/vitals, the participant inventory ledger, and
+  disconnect/rejoin. Disconnect removes the old native proxy and participant
+  replication epoch; a fresh revision-1 rejoin replaced an earlier revision-7
+  skillbook/statbook instead of inheriting its Chaining rank.
+- Every real level-up upgrade row (`8..79`) has been applied and checked in
+  both ownership directions (144 owner/observer checks). All 16 native stat
+  rows have also been maxed independently on both players, including derived
+  values, secondary spell costs, Creativity picker width, Concentrate state,
+  and measured mana recovery.
+- The focused Steam behavior pass verified Fireball Explode damage and native
+  impact playback on both peers, four Embers on both peers with terminal and
+  fallback-materialization convergence, and Air Chaining against five victims
+  with identical ordered target IDs and source/target endpoints for every
+  captured frame.
 
-A genuine Steam peer handshake still requires two different Steam accounts in
-two simultaneously running Steam clients. Use two PCs for the first playtest.
-An account switcher changes the account used by one client; it is not process
-isolation and cannot prove two live peers on one Windows session.
+A genuine cross-account Steam peer handshake has been exercised on this
+machine with a Windows host and a WSLg/Proton joiner. The joiner waited without
+a lobby ID, accepted the host's friend invite, joined the friends-only lobby,
+completed the authenticated compatibility handshake, and entered the shared
+run. Two physical PCs remain the recommended final player-environment check,
+but they are not required for same-machine development validation.
+
+The latest local structured evidence is:
+
+- `runtime/steam_friend_active_pair_run_stats33.json` — fresh invited pair and
+  shared run bootstrap.
+- `runtime/steam_friend_active_pair_state_reconnect_final32.json` — active-run
+  reconnect, visible native body lanes, status/vitals, derived stats, costs,
+  inventory ledger, and revision reset.
+- `runtime/steam_friend_spell_behavior_all_post_reconnect_final32.json` —
+  Explode, Embers, and strict Air Chaining after reconnect.
+- `runtime/steam_friend_active_pair_all_stats_final33.json` — exhaustive fresh
+  stat matrix on both Steam owners.
+- `runtime/steam_friend_active_pair_all_upgrade_rows_final27.json` plus
+  `runtime/steam_friend_active_pair_regenerate_upgrade_final28.json` — all 144
+  real upgrade-row ownership checks, including the two level-cap residuals.
+
+These files contain no credentials. Steam and lobby identities are operational
+diagnostics and should still be treated as private when sharing raw logs.
+
+For same-machine development, WSLg can provide the required second Steam
+process and account boundary. Install a 32-bit-capable Wine environment and a
+Proton compatibility tool, sign the Linux Steam client into the second account,
+then start its join-wait process from WSL:
+
+```bash
+./scripts/Launch-WslSteamMultiplayerClient.sh
+```
+
+The script publishes a self-contained win-x86 launcher into `runtime/`, uses an
+isolated Spacewar Proton prefix, stages AppID 480, and starts the normal join
+flow. Pass the host lobby ID as its only argument to test the direct lobby-ID
+fallback. `SDMOD_PROTON_PATH`, `SDMOD_STEAM_API_DLL`, `SDMOD_GAME_DIR`, and
+`SDMOD_WSL_STEAM_INSTANCE` override machine-specific defaults. No account name,
+password, refresh token, or Steam Guard code is read or copied by the script.
+
+If the WSLg Steam client aborts while cleaning up PulseAudio, restart that
+client with audio disabled; multiplayer transport and the Steam UI do not
+require it:
+
+```bash
+PULSE_SERVER=unix:/dev/null SDL_AUDIODRIVER=dummy ~/.steam/debian-installation/steam.sh
+```
 
 ## Prerequisites
 
@@ -104,7 +164,10 @@ profile for a one-off run.
 - Pick up host-authored gold, health/mana orbs, an item, and a potion. Confirm
   one credit only and no client-authored duplicate drop.
 - Disconnect the client, rejoin the same still-open host lobby, and verify the
-  late-join book/stat/loadout catch-up before casting again.
+  late-join book/stat/loadout catch-up before casting again. A reconnecting
+  client may use **Last Game**; while connected, the loader redirects that safe
+  stock menu path into multiplayer character onboarding and then follows the
+  host's active run.
 
 ## Expected diagnostics
 

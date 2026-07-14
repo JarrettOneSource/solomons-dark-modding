@@ -120,6 +120,17 @@ bool SteamSetLobbyJoinable(std::uint64_t lobby_id, bool joinable) {
            state.matchmaking_set_lobby_joinable(matchmaking, lobby_id, joinable);
 }
 
+bool SteamInviteUserToLobby(std::uint64_t lobby_id, std::uint64_t steam_id) {
+    if (lobby_id == 0 || steam_id == 0) {
+        return false;
+    }
+    std::scoped_lock lock(detail::SteamBootstrapMutex());
+    auto& state = detail::MutableSteamBootstrapState();
+    auto* matchmaking = Matchmaking(state);
+    return matchmaking != nullptr &&
+           state.matchmaking_invite_user_to_lobby(matchmaking, lobby_id, steam_id);
+}
+
 bool SteamSetLobbyData(std::uint64_t lobby_id, const char* key, const char* value) {
     if (lobby_id == 0 || key == nullptr || *key == '\0' || value == nullptr) {
         return false;
@@ -282,9 +293,12 @@ bool SteamSendNetworkMessage(
     if (networking == nullptr || !BuildIdentity(state, remote_steam_id, &identity)) {
         return false;
     }
-    const int flags = mode == SteamNetworkSendMode::ReliableNoNagle
-        ? steamabi::kNetworkingSendReliableNoNagle
-        : steamabi::kNetworkingSendUnreliableNoNagle;
+    int flags = steamabi::kNetworkingSendUnreliableNoNagle;
+    if (mode == SteamNetworkSendMode::UnreliableNoDelay) {
+        flags = steamabi::kNetworkingSendUnreliableNoDelay;
+    } else if (mode == SteamNetworkSendMode::ReliableNoNagle) {
+        flags = steamabi::kNetworkingSendReliableNoNagle;
+    }
     const auto result = state.networking_messages_send(
         networking,
         &identity,

@@ -173,6 +173,10 @@ bool LoadSteamApiExports(SteamBootstrapState* state) {
             "SteamAPI_ISteamMatchmaking_SetLobbyJoinable") &&
         LoadRequiredExport(
             state,
+            &state->matchmaking_invite_user_to_lobby,
+            "SteamAPI_ISteamMatchmaking_InviteUserToLobby") &&
+        LoadRequiredExport(
+            state,
             &state->matchmaking_set_lobby_data,
             "SteamAPI_ISteamMatchmaking_SetLobbyData") &&
         LoadRequiredExport(

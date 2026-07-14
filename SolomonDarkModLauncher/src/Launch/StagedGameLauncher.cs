@@ -56,6 +56,7 @@ internal static class StagedGameLauncher
             multiplayer ?? MultiplayerLaunchOptions.Create(
                 MultiplayerLaunchMode.Unspecified,
                 null,
+                null,
                 MultiplayerLaunchOptions.DefaultMaxParticipants,
                 openInviteDialog: true));
         options = ApplySteamBootstrap(configuration, stage, options);

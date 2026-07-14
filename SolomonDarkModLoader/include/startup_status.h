@@ -41,6 +41,7 @@ struct MultiplayerSessionStatusSnapshot {
     std::uint32_t authenticated_peer_count = 0;
     bool overlay_enabled = false;
     bool invite_dialog_opened = false;
+    bool invite_sent = false;
     bool route_relayed = false;
     std::int32_t route_ping_ms = 0;
     std::string status_text;
