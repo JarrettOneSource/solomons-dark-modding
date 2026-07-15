@@ -103,6 +103,74 @@ WorldSnapshotRuntimeInfo BuildWorldSnapshotRuntimeInfo(
             entry.radial_offset = packet_entry.radial_offset;
             entry.angular_offset = packet_entry.angular_offset;
         }
+
+        const auto& packet_named = packet_actor.named_hub_npc;
+        auto& named = actor.named_hub_npc;
+        named.idle_active = packet_named.idle_active;
+        named.idle_enabled = packet_named.idle_enabled;
+        named.type_state_byte = packet_named.type_state_byte;
+        named.idle_phase = packet_named.idle_phase;
+        named.idle_frame = packet_named.idle_frame;
+        named.idle_rate = packet_named.idle_rate;
+        named.idle_amplitude = packet_named.idle_amplitude;
+        named.motion_position = packet_named.motion_position;
+        named.motion_direction = packet_named.motion_direction;
+        named.render_scale = packet_named.render_scale;
+        named.timer = packet_named.timer;
+        named.pose = packet_named.pose;
+
+        const bool idle_animator_valid =
+            (actor.native_type_id == 0x138B ||
+             actor.native_type_id == 0x138C ||
+             actor.native_type_id == 0x138D ||
+             actor.native_type_id == 0x138F) &&
+            named.idle_active <= 1 &&
+            named.idle_enabled <= 1 &&
+            IsSaneNamedHubNpcPresentationFloat(named.idle_phase) &&
+            IsSaneNamedHubNpcPresentationFloat(named.idle_frame) &&
+            IsSaneNamedHubNpcPresentationFloat(named.idle_rate) &&
+            IsSaneNamedHubNpcPresentationFloat(named.idle_amplitude);
+        if (!idle_animator_valid) {
+            actor.presentation_flags &= ~WorldActorPresentationFlagNamedHubNpcIdleAnimator;
+        }
+
+        const bool witch_orbit_valid =
+            actor.native_type_id == 0x1389 &&
+            IsSaneNamedHubNpcPresentationFloat(named.idle_frame) &&
+            IsSaneNamedHubNpcPresentationFloat(named.idle_rate);
+        if (!witch_orbit_valid) {
+            actor.presentation_flags &= ~WorldActorPresentationFlagNamedHubNpcWitchOrbit;
+        }
+
+        const bool potion_motion_valid =
+            actor.native_type_id == 0x138C &&
+            IsSaneNamedHubNpcPresentationFloat(named.motion_position) &&
+            IsSaneNamedHubNpcPresentationFloat(named.motion_direction) &&
+            named.timer >= 0 &&
+            named.timer <= 100000;
+        if (!potion_motion_valid) {
+            actor.presentation_flags &= ~WorldActorPresentationFlagNamedHubNpcPotionMotion;
+        }
+
+        const bool tyrannia_pose_valid =
+            actor.native_type_id == 0x138F &&
+            named.timer >= -1 &&
+            named.timer <= 100000 &&
+            named.pose >= 0 &&
+            named.pose <= 2 &&
+            IsSaneNamedHubNpcPresentationFloat(named.render_scale);
+        if (!tyrannia_pose_valid) {
+            actor.presentation_flags &= ~WorldActorPresentationFlagNamedHubNpcTyranniaPose;
+        }
+
+        const bool teacher_cycle_valid =
+            actor.native_type_id == 0x1390 &&
+            named.type_state_byte <= 1 &&
+            IsSaneNamedHubNpcPresentationFloat(named.idle_phase) &&
+            IsSaneNamedHubNpcPresentationFloat(named.idle_frame);
+        if (!teacher_cycle_valid) {
+            actor.presentation_flags &= ~WorldActorPresentationFlagNamedHubNpcTeacherCycle;
+        }
         snapshot.actors.push_back(actor);
     }
 

@@ -411,8 +411,8 @@ bool TryGetPlayerState(SDModPlayerState* state) {
             ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkAttachmentOffset);
     } else if (resolved_gameplay_address &&
                state->attachment_visual_lane.current_object_address == 0) {
-        // Local run casting uses an actor-owned robe/hat runtime, while the
-        // stock player staff remains in the gameplay-owned attachment sink.
+        // Stock local players keep their equipment in gameplay-owned sinks;
+        // actor-owned equipment runtimes belong to materialized bot actors.
         state->attachment_visual_lane =
             ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkAttachmentOffset);
     }

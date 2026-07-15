@@ -75,8 +75,26 @@ function Invoke-JsonLauncher {
     return $response
 }
 
+function Remove-DirectoryWithRetry {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $deadline = (Get-Date).AddSeconds(10)
+    while (Test-Path $Path) {
+        try {
+            Remove-Item $Path -Recurse -Force -ErrorAction Stop
+            return
+        }
+        catch {
+            if ((Get-Date) -ge $deadline) {
+                throw
+            }
+            Start-Sleep -Milliseconds 100
+        }
+    }
+}
+
 if (Test-Path $smokeRoot) {
-    Remove-Item $smokeRoot -Recurse -Force
+    Remove-DirectoryWithRetry -Path $smokeRoot
 }
 New-Item -ItemType Directory -Path $smokeRoot -Force | Out-Null
 
@@ -208,7 +226,7 @@ finally {
         (($result | ConvertTo-Json -Depth 8) + [Environment]::NewLine),
         $utf8NoBom)
     if (-not $KeepExtracted -and (Test-Path $smokeRoot)) {
-        Remove-Item $smokeRoot -Recurse -Force
+        Remove-DirectoryWithRetry -Path $smokeRoot
     }
 }
 

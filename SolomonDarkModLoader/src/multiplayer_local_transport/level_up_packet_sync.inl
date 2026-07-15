@@ -85,6 +85,31 @@ bool ClearLocalLevelUpPickerAfterProgrammaticChoice(
             kLevelUpScreenSelectedOptionIndexOffset,
             zero_based_selected_index) && wrote;
     }
+    if (!wrote) {
+        Log(
+            "Multiplayer level-up native picker selection write failed before close. offer_id=" +
+            std::to_string(offer_id) +
+            " option_index=" + std::to_string(option_index) +
+            " option_id=" + std::to_string(option_id) +
+            " screen=" + HexString(screen_address));
+        return false;
+    }
+
+    DWORD close_exception = 0;
+    const bool close_ok =
+        screen_address == 0 ||
+        CallLevelUpScreenCloseSafe(screen_address, &close_exception);
+    if (!close_ok) {
+        Log(
+            "Multiplayer level-up native picker close failed; synchronized pause retained. offer_id=" +
+            std::to_string(offer_id) +
+            " option_index=" + std::to_string(option_index) +
+            " option_id=" + std::to_string(option_id) +
+            " screen=" + HexString(screen_address) +
+            " close_seh=" +
+            HexString(static_cast<uintptr_t>(close_exception)));
+        return false;
+    }
 
     const std::int32_t no_pending_choices = 0;
     const std::int32_t no_incoming_choices = 0;
@@ -117,12 +142,14 @@ bool ClearLocalLevelUpPickerAfterProgrammaticChoice(
         no_screen) && wrote;
 
     Log(
-        "Multiplayer level-up native picker cleared after programmatic accepted choice. offer_id=" +
+        "Multiplayer level-up native picker closed and cleared after programmatic accepted choice. offer_id=" +
         std::to_string(offer_id) +
         " option_index=" + std::to_string(option_index) +
         " option_id=" + std::to_string(option_id) +
         " progression=" + HexString(player_state.progression_address) +
         " screen=" + HexString(screen_address) +
+        " close_ok=" + std::to_string(close_ok ? 1 : 0) +
+        " close_seh=" + HexString(static_cast<uintptr_t>(close_exception)) +
         " wrote=" + std::to_string(wrote ? 1 : 0));
     return wrote;
 }
@@ -218,6 +245,7 @@ LevelUpChoiceResultPacket SendLevelUpChoiceResult(
     std::int32_t option_index,
     const BotSkillChoiceOption& option,
     LevelUpChoiceResultCode result_code,
+    bool auto_picked,
     const TransportPeerEndpoint& endpoint) {
     std::uint16_t resulting_active = 0;
     if (result_code == LevelUpChoiceResultCode::Accepted) {
@@ -235,7 +263,8 @@ LevelUpChoiceResultPacket SendLevelUpChoiceResult(
         option_index,
         option,
         result_code,
-        resulting_active);
+        resulting_active,
+        auto_picked);
 
     SendPacketToEndpoint(result, endpoint);
     RelayPacketToPeers(result, endpoint);
@@ -355,6 +384,7 @@ void ApplyLevelUpChoicePacket(
     std::int32_t experience = 0;
     std::uint32_t run_nonce = packet.run_nonce;
     LevelUpChoiceResultCode result_code = LevelUpChoiceResultCode::StaleOffer;
+    bool auto_pick_confirmation = false;
     std::string error_message;
 
     if (offer_it != g_local_transport.issued_level_up_offers_by_id.end()) {
@@ -374,6 +404,25 @@ void ApplyLevelUpChoicePacket(
                        &selected_option)) {
             result_code = LevelUpChoiceResultCode::InvalidOption;
             offer.result_code = result_code;
+        } else if (offer.auto_picked) {
+            const auto* barrier_participant =
+                FindHostLevelUpBarrierParticipant(packet.participant_id);
+            if (barrier_participant == nullptr ||
+                !barrier_participant->auto_picked ||
+                barrier_participant->offer_id != packet.offer_id ||
+                barrier_participant->option_index != packet.option_index ||
+                barrier_participant->option_id != selected_option.option_id) {
+                result_code = LevelUpChoiceResultCode::InvalidOption;
+                offer.result_code = result_code;
+            } else {
+                // The authority already applied this forced choice to its
+                // remote clone. This matching packet is the client's proof
+                // that its native picker applied and closed successfully.
+                result_code = LevelUpChoiceResultCode::Accepted;
+                auto_pick_confirmation = true;
+                offer.resolved = true;
+                offer.result_code = result_code;
+            }
         } else if (!ApplyParticipantSkillChoiceOption(
                        packet.participant_id,
                        selected_option,
@@ -405,9 +454,13 @@ void ApplyLevelUpChoicePacket(
         selected_index,
         selected_option,
         result_code,
+        auto_pick_confirmation,
         from);
     if (result_code == LevelUpChoiceResultCode::Accepted) {
-        MarkHostLevelUpBarrierParticipantResolved(result, false, now_ms);
+        MarkHostLevelUpBarrierParticipantResolved(
+            result,
+            auto_pick_confirmation,
+            now_ms);
     }
 
     Log(
@@ -418,6 +471,8 @@ void ApplyLevelUpChoicePacket(
         " run_nonce=" + std::to_string(run_nonce) +
         " option_index=" + std::to_string(selected_index) +
         " option_id=" + std::to_string(selected_option.option_id) +
+        " auto_pick_confirmation=" +
+            std::to_string(auto_pick_confirmation ? 1 : 0) +
         " result=" + LevelUpChoiceResultCodeLabel(result_code) +
         (error_message.empty() ? "" : " error=" + error_message));
 }
@@ -441,6 +496,8 @@ void ApplyLevelUpChoiceResultPacket(
         BotSkillChoiceOption option;
         option.option_id = packet.option_id;
         option.apply_count = packet.apply_count;
+        const bool auto_picked =
+            (packet.flags & kLevelUpChoiceResultFlagAutoPicked) != 0;
         const bool duplicate_result =
             g_local_transport.native_applied_level_up_result_offer_ids.find(
                 packet.offer_id) !=
@@ -455,28 +512,21 @@ void ApplyLevelUpChoiceResultPacket(
             packet.resulting_active > 0 &&
             have_native_active_before &&
             native_active_before >= packet.resulting_active;
-        bool native_apply_complete = duplicate_result || already_at_authoritative_result;
+        bool native_apply_complete = false;
 
-        if (duplicate_result || already_at_authoritative_result) {
-            Log(
-                "Multiplayer level-up choice result native apply skipped as idempotent. authority_participant_id=" +
-                std::to_string(packet.authority_participant_id) +
-                " target_participant_id=" + std::to_string(packet.target_participant_id) +
-                " offer_id=" + std::to_string(packet.offer_id) +
-                " option_id=" + std::to_string(packet.option_id) +
-                " native_active=" +
-                    (have_native_active_before
-                         ? std::to_string(native_active_before)
-                         : std::string("unavailable")) +
-                " resulting_active=" + std::to_string(packet.resulting_active));
-        } else if (packet.target_participant_id == g_local_transport.local_peer_id) {
+        if (packet.target_participant_id == g_local_transport.local_peer_id) {
             const auto runtime_state = SnapshotRuntimeState();
             const bool native_picker_already_applied =
                 runtime_state.active_level_up_offer.valid &&
                 runtime_state.active_level_up_offer.offer_id == packet.offer_id &&
                 runtime_state.active_level_up_offer.target_participant_id == packet.target_participant_id &&
                 runtime_state.active_level_up_offer.native_picker_local_apply_observed;
-            if (!native_picker_already_applied) {
+            bool local_progression_complete =
+                duplicate_result ||
+                already_at_authoritative_result ||
+                native_picker_already_applied;
+            bool programmatic_apply = false;
+            if (!local_progression_complete) {
                 std::string error_message;
                 if (!ApplyLocalPlayerSkillChoiceOption(option, &error_message)) {
                     Log(
@@ -486,30 +536,61 @@ void ApplyLevelUpChoiceResultPacket(
                         " option_id=" + std::to_string(packet.option_id) +
                         " error=" + error_message);
                 } else {
-                    native_apply_complete = true;
-                    if (!ClearLocalLevelUpPickerAfterProgrammaticChoice(
-                            packet.offer_id,
-                            packet.option_index,
-                            packet.option_id,
-                            true)) {
-                        Log(
-                            "Multiplayer level-up choice result accepted but native picker cleanup failed. authority_participant_id=" +
-                            std::to_string(packet.authority_participant_id) +
-                            " offer_id=" + std::to_string(packet.offer_id) +
-                            " option_id=" + std::to_string(packet.option_id));
+                    local_progression_complete = true;
+                    programmatic_apply = true;
+                    g_local_transport.native_applied_level_up_result_offer_ids.insert(
+                        packet.offer_id);
+                    if (g_local_transport.native_applied_level_up_result_offer_ids.size() > 512) {
+                        g_local_transport.native_applied_level_up_result_offer_ids.clear();
+                        g_local_transport.native_applied_level_up_result_offer_ids.insert(
+                            packet.offer_id);
                     }
                 }
-            } else {
-                native_apply_complete = true;
+            }
+
+            bool picker_cleanup_complete = true;
+            if (local_progression_complete &&
+                (auto_picked || programmatic_apply)) {
+                picker_cleanup_complete =
+                    ClearLocalLevelUpPickerAfterProgrammaticChoice(
+                        packet.offer_id,
+                        packet.option_index,
+                        packet.option_id,
+                        true);
+            }
+            native_apply_complete =
+                local_progression_complete && picker_cleanup_complete;
+
+            if (auto_picked && native_apply_complete) {
+                LevelUpChoicePacket confirmation{};
+                confirmation.header = MakePacketHeader(
+                    PacketKind::LevelUpChoice,
+                    g_local_transport.next_sequence++);
+                confirmation.participant_id = g_local_transport.local_peer_id;
+                confirmation.offer_id = packet.offer_id;
+                confirmation.run_nonce = packet.run_nonce;
+                confirmation.option_index = packet.option_index;
+                confirmation.option_id = packet.option_id;
+                SendPacketToEndpoint(confirmation, from);
+                SendPacketToEndpoint(confirmation, from);
                 Log(
-                    "Multiplayer level-up choice result accepted; native picker had already applied locally. authority_participant_id=" +
+                    "Multiplayer forced level-up choice applied and native picker closed; confirmation sent. authority_participant_id=" +
                     std::to_string(packet.authority_participant_id) +
                     " offer_id=" + std::to_string(packet.offer_id) +
                     " option_id=" + std::to_string(packet.option_id));
             }
         } else {
+            if (duplicate_result || already_at_authoritative_result) {
+                native_apply_complete = true;
+                Log(
+                    "Multiplayer level-up choice result native apply skipped as idempotent. authority_participant_id=" +
+                    std::to_string(packet.authority_participant_id) +
+                    " target_participant_id=" + std::to_string(packet.target_participant_id) +
+                    " offer_id=" + std::to_string(packet.offer_id) +
+                    " option_id=" + std::to_string(packet.option_id));
+            }
             std::string error_message;
-            if (!ApplyParticipantSkillChoiceOption(
+            if (!native_apply_complete && !ApplyParticipantSkillChoiceOption(
                     packet.target_participant_id,
                     option,
                     &error_message)) {
@@ -520,7 +601,7 @@ void ApplyLevelUpChoiceResultPacket(
                     " offer_id=" + std::to_string(packet.offer_id) +
                     " option_id=" + std::to_string(packet.option_id) +
                     " error=" + error_message);
-            } else {
+            } else if (!native_apply_complete) {
                 std::uint16_t native_active_after = 0;
                 native_apply_complete =
                     packet.resulting_active == 0 ||

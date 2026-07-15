@@ -4,33 +4,6 @@ bool ShouldSuppressLocalLevelUpFanoutForDebug() {
     return g_local_transport.suppress_local_level_up_fanout_for_debug;
 }
 
-bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code) {
-    if (exception_code != nullptr) {
-        *exception_code = 0;
-    }
-    if (screen_address == 0) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    uintptr_t vtable_address = 0;
-    uintptr_t close_address = 0;
-    if (!memory.TryReadValue(screen_address, &vtable_address) ||
-        vtable_address == 0 ||
-        !memory.TryReadValue(vtable_address + kLevelUpScreenCloseVtableOffset, &close_address) ||
-        close_address == 0) {
-        return false;
-    }
-
-    auto* close_screen = reinterpret_cast<NativeLevelUpScreenCloseFn>(close_address);
-    __try {
-        close_screen(reinterpret_cast<void*>(screen_address));
-        return true;
-    } __except (CaptureLocalTransportSehCode(GetExceptionInformation(), exception_code)) {
-        return false;
-    }
-}
-
 #include "level_up_choice_and_picker.inl"
 
 bool TryAutoPickHostLevelUpBarrierParticipant(
@@ -53,6 +26,44 @@ bool TryAutoPickHostLevelUpBarrierParticipant(
     }
 
     auto& offer = offer_it->second;
+    auto send_remote_auto_pick_result = [&]() {
+        if (participant_id == g_local_transport.local_peer_id ||
+            !barrier_participant->auto_picked ||
+            barrier_participant->option_index <= 0 ||
+            barrier_participant->option_id < 0 ||
+            barrier_participant->apply_count <= 0) {
+            return false;
+        }
+        if (barrier_participant->last_auto_pick_result_ms != 0 &&
+            now_ms - barrier_participant->last_auto_pick_result_ms <
+                kHostLevelUpBarrierBroadcastIntervalMs) {
+            return true;
+        }
+
+        BotSkillChoiceOption selected_option;
+        selected_option.option_id = barrier_participant->option_id;
+        selected_option.apply_count = barrier_participant->apply_count;
+        const auto result = BuildLevelUpChoiceResultPacket(
+            offer.offer_id,
+            participant_id,
+            offer.run_nonce,
+            offer.level,
+            offer.experience,
+            barrier_participant->option_index,
+            selected_option,
+            LevelUpChoiceResultCode::Accepted,
+            barrier_participant->resulting_active,
+            true);
+        SendPacketToParticipantOrPeers(result, participant_id);
+        SendPacketToParticipantOrPeers(result, participant_id);
+        barrier_participant->last_auto_pick_result_ms = now_ms;
+        return true;
+    };
+
+    if (offer.auto_picked) {
+        return send_remote_auto_pick_result();
+    }
+
     for (std::size_t index = 0; index < offer.options.size(); ++index) {
         const auto& option = offer.options[index];
         const auto option_index = static_cast<std::int32_t>(index + 1);
@@ -97,7 +108,6 @@ bool TryAutoPickHostLevelUpBarrierParticipant(
             continue;
         }
 
-        offer.resolved = true;
         offer.auto_picked = true;
         offer.result_code = LevelUpChoiceResultCode::Accepted;
         g_local_transport.pending_level_up_offer_targets_by_participant.erase(
@@ -107,25 +117,16 @@ bool TryAutoPickHostLevelUpBarrierParticipant(
             participant_id,
             option.option_id,
             &resulting_active);
-        const auto result = BuildLevelUpChoiceResultPacket(
-            offer.offer_id,
-            participant_id,
-            offer.run_nonce,
-            offer.level,
-            offer.experience,
-            option_index,
-            option,
-            LevelUpChoiceResultCode::Accepted,
-            resulting_active,
-            true);
-        const auto endpoints = BuildKnownSendEndpoints();
-        for (const auto& endpoint : endpoints) {
-            SendPacketToEndpoint(result, endpoint);
-        }
-        PublishLevelUpChoiceResultRuntimeInfo(result, now_ms);
-        MarkHostLevelUpBarrierParticipantResolved(result, true, now_ms);
+        barrier_participant->option_index = option_index;
+        barrier_participant->option_id = option.option_id;
+        barrier_participant->apply_count = option.apply_count;
+        barrier_participant->resulting_active = resulting_active;
+        barrier_participant->auto_picked = true;
+        AdvanceHostLevelUpBarrierRevision();
+        BroadcastHostLevelUpBarrierState(now_ms, true);
+        (void)send_remote_auto_pick_result();
         Log(
-            "Multiplayer level-up timeout auto-picked remote option. "
+            "Multiplayer level-up timeout forced remote option; waiting for native picker confirmation. "
             "barrier_id=" +
             std::to_string(
                 g_local_transport.host_level_up_barrier.barrier_id) +

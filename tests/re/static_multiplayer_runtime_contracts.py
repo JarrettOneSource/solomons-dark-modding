@@ -227,44 +227,47 @@ def test_native_potion_pickup_converges_into_stock_inventory() -> str:
     )
 
 
-def test_local_run_cast_prime_hydrates_actor_owned_visual_lanes() -> str:
-    constants = _read(
-        "SolomonDarkModLoader/src/mod_loader_gameplay/core/gameplay_constants.inl"
-    )
-    prime = _read(
-        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+def test_native_local_player_keeps_stock_input_and_equipment_ownership() -> str:
+    removed_prime = (
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/"
         "standalone_materialization_local_player_cast_state.inl"
+    )
+    actor_tick = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "actor_tick/player_actor_tick_hook.inl"
+    )
+    materialization = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization.inl"
+    )
+    declarations = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/core/"
+        "internal_forward_declarations.inl"
     )
     getters = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"
     )
     verifier = _read("tools/verify_multiplayer_player_visibility.py")
 
-    assert "kStandaloneWizardHatVisualTypeId = 0x1B5D" in constants
-    assert "kStandaloneWizardRobeVisualTypeId = 0x1B5E" in constants
-    for token in (
-        "bool LocalPlayerRunEquipVisualLanesReady(",
-        "bool EnsureLocalPlayerRunEquipVisualLanes(",
-        "kGameplayVisualSinkPrimaryOffset",
-        "kGameplayVisualSinkSecondaryOffset",
-        "AttachBuiltDescriptorToEquipVisualLane(",
-        "[player-cast-prime] hydrated local run equip visual lanes.",
-        "LocalPlayerRunEquipVisualLanesReady(after.equip_runtime)",
-    ):
-        assert token in prime, f"local player visual hydration lacks: {token}"
-
-    prime_body = prime[prime.index("bool MaybePrimeLocalPlayerRunCastState(") :]
-    _require_in_order(
-        prime_body,
-        "EnsureWizardActorEquipRuntimeHandles(",
-        "EnsureLocalPlayerRunEquipVisualLanes(",
-        "EnsureActorProgressionRuntimeFieldFromHandle(",
+    assert not removed_prime.exists(), (
+        "native local players must not carry the bot cast/equip/control materializer"
     )
+    for text in (actor_tick, materialization, declarations):
+        assert "MaybePrimeLocalPlayerRunCastState" not in text
+    for token in (
+        "EnsureWizardActorEquipRuntimeHandles(",
+        "PrimeGameplaySlotBotSelectionState(",
+        "WireGameplaySlotBotRuntimeHandles(",
+    ):
+        assert token not in actor_tick, f"local actor tick still installs bot state: {token}"
+
     _require_in_order(
         getters,
         "if (state->equip_runtime_state_address != 0)",
         "kActorEquipRuntimeVisualLinkPrimaryOffset",
         "if (resolved_gameplay_address && state->equip_runtime_state_address == 0)",
+        "kGameplayVisualSinkPrimaryOffset",
+        "kGameplayVisualSinkAttachmentOffset",
     )
     for token in (
         "RUN_ENTRY_FORMATION_RELEASE_SECONDS = 5.25",
@@ -275,8 +278,8 @@ def test_local_run_cast_prime_hydrates_actor_owned_visual_lanes() -> str:
         assert token in verifier, f"visibility verifier lacks: {token}"
 
     return (
-        "local run cast priming clones the stock gameplay robe/hat descriptor "
-        "into the actor-owned equip runtime and captures separated hub/run views"
+        "native local players retain stock input/control and gameplay-owned equipment "
+        "sinks while bot materialization stays off their actor tick"
     )
 
 
@@ -614,7 +617,7 @@ def test_meditation_transient_counters_self_repair_to_native_bounds() -> str:
     )
 
 
-def test_level_up_barrier_waits_for_every_player_and_times_out() -> str:
+def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
     protocol = _read(
         "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
     )
@@ -630,6 +633,10 @@ def test_level_up_barrier_waits_for_every_player_and_times_out() -> str:
     choices = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "level_up_packet_sync.inl"
+    )
+    picker = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "level_up_choice_and_picker.inl"
     )
     local_state = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
@@ -657,7 +664,7 @@ def test_level_up_barrier_waits_for_every_player_and_times_out() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 53;",
+        "constexpr std::uint16_t kProtocolVersion = 54;",
         "LevelUpBarrier = 19",
         "struct LevelUpBarrierPacket",
         "kLevelUpChoiceResultFlagAutoPicked",
@@ -700,18 +707,74 @@ def test_level_up_barrier_waits_for_every_player_and_times_out() -> str:
         "ResolveHostSelfLevelUpChoice(",
         "ApplyParticipantSkillChoiceOption(",
         "BuildLevelUpChoiceResultPacket(",
-        "MarkHostLevelUpBarrierParticipantResolved(result, true, now_ms);",
+        "offer.auto_picked = true;",
+        "barrier_participant->auto_picked = true;",
+        "SendPacketToParticipantOrPeers(result, participant_id);",
+        "waiting for native picker confirmation",
     ):
-        assert token in authority, f"timeout auto-pick lacks: {token}"
+        assert token in authority, f"confirmed timeout auto-pick lacks: {token}"
+
+    remote_auto_pick = authority[
+        authority.index("bool TryAutoPickHostLevelUpBarrierParticipant(") :
+        authority.index("void ProcessHostLevelUpBarrier(")
+    ]
+    assert "MarkHostLevelUpBarrierParticipantResolved(" not in remote_auto_pick, (
+        "a forced remote choice must not release the barrier before client confirmation"
+    )
+    assert remote_auto_pick.count(
+        "SendPacketToParticipantOrPeers(result, participant_id);"
+    ) == 2, "forced results must be repeated until the client confirms native cleanup"
+
+    for token in (
+        "CallLevelUpScreenCloseSafe(screen_address, &close_exception)",
+        "native picker close failed; synchronized pause retained",
+        "else if (offer.auto_picked)",
+        "auto_pick_confirmation = true;",
+        "SendPacketToEndpoint(confirmation, from);",
+        "MarkHostLevelUpBarrierParticipantResolved(\n            result,\n            auto_pick_confirmation,",
+    ):
+        assert token in choices, f"forced picker confirmation lacks: {token}"
+    assert choices.count("SendPacketToEndpoint(confirmation, from);") == 2
+    _require_in_order(
+        choices,
+        "else if (offer.auto_picked)",
+        "auto_pick_confirmation = true;",
+        "MarkHostLevelUpBarrierParticipantResolved(",
+    )
 
     choice_handler = choices[
         choices.index("void ApplyLevelUpChoicePacket(") :
         choices.index("void ApplyLevelUpChoiceResultPacket(")
     ]
-    assert choice_handler.count("offer.resolved = true;") == 1, (
-        "only an accepted choice may resolve a barrier participant"
+    assert choice_handler.count("offer.resolved = true;") == 2, (
+        "manual acceptance and confirmed forced acceptance must be the only resolution paths"
     )
-    assert "MarkHostLevelUpBarrierParticipantResolved(result, false, now_ms);" in choices
+    _require_in_order(
+        choice_handler,
+        "} else if (offer.auto_picked)",
+        "result_code = LevelUpChoiceResultCode::Accepted;",
+        "auto_pick_confirmation = true;",
+        "offer.resolved = true;",
+        "} else if (!ApplyParticipantSkillChoiceOption(",
+        "result_code = LevelUpChoiceResultCode::Accepted;",
+        "offer.resolved = true;",
+    )
+
+    for token in (
+        "offer.local_progression_applied &&",
+        "native_picker_local_apply_observed",
+        "if (!offer.local_progression_applied)",
+        "offer.local_progression_applied = true;",
+        "host-self level-up retry does not match the already-applied option",
+    ):
+        assert token in picker, f"host-self picker idempotence lacks: {token}"
+    _require_in_order(
+        picker,
+        "if (!offer.local_progression_applied)",
+        "ApplyLocalPlayerSkillChoiceOption(option, &apply_error)",
+        "offer.local_progression_applied = true;",
+        "ClearLocalLevelUpPickerAfterProgrammaticChoice(",
+    )
 
     assert 'return "Waiting on " + std::to_string(participant_ids.size())' in local_state
     assert 'participant_ids.size() == 1 ? " player" : " players"' in local_state
@@ -734,6 +797,6 @@ def test_level_up_barrier_waits_for_every_player_and_times_out() -> str:
 
     return (
         "the host pauses one revisioned cohort, shows an exact waiting count, "
-        "auto-picks at 60 seconds, and repeatedly broadcasts accepted results "
-        "plus the final resume state"
+        "forces timed-out choices through the connected client's native picker, "
+        "and resumes only after confirmed native cleanup"
     )

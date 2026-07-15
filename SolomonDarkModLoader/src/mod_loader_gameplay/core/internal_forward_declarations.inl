@@ -118,10 +118,6 @@ bool PrimeGameplaySlotBotSelectionState(
     int slot_index,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
     std::string* error_message);
-bool MaybePrimeLocalPlayerRunCastState(
-    uintptr_t gameplay_address,
-    uintptr_t actor_address,
-    std::uint64_t now_ms);
 bool EnsureWizardActorEquipRuntimeHandles(
     uintptr_t actor_address,
     std::string_view context,

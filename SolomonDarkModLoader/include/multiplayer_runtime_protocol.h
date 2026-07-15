@@ -4,7 +4,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 53;
+constexpr std::uint16_t kProtocolVersion = 54;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -157,6 +157,11 @@ enum WorldActorPresentationFlags : std::uint16_t {
     WorldActorPresentationFlagStudentVariantBytes = 1 << 2,
     WorldActorPresentationFlagLocomotionFloats = 1 << 3,
     WorldActorPresentationFlagStudentBookPalette = 1 << 4,
+    WorldActorPresentationFlagNamedHubNpcIdleAnimator = 1 << 5,
+    WorldActorPresentationFlagNamedHubNpcWitchOrbit = 1 << 6,
+    WorldActorPresentationFlagNamedHubNpcPotionMotion = 1 << 7,
+    WorldActorPresentationFlagNamedHubNpcTyranniaPose = 1 << 8,
+    WorldActorPresentationFlagNamedHubNpcTeacherCycle = 1 << 9,
 };
 
 enum WorldSnapshotFlags : std::uint8_t {
@@ -519,6 +524,22 @@ struct StudentBookPaletteEntryPacketState {
     float angular_offset;
 };
 
+struct NamedHubNpcPresentationPacketState {
+    std::uint8_t idle_active;
+    std::uint8_t idle_enabled;
+    std::uint8_t type_state_byte;
+    std::uint8_t reserved = 0;
+    float idle_phase;
+    float idle_frame;
+    float idle_rate;
+    float idle_amplitude;
+    float motion_position;
+    float motion_direction;
+    float render_scale;
+    std::int32_t timer;
+    std::int32_t pose;
+};
+
 struct WorldActorSnapshotPacketState {
     std::uint64_t network_actor_id;
     std::uint32_t native_type_id;
@@ -552,6 +573,7 @@ struct WorldActorSnapshotPacketState {
     std::uint32_t student_book_palette_count;
     StudentBookPaletteEntryPacketState
         student_book_palette[kWorldActorStudentBookPaletteMaxEntries];
+    NamedHubNpcPresentationPacketState named_hub_npc;
 };
 
 struct WorldSnapshotPacket {
@@ -835,8 +857,10 @@ static_assert(sizeof(LevelUpBarrierPacket) == 308,
               "Unexpected level-up barrier packet size");
 static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24,
               "Unexpected Student book palette entry size");
-static_assert(sizeof(WorldActorSnapshotPacketState) == 252, "Unexpected world actor snapshot size");
-static_assert(sizeof(WorldSnapshotPacket) == 16160, "Unexpected world snapshot packet size");
+static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40,
+              "Unexpected named hub NPC presentation size");
+static_assert(sizeof(WorldActorSnapshotPacketState) == 292, "Unexpected world actor snapshot size");
+static_assert(sizeof(WorldSnapshotPacket) == 18720, "Unexpected world snapshot packet size");
 static_assert(sizeof(LootDropSnapshotPacketState) == 72, "Unexpected loot drop snapshot size");
 static_assert(sizeof(LootSnapshotPacket) == 4640, "Unexpected loot snapshot packet size");
 static_assert(sizeof(SpellEffectPacketState) == 124, "Unexpected spell effect packet state size");

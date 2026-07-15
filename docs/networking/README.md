@@ -16,7 +16,7 @@ perform local movement and presentation immediately, then the host or dedicated
 authority accepts, corrects, or rejects the claim. Clients never own canonical
 HP, deaths, drops, XP, or wave state.
 
-Protocol v53 distinguishes automatically observed native enemy-damage claims
+Protocol v54 distinguishes automatically observed native enemy-damage claims
 from explicit damage requests. Native collision callbacks may report damage
 without asserting target-transform authority because their local knockback can
 precede the next world snapshot. The host still validates the participant, run,
@@ -174,7 +174,7 @@ Spacewar playtest flow and the remaining external verification boundary.
   applies a returned choice only if it matches the issued offer. Connected
   non-host clients suppress their local native level-up picker/event and expose
   the active offer through `sd.runtime.get_multiplayer_state()`.
-  Protocol v53 groups every connected participant's offer into one revisioned
+  Protocol v54 groups every connected participant's offer into one revisioned
   host barrier. All peers pause together, resolved players see
   `Waiting on N players`, and no peer resumes until every participant has an
   accepted choice. The host auto-picks the first valid rolled option for any

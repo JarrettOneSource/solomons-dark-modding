@@ -239,7 +239,8 @@ if (-not (Test-X86Dll $packagedSteamApi)) {
 
 $readmeText = [System.IO.File]::ReadAllText($releaseReadmePath).
     Replace("{{VERSION}}", $Version).
-    Replace("{{PROTOCOL_VERSION}}", [string]$protocolVersion)
+    Replace("{{PROTOCOL_VERSION}}", [string]$protocolVersion).
+    Replace("{{SUPPORTED_EXECUTABLE_SHA256}}", $supportedGameHash.ToLowerInvariant())
 Write-Utf8NoBom -Path (Join-Path $packageRoot "README.txt") -Content $readmeText
 Copy-Item $thirdPartyNoticesPath (Join-Path $packageRoot "THIRD-PARTY-NOTICES.txt") -Force
 

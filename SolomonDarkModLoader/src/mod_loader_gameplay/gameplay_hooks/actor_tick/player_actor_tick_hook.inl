@@ -204,13 +204,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         return;
     }
 
-    if (local_player_actor) {
-        (void)MaybePrimeLocalPlayerRunCastState(
-            gameplay_address_for_pump,
-            actor_address,
-            native_tick_now_ms);
-    }
-
     bool standalone_puppet_actor = false;
     bool gameplay_slot_wizard_actor = false;
     bool tracked_actor_native_remote = false;

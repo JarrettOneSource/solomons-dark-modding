@@ -1,6 +1,9 @@
-# Solomon Dark Multiplayer Beta v0.1.0-beta.2
+# Solomon Dark Multiplayer Beta v0.1.0-beta.3
 
-- Fixed the packaged launcher failing with “Build the launcher project first.”
-- Synchronized hub students’ book colors.
+- Restored direct control of the local wizard and returned staff/equipment
+  presentation to the stock game.
+- Fixed forced level-up choices so the connected client applies the choice,
+  closes its native picker, and confirms cleanup before the host resumes play.
+- Synchronized the remaining named hub NPC animation and pose state.
 
 Download the ZIP, extract it, and run `SolomonDarkMultiplayerBeta.exe`.

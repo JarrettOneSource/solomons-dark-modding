@@ -119,7 +119,7 @@ void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
 }
 
 void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSnapshot& actor) {
-    lua_createtable(state, 0, 39);
+    lua_createtable(state, 0, 51);
     lua_pushinteger(state, static_cast<lua_Integer>(actor.network_actor_id));
     lua_setfield(state, -2, "network_actor_id");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.native_type_id));
@@ -170,6 +170,30 @@ void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSna
     lua_setfield(state, -2, "render_selection_byte");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.render_variant_tertiary));
     lua_setfield(state, -2, "render_variant_tertiary");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.named_hub_npc.idle_active));
+    lua_setfield(state, -2, "named_hub_npc_idle_active");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.named_hub_npc.idle_enabled));
+    lua_setfield(state, -2, "named_hub_npc_idle_enabled");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.named_hub_npc.type_state_byte));
+    lua_setfield(state, -2, "named_hub_npc_type_state_byte");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.named_hub_npc.idle_phase));
+    lua_setfield(state, -2, "named_hub_npc_idle_phase");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.named_hub_npc.idle_frame));
+    lua_setfield(state, -2, "named_hub_npc_idle_frame");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.named_hub_npc.idle_rate));
+    lua_setfield(state, -2, "named_hub_npc_idle_rate");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.named_hub_npc.idle_amplitude));
+    lua_setfield(state, -2, "named_hub_npc_idle_amplitude");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.named_hub_npc.motion_position));
+    lua_setfield(state, -2, "named_hub_npc_motion_position");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.named_hub_npc.motion_direction));
+    lua_setfield(state, -2, "named_hub_npc_motion_direction");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.named_hub_npc.render_scale));
+    lua_setfield(state, -2, "named_hub_npc_render_scale");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.named_hub_npc.timer));
+    lua_setfield(state, -2, "named_hub_npc_timer");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.named_hub_npc.pose));
+    lua_setfield(state, -2, "named_hub_npc_pose");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.student_book_palette_count));
     lua_setfield(state, -2, "student_book_palette_count");
     lua_createtable(

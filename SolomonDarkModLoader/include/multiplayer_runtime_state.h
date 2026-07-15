@@ -280,6 +280,21 @@ struct StudentBookPaletteEntryState {
     float angular_offset = 0.0f;
 };
 
+struct NamedHubNpcPresentationState {
+    std::uint8_t idle_active = 0;
+    std::uint8_t idle_enabled = 0;
+    std::uint8_t type_state_byte = 0;
+    float idle_phase = 0.0f;
+    float idle_frame = 0.0f;
+    float idle_rate = 0.0f;
+    float idle_amplitude = 0.0f;
+    float motion_position = 0.0f;
+    float motion_direction = 0.0f;
+    float render_scale = 0.0f;
+    std::int32_t timer = 0;
+    std::int32_t pose = 0;
+};
+
 struct WorldActorSnapshot {
     std::uint64_t network_actor_id = 0;
     std::uint32_t native_type_id = 0;
@@ -317,6 +332,7 @@ struct WorldActorSnapshot {
     std::uint32_t student_book_palette_count = 0;
     std::array<StudentBookPaletteEntryState, kWorldActorStudentBookPaletteMaxEntries>
         student_book_palette = {};
+    NamedHubNpcPresentationState named_hub_npc;
 };
 
 struct WorldSnapshotActorBindingRuntimeInfo {

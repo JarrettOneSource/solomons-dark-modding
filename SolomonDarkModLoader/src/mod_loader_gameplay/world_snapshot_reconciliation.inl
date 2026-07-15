@@ -121,6 +121,7 @@ void CopyWorldActorPresentationState(
     target->student_visual_state = source.student_visual_state;
     target->student_book_palette_count = source.student_book_palette_count;
     target->student_book_palette = source.student_book_palette;
+    target->named_hub_npc = source.named_hub_npc;
 }
 
 bool IsReplicatedHubPhaseAdvancingActorSnapshot(
@@ -894,6 +895,121 @@ bool IsReplicatedHubStudentSnapshot(const multiplayer::WorldActorSnapshot& autho
     return authoritative_actor.native_type_id == 0x138A;
 }
 
+bool IsReplicatedNamedHubNpcSnapshot(
+    const multiplayer::WorldActorSnapshot& authoritative_actor) {
+    switch (authoritative_actor.native_type_id) {
+    case 0x1389:
+    case 0x138B:
+    case 0x138C:
+    case 0x138D:
+    case 0x138F:
+    case 0x1390:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool IsSaneReplicatedNamedHubNpcFloat(float value) {
+    constexpr float kMaxMagnitude = 65536.0f;
+    return std::isfinite(value) && value >= -kMaxMagnitude && value <= kMaxMagnitude;
+}
+
+bool ApplyReplicatedNamedHubNpcPresentation(
+    uintptr_t actor_address,
+    const multiplayer::WorldActorSnapshot& authoritative_actor) {
+    if (actor_address == 0 ||
+        !IsReplicatedNamedHubNpcSnapshot(authoritative_actor) ||
+        kNamedHubNpcIdleAnimationBlockOffset == 0) {
+        return false;
+    }
+
+    constexpr std::size_t kActiveOffset = 0x00;
+    constexpr std::size_t kPhaseOffset = 0x04;
+    constexpr std::size_t kFrameOffset = 0x08;
+    constexpr std::size_t kRateOffset = 0x0C;
+    constexpr std::size_t kAmplitudeOffset = 0x10;
+    constexpr std::size_t kEnabledOffset = 0x14;
+    const auto idle_block = actor_address + kNamedHubNpcIdleAnimationBlockOffset;
+    const auto& state = authoritative_actor.named_hub_npc;
+    auto& memory = ProcessMemory::Instance();
+    bool wrote = false;
+
+    const bool idle_animator_type =
+        authoritative_actor.native_type_id == 0x138B ||
+        authoritative_actor.native_type_id == 0x138C ||
+        authoritative_actor.native_type_id == 0x138D ||
+        authoritative_actor.native_type_id == 0x138F;
+    if ((authoritative_actor.presentation_flags &
+         multiplayer::WorldActorPresentationFlagNamedHubNpcIdleAnimator) != 0 &&
+        idle_animator_type &&
+        state.idle_active <= 1 &&
+        state.idle_enabled <= 1 &&
+        IsSaneReplicatedNamedHubNpcFloat(state.idle_phase) &&
+        IsSaneReplicatedNamedHubNpcFloat(state.idle_frame) &&
+        IsSaneReplicatedNamedHubNpcFloat(state.idle_rate) &&
+        IsSaneReplicatedNamedHubNpcFloat(state.idle_amplitude)) {
+        wrote = memory.TryWriteValue(idle_block + kActiveOffset, state.idle_active) || wrote;
+        wrote = memory.TryWriteValue(idle_block + kPhaseOffset, state.idle_phase) || wrote;
+        wrote = memory.TryWriteValue(idle_block + kFrameOffset, state.idle_frame) || wrote;
+        wrote = memory.TryWriteValue(idle_block + kRateOffset, state.idle_rate) || wrote;
+        wrote = memory.TryWriteValue(idle_block + kAmplitudeOffset, state.idle_amplitude) || wrote;
+        wrote = memory.TryWriteValue(idle_block + kEnabledOffset, state.idle_enabled) || wrote;
+    }
+
+    if ((authoritative_actor.presentation_flags &
+         multiplayer::WorldActorPresentationFlagNamedHubNpcWitchOrbit) != 0 &&
+        authoritative_actor.native_type_id == 0x1389 &&
+        IsSaneReplicatedNamedHubNpcFloat(state.idle_frame) &&
+        IsSaneReplicatedNamedHubNpcFloat(state.idle_rate)) {
+        wrote = memory.TryWriteValue(idle_block + kFrameOffset, state.idle_frame) || wrote;
+        wrote = memory.TryWriteValue(idle_block + kRateOffset, state.idle_rate) || wrote;
+    }
+
+    if (kNamedHubNpcTypeSpecificStateBlockOffset == 0) {
+        return wrote;
+    }
+    const auto type_block = actor_address + kNamedHubNpcTypeSpecificStateBlockOffset;
+
+    if ((authoritative_actor.presentation_flags &
+         multiplayer::WorldActorPresentationFlagNamedHubNpcPotionMotion) != 0 &&
+        authoritative_actor.native_type_id == 0x138C &&
+        IsSaneReplicatedNamedHubNpcFloat(state.motion_position) &&
+        IsSaneReplicatedNamedHubNpcFloat(state.motion_direction) &&
+        state.timer >= 0 &&
+        state.timer <= 100000) {
+        wrote = memory.TryWriteValue(type_block + 0x00, state.motion_position) || wrote;
+        wrote = memory.TryWriteValue(type_block + 0x04, state.motion_direction) || wrote;
+        wrote = memory.TryWriteValue(type_block + 0x08, state.timer) || wrote;
+    }
+
+    if ((authoritative_actor.presentation_flags &
+         multiplayer::WorldActorPresentationFlagNamedHubNpcTyranniaPose) != 0 &&
+        authoritative_actor.native_type_id == 0x138F &&
+        state.timer >= -1 &&
+        state.timer <= 100000 &&
+        state.pose >= 0 &&
+        state.pose <= 2 &&
+        IsSaneReplicatedNamedHubNpcFloat(state.render_scale)) {
+        wrote = memory.TryWriteValue(type_block + 0x00, state.timer) || wrote;
+        wrote = memory.TryWriteValue(type_block + 0x04, state.pose) || wrote;
+        wrote = memory.TryWriteValue(type_block + 0x08, state.render_scale) || wrote;
+    }
+
+    if ((authoritative_actor.presentation_flags &
+         multiplayer::WorldActorPresentationFlagNamedHubNpcTeacherCycle) != 0 &&
+        authoritative_actor.native_type_id == 0x1390 &&
+        state.type_state_byte <= 1 &&
+        IsSaneReplicatedNamedHubNpcFloat(state.idle_phase) &&
+        IsSaneReplicatedNamedHubNpcFloat(state.idle_frame)) {
+        wrote = memory.TryWriteValue(idle_block + kPhaseOffset, state.idle_phase) || wrote;
+        wrote = memory.TryWriteValue(idle_block + kFrameOffset, state.idle_frame) || wrote;
+        wrote = memory.TryWriteValue(type_block, state.type_state_byte) || wrote;
+    }
+
+    return wrote;
+}
+
 bool ApplyReplicatedWorldActorPresentation(
     uintptr_t actor_address,
     const multiplayer::WorldActorSnapshot& authoritative_actor) {
@@ -910,6 +1026,13 @@ bool ApplyReplicatedWorldActorPresentation(
             actor_address,
             kActorAnimationDriveStateByteOffset,
             authoritative_actor.anim_drive_state_word) || wrote;
+    }
+
+    if (IsReplicatedNamedHubNpcSnapshot(authoritative_actor)) {
+        wrote = ApplyReplicatedNamedHubNpcPresentation(
+            actor_address,
+            authoritative_actor) || wrote;
+        return wrote;
     }
 
     if (!IsReplicatedHubStudentSnapshot(authoritative_actor)) {

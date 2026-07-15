@@ -393,6 +393,143 @@ bool IsHubStudentActorType(std::uint32_t native_type_id) {
     return native_type_id == 0x138A;
 }
 
+bool IsNamedHubNpcActorType(std::uint32_t native_type_id) {
+    switch (native_type_id) {
+    case 0x1389: // PerkWitch
+    case 0x138B: // Annalist
+    case 0x138C: // PotionGuy
+    case 0x138D: // ItemsGuy
+    case 0x138F: // Tyrannia
+    case 0x1390: // Teacher
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool IsSaneNamedHubNpcPresentationFloat(float value) {
+    constexpr float kMaxMagnitude = 65536.0f;
+    return std::isfinite(value) && value >= -kMaxMagnitude && value <= kMaxMagnitude;
+}
+
+bool PopulateNamedHubNpcIdleAnimatorSnapshot(
+    uintptr_t actor_address,
+    WorldActorSnapshotPacketState* snapshot) {
+    if (actor_address == 0 ||
+        snapshot == nullptr ||
+        kNamedHubNpcIdleAnimationBlockOffset == 0) {
+        return false;
+    }
+
+    constexpr std::size_t kActiveOffset = 0x00;
+    constexpr std::size_t kPhaseOffset = 0x04;
+    constexpr std::size_t kFrameOffset = 0x08;
+    constexpr std::size_t kRateOffset = 0x0C;
+    constexpr std::size_t kAmplitudeOffset = 0x10;
+    constexpr std::size_t kEnabledOffset = 0x14;
+    const auto block = actor_address + kNamedHubNpcIdleAnimationBlockOffset;
+    auto& state = snapshot->named_hub_npc;
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.TryReadValue(block + kActiveOffset, &state.idle_active) ||
+        !memory.TryReadValue(block + kEnabledOffset, &state.idle_enabled) ||
+        !memory.TryReadValue(block + kPhaseOffset, &state.idle_phase) ||
+        !memory.TryReadValue(block + kFrameOffset, &state.idle_frame) ||
+        !memory.TryReadValue(block + kRateOffset, &state.idle_rate) ||
+        !memory.TryReadValue(block + kAmplitudeOffset, &state.idle_amplitude) ||
+        state.idle_active > 1 ||
+        state.idle_enabled > 1 ||
+        !IsSaneNamedHubNpcPresentationFloat(state.idle_phase) ||
+        !IsSaneNamedHubNpcPresentationFloat(state.idle_frame) ||
+        !IsSaneNamedHubNpcPresentationFloat(state.idle_rate) ||
+        !IsSaneNamedHubNpcPresentationFloat(state.idle_amplitude)) {
+        return false;
+    }
+
+    snapshot->presentation_flags |= WorldActorPresentationFlagNamedHubNpcIdleAnimator;
+    return true;
+}
+
+void PopulateNamedHubNpcPresentationSnapshot(
+    uintptr_t actor_address,
+    std::uint32_t native_type_id,
+    WorldActorSnapshotPacketState* snapshot) {
+    if (actor_address == 0 ||
+        snapshot == nullptr ||
+        !IsNamedHubNpcActorType(native_type_id) ||
+        kNamedHubNpcIdleAnimationBlockOffset == 0) {
+        return;
+    }
+
+    constexpr std::size_t kPhaseOffset = 0x04;
+    constexpr std::size_t kFrameOffset = 0x08;
+    constexpr std::size_t kRateOffset = 0x0C;
+    const auto idle_block = actor_address + kNamedHubNpcIdleAnimationBlockOffset;
+    auto& state = snapshot->named_hub_npc;
+    auto& memory = ProcessMemory::Instance();
+
+    switch (native_type_id) {
+    case 0x1389: // PerkWitch: +0x144 angle/frame and +0x148 angular rate.
+        if (memory.TryReadValue(idle_block + kFrameOffset, &state.idle_frame) &&
+            memory.TryReadValue(idle_block + kRateOffset, &state.idle_rate) &&
+            IsSaneNamedHubNpcPresentationFloat(state.idle_frame) &&
+            IsSaneNamedHubNpcPresentationFloat(state.idle_rate)) {
+            snapshot->presentation_flags |= WorldActorPresentationFlagNamedHubNpcWitchOrbit;
+        }
+        return;
+    case 0x138B: // Annalist
+    case 0x138D: // ItemsGuy
+        (void)PopulateNamedHubNpcIdleAnimatorSnapshot(actor_address, snapshot);
+        return;
+    case 0x138C: { // PotionGuy
+        (void)PopulateNamedHubNpcIdleAnimatorSnapshot(actor_address, snapshot);
+        if (kNamedHubNpcTypeSpecificStateBlockOffset == 0) {
+            return;
+        }
+        const auto type_block = actor_address + kNamedHubNpcTypeSpecificStateBlockOffset;
+        if (memory.TryReadValue(type_block + 0x00, &state.motion_position) &&
+            memory.TryReadValue(type_block + 0x04, &state.motion_direction) &&
+            memory.TryReadValue(type_block + 0x08, &state.timer) &&
+            IsSaneNamedHubNpcPresentationFloat(state.motion_position) &&
+            IsSaneNamedHubNpcPresentationFloat(state.motion_direction) &&
+            state.timer >= 0 && state.timer <= 100000) {
+            snapshot->presentation_flags |= WorldActorPresentationFlagNamedHubNpcPotionMotion;
+        }
+        return;
+    }
+    case 0x138F: { // Tyrannia
+        (void)PopulateNamedHubNpcIdleAnimatorSnapshot(actor_address, snapshot);
+        if (kNamedHubNpcTypeSpecificStateBlockOffset == 0) {
+            return;
+        }
+        const auto type_block = actor_address + kNamedHubNpcTypeSpecificStateBlockOffset;
+        if (memory.TryReadValue(type_block + 0x00, &state.timer) &&
+            memory.TryReadValue(type_block + 0x04, &state.pose) &&
+            memory.TryReadValue(type_block + 0x08, &state.render_scale) &&
+            state.timer >= -1 && state.timer <= 100000 &&
+            state.pose >= 0 && state.pose <= 2 &&
+            IsSaneNamedHubNpcPresentationFloat(state.render_scale)) {
+            snapshot->presentation_flags |= WorldActorPresentationFlagNamedHubNpcTyranniaPose;
+        }
+        return;
+    }
+    case 0x1390: // Teacher: dedicated cycle plus one-shot effect latch.
+        if (kNamedHubNpcTypeSpecificStateBlockOffset != 0 &&
+            memory.TryReadValue(idle_block + kPhaseOffset, &state.idle_phase) &&
+            memory.TryReadValue(idle_block + kFrameOffset, &state.idle_frame) &&
+            memory.TryReadValue(
+                actor_address + kNamedHubNpcTypeSpecificStateBlockOffset,
+                &state.type_state_byte) &&
+            IsSaneNamedHubNpcPresentationFloat(state.idle_phase) &&
+            IsSaneNamedHubNpcPresentationFloat(state.idle_frame) &&
+            state.type_state_byte <= 1) {
+            snapshot->presentation_flags |= WorldActorPresentationFlagNamedHubNpcTeacherCycle;
+        }
+        return;
+    default:
+        return;
+    }
+}
+
 bool IsSharedHubFactoryActorType(std::uint32_t native_type_id) {
     switch (native_type_id) {
     case 0x1389:
@@ -452,6 +589,11 @@ void PopulateWorldActorPresentationSnapshot(
             snapshot->presentation_flags |= WorldActorPresentationFlagAnimationDriveWord;
             snapshot->anim_drive_state_word = drive_word;
         }
+    }
+
+    if (scene_kind == ParticipantSceneIntentKind::SharedHub &&
+        IsNamedHubNpcActorType(native_type_id)) {
+        PopulateNamedHubNpcPresentationSnapshot(actor_address, native_type_id, snapshot);
     }
 
     if (scene_kind != ParticipantSceneIntentKind::SharedHub ||

@@ -109,6 +109,8 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "actor_move_step_scale", kActorMoveStepScaleOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_cast_diagnostic_context", kActorCastDiagnosticContextOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_animation_drive_state_byte", kActorAnimationDriveStateByteOffset),
+        SDMOD_SIZE("gameplay.offsets", "named_hub_npc_idle_animation_block", kNamedHubNpcIdleAnimationBlockOffset),
+        SDMOD_SIZE("gameplay.offsets", "named_hub_npc_type_specific_state_block", kNamedHubNpcTypeSpecificStateBlockOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_spell_target_group_byte", kActorSpellTargetGroupByteOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_spell_target_slot_short", kActorSpellTargetSlotShortOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_animation_move_duration_ticks", kActorAnimationMoveDurationTicksOffset),

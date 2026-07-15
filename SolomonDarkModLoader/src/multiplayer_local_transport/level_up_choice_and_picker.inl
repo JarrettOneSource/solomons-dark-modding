@@ -47,8 +47,6 @@ bool TryApplyLocalProgrammaticLevelUpChoiceThroughNativePicker(
         return fail("programmatic local skill choice apply failed: " + apply_error);
     }
 
-    DWORD close_exception = 0;
-    const bool close_ok = CallLevelUpScreenCloseSafe(screen_address, &close_exception);
     const bool cleanup_ok = ClearLocalLevelUpPickerAfterProgrammaticChoice(
         offer_id,
         option_index,
@@ -61,9 +59,10 @@ bool TryApplyLocalProgrammaticLevelUpChoiceThroughNativePicker(
         " option_index=" + std::to_string(option_index) +
         " option_id=" + std::to_string(selected_option.option_id) +
         " screen=" + HexString(screen_address) +
-        " close_ok=" + std::to_string(close_ok ? 1 : 0) +
-        " close_seh=" + HexString(static_cast<uintptr_t>(close_exception)) +
         " cleanup_ok=" + std::to_string(cleanup_ok ? 1 : 0));
+    if (!cleanup_ok) {
+        return fail("programmatic native level-up picker did not close cleanly");
+    }
     return true;
 }
 
@@ -72,7 +71,8 @@ bool ResolveHostSelfLevelUpChoice(
     std::int32_t resolved_option_index,
     const LevelUpChoiceOptionState& selected_option,
     std::string* error_message,
-    bool auto_picked = false) {
+    bool auto_picked = false,
+    bool native_picker_local_apply_observed = false) {
     auto fail = [&](std::string message) {
         if (error_message != nullptr) {
             *error_message = std::move(message);
@@ -87,41 +87,53 @@ bool ResolveHostSelfLevelUpChoice(
         return fail("host-self level-up offer is missing, mismatched, or already resolved");
     }
 
-    // The host applies its own skill choice straight to the local player
-    // progression. Unlike the client path this does not require a presented
-    // native picker, so it is robust regardless of whether a controlled picker
-    // has been materialized yet -- never a silent no-op.
+    auto& offer = issued->second;
+    if (offer.local_progression_applied &&
+        (offer.local_progression_option_index != resolved_option_index ||
+         offer.local_progression_option_id != selected_option.option_id)) {
+        return fail("host-self level-up retry does not match the already-applied option");
+    }
+
+    if (native_picker_local_apply_observed) {
+        offer.local_progression_applied = true;
+        offer.local_progression_option_index = resolved_option_index;
+        offer.local_progression_option_id = selected_option.option_id;
+    }
+
+    // A stock picker selection has already mutated progression. Programmatic
+    // choices apply exactly once and record that fact before attempting UI
+    // cleanup, so a failed close can be retried without granting the skill
+    // again.
     BotSkillChoiceOption option;
     option.option_id = selected_option.option_id;
     option.apply_count = selected_option.apply_count;
 
-    std::string apply_error;
-    if (!ApplyLocalPlayerSkillChoiceOption(option, &apply_error)) {
-        return fail("host-self level-up apply failed: " + apply_error);
+    if (!offer.local_progression_applied) {
+        std::string apply_error;
+        if (!ApplyLocalPlayerSkillChoiceOption(option, &apply_error)) {
+            return fail("host-self level-up apply failed: " + apply_error);
+        }
+        offer.local_progression_applied = true;
+        offer.local_progression_option_index = resolved_option_index;
+        offer.local_progression_option_id = selected_option.option_id;
     }
 
-    // Close and clear any controlled picker that was presented for a human
-    // host; a no-op when the offer is resolved before a picker materializes.
-    SDModPlayerState player_state;
-    if (TryGetPlayerState(&player_state) &&
-        player_state.valid &&
-        player_state.progression_address != 0 &&
-        kProgressionLocalSkillPickerScreenOffset != 0) {
-        uintptr_t screen_address = 0;
-        if (ProcessMemory::Instance().TryReadField(
-                player_state.progression_address,
-                kProgressionLocalSkillPickerScreenOffset,
-                &screen_address) &&
-            screen_address != 0) {
-            DWORD close_exception = 0;
-            (void)CallLevelUpScreenCloseSafe(screen_address, &close_exception);
+    UpdateRuntimeState([&](RuntimeState& state) {
+        if (state.active_level_up_offer.valid &&
+            state.active_level_up_offer.offer_id == offer_id) {
+            state.active_level_up_offer.native_picker_local_apply_observed = true;
         }
-    }
-    (void)ClearLocalLevelUpPickerAfterProgrammaticChoice(
+    });
+
+    // Close before clearing the progression pointer. The synchronized barrier
+    // must never resume while a native picker remains visible.
+    if (!ClearLocalLevelUpPickerAfterProgrammaticChoice(
         offer_id,
         resolved_option_index,
         selected_option.option_id,
-        false);
+        false)) {
+        return fail("host-self native level-up picker did not close cleanly");
+    }
 
     // The host is its own authority: resolve the issued offer so the
     // synchronized level-up pause clears for both peers, and retire the active
@@ -251,7 +263,9 @@ bool QueueLocalLevelUpChoiceInternal(
             offer_id,
             resolved_option_index,
             selected_option,
-            error_message);
+            error_message,
+            false,
+            native_picker_local_apply_observed);
     }
 
     bool local_native_apply_observed = native_picker_local_apply_observed;

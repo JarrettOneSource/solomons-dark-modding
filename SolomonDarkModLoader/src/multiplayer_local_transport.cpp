@@ -357,8 +357,11 @@ struct IssuedLevelUpOffer {
     std::vector<BotSkillChoiceOption> options;
     std::uint64_t barrier_id = 0;
     std::uint64_t issued_ms = 0;
+    std::int32_t local_progression_option_index = -1;
+    std::int32_t local_progression_option_id = -1;
     bool resolved = false;
     bool auto_picked = false;
+    bool local_progression_applied = false;
     LevelUpChoiceResultCode result_code = LevelUpChoiceResultCode::Rejected;
 };
 
@@ -370,6 +373,7 @@ struct HostLevelUpBarrierParticipant {
     std::int32_t option_id = -1;
     std::int32_t apply_count = 0;
     std::uint16_t resulting_active = 0;
+    std::uint64_t last_auto_pick_result_ms = 0;
     bool resolved = false;
     bool auto_picked = false;
     bool disconnected = false;
@@ -764,6 +768,36 @@ void MarkHostLevelUpBarrierParticipantResolved(
     const LevelUpChoiceResultPacket& result,
     bool auto_picked,
     std::uint64_t now_ms);
+HostLevelUpBarrierParticipant* FindHostLevelUpBarrierParticipant(
+    std::uint64_t participant_id);
+bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (screen_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t vtable_address = 0;
+    uintptr_t close_address = 0;
+    if (!memory.TryReadValue(screen_address, &vtable_address) ||
+        vtable_address == 0 ||
+        !memory.TryReadValue(
+            vtable_address + kLevelUpScreenCloseVtableOffset,
+            &close_address) ||
+        close_address == 0) {
+        return false;
+    }
+
+    auto* close_screen = reinterpret_cast<NativeLevelUpScreenCloseFn>(close_address);
+    __try {
+        close_screen(reinterpret_cast<void*>(screen_address));
+        return true;
+    } __except (CaptureLocalTransportSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
 
 #include "multiplayer_local_transport/skill_config_and_packet_helpers.inl"
 #include "multiplayer_local_transport/run_exit_sync.inl"

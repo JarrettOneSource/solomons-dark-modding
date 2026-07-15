@@ -22,8 +22,8 @@ from typing import Callable
 from static_multiplayer_runtime_contracts import (
     test_explicit_blank_boneyard_removes_native_scenery_and_collision,
     test_host_run_exit_is_authoritative_and_self_correcting,
-    test_level_up_barrier_waits_for_every_player_and_times_out,
-    test_local_run_cast_prime_hydrates_actor_owned_visual_lanes,
+    test_level_up_barrier_waits_for_forced_picker_confirmation,
+    test_native_local_player_keeps_stock_input_and_equipment_ownership,
     test_lua_exec_timeout_cancels_pending_work,
     test_meditation_transient_counters_self_repair_to_native_bounds,
     test_native_potion_pickup_converges_into_stock_inventory,
@@ -112,9 +112,6 @@ PLAYER_HEALTH_DEATH_SYNC_VERIFIER = ROOT / "tools/verify_player_health_death_syn
 REAL_INPUT_SPELL_CAST_SYNC_VERIFIER = ROOT / "tools/verify_real_input_spell_cast_sync.py"
 PRIMARY_KILL_STRESS_VERIFIER = ROOT / "tools/verify_multiplayer_primary_kill_stress.py"
 TARGETED_SPELL_MATRIX_VERIFIER = ROOT / "tools/verify_multiplayer_targeted_spell_matrix.py"
-LOCAL_PLAYER_CAST_STATE = (
-    ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_local_player_cast_state.inl"
-)
 RUN_LIFECYCLE_SPELL_CAST_HOOKS = (
     ROOT / "SolomonDarkModLoader/src/run_lifecycle/spell_cast_hooks.inl"
 )
@@ -1735,26 +1732,9 @@ def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
     return "primary kill stress verifier primes suppressed native spawners on both instances, then uses gameplay-pumped manual frozen spawns"
 
 
-def test_local_player_cast_prime_requires_equip_runtime_ready() -> str:
-    prime_text = read_text(LOCAL_PLAYER_CAST_STATE)
+def test_bot_equip_materialization_stays_scoped_to_bot_creation() -> str:
     resources_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_wizard_resources.inl")
     slot_creation_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_slot_bot_creation.inl")
-    required_tokens = (
-        "after_handle_refresh.equip_runtime == 0",
-        "EnsureWizardActorEquipRuntimeHandles(",
-        "\"local_player_run_cast_prime\"",
-        "[player-cast-prime] equip runtime repair failed.",
-        "after_equip_repair.equip_runtime == 0",
-        "[player-cast-prime] deferred until equip runtime is ready.",
-        "after.equip_runtime != 0",
-        "equip_runtime_ready",
-        "equip_inner",
-    )
-    missing = [token for token in required_tokens if token not in prime_text]
-    if missing:
-        raise StaticReTestFailure(
-            "local player cast prime is missing equip-runtime readiness guard token(s): " +
-            ", ".join(missing))
     shared_required_tokens = (
         (resources_text, "generic equip repair helper", "bool EnsureWizardActorEquipRuntimeHandles("),
         (resources_text, "generic equip repair helper", "CreateStandaloneWizardEquipWrapper("),
@@ -1769,9 +1749,12 @@ def test_local_player_cast_prime_requires_equip_runtime_ready() -> str:
     ]
     if shared_missing:
         raise StaticReTestFailure(
-            "local player cast prime is missing shared equip repair helper token(s): " +
+            "bot equip materialization is missing required token(s): " +
             ", ".join(shared_missing))
-    return "local player cast prime repairs missing wizard equip handles before requiring equip runtime"
+    if "local_player_run_cast_prime" in resources_text + slot_creation_text:
+        raise StaticReTestFailure(
+            "bot equip materialization still exposes the removed local-player path")
+    return "wizard equip materialization remains available to bot creation without a local-player owner"
 
 
 def test_hub_start_testrun_uses_gameplay_region_switch() -> str:
@@ -2110,7 +2093,7 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
             "Lightning Chaining verifier still competes with the permanent target hook")
 
     required_network_tokens = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 53;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 54;"),
         (protocol_text, "AirChainSnapshot = 15"),
         (protocol_text, "kAirChainSnapshotMaxTargets = 8"),
         (protocol_text, "struct AirChainTargetPacketState"),
@@ -5172,7 +5155,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 53;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 54;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
@@ -5281,8 +5264,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "std::uint64_t authority_participant_id;"),
         (protocol_text, "static_assert(sizeof(StatePacket) == 3848"),
         (protocol_text, "static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24"),
-        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 252"),
-        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 16160"),
+        (protocol_text, "static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40"),
+        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 292"),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 18720"),
         (protocol_text, "static_assert(sizeof(LootDropSnapshotPacketState) == 72"),
         (protocol_text, "static_assert(sizeof(LootSnapshotPacket) == 4640"),
         (protocol_text, "static_assert(sizeof(LootPickupRequestPacket) == 56"),
@@ -5484,7 +5468,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "IsLevelUpOfferMaterializationPendingError"),
         (transport_text, "Multiplayer level-up offer deferred; participant progression not materialized"),
         (transport_text, "ClearLocalLevelUpPickerAfterProgrammaticChoice"),
-        (transport_text, "Multiplayer level-up native picker cleared after programmatic accepted choice"),
+        (transport_text, "Multiplayer level-up native picker closed and cleared after programmatic accepted choice"),
         (transport_text, "kProgressionLevelUpPickerUiFlagOffset"),
         (transport_text, "kProgressionLevelUpTemporaryPickerObjectOffset"),
         (transport_text, "kProgressionLevelUpTemporaryPickerValueOffset"),
@@ -6305,8 +6289,8 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 53;"),
-        (compatibility_materializer_text, "CurrentProtocolVersion = 53;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 54;"),
+        (compatibility_materializer_text, "CurrentProtocolVersion = 54;"),
         (protocol_text, "SessionCapabilityHostAuthority"),
         (protocol_text, "struct SessionHelloPacket"),
         (protocol_text, "struct SessionHelloAckPacket"),
@@ -6396,7 +6380,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
             "WPF launcher still waits for inherited game pipe EOF instead of the CLI JSON response"
         )
     return (
-        "Steam friends-only lobby, authenticated v53 handshake, idle keepalive, owner-checked gameplay "
+        "Steam friends-only lobby, authenticated v54 handshake, idle keepalive, owner-checked gameplay "
         "routing, Spacewar launch, x86 runtime staging, and launch-token-bound lobby "
         "status reporting are wired"
     )
@@ -8898,8 +8882,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_explicit_blank_boneyard_removes_native_scenery_and_collision,
     ),
     (
-        "local run cast prime hydrates actor-owned visual lanes",
-        test_local_run_cast_prime_hydrates_actor_owned_visual_lanes,
+        "native local player keeps stock input and equipment ownership",
+        test_native_local_player_keeps_stock_input_and_equipment_ownership,
     ),
     (
         "host run exit is authoritative and self-correcting",
@@ -8926,8 +8910,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_meditation_transient_counters_self_repair_to_native_bounds,
     ),
     (
-        "level-up barrier waits for every player and times out",
-        test_level_up_barrier_waits_for_every_player_and_times_out,
+        "level-up barrier waits for forced picker confirmation",
+        test_level_up_barrier_waits_for_forced_picker_confirmation,
     ),
     ("primary mana resolver uses native live spell stats", test_primary_mana_resolver_uses_native_live_spell_stats),
     ("Earth boulder damage uses native live spell stats", test_earth_boulder_damage_uses_native_live_spell_stats),
@@ -8951,7 +8935,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("primary build skill mapping has single runtime owner", test_primary_build_skill_mapping_has_single_runtime_owner),
     ("gameplay selection writes preserve stock run-placement vector", test_gameplay_selection_writes_do_not_corrupt_stock_run_placement_vector),
     ("primary kill stress verifier uses manual spawns without waves", test_primary_kill_stress_verifier_uses_manual_spawns_without_waves),
-    ("local player cast prime requires equip runtime ready", test_local_player_cast_prime_requires_equip_runtime_ready),
+    ("bot equip materialization stays scoped to bot creation", test_bot_equip_materialization_stays_scoped_to_bot_creation),
     (
         "memory-region cache refreshes newly committed native objects",
         test_memory_region_cache_refreshes_newly_committed_native_objects,

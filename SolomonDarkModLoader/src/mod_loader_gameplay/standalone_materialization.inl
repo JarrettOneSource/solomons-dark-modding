@@ -3,7 +3,6 @@
 #include "standalone_materialization_wizard_clone_source.inl"
 #include "standalone_materialization_equip_visual_lanes.inl"
 #include "standalone_materialization_selection_priming.inl"
-#include "standalone_materialization_local_player_cast_state.inl"
 #include "standalone_materialization_wizard_resources.inl"
 #include "standalone_materialization_slot_bot_creation.inl"
 #include "standalone_materialization_slot_bot_destruction.inl"

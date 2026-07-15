@@ -11,6 +11,8 @@ QUICK START
 2. Start Steam and sign in. Friends must already be friends on Steam.
 3. Double-click SolomonDarkMultiplayerBeta.exe.
 4. Choose the folder containing the original SolomonDark.exe when prompted.
+   The supported executable is Solomon's Dark 0.72.5 with SHA-256:
+   {{SUPPORTED_EXECUTABLE_SHA256}}
 5. The joining player clicks Join Friend FIRST and leaves the lobby ID empty.
 6. After the joiner's game is open and waiting, the host clicks
    Host & Invite Friends.
@@ -40,7 +42,8 @@ IMPORTANT BETA NOTES
   powerups, and shop/trader ownership are still incomplete.
 - Level-up cohorts pause together. After choosing, the UI shows Waiting on N
   players. The host resumes everyone after all choices arrive, or auto-picks
-  for an idle player after 60 seconds.
+  for an idle player after 60 seconds. A forced choice is applied and closed on
+  that player's client before the synchronized pause ends.
 - This is a beta. Back up any save/profile data you care about. The launcher
   uses an isolated mod profile and disposable staged game copy, but bugs remain
   possible.
