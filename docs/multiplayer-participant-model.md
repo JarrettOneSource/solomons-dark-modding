@@ -145,7 +145,7 @@ host offer through `sd.runtime.get_multiplayer_state()`, and submits a selected
 option through `sd.runtime.choose_level_up_option(...)`. The host accepts only an
 option index/id that exists in the issued offer, applies it to that participant's
 materialized progression, and returns `LevelUpChoiceResult` for the client's
-local progression to apply. Protocol v52 wraps those private offers in one
+local progression to apply. Protocol v53 wraps those private offers in one
 host-authored cohort barrier: every participant pauses together, accepted
 choosers wait on the remaining count, the host auto-picks unresolved offers at
 60 seconds, and repeated final result/resume packets keep every peer on the same

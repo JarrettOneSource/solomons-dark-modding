@@ -237,9 +237,9 @@ if (-not (Test-X86Dll $packagedSteamApi)) {
     throw "Packaged Steam API is not a valid x86 DLL: $packagedSteamApi"
 }
 
-$readmeText = [System.IO.File]::ReadAllText($releaseReadmePath).Replace(
-    "0.1.0-beta.1",
-    $Version)
+$readmeText = [System.IO.File]::ReadAllText($releaseReadmePath).
+    Replace("{{VERSION}}", $Version).
+    Replace("{{PROTOCOL_VERSION}}", [string]$protocolVersion)
 Write-Utf8NoBom -Path (Join-Path $packageRoot "README.txt") -Content $readmeText
 Copy-Item $thirdPartyNoticesPath (Join-Path $packageRoot "THIRD-PARTY-NOTICES.txt") -Force
 

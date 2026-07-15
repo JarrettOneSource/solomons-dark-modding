@@ -116,6 +116,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "actor_hub_visual_source_profile", kActorHubVisualSourceProfileOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_hub_visual_source_aux_pointer", kActorHubVisualSourceAuxPointerOffset),
         SDMOD_SIZE("gameplay.offsets", "student_visual_state_block", kStudentVisualStateBlockOffset),
+        SDMOD_SIZE("gameplay.offsets", "student_book_palette_block", kStudentBookPaletteBlockOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_walk_cycle_primary", kActorWalkCyclePrimaryOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_walk_cycle_secondary", kActorWalkCycleSecondaryOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_render_drive_stride_scale", kActorRenderDriveStrideScaleOffset),

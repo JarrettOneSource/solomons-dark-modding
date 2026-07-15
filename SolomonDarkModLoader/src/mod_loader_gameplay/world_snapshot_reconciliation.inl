@@ -119,6 +119,8 @@ void CopyWorldActorPresentationState(
     target->render_selection_byte = source.render_selection_byte;
     target->render_variant_tertiary = source.render_variant_tertiary;
     target->student_visual_state = source.student_visual_state;
+    target->student_book_palette_count = source.student_book_palette_count;
+    target->student_book_palette = source.student_book_palette;
 }
 
 bool IsReplicatedHubPhaseAdvancingActorSnapshot(
@@ -936,6 +938,59 @@ bool ApplyReplicatedWorldActorPresentation(
             actor_address + kStudentVisualStateBlockOffset,
             authoritative_actor.student_visual_state.data(),
             authoritative_actor.student_visual_state.size()) || wrote;
+    }
+
+    if ((authoritative_actor.presentation_flags &
+         multiplayer::WorldActorPresentationFlagStudentBookPalette) != 0 &&
+        kStudentBookPaletteBlockOffset != 0 &&
+        authoritative_actor.student_book_palette_count <=
+            multiplayer::kWorldActorStudentBookPaletteMaxEntries) {
+        constexpr std::size_t kStudentBookPaletteColorsOffset = 0x04;
+        constexpr std::size_t kStudentBookPaletteRadialOffsetsOffset = 0x54;
+        constexpr std::size_t kStudentBookPaletteAngularOffsetsOffset = 0x68;
+        const auto palette_address = actor_address + kStudentBookPaletteBlockOffset;
+        bool palette_valid = true;
+        for (std::size_t index = 0;
+             index < authoritative_actor.student_book_palette_count;
+             ++index) {
+            const auto& entry = authoritative_actor.student_book_palette[index];
+            const float values[] = {
+                entry.red,
+                entry.green,
+                entry.blue,
+                entry.alpha,
+                entry.radial_offset,
+                entry.angular_offset,
+            };
+            for (const float value : values) {
+                palette_valid = palette_valid && std::isfinite(value) &&
+                                value >= -4096.0f && value <= 4096.0f;
+            }
+        }
+        if (palette_valid) {
+            bool palette_written = true;
+            for (std::size_t index = 0;
+                 index < authoritative_actor.student_book_palette_count;
+                 ++index) {
+                const auto& entry = authoritative_actor.student_book_palette[index];
+                palette_written = memory.TryWrite(
+                    palette_address + kStudentBookPaletteColorsOffset + index * sizeof(float) * 4,
+                    &entry.red,
+                    sizeof(float) * 4) && palette_written;
+                palette_written = memory.TryWriteValue(
+                    palette_address + kStudentBookPaletteRadialOffsetsOffset + index * sizeof(float),
+                    entry.radial_offset) && palette_written;
+                palette_written = memory.TryWriteValue(
+                    palette_address + kStudentBookPaletteAngularOffsetsOffset + index * sizeof(float),
+                    entry.angular_offset) && palette_written;
+            }
+            if (palette_written) {
+                palette_written = memory.TryWriteValue(
+                    palette_address,
+                    authoritative_actor.student_book_palette_count);
+            }
+            wrote = palette_written || wrote;
+        }
     }
 
     if ((authoritative_actor.presentation_flags &

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Probe host/client hub NPC presentation state that the current world snapshot misses."""
+"""Verify host-authored hub NPC presentation state on a connected client."""
 
 from __future__ import annotations
 
@@ -59,6 +59,56 @@ local function byte_string(address, count)
   return table.concat(out, " ")
 end
 
+local function student_book_palette_string(address)
+  local count = u32(address + 0x1C0)
+  if count > 5 then
+    return "invalid:" .. tostring(count)
+  end
+  local out = { tostring(count) }
+  for index = 0, count - 1 do
+    local color = address + 0x1C4 + index * 0x10
+    for component = 0, 3 do
+      out[#out + 1] = hx(u32(color + component * 4))
+    end
+    out[#out + 1] = hx(u32(address + 0x214 + index * 4))
+    out[#out + 1] = hx(u32(address + 0x228 + index * 4))
+  end
+  return table.concat(out, ":")
+end
+
+local function float_hex(value)
+  local packed = string.pack("<f", tonumber(value) or 0)
+  local b1, b2, b3, b4 = string.byte(packed, 1, 4)
+  return string.format("0x%02X%02X%02X%02X", b4, b3, b2, b1)
+end
+
+local function student_visual_state_string(actor)
+  local out = {}
+  for index = 1, 32 do
+    out[#out + 1] = string.format(
+      "%02X", tonumber(actor.student_visual_state and actor.student_visual_state[index]) or 0)
+  end
+  return table.concat(out, " ")
+end
+
+local function student_book_palette_snapshot_string(actor)
+  local count = tonumber(actor.student_book_palette_count) or 0
+  if count > 5 then
+    return "invalid:" .. tostring(count)
+  end
+  local out = { tostring(count) }
+  for index = 1, count do
+    local entry = actor.student_book_palette and actor.student_book_palette[index] or {}
+    out[#out + 1] = float_hex(entry.red)
+    out[#out + 1] = float_hex(entry.green)
+    out[#out + 1] = float_hex(entry.blue)
+    out[#out + 1] = float_hex(entry.alpha)
+    out[#out + 1] = float_hex(entry.radial_offset)
+    out[#out + 1] = float_hex(entry.angular_offset)
+  end
+  return table.concat(out, ":")
+end
+
 local function finite(v)
   return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge
 end
@@ -81,7 +131,8 @@ for _, actor in ipairs(actors) do
     local prefix = "actor." .. tostring(actor_index)
     emit(prefix .. ".address", hx(address))
     emit(prefix .. ".type", type_id)
-    emit(prefix .. ".slot", actor.world_slot or -1)
+    emit(prefix .. ".actor_slot", actor.actor_slot or -1)
+    emit(prefix .. ".world_slot", actor.world_slot or -1)
     emit(prefix .. ".x", f(actor.x))
     emit(prefix .. ".y", f(actor.y))
     emit(prefix .. ".heading", f(flt(address + 0x6C)))
@@ -101,7 +152,7 @@ for _, actor in ipairs(actors) do
     emit(prefix .. ".variant_tertiary", u8(address + 0x240))
     if type_id == 0x138A then
       emit(prefix .. ".student_color_190", byte_string(address + 0x190, 32))
-      emit(prefix .. ".student_path_block_1c0", byte_string(address + 0x1C0, 64))
+      emit(prefix .. ".student_book_palette_1c0", student_book_palette_string(address))
     end
   end
 end
@@ -120,6 +171,8 @@ if replicated ~= nil and replicated.actors ~= nil then
     local prefix = "repactor." .. tostring(index)
     emit(prefix .. ".network_id", actor.network_actor_id or 0)
     emit(prefix .. ".type", actor.object_type_id or 0)
+    emit(prefix .. ".actor_slot", actor.actor_slot or -1)
+    emit(prefix .. ".world_slot", actor.world_slot or -1)
     emit(prefix .. ".x", f(actor.x))
     emit(prefix .. ".y", f(actor.y))
     emit(prefix .. ".heading", f(actor.heading))
@@ -131,6 +184,11 @@ if replicated ~= nil and replicated.actors ~= nil then
     emit(prefix .. ".weapon_type", actor.render_weapon_type or 0)
     emit(prefix .. ".selection_byte", actor.render_selection_byte or 0)
     emit(prefix .. ".variant_tertiary", actor.render_variant_tertiary or 0)
+    emit(prefix .. ".student_book_palette_count", actor.student_book_palette_count or 0)
+    if tonumber(actor.object_type_id) == 0x138A then
+      emit(prefix .. ".student_color_190", student_visual_state_string(actor))
+      emit(prefix .. ".student_book_palette_1c0", student_book_palette_snapshot_string(actor))
+    end
   end
 end
 
@@ -222,6 +280,37 @@ def nearest_actor(
     return best_index, best_actor, math.sqrt(best_distance) if math.isfinite(best_distance) else math.inf
 
 
+def match_snapshot_actor(
+    actors: list[dict[str, str]],
+    snapshot: dict[str, str],
+    used: set[int],
+) -> tuple[int, dict[str, str] | None, float]:
+    type_id = parse_int(snapshot.get("type"))
+    actor_slot = parse_int(snapshot.get("actor_slot"), -1)
+    world_slot = parse_int(snapshot.get("world_slot"), -1)
+    exact: list[tuple[int, dict[str, str]]] = []
+    for index, actor in enumerate(actors):
+        if index in used or parse_int(actor.get("type")) != type_id:
+            continue
+        if (
+            parse_int(actor.get("actor_slot"), -1) == actor_slot
+            and parse_int(actor.get("world_slot"), -1) == world_slot
+        ):
+            exact.append((index, actor))
+    if len(exact) == 1:
+        index, actor = exact[0]
+        return index, actor, math.sqrt(
+            dist_sq(actor, parse_float(snapshot.get("x")), parse_float(snapshot.get("y")))
+        )
+    return nearest_actor(
+        actors,
+        type_id,
+        parse_float(snapshot.get("x")),
+        parse_float(snapshot.get("y")),
+        used,
+    )
+
+
 def build_client_snapshot(values: dict[str, str]) -> dict[str, Any]:
     actors = parse_indexed(values, "actor")
     repactors = parse_indexed(values, "repactor")
@@ -237,6 +326,11 @@ def build_client_snapshot(values: dict[str, str]) -> dict[str, Any]:
         "scene_kind": values.get("scene.kind", ""),
         "actors": actors,
         "repactors": repactors,
+        "repactor_by_id": {
+            parse_int(actor.get("network_id")): actor
+            for actor in repactors
+            if parse_int(actor.get("network_id")) != 0
+        },
         "bindings": bindings,
         "local_by_address": local_by_address,
         "binding_by_id": binding_by_id,
@@ -252,6 +346,21 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
     client = build_client_snapshot(client_values)
     host_actors: list[dict[str, str]] = host["actors"]
     used_host: set[int] = set()
+    host_actor_by_network_id: dict[int, tuple[dict[str, str], float]] = {}
+    for repactor in host["repactors"]:
+        type_id = parse_int(repactor.get("type"))
+        if type_id < HUB_NPC_TYPE_MIN or type_id > HUB_NPC_TYPE_MAX:
+            continue
+        host_index, host_actor, host_distance = match_snapshot_actor(
+            host_actors, repactor, used_host
+        )
+        if host_actor is None:
+            continue
+        used_host.add(host_index)
+        host_actor_by_network_id[parse_int(repactor.get("network_id"))] = (
+            host_actor,
+            host_distance,
+        )
 
     comparisons: list[dict[str, Any]] = []
     for repactor in client["repactors"]:
@@ -265,21 +374,16 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
         local_actor = client["local_by_address"].get(parse_int(binding.get("address")))
         if local_actor is None:
             continue
-        host_index, host_actor, host_distance = nearest_actor(
-            host_actors,
-            type_id,
-            parse_float(repactor.get("x")),
-            parse_float(repactor.get("y")),
-            used_host,
-        )
-        if host_actor is None:
+        host_match = host_actor_by_network_id.get(network_id)
+        host_repactor = host["repactor_by_id"].get(network_id)
+        if host_repactor is None:
             continue
-        used_host.add(host_index)
+        host_actor, host_distance = host_match if host_match is not None else ({}, math.inf)
 
         row = {
             "network_id": str(network_id),
             "type": type_id,
-            "host_match_distance": round(host_distance, 3),
+            "host_match_distance": round(host_distance, 3) if math.isfinite(host_distance) else None,
             "host_address": host_actor.get("address", ""),
             "client_address": local_actor.get("address", ""),
             "variant_primary_match": host_actor.get("variant_primary") == local_actor.get("variant_primary"),
@@ -308,14 +412,40 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
         row["drive_phase_distance"] = phase_distance
         row["drive_phase_within_tolerance"] = phase_distance <= DRIVE_PHASE_TOLERANCE
         if type_id == STUDENT_TYPE_ID:
+            row["variant_primary_match"] = (
+                local_actor.get("variant_primary") == repactor.get("variant_primary")
+            )
+            row["variant_secondary_match"] = (
+                local_actor.get("variant_secondary") == repactor.get("variant_secondary")
+            )
+            row["weapon_type_match"] = (
+                local_actor.get("weapon_type") == repactor.get("weapon_type")
+            )
+            row["selection_byte_match"] = (
+                local_actor.get("selection_byte") == repactor.get("selection_byte")
+            )
+            row["variant_tertiary_match"] = (
+                local_actor.get("variant_tertiary") == repactor.get("variant_tertiary")
+            )
             row["student_color_match"] = (
-                host_actor.get("student_color_190") == local_actor.get("student_color_190")
+                repactor.get("student_color_190") == local_actor.get("student_color_190")
             )
-            row["student_path_block_match"] = (
-                host_actor.get("student_path_block_1c0") == local_actor.get("student_path_block_1c0")
+            row["student_book_palette_match"] = (
+                repactor.get("student_book_palette_1c0") ==
+                local_actor.get("student_book_palette_1c0")
             )
-            row["host_student_color_190"] = host_actor.get("student_color_190", "")
+            row["student_book_palette_count_matches_snapshot"] = (
+                parse_int(local_actor.get("student_book_palette_1c0", "").partition(":")[0]) ==
+                parse_int(repactor.get("student_book_palette_count"))
+            )
+            row["host_student_color_190"] = host_repactor.get("student_color_190", "")
             row["client_student_color_190"] = local_actor.get("student_color_190", "")
+            row["host_student_book_palette_1c0"] = host_actor.get(
+                "student_book_palette_1c0", host_repactor.get("student_book_palette_1c0", "")
+            )
+            row["client_student_book_palette_1c0"] = local_actor.get(
+                "student_book_palette_1c0", ""
+            )
         comparisons.append(row)
 
     student_rows = [row for row in comparisons if row["type"] == STUDENT_TYPE_ID]
@@ -335,7 +465,12 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
         "student_compared": len(student_rows),
         "student_variant_primary_mismatches": count_false(student_rows, "variant_primary_match"),
         "student_color_mismatches": count_false(student_rows, "student_color_match"),
-        "student_path_block_mismatches": count_false(student_rows, "student_path_block_match"),
+        "student_book_palette_mismatches": count_false(
+            student_rows, "student_book_palette_match"
+        ),
+        "student_book_palette_snapshot_count_mismatches": count_false(
+            student_rows, "student_book_palette_count_matches_snapshot"
+        ),
         "named_compared": len(named_rows),
         "named_drive_raw_mismatches": count_false(named_rows, "drive_raw_match"),
         "named_drive_phase_tolerance": DRIVE_PHASE_TOLERANCE,
@@ -406,6 +541,8 @@ def main() -> int:
             for field in (
                 "student_variant_primary_mismatches",
                 "student_color_mismatches",
+                "student_book_palette_mismatches",
+                "student_book_palette_snapshot_count_mismatches",
                 "named_drive_phase_out_of_tolerance",
             )
         )

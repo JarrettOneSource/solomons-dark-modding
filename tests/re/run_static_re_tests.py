@@ -27,6 +27,7 @@ from static_multiplayer_runtime_contracts import (
     test_lua_exec_timeout_cancels_pending_work,
     test_meditation_transient_counters_self_repair_to_native_bounds,
     test_native_potion_pickup_converges_into_stock_inventory,
+    test_packaged_ui_accepts_single_file_launcher,
     test_pair_launcher_drains_redirected_json_output,
     test_progression_matrices_prearm_quiet_spawning_before_run_entry,
     test_spell_verifiers_quiesce_input_and_prearm_manual_spawning,
@@ -2109,7 +2110,7 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
             "Lightning Chaining verifier still competes with the permanent target hook")
 
     required_network_tokens = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 52;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 53;"),
         (protocol_text, "AirChainSnapshot = 15"),
         (protocol_text, "kAirChainSnapshotMaxTargets = 8"),
         (protocol_text, "struct AirChainTargetPacketState"),
@@ -5171,13 +5172,14 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 52;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 53;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
         (protocol_text, "kWorldSnapshotMaxActors"),
         (protocol_text, "kLootSnapshotMaxDrops"),
         (protocol_text, "kWorldActorStudentVisualStateBytes"),
+        (protocol_text, "kWorldActorStudentBookPaletteMaxEntries"),
         (protocol_text, "WorldSnapshotFlagTruncated"),
         (protocol_text, "LootSnapshotFlagTruncated"),
         (protocol_text, "LootSnapshot = 6"),
@@ -5236,6 +5238,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "WorldActorPresentationFlagStudentVisualState"),
         (protocol_text, "WorldActorPresentationFlagStudentVariantBytes"),
         (protocol_text, "WorldActorPresentationFlagLocomotionFloats"),
+        (protocol_text, "WorldActorPresentationFlagStudentBookPalette"),
         (protocol_text, "WorldActorSnapshotFlagRunStatic"),
         (protocol_text, "WorldActorSnapshotFlagTargetAuthoritative"),
         (protocol_text, "std::uint64_t target_participant_id;"),
@@ -5277,8 +5280,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20"),
         (protocol_text, "std::uint64_t authority_participant_id;"),
         (protocol_text, "static_assert(sizeof(StatePacket) == 3848"),
-        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 128"),
-        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 8224"),
+        (protocol_text, "static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24"),
+        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 252"),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 16160"),
         (protocol_text, "static_assert(sizeof(LootDropSnapshotPacketState) == 72"),
         (protocol_text, "static_assert(sizeof(LootSnapshotPacket) == 4640"),
         (protocol_text, "static_assert(sizeof(LootPickupRequestPacket) == 56"),
@@ -6301,8 +6305,8 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 52;"),
-        (compatibility_materializer_text, "CurrentProtocolVersion = 52;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 53;"),
+        (compatibility_materializer_text, "CurrentProtocolVersion = 53;"),
         (protocol_text, "SessionCapabilityHostAuthority"),
         (protocol_text, "struct SessionHelloPacket"),
         (protocol_text, "struct SessionHelloAckPacket"),
@@ -6392,7 +6396,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
             "WPF launcher still waits for inherited game pipe EOF instead of the CLI JSON response"
         )
     return (
-        "Steam friends-only lobby, authenticated v52 handshake, idle keepalive, owner-checked gameplay "
+        "Steam friends-only lobby, authenticated v53 handshake, idle keepalive, owner-checked gameplay "
         "routing, Spacewar launch, x86 runtime staging, and launch-token-bound lobby "
         "status reporting are wired"
     )
@@ -8904,6 +8908,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "pair launcher drains redirected JSON output",
         test_pair_launcher_drains_redirected_json_output,
+    ),
+    (
+        "packaged desktop UI accepts its single-file launcher",
+        test_packaged_ui_accepts_single_file_launcher,
     ),
     (
         "progression matrices prearm quiet spawning before run entry",

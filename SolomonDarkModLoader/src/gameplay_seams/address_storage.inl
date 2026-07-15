@@ -286,6 +286,7 @@ std::size_t kActorHubVisualSourceKindOffset = 0;
 std::size_t kActorHubVisualSourceProfileOffset = 0;
 std::size_t kActorHubVisualSourceAuxPointerOffset = 0;
 std::size_t kStudentVisualStateBlockOffset = 0;
+std::size_t kStudentBookPaletteBlockOffset = 0;
 std::size_t kActorWalkCyclePrimaryOffset = 0;
 std::size_t kActorWalkCycleSecondaryOffset = 0;
 std::size_t kActorRenderDriveStrideScaleOffset = 0;

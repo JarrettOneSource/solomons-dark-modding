@@ -119,7 +119,7 @@ void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
 }
 
 void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSnapshot& actor) {
-    lua_createtable(state, 0, 36);
+    lua_createtable(state, 0, 39);
     lua_pushinteger(state, static_cast<lua_Integer>(actor.network_actor_id));
     lua_setfield(state, -2, "network_actor_id");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.native_type_id));
@@ -170,6 +170,41 @@ void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSna
     lua_setfield(state, -2, "render_selection_byte");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.render_variant_tertiary));
     lua_setfield(state, -2, "render_variant_tertiary");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.student_book_palette_count));
+    lua_setfield(state, -2, "student_book_palette_count");
+    lua_createtable(
+        state,
+        static_cast<int>(actor.student_visual_state.size()),
+        0);
+    for (std::size_t index = 0; index < actor.student_visual_state.size(); ++index) {
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(actor.student_visual_state[index]));
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+    lua_setfield(state, -2, "student_visual_state");
+    lua_createtable(
+        state,
+        static_cast<int>(actor.student_book_palette_count),
+        0);
+    for (std::size_t index = 0; index < actor.student_book_palette_count; ++index) {
+        const auto& entry = actor.student_book_palette[index];
+        lua_createtable(state, 0, 6);
+        lua_pushnumber(state, static_cast<lua_Number>(entry.red));
+        lua_setfield(state, -2, "red");
+        lua_pushnumber(state, static_cast<lua_Number>(entry.green));
+        lua_setfield(state, -2, "green");
+        lua_pushnumber(state, static_cast<lua_Number>(entry.blue));
+        lua_setfield(state, -2, "blue");
+        lua_pushnumber(state, static_cast<lua_Number>(entry.alpha));
+        lua_setfield(state, -2, "alpha");
+        lua_pushnumber(state, static_cast<lua_Number>(entry.radial_offset));
+        lua_setfield(state, -2, "radial_offset");
+        lua_pushnumber(state, static_cast<lua_Number>(entry.angular_offset));
+        lua_setfield(state, -2, "angular_offset");
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+    lua_setfield(state, -2, "student_book_palette");
     lua_pushnumber(state, static_cast<lua_Number>(actor.position_x));
     lua_setfield(state, -2, "x");
     lua_pushnumber(state, static_cast<lua_Number>(actor.position_y));

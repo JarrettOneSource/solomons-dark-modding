@@ -48,6 +48,17 @@ $result = [ordered]@{
     steamApiReady = $false
     steamApiSource = $null
     uiWindowTitle = $null
+    uiCatalogStatus = $null
+}
+
+$uiSettingsDirectory = Join-Path $env:LOCALAPPDATA "SolomonDarkMultiplayerBeta"
+$uiSettingsPath = Join-Path $uiSettingsDirectory "settings.json"
+$hadUiSettings = Test-Path $uiSettingsPath -PathType Leaf
+$originalUiSettings = if ($hadUiSettings) {
+    [System.IO.File]::ReadAllBytes($uiSettingsPath)
+}
+else {
+    $null
 }
 
 function Invoke-JsonLauncher {
@@ -114,6 +125,10 @@ try {
         throw "Extracted stage did not use the packaged Steam runtime: $($result.steamApiSource)"
     }
 
+    New-Item -ItemType Directory -Path $uiSettingsDirectory -Force | Out-Null
+    $uiSettings = [ordered]@{ gameDirectory = $GameDirectory } | ConvertTo-Json
+    [System.IO.File]::WriteAllText($uiSettingsPath, $uiSettings, $utf8NoBom)
+
     $uiProcess = Start-Process -FilePath $uiExecutable -PassThru
     try {
         $deadline = (Get-Date).AddSeconds(20)
@@ -132,6 +147,42 @@ try {
         if ($result.uiWindowTitle -notlike "Solomon Dark Multiplayer Beta*") {
             throw "Unexpected desktop launcher title: $($result.uiWindowTitle)"
         }
+
+        Add-Type -AssemblyName UIAutomationClient
+        $automationRoot = [System.Windows.Automation.AutomationElement]::FromHandle(
+            $uiProcess.MainWindowHandle)
+        $catalogDeadline = (Get-Date).AddSeconds(20)
+        $visibleText = @()
+        while ((Get-Date) -lt $catalogDeadline -and -not $uiProcess.HasExited) {
+            $elements = $automationRoot.FindAll(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)
+            $visibleText = @(
+                for ($index = 0; $index -lt $elements.Count; $index++) {
+                    $name = $elements.Item($index).Current.Name
+                    if (-not [string]::IsNullOrWhiteSpace($name)) {
+                        $name
+                    }
+                })
+            if ($visibleText -contains "Catalog refreshed") {
+                $result.uiCatalogStatus = "Catalog refreshed"
+                break
+            }
+            $launcherResolutionError = $visibleText |
+                Where-Object { $_ -like "Could not locate SolomonDarkModLauncher.exe*" } |
+                Select-Object -First 1
+            if ($launcherResolutionError) {
+                throw "Packaged desktop launcher could not invoke its packaged CLI: $launcherResolutionError"
+            }
+            Start-Sleep -Milliseconds 100
+            $uiProcess.Refresh()
+        }
+        if ($result.uiCatalogStatus -ne "Catalog refreshed") {
+            $diagnostics = ($visibleText |
+                Where-Object { $_ -match "failed|error|launcher|catalog" } |
+                Select-Object -Unique) -join "; "
+            throw "Packaged desktop launcher did not refresh its mod catalog. $diagnostics"
+        }
     }
     finally {
         if ($null -ne $uiProcess -and -not $uiProcess.HasExited) {
@@ -143,6 +194,13 @@ try {
     $result.ok = $true
 }
 finally {
+    if ($hadUiSettings) {
+        New-Item -ItemType Directory -Path $uiSettingsDirectory -Force | Out-Null
+        [System.IO.File]::WriteAllBytes($uiSettingsPath, $originalUiSettings)
+    }
+    elseif (Test-Path $uiSettingsPath) {
+        Remove-Item $uiSettingsPath -Force
+    }
     $outputDirectory = Split-Path -Parent $OutputPath
     New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
     [System.IO.File]::WriteAllText(
@@ -159,3 +217,4 @@ Write-Host "Archive: $ArchivePath"
 Write-Host "Portable root: $($result.workspaceRoot)"
 Write-Host "Steam API source: $($result.steamApiSource)"
 Write-Host "Desktop title: $($result.uiWindowTitle)"
+Write-Host "Desktop catalog: $($result.uiCatalogStatus)"

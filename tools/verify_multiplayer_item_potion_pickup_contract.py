@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 CHECKS = (
-    ("protocol version", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "kProtocolVersion = 52"),
+    ("protocol version", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "kProtocolVersion = 53"),
     ("drop item type", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "std::uint32_t item_type_id;"),
     ("drop item slot", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "std::int32_t item_slot;"),
     ("drop stack count", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "std::int32_t stack_count;"),

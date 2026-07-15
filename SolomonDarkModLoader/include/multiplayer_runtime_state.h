@@ -271,6 +271,15 @@ struct ParticipantInfo {
     std::vector<ParticipantTransformSample> transform_history;
 };
 
+struct StudentBookPaletteEntryState {
+    float red = 0.0f;
+    float green = 0.0f;
+    float blue = 0.0f;
+    float alpha = 0.0f;
+    float radial_offset = 0.0f;
+    float angular_offset = 0.0f;
+};
+
 struct WorldActorSnapshot {
     std::uint64_t network_actor_id = 0;
     std::uint32_t native_type_id = 0;
@@ -305,6 +314,9 @@ struct WorldActorSnapshot {
     std::uint8_t render_selection_byte = 0;
     std::uint8_t render_variant_tertiary = 0;
     std::array<std::uint8_t, kWorldActorStudentVisualStateBytes> student_visual_state = {};
+    std::uint32_t student_book_palette_count = 0;
+    std::array<StudentBookPaletteEntryState, kWorldActorStudentBookPaletteMaxEntries>
+        student_book_palette = {};
 };
 
 struct WorldSnapshotActorBindingRuntimeInfo {

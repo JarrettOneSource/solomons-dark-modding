@@ -392,6 +392,38 @@ def test_pair_launcher_drains_redirected_json_output() -> str:
     )
 
 
+def test_packaged_ui_accepts_single_file_launcher() -> str:
+    resolver = _read(
+        "SolomonDarkModLauncher.UI/src/Infrastructure/"
+        "LauncherExecutableResolver.cs"
+    )
+    package = _read("scripts/New-BetaReleasePackage.ps1")
+    smoke = _read("scripts/Test-BetaReleasePackage.ps1")
+
+    assert "if (File.Exists(candidate))" in resolver
+    for rejected_token in (
+        "managedDllPath",
+        "runtimeConfigPath",
+        "depsPath",
+        "Build the launcher project first",
+    ):
+        assert rejected_token not in resolver, (
+            f"packaged launcher resolver still requires {rejected_token}"
+        )
+    assert "-p:PublishSingleFile=true" in package
+    for token in (
+        'if ($visibleText -contains "Catalog refreshed")',
+        '$_ -like "Could not locate SolomonDarkModLauncher.exe*"',
+        '$result.uiCatalogStatus = "Catalog refreshed"',
+    ):
+        assert token in smoke, f"beta package smoke test lacks: {token}"
+
+    return (
+        "the packaged desktop UI accepts its single-file CLI and proves a "
+        "catalog command crosses the real UI-to-CLI boundary"
+    )
+
+
 def test_explicit_blank_boneyard_removes_native_scenery_and_collision() -> str:
     blank_runtime = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
@@ -625,7 +657,7 @@ def test_level_up_barrier_waits_for_every_player_and_times_out() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 52;",
+        "constexpr std::uint16_t kProtocolVersion = 53;",
         "LevelUpBarrier = 19",
         "struct LevelUpBarrierPacket",
         "kLevelUpChoiceResultFlagAutoPicked",

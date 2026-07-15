@@ -103,7 +103,7 @@ py -3 .\tools\verify_beta_release_artifact.py
 ```
 
 The result is
-`artifacts\SolomonDarkMultiplayerBeta-v0.1.0-beta.1.zip` plus
+`artifacts\SolomonDarkMultiplayerBeta-v0.1.0-beta.2.zip` plus
 `artifacts\SHA256SUMS.txt`. The archive includes the self-contained desktop and
 x86 launchers, loader, config, sample mods, and the x86 Steam runtime; it does
 not include Solomon's Dark or Steam credentials. See

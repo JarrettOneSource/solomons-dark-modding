@@ -1,5 +1,5 @@
 SOLOMON DARK MULTIPLAYER BETA
-Version 0.1.0-beta.1 | Multiplayer protocol 52
+Version {{VERSION}} | Multiplayer protocol {{PROTOCOL_VERSION}}
 
 This is an early friends-only co-op beta for the original 32-bit Solomon's Dark
 0.72.5. It does not include the game. Every player needs the same beta ZIP, the
@@ -11,8 +11,6 @@ QUICK START
 2. Start Steam and sign in. Friends must already be friends on Steam.
 3. Double-click SolomonDarkMultiplayerBeta.exe.
 4. Choose the folder containing the original SolomonDark.exe when prompted.
-   The supported executable is Solomon's Dark 0.72.5 with SHA-256:
-   03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3
 5. The joining player clicks Join Friend FIRST and leaves the lobby ID empty.
 6. After the joiner's game is open and waiting, the host clicks
    Host & Invite Friends.

@@ -70,6 +70,39 @@ WorldSnapshotRuntimeInfo BuildWorldSnapshotRuntimeInfo(
             actor.student_visual_state.data(),
             packet_actor.student_visual_state,
             actor.student_visual_state.size());
+        actor.student_book_palette_count =
+            packet_actor.student_book_palette_count <= kWorldActorStudentBookPaletteMaxEntries
+            ? packet_actor.student_book_palette_count
+            : 0;
+        for (std::size_t palette_index = 0;
+             palette_index < actor.student_book_palette_count;
+             ++palette_index) {
+            const auto& packet_entry = packet_actor.student_book_palette[palette_index];
+            auto& entry = actor.student_book_palette[palette_index];
+            const float values[] = {
+                packet_entry.red,
+                packet_entry.green,
+                packet_entry.blue,
+                packet_entry.alpha,
+                packet_entry.radial_offset,
+                packet_entry.angular_offset,
+            };
+            bool entry_valid = true;
+            for (const float value : values) {
+                entry_valid = entry_valid && std::isfinite(value) && value >= -4096.0f && value <= 4096.0f;
+            }
+            if (!entry_valid) {
+                actor.presentation_flags &= ~WorldActorPresentationFlagStudentBookPalette;
+                actor.student_book_palette_count = 0;
+                break;
+            }
+            entry.red = packet_entry.red;
+            entry.green = packet_entry.green;
+            entry.blue = packet_entry.blue;
+            entry.alpha = packet_entry.alpha;
+            entry.radial_offset = packet_entry.radial_offset;
+            entry.angular_offset = packet_entry.angular_offset;
+        }
         snapshot.actors.push_back(actor);
     }
 

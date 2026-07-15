@@ -497,6 +497,56 @@ void PopulateWorldActorPresentationSnapshot(
             kWorldActorStudentVisualStateBytes)) {
         snapshot->presentation_flags |= WorldActorPresentationFlagStudentVisualState;
     }
+
+    if (kStudentBookPaletteBlockOffset == 0) {
+        return;
+    }
+
+    constexpr std::size_t kStudentBookPaletteColorsOffset = 0x04;
+    constexpr std::size_t kStudentBookPaletteRadialOffsetsOffset = 0x54;
+    constexpr std::size_t kStudentBookPaletteAngularOffsetsOffset = 0x68;
+    constexpr float kMaxSaneStudentBookPaletteMagnitude = 4096.0f;
+    const auto palette_address = actor_address + kStudentBookPaletteBlockOffset;
+    std::uint32_t palette_count = 0;
+    if (!memory.TryReadValue(palette_address, &palette_count) ||
+        palette_count > kWorldActorStudentBookPaletteMaxEntries) {
+        return;
+    }
+
+    bool palette_valid = true;
+    for (std::size_t index = 0; index < palette_count; ++index) {
+        auto& entry = snapshot->student_book_palette[index];
+        const auto color_address =
+            palette_address + kStudentBookPaletteColorsOffset + index * sizeof(float) * 4;
+        palette_valid = memory.TryRead(color_address, &entry.red, sizeof(float) * 4) &&
+                        memory.TryReadValue(
+                            palette_address + kStudentBookPaletteRadialOffsetsOffset +
+                                index * sizeof(float),
+                            &entry.radial_offset) &&
+                        memory.TryReadValue(
+                            palette_address + kStudentBookPaletteAngularOffsetsOffset +
+                                index * sizeof(float),
+                            &entry.angular_offset);
+        const float values[] = {
+            entry.red,
+            entry.green,
+            entry.blue,
+            entry.alpha,
+            entry.radial_offset,
+            entry.angular_offset,
+        };
+        for (const float value : values) {
+            palette_valid = palette_valid && std::isfinite(value) &&
+                            value >= -kMaxSaneStudentBookPaletteMagnitude &&
+                            value <= kMaxSaneStudentBookPaletteMagnitude;
+        }
+        if (!palette_valid) {
+            return;
+        }
+    }
+
+    snapshot->student_book_palette_count = palette_count;
+    snapshot->presentation_flags |= WorldActorPresentationFlagStudentBookPalette;
 }
 
 std::int32_t RoundRewardAmountToInt(float amount) {

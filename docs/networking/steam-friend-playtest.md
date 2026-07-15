@@ -16,7 +16,7 @@ disposable stage. It never copies or stores Steam credentials.
   `WaitingForInvite` without a lobby ID. Redirected CLI launches also return at
   that milestone while the game remains running, which is the path used by the
   desktop UI.
-- Protocol v52 statically covers lobby membership checks, host ownership,
+- Protocol v53 statically covers lobby membership checks, host ownership,
   compatibility handshake, authenticated gameplay routing, goodbye/timeout
   cleanup, automatic re-handshake after silent route loss, and no host
   migration.

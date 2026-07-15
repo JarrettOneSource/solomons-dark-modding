@@ -4,7 +4,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 52;
+constexpr std::uint16_t kProtocolVersion = 53;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -12,6 +12,7 @@ constexpr std::uint32_t kParticipantInventorySnapshotMaxItems = 64;
 constexpr std::uint32_t kParticipantProgressionBookSnapshotMaxEntries = 128;
 constexpr std::uint32_t kWorldSnapshotMaxActors = 64;
 constexpr std::uint32_t kWorldActorStudentVisualStateBytes = 32;
+constexpr std::uint32_t kWorldActorStudentBookPaletteMaxEntries = 5;
 constexpr std::uint32_t kLootSnapshotMaxDrops = 64;
 constexpr std::uint32_t kLevelUpOfferMaxOptions = 8;
 constexpr std::uint32_t kLevelUpWaitStatusMaxParticipants = 8;
@@ -155,6 +156,7 @@ enum WorldActorPresentationFlags : std::uint16_t {
     WorldActorPresentationFlagStudentVisualState = 1 << 1,
     WorldActorPresentationFlagStudentVariantBytes = 1 << 2,
     WorldActorPresentationFlagLocomotionFloats = 1 << 3,
+    WorldActorPresentationFlagStudentBookPalette = 1 << 4,
 };
 
 enum WorldSnapshotFlags : std::uint8_t {
@@ -508,6 +510,15 @@ struct LevelUpBarrierPacket {
     LevelUpBarrierParticipantPacketState participants[kLevelUpWaitStatusMaxParticipants];
 };
 
+struct StudentBookPaletteEntryPacketState {
+    float red;
+    float green;
+    float blue;
+    float alpha;
+    float radial_offset;
+    float angular_offset;
+};
+
 struct WorldActorSnapshotPacketState {
     std::uint64_t network_actor_id;
     std::uint32_t native_type_id;
@@ -538,6 +549,9 @@ struct WorldActorSnapshotPacketState {
     std::uint8_t render_variant_tertiary;
     std::uint8_t presentation_reserved[3];
     std::uint8_t student_visual_state[kWorldActorStudentVisualStateBytes];
+    std::uint32_t student_book_palette_count;
+    StudentBookPaletteEntryPacketState
+        student_book_palette[kWorldActorStudentBookPaletteMaxEntries];
 };
 
 struct WorldSnapshotPacket {
@@ -819,8 +833,10 @@ static_assert(sizeof(LevelUpBarrierParticipantPacketState) == 32,
               "Unexpected level-up barrier participant state size");
 static_assert(sizeof(LevelUpBarrierPacket) == 308,
               "Unexpected level-up barrier packet size");
-static_assert(sizeof(WorldActorSnapshotPacketState) == 128, "Unexpected world actor snapshot size");
-static_assert(sizeof(WorldSnapshotPacket) == 8224, "Unexpected world snapshot packet size");
+static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24,
+              "Unexpected Student book palette entry size");
+static_assert(sizeof(WorldActorSnapshotPacketState) == 252, "Unexpected world actor snapshot size");
+static_assert(sizeof(WorldSnapshotPacket) == 16160, "Unexpected world snapshot packet size");
 static_assert(sizeof(LootDropSnapshotPacketState) == 72, "Unexpected loot drop snapshot size");
 static_assert(sizeof(LootSnapshotPacket) == 4640, "Unexpected loot snapshot packet size");
 static_assert(sizeof(SpellEffectPacketState) == 124, "Unexpected spell effect packet state size");
