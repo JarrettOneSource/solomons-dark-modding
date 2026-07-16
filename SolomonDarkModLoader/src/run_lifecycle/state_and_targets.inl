@@ -1,6 +1,8 @@
 using RunStartedFn = void(__fastcall*)(void* self, void* unused_edx);
 using MainMenuRunTransitionFn = void(__fastcall*)(void* self, void* unused_edx);
 using RunEndedFn = void(__cdecl*)();
+using ActorWorldTickFn = void(__fastcall*)(void* self, void* unused_edx);
+using ActorWorldEntryFn = void(__thiscall*)(void* self);
 using WaveSpawnerTickFn = void(__fastcall*)(void* self, void* unused_edx);
 using EnemySpawnedFn =
     void* (__fastcall*)(void* self, void* unused_edx, void* param_2, int enemy_config, void* param_4, int param_5, int param_6, char param_7);
@@ -29,6 +31,7 @@ enum HookIndex : size_t {
     kHookMainMenuRunTransition,
     kHookStartGame,
     kHookRunEnded,
+    kHookActorWorldTick,
     kHookWaveSpawnerTick,
     kHookEnemySpawned,
     kHookEnemyDeath,
@@ -129,6 +132,8 @@ void BuildHookTargets(HookTarget* targets) {
     targets[kHookMainMenuRunTransition] = {kMainMenuRunTransition, 6};
     targets[kHookStartGame] = {kStartGame, 7};          // "on START GAME" menu-initiated
     targets[kHookRunEnded] = {kRunEnded, 7};            // GameOver trigger (__cdecl)
+    // Whole instructions: PUSH ESI, PUSH EDI, XOR EDI,EDI, MOV ESI,ECX.
+    targets[kHookActorWorldTick] = {kActorWorldTick, 6};
     targets[kHookWaveSpawnerTick] = {kWaveSpawnerTick, 6};
     targets[kHookEnemySpawned] = {kSpawnEnemy, 7};
     targets[kHookEnemyDeath] = {kEnemyDeath, 10};

@@ -272,7 +272,9 @@ std::uint64_t LootSnapshotIntervalForPacket(const LootSnapshotPacket& packet) {
         if (!active) {
             continue;
         }
-        if (drop_kind == LootDropKind::Gold || drop_kind == LootDropKind::Orb) {
+        if (drop_kind == LootDropKind::Gold ||
+            drop_kind == LootDropKind::Orb ||
+            drop_kind == LootDropKind::Powerup) {
             return kLocalTransportAnimatedLootSnapshotIntervalMs;
         }
     }

@@ -11,6 +11,10 @@ void CopyEquipVisualLaneState(
     destination->holder_kind = source.holder_kind;
     destination->current_object_vtable = source.current_object_vtable;
     destination->current_object_type_id = source.current_object_type_id;
+    destination->current_object_recipe_uid = source.current_object_recipe_uid;
+    destination->current_object_color_state_valid =
+        source.current_object_color_state_valid;
+    destination->current_object_color_state = source.current_object_color_state;
 }
 
 BotLoadoutInfo DefaultBotLoadout() {

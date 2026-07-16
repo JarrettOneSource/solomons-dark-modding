@@ -76,6 +76,20 @@ calling the same progression vtable roll method.
 
 `0x0040B2D0` clears/frees the array value pointer and resets the count.
 
+The build path consumes each rolled option immediately: at `0x0066FDF2` it
+loads the option id from `screen + 0x90 + index * 4`, then calls `0x00657C00`
+to resolve the name/icon payload. The return address after that call is
+`0x0066FE0E`. Replacing only the screen array on a later multiplayer tick is
+therefore too late: selection reports authoritative ids, but the visible
+children still describe the discarded local random roll.
+
+For a host-authored local offer, the loader arms the exact local progression
+and offer before creating the screen. A hook on progression vtable slot `+0x74`
+lets the native roll allocate its normal `Array<int>`, then replaces those ids
+with the authoritative offer before control returns to `0x0066F920`. Names,
+icons, and selection consequently share one option list. The hook is removed
+when the local transport shuts down.
+
 ## Choice Apply
 
 `0x00671470` is the level-up screen apply handler. For a selected option id it:
@@ -104,6 +118,29 @@ accepts a host `LevelUpOffer`, and applies only the host-confirmed
 materialized progression/book state and rejects returned choices that were not
 part of the issued offer.
 
+## Synchronized World Pause
+
+`0x004022A0` is the common `ActorWorld::Tick` dispatcher. Its actor-list ABI is:
+
+- `world + 0x08`: actor count
+- `world + 0x14`: actor pointer array
+- `world + 0x48`: actor currently being dispatched
+- `actor + 0x04`: pending-initialize byte
+- `actor + 0x05`: pending-remove byte
+- actor vtable `+0x04`: initialize method
+- actor vtable `+0x08`: tick method
+
+The virtual tick call returns at `0x00402348`. A live trace of a skeleton
+resolved its vtable tick to stock address `0x00484B90`, while a PlayerActor
+resolves to `0x00548B00`.
+
+While a multiplayer level-up cohort is unresolved, the loader detours
+`ActorWorld::Tick` and dispatches only actors whose virtual tick is the
+PlayerActor tick. This keeps the existing PlayerActor hook pumping transport,
+Lua, picker UI, and forced-choice cleanup, but holds enemies, projectiles,
+pickups, and effects. Once every participant confirms its choice, the stock
+actor-world dispatcher resumes on the next frame.
+
 ## Regression Harness
 
 Run the live bot skill-choice regression with:
@@ -128,3 +165,25 @@ progression picker, chooses one option per bot per level, then validates:
 The full result is written to `runtime/test_bot_skill_choice_regression.json`.
 Use `--from-report runtime/probe_bot_skill_choice_stress.json` to validate a
 previous stress report without launching the game again.
+
+Run the multiplayer visual-identity regression with:
+
+```sh
+python3 tools/verify_multiplayer_skill_picker_visual_identity.py
+```
+
+It traces `0x00657C00` calls returning to `0x0066FE0E`, compares the option ids
+used by the native visual builder with the host offer and pinned picker array,
+then accepts the first option and verifies that the same id is applied and the
+native picker closes on both peers.
+
+Run the complete multiplayer level-up barrier regression with:
+
+```sh
+PYTHONPATH=tools python3 tools/verify_multiplayer_level_up_barrier_sync.py
+```
+
+It proves an unfrozen stock skeleton moves before the barrier, remains fixed
+while the host waits on an unresolved client, and moves again after resume. It
+also waits for the real 60-second timeout and requires the forced client choice
+to apply exactly once, close both native pickers, and release the shared pause.

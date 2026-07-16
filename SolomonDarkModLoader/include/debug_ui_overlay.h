@@ -48,6 +48,7 @@ struct DebugUiActionDispatchSnapshot {
 bool InitializeDebugUiOverlay();
 void ShutdownDebugUiOverlay();
 bool IsDebugUiOverlayInitialized();
+void ObserveDebugUiExactTextGlyph(float x, float y);
 void DispatchPendingDebugUiActionOnAppTick();
 bool TryGetLatestDebugUiSurfaceSnapshot(DebugUiSurfaceSnapshot* snapshot);
 bool TryFindDebugUiActionElement(std::string_view action_id, std::string_view surface_id, DebugUiSnapshotElement* element);

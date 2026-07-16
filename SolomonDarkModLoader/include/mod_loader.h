@@ -26,6 +26,10 @@ struct SDModEquipVisualLaneState {
     std::uint32_t holder_kind = 0;
     uintptr_t current_object_vtable = 0;
     std::uint32_t current_object_type_id = 0;
+    std::uint32_t current_object_recipe_uid = 0;
+    bool current_object_color_state_valid = false;
+    std::array<std::uint8_t, multiplayer::kParticipantVisualLinkColorBlockBytes>
+        current_object_color_state = {};
 };
 
 constexpr std::size_t kSDModInventorySnapshotMaxItems = 64;
@@ -34,8 +38,12 @@ struct SDModInventoryItemState {
     bool valid = false;
     uintptr_t item_address = 0;
     std::uint32_t type_id = 0;
+    std::uint32_t recipe_uid = 0;
     int slot = -1;
     int stack_count = 0;
+    bool color_state_valid = false;
+    std::array<std::uint8_t, multiplayer::kParticipantVisualLinkColorBlockBytes>
+        color_state = {};
 };
 
 struct SDModInventoryState {
@@ -43,6 +51,7 @@ struct SDModInventoryState {
     uintptr_t gameplay_scene_address = 0;
     uintptr_t item_list_root_address = 0;
     uintptr_t item_array_address = 0;
+    int raw_item_count = 0;
     int item_count = 0;
     int enumerated_item_count = 0;
     bool truncated = false;
@@ -50,6 +59,9 @@ struct SDModInventoryState {
     SDModEquipVisualLaneState primary_visual_lane;
     SDModEquipVisualLaneState secondary_visual_lane;
     SDModEquipVisualLaneState attachment_visual_lane;
+    std::array<SDModEquipVisualLaneState, multiplayer::kParticipantRingSlotCount>
+        ring_lanes;
+    SDModEquipVisualLaneState amulet_lane;
 };
 
 constexpr std::size_t kSDModProgressionBookSnapshotMaxEntries = 128;
@@ -98,6 +110,7 @@ struct SDModPlayerState {
     std::uint8_t persistent_status_flags = 0;
     std::uint8_t transient_status_flags = 0;
     std::int32_t poison_remaining_ticks = 0;
+    std::int32_t damage_x4_remaining_ticks = 0;
     float hp = 0.0f;
     float max_hp = 0.0f;
     float mp = 0.0f;
@@ -316,10 +329,23 @@ struct SDModReplicatedLootPresentationState {
     std::int32_t amount = 0;
     std::int32_t amount_tier = 0;
     float value = 0.0f;
+    float motion = 0.0f;
+    float progress = 0.0f;
+    float auxiliary = 0.0f;
+    std::uint32_t lifetime = 0;
     float x = 0.0f;
     float y = 0.0f;
     float radius = 0.0f;
     std::uint64_t last_seen_ms = 0;
+};
+
+struct SDModHostLootDropDeactivationResult {
+    std::uint32_t run_nonce = 0;
+    std::uint64_t network_drop_id = 0;
+    uintptr_t actor_address = 0;
+    multiplayer::LootDropKind drop_kind = multiplayer::LootDropKind::Unknown;
+    bool deactivated = false;
+    std::uint32_t exception_code = 0;
 };
 
 struct SDModParticipantGameplayState {
@@ -353,6 +379,7 @@ struct SDModParticipantGameplayState {
     std::uint8_t native_persistent_status_flags = 0;
     std::uint8_t native_transient_status_flags = 0;
     std::int32_t native_poison_remaining_ticks = 0;
+    std::int32_t native_damage_x4_remaining_ticks = 0;
     std::uint8_t no_interrupt = 0;
     std::uint8_t active_cast_group = 0xFF;
     std::uint16_t active_cast_slot = 0xFFFF;
@@ -422,6 +449,7 @@ bool SetGameplayNativeControlAllowanceFrames(
     std::uint32_t frames,
     std::string* error_message);
 bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_message);
+bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address);
 void ClearQueuedGameplayMouseLeft();
 bool ClearLocalPlayerGameplayCastState(std::string* error_message);
 std::uint64_t GetGameplayMouseLeftEdgeSerial();

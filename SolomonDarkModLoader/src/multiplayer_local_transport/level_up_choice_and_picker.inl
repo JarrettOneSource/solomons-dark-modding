@@ -1,3 +1,148 @@
+namespace {
+
+bool TryOverwriteNativeLevelUpOptions(
+    NativeLevelUpOptionArray* output,
+    const std::int32_t* option_ids,
+    std::size_t option_count) {
+    __try {
+        if (output == nullptr ||
+            option_ids == nullptr ||
+            option_count == 0 ||
+            option_count > kLevelUpOfferMaxOptions ||
+            output->values == nullptr ||
+            output->count < static_cast<std::int32_t>(option_count)) {
+            return false;
+        }
+        for (std::size_t index = 0; index < option_count; ++index) {
+            output->values[index] = option_ids[index];
+        }
+        output->count = static_cast<std::int32_t>(option_count);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+void __fastcall HookLocalLevelUpOptionRoll(
+    void* progression,
+    void* /*unused_edx*/,
+    int desired_count,
+    NativeLevelUpOptionArray* output) {
+    const auto original = GetX86HookTrampoline<NativeLevelUpOptionRollFn>(
+        g_local_level_up_option_roll_hook);
+    if (original == nullptr) {
+        return;
+    }
+    original(progression, desired_count, output);
+
+    ArmedLocalLevelUpOptionRoll armed;
+    {
+        std::lock_guard<std::mutex> lock(g_local_level_up_option_roll_mutex);
+        armed = g_armed_local_level_up_option_roll;
+    }
+    if (armed.progression_address == 0 ||
+        reinterpret_cast<uintptr_t>(progression) != armed.progression_address ||
+        armed.offer_id == 0 ||
+        armed.option_count == 0 ||
+        desired_count < static_cast<int>(armed.option_count) ||
+        !TryOverwriteNativeLevelUpOptions(
+            output,
+            armed.option_ids.data(),
+            armed.option_count)) {
+        return;
+    }
+
+    const auto previous_offer_id =
+        g_last_applied_local_level_up_option_roll_offer_id.exchange(
+            armed.offer_id,
+            std::memory_order_acq_rel);
+    if (previous_offer_id != armed.offer_id) {
+        Log(
+            "Multiplayer level-up native option roll replaced before visual build. offer_id=" +
+            std::to_string(armed.offer_id) +
+            " progression=" + HexString(armed.progression_address) +
+            " option_count=" + std::to_string(armed.option_count));
+    }
+}
+
+bool ArmLocalLevelUpOptionRoll(
+    uintptr_t progression_address,
+    const LevelUpOfferRuntimeInfo& offer,
+    std::string* error_message) {
+    auto fail = [&](std::string message) {
+        if (error_message != nullptr) {
+            *error_message = std::move(message);
+        }
+        return false;
+    };
+
+    if (progression_address == 0 ||
+        !offer.valid ||
+        offer.offer_id == 0 ||
+        offer.options.empty() ||
+        offer.options.size() > kLevelUpOfferMaxOptions) {
+        return fail("native option-roll override requires a live local offer");
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t vtable_address = 0;
+    uintptr_t roll_address = 0;
+    if (!memory.TryReadValue(progression_address, &vtable_address) ||
+        vtable_address == 0 ||
+        !memory.TryReadValue(
+            vtable_address + kNativeSkillOptionRollVtableOffset,
+            &roll_address) ||
+        roll_address == 0) {
+        return fail("native option-roll vtable method is unavailable");
+    }
+
+    if (g_local_level_up_option_roll_hook.installed) {
+        if (reinterpret_cast<uintptr_t>(g_local_level_up_option_roll_hook.target) !=
+            roll_address) {
+            return fail("local progression option-roll implementation changed while hooked");
+        }
+    } else {
+        std::string hook_error;
+        if (!InstallSafeX86Hook(
+                reinterpret_cast<void*>(roll_address),
+                reinterpret_cast<void*>(&HookLocalLevelUpOptionRoll),
+                5,
+                &g_local_level_up_option_roll_hook,
+                &hook_error)) {
+            return fail("native option-roll hook install failed: " + hook_error);
+        }
+        Log(
+            "Multiplayer level-up native option-roll hook installed. target=" +
+            HexString(roll_address));
+    }
+
+    ArmedLocalLevelUpOptionRoll armed;
+    armed.progression_address = progression_address;
+    armed.offer_id = offer.offer_id;
+    armed.option_count = offer.options.size();
+    for (std::size_t index = 0; index < offer.options.size(); ++index) {
+        armed.option_ids[index] = offer.options[index].option_id;
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_local_level_up_option_roll_mutex);
+        g_armed_local_level_up_option_roll = armed;
+    }
+    return true;
+}
+
+void ShutdownLocalLevelUpOptionRollHook() {
+    {
+        std::lock_guard<std::mutex> lock(g_local_level_up_option_roll_mutex);
+        g_armed_local_level_up_option_roll = ArmedLocalLevelUpOptionRoll{};
+    }
+    g_last_applied_local_level_up_option_roll_offer_id.store(
+        0,
+        std::memory_order_release);
+    RemoveX86Hook(&g_local_level_up_option_roll_hook);
+}
+
+}  // namespace
+
 bool TryApplyLocalProgrammaticLevelUpChoiceThroughNativePicker(
     std::uint64_t offer_id,
     std::int32_t option_index,
@@ -516,6 +661,21 @@ void ReconcileLocalLevelUpOfferPresentation(std::uint64_t now_ms, bool allow_nat
     if (!TryGetPlayerState(&player_state) ||
         !player_state.valid ||
         player_state.progression_address == 0) {
+        return;
+    }
+
+    std::string option_roll_error;
+    if (!ArmLocalLevelUpOptionRoll(
+            player_state.progression_address,
+            offer,
+            &option_roll_error)) {
+        if (allow_native_create) {
+            Log(
+                "Multiplayer level-up native picker waiting for authoritative visual identity. offer_id=" +
+                std::to_string(offer.offer_id) +
+                " progression=" + HexString(player_state.progression_address) +
+                " error=" + option_roll_error);
+        }
         return;
     }
 

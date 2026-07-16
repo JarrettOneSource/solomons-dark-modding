@@ -42,7 +42,8 @@ bool ShouldReplicateWorldActor(
 bool IsReplicatedLootDropNativeType(std::uint32_t native_type_id) {
     return native_type_id == kGoldRewardNativeTypeId ||
            native_type_id == kOrbRewardNativeTypeId ||
-           native_type_id == kItemDropNativeTypeId;
+           native_type_id == kItemDropNativeTypeId ||
+           native_type_id == kPowerupRewardNativeTypeId;
 }
 
 bool ShouldReplicateLootDropActor(
@@ -98,6 +99,14 @@ void ClearRunHostLocalWorldActorNetworkIds() {
 void ClearRunLootDropNetworkIds() {
     g_local_transport.run_loot_drop_ids_by_address.clear();
     g_local_transport.accepted_loot_pickup_drop_ids.clear();
+    g_local_transport.native_applied_powerup_result_drop_ids.clear();
+    g_local_transport.pending_host_loot_pickups_by_drop_id.clear();
+    {
+        std::lock_guard<std::mutex> lock(
+            g_local_transport_event_mutex);
+        g_queued_local_host_powerup_pickups.clear();
+    }
+    sdmod::ClearHostLootDropDeactivationState();
     g_local_transport.next_run_loot_drop_serial = 1;
 }
 

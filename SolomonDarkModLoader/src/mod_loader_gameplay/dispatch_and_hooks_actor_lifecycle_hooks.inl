@@ -254,6 +254,93 @@ void __fastcall HookPuppetManagerDeletePuppet(void* self, void* /*unused_edx*/, 
     original(self, actor);
 }
 
+int DisableStaleManagedPointerReleaseCallbacks(
+    uintptr_t self_address,
+    uintptr_t list_address,
+    uintptr_t caller_address) {
+    if (self_address == 0 || list_address == 0) {
+        return 0;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t self_vtable = 0;
+    uintptr_t delete_callback = 0;
+    const auto managed_pointer_release_callback =
+        memory.ResolveGameAddressOrZero(kObjectDelete);
+    if (managed_pointer_release_callback == 0 ||
+        !memory.TryReadValue(self_address, &self_vtable) ||
+        self_vtable == 0 ||
+        !memory.TryReadValue(
+            self_vtable + kManagedPointerReleaseOwnerVtableOffset,
+            &delete_callback) ||
+        delete_callback != managed_pointer_release_callback) {
+        return 0;
+    }
+
+    int count = 0;
+    uintptr_t items_address = 0;
+    if (!memory.TryReadField(list_address, kPointerListCountOffset, &count) ||
+        !memory.TryReadField(list_address, kPointerListItemsOffset, &items_address) ||
+        count <= 0 ||
+        count > kManagedPointerReleasePreflightMaxCount ||
+        items_address == 0) {
+        return 0;
+    }
+
+    int disabled_count = 0;
+    for (int index = 0; index < count; ++index) {
+        uintptr_t item_address = 0;
+        if (!memory.TryReadValue(
+                items_address + static_cast<std::size_t>(index) * sizeof(std::uint32_t),
+                &item_address) ||
+            item_address == 0) {
+            continue;
+        }
+
+        std::uint8_t callback_enabled = 0;
+        if (!memory.TryReadField(
+                item_address,
+                kManagedPointerReleaseCallbackEnabledOffset,
+                &callback_enabled) ||
+            callback_enabled == 0) {
+            continue;
+        }
+
+        uintptr_t callback_cell = 0;
+        uintptr_t callback_address = 0;
+        const bool callback_is_callable =
+            memory.TryReadField(
+                item_address,
+                kManagedPointerReleaseCallbackCellOffset,
+                &callback_cell) &&
+            callback_cell != 0 &&
+            memory.TryReadValue(callback_cell, &callback_address) &&
+            memory.IsExecutableRange(callback_address, 1);
+        if (callback_is_callable) {
+            continue;
+        }
+
+        const std::uint8_t disabled = 0;
+        if (!memory.TryWriteField(
+                item_address,
+                kManagedPointerReleaseCallbackEnabledOffset,
+                disabled)) {
+            continue;
+        }
+
+        ++disabled_count;
+        Log(
+            "pointer_list_delete_batch: disabled stale managed release callback. item=" +
+            HexString(item_address) +
+            " callback_cell=" + HexString(callback_cell) +
+            " callback=" + HexString(callback_address) +
+            " list=" + HexString(list_address) +
+            " index=" + std::to_string(index) +
+            " caller=" + HexString(caller_address));
+    }
+    return disabled_count;
+}
+
 void __fastcall HookPointerListDeleteBatch(void* self, void* /*unused_edx*/, void* list) {
     const auto original = GetX86HookTrampoline<PointerListDeleteBatchFn>(
         g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
@@ -264,6 +351,10 @@ void __fastcall HookPointerListDeleteBatch(void* self, void* /*unused_edx*/, voi
     const auto self_address = reinterpret_cast<uintptr_t>(self);
     const auto list_address = reinterpret_cast<uintptr_t>(list);
     const auto caller_address = reinterpret_cast<uintptr_t>(_ReturnAddress());
+    (void)DisableStaleManagedPointerReleaseCallbacks(
+        self_address,
+        list_address,
+        caller_address);
     const bool tracked = LogTrackedStandaloneWizardPuppetManagerDeleteBatchEvent(
         "puppet_manager_delete_batch enter",
         self_address,

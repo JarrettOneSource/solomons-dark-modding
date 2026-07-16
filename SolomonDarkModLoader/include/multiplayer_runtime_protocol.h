@@ -4,11 +4,12 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 54;
+constexpr std::uint16_t kProtocolVersion = 59;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
 constexpr std::uint32_t kParticipantInventorySnapshotMaxItems = 64;
+constexpr std::uint32_t kParticipantRingSlotCount = 3;
 constexpr std::uint32_t kParticipantProgressionBookSnapshotMaxEntries = 128;
 constexpr std::uint32_t kWorldSnapshotMaxActors = 64;
 constexpr std::uint32_t kWorldActorStudentVisualStateBytes = 32;
@@ -110,6 +111,12 @@ enum class LootDropKind : std::uint8_t {
     Powerup = 5,
 };
 
+enum class PowerupRewardKind : std::int32_t {
+    BonusSkillPoint = 0,
+    RandomSkillRank = 1,
+    DamageX4 = 2,
+};
+
 enum class LootPickupResultCode : std::uint8_t {
     Accepted = 1,
     Rejected = 2,
@@ -170,10 +177,15 @@ enum WorldSnapshotFlags : std::uint8_t {
 
 enum LootDropSnapshotFlags : std::uint8_t {
     LootDropSnapshotFlagActive = 1 << 0,
+    LootDropSnapshotFlagItemColorState = 1 << 1,
 };
 
 enum LootSnapshotFlags : std::uint8_t {
     LootSnapshotFlagTruncated = 1 << 0,
+};
+
+enum LootPickupResultFlags : std::uint16_t {
+    LootPickupResultFlagItemColorState = 1 << 0,
 };
 
 enum SpellEffectSnapshotFlags : std::uint16_t {
@@ -201,6 +213,7 @@ enum ParticipantPresentationFlags : std::uint16_t {
     ParticipantPresentationFlagStaffVisualState = 1 << 2,
     ParticipantPresentationFlagRenderSelectorBytes = 1 << 3,
     ParticipantPresentationFlagVisualLinkColorBlocks = 1 << 4,
+    ParticipantPresentationFlagEquipmentState = 1 << 5,
 };
 
 enum ParticipantPersistentStatusFlags : std::uint8_t {
@@ -217,12 +230,15 @@ constexpr std::uint8_t kParticipantPersistentStatusValueMask =
 
 enum ParticipantTransientStatusFlags : std::uint8_t {
     ParticipantTransientStatusFlagPoisoned = 1 << 0,
+    ParticipantTransientStatusFlagDamageX4 = 1 << 1,
     ParticipantTransientStatusFlagSnapshotValid = 1 << 7,
 };
 
 constexpr std::uint8_t kParticipantTransientStatusValueMask =
-    ParticipantTransientStatusFlagPoisoned;
+    ParticipantTransientStatusFlagPoisoned |
+    ParticipantTransientStatusFlagDamageX4;
 constexpr std::int32_t kParticipantPoisonMaxDurationTicks = 100000;
+constexpr std::int32_t kParticipantDamageX4MaxDurationTicks = 100000;
 
 enum ParticipantInventorySnapshotFlags : std::uint16_t {
     ParticipantInventorySnapshotFlagTruncated = 1 << 0,
@@ -242,8 +258,14 @@ struct PacketHeader {
 
 struct ParticipantInventoryItemPacketState {
     std::uint32_t type_id;
+    std::uint32_t recipe_uid;
     std::int32_t slot;
     std::int32_t stack_count;
+};
+
+struct ParticipantEquippedItemPacketState {
+    std::uint32_t type_id;
+    std::uint32_t recipe_uid;
 };
 
 struct ParticipantProgressionBookEntryPacketState {
@@ -282,6 +304,7 @@ struct ParticipantDerivedStatPacketState {
 struct StatePacket {
     PacketHeader header;
     std::uint64_t participant_id;
+    std::uint64_t participant_session_nonce;
     std::uint64_t authority_participant_id;
     char display_name[kParticipantDisplayNameBytes];
     std::uint8_t ready;
@@ -305,6 +328,14 @@ struct StatePacket {
     std::int32_t owned_gold;
     std::uint32_t gold_revision;
     std::uint32_t inventory_revision;
+    std::uint32_t equipment_revision;
+    std::uint8_t equipment_valid;
+    std::uint8_t equipment_reserved[3] = {};
+    ParticipantEquippedItemPacketState equipped_hat;
+    ParticipantEquippedItemPacketState equipped_robe;
+    ParticipantEquippedItemPacketState equipped_weapon;
+    ParticipantEquippedItemPacketState equipped_rings[kParticipantRingSlotCount];
+    ParticipantEquippedItemPacketState equipped_amulet;
     std::uint32_t spellbook_revision;
     std::uint32_t statbook_revision;
     std::uint32_t loadout_revision;
@@ -345,6 +376,7 @@ struct StatePacket {
     std::uint8_t transient_status_flags;
     std::uint8_t transient_status_reserved[3] = {};
     std::int32_t poison_remaining_ticks;
+    std::int32_t damage_x4_remaining_ticks;
     std::uint16_t presentation_flags;
     std::uint32_t attachment_staff_visual_state;
     std::uint8_t render_variant_primary;
@@ -355,6 +387,10 @@ struct StatePacket {
     std::uint8_t visual_link_reserved[3] = {};
     std::uint32_t primary_visual_link_type_id;
     std::uint32_t secondary_visual_link_type_id;
+    std::uint32_t primary_visual_link_recipe_uid;
+    std::uint32_t secondary_visual_link_recipe_uid;
+    std::uint32_t attachment_visual_link_type_id;
+    std::uint32_t attachment_visual_link_recipe_uid;
     std::uint8_t primary_visual_link_color_block[kParticipantVisualLinkColorBlockBytes];
     std::uint8_t secondary_visual_link_color_block[kParticipantVisualLinkColorBlockBytes];
     std::uint32_t anim_drive_state_word;
@@ -600,7 +636,10 @@ struct LootDropSnapshotPacketState {
     float value;
     float motion;
     float progress;
+    float auxiliary;
     std::uint32_t item_type_id;
+    std::uint32_t item_recipe_uid;
+    std::uint8_t item_color_state[kParticipantVisualLinkColorBlockBytes];
     std::int32_t item_slot;
     std::int32_t stack_count;
     std::int32_t actor_slot;
@@ -775,7 +814,7 @@ struct LootPickupResultPacket {
     std::uint64_t network_drop_id;
     std::uint8_t result_code;
     std::uint8_t drop_kind;
-    std::uint16_t reserved = 0;
+    std::uint16_t result_flags = 0;
     std::int32_t amount;
     std::int32_t resulting_gold;
     std::uint32_t gold_revision;
@@ -786,9 +825,19 @@ struct LootPickupResultPacket {
     float resulting_mana_current;
     float resulting_mana_max;
     std::uint32_t item_type_id;
+    std::uint32_t item_recipe_uid;
+    std::uint8_t item_color_state[kParticipantVisualLinkColorBlockBytes];
     std::int32_t item_slot;
     std::int32_t stack_count;
     std::uint32_t inventory_revision;
+    std::int32_t powerup_kind;
+    std::int32_t powerup_skill_entry_index;
+    std::int32_t powerup_skill_apply_count;
+    std::uint16_t powerup_skill_resulting_active;
+    std::uint16_t powerup_reserved = 0;
+    std::int32_t damage_x4_remaining_ticks;
+    std::uint32_t spellbook_revision;
+    std::uint32_t statbook_revision;
 };
 #pragma pack(pop)
 
@@ -837,11 +886,12 @@ static_assert(
 static_assert(
     !IsPacketSequenceNewer(0xFFFFFFFFu, 0u),
     "Packet sequence comparison must reject pre-wrap packets after wraparound");
-static_assert(sizeof(ParticipantInventoryItemPacketState) == 12, "Unexpected inventory item packet size");
+static_assert(sizeof(ParticipantInventoryItemPacketState) == 16, "Unexpected inventory item packet size");
+static_assert(sizeof(ParticipantEquippedItemPacketState) == 8, "Unexpected equipped item packet size");
 static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpected progression book entry packet size");
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 56, "Unexpected derived stat packet size");
-static_assert(sizeof(StatePacket) == 3848, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 4196, "Unexpected state packet size");
 static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");
 static_assert(sizeof(CastPacket) == 120, "Unexpected cast packet size");
 static_assert(sizeof(SessionHelloAckPacket) == 92, "Unexpected session hello acknowledgement packet size");
@@ -861,8 +911,8 @@ static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40,
               "Unexpected named hub NPC presentation size");
 static_assert(sizeof(WorldActorSnapshotPacketState) == 292, "Unexpected world actor snapshot size");
 static_assert(sizeof(WorldSnapshotPacket) == 18720, "Unexpected world snapshot packet size");
-static_assert(sizeof(LootDropSnapshotPacketState) == 72, "Unexpected loot drop snapshot size");
-static_assert(sizeof(LootSnapshotPacket) == 4640, "Unexpected loot snapshot packet size");
+static_assert(sizeof(LootDropSnapshotPacketState) == 112, "Unexpected loot drop snapshot size");
+static_assert(sizeof(LootSnapshotPacket) == 7200, "Unexpected loot snapshot packet size");
 static_assert(sizeof(SpellEffectPacketState) == 124, "Unexpected spell effect packet state size");
 static_assert(sizeof(SpellEffectSnapshotPacket) == 4000, "Unexpected spell effect snapshot packet size");
 static_assert(sizeof(AirChainTargetPacketState) == 28, "Unexpected Air chain target packet size");
@@ -871,6 +921,6 @@ static_assert(sizeof(ParticipantVitalsCorrectionPacket) == 56, "Unexpected parti
 static_assert(sizeof(EnemyDamageClaimPacket) == 72, "Unexpected enemy damage claim packet size");
 static_assert(sizeof(EnemyDamageResultPacket) == 56, "Unexpected enemy damage result packet size");
 static_assert(sizeof(LootPickupRequestPacket) == 56, "Unexpected loot pickup request packet size");
-static_assert(sizeof(LootPickupResultPacket) == 100, "Unexpected loot pickup result packet size");
+static_assert(sizeof(LootPickupResultPacket) == 164, "Unexpected loot pickup result packet size");
 
 }  // namespace sdmod::multiplayer

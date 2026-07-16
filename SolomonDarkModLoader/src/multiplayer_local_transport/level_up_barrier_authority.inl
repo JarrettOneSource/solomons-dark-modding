@@ -1,7 +1,7 @@
 // Host barrier timeout, auto-pick, and periodic broadcast authority.
 
-bool ShouldSuppressLocalLevelUpFanoutForDebug() {
-    return g_local_transport.suppress_local_level_up_fanout_for_debug;
+bool ShouldSuppressLocalLevelUpFanout() {
+    return g_local_transport.suppress_local_level_up_fanout;
 }
 
 #include "level_up_choice_and_picker.inl"

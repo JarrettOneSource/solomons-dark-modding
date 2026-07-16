@@ -5,10 +5,23 @@
 #include "multiplayer_runtime_state.h"
 #include "native_enemy_lifecycle.h"
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <string>
 
 namespace sdmod::detail {
 namespace {
+
+template <std::size_t Size>
+void PushByteArray(lua_State* state, const std::array<std::uint8_t, Size>& bytes) {
+    lua_createtable(state, static_cast<int>(bytes.size()), 0);
+    for (std::size_t index = 0; index < bytes.size(); ++index) {
+        lua_pushinteger(state, static_cast<lua_Integer>(bytes[index]));
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+}
 
 void PushPositionTable(lua_State* state, float x, float y) {
     lua_createtable(state, 0, 2);
@@ -19,7 +32,7 @@ void PushPositionTable(lua_State* state, float x, float y) {
 }
 
 void PushEquipVisualLaneState(lua_State* state, const SDModEquipVisualLaneState& lane) {
-    lua_createtable(state, 0, 6);
+    lua_createtable(state, 0, 9);
     lua_pushinteger(state, static_cast<lua_Integer>(lane.wrapper_address));
     lua_setfield(state, -2, "wrapper_address");
     lua_pushinteger(state, static_cast<lua_Integer>(lane.holder_address));
@@ -32,20 +45,32 @@ void PushEquipVisualLaneState(lua_State* state, const SDModEquipVisualLaneState&
     lua_setfield(state, -2, "current_object_vtable");
     lua_pushinteger(state, static_cast<lua_Integer>(lane.current_object_type_id));
     lua_setfield(state, -2, "current_object_type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.current_object_recipe_uid));
+    lua_setfield(state, -2, "current_object_recipe_uid");
+    lua_pushboolean(state, lane.current_object_color_state_valid ? 1 : 0);
+    lua_setfield(state, -2, "current_object_color_state_valid");
+    PushByteArray(state, lane.current_object_color_state);
+    lua_setfield(state, -2, "current_object_color_state");
 }
 
 void PushInventoryItemState(lua_State* state, const SDModInventoryItemState& item) {
-    lua_createtable(state, 0, 7);
+    lua_createtable(state, 0, 9);
     lua_pushboolean(state, item.valid ? 1 : 0);
     lua_setfield(state, -2, "valid");
     lua_pushinteger(state, static_cast<lua_Integer>(item.item_address));
     lua_setfield(state, -2, "item_address");
     lua_pushinteger(state, static_cast<lua_Integer>(item.type_id));
     lua_setfield(state, -2, "type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(item.recipe_uid));
+    lua_setfield(state, -2, "recipe_uid");
     lua_pushinteger(state, static_cast<lua_Integer>(item.slot));
     lua_setfield(state, -2, "slot");
     lua_pushinteger(state, static_cast<lua_Integer>(item.stack_count));
     lua_setfield(state, -2, "stack_count");
+    lua_pushboolean(state, item.color_state_valid ? 1 : 0);
+    lua_setfield(state, -2, "color_state_valid");
+    PushByteArray(state, item.color_state);
+    lua_setfield(state, -2, "color_state");
 }
 
 void PushProgressionBookEntryState(lua_State* state, const SDModProgressionBookEntryState& entry) {
@@ -273,8 +298,29 @@ void PushReplicatedLootDrop(lua_State* state, const multiplayer::LootDropSnapsho
     lua_setfield(state, -2, "motion");
     lua_pushnumber(state, static_cast<lua_Number>(drop.progress));
     lua_setfield(state, -2, "progress");
+    lua_pushnumber(state, static_cast<lua_Number>(drop.auxiliary));
+    lua_setfield(state, -2, "auxiliary");
+    if (drop.drop_kind == multiplayer::LootDropKind::Powerup) {
+        const auto powerup_kind =
+            static_cast<multiplayer::PowerupRewardKind>(
+                drop.amount_tier);
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(powerup_kind));
+        lua_setfield(state, -2, "powerup_kind_id");
+        lua_pushstring(
+            state,
+            multiplayer::PowerupRewardKindLabel(powerup_kind));
+        lua_setfield(state, -2, "powerup_kind");
+    }
     lua_pushinteger(state, static_cast<lua_Integer>(drop.item_type_id));
     lua_setfield(state, -2, "item_type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(drop.item_recipe_uid));
+    lua_setfield(state, -2, "item_recipe_uid");
+    lua_pushboolean(state, drop.item_color_state_valid ? 1 : 0);
+    lua_setfield(state, -2, "item_color_state_valid");
+    PushByteArray(state, drop.item_color_state);
+    lua_setfield(state, -2, "item_color_state");
     lua_pushinteger(state, static_cast<lua_Integer>(drop.item_slot));
     lua_setfield(state, -2, "item_slot");
     lua_pushinteger(state, static_cast<lua_Integer>(drop.stack_count));
@@ -354,12 +400,69 @@ void PushLootPickupResult(lua_State* state, const multiplayer::LootPickupResultR
     lua_setfield(state, -2, "resulting_mana_max");
     lua_pushinteger(state, static_cast<lua_Integer>(result.item_type_id));
     lua_setfield(state, -2, "item_type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.item_recipe_uid));
+    lua_setfield(state, -2, "item_recipe_uid");
+    lua_pushboolean(state, result.item_color_state_valid ? 1 : 0);
+    lua_setfield(state, -2, "item_color_state_valid");
+    PushByteArray(state, result.item_color_state);
+    lua_setfield(state, -2, "item_color_state");
     lua_pushinteger(state, static_cast<lua_Integer>(result.item_slot));
     lua_setfield(state, -2, "item_slot");
     lua_pushinteger(state, static_cast<lua_Integer>(result.stack_count));
     lua_setfield(state, -2, "stack_count");
     lua_pushinteger(state, static_cast<lua_Integer>(result.inventory_revision));
     lua_setfield(state, -2, "inventory_revision");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(result.powerup_kind));
+    lua_setfield(state, -2, "powerup_kind_id");
+    lua_pushstring(
+        state,
+        multiplayer::PowerupRewardKindLabel(
+            result.powerup_kind));
+    lua_setfield(state, -2, "powerup_kind");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            result.powerup_skill_entry_index));
+    lua_setfield(
+        state,
+        -2,
+        "powerup_skill_entry_index");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            result.powerup_skill_apply_count));
+    lua_setfield(
+        state,
+        -2,
+        "powerup_skill_apply_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            result.powerup_skill_resulting_active));
+    lua_setfield(
+        state,
+        -2,
+        "powerup_skill_resulting_active");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            result.damage_x4_remaining_ticks));
+    lua_setfield(
+        state,
+        -2,
+        "damage_x4_remaining_ticks");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            result.spellbook_revision));
+    lua_setfield(state, -2, "spellbook_revision");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            result.statbook_revision));
+    lua_setfield(state, -2, "statbook_revision");
 }
 
 void PushReplicatedWorldActorBinding(
@@ -446,7 +549,7 @@ int LuaGameplayGetCombatState(lua_State* state) {
         return 1;
     }
 
-    lua_createtable(state, 0, 12);
+    lua_createtable(state, 0, 13);
     lua_pushstring(state, HexString(combat_state.arena_address).c_str());
     lua_setfield(state, -2, "arena_id");
     lua_pushinteger(state, static_cast<lua_Integer>(combat_state.combat_section_index));
@@ -608,7 +711,7 @@ int LuaPlayerGetState(lua_State* state) {
         return 1;
     }
 
-    lua_createtable(state, 0, 59);
+    lua_createtable(state, 0, 60);
     lua_pushnumber(state, static_cast<lua_Number>(player_state.hp));
     lua_setfield(state, -2, "hp");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.max_hp));
@@ -629,6 +732,11 @@ int LuaPlayerGetState(lua_State* state) {
         state,
         static_cast<lua_Integer>(player_state.poison_remaining_ticks));
     lua_setfield(state, -2, "poison_remaining_ticks");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            player_state.damage_x4_remaining_ticks));
+    lua_setfield(state, -2, "damage_x4_remaining_ticks");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.xp));
     lua_setfield(state, -2, "xp");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.level));
@@ -764,6 +872,8 @@ int LuaPlayerGetInventoryState(lua_State* state) {
     lua_setfield(state, -2, "item_list_root_address");
     lua_pushinteger(state, static_cast<lua_Integer>(inventory_state.item_array_address));
     lua_setfield(state, -2, "item_array_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(inventory_state.raw_item_count));
+    lua_setfield(state, -2, "raw_item_count");
     lua_pushinteger(state, static_cast<lua_Integer>(inventory_state.item_count));
     lua_setfield(state, -2, "item_count");
     lua_pushinteger(state, static_cast<lua_Integer>(inventory_state.enumerated_item_count));
@@ -786,6 +896,39 @@ int LuaPlayerGetInventoryState(lua_State* state) {
     lua_setfield(state, -2, "secondary_visual_lane");
     PushEquipVisualLaneState(state, inventory_state.attachment_visual_lane);
     lua_setfield(state, -2, "attachment_visual_lane");
+    lua_createtable(
+        state,
+        static_cast<int>(inventory_state.ring_lanes.size()),
+        0);
+    for (std::size_t index = 0; index < inventory_state.ring_lanes.size(); ++index) {
+        PushEquipVisualLaneState(state, inventory_state.ring_lanes[index]);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+    lua_setfield(state, -2, "ring_lanes");
+    PushEquipVisualLaneState(state, inventory_state.amulet_lane);
+    lua_setfield(state, -2, "amulet_lane");
+    return 1;
+}
+
+int LuaPlayerEquipInventoryItem(lua_State* state) {
+    const auto raw_recipe_uid = luaL_checkinteger(state, 1);
+    if (raw_recipe_uid <= 0 ||
+        static_cast<std::uint64_t>(raw_recipe_uid) >
+            static_cast<std::uint64_t>((std::numeric_limits<std::uint32_t>::max)())) {
+        lua_pushboolean(state, 0);
+        lua_pushstring(state, "A valid nonzero item recipe uid is required.");
+        return 2;
+    }
+
+    std::string error_message;
+    if (!QueuePlayerInventoryItemEquip(
+            static_cast<std::uint32_t>(raw_recipe_uid),
+            &error_message)) {
+        lua_pushboolean(state, 0);
+        lua_pushstring(state, error_message.c_str());
+        return 2;
+    }
+    lua_pushboolean(state, 1);
     return 1;
 }
 
@@ -959,7 +1102,11 @@ int LuaWorldGetReplicatedActors(lua_State* state) {
         return 1;
     }
 
-    lua_createtable(state, 0, 17);
+    const auto sampled_ms =
+        static_cast<std::uint64_t>(GetTickCount64());
+    lua_createtable(state, 0, 18);
+    lua_pushinteger(state, static_cast<lua_Integer>(sampled_ms));
+    lua_setfield(state, -2, "sampled_ms");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.authority_participant_id));
     lua_setfield(state, -2, "authority_participant_id");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.received_ms));
@@ -1598,9 +1745,10 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaGameplaySetRunEnemyHealth, "set_run_enemy_health");
     lua_setfield(state, -2, "gameplay");
 
-    lua_createtable(state, 0, 3);
+    lua_createtable(state, 0, 4);
     RegisterFunction(state, &LuaPlayerGetState, "get_state");
     RegisterFunction(state, &LuaPlayerGetInventoryState, "get_inventory_state");
+    RegisterFunction(state, &LuaPlayerEquipInventoryItem, "equip_inventory_item");
     RegisterFunction(state, &LuaPlayerGetProgressionBookState, "get_progression_book_state");
     lua_setfield(state, -2, "player");
 

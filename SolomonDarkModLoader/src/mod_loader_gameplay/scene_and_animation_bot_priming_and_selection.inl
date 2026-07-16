@@ -93,37 +93,37 @@ bool PrimeGameplaySlotBotActor(
         }
     }
 
-    const auto refresh_runtime_handles_address =
-        memory.ResolveGameAddressOrZero(kPlayerActorRefreshRuntimeHandles);
-    if (refresh_runtime_handles_address == 0) {
+    const auto initialize_control_brain_address =
+        memory.ResolveGameAddressOrZero(kPlayerActorInitializeControlBrain);
+    if (initialize_control_brain_address == 0) {
         if (error_message != nullptr) {
-            *error_message = "Unable to resolve PlayerActor_RefreshRuntimeHandles.";
+            *error_message = "Unable to resolve PlayerActor_InitializeControlBrain.";
         }
         return false;
     }
     {
         DWORD exception_code = 0;
-        if (!CallPlayerActorRefreshRuntimeHandlesSafe(
-                refresh_runtime_handles_address,
+        if (!CallPlayerActorInitializeControlBrainSafe(
+                initialize_control_brain_address,
                 actor_address,
                 &exception_code)) {
             if (error_message != nullptr) {
                 *error_message =
-                    "PlayerActor_RefreshRuntimeHandles failed with 0x" +
+                    "PlayerActor_InitializeControlBrain failed with 0x" +
                     HexString(exception_code) + ".";
             }
             return false;
         }
     }
 
-    uintptr_t equip_handle_after_refresh = 0;
-    if (!memory.TryReadField(actor_address, kActorEquipHandleOffset, &equip_handle_after_refresh)) {
+    uintptr_t equip_handle_after_initialize = 0;
+    if (!memory.TryReadField(actor_address, kActorEquipHandleOffset, &equip_handle_after_initialize)) {
         if (error_message != nullptr) {
-            *error_message = "Actor equip handle unreadable after runtime handle refresh.";
+            *error_message = "Actor equip handle unreadable after control-brain initialization.";
         }
         return false;
     }
-    if (equip_handle_after_refresh == 0) {
+    if (equip_handle_after_initialize == 0) {
         std::string stage_error;
         if (!WireGameplaySlotBotRuntimeHandles(actor_address, &stage_error)) {
             if (error_message != nullptr) {

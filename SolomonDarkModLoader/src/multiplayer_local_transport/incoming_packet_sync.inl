@@ -189,6 +189,7 @@ void ApplyRemoteStatePacket(
     const TransportPeerEndpoint& from,
     std::uint64_t now_ms) {
     if (packet.participant_id == 0 ||
+        packet.participant_session_nonce == 0 ||
         packet.participant_id == kLocalParticipantId ||
         packet.participant_id == g_local_transport.local_peer_id) {
         return;
@@ -211,6 +212,39 @@ void ApplyRemoteStatePacket(
     profile.experience = packet.experience_current;
     if (!IsValidCharacterProfile(profile)) {
         return;
+    }
+
+    auto session_it =
+        g_local_transport.session_nonce_by_participant.find(packet.participant_id);
+    if (session_it == g_local_transport.session_nonce_by_participant.end()) {
+        g_local_transport.session_nonce_by_participant.emplace(
+            packet.participant_id,
+            packet.participant_session_nonce);
+    } else if (session_it->second != packet.participant_session_nonce) {
+        const auto retired_it =
+            g_local_transport.retired_session_nonces_by_participant.find(
+                packet.participant_id);
+        if (retired_it !=
+                g_local_transport.retired_session_nonces_by_participant.end() &&
+            retired_it->second.find(packet.participant_session_nonce) !=
+                retired_it->second.end()) {
+            return;
+        }
+        const auto previous_nonce = session_it->second;
+        ResetRemoteParticipantSessionEpoch(
+            packet.participant_id,
+            false,
+            true);
+        g_local_transport.retired_session_nonces_by_participant[
+            packet.participant_id].insert(previous_nonce);
+        g_local_transport.session_nonce_by_participant[packet.participant_id] =
+            packet.participant_session_nonce;
+        Log(
+            "Multiplayer participant gameplay session changed; accepted new stream epochs. "
+            "participant_id=" + std::to_string(packet.participant_id) +
+            " previous_nonce=" + std::to_string(previous_nonce) +
+            " session_nonce=" +
+            std::to_string(packet.participant_session_nonce));
     }
 
     const auto last_state_sequence_it =
@@ -252,10 +286,24 @@ void ApplyRemoteStatePacket(
               std::int32_t{1},
               kParticipantPoisonMaxDurationTicks)
         : 0;
+    const bool damage_x4_snapshot_active =
+        (transient_status_flags &
+         (ParticipantTransientStatusFlagSnapshotValid |
+          ParticipantTransientStatusFlagDamageX4)) ==
+        (ParticipantTransientStatusFlagSnapshotValid |
+         ParticipantTransientStatusFlagDamageX4);
+    const auto damage_x4_remaining_ticks = damage_x4_snapshot_active
+        ? (std::clamp)(
+              packet.damage_x4_remaining_ticks,
+              std::int32_t{1},
+              kParticipantDamageX4MaxDurationTicks)
+        : 0;
     float effective_life_current = packet.life_current;
     float effective_life_max = packet.life_max;
     std::uint8_t effective_transient_status_flags = transient_status_flags;
     std::int32_t effective_poison_remaining_ticks = poison_remaining_ticks;
+    std::int32_t effective_damage_x4_remaining_ticks =
+        damage_x4_remaining_ticks;
     if (g_local_transport.is_host) {
         const auto pending_it =
             g_local_transport.pending_participant_vitals_corrections_by_participant.find(
@@ -293,7 +341,7 @@ void ApplyRemoteStatePacket(
                     effective_life_max = correction.life_max;
                 }
                 if (!poison_acknowledged && correction_poisoned) {
-                    effective_transient_status_flags =
+                    effective_transient_status_flags |=
                         ParticipantTransientStatusFlagSnapshotValid |
                         ParticipantTransientStatusFlagPoisoned;
                     effective_poison_remaining_ticks =
@@ -387,6 +435,8 @@ void ApplyRemoteStatePacket(
             effective_transient_status_flags;
         participant->runtime.poison_remaining_ticks =
             effective_poison_remaining_ticks;
+        participant->runtime.damage_x4_remaining_ticks =
+            effective_damage_x4_remaining_ticks;
         participant->runtime.experience_current = packet.experience_current;
         participant->runtime.experience_next = packet.experience_next;
         const bool should_apply_gold =
@@ -417,10 +467,54 @@ void ApplyRemoteStatePacket(
                 }
                 ParticipantInventoryItemState item;
                 item.type_id = packet_item.type_id;
+                item.recipe_uid = packet_item.recipe_uid;
                 item.slot = packet_item.slot;
                 item.stack_count = packet_item.stack_count;
                 participant->owned_progression.inventory_items.push_back(item);
             }
+        }
+        const auto equipped_type_is = [](
+            const ParticipantEquippedItemPacketState& item,
+            std::initializer_list<std::uint32_t> allowed_types) {
+            return item.type_id == 0 ||
+                   std::find(
+                       allowed_types.begin(),
+                       allowed_types.end(),
+                       item.type_id) != allowed_types.end();
+        };
+        bool equipment_packet_is_sane = packet.equipment_valid != 0 &&
+            equipped_type_is(packet.equipped_hat, {0x1B5D}) &&
+            equipped_type_is(packet.equipped_robe, {0x1B5E}) &&
+            equipped_type_is(packet.equipped_weapon, {0x1B5C, 0x1B63}) &&
+            equipped_type_is(packet.equipped_amulet, {0x1B5B});
+        for (const auto& ring : packet.equipped_rings) {
+            equipment_packet_is_sane =
+                equipment_packet_is_sane && equipped_type_is(ring, {0x1B5A});
+        }
+        const bool should_apply_equipment =
+            equipment_packet_is_sane &&
+            (!participant->owned_progression.equipment.valid ||
+             packet.equipment_revision >=
+                 participant->owned_progression.equipment_revision);
+        if (should_apply_equipment) {
+            const auto copy_equipped_item = [](
+                const ParticipantEquippedItemPacketState& source,
+                ParticipantEquippedItemState* destination) {
+                destination->type_id = source.type_id;
+                destination->recipe_uid = source.recipe_uid;
+            };
+            auto& equipment = participant->owned_progression.equipment;
+            equipment = ParticipantEquipmentState{};
+            equipment.valid = true;
+            copy_equipped_item(packet.equipped_hat, &equipment.hat);
+            copy_equipped_item(packet.equipped_robe, &equipment.robe);
+            copy_equipped_item(packet.equipped_weapon, &equipment.weapon);
+            for (std::size_t index = 0; index < equipment.rings.size(); ++index) {
+                copy_equipped_item(packet.equipped_rings[index], &equipment.rings[index]);
+            }
+            copy_equipped_item(packet.equipped_amulet, &equipment.amulet);
+            participant->owned_progression.equipment_revision =
+                packet.equipment_revision;
         }
         const bool should_apply_progression_book =
             packet.statbook_revision >= participant->owned_progression.statbook_revision ||
@@ -497,6 +591,14 @@ void ApplyRemoteStatePacket(
         participant->runtime.render_variant_tertiary = packet.render_variant_tertiary;
         participant->runtime.primary_visual_link_type_id = packet.primary_visual_link_type_id;
         participant->runtime.secondary_visual_link_type_id = packet.secondary_visual_link_type_id;
+        participant->runtime.primary_visual_link_recipe_uid =
+            packet.primary_visual_link_recipe_uid;
+        participant->runtime.secondary_visual_link_recipe_uid =
+            packet.secondary_visual_link_recipe_uid;
+        participant->runtime.attachment_visual_link_type_id =
+            packet.attachment_visual_link_type_id;
+        participant->runtime.attachment_visual_link_recipe_uid =
+            packet.attachment_visual_link_recipe_uid;
         std::memcpy(
             participant->runtime.primary_visual_link_color_block.data(),
             packet.primary_visual_link_color_block,
@@ -541,6 +643,14 @@ void ApplyRemoteStatePacket(
             sample.render_variant_tertiary = packet.render_variant_tertiary;
             sample.primary_visual_link_type_id = packet.primary_visual_link_type_id;
             sample.secondary_visual_link_type_id = packet.secondary_visual_link_type_id;
+            sample.primary_visual_link_recipe_uid =
+                packet.primary_visual_link_recipe_uid;
+            sample.secondary_visual_link_recipe_uid =
+                packet.secondary_visual_link_recipe_uid;
+            sample.attachment_visual_link_type_id =
+                packet.attachment_visual_link_type_id;
+            sample.attachment_visual_link_recipe_uid =
+                packet.attachment_visual_link_recipe_uid;
             std::memcpy(
                 sample.primary_visual_link_color_block.data(),
                 packet.primary_visual_link_color_block,

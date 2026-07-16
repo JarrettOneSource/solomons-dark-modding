@@ -304,6 +304,49 @@ bool QueueLocalLootPickupRequest(
     return true;
 }
 
+bool QueueLocalHostPowerupPickup(
+    uintptr_t actor_address,
+    const LootPickupRequestCapture* capture) {
+    if (!IsLocalTransportHost() || actor_address == 0) {
+        return false;
+    }
+
+    LootPickupRequestCapture resolved_capture;
+    if (capture != nullptr &&
+        capture->valid &&
+        std::isfinite(capture->requester_position_x) &&
+        std::isfinite(capture->requester_position_y) &&
+        std::isfinite(capture->drop_position_x) &&
+        std::isfinite(capture->drop_position_y)) {
+        resolved_capture = *capture;
+    }
+
+    std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
+    const auto existing = std::find_if(
+        g_queued_local_host_powerup_pickups.begin(),
+        g_queued_local_host_powerup_pickups.end(),
+        [&](const QueuedLocalHostPowerupPickup& pickup) {
+            return pickup.actor_address == actor_address;
+        });
+    if (existing != g_queued_local_host_powerup_pickups.end()) {
+        if (resolved_capture.valid) {
+            existing->capture = resolved_capture;
+        }
+        return true;
+    }
+    constexpr std::size_t kMaxQueuedLocalHostPowerupPickups = 16;
+    if (g_queued_local_host_powerup_pickups.size() >=
+        kMaxQueuedLocalHostPowerupPickups) {
+        g_queued_local_host_powerup_pickups.erase(
+            g_queued_local_host_powerup_pickups.begin());
+    }
+    QueuedLocalHostPowerupPickup pickup;
+    pickup.actor_address = actor_address;
+    pickup.capture = resolved_capture;
+    g_queued_local_host_powerup_pickups.push_back(pickup);
+    return true;
+}
+
 bool MarkLocalInventoryNativeConverged(std::uint32_t inventory_revision) {
     if (inventory_revision == 0) {
         return false;

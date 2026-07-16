@@ -3,10 +3,21 @@
 namespace sdmod::detail {
 namespace {
 
+template <std::size_t Size>
+void PushByteArray(
+    lua_State* state,
+    const std::array<std::uint8_t, Size>& bytes) {
+    lua_createtable(state, static_cast<int>(bytes.size()), 0);
+    for (std::size_t index = 0; index < bytes.size(); ++index) {
+        lua_pushinteger(state, static_cast<lua_Integer>(bytes[index]));
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+}
+
 void PushBotEquipVisualLaneState(
     lua_State* state,
     const multiplayer::BotEquipVisualLaneState& lane) {
-    lua_createtable(state, 0, 6);
+    lua_createtable(state, 0, 9);
     lua_pushinteger(state, static_cast<lua_Integer>(lane.wrapper_address));
     lua_setfield(state, -2, "wrapper_address");
     lua_pushinteger(state, static_cast<lua_Integer>(lane.holder_address));
@@ -19,6 +30,12 @@ void PushBotEquipVisualLaneState(
     lua_setfield(state, -2, "current_object_vtable");
     lua_pushinteger(state, static_cast<lua_Integer>(lane.current_object_type_id));
     lua_setfield(state, -2, "current_object_type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(lane.current_object_recipe_uid));
+    lua_setfield(state, -2, "current_object_recipe_uid");
+    lua_pushboolean(state, lane.current_object_color_state_valid ? 1 : 0);
+    lua_setfield(state, -2, "current_object_color_state_valid");
+    PushByteArray(state, lane.current_object_color_state);
+    lua_setfield(state, -2, "current_object_color_state");
 }
 
 }  // namespace
@@ -105,6 +122,22 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
         static_cast<lua_Integer>(
             snapshot.native_poison_remaining_ticks));
     lua_setfield(state, -2, "native_poison_remaining_ticks");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.replicated_damage_x4_remaining_ticks));
+    lua_setfield(
+        state,
+        -2,
+        "replicated_damage_x4_remaining_ticks");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.native_damage_x4_remaining_ticks));
+    lua_setfield(
+        state,
+        -2,
+        "native_damage_x4_remaining_ticks");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.actor_address));
     lua_setfield(state, -2, "actor_address");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.world_address));

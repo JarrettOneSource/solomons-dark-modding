@@ -87,6 +87,7 @@ struct ParticipantRuntimeInfo {
     std::uint8_t persistent_status_flags = 0;
     std::uint8_t transient_status_flags = 0;
     std::int32_t poison_remaining_ticks = 0;
+    std::int32_t damage_x4_remaining_ticks = 0;
     std::uint16_t presentation_flags = 0;
     std::uint32_t attachment_staff_visual_state = 0;
     std::uint8_t render_variant_primary = 0;
@@ -96,6 +97,10 @@ struct ParticipantRuntimeInfo {
     std::uint8_t render_variant_tertiary = 0;
     std::uint32_t primary_visual_link_type_id = 0;
     std::uint32_t secondary_visual_link_type_id = 0;
+    std::uint32_t primary_visual_link_recipe_uid = 0;
+    std::uint32_t secondary_visual_link_recipe_uid = 0;
+    std::uint32_t attachment_visual_link_type_id = 0;
+    std::uint32_t attachment_visual_link_recipe_uid = 0;
     std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> primary_visual_link_color_block = {};
     std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> secondary_visual_link_color_block = {};
     std::uint32_t anim_drive_state_word = 0;
@@ -113,8 +118,23 @@ struct ParticipantRuntimeInfo {
 
 struct ParticipantInventoryItemState {
     std::uint32_t type_id = 0;
+    std::uint32_t recipe_uid = 0;
     std::int32_t slot = -1;
     std::int32_t stack_count = 0;
+};
+
+struct ParticipantEquippedItemState {
+    std::uint32_t type_id = 0;
+    std::uint32_t recipe_uid = 0;
+};
+
+struct ParticipantEquipmentState {
+    bool valid = false;
+    ParticipantEquippedItemState hat;
+    ParticipantEquippedItemState robe;
+    ParticipantEquippedItemState weapon;
+    std::array<ParticipantEquippedItemState, kParticipantRingSlotCount> rings;
+    ParticipantEquippedItemState amulet;
 };
 
 struct ParticipantProgressionBookEntryState {
@@ -148,6 +168,7 @@ struct ParticipantOwnedProgressionState {
     std::int32_t gold = 0;
     std::uint32_t gold_revision = 0;
     std::uint32_t inventory_revision = 0;
+    std::uint32_t equipment_revision = 0;
     std::uint32_t spellbook_revision = 0;
     std::uint32_t statbook_revision = 0;
     std::uint32_t loadout_revision = 0;
@@ -161,6 +182,7 @@ struct ParticipantOwnedProgressionState {
     std::uint16_t inventory_item_total_count = 0;
     bool inventory_truncated = false;
     std::vector<ParticipantInventoryItemState> inventory_items;
+    ParticipantEquipmentState equipment;
     std::uint16_t progression_book_entry_total_count = 0;
     bool progression_book_truncated = false;
     std::vector<ParticipantProgressionBookEntryState> progression_book_entries;
@@ -240,6 +262,10 @@ struct ParticipantTransformSample {
     std::uint8_t render_variant_tertiary = 0;
     std::uint32_t primary_visual_link_type_id = 0;
     std::uint32_t secondary_visual_link_type_id = 0;
+    std::uint32_t primary_visual_link_recipe_uid = 0;
+    std::uint32_t secondary_visual_link_recipe_uid = 0;
+    std::uint32_t attachment_visual_link_type_id = 0;
+    std::uint32_t attachment_visual_link_recipe_uid = 0;
     std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> primary_visual_link_color_block = {};
     std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> secondary_visual_link_color_block = {};
     std::uint32_t anim_drive_state_word = 0;
@@ -369,7 +395,11 @@ struct LootDropSnapshot {
     float value = 0.0f;
     float motion = 0.0f;
     float progress = 0.0f;
+    float auxiliary = 0.0f;
     std::uint32_t item_type_id = 0;
+    std::uint32_t item_recipe_uid = 0;
+    bool item_color_state_valid = false;
+    std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> item_color_state = {};
     std::int32_t item_slot = -1;
     std::int32_t stack_count = 0;
     std::int32_t actor_slot = -1;

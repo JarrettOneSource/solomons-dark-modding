@@ -114,21 +114,25 @@ bool InitializeDebugUiOverlay() {
     }
     Log("Debug UI overlay: Dark Cloud browser exact text render hook installed.");
 
-    Log("Debug UI overlay: installing glyph draw hook.");
-    if (!InstallGlyphDrawHook(g_debug_ui_overlay_state.config, &hook_error)) {
-        Log("Debug UI overlay glyph draw hook failed. " + hook_error);
-        RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
-        RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
-        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
-        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
-        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
-        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_add_line_hook);
-        RemoveX86Hook(&g_debug_ui_overlay_state.string_assign_hook);
-        RemoveX86Hook(&g_debug_ui_overlay_state.text_draw_hook);
-        ResetDebugUiOverlayStateUnlocked(&g_debug_ui_overlay_state);
-        return false;
+    if (IsGameplayKeyboardInjectionInitialized()) {
+        Log("Debug UI overlay: using gameplay-owned glyph draw hook.");
+    } else {
+        Log("Debug UI overlay: installing its glyph draw hook.");
+        if (!InstallGlyphDrawHook(g_debug_ui_overlay_state.config, &hook_error)) {
+            Log("Debug UI overlay glyph draw hook failed. " + hook_error);
+            RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
+            RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+            RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
+            RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
+            RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
+            RemoveX86Hook(&g_debug_ui_overlay_state.dialog_add_line_hook);
+            RemoveX86Hook(&g_debug_ui_overlay_state.string_assign_hook);
+            RemoveX86Hook(&g_debug_ui_overlay_state.text_draw_hook);
+            ResetDebugUiOverlayStateUnlocked(&g_debug_ui_overlay_state);
+            return false;
+        }
+        Log("Debug UI overlay: glyph draw hook installed.");
     }
-    Log("Debug UI overlay: glyph draw hook installed.");
 
     Log("Debug UI overlay: installing text quad draw hook.");
     if (!InstallTextQuadDrawHook(g_debug_ui_overlay_state.config, &hook_error)) {

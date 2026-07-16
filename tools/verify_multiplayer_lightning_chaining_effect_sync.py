@@ -568,6 +568,56 @@ emit("available", ok)
 emit("chain_count", ok and chain_count or "")
 """
 
+AIR_CHAIN_NATIVE_SURFACE_LUA = r"""
+local target_ids = __TARGET_IDS__
+local function emit(k, v) print(k .. '=' .. tostring(v)) end
+local function hx(v) return string.format("0x%08X", tonumber(v) or 0) end
+local function offset(key) return sd.debug.layout_offset(key) end
+local function read_ptr(address) return address ~= 0 and (sd.debug.read_ptr(address) or 0) or 0 end
+local function read_u8(address) return address ~= 0 and (sd.debug.read_u8(address) or 0) or 0 end
+local function read_u16(address) return address ~= 0 and (sd.debug.read_u16(address) or 0) or 0 end
+local function read_u32(address) return address ~= 0 and (sd.debug.read_u32(address) or 0) or 0 end
+local function read_i32(address) return address ~= 0 and (sd.debug.read_i32(address) or 0) or 0 end
+local function read_float(address) return address ~= 0 and (sd.debug.read_float(address) or 0) or 0 end
+
+local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
+local player_actor = tonumber(player and player.actor_address or 0) or 0
+local owner_offset = offset("actor_owner")
+local player_world = player_actor ~= 0 and owner_offset ~= nil and read_ptr(player_actor + owner_offset) or 0
+
+emit("ok", player_actor ~= 0 and player_world ~= 0)
+emit("player.actor", hx(player_actor))
+emit("player.world", hx(player_world))
+emit("world.transient_count", player_world ~= 0 and read_i32(player_world + 0x8B78) or 0)
+emit("world.transient_items", hx(player_world ~= 0 and read_ptr(player_world + 0x8B84) or 0))
+
+local position_x_offset = offset("actor_position_x")
+local position_y_offset = offset("actor_position_y")
+local grid_cell_offset = offset("actor_grid_cell_ptr")
+local slot_offset = offset("actor_slot")
+local world_slot_offset = offset("actor_world_slot")
+local spatial_handle_offset = offset("actor_spatial_handle")
+for index, network_actor_id in ipairs(target_ids) do
+  local prefix = "target." .. tostring(index) .. "."
+  local snapshot = sd.world.get_run_enemy_by_network_id and sd.world.get_run_enemy_by_network_id(network_actor_id) or nil
+  local actor = tonumber(snapshot and snapshot.actor_address or 0) or 0
+  emit(prefix .. "network_actor_id", string.format("%.0f", network_actor_id))
+  emit(prefix .. "actor", hx(actor))
+  emit(prefix .. "vtable", hx(actor ~= 0 and read_ptr(actor) or 0))
+  emit(prefix .. "header_word", actor ~= 0 and read_u32(actor + 0x04) or 0)
+  emit(prefix .. "type_id", actor ~= 0 and read_u32(actor + 0x08) or 0)
+  emit(prefix .. "native_flags_14", actor ~= 0 and read_u32(actor + 0x14) or 0)
+  emit(prefix .. "x", actor ~= 0 and position_x_offset ~= nil and read_float(actor + position_x_offset) or 0)
+  emit(prefix .. "y", actor ~= 0 and position_y_offset ~= nil and read_float(actor + position_y_offset) or 0)
+  emit(prefix .. "grid_cell", hx(actor ~= 0 and grid_cell_offset ~= nil and read_ptr(actor + grid_cell_offset) or 0))
+  emit(prefix .. "owner", hx(actor ~= 0 and owner_offset ~= nil and read_ptr(actor + owner_offset) or 0))
+  emit(prefix .. "slot", actor ~= 0 and slot_offset ~= nil and read_u8(actor + slot_offset) or 0)
+  emit(prefix .. "world_slot", actor ~= 0 and world_slot_offset ~= nil and read_u16(actor + world_slot_offset) or 0)
+  emit(prefix .. "spatial_handle", actor ~= 0 and spatial_handle_offset ~= nil and read_u16(actor + spatial_handle_offset) or 0)
+end
+emit("target_count", #target_ids)
+"""
+
 NATIVE_PRIMARY_OUTPUTS_LUA = r"""
 local participant_id = tonumber("__PARTICIPANT_ID__") or 0
 local function emit(k, v) print(k .. '=' .. tostring(v)) end
@@ -792,6 +842,69 @@ def query_air_chain_state(
         AIR_CHAIN_STATE_LUA
         .replace("__PARTICIPANT_ID__", str(participant_id))
         .replace("__CHAIN_COUNT_OFFSET__", str(AIR_LIGHTNING_CHAIN_COUNT_OFFSET)),
+    )
+
+
+def query_air_chain_native_surface(
+    pipe_name: str,
+    cluster: dict[str, Any],
+) -> dict[str, str]:
+    target_ids = "{" + ",".join(
+        str(int(target["network_id"]))
+        for target in cluster["targets"]
+    ) + "}"
+    return values(
+        pipe_name,
+        AIR_CHAIN_NATIVE_SURFACE_LUA.replace("__TARGET_IDS__", target_ids),
+    )
+
+
+def air_chain_native_surface_ready(
+    surface: dict[str, str],
+    target_count: int,
+) -> bool:
+    if surface.get("ok") != "true":
+        return False
+    player_world = parse_int_text(surface.get("player.world"), 0)
+    if player_world == 0:
+        return False
+    for index in range(1, target_count + 1):
+        prefix = f"target.{index}."
+        if (
+            parse_int_text(surface.get(f"{prefix}actor"), 0) == 0
+            or parse_int_text(surface.get(f"{prefix}type_id"), 0) == 0
+            or parse_int_text(surface.get(f"{prefix}native_flags_14"), 0) & 0x2 == 0
+            or parse_int_text(surface.get(f"{prefix}grid_cell"), 0) == 0
+            or parse_int_text(surface.get(f"{prefix}owner"), 0) != player_world
+        ):
+            return False
+    return True
+
+
+def wait_for_air_chain_native_surfaces(
+    direction: Direction,
+    cluster: dict[str, Any],
+    timeout: float = 3.0,
+) -> dict[str, Any]:
+    target_count = len(cluster["targets"])
+    deadline = time.monotonic() + timeout
+    attempts = 0
+    last: dict[str, dict[str, str]] = {}
+    while time.monotonic() < deadline:
+        attempts += 1
+        last = {
+            "owner": query_air_chain_native_surface(direction.source_pipe, cluster),
+            "observer": query_air_chain_native_surface(direction.receiver_pipe, cluster),
+        }
+        if all(
+            air_chain_native_surface_ready(surface, target_count)
+            for surface in last.values()
+        ):
+            return {"attempts": attempts, **last}
+        time.sleep(0.1)
+    raise VerifyFailure(
+        "Lightning targets did not enter both peers' native mask=2 spatial surfaces: "
+        f"attempts={attempts} last={last}"
     )
 
 
@@ -1296,6 +1409,10 @@ def cast_lightning_cluster(
         write_hp=manual_cluster,
         include_client=False,
     )
+    native_selection_surface_before_cast = wait_for_air_chain_native_surfaces(
+        direction,
+        cluster,
+    )
     before_hp_by_id = {
         int(target["network_id"]): parse_float(
             query_enemy_state(int(target["network_id"])).get("hp"),
@@ -1403,6 +1520,7 @@ def cast_lightning_cluster(
         "quiesce": quiesce,
         "cast_runtime": cast_runtime,
         "cast_start": cast_start,
+        "native_selection_surface_before_cast": native_selection_surface_before_cast,
         "native_outputs_before_cast": native_outputs_before_cast,
         "native_chain_state": {
             "before": native_chain_state_before_cast,

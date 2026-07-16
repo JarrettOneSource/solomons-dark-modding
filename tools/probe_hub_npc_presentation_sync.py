@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,8 @@ STUDENT_TYPE_ID = 0x138A
 HUB_NPC_TYPE_MIN = 0x1389
 HUB_NPC_TYPE_MAX = 0x1390
 DRIVE_PHASE_TOLERANCE = 8
+HUB_ANIMATION_DRIVE_PHASE_UNITS_PER_SECOND = 150
+PHASE_ADVANCING_NPC_TYPES = frozenset((0x138B, 0x138C, 0x138D, 0x138F))
 
 
 LUA_CAPTURE = r"""
@@ -161,6 +164,11 @@ emit("actor.count", actor_index)
 local replicated = sd.world.get_replicated_actors and sd.world.get_replicated_actors() or nil
 emit("replicated.valid", replicated ~= nil)
 emit("replicated.scene_kind", replicated and replicated.scene_kind or "")
+emit("replicated.sampled_ms", replicated and replicated.sampled_ms or 0)
+emit("replicated.received_ms", replicated and replicated.received_ms or 0)
+emit("replicated.sequence", replicated and replicated.sequence or 0)
+emit("replicated.apply_valid", replicated and replicated.apply_valid or false)
+emit("replicated.applied_ms", replicated and replicated.applied_ms or 0)
 emit("replicated.actor_count", replicated and replicated.actor_count or 0)
 emit("replicated.total_count", replicated and replicated.actor_total_count or 0)
 emit("replicated.truncated", replicated and replicated.truncated or false)
@@ -253,6 +261,19 @@ def drive_phase_distance(left: str | None, right: str | None) -> int:
     return delta
 
 
+def advance_drive_phase(drive_word: str | None, elapsed_ms: int) -> int:
+    value = parse_int(drive_word)
+    if elapsed_ms >= 0:
+        phase_delta = (
+            elapsed_ms * HUB_ANIMATION_DRIVE_PHASE_UNITS_PER_SECOND + 500
+        ) // 1000
+    else:
+        phase_delta = -((
+            (-elapsed_ms) * HUB_ANIMATION_DRIVE_PHASE_UNITS_PER_SECOND + 500
+        ) // 1000)
+    return (value & 0xFFFF0000) | ((value + phase_delta) & 0xFFFF)
+
+
 def dist_sq(actor: dict[str, str], x: float, y: float) -> float:
     dx = parse_float(actor.get("x")) - x
     dy = parse_float(actor.get("y")) - y
@@ -335,6 +356,11 @@ def build_client_snapshot(values: dict[str, str]) -> dict[str, Any]:
         "local_by_address": local_by_address,
         "binding_by_id": binding_by_id,
         "replicated_valid": values.get("replicated.valid") == "true",
+        "replicated_sampled_ms": parse_int(values.get("replicated.sampled_ms")),
+        "replicated_received_ms": parse_int(values.get("replicated.received_ms")),
+        "replicated_sequence": parse_int(values.get("replicated.sequence")),
+        "replicated_apply_valid": values.get("replicated.apply_valid") == "true",
+        "replicated_applied_ms": parse_int(values.get("replicated.applied_ms")),
         "replicated_actor_count": parse_int(values.get("replicated.actor_count")),
         "replicated_total_count": parse_int(values.get("replicated.total_count")),
         "replicated_truncated": values.get("replicated.truncated") == "true",
@@ -408,7 +434,27 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
             "host_render_phase": host_actor.get("render_phase", ""),
             "client_render_phase": local_actor.get("render_phase", ""),
         }
-        phase_distance = drive_phase_distance(host_actor.get("drive_raw"), local_actor.get("drive_raw"))
+        sample_delta_ms = (
+            client["replicated_sampled_ms"] -
+            host["replicated_sampled_ms"]
+        )
+        raw_phase_distance = drive_phase_distance(
+            host_actor.get("drive_raw"),
+            local_actor.get("drive_raw"),
+        )
+        adjusted_host_drive = parse_int(host_actor.get("drive_raw"))
+        if type_id in PHASE_ADVANCING_NPC_TYPES:
+            adjusted_host_drive = advance_drive_phase(
+                host_actor.get("drive_raw"),
+                sample_delta_ms,
+            )
+        phase_distance = drive_phase_distance(
+            str(adjusted_host_drive),
+            local_actor.get("drive_raw"),
+        )
+        row["sample_delta_ms"] = sample_delta_ms
+        row["drive_phase_raw_distance"] = raw_phase_distance
+        row["sample_time_adjusted_host_drive"] = f"0x{adjusted_host_drive:08X}"
         row["drive_phase_distance"] = phase_distance
         row["drive_phase_within_tolerance"] = phase_distance <= DRIVE_PHASE_TOLERANCE
         if type_id == STUDENT_TYPE_ID:
@@ -458,6 +504,17 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
         "host_scene": host["scene_name"],
         "client_scene": client["scene_name"],
         "client_replicated_valid": client["replicated_valid"],
+        "host_replicated_sampled_ms": host["replicated_sampled_ms"],
+        "client_replicated_sampled_ms": client["replicated_sampled_ms"],
+        "sample_delta_ms": (
+            client["replicated_sampled_ms"] -
+            host["replicated_sampled_ms"]
+        ),
+        "host_replicated_sequence": host["replicated_sequence"],
+        "client_replicated_sequence": client["replicated_sequence"],
+        "client_replicated_received_ms": client["replicated_received_ms"],
+        "client_replicated_apply_valid": client["replicated_apply_valid"],
+        "client_replicated_applied_ms": client["replicated_applied_ms"],
         "client_replicated_actor_count": client["replicated_actor_count"],
         "client_replicated_total_count": client["replicated_total_count"],
         "client_replicated_truncated": client["replicated_truncated"],
@@ -499,6 +556,8 @@ def main() -> int:
         help="Lua exec endpoint as NAME=PIPE. Defaults to local multiplayer host/client.",
     )
     parser.add_argument("--timeout", type=float, default=10.0)
+    parser.add_argument("--samples", type=int, default=1)
+    parser.add_argument("--interval", type=float, default=0.25)
     parser.add_argument("--json", action="store_true")
     parser.add_argument(
         "--fail-on-divergence",
@@ -506,22 +565,96 @@ def main() -> int:
         help="Return non-zero when compared presentation fields diverge.",
     )
     args = parser.parse_args()
+    if args.samples <= 0:
+        parser.error("--samples must be positive")
+    if args.interval < 0.0:
+        parser.error("--interval cannot be negative")
 
     clients = args.client or list(DEFAULT_CLIENTS)
-    results = run_all(clients, LUA_CAPTURE, args.timeout)
-    values_by_name = {
-        str(result["name"]): {str(k): str(v) for k, v in result.get("values", {}).items()}
-        for result in results
-        if isinstance(result.get("values"), dict)
-    }
-    if "host" not in values_by_name or "client" not in values_by_name:
-        raise SystemExit("expected clients named 'host' and 'client'")
+    samples: list[dict[str, Any]] = []
+    all_clients_ok = True
+    for sample_index in range(args.samples):
+        results = run_all(clients, LUA_CAPTURE, args.timeout)
+        all_clients_ok = all_clients_ok and all(
+            result["returncode"] == 0 for result in results
+        )
+        values_by_name = {
+            str(result["name"]): {
+                str(k): str(v)
+                for k, v in result.get("values", {}).items()
+            }
+            for result in results
+            if isinstance(result.get("values"), dict)
+        }
+        if "host" not in values_by_name or "client" not in values_by_name:
+            raise SystemExit("expected clients named 'host' and 'client'")
+        samples.append({
+            "clients": results,
+            "comparison": compare_host_to_client(
+                values_by_name["host"],
+                values_by_name["client"],
+            ),
+        })
+        if sample_index + 1 < args.samples and args.interval > 0.0:
+            time.sleep(args.interval)
 
-    comparison = compare_host_to_client(values_by_name["host"], values_by_name["client"])
+    results = samples[-1]["clients"]
+    comparison = samples[-1]["comparison"]
+    summaries = [sample["comparison"]["summary"] for sample in samples]
+    aggregate = {
+        "sample_count": len(samples),
+        "all_client_calls_ok": all_clients_ok,
+        "all_replicated_valid": all(
+            bool(summary["client_replicated_valid"])
+            for summary in summaries
+        ),
+        "any_replicated_truncated": any(
+            bool(summary["client_replicated_truncated"])
+            for summary in summaries
+        ),
+        "minimum_compared_total": min(
+            int(summary["compared_total"])
+            for summary in summaries
+        ),
+        "minimum_student_compared": min(
+            int(summary["student_compared"])
+            for summary in summaries
+        ),
+        "minimum_named_compared": min(
+            int(summary["named_compared"])
+            for summary in summaries
+        ),
+        "maximum_student_variant_primary_mismatches": max(
+            int(summary["student_variant_primary_mismatches"])
+            for summary in summaries
+        ),
+        "maximum_student_color_mismatches": max(
+            int(summary["student_color_mismatches"])
+            for summary in summaries
+        ),
+        "maximum_student_book_palette_mismatches": max(
+            int(summary["student_book_palette_mismatches"])
+            for summary in summaries
+        ),
+        "maximum_student_book_palette_snapshot_count_mismatches": max(
+            int(summary["student_book_palette_snapshot_count_mismatches"])
+            for summary in summaries
+        ),
+        "maximum_named_drive_phase_out_of_tolerance": max(
+            int(summary["named_drive_phase_out_of_tolerance"])
+            for summary in summaries
+        ),
+        "maximum_named_drive_phase_distance": max(
+            int(summary["named_drive_phase_max_distance"])
+            for summary in summaries
+        ),
+    }
     output = {
-        "ok": all(result["returncode"] == 0 for result in results),
+        "ok": all_clients_ok,
         "clients": results,
         "comparison": comparison,
+        "samples": samples,
+        "aggregate": aggregate,
     }
     RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     RUNTIME_OUTPUT.write_text(json.dumps(output, indent=2, sort_keys=True), encoding="utf-8")
@@ -529,21 +662,27 @@ def main() -> int:
     if args.json:
         print(json.dumps(output, indent=2, sort_keys=True))
     else:
-        print(json.dumps(comparison["summary"], indent=2, sort_keys=True))
+        print(json.dumps(aggregate, indent=2, sort_keys=True))
         print(f"wrote {RUNTIME_OUTPUT}")
 
     if not output["ok"]:
         return 1
     if args.fail_on_divergence:
-        summary = comparison["summary"]
-        diverged = any(
-            int(summary.get(field, 0)) > 0
-            for field in (
-                "student_variant_primary_mismatches",
-                "student_color_mismatches",
-                "student_book_palette_mismatches",
-                "student_book_palette_snapshot_count_mismatches",
-                "named_drive_phase_out_of_tolerance",
+        diverged = (
+            not aggregate["all_replicated_valid"] or
+            aggregate["any_replicated_truncated"] or
+            aggregate["minimum_compared_total"] <= 0 or
+            aggregate["minimum_student_compared"] <= 0 or
+            aggregate["minimum_named_compared"] <= 0 or
+            any(
+                int(aggregate[field]) > 0
+                for field in (
+                    "maximum_student_variant_primary_mismatches",
+                    "maximum_student_color_mismatches",
+                    "maximum_student_book_palette_mismatches",
+                    "maximum_student_book_palette_snapshot_count_mismatches",
+                    "maximum_named_drive_phase_out_of_tolerance",
+                )
             )
         )
         return 1 if diverged else 0

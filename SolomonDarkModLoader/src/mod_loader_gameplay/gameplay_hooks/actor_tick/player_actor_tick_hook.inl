@@ -115,7 +115,10 @@ void RepairInvalidNativeMeditationTransientState(uintptr_t actor_address) {
     const auto maximum_ramp_ticks = (std::max)(idle_ticks, 0);
     const bool repair_idle_elapsed = idle_elapsed_ticks < 0;
     const bool repair_recovery_ramp =
-        recovery_ramp_ticks < 0 || recovery_ramp_ticks > maximum_ramp_ticks;
+        idle_ticks == -1
+            ? recovery_ramp_ticks < -1 || recovery_ramp_ticks > 0
+            : recovery_ramp_ticks < 0 ||
+                  recovery_ramp_ticks > maximum_ramp_ticks;
     if (!repair_idle_elapsed && !repair_recovery_ramp) {
         return;
     }
@@ -178,6 +181,13 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         local_actor_address != 0 &&
         local_actor_address == actor_address;
     const auto native_tick_now_ms = static_cast<std::uint64_t>(GetTickCount64());
+
+    if (local_player_actor) {
+        (void)MaybeInitializeLocalPlayerNativePrimaryRuntime(
+            gameplay_address_for_pump,
+            actor_address,
+            native_tick_now_ms);
+    }
 
     RepairInvalidNativeMeditationTransientState(actor_address);
 
@@ -860,6 +870,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
 
     if (local_player_actor) {
         MaybeLogLocalPlayerCastProbe(gameplay_address_for_pump, actor_address, false);
+        ScopedLocalPlayerScriptedMovementInput scripted_movement_input(
+            gameplay_address_for_pump);
         ScopedLocalPlayerRushMovementScale rush_movement_scale(actor_address);
         original(self);
     } else {

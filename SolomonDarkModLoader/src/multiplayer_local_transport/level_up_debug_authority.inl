@@ -5,7 +5,7 @@ void PublishHostLevelUpBarrierOffers(
     std::int32_t experience,
     uintptr_t source_progression_address) {
     if (!IsLocalTransportHost() ||
-        g_local_transport.suppress_local_level_up_fanout_for_debug ||
+        g_local_transport.suppress_local_level_up_fanout ||
         level <= 0 || experience < 0) {
         return;
     }
@@ -84,17 +84,15 @@ bool DebugPublishHostNaturalLevelUpOffer(
     if (target_participant_id == g_local_transport.local_peer_id) {
         std::vector<BotSkillChoiceOption> options;
         std::string roll_error;
-        const bool previous_suppression =
-            g_local_transport.suppress_local_level_up_fanout_for_debug;
-        g_local_transport.suppress_local_level_up_fanout_for_debug = true;
-        const bool synchronized =
-            SyncLocalPlayerProgressionToSharedLevelUpAndRollChoices(
+        bool synchronized = false;
+        {
+            ScopedLocalLevelUpFanoutSuppression suppress_fanout;
+            synchronized = SyncLocalPlayerProgressionToSharedLevelUpAndRollChoices(
                 level,
                 experience,
                 &options,
                 &roll_error);
-        g_local_transport.suppress_local_level_up_fanout_for_debug =
-            previous_suppression;
+        }
         if (!synchronized) {
             return fail("natural host-self choice roll failed: " + roll_error);
         }
@@ -194,25 +192,31 @@ bool DebugPublishHostLevelUpOffer(
 
     std::string sync_error;
     if (target_self) {
-        const bool previous_suppression =
-            g_local_transport.suppress_local_level_up_fanout_for_debug;
-        g_local_transport.suppress_local_level_up_fanout_for_debug = true;
-        const bool synchronized = SyncLocalPlayerProgressionToSharedLevelUp(
+        bool synchronized = false;
+        {
+            ScopedLocalLevelUpFanoutSuppression suppress_fanout;
+            synchronized = SyncLocalPlayerProgressionToSharedLevelUp(
                 level,
                 experience,
                 &sync_error);
-        g_local_transport.suppress_local_level_up_fanout_for_debug =
-            previous_suppression;
+        }
         if (!synchronized) {
             return fail("deterministic host-self progression sync failed: " + sync_error);
         }
-    } else if (!SyncParticipantProgressionToSharedLevelUp(
-                   target_participant_id,
-                   level,
-                   experience,
-                   0,
-                   &sync_error)) {
-        return fail("deterministic remote progression sync failed: " + sync_error);
+    } else {
+        bool synchronized = false;
+        {
+            ScopedLocalLevelUpFanoutSuppression suppress_fanout;
+            synchronized = SyncParticipantProgressionToSharedLevelUp(
+                target_participant_id,
+                level,
+                experience,
+                0,
+                &sync_error);
+        }
+        if (!synchronized) {
+            return fail("deterministic remote progression sync failed: " + sync_error);
+        }
     }
 
     BotSkillChoiceOption option;
@@ -231,13 +235,15 @@ bool DebugPublishHostLevelUpOffer(
     const auto* local = FindLocalParticipant(runtime_state);
     const std::uint32_t run_nonce =
         local != nullptr && local->runtime.valid ? local->runtime.run_nonce : 0;
-    IssueHostLevelUpOfferForParticipant(
+    if (!IssueHostLevelUpOfferForParticipant(
         target_participant_id,
         run_nonce,
         level,
         experience,
         std::move(options),
-        true);
+        true)) {
+        return fail("deterministic remote level-up offer could not be issued");
+    }
     Log(
         "Multiplayer deterministic level-up offer issued. target_participant_id=" +
         std::to_string(target_participant_id) +

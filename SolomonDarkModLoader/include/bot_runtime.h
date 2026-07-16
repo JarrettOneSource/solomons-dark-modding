@@ -2,6 +2,7 @@
 
 #include "multiplayer_runtime_state.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -155,6 +156,10 @@ struct BotEquipVisualLaneState {
     std::uint32_t holder_kind = 0;
     uintptr_t current_object_vtable = 0;
     std::uint32_t current_object_type_id = 0;
+    std::uint32_t current_object_recipe_uid = 0;
+    bool current_object_color_state_valid = false;
+    std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes>
+        current_object_color_state = {};
 };
 
 struct BotSnapshot {
@@ -188,6 +193,8 @@ struct BotSnapshot {
     std::uint8_t native_transient_status_flags = 0;
     std::int32_t replicated_poison_remaining_ticks = 0;
     std::int32_t native_poison_remaining_ticks = 0;
+    std::int32_t replicated_damage_x4_remaining_ticks = 0;
+    std::int32_t native_damage_x4_remaining_ticks = 0;
     bool entity_materialized = false;
     uintptr_t actor_address = 0;
     uintptr_t world_address = 0;
@@ -325,6 +332,13 @@ bool SyncLocalPlayerProgressionToSharedLevelUp(
 bool SyncLocalPlayerProgressionToSharedLevelUpAndRollChoices(
     std::int32_t level,
     std::int32_t experience,
+    std::vector<BotSkillChoiceOption>* options,
+    std::string* error_message);
+bool RollParticipantSkillChoiceOptions(
+    std::uint64_t participant_id,
+    std::vector<BotSkillChoiceOption>* options,
+    std::string* error_message);
+bool RollLocalPlayerSkillChoiceOptions(
     std::vector<BotSkillChoiceOption>* options,
     std::string* error_message);
 bool ApplyParticipantSkillChoiceOption(

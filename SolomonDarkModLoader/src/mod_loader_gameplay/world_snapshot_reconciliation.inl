@@ -6,7 +6,9 @@ constexpr std::uint64_t kWorldSnapshotRunLifecycleRequestIntervalMs = 1000;
 constexpr std::uint64_t kReplicatedRunEnemyRemoteDeathHoldMs = 1200;
 constexpr std::uint64_t kHubAnimationDrivePhaseUnitsPerSecond = 150;
 constexpr std::uint64_t kRunEntryAuthoritySnapshotStaleMs = 3000;
-constexpr float kWorldSnapshotSettleDistance = 0.05f;
+constexpr float kWorldSnapshotSettleDistance = 0.5f;
+constexpr float kReplicatedRunEnemySoftCorrectionFactor = 0.2f;
+constexpr float kReplicatedRunEnemyHardSnapDistance = 192.0f;
 constexpr float kReplicatedRunEnemyDeathHpEpsilon = 0.05f;
 constexpr float kReplicatedRunEnemyDamageObservationEpsilon = 0.0001f;
 // Keep client-authored native hit reactions when they remain close to the
@@ -130,6 +132,7 @@ bool IsReplicatedHubPhaseAdvancingActorSnapshot(
     case 0x138B:
     case 0x138C:
     case 0x138D:
+    case 0x138F:
         return true;
     default:
         return false;
@@ -1167,16 +1170,30 @@ bool ApplyReplicatedWorldActorTransform(
         TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &current_y);
     const float dx = have_current_position ? authoritative_actor.position_x - current_x : 0.0f;
     const float dy = have_current_position ? authoritative_actor.position_y - current_y : 0.0f;
+    const float position_error_squared = dx * dx + dy * dy;
     const bool position_changed =
         force_write ||
         !have_current_position ||
-        dx * dx + dy * dy > kWorldSnapshotSettleDistance * kWorldSnapshotSettleDistance;
+        position_error_squared > kWorldSnapshotSettleDistance * kWorldSnapshotSettleDistance;
 
     bool wrote_position = false;
     if (position_changed) {
+        const bool soft_correct_live_run_enemy =
+            !force_write &&
+            have_current_position &&
+            authoritative_actor.tracked_enemy &&
+            !authoritative_actor.dead &&
+            position_error_squared <
+                kReplicatedRunEnemyHardSnapDistance * kReplicatedRunEnemyHardSnapDistance;
+        const float corrected_x = soft_correct_live_run_enemy
+            ? current_x + dx * kReplicatedRunEnemySoftCorrectionFactor
+            : authoritative_actor.position_x;
+        const float corrected_y = soft_correct_live_run_enemy
+            ? current_y + dy * kReplicatedRunEnemySoftCorrectionFactor
+            : authoritative_actor.position_y;
         wrote_position =
-            memory.TryWriteField(actor_address, kActorPositionXOffset, authoritative_actor.position_x) &&
-            memory.TryWriteField(actor_address, kActorPositionYOffset, authoritative_actor.position_y);
+            memory.TryWriteField(actor_address, kActorPositionXOffset, corrected_x) &&
+            memory.TryWriteField(actor_address, kActorPositionYOffset, corrected_y);
         if (wrote_position) {
             DWORD rebind_exception_code = 0;
             (void)TryRebindActorToOwnerWorld(actor_address, &rebind_exception_code);

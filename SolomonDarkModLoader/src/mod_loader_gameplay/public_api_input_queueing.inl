@@ -37,6 +37,23 @@ bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_m
     return true;
 }
 
+bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address) {
+    if (!IsRunLifecycleManualEnemySpawnerTestModeEnabled() ||
+        !IsActorCurrentLocalPlayerSlotZero(actor_address) ||
+        !IsManualSpawnerPrimaryCastControlGraceActive()) {
+        return false;
+    }
+
+    const auto target_actor_address =
+        g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.load(
+            std::memory_order_acquire);
+    return IsManualSpawnerPrimaryTargetActor(target_actor_address) &&
+           ApplyManualSpawnerPrimaryTargetState(
+               actor_address,
+               0,
+               target_actor_address);
+}
+
 bool QueueGameplayMouseLeftClick(std::string* error_message) {
     return QueueGameplayMouseLeftHoldFrames(kInjectedGameplayMouseClickFrames, error_message);
 }
@@ -241,51 +258,55 @@ bool ClearLocalPlayerGameplayCastState(std::string* error_message) {
     wrote = memory.TryWriteField<std::int32_t>(actor_address, kActorCurrentTargetBucketDeltaOffset, 0) && wrote;
 
     uintptr_t selection_pointer = 0;
-    if (!memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &selection_pointer) ||
-        selection_pointer == 0) {
+    if (!memory.TryReadField(
+            actor_address,
+            kActorAnimationSelectionStateOffset,
+            &selection_pointer)) {
         if (error_message != nullptr) {
-            *error_message = "Local player animation-selection/control-brain state is not available.";
+            *error_message = "Local player animation-selection field is not readable.";
         }
         return false;
     }
 
-    constexpr int kLocalCastStateSuppressedRetargetTicks = 60;
-    wrote = memory.TryWriteField<std::uint8_t>(
-        selection_pointer,
-        kActorControlBrainTargetSlotOffset,
-        kTargetHandleGroupSentinel) && wrote;
-    wrote = memory.TryWriteField<std::uint16_t>(
-        selection_pointer,
-        kActorControlBrainTargetHandleOffset,
-        kTargetHandleSlotSentinel) && wrote;
-    wrote = memory.TryWriteField<std::int32_t>(
-        selection_pointer,
-        kActorControlBrainRetargetTicksOffset,
-        kLocalCastStateSuppressedRetargetTicks) && wrote;
-    wrote = memory.TryWriteField<std::int32_t>(
-        selection_pointer,
-        kActorControlBrainTargetCooldownTicksOffset,
-        0) && wrote;
-    wrote = memory.TryWriteField<std::int32_t>(
-        selection_pointer,
-        kActorControlBrainActionCooldownTicksOffset,
-        0) && wrote;
-    wrote = memory.TryWriteField<std::int32_t>(
-        selection_pointer,
-        kActorControlBrainActionBurstTicksOffset,
-        0) && wrote;
-    wrote = memory.TryWriteField<std::int32_t>(
-        selection_pointer,
-        kActorControlBrainHeadingLockTicksOffset,
-        0) && wrote;
-    wrote = memory.TryWriteField<float>(
-        selection_pointer,
-        kActorControlBrainMoveInputXOffset,
-        0.0f) && wrote;
-    wrote = memory.TryWriteField<float>(
-        selection_pointer,
-        kActorControlBrainMoveInputYOffset,
-        0.0f) && wrote;
+    if (selection_pointer != 0) {
+        constexpr int kLocalCastStateSuppressedRetargetTicks = 60;
+        wrote = memory.TryWriteField<std::uint8_t>(
+            selection_pointer,
+            kActorControlBrainTargetSlotOffset,
+            kTargetHandleGroupSentinel) && wrote;
+        wrote = memory.TryWriteField<std::uint16_t>(
+            selection_pointer,
+            kActorControlBrainTargetHandleOffset,
+            kTargetHandleSlotSentinel) && wrote;
+        wrote = memory.TryWriteField<std::int32_t>(
+            selection_pointer,
+            kActorControlBrainRetargetTicksOffset,
+            kLocalCastStateSuppressedRetargetTicks) && wrote;
+        wrote = memory.TryWriteField<std::int32_t>(
+            selection_pointer,
+            kActorControlBrainTargetCooldownTicksOffset,
+            0) && wrote;
+        wrote = memory.TryWriteField<std::int32_t>(
+            selection_pointer,
+            kActorControlBrainActionCooldownTicksOffset,
+            0) && wrote;
+        wrote = memory.TryWriteField<std::int32_t>(
+            selection_pointer,
+            kActorControlBrainActionBurstTicksOffset,
+            0) && wrote;
+        wrote = memory.TryWriteField<std::int32_t>(
+            selection_pointer,
+            kActorControlBrainHeadingLockTicksOffset,
+            0) && wrote;
+        wrote = memory.TryWriteField<float>(
+            selection_pointer,
+            kActorControlBrainMoveInputXOffset,
+            0.0f) && wrote;
+        wrote = memory.TryWriteField<float>(
+            selection_pointer,
+            kActorControlBrainMoveInputYOffset,
+            0.0f) && wrote;
+    }
 
     Log(
         "Cleared local player gameplay cast state. gameplay=" + HexString(gameplay_address) +

@@ -20,6 +20,7 @@ std::vector<ParticipantInventoryItemState> BuildOwnedInventoryItems(
         }
         ParticipantInventoryItemState built;
         built.type_id = item.type_id;
+        built.recipe_uid = item.recipe_uid;
         built.slot = item.slot;
         built.stack_count = item.stack_count;
         items.push_back(built);
@@ -35,6 +36,7 @@ bool InventoryItemsEqual(
     }
     for (std::size_t index = 0; index < left.size(); ++index) {
         if (left[index].type_id != right[index].type_id ||
+            left[index].recipe_uid != right[index].recipe_uid ||
             left[index].slot != right[index].slot ||
             left[index].stack_count != right[index].stack_count) {
             return false;
@@ -67,6 +69,74 @@ void RefreshOwnedInventoryFromSnapshot(
     owned_progression->inventory_truncated = next_truncated;
     owned_progression->inventory_items = std::move(next_items);
     owned_progression->inventory_revision += 1;
+}
+
+ParticipantEquippedItemState BuildOwnedEquippedItem(
+    const SDModEquipVisualLaneState& lane) {
+    ParticipantEquippedItemState item;
+    item.type_id = lane.current_object_type_id;
+    item.recipe_uid = lane.current_object_recipe_uid;
+    return item;
+}
+
+bool EquippedItemsEqual(
+    const ParticipantEquippedItemState& left,
+    const ParticipantEquippedItemState& right) {
+    return left.type_id == right.type_id &&
+           left.recipe_uid == right.recipe_uid;
+}
+
+bool EquipmentStatesEqual(
+    const ParticipantEquipmentState& left,
+    const ParticipantEquipmentState& right) {
+    if (left.valid != right.valid ||
+        !EquippedItemsEqual(left.hat, right.hat) ||
+        !EquippedItemsEqual(left.robe, right.robe) ||
+        !EquippedItemsEqual(left.weapon, right.weapon) ||
+        !EquippedItemsEqual(left.amulet, right.amulet)) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.rings.size(); ++index) {
+        if (!EquippedItemsEqual(left.rings[index], right.rings[index])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void RefreshOwnedEquipmentFromSnapshot(
+    const SDModInventoryState& inventory_state,
+    ParticipantOwnedProgressionState* owned_progression) {
+    if (owned_progression == nullptr || !inventory_state.valid) {
+        return;
+    }
+
+    ParticipantEquipmentState next;
+    next.valid =
+        inventory_state.primary_visual_lane.holder_address != 0 &&
+        inventory_state.secondary_visual_lane.holder_address != 0 &&
+        inventory_state.attachment_visual_lane.holder_address != 0 &&
+        inventory_state.amulet_lane.holder_address != 0;
+    for (const auto& ring_lane : inventory_state.ring_lanes) {
+        next.valid = next.valid && ring_lane.holder_address != 0;
+    }
+    if (!next.valid) {
+        return;
+    }
+
+    next.hat = BuildOwnedEquippedItem(inventory_state.primary_visual_lane);
+    next.robe = BuildOwnedEquippedItem(inventory_state.secondary_visual_lane);
+    next.weapon = BuildOwnedEquippedItem(inventory_state.attachment_visual_lane);
+    for (std::size_t index = 0; index < next.rings.size(); ++index) {
+        next.rings[index] = BuildOwnedEquippedItem(inventory_state.ring_lanes[index]);
+    }
+    next.amulet = BuildOwnedEquippedItem(inventory_state.amulet_lane);
+    if (EquipmentStatesEqual(owned_progression->equipment, next)) {
+        return;
+    }
+
+    owned_progression->equipment = next;
+    owned_progression->equipment_revision += 1;
 }
 
 std::uint16_t ClampProgressionBookEntryCountForPacket(int value) {
@@ -318,13 +388,14 @@ void RefreshOwnedAbilityLoadoutFromProfile(
 
 std::int32_t NormalizeInventoryLootStackCount(std::uint32_t type_id, std::int32_t stack_count) {
     if (type_id != kPotionItemTypeId) {
-        return stack_count > 0 ? stack_count : 0;
+        return (std::max)(stack_count, 1);
     }
     return (std::max)(stack_count, 1);
 }
 
 bool ApplyOwnedInventoryLootItem(
     std::uint32_t type_id,
+    std::uint32_t recipe_uid,
     std::int32_t slot,
     std::int32_t stack_count,
     ParticipantOwnedProgressionState* owned_progression) {
@@ -356,6 +427,7 @@ bool ApplyOwnedInventoryLootItem(
 
     ParticipantInventoryItemState item;
     item.type_id = type_id;
+    item.recipe_uid = recipe_uid;
     item.slot = slot;
     item.stack_count = normalized_stack_count;
     owned_progression->inventory_items.push_back(item);

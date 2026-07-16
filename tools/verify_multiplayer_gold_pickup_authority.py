@@ -397,6 +397,36 @@ def move_client_out_of_pickup_range(
     drop_y: float,
     timeout: float,
 ) -> dict[str, Any]:
+    current = capture_pair()
+    current_host_row = find_participant(current["host"], CLIENT_ID)
+    current_client_distance = distance(
+        parse_float_text(current["client"].get("player.x")),
+        parse_float_text(current["client"].get("player.y")),
+        drop_x,
+        drop_y,
+    )
+    current_host_distance = (
+        distance(current_host_row["x"], current_host_row["y"], drop_x, drop_y)
+        if current_host_row is not None else 0.0
+    )
+    if (
+        current_client_distance > PICKUP_SUPPRESSION_RADIUS
+        and current_host_row is not None
+        and current_host_distance > PICKUP_SUPPRESSION_RADIUS
+    ):
+        return {
+            "place": None,
+            "client_capture": current["client"],
+            "host_capture": current["host"],
+            "host_participant": current_host_row,
+            "drop_x": drop_x,
+            "drop_y": drop_y,
+            "parking_x": parse_float_text(current["client"].get("player.x")),
+            "parking_y": parse_float_text(current["client"].get("player.y")),
+            "client_distance": current_client_distance,
+            "host_distance": current_host_distance,
+        }
+
     candidate_targets = [
         (drop_x + 900.0, drop_y + 900.0),
         (drop_x - 900.0, drop_y + 900.0),
@@ -548,16 +578,52 @@ def select_remote_spawn_anchor(timeout: float) -> dict[str, Any]:
 
 def select_spawn_point(timeout: float) -> dict[str, Any]:
     before = capture_pair()
-    requested_x = RUN_SAFE_SPAWN_X
-    requested_y = RUN_SAFE_SPAWN_Y
-    snapped_x, snapped_y = snap_to_nav(HOST_PIPE, requested_x, requested_y)
-    return {
-        "before": before,
-        "requested_x": requested_x,
-        "requested_y": requested_y,
-        "snapped_x": snapped_x,
-        "snapped_y": snapped_y,
-    }
+    client_x = parse_float_text(before["client"].get("player.x"))
+    client_y = parse_float_text(before["client"].get("player.y"))
+    host_x = parse_float_text(before["host"].get("player.x"))
+    host_y = parse_float_text(before["host"].get("player.y"))
+    away_x = client_x - host_x
+    away_y = client_y - host_y
+    away_length = math.hypot(away_x, away_y)
+    if away_length < 1.0:
+        away_x, away_y, away_length = 1.0, 0.0, 1.0
+    away_x /= away_length
+    away_y /= away_length
+    directions = (
+        (away_x, away_y),
+        (-away_y, away_x),
+        (away_y, -away_x),
+        (-away_x, -away_y),
+    )
+    attempts: list[dict[str, Any]] = []
+    for radius in (440.0, 520.0, 600.0):
+        for direction_x, direction_y in directions:
+            requested_x = client_x + direction_x * radius
+            requested_y = client_y + direction_y * radius
+            snapped_x, snapped_y = snap_to_nav(CLIENT_PIPE, requested_x, requested_y)
+            client_distance = distance(client_x, client_y, snapped_x, snapped_y)
+            host_distance = distance(host_x, host_y, snapped_x, snapped_y)
+            candidate = {
+                "requested_x": requested_x,
+                "requested_y": requested_y,
+                "snapped_x": snapped_x,
+                "snapped_y": snapped_y,
+                "client_distance": client_distance,
+                "host_distance": host_distance,
+            }
+            attempts.append(candidate)
+            if (
+                client_distance > PICKUP_SUPPRESSION_RADIUS + 20.0
+                and client_distance <= 700.0
+                and host_distance > PICKUP_SUPPRESSION_RADIUS + 20.0
+            ):
+                return {
+                    "before": before,
+                    **candidate,
+                }
+    raise VerifyFailure(
+        f"no reachable gold spawn point separated from both players: {attempts}"
+    )
 
 
 def verify_gold_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:

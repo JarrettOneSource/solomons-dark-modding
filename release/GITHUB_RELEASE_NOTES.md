@@ -1,9 +1,11 @@
-# Solomon Dark Multiplayer Beta v0.1.0-beta.3
+# Solomon Dark Multiplayer Beta v0.1.0-beta.4
 
-- Restored direct control of the local wizard and returned staff/equipment
-  presentation to the stock game.
-- Fixed forced level-up choices so the connected client applies the choice,
-  closes its native picker, and confirms cleanup before the host resumes play.
-- Synchronized the remaining named hub NPC animation and pose state.
+- Fixed player visibility, movement, rotation, staff visuals, ally health bars,
+  and player names.
+- Expanded synchronization for level-ups, upgraded spells, equipment, inventory,
+  powerups, hub NPCs, storage, and shops.
+- Improved late-join recovery and self-correction for player, enemy, and world
+  state.
+- Refreshed the launcher and multiplayer session status.
 
 Download the ZIP, extract it, and run `SolomonDarkMultiplayerBeta.exe`.

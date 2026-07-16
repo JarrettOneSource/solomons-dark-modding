@@ -408,6 +408,14 @@ void __fastcall HookSpellCast_018(void* self, void* unused_edx) {
     int spell_id = 0;
     const bool have_spell_id = TryReadSpellCastHookSkillId(self_address, &spell_id);
 
+    // Scripted flat-boneyard casts have no real cursor hover to refresh the
+    // actor's native target handle. Lightning consumes that handle at this
+    // dispatcher entry, unlike projectile primaries which consume aim
+    // coordinates later. This helper is inert during ordinary player input.
+    if (IsLocalPlayerActorForRunLifecycle(self_address)) {
+        (void)ApplyPinnedManualSpawnerPrimaryTarget(self_address);
+    }
+
     const auto previous_context = g_air_lightning_dispatch_context;
     g_air_lightning_dispatch_context = AirLightningDispatchContext{};
     auto& context = g_air_lightning_dispatch_context;

@@ -164,11 +164,16 @@ bool IsExecutableProtection(DWORD protect) {
 
 bool TrySetPageProtection(uintptr_t page_base, DWORD protect) {
     DWORD previous = 0;
-    return VirtualProtect(
-               reinterpret_cast<void*>(page_base),
-               GetSystemPageSize(),
-               protect,
-               &previous) != FALSE;
+    const auto page_size = GetSystemPageSize();
+    const auto changed = VirtualProtect(
+        reinterpret_cast<void*>(page_base),
+        page_size,
+        protect,
+        &previous) != FALSE;
+    if (changed) {
+        sdmod::ProcessMemory::Instance().InvalidateRange(page_base, page_size);
+    }
+    return changed;
 }
 
 bool TryReadStackWords(uintptr_t esp, std::uint32_t* stack_words, size_t word_count) {

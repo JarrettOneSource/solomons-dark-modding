@@ -11,6 +11,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Resource Include="Assets\**\*.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="..\Shared\DistributionLayout.cs" Link="Shared\DistributionLayout.cs" />
     <ProjectReference Include="..\SolomonDarkModLauncher\SolomonDarkModLauncher.csproj"
                       Condition="'$(RuntimeIdentifier)' == ''"

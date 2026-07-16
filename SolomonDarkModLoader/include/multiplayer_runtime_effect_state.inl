@@ -79,9 +79,19 @@ struct LootPickupResultRuntimeInfo {
     float resulting_mana_current = 0.0f;
     float resulting_mana_max = 0.0f;
     std::uint32_t item_type_id = 0;
+    std::uint32_t item_recipe_uid = 0;
+    bool item_color_state_valid = false;
+    std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> item_color_state = {};
     std::int32_t item_slot = -1;
     std::int32_t stack_count = 0;
     std::uint32_t inventory_revision = 0;
+    PowerupRewardKind powerup_kind = PowerupRewardKind::BonusSkillPoint;
+    std::int32_t powerup_skill_entry_index = -1;
+    std::int32_t powerup_skill_apply_count = 0;
+    std::uint16_t powerup_skill_resulting_active = 0;
+    std::int32_t damage_x4_remaining_ticks = 0;
+    std::uint32_t spellbook_revision = 0;
+    std::uint32_t statbook_revision = 0;
 };
 
 struct WorldSnapshotApplyRuntimeInfo {
@@ -219,6 +229,7 @@ const char* ParticipantKindLabel(ParticipantKind kind);
 const char* ParticipantControllerKindLabel(ParticipantControllerKind kind);
 const char* ParticipantSceneIntentKindLabel(ParticipantSceneIntentKind kind);
 const char* LootDropKindLabel(LootDropKind kind);
+const char* PowerupRewardKindLabel(PowerupRewardKind kind);
 const char* LootPickupResultCodeLabel(LootPickupResultCode code);
 // Reproduce the stock pickup/attraction radii from the participant's native
 // progression+0xCC value. Gold and item carriers use 30 world units per

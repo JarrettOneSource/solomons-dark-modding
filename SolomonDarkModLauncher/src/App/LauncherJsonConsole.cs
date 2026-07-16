@@ -84,6 +84,7 @@ internal static class LauncherJsonConsole
                     MultiplayerSession = execution.LaunchedGame.MultiplayerSessionStatus is { } session
                         ? new LauncherJsonMultiplayerSession
                         {
+                            LaunchToken = session.LaunchToken,
                             Enabled = session.Enabled,
                             IsHost = session.IsHost,
                             Phase = session.Phase,
@@ -221,6 +222,7 @@ internal static class LauncherJsonConsole
 
     private sealed class LauncherJsonMultiplayerSession
     {
+        public required string LaunchToken { get; init; }
         public required bool Enabled { get; init; }
         public required bool IsHost { get; init; }
         public required string Phase { get; init; }

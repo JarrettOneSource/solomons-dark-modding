@@ -41,6 +41,8 @@ void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) 
         participant.runtime.transient_status_flags;
     snapshot->replicated_poison_remaining_ticks =
         participant.runtime.poison_remaining_ticks;
+    snapshot->replicated_damage_x4_remaining_ticks =
+        participant.runtime.damage_x4_remaining_ticks;
     if (const auto* pending_cast = FindPendingCast(participant.participant_id); pending_cast != nullptr) {
         snapshot->cast_pending = true;
         snapshot->queued_cast_count = pending_cast->queued_cast_count;
@@ -126,6 +128,8 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
         gameplay_state.native_transient_status_flags;
     snapshot->native_poison_remaining_ticks =
         gameplay_state.native_poison_remaining_ticks;
+    snapshot->native_damage_x4_remaining_ticks =
+        gameplay_state.native_damage_x4_remaining_ticks;
     snapshot->no_interrupt = gameplay_state.no_interrupt;
     snapshot->active_cast_group = gameplay_state.active_cast_group;
     snapshot->active_cast_slot = gameplay_state.active_cast_slot;

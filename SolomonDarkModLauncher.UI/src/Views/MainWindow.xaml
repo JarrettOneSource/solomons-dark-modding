@@ -5,11 +5,11 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         mc:Ignorable="d"
-        Title="Solomon Dark Multiplayer Beta"
+        Title="Solomon Dark Revived"
         Width="760"
-        Height="960"
-        MinWidth="560"
-        MinHeight="620"
+        Height="940"
+        MinWidth="620"
+        MinHeight="720"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResize"
@@ -27,6 +27,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="36" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -38,8 +39,8 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="16,0" VerticalAlignment="Center">
-                <TextBlock Text="&#x25C6;" Foreground="{StaticResource AccentBrush}" FontSize="14" Margin="0,0,10,0" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="&#x25C6;" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding Version}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="10,1,0,0" VerticalAlignment="Center" />
             </StackPanel>
 
@@ -50,19 +51,60 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="1" Margin="24,20">
+        <!-- Hero: the game's own title art -->
+        <Grid Grid.Row="1" Height="180" ClipToBounds="True">
+            <Image Source="/Assets/hero_sky.png"
+                   Stretch="UniformToFill"
+                   RenderOptions.BitmapScalingMode="HighQuality" />
+            <Rectangle Fill="#46000000" />
+            <Image Source="/Assets/moon.png"
+                   Width="76"
+                   Margin="0,12,64,0"
+                   HorizontalAlignment="Right"
+                   VerticalAlignment="Top"
+                   Opacity="0.95"
+                   RenderOptions.BitmapScalingMode="HighQuality" />
+            <Image Source="/Assets/grass.png"
+                   Height="42"
+                   VerticalAlignment="Bottom"
+                   Stretch="UniformToFill"
+                   RenderOptions.BitmapScalingMode="HighQuality" />
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,4,0,0">
+                <Image Source="/Assets/logo.png"
+                       Height="116"
+                       RenderOptions.BitmapScalingMode="HighQuality" />
+                <TextBlock Text="R E V I V E D"
+                           Margin="0,9,0,0"
+                           HorizontalAlignment="Center"
+                           FontSize="13"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource GoldOutlineTextBrush}" />
+            </StackPanel>
+            <Rectangle Height="56" VerticalAlignment="Bottom">
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#0017151C" Offset="0" />
+                        <GradientStop Color="#FF17151C" Offset="1" />
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+        </Grid>
+
+        <ScrollViewer Grid.Row="2"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+        <Grid Margin="24,14,24,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0"
-                    Margin="0,0,0,16"
+                    Margin="0,0,0,14"
                     Padding="14,12"
                     Background="{StaticResource ErrorBannerBackgroundBrush}"
                     BorderBrush="{StaticResource ErrorBannerBorderBrush}"
@@ -85,82 +127,166 @@
                            TextWrapping="Wrap" />
             </Border>
 
+            <!-- First-run setup: hidden once a game folder is chosen -->
             <Border Grid.Row="1"
                     Margin="0,0,0,14"
-                    Padding="16,14"
-                    Background="{StaticResource CardBackgroundBrush}"
-                    BorderBrush="{StaticResource BorderSubtleBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8">
+                    Padding="18,14">
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource CardStyle}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasGameDirectory}" Value="False">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0" Margin="0,0,18,0">
-                        <TextBlock Text="Game files"
+                    <StackPanel Grid.Column="0" Margin="0,0,18,0" VerticalAlignment="Center">
+                        <TextBlock Text="Locate your game"
                                    FontSize="14"
                                    FontWeight="SemiBold" />
                         <TextBlock Margin="0,5,0,0"
-                                   Text="{Binding GameDirectorySummary}"
+                                   Text="Pick your Solomon Dark 0.72.5 folder — the one containing SolomonDark.exe. The newer SB.exe remake is a different game and won't work."
                                    FontSize="12"
                                    Foreground="{StaticResource TextSecondaryBrush}"
-                                   TextWrapping="Wrap" />
-                        <TextBlock Margin="0,5,0,0"
-                                   Text="Select the legacy Solomon Dark 0.72.5 folder containing SolomonDark.exe. The current SB.exe remake is a different game build."
-                                   FontSize="11"
-                                   Foreground="{StaticResource TextMutedBrush}"
                                    TextWrapping="Wrap" />
                     </StackPanel>
 
                     <Button Grid.Column="1"
-                            Content="{Binding GameSetupAction}"
+                            Content="Choose Folder…"
                             Command="{Binding ChooseGameFolderCommand}"
-                            Style="{StaticResource SecondaryButtonStyle}"
-                            Margin="0"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Padding="20,10"
                             VerticalAlignment="Center" />
                 </Grid>
             </Border>
 
-            <StackPanel Grid.Row="3" Margin="0,0,0,12">
-                <DockPanel>
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="Instance"
+            <Border Grid.Row="2"
+                    Padding="20,18"
+                    Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <Border Margin="0,0,0,14"
+                            Padding="12,7"
+                            HorizontalAlignment="Center"
+                            Background="{StaticResource InputBackgroundBrush}"
+                            BorderThickness="1"
+                            CornerRadius="12">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasSteamSession}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsSteamFriendConnected}" Value="True">
+                                        <Setter Property="BorderBrush" Value="{StaticResource SuccessBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="{StaticResource TextMutedBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsSteamFriendConnected}" Value="True">
+                                                <Setter Property="Fill" Value="{StaticResource SuccessBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="{Binding SteamConnectionText}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsSteamFriendConnected}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <WrapPanel HorizontalAlignment="Center">
+                        <Button Command="{Binding HostSteamCommand}"
+                                Content="{Binding HostButtonText}"
+                                MinWidth="168"
+                                Margin="5,4"
+                                Style="{StaticResource PrimaryButtonStyle}" />
+                        <Button Command="{Binding JoinSteamCommand}"
+                                Content="Join Friend"
+                                MinWidth="132"
+                                Margin="5,4"
+                                Style="{StaticResource OutlineButtonStyle}" />
+                        <Button Command="{Binding LaunchSinglePlayerCommand}"
+                                Content="Play Solo"
+                                Margin="5,4"
+                                Padding="20,10"
+                                FontSize="13"
+                                Style="{StaticResource SecondaryButtonStyle}" />
+                    </WrapPanel>
+
+                    <TextBlock Margin="0,12,0,0"
+                               HorizontalAlignment="Center"
+                               FontSize="11"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               Text="Joiners launch first — then the host creates the lobby and sends Steam invites."
+                               TextAlignment="Center"
+                               TextWrapping="Wrap" />
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">
+                        <TextBlock Text="Lobby ID"
+                                   Margin="0,0,10,0"
                                    VerticalAlignment="Center"
                                    FontSize="12"
                                    Foreground="{StaticResource TextMutedBrush}" />
-                        <TextBox Width="120"
-                                 Margin="8,0,8,0"
+                        <TextBox Width="210"
                                  VerticalContentAlignment="Center"
-                                 Text="{Binding InstanceName, UpdateSourceTrigger=PropertyChanged}"
+                                 Text="{Binding LobbyId, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Filled in automatically when you host. Paste one to join directly if Steam invites aren't working."
                                  Style="{StaticResource DarkTextBoxStyle}" />
-                        <Button Content="Use"
-                                Style="{StaticResource SecondaryButtonStyle}"
-                                Command="{Binding ApplyInstanceCommand}" />
-                        <Button Content="Refresh"
-                                Style="{StaticResource SecondaryButtonStyle}"
-                                Command="{Binding RefreshCommand}"
-                                Margin="0" />
                     </StackPanel>
+                </StackPanel>
+            </Border>
 
-                    <TextBlock Text="Mods"
+            <DockPanel Grid.Row="3" Margin="0,18,0,10">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ModSummaryText}"
+                               Margin="0,0,14,0"
                                VerticalAlignment="Center"
-                               FontSize="18"
-                               FontWeight="SemiBold" />
-                </DockPanel>
+                               FontSize="12"
+                               Foreground="{StaticResource TextMutedBrush}" />
+                    <Button Content="Mods Folder"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Command="{Binding OpenModsFolderCommand}" />
+                    <Button Content="Refresh"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Command="{Binding RefreshCommand}"
+                            Margin="0" />
+                </StackPanel>
 
-                <TextBlock Text="{Binding InstanceSummaryText}"
-                           Margin="0,6,0,0"
-                           FontSize="12"
-                           Foreground="{StaticResource TextMutedBrush}" />
-            </StackPanel>
+                <TextBlock Text="Mods"
+                           VerticalAlignment="Center"
+                           FontSize="16"
+                           FontWeight="SemiBold" />
+            </DockPanel>
 
-            <Grid Grid.Row="4" MinHeight="180">
-                <Border Background="{StaticResource CardBackgroundBrush}"
-                        BorderBrush="{StaticResource BorderSubtleBrush}"
-                        BorderThickness="1"
-                        CornerRadius="10" />
+            <Grid Grid.Row="4" MinHeight="160" MaxHeight="344">
+                <Border Style="{StaticResource CardStyle}" />
 
                 <ListBox ItemsSource="{Binding Mods}"
                          Margin="10,10,4,10"
@@ -168,12 +294,19 @@
                          ItemContainerStyle="{StaticResource ModListBoxItemStyle}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Border Margin="0,0,8,8"
-                                    Padding="16,12"
-                                    Background="{StaticResource CardBackgroundBrush}"
-                                    BorderBrush="{StaticResource BorderSubtleBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="8">
+                            <Border Margin="0,0,8,2"
+                                    Padding="14,11"
+                                    CornerRadius="6">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{StaticResource CardHoverBackgroundBrush}" />
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
                                 <Border.ContextMenu>
                                     <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                                         <MenuItem Header="Open Folder" Command="{Binding OpenFolderCommand}" />
@@ -202,31 +335,31 @@
                                                        TextTrimming="CharacterEllipsis" />
                                         </DockPanel>
 
-                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                            <Border Margin="0,0,8,0"
-                                                    Padding="6,2"
-                                                    Background="{Binding RuntimeBadgeBackground}"
+                                        <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                            <Border Padding="7,2"
+                                                    Background="{Binding RuntimeChipBackground}"
                                                     CornerRadius="3">
                                                 <TextBlock FontSize="10"
                                                            FontWeight="SemiBold"
-                                                           Foreground="{Binding RuntimeBadgeForeground}"
-                                                           Text="{Binding RuntimeKindUpper}" />
+                                                           Foreground="{Binding RuntimeChipForeground}"
+                                                           Text="{Binding RuntimeChipText}" />
                                             </Border>
-                                            <TextBlock VerticalAlignment="Center"
+                                            <TextBlock Margin="10,0,0,0"
+                                                       VerticalAlignment="Center"
                                                        FontSize="12"
                                                        Foreground="{StaticResource TextMutedBrush}"
-                                                       Text="{Binding PriorityText}" />
+                                                       Text="{Binding RequiresText}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding RequiresText}" Value="">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                         </StackPanel>
-
-                                        <TextBlock Margin="0,8,0,0"
-                                                   FontSize="12"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                                   Text="{Binding OverlaySummary}" />
-                                        <TextBlock Margin="0,3,0,0"
-                                                   FontSize="12"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   Text="{Binding DependencySummary}"
-                                                   TextWrapping="Wrap" />
                                     </StackPanel>
 
                                     <CheckBox Grid.Column="1"
@@ -240,16 +373,12 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
 
-                <TextBlock Margin="32,0"
-                           Width="280"
-                           VerticalAlignment="Center"
-                           Panel.ZIndex="1"
-                           FontSize="13"
-                           Foreground="{StaticResource TextMutedBrush}"
-                           Text="No mods found. Add mods to the mods directory and click Refresh."
-                           TextAlignment="Center">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock">
+                <StackPanel Margin="32,0"
+                            VerticalAlignment="Center"
+                            Panel.ZIndex="1"
+                            IsHitTestVisible="False">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
                             <Setter Property="Visibility" Value="Collapsed" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding Mods.Count}" Value="0">
@@ -257,85 +386,63 @@
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
-                    </TextBlock.Style>
-                </TextBlock>
-            </Grid>
-
-            <TextBlock Grid.Row="5"
-                       Margin="0,12,0,0"
-                       FontSize="12"
-                       Foreground="{StaticResource TextMutedBrush}"
-                       Text="{Binding ModSummaryText}" />
-
-            <Border Grid.Row="2"
-                    Margin="0,0,0,18"
-                    Padding="16,14"
-                    Background="{StaticResource CardBackgroundBrush}"
-                    BorderBrush="{StaticResource BorderSubtleBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8">
-                <StackPanel>
-                    <TextBlock Text="Play with friends"
-                               FontSize="16"
+                    </StackPanel.Style>
+                    <Image Source="/Assets/gravestone.png"
+                           Height="76"
+                           Margin="0,0,0,12"
+                           Opacity="0.9"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+                    <TextBlock Text="No mods installed"
+                               HorizontalAlignment="Center"
+                               FontSize="13"
                                FontWeight="SemiBold"
-                               HorizontalAlignment="Center" />
-                    <TextBlock Margin="20,5,20,12"
-                               Text="The joining player clicks Join Friend first and waits in the open game. The host then creates the lobby and sends the Steam invite."
-                               FontSize="12"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               TextAlignment="Center"
-                               TextWrapping="Wrap" />
-                <WrapPanel HorizontalAlignment="Center">
-                    <Button Command="{Binding HostSteamCommand}"
-                            Content="{Binding HostButtonText}"
-                            Style="{StaticResource PrimaryButtonStyle}" />
-                    <Button Command="{Binding JoinSteamCommand}"
-                            Content="Join Friend"
-                            Style="{StaticResource SecondaryButtonStyle}" />
-                    <Button Command="{Binding LaunchSinglePlayerCommand}"
-                            Content="Single Player"
-                            Style="{StaticResource SecondaryButtonStyle}"
-                            Margin="0" />
-                </WrapPanel>
-
-                <DockPanel Margin="72,12,72,0">
-                    <TextBlock DockPanel.Dock="Left"
-                               Margin="0,0,10,0"
-                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}" />
+                    <TextBlock Text="Drop mod folders into the mods folder, then refresh."
+                               Margin="0,5,0,0"
+                               HorizontalAlignment="Center"
                                FontSize="12"
                                Foreground="{StaticResource TextMutedBrush}"
-                               Text="Lobby ID (optional)" />
-                    <TextBox VerticalContentAlignment="Center"
-                             Text="{Binding LobbyId, UpdateSourceTrigger=PropertyChanged}"
-                             ToolTip="Leave blank to wait for a Steam friend invite."
-                             Style="{StaticResource DarkTextBoxStyle}" />
-                </DockPanel>
-                <TextBlock Margin="72,6,72,0"
-                           FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}"
-                           Text="Hosting fills in the Lobby ID. Use it only if the Steam invite panel is unavailable."
-                           TextWrapping="Wrap" />
+                               TextAlignment="Center"
+                               TextWrapping="Wrap" />
                 </StackPanel>
-            </Border>
+            </Grid>
 
-            <Expander Grid.Row="6"
-                      Margin="0,16,0,0"
+            <Expander Grid.Row="5"
+                      Margin="0,12,0,0"
                       Header="Advanced"
                       Style="{StaticResource AdvancedExpanderStyle}">
                 <StackPanel Margin="0,8,0,0">
-                    <WrapPanel>
-                        <Button Content="Stage Only" Command="{Binding StageCommand}" Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button Content="Open Mods Folder" Command="{Binding OpenModsFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button Content="Open Stage Folder" Command="{Binding OpenStageFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button Content="Open Profile Folder" Command="{Binding OpenProfileFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button Content="Open Game Folder" Command="{Binding OpenGameFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0" />
+                    <DockPanel LastChildFill="False">
+                        <TextBlock DockPanel.Dock="Left"
+                                   Text="Instance"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   ToolTip="Separate mod setups, each with its own stage and save profile." />
+                        <TextBox DockPanel.Dock="Left"
+                                 Width="150"
+                                 Margin="10,0,8,0"
+                                 VerticalContentAlignment="Center"
+                                 Text="{Binding InstanceName, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource DarkTextBoxStyle}" />
+                        <Button DockPanel.Dock="Left"
+                                Content="Apply"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Command="{Binding ApplyInstanceCommand}"
+                                Margin="0" />
+                    </DockPanel>
+
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button Content="Stage Only" Command="{Binding StageCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,8" />
+                        <Button Content="Open Stage Folder" Command="{Binding OpenStageFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,8" />
+                        <Button Content="Open Profile Folder" Command="{Binding OpenProfileFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,8" />
+                        <Button Content="Open Game Folder" Command="{Binding OpenGameFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,8" />
+                        <Button Content="Change Game Folder…" Command="{Binding ChooseGameFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,0,8" />
                     </WrapPanel>
 
-                    <Border Margin="0,12,0,0"
+                    <Border Margin="0,6,0,0"
                             Padding="12,10"
-                            Background="{StaticResource CardBackgroundBrush}"
-                            BorderBrush="{StaticResource BorderSubtleBrush}"
-                            BorderThickness="1"
+                            Style="{StaticResource CardStyle}"
                             CornerRadius="8">
                         <DockPanel LastChildFill="True">
                             <CheckBox DockPanel.Dock="Right"
@@ -345,14 +452,14 @@
                                       Style="{StaticResource ToggleSwitchStyle}" />
 
                             <StackPanel>
-                                <TextBlock Text="Loader Debug UI Overlay"
+                                <TextBlock Text="Debug overlay"
                                            FontSize="12"
                                            FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}" />
                                 <TextBlock Margin="0,4,0,0"
                                            FontSize="12"
                                            Foreground="{StaticResource TextMutedBrush}"
-                                           Text="Draw loader-owned UI bounds and keep the built-in Lua UI bridge available during stage and launch."
+                                           Text="Draws loader UI bounds in-game and keeps the Lua UI bridge active."
                                            TextWrapping="Wrap" />
                             </StackPanel>
                         </DockPanel>
@@ -368,25 +475,26 @@
                             <TextBlock Text="Workspace" Style="{StaticResource FieldLabelStyle}" />
                             <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding WorkspaceRoot}" TextWrapping="Wrap" />
 
-                            <TextBlock Margin="0,12,0,0" Text="Game Directory" Style="{StaticResource FieldLabelStyle}" />
-                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding GameDirectory}" TextWrapping="Wrap" />
+                            <TextBlock Margin="0,12,0,0" Text="Game Folder" Style="{StaticResource FieldLabelStyle}" />
+                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding GameDirectorySummary}" TextWrapping="Wrap" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="1">
-                            <TextBlock Text="Current Command" Style="{StaticResource FieldLabelStyle}" />
+                            <TextBlock Text="Command" Style="{StaticResource FieldLabelStyle}" />
                             <TextBox Text="{Binding CommandPreviewText, Mode=OneWay}" Style="{StaticResource CommandTextBoxStyle}" />
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock Margin="0,14,0,6" Text="Command Transcript" Style="{StaticResource FieldLabelStyle}" />
-                    <TextBox Height="220"
+                    <TextBlock Margin="0,14,0,6" Text="Log" Style="{StaticResource FieldLabelStyle}" />
+                    <TextBox Height="200"
                              Text="{Binding TranscriptText, Mode=OneWay}"
                              Style="{StaticResource CommandTextBoxStyle}" />
                 </StackPanel>
             </Expander>
         </Grid>
+        </ScrollViewer>
 
-        <Border Grid.Row="2" Background="{StaticResource TitleBarBackgroundBrush}" Padding="16,8">
+        <Border Grid.Row="3" Background="{StaticResource TitleBarBackgroundBrush}" Padding="16,8" Margin="0,12,0,0">
             <TextBlock FontSize="11"
                        Foreground="{StaticResource TextMutedBrush}"
                        Text="{Binding StatusText}" />

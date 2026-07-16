@@ -36,6 +36,9 @@ void PinRunLifecycleFrozenManualEnemies();
 void ClearRunLifecycleManualEnemyFreeze(uintptr_t actor_address = 0);
 bool TryGetPlayerState(SDModPlayerState* state);
 bool TryGetPlayerInventoryState(SDModInventoryState* state);
+bool QueuePlayerInventoryItemEquip(
+    std::uint32_t recipe_uid,
+    std::string* error_message);
 bool TryGetPlayerProgressionBookState(SDModProgressionBookState* state);
 bool TryGetWorldState(SDModWorldState* state);
 bool TryGetGameplayCombatState(SDModGameplayCombatState* state);
@@ -90,11 +93,24 @@ bool SpawnReward(std::string_view kind, int amount, float x, float y, std::strin
 bool QueueReplicatedLootSnapshot(
     const multiplayer::LootSnapshotRuntimeInfo& snapshot,
     std::string* error_message);
-bool QueueNativePotionInventoryCredit(
+bool QueueHostLootDropDeactivation(
+    std::uint32_t run_nonce,
+    std::uint64_t network_drop_id,
+    uintptr_t actor_address,
+    multiplayer::LootDropKind drop_kind,
+    std::string* error_message);
+bool TryTakeHostLootDropDeactivationResult(
+    SDModHostLootDropDeactivationResult* result);
+void ClearHostLootDropDeactivationState();
+bool QueueNativeInventoryCredit(
     std::uint64_t authority_participant_id,
     std::uint32_t run_nonce,
     std::uint64_t network_drop_id,
     std::uint32_t item_type_id,
+    std::uint32_t item_recipe_uid,
+    const std::array<std::uint8_t, multiplayer::kParticipantVisualLinkColorBlockBytes>&
+        item_color_state,
+    bool item_color_state_valid,
     std::int32_t item_slot,
     std::int32_t stack_count,
     std::uint32_t inventory_revision,

@@ -12,8 +12,6 @@ DWORD WINAPI InitializeLoaderThread(LPVOID parameter) {
 }  // namespace
 
 BOOL APIENTRY DllMain(HMODULE module_handle, DWORD reason, LPVOID reserved) {
-    (void)reserved;
-
     switch (reason) {
     case DLL_PROCESS_ATTACH:
         DisableThreadLibraryCalls(module_handle);
@@ -23,7 +21,9 @@ BOOL APIENTRY DllMain(HMODULE module_handle, DWORD reason, LPVOID reserved) {
         }
         break;
     case DLL_PROCESS_DETACH:
-        sdmod::Shutdown();
+        if (reserved == nullptr) {
+            sdmod::Shutdown();
+        }
         break;
     default:
         break;

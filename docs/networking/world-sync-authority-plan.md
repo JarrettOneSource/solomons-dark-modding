@@ -281,9 +281,9 @@ For hub Students specifically, the recommended shape is:
   validated field map. The live presentation probe shows those actors store
   different type-specific data at nearby offsets.
 - For the named hub actor families whose `+0x160` animation drive word is a
-  live phase counter (`0x138B`, `0x138C`, `0x138D`), clients advance only that
-  replicated word at the measured stock rate between host snapshots. Static
-  named NPCs and Students keep exact host snapshot values.
+  live phase counter (`0x138B`, `0x138C`, `0x138D`, `0x138F`), clients advance
+  only that replicated word at the measured stock rate between host snapshots.
+  Static named NPCs and Students keep exact host snapshot values.
 - `tools/probe_named_hub_npc_fields.py` is the bounded per-family field probe
   for named hub NPC presentation work. It uses the recovered factory allocation
   sizes instead of the larger player/Student render window:
@@ -298,7 +298,7 @@ For hub Students specifically, the recommended shape is:
   the named actor allocations and belonged to the larger player/Student render
   layout. The only common, presently validated named-NPC animation serializer is
   the existing `+0x160` drive word plus phase extrapolation for
-  `0x138B/0x138C/0x138D`.
+  `0x138B/0x138C/0x138D/0x138F`.
 - If we want low-bandwidth Student prediction later, first build an explicit
   loader-owned Student state machine and seed that bounded machine, then
   reconcile with periodic authoritative snapshots.
@@ -499,8 +499,8 @@ Current verified gates:
     cross-process sampling tolerance
 - `python3 tools/probe_named_hub_npc_fields.py --samples 8 --interval 0.2`
   - latest persisted result is `runtime/named_hub_npc_field_probe.json`
-  - confirmed the moving named drive-word families are `0x138B`, `0x138C`, and
-    `0x138D`
+  - confirmed the moving named drive-word families are `0x138B`, `0x138C`,
+    `0x138D`, and `0x138F`
   - confirmed the other candidate generic render offsets previously inspected
     for named NPCs either fall outside the per-family allocation size or are
     type-specific/native-local state not safe for a generic serializer

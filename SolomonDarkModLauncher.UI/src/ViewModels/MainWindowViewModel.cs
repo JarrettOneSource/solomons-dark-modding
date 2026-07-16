@@ -7,7 +7,7 @@ using SolomonDarkModLauncher.UI.Infrastructure;
 
 namespace SolomonDarkModLauncher.UI.ViewModels;
 
-internal sealed class MainWindowViewModel : ViewModelBase
+internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private readonly LauncherUiCommandClient client_;
     private readonly StringBuilder transcriptBuilder_ = new();
@@ -15,10 +15,8 @@ internal sealed class MainWindowViewModel : ViewModelBase
     private bool isBusy_;
     private bool hasError_;
     private string errorMessage_ = string.Empty;
-    private string statusText_ = "Loading launcher state...";
-    private string summaryText_ = string.Empty;
+    private string statusText_ = "Loading…";
     private string modSummaryText_ = string.Empty;
-    private string instanceSummaryText_ = string.Empty;
     private string commandPreviewText_ = string.Empty;
     private string transcriptText_ = string.Empty;
     private string instanceName_;
@@ -26,6 +24,10 @@ internal sealed class MainWindowViewModel : ViewModelBase
     private string lobbyId_;
     private string gameDirectory_;
     private bool isGameReady_;
+    private CancellationTokenSource? steamSessionMonitorCancellation_;
+    private bool hasSteamSession_;
+    private bool isSteamFriendConnected_;
+    private string steamConnectionText_ = string.Empty;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
@@ -39,21 +41,21 @@ internal sealed class MainWindowViewModel : ViewModelBase
         HostSteamCommand = new RelayCommand(
             _ => _ = ExecuteActionAsync(
                 LauncherUiCommandMode.HostSteam,
-                "Creating Steam lobby and launching host..."),
+                "Creating lobby…"),
             _ => CanLaunch());
         JoinSteamCommand = new RelayCommand(
             _ => _ = ExecuteActionAsync(
                 LauncherUiCommandMode.JoinSteam,
                 string.IsNullOrWhiteSpace(LobbyId)
-                    ? "Launching and waiting for a Steam friend invite..."
-                    : $"Joining Steam lobby {LobbyId}..."),
+                    ? "Launching — waiting for your friend's invite…"
+                    : $"Joining lobby {LobbyId}…"),
             _ => CanLaunch());
         LaunchSinglePlayerCommand = new RelayCommand(
             _ => _ = ExecuteActionAsync(
                 LauncherUiCommandMode.LaunchSinglePlayer,
-                "Launching single player..."),
+                "Launching…"),
             _ => CanLaunch());
-        StageCommand = new RelayCommand(_ => _ = ExecuteActionAsync(LauncherUiCommandMode.Stage, "Building stage..."), _ => CanLaunch());
+        StageCommand = new RelayCommand(_ => _ = ExecuteActionAsync(LauncherUiCommandMode.Stage, "Staging mods…"), _ => CanLaunch());
         ApplyInstanceCommand = new RelayCommand(_ => _ = ApplyInstanceAsync(), _ => CanInteract());
         ChooseGameFolderCommand = new RelayCommand(_ => ChooseGameFolder(), _ => CanInteract());
         OpenModsFolderCommand = new RelayCommand(_ => OpenFolder(lastResponse_?.Configuration?.ModsRoot), _ => CanOpenFolder(lastResponse_?.Configuration?.ModsRoot));
@@ -64,7 +66,7 @@ internal sealed class MainWindowViewModel : ViewModelBase
         UpdateLaunchPreview();
         if (string.IsNullOrWhiteSpace(GameDirectory))
         {
-            StatusText = "Choose your Solomon Dark 0.72.5 folder to get started";
+            StatusText = "Locate your game folder to get started";
         }
         else
         {
@@ -74,11 +76,18 @@ internal sealed class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<ModItemViewModel> Mods { get; } = [];
 
-    public string Title => "Solomon Dark Multiplayer Beta";
-    public string Version =>
-        Assembly.GetEntryAssembly()?
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion ?? "development";
+    public string Title => "Solomon Dark Revived";
+    public string Version
+    {
+        get
+        {
+            var version = Assembly.GetEntryAssembly()?
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+                .InformationalVersion ?? "development";
+            var metadataStart = version.IndexOf('+');
+            return metadataStart < 0 ? version : version[..metadataStart];
+        }
+    }
 
     public bool IsBusy
     {
@@ -111,22 +120,28 @@ internal sealed class MainWindowViewModel : ViewModelBase
         private set => SetProperty(ref statusText_, value);
     }
 
-    public string SummaryText
+    public bool HasSteamSession
     {
-        get => summaryText_;
-        private set => SetProperty(ref summaryText_, value);
+        get => hasSteamSession_;
+        private set => SetProperty(ref hasSteamSession_, value);
+    }
+
+    public bool IsSteamFriendConnected
+    {
+        get => isSteamFriendConnected_;
+        private set => SetProperty(ref isSteamFriendConnected_, value);
+    }
+
+    public string SteamConnectionText
+    {
+        get => steamConnectionText_;
+        private set => SetProperty(ref steamConnectionText_, value);
     }
 
     public string ModSummaryText
     {
         get => modSummaryText_;
         private set => SetProperty(ref modSummaryText_, value);
-    }
-
-    public string InstanceSummaryText
-    {
-        get => instanceSummaryText_;
-        private set => SetProperty(ref instanceSummaryText_, value);
     }
 
     public string CommandPreviewText
@@ -173,9 +188,10 @@ internal sealed class MainWindowViewModel : ViewModelBase
         }
     }
 
-    public string HostButtonText => IsBusy ? "Working..." : "Host & Invite Friends";
+    public string HostButtonText => IsBusy ? "Working…" : "Host Game";
 
     public string WorkspaceRoot => lastResponse_?.Configuration?.WorkspaceRoot ?? "(unresolved)";
+
     public string GameDirectory
     {
         get => gameDirectory_;
@@ -184,22 +200,16 @@ internal sealed class MainWindowViewModel : ViewModelBase
             if (SetProperty(ref gameDirectory_, value))
             {
                 OnPropertyChanged(nameof(GameDirectorySummary));
-                OnPropertyChanged(nameof(GameSetupAction));
+                OnPropertyChanged(nameof(HasGameDirectory));
             }
         }
     }
 
-    public string GameDirectorySummary => string.IsNullOrWhiteSpace(GameDirectory)
-        ? "No game folder selected"
-        : GameDirectory;
+    public bool HasGameDirectory => !string.IsNullOrWhiteSpace(GameDirectory);
 
-    public string GameSetupAction => string.IsNullOrWhiteSpace(GameDirectory)
-        ? "Choose Game Folder"
-        : "Change Game Folder";
-    public string ModsRoot => lastResponse_?.Configuration?.ModsRoot ?? "(unresolved)";
-    public string StageRoot => lastResponse_?.Configuration?.StageRoot ?? "(unresolved)";
-    public string ProfileRoot => lastResponse_?.Configuration?.ProfileRoot ?? "(unresolved)";
-    public string RuntimeProfile => lastResponse_?.Configuration?.RuntimeProfile ?? "(unresolved)";
+    public string GameDirectorySummary => string.IsNullOrWhiteSpace(GameDirectory)
+        ? "Not set"
+        : GameDirectory;
 
     public RelayCommand RefreshCommand { get; }
     public RelayCommand HostSteamCommand { get; }
@@ -254,7 +264,7 @@ internal sealed class MainWindowViewModel : ViewModelBase
     {
         await ExecuteUiCommandAsync(
             LauncherUiCommandMode.ListMods,
-            statusText: "Refreshing mod catalog...");
+            statusText: "Checking mods…");
     }
 
     private async Task ApplyInstanceAsync()
@@ -271,7 +281,7 @@ internal sealed class MainWindowViewModel : ViewModelBase
 
         await ExecuteUiCommandAsync(
             LauncherUiCommandMode.ListMods,
-            statusText: $"Switching to instance '{InstanceName}'...");
+            statusText: $"Switching to instance '{InstanceName}'…");
     }
 
     private async Task ExecuteActionAsync(LauncherUiCommandMode mode, string statusText)
@@ -284,6 +294,14 @@ internal sealed class MainWindowViewModel : ViewModelBase
         string statusText,
         string? targetModId = null)
     {
+        if (mode is LauncherUiCommandMode.HostSteam or
+            LauncherUiCommandMode.JoinSteam or
+            LauncherUiCommandMode.LaunchSinglePlayer or
+            LauncherUiCommandMode.Stage)
+        {
+            StopSteamSessionMonitoring(clearStatus: true);
+        }
+
         IsBusy = true;
         StatusText = statusText;
         CommandPreviewText = client_.BuildCommandPreview(mode, targetModId);
@@ -295,7 +313,7 @@ internal sealed class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             SetError(ex.Message);
-            StatusText = "Command failed";
+            StatusText = "Failed — see the message above";
             IsBusy = false;
             return;
         }
@@ -310,7 +328,7 @@ internal sealed class MainWindowViewModel : ViewModelBase
                 RaiseCommandStates();
             }
             SetError(invocation.ErrorMessage ?? "Launcher command failed.");
-            StatusText = "Command failed";
+            StatusText = "Failed — see the message above";
             IsBusy = false;
             return;
         }
@@ -324,11 +342,16 @@ internal sealed class MainWindowViewModel : ViewModelBase
         {
             LobbyId = multiplayer.LobbyId.ToString();
         }
+        if (mode is LauncherUiCommandMode.HostSteam or LauncherUiCommandMode.JoinSteam &&
+            multiplayer is not null)
+        {
+            StartSteamSessionMonitoring(invocation.Response, multiplayer);
+        }
         StatusText = mode switch
         {
-            LauncherUiCommandMode.ListMods => "Catalog refreshed",
-            LauncherUiCommandMode.Stage => "Stage completed",
-            LauncherUiCommandMode.LaunchSinglePlayer => "Single-player game launched",
+            LauncherUiCommandMode.ListMods => "Ready",
+            LauncherUiCommandMode.Stage => "Stage built",
+            LauncherUiCommandMode.LaunchSinglePlayer => "Game running",
             LauncherUiCommandMode.HostSteam => DescribeSteamHost(multiplayer),
             LauncherUiCommandMode.JoinSteam => DescribeSteamJoin(multiplayer),
             LauncherUiCommandMode.EnableMod => "Mod enabled",
@@ -338,30 +361,159 @@ internal sealed class MainWindowViewModel : ViewModelBase
         IsBusy = false;
     }
 
+    private void StartSteamSessionMonitoring(
+        LauncherCliResponse response,
+        LauncherCliMultiplayerSession initialStatus)
+    {
+        StopSteamSessionMonitoring(clearStatus: false);
+        ApplySteamSessionStatus(initialStatus);
+
+        var stageRuntimeRootPath = response.Stage?.StageRuntimeRootPath;
+        var processId = response.Launch?.ProcessId ?? 0;
+        if (string.IsNullOrWhiteSpace(stageRuntimeRootPath) ||
+            string.IsNullOrWhiteSpace(initialStatus.LaunchToken) ||
+            processId <= 0)
+        {
+            return;
+        }
+
+        var monitorCancellation = new CancellationTokenSource();
+        steamSessionMonitorCancellation_ = monitorCancellation;
+        _ = MonitorSteamSessionAsync(
+            stageRuntimeRootPath,
+            initialStatus.LaunchToken,
+            processId,
+            monitorCancellation);
+    }
+
+    private async Task MonitorSteamSessionAsync(
+        string stageRuntimeRootPath,
+        string launchToken,
+        int processId,
+        CancellationTokenSource monitorCancellation)
+    {
+        var cancellationToken = monitorCancellation.Token;
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(500, cancellationToken);
+                if (!IsProcessRunning(processId))
+                {
+                    ClearSteamSessionStatus();
+                    return;
+                }
+
+                var status = await LauncherMultiplayerSessionStatusReader.ReadAsync(
+                    stageRuntimeRootPath,
+                    launchToken,
+                    cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (status is not null)
+                {
+                    ApplySteamSessionStatus(status);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            if (ReferenceEquals(steamSessionMonitorCancellation_, monitorCancellation))
+            {
+                steamSessionMonitorCancellation_ = null;
+                monitorCancellation.Dispose();
+            }
+        }
+    }
+
+    private void ApplySteamSessionStatus(LauncherCliMultiplayerSession status)
+    {
+        HasSteamSession = status.Enabled;
+        IsSteamFriendConnected =
+            status.Enabled &&
+            status.Phase == "Connected" &&
+            status.AuthenticatedPeerCount > 0;
+
+        if (IsSteamFriendConnected)
+        {
+            SteamConnectionText = status.AuthenticatedPeerCount == 1
+                ? "Connected — 1 friend in the lobby"
+                : $"Connected — {status.AuthenticatedPeerCount} friends in the lobby";
+            return;
+        }
+
+        SteamConnectionText = status.Phase switch
+        {
+            "WaitingForInvite" => "Waiting for a Steam invite…",
+            "JoiningLobby" => "Joining lobby…",
+            "LobbyReady" when status.IsHost => "Lobby open — waiting for friends",
+            "Error" when !string.IsNullOrWhiteSpace(status.ErrorText) =>
+                $"Steam error — {status.ErrorText}",
+            _ when !string.IsNullOrWhiteSpace(status.StatusText) => status.StatusText,
+            _ => "Starting Steam session…"
+        };
+    }
+
+    private void StopSteamSessionMonitoring(bool clearStatus)
+    {
+        steamSessionMonitorCancellation_?.Cancel();
+        steamSessionMonitorCancellation_?.Dispose();
+        steamSessionMonitorCancellation_ = null;
+        if (clearStatus)
+        {
+            ClearSteamSessionStatus();
+        }
+    }
+
+    private void ClearSteamSessionStatus()
+    {
+        HasSteamSession = false;
+        IsSteamFriendConnected = false;
+        SteamConnectionText = string.Empty;
+    }
+
+    private static bool IsProcessRunning(int processId)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    public void Dispose()
+    {
+        StopSteamSessionMonitoring(clearStatus: false);
+    }
+
     private static string DescribeSteamHost(LauncherCliMultiplayerSession? multiplayer)
     {
         if (multiplayer is null || multiplayer.LobbyId == 0)
         {
-            return "Steam host launched";
+            return "Host running";
         }
         if (multiplayer.InviteDialogOpened)
         {
-            return $"Steam lobby {multiplayer.LobbyId} ready; invite dialog opened";
+            return $"Lobby {multiplayer.LobbyId} open — pick friends in the Steam invite window";
         }
         return multiplayer.OverlayEnabled
-            ? $"Steam lobby {multiplayer.LobbyId} ready; invite dialog did not open, " +
-              "so share the Lobby ID or use Steam Friends"
-            : $"Steam lobby {multiplayer.LobbyId} ready; Steam overlay unavailable, " +
-              "so share the Lobby ID or use Steam Friends";
+            ? $"Lobby {multiplayer.LobbyId} open — invite friends via Steam, or share the Lobby ID"
+            : $"Lobby {multiplayer.LobbyId} open — Steam overlay is off, so share the Lobby ID";
     }
 
     private static string DescribeSteamJoin(LauncherCliMultiplayerSession? multiplayer)
     {
         if (multiplayer?.Phase == "WaitingForInvite")
         {
-            return "Steam client launched; waiting for a friend invite";
+            return "Game running — accept your friend's Steam invite";
         }
-        return multiplayer?.StatusText ?? "Steam lobby join launched";
+        return multiplayer?.StatusText ?? "Joining…";
     }
 
     private void UpdateFromResponse(LauncherCliResponse response)
@@ -379,12 +531,9 @@ internal sealed class MainWindowViewModel : ViewModelBase
             Mods.Add(viewModel);
         }
 
-        var discovered = response.Mods.Count;
+        var total = response.Mods.Count;
         var enabled = response.Mods.Count(mod => mod.Enabled);
-        ModSummaryText = $"{discovered} mod{(discovered == 1 ? string.Empty : "s")} discovered  ·  {enabled} enabled";
-        SummaryText = ModSummaryText;
-        var instance = response.Configuration?.Instance ?? client_.InstanceName;
-        var runtimeProfile = response.Configuration?.RuntimeProfile ?? "(unresolved)";
+        ModSummaryText = total == 0 ? string.Empty : $"{enabled} of {total} enabled";
         DebugUiEnabled = response.Configuration?.LoaderDebugUi ?? true;
         var resolvedGameDirectory = response.Configuration?.GameDirectory;
         if (!string.IsNullOrWhiteSpace(resolvedGameDirectory))
@@ -392,14 +541,8 @@ internal sealed class MainWindowViewModel : ViewModelBase
             GameDirectory = resolvedGameDirectory;
             client_.UpdateGameDirectory(resolvedGameDirectory);
         }
-        InstanceSummaryText =
-            $"Instance {instance}  ·  runtime profile {runtimeProfile}  ·  debug UI {(DebugUiEnabled ? "on" : "off")}";
 
         OnPropertyChanged(nameof(WorkspaceRoot));
-        OnPropertyChanged(nameof(ModsRoot));
-        OnPropertyChanged(nameof(StageRoot));
-        OnPropertyChanged(nameof(ProfileRoot));
-        OnPropertyChanged(nameof(RuntimeProfile));
         RaiseCommandStates();
     }
 
@@ -415,7 +558,7 @@ internal sealed class MainWindowViewModel : ViewModelBase
         var mode = desiredState ? LauncherUiCommandMode.EnableMod : LauncherUiCommandMode.DisableMod;
         await ExecuteUiCommandAsync(
             mode,
-            desiredState ? $"Enabling {mod.Id}..." : $"Disabling {mod.Id}...",
+            desiredState ? $"Enabling {mod.Name}…" : $"Disabling {mod.Name}…",
             mod.Id);
     }
 

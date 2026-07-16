@@ -19,20 +19,21 @@ bool CallPlayerActorEnsureProgressionHandleSafe(
     }
 }
 
-bool CallPlayerActorRefreshRuntimeHandlesSafe(
-    uintptr_t refresh_address,
+bool CallPlayerActorInitializeControlBrainSafe(
+    uintptr_t initialize_address,
     uintptr_t actor_address,
     DWORD* exception_code) {
-    auto* refresh_runtime_handles = reinterpret_cast<PlayerActorRefreshRuntimeHandlesFn>(refresh_address);
+    auto* initialize_control_brain =
+        reinterpret_cast<PlayerActorInitializeControlBrainFn>(initialize_address);
     if (exception_code != nullptr) {
         *exception_code = 0;
     }
-    if (refresh_runtime_handles == nullptr || actor_address == 0) {
+    if (initialize_control_brain == nullptr || actor_address == 0) {
         return false;
     }
 
     __try {
-        refresh_runtime_handles(reinterpret_cast<void*>(actor_address));
+        initialize_control_brain(reinterpret_cast<void*>(actor_address));
         return true;
     } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
         return false;

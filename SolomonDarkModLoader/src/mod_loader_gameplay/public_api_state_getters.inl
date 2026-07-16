@@ -93,6 +93,22 @@ bool TryGetParticipantGameplayState(
         state->actor_address,
         &state->native_transient_status_flags,
         &state->native_poison_remaining_ticks);
+    if (state->progression_runtime_state_address != 0 &&
+        kProgressionDamageX4RemainingTicksOffset != 0) {
+        (void)ProcessMemory::Instance().TryReadField(
+            state->progression_runtime_state_address,
+            kProgressionDamageX4RemainingTicksOffset,
+            &state->native_damage_x4_remaining_ticks);
+        state->native_damage_x4_remaining_ticks =
+            (std::clamp)(
+                state->native_damage_x4_remaining_ticks,
+                std::int32_t{0},
+                multiplayer::kParticipantDamageX4MaxDurationTicks);
+        if (state->native_damage_x4_remaining_ticks > 0) {
+            state->native_transient_status_flags |=
+                multiplayer::ParticipantTransientStatusFlagDamageX4;
+        }
+    }
     return true;
 }
 
@@ -352,6 +368,26 @@ bool TryGetPlayerState(SDModPlayerState* state) {
         actor_address,
         &state->transient_status_flags,
         &state->poison_remaining_ticks);
+    std::int32_t damage_x4_remaining_ticks = 0;
+    if (kProgressionDamageX4RemainingTicksOffset != 0 &&
+        memory.TryReadField(
+            progression_address,
+            kProgressionDamageX4RemainingTicksOffset,
+            &damage_x4_remaining_ticks)) {
+        state->damage_x4_remaining_ticks =
+            (std::clamp)(
+                damage_x4_remaining_ticks,
+                std::int32_t{0},
+                multiplayer::kParticipantDamageX4MaxDurationTicks);
+        if (state->damage_x4_remaining_ticks > 0) {
+            state->transient_status_flags |=
+                multiplayer::ParticipantTransientStatusFlagDamageX4;
+        } else {
+            state->transient_status_flags &=
+                static_cast<std::uint8_t>(
+                    ~multiplayer::ParticipantTransientStatusFlagDamageX4);
+        }
+    }
     state->render_subject_address = actor_address;
     state->world_address = world_address;
     state->progression_address = progression_address;
@@ -462,13 +498,13 @@ bool TryGetPlayerInventoryState(SDModInventoryState* state) {
 
     auto& memory = ProcessMemory::Instance();
     const uintptr_t item_list_root = gameplay_address + kGameplayItemListRootOffset;
-    int item_count = 0;
+    int raw_item_count = 0;
     uintptr_t item_array_address = 0;
     if (!memory.IsReadableRange(item_list_root, kGameplayItemListItemsOffset + sizeof(uintptr_t)) ||
-        !memory.TryReadField(item_list_root, kGameplayItemListCountOffset, &item_count) ||
+        !memory.TryReadField(item_list_root, kGameplayItemListCountOffset, &raw_item_count) ||
         !memory.TryReadField(item_list_root, kGameplayItemListItemsOffset, &item_array_address) ||
-        item_count < 0 ||
-        item_count > 4096) {
+        raw_item_count < 0 ||
+        raw_item_count > 4096) {
         return false;
     }
 
@@ -476,35 +512,40 @@ bool TryGetPlayerInventoryState(SDModInventoryState* state) {
     state->gameplay_scene_address = gameplay_address;
     state->item_list_root_address = item_list_root;
     state->item_array_address = item_array_address;
-    state->item_count = item_count;
+    state->raw_item_count = raw_item_count;
     state->primary_visual_lane =
         ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkPrimaryOffset);
     state->secondary_visual_lane =
         ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkSecondaryOffset);
     state->attachment_visual_lane =
         ReadEquipVisualLaneState(gameplay_address, kGameplayVisualSinkAttachmentOffset);
+    state->ring_lanes[0] =
+        ReadEquipVisualLaneState(gameplay_address, kGameplayEquipmentRing0Offset);
+    state->ring_lanes[1] =
+        ReadEquipVisualLaneState(gameplay_address, kGameplayEquipmentRing1Offset);
+    state->ring_lanes[2] =
+        ReadEquipVisualLaneState(gameplay_address, kGameplayEquipmentRing2Offset);
+    state->amulet_lane =
+        ReadEquipVisualLaneState(gameplay_address, kGameplayEquipmentAmuletOffset);
 
-    if (item_count == 0) {
+    if (raw_item_count == 0) {
         return true;
     }
     if (item_array_address == 0) {
         return false;
     }
 
-    const int enumerate_count =
-        item_count > static_cast<int>(kSDModInventorySnapshotMaxItems)
-            ? static_cast<int>(kSDModInventorySnapshotMaxItems)
-            : item_count;
-    state->truncated = item_count > enumerate_count;
     if (!memory.IsReadableRange(
             item_array_address,
-            static_cast<std::size_t>(enumerate_count) * sizeof(std::uint32_t))) {
+            static_cast<std::size_t>(raw_item_count) * sizeof(std::uint32_t))) {
         return false;
     }
 
-    state->items.reserve(static_cast<std::size_t>(enumerate_count));
+    state->items.reserve((std::min)(
+        static_cast<std::size_t>(raw_item_count),
+        kSDModInventorySnapshotMaxItems));
     constexpr std::uint32_t kPotionItemTypeId = 0x1B59;
-    for (int index = 0; index < enumerate_count; ++index) {
+    for (int index = 0; index < raw_item_count; ++index) {
         std::uint32_t raw_item_address = 0;
         if (!memory.TryReadValue(
                 item_array_address + static_cast<std::size_t>(index) * sizeof(std::uint32_t),
@@ -518,16 +559,41 @@ bool TryGetPlayerInventoryState(SDModInventoryState* state) {
             continue;
         }
 
-        SDModInventoryItemState item{};
-        item.item_address = item_address;
-        if (!memory.TryReadField(item_address, kGameObjectTypeIdOffset, &item.type_id)) {
+        std::uint32_t item_type_id = 0;
+        if (!memory.TryReadField(item_address, kGameObjectTypeIdOffset, &item_type_id) ||
+            item_type_id == 0 ||
+            item_type_id == kInventoryPlaceholderItemTypeId) {
             continue;
         }
+
+        state->item_count += 1;
+        if (state->items.size() >= kSDModInventorySnapshotMaxItems) {
+            state->truncated = true;
+            continue;
+        }
+
+        SDModInventoryItemState item{};
+        item.item_address = item_address;
+        item.type_id = item_type_id;
         item.valid = true;
+        if (kItemInstanceRecipeUidOffset != 0) {
+            (void)memory.TryReadField(
+                item_address,
+                kItemInstanceRecipeUidOffset,
+                &item.recipe_uid);
+        }
         (void)memory.TryReadField(item_address, kItemSlotOffset, &item.slot);
         if (item.type_id == kPotionItemTypeId &&
             memory.IsReadableRange(item_address + kPotionStackCountOffset, sizeof(int))) {
             (void)memory.TryReadField(item_address, kPotionStackCountOffset, &item.stack_count);
+        }
+        if ((item.type_id == kStandaloneWizardHatVisualTypeId ||
+             item.type_id == kStandaloneWizardRobeVisualTypeId) &&
+            memory.TryRead(
+                item_address + kItemWearableColorStateOffset,
+                item.color_state.data(),
+                item.color_state.size())) {
+            item.color_state_valid = true;
         }
         state->items.push_back(item);
     }
@@ -941,7 +1007,8 @@ void AppendTransientRewardActors(
         if (!TryBuildSceneActorState(actor_address, scene_context, true, false, -1, &actor_state)) {
             continue;
         }
-        if (actor_state.object_type_id == 0x07DB) {
+        if (actor_state.object_type_id == 0x07DB ||
+            actor_state.object_type_id == 0x07F6) {
             actors->push_back(actor_state);
         }
     }

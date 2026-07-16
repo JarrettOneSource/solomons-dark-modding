@@ -28,7 +28,7 @@ bool ApplyManualSpawnerPrimaryTargetState(
     uintptr_t actor_address,
     uintptr_t selection_pointer,
     uintptr_t target_actor_address) {
-    if (actor_address == 0 || selection_pointer == 0 ||
+    if (actor_address == 0 ||
         !IsManualSpawnerPrimaryTargetActor(target_actor_address)) {
         return false;
     }
@@ -44,24 +44,80 @@ bool ApplyManualSpawnerPrimaryTargetState(
     }
 
     auto& memory = ProcessMemory::Instance();
+    float actor_x = 0.0f;
+    float actor_y = 0.0f;
+    float target_x = 0.0f;
+    float target_y = 0.0f;
+    if (!TryReadFiniteFloatField(
+            actor_address,
+            kActorPositionXOffset,
+            &actor_x) ||
+        !TryReadFiniteFloatField(
+            actor_address,
+            kActorPositionYOffset,
+            &actor_y) ||
+        !TryReadFiniteFloatField(
+            target_actor_address,
+            kActorPositionXOffset,
+            &target_x) ||
+        !TryReadFiniteFloatField(
+            target_actor_address,
+            kActorPositionYOffset,
+            &target_y)) {
+        return false;
+    }
+    const auto delta_x = target_x - actor_x;
+    const auto delta_y = target_y - actor_y;
+    const auto distance_squared = delta_x * delta_x + delta_y * delta_y;
+    if (!std::isfinite(distance_squared) || distance_squared <= 0.0001f) {
+        return false;
+    }
+    const auto target_heading = NormalizeWizardActorHeadingForWrite(
+        static_cast<float>(
+            std::atan2(delta_y, delta_x) *
+                kWizardHeadingRadiansToDegrees +
+            90.0f));
+    ApplyWizardActorFacingState(actor_address, target_heading);
+
     constexpr std::int32_t kManualSpawnerTargetHoldTicks = 60;
-    return memory.TryWriteField<uintptr_t>(
-               actor_address,
-               kActorCurrentTargetActorOffset,
-               target_actor_address) &&
-           memory.TryWriteField<std::int32_t>(
-               actor_address,
-               kActorCurrentTargetBucketDeltaOffset,
-               0) &&
-           memory.TryWriteField<std::uint8_t>(
-               actor_address,
-               kActorSpellTargetGroupByteOffset,
-               target_group) &&
-           memory.TryWriteField<std::uint16_t>(
-               actor_address,
-               kActorSpellTargetSlotShortOffset,
-               target_slot) &&
-           memory.TryWriteField<std::uint8_t>(
+    const bool actor_target_written =
+        memory.TryWriteField<float>(
+            actor_address,
+            kActorAimTargetXOffset,
+            target_x) &&
+        memory.TryWriteField<float>(
+            actor_address,
+            kActorAimTargetYOffset,
+            target_y) &&
+        memory.TryWriteField<std::uint32_t>(
+            actor_address,
+            kActorAimTargetAux0Offset,
+            0) &&
+        memory.TryWriteField<std::uint32_t>(
+            actor_address,
+            kActorAimTargetAux1Offset,
+            0) &&
+        memory.TryWriteField<uintptr_t>(
+            actor_address,
+            kActorCurrentTargetActorOffset,
+            target_actor_address) &&
+        memory.TryWriteField<std::int32_t>(
+            actor_address,
+            kActorCurrentTargetBucketDeltaOffset,
+            0) &&
+        memory.TryWriteField<std::uint8_t>(
+            actor_address,
+            kActorSpellTargetGroupByteOffset,
+            target_group) &&
+        memory.TryWriteField<std::uint16_t>(
+            actor_address,
+            kActorSpellTargetSlotShortOffset,
+            target_slot);
+    if (!actor_target_written || selection_pointer == 0) {
+        return actor_target_written;
+    }
+
+    return memory.TryWriteField<std::uint8_t>(
                selection_pointer,
                kActorControlBrainTargetSlotOffset,
                target_group) &&
@@ -353,9 +409,6 @@ void __fastcall HookPlayerControlBrainUpdate(
             std::memory_order_acquire);
     const bool manual_spawner_primary_grace_active =
         IsManualSpawnerPrimaryCastControlGraceActive();
-    const auto pending_scripted_movement_frames =
-        g_gameplay_keyboard_injection.pending_movement_frames.load(
-            std::memory_order_acquire);
     auto& injected_keyboard_control_frames =
         g_gameplay_keyboard_injection.pending_injected_keyboard_control_frames;
     const auto pending_injected_keyboard_control_frames =
@@ -371,7 +424,6 @@ void __fastcall HookPlayerControlBrainUpdate(
         current_actor_is_local_player &&
         pending_manual_spawner_primary_allowances == 0 &&
         !manual_spawner_primary_grace_active &&
-        pending_scripted_movement_frames == 0 &&
         pending_injected_keyboard_control_frames == 0;
     if (suppress_manual_spawner_local_control) {
         ClearManualSpawnerSuppressedLocalPrimaryCastState(actor_address);
@@ -499,7 +551,7 @@ void __fastcall HookPlayerControlBrainUpdate(
     };
 
     const auto apply_manual_spawner_local_primary_control = [&]() {
-        if (!manual_spawner_scripted_local_primary_control || selection_pointer == 0) {
+        if (!manual_spawner_scripted_local_primary_control) {
             return;
         }
 
@@ -541,12 +593,14 @@ void __fastcall HookPlayerControlBrainUpdate(
         (void)write_vector2(param2, 0.0f, 0.0f);
         (void)write_vector2(param3, control_x, control_y);
         ApplyWizardActorFacingState(actor_address, desired_heading);
-        (void)memory.TryWriteValue<float>(
-            selection_pointer + kActorControlBrainMoveInputXOffset,
-            control_x);
-        (void)memory.TryWriteValue<float>(
-            selection_pointer + kActorControlBrainMoveInputYOffset,
-            control_y);
+        if (selection_pointer != 0) {
+            (void)memory.TryWriteValue<float>(
+                selection_pointer + kActorControlBrainMoveInputXOffset,
+                control_x);
+            (void)memory.TryWriteValue<float>(
+                selection_pointer + kActorControlBrainMoveInputYOffset,
+                control_y);
+        }
         (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, aim_target_x);
         (void)memory.TryWriteField(actor_address, kActorAimTargetYOffset, aim_target_y);
         (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
@@ -638,43 +692,6 @@ void __fastcall HookPlayerControlBrainUpdate(
     seed_selection_target();
     apply_manual_spawner_local_primary_control();
     apply_face_control();
-
-    // Deterministic held movement is injected at the control-brain output.
-    // It intentionally exercises the standing movement envelope, collision,
-    // transform publication, and replication, but it is downstream of ranked
-    // input modifiers such as Rush. Ranked behavior tests must validate that
-    // native lane separately instead of treating this as raw keyboard input.
-    uintptr_t movement_gameplay_address = 0;
-    uintptr_t movement_local_actor_address = 0;
-    const bool movement_actor_is_local_player =
-        TryResolveCurrentGameplayScene(&movement_gameplay_address) &&
-        movement_gameplay_address != 0 &&
-        TryResolvePlayerActorForSlot(
-            movement_gameplay_address,
-            0,
-            &movement_local_actor_address) &&
-        movement_local_actor_address == actor_address;
-    if (movement_actor_is_local_player) {
-        auto& pending_frames =
-            g_gameplay_keyboard_injection.pending_movement_frames;
-        auto available = pending_frames.load(std::memory_order_acquire);
-        while (available > 0) {
-            if (pending_frames.compare_exchange_weak(
-                    available,
-                    available - 1,
-                    std::memory_order_acq_rel,
-                    std::memory_order_acquire)) {
-                const auto movement_x =
-                    g_gameplay_keyboard_injection.pending_movement_x.load(
-                        std::memory_order_acquire);
-                const auto movement_y =
-                    g_gameplay_keyboard_injection.pending_movement_y.load(
-                        std::memory_order_acquire);
-                (void)write_vector2(param2, movement_x, movement_y);
-                break;
-            }
-        }
-    }
 
     float move_x_after = 0.0f;
     float move_y_after = 0.0f;

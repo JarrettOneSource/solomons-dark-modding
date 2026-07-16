@@ -31,6 +31,8 @@ GOLD_TYPE_ID = 0x07DC
 ORB_TYPE_ID = 0x07DB
 ITEM_DROP_TYPE_ID = 0x07DD
 POTION_ITEM_TYPE_ID = 0x1B59
+HAT_HELPER_TYPE_ID = 0x1B5D
+ROBE_HELPER_TYPE_ID = 0x1B5E
 MATCH_RADIUS = 260.0
 PLAYER_PARK_DISTANCE = 1400.0
 DROP_FORWARD_DISTANCE = 2600.0
@@ -60,9 +62,25 @@ local pos_x_offset = sd.debug.layout_offset("actor_position_x")
 local pos_y_offset = sd.debug.layout_offset("actor_position_y")
 local radius_offset = sd.debug.layout_offset("actor_collision_radius")
 local type_id_offset = sd.debug.layout_offset("game_object_type_id")
+local item_recipe_uid_offset = sd.debug.layout_offset("item_instance_recipe_uid")
+local item_wearable_color_state_offset = sd.debug.layout_offset("item_wearable_color_state")
 local item_slot_offset = sd.debug.layout_offset("item_slot")
 local potion_stack_count_offset = sd.debug.layout_offset("potion_stack_count")
 local item_drop_held_item_offset = sd.debug.layout_offset("item_drop_held_item")
+local function bytes_hex(address, count)
+  local parts = {}
+  for index = 0, count - 1 do
+    parts[#parts + 1] = string.format("%02X", u8(address + index))
+  end
+  return table.concat(parts)
+end
+local function table_bytes_hex(values)
+  local parts = {}
+  for index, value in ipairs(values or {}) do
+    parts[index] = string.format("%02X", tonumber(value) or 0)
+  end
+  return table.concat(parts)
+end
 local function actor_x(address, fallback)
   if address ~= 0 and pos_x_offset ~= nil then return f32(address + pos_x_offset) end
   return tonumber(fallback) or 0
@@ -117,7 +135,12 @@ for _, actor in ipairs(actors) do
           end
           emit(prefix .. "held_item", hx(held_item))
           if held_item ~= 0 then
-            if type_id_offset ~= nil then emit(prefix .. "item_type_id", u32(held_item + type_id_offset)) end
+            local held_type_id = type_id_offset ~= nil and u32(held_item + type_id_offset) or 0
+            emit(prefix .. "item_type_id", held_type_id)
+            if item_recipe_uid_offset ~= nil then emit(prefix .. "item_recipe_uid", u32(held_item + item_recipe_uid_offset)) end
+            if item_wearable_color_state_offset ~= nil and (held_type_id == 0x1B5D or held_type_id == 0x1B5E) then
+              emit(prefix .. "item_color_state", bytes_hex(held_item + item_wearable_color_state_offset, 32))
+            end
             if item_slot_offset ~= nil then emit(prefix .. "item_slot", sd.debug.read_i32(held_item + item_slot_offset) or -1) end
             if potion_stack_count_offset ~= nil then emit(prefix .. "stack_count", sd.debug.read_i32(held_item + potion_stack_count_offset) or 0) end
           end
@@ -154,6 +177,9 @@ if loot and loot.drops then
       emit(prefix .. "local_actor_address", hx(drop.local_actor_address or 0))
       emit(prefix .. "lifetime", drop.lifetime or 0)
       emit(prefix .. "item_type_id", drop.item_type_id or 0)
+      emit(prefix .. "item_recipe_uid", drop.item_recipe_uid or 0)
+      emit(prefix .. "item_color_state_valid", drop.item_color_state_valid and 1 or 0)
+      emit(prefix .. "item_color_state", table_bytes_hex(drop.item_color_state))
       emit(prefix .. "item_slot", drop.item_slot or -1)
       emit(prefix .. "stack_count", drop.stack_count or 0)
       emit(prefix .. "x", string.format("%.3f", tonumber(drop.x) or 0))
@@ -218,6 +244,8 @@ def actor_rows(capture_values: dict[str, str]) -> list[dict[str, Any]]:
             "progress": parse_float(capture_values.get(prefix + "progress")),
             "held_item": parse_int(capture_values.get(prefix + "held_item")),
             "item_type_id": parse_int(capture_values.get(prefix + "item_type_id")),
+            "item_recipe_uid": parse_int(capture_values.get(prefix + "item_recipe_uid")),
+            "item_color_state": capture_values.get(prefix + "item_color_state", ""),
             "item_slot": parse_int(capture_values.get(prefix + "item_slot"), -1),
             "stack_count": parse_int(capture_values.get(prefix + "stack_count")),
         })
@@ -243,6 +271,9 @@ def drop_rows(capture_values: dict[str, str]) -> list[dict[str, Any]]:
             "local_actor_address": parse_int(capture_values.get(prefix + "local_actor_address")),
             "lifetime": parse_int(capture_values.get(prefix + "lifetime")),
             "item_type_id": parse_int(capture_values.get(prefix + "item_type_id")),
+            "item_recipe_uid": parse_int(capture_values.get(prefix + "item_recipe_uid")),
+            "item_color_state_valid": parse_int(capture_values.get(prefix + "item_color_state_valid")),
+            "item_color_state": capture_values.get(prefix + "item_color_state", ""),
             "item_slot": parse_int(capture_values.get(prefix + "item_slot"), -1),
             "stack_count": parse_int(capture_values.get(prefix + "stack_count")),
             "x": parse_float(capture_values.get(prefix + "x")),
@@ -303,6 +334,7 @@ def select_actor(
     resource_kind: int | None,
     raw_value: int | None,
     item_type_id: int | None = None,
+    item_recipe_uid: int | None = None,
     item_slot: int | None = None,
     stack_count: int | None = None,
     x: float,
@@ -319,6 +351,8 @@ def select_actor(
         if raw_value is not None and abs(row["value"] - raw_value) > FLOAT_FIELD_TOLERANCE:
             continue
         if item_type_id is not None and row["item_type_id"] != item_type_id:
+            continue
+        if item_recipe_uid is not None and row["item_recipe_uid"] != item_recipe_uid:
             continue
         if item_slot is not None and row["item_slot"] != item_slot:
             continue
@@ -344,6 +378,7 @@ def select_materialized_drop(
     resource_kind: int | None,
     raw_value: int | None,
     item_type_id: int | None = None,
+    item_recipe_uid: int | None = None,
     item_slot: int | None = None,
     stack_count: int | None = None,
     x: float,
@@ -361,6 +396,8 @@ def select_materialized_drop(
         if raw_value is not None and abs(drop["value"] - raw_value) > 0.01:
             continue
         if item_type_id is not None and drop["item_type_id"] != item_type_id:
+            continue
+        if item_recipe_uid is not None and drop["item_recipe_uid"] != item_recipe_uid:
             continue
         if item_slot is not None and drop["item_slot"] != item_slot:
             continue
@@ -466,14 +503,33 @@ def field_comparison(
     elif host_actor["type"] == ITEM_DROP_TYPE_ID:
         if host_actor["held_item"] == 0 or client_actor["held_item"] == 0:
             fail("item drop held item pointer is missing")
-        if host_actor["item_type_id"] != POTION_ITEM_TYPE_ID:
-            fail("host item drop is not a potion")
-        if client_actor["item_type_id"] != POTION_ITEM_TYPE_ID:
-            fail("client item drop is not a potion")
-        if host_actor["item_slot"] != client_actor["item_slot"] or host_actor["item_slot"] != client_drop["item_slot"]:
-            fail("potion slot differs")
-        if host_actor["stack_count"] != client_actor["stack_count"] or host_actor["stack_count"] != client_drop["stack_count"]:
-            fail("potion stack count differs")
+        if (
+            host_actor["item_type_id"] != client_actor["item_type_id"]
+            or host_actor["item_type_id"] != client_drop["item_type_id"]
+        ):
+            fail("item native type differs")
+        if host_actor["item_type_id"] == POTION_ITEM_TYPE_ID:
+            if host_actor["item_slot"] != client_actor["item_slot"] or host_actor["item_slot"] != client_drop["item_slot"]:
+                fail("potion slot differs")
+            if host_actor["stack_count"] != client_actor["stack_count"] or host_actor["stack_count"] != client_drop["stack_count"]:
+                fail("potion stack count differs")
+        else:
+            if host_actor["item_recipe_uid"] == 0:
+                fail("host item recipe identity is missing")
+            if (
+                host_actor["item_recipe_uid"] != client_actor["item_recipe_uid"]
+                or host_actor["item_recipe_uid"] != client_drop["item_recipe_uid"]
+            ):
+                fail("item recipe identity differs")
+            if host_actor["item_type_id"] in (HAT_HELPER_TYPE_ID, ROBE_HELPER_TYPE_ID):
+                if not host_actor["item_color_state"] or not client_actor["item_color_state"]:
+                    fail("wearable color state is missing")
+                elif host_actor["item_color_state"] != client_actor["item_color_state"]:
+                    fail("wearable color state differs")
+                if client_drop["item_color_state_valid"] != 1:
+                    fail("wearable snapshot color-state flag is missing")
+                elif host_actor["item_color_state"] != client_drop["item_color_state"]:
+                    fail("wearable snapshot color state differs")
     if host_actor["lifetime"] != 0 and client_actor["lifetime"] == 0:
         fail("client presentation actor lifetime expired while host actor is live")
     return comparison
@@ -494,6 +550,7 @@ def wait_for_materialized_drop(
     resource_kind: int | None = None,
     raw_value: int | None = None,
     item_type_id: int | None = None,
+    item_recipe_uid: int | None = None,
     item_slot: int | None = None,
     stack_count: int | None = None,
     x: float,
@@ -511,6 +568,7 @@ def wait_for_materialized_drop(
             resource_kind=resource_kind,
             raw_value=raw_value,
             item_type_id=item_type_id,
+            item_recipe_uid=item_recipe_uid,
             item_slot=item_slot,
             stack_count=stack_count,
             x=x,

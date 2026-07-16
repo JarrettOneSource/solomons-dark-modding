@@ -49,7 +49,7 @@ using MovementCollisionTestCirclePlacementExtendedFn =
 using ActorMoveByDeltaFn = void(__thiscall*)(void* self, float move_x, float move_y, int flags);
 using ActorAnimationAdvanceFn = void(__thiscall*)(void* self);
 using ActorWorldAttachFn = void(__thiscall*)(void* self, void* actor);
-using PlayerActorRefreshRuntimeHandlesFn = void(__thiscall*)(void* self);
+using PlayerActorInitializeControlBrainFn = void(__thiscall*)(void* self);
 using ActorProgressionRefreshFn = void(__thiscall*)(void* self);
 using PlayerAppearanceApplyChoiceFn = void(__thiscall*)(void* progression, int choice_id, int ensure_assets);
 using SkillsWizardBuildPrimarySpellFn = std::uint32_t(__thiscall*)(
@@ -83,12 +83,20 @@ using OrbRewardInitializeFn = void(__thiscall*)(void* self, void* rng_state);
 using GoldPickupTickFn = void(__thiscall*)(void* self);
 using OrbPickupTickFn = void(__thiscall*)(void* self);
 using ItemDropPickupTickFn = void(__thiscall*)(void* self);
+using PowerupPickupTickFn = void(__thiscall*)(void* self);
 using InventoryInsertOrStackItemFn = void(__thiscall*)(
     void* inventory_root,
     void* item,
     std::uint8_t allow_potion_stacking,
     std::uint8_t remove_placeholder);
-using GameplayHudRenderDispatchFn = void(__thiscall*)(void* self, int render_case);
+using ItemRecipeCloneFn = void*(__cdecl*)(void* recipe);
+using ItemDropCarrierResetFn = void(__thiscall*)(void* self);
+// ItemDrop_PostRegister ends in RET 0x4, so it owns its single stack argument.
+using ItemDropPostRegisterFn = void(__stdcall*)(void* actor);
+using GameplayUiGlyphDrawFn = void(__thiscall*)(void* self, float x, float y);
+// GameplayHud_RenderDispatch reads only render_case, but its stock RET 0x0C
+// proves three stack arguments. Preserve all three across the detour.
+using GameplayHudRenderDispatchFn = void(__thiscall*)(void* self, int render_case, uintptr_t arg1, uintptr_t arg2);
 
 struct NativeGameString {
     uintptr_t vtable = 0;

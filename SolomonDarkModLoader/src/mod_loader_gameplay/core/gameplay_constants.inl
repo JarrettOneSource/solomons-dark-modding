@@ -21,6 +21,9 @@ constexpr std::size_t kSpellActionBuilderHookMinimumPatchSize = 7;
 constexpr std::size_t kSpellBuilderResetHookMinimumPatchSize = 5;
 constexpr std::size_t kSpellBuilderFinalizeHookMinimumPatchSize = 5;
 constexpr std::size_t kGameplayHudRenderDispatchHookPatchSize = 6;
+// Glyph_Draw begins with push ebp; mov ebp,esp; and esp,0xfffffff8 (6 bytes).
+constexpr std::size_t kGameplayUiGlyphDrawHookPatchSize = 6;
+constexpr std::size_t kGameplayUiCenteredGlyphDrawHookPatchSize = 6;
 constexpr std::size_t kPuppetManagerDeletePuppetHookPatchSize = 6;
 // 0x004024C0 starts with 5 bytes of whole instructions:
 //   push ebp; mov ebp, esp; push ebx; push esi
@@ -28,6 +31,12 @@ constexpr std::size_t kPuppetManagerDeletePuppetHookPatchSize = 6;
 // trampoline. Keep this hook boundary at 5 unless the function prologue is
 // re-audited.
 constexpr std::size_t kPointerListDeleteBatchHookPatchSize = 5;
+// Object_Delete at 0x004024A0 treats each batch entry as a managed callback
+// wrapper. Byte +0x06 requests a call through the callback cell at +0x00.
+constexpr std::size_t kManagedPointerReleaseCallbackCellOffset = 0x00;
+constexpr std::size_t kManagedPointerReleaseCallbackEnabledOffset = 0x06;
+constexpr std::size_t kManagedPointerReleaseOwnerVtableOffset = 0x28;
+constexpr int kManagedPointerReleasePreflightMaxCount = 4096;
 constexpr std::size_t kActorWorldUnregisterHookPatchSize = 6;
 constexpr std::size_t kGameplaySwitchRegionHookMinimumPatchSize = 5;
 constexpr int kWizardSourceActorFactoryTypeId = 0x1397;
@@ -39,6 +48,7 @@ constexpr std::size_t kMonsterPathfindingRefreshTargetHookMinimumPatchSize = 5;
 constexpr std::size_t kGoldPickupHookMinimumPatchSize = 5;
 constexpr std::size_t kOrbPickupHookMinimumPatchSize = 5;
 constexpr std::size_t kItemDropPickupHookMinimumPatchSize = 5;
+constexpr std::size_t kPowerupPickupHookMinimumPatchSize = 5;
 constexpr int kArenaRegionIndex = 5;
 constexpr std::size_t kStandaloneWizardVisualRuntimeSize = 0x8E4;
 // PlayerActor::CastSecondary toggles these three persistent profile bytes for
@@ -64,6 +74,9 @@ constexpr std::size_t kStandaloneWizardVisualLinkResetStateOffset = 0x1C;
 constexpr std::size_t kStandaloneWizardVisualLinkActiveFlagOffset = 0x58;
 constexpr std::uint32_t kStandaloneWizardHatVisualTypeId = 0x1B5D;
 constexpr std::uint32_t kStandaloneWizardRobeVisualTypeId = 0x1B5E;
+// Stock inventory lists use base Item objects as empty grid placeholders.
+// They are implementation detail, not participant-owned inventory rows.
+constexpr std::uint32_t kInventoryPlaceholderItemTypeId = 0x1B58;
 constexpr int kStandaloneWizardHiddenSelectionState = -2;
 constexpr std::size_t kGameplayRegionStride = 4;
 constexpr std::size_t kGameplayPlayerSlotStride = 4;
@@ -77,6 +90,9 @@ constexpr std::size_t kStandaloneWizardEquipSize = 100;
 constexpr std::size_t kStandaloneWizardAttachmentItemSize = 0x88;
 constexpr std::size_t kStandaloneWizardAttachmentStaffVisualStateOffset = 0x84;
 constexpr std::uint32_t kStandaloneWizardStaffItemTypeId = 0x1B5C;
+constexpr std::uint32_t kStandaloneWizardWandItemTypeId = 0x1B63;
+constexpr std::uint32_t kStandaloneWizardRingItemTypeId = 0x1B5A;
+constexpr std::uint32_t kStandaloneWizardAmuletItemTypeId = 0x1B5B;
 // Object_Ctor treats +0x04..+0x07 as object-header state, not an actor-owned
 // render-context pointer. Keep the raw word available for dumps and probes, but
 // do not treat it as a transferable render node.

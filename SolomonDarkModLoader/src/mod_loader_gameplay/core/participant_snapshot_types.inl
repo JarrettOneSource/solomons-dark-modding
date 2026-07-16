@@ -133,6 +133,20 @@ SDModEquipVisualLaneState ReadEquipVisualLaneState(
         lane.current_object_address,
         kGameObjectTypeIdOffset,
         &lane.current_object_type_id);
+    if (kItemInstanceRecipeUidOffset != 0) {
+        (void)memory.TryReadField(
+            lane.current_object_address,
+            kItemInstanceRecipeUidOffset,
+            &lane.current_object_recipe_uid);
+    }
+    if ((lane.current_object_type_id == kStandaloneWizardHatVisualTypeId ||
+         lane.current_object_type_id == kStandaloneWizardRobeVisualTypeId) &&
+        memory.TryRead(
+            lane.current_object_address + kStandaloneWizardVisualLinkColorBlockOffset,
+            lane.current_object_color_state.data(),
+            lane.current_object_color_state.size())) {
+        lane.current_object_color_state_valid = true;
+    }
     return lane;
 }
 
@@ -151,5 +165,6 @@ void AppendEquipVisualLaneSummary(
          << " object=" << HexString(lane.current_object_address)
          << " vtbl=" << HexString(lane.current_object_vtable)
          << " type=0x" << HexString(static_cast<uintptr_t>(lane.current_object_type_id))
+         << " recipe_uid=" << lane.current_object_recipe_uid
          << "}";
 }

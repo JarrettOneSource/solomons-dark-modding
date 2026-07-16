@@ -55,6 +55,11 @@ completed the authenticated compatibility handshake, and entered the shared
 run. Two physical PCs remain the recommended final player-environment check,
 but they are not required for same-machine development validation.
 
+This does not mean every deterministic verifier was rerun through Proton. The
+broader gameplay matrix uses local UDP; the two-account Steam/Proton path covers
+the real invite, authentication, reconnect, exhaustive stat and upgrade state,
+and the focused Explode, Embers, and Air Chaining behavior passes listed above.
+
 The latest local structured evidence is:
 
 - `runtime/steam_friend_active_pair_run_stats33.json` — fresh invited pair and
@@ -205,11 +210,15 @@ the valid lobby returns to `Handshaking` with a fresh session nonce.
 ## Current boundary
 
 Inventory/book/loadout rows are replicated as participant-owned state. The
-verified potion slice also inserts or stacks a real native potion object in the
-owning client's stock inventory. Arbitrary item/equipment insertion, powerup
-ownership, and shop/trader transfers are still unfinished; do not treat a
-peer-visible row as proof that those stock UI or merchant paths own a native
-object yet.
+owning process inserts or stacks real native potions and exact recipe-backed
+equipment in its stock inventory. Hat, robe, staff, wand, ring, and amulet
+equipment identity replicates to observers; visible lanes are materialized on
+native remote actors. Random Skill, Damage x4, and Bonus Skill powerups are
+host-authorized. Luthacus storage and Fomentius/Hagatha merchant actions remain
+owner-local stock UI paths whose resulting state replicates to peers. Observer
+processes intentionally retain participant rows rather than a second stock
+inventory root. Nested sack browsing, the remaining Hagatha catalog, non-shop
+quest/reward insertion, and durable cross-session persistence are still open.
 
 Spacewar AppID 480 is a shared development namespace, not a production product
 identity. This public beta deliberately uses it only for development

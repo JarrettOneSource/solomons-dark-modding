@@ -34,6 +34,7 @@ extern std::size_t kProgressionMeditationIdleTicksOffset;
 extern std::size_t kProgressionMeditationIdleElapsedTicksOffset;
 extern std::size_t kProgressionMeditationRecoveryRampTicksOffset;
 extern std::size_t kProgressionMeditationRecoveryBonusOffset;
+extern std::size_t kProgressionDamageX4RemainingTicksOffset;
 extern std::size_t kNativeSkillOptionRollVtableOffset;
 extern std::size_t kNativeSpecialChoicePostRefreshVtableOffset;
 extern std::size_t kNativeSpecialChoiceActivateVtableOffset;

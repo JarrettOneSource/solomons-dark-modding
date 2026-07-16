@@ -205,6 +205,7 @@ bool BeginOrExtendHostLevelUpBarrier(
         for (const auto participant_id : participant_ids) {
             HostLevelUpBarrierParticipant participant;
             participant.participant_id = participant_id;
+            participant.last_offer_attempt_ms = now_ms;
             barrier.participants.push_back(participant);
         }
         BroadcastHostLevelUpBarrierState(now_ms, true);
@@ -225,6 +226,7 @@ bool BeginOrExtendHostLevelUpBarrier(
         }
         HostLevelUpBarrierParticipant participant;
         participant.participant_id = participant_id;
+        participant.last_offer_attempt_ms = now_ms;
         barrier.participants.push_back(participant);
         changed = true;
     }

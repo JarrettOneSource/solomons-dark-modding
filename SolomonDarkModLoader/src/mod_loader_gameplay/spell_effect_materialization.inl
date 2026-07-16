@@ -125,6 +125,30 @@ bool ShouldDeferForMatchingRemoteCastReplay(
         return false;
     }
 
+    bool replay_active = false;
+    {
+        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+        const auto* binding = FindParticipantEntity(owner_participant_id);
+        if (binding != nullptr) {
+            const auto& cast = binding->ongoing_cast;
+            replay_active =
+                cast.active &&
+                cast.remote_input_controlled &&
+                cast.remote_input_cast_sequence == effect.cast_sequence;
+        }
+    }
+
+    if (replay_active) {
+        g_recent_remote_spell_effect_replay_activity[owner_participant_id]
+                                                     [effect.cast_sequence] = now_ms;
+        return true;
+    }
+
+    // A live matching replay is stronger evidence than the progression table:
+    // the remote Fireball can remain in flight while that table is briefly
+    // unavailable or stale. Once replay has ended, an explicitly inactive
+    // Embers entry means no natural children are expected and replicated
+    // materialization can run.
     bool native_embers_active = false;
     if (TryReadNativeProgressionEntryActive(
             owner_progression_address,
@@ -134,37 +158,27 @@ bool ShouldDeferForMatchingRemoteCastReplay(
         return false;
     }
 
-    bool replay_active = false;
-    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-    const auto* binding = FindParticipantEntity(owner_participant_id);
-    if (binding != nullptr) {
-        const auto& cast = binding->ongoing_cast;
-        replay_active =
-            cast.active &&
-            cast.remote_input_controlled &&
-            cast.remote_input_cast_sequence == effect.cast_sequence;
-    }
-
-    auto& activity_by_sequence =
-        g_recent_remote_spell_effect_replay_activity[owner_participant_id];
-    if (replay_active) {
-        activity_by_sequence[effect.cast_sequence] = now_ms;
-        return true;
-    }
-
-    const auto activity_it = activity_by_sequence.find(effect.cast_sequence);
-    if (activity_it == activity_by_sequence.end()) {
+    const auto owner_activity_it =
+        g_recent_remote_spell_effect_replay_activity.find(owner_participant_id);
+    if (owner_activity_it ==
+        g_recent_remote_spell_effect_replay_activity.end()) {
         return false;
     }
-    if (now_ms >= activity_it->second &&
-        now_ms - activity_it->second <
+    auto& activity_by_sequence = owner_activity_it->second;
+    const auto sequence_activity_it =
+        activity_by_sequence.find(effect.cast_sequence);
+    if (sequence_activity_it == activity_by_sequence.end()) {
+        return false;
+    }
+    if (now_ms >= sequence_activity_it->second &&
+        now_ms - sequence_activity_it->second <
             kReplicatedEmberRemoteReplaySettleGraceMs) {
         return true;
     }
-    activity_by_sequence.erase(activity_it);
+    activity_by_sequence.erase(sequence_activity_it);
     if (activity_by_sequence.empty()) {
         g_recent_remote_spell_effect_replay_activity.erase(
-            owner_participant_id);
+            owner_activity_it);
     }
     return false;
 }

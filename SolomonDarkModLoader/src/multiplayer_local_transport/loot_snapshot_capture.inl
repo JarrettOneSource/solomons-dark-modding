@@ -1,10 +1,16 @@
 bool TryReadItemDropHeldItemMetadata(
     uintptr_t drop_actor_address,
     std::uint32_t* item_type_id,
+    std::uint32_t* item_recipe_uid,
+    std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes>* item_color_state,
+    bool* item_color_state_valid,
     std::int32_t* item_slot,
     std::int32_t* stack_count) {
     if (drop_actor_address == 0 ||
         item_type_id == nullptr ||
+        item_recipe_uid == nullptr ||
+        item_color_state == nullptr ||
+        item_color_state_valid == nullptr ||
         item_slot == nullptr ||
         stack_count == nullptr ||
         kItemDropHeldItemOffset == 0 ||
@@ -23,11 +29,18 @@ bool TryReadItemDropHeldItemMetadata(
     }
 
     std::uint32_t read_item_type_id = 0;
+    std::uint32_t read_item_recipe_uid = 0;
     std::int32_t read_item_slot = -1;
     if (!memory.TryReadField(held_item_address, kGameObjectTypeIdOffset, &read_item_type_id) ||
         read_item_type_id == 0 ||
         !memory.TryReadField(held_item_address, kItemSlotOffset, &read_item_slot)) {
         return false;
+    }
+    if (kItemInstanceRecipeUidOffset != 0) {
+        (void)memory.TryReadField(
+            held_item_address,
+            kItemInstanceRecipeUidOffset,
+            &read_item_recipe_uid);
     }
 
     std::int32_t read_stack_count = 0;
@@ -37,7 +50,18 @@ bool TryReadItemDropHeldItemMetadata(
         (void)memory.TryReadField(held_item_address, kPotionStackCountOffset, &read_stack_count);
     }
 
+    *item_color_state = {};
+    *item_color_state_valid = false;
+    if ((read_item_type_id == kHatItemTypeId || read_item_type_id == kRobeItemTypeId) &&
+        memory.TryRead(
+            static_cast<uintptr_t>(held_item_address) + kItemWearableColorStateOffset,
+            item_color_state->data(),
+            item_color_state->size())) {
+        *item_color_state_valid = true;
+    }
+
     *item_type_id = read_item_type_id;
+    *item_recipe_uid = read_item_recipe_uid;
     *item_slot = read_item_slot;
     *stack_count = NormalizeInventoryLootStackCount(read_item_type_id, read_stack_count);
     return true;
@@ -154,11 +178,17 @@ bool TryPopulateItemLootDropSnapshot(
     }
 
     std::uint32_t item_type_id = 0;
+    std::uint32_t item_recipe_uid = 0;
+    std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> item_color_state = {};
+    bool item_color_state_valid = false;
     std::int32_t item_slot = -1;
     std::int32_t stack_count = 0;
     if (!TryReadItemDropHeldItemMetadata(
             actor.actor_address,
             &item_type_id,
+            &item_recipe_uid,
+            &item_color_state,
+            &item_color_state_valid,
             &item_slot,
             &stack_count)) {
         return false;
@@ -170,15 +200,76 @@ bool TryPopulateItemLootDropSnapshot(
     built.drop_kind = static_cast<std::uint8_t>(
         item_type_id == kPotionItemTypeId ? LootDropKind::Potion : LootDropKind::Item);
     built.flags = LootDropSnapshotFlagActive;
+    if (item_color_state_valid) {
+        built.flags |= LootDropSnapshotFlagItemColorState;
+        std::memcpy(
+            built.item_color_state,
+            item_color_state.data(),
+            item_color_state.size());
+    }
     built.amount = stack_count;
     built.amount_tier = item_slot;
     built.value = 0.0f;
     built.item_type_id = item_type_id;
+    built.item_recipe_uid = item_recipe_uid;
     built.item_slot = item_slot;
     built.stack_count = stack_count;
     built.actor_slot = actor.actor_slot;
     built.world_slot = actor.world_slot;
     built.lifetime = 0;
+    built.position_x = actor.x;
+    built.position_y = actor.y;
+    built.radius = actor.radius;
+    *snapshot = built;
+    return true;
+}
+
+bool TryPopulatePowerupLootDropSnapshot(
+    const SDModSceneActorState& actor,
+    std::uint64_t network_drop_id,
+    LootDropSnapshotPacketState* snapshot) {
+    if (snapshot == nullptr ||
+        network_drop_id == 0 ||
+        !ShouldReplicateLootDropActor(actor, ParticipantSceneIntentKind::Run) ||
+        actor.object_type_id != kPowerupRewardNativeTypeId) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t powerup_kind = 0;
+    float motion = 0.0f;
+    std::uint32_t lifetime = 0;
+    float progress = 0.0f;
+    float value = 0.0f;
+    float auxiliary = 0.0f;
+    if (!memory.TryReadField(actor.actor_address, kPowerupRewardKindOffset, &powerup_kind) ||
+        !memory.TryReadField(actor.actor_address, kPowerupRewardMotionOffset, &motion) ||
+        !memory.TryReadField(actor.actor_address, kPowerupRewardLifetimeOffset, &lifetime) ||
+        !memory.TryReadField(actor.actor_address, kPowerupRewardProgressOffset, &progress) ||
+        !memory.TryReadField(actor.actor_address, kPowerupRewardValueOffset, &value) ||
+        !memory.TryReadField(actor.actor_address, kPowerupRewardAuxiliaryOffset, &auxiliary) ||
+        powerup_kind > static_cast<std::uint8_t>(PowerupRewardKind::DamageX4) ||
+        !std::isfinite(motion) ||
+        !std::isfinite(progress) ||
+        !std::isfinite(value) ||
+        !std::isfinite(auxiliary)) {
+        return false;
+    }
+
+    LootDropSnapshotPacketState built{};
+    built.network_drop_id = network_drop_id;
+    built.native_type_id = actor.object_type_id;
+    built.drop_kind = static_cast<std::uint8_t>(LootDropKind::Powerup);
+    built.flags = lifetime != 0 ? LootDropSnapshotFlagActive : 0;
+    built.amount = 1;
+    built.amount_tier = powerup_kind;
+    built.value = value;
+    built.motion = motion;
+    built.progress = progress;
+    built.auxiliary = auxiliary;
+    built.actor_slot = actor.actor_slot;
+    built.world_slot = actor.world_slot;
+    built.lifetime = lifetime;
     built.position_x = actor.x;
     built.position_y = actor.y;
     built.radius = actor.radius;
@@ -198,6 +289,9 @@ bool TryPopulateLootDropSnapshot(
     }
     if (actor.object_type_id == kItemDropNativeTypeId) {
         return TryPopulateItemLootDropSnapshot(actor, network_drop_id, snapshot);
+    }
+    if (actor.object_type_id == kPowerupRewardNativeTypeId) {
+        return TryPopulatePowerupLootDropSnapshot(actor, network_drop_id, snapshot);
     }
     return false;
 }
@@ -250,108 +344,6 @@ bool TryFindHostRunLootDropByNetworkId(
         return true;
     }
     return false;
-}
-
-bool TryDeactivateHostGoldLootDrop(uintptr_t actor_address) {
-    if (actor_address == 0) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    const std::uint8_t inactive = 0;
-    const std::uint32_t zero_amount = 0;
-    const std::uint32_t expired_lifetime = 0;
-    (void)
-        memory.TryWriteField(actor_address, kGoldRewardActiveOffset, inactive);
-    const bool wrote_amount =
-        memory.TryWriteField(actor_address, kGoldRewardAmountOffset, zero_amount);
-    const bool wrote_lifetime =
-        memory.TryWriteField(actor_address, kGoldRewardLifetimeOffset, expired_lifetime);
-    return wrote_amount && wrote_lifetime;
-}
-
-bool TryDeactivateHostOrbLootDrop(uintptr_t actor_address) {
-    if (actor_address == 0) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    const float zero_value = 0.0f;
-    const std::uint32_t expired_lifetime = 0;
-    const float settled_motion = 0.0f;
-    const bool wrote_value =
-        memory.TryWriteField(actor_address, kOrbRewardValueOffset, zero_value);
-    const bool wrote_lifetime =
-        memory.TryWriteField(actor_address, kOrbRewardLifetimeOffset, expired_lifetime);
-    const bool wrote_motion =
-        memory.TryWriteField(actor_address, kOrbRewardMotionOffset, settled_motion);
-    return wrote_value && wrote_lifetime && wrote_motion;
-}
-
-bool CallHostLootDropActorWorldUnregisterSafe(
-    uintptr_t actor_address,
-    DWORD* exception_code) {
-    if (exception_code != nullptr) {
-        *exception_code = 0;
-    }
-    if (actor_address == 0) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    uintptr_t world_address = 0;
-    if (kActorOwnerOffset == 0 ||
-        !memory.TryReadField(actor_address, kActorOwnerOffset, &world_address) ||
-        world_address == 0) {
-        return false;
-    }
-
-    const auto unregister_address = memory.ResolveGameAddressOrZero(kActorWorldUnregister);
-    auto* unregister_actor = reinterpret_cast<NativeActorWorldUnregisterFn>(unregister_address);
-    if (unregister_actor == nullptr) {
-        return false;
-    }
-
-    __try {
-        unregister_actor(
-            reinterpret_cast<void*>(world_address),
-            reinterpret_cast<void*>(actor_address),
-            1);
-        return true;
-    } __except (CaptureLocalTransportSehCode(GetExceptionInformation(), exception_code)) {
-        return false;
-    }
-}
-
-bool TryDeactivateHostItemLootDrop(uintptr_t actor_address) {
-    if (actor_address == 0) {
-        return false;
-    }
-
-    DWORD exception_code = 0;
-    const bool unregistered =
-        CallHostLootDropActorWorldUnregisterSafe(actor_address, &exception_code);
-    if (!unregistered) {
-        Log(
-            "Multiplayer loot item drop deactivation failed; native unregister unavailable. actor=" +
-            HexString(actor_address) +
-            " seh=" + HexString(static_cast<uintptr_t>(exception_code)));
-    }
-    return unregistered;
-}
-
-bool TryDeactivateHostLootDrop(uintptr_t actor_address, LootDropKind kind) {
-    switch (kind) {
-    case LootDropKind::Gold:
-        return TryDeactivateHostGoldLootDrop(actor_address);
-    case LootDropKind::Orb:
-        return TryDeactivateHostOrbLootDrop(actor_address);
-    case LootDropKind::Item:
-    case LootDropKind::Potion:
-        return TryDeactivateHostItemLootDrop(actor_address);
-    default:
-        return false;
-    }
 }
 
 bool TryWriteLocalGlobalGold(std::int32_t gold) {

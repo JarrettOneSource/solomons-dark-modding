@@ -37,10 +37,11 @@ from verify_real_input_spell_cast_sync import (
     CLIENT_LOG,
     HOST_LOG,
     Direction,
+    count_local_native_queues,
     detect_instance_pids,
     log_after,
-    read_log,
-    wait_for_source_cast,
+    log_position,
+    parse_phase_counts,
 )
 from verify_multiplayer_level_up_offer_sync import (
     choose_client_option,
@@ -106,6 +107,10 @@ PAIR_REMOTE_SYNC_TOLERANCE = 8.0
 # own convergence budget. Bounds the self-healing loop so a pause that never
 # clears still surfaces as a failure instead of hanging forever.
 LEVEL_UP_RESOLVE_BUDGET = 20.0
+LEVEL_UP_PAUSE_LOG_MARKERS = (
+    "Multiplayer level-up barrier started.",
+    "ActorWorld_Tick held for multiplayer level-up wait.",
+)
 LANE_HALF_WIDTH = 72.0
 LANE_END_PADDING = 96.0
 LANE_ACTOR_PADDING = 34.0
@@ -442,8 +447,8 @@ def quiesce_gameplay_primary_input(label: str, stable_seconds: float = 0.9) -> d
     # below re-arms if anything is detected. 2.75s was pure dead time per call.
     attempts: list[dict[str, Any]] = []
     for attempt in range(1, 7):
-        host_offset = len(read_log(HOST_LOG))
-        client_offset = len(read_log(CLIENT_LOG))
+        host_offset = log_position(HOST_LOG)
+        client_offset = log_position(CLIENT_LOG)
         host_clear_before = clear_gameplay_mouse_left(HOST_PIPE)
         client_clear_before = clear_gameplay_mouse_left(CLIENT_PIPE)
         time.sleep(stable_seconds)
@@ -1369,11 +1374,10 @@ local previous_skill = oprev ~= nil and read_i32(actor + oprev) or 0
 local selection_action_cooldown = selection_ptr ~= 0 and oselection_action_cooldown ~= nil and read_i32(selection_ptr + oselection_action_cooldown) or -1
 local selection_action_burst = selection_ptr ~= 0 and oselection_action_burst ~= nil and read_i32(selection_ptr + oselection_action_burst) or -1
 local equip_ready = equip_runtime ~= 0 or equip_inner ~= 0
+local native_local_control = equip_runtime == 0 and selection_ptr == 0
 local ready = progression_runtime ~= 0
   and progression_inner ~= 0
   and progression_runtime == progression_inner
-  and equip_ready
-  and selection_ptr ~= 0
   and progression_spell > 0
   and primary_skill == 0
   and previous_skill == 0
@@ -1382,6 +1386,7 @@ local ready = progression_runtime ~= 0
 emit("ok", true)
 emit("ready", ready)
 emit("equip_ready", equip_ready)
+emit("native_local_control", native_local_control)
 emit("actor", hx(actor))
 emit("progression_runtime", hx(progression_runtime))
 emit("progression_handle", hx(progression_handle))
@@ -2690,7 +2695,7 @@ def wait_for_cast_runtime_ready(direction: Direction, timeout: float = 4.0) -> d
     stable_key: tuple[str | None, ...] | None = None
     while time.monotonic() < deadline:
         last = cast_runtime_state(direction.source_pipe)
-        if last.get("ready") == "true" and last.get("equip_ready") == "true":
+        if last.get("ready") == "true":
             current_key = (
                 last.get("actor"),
                 last.get("progression_runtime"),
@@ -2712,6 +2717,93 @@ def wait_for_cast_runtime_ready(direction: Direction, timeout: float = 4.0) -> d
     raise VerifyFailure(f"{direction.name}: local caster runtime never became primary-cast ready: {last}")
 
 
+def resolve_active_level_up_barrier(label: str) -> dict[str, Any]:
+    deadline = time.monotonic() + LEVEL_UP_RESOLVE_BUDGET
+    pause_observed = False
+    barrier_state_observed = False
+    resolved: list[dict[str, Any]] = []
+    resolved_keys: set[tuple[str, int]] = set()
+    last_host: dict[str, str] = {}
+    last_client: dict[str, str] = {}
+
+    while time.monotonic() < deadline:
+        last_host = query(HOST_PIPE)
+        last_client = query(CLIENT_PIPE)
+        pause_active = (
+            last_host.get("levelup.pause_active") == "true"
+            or last_client.get("levelup.pause_active") == "true"
+        )
+        offer_active = (
+            last_host.get("levelup.offer_valid") == "true"
+            or last_client.get("levelup.offer_valid") == "true"
+        )
+        pause_observed = pause_observed or pause_active
+        barrier_state_observed = barrier_state_observed or pause_active or offer_active
+        for choice in resolve_level_ups_from_snapshots(last_host, last_client):
+            key = (str(choice["pipe"]), int(choice["offer_id"]))
+            if key not in resolved_keys:
+                resolved_keys.add(key)
+                resolved.append(choice)
+        if barrier_state_observed and not pause_active and not offer_active:
+            return {
+                "ok": True,
+                "label": label,
+                "pause_observed": True,
+                "resolved": resolved,
+            }
+        time.sleep(0.1)
+
+    raise VerifyFailure(
+        f"{label}: level-up pause did not clear within {LEVEL_UP_RESOLVE_BUDGET:.1f}s: "
+        f"resolved={resolved} host={last_host} client={last_client}"
+    )
+
+
+def wait_for_source_cast_resolving_level_ups(
+    direction: Direction,
+    source_offset: int,
+    receiver_offset: int,
+    required_counts: dict[str, int],
+    timeout: float,
+) -> tuple[str, dict[str, int], int, list[dict[str, Any]]]:
+    deadline = time.monotonic() + timeout
+    level_up_handled = False
+    level_up_resolutions: list[dict[str, Any]] = []
+    last_log = ""
+    last_counts: dict[str, int] = {}
+    last_native_hook_count = 0
+
+    while time.monotonic() < deadline:
+        last_log = log_after(direction.source_log, source_offset)
+        last_counts = parse_phase_counts(last_log, direction.source_id)
+        last_native_hook_count = count_local_native_queues(last_log)
+        if last_native_hook_count >= 1 and all(
+            last_counts.get(phase, 0) >= count
+            for phase, count in required_counts.items()
+        ):
+            return last_log, last_counts, last_native_hook_count, level_up_resolutions
+
+        if not level_up_handled:
+            receiver_log = log_after(direction.receiver_log, receiver_offset)
+            combined_log = last_log + receiver_log
+            if any(marker in combined_log for marker in LEVEL_UP_PAUSE_LOG_MARKERS):
+                resolution_started = time.monotonic()
+                level_up_resolutions.append(
+                    resolve_active_level_up_barrier(
+                        f"{direction.name}.source_cast"
+                    )
+                )
+                deadline += time.monotonic() - resolution_started
+                level_up_handled = True
+        time.sleep(0.05)
+
+    raise VerifyFailure(
+        f"{direction.name}: source cast did not reach native hook/phases. "
+        f"required={required_counts} native_hooks={last_native_hook_count} "
+        f"phases={last_counts} level_up_resolutions={level_up_resolutions}"
+    )
+
+
 def execute_primary_kill_attempt(
     direction: Direction,
     target: dict[str, Any],
@@ -2729,8 +2821,8 @@ def execute_primary_kill_attempt(
     }
     attempt["source_cast_runtime_before"] = wait_for_cast_runtime_ready(direction)
     set_local_player_vitals(direction.source_pipe, 5000.0, 5000.0)
-    source_offset = len(read_log(direction.source_log))
-    receiver_offset = len(read_log(direction.receiver_log))
+    source_offset = log_position(direction.source_log)
+    receiver_offset = log_position(direction.receiver_log)
     attempt["source_log_offset"] = source_offset
     attempt["receiver_log_offset"] = receiver_offset
     attempt["prepare"] = prepare_and_queue_caster(direction, target_actor, target_x, target_y, frames)
@@ -2740,11 +2832,14 @@ def execute_primary_kill_attempt(
     }
     attempt["status"] = "cast_queued"
     try:
-        source_log, phase_counts, native_hook_count = wait_for_source_cast(
-            direction,
-            source_offset,
-            {"pressed": 1, "released": 1},
-            timeout=8.0,
+        source_log, phase_counts, native_hook_count, level_up_resolutions = (
+            wait_for_source_cast_resolving_level_ups(
+                direction,
+                source_offset,
+                receiver_offset,
+                {"pressed": 1, "released": 1},
+                timeout=8.0,
+            )
         )
     except VerifyFailure as exc:
         attempt["status"] = "source_cast_missing"
@@ -2755,6 +2850,7 @@ def execute_primary_kill_attempt(
 
     attempt["phase_counts"] = phase_counts
     attempt["native_hook_count"] = native_hook_count
+    attempt["level_up_resolutions"] = level_up_resolutions
     attempt["source_log_tail"] = source_log[-2000:]
     attempt["cast_impact_timeline"] = collect_cast_impact_timeline(
         direction,
@@ -3080,8 +3176,8 @@ def lua_excluded_address_table(addresses: set[int]) -> str:
 
 
 def verify_forced_gold_drop(amount: int, x: float, y: float, pickup_pipe: str) -> dict[str, Any]:
-    host_log_offset = len(read_log(HOST_LOG))
-    client_log_offset = len(read_log(CLIENT_LOG))
+    host_log_offset = log_position(HOST_LOG)
+    client_log_offset = log_position(CLIENT_LOG)
     before_addresses = list_host_active_native_gold_addresses()
     pre_spawn_client_loot = replicated_loot_diagnostics(CLIENT_PIPE, amount, x, y)
     spawn = values(
@@ -3962,6 +4058,7 @@ def verify_one_kill(direction: Direction, kill_index: int, record: dict[str, Any
     record["status"] = "cast_queued"
     record["phase_counts"] = selected_attempt.get("phase_counts")
     record["native_hook_count"] = selected_attempt.get("native_hook_count")
+    record["level_up_resolutions"] = selected_attempt.get("level_up_resolutions", [])
     record["source_log_tail"] = selected_attempt.get("source_log_tail")
     record["cast_impact_timeline"] = selected_attempt.get("cast_impact_timeline")
     death_logs = selected_attempt["death_logs"]

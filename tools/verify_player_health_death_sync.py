@@ -15,16 +15,20 @@ from verify_local_multiplayer_sync import (
     HOST_NAME,
     HOST_PIPE,
     ROOT,
+    THIRD_ID,
+    THIRD_NAME,
+    THIRD_PIPE,
     VerifyFailure,
     disable_bots,
     distance,
-    launch_pair,
+    launch_trio,
     lua,
     parse_key_values,
     place_player,
-    start_host_testrun_and_wait_for_clients,
+    start_testrun,
     stop_games,
     wait_for_remote,
+    wait_for_scene,
 )
 
 
@@ -35,7 +39,7 @@ DEAD_CORPSE_DRIVE_STATE = 1
 ALIVE_TEST_HP = 375.0
 ALIVE_TEST_MAX_HP = 500.0
 DEAD_TEST_HP = -50.0
-VITAL_SYNC_TOLERANCE = 8.0
+VITAL_SYNC_TOLERANCE = 0.25
 
 
 def lua_id(participant_id: int) -> str:
@@ -352,16 +356,61 @@ def main() -> int:
     result: dict[str, object] = {"ok": False}
     try:
         stop_games()
-        result["launch"] = launch_pair()
+        result["launch"] = launch_trio(tile_windows=False)
         disable_bots()
-        result["host_run_entry"] = start_host_testrun_and_wait_for_clients()
-        wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "testrun")
-        wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "testrun")
+        third_bot_count = lua(
+            THIRD_PIPE,
+            "lua_bots_disable_tick = true; sd.bots.clear(); "
+            "return tostring(sd.bots.get_count())",
+        ).strip()
+        if third_bot_count != "0":
+            raise VerifyFailure(
+                f"failed to disable bots on third instance: {third_bot_count!r}"
+            )
+        result["bots_disabled"] = {
+            "host": True,
+            "client": True,
+            "third": True,
+        }
+
+        start_testrun(HOST_PIPE)
+        for pipe_name in (HOST_PIPE, CLIENT_PIPE, THIRD_PIPE):
+            wait_for_scene(pipe_name, "testrun", 45.0)
+        relationships: dict[str, dict[str, str]] = {}
+        participants = (
+            ("host", HOST_ID, HOST_NAME, HOST_PIPE),
+            ("client", CLIENT_ID, CLIENT_NAME, CLIENT_PIPE),
+            ("third", THIRD_ID, THIRD_NAME, THIRD_PIPE),
+        )
+        for observer_label, _, _, observer_pipe in participants:
+            for owner_label, owner_id, owner_name, _ in participants:
+                if observer_label == owner_label:
+                    continue
+                relationship = f"{observer_label}_observes_{owner_label}"
+                relationships[relationship] = wait_for_remote(
+                    observer_pipe,
+                    owner_id,
+                    owner_name,
+                    "testrun",
+                    45.0,
+                )
+        result["run_entry"] = {
+            "host_started": True,
+            "clients_followed": [CLIENT_ID, THIRD_ID],
+            "scene": "testrun",
+        }
+        result["run_relationships"] = relationships
 
         result["host_to_client"] = verify_one_direction(
             owner_pipe=HOST_PIPE,
             owner_name=HOST_NAME,
             observer_pipe=CLIENT_PIPE,
+            participant_id=HOST_ID,
+        )
+        result["host_to_third"] = verify_one_direction(
+            owner_pipe=HOST_PIPE,
+            owner_name=HOST_NAME,
+            observer_pipe=THIRD_PIPE,
             participant_id=HOST_ID,
         )
         result["client_to_host"] = verify_one_direction(
@@ -370,6 +419,31 @@ def main() -> int:
             observer_pipe=HOST_PIPE,
             participant_id=CLIENT_ID,
         )
+        result["client_to_third"] = verify_one_direction(
+            owner_pipe=CLIENT_PIPE,
+            owner_name=CLIENT_NAME,
+            observer_pipe=THIRD_PIPE,
+            participant_id=CLIENT_ID,
+        )
+        result["third_to_host"] = verify_one_direction(
+            owner_pipe=THIRD_PIPE,
+            owner_name=THIRD_NAME,
+            observer_pipe=HOST_PIPE,
+            participant_id=THIRD_ID,
+        )
+        result["third_to_client"] = verify_one_direction(
+            owner_pipe=THIRD_PIPE,
+            owner_name=THIRD_NAME,
+            observer_pipe=CLIENT_PIPE,
+            participant_id=THIRD_ID,
+        )
+
+        result["summary"] = {
+            "participant_count": 3,
+            "observer_relationship_count": 6,
+            "owner_to_observer_health_checks": 6,
+            "vital_sync_tolerance": VITAL_SYNC_TOLERANCE,
+        }
 
         result["ok"] = True
         RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)

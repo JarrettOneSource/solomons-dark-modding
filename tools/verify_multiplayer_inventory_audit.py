@@ -41,6 +41,17 @@ local function emit(key, value)
   end
 end
 
+local function bytes_hex(address, count)
+  if address == 0 then return "" end
+  local parts = {}
+  for offset = 0, count - 1 do
+    local value = sd.debug.read_u8(address + offset)
+    if value == nil then return "" end
+    parts[#parts + 1] = string.format("%02x", value)
+  end
+  return table.concat(parts)
+end
+
 local scene = sd.world and sd.world.get_scene and sd.world.get_scene() or nil
 local inventory = sd.player and sd.player.get_inventory_state and sd.player.get_inventory_state() or nil
 emit("scene", scene and (scene.name or scene.kind) or "")
@@ -48,27 +59,38 @@ emit("inventory.valid", inventory ~= nil and inventory.valid or false)
 emit("inventory.scene", inventory and inventory.gameplay_scene_address or 0)
 emit("inventory.root", inventory and inventory.item_list_root_address or 0)
 emit("inventory.items_address", inventory and inventory.item_array_address or 0)
+emit("inventory.raw_item_count", inventory and inventory.raw_item_count or 0)
 emit("inventory.item_count", inventory and inventory.item_count or 0)
 emit("inventory.enumerated_item_count", inventory and inventory.enumerated_item_count or 0)
 emit("inventory.truncated", inventory and inventory.truncated or false)
 local items = inventory and inventory.items or {}
+local wearable_color_offset = sd.debug.layout_offset("item_wearable_color_state")
 emit("item.row_count", #items)
 for index, item in ipairs(items) do
   local prefix = "item." .. tostring(index) .. "."
   emit(prefix .. "valid", item.valid or false)
   emit(prefix .. "address", item.item_address or 0)
   emit(prefix .. "type_id", item.type_id or 0)
+  emit(prefix .. "recipe_uid", item.recipe_uid or 0)
   emit(prefix .. "slot", item.slot or -1)
   emit(prefix .. "stack_count", item.stack_count or 0)
+  local wearable = item.type_id == 0x1B5D or item.type_id == 0x1B5E
+  local color_state = wearable and wearable_color_offset ~= nil
+    and bytes_hex((item.item_address or 0) + wearable_color_offset, 32) or ""
+  emit(prefix .. "color_state_valid", #color_state == 64)
+  emit(prefix .. "color_state", color_state)
 end
 local primary = inventory and inventory.primary_visual_lane or {}
 local secondary = inventory and inventory.secondary_visual_lane or {}
 local attachment = inventory and inventory.attachment_visual_lane or {}
 emit("visual.primary.type_id", primary.current_object_type_id or 0)
+emit("visual.primary.recipe_uid", primary.current_object_recipe_uid or 0)
 emit("visual.primary.object", primary.current_object_address or 0)
 emit("visual.secondary.type_id", secondary.current_object_type_id or 0)
+emit("visual.secondary.recipe_uid", secondary.current_object_recipe_uid or 0)
 emit("visual.secondary.object", secondary.current_object_address or 0)
 emit("visual.attachment.type_id", attachment.current_object_type_id or 0)
+emit("visual.attachment.recipe_uid", attachment.current_object_recipe_uid or 0)
 emit("visual.attachment.object", attachment.current_object_address or 0)
 
 local book = sd.player and sd.player.get_progression_book_state and sd.player.get_progression_book_state() or nil
@@ -118,6 +140,7 @@ if mp and mp.participants then
       for item_index, item in ipairs(owned.inventory_items) do
         local item_prefix = prefix .. "inventory_item." .. tostring(item_index) .. "."
         emit(item_prefix .. "type_id", item.type_id or 0)
+        emit(item_prefix .. "recipe_uid", item.recipe_uid or 0)
         emit(item_prefix .. "slot", item.slot or -1)
         emit(item_prefix .. "stack_count", item.stack_count or 0)
       end
@@ -187,8 +210,11 @@ def item_rows(values: dict[str, str]) -> list[dict[str, Any]]:
             "valid": bool_text(values.get(prefix + "valid")),
             "address": parse_int_text(values.get(prefix + "address"), 0),
             "type_id": parse_int_text(values.get(prefix + "type_id"), 0),
+            "recipe_uid": parse_int_text(values.get(prefix + "recipe_uid"), 0),
             "slot": parse_int_text(values.get(prefix + "slot"), -1),
             "stack_count": parse_int_text(values.get(prefix + "stack_count"), 0),
+            "color_state_valid": bool_text(values.get(prefix + "color_state_valid")),
+            "color_state": values.get(prefix + "color_state", ""),
         })
     return rows
 
@@ -223,6 +249,7 @@ def participant_rows(values: dict[str, str]) -> list[dict[str, Any]]:
             inventory_items.append({
                 "index": item_index,
                 "type_id": parse_int_text(values.get(item_prefix + "type_id"), 0),
+                "recipe_uid": parse_int_text(values.get(item_prefix + "recipe_uid"), 0),
                 "slot": parse_int_text(values.get(item_prefix + "slot"), -1),
                 "stack_count": parse_int_text(values.get(item_prefix + "stack_count"), 0),
             })
@@ -417,6 +444,7 @@ def assert_inventory_shape(label: str, values: dict[str, str]) -> dict[str, Any]
             )
 
     return {
+        "raw_item_count": parse_int_text(values.get("inventory.raw_item_count"), 0),
         "item_count": item_count,
         "enumerated_item_count": parse_int_text(values.get("inventory.enumerated_item_count"), 0),
         "items": rows,

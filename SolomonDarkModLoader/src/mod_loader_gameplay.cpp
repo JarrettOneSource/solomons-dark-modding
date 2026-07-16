@@ -1,5 +1,6 @@
 #include "bot_runtime.h"
 #include "d3d9_end_scene_hook.h"
+#include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
 #include "logger.h"
 #include "lua_engine.h"

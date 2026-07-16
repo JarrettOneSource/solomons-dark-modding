@@ -298,6 +298,8 @@ void RefreshLocalParticipantFromGameState() {
             player_state.transient_status_flags;
         local->runtime.poison_remaining_ticks =
             player_state.poison_remaining_ticks;
+        local->runtime.damage_x4_remaining_ticks =
+            player_state.damage_x4_remaining_ticks;
         local->runtime.level = player_state.level;
         local->runtime.experience_current = player_state.xp;
         local->runtime.primary_entry_index = local->character_profile.loadout.primary_entry_index;
@@ -315,6 +317,9 @@ void RefreshLocalParticipantFromGameState() {
         }
         if (have_inventory_state && !local->owned_progression.inventory_host_authoritative) {
             RefreshOwnedInventoryFromSnapshot(inventory_state, &local->owned_progression);
+        }
+        if (have_inventory_state) {
+            RefreshOwnedEquipmentFromSnapshot(inventory_state, &local->owned_progression);
         }
         if (have_progression_book_state) {
             RefreshOwnedProgressionBookFromSnapshot(progression_book_state, &local->owned_progression);
@@ -363,24 +368,41 @@ void RefreshLocalParticipantFromGameState() {
         }
         std::uint32_t primary_visual_type = 0;
         std::uint32_t secondary_visual_type = 0;
+        std::uint32_t primary_visual_recipe_uid = 0;
+        std::uint32_t secondary_visual_recipe_uid = 0;
         std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> primary_visual_block = {};
         std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> secondary_visual_block = {};
         if (TryReadVisualLinkColorBlock(
                 player_state.primary_visual_lane,
                 &primary_visual_type,
+                &primary_visual_recipe_uid,
                 &primary_visual_block) &&
             TryReadVisualLinkColorBlock(
                 player_state.secondary_visual_lane,
                 &secondary_visual_type,
-                &secondary_visual_block)) {
-            local->runtime.presentation_flags |= ParticipantPresentationFlagVisualLinkColorBlocks;
+                &secondary_visual_recipe_uid,
+                &secondary_visual_block) &&
+            player_state.attachment_visual_lane.holder_address != 0) {
+            local->runtime.presentation_flags |=
+                ParticipantPresentationFlagVisualLinkColorBlocks |
+                ParticipantPresentationFlagEquipmentState;
             local->runtime.primary_visual_link_type_id = primary_visual_type;
             local->runtime.secondary_visual_link_type_id = secondary_visual_type;
+            local->runtime.primary_visual_link_recipe_uid = primary_visual_recipe_uid;
+            local->runtime.secondary_visual_link_recipe_uid = secondary_visual_recipe_uid;
+            local->runtime.attachment_visual_link_type_id =
+                player_state.attachment_visual_lane.current_object_type_id;
+            local->runtime.attachment_visual_link_recipe_uid =
+                player_state.attachment_visual_lane.current_object_recipe_uid;
             local->runtime.primary_visual_link_color_block = primary_visual_block;
             local->runtime.secondary_visual_link_color_block = secondary_visual_block;
         } else {
             local->runtime.primary_visual_link_type_id = 0;
             local->runtime.secondary_visual_link_type_id = 0;
+            local->runtime.primary_visual_link_recipe_uid = 0;
+            local->runtime.secondary_visual_link_recipe_uid = 0;
+            local->runtime.attachment_visual_link_type_id = 0;
+            local->runtime.attachment_visual_link_recipe_uid = 0;
             local->runtime.primary_visual_link_color_block = {};
             local->runtime.secondary_visual_link_color_block = {};
         }
@@ -407,6 +429,7 @@ StatePacket BuildLocalStatePacket() {
     StatePacket packet{};
     packet.header = MakePacketHeader(PacketKind::State, g_local_transport.next_sequence++);
     packet.participant_id = g_local_transport.local_peer_id;
+    packet.participant_session_nonce = g_local_transport.local_session_nonce;
     packet.authority_participant_id =
         g_local_transport.is_host ? g_local_transport.local_peer_id : 0;
     if (local == nullptr) {
@@ -439,11 +462,30 @@ StatePacket BuildLocalStatePacket() {
         local->runtime.transient_status_flags;
     packet.poison_remaining_ticks =
         local->runtime.poison_remaining_ticks;
+    packet.damage_x4_remaining_ticks =
+        local->runtime.damage_x4_remaining_ticks;
     packet.experience_current = local->runtime.experience_current;
     packet.experience_next = local->runtime.experience_next;
     packet.owned_gold = local->owned_progression.gold;
     packet.gold_revision = local->owned_progression.gold_revision;
     packet.inventory_revision = local->owned_progression.inventory_revision;
+    packet.equipment_revision = local->owned_progression.equipment_revision;
+    packet.equipment_valid = local->owned_progression.equipment.valid ? 1 : 0;
+    const auto copy_equipped_item = [](
+        const ParticipantEquippedItemState& source,
+        ParticipantEquippedItemPacketState* destination) {
+        destination->type_id = source.type_id;
+        destination->recipe_uid = source.recipe_uid;
+    };
+    copy_equipped_item(local->owned_progression.equipment.hat, &packet.equipped_hat);
+    copy_equipped_item(local->owned_progression.equipment.robe, &packet.equipped_robe);
+    copy_equipped_item(local->owned_progression.equipment.weapon, &packet.equipped_weapon);
+    for (std::size_t index = 0; index < local->owned_progression.equipment.rings.size(); ++index) {
+        copy_equipped_item(
+            local->owned_progression.equipment.rings[index],
+            &packet.equipped_rings[index]);
+    }
+    copy_equipped_item(local->owned_progression.equipment.amulet, &packet.equipped_amulet);
     packet.spellbook_revision = local->owned_progression.spellbook_revision;
     packet.statbook_revision = local->owned_progression.statbook_revision;
     packet.loadout_revision = local->owned_progression.loadout_revision;
@@ -473,6 +515,7 @@ StatePacket BuildLocalStatePacket() {
     for (std::size_t index = 0; index < inventory_packet_count; ++index) {
         const auto& item = local->owned_progression.inventory_items[index];
         packet.inventory_items[index].type_id = item.type_id;
+        packet.inventory_items[index].recipe_uid = item.recipe_uid;
         packet.inventory_items[index].slot = item.slot;
         packet.inventory_items[index].stack_count = item.stack_count;
     }
@@ -517,6 +560,10 @@ StatePacket BuildLocalStatePacket() {
     packet.render_variant_tertiary = local->runtime.render_variant_tertiary;
     packet.primary_visual_link_type_id = local->runtime.primary_visual_link_type_id;
     packet.secondary_visual_link_type_id = local->runtime.secondary_visual_link_type_id;
+    packet.primary_visual_link_recipe_uid = local->runtime.primary_visual_link_recipe_uid;
+    packet.secondary_visual_link_recipe_uid = local->runtime.secondary_visual_link_recipe_uid;
+    packet.attachment_visual_link_type_id = local->runtime.attachment_visual_link_type_id;
+    packet.attachment_visual_link_recipe_uid = local->runtime.attachment_visual_link_recipe_uid;
     std::memcpy(
         packet.primary_visual_link_color_block,
         local->runtime.primary_visual_link_color_block.data(),

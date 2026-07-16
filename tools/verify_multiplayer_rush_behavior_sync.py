@@ -227,39 +227,6 @@ def load_native_rush_evidence(path: Path) -> dict[str, Any]:
     }
 
 
-def expected_native_post_tick_peak_velocity(
-    runtime: dict[str, str],
-    rush_multiplier: float,
-    native_globals: dict[str, float],
-) -> float:
-    actor_multiplier = parse_float_text(
-        runtime.get("actor_movement_speed_multiplier"), math.nan
-    )
-    actor_scale = parse_float_text(runtime.get("actor_move_speed_scale"), math.nan)
-    progression_speed = parse_float_text(
-        runtime.get("progression_move_speed"), math.nan
-    )
-    acceleration_divisor = native_globals["input_acceleration_divisor"]
-    speed_scalar = native_globals["speed_scalar"]
-    damping = native_globals["velocity_damping"]
-    speed_cap = (
-        actor_multiplier
-        * actor_scale
-        * progression_speed
-        * rush_multiplier
-        * speed_scalar
-    )
-    unconstrained_pre_damping_peak = (1.0 / acceleration_divisor) / (1.0 - damping)
-    peak = min(speed_cap, unconstrained_pre_damping_peak) * damping
-    if not math.isfinite(peak) or peak <= 0.0:
-        raise VerifyFailure(
-            "invalid expected native keyboard velocity envelope: "
-            f"runtime={runtime} rush_multiplier={rush_multiplier} "
-            f"native_globals={native_globals}"
-        )
-    return peak
-
-
 def apply_rush_batch(
     target_id: int,
     expected_active: int,
@@ -330,6 +297,66 @@ def apply_rush_to_max(target_id: int, timeout: float) -> list[dict[str, Any]]:
         apply_rush_batch(target_id, expected_active, timeout)
         for expected_active in range(RUSH_BATCH_SIZE, RUSH_MAX_RANK + 1, RUSH_BATCH_SIZE)
     ]
+
+
+def enable_quiet_stock_input_mode(timeout: float) -> dict[str, Any]:
+    from verify_multiplayer_primary_kill_stress import (
+        COMBAT_STATE_LUA,
+        ENABLE_PRELUDE_LUA,
+        combat_ready,
+        set_manual_spawner_test_mode,
+        values,
+    )
+
+    result: dict[str, Any] = {
+        "host_enable_prelude": values(HOST_PIPE, ENABLE_PRELUDE_LUA),
+        "client_enable_prelude": values(CLIENT_PIPE, ENABLE_PRELUDE_LUA),
+    }
+    if result["host_enable_prelude"].get("ok") != "true":
+        raise VerifyFailure(
+            f"failed to enable host no-wave combat prelude: {result['host_enable_prelude']}"
+        )
+    if result["client_enable_prelude"].get("ok") != "true":
+        raise VerifyFailure(
+            f"failed to enable client no-wave combat prelude: {result['client_enable_prelude']}"
+        )
+
+    deadline = time.monotonic() + timeout
+    host_state: dict[str, str] = {}
+    client_state: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        host_state = values(HOST_PIPE, COMBAT_STATE_LUA)
+        client_state = values(CLIENT_PIPE, COMBAT_STATE_LUA)
+        if combat_ready(host_state) and combat_ready(client_state):
+            break
+        time.sleep(0.05)
+    else:
+        raise VerifyFailure(
+            "no-wave combat prelude did not settle: "
+            f"host={host_state} client={client_state}"
+        )
+
+    result["host_before_manual_release"] = host_state
+    result["client_before_manual_release"] = client_state
+    result["host_manual_release"] = set_manual_spawner_test_mode(HOST_PIPE, False)
+    result["client_manual_release"] = set_manual_spawner_test_mode(CLIENT_PIPE, False)
+    for label in ("host", "client"):
+        release = result[f"{label}_manual_release"]
+        if release.get("ok") != "true" or release.get("active") != "false":
+            raise VerifyFailure(
+                f"failed to restore {label} stock player input: {release}"
+            )
+    result["host_after_manual_release"] = values(HOST_PIPE, COMBAT_STATE_LUA)
+    result["client_after_manual_release"] = values(CLIENT_PIPE, COMBAT_STATE_LUA)
+    if not combat_ready(result["host_after_manual_release"]) or not combat_ready(
+        result["client_after_manual_release"]
+    ):
+        raise VerifyFailure(
+            "no-wave combat state changed while restoring stock input: "
+            f"host={result['host_after_manual_release']} "
+            f"client={result['client_after_manual_release']}"
+        )
+    return result
 
 
 def configure_native_movement_drive(pipe_name: str, ticks: int) -> dict[str, str]:
@@ -588,17 +615,30 @@ if not _G.__sdmod_mp_rush_keyboard_monitor_registered then
       selection + off('actor_control_brain_move_input_x'))) or 0
     local control_y = selection ~= 0 and tonumber(sd.debug.read_float(
       selection + off('actor_control_brain_move_input_y'))) or 0
-    local speed = math.sqrt(vx * vx + vy * vy)
+    local accumulator_speed = math.sqrt(vx * vx + vy * vy)
     local input_magnitude = math.sqrt(input_x * input_x + input_y * input_y)
     local control_magnitude = math.sqrt(control_x * control_x + control_y * control_y)
+    local player_x = tonumber(player.x)
+    local player_y = tonumber(player.y)
     trial.samples = trial.samples + 1
-    trial.peak_velocity = math.max(trial.peak_velocity, speed)
+    trial.peak_accumulator_speed = math.max(
+      trial.peak_accumulator_speed, accumulator_speed)
     trial.peak_input = math.max(trial.peak_input, input_magnitude)
     trial.peak_control = math.max(trial.peak_control, control_magnitude)
-    trial.min_x = math.min(trial.min_x, tonumber(player.x) or trial.min_x)
-    trial.max_x = math.max(trial.max_x, tonumber(player.x) or trial.max_x)
-    trial.min_y = math.min(trial.min_y, tonumber(player.y) or trial.min_y)
-    trial.max_y = math.max(trial.max_y, tonumber(player.y) or trial.max_y)
+    if player_x ~= nil and player_y ~= nil then
+      if trial.last_x ~= nil and trial.last_y ~= nil then
+        local dx = player_x - trial.last_x
+        local dy = player_y - trial.last_y
+        trial.peak_position_step = math.max(
+          trial.peak_position_step, math.sqrt(dx * dx + dy * dy))
+      end
+      trial.last_x = player_x
+      trial.last_y = player_y
+      trial.min_x = math.min(trial.min_x, player_x)
+      trial.max_x = math.max(trial.max_x, player_x)
+      trial.min_y = math.min(trial.min_y, player_y)
+      trial.max_y = math.max(trial.max_y, player_y)
+    end
     if input_magnitude > 0.01 then
       trial.input_frames = trial.input_frames + 1
     end
@@ -611,7 +651,10 @@ _G.__sdmod_mp_rush_keyboard_trial = {
   input_frames = 0,
   peak_input = 0.0,
   peak_control = 0.0,
-  peak_velocity = 0.0,
+  peak_accumulator_speed = 0.0,
+  peak_position_step = 0.0,
+  last_x = nil,
+  last_y = nil,
   min_x = math.huge,
   max_x = -math.huge,
   min_y = math.huge,
@@ -643,7 +686,8 @@ trial.active = false
 local allowance_ok, allowance_result = pcall(
   sd.input.set_native_control_allowance_frames, 0)
 for _, key in ipairs({
-  'samples','input_frames','peak_input','peak_control','peak_velocity',
+  'samples','input_frames','peak_input','peak_control',
+  'peak_accumulator_speed','peak_position_step',
   'min_x','max_x','min_y','max_y'
 }) do
   emit(key, trial[key])
@@ -707,16 +751,27 @@ def run_real_keyboard_movement_trial(
     displacement = distance(start_x, start_y, settled_x, settled_y)
     forward_displacement = settled_x - start_x
     cross_axis_displacement = abs(settled_y - start_y)
-    peak_velocity = parse_float_text(monitor.get("peak_velocity"), math.nan)
+    peak_accumulator_speed = parse_float_text(
+        monitor.get("peak_accumulator_speed"), math.nan
+    )
+    peak_position_step = parse_float_text(
+        monitor.get("peak_position_step"), math.nan
+    )
     if not math.isfinite(displacement) or displacement <= 20.0:
         raise VerifyFailure(
             f"{direction.name} {label} real keyboard movement was too small: "
             f"start=({start_x},{start_y}) final=({settled_x},{settled_y}) "
             f"monitor={monitor}"
         )
-    if not math.isfinite(peak_velocity) or peak_velocity <= 0.01:
+    if not math.isfinite(peak_accumulator_speed) or peak_accumulator_speed <= 0.01:
         raise VerifyFailure(
-            f"{direction.name} {label} real keyboard velocity was not observed: {monitor}"
+            f"{direction.name} {label} real keyboard accumulator was not observed: "
+            f"{monitor}"
+        )
+    if not math.isfinite(peak_position_step) or peak_position_step <= 0.01:
+        raise VerifyFailure(
+            f"{direction.name} {label} real keyboard position steps were not observed: "
+            f"{monitor}"
         )
     return {
         "direction": direction.name,
@@ -735,7 +790,8 @@ def run_real_keyboard_movement_trial(
         "displacement": displacement,
         "forward_displacement": forward_displacement,
         "cross_axis_displacement": cross_axis_displacement,
-        "peak_velocity": peak_velocity,
+        "peak_accumulator_speed": peak_accumulator_speed,
+        "peak_position_step": peak_position_step,
         "observer": {
             "x": observer_x,
             "y": observer_y,
@@ -870,13 +926,12 @@ def main() -> int:
         ),
     )
     parser.add_argument(
-        "--minimum-ranked-rush-velocity-ratio",
+        "--minimum-ranked-rush-step-ratio",
         type=float,
         default=1.30,
         help=(
-            "minimum real-keyboard peak-velocity gain attributable to ranked "
-            "Rush after removing the independently measured Concentrate gain; "
-            "the measured peaks must also match the live native envelope"
+            "minimum real-keyboard movement-step gain attributable to ranked "
+            "Rush after removing the independently measured Concentrate gain"
         ),
     )
     parser.add_argument("--keep-open", action="store_true")
@@ -916,11 +971,9 @@ def main() -> int:
         output["quiet_progression_test_mode"] = enable_quiet_progression_test_mode()
         output["run_entry"] = start_host_testrun_and_wait_for_clients(args.timeout)
         output["post_run_progression_ready"] = wait_for_post_run_progression_ready(args.timeout)
-        from verify_multiplayer_primary_kill_stress import (
-            enable_manual_stock_spawner_combat,
+        output["quiet_stock_input_mode"] = enable_quiet_stock_input_mode(
+            args.timeout
         )
-
-        output["combat_prelude"] = enable_manual_stock_spawner_combat()
         output["baseline_rush_contexts"] = assert_rush_contexts(
             0,
             0.0,
@@ -1017,8 +1070,7 @@ def main() -> int:
         output["concentrate_motion_ratios"] = motion_ratios
 
         keyboard_contract: dict[str, dict[str, float]] = {}
-        ranked_velocity_ratios: dict[str, float] = {}
-        native_globals = output["native_rush_evidence"]["native_globals"]
+        ranked_step_ratios: dict[str, float] = {}
         for direction in DIRECTIONS:
             baseline_trial = output["real_keyboard_baseline"][direction.name]
             upgraded_trial = output["real_keyboard_upgraded"][direction.name]
@@ -1026,90 +1078,88 @@ def main() -> int:
                 float(upgraded_trial["displacement"])
                 / float(baseline_trial["displacement"])
             )
-            peak_velocity_ratio = (
-                float(upgraded_trial["peak_velocity"])
-                / float(baseline_trial["peak_velocity"])
+            accumulator_ratio = (
+                float(upgraded_trial["peak_accumulator_speed"])
+                / float(baseline_trial["peak_accumulator_speed"])
             )
-            ranked_velocity_ratio = (
-                peak_velocity_ratio / CONCENTRATE_SPEED_MULTIPLIER
+            position_step_ratio = (
+                float(upgraded_trial["peak_position_step"])
+                / float(baseline_trial["peak_position_step"])
             )
-            expected_baseline_peak = expected_native_post_tick_peak_velocity(
-                baseline_trial["before_runtime"],
-                1.0,
-                native_globals,
-            )
-            expected_upgraded_peak = expected_native_post_tick_peak_velocity(
-                upgraded_trial["before_runtime"],
-                RUSH_MAX_SPEED_MULTIPLIER,
-                native_globals,
-            )
-            expected_peak_velocity_ratio = (
-                expected_upgraded_peak / expected_baseline_peak
-            )
-            expected_ranked_velocity_ratio = (
-                expected_peak_velocity_ratio / CONCENTRATE_SPEED_MULTIPLIER
+            ranked_step_ratio = (
+                position_step_ratio / CONCENTRATE_SPEED_MULTIPLIER
             )
             keyboard_contract[direction.name] = {
                 "displacement_ratio": displacement_ratio,
-                "peak_velocity_ratio": peak_velocity_ratio,
+                "peak_accumulator_ratio": accumulator_ratio,
+                "peak_position_step_ratio": position_step_ratio,
                 "concentrate_multiplier": CONCENTRATE_SPEED_MULTIPLIER,
-                "ranked_rush_velocity_ratio": ranked_velocity_ratio,
+                "ranked_rush_step_ratio": ranked_step_ratio,
+                "expected_combined_step_multiplier": COMBINED_MAX_SPEED_MULTIPLIER,
                 "expected_ranked_rush_multiplier": RUSH_MAX_SPEED_MULTIPLIER,
-                "expected_baseline_peak_velocity": expected_baseline_peak,
-                "expected_upgraded_peak_velocity": expected_upgraded_peak,
-                "expected_peak_velocity_ratio": expected_peak_velocity_ratio,
-                "expected_ranked_rush_velocity_ratio": expected_ranked_velocity_ratio,
             }
-            ranked_velocity_ratios[direction.name] = ranked_velocity_ratio
+            ranked_step_ratios[direction.name] = ranked_step_ratio
             if not math.isclose(
-                float(baseline_trial["peak_velocity"]),
-                expected_baseline_peak,
+                accumulator_ratio,
+                1.0,
                 rel_tol=0.0,
-                abs_tol=0.015,
+                abs_tol=0.03,
             ):
                 raise VerifyFailure(
-                    f"{direction.name} baseline keyboard velocity diverged from the native envelope: "
-                    f"measured={baseline_trial['peak_velocity']:.6f} "
-                    f"expected={expected_baseline_peak:.6f}"
+                    f"{direction.name} Rush unexpectedly changed the stock input accumulator: "
+                    f"baseline={baseline_trial['peak_accumulator_speed']:.6f} "
+                    f"upgraded={upgraded_trial['peak_accumulator_speed']:.6f} "
+                    f"ratio={accumulator_ratio:.6f}"
                 )
             if not math.isclose(
-                float(upgraded_trial["peak_velocity"]),
-                expected_upgraded_peak,
+                position_step_ratio,
+                COMBINED_MAX_SPEED_MULTIPLIER,
                 rel_tol=0.0,
-                abs_tol=0.015,
+                abs_tol=0.08,
             ):
                 raise VerifyFailure(
-                    f"{direction.name} upgraded keyboard velocity diverged from the native envelope: "
-                    f"measured={upgraded_trial['peak_velocity']:.6f} "
-                    f"expected={expected_upgraded_peak:.6f}"
+                    f"{direction.name} combined Rush/Concentrate movement step diverged: "
+                    f"measured={position_step_ratio:.6f} "
+                    f"expected={COMBINED_MAX_SPEED_MULTIPLIER:.6f}"
                 )
             if not math.isclose(
-                ranked_velocity_ratio,
-                expected_ranked_velocity_ratio,
+                displacement_ratio,
+                COMBINED_MAX_SPEED_MULTIPLIER,
                 rel_tol=0.0,
-                abs_tol=0.02,
+                abs_tol=0.08,
             ):
                 raise VerifyFailure(
-                    f"{direction.name} ranked Rush velocity ratio diverged from the native envelope: "
-                    f"measured={ranked_velocity_ratio:.6f} "
-                    f"expected={expected_ranked_velocity_ratio:.6f}"
+                    f"{direction.name} combined Rush/Concentrate displacement diverged: "
+                    f"measured={displacement_ratio:.6f} "
+                    f"expected={COMBINED_MAX_SPEED_MULTIPLIER:.6f}"
                 )
-            if ranked_velocity_ratio < args.minimum_ranked_rush_velocity_ratio:
+            if not math.isclose(
+                ranked_step_ratio,
+                RUSH_MAX_SPEED_MULTIPLIER,
+                rel_tol=0.0,
+                abs_tol=0.06,
+            ):
+                raise VerifyFailure(
+                    f"{direction.name} ranked Rush movement-step ratio diverged: "
+                    f"measured={ranked_step_ratio:.6f} "
+                    f"expected={RUSH_MAX_SPEED_MULTIPLIER:.6f}"
+                )
+            if ranked_step_ratio < args.minimum_ranked_rush_step_ratio:
                 raise VerifyFailure(
                     f"{direction.name} stock keyboard movement did not apply ranked Rush: "
-                    f"baseline_peak={baseline_trial['peak_velocity']:.6f} "
-                    f"upgraded_peak={upgraded_trial['peak_velocity']:.6f} "
-                    f"combined_ratio={peak_velocity_ratio:.6f} "
-                    f"ranked_ratio={ranked_velocity_ratio:.6f} "
-                    f"minimum={args.minimum_ranked_rush_velocity_ratio:.6f}"
+                    f"baseline_step={baseline_trial['peak_position_step']:.6f} "
+                    f"upgraded_step={upgraded_trial['peak_position_step']:.6f} "
+                    f"combined_ratio={position_step_ratio:.6f} "
+                    f"ranked_ratio={ranked_step_ratio:.6f} "
+                    f"minimum={args.minimum_ranked_rush_step_ratio:.6f}"
                 )
         if abs(
-            ranked_velocity_ratios["host_owned"]
-            - ranked_velocity_ratios["client_owned"]
+            ranked_step_ratios["host_owned"]
+            - ranked_step_ratios["client_owned"]
         ) > 0.08:
             raise VerifyFailure(
-                "host/client real-keyboard ranked Rush velocity ratios diverged: "
-                f"{ranked_velocity_ratios}"
+                "host/client real-keyboard ranked Rush movement-step ratios diverged: "
+                f"{ranked_step_ratios}"
             )
         output["real_keyboard_contract"] = keyboard_contract
 

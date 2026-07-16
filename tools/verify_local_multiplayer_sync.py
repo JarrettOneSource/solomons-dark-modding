@@ -796,6 +796,7 @@ emit("player.y", player and player.y or 0)
 emit("player.heading", player and player.heading or 0)
 local radius_offset = sd.debug.layout_offset("actor_collision_radius")
 local animation_drive_offset = sd.debug.layout_offset("actor_animation_drive_state_byte")
+local heading_offset = sd.debug.layout_offset("actor_heading")
 local function actor_radius(actor_address)
   if actor_address == nil or actor_address == 0 or radius_offset == nil then
     return 0
@@ -807,6 +808,12 @@ local function actor_animation_drive(actor_address)
     return 0
   end
   return sd.debug.read_u8(actor_address + animation_drive_offset) or 0
+end
+local function actor_heading(actor_address)
+  if actor_address == nil or actor_address == 0 or heading_offset == nil then
+    return 0
+  end
+  return sd.debug.read_float(actor_address + heading_offset) or 0
 end
 local function staff_visual_state(lane)
   if lane == nil or lane.current_object_address == nil or lane.current_object_address == 0 then
@@ -843,6 +850,7 @@ local function render_selector(state)
   }, ",")
 end
 emit("player.radius", player and actor_radius(player.actor_address) or 0)
+emit("player.actor_heading", player and actor_heading(player.actor_address) or 0)
 emit("player.animation_drive", player and actor_animation_drive(player.actor_address) or 0)
 emit("player.staff_visual_state", player and staff_visual_state(player.attachment_visual_lane) or 0)
 emit("player.render_selector", render_selector(player))
@@ -864,6 +872,7 @@ for i, peer in ipairs(peers) do
   emit(prefix .. "x", peer.x)
   emit(prefix .. "y", peer.y)
   emit(prefix .. "heading", peer.heading)
+  emit(prefix .. "actor_heading", actor_heading(peer.actor_address))
   emit(prefix .. "radius", actor_radius(peer.actor_address))
   emit(prefix .. "animation_drive", actor_animation_drive(peer.actor_address))
   emit(prefix .. "staff_visual_state", staff_visual_state(peer.attachment_visual_lane))
@@ -1373,10 +1382,12 @@ def wait_for_remote_motion(
         x = float(last.get(prefix + "x", "nan"))
         y = float(last.get(prefix + "y", "nan"))
         heading = float(last.get(prefix + "heading", "nan"))
+        actor_heading = float(last.get(prefix + "actor_heading", "nan"))
         moved_distance = ((x - previous_x) ** 2 + (y - previous_y) ** 2) ** 0.5
         if (
             moved_distance >= 2.0
             and heading_distance(heading, expected_heading) <= heading_tolerance
+            and heading_distance(actor_heading, expected_heading) <= heading_tolerance
         ):
             return last
         time.sleep(0.2)
@@ -1403,9 +1414,11 @@ def wait_for_remote_convergence(
         x = float(last.get(prefix + "x", "nan"))
         y = float(last.get(prefix + "y", "nan"))
         heading = float(last.get(prefix + "heading", "nan"))
+        actor_heading = float(last.get(prefix + "actor_heading", "nan"))
         if (
             distance(x, y, expected_x, expected_y) <= 3.0
             and heading_distance(heading, expected_heading) <= 1.0
+            and heading_distance(actor_heading, expected_heading) <= 1.0
         ):
             return last
         time.sleep(0.15)

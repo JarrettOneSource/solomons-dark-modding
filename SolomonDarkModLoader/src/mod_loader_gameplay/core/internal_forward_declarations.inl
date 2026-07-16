@@ -34,8 +34,8 @@ bool CallPlayerActorEnsureProgressionHandleSafe(
     uintptr_t ensure_progression_handle_address,
     uintptr_t actor_address,
     DWORD* exception_code);
-bool CallPlayerActorRefreshRuntimeHandlesSafe(
-    uintptr_t refresh_address,
+bool CallPlayerActorInitializeControlBrainSafe(
+    uintptr_t initialize_address,
     uintptr_t actor_address,
     DWORD* exception_code);
 bool CallActorProgressionRefreshSafe(
@@ -103,6 +103,26 @@ bool CallRawObjectCtorSafe(
     void* object_memory,
     uintptr_t* object_address,
     DWORD* exception_code);
+bool TryResolveNativeItemRecipe(
+    std::uint32_t recipe_uid,
+    std::uint32_t expected_item_type_id,
+    uintptr_t* recipe_address,
+    std::uint32_t* resolved_item_type_id,
+    std::string* error_message);
+void DestroyUnownedNativeItem(uintptr_t item_address, std::string_view reason);
+bool CloneNativeItemFromRecipe(
+    std::uint32_t recipe_uid,
+    std::uint32_t expected_item_type_id,
+    const std::array<std::uint8_t, multiplayer::kParticipantVisualLinkColorBlockBytes>&
+        wearable_color_state,
+    bool wearable_color_state_valid,
+    uintptr_t* item_address,
+    std::string* error_message);
+bool SpawnNativeItemDropFromRecipe(
+    const multiplayer::LootDropSnapshot& drop,
+    uintptr_t* carrier_address,
+    uintptr_t* held_item_address,
+    std::string* error_message);
 bool CallPlayerActorCtorSafe(
     uintptr_t ctor_address,
     void* actor_memory,

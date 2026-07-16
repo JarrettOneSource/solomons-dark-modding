@@ -1,160 +1,78 @@
-# Ally Healthbar Text System
+# Multiplayer names and health bars
 
-This note captures the recovered facts around the stacked top-center ally
-healthbars used for player/bot party members in arena scenes. The goal is to
-replace the stock `ALLY` label with each participant's display name without
-adding broad text-draw patches or fallback string spam.
+This note records the live-tested native render seams used for multiplayer
+participant names. It supersedes the earlier `FUN_00500250`, HUD case-100, and
+`DAT_008199B8` hypotheses.
 
-## Target Surface
+## World nameplate
 
-The relevant HUD widget is the stacked red healthbar group drawn below the main
-player health/mana area. With participant bots present, the live layout shows:
+Remote `PlayerWizard` actors render through `0x0054BA80`. The loader detours
+that callback, lets the original wizard render finish, and then draws:
 
-- one wider top entry paired with portrait and MP bar context
-- three smaller entries below it
-- yellow `ALLY` text on each stacked entry
+- the connected participant's display name with command-aware ExactText
+  (`0x0043BCD0`) at half scale;
+- a centered, thin ASCII health strip immediately below it at quarter scale.
 
-This matches the four slot entries at `SdGameplayScene + 0x1358..0x1364`
-(`player + 3 bot slots`) when gameplay-slot bots are present.
+The strip is `[` plus twelve `=`/`-` cells plus `]`. Its fill count is derived
+from the actor's native progression HP and max-HP fields, so it follows the same
+replicated runtime state as the remote actor. The health bar is intentionally
+text-based: attempts to inject filled rectangles into this scene transform
+produced black wedge artifacts.
 
-The world-space participant nameplate path already exists in
-`src/mod_loader_gameplay/gameplay_hooks/gameplay_hud_hooks.inl`; the missing
-piece is the top-center stacked-bar text source.
+## Top-center ally rows
 
-## Confirmed Runtime Layout
+The stock `ALLY` label is `UI.bundle` record zero. In the retail bundle it is a
+26-by-7 sprite:
 
-- Static image base: `0x00400000`.
-- The observed runtime image was relocated by `+0xA80000` in the captured
-  session. For example, static `0x0054BA80` mapped to runtime `0x00FCBA80`.
-- Scene slot array:
-  - `scene + 0x1358`
-  - `scene + 0x135C`
-  - `scene + 0x1360`
-  - `scene + 0x1364`
-- All four slot entries were verified as `PlayerWizard` instances when bots were
-  present.
+- rectangle: `(-13, -3.5, 13, 3.5)`;
+- UV: `(0.09423828125, 0.04833984375, 0.119384765625, 0.054931640625)`;
+- bundle pointer global: `DAT_008199E4` (`0x008199E4`).
 
-## HUD Dispatcher Findings
+The recovered native data path is:
 
-`FUN_00512060` case `100` is a real HUD participant path:
+1. `FUN_0052C910` queues `(health ratio, UI.bundle + 0x38)` through
+   `FUN_005CF480` into the `Game::HealthBar` list.
+2. `FUN_005D2520` consumes that list and renders each row.
+3. The row label calls the centered glyph renderer at `0x004142E0`; the exact
+   return address after that call is `0x005D3521`.
 
-1. It reads the four gameplay slot pointers.
-2. It applies a visibility test through `FUN_00403DA0`.
-3. It appends survivors to a local pointer list.
-4. It calls vtable slot `10`, then vtable slot `7`, on each survivor.
+The launcher expands that record to 128-by-7 and renders `ALLY` into it. The
+native health-bar layout then reserves enough horizontal space for the full
+multiplayer display-name limit instead of placing the red bar under the name.
+Single-player retains the stock label.
 
-The obvious `PlayerWizard` vtable slots are not the `ALLY` writer:
+The loader hooks only `0x004142E0` calls where both facts match: the caller is
+`0x005D3521` and `self == *DAT_008199E4 + 0x38`. Other centered glyph draws are
+passed through untouched.
 
-- `PlayerWizard vt[7] = 0x0054BA80`
-  - contains one `String_Assign`
-  - writes a formatted slot index using `"%d"` into `DAT_008199A0 + 0xE7D98`
-  - does not write `ALLY`
-- `PlayerWizard vt[10] = 0x00528AD0`
-  - sprite/quad drawing only
-  - no text assignment
+For each matching call, connected remote wizard participants are sorted by
+their local gameplay slot. The current row's stock `ALLY` sprite is replaced
+with that participant's quarter-scale ExactText name inside the already-active
+HUD transform. The name begins two HUD units after the bar and must end inside
+the reserved 128-unit label slot. The protocol carries at most 31 display-name
+bytes; even 31 widest glyphs consume 124 units at this scale, leaving the
+required two-unit padding on both sides. The original sprite draw is suppressed
+only after the name draw and layout checks succeed; failures retain `ALLY`.
 
-So the case-100 loop is relevant to the stacked HUD path, but the `ALLY` string
-source is not in the plain `PlayerWizard vt[7]` or `vt[10]` bodies.
+## Rejected paths
 
-## Text Storage Candidate
+- The five sprite calls in `FUN_00500250` are mixed UI assets, not five ally
+  rows.
+- HUD case `100` and the `PlayerWizard` vtable calls reached from it do not own
+  the stacked label draw.
+- `DAT_008199B8` is not the live bundle pointer used by this renderer; the
+  verified global is `DAT_008199E4`.
+- The screen wrapper at `0x004A57C0` does not parse `_s(0.5)` in this context;
+  it visibly rendered the command as literal text. Direct ExactText rendering
+  under the current HUD transform parses the command correctly.
+- Rewriting `UI.bundle` record zero cannot provide per-row names because every
+  stock row reuses the same sprite record.
 
-### Current verified bundle-label source
+## Verification
 
-The top-center `ALLY` / `GOLEM` labels are native sprite records, not ordinary
-ASCII/UTF-16 strings passed through `Text_Draw`:
-
-- `UI.bundle` is 113 fixed records of 45 bytes each.
-- `UI.bundle` record `0` begins with `x=96`, `y=49`, `w=26`, `h=7` and the
-  matching `UI.png` crop is the stock `ALLY` label.
-- `UI.bundle` record `23` begins with `x=421`, `y=53`, `w=37`, `h=7` and the
-  matching `UI.png` crop is the stock `GOLEM` label.
-- `FUN_00512060` case `100` references the `DAT_008199B8` UI record table; the
-  runtime table expands compact bundle records into `0xC4` draw records.
-
-The first implemented source-level substitution is the launcher-stage
-`HudLabelAssetMaterializer`. When `SDMOD_HUD_ALLY_LABEL` is set, it rewrites
-staged `UI.bundle` record `0` to a wider generated-label rectangle and renders
-that label into staged `runtime/stage/images/UI.png`, so the stock HUD draws the
-changed source sprite. The local multiplayer pair launcher sets this variable
-to the remote player's display name for each instance. This is intentionally
-different from the rejected D3D overlay/mask approach.
-
-For player-specific names, a later pass still needs a per-row selection seam or
-per-row record swap. Editing record `0` changes every stock `ALLY` use because
-the native HUD reuses that record.
-
-### Superseded string-object trail
-
-The strongest known text draw site is inside `FUN_0060C540`:
-
-- it calls `Text_Draw(DAT_00819978 + 0x4210)`
-- the effective text object address is `0x0081DB88`
-- the draw is conditional on `*(float *)(local_74 + 0x1EC) != 0.0`
-- the function appears under a different vtable family around `0x0079E08C`
-
-The existing function label for `FUN_0060C540` should not be trusted blindly.
-The body also resembles a Boulder/Rock list renderer, so the owning class still
-needs RTTI/vtable confirmation before this can be treated as the final ally-bar
-class.
-
-Live observations of `0x0081DB88`:
-
-- empty when no bots were present in arena
-- populated with vtable-like pointers and buffer pointers when bots were
-  present
-- neighboring entries appear to have an `0x80` stride
-
-Observed field shape:
-
-- `+0x08`: vtable-like pointer
-- `+0x0C`: buffer pointer
-- `+0x10`: small integer, possibly character count
-- `+0x18`: repeated vtable-like pointer
-- `+0x28..+0x2C`: small dimensions or glyph counts
-- `+0x34`: secondary buffer pointer
-
-## String Storage Facts
-
-`ALLY` is not present as a standalone ASCII or UTF-16 literal in:
-
-- `SolomonDark.exe`
-- `magenames.txt`
-- `wave.txt`
-- `items.cfg`
-- `wizardskills/*.cfg`
-
-That makes a direct literal substitution unlikely. The source is probably one of:
-
-- glyph-indexed text
-- a binary/localized text table not found by ordinary strings
-- a dynamic text object populated from non-ASCII identifiers
-- a class-specific HUD string builder that writes through the text-object API
-
-## Distinct Text Destinations
-
-Do not conflate these destinations:
-
-- `DAT_00819978 + 0x4210` / `0x0081DB88`
-  - strongest current stacked-bar text candidate
-- `DAT_008199A0 + 0xE7D98` / `0x013D5C98`
-  - slot-index `%d` text from `PlayerWizard vt[7]`
-- `DAT_00819978 + 0x381C`
-  - separate text target used by `FUN_00538B80`
-
-The `ALLY` substitution should target the writer for the first family, not the
-debug/index display path.
-
-## Implementation Boundary
-
-Before patching the label, the loader needs one precise substitution seam:
-
-1. Identify the writer that populates `DAT_00819978 + 0x4210` or its `0x80`
-   stride family.
-2. Confirm the owner of vtable `0x0079E08C` and whether `FUN_0060C540` is the
-   stacked-bar reader for participant HUD entries.
-3. Map the participant slot or actor pointer available at the writer.
-4. Substitute the participant display name at that writer or at one tightly
-   scoped text-object update call.
-
-Broad hooks around every `Text_Draw` / `String_Assign` candidate are explicitly
-the wrong implementation shape for this system.
+`tools/verify_multiplayer_hud_names.py` launches three independent instances,
+waits for all six observer/participant relationships, changes one participant
+to half health, captures every backbuffer, and requires successful world-name,
+thin-health-strip, and ally-row name draw records for both remote participants
+on every instance. It also parses the native HUD coordinates and fails if a
+name begins over its bar or extends beyond the reserved label slot.

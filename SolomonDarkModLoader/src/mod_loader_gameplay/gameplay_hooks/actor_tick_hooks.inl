@@ -1,3 +1,5 @@
 #include "actor_tick/animation_advance_hook.inl"
 #include "actor_tick/ranked_rush_movement_scale.inl"
+#include "actor_tick/local_player_native_primary_runtime.inl"
+#include "actor_tick/local_player_stock_input_runtime.inl"
 #include "actor_tick/player_actor_tick_hook.inl"

@@ -167,6 +167,61 @@ void ProcessMemory::InvalidateRange(uintptr_t address, size_t size) {
     }
 }
 
+void ProcessMemory::RegisterManagedGuardRange(uintptr_t address, size_t size) {
+    if (address == 0 || size == 0) {
+        return;
+    }
+
+    uintptr_t end = 0;
+    if (!TryAdvanceAddress(address, size, &end)) {
+        return;
+    }
+
+    {
+        std::unique_lock lock(managed_guard_mutex_);
+        managed_guard_ranges_[address] = end;
+    }
+    InvalidateRange(address, size);
+}
+
+void ProcessMemory::UnregisterManagedGuardRange(uintptr_t address, size_t size) {
+    if (address == 0 || size == 0) {
+        return;
+    }
+
+    {
+        std::unique_lock lock(managed_guard_mutex_);
+        managed_guard_ranges_.erase(address);
+    }
+    InvalidateRange(address, size);
+}
+
+bool ProcessMemory::IsManagedGuardRange(uintptr_t address, size_t size) const {
+    if (address == 0 || size == 0) {
+        return false;
+    }
+
+    uintptr_t end = 0;
+    if (!TryAdvanceAddress(address, size, &end)) {
+        return false;
+    }
+
+    std::shared_lock lock(managed_guard_mutex_);
+    auto current = address;
+    while (current < end) {
+        auto it = managed_guard_ranges_.upper_bound(current);
+        if (it == managed_guard_ranges_.begin()) {
+            return false;
+        }
+        --it;
+        if (current < it->first || current >= it->second) {
+            return false;
+        }
+        current = (std::min)(end, it->second);
+    }
+    return true;
+}
+
 bool ProcessMemory::IsRangeAccessible(uintptr_t address, size_t size, bool require_write) {
     if (address == 0 || size == 0) {
         return false;
@@ -180,8 +235,13 @@ bool ProcessMemory::IsRangeAccessible(uintptr_t address, size_t size, bool requi
             return false;
         }
 
+        const auto available = static_cast<size_t>(region.end - current);
+        const auto candidate_size = (std::min)(remaining, available);
         const auto has_required_access = [&](const MemoryRegionInfo& candidate) {
-            if (!candidate.committed || candidate.guarded || candidate.no_access) {
+            if (!candidate.committed || candidate.no_access) {
+                return false;
+            }
+            if (candidate.guarded && !IsManagedGuardRange(current, candidate_size)) {
                 return false;
             }
             return require_write ? candidate.writable : candidate.readable;
@@ -201,7 +261,6 @@ bool ProcessMemory::IsRangeAccessible(uintptr_t address, size_t size, bool requi
             return false;
         }
 
-        const auto available = static_cast<size_t>(region.end - current);
         if (available >= remaining) {
             return true;
         }
@@ -234,9 +293,11 @@ bool ProcessMemory::IsExecutableRange(uintptr_t address, size_t size) {
             return false;
         }
 
-        const auto is_executable = [](const MemoryRegionInfo& candidate) {
+        const auto available = static_cast<size_t>(region.end - current);
+        const auto candidate_size = (std::min)(remaining, available);
+        const auto is_executable = [&](const MemoryRegionInfo& candidate) {
             return candidate.committed &&
-                   !candidate.guarded &&
+                   (!candidate.guarded || IsManagedGuardRange(current, candidate_size)) &&
                    !candidate.no_access &&
                    candidate.executable;
         };
@@ -252,7 +313,6 @@ bool ProcessMemory::IsExecutableRange(uintptr_t address, size_t size) {
             return false;
         }
 
-        const auto available = static_cast<size_t>(region.end - current);
         if (available >= remaining) {
             return true;
         }

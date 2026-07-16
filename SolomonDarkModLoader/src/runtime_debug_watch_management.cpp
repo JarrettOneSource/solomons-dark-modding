@@ -45,7 +45,11 @@ bool RuntimeDebug_UnwatchMemoryByName(const char* name) {
     }
 
     for (const auto& page : pages_to_restore) {
-        (void)rt::TrySetPageProtection(page.page_base, page.base_protect);
+        if (rt::TrySetPageProtection(page.page_base, page.base_protect)) {
+            sdmod::ProcessMemory::Instance().UnregisterManagedGuardRange(
+                page.page_base,
+                rt::GetSystemPageSize());
+        }
     }
 
     if (remove_write_handler) {

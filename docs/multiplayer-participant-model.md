@@ -89,7 +89,7 @@ profile, progression, appearance, and loadout data needed by the game.
 The multiplayer participant owns gameplay progression state that stock
 single-player stores on local slot 0 or in process-global fields:
 
-- inventory root and equipment sinks
+- the owner process's one stock scene inventory root and equipment sinks
 - gold
 - spellbook unlock/upgrade state
 - statbook allocation/upgrade state
@@ -129,11 +129,14 @@ results apply the host-authored health or mana resource result to the requesting
 participant's runtime vitals and to the client's local HP/MP presentation.
 Accepted item/potion carrier results clear the host carrier's held-item pointer
 and credit the requesting participant's replicated inventory ledger by item type,
-slot, and stack count. This is deliberately narrower than complete
-inventory/native-root mutation sync: powerups and real per-participant native
-inventory roots still need their own participant storage and native seams. The
-native progression table is mirrored into the participant ledger for peer-visible
-progression/stat/skill/spellbook state.
+slot, stack count, exact recipe identity, and wearable color when applicable.
+The owning process materializes the item through the stock recipe-clone and
+inventory insertion paths. Observer processes intentionally do not create a
+second native inventory root: all recovered stock inventory, equip, storage,
+and merchant consumers address the one process-local scene root without a
+participant parameter. Observers retain the authoritative participant rows,
+native remote equipment presentation, and mirrored progression/stat/skill/
+spellbook state.
 
 Shared experience and level-up choices follow the same participant-owned rule.
 The host owns the shared XP/level event. When the host levels, it synchronizes
@@ -163,8 +166,13 @@ loadout. That proves inventory/book/loadout content visibility between peers.
 The pickup request/result protocol also mirrors accepted item/potion carrier
 metadata through `LootPickupResult`; for verified health/mana potions, the
 owning client now transfers the native held item through the stock inventory
-insert/stack ABI and publishes the resulting row. Arbitrary item/equipment
-insertion, powerup pickup, and shop/trader ownership are still pending.
+insert/stack ABI and publishes the resulting row. Exact recipe-backed hat, robe,
+staff, wand, ring, and amulet pickups and equips are verified. Host-authorized
+Random Skill, Damage x4, and Bonus Skill powerups are verified in both ownership
+directions. Luthacus storage plus Fomentius and Hagatha purchases remain
+owner-local stock UI operations and publish their resulting participant state.
+Nested sack browsing, the remaining Hagatha catalog, non-shop quest/reward
+insertion, and durable cross-session persistence remain open.
 
 ## Scene Intent
 

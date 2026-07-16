@@ -915,10 +915,10 @@ def main() -> int:
         )
         output["hub_ready"] = wait_for_all_relationships("hub", args.timeout)
         output["bots_disabled"] = disable_all_bots(args.timeout)
+        output["quiet_progression_mode"] = enable_quiet_progression_mode()
         output["run_entry"] = start_trio_run(args.timeout)
         output["run_ready"] = wait_for_all_relationships("testrun", args.timeout)
         output["manual_combat"] = enable_flat_manual_cluster_combat()
-        output["quiet_progression_mode"] = enable_quiet_progression_mode()
         output["initial_native_objects"] = verify_native_object_isolation(args.timeout)
         output["upgrades"] = []
         for owner in PARTICIPANTS:

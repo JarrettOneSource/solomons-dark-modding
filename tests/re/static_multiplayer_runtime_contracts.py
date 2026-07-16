@@ -41,6 +41,9 @@ def test_unreliable_snapshot_ordering_is_wrap_safe() -> str:
     lifecycle = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/remote_peer_lifecycle.inl"
     )
+    local_state = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/local_state_packet_sync.inl"
+    )
     runtime_header = _read(
         "SolomonDarkModLoader/include/multiplayer_runtime_effect_state.inl"
     )
@@ -59,9 +62,23 @@ def test_unreliable_snapshot_ordering_is_wrap_safe() -> str:
         "last_state_packet_sequence_by_participant.erase(participant_id)"
         in lifecycle
     ), "participant reconnect must reset its state-packet epoch"
+    for token in (
+        "std::uint64_t participant_session_nonce;",
+        "session_nonce_by_participant",
+        "retired_session_nonces_by_participant",
+        "packet.participant_session_nonce = g_local_transport.local_session_nonce;",
+        "ResetRemoteParticipantSessionEpoch(",
+        "preserve_session_nonce_history",
+    ):
+        assert token in protocol + transport + incoming + lifecycle + local_state, (
+            f"same-identity reconnect contract lacks: {token}"
+        )
     _require_in_order(
         incoming,
         "void ApplyRemoteStatePacket(",
+        "session_nonce_by_participant.find(",
+        "retired_session_nonces_by_participant.find(",
+        "ResetRemoteParticipantSessionEpoch(",
         "last_state_packet_sequence_by_participant.find(",
         "!IsPacketSequenceNewer(",
         "RelayStatePacketToPeers(packet, from);",
@@ -85,7 +102,7 @@ def test_unreliable_snapshot_ordering_is_wrap_safe() -> str:
 
     return (
         "participant and loot snapshots reject duplicate/out-of-order packets, "
-        "accept uint32 wraparound, and reset on reconnect"
+        "accept uint32 wraparound, and reset every stream on a new gameplay-session nonce"
     )
 
 
@@ -157,9 +174,15 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
     )
 
 
-def test_native_potion_pickup_converges_into_stock_inventory() -> str:
+def test_native_item_pickup_converges_into_stock_inventory() -> str:
     native_inventory = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/native_inventory_reconciliation.inl"
+    )
+    native_item = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/native_item_materialization.inl"
+    )
+    host_deactivation = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/host_loot_drop_deactivation.inl"
     )
     replicated_loot = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl"
@@ -173,6 +196,7 @@ def test_native_potion_pickup_converges_into_stock_inventory() -> str:
     authority = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/loot_pickup_authority.inl"
     )
+    transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")
     transport_api = _read_many(
         "SolomonDarkModLoader/src/multiplayer_local_transport/public_cast_loot_api.inl",
         "SolomonDarkModLoader/src/multiplayer_local_transport/public_cast_loot_queue_api.inl",
@@ -190,30 +214,38 @@ def test_native_potion_pickup_converges_into_stock_inventory() -> str:
     assert "remove_placeholder" in native_types
     assert '"inventory_insert_or_stack_item"' in seams
     assert "inventory_insert_or_stack_item=0x0055FF20" in layout
+    assert "item_wearable_color_state=0x88" in layout
+    assert "TryResolveNativeItemRecipe(" in native_item
+    assert "SpawnNativeItemDropFromRecipe(" in native_item
+    assert "using ItemDropPostRegisterFn = void(__stdcall*)(void* actor);" in native_types
 
     _require_in_order(
         authority,
-        "PublishLootPickupResultRuntimeInfo(packet, now_ms);",
-        "QueueNativePotionInventoryCredit(",
+        "QueueHostLootDropDeactivation(",
+        "pending_host_loot_pickups_by_drop_id.emplace",
     )
+    assert "ProcessCompletedHostLootPickups()" in authority
+    assert "PumpHostLootDropDeactivation()" in host_deactivation
+    assert "CallActorWorldUnregisterSafe(" in host_deactivation
+    assert "CallActorWorldUnregisterSafe(" not in transport
     _require_in_order(
         native_inventory,
-        "QueueNativePotionInventoryCreditInternal(",
+        "QueueNativeInventoryCreditInternal(",
         "pending_native_inventory_credit_drop_ids.insert(network_drop_id)",
     )
     _require_in_order(
         native_inventory,
-        "ExecuteNativePotionInventoryCreditNow(",
+        "ExecuteNativeInventoryCreditNow(",
         "kItemDropHeldItemOffset,",
         "cleared_held_item_address",
         "CallInventoryInsertOrStackItemSafe(",
-        "expected_stack_after",
+        "expected_quantity_after",
         "MarkLocalInventoryNativeConverged",
     )
     assert "completed_native_inventory_credit_drop_ids" in native_inventory
     assert "IsNativeInventoryCreditCompleted(snapshot.run_nonce" in replicated_loot
-    assert "NativePotionInventoryCreditOutcome::ApplyStateUnknown" in pump
-    assert "pending_native_potion_inventory_credits.push_back" in pump
+    assert "NativeInventoryCreditOutcome::ApplyStateUnknown" in pump
+    assert "pending_native_inventory_credits.push_back" in pump
     _require_in_order(
         transport_api,
         "bool MarkLocalInventoryNativeConverged(",
@@ -222,8 +254,387 @@ def test_native_potion_pickup_converges_into_stock_inventory() -> str:
     )
 
     return (
-        "accepted remote potions transfer through the stock insertion ABI, "
-        "verify native stack growth, deduplicate by run/drop, and release the ledger guard"
+        "accepted remote items and potions transfer through the stock insertion ABI, "
+        "verify exact native inventory growth, deduplicate by run/drop, and release the ledger guard"
+    )
+
+
+def test_powerup_rewards_are_authoritative_and_native() -> str:
+    protocol = _read(
+        "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
+    )
+    capture = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/loot_snapshot_capture.inl"
+    )
+    authority = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/powerup_loot_authority.inl"
+    )
+    pickup_authority = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/loot_pickup_authority.inl"
+    )
+    hook = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/powerup_pickup_hook.inl"
+    )
+    reconciliation = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl"
+    )
+    deactivation = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/host_loot_drop_deactivation.inl"
+    )
+    native_progression = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/native_progression_sync.inl"
+    )
+    local_state = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/local_state_packet_sync.inl"
+    )
+    incoming_state = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/incoming_packet_sync.inl"
+    )
+    lua_gameplay = _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp"
+    )
+    lua_runtime = _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp"
+    )
+    layout = _read("config/binary-layout.ini")
+    verifier = _read("tools/verify_multiplayer_powerup_sync.py")
+
+    for token in (
+        "constexpr std::uint16_t kProtocolVersion = 59;",
+        "Powerup = 5",
+        "enum class PowerupRewardKind",
+        "BonusSkillPoint = 0",
+        "RandomSkillRank = 1",
+        "DamageX4 = 2",
+        "ParticipantTransientStatusFlagDamageX4",
+        "std::int32_t damage_x4_remaining_ticks;",
+        "std::int32_t powerup_kind;",
+        "std::int32_t powerup_skill_entry_index;",
+        "std::uint16_t powerup_skill_resulting_active;",
+        "static_assert(sizeof(StatePacket) == 4196",
+        "static_assert(sizeof(LootDropSnapshotPacketState) == 112",
+        "static_assert(sizeof(LootSnapshotPacket) == 7200",
+        "static_assert(sizeof(LootPickupResultPacket) == 164",
+    ):
+        assert token in protocol, f"powerup protocol lacks: {token}"
+
+    for token in (
+        "kPowerupRewardNativeTypeId",
+        "TryPopulatePowerupLootDropSnapshot",
+        "kPowerupRewardKindOffset",
+        "kPowerupRewardMotionOffset",
+        "kPowerupRewardLifetimeOffset",
+        "kPowerupRewardProgressOffset",
+        "kPowerupRewardValueOffset",
+        "kPowerupRewardAuxiliaryOffset",
+    ):
+        assert token in capture, f"powerup carrier capture lacks: {token}"
+
+    for token in (
+        "TrySelectRandomSkillRankPowerupOption",
+        "entry.active == 0",
+        "TryResolveDamageX4DurationTicks",
+        "RollParticipantSkillChoiceOptions",
+        "IssueHostLevelUpOfferForParticipant",
+        "IssueLocalHostSelfLevelUpOffer",
+        "ApplyParticipantSkillChoiceOption",
+        "ApplyLocalPlayerSkillChoiceOption",
+        "TryWriteParticipantDamageX4Ticks",
+        "ProcessQueuedLocalHostPowerupPickups",
+        "queued.capture.requester_position_x",
+        "captured_positions",
+    ):
+        assert token in authority, f"powerup authority lacks: {token}"
+
+    for token in (
+        "TryPreparePowerupReward",
+        "TryApplyPreparedPowerupReward",
+        "ProcessPendingHostPowerupPreparations",
+        "awaiting_powerup_preparation",
+        "powerup_prepared",
+        "deferred powerup pickup deactivation queue expired",
+        "IsPowerupPreparationPendingMaterializationError",
+        "native_applied_powerup_result_drop_ids",
+        "powerup_skill_resulting_active",
+        "damage_x4_remaining_ticks",
+    ):
+        assert token in pickup_authority, f"powerup result flow lacks: {token}"
+
+    assert "QueueLocalHostPowerupPickup" in hook
+    assert "TryQueueReplicatedLootPickupRequest" in hook
+    assert "QueueClientLocalLootSuppressionInternal" in hook
+    assert "binding.drop_kind == multiplayer::LootDropKind::Powerup" in reconciliation
+    assert "return ParkReplicatedLootPresentationActor(binding);" in reconciliation
+    assert "ParkReplicatedLootPresentationActor(binding)" in deactivation
+    assert "kReplicatedLootPowerupNativeTypeId = 0x07F6" in reconciliation
+    assert 'spawn_kind = "bonus_skill"' in reconciliation
+    assert 'spawn_kind = "random_skill"' in reconciliation
+    assert 'spawn_kind = "damage_x4"' in reconciliation
+    assert "ReconcileRemoteParticipantDamageX4State" in native_progression
+    assert "packet.damage_x4_remaining_ticks" in local_state
+    assert "effective_damage_x4_remaining_ticks" in incoming_state
+    assert '"damage_x4_remaining_ticks"' in lua_gameplay
+    assert '"damage_x4_remaining_ticks"' in lua_runtime
+    assert "powerup_pickup=0x006039C0" in layout
+    assert "game_timing_scale=0x00820230" in layout
+    assert "progression_damage_x4_remaining_ticks=0x824" in layout
+
+    for token in (
+        "verify_random_skill",
+        "verify_damage_x4",
+        "verify_bonus_skill",
+        "wait_for_entry_parity",
+        "wait_for_damage_x4_parity",
+        "Waiting on 1 player",
+        "client_random_skill",
+        "host_random_skill",
+        "client_damage_x4",
+        "host_damage_x4",
+        "client_bonus_skill",
+        "host_bonus_skill",
+    ):
+        assert token in verifier, f"powerup live verifier lacks: {token}"
+
+    return (
+        "stock bonus-skill, learned-skill-rank, and DamageX4 rewards use host "
+        "pickup authority, exact native owner/observer application, and a two-owner live matrix"
+    )
+
+
+def test_exact_native_equipment_identity_and_color_replicate() -> str:
+    protocol = _read("SolomonDarkModLoader/include/multiplayer_runtime_protocol.h")
+    local_state = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/local_state_packet_sync.inl"
+    )
+    incoming_state = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/incoming_packet_sync.inl"
+    )
+    remote_playback = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/native_remote_playback.inl"
+    )
+    local_equip = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/local_player_native_equipment.inl"
+    )
+    inventory_getter = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"
+    )
+    gameplay_constants = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/core/gameplay_constants.inl"
+    )
+    runtime_state = _read("SolomonDarkModLoader/include/multiplayer_runtime_state.h")
+    lua_runtime = _read("SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp")
+    binary_layout = _read("config/binary-layout.ini")
+    public_equip = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_inventory.inl"
+    )
+    public_header = _read(
+        "SolomonDarkModLoader/include/mod_loader_gameplay_api.inl"
+    )
+    lua_gameplay = _read("SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp")
+    pump = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_pump_loop.inl"
+    )
+    verifier = _read("tools/verify_multiplayer_native_item_inventory_sync.py")
+
+    for token in (
+        "constexpr std::uint16_t kProtocolVersion = 59;",
+        "ParticipantPresentationFlagEquipmentState = 1 << 5",
+        "std::uint32_t primary_visual_link_recipe_uid;",
+        "std::uint32_t secondary_visual_link_recipe_uid;",
+        "std::uint32_t attachment_visual_link_recipe_uid;",
+        "constexpr std::uint32_t kParticipantRingSlotCount = 3;",
+        "struct ParticipantEquippedItemPacketState",
+        "std::uint32_t equipment_revision;",
+        "ParticipantEquippedItemPacketState equipped_rings[kParticipantRingSlotCount];",
+        "ParticipantEquippedItemPacketState equipped_amulet;",
+        "static_assert(sizeof(StatePacket) == 4196",
+    ):
+        assert token in protocol, f"exact equipment packet contract lacks: {token}"
+
+    _require_in_order(
+        local_state,
+        "TryReadVisualLinkColorBlock(",
+        "ParticipantPresentationFlagEquipmentState",
+        "local->runtime.primary_visual_link_recipe_uid = primary_visual_recipe_uid;",
+        "local->runtime.attachment_visual_link_recipe_uid =",
+        "packet.primary_visual_link_recipe_uid = local->runtime.primary_visual_link_recipe_uid;",
+        "packet.attachment_visual_link_recipe_uid = local->runtime.attachment_visual_link_recipe_uid;",
+    )
+    _require_in_order(
+        incoming_state,
+        "equipment_packet_is_sane",
+        "packet.equipped_rings",
+        "participant->owned_progression.equipment_revision =",
+        "participant->runtime.primary_visual_link_recipe_uid =",
+        "participant->runtime.attachment_visual_link_recipe_uid =",
+        "sample.primary_visual_link_recipe_uid =",
+        "sample.attachment_visual_link_recipe_uid =",
+    )
+
+    for token in (
+        "ApplyNativeRemoteParticipantEquipmentState(",
+        "desired_type_id == 0",
+        "SetEquipVisualLaneObject(",
+        "CloneNativeItemFromRecipe(",
+        "TryApplyNativeRemoteParticipantWearableColor(",
+        "current.current_object_recipe_uid == desired_recipe_uid",
+        "RefreshParticipantNativeProgression(",
+        "equipment_reconcile_not_before_ms",
+    ):
+        assert token in remote_playback, f"remote native equipment reconciliation lacks: {token}"
+
+    for token in (
+        "RemoveNativeInventoryItemPointer(",
+        "CallPointerListRemoveValueSafe(",
+        "AttachLocalNativeEquipmentObject(",
+        "ResolveLocalNativeEquipLaneByHolder(",
+        "CallInventoryInsertOrStackItemSafe(",
+        "RestoreLocalNativeEquipTransaction(",
+        "CallActorProgressionRefreshSafe(",
+        "current_object_recipe_uid != request.recipe_uid",
+        "kStandaloneWizardRingItemTypeId",
+        "kStandaloneWizardAmuletItemTypeId",
+        "inventory.ring_lanes[index]",
+        "inventory.amulet_lane",
+    ):
+        assert token in local_equip, f"local native equip transaction lacks: {token}"
+    assert "kInventoryPlaceholderItemTypeId" in gameplay_constants
+    for token in (
+        "state->raw_item_count = raw_item_count;",
+        "for (int index = 0; index < raw_item_count; ++index)",
+        "item_type_id == kInventoryPlaceholderItemTypeId",
+        "state->item_count += 1;",
+    ):
+        assert token in inventory_getter, (
+            f"native inventory placeholder filtering lacks: {token}"
+        )
+    assert 'lua_setfield(state, -2, "raw_item_count")' in lua_gameplay
+    _require_in_order(
+        local_equip,
+        "kGameplayInventoryDirtyOffset",
+        "RemoveNativeInventoryItemPointer(",
+        "AttachLocalNativeEquipmentObject(",
+        "CallActorProgressionRefreshSafe(",
+        "Native equipment verification did not converge",
+    )
+
+    for token in (
+        "ParticipantEquipmentState",
+        "std::uint32_t equipment_revision = 0;",
+        "std::array<ParticipantEquippedItemState, kParticipantRingSlotCount> rings;",
+    ):
+        assert token in runtime_state, f"owned equipment state lacks: {token}"
+    for token in (
+        "RefreshOwnedEquipmentFromSnapshot(inventory_state",
+        "packet.equipment_revision = local->owned_progression.equipment_revision;",
+        "packet.equipped_rings[index]",
+        "packet.equipped_amulet",
+    ):
+        assert token in local_state, f"owner equipment packet authoring lacks: {token}"
+    for token in (
+        "kGameplayEquipmentRing0Offset",
+        "kGameplayEquipmentRing1Offset",
+        "kGameplayEquipmentRing2Offset",
+        "kGameplayEquipmentAmuletOffset",
+        "state->ring_lanes[0]",
+        "state->amulet_lane",
+    ):
+        assert token in inventory_getter, f"native ring/amulet capture lacks: {token}"
+    for token in (
+        "gameplay_equipment_ring_0=0x1430",
+        "gameplay_equipment_ring_1=0x1434",
+        "gameplay_equipment_ring_2=0x1438",
+        "gameplay_equipment_amulet=0x143C",
+    ):
+        assert token in binary_layout, f"native equipment layout lacks: {token}"
+    for token in (
+        "PushEquipmentIdentityState",
+        'lua_setfield(state, -2, "rings")',
+        'lua_setfield(state, -2, "amulet")',
+        'lua_setfield(state, -2, "equipment_revision")',
+    ):
+        assert token in lua_runtime, f"Lua equipment audit surface lacks: {token}"
+
+    assert "bool QueuePlayerInventoryItemEquip(" in public_header
+    assert "pending_local_inventory_equip_requests" in public_equip
+    assert "ExecuteLocalInventoryEquipNow(" in pump
+    assert "QueuePlayerInventoryItemEquip(" in lua_gameplay
+    assert 'RegisterFunction(state, &LuaPlayerEquipInventoryItem, "equip_inventory_item")' in lua_gameplay
+
+    for token in (
+        "sd.player.equip_inventory_item",
+        "previous_item_returned",
+        "host_native_remote_equipment",
+        "host_bot_color_matches",
+        'last["client_inventory_revision"] > accepted_revision',
+        'last["host_inventory_revision"] > accepted_revision',
+        'all(last["color_matches"].values())',
+    ):
+        assert token in verifier, f"native equipment live verifier lacks: {token}"
+
+    return (
+        "exact hat/robe/staff-or-wand presentation plus all three ring slots and the amulet "
+        "flow from stock local ownership through protocol v59; visible lanes self-correct natively"
+    )
+
+
+def test_hub_shops_preserve_participant_ownership() -> str:
+    inventory_shop_verifier = _read(
+        "tools/verify_multiplayer_hub_inventory_shop_sync.py"
+    )
+    merchant_verifier = _read("tools/verify_multiplayer_hub_shop_ownership.py")
+    click_helper = _read("scripts/click_window.py")
+    inventory_audit = _read("tools/verify_multiplayer_inventory_audit.py")
+    inventory_doc = _read("docs/inventory-item-investigation.md")
+
+    for token in (
+        '"--drag-x"',
+        '"--drag-y"',
+        "drag_client_point",
+        "drag_screen_point",
+        "release_client_lparam = drag_lparam",
+        "step_count = max(6, min(24, drag_hold_ms // 40))",
+        "fraction = step / step_count",
+    ):
+        assert token in click_helper, f"stock inventory drag helper lacks: {token}"
+    for token in (
+        'emit("inventory.raw_item_count"',
+        '"raw_item_count": parse_int_text(',
+    ):
+        assert token in inventory_audit, f"inventory audit raw-count surface lacks: {token}"
+    for token in (
+        "open_luthacus_inventory(host_pid)",
+        "drag_to_private_storage",
+        "drag_back_to_backpack",
+        "client private inventory changed with host storage",
+        'host["raw_item_count"] <= 64',
+        'current["client_view_host"]["revision"] <= baseline_revision',
+        'current["client_view_host"]["revision"] <= stored_revision',
+        "assert_ledger_matches_local(",
+    ):
+        assert token in inventory_shop_verifier, (
+            f"hub inventory-shop live verifier lacks: {token}"
+        )
+    for token in (
+        "open_fomentius(pid)",
+        "open_hagatha(pid)",
+        "host purchase changed the client's native gold",
+        "host purchase changed the client's native backpack",
+        "client did not observe exact purchased host backpack",
+        'baseline_host["gold"] - host["gold"] != 600',
+        'expected_max_hp = baseline_host["max_hp"] * 1.25',
+        "client did not observe exact Life Charm max HP",
+        "Life Charm changed the client backpack",
+        "dismiss_intro",
+        "menu_movement",
+    ):
+        assert token in merchant_verifier, f"hub merchant live verifier lacks: {token}"
+    assert "participant-private" in inventory_doc
+    assert "Luthacus" in inventory_doc
+
+    return (
+        "real Luthacus, Fomentius, and Hagatha UI actions keep storage, gold, "
+        "inventory, and perk-derived stats participant-owned while peers observe exact results"
     )
 
 
@@ -237,12 +648,47 @@ def test_native_local_player_keeps_stock_input_and_equipment_ownership() -> str:
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "actor_tick/player_actor_tick_hook.inl"
     )
+    native_primary = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "actor_tick/local_player_native_primary_runtime.inl"
+    )
+    stock_input = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "actor_tick/local_player_stock_input_runtime.inl"
+    )
+    ranked_rush = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "actor_tick/ranked_rush_movement_scale.inl"
+    )
+    player_control = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "player_control_hooks.inl"
+    )
+    actor_tick_includes = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "actor_tick_hooks.inl"
+    )
     materialization = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization.inl"
     )
     declarations = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/core/"
         "internal_forward_declarations.inl"
+    )
+    native_control_contract = _read_many(
+        "config/binary-layout.ini",
+        "SolomonDarkModLoader/src/gameplay_seams.h",
+        "SolomonDarkModLoader/src/gameplay_seams/address_storage.inl",
+        "SolomonDarkModLoader/src/gameplay_seams/state_and_address_bindings.inl",
+        "SolomonDarkModLoader/src/mod_loader_gameplay/core/native_function_types.inl",
+        "SolomonDarkModLoader/src/mod_loader_gameplay/core/internal_forward_declarations.inl",
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "bot_actor_calls/player_runtime_and_progression_calls.inl",
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "scene_and_animation_bot_priming_and_selection.inl",
+        "mods/lua_ui_sandbox_lab/config/probe-layout.ini",
+        "mods/lua_ui_sandbox_lab/scripts/lib/config.lua",
+        "mods/lua_ui_sandbox_lab/scripts/lib/create_probe.lua",
     )
     getters = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"
@@ -258,8 +704,147 @@ def test_native_local_player_keeps_stock_input_and_equipment_ownership() -> str:
         "EnsureWizardActorEquipRuntimeHandles(",
         "PrimeGameplaySlotBotSelectionState(",
         "WireGameplaySlotBotRuntimeHandles(",
+        "TryWriteGameplaySelectionStateForSlot(",
+        "ApplyStandaloneWizardPuppetDriveState(",
     ):
-        assert token not in actor_tick, f"local actor tick still installs bot state: {token}"
+        assert token not in native_primary, (
+            f"local primary initializer still installs bot-owned state: {token}"
+        )
+
+    for stale_name in (
+        "PlayerActorRefreshRuntimeHandles",
+        "player_actor_refresh_runtime_handles",
+        "refresh_runtime_handles",
+        "trace_player_refresh_runtime",
+    ):
+        assert stale_name not in native_control_contract, (
+            f"decoded control-brain initializer keeps stale name: {stale_name}"
+        )
+    for token in (
+        "player_actor_initialize_control_brain=0x0052A370",
+        "kPlayerActorInitializeControlBrain",
+        "PlayerActorInitializeControlBrainFn",
+        "CallPlayerActorInitializeControlBrainSafe(",
+        "PlayerActor_InitializeControlBrain",
+        "trace_player_initialize_control_brain",
+    ):
+        assert token in native_control_contract, (
+            f"decoded control-brain initializer lacks: {token}"
+        )
+
+    for token in (
+        "MaybeInitializeLocalPlayerNativePrimaryRuntime(",
+        "EnsureActorProgressionRuntimeFieldFromHandle(",
+        "ApplyProfilePrimaryLoadoutToSkillsWizard(",
+        "kActorProgressionRuntimeStateOffset",
+        "kProgressionCurrentSpellIdOffset",
+        "spellbook_revision",
+        "statbook_revision",
+        "loadout_revision",
+        "concentration_revision",
+        "derived_stat_revision",
+    ):
+        assert token in native_primary, (
+            f"native local primary initialization lacks: {token}"
+        )
+    _require_in_order(
+        actor_tick_includes,
+        '#include "actor_tick/local_player_native_primary_runtime.inl"',
+        '#include "actor_tick/local_player_stock_input_runtime.inl"',
+        '#include "actor_tick/player_actor_tick_hook.inl"',
+    )
+    assert "EnsureLocalPlayerNativeControlBrain(" not in actor_tick
+    assert "EnsureLocalPlayerNativeControlBrain(" not in native_primary
+    assert "CallPlayerActorInitializeControlBrainSafe(" not in native_primary
+    assert "kPlayerActorInitializeControlBrain" not in native_primary
+    for token in (
+        "class ScopedLocalPlayerScriptedMovementInput final",
+        "g_gameplay_keyboard_injection.pending_movement_frames",
+        "kGameplayLocalMovementInputXOffset",
+        "kGameplayLocalMovementInputYOffset",
+        "pending_frames.compare_exchange_weak(",
+        "pending_frames.fetch_add(1, std::memory_order_acq_rel)",
+    ):
+        assert token in stock_input, f"stock local scripted input lacks: {token}"
+    _require_in_order(
+        actor_tick,
+        "ScopedLocalPlayerScriptedMovementInput scripted_movement_input(",
+        "ScopedLocalPlayerRushMovementScale rush_movement_scale(actor_address)",
+        "original(self);",
+    )
+    assert "pending_movement_frames" not in player_control, (
+        "human scripted movement must not be consumed by the AI control-brain hook"
+    )
+    for token in (
+        "kActorMoveStepScaleOffset",
+        '"mValue"',
+        '"mConcentration"',
+        "TryReadGameplayConcentrationStateForSlot(",
+        "concentration_entry_a == kRushProgressionEntryIndex",
+        "concentration_entry_b == kRushProgressionEntryIndex",
+        "original_move_step_scale_ * movement_multiplier",
+    ):
+        assert token in ranked_rush, f"stock human Rush movement lacks: {token}"
+    assert "kActorMovementSpeedMultiplierOffset" not in ranked_rush, (
+        "Rush must scale the native human move step, not only raise an unreachable velocity cap"
+    )
+
+    cast_verifier = _read("tools/verify_multiplayer_primary_kill_stress.py")
+    real_cast_verifier = _read("tools/verify_real_input_spell_cast_sync.py")
+    cast_runtime = cast_verifier[
+        cast_verifier.index('CAST_RUNTIME_STATE_LUA = r"""') :
+        cast_verifier.index('SPAWN_REWARD_LUA = r"""')
+    ]
+    for token in (
+        "progression_runtime == progression_inner",
+        "progression_spell > 0",
+        "native_local_control",
+    ):
+        assert token in cast_runtime, f"native cast readiness lacks: {token}"
+    ready_clause = cast_runtime[
+        cast_runtime.index("local ready =") : cast_runtime.index('emit("ok", true)')
+    ]
+    assert "equip_ready" not in ready_clause
+    assert "selection_ptr ~= 0" not in ready_clause
+    assert "selection_state > 0" not in ready_clause
+    assert (
+        "local native_local_control = equip_runtime == 0 and selection_ptr == 0"
+        in cast_runtime
+    )
+    for token in (
+        "LEVEL_UP_PAUSE_LOG_MARKERS",
+        "def resolve_active_level_up_barrier(",
+        "def wait_for_source_cast_resolving_level_ups(",
+        "resolve_level_ups_from_snapshots(last_host, last_client)",
+        'record["level_up_resolutions"]',
+    ):
+        assert token in cast_verifier, (
+            f"primary-kill verifier mid-cast level-up handling lacks: {token}"
+        )
+    source_cast_wait = cast_verifier[
+        cast_verifier.index("def wait_for_source_cast_resolving_level_ups(") :
+        cast_verifier.index("def execute_primary_kill_attempt(")
+    ]
+    _require_in_order(
+        source_cast_wait,
+        "parse_phase_counts(last_log, direction.source_id)",
+        "if last_native_hook_count >= 1",
+        "combined_log = last_log + receiver_log",
+        "resolve_active_level_up_barrier(",
+        "deadline += time.monotonic() - resolution_started",
+    )
+    assert "wait_for_source_cast," not in cast_verifier
+    for token in (
+        "def log_position(path: Path) -> int:",
+        'with path.open("rb") as stream:',
+        "stream.seek(offset)",
+    ):
+        assert token in real_cast_verifier, (
+            f"spell verifier incremental log reader lacks: {token}"
+        )
+    assert "return read_log(path)[offset:]" not in real_cast_verifier
+    assert "len(read_log(" not in real_cast_verifier
+    assert "len(read_log(" not in cast_verifier
 
     _require_in_order(
         getters,
@@ -278,8 +863,9 @@ def test_native_local_player_keeps_stock_input_and_equipment_ownership() -> str:
         assert token in verifier, f"visibility verifier lacks: {token}"
 
     return (
-        "native local players retain stock input/control and gameplay-owned equipment "
-        "sinks while bot materialization stays off their actor tick"
+        "native local players retain the stock null control-brain slot-table path "
+        "while synchronized progression/spells initialize and bot-owned equipment "
+        "and drive materializers remain excluded"
     )
 
 
@@ -415,9 +1001,10 @@ def test_packaged_ui_accepts_single_file_launcher() -> str:
         )
     assert "-p:PublishSingleFile=true" in package
     for token in (
-        'if ($visibleText -contains "Catalog refreshed")',
+        '$catalogReady = $visibleText -contains "Ready"',
+        "$modSummaryPattern =",
         '$_ -like "Could not locate SolomonDarkModLauncher.exe*"',
-        '$result.uiCatalogStatus = "Catalog refreshed"',
+        '$result.uiCatalogStatus = "Ready"',
     ):
         assert token in smoke, f"beta package smoke test lacks: {token}"
 
@@ -534,6 +1121,16 @@ def test_spell_verifiers_quiesce_input_and_prearm_manual_spawning() -> str:
         "run_entry = start_host_testrun_and_wait_for_clients()",
     )
 
+    third_observer = _read(
+        "tools/verify_multiplayer_third_observer_upgrade_sync.py"
+    )
+    _require_in_order(
+        third_observer,
+        'output["quiet_progression_mode"] = enable_quiet_progression_mode()',
+        'output["run_entry"] = start_trio_run(args.timeout)',
+        'output["manual_combat"] = enable_flat_manual_cluster_combat()',
+    )
+
     shared_effect_harness = _read(
         "tools/verify_multiplayer_fireball_explode_effect_sync.py"
     )
@@ -598,7 +1195,10 @@ def test_meditation_transient_counters_self_repair_to_native_bounds() -> str:
         "void RepairInvalidNativeMeditationTransientState(uintptr_t actor_address)",
         "idle_ticks < -1",
         "const auto maximum_ramp_ticks = (std::max)(idle_ticks, 0);",
-        "recovery_ramp_ticks < 0 || recovery_ramp_ticks > maximum_ramp_ticks",
+        "idle_ticks == -1",
+        "recovery_ramp_ticks < -1 || recovery_ramp_ticks > 0",
+        "recovery_ramp_ticks < 0 ||",
+        "recovery_ramp_ticks > maximum_ramp_ticks",
         "kProgressionMeditationRecoveryRampTicksOffset,\n                       0",
         "RepairInvalidNativeMeditationTransientState(actor_address);",
         "if (multiplayer::ShouldPauseGameplayForLevelUpSelection())",
@@ -624,6 +1224,9 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
     barrier = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "level_up_barrier_sync.inl"
+    )
+    offer_authority = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/level_up_authority.inl"
     )
     authority = _read_many(
         "SolomonDarkModLoader/src/multiplayer_local_transport/level_up_authority.inl",
@@ -656,15 +1259,33 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "remote_peer_lifecycle.inl"
     )
+    native_progression = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "native_progression_sync.inl"
+    )
+    transport = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
+    )
+    verifier = _read("tools/verify_multiplayer_level_up_barrier_sync.py")
     level_hook = _read(
         "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks.inl"
     )
+    lifecycle_targets = _read(
+        "SolomonDarkModLoader/src/run_lifecycle/state_and_targets.inl"
+    )
+    lifecycle_install = _read(
+        "SolomonDarkModLoader/src/run_lifecycle/public_api_and_install.inl"
+    )
+    gameplay_seams = _read(
+        "SolomonDarkModLoader/src/gameplay_seams.h"
+    )
+    binary_layout = _read("config/binary-layout.ini")
     lua_runtime = _read(
         "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp"
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 54;",
+        "constexpr std::uint16_t kProtocolVersion = 59;",
         "LevelUpBarrier = 19",
         "struct LevelUpBarrierPacket",
         "kLevelUpChoiceResultFlagAutoPicked",
@@ -700,6 +1321,32 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
         "PublishHostLevelUpOffers(level, experience, source_progression_address);",
         "PublishLocalHostSelfLevelUpOffer(",
     )
+
+    issue_remote_offer = offer_authority[
+        offer_authority.index("bool IssueHostLevelUpOfferForParticipant(") :
+        offer_authority.index("HostLevelUpOfferPublishResult TryPublishHostLevelUpOfferForParticipant(")
+    ]
+    _require_in_order(
+        issue_remote_offer,
+        "HasUnresolvedIssuedLevelUpOfferForParticipant(target_participant_id)",
+        "BeginOrExtendHostLevelUpBarrier(",
+        "g_local_transport.issued_level_up_offers_by_id[offer_id] = issued_offer;",
+    )
+    publish_remote_offer = offer_authority[
+        offer_authority.index("HostLevelUpOfferPublishResult TryPublishHostLevelUpOfferForParticipant(") :
+        offer_authority.index("void ProcessPendingHostLevelUpOffers(")
+    ]
+    reentrant_offer_tokens = (
+        "ScopedLocalLevelUpFanoutSuppression suppress_fanout;",
+        "SyncParticipantProgressionToSharedLevelUpAndRollChoices(",
+        "if (HasUnresolvedIssuedLevelUpOfferForParticipant(participant.participant_id))",
+        "if (!IssueHostLevelUpOfferForParticipant(",
+    )
+    for token in reentrant_offer_tokens:
+        assert token in publish_remote_offer, (
+            f"reentrant native progression sync can duplicate a participant offer: {token}"
+        )
+    _require_in_order(publish_remote_offer, *reentrant_offer_tokens)
     for token in (
         "TryAutoPickHostLevelUpBarrierParticipant(",
         "ProcessHostLevelUpBarrier(",
@@ -713,6 +1360,19 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
         "waiting for native picker confirmation",
     ):
         assert token in authority, f"confirmed timeout auto-pick lacks: {token}"
+
+    assert barrier.count("participant.last_offer_attempt_ms = now_ms;") == 2, (
+        "a newly opened or extended barrier can race its initial offer publisher"
+    )
+    for token in (
+        "void DisarmLocalLevelUpOptionRollForOffer(std::uint64_t offer_id)",
+        "g_armed_local_level_up_option_roll.offer_id == offer_id",
+        "DisarmLocalLevelUpOptionRollForOffer(packet.offer_id);",
+        "DisarmLocalLevelUpOptionRollForOffer(offer_id);",
+    ):
+        assert token in choices, (
+            f"a resolved picker can contaminate the next native option roll: {token}"
+        )
 
     remote_auto_pick = authority[
         authority.index("bool TryAutoPickHostLevelUpBarrierParticipant(") :
@@ -746,6 +1406,15 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
         choices.index("void ApplyLevelUpChoicePacket(") :
         choices.index("void ApplyLevelUpChoiceResultPacket(")
     ]
+    for token in (
+        "const auto* resolved_participant =",
+        "resolved_participant->offer_id == packet.offer_id",
+        "result_code = LevelUpChoiceResultCode::Accepted;",
+        "auto_pick_confirmation = resolved_participant->auto_picked;",
+    ):
+        assert token in choice_handler, (
+            f"duplicate forced confirmation is not idempotently accepted: {token}"
+        )
     assert choice_handler.count("offer.resolved = true;") == 2, (
         "manual acceptance and confirmed forced acceptance must be the only resolution paths"
     )
@@ -758,6 +1427,110 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
         "} else if (!ApplyParticipantSkillChoiceOption(",
         "result_code = LevelUpChoiceResultCode::Accepted;",
         "offer.resolved = true;",
+    )
+
+    for token in (
+        "current.result_code == LevelUpChoiceResultCode::Accepted",
+        "incoming_result_code != LevelUpChoiceResultCode::Accepted",
+    ):
+        assert token in choices, (
+            f"accepted level-up result can be downgraded by a late packet: {token}"
+        )
+
+    for token in (
+        "defer_progression_book_reconcile",
+        "HasUnresolvedIssuedLevelUpOfferForParticipant(",
+    ):
+        assert token in native_progression, (
+            f"unresolved remote level-up can race native rank reconciliation: {token}"
+        )
+    _require_in_order(
+        native_progression,
+        "defer_progression_book_reconcile",
+        "NativeProgressionBookTableView table;",
+        "if (defer_progression_book_reconcile)",
+        "for (const auto& desired : participant.owned_progression.progression_book_entries)",
+    )
+
+    for token in (
+        "confirmed_auto_pick_level_up_offer_ids",
+        "native_active_after == packet.resulting_active",
+        "auto-pick native rank verification failed; synchronized pause retained",
+    ):
+        assert token in transport + choices, (
+            f"forced result confirmation is not exact and one-shot: {token}"
+        )
+    _require_in_order(
+        choices,
+        "confirmed_auto_pick_level_up_offer_ids.insert(",
+        "packet.offer_id).second",
+        "if (send_auto_pick_confirmation)",
+        "SendPacketToEndpoint(confirmation, from);",
+    )
+
+    for token in (
+        "--normal-only",
+        'resulting_active == expected_client_active',
+        'resulting_active == selected_baseline["expected_active"]',
+        'host_remote_entry["active"] == resulting_active',
+        'client_local_entry["active"] == resulting_active',
+        "confirmation_send_count != 1",
+        "world_activity_probe",
+        "pause_position_drift",
+        "resumed_position_drift",
+    ):
+        assert token in verifier, f"live exact-rank regression lacks: {token}"
+
+    for token in (
+        "actor_world_tick=0x004022A0",
+        "actor_world_actor_count=0x08",
+        "actor_world_actor_array=0x14",
+        "actor_world_current_actor=0x48",
+        "actor_pending_initialize=0x04",
+        "actor_pending_remove=0x05",
+        "actor_vtable_initialize=0x04",
+        "actor_vtable_tick=0x08",
+    ):
+        assert token in binary_layout, f"actor-world pause layout lacks: {token}"
+    for token in (
+        "kActorWorldTick",
+        "kActorWorldActorCountOffset",
+        "kActorWorldActorArrayOffset",
+        "kActorWorldCurrentActorOffset",
+        "kActorPendingInitializeOffset",
+        "kActorPendingRemoveOffset",
+        "kActorVtableInitializeOffset",
+        "kActorVtableTickOffset",
+    ):
+        assert token in gameplay_seams, f"actor-world pause seams lack: {token}"
+    for token in (
+        "kHookActorWorldTick",
+        "targets[kHookActorWorldTick] = {kActorWorldTick, 6};",
+    ):
+        assert token in lifecycle_targets, f"actor-world pause hook target lacks: {token}"
+    for token in (
+        "reinterpret_cast<void*>(&HookActorWorldTick)",
+        '"actor_world.tick"',
+    ):
+        assert token in lifecycle_install, f"actor-world pause install lacks: {token}"
+    actor_world_hook = level_hook[
+        level_hook.index("void __fastcall HookActorWorldTick(") :
+        level_hook.index("void __fastcall HookWaveSpawnerTick(")
+    ]
+    for token in (
+        "multiplayer::ShouldPauseGameplayForLevelUpSelection()",
+        "resolved_player_actor_tick",
+        "actor_tick_address != resolved_player_actor_tick",
+        "actor_initialize(actor);",
+        "actor_tick(actor);",
+    ):
+        assert token in actor_world_hook, f"actor-world level-up pause lacks: {token}"
+    _require_in_order(
+        actor_world_hook,
+        "if (!multiplayer::ShouldPauseGameplayForLevelUpSelection())",
+        "original(self, unused_edx);",
+        "actor_tick_address != resolved_player_actor_tick",
+        "actor_tick(actor);",
     )
 
     for token in (
@@ -800,3 +1573,50 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
         "forces timed-out choices through the connected client's native picker, "
         "and resumes only after confirmed native cleanup"
     )
+
+
+def test_pointer_list_batch_rejects_stale_managed_release_callbacks() -> str:
+    lifecycle_hooks = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "dispatch_and_hooks_actor_lifecycle_hooks.inl"
+    )
+    constants = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/core/gameplay_constants.inl"
+    )
+    verifier = _read("tools/verify_multiplayer_ring_of_fire_multikill_stability.py")
+
+    for token in (
+        "kManagedPointerReleaseCallbackCellOffset = 0x00",
+        "kManagedPointerReleaseCallbackEnabledOffset = 0x06",
+        "kManagedPointerReleaseOwnerVtableOffset = 0x28",
+        "kManagedPointerReleasePreflightMaxCount = 4096",
+    ):
+        assert token in constants, f"managed callback preflight lacks: {token}"
+
+    preflight = lifecycle_hooks[
+        lifecycle_hooks.index("int DisableStaleManagedPointerReleaseCallbacks(") :
+        lifecycle_hooks.index("void __fastcall HookPointerListDeleteBatch(")
+    ]
+    for token in (
+        "memory.ResolveGameAddressOrZero(kObjectDelete)",
+        "self_vtable + kManagedPointerReleaseOwnerVtableOffset",
+        "delete_callback != managed_pointer_release_callback",
+        "callback_enabled == 0",
+        "memory.IsExecutableRange(callback_address, 1)",
+        "kManagedPointerReleaseCallbackEnabledOffset,\n                disabled",
+    ):
+        assert token in preflight, f"managed callback preflight lacks: {token}"
+
+    hook = lifecycle_hooks[
+        lifecycle_hooks.index("void __fastcall HookPointerListDeleteBatch(") :
+        lifecycle_hooks.index("void LogSceneChurnActorWorldUnregisterCandidate(")
+    ]
+    _require_in_order(
+        hook,
+        "DisableStaleManagedPointerReleaseCallbacks(",
+        "LogTrackedStandaloneWizardPuppetManagerDeleteBatchEvent(",
+        "original(self, list);",
+    )
+    assert "stale_managed_callback_guard" in verifier
+    assert "did not exercise the stale managed-callback seam" in verifier
+    return "stale managed release callbacks are disabled before the stock batch dereference"

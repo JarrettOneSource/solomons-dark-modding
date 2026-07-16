@@ -7,6 +7,26 @@ enum class HostLevelUpOfferPublishResult {
     Failed,
 };
 
+class ScopedLocalLevelUpFanoutSuppression final {
+public:
+    ScopedLocalLevelUpFanoutSuppression()
+        : previous_(g_local_transport.suppress_local_level_up_fanout) {
+        g_local_transport.suppress_local_level_up_fanout = true;
+    }
+
+    ~ScopedLocalLevelUpFanoutSuppression() {
+        g_local_transport.suppress_local_level_up_fanout = previous_;
+    }
+
+    ScopedLocalLevelUpFanoutSuppression(
+        const ScopedLocalLevelUpFanoutSuppression&) = delete;
+    ScopedLocalLevelUpFanoutSuppression& operator=(
+        const ScopedLocalLevelUpFanoutSuppression&) = delete;
+
+private:
+    bool previous_ = false;
+};
+
 bool IsLevelUpOfferMaterializationPendingError(const std::string& error_message) {
     return error_message.find("materialized progression") != std::string::npos;
 }
@@ -47,7 +67,7 @@ void QueuePendingHostLevelUpOfferTarget(
     }
 }
 
-void IssueHostLevelUpOfferForParticipant(
+bool IssueHostLevelUpOfferForParticipant(
     std::uint64_t target_participant_id,
     std::uint32_t run_nonce,
     std::int32_t level,
@@ -55,7 +75,13 @@ void IssueHostLevelUpOfferForParticipant(
     std::vector<BotSkillChoiceOption> options,
     bool suppress_native_picker = false) {
     if (target_participant_id == 0 || options.empty()) {
-        return;
+        return false;
+    }
+    if (HasUnresolvedIssuedLevelUpOfferForParticipant(target_participant_id)) {
+        Log(
+            "Multiplayer duplicate level-up offer issuance suppressed. participant_id=" +
+            std::to_string(target_participant_id));
+        return false;
     }
     if (options.size() > kLevelUpOfferMaxOptions) {
         options.resize(kLevelUpOfferMaxOptions);
@@ -69,7 +95,7 @@ void IssueHostLevelUpOfferForParticipant(
             experience,
             0,
             now_ms)) {
-        return;
+        return false;
     }
 
     const auto offer_id = g_local_transport.next_level_up_offer_id++;
@@ -120,6 +146,7 @@ void IssueHostLevelUpOfferForParticipant(
         " level=" + std::to_string(packet.level) +
         " xp=" + std::to_string(packet.experience) +
         " option_count=" + std::to_string(packet.option_count));
+    return true;
 }
 
 HostLevelUpOfferPublishResult TryPublishHostLevelUpOfferForParticipant(
@@ -148,13 +175,18 @@ HostLevelUpOfferPublishResult TryPublishHostLevelUpOfferForParticipant(
 
     std::vector<BotSkillChoiceOption> options;
     std::string error_message;
-    if (!SyncParticipantProgressionToSharedLevelUpAndRollChoices(
+    bool synchronized = false;
+    {
+        ScopedLocalLevelUpFanoutSuppression suppress_fanout;
+        synchronized = SyncParticipantProgressionToSharedLevelUpAndRollChoices(
             participant.participant_id,
             level,
             experience,
             source_progression_address,
             &options,
-            &error_message)) {
+            &error_message);
+    }
+    if (!synchronized) {
         if (IsLevelUpOfferMaterializationPendingError(error_message)) {
             if (queue_on_pending_materialization) {
                 QueuePendingHostLevelUpOfferTarget(
@@ -184,12 +216,20 @@ HostLevelUpOfferPublishResult TryPublishHostLevelUpOfferForParticipant(
         return HostLevelUpOfferPublishResult::Failed;
     }
 
-    IssueHostLevelUpOfferForParticipant(
+    if (HasUnresolvedIssuedLevelUpOfferForParticipant(participant.participant_id)) {
+        return HostLevelUpOfferPublishResult::AlreadyIssued;
+    }
+
+    if (!IssueHostLevelUpOfferForParticipant(
         participant.participant_id,
         run_nonce,
         level,
         experience,
-        std::move(options));
+        std::move(options))) {
+        return HasUnresolvedIssuedLevelUpOfferForParticipant(participant.participant_id)
+            ? HostLevelUpOfferPublishResult::AlreadyIssued
+            : HostLevelUpOfferPublishResult::Failed;
+    }
     return HostLevelUpOfferPublishResult::Sent;
 }
 
@@ -255,7 +295,7 @@ void PublishHostLevelUpOffers(
     std::int32_t experience,
     uintptr_t source_progression_address) {
     if (!IsLocalTransportHost() ||
-        g_local_transport.suppress_local_level_up_fanout_for_debug ||
+        g_local_transport.suppress_local_level_up_fanout ||
         level <= 0 ||
         experience < 0) {
         return;
@@ -427,7 +467,7 @@ void PublishLocalHostSelfLevelUpOffer(
     std::int32_t experience,
     uintptr_t source_progression_address) {
     if (!IsLocalTransportHost() ||
-        g_local_transport.suppress_local_level_up_fanout_for_debug ||
+        g_local_transport.suppress_local_level_up_fanout ||
         level <= 0 ||
         experience < 0) {
         return;
@@ -459,11 +499,16 @@ void PublishLocalHostSelfLevelUpOffer(
     // picker that monopolizes the gameplay thread.
     std::vector<BotSkillChoiceOption> options;
     std::string error_message;
-    if (!SyncLocalPlayerProgressionToSharedLevelUpAndRollChoices(
+    bool synchronized = false;
+    {
+        ScopedLocalLevelUpFanoutSuppression suppress_fanout;
+        synchronized = SyncLocalPlayerProgressionToSharedLevelUpAndRollChoices(
             level,
             experience,
             &options,
-            &error_message)) {
+            &error_message);
+    }
+    if (!synchronized) {
         Log(
             "Multiplayer host-self level-up offer skipped; local roll failed. level=" +
             std::to_string(level) +

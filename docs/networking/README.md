@@ -63,8 +63,9 @@ Spacewar playtest flow and the remaining external verification boundary.
   transform/heading snapshot on the gameplay thread; presentation state is
   overlaid from the latest same-timeline host snapshot so animation phase does
   not inherit the transform interpolation delay. Known phase-advancing named
-  hub NPC families (`0x138B`, `0x138C`, `0x138D`) advance the replicated drive
-  word by the measured native phase rate while waiting for the next snapshot.
+  hub NPC families (`0x138B`, `0x138C`, `0x138D`, `0x138F`) advance the
+  replicated drive word by the measured native phase rate while waiting for the
+  next snapshot.
   Named hub NPC serializers use recovered per-family allocation sizes for
   bounds; the larger player/Student render window is not reused for those
   classes. Hub snapshots also carry a typed presentation payload: the host's
@@ -149,24 +150,41 @@ Spacewar playtest flow and the remaining external verification boundary.
   requesting participant's runtime vitals and to that client's local HP/MP
   presentation. Accepted item/potion carrier pickups clear the host carrier's
   held-item pointer and credit the requesting participant's replicated
-  inventory state by item type, slot, and stack count. For the verified
-  health/mana potion type, the owning client now transfers a native held-item
-  object through the stock `Inventory_InsertOrStackItem` path, verifies that
-  the requested native potion stack increased, and deduplicates the credit by
-  run/drop identity. Arbitrary item types, powerups, and merchant ownership
-  still need their own native insertion seams; their peer-visible rows remain
-  replication evidence rather than proof of stock inventory ownership.
+  inventory state by exact recipe/type identity, color when applicable, slot,
+  and stack count. The owning client materializes the held object through the
+  stock item-recipe clone and `Inventory_InsertOrStackItem` paths, verifies the
+  exact native inventory delta, and deduplicates the credit by run/drop
+  identity. This is proven live for potion stacking and a recipe-backed hat.
   The loader now exposes `sd.player.get_inventory_state()` as a read-only
   audit surface for the stock scene-owned inventory root and visual sink helper
   items, and `tools/verify_multiplayer_inventory_audit.py` proves both local
   multiplayer clients can read their own native starter inventory shape.
-  Protocol v30 also mirrors bounded full participant-owned inventory item rows,
+  Protocol v30 introduced bounded full participant-owned inventory item rows,
   progression-book/statbook/skillbook/spellbook rows, and current ability loadout
   in `StatePacket`, so peers can inspect each other's starter potion rows,
-  active/visible native book entries, and primary/secondary loadout. This is not
-  full native inventory ownership yet: the proven native mutation slice is
-  potion insertion/stacking for the owning client; arbitrary item equipment,
-  powerup pickup, and shop/trader transfer remain incomplete.
+  active/visible native book entries, and primary/secondary loadout. Protocol
+  v59 carries exact hat, robe, staff, wand, three-ring-slot, and amulet equipment
+  identity: recipe UIDs and wearable colors are owner-authored, visible lanes
+  are applied to native remote participants and periodically self-corrected,
+  and nonvisual ring/amulet identity remains inspectable on every peer. The
+  owning client can equip an exact recipe-backed inventory item through
+  `sd.player.equip_inventory_item`; the stock inventory, exact selected holder,
+  prior-item return, dirty flag, and progression refresh paths remain
+  authoritative. Observer processes still do not own a second native inventory
+  root. This is intentional: the stock inventory, equip, storage, and merchant
+  paths consume the one process-local scene inventory root without a participant
+  parameter. Remote inventory therefore remains authoritative replicated rows,
+  while remote equipment that affects presentation is materialized on the
+  native remote actor. Protocol v59 also gives every gameplay process a fresh
+  session nonce;
+  a same-identity reconnect resets the old participant's packet-stream epochs
+  before its new state is accepted, while packets from retired nonces are
+  ignored. Host-authorized powerup pickup is verified for Random Skill,
+  Damage x4, and Bonus Skill in both ownership directions. Luthacus storage,
+  Fomentius purchases, and Hagatha purchases are owner-local stock UI paths whose
+  resulting inventory, gold, equipment, stat, and status state replicates to
+  observers. Non-shop quest/reward insertion and durable cross-session
+  persistence remain incomplete.
   Protocol v30 also adds host-authored `LevelUpOffer`, `LevelUpChoice`, and
   `LevelUpChoiceResult` packets. The host advances shared XP/level, rolls each
   participant's native skill-picker options against that participant's
@@ -224,7 +242,7 @@ Spacewar playtest flow and the remaining external verification boundary.
 | Identity | Connection-bound. Host ignores client-declared player / actor IDs. |
 | Mod compatibility | **Exact** protocol version + mod-manifest hash. Mismatch refuses connect. |
 | Anti-cheat | None in the serious sense. Baseline hygiene only (see below). |
-| Loot | Synced host-owned run drops. Gold, health/mana orbs, and item/potion carriers have request/result authority slices. Accepted health/mana potions enter the owning client's stock native inventory through the verified insert/stack ABI and converge back into participant-owned rows. Local inventory/equip roots have a typed read-only audit API, and local UDP mirrors bounded full inventory, progression-book/statbook/skillbook/spellbook, and loadout rows in `StatePacket`. Arbitrary item/equipment transfer, powerups, and shop/trader ownership are still pending. |
+| Loot | Synced host-owned run drops. Gold, health/mana orbs, item/potion carriers, and powerups have host-authorized request/result ownership. Accepted potions and exact recipe-backed items enter the owning client's stock native inventory and converge back into participant-owned rows. Hat/robe/staff/wand identity and wearable colors reconcile onto native remote actors; all three ring slots and the amulet are replicated as exact owner-authored equipment state. Stock storage and merchant actions remain owner-local and publish their resulting state. Observer processes intentionally retain replicated inventory rows instead of an unused second native root. |
 
 ## Tick rates
 
@@ -397,9 +415,11 @@ host position over a short window.
 - Host can cheat in their own session (trusted-peer model)
 - Cross-region divergence (host sims one region; multi-region is later work)
 - Durable inventory/book persistence beyond one run (Phase 3+)
-- Potion pickup credits now enter the owning client's native inventory, but
-  arbitrary item/equipment insertion, powerups, and shop/trader ownership
-  remain incomplete.
+- Nested sack browsing and ownership have not had a focused multiplayer pass.
+- The remaining Hagatha charm/curse catalog needs a behavior matrix beyond the
+  verified Life Charm purchase.
+- Non-shop quest/reward insertion and durable participant inventory/book
+  persistence remain incomplete.
 
 ## Run-identity object (replaces "save-provenance" from earlier drafts)
 

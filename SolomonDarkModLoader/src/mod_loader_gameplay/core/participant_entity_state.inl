@@ -88,10 +88,15 @@ struct ParticipantEntityBinding {
     std::uint8_t replicated_render_variant_tertiary = 0;
     std::uint32_t replicated_primary_visual_link_type_id = 0;
     std::uint32_t replicated_secondary_visual_link_type_id = 0;
+    std::uint32_t replicated_primary_visual_link_recipe_uid = 0;
+    std::uint32_t replicated_secondary_visual_link_recipe_uid = 0;
+    std::uint32_t replicated_attachment_visual_link_type_id = 0;
+    std::uint32_t replicated_attachment_visual_link_recipe_uid = 0;
     std::array<std::uint8_t, multiplayer::kParticipantVisualLinkColorBlockBytes>
         replicated_primary_visual_link_color_block = {};
     std::array<std::uint8_t, multiplayer::kParticipantVisualLinkColorBlockBytes>
         replicated_secondary_visual_link_color_block = {};
+    std::uint64_t equipment_reconcile_not_before_ms = 0;
     std::uint32_t replicated_anim_drive_state_word = 0;
     float replicated_walk_cycle_primary = 0.0f;
     float replicated_walk_cycle_secondary = 0.0f;

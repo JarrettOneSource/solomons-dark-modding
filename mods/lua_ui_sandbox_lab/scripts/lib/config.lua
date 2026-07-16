@@ -12,7 +12,7 @@ local REQUIRED_SECTIONS = {
     "create_selected_subindex_global",
     "create_owner_slot_global",
     "trace_create_event_handler",
-    "trace_player_refresh_runtime",
+    "trace_player_initialize_control_brain",
     "trace_actor_progression_refresh",
     "trace_player_appearance_apply_choice",
     "trace_gameplay_finalize_player_start",

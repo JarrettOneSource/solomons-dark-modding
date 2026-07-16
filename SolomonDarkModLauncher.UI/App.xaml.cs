@@ -17,6 +17,7 @@ public partial class App : Application
         {
             DataContext = viewModel
         };
+        window.Closed += (_, _) => viewModel.Dispose();
 
         MainWindow = window;
         window.Show();

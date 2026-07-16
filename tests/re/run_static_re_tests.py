@@ -22,13 +22,17 @@ from typing import Callable
 from static_multiplayer_runtime_contracts import (
     test_explicit_blank_boneyard_removes_native_scenery_and_collision,
     test_host_run_exit_is_authoritative_and_self_correcting,
+    test_hub_shops_preserve_participant_ownership,
     test_level_up_barrier_waits_for_forced_picker_confirmation,
+    test_exact_native_equipment_identity_and_color_replicate,
     test_native_local_player_keeps_stock_input_and_equipment_ownership,
     test_lua_exec_timeout_cancels_pending_work,
     test_meditation_transient_counters_self_repair_to_native_bounds,
-    test_native_potion_pickup_converges_into_stock_inventory,
+    test_native_item_pickup_converges_into_stock_inventory,
+    test_powerup_rewards_are_authoritative_and_native,
     test_packaged_ui_accepts_single_file_launcher,
     test_pair_launcher_drains_redirected_json_output,
+    test_pointer_list_batch_rejects_stale_managed_release_callbacks,
     test_progression_matrices_prearm_quiet_spawning_before_run_entry,
     test_spell_verifiers_quiesce_input_and_prearm_manual_spawning,
     test_unreliable_snapshot_ordering_is_wrap_safe,
@@ -94,6 +98,18 @@ STAGED_GAME_LAUNCHER = ROOT / "SolomonDarkModLauncher/src/Launch/StagedGameLaunc
 MOD_LOADER_HEADER = ROOT / "SolomonDarkModLoader/include/mod_loader.h"
 MOD_LOADER_GAMEPLAY = ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay.cpp"
 MEMORY_ACCESS_REGIONS = ROOT / "SolomonDarkModLoader/src/memory_access_regions.cpp"
+MEMORY_ACCESS_HEADER = ROOT / "SolomonDarkModLoader/include/memory_access.h"
+RUNTIME_DEBUG_CORE = ROOT / "SolomonDarkModLoader/src/runtime_debug_core.cpp"
+RUNTIME_DEBUG_WATCH = ROOT / "SolomonDarkModLoader/src/runtime_debug_watch.cpp"
+RUNTIME_DEBUG_WATCH_HELPERS = (
+    ROOT / "SolomonDarkModLoader/src/runtime_debug_watch_helpers.cpp"
+)
+RUNTIME_DEBUG_WATCH_MANAGEMENT = (
+    ROOT / "SolomonDarkModLoader/src/runtime_debug_watch_management.cpp"
+)
+RUNTIME_DEBUG_WATCH_REGISTRATION = (
+    ROOT / "SolomonDarkModLoader/src/runtime_debug_watch_registration.cpp"
+)
 PARTICIPANT_ENTITY_SYNC = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/participant_entity_sync.inl"
 )
@@ -109,6 +125,10 @@ RUN_WORLD_SNAPSHOT_VERIFIER = ROOT / "tools/verify_run_world_snapshot.py"
 ENEMY_DAMAGE_CLAIM_SYNC_VERIFIER = ROOT / "tools/verify_enemy_damage_claim_sync.py"
 RUN_STATIC_LAYOUT_SYNC_VERIFIER = ROOT / "tools/verify_run_static_layout_sync.py"
 PLAYER_HEALTH_DEATH_SYNC_VERIFIER = ROOT / "tools/verify_player_health_death_sync.py"
+MULTIPLAYER_HUD_NAMES_VERIFIER = ROOT / "tools/verify_multiplayer_hud_names.py"
+HUD_LABEL_ASSET_MATERIALIZER = (
+    ROOT / "SolomonDarkModLauncher/src/Staging/HudLabelAssetMaterializer.cs"
+)
 REAL_INPUT_SPELL_CAST_SYNC_VERIFIER = ROOT / "tools/verify_real_input_spell_cast_sync.py"
 PRIMARY_KILL_STRESS_VERIFIER = ROOT / "tools/verify_multiplayer_primary_kill_stress.py"
 TARGETED_SPELL_MATRIX_VERIFIER = ROOT / "tools/verify_multiplayer_targeted_spell_matrix.py"
@@ -1622,11 +1642,15 @@ def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_input_queueing.inl")
     player_control_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl")
+    player_cast_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_cast_hooks.inl")
     pump_loop_text = read_text(DISPATCH_PUMP_LOOP)
     run_lifecycle_state_text = read_text(
         ROOT / "SolomonDarkModLoader/src/run_lifecycle/state_and_targets.inl")
     run_lifecycle_hooks_text = read_text(
         ROOT / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks.inl")
+    run_lifecycle_cast_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/run_lifecycle/spell_cast_hooks.inl")
     run_lifecycle_public_api_text = read_text(
         ROOT / "SolomonDarkModLoader/src/run_lifecycle/public_api_and_install.inl")
     required_tokens = (
@@ -1686,6 +1710,16 @@ def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
         (player_control_text, "player control hooks", "suppressed extra local pure-primary start during scripted cast grace"),
         (player_control_text, "player control hooks", "manual_spawner_scripted_local_primary_control"),
         (player_control_text, "player control hooks", "seeded local scripted primary control"),
+        (player_control_text, "player control hooks", "const bool actor_target_written ="),
+        (player_control_text, "player control hooks", "const auto target_heading = NormalizeWizardActorHeadingForWrite("),
+        (player_control_text, "player control hooks", "ApplyWizardActorFacingState(actor_address, target_heading)"),
+        (player_control_text, "player control hooks", "if (!actor_target_written || selection_pointer == 0)"),
+        (player_control_text, "player control hooks", "if (selection_pointer != 0)"),
+        (input_queue_text, "input queue", "if (selection_pointer != 0)"),
+        (player_cast_text, "player cast hooks", "void __fastcall HookPurePrimaryAttackDispatch("),
+        (player_cast_text, "player cast hooks", "IsManualSpawnerPrimaryCastControlGraceActive()"),
+        (player_cast_text, "player cast hooks", "ApplyManualSpawnerPrimaryTargetState("),
+        (run_lifecycle_cast_text, "run lifecycle cast hooks", "ApplyPinnedManualSpawnerPrimaryTarget(self_address)"),
     )
     native_missing = [
         f"{label}: {token}"
@@ -1696,6 +1730,9 @@ def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
         raise StaticReTestFailure(
             "manual enemy spawn requests must be serviced by the gameplay action pump: " +
             ", ".join(native_missing))
+    if "if (!manual_spawner_scripted_local_primary_control || selection_pointer == 0)" in player_control_text:
+        raise StaticReTestFailure(
+            "scripted local primary aiming still requires a bot-owned selection pointer")
     if "x=target_x + FORCED_GOLD_OFFSET_X" in verifier_text:
         raise StaticReTestFailure(
             "primary kill stress verifier regressed to a blind forced-gold offset instead of nav-aware selection")
@@ -2093,7 +2130,7 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
             "Lightning Chaining verifier still competes with the permanent target hook")
 
     required_network_tokens = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 54;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 59;"),
         (protocol_text, "AirChainSnapshot = 15"),
         (protocol_text, "kAirChainSnapshotMaxTargets = 8"),
         (protocol_text, "struct AirChainTargetPacketState"),
@@ -5062,6 +5099,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     replicated_loot_reconciliation_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl"
     )
+    host_loot_drop_deactivation_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/host_loot_drop_deactivation.inl"
+    )
     spell_effect_transport_text = read_text(
         ROOT / "SolomonDarkModLoader/src/multiplayer_local_transport/spell_effect_sync.inl"
     )
@@ -5126,6 +5166,16 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     item_potion_contract_verifier_text = read_text(
         ROOT / "tools/verify_multiplayer_item_potion_pickup_contract.py"
     )
+    enemy_soft_reconciliation_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_enemy_soft_reconciliation.py"
+    )
+    level_up_choice_and_picker_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/level_up_choice_and_picker.inl"
+    )
+    skill_picker_visual_identity_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_skill_picker_visual_identity.py"
+    )
     lua_input_text = read_text(ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_input.cpp")
     lua_gameplay_text = read_text(ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp")
     lua_runtime_text = read_lua_runtime_source()
@@ -5155,7 +5205,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 54;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 59;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
@@ -5259,18 +5309,18 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "float render_drive_overlay_alpha;"),
         (protocol_text, "float render_drive_move_blend;"),
         (protocol_text, "display_name"),
-        (protocol_text, "static_assert(sizeof(ParticipantInventoryItemPacketState) == 12"),
+        (protocol_text, "static_assert(sizeof(ParticipantInventoryItemPacketState) == 16"),
         (protocol_text, "static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20"),
         (protocol_text, "std::uint64_t authority_participant_id;"),
-        (protocol_text, "static_assert(sizeof(StatePacket) == 3848"),
+        (protocol_text, "static_assert(sizeof(StatePacket) == 4196"),
         (protocol_text, "static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24"),
         (protocol_text, "static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40"),
         (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 292"),
         (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 18720"),
-        (protocol_text, "static_assert(sizeof(LootDropSnapshotPacketState) == 72"),
-        (protocol_text, "static_assert(sizeof(LootSnapshotPacket) == 4640"),
+        (protocol_text, "static_assert(sizeof(LootDropSnapshotPacketState) == 112"),
+        (protocol_text, "static_assert(sizeof(LootSnapshotPacket) == 7200"),
         (protocol_text, "static_assert(sizeof(LootPickupRequestPacket) == 56"),
-        (protocol_text, "static_assert(sizeof(LootPickupResultPacket) == 100"),
+        (protocol_text, "static_assert(sizeof(LootPickupResultPacket) == 164"),
         (protocol_text, "static_assert(sizeof(LevelUpOfferPacket) == 116"),
         (protocol_text, "static_assert(sizeof(LevelUpChoicePacket) == 40"),
         (protocol_text, "static_assert(sizeof(LevelUpChoiceResultPacket) == 64"),
@@ -5419,7 +5469,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "PruneRunLootDropNetworkIds"),
         (transport_text, "kGoldRewardAmountOffset"),
         (transport_text, "built.flags = built.amount > 0 && lifetime != 0 ? LootDropSnapshotFlagActive : 0"),
-        (transport_text, "return wrote_amount && wrote_lifetime;"),
+        (host_loot_drop_deactivation_text, "kReplicatedGoldAmountOffset"),
+        (host_loot_drop_deactivation_text, "kReplicatedGoldLifetimeOffset"),
         (transport_text, "kOrbRewardValueOffset"),
         (transport_text, "kOrbRewardResourceKindOffset"),
         (transport_text, "kOrbHealthRewardScale"),
@@ -5475,6 +5526,15 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "TryApplyLocalProgrammaticLevelUpChoiceThroughNativePicker"),
         (transport_text, "CallLevelUpScreenCloseSafe"),
         (transport_text, "Multiplayer level-up native picker applied locally through programmatic choice"),
+        (level_up_choice_and_picker_text, "HookLocalLevelUpOptionRoll"),
+        (level_up_choice_and_picker_text, "TryOverwriteNativeLevelUpOptions"),
+        (level_up_choice_and_picker_text, "ArmLocalLevelUpOptionRoll"),
+        (level_up_choice_and_picker_text, "native option roll replaced before visual build"),
+        (transport_text, "ShutdownLocalLevelUpOptionRollHook"),
+        (skill_picker_visual_identity_verifier_text, "SKILL_VISUAL_IDENTITY_RETURN = 0x0066FE0E"),
+        (skill_picker_visual_identity_verifier_text, "visual_option_ids"),
+        (skill_picker_visual_identity_verifier_text, "picker_option_ids"),
+        (skill_picker_visual_identity_verifier_text, "wait_for_choice_result"),
         (transport_text, "RelayPacketToPeers(result, endpoint)"),
         (transport_text, "ApplyParticipantSkillChoiceOption(\n                    packet.target_participant_id"),
         (transport_text, "SendQueuedLevelUpChoices"),
@@ -5499,9 +5559,10 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "TryPopulateOrbLootDropSnapshot"),
         (transport_text, "TryPopulateItemLootDropSnapshot"),
         (transport_text, "TryReadItemDropHeldItemMetadata"),
-        (transport_text, "TryDeactivateHostOrbLootDrop"),
-        (transport_text, "TryDeactivateHostItemLootDrop"),
-        (transport_text, "CallHostLootDropActorWorldUnregisterSafe"),
+        (transport_text, "QueueHostLootDropDeactivation("),
+        (transport_text, "ProcessCompletedHostLootPickups();"),
+        (host_loot_drop_deactivation_text, "PumpHostLootDropDeactivation()"),
+        (host_loot_drop_deactivation_text, "CallActorWorldUnregisterSafe("),
         (transport_text, "TryBuildAcceptedOrbLootPickupPayload"),
         (transport_text, "TryBuildAcceptedItemLootPickupPayload"),
         (transport_text, "ApplyOwnedInventoryLootItem"),
@@ -5555,9 +5616,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (replicated_loot_reconciliation_text, "SpawnPotionDropFn"),
         (replicated_loot_reconciliation_text, "ExecuteSpawnReplicatedPotionDropNow"),
         (replicated_loot_reconciliation_text, "drop.drop_kind == multiplayer::LootDropKind::Potion"),
-        (replicated_loot_reconciliation_text, "held_item_type_id != kReplicatedLootPotionItemTypeId"),
+        (replicated_loot_reconciliation_text, "held_item_type_id != drop.item_type_id"),
         (replicated_loot_reconciliation_text, "memory.TryWriteField(held_item_address, kItemSlotOffset, potion_slot)"),
-        (replicated_loot_reconciliation_text, "memory.TryWriteField(held_item_address, kPotionStackCountOffset, stack_count)"),
+        (replicated_loot_reconciliation_text, "kPotionStackCountOffset,"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/native_function_types.inl"), "using SpawnPotionDropFn"),
         (protocol_text, "std::uint32_t item_type_id;"),
         (protocol_text, "std::int32_t item_slot;"),
@@ -5597,7 +5658,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_reward.inl"), "ResolveGameAddressOrZero(kSpawnRewardGold)"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_reward.inl"), "kSpawnRewardDefaultLifetime"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/spawn_reward.inl"), "CallRewardWorldAttachSafe"),
-        (transport_text, "TryDeactivateHostGoldLootDrop"),
+        (transport_text, "QueueHostLootDropDeactivation("),
         (transport_text, "TryWriteLocalGlobalGold"),
         (transport_text, "accepted_loot_pickup_drop_ids"),
         (transport_text, "RefreshOwnedInventoryFromSnapshot"),
@@ -5684,6 +5745,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "OverlayLatestWorldSnapshotPresentation"),
         (world_snapshot_reconciliation_text, "kHubAnimationDrivePhaseUnitsPerSecond"),
         (world_snapshot_reconciliation_text, "AdvanceHubAnimationDrivePhase"),
+        (world_snapshot_reconciliation_text, "case 0x138F:"),
+        (lua_gameplay_text, '"sampled_ms"'),
         (world_snapshot_reconciliation_text, "ApplyReplicatedWorldActorPresentation"),
         (world_snapshot_reconciliation_text, "kStudentVisualStateBlockOffset"),
         (world_snapshot_reconciliation_text, "presentation_write_count"),
@@ -5713,6 +5776,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "kWorldSnapshotApplyStaleMs"),
         (world_snapshot_reconciliation_text, "kWorldSnapshotInterpolationDelayMs"),
         (world_snapshot_reconciliation_text, "TrySampleWorldSnapshot"),
+        (world_snapshot_reconciliation_text, "kReplicatedRunEnemySoftCorrectionFactor"),
+        (world_snapshot_reconciliation_text, "kReplicatedRunEnemyHardSnapDistance"),
+        (world_snapshot_reconciliation_text, "soft_correct_live_run_enemy"),
+        (enemy_soft_reconciliation_verifier_text, "INJECTED_DRIFT = 96.0"),
+        (enemy_soft_reconciliation_verifier_text, "MAX_CORRECTION_STEP = 48.0"),
+        (enemy_soft_reconciliation_verifier_text, "correction_step_count"),
         (world_snapshot_reconciliation_text, "ParticipantSceneIntentKind::SharedHub"),
         (world_snapshot_reconciliation_text, "ParticipantSceneIntentKind::Run"),
         (world_snapshot_reconciliation_text, "QueueGameplayStartWaves"),
@@ -5848,7 +5917,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (networking_doc_text, "LootSnapshot"),
         (networking_doc_text, "sd.world.get_replicated_loot()"),
         (networking_doc_text, "Protocol v30"),
-        (networking_doc_text, "Gold, health/mana orbs, and item/potion carriers have request/result authority slices"),
+        (networking_doc_text, "Gold, health/mana orbs, item/potion carriers, and powerups have host-authorized request/result ownership"),
         (networking_doc_text, "run-world"),
         (networking_doc_text, "tracked enemies"),
         (networking_doc_text, "bootstrap client wave activation"),
@@ -5868,11 +5937,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (networking_doc_text, "Synced host-owned run drops"),
         (networking_doc_text, "sd.player.get_inventory_state()"),
         (networking_doc_text, "tools/verify_multiplayer_inventory_audit.py"),
-        (networking_doc_text, "Accepted health/mana potions enter the owning client's stock native inventory"),
+        (networking_doc_text, "Accepted potions and exact recipe-backed items enter the owning client's stock native inventory"),
+        (networking_doc_text, "Observer processes intentionally retain replicated inventory rows"),
         (networking_doc_text, "pickup-request / pickup-result"),
         (networking_doc_text, "bounded full participant-owned inventory item rows"),
         (networking_doc_text, "progression-book/statbook/skillbook/spellbook rows"),
-        (networking_doc_text, "Gold, health/mana orbs, and item/potion carriers have request/result authority slices"),
+        (networking_doc_text, "Gold, health/mana orbs, item/potion carriers, and powerups have host-authorized request/result ownership"),
         (world_sync_plan_text, "tools/probe_named_hub_npc_fields.py"),
         (world_sync_plan_text, "FUN_00502120"),
         (world_sync_plan_text, "larger player/Student render window"),
@@ -5960,20 +6030,22 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (participant_doc_text, "sd.player.get_inventory_state()"),
         (participant_doc_text, "sd.player.get_progression_book_state()"),
         (participant_doc_text, "read-only native inventory audit surface"),
+        (participant_doc_text, "Observers retain the authoritative participant rows"),
         (participant_doc_text, "Local UDP protocol v30 mirrors bounded full participant-owned"),
         (inventory_item_doc_text, "tools/probe_run_reward_sync.py --attempts 3"),
         (inventory_item_doc_text, "sd.world.get_replicated_loot()"),
         (inventory_item_doc_text, "sd.player.get_inventory_state()"),
         (inventory_item_doc_text, "tools/verify_multiplayer_inventory_audit.py"),
         (inventory_item_doc_text, "item row count, item pointer array address"),
-        (inventory_item_doc_text, "local UDP `StatePacket` protocol v30 carries a bounded full participant-owned"),
+        (inventory_item_doc_text, "local UDP `StatePacket` protocol v30 introduced a bounded full participant-owned"),
         (inventory_item_doc_text, "participant-owned progression-book/statbook/skillbook/"),
         (inventory_item_doc_text, "participant-owned starter potion rows"),
-        (inventory_item_doc_text, "by held item type"),
+        (inventory_item_doc_text, "by exact item type and recipe identity"),
         (inventory_item_doc_text, "not a valid\n\"available for pickup\" predicate"),
         (inventory_item_doc_text, "verify_multiplayer_orb_pickup_authority.py --attempts 3"),
         (inventory_item_doc_text, "`0x005E6B50` -> `ItemDropActor_TickPickup`"),
-        (inventory_item_doc_text, "Powerup, arbitrary item/equipment"),
+        (inventory_item_doc_text, "`sd.player.equip_inventory_item(recipe_uid)`"),
+        (inventory_item_doc_text, "tools/verify_multiplayer_native_item_inventory_sync.py"),
         (inventory_item_doc_text, "host snapshots `drop + 0x148` held-item metadata"),
         (binary_layout_text, "item_drop_pickup=0x005E6B50"),
         (binary_layout_text, "native_global_rng_state=0x00818B08"),
@@ -6021,6 +6093,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (verifier_text, "wait_for_local_transform_settled"),
         (verifier_text, "heading_tolerance: float = 0.25"),
         (verifier_text, "observed-motion heading"),
+        (verifier_text, 'emit(prefix .. "actor_heading", actor_heading(peer.actor_address))'),
+        (verifier_text, "heading_distance(actor_heading, expected_heading)"),
         (verifier_text, "verify_native_remote_overlap_policy"),
         (verifier_text, "skip_local_native_remote_push_to_avoid_replication_feedback"),
         (verifier_text, "sd.bots.get_nameplate"),
@@ -6042,8 +6116,15 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (player_health_death_verifier_text, "set_local_player_vitals"),
         (player_health_death_verifier_text, "assert_dead_remote_ignores_transform"),
         (player_health_death_verifier_text, "assert_restored_remote_follows_transform"),
+        (player_health_death_verifier_text, "launch_trio"),
+        (player_health_death_verifier_text, "VITAL_SYNC_TOLERANCE = 0.25"),
         (player_health_death_verifier_text, "host_to_client"),
+        (player_health_death_verifier_text, "host_to_third"),
         (player_health_death_verifier_text, "client_to_host"),
+        (player_health_death_verifier_text, "client_to_third"),
+        (player_health_death_verifier_text, "third_to_host"),
+        (player_health_death_verifier_text, "third_to_client"),
+        (player_health_death_verifier_text, '"observer_relationship_count": 6'),
         (run_enemy_presentation_probe_text, "start_host_testrun_and_wait_for_clients"),
         (run_reward_sync_probe_text, "start_host_testrun_and_wait_for_clients"),
         (transport_text, "std::fabs(local_actor.max_hp - authoritative_max_hp)"),
@@ -6067,19 +6148,14 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         )
     if "built.flags = active != 0 ? LootDropSnapshotFlagActive : 0" in transport_text:
         missing.append("gold loot availability must not use the +0x148 state byte")
-    item_drop_deactivate = re.search(
-        r"bool\s+TryDeactivateHostItemLootDrop\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}",
-        transport_text,
-        re.DOTALL,
-    )
-    if item_drop_deactivate is None:
-        missing.append("item/potion loot deactivation helper")
-    else:
-        item_drop_deactivate_body = item_drop_deactivate.group("body")
-        if "CallHostLootDropActorWorldUnregisterSafe" not in item_drop_deactivate_body:
-            missing.append("item/potion loot deactivation must unregister the native drop actor")
-        if "kItemDropHeldItemOffset" in item_drop_deactivate_body or "no_held_item" in item_drop_deactivate_body:
-            missing.append("item/potion loot deactivation must not null the native held-item pointer")
+    if "ExecuteHostLootDropDeactivationNow(" not in host_loot_drop_deactivation_text:
+        missing.append("gameplay-thread loot deactivation helper")
+    if "CallActorWorldUnregisterSafe(" not in host_loot_drop_deactivation_text:
+        missing.append("item/potion loot deactivation must unregister the native drop actor")
+    if "kItemDropHeldItemOffset" in host_loot_drop_deactivation_text:
+        missing.append("item/potion loot deactivation must not null the native held-item pointer")
+    if "CallActorWorldUnregisterSafe(" in transport_text:
+        missing.append("network service thread must not mutate native world containers")
     if missing:
         raise StaticReTestFailure(
             "local multiplayer transport wiring missing token(s): " + ", ".join(missing))
@@ -6278,6 +6354,13 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     ui_response_reader_text = read_text(
         ROOT / "SolomonDarkModLauncher.UI/src/Infrastructure/LauncherJsonResponseReader.cs"
     )
+    ui_session_status_reader_text = read_text(
+        ROOT / "SolomonDarkModLauncher.UI/src/Infrastructure/"
+        "LauncherMultiplayerSessionStatusReader.cs"
+    )
+    ui_xaml_text = read_text(
+        ROOT / "SolomonDarkModLauncher.UI/src/Views/MainWindow.xaml"
+    )
     wsl_steam_client_text = read_text(
         ROOT / "scripts/Launch-WslSteamMultiplayerClient.sh"
     )
@@ -6289,8 +6372,8 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 54;"),
-        (compatibility_materializer_text, "CurrentProtocolVersion = 54;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 59;"),
+        (compatibility_materializer_text, "CurrentProtocolVersion = 59;"),
         (protocol_text, "SessionCapabilityHostAuthority"),
         (protocol_text, "struct SessionHelloPacket"),
         (protocol_text, "struct SessionHelloAckPacket"),
@@ -6344,9 +6427,20 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
         (session_monitor_text, "WaitForConnectedJoin("),
         (session_monitor_text, "expectedLaunchToken"),
         (launcher_json_text, "MultiplayerSession ="),
+        (launcher_json_text, "LaunchToken = session.LaunchToken"),
         (launcher_output_text, "Steam lobby id:"),
         (ui_response_text, "LauncherCliMultiplayerSession"),
+        (ui_response_text, "public string LaunchToken"),
         (ui_view_model_text, "LobbyId = multiplayer.LobbyId.ToString();"),
+        (ui_view_model_text, "StartSteamSessionMonitoring("),
+        (ui_view_model_text, 'status.Phase == "Connected"'),
+        (ui_view_model_text, '"Connected — 1 friend in the lobby"'),
+        (ui_view_model_text, '"Connected — {status.AuthenticatedPeerCount} friends in the lobby"'),
+        (ui_session_status_reader_text, "FileShare.ReadWrite | FileShare.Delete"),
+        (ui_session_status_reader_text, "expectedLaunchToken"),
+        (ui_xaml_text, 'Binding="{Binding HasSteamSession}"'),
+        (ui_xaml_text, 'Binding="{Binding IsSteamFriendConnected}"'),
+        (ui_xaml_text, 'Text="{Binding SteamConnectionText}"'),
         (ui_command_client_text, "LauncherJsonResponseReader.ReadAsync("),
         (ui_response_reader_text, "ReadLineAsync(cancellationToken)"),
         (ui_response_reader_text, 'TryGetProperty("success"'),
@@ -6380,9 +6474,9 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
             "WPF launcher still waits for inherited game pipe EOF instead of the CLI JSON response"
         )
     return (
-        "Steam friends-only lobby, authenticated v54 handshake, idle keepalive, owner-checked gameplay "
-        "routing, Spacewar launch, x86 runtime staging, and launch-token-bound lobby "
-        "status reporting are wired"
+        "Steam friends-only lobby, authenticated v59 handshake, idle keepalive, owner-checked gameplay "
+        "routing, Spacewar launch, x86 runtime staging, and a live launch-token-bound "
+        "Steam-friend connection indicator are wired"
     )
 
 
@@ -6712,6 +6806,61 @@ def test_second_residual_runtime_and_trace_addresses_are_layout_backed() -> str:
             ", ".join(present_retired_tick_tokens))
 
     return "second residual runtime offsets and trace addresses are layout-backed"
+
+
+def test_process_termination_skips_loader_shutdown() -> str:
+    dllmain_text = read_text(ROOT / "SolomonDarkModLoader/src/dllmain.cpp")
+    process_detach = re.search(
+        r"case DLL_PROCESS_DETACH:\s*"
+        r"if \(reserved == nullptr\) \{\s*"
+        r"sdmod::Shutdown\(\);\s*"
+        r"\}\s*break;",
+        dllmain_text,
+        re.S,
+    )
+    if process_detach is None:
+        raise StaticReTestFailure(
+            "process termination still performs full loader/Steam shutdown from DllMain"
+        )
+    if "(void)reserved;" in dllmain_text:
+        raise StaticReTestFailure(
+            "DllMain still discards the process-termination discriminator"
+        )
+    return "process termination bypasses loader-lock Steam/network shutdown"
+
+
+def test_stage_mirror_repairs_denied_destination_acl() -> str:
+    mirror_text = read_text(
+        ROOT / "SolomonDarkModLauncher/src/Staging/FileTreeMirror.cs"
+    )
+    required_tokens = (
+        "CopyStageFileWithAccessRecovery",
+        "PrepareForDeletion(destinationFile)",
+        '"/remove:d"',
+        "currentUserName",
+    )
+    missing = [token for token in required_tokens if token not in mirror_text]
+    if missing:
+        raise StaticReTestFailure(
+            "stage ACL recovery is missing: " + ", ".join(missing)
+        )
+    repair_start = mirror_text.find(
+        "private static void PrepareForDeletion(FileSystemInfo entry)"
+    )
+    repair_end = mirror_text.find(
+        "private static void ClearRestrictedAttributes",
+        repair_start,
+    )
+    if repair_start < 0 or repair_end < 0:
+        raise StaticReTestFailure("stage ACL recovery helper is missing")
+    body = mirror_text[repair_start:repair_end]
+    grant_index = body.find("GrantCurrentUserFullControl")
+    attributes_index = body.find("ClearRestrictedAttributes")
+    if grant_index < 0 or attributes_index < 0 or grant_index > attributes_index:
+        raise StaticReTestFailure(
+            "stage ACL recovery still clears attributes before repairing access"
+        )
+    return "stage mirror removes explicit deny ACLs before retrying destination writes"
 
 
 def test_remaining_native_addresses_and_probe_offsets_are_layout_backed() -> str:
@@ -7093,6 +7242,21 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
     if "AttachBuiltDescriptorToEquipVisualLane" not in slot_creation_text:
         raise StaticReTestFailure(
             "gameplay-slot bot materialization does not publish the source descriptor through helper lanes")
+    if re.search(
+        r"SeedWizardCloneSourceActorFromNativeDerivedProfile\(\s*actor_address,",
+        slot_creation_text,
+    ):
+        raise StaticReTestFailure(
+            "gameplay-slot bot materialization still stages a source descriptor over the live target actor")
+    if not re.search(
+        r"IsLuaControlledParticipant[\s\S]*CreateWizardCloneSourceActor\(\s*"
+        r"world_address,[\s\S]*&source_actor_address,[\s\S]*"
+        r"CaptureActorRenderBuildSnapshot\(source_actor_address\)[\s\S]*"
+        r"DestroyWizardCloneSourceActor\(source_actor_address,",
+        slot_creation_text,
+    ):
+        raise StaticReTestFailure(
+            "Lua gameplay-slot visuals do not build on a disposable source actor before helper publication")
     if "ApplyNativeRemoteParticipantRenderSelectorBytes" in native_remote_playback_text:
         raise StaticReTestFailure(
             "remote playback still overwrites profile-built clone render selector bytes")
@@ -8032,24 +8196,20 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
     player_tick_text = read_text(PLAYER_ACTOR_TICK_HOOK)
     keyboard_injection_text = read_text(GAMEPLAY_KEYBOARD_INJECTION)
     native_types_text = read_text(GAMEPLAY_NATIVE_FUNCTION_TYPES)
-
-    forbidden_animation_tokens = (
-        "TryListGameplayParticipantNameplates(",
-        "std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex)",
-        "TryCaptureTrackedStandaloneWizardBindingIdentity(",
-        "NormalizeGameplaySlotBotSyntheticVisualState(actor_address)",
-        "ApplyNativeRemoteParticipantPresentationState(binding, actor_address)",
-    )
-    present = [token for token in forbidden_animation_tokens if token in animation_text]
-    if present:
-        raise StaticReTestFailure(
-            "animation advance hook still owns participant presentation or snapshot work: " +
-            ", ".join(present))
+    verifier_text = read_text(MULTIPLAYER_HUD_NAMES_VERIFIER)
+    hud_label_materializer_text = read_text(HUD_LABEL_ASSET_MATERIALIZER)
 
     required_animation_tokens = (
         "struct AnimationAdvanceContextScope",
         "~AnimationAdvanceContextScope()",
         "original(self);",
+        "IsTrackedWizardParticipantActorForHud(actor_address)",
+        "TryGetGameplayHudParticipantDisplayNameForActor(actor_address, &display_name, &participant_id)",
+        "DrawGameplayHudParticipantName(actor_address, display_name, &draw_x, &draw_y, &exception_code)",
+        "DrawGameplayParticipantHealthBar(",
+        "source=playerwizard_render",
+        "health_ratio=",
+        "health_segments=",
     )
     missing_animation = [
         token for token in required_animation_tokens
@@ -8057,22 +8217,21 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
     ]
     if missing_animation:
         raise StaticReTestFailure(
-            "animation advance hook no longer preserves context scope without owning HUD nameplate rendering: " +
+            "PlayerWizard render callback no longer draws remote names and health bars: " +
             ", ".join(missing_animation))
 
-    forbidden_animation_draw_tokens = (
-        "TryGetGameplayHudParticipantDisplayNameForActor(actor_address, &display_name, &participant_id)",
-        "DrawGameplayHudParticipantName(actor_address, display_name, &draw_x, &draw_y, &exception_code)",
+    forbidden_animation_tokens = (
+        "TryListGameplayParticipantNameplates(",
+        "PublishGameplayParticipantNameplateOverlaySnapshot",
         "source=actor_callback",
     )
-    present_animation_draw = [
-        token for token in forbidden_animation_draw_tokens
-        if token in animation_text
+    present_animation = [
+        token for token in forbidden_animation_tokens if token in animation_text
     ]
-    if present_animation_draw:
+    if present_animation:
         raise StaticReTestFailure(
-            "animation advance hook must not render native nameplates outside the HUD render pass: " +
-            ", ".join(present_animation_draw))
+            "PlayerWizard native render path contains stale overlay/callback plumbing: " +
+            ", ".join(present_animation))
 
     forbidden_hud_tokens = (
         "TryListGameplayParticipantNameplates(",
@@ -8087,6 +8246,8 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "scene_state.kind != \"arena\"",
         "kGameplayHudVirtualWidth",
         "actor_x - player_state.x",
+        "DrawGameplayHudUiExactTextAt(",
+        "kGameplayUiExactTextObjectRender",
     )
     present_hud = [token for token in forbidden_hud_tokens if token in hud_text]
     if present_hud:
@@ -8095,6 +8256,27 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
             ", ".join(present_hud))
 
     required_hud_tokens = (
+        "void __fastcall HookGameplayUiAllyLabelGlyphDraw(",
+        "IsGameplayAllyHudLabelGlyphCall(glyph_address, caller_address)",
+        "BuildGameplayAllyHudRows()",
+        "ResolveGameplayAllyHudRowIndex(y, rows.size())",
+        "DrawGameplayHudAllyBarParticipantName(",
+        "&name_layout,",
+        "&exception_code);",
+        "source=ally_healthbar",
+        "stock_label=",
+        "BuildGameplayAllyHudExactText(",
+        "EstimateGameplayAllyHudTextWidth(",
+        "constexpr float kGameplayAllyHudReservedLabelWidth = 128.0f;",
+        "constexpr float kGameplayAllyHudNameHorizontalPadding = 2.0f;",
+        "multiplayer::kParticipantDisplayNameBytes - 1",
+        '"The ally HUD reservation must fit the longest protocol display name."',
+        "resolved.name_left_x = x + kGameplayAllyHudNameHorizontalPadding;",
+        "layout_ok=",
+        "bar_right_x=",
+        "label_right_x=",
+        "name_left_x=",
+        "name_right_x=",
         "bool CallGameplayExactTextObjectRenderSafe(",
         "NativeStringAssignFn",
         "NativeExactTextObjectRenderFn",
@@ -8103,12 +8285,7 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "std::string BuildGameplayNameplateExactText(const std::string& display_name)",
         "constexpr const char* kHalfScaleCommand = \"s(0.5)\"",
         "bool DrawGameplayHudParticipantName(",
-        "void DrawGameplayHudParticipantNamesForHudPass()",
-        "DrawGameplayHudParticipantNamesForHudPass();",
-        "source=hud_case100",
         "native gameplay HUD participant name draw",
-        "TryGetGameplayHudParticipantDisplayNameForActor(actor_address, &display_name, &participant_id)",
-        "DrawGameplayHudParticipantName(actor_address, display_name, &draw_x, &draw_y, &exception_code)",
         "ResolveGameAddressOrZero(kGameplayStringAssign)",
         "ResolveGameAddressOrZero(kGameplayExactTextObjectRender)",
         "ResolveGameAddressOrZero(kGameplayExactTextObjectGlobal)",
@@ -8125,12 +8302,31 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "const auto nameplate_text = BuildGameplayNameplateExactText(display_name);",
         "CallGameplayExactTextObjectRenderSafe(",
         "nameplate_text.c_str()",
+        "bool DrawGameplayParticipantHealthBar(",
+        "TryReadActorProgressionHealth(actor_address, &health)",
+        "constexpr int kBarSegments = 12;",
+        "std::string bar_text = \"_s(0.25)[\";",
+        "filled_segments",
     )
     missing_hud = [token for token in required_hud_tokens if token not in hud_text]
     if missing_hud:
         raise StaticReTestFailure(
-            "native exact-text helper no longer matches native nameplate baseline commit 35378b3: " +
+            "native remote-name or thin-health-bar rendering contract is incomplete: " +
             ", ".join(missing_hud))
+
+    required_materializer_tokens = (
+        'private const string DefaultAllyLabel = "ALLY";',
+        "private const int GeneratedAllyLabelWidth = 128;",
+        "return string.IsNullOrEmpty(configuredLabel) ? DefaultAllyLabel : configuredLabel;",
+    )
+    missing_materializer = [
+        token for token in required_materializer_tokens
+        if token not in hud_label_materializer_text
+    ]
+    if missing_materializer:
+        raise StaticReTestFailure(
+            "staged ally HUD label reservation no longer matches the native name layout: " +
+            ", ".join(missing_materializer))
 
     forbidden_public_tokens = (
         "struct SDModGameplayNameplateDrawItem",
@@ -8181,9 +8377,14 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
             ", ".join(present_overlay))
 
     required_layout_tokens = (
+        "gameplay_ui_glyph_draw=0x004143D0",
+        "gameplay_ui_centered_glyph_draw=0x004142E0",
+        "gameplay_ally_label_glyph_return=0x005D3521",
         "gameplay_string_assign=0x00402AE0",
         "gameplay_exact_text_object_render=0x0043BCD0",
+        "gameplay_ui_bundle=0x008199E4",
         "gameplay_exact_text_object=0x008199A0",
+        "gameplay_ui_ally_label_glyph=0x38",
         "gameplay_exact_text_object=0xE7D98",
     )
     missing_layout = [token for token in required_layout_tokens if token not in layout_text]
@@ -8200,6 +8401,8 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
             ", ".join(present_layout))
 
     required_native_type_tokens = (
+        "using GameplayUiGlyphDrawFn = void(__thiscall*)(void* self, float x, float y)",
+        "using GameplayHudRenderDispatchFn = void(__thiscall*)(void* self, int render_case, uintptr_t arg1, uintptr_t arg2)",
         "struct NativeGameString",
         "static_assert(sizeof(NativeGameString) == 0x1C",
         "using NativeStringAssignFn = void(__thiscall*)(void* self, char* text)",
@@ -8215,6 +8418,17 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
             ", ".join(missing_native_types))
 
     required_injection_tokens = (
+        "ResolveGameAddressOrZero(kGameplayUiGlyphDraw)",
+        "ResolveGameAddressOrZero(kGameplayUiCenteredGlyphDraw)",
+        "ResolveGameAddressOrZero(kGameplayAllyLabelGlyphReturn)",
+        "ResolveGameAddressOrZero(kGameplayUiBundleGlobal)",
+        "kGameplayUiAllyLabelGlyphOffset == 0",
+        "reinterpret_cast<void*>(&HookGameplayUiGlyphDraw)",
+        "reinterpret_cast<void*>(&HookGameplayUiAllyLabelGlyphDraw)",
+        "kGameplayUiGlyphDrawHookPatchSize",
+        "kGameplayUiCenteredGlyphDrawHookPatchSize",
+        "gameplay_ui_glyph_draw_hook",
+        "gameplay_ui_ally_label_glyph_draw_hook",
         "ResolveGameAddressOrZero(kGameplayStringAssign)",
         "ResolveGameAddressOrZero(kGameplayExactTextObjectRender)",
         "ResolveGameAddressOrZero(kGameplayExactTextObjectGlobal)",
@@ -8250,7 +8464,33 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         raise StaticReTestFailure(
             "player tick still publishes stale D3D nameplate overlay snapshots")
 
-    return "remote nameplates use native HUD-pass exact text with direct native scaling"
+    required_verifier_tokens = (
+        "launch_trio(god_mode=False, tile_windows=True)",
+        "wait_for_all_relationships(\"hub\", timeout)",
+        "wait_for_all_relationships(\"testrun\", timeout)",
+        "place_trio_for_capture(timeout)",
+        "set_local_player_vitals(",
+        "wait_for_remote_matches_owner_health(",
+        "abs(health_ratio - 0.5) > 0.01",
+        "health_segments={EXPECTED_HALF_HEALTH_SEGMENTS}/12",
+        "source=playerwizard_render",
+        "source=ally_healthbar",
+        "stock_label=0",
+        "layout_ok=1",
+        "verify_ally_hud_name_layout(ally_hud_line)",
+        "ally HUD name overlaps its health bar",
+        "ally HUD name extends outside its reserved label slot",
+        "capture_game_backbuffer(",
+    )
+    missing_verifier = [
+        token for token in required_verifier_tokens if token not in verifier_text
+    ]
+    if missing_verifier:
+        raise StaticReTestFailure(
+            "three-player name/health-bar regression verifier is incomplete: " +
+            ", ".join(missing_verifier))
+
+    return "remote names and thin health bars render through native PlayerWizard and ally-HUD passes"
 
 
 def test_memory_region_cache_refreshes_newly_committed_native_objects() -> str:
@@ -8281,6 +8521,74 @@ def test_memory_region_cache_refreshes_newly_committed_native_objects() -> str:
         )
 
     return "inaccessible cached reservations are refreshed after native heap/page commits"
+
+
+def test_write_watches_are_transparent_to_loader_memory_access() -> str:
+    memory_header = MEMORY_ACCESS_HEADER.read_text(encoding="utf-8")
+    memory_regions = MEMORY_ACCESS_REGIONS.read_text(encoding="utf-8")
+    debug_core = RUNTIME_DEBUG_CORE.read_text(encoding="utf-8")
+    registration = RUNTIME_DEBUG_WATCH_REGISTRATION.read_text(encoding="utf-8")
+    management = RUNTIME_DEBUG_WATCH_MANAGEMENT.read_text(encoding="utf-8")
+    shutdown = RUNTIME_DEBUG_WATCH.read_text(encoding="utf-8")
+    handler = RUNTIME_DEBUG_WATCH_HELPERS.read_text(encoding="utf-8")
+
+    required_by_source = {
+        "memory_access.h": (
+            "RegisterManagedGuardRange",
+            "UnregisterManagedGuardRange",
+            "IsManagedGuardRange",
+            "managed_guard_ranges_",
+        ),
+        "memory_access_regions.cpp": (
+            "candidate.guarded && !IsManagedGuardRange(current, candidate_size)",
+            "(!candidate.guarded || IsManagedGuardRange(current, candidate_size))",
+        ),
+        "runtime_debug_core.cpp": (
+            "ProcessMemory::Instance().InvalidateRange(page_base, page_size)",
+        ),
+        "runtime_debug_watch_registration.cpp": (
+            "RegisterManagedGuardRange(",
+            "UnregisterManagedGuardRange(",
+        ),
+        "runtime_debug_watch_management.cpp": ("UnregisterManagedGuardRange(",),
+        "runtime_debug_watch.cpp": ("UnregisterManagedGuardRange(",),
+    }
+    source_text = {
+        "memory_access.h": memory_header,
+        "memory_access_regions.cpp": memory_regions,
+        "runtime_debug_core.cpp": debug_core,
+        "runtime_debug_watch_registration.cpp": registration,
+        "runtime_debug_watch_management.cpp": management,
+        "runtime_debug_watch.cpp": shutdown,
+    }
+    missing = [
+        f"{source}:{token}"
+        for source, tokens in required_by_source.items()
+        for token in tokens
+        if token not in source_text[source]
+    ]
+    if missing:
+        raise StaticReTestFailure(
+            "write-watch guard transparency is incomplete: " + ", ".join(missing)
+        )
+
+    capture_position = handler.find("after_bytes_by_hit.reserve(hits_to_log.size())")
+    rearm_position = handler.find("page.base_protect | PAGE_GUARD", capture_position)
+    log_position = handler.find(
+        "LogWriteWatchHit(hits_to_log[index], after_bytes_by_hit[index])",
+        capture_position,
+    )
+    if capture_position == -1 or rearm_position == -1 or log_position == -1:
+        raise StaticReTestFailure("write-watch post-write capture sequence was not found")
+    capture_read_position = handler.find("ProcessMemory::Instance().TryRead(", capture_position)
+    if capture_read_position == -1 or not (
+        capture_position < capture_read_position < rearm_position < log_position
+    ):
+        raise StaticReTestFailure(
+            "write-watch post-write bytes must be captured before PAGE_GUARD is rearmed"
+        )
+
+    return "managed PAGE_GUARD watches remain transparent to loader and Lua memory access"
 
 
 def test_player_control_brain_requires_published_gameplay_slot() -> str:
@@ -8874,8 +9182,20 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_unreliable_snapshot_ordering_is_wrap_safe,
     ),
     (
-        "accepted remote potion pickups converge into native inventory",
-        test_native_potion_pickup_converges_into_stock_inventory,
+        "accepted remote item pickups converge into native inventory",
+        test_native_item_pickup_converges_into_stock_inventory,
+    ),
+    (
+        "stock powerups remain host-authoritative and native",
+        test_powerup_rewards_are_authoritative_and_native,
+    ),
+    (
+        "exact native equipment identity and color replicate",
+        test_exact_native_equipment_identity_and_color_replicate,
+    ),
+    (
+        "hub shops preserve participant ownership",
+        test_hub_shops_preserve_participant_ownership,
     ),
     (
         "explicit blank Boneyard removes native scenery and collision",
@@ -8913,6 +9233,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         "level-up barrier waits for forced picker confirmation",
         test_level_up_barrier_waits_for_forced_picker_confirmation,
     ),
+    (
+        "pointer-list batches reject stale managed release callbacks",
+        test_pointer_list_batch_rejects_stale_managed_release_callbacks,
+    ),
     ("primary mana resolver uses native live spell stats", test_primary_mana_resolver_uses_native_live_spell_stats),
     ("Earth boulder damage uses native live spell stats", test_earth_boulder_damage_uses_native_live_spell_stats),
     ("Earth boulder projection stays read-only and drives target-lethal release", test_boulder_projection_is_read_only_native_formula),
@@ -8941,6 +9265,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_memory_region_cache_refreshes_newly_committed_native_objects,
     ),
     (
+        "write watches remain transparent to loader memory access",
+        test_write_watches_are_transparent_to_loader_memory_access,
+    ),
+    (
         "player control-brain requires a published gameplay slot",
         test_player_control_brain_requires_published_gameplay_slot,
     ),
@@ -8963,6 +9291,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Steam peer disconnect resets participant replication epoch",
         test_steam_peer_disconnect_resets_remote_session_epoch,
+    ),
+    (
+        "process termination skips loader-lock Steam shutdown",
+        test_process_termination_skips_loader_shutdown,
+    ),
+    (
+        "stage mirror repairs denied destination ACLs",
+        test_stage_mirror_repairs_denied_destination_acl,
     ),
     (
         "Steam spell behavior verification uses real upgrades and delivery waits",

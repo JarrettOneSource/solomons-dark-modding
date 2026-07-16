@@ -114,7 +114,6 @@ function Start-MultiplayerInstance {
     $env = @{
         SDMOD_UI_SANDBOX_PRESET = $InstanceLaunchPreset
         SDMOD_LUA_EXEC_PIPE_NAME = "SolomonDarkModLoader_LuaExec_$Instance"
-        SDMOD_HUD_ALLY_LABEL = $RemotePlayerName
     }
     if ($GodMode) {
         $env.SDMOD_MULTIPLAYER_GODMODE = "1"

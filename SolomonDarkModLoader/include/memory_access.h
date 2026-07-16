@@ -73,12 +73,19 @@ public:
     void InvalidateRegion(uintptr_t address);
     void InvalidateRange(uintptr_t address, size_t size);
 
+    // Runtime write watches use PAGE_GUARD. Registering their pages keeps
+    // loader-side validation and reads/writes transparent while the vectored
+    // exception handler owns the guard fault.
+    void RegisterManagedGuardRange(uintptr_t address, size_t size);
+    void UnregisterManagedGuardRange(uintptr_t address, size_t size);
+
 private:
     ProcessMemory() = default;
 
     bool ResolveRegion(uintptr_t address, MemoryRegionInfo* region);
     bool QueryRegion(uintptr_t address, MemoryRegionInfo* region) const;
     bool IsRangeAccessible(uintptr_t address, size_t size, bool require_write);
+    bool IsManagedGuardRange(uintptr_t address, size_t size) const;
 
     static bool HasReadableProtection(DWORD protection);
     static bool HasWritableProtection(DWORD protection);
@@ -86,6 +93,8 @@ private:
 
     mutable std::shared_mutex region_cache_mutex_;
     mutable std::map<uintptr_t, MemoryRegionInfo> region_cache_;
+    mutable std::shared_mutex managed_guard_mutex_;
+    std::map<uintptr_t, uintptr_t> managed_guard_ranges_;
     mutable std::atomic<uintptr_t> module_base_{0};
 };
 

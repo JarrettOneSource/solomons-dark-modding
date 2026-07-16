@@ -3,6 +3,7 @@
 #include "gameplay_hooks/orb_pickup_hook.inl"
 #include "gameplay_hooks/gold_pickup_hook.inl"
 #include "gameplay_hooks/item_drop_pickup_hook.inl"
+#include "gameplay_hooks/powerup_pickup_hook.inl"
 #include "gameplay_hooks/player_mana_hooks.inl"
 #include "gameplay_hooks/player_cast_hooks.inl"
 #include "gameplay_hooks/player_control_hooks.inl"

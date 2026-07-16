@@ -175,20 +175,28 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
                 character_profile.element_id));
         built_snapshot.variant_tertiary = 0;
     } else if (multiplayer::IsLuaControlledParticipant(*participant)) {
-        if (!SeedWizardCloneSourceActorFromNativeDerivedProfile(
-                actor_address,
+        uintptr_t source_actor_address = 0;
+        if (!CreateWizardCloneSourceActor(
+                world_address,
                 native_visual_actor_address,
                 character_profile,
                 x,
                 y,
                 heading,
+                &source_actor_address,
                 &stage_error)) {
             if (error_message != nullptr) {
                 *error_message = stage_error;
             }
             return false;
         }
-        built_snapshot = CaptureActorRenderBuildSnapshot(actor_address);
+        built_snapshot = CaptureActorRenderBuildSnapshot(source_actor_address);
+        if (!DestroyWizardCloneSourceActor(source_actor_address, &stage_error)) {
+            if (error_message != nullptr) {
+                *error_message = stage_error;
+            }
+            return false;
+        }
     } else {
         if (error_message != nullptr) {
             *error_message = "Unsupported gameplay-slot participant controller.";

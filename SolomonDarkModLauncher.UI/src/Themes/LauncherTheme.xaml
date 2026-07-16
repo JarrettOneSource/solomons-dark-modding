@@ -1,26 +1,33 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Color x:Key="WindowBackgroundColor">#1A1B2E</Color>
-    <Color x:Key="TitleBarColor">#12131F</Color>
-    <Color x:Key="CardColor">#242640</Color>
-    <Color x:Key="CardHoverColor">#2E3050</Color>
-    <Color x:Key="AccentColor">#6C63FF</Color>
-    <Color x:Key="AccentHoverColor">#8078FF</Color>
-    <Color x:Key="AccentPressedColor">#5A52E0</Color>
-    <Color x:Key="TextPrimaryColor">#EAEAF0</Color>
-    <Color x:Key="TextSecondaryColor">#8E90AA</Color>
-    <Color x:Key="TextMutedColor">#5C5E78</Color>
-    <Color x:Key="SuccessColor">#4ADE80</Color>
-    <Color x:Key="ErrorColor">#F87171</Color>
-    <Color x:Key="ToggleOnColor">#4ADE80</Color>
-    <Color x:Key="ToggleOffColor">#3A3C56</Color>
-    <Color x:Key="InputBackgroundColor">#1E1F32</Color>
-    <Color x:Key="InputBorderColor">#3A3C56</Color>
-    <Color x:Key="SurfaceElevatedColor">#2E3050</Color>
-    <Color x:Key="BorderSubtleColor">#2E3050</Color>
-    <Color x:Key="ErrorBannerBackgroundColor">#2A1520</Color>
-    <Color x:Key="ErrorBannerBorderColor">#5C2030</Color>
+    <!-- Palette sampled from the game's title screen and UI atlases:
+         weathered gold lettering, plum-black night sky, parchment text,
+         and the control panel's teal "ON" state. -->
+    <Color x:Key="WindowBackgroundColor">#17151C</Color>
+    <Color x:Key="TitleBarColor">#100E14</Color>
+    <Color x:Key="CardColor">#211E28</Color>
+    <Color x:Key="CardHoverColor">#2B2735</Color>
+    <Color x:Key="AccentColor">#C7A44E</Color>
+    <Color x:Key="AccentHoverColor">#DBBA66</Color>
+    <Color x:Key="AccentPressedColor">#A5853C</Color>
+    <Color x:Key="AccentTextColor">#1E1608</Color>
+    <Color x:Key="GoldOutlineBorderColor">#79643A</Color>
+    <Color x:Key="GoldOutlineTextColor">#D6BC7C</Color>
+    <Color x:Key="GoldOutlineHoverColor">#2B2416</Color>
+    <Color x:Key="TextPrimaryColor">#EDE8DC</Color>
+    <Color x:Key="TextSecondaryColor">#A8A093</Color>
+    <Color x:Key="TextMutedColor">#6F6A61</Color>
+    <Color x:Key="SuccessColor">#4FC1A6</Color>
+    <Color x:Key="ErrorColor">#E06A57</Color>
+    <Color x:Key="ToggleOnColor">#4FC1A6</Color>
+    <Color x:Key="ToggleOffColor">#3D3749</Color>
+    <Color x:Key="InputBackgroundColor">#131118</Color>
+    <Color x:Key="InputBorderColor">#3A3448</Color>
+    <Color x:Key="SurfaceElevatedColor">#2E2938</Color>
+    <Color x:Key="BorderSubtleColor">#322D3D</Color>
+    <Color x:Key="ErrorBannerBackgroundColor">#2C1712</Color>
+    <Color x:Key="ErrorBannerBorderColor">#61301F</Color>
 
     <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{StaticResource WindowBackgroundColor}" />
     <SolidColorBrush x:Key="TitleBarBackgroundBrush" Color="{StaticResource TitleBarColor}" />
@@ -29,6 +36,10 @@
     <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
     <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHoverColor}" />
     <SolidColorBrush x:Key="AccentPressedBrush" Color="{StaticResource AccentPressedColor}" />
+    <SolidColorBrush x:Key="AccentTextBrush" Color="{StaticResource AccentTextColor}" />
+    <SolidColorBrush x:Key="GoldOutlineBorderBrush" Color="{StaticResource GoldOutlineBorderColor}" />
+    <SolidColorBrush x:Key="GoldOutlineTextBrush" Color="{StaticResource GoldOutlineTextColor}" />
+    <SolidColorBrush x:Key="GoldOutlineHoverBrush" Color="{StaticResource GoldOutlineHoverColor}" />
     <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}" />
     <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}" />
     <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMutedColor}" />
@@ -47,6 +58,13 @@
         <Setter Property="FontFamily" Value="Segoe UI" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
         <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
+    </Style>
+
+    <Style x:Key="CardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
     </Style>
 
     <Style x:Key="TitleBarButtonStyle" TargetType="Button">
@@ -101,10 +119,10 @@
 
     <Style x:Key="PrimaryButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-        <Setter Property="Foreground" Value="White" />
+        <Setter Property="Foreground" Value="{StaticResource AccentTextBrush}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Padding" Value="32,12" />
+        <Setter Property="Padding" Value="30,11" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Template">
@@ -132,6 +150,42 @@
         </Setter>
     </Style>
 
+    <Style x:Key="OutlineButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource GoldOutlineTextBrush}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Padding" Value="24,10" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{StaticResource GoldOutlineBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource GoldOutlineHoverBrush}" />
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                            <Setter Property="Foreground" Value="{StaticResource AccentHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="#1F1A10" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bg" Property="Opacity" Value="0.4" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="SecondaryButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="{StaticResource SurfaceElevatedBrush}" />
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
@@ -145,17 +199,17 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Bg"
                             Background="{TemplateBinding Background}"
-                            CornerRadius="4"
+                            CornerRadius="5"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="#3A3C56" />
+                            <Setter TargetName="Bg" Property="Background" Value="#3A3448" />
                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="#444666" />
+                            <Setter TargetName="Bg" Property="Background" Value="#443E54" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Bg" Property="Opacity" Value="0.4" />
@@ -219,15 +273,16 @@
                                 Margin="3,0,0,0"
                                 HorizontalAlignment="Left"
                                 CornerRadius="9"
-                                Background="White" />
+                                Background="#EDE8DC" />
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Track" Property="Background" Value="{StaticResource ToggleOnBrush}" />
                             <Setter TargetName="Thumb" Property="Margin" Value="23,0,0,0" />
+                            <Setter TargetName="Thumb" Property="Background" Value="#10251F" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Thumb" Property="Background" Value="#F0F0F0" />
+                            <Setter TargetName="Thumb" Property="Opacity" Value="0.92" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -241,13 +296,13 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
-                    <Border x:Name="ThumbBd" Margin="1" Background="#3A3C56" CornerRadius="3" />
+                    <Border x:Name="ThumbBd" Margin="1" Background="#3A3448" CornerRadius="3" />
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ThumbBd" Property="Background" Value="#4A4C66" />
+                            <Setter TargetName="ThumbBd" Property="Background" Value="#4A4458" />
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
-                            <Setter TargetName="ThumbBd" Property="Background" Value="#5A5C76" />
+                            <Setter TargetName="ThumbBd" Property="Background" Value="#5A5468" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

@@ -148,8 +148,20 @@ def read_log(path: Path) -> str:
         return ""
 
 
+def log_position(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except FileNotFoundError:
+        return 0
+
+
 def log_after(path: Path, offset: int) -> str:
-    return read_log(path)[offset:]
+    try:
+        with path.open("rb") as stream:
+            stream.seek(offset)
+            return stream.read().decode("utf-8", errors="replace")
+    except FileNotFoundError:
+        return ""
 
 
 def query_scene(pipe_name: str) -> str:
@@ -551,8 +563,8 @@ def wait_for_balanced_source_casts(
 
 def verify_single_click(direction: Direction) -> dict[str, object]:
     pre_clear = clear_local_cast_state(direction)
-    source_offset = len(read_log(direction.source_log))
-    receiver_offset = len(read_log(direction.receiver_log))
+    source_offset = log_position(direction.source_log)
+    receiver_offset = log_position(direction.receiver_log)
     before_fire = sample_remote_fire(direction.receiver_pipe, duration=0.15)
     input_output = queue_gameplay_mouse_left(direction, TAP_FRAMES)
     wait_for_source_cast(
@@ -637,8 +649,8 @@ def verify_single_click(direction: Direction) -> dict[str, object]:
 
 def verify_rapid_clicks(direction: Direction, click_count: int = 5) -> dict[str, object]:
     pre_clear = clear_local_cast_state(direction)
-    source_offset = len(read_log(direction.source_log))
-    receiver_offset = len(read_log(direction.receiver_log))
+    source_offset = log_position(direction.source_log)
+    receiver_offset = log_position(direction.receiver_log)
     before_fire = sample_remote_fire(direction.receiver_pipe, duration=0.15)
     input_outputs: list[dict[str, str]] = []
     for _ in range(click_count):
@@ -711,8 +723,8 @@ def verify_hold(direction: Direction) -> dict[str, object]:
     input_attempts: list[dict[str, object]] = []
     for arm_attempt in range(1, 3):
         pre_clear = clear_local_cast_state(direction)
-        source_offset = len(read_log(direction.source_log))
-        receiver_offset = len(read_log(direction.receiver_log))
+        source_offset = log_position(direction.source_log)
+        receiver_offset = log_position(direction.receiver_log)
         before_fire = sample_remote_fire(direction.receiver_pipe, duration=0.15)
         input_output = queue_gameplay_mouse_left(direction, HOLD_FRAMES)
         try:

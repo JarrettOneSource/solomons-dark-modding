@@ -52,7 +52,6 @@ $pipeName = "SolomonDarkModLoader_LuaExec_$Instance"
 $environment = @{
     SDMOD_UI_SANDBOX_PRESET = $Preset
     SDMOD_LUA_EXEC_PIPE_NAME = $pipeName
-    SDMOD_HUD_ALLY_LABEL = $HostName
     SDMOD_MULTIPLAYER_TRANSPORT = "local_udp"
     SDMOD_MULTIPLAYER_ROLE = "client"
     SDMOD_MULTIPLAYER_LOCAL_PORT = [string]$LocalPort

@@ -144,20 +144,22 @@ audit surface:
 - gameplay scene address and embedded `SdItemListRoot` address
 - item row count, item pointer array address, truncation flag, and up to 64
   decoded item rows
-- item row fields: native item address, type id, slot/side field, and potion
-  stack count for potion rows (`0x1B59`)
+- raw stock-list count remains separately visible for diagnosis; base `Item`
+  objects (`0x1B58`) used as empty shop/inventory grid placeholders are excluded
+  from participant-owned item counts and replication
+- item row fields: native item address, type id, exact recipe UID, slot/side
+  field, potion stack count for potion rows (`0x1B59`), and wearable color state
 - gameplay-owned primary/secondary/attachment visual sink lanes, including the
-  current helper item type ids for robe/hat/staff
+  current object address, type id, recipe UID, and wearable color state
 - live verification maps the loader's `primary_visual_lane` field to the
   `0x1428` sink and helper type `0x1B5D` (hat), while
   `secondary_visual_lane` maps to the `0x142C` sink and helper type `0x1B5E`
   (robe); this follows the existing loader offset labels, not the older prose
   shorthand that called `0x1428` the secondary sink
 
-Current gaps:
+Current multiplayer ownership state:
 
-- the inventory API is read-only instrumentation, not participant-owned sync
-- local UDP `StatePacket` protocol v30 carries a bounded full participant-owned
+- local UDP `StatePacket` protocol v30 introduced a bounded full participant-owned
   inventory snapshot with up to 64 decoded item rows and a total/truncated
   marker, so peers can inspect each other's current native inventory item rows
 - `sd.player.get_progression_book_state()` reads the local native progression
@@ -165,14 +167,30 @@ Current gaps:
   mirrors up to 128 participant-owned progression-book/statbook/skillbook/
   spellbook rows plus total/truncated metadata
 - local UDP also mirrors the current ability loadout as participant-owned state
-- host-authorized item/potion carrier pickup now credits the requesting
-  participant's replicated inventory ledger by held item type, slot, and stack
-  count; real per-participant native item roots are still pending
-- no stock powerup pickup hook credits participant-owned roots yet
+- host-authorized item/potion carrier pickup credits the requesting participant
+  by exact item type and recipe identity, wearable color when applicable, slot,
+  and stack count
+- the owning client clones exact recipe-backed native items, transfers them
+  through stock `Inventory_InsertOrStackItem`, and verifies the resulting native
+  inventory quantity; potion stacking uses the same stock insertion ABI
+- `sd.player.equip_inventory_item(recipe_uid)` queues an owner-local stock
+  inventory-to-equipment transaction for hats, robes, staffs, wands, rings,
+  and amulets; it returns the previous item to inventory, dirties the view,
+  refreshes native progression, and verifies exact recipe ownership against
+  the same native holder selected at transaction start
+- protocol v59 carries exact hat, robe, staff/wand, three-ring-slot, and amulet
+  recipe identity plus wearable colors; native remote participant actors
+  reconcile visible lanes and retry divergence, while every peer retains the
+  complete owner-authored equipment snapshot
+- observer processes intentionally retain replicated inventory rows rather than
+  a second participant-owned native inventory root
+- host-authorized Random Skill, Damage x4, and Bonus Skill powerups apply to
+  participant-owned progression/status and are verified in both ownership
+  directions
 - the native progression book is exposed as progression-book, statbook, skillbook,
   and spellbook views so every instance can inspect the same owner-authored rows
 
-Multiplayer exposure added for the first loot slice:
+Multiplayer exposure:
 
 - `sd.world.get_replicated_loot()` exposes host-owned run loot metadata received
   by a client, including gold drops (`0x7DC`), health/mana orbs (`0x7DB`), and
@@ -190,6 +208,11 @@ Multiplayer exposure added for the first loot slice:
   the native book table, and verifies that each peer receives the other's
   participant-owned starter potion rows, compact statbook rows, and ability
   loadout
+- `tools/verify_multiplayer_native_item_inventory_sync.py` proves an exact
+  recipe-backed item pickup enters the owning client's stock inventory, can be
+  equipped by recipe UID, returns the prior item to inventory, advances both
+  inventory revisions, and reaches the host's native remote actor with matching
+  type, recipe, and wearable color
 
 ## Live Runtime Check
 
@@ -603,11 +626,10 @@ and duplicate pickup attempts are rejected without a second credit.
 For multiplayer, synced loot is required, but pickup credit must be
 participant-owned. Gold, item, potion, orb, and powerup drops should be
 host-owned lifecycle objects. `LootSnapshot` now drives client-side
-presentation actors for host-owned gold and health/mana orb drops; those actors
-are marked as replicated presentations and stock pickup ticks are suppressed on
-the client so they cannot mutate local/global progression state. Item and potion
-carrier drops still expose identity and held-item metadata, but their visual
-materialization needs a separate native factory/setup pass. Gold has the first
+presentation actors for host-owned gold, health/mana orb, potion, and exact
+recipe-backed item drops; those actors are marked as replicated presentations
+and stock pickup ticks are suppressed on the client so they cannot mutate
+local/global progression state. Gold has the first
 host-authoritative pickup slice: clients call `sd.world.request_loot_pickup(network_drop_id)`, the host
 sanity-checks run nonce, range, duplicate pickup state, and drop identity, then
 confirms or denies the request. Accepted gold pickup results credit the owning
@@ -622,14 +644,15 @@ kind, raw value, lifetime, and position. Accepted orb pickup results apply the
 host-authored health or mana resource value to the requesting participant's
 runtime vitals and to the client's local HP/MP presentation. Item/potion
 carrier pickup now uses the same host request/result boundary for type `0x7DD`:
-the host snapshots `drop + 0x148` held-item metadata, clears that held-item
-pointer on accepted pickup, and credits the requesting participant's replicated
-inventory state by item type, slot, and stack count. The verified potion path
-now transfers a native held potion into the owning client's active inventory
-through `Inventory_InsertOrStackItem`, confirms the native stack delta, and
-deduplicates by run/drop identity. Powerup, arbitrary item/equipment,
-spellbook, and statbook reward paths still need their own participant-owned
-native mutation seams.
+the host snapshots `drop + 0x148` held-item metadata, including recipe identity
+and wearable color, clears that held-item pointer on accepted pickup, and
+credits the requesting participant's replicated inventory state. The owning
+client transfers a native held object into its active inventory through
+`Inventory_InsertOrStackItem`, confirms the exact native identity delta, and
+deduplicates by run/drop identity. Potion stacking and a recipe-backed wearable
+pickup/equip round trip are proven live. Powerup, independently rewarded
+spellbook/statbook, and non-shop quest reward paths still need
+participant-owned native mutation seams.
 
 `python3 tools/verify_multiplayer_gold_pickup_authority.py --attempts 3` is the
 focused proof for that gold slice. The latest run verified amount/tier identity,
@@ -642,42 +665,65 @@ focused proof for health/mana orb pickup authority. The latest run verified both
 resource kinds, accepted host resource deltas, host participant-vital update,
 client local HP/MP convergence, metadata despawn, and duplicate rejection.
 
-### Remaining gaps after native potion insertion
+### Hub inventory-shop ownership boundary
 
-- arbitrary item materialization/insertion behind the owner vtable method at
-  `+0x140` remains unresolved; the potion carrier/factory and stock potion
-  insert/stack path are now proven
+`InventoryShop` (`0x004F59A0`, vtable `0x0079044C`) and its transfer callback
+at `0x0056CD00` do not implement a shared merchant catalog or spend gold. The
+Luthacus' Scavenged Goods screen moves objects between the active player's
+backpack and that player's persistent scavenged storage. That storage is
+participant-private: peers synchronize the owner's resulting active backpack,
+not the contents of another player's storage container.
+
+`tools/verify_multiplayer_hub_inventory_shop_sync.py` drives the stock dialog
+and inventory screen with real window input. It transfers a starter potion into
+Luthacus storage and back, checks both inventory revisions on the observing
+peer, proves the other participant's native backpack never changes, and
+exercises the placeholder-heavy stock list created by the grid UI. Base `Item`
+placeholder objects remain visible only through `raw_item_count`; they never
+become replicated inventory rows.
+
+The gold-spending `Shop` callback at `0x0056BF70` remains stock-owned on the
+purchasing process. A live Fomentius purchase spends only the buyer's native
+gold, stacks the bought potion only in that buyer's active backpack, and then
+advances the participant gold and inventory revisions. The other process keeps
+its own native gold and backpack unchanged while observing the buyer's exact
+post-purchase values.
+
+`PerkShop` (`0x0056C340`) is also owner-local. The focused Hagatha proof buys a
+600-gold Life Charm through the stock two-stage catalog button. It raises only
+the buyer's native max/current HP from 50 to 62.5; the other player remains at
+50 HP and keeps all gold/items, while its remote participant view converges to
+the buyer's 62.5 HP and exact post-purchase gold. Both merchant cases are in
+`tools/verify_multiplayer_hub_shop_ownership.py`.
+
+### Remaining gaps after native recipe-item equipment
+
 - remote observer/host views still use replicated rows rather than a second
-  stock-native inventory root; ownership-sensitive UI/equip code must stay on
-  the owning client's real root
+  stock-native inventory root; this is the intended ownership boundary because
+  stock inventory/equip/storage/merchant code consumes the one process-local
+  scene root without a participant parameter
+- exact equipment sync covers hat, robe, staff, wand, all three ring sinks, and
+  the amulet sink; the focused live matrix passes every supported item type,
+  including remote wearable-color convergence for hat and robe
+- nested sack ownership and inventory-screen browsing have not had an
+  owner-sensitive multiplayer pass
 - per-run owner-authored spellbook/statbook rows and native participant-clone
   reconciliation are verified; durable storage/lifetime rules are still needed
   before loot or progression can mutate those books independently across runs
-- shop / trader purchase paths still need a separate economy ownership pass;
-  `0x0056BF70` is already visible as a likely future seam because it spends
-  global gold through `Gold_ChangeGlobal(-price, 0)` and inserts into the active
-  inventory root
+- the remaining Hagatha charm/curse catalog needs a behavior matrix beyond the
+  verified Life Charm slice; invisible loadout identity only needs replication
+  when a peer cannot reconstruct the observable stat/status/cast outcome
 
 ## Current Best Next Targets
 
-- extend the reliable multiplayer loot-drop lifecycle packet/event contract
-  beyond verified gold, health/mana orb, and item/potion carrier request/result
-  slices to powerup carriers
-- generalize the proven owner-client potion transfer into typed native
-  insertion policies for real equipment/item classes, without treating a
-  replicated row as a native object
+- verify third-ring unlock behavior through the stock inventory UI; protocol
+  capture already includes the progression-gated third sink, while the semantic
+  equip API intentionally fills only the two unconditional ring slots
 - extend the verified per-run spellbook/statbook ownership into durable reward
   and persistence rules before new loot paths mutate those books
-- preserve the verified potion insert/stack path while adding exact native
-  object construction, ownership, and lifetime rules for non-potion items
-- hook `GoldActor_TickPickup (0x005E66B0)` so physical walk-over pickup routes
-  through the verified request/result path instead of global currency mutation
-- hook `Orb_TickPickup (0x005E62E0)` only if physical walk-over orb pickup must
-  route through the same participant-owned request/result path; networked orb
-  request/result pickup is already verified
-- decide whether powerups should be participant-owned rewards; if yes, hook
-  `Bonus_TickPickup (0x006039C0)`
-- switch `InventoryScreen + 0x88` to the selected participant root when opening
-  or changing the controlled participant inventory
-- only after pickup ownership works, spiderweb into shops / traders, where the
-  global-gold and active-root assumptions are separate from walk-over loot
+- keep `InventoryScreen + 0x88` on the local owner root and verify nested sack
+  browsing does not cross participant boundaries; the Luthacus top-level
+  storage boundary is now explicitly participant-private
+- extend the Hagatha pass across charms/curses that alter movement, potion use,
+  casting, or statuses, and verify each result through the existing participant
+  stat/status/effect channels

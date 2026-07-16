@@ -38,8 +38,10 @@ IMPORTANT BETA NOTES
   closed instead of attempting to connect.
 - Player bodies, movement, vitals, deaths, spells, skill/stat books, level-up
   upgrades, upgraded spell behavior, enemies, drops, and the verified potion
-  inventory path are synchronized. Arbitrary native equipment insertion,
-  powerups, and shop/trader ownership are still incomplete.
+  and item inventory paths are synchronized. Equipment, powerups, and verified
+  storage/shop actions are also synchronized. Nested sacks, the remaining
+  Hagatha catalog, non-shop quest rewards, and durable cross-session inventory
+  and book persistence are still incomplete.
 - Level-up cohorts pause together. After choosing, the UI shows Waiting on N
   players. The host resumes everyone after all choices arrive, or auto-picks
   for an idle player after 60 seconds. A forced choice is applied and closed on

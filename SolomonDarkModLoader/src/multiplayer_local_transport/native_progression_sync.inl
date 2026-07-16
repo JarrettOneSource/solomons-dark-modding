@@ -246,6 +246,39 @@ bool ApplyAuthoritativeParticipantDerivedStats(
     return complete;
 }
 
+void ReconcileRemoteParticipantDamageX4State(
+    const ParticipantInfo& participant,
+    uintptr_t progression_address) {
+    if (progression_address == 0 ||
+        kProgressionDamageX4RemainingTicksOffset == 0 ||
+        (participant.runtime.transient_status_flags &
+         ParticipantTransientStatusFlagSnapshotValid) == 0) {
+        return;
+    }
+
+    const auto desired_ticks =
+        (participant.runtime.transient_status_flags &
+         ParticipantTransientStatusFlagDamageX4) != 0
+            ? (std::clamp)(
+                  participant.runtime.damage_x4_remaining_ticks,
+                  std::int32_t{1},
+                  kParticipantDamageX4MaxDurationTicks)
+            : 0;
+    std::int32_t native_ticks = 0;
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.TryReadField(
+            progression_address,
+            kProgressionDamageX4RemainingTicksOffset,
+            &native_ticks) ||
+        native_ticks == desired_ticks) {
+        return;
+    }
+    (void)memory.TryWriteField(
+        progression_address,
+        kProgressionDamageX4RemainingTicksOffset,
+        desired_ticks);
+}
+
 void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
     const auto runtime_state = SnapshotRuntimeState();
     std::unordered_set<std::uint64_t> live_remote_participant_ids;
@@ -272,6 +305,13 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
         }
         const uintptr_t progression_address =
             gameplay_state.progression_runtime_state_address;
+        ReconcileRemoteParticipantDamageX4State(
+            participant,
+            progression_address);
+        const bool defer_progression_book_reconcile =
+            IsLocalTransportHost() &&
+            HasUnresolvedIssuedLevelUpOfferForParticipant(
+                participant.participant_id);
 
         auto& checkpoint =
             g_local_transport.native_progression_reconcile_by_participant[
@@ -410,7 +450,13 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
         }
 
         NativeProgressionBookTableView table;
-        if (!participant.owned_progression.initialized ||
+        if (defer_progression_book_reconcile) {
+            // The client applies its stock picker choice before the explicit
+            // authority request reaches the host. Do not let its state packet
+            // apply that rank to the remote clone first; the accepted choice
+            // packet is the sole mutation while this offer is unresolved.
+            complete = false;
+        } else if (!participant.owned_progression.initialized ||
             participant.owned_progression.progression_book_entries.empty()) {
             complete = false;
         } else if (!TryReadNativeProgressionBookTable(progression_address, &table)) {

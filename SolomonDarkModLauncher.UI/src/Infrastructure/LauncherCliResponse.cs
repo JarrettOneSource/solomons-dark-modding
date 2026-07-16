@@ -72,6 +72,7 @@ internal sealed class LauncherCliLaunch
 
 internal sealed class LauncherCliMultiplayerSession
 {
+    public string LaunchToken { get; set; } = string.Empty;
     public bool Enabled { get; set; }
     public bool IsHost { get; set; }
     public string Phase { get; set; } = string.Empty;

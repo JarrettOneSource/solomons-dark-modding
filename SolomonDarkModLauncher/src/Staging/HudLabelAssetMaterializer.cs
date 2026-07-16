@@ -7,9 +7,10 @@ internal static class HudLabelAssetMaterializer
     private const int UiBundleRecordSize = 45;
     private const int AllyLabelRecordIndex = 0;
     private const string AllyLabelEnvironmentVariable = "SDMOD_HUD_ALLY_LABEL";
+    private const string DefaultAllyLabel = "ALLY";
     private const int GeneratedAllyLabelX = 459;
     private const int GeneratedAllyLabelY = 53;
-    private const int GeneratedAllyLabelWidth = 96;
+    private const int GeneratedAllyLabelWidth = 128;
     private const int GeneratedAllyLabelHeight = 7;
 
     public static HudLabelAssetResult Materialize(string stageRootPath)
@@ -28,22 +29,7 @@ internal static class HudLabelAssetMaterializer
             throw new FileNotFoundException("The staged UI.png file was not found.", uiImagePath);
         }
 
-        var stockRecord = ReadUiSpriteRecord(uiBundlePath, AllyLabelRecordIndex);
         var allyLabel = ResolveAllyLabel();
-        if (string.IsNullOrWhiteSpace(allyLabel))
-        {
-            return new HudLabelAssetResult(
-                false,
-                string.Empty,
-                uiBundlePath,
-                uiImagePath,
-                AllyLabelRecordIndex,
-                stockRecord.X,
-                stockRecord.Y,
-                stockRecord.Width,
-                stockRecord.Height);
-        }
-
         var record = new UiSpriteRecord(
             GeneratedAllyLabelX,
             GeneratedAllyLabelY,
@@ -71,34 +57,9 @@ internal static class HudLabelAssetMaterializer
 
     private static string ResolveAllyLabel()
     {
-        return (Environment.GetEnvironmentVariable(AllyLabelEnvironmentVariable) ?? string.Empty).Trim();
-    }
-
-    private static UiSpriteRecord ReadUiSpriteRecord(string uiBundlePath, int recordIndex)
-    {
-        var bytes = File.ReadAllBytes(uiBundlePath);
-        var offset = checked(recordIndex * UiBundleRecordSize);
-        if (offset + UiBundleRecordSize > bytes.Length)
-        {
-            throw new InvalidOperationException(
-                $"UI.bundle does not contain record {recordIndex}; length={bytes.Length} recordSize={UiBundleRecordSize}.");
-        }
-
-        var textureX = ReadSingle(bytes, offset);
-        var textureY = ReadSingle(bytes, offset + 4);
-        var width = BitConverter.ToInt32(bytes, offset + 16);
-        var height = BitConverter.ToInt32(bytes, offset + 20);
-
-        return new UiSpriteRecord(
-            CheckedIntegralCoordinate(textureX, "x"),
-            CheckedIntegralCoordinate(textureY, "y"),
-            width,
-            height);
-    }
-
-    private static float ReadSingle(byte[] bytes, int offset)
-    {
-        return BitConverter.ToSingle(bytes, offset);
+        var configuredLabel =
+            (Environment.GetEnvironmentVariable(AllyLabelEnvironmentVariable) ?? string.Empty).Trim();
+        return string.IsNullOrEmpty(configuredLabel) ? DefaultAllyLabel : configuredLabel;
     }
 
     private static void WriteUiSpriteRecord(string uiBundlePath, int recordIndex, UiSpriteRecord record)
@@ -130,23 +91,6 @@ internal static class HudLabelAssetMaterializer
     private static void WriteInt32(byte[] bytes, int offset, int value)
     {
         BitConverter.GetBytes(value).CopyTo(bytes, offset);
-    }
-
-    private static int CheckedIntegralCoordinate(float value, string fieldName)
-    {
-        if (!float.IsFinite(value))
-        {
-            throw new InvalidOperationException($"UI.bundle record {AllyLabelRecordIndex} has non-finite {fieldName}={value}.");
-        }
-
-        var rounded = (int)MathF.Round(value);
-        if (MathF.Abs(value - rounded) > 0.01f)
-        {
-            throw new InvalidOperationException(
-                $"UI.bundle record {AllyLabelRecordIndex} has non-integral {fieldName}={value}.");
-        }
-
-        return rounded;
     }
 
     private static void RenderLabelIntoUiImage(string uiImagePath, UiSpriteRecord record, string label)

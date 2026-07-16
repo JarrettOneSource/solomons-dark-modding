@@ -103,6 +103,18 @@ const char* LootDropKindLabel(LootDropKind kind) {
     return "Unknown";
 }
 
+const char* PowerupRewardKindLabel(PowerupRewardKind kind) {
+    switch (kind) {
+    case PowerupRewardKind::BonusSkillPoint:
+        return "BonusSkillPoint";
+    case PowerupRewardKind::RandomSkillRank:
+        return "RandomSkillRank";
+    case PowerupRewardKind::DamageX4:
+        return "DamageX4";
+    }
+    return "Unknown";
+}
+
 float StockLootBehaviorDistance(LootDropKind kind, float pickup_range) {
     if (!std::isfinite(pickup_range) || pickup_range <= 0.0f) {
         return 0.0f;

@@ -1,3 +1,11 @@
+bool IsActorCurrentLocalPlayerSlotZero(uintptr_t actor_address);
+bool IsManualSpawnerPrimaryCastControlGraceActive();
+bool IsManualSpawnerPrimaryTargetActor(uintptr_t actor_address);
+bool ApplyManualSpawnerPrimaryTargetState(
+    uintptr_t actor_address,
+    uintptr_t selection_pointer,
+    uintptr_t target_actor_address);
+
 namespace {
 
 constexpr std::size_t kSecondaryCastGameplayBeltArrayOffset = 0x5EC;
@@ -435,6 +443,20 @@ void __fastcall HookPurePrimaryAttackDispatch(void* self, void* /*unused_edx*/) 
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    if (IsRunLifecycleManualEnemySpawnerTestModeEnabled() &&
+        IsActorCurrentLocalPlayerSlotZero(actor_address) &&
+        IsManualSpawnerPrimaryCastControlGraceActive()) {
+        const auto manual_spawner_target_actor =
+            g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.load(
+                std::memory_order_acquire);
+        if (IsManualSpawnerPrimaryTargetActor(manual_spawner_target_actor)) {
+            (void)ApplyManualSpawnerPrimaryTargetState(
+                actor_address,
+                0,
+                manual_spawner_target_actor);
+        }
+    }
+
     bool observe_emission = false;
     std::uint64_t bot_id = 0;
     std::uint32_t cast_sequence = 0;

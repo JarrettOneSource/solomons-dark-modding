@@ -6,6 +6,13 @@ namespace SolomonDarkModLauncher.UI.ViewModels;
 
 internal sealed class ModItemViewModel : ViewModelBase
 {
+    private static readonly Brush LuaChipBackground = Freeze(new SolidColorBrush(Color.FromRgb(0x1E, 0x2C, 0x38)));
+    private static readonly Brush LuaChipForeground = Freeze(new SolidColorBrush(Color.FromRgb(0x7F, 0xB4, 0xD9)));
+    private static readonly Brush NativeChipBackground = Freeze(new SolidColorBrush(Color.FromRgb(0x33, 0x26, 0x1A)));
+    private static readonly Brush NativeChipForeground = Freeze(new SolidColorBrush(Color.FromRgb(0xDF, 0xA9, 0x6B)));
+    private static readonly Brush DefaultChipBackground = Freeze(new SolidColorBrush(Color.FromRgb(0x2A, 0x28, 0x30)));
+    private static readonly Brush DefaultChipForeground = Freeze(new SolidColorBrush(Color.FromRgb(0xB9, 0xB4, 0xA8)));
+
     private bool isEnabled_;
     private bool suppressToggleNotification_;
 
@@ -14,14 +21,9 @@ internal sealed class ModItemViewModel : ViewModelBase
         Id = mod.Id;
         Name = string.IsNullOrWhiteSpace(mod.Name) ? mod.Id : mod.Name;
         Version = $"v{mod.Version}";
-        Priority = mod.Priority;
         RuntimeKind = mod.RuntimeKind;
-        RuntimeKindUpper = RuntimeKind.ToUpperInvariant();
-        OverlaySummary = mod.OverlayCount == 0
-            ? "No overlay files"
-            : $"{mod.OverlayCount} overlay file{(mod.OverlayCount == 1 ? string.Empty : "s")}";
-        DependencySummary = mod.RequiredMods.Count == 0
-            ? "Standalone"
+        RequiresText = mod.RequiredMods.Count == 0
+            ? string.Empty
             : $"Requires {string.Join(", ", mod.RequiredMods)}";
         RootPath = mod.RootPath;
         ManifestPath = mod.ManifestPath;
@@ -36,28 +38,30 @@ internal sealed class ModItemViewModel : ViewModelBase
     public string Id { get; }
     public string Name { get; }
     public string Version { get; }
-    public int Priority { get; }
     public string RuntimeKind { get; }
-    public string RuntimeKindUpper { get; }
-    public string OverlaySummary { get; }
-    public string DependencySummary { get; }
+    public string RequiresText { get; }
     public string RootPath { get; }
     public string ManifestPath { get; }
 
-    public string PriorityText => $"Priority {Priority}";
-
-    public Brush RuntimeBadgeBackground => RuntimeKind switch
+    public string RuntimeChipText => RuntimeKind switch
     {
-        "native" => new SolidColorBrush(Color.FromRgb(0x43, 0x1F, 0x12)),
-        "lua" => new SolidColorBrush(Color.FromRgb(0x1D, 0x29, 0x3B)),
-        _ => new SolidColorBrush(Color.FromRgb(0x24, 0x24, 0x24))
+        "native" => "Native",
+        "lua" => "Lua",
+        _ => "Data"
     };
 
-    public Brush RuntimeBadgeForeground => RuntimeKind switch
+    public Brush RuntimeChipBackground => RuntimeKind switch
     {
-        "native" => new SolidColorBrush(Color.FromRgb(0xF7, 0xB2, 0x68)),
-        "lua" => new SolidColorBrush(Color.FromRgb(0x8E, 0xC5, 0xFF)),
-        _ => Brushes.Gainsboro
+        "native" => NativeChipBackground,
+        "lua" => LuaChipBackground,
+        _ => DefaultChipBackground
+    };
+
+    public Brush RuntimeChipForeground => RuntimeKind switch
+    {
+        "native" => NativeChipForeground,
+        "lua" => LuaChipForeground,
+        _ => DefaultChipForeground
     };
 
     public bool IsEnabled
@@ -82,5 +86,11 @@ internal sealed class ModItemViewModel : ViewModelBase
         suppressToggleNotification_ = true;
         IsEnabled = value;
         suppressToggleNotification_ = false;
+    }
+
+    private static Brush Freeze(Brush brush)
+    {
+        brush.Freeze();
+        return brush;
     }
 }

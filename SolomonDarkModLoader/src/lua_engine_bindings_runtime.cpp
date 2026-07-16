@@ -5,7 +5,10 @@
 #include "multiplayer_runtime_state.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -14,6 +17,116 @@
 
 namespace sdmod::detail {
 namespace {
+
+template <std::size_t Size>
+void PushByteArray(lua_State* state, const std::array<std::uint8_t, Size>& bytes) {
+    lua_createtable(state, static_cast<int>(bytes.size()), 0);
+    for (std::size_t index = 0; index < bytes.size(); ++index) {
+        lua_pushinteger(state, static_cast<lua_Integer>(bytes[index]));
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+}
+
+void PushEquippedItemIdentity(
+    lua_State* state,
+    const multiplayer::ParticipantEquippedItemState& item) {
+    lua_createtable(state, 0, 2);
+    lua_pushinteger(state, static_cast<lua_Integer>(item.type_id));
+    lua_setfield(state, -2, "type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(item.recipe_uid));
+    lua_setfield(state, -2, "recipe_uid");
+}
+
+void PushEquipmentIdentityState(
+    lua_State* state,
+    const multiplayer::ParticipantEquipmentState& equipment) {
+    lua_createtable(state, 0, 6);
+    lua_pushboolean(state, equipment.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    PushEquippedItemIdentity(state, equipment.hat);
+    lua_setfield(state, -2, "hat");
+    PushEquippedItemIdentity(state, equipment.robe);
+    lua_setfield(state, -2, "robe");
+    PushEquippedItemIdentity(state, equipment.weapon);
+    lua_setfield(state, -2, "weapon");
+    lua_createtable(state, static_cast<int>(equipment.rings.size()), 0);
+    for (std::size_t index = 0; index < equipment.rings.size(); ++index) {
+        PushEquippedItemIdentity(state, equipment.rings[index]);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+    lua_setfield(state, -2, "rings");
+    PushEquippedItemIdentity(state, equipment.amulet);
+    lua_setfield(state, -2, "amulet");
+}
+
+void PushParticipantEquipmentState(
+    lua_State* state,
+    const multiplayer::ParticipantRuntimeInfo& runtime,
+    const multiplayer::ParticipantOwnedProgressionState& owned_progression) {
+    lua_createtable(state, 0, 11);
+    lua_pushboolean(
+        state,
+        owned_progression.equipment.valid ||
+            (runtime.presentation_flags &
+             multiplayer::ParticipantPresentationFlagEquipmentState) != 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(owned_progression.equipment_revision));
+    lua_setfield(state, -2, "revision");
+
+    const auto push_wearable = [&](std::uint32_t type_id,
+                                   std::uint32_t recipe_uid,
+                                   const auto& color_state) {
+        lua_createtable(state, 0, 3);
+        lua_pushinteger(state, static_cast<lua_Integer>(type_id));
+        lua_setfield(state, -2, "type_id");
+        lua_pushinteger(state, static_cast<lua_Integer>(recipe_uid));
+        lua_setfield(state, -2, "recipe_uid");
+        PushByteArray(state, color_state);
+        lua_setfield(state, -2, "color_state");
+    };
+    push_wearable(
+        runtime.primary_visual_link_type_id,
+        runtime.primary_visual_link_recipe_uid,
+        runtime.primary_visual_link_color_block);
+    lua_setfield(state, -2, "primary");
+    push_wearable(
+        runtime.secondary_visual_link_type_id,
+        runtime.secondary_visual_link_recipe_uid,
+        runtime.secondary_visual_link_color_block);
+    lua_setfield(state, -2, "secondary");
+
+    lua_createtable(state, 0, 2);
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(runtime.attachment_visual_link_type_id));
+    lua_setfield(state, -2, "type_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(runtime.attachment_visual_link_recipe_uid));
+    lua_setfield(state, -2, "recipe_uid");
+    lua_setfield(state, -2, "attachment");
+    PushEquippedItemIdentity(state, owned_progression.equipment.hat);
+    lua_setfield(state, -2, "hat");
+    PushEquippedItemIdentity(state, owned_progression.equipment.robe);
+    lua_setfield(state, -2, "robe");
+    PushEquippedItemIdentity(state, owned_progression.equipment.weapon);
+    lua_setfield(state, -2, "weapon");
+    lua_createtable(
+        state,
+        static_cast<int>(owned_progression.equipment.rings.size()),
+        0);
+    for (std::size_t index = 0;
+         index < owned_progression.equipment.rings.size();
+         ++index) {
+        PushEquippedItemIdentity(state, owned_progression.equipment.rings[index]);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+    lua_setfield(state, -2, "rings");
+    PushEquippedItemIdentity(state, owned_progression.equipment.amulet);
+    lua_setfield(state, -2, "amulet");
+}
 
 void PushOwnedProgressionBookEntry(
     lua_State* state,
@@ -88,6 +201,8 @@ void PushOwnedProgressionState(
     lua_setfield(state, -2, "gold_revision");
     lua_pushinteger(state, static_cast<lua_Integer>(progression.inventory_revision));
     lua_setfield(state, -2, "inventory_revision");
+    lua_pushinteger(state, static_cast<lua_Integer>(progression.equipment_revision));
+    lua_setfield(state, -2, "equipment_revision");
     lua_pushinteger(state, static_cast<lua_Integer>(progression.spellbook_revision));
     lua_setfield(state, -2, "spellbook_revision");
     lua_pushinteger(state, static_cast<lua_Integer>(progression.statbook_revision));
@@ -147,9 +262,11 @@ void PushOwnedProgressionState(
     lua_createtable(state, static_cast<int>(progression.inventory_items.size()), 0);
     int lua_index = 1;
     for (const auto& item : progression.inventory_items) {
-        lua_createtable(state, 0, 3);
+        lua_createtable(state, 0, 4);
         lua_pushinteger(state, static_cast<lua_Integer>(item.type_id));
         lua_setfield(state, -2, "type_id");
+        lua_pushinteger(state, static_cast<lua_Integer>(item.recipe_uid));
+        lua_setfield(state, -2, "recipe_uid");
         lua_pushinteger(state, static_cast<lua_Integer>(item.slot));
         lua_setfield(state, -2, "slot");
         lua_pushinteger(state, static_cast<lua_Integer>(item.stack_count));
@@ -158,6 +275,8 @@ void PushOwnedProgressionState(
         ++lua_index;
     }
     lua_setfield(state, -2, "inventory_items");
+    PushEquipmentIdentityState(state, progression.equipment);
+    lua_setfield(state, -2, "equipment");
 
     lua_pushinteger(state, static_cast<lua_Integer>(progression.progression_book_entry_total_count));
     lua_setfield(state, -2, "progression_book_entry_total_count");
@@ -343,7 +462,7 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
     lua_createtable(state, static_cast<int>(runtime.participants.size()), 0);
     int lua_index = 1;
     for (const auto& participant : runtime.participants) {
-        lua_createtable(state, 0, 26);
+        lua_createtable(state, 0, 27);
         lua_pushinteger(state, static_cast<lua_Integer>(participant.participant_id));
         lua_setfield(state, -2, "participant_id");
         lua_pushinteger(state, static_cast<lua_Integer>(participant.steam_id));
@@ -405,12 +524,25 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
             static_cast<lua_Integer>(
                 participant.runtime.poison_remaining_ticks));
         lua_setfield(state, -2, "poison_remaining_ticks");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                participant.runtime.damage_x4_remaining_ticks));
+        lua_setfield(
+            state,
+            -2,
+            "damage_x4_remaining_ticks");
         lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.position_x));
         lua_setfield(state, -2, "x");
         lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.position_y));
         lua_setfield(state, -2, "y");
         lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.heading));
         lua_setfield(state, -2, "heading");
+        PushParticipantEquipmentState(
+            state,
+            participant.runtime,
+            participant.owned_progression);
+        lua_setfield(state, -2, "equipment");
         PushOwnedProgressionState(state, participant.owned_progression);
         lua_setfield(state, -2, "owned_progression");
         lua_rawseti(state, -2, static_cast<lua_Integer>(lua_index));

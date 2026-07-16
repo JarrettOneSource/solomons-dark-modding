@@ -355,17 +355,23 @@ LONG CALLBACK RuntimeDebug_WriteWatchExceptionHandler(EXCEPTION_POINTERS* except
             return EXCEPTION_CONTINUE_SEARCH;
         }
 
-        for (const auto& page : pages_to_rearm) {
-            (void)TrySetPageProtection(page.page_base, page.base_protect | PAGE_GUARD);
-        }
-
+        std::vector<std::vector<std::uint8_t>> after_bytes_by_hit;
+        after_bytes_by_hit.reserve(hits_to_log.size());
         for (const auto& hit : hits_to_log) {
             std::vector<std::uint8_t> after_bytes((std::min)(hit.size, kMaxLoggedBytes), 0);
             (void)sdmod::ProcessMemory::Instance().TryRead(
                 hit.value_address != 0 ? hit.value_address : hit.resolved_address,
                 after_bytes.data(),
                 after_bytes.size());
-            LogWriteWatchHit(hit, after_bytes);
+            after_bytes_by_hit.push_back(std::move(after_bytes));
+        }
+
+        for (const auto& page : pages_to_rearm) {
+            (void)TrySetPageProtection(page.page_base, page.base_protect | PAGE_GUARD);
+        }
+
+        for (size_t index = 0; index < hits_to_log.size(); ++index) {
+            LogWriteWatchHit(hits_to_log[index], after_bytes_by_hit[index]);
         }
 
         return EXCEPTION_CONTINUE_EXECUTION;

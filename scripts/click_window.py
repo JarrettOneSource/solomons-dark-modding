@@ -48,6 +48,8 @@ def click_screen_point(
     hold_ms: int,
     global_only: bool,
     button: str,
+    drag_client_point: tuple[int, int] | None = None,
+    drag_screen_point: tuple[int, int] | None = None,
 ) -> None:
     user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
     user32.SetCursorPos.restype = wintypes.BOOL
@@ -70,6 +72,7 @@ def click_screen_point(
         wm_buttonup = 0x0202
         mk_button = 0x0001
     client_lparam = ((client_y & 0xFFFF) << 16) | (client_x & 0xFFFF)
+    release_client_lparam = client_lparam
 
     if not user32.SetCursorPos(screen_x, screen_y):
         raise OSError(ctypes.get_last_error(), "SetCursorPos failed")
@@ -77,19 +80,43 @@ def click_screen_point(
     window_button_down = False
     global_button_down = False
     try:
+        user32.mouse_event(mouseeventf_down, 0, 0, 0, 0)
+        global_button_down = True
         if not global_only:
             user32.SendMessageW(hwnd, wm_mousemove, 0, client_lparam)
             user32.SendMessageW(hwnd, wm_buttondown, mk_button, client_lparam)
             window_button_down = True
-        user32.mouse_event(mouseeventf_down, 0, 0, 0, 0)
-        global_button_down = True
-        if hold_ms > 0:
+        if drag_client_point is not None and drag_screen_point is not None:
+            drag_hold_ms = max(hold_ms, 200)
+            drag_x, drag_y = drag_client_point
+            drag_screen_x, drag_screen_y = drag_screen_point
+            drag_lparam = ((drag_y & 0xFFFF) << 16) | (drag_x & 0xFFFF)
+            release_client_lparam = drag_lparam
+            step_count = max(6, min(24, drag_hold_ms // 40))
+            time.sleep(drag_hold_ms / 4000.0)
+            for step in range(1, step_count + 1):
+                fraction = step / step_count
+                step_screen_x = round(screen_x + (drag_screen_x - screen_x) * fraction)
+                step_screen_y = round(screen_y + (drag_screen_y - screen_y) * fraction)
+                if not user32.SetCursorPos(step_screen_x, step_screen_y):
+                    raise OSError(ctypes.get_last_error(), "SetCursorPos failed while dragging")
+                if not global_only:
+                    step_client_x = round(client_x + (drag_x - client_x) * fraction)
+                    step_client_y = round(client_y + (drag_y - client_y) * fraction)
+                    step_lparam = (
+                        ((step_client_y & 0xFFFF) << 16)
+                        | (step_client_x & 0xFFFF)
+                    )
+                    user32.SendMessageW(hwnd, wm_mousemove, mk_button, step_lparam)
+                time.sleep(drag_hold_ms / (2000.0 * step_count))
+            time.sleep(drag_hold_ms / 4000.0)
+        elif hold_ms > 0:
             time.sleep(hold_ms / 1000.0)
     finally:
-        if window_button_down:
-            user32.SendMessageW(hwnd, wm_buttonup, 0, client_lparam)
         if global_button_down:
             user32.mouse_event(mouseeventf_up, 0, 0, 0, 0)
+        if window_button_down:
+            user32.SendMessageW(hwnd, wm_buttonup, 0, release_client_lparam)
 
 
 def release_mouse_button(button: str) -> None:
@@ -106,6 +133,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pid", type=int, help="Require the window to belong to this process ID.")
     parser.add_argument("--x", type=float, help="Client X coordinate. Use pixels by default or a 0-1 fraction with --relative.")
     parser.add_argument("--y", type=float, help="Client Y coordinate. Use pixels by default or a 0-1 fraction with --relative.")
+    parser.add_argument("--drag-x", type=float, help="Optional drag destination X coordinate in the same coordinate space as --x.")
+    parser.add_argument("--drag-y", type=float, help="Optional drag destination Y coordinate in the same coordinate space as --y.")
     parser.add_argument("--relative", action="store_true", help="Interpret --x and --y as 0-1 fractions of client width and height.")
     parser.add_argument("--virtual-width", type=float, help="Scale pixel coordinates from this virtual client width.")
     parser.add_argument("--virtual-height", type=float, help="Scale pixel coordinates from this virtual client height.")
@@ -162,6 +191,8 @@ def main() -> int:
         return 0
     if args.x is None or args.y is None:
         parser.error("--x and --y are required unless --release-only is used.")
+    if (args.drag_x is None) != (args.drag_y is None):
+        parser.error("--drag-x and --drag-y must be provided together.")
 
     window = find_window(args.title, args.exact_title, args.pid)
     if args.activate:
@@ -197,6 +228,27 @@ def main() -> int:
         absolute_x = origin_x + int(round(click_x))
         absolute_y = origin_y + int(round(click_y))
 
+    drag_client_point = None
+    drag_screen_point = None
+    if args.drag_x is not None and args.drag_y is not None:
+        drag_x = args.drag_x
+        drag_y = args.drag_y
+        if args.screen:
+            drag_screen_x = int(round(drag_x))
+            drag_screen_y = int(round(drag_y))
+            drag_x, drag_y = screen_to_client(window.hwnd, drag_screen_x, drag_screen_y)
+        else:
+            if args.relative:
+                drag_x *= client_width
+                drag_y *= client_height
+            elif args.virtual_width is not None and args.virtual_height is not None:
+                drag_x = (drag_x / args.virtual_width) * client_width
+                drag_y = (drag_y / args.virtual_height) * client_height
+            drag_screen_x = origin_x + int(round(drag_x))
+            drag_screen_y = origin_y + int(round(drag_y))
+        drag_client_point = (int(round(drag_x)), int(round(drag_y)))
+        drag_screen_point = (drag_screen_x, drag_screen_y)
+
     click_screen_point(
         window.hwnd,
         int(round(click_x)),
@@ -206,12 +258,20 @@ def main() -> int:
         max(0, args.hold_ms),
         args.global_only,
         args.button,
+        drag_client_point,
+        drag_screen_point,
     )
     time.sleep(max(0, args.post_delay_ms) / 1000.0)
+    action = "dragged" if drag_client_point is not None else "clicked"
+    destination = (
+        f" to client={drag_client_point} screen={drag_screen_point}"
+        if drag_client_point is not None
+        else ""
+    )
     print(
-        f"{args.button}-clicked {window.title} at "
+        f"{args.button}-{action} {window.title} at "
         f"client=({int(round(click_x))},{int(round(click_y))}) "
-        f"screen=({absolute_x},{absolute_y})"
+        f"screen=({absolute_x},{absolute_y}){destination}"
     )
     return 0
 

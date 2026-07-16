@@ -554,24 +554,16 @@ def run_poison_trial(direction: Direction, label: str, timeout: float) -> dict[s
         )
 
     deadline = time.monotonic() + min(timeout, 8.0)
-    owner_damaged: dict[str, Any] = {}
-    mirror_damaged: dict[str, Any] = {}
+    owner_damage_observed: dict[str, Any] = {}
     while time.monotonic() < deadline:
-        owner_damaged = query_poison_status(direction.owner_pipe)
-        mirror_damaged = query_poison_status(
-            direction.observer_pipe,
-            participant_id=direction.participant_id,
-        )
-        if (
-            owner_damaged["hp"] < owner_before["hp"] - 0.01
-            and abs(mirror_damaged["hp"] - owner_damaged["hp"]) <= 0.2
-        ):
+        owner_damage_observed = query_poison_status(direction.owner_pipe)
+        if owner_damage_observed["hp"] < owner_before["hp"] - 0.01:
             break
         time.sleep(0.05)
     else:
         raise VerifyFailure(
-            f"{direction.name} poison did not damage only its owner: "
-            f"owner={owner_damaged} mirror={mirror_damaged}"
+            f"{direction.name} owner poison did not deal native damage: "
+            f"owner={owner_damage_observed}"
         )
 
     clear = clear_local_native_poison_status(direction.owner_pipe)
@@ -587,12 +579,19 @@ def run_poison_trial(direction: Direction, label: str, timeout: float) -> dict[s
         poisoned=False,
         timeout=timeout,
     )
+    owner_damaged, mirror_damaged = wait_for_owner_mirror_damage_convergence(
+        direction,
+        owner_before["hp"],
+        0.01,
+        timeout,
+    )
     return {
         "owner_before": owner_before,
         "mirror_before": mirror_before,
         "injection": injection,
         "owner_active": owner_active,
         "mirror_active": mirror_active,
+        "owner_damage_observed": owner_damage_observed,
         "owner_damaged": owner_damaged,
         "mirror_damaged": mirror_damaged,
         "owner_hp_delta": owner_before["hp"] - owner_damaged["hp"],

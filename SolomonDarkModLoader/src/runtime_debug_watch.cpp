@@ -102,7 +102,11 @@ extern "C" void RuntimeDebug_Shutdown() {
         rt::g_runtime_debug_state.active_traces.clear();
         rt::g_runtime_debug_state.watches.clear();
         for (const auto& [page_base, state] : rt::g_runtime_debug_state.guarded_pages) {
-            (void)rt::TrySetPageProtection(page_base, state.base_protect);
+            if (rt::TrySetPageProtection(page_base, state.base_protect)) {
+                sdmod::ProcessMemory::Instance().UnregisterManagedGuardRange(
+                    page_base,
+                    rt::GetSystemPageSize());
+            }
         }
         rt::g_runtime_debug_state.guarded_pages.clear();
         rt::g_runtime_debug_state.write_watches.clear();

@@ -162,7 +162,7 @@ try {
             throw "Extracted desktop launcher did not open a window."
         }
         $result.uiWindowTitle = $uiProcess.MainWindowTitle
-        if ($result.uiWindowTitle -notlike "Solomon Dark Multiplayer Beta*") {
+        if ($result.uiWindowTitle -notlike "Solomon Dark Revived*") {
             throw "Unexpected desktop launcher title: $($result.uiWindowTitle)"
         }
 
@@ -170,6 +170,8 @@ try {
         $automationRoot = [System.Windows.Automation.AutomationElement]::FromHandle(
             $uiProcess.MainWindowHandle)
         $catalogDeadline = (Get-Date).AddSeconds(20)
+        $modSummaryPattern =
+            '^\d+ of ' + [regex]::Escape([string]$result.modCount) + ' enabled$'
         $visibleText = @()
         while ((Get-Date) -lt $catalogDeadline -and -not $uiProcess.HasExited) {
             $elements = $automationRoot.FindAll(
@@ -182,8 +184,12 @@ try {
                         $name
                     }
                 })
-            if ($visibleText -contains "Catalog refreshed") {
-                $result.uiCatalogStatus = "Catalog refreshed"
+            $catalogReady = $visibleText -contains "Ready"
+            $catalogSummary = $visibleText |
+                Where-Object { $_ -match $modSummaryPattern } |
+                Select-Object -First 1
+            if ($catalogReady -and $catalogSummary) {
+                $result.uiCatalogStatus = "Ready"
                 break
             }
             $launcherResolutionError = $visibleText |
@@ -195,7 +201,7 @@ try {
             Start-Sleep -Milliseconds 100
             $uiProcess.Refresh()
         }
-        if ($result.uiCatalogStatus -ne "Catalog refreshed") {
+        if ($result.uiCatalogStatus -ne "Ready") {
             $diagnostics = ($visibleText |
                 Where-Object { $_ -match "failed|error|launcher|catalog" } |
                 Select-Object -Unique) -join "; "

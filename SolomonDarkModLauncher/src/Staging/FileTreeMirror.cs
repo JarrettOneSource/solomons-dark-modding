@@ -87,14 +87,50 @@ internal static class FileTreeMirror
             return;
         }
 
+        CopyStageFileWithAccessRecovery(
+            sourceFile,
+            destinationFile,
+            destinationDirectoryPath,
+            destinationPath);
+        counters.CopiedFileCount++;
+    }
+
+    private static void CopyStageFileWithAccessRecovery(
+        FileInfo sourceFile,
+        FileInfo destinationFile,
+        string destinationDirectoryPath,
+        string destinationPath)
+    {
+        try
+        {
+            CopyStageFile(sourceFile, destinationFile, destinationPath);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            if (destinationFile.Exists)
+            {
+                PrepareForDeletion(destinationFile);
+            }
+            else
+            {
+                PrepareForDeletion(new DirectoryInfo(destinationDirectoryPath));
+            }
+            CopyStageFile(sourceFile, destinationFile, destinationPath);
+        }
+    }
+
+    private static void CopyStageFile(
+        FileInfo sourceFile,
+        FileInfo destinationFile,
+        string destinationPath)
+    {
+        destinationFile.Refresh();
         if (destinationFile.Exists)
         {
             ClearRestrictedAttributes(destinationFile);
         }
-
         File.Copy(sourceFile.FullName, destinationPath, overwrite: true);
         File.SetLastWriteTimeUtc(destinationPath, sourceFile.LastWriteTimeUtc);
-        counters.CopiedFileCount++;
     }
 
     private static bool FilesMatch(FileInfo sourceFile, FileInfo destinationFile)
@@ -154,11 +190,11 @@ internal static class FileTreeMirror
 
     private static void PrepareForDeletion(FileSystemInfo entry)
     {
-        ClearRestrictedAttributes(entry);
         if (OperatingSystem.IsWindows())
         {
             GrantCurrentUserFullControl(entry.FullName, entry is DirectoryInfo);
         }
+        ClearRestrictedAttributes(entry);
     }
 
     private static void ClearRestrictedAttributes(FileSystemInfo entry)
@@ -215,6 +251,9 @@ internal static class FileTreeMirror
         RunWindowsTool("takeown.exe", isDirectory
             ? ["/F", path, "/R", "/D", "Y"]
             : ["/F", path]);
+        RunWindowsTool("icacls.exe", isDirectory
+            ? [path, "/remove:d", currentUserName, "/T", "/C"]
+            : [path, "/remove:d", currentUserName]);
         RunWindowsTool("icacls.exe", isDirectory
             ? [path, "/grant", $"{currentUserName}:F", "/T", "/C"]
             : [path, "/grant", $"{currentUserName}:F"]);

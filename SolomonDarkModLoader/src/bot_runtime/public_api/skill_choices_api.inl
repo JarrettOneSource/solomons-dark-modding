@@ -506,6 +506,88 @@ bool SyncLocalPlayerProgressionToSharedLevelUpAndRollChoices(
     return true;
 }
 
+bool RollParticipantSkillChoiceOptions(
+    std::uint64_t participant_id,
+    std::vector<BotSkillChoiceOption>* options,
+    std::string* error_message) {
+    auto fail = [&](std::string message) {
+        if (error_message != nullptr) {
+            *error_message = std::move(message);
+        }
+        if (options != nullptr) {
+            options->clear();
+        }
+        return false;
+    };
+
+    if (participant_id == 0) {
+        return fail("participant skill choice roll requires a participant id");
+    }
+    if (options == nullptr) {
+        return fail("participant skill choice roll requires an option sink");
+    }
+    options->clear();
+
+    SDModParticipantGameplayState gameplay_state;
+    if (!TryGetParticipantGameplayState(participant_id, &gameplay_state) ||
+        !gameplay_state.available ||
+        gameplay_state.progression_runtime_state_address == 0) {
+        return fail("participant skill choice roll requires a materialized progression");
+    }
+
+    DWORD roll_exception = 0;
+    int requested_choice_count = 0;
+    if (!RollNativeSkillChoiceOptions(
+            gameplay_state.progression_runtime_state_address,
+            options,
+            &roll_exception,
+            &requested_choice_count)) {
+        return fail(
+            "participant native skill choices roll failed exception=0x" +
+            HexString(roll_exception));
+    }
+    return true;
+}
+
+bool RollLocalPlayerSkillChoiceOptions(
+    std::vector<BotSkillChoiceOption>* options,
+    std::string* error_message) {
+    auto fail = [&](std::string message) {
+        if (error_message != nullptr) {
+            *error_message = std::move(message);
+        }
+        if (options != nullptr) {
+            options->clear();
+        }
+        return false;
+    };
+
+    if (options == nullptr) {
+        return fail("local skill choice roll requires an option sink");
+    }
+    options->clear();
+
+    SDModPlayerState player_state;
+    if (!TryGetPlayerState(&player_state) ||
+        !player_state.valid ||
+        player_state.progression_address == 0) {
+        return fail("local skill choice roll requires a live player progression");
+    }
+
+    DWORD roll_exception = 0;
+    int requested_choice_count = 0;
+    if (!RollNativeSkillChoiceOptions(
+            player_state.progression_address,
+            options,
+            &roll_exception,
+            &requested_choice_count)) {
+        return fail(
+            "local native skill choices roll failed exception=0x" +
+            HexString(roll_exception));
+    }
+    return true;
+}
+
 bool ApplyParticipantSkillChoiceOption(
     std::uint64_t participant_id,
     const BotSkillChoiceOption& option,

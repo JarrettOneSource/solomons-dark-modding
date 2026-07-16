@@ -154,6 +154,9 @@ bool QueueLocalLootPickupRequest(
     std::uint32_t* request_sequence,
     std::string* error_message,
     const LootPickupRequestCapture* capture = nullptr);
+bool QueueLocalHostPowerupPickup(
+    uintptr_t actor_address,
+    const LootPickupRequestCapture* capture = nullptr);
 bool MarkLocalInventoryNativeConverged(std::uint32_t inventory_revision);
 void PublishHostLevelUpBarrierOffers(
     std::int32_t level,
@@ -185,7 +188,7 @@ bool DebugPublishHostLevelUpOffer(
 bool SetRemoteNativeProgressionReconcileSuppressedForTest(
     std::uint64_t participant_id,
     bool suppressed);
-bool ShouldSuppressLocalLevelUpFanoutForDebug();
+bool ShouldSuppressLocalLevelUpFanout();
 bool QueueLocalLevelUpChoice(
     std::uint64_t offer_id,
     std::int32_t option_index,

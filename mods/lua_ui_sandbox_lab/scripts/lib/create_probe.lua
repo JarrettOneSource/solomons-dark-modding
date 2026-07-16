@@ -432,7 +432,7 @@ local function new(ctx)
 
     if type(sd.debug.trace_function) == "function" then
       pcall(sd.debug.trace_function, addresses.trace_create_event_handler, "create.event_handler")
-      pcall(sd.debug.trace_function, addresses.trace_player_refresh_runtime, "player.refresh_runtime_handles")
+      pcall(sd.debug.trace_function, addresses.trace_player_initialize_control_brain, "player.initialize_control_brain")
       pcall(sd.debug.trace_function, addresses.trace_actor_progression_refresh, "actor.progression_refresh")
       pcall(sd.debug.trace_function, addresses.trace_actor_build_render_descriptor_from_source, "actor.build_render_descriptor_from_source")
       pcall(sd.debug.trace_function, addresses.trace_wizard_source_lookup, "create.wizard_source_lookup")

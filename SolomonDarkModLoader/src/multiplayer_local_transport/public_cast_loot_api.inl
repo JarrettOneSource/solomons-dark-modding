@@ -123,6 +123,16 @@ bool InitializeLocalTransport() {
         return true;
     }
 
+    std::random_device random;
+    g_local_transport.local_session_nonce =
+        (static_cast<std::uint64_t>(random()) << 32) ^
+        static_cast<std::uint64_t>(random()) ^
+        GetTickCount64() ^
+        (static_cast<std::uint64_t>(GetCurrentProcessId()) << 16);
+    if (g_local_transport.local_session_nonce == 0) {
+        g_local_transport.local_session_nonce = 1;
+    }
+
     if (g_local_transport.backend == GameplayTransportBackend::Steam) {
         if (g_local_transport.local_peer_id == 0) {
             Log("Multiplayer Steam transport requested without an initialized Steam identity.");
@@ -133,7 +143,9 @@ bool InitializeLocalTransport() {
         Log(
             "Multiplayer Steam gameplay transport initialized. role=" +
             std::string(g_local_transport.is_host ? "host" : "client") +
-            " participant_id=" + std::to_string(g_local_transport.local_peer_id));
+            " participant_id=" + std::to_string(g_local_transport.local_peer_id) +
+            " session_nonce=" +
+            std::to_string(g_local_transport.local_session_nonce));
         return true;
     }
 
@@ -179,11 +191,14 @@ bool InitializeLocalTransport() {
             << " local_port=" << g_local_transport.local_port
             << " remote=" << g_local_transport.remote_host << ":" << g_local_transport.remote_port
             << " participant_id=" << g_local_transport.local_peer_id;
+    message << " session_nonce=" << g_local_transport.local_session_nonce;
     Log(message.str());
     return true;
 }
 
 void ShutdownLocalTransport() {
+    ShutdownLocalLevelUpOptionRollHook();
+    sdmod::ClearHostLootDropDeactivationState();
     if (g_local_transport.socket_handle != INVALID_SOCKET) {
         closesocket(g_local_transport.socket_handle);
     }
@@ -205,6 +220,7 @@ void ShutdownLocalTransport() {
         g_queued_local_enemy_damage_claims.clear();
         g_queued_host_participant_vitals_corrections.clear();
         g_queued_local_loot_pickup_requests.clear();
+        g_queued_local_host_powerup_pickups.clear();
         g_queued_local_level_up_choices.clear();
         g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
         g_have_queued_local_air_chain_frame = false;
@@ -220,8 +236,11 @@ void TickLocalTransport(std::uint64_t now_ms) {
 
     RefreshLocalParticipantFromGameState();
     ReceivePackets(now_ms);
+    ProcessCompletedHostLootPickups();
+    ProcessQueuedLocalHostPowerupPickups(now_ms);
     ServiceClientHostRunExitFollow(now_ms);
     ReconcileRemoteParticipantNativeProgression(now_ms);
+    ProcessPendingHostPowerupPreparations(now_ms);
     ProcessPendingHostLevelUpOffers(now_ms);
     ProcessHostLevelUpBarrier(now_ms);
     BroadcastHostLevelUpBarrierState(now_ms, false);

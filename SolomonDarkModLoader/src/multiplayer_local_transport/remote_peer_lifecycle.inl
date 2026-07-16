@@ -1,6 +1,7 @@
 void ResetRemoteParticipantSessionEpoch(
     std::uint64_t participant_id,
-    bool configured_authority_disconnected) {
+    bool configured_authority_disconnected,
+    bool preserve_session_nonce_history) {
     MarkHostLevelUpBarrierParticipantDisconnected(
         participant_id,
         static_cast<std::uint64_t>(GetTickCount64()));
@@ -17,6 +18,10 @@ void ResetRemoteParticipantSessionEpoch(
     }
 
     g_local_transport.last_state_packet_sequence_by_participant.erase(participant_id);
+    if (!preserve_session_nonce_history) {
+        g_local_transport.session_nonce_by_participant.erase(participant_id);
+        g_local_transport.retired_session_nonces_by_participant.erase(participant_id);
+    }
     g_local_transport.last_cast_sequence_by_participant.erase(participant_id);
     g_local_transport.last_spell_effect_packet_sequence_by_participant.erase(
         participant_id);
@@ -44,6 +49,7 @@ void ResetRemoteParticipantSessionEpoch(
             continue;
         }
         g_local_transport.native_applied_level_up_result_offer_ids.erase(it->first);
+        g_local_transport.confirmed_auto_pick_level_up_offer_ids.erase(it->first);
         it = g_local_transport.issued_level_up_offers_by_id.erase(it);
     }
 

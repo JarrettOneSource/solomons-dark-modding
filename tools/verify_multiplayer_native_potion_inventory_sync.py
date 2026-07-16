@@ -296,7 +296,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             f"duplicate potion request changed native stack: expected={expected_stack} actual={final_stack}"
         )
     result["native_apply_log"] = client_native_apply_log_lines(network_drop_id)
-    if not any("applied authoritative potion pickup" in line for line in result["native_apply_log"]):
+    if not any("applied authoritative item pickup" in line for line in result["native_apply_log"]):
         raise VerifyFailure(
             f"client log lacks native inventory apply evidence for drop {network_drop_id}: "
             f"{result['native_apply_log']}"

@@ -43,6 +43,14 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         ProcessMemory::Instance().ResolveGameAddressOrZero(kSpellBuilderFinalize);
     const auto gameplay_hud_render_dispatch =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayHudRenderDispatch);
+    const auto gameplay_ui_glyph_draw =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayUiGlyphDraw);
+    const auto gameplay_ui_centered_glyph_draw =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayUiCenteredGlyphDraw);
+    const auto gameplay_ally_label_glyph_return =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayAllyLabelGlyphReturn);
+    const auto gameplay_ui_bundle_global =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayUiBundleGlobal);
     const auto gameplay_string_assign =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayStringAssign);
     const auto gameplay_exact_text_object_render =
@@ -62,6 +70,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     const auto gold_pickup = ProcessMemory::Instance().ResolveGameAddressOrZero(kGoldPickupCaller);
     const auto orb_pickup = ProcessMemory::Instance().ResolveGameAddressOrZero(kOrbPickup);
     const auto item_drop_pickup = ProcessMemory::Instance().ResolveGameAddressOrZero(kItemDropPickupCaller);
+    const auto powerup_pickup =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kPowerupPickup);
     if (mouse_helper == 0 || helper == 0 || player_actor_tick == 0 ||
         player_actor_progression_handle == 0 ||
         player_actor_apply_mana_delta == 0 ||
@@ -75,6 +85,11 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         fire_ember_ctor == 0 ||
         spell_cast_dispatcher == 0 ||
         gameplay_hud_render_dispatch == 0 ||
+        gameplay_ui_glyph_draw == 0 ||
+        gameplay_ui_centered_glyph_draw == 0 ||
+        gameplay_ally_label_glyph_return == 0 ||
+        kGameplayUiAllyLabelGlyphOffset == 0 ||
+        gameplay_ui_bundle_global == 0 ||
         gameplay_string_assign == 0 ||
         gameplay_exact_text_object_render == 0 ||
         gameplay_exact_text_object_global == 0 ||
@@ -87,7 +102,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         monster_pathfinding_refresh_target == 0 ||
         gold_pickup == 0 ||
         orb_pickup == 0 ||
-        item_drop_pickup == 0) {
+        item_drop_pickup == 0 ||
+        powerup_pickup == 0) {
         if (error_message != nullptr) {
             *error_message = "Unable to resolve gameplay input, lifecycle, tracked actor, or native HUD text helpers.";
         }
@@ -696,6 +712,46 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
+    if (!InstallX86Hook(
+            reinterpret_cast<void*>(gameplay_ui_glyph_draw),
+            reinterpret_cast<void*>(&HookGameplayUiGlyphDraw),
+            kGameplayUiGlyphDrawHookPatchSize,
+            &g_gameplay_keyboard_injection.gameplay_ui_glyph_draw_hook,
+            &hook_error)) {
+        ShutdownGameplayKeyboardInjection();
+        if (error_message != nullptr) {
+            *error_message = "Failed to install gameplay ally-label glyph hook: " + hook_error;
+        }
+        return false;
+    }
+
+    if (!InstallX86Hook(
+            reinterpret_cast<void*>(gameplay_ui_centered_glyph_draw),
+            reinterpret_cast<void*>(&HookGameplayUiAllyLabelGlyphDraw),
+            kGameplayUiCenteredGlyphDrawHookPatchSize,
+            &g_gameplay_keyboard_injection.gameplay_ui_ally_label_glyph_draw_hook,
+            &hook_error)) {
+        ShutdownGameplayKeyboardInjection();
+        if (error_message != nullptr) {
+            *error_message = "Failed to install gameplay ally-label centered glyph hook: " + hook_error;
+        }
+        return false;
+    }
+
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(powerup_pickup),
+            reinterpret_cast<void*>(&HookPowerupPickupTick),
+            kPowerupPickupHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.powerup_pickup_hook,
+            &hook_error)) {
+        ShutdownGameplayKeyboardInjection();
+        if (error_message != nullptr) {
+            *error_message =
+                "Failed to install powerup pickup hook: " + hook_error;
+        }
+        return false;
+    }
+
     g_gameplay_keyboard_injection.initialized = true;
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
@@ -726,6 +782,10 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
         g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.clear();
         g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.clear();
+        g_gameplay_keyboard_injection.pending_host_loot_drop_deactivations.clear();
+        g_gameplay_keyboard_injection.pending_host_loot_drop_deactivation_ids.clear();
+        g_gameplay_keyboard_injection.completed_host_loot_drop_deactivations.clear();
+        g_gameplay_keyboard_injection.host_loot_drop_deactivation_run_nonce = 0;
         g_gameplay_keyboard_injection.pending_gameplay_region_switch_requests.clear();
         g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();
         g_gameplay_keyboard_injection.pending_multiplayer_dampen_effect_requests.clear();
@@ -766,6 +826,12 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " spell_builder_reset=" + HexString(spell_builder_reset) +
         " spell_builder_finalize=" + HexString(spell_builder_finalize) +
         " hud_case_dispatch=" + HexString(gameplay_hud_render_dispatch) +
+        " gameplay_ui_glyph_draw=" + HexString(gameplay_ui_glyph_draw) +
+        " gameplay_ui_centered_glyph_draw=" + HexString(gameplay_ui_centered_glyph_draw) +
+        " gameplay_ally_label_glyph_return=" + HexString(gameplay_ally_label_glyph_return) +
+        " gameplay_ui_bundle_global=" + HexString(gameplay_ui_bundle_global) +
+        " gameplay_ui_ally_label_glyph_offset=" +
+            HexString(static_cast<uintptr_t>(kGameplayUiAllyLabelGlyphOffset)) +
         " gameplay_string_assign=" + HexString(gameplay_string_assign) +
         " gameplay_exact_text_object_render=" + HexString(gameplay_exact_text_object_render) +
         " gameplay_exact_text_object_global=" + HexString(gameplay_exact_text_object_global) +
@@ -778,7 +844,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " hostile_target_refresh=" + HexString(monster_pathfinding_refresh_target) +
         " gold_pickup=" + HexString(gold_pickup) +
         " orb_pickup=" + HexString(orb_pickup) +
-        " item_drop_pickup=" + HexString(item_drop_pickup));
+        " item_drop_pickup=" + HexString(item_drop_pickup) +
+        " powerup_pickup=" + HexString(powerup_pickup));
     return true;
 }
 
@@ -804,6 +871,8 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.spell_action_builder_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_reset_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.spell_builder_finalize_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_ui_ally_label_glyph_draw_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_ui_glyph_draw_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
@@ -814,6 +883,7 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.gold_pickup_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.orb_pickup_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.powerup_pickup_hook);
     RestoreNativeCastGatePatches();
     {
         std::lock_guard<std::mutex> lock(g_native_spell_effect_actor_mutex);
@@ -857,8 +927,13 @@ void ShutdownGameplayKeyboardInjection() {
     {
         std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
         g_gameplay_keyboard_injection.pending_reward_spawn_requests.clear();
+        g_gameplay_keyboard_injection.pending_local_inventory_equip_requests.clear();
         g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.clear();
         g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.clear();
+        g_gameplay_keyboard_injection.pending_host_loot_drop_deactivations.clear();
+        g_gameplay_keyboard_injection.pending_host_loot_drop_deactivation_ids.clear();
+        g_gameplay_keyboard_injection.completed_host_loot_drop_deactivations.clear();
+        g_gameplay_keyboard_injection.host_loot_drop_deactivation_run_nonce = 0;
         g_gameplay_keyboard_injection.pending_gameplay_region_switch_requests.clear();
         g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();
         g_gameplay_keyboard_injection.pending_multiplayer_dampen_effect_requests.clear();

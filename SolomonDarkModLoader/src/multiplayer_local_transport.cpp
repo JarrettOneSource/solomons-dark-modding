@@ -17,6 +17,7 @@
 #include "native_enemy_lifecycle.h"
 #include "native_spell_stats.h"
 #include "steam_bootstrap.h"
+#include "x86_hook.h"
 
 #include <algorithm>
 #include <array>
@@ -28,8 +29,10 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <limits>
 #include <mutex>
+#include <random>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -43,6 +46,19 @@
 namespace sdmod::multiplayer {
 
 int CaptureLocalTransportSehCode(EXCEPTION_POINTERS* exception_pointers, DWORD* exception_code);
+bool IssueHostLevelUpOfferForParticipant(
+    std::uint64_t target_participant_id,
+    std::uint32_t run_nonce,
+    std::int32_t level,
+    std::int32_t experience,
+    std::vector<BotSkillChoiceOption> options,
+    bool suppress_native_picker);
+bool IssueLocalHostSelfLevelUpOffer(
+    std::int32_t level,
+    std::int32_t experience,
+    std::vector<BotSkillChoiceOption> options,
+    bool suppress_native_picker,
+    std::string* error_message);
 
 namespace {
 
@@ -103,9 +119,11 @@ constexpr float kFireballExplodeConfigFootToWorldUnits = 2.4f;
 constexpr float kLootPickupDropDriftMaxDistance = 160.0f;
 constexpr float kLootPickupResourceEpsilon = 0.001f;
 constexpr float kLootPickupMaxResourceDelta = 10000.0f;
+constexpr std::uint64_t kPowerupPreparationMaterializationTimeoutMs = 60000;
 constexpr std::uint32_t kOrbRewardNativeTypeId = 0x07DB;
 constexpr std::uint32_t kGoldRewardNativeTypeId = 0x07DC;
 constexpr std::uint32_t kItemDropNativeTypeId = 0x07DD;
+constexpr std::uint32_t kPowerupRewardNativeTypeId = 0x07F6;
 constexpr std::uint32_t kPotionItemTypeId = 0x1B59;
 constexpr std::uint32_t kEtherPrimaryNativeTypeId = 0x07D3;
 constexpr std::uint32_t kFireballPrimaryNativeTypeId = 0x07D4;
@@ -123,11 +141,19 @@ constexpr std::size_t kOrbRewardValueOffset = 0x140;
 constexpr std::size_t kOrbRewardLifetimeOffset = 0x144;
 constexpr std::size_t kOrbRewardMotionOffset = 0x148;
 constexpr std::size_t kOrbRewardProgressOffset = 0x14C;
+constexpr std::size_t kPowerupRewardKindOffset = 0x13C;
+constexpr std::size_t kPowerupRewardMotionOffset = 0x150;
+constexpr std::size_t kPowerupRewardLifetimeOffset = 0x154;
+constexpr std::size_t kPowerupRewardProgressOffset = 0x158;
+constexpr std::size_t kPowerupRewardValueOffset = 0x15C;
+constexpr std::size_t kPowerupRewardAuxiliaryOffset = 0x160;
 constexpr float kOrbHealthRewardScale = 25.0f;
 constexpr float kOrbManaRewardScale = 40.0f;
 constexpr std::size_t kAttachmentStaffVisualStateOffset = 0x84;
 constexpr std::size_t kVisualLinkColorBlockOffset = 0x88;
 constexpr std::uint32_t kAttachmentStaffItemTypeId = 0x1B5C;
+constexpr std::uint32_t kHatItemTypeId = 0x1B5D;
+constexpr std::uint32_t kRobeItemTypeId = 0x1B5E;
 constexpr int kMaxPacketsPerTick = 64;
 constexpr float kRenderDriveEffectTimerEpsilon = 0.001f;
 constexpr std::size_t kProgressionLevelUpPendingChoiceCountOffset = 0x44;
@@ -143,7 +169,32 @@ constexpr std::size_t kLevelUpScreenCloseVtableOffset = 0x18;
 
 using NativeLevelUpScreenCreateFn = void(__thiscall*)(void* progression, char preserve_existing_flag);
 using NativeLevelUpScreenCloseFn = void(__thiscall*)(void* screen);
-using NativeActorWorldUnregisterFn = void(__thiscall*)(void* self, void* actor, char remove_from_container);
+struct NativeLevelUpOptionArray {
+    uintptr_t vtable = 0;
+    std::int32_t* values = nullptr;
+    std::int32_t count = 0;
+    std::uint16_t flags = 0;
+    std::uint16_t padding = 0;
+};
+
+static_assert(sizeof(NativeLevelUpOptionArray) == 0x10, "Native level-up option array layout changed");
+
+using NativeLevelUpOptionRollFn =
+    void(__thiscall*)(void* progression, int desired_count, NativeLevelUpOptionArray* output);
+
+struct ArmedLocalLevelUpOptionRoll {
+    uintptr_t progression_address = 0;
+    std::uint64_t offer_id = 0;
+    std::size_t option_count = 0;
+    std::array<std::int32_t, kLevelUpOfferMaxOptions> option_ids = {};
+};
+
+X86Hook g_local_level_up_option_roll_hook;
+std::mutex g_local_level_up_option_roll_mutex;
+ArmedLocalLevelUpOptionRoll g_armed_local_level_up_option_roll;
+std::atomic<std::uint64_t> g_last_applied_local_level_up_option_roll_offer_id{0};
+
+void ShutdownLocalLevelUpOptionRollHook();
 
 struct RenderDriveEffectState {
     float timer = 0.0f;
@@ -179,9 +230,19 @@ struct LootPickupResultPayload {
     float resulting_mana_current = 0.0f;
     float resulting_mana_max = 0.0f;
     std::uint32_t item_type_id = 0;
+    std::uint32_t item_recipe_uid = 0;
+    bool item_color_state_valid = false;
+    std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> item_color_state = {};
     std::int32_t item_slot = -1;
     std::int32_t stack_count = 0;
     std::uint32_t inventory_revision = 0;
+    PowerupRewardKind powerup_kind = PowerupRewardKind::BonusSkillPoint;
+    std::int32_t powerup_skill_entry_index = -1;
+    std::int32_t powerup_skill_apply_count = 0;
+    std::uint16_t powerup_skill_resulting_active = 0;
+    std::int32_t damage_x4_remaining_ticks = 0;
+    std::uint32_t spellbook_revision = 0;
+    std::uint32_t statbook_revision = 0;
 };
 
 RenderDriveEffectState NormalizeRenderDriveEffectState(float timer, float progress) {
@@ -216,11 +277,22 @@ bool TryReadAttachmentStaffVisualState(
 bool TryReadVisualLinkColorBlock(
     const SDModEquipVisualLaneState& visual_lane,
     std::uint32_t* type_id,
+    std::uint32_t* recipe_uid,
     std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes>* color_block) {
     if (type_id == nullptr ||
+        recipe_uid == nullptr ||
         color_block == nullptr ||
-        visual_lane.current_object_address == 0 ||
-        visual_lane.current_object_type_id == 0) {
+        visual_lane.holder_address == 0) {
+        return false;
+    }
+
+    *type_id = visual_lane.current_object_type_id;
+    *recipe_uid = visual_lane.current_object_recipe_uid;
+    *color_block = {};
+    if (visual_lane.current_object_address == 0) {
+        return true;
+    }
+    if (visual_lane.current_object_type_id == 0) {
         return false;
     }
 
@@ -232,7 +304,6 @@ bool TryReadVisualLinkColorBlock(
         return false;
     }
 
-    *type_id = visual_lane.current_object_type_id;
     return true;
 }
 
@@ -346,6 +417,32 @@ struct QueuedLocalLootPickupRequest {
     float requester_position_y = 0.0f;
     float drop_position_x = 0.0f;
     float drop_position_y = 0.0f;
+};
+
+struct QueuedLocalHostPowerupPickup {
+    uintptr_t actor_address = 0;
+    LootPickupRequestCapture capture;
+};
+
+struct PreparedPowerupReward {
+    PowerupRewardKind kind = PowerupRewardKind::BonusSkillPoint;
+    std::vector<BotSkillChoiceOption> skill_choice_options;
+    BotSkillChoiceOption skill_rank_option;
+    std::uint16_t skill_rank_resulting_active = 0;
+    std::int32_t damage_x4_duration_ticks = 0;
+};
+
+struct PendingHostLootPickup {
+    LootPickupRequestPacket packet{};
+    TransportPeerEndpoint endpoint;
+    LootDropKind drop_kind = LootDropKind::Unknown;
+    LootPickupResultPayload payload;
+    PreparedPowerupReward powerup;
+    uintptr_t actor_address = 0;
+    std::uint64_t queued_ms = 0;
+    bool host_self = false;
+    bool powerup_prepared = false;
+    bool awaiting_powerup_preparation = false;
 };
 
 struct IssuedLevelUpOffer {
@@ -508,7 +605,7 @@ struct LocalTransportState {
     bool initialized = false;
     bool winsock_initialized = false;
     bool is_host = false;
-    bool suppress_local_level_up_fanout_for_debug = false;
+    bool suppress_local_level_up_fanout = false;
     GameplayTransportBackend backend = GameplayTransportBackend::LocalUdp;
     SOCKET socket_handle = INVALID_SOCKET;
     std::uint16_t local_port = 0;
@@ -524,6 +621,7 @@ struct LocalTransportState {
     std::uint64_t last_client_host_run_request_ms = 0;
     ClientHostRunExitFollow client_host_run_exit_follow;
     std::uint32_t next_sequence = 1;
+    std::uint64_t local_session_nonce = 0;
     std::uint32_t world_scene_epoch = 0;
     std::uint64_t packets_sent = 0;
     std::uint64_t packets_received = 0;
@@ -556,6 +654,10 @@ struct LocalTransportState {
     std::unordered_map<std::uint64_t, std::uint64_t> pending_lethal_enemy_damage_claim_until_ms;
     std::unordered_map<std::uint64_t, std::uint64_t> rejected_enemy_damage_retry_suppressed_until_ms;
     std::unordered_map<std::uint64_t, std::uint32_t> last_state_packet_sequence_by_participant;
+    std::unordered_map<std::uint64_t, std::uint64_t>
+        session_nonce_by_participant;
+    std::unordered_map<std::uint64_t, std::unordered_set<std::uint64_t>>
+        retired_session_nonces_by_participant;
     std::unordered_map<std::uint64_t, std::uint32_t> last_cast_sequence_by_participant;
     std::unordered_map<std::uint64_t, std::uint32_t>
         last_spell_effect_packet_sequence_by_participant;
@@ -579,7 +681,12 @@ struct LocalTransportState {
     std::unordered_map<std::uint64_t, NativeProgressionReconcileCheckpoint>
         native_progression_reconcile_by_participant;
     std::unordered_set<std::uint64_t> native_applied_level_up_result_offer_ids;
+    std::unordered_set<std::uint64_t> confirmed_auto_pick_level_up_offer_ids;
     std::unordered_set<std::uint64_t> accepted_loot_pickup_drop_ids;
+    std::unordered_set<std::uint64_t>
+        native_applied_powerup_result_drop_ids;
+    std::unordered_map<std::uint64_t, PendingHostLootPickup>
+        pending_host_loot_pickups_by_drop_id;
     ActiveLocalCastInput active_local_cast_input;
     std::vector<PendingAirChainTerminal> pending_air_chain_terminals;
     std::uint32_t next_hub_world_actor_serial = 1;
@@ -601,6 +708,8 @@ std::vector<QueuedLocalEnemyDamageClaim> g_queued_local_enemy_damage_claims;
 std::vector<QueuedHostParticipantVitalsCorrection>
     g_queued_host_participant_vitals_corrections;
 std::vector<QueuedLocalLootPickupRequest> g_queued_local_loot_pickup_requests;
+std::vector<QueuedLocalHostPowerupPickup>
+    g_queued_local_host_powerup_pickups;
 std::vector<QueuedLocalLevelUpChoice> g_queued_local_level_up_choices;
 QueuedLocalAirChainFrame g_queued_local_air_chain_frame;
 bool g_have_queued_local_air_chain_frame = false;
@@ -621,6 +730,12 @@ void QueueAirChainTerminal(
     std::uint32_t cast_sequence,
     std::uint32_t run_nonce,
     std::uint64_t now_ms);
+bool TryReadParticipantProgressionEntryActive(
+    std::uint64_t participant_id,
+    std::int32_t entry_index,
+    std::uint16_t* active);
+LootPickupResultPayload BuildLootPickupResultPayloadFromParticipant(
+    const ParticipantInfo* participant);
 
 std::string ReadEnvironmentVariable(const char* name) {
     char* value = nullptr;
@@ -770,6 +885,10 @@ void MarkHostLevelUpBarrierParticipantResolved(
     std::uint64_t now_ms);
 HostLevelUpBarrierParticipant* FindHostLevelUpBarrierParticipant(
     std::uint64_t participant_id);
+void ResetRemoteParticipantSessionEpoch(
+    std::uint64_t participant_id,
+    bool configured_authority_disconnected,
+    bool preserve_session_nonce_history = false);
 bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code) {
     if (exception_code != nullptr) {
         *exception_code = 0;

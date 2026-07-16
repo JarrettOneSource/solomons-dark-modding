@@ -128,7 +128,11 @@ extern "C" bool RuntimeDebug_WatchWriteMemory(uintptr_t address, size_t size, co
             &pages_to_restore);
 
         for (const auto& page : pages_to_restore) {
-            (void)rt::TrySetPageProtection(page.page_base, page.base_protect);
+            if (rt::TrySetPageProtection(page.page_base, page.base_protect)) {
+                sdmod::ProcessMemory::Instance().UnregisterManagedGuardRange(
+                    page.page_base,
+                    rt::GetSystemPageSize());
+            }
         }
         pages_to_restore.clear();
 
@@ -153,6 +157,9 @@ extern "C" bool RuntimeDebug_WatchWriteMemory(uintptr_t address, size_t size, co
                         " for " + watch.name);
                     return false;
                 }
+                sdmod::ProcessMemory::Instance().RegisterManagedGuardRange(
+                    page_base,
+                    rt::GetSystemPageSize());
                 state.ref_count = 1;
                 rt::g_runtime_debug_state.guarded_pages.emplace(page_base, state);
             } else {
@@ -235,7 +242,11 @@ extern "C" bool RuntimeDebug_WatchWritePtrField(uintptr_t ptr_address, size_t of
             &pages_to_restore);
 
         for (const auto& page : pages_to_restore) {
-            (void)rt::TrySetPageProtection(page.page_base, page.base_protect);
+            if (rt::TrySetPageProtection(page.page_base, page.base_protect)) {
+                sdmod::ProcessMemory::Instance().UnregisterManagedGuardRange(
+                    page.page_base,
+                    rt::GetSystemPageSize());
+            }
         }
         pages_to_restore.clear();
 
@@ -260,6 +271,9 @@ extern "C" bool RuntimeDebug_WatchWritePtrField(uintptr_t ptr_address, size_t of
                         " for " + watch.name);
                     return false;
                 }
+                sdmod::ProcessMemory::Instance().RegisterManagedGuardRange(
+                    page_base,
+                    rt::GetSystemPageSize());
                 state.ref_count = 1;
                 rt::g_runtime_debug_state.guarded_pages.emplace(page_base, state);
             } else {

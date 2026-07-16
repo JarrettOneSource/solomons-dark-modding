@@ -840,6 +840,7 @@ def wait_for_waiting_ids(
     timeout: float,
     *,
     host_display_text: str | None = None,
+    client_display_text: str | None = None,
     require_timed_out: bool | None = None,
 ) -> dict[str, dict[str, str]]:
     deadline = time.monotonic() + timeout
@@ -881,15 +882,20 @@ def wait_for_waiting_ids(
                 for snapshot in snapshots
             )
         )
-        display_matches = (
+        host_display_matches = (
             host_display_text is None
             or last_host.get("wait.display_text") == host_display_text
+        )
+        client_display_matches = (
+            client_display_text is None
+            or last_client.get("wait.display_text") == client_display_text
         )
         if (
             same_barrier
             and pause_matches
             and timeout_matches
-            and display_matches
+            and host_display_matches
+            and client_display_matches
             and all(
                 observed == expected_participant_ids
                 for observed in observed_sets
@@ -901,6 +907,7 @@ def wait_for_waiting_ids(
         "level-up barrier waiting set did not converge: "
         f"expected={sorted(expected_participant_ids)} "
         f"host_display_text={host_display_text!r} "
+        f"client_display_text={client_display_text!r} "
         f"require_timed_out={require_timed_out} "
         f"last_host={last_host} last_client={last_client}"
     )
@@ -1001,6 +1008,10 @@ def wait_for_choice_result(
                 "result_option_id": parse_int_text(
                     local_values.get("result.option_id"),
                     -1,
+                ),
+                "resulting_active": parse_int_text(
+                    local_values.get("result.resulting_active"),
+                    0,
                 ),
                 "auto_picked":
                     local_values.get("result.auto_picked") == "true",

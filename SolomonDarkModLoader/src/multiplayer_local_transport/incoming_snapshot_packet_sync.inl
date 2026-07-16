@@ -226,8 +226,19 @@ LootSnapshotRuntimeInfo BuildLootSnapshotRuntimeInfo(
             !std::isfinite(packet_drop.radius) ||
             packet_drop.radius < 0.0f ||
             (drop_kind == LootDropKind::Orb && !std::isfinite(packet_drop.value)) ||
+            (drop_kind == LootDropKind::Powerup &&
+                (packet_drop.native_type_id != kPowerupRewardNativeTypeId ||
+                 packet_drop.amount_tier <
+                     static_cast<std::int32_t>(PowerupRewardKind::BonusSkillPoint) ||
+                 packet_drop.amount_tier >
+                     static_cast<std::int32_t>(PowerupRewardKind::DamageX4) ||
+                 !std::isfinite(packet_drop.value) ||
+                 !std::isfinite(packet_drop.motion) ||
+                 !std::isfinite(packet_drop.progress) ||
+                 !std::isfinite(packet_drop.auxiliary))) ||
             ((drop_kind == LootDropKind::Item || drop_kind == LootDropKind::Potion) &&
-                packet_drop.item_type_id == 0)) {
+                packet_drop.item_type_id == 0) ||
+            (drop_kind == LootDropKind::Item && packet_drop.item_recipe_uid == 0)) {
             continue;
         }
 
@@ -242,7 +253,17 @@ LootSnapshotRuntimeInfo BuildLootSnapshotRuntimeInfo(
         drop.value = packet_drop.value;
         drop.motion = packet_drop.motion;
         drop.progress = packet_drop.progress;
+        drop.auxiliary = packet_drop.auxiliary;
         drop.item_type_id = packet_drop.item_type_id;
+        drop.item_recipe_uid = packet_drop.item_recipe_uid;
+        drop.item_color_state_valid =
+            (packet_drop.flags & LootDropSnapshotFlagItemColorState) != 0;
+        if (drop.item_color_state_valid) {
+            std::memcpy(
+                drop.item_color_state.data(),
+                packet_drop.item_color_state,
+                drop.item_color_state.size());
+        }
         drop.item_slot = packet_drop.item_slot;
         drop.stack_count = packet_drop.stack_count;
         drop.actor_slot = packet_drop.actor_slot;
@@ -277,6 +298,13 @@ void ApplyLootSnapshotPacket(
         return;
     }
 
+    const auto previous_runtime_state = SnapshotRuntimeState();
+    if (previous_runtime_state.loot_snapshot.valid &&
+        previous_runtime_state.loot_snapshot.run_nonce !=
+            packet.run_nonce) {
+        g_local_transport
+            .native_applied_powerup_result_drop_ids.clear();
+    }
     UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
     if (!PublishLootSnapshotRuntimeInfo(packet, now_ms)) {
         return;
@@ -288,6 +316,7 @@ void ApplyLootSnapshotPacket(
 
 #include "multiplayer_local_transport/enemy_damage_authority.inl"
 
+#include "multiplayer_local_transport/powerup_loot_authority.inl"
 #include "multiplayer_local_transport/loot_pickup_authority.inl"
 
 #include "multiplayer_local_transport/level_up_packet_sync.inl"
