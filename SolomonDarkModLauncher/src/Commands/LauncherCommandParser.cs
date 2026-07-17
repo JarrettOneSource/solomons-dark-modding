@@ -26,6 +26,19 @@ internal static class LauncherCommandParser
         ulong? inviteSteamId = null;
         var multiplayerMaxParticipants = MultiplayerLaunchOptions.DefaultMaxParticipants;
         var openSteamInviteDialog = true;
+        var lobbyPrivacy = MultiplayerLobbyPrivacy.FriendsOnly;
+        string? lobbyPasswordSalt = null;
+        string? lobbyPasswordHash = null;
+        string? directoryBaseUrl = null;
+        string? joinTicket = null;
+        string? boneyardId = null;
+        string? boneyardName = null;
+        string? boneyardSha256 = null;
+        var lobbyPhase = "hub";
+        int? lobbyWave = null;
+        string? lobbyDifficulty = null;
+        int? lobbyElapsedSeconds = null;
+        string? lobbyStatusText = null;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -134,6 +147,85 @@ internal static class LauncherCommandParser
                 continue;
             }
 
+            if (arg == "--lobby-privacy")
+            {
+                lobbyPrivacy = MultiplayerLobbyPrivacyTokens.Parse(
+                    ReadValue(args, ref index, arg));
+                continue;
+            }
+
+            if (arg == "--lobby-password-salt")
+            {
+                lobbyPasswordSalt = ReadValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg == "--lobby-password-hash")
+            {
+                lobbyPasswordHash = ReadValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg == "--directory-url")
+            {
+                directoryBaseUrl = ReadValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg == "--join-ticket")
+            {
+                joinTicket = ReadValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg == "--boneyard-id")
+            {
+                boneyardId = ReadValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg == "--boneyard-name")
+            {
+                boneyardName = ReadValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg == "--boneyard-sha256")
+            {
+                boneyardSha256 = ReadValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg == "--lobby-phase")
+            {
+                lobbyPhase = ReadValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg == "--lobby-wave")
+            {
+                lobbyWave = ParseInt(ReadValue(args, ref index, arg), arg);
+                continue;
+            }
+
+            if (arg == "--lobby-difficulty")
+            {
+                lobbyDifficulty = ReadValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg == "--lobby-elapsed-seconds")
+            {
+                lobbyElapsedSeconds = ParseInt(ReadValue(args, ref index, arg), arg);
+                continue;
+            }
+
+            if (arg == "--lobby-status-text")
+            {
+                lobbyStatusText = ReadValue(args, ref index, arg);
+                continue;
+            }
+
             if (arg == "--invite-steam-id")
             {
                 inviteSteamId = ParseSteamId(ReadValue(args, ref index, arg));
@@ -149,12 +241,27 @@ internal static class LauncherCommandParser
             throw new InvalidOperationException($"Unknown argument: {arg}");
         }
 
+        var host = LobbyHostOptions.Create(
+            lobbyPrivacy,
+            directoryBaseUrl,
+            lobbyPasswordSalt,
+            lobbyPasswordHash,
+            boneyardId,
+            boneyardName,
+            boneyardSha256,
+            lobbyPhase,
+            lobbyWave,
+            lobbyDifficulty,
+            lobbyElapsedSeconds,
+            lobbyStatusText);
         var multiplayer = MultiplayerLaunchOptions.Create(
             multiplayerMode,
             steamLobbyId,
             inviteSteamId,
             multiplayerMaxParticipants,
-            openSteamInviteDialog);
+            openSteamInviteDialog,
+            host,
+            joinTicket);
 
         return new LauncherCommand(
             mode,
@@ -171,11 +278,7 @@ internal static class LauncherCommandParser
             temporaryProfile,
             steamAppId,
             steamApiDll,
-            multiplayer.Mode,
-            multiplayer.LobbyId,
-            multiplayer.InviteSteamId,
-            multiplayer.MaxParticipants,
-            multiplayer.OpenInviteDialog);
+            multiplayer);
     }
 
     private static LauncherMode ParseMode(string value)
@@ -237,5 +340,12 @@ internal static class LauncherCommandParser
             ? count
             : throw new InvalidOperationException(
                 $"--max-players must be between 2 and {MultiplayerLaunchOptions.MaximumSupportedParticipants}: {value}");
+    }
+
+    private static int ParseInt(string value, string optionName)
+    {
+        return int.TryParse(value, out var parsed)
+            ? parsed
+            : throw new InvalidOperationException($"{optionName} requires an integer: {value}");
     }
 }

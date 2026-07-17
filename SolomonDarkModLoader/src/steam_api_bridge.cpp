@@ -60,17 +60,34 @@ std::string CopyBoundedText(const char* text, std::size_t capacity) {
 
 }  // namespace
 
-std::uint64_t SteamCreateFriendsOnlyLobby(std::int32_t max_members) {
+std::uint64_t SteamCreateLobby(
+    SteamLobbyVisibility visibility,
+    std::int32_t max_members) {
     if (max_members < 2) {
         return 0;
     }
     std::scoped_lock lock(detail::SteamBootstrapMutex());
     auto& state = detail::MutableSteamBootstrapState();
     auto* matchmaking = Matchmaking(state);
+    int steam_visibility = steamabi::kLobbyTypeFriendsOnly;
+    switch (visibility) {
+    case SteamLobbyVisibility::Private:
+        steam_visibility = steamabi::kLobbyTypePrivate;
+        break;
+    case SteamLobbyVisibility::Public:
+        steam_visibility = steamabi::kLobbyTypePublic;
+        break;
+    case SteamLobbyVisibility::Invisible:
+        steam_visibility = steamabi::kLobbyTypeInvisible;
+        break;
+    case SteamLobbyVisibility::FriendsOnly:
+    default:
+        break;
+    }
     return matchmaking != nullptr
         ? state.matchmaking_create_lobby(
               matchmaking,
-              steamabi::kLobbyTypeFriendsOnly,
+              steam_visibility,
               max_members)
         : 0;
 }
@@ -271,6 +288,48 @@ std::string SteamGetFriendPersonaName(std::uint64_t steam_id) {
     return friends != nullptr
         ? CopySteamString(state.friends_get_friend_persona_name(friends, steam_id))
         : std::string{};
+}
+
+std::vector<std::uint64_t> SteamGetImmediateFriends() {
+    std::vector<std::uint64_t> friends;
+    std::scoped_lock lock(detail::SteamBootstrapMutex());
+    auto& state = detail::MutableSteamBootstrapState();
+    auto* steam_friends = Friends(state);
+    if (steam_friends == nullptr) {
+        return friends;
+    }
+    const int count = (std::clamp)(
+        state.friends_get_friend_count(
+            steam_friends,
+            steamabi::kFriendFlagImmediate),
+        0,
+        5000);
+    friends.reserve(static_cast<std::size_t>(count));
+    for (int index = 0; index < count; ++index) {
+        const auto steam_id = state.friends_get_friend_by_index(
+            steam_friends,
+            index,
+            steamabi::kFriendFlagImmediate);
+        if (steam_id != 0) {
+            friends.push_back(steam_id);
+        }
+    }
+    std::sort(friends.begin(), friends.end());
+    friends.erase(std::unique(friends.begin(), friends.end()), friends.end());
+    return friends;
+}
+
+bool SteamHasImmediateFriend(std::uint64_t steam_id) {
+    if (steam_id == 0) {
+        return false;
+    }
+    std::scoped_lock lock(detail::SteamBootstrapMutex());
+    auto& state = detail::MutableSteamBootstrapState();
+    auto* friends = Friends(state);
+    return friends != nullptr && state.friends_has_friend(
+        friends,
+        steam_id,
+        steamabi::kFriendFlagImmediate);
 }
 
 bool SteamSendNetworkMessage(

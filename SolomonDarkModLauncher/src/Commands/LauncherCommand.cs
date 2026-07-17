@@ -17,8 +17,4 @@ internal sealed record LauncherCommand(
     bool TemporaryProfile,
     string? SteamAppIdOverride,
     string? SteamApiDllOverride,
-    MultiplayerLaunchMode MultiplayerMode,
-    ulong? SteamLobbyId,
-    ulong? InviteSteamId,
-    int MultiplayerMaxParticipants,
-    bool OpenSteamInviteDialog);
+    MultiplayerLaunchOptions Multiplayer);

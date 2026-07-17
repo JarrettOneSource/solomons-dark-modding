@@ -9,6 +9,10 @@ bool SetHostLobbyMetadata() {
                kLobbyMaxParticipantsKey,
                std::to_string(g_session.max_participants).c_str()) &&
            SteamSetLobbyData(lobby_id, kLobbyStateKey, kLobbyStateOpen) &&
+           SteamSetLobbyData(
+               lobby_id,
+               kLobbyPrivacyKey,
+               LobbyPrivacyToken(g_session.privacy)) &&
            SteamSetLobbyJoinable(lobby_id, true);
 }
 
@@ -67,6 +71,12 @@ bool ValidateJoinedLobby(std::string* error_message) {
     }
     if (SteamGetLobbyData(g_session.lobby_id, kLobbyStateKey) != kLobbyStateOpen) {
         *error_message = "Lobby is no longer accepting players.";
+        return false;
+    }
+    if (!TryParseLobbyPrivacy(
+            SteamGetLobbyData(g_session.lobby_id, kLobbyPrivacyKey),
+            &g_session.privacy)) {
+        *error_message = "Lobby privacy metadata is invalid.";
         return false;
     }
     g_session.host_steam_id = owner;
@@ -137,7 +147,8 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         status << "Steam multiplayer waiting for a lobby invite.";
         break;
     case SteamSessionPhase::CreatingLobby:
-        status << "Creating friends-only Steam lobby.";
+        status << "Creating " << LobbyPrivacyToken(g_session.privacy)
+               << " Steam lobby.";
         break;
     case SteamSessionPhase::JoiningLobby:
         status << "Joining Steam lobby " << g_session.desired_lobby_id << '.';
@@ -262,7 +273,13 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         snapshot.phase = SteamSessionPhaseLabel(g_session.phase);
         snapshot.app_id = g_session.app_id;
         snapshot.lobby_id = g_session.lobby_id;
+        snapshot.local_steam_id = g_session.local_steam_id;
         snapshot.host_steam_id = g_session.host_steam_id;
+        snapshot.persona_name = GetSteamBootstrapSnapshot().persona_name;
+        snapshot.privacy = LobbyPrivacyToken(g_session.privacy);
+        snapshot.protocol_version = kProtocolVersion;
+        snapshot.manifest_sha256 = g_session.manifest_sha256_text;
+        snapshot.friend_steam_ids = g_session.immediate_friends;
         snapshot.max_participants = g_session.max_participants;
         snapshot.authenticated_peer_count = authenticated_count;
         snapshot.overlay_enabled = g_session.overlay_enabled;
@@ -539,6 +556,15 @@ void HandleSessionHello(
                    g_session.manifest_sha256.data(),
                    g_session.manifest_sha256.size()) != 0) {
         result = SessionHelloResultCode::ManifestMismatch;
+    } else if (g_session.privacy == LobbyPrivacy::PasswordProtected &&
+               !SteamHasImmediateFriend(message.sender_steam_id) &&
+               !ValidatePasswordLobbyJoinTicket(
+                   g_session.directory_secret,
+                   PacketDisplayName(packet.join_ticket, sizeof(packet.join_ticket)),
+                   g_session.lobby_id,
+                   message.sender_steam_id,
+                   static_cast<std::uint64_t>(std::time(nullptr)))) {
+        result = SessionHelloResultCode::AccessDenied;
     } else {
         std::uint32_t authenticated_count = 1;
         for (const auto& [steam_id, peer] : g_session.peers) {

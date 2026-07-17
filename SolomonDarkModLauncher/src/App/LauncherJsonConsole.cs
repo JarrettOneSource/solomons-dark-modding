@@ -90,6 +90,11 @@ internal static class LauncherJsonConsole
                             Phase = session.Phase,
                             AppId = session.AppId,
                             LobbyId = session.LobbyId,
+                            LocalSteamId = session.LocalSteamId,
+                            PersonaName = session.PersonaName,
+                            Privacy = session.Privacy,
+                            ProtocolVersion = session.ProtocolVersion,
+                            ManifestSha256 = session.ManifestSha256,
                             MaxParticipants = session.MaxParticipants,
                             AuthenticatedPeerCount = session.AuthenticatedPeerCount,
                             OverlayEnabled = session.OverlayEnabled,
@@ -228,6 +233,11 @@ internal static class LauncherJsonConsole
         public required string Phase { get; init; }
         public required uint AppId { get; init; }
         public required ulong LobbyId { get; init; }
+        public required ulong LocalSteamId { get; init; }
+        public required string PersonaName { get; init; }
+        public required string Privacy { get; init; }
+        public required int ProtocolVersion { get; init; }
+        public required string ManifestSha256 { get; init; }
         public required uint MaxParticipants { get; init; }
         public required uint AuthenticatedPeerCount { get; init; }
         public required bool OverlayEnabled { get; init; }

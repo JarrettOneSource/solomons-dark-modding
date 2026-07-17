@@ -140,6 +140,18 @@ bool LoadSteamApiExports(SteamBootstrapState* state) {
             "SteamAPI_ISteamFriends_GetFriendPersonaName") &&
         LoadRequiredExport(
             state,
+            &state->friends_get_friend_count,
+            "SteamAPI_ISteamFriends_GetFriendCount") &&
+        LoadRequiredExport(
+            state,
+            &state->friends_get_friend_by_index,
+            "SteamAPI_ISteamFriends_GetFriendByIndex") &&
+        LoadRequiredExport(
+            state,
+            &state->friends_has_friend,
+            "SteamAPI_ISteamFriends_HasFriend") &&
+        LoadRequiredExport(
+            state,
             &state->friends_activate_game_overlay_invite_dialog,
             "SteamAPI_ISteamFriends_ActivateGameOverlayInviteDialog") &&
         LoadRequiredExport(

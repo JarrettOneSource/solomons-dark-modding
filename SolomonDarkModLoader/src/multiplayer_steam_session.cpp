@@ -1,6 +1,7 @@
 #include "multiplayer_steam_session.h"
 
 #include "logger.h"
+#include "lobby_access.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_protocol.h"
@@ -17,6 +18,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <random>
 #include <sstream>
 #include <string>
