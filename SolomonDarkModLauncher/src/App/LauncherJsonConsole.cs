@@ -107,6 +107,14 @@ internal static class LauncherJsonConsole
                         }
                         : null
                 },
+            DirectorySession = execution.DirectorySession is null
+                ? null
+                : new LauncherJsonDirectorySession
+                {
+                    Token = execution.DirectorySession.Token,
+                    SteamId = execution.DirectorySession.SteamId,
+                    ExpiresAtUtc = execution.DirectorySession.ExpiresAtUtc
+                },
             ModStateChange = execution.ModStateChange is null
                 ? null
                 : new LauncherJsonModStateChange
@@ -132,6 +140,7 @@ internal static class LauncherJsonConsole
             Mods = [],
             Stage = null,
             Launch = null,
+            DirectorySession = null,
             ModStateChange = null
         };
 
@@ -143,6 +152,7 @@ internal static class LauncherJsonConsole
         return mode switch
         {
             LauncherMode.Launch => "launch",
+            LauncherMode.DirectoryAuth => "directory-auth",
             LauncherMode.Stage => "stage",
             LauncherMode.ListMods => "list-mods",
             LauncherMode.EnableMod => "enable-mod",
@@ -161,6 +171,7 @@ internal static class LauncherJsonConsole
         public required IReadOnlyList<LauncherJsonMod> Mods { get; init; }
         public required LauncherJsonStage? Stage { get; init; }
         public required LauncherJsonLaunch? Launch { get; init; }
+        public required LauncherJsonDirectorySession? DirectorySession { get; init; }
         public required LauncherJsonModStateChange? ModStateChange { get; init; }
     }
 
@@ -247,6 +258,13 @@ internal static class LauncherJsonConsole
         public required int RoutePingMs { get; init; }
         public required string StatusText { get; init; }
         public required string ErrorText { get; init; }
+    }
+
+    private sealed class LauncherJsonDirectorySession
+    {
+        public required string Token { get; init; }
+        public required string SteamId { get; init; }
+        public required DateTime ExpiresAtUtc { get; init; }
     }
 
     private sealed class LauncherJsonModStateChange

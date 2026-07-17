@@ -11,6 +11,7 @@ namespace SolomonDarkModLauncher.UI.ViewModels;
 internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private readonly LauncherUiCommandClient client_;
+    private readonly LobbyDirectoryClient lobbyDirectoryClient_;
     private readonly StringBuilder transcriptBuilder_ = new();
     private LauncherCliResponse? lastResponse_;
     private bool isBusy_;
@@ -44,6 +45,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
         client_ = client;
+        lobbyDirectoryClient_ = new LobbyDirectoryClient(client);
         instanceName_ = client.InstanceName;
         debugUiEnabled_ = client.DebugUiEnabled;
         lobbyId_ = client.LobbyId;
@@ -692,7 +694,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         DirectoryLobbyList list;
         try
         {
-            list = await LobbyDirectoryClient.ListAsync(client_.DirectoryUrl, cancellationToken);
+            list = await lobbyDirectoryClient_.ListAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -729,9 +731,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         LobbyBrowserSummaryText = list.Items.Count == 0
             ? string.Empty
             : $"{list.Items.Count} open · {list.PlayerCount} playing";
-        LobbyBrowserStatusText = list.Items.Count == 0
-            ? "No lobbies right now."
-            : string.Empty;
+        LobbyBrowserStatusText = !list.SteamAuthenticated
+            ? "Showing public and password lobbies. Steam verification is unavailable, so friends-only games are hidden."
+            : list.Items.Count == 0
+                ? "No lobbies right now."
+                : string.Empty;
     }
 
     private void JoinDirectoryLobby(DirectoryLobbyViewModel lobby)

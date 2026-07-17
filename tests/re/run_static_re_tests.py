@@ -24,6 +24,7 @@ from static_multiplayer_runtime_contracts import (
     test_host_run_exit_is_authoritative_and_self_correcting,
     test_hub_shops_preserve_participant_ownership,
     test_level_up_barrier_waits_for_forced_picker_confirmation,
+    test_directory_viewer_identity_uses_steam_web_api_tickets,
     test_lobby_directory_privacy_contract_is_end_to_end,
     test_exact_native_equipment_identity_and_color_replicate,
     test_native_local_player_keeps_stock_input_and_equipment_ownership,
@@ -9176,6 +9177,10 @@ def test_main_menu_new_game_dispatches_on_app_update_thread() -> str:
 
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "directory viewer identity uses Steam Web API tickets",
+        test_directory_viewer_identity_uses_steam_web_api_tickets,
+    ),
     (
         "lobby directory privacy contract is end-to-end",
         test_lobby_directory_privacy_contract_is_end_to_end,

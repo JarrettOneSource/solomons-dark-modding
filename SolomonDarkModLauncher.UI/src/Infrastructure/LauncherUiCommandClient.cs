@@ -26,8 +26,8 @@ internal sealed class LauncherUiCommandClient
         gameDirectory_ = settingsStore_.LoadGameDirectory() ??
             FindDevelopmentGameDirectory(workspaceRoot) ??
             string.Empty;
-        directoryUrl_ = settingsStore_.LoadDirectoryUrl() ??
-            LobbyDirectoryClient.DefaultDirectoryUrl;
+        directoryUrl_ = NormalizeDirectoryUrl(
+            settingsStore_.LoadDirectoryUrl() ?? LobbyDirectoryClient.DefaultDirectoryUrl);
         var portableMarkerPath = Path.Combine(
             workspaceRoot,
             DistributionLayout.PortableRootMarkerFileName);
@@ -78,15 +78,8 @@ internal sealed class LauncherUiCommandClient
             return;
         }
 
-        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
-            uri.Scheme is not ("http" or "https"))
-        {
-            throw new InvalidOperationException(
-                "The lobby directory must be an absolute http(s) URL.");
-        }
-
-        directoryUrl_ = trimmed;
-        settingsStore_.SaveDirectoryUrl(trimmed);
+        directoryUrl_ = NormalizeDirectoryUrl(trimmed);
+        settingsStore_.SaveDirectoryUrl(directoryUrl_);
     }
 
     public string BuildCommandPreview(
@@ -195,6 +188,10 @@ internal sealed class LauncherUiCommandClient
 
         switch (mode)
         {
+            case LauncherUiCommandMode.DirectoryAuth:
+                arguments.Add("--directory-url");
+                arguments.Add(directoryUrl_);
+                break;
             case LauncherUiCommandMode.LaunchSinglePlayer:
                 arguments.Add("--multiplayer");
                 arguments.Add("off");
@@ -240,6 +237,7 @@ internal sealed class LauncherUiCommandClient
         return mode switch
         {
             LauncherUiCommandMode.LaunchSinglePlayer => "launch",
+            LauncherUiCommandMode.DirectoryAuth => "directory-auth",
             LauncherUiCommandMode.HostSteam => "launch",
             LauncherUiCommandMode.JoinSteam => "launch",
             LauncherUiCommandMode.Stage => "stage",
@@ -292,6 +290,20 @@ internal sealed class LauncherUiCommandClient
         }
 
         return builder.ToString();
+    }
+
+    private static string NormalizeDirectoryUrl(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+             !(string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+               uri.IsLoopback)))
+        {
+            throw new InvalidOperationException(
+                "The lobby directory URL must use HTTPS, except localhost development URLs may use HTTP.");
+        }
+
+        return uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
     }
 
     private static string? FindDevelopmentGameDirectory(string workspaceRoot)
