@@ -17,6 +17,7 @@ internal static class LauncherOutputFormatter
             string.Empty,
             "Commands:",
             "  launch               Mirror Solomon Dark into the stage root, stage enabled overlay or runtime mods, start the staged game, inject SolomonDarkModLoader.dll, and wait for loader startup completion.",
+            "  directory-auth       Prove the signed-in Steam identity and obtain a short-lived lobby-directory session.",
             "  stage                Mirror Solomon Dark into the stage root and stage enabled overlay or runtime mods without launching.",
             "  list-mods            Discover overlay or runtime manifests and print enabled or disabled mods.",
             "  enable-mod <mod-id>  Persistently enable a discovered overlay or runtime mod.",
@@ -79,6 +80,12 @@ internal static class LauncherOutputFormatter
             case LauncherMode.ListMods:
                 AppendConfiguration(builder, execution.Configuration);
                 AppendModList(builder, execution.Catalog);
+                break;
+            case LauncherMode.DirectoryAuth:
+                builder.AppendLine(
+                    $"Steam identity verified: {execution.DirectorySession!.SteamId}");
+                builder.AppendLine(
+                    $"Directory session expires: {execution.DirectorySession.ExpiresAtUtc:O}");
                 break;
             case LauncherMode.Stage:
                 AppendConfiguration(builder, execution.Configuration);

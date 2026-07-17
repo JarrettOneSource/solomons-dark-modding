@@ -30,12 +30,40 @@ internal static class LauncherCommandExecutor
         return command.Mode switch
         {
             LauncherMode.ListMods => new LauncherCommandExecution(command, configuration, catalog),
+            LauncherMode.DirectoryAuth => ExecuteDirectoryAuth(command, configuration, catalog),
             LauncherMode.Stage => ExecuteStage(command, configuration, catalog),
             LauncherMode.Launch => ExecuteLaunch(command, configuration, catalog),
             LauncherMode.EnableMod => ExecuteSetEnabled(command, configuration, manager, enabled: true),
             LauncherMode.DisableMod => ExecuteSetEnabled(command, configuration, manager, enabled: false),
             _ => throw new InvalidOperationException($"Unsupported mode: {command.Mode}")
         };
+    }
+
+    private static LauncherCommandExecution ExecuteDirectoryAuth(
+        LauncherCommand command,
+        LauncherConfiguration configuration,
+        ModCatalog catalog)
+    {
+        var steamBootstrap = SteamBootstrapMaterializer.Materialize(configuration);
+        if (!steamBootstrap.ReadyForInitialization || steamBootstrap.StageApiDllPath is null)
+        {
+            throw new InvalidOperationException(
+                "Steam identity verification requires an x86 steam_api.dll. Install the Steamworks SDK runtime, " +
+                "place it under assets/steam/win32, or pass --steam-api-dll <path>.");
+        }
+
+        using var steamTicket = SteamWebApiTicketSession.Open(steamBootstrap.StageApiDllPath);
+        var directorySession = LobbyDirectorySessionClient.ExchangeAsync(
+                command.DirectoryBaseUrl,
+                steamTicket.TicketHex,
+                CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+        return new LauncherCommandExecution(
+            command,
+            configuration,
+            catalog,
+            DirectorySession: directorySession);
     }
 
     private static LauncherCommandExecution ExecuteStage(
@@ -101,7 +129,8 @@ internal static class LauncherCommandExecutor
             return command.SteamAppIdOverride;
         }
 
-        return command.Multiplayer.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join
+        return command.Mode == LauncherMode.DirectoryAuth ||
+               command.Multiplayer.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join
             ? SteamBootstrapConfiguration.SpacewarDevelopmentAppId
             : null;
     }

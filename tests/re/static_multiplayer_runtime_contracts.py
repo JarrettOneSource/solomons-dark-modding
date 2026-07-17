@@ -124,6 +124,49 @@ def test_lobby_directory_privacy_contract_is_end_to_end() -> str:
     )
 
 
+def test_directory_viewer_identity_uses_steam_web_api_tickets() -> str:
+    executor = _read(
+        "SolomonDarkModLauncher/src/App/LauncherCommandExecutor.cs"
+    )
+    steam_ticket = _read(
+        "SolomonDarkModLauncher/src/Steam/SteamWebApiTicketSession.cs"
+    )
+    directory_exchange = _read(
+        "SolomonDarkModLauncher/src/Launch/LobbyDirectorySessionClient.cs"
+    )
+    ui_directory = _read(
+        "SolomonDarkModLauncher.UI/src/Infrastructure/LobbyDirectoryClient.cs"
+    )
+
+    _require_in_order(
+        executor,
+        "SteamWebApiTicketSession.Open(",
+        "LobbyDirectorySessionClient.ExchangeAsync(",
+    )
+    for token in (
+        'TicketIdentity = "solomon-dark-directory-v1"',
+        'GetTicketForWebApiCallback = 168',
+        '"SteamAPI_ISteamUser_GetAuthTicketForWebApi"',
+        '"SteamAPI_ISteamUser_CancelAuthTicket"',
+        "cancelAuthTicket_(steamUser_, authTicket_)",
+        "shutdown_()",
+    ):
+        assert token in steam_ticket, f"Steam ticket lifecycle lacks: {token}"
+
+    assert "/api/auth/steam/session" in directory_exchange
+    assert 'new AuthenticationHeaderValue("Bearer", token)' in ui_directory
+    assert "viewerSteamId" not in ui_directory
+    assert not (
+        ROOT
+        / "SolomonDarkModLauncher.UI/src/Infrastructure/SteamLocalUser.cs"
+    ).exists(), "registry SteamID claim reader must stay deleted"
+
+    return (
+        "the x86 launcher proves Steam identity with a Web API ticket, exchanges it "
+        "while active, and the UI sends only the short-lived directory bearer token"
+    )
+
+
 def test_unreliable_snapshot_ordering_is_wrap_safe() -> str:
     protocol = _read("SolomonDarkModLoader/include/multiplayer_runtime_protocol.h")
     transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")
