@@ -28,6 +28,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool hasSteamSession_;
     private bool isSteamFriendConnected_;
     private string steamConnectionText_ = string.Empty;
+    private bool isLobbyBrowserOpen_;
+    private string lobbyBrowserSummaryText_ = string.Empty;
+    private string lobbyBrowserStatusText_ = string.Empty;
+    private string directoryLobbiesSignature_ = string.Empty;
+    private string directoryUrl_;
+    private CancellationTokenSource? lobbyBrowserPollCancellation_;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
@@ -36,8 +42,13 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         debugUiEnabled_ = client.DebugUiEnabled;
         lobbyId_ = client.LobbyId;
         gameDirectory_ = client.GameDirectory;
+        directoryUrl_ = client.DirectoryUrl;
 
         RefreshCommand = new RelayCommand(_ => _ = RefreshAsync(), _ => CanInteract());
+        BrowseLobbiesCommand = new RelayCommand(_ => ToggleLobbyBrowser());
+        RefreshLobbiesCommand = new RelayCommand(
+            _ => _ = RefreshLobbyDirectoryAsync(CancellationToken.None),
+            _ => IsLobbyBrowserOpen);
         HostSteamCommand = new RelayCommand(
             _ => _ = ExecuteActionAsync(
                 LauncherUiCommandMode.HostSteam,
@@ -75,6 +86,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     public ObservableCollection<ModItemViewModel> Mods { get; } = [];
+
+    public ObservableCollection<DirectoryLobbyViewModel> DirectoryLobbies { get; } = [];
 
     public string Title => "Solomon Dark Revived";
     public string Version
@@ -136,6 +149,63 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         get => steamConnectionText_;
         private set => SetProperty(ref steamConnectionText_, value);
+    }
+
+    public bool IsLobbyBrowserOpen
+    {
+        get => isLobbyBrowserOpen_;
+        private set
+        {
+            if (SetProperty(ref isLobbyBrowserOpen_, value))
+            {
+                RefreshLobbiesCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public string LobbyBrowserSummaryText
+    {
+        get => lobbyBrowserSummaryText_;
+        private set => SetProperty(ref lobbyBrowserSummaryText_, value);
+    }
+
+    public string LobbyBrowserStatusText
+    {
+        get => lobbyBrowserStatusText_;
+        private set => SetProperty(ref lobbyBrowserStatusText_, value);
+    }
+
+    public string DirectoryUrl
+    {
+        get => directoryUrl_;
+        set
+        {
+            if (!SetProperty(ref directoryUrl_, value))
+            {
+                return;
+            }
+
+            try
+            {
+                client_.UpdateDirectoryUrl(directoryUrl_);
+            }
+            catch (Exception ex)
+            {
+                SetError(ex.Message);
+                return;
+            }
+
+            ClearError();
+            if (directoryUrl_ != client_.DirectoryUrl)
+            {
+                directoryUrl_ = client_.DirectoryUrl;
+                OnPropertyChanged();
+            }
+            if (IsLobbyBrowserOpen)
+            {
+                _ = RefreshLobbyDirectoryAsync(CancellationToken.None);
+            }
+        }
     }
 
     public string ModSummaryText
@@ -212,6 +282,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         : GameDirectory;
 
     public RelayCommand RefreshCommand { get; }
+    public RelayCommand BrowseLobbiesCommand { get; }
+    public RelayCommand RefreshLobbiesCommand { get; }
     public RelayCommand HostSteamCommand { get; }
     public RelayCommand JoinSteamCommand { get; }
     public RelayCommand LaunchSinglePlayerCommand { get; }
@@ -456,6 +528,119 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         };
     }
 
+    private void ToggleLobbyBrowser()
+    {
+        if (IsLobbyBrowserOpen)
+        {
+            CloseLobbyBrowser();
+            return;
+        }
+
+        IsLobbyBrowserOpen = true;
+        var pollCancellation = new CancellationTokenSource();
+        lobbyBrowserPollCancellation_ = pollCancellation;
+        _ = PollLobbyDirectoryAsync(pollCancellation);
+    }
+
+    private void CloseLobbyBrowser()
+    {
+        lobbyBrowserPollCancellation_?.Cancel();
+        lobbyBrowserPollCancellation_?.Dispose();
+        lobbyBrowserPollCancellation_ = null;
+        IsLobbyBrowserOpen = false;
+    }
+
+    private async Task PollLobbyDirectoryAsync(CancellationTokenSource pollCancellation)
+    {
+        var cancellationToken = pollCancellation.Token;
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await RefreshLobbyDirectoryAsync(cancellationToken);
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async Task RefreshLobbyDirectoryAsync(CancellationToken cancellationToken)
+    {
+        if (DirectoryLobbies.Count == 0)
+        {
+            LobbyBrowserStatusText = "Consulting the directory…";
+        }
+
+        DirectoryLobbyList list;
+        try
+        {
+            list = await LobbyDirectoryClient.ListAsync(client_.DirectoryUrl, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception)
+        {
+            DirectoryLobbies.Clear();
+            directoryLobbiesSignature_ = string.Empty;
+            LobbyBrowserSummaryText = string.Empty;
+            LobbyBrowserStatusText =
+                "The lobby directory is unreachable. Steam invites and Lobby IDs still work.";
+            return;
+        }
+
+        var signature = string.Join(
+            "\n",
+            list.Items.Select(lobby =>
+                $"{lobby.Id}|{lobby.HostPlayer}|{lobby.Access}|{lobby.Players}|{lobby.MaxPlayers}|" +
+                $"{lobby.Game.Phase}|{lobby.Game.BoneyardName}|{lobby.Game.Wave}|{lobby.Game.StatusText}"));
+        if (signature != directoryLobbiesSignature_)
+        {
+            directoryLobbiesSignature_ = signature;
+            DirectoryLobbies.Clear();
+            foreach (var lobby in list.Items)
+            {
+                DirectoryLobbies.Add(new DirectoryLobbyViewModel(
+                    lobby,
+                    JoinDirectoryLobby,
+                    OpenDirectoryLobbyOnWebsite));
+            }
+        }
+
+        LobbyBrowserSummaryText = list.Items.Count == 0
+            ? string.Empty
+            : $"{list.Items.Count} open · {list.PlayerCount} playing";
+        LobbyBrowserStatusText = list.Items.Count == 0
+            ? "No open lobbies right now. Friends' games arrive as Steam invites either way."
+            : string.Empty;
+    }
+
+    private void JoinDirectoryLobby(DirectoryLobbyViewModel lobby)
+    {
+        if (lobby.LobbyId is null || !CanLaunch())
+        {
+            return;
+        }
+
+        LobbyId = lobby.LobbyId;
+        CloseLobbyBrowser();
+        _ = ExecuteActionAsync(
+            LauncherUiCommandMode.JoinSteam,
+            $"Joining {lobby.HostName}'s lobby…");
+    }
+
+    private void OpenDirectoryLobbyOnWebsite(DirectoryLobbyViewModel lobby)
+    {
+        var baseUrl = client_.DirectoryUrl.TrimEnd('/');
+        Process.Start(new ProcessStartInfo($"{baseUrl}/classes?lobby={lobby.DirectoryId}")
+        {
+            UseShellExecute = true
+        });
+    }
+
     private void StopSteamSessionMonitoring(bool clearStatus)
     {
         steamSessionMonitorCancellation_?.Cancel();
@@ -490,6 +675,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         StopSteamSessionMonitoring(clearStatus: false);
+        CloseLobbyBrowser();
     }
 
     private static string DescribeSteamHost(LauncherCliMultiplayerSession? multiplayer)
