@@ -159,7 +159,23 @@ void WriteMultiplayerSessionStatus(
            << EscapeJsonString(snapshot.phase) << "\",\n";
     stream << "  \"appId\": " << snapshot.app_id << ",\n";
     stream << "  \"lobbyId\": " << snapshot.lobby_id << ",\n";
+    stream << "  \"localSteamId\": " << snapshot.local_steam_id << ",\n";
     stream << "  \"hostSteamId\": " << snapshot.host_steam_id << ",\n";
+    stream << "  \"personaName\": \""
+           << EscapeJsonString(snapshot.persona_name) << "\",\n";
+    stream << "  \"privacy\": \""
+           << EscapeJsonString(snapshot.privacy) << "\",\n";
+    stream << "  \"protocolVersion\": " << snapshot.protocol_version << ",\n";
+    stream << "  \"manifestSha256\": \""
+           << EscapeJsonString(snapshot.manifest_sha256) << "\",\n";
+    stream << "  \"friendSteamIds\": [";
+    for (std::size_t index = 0; index < snapshot.friend_steam_ids.size(); ++index) {
+        if (index != 0) {
+            stream << ',';
+        }
+        stream << snapshot.friend_steam_ids[index];
+    }
+    stream << "],\n";
     stream << "  \"maxParticipants\": "
            << snapshot.max_participants << ",\n";
     stream << "  \"authenticatedPeerCount\": "
