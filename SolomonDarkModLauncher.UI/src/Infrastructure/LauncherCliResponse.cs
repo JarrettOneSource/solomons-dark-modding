@@ -10,6 +10,7 @@ internal sealed class LauncherCliResponse
     public List<LauncherCliMod> Mods { get; set; } = [];
     public LauncherCliStage? Stage { get; set; }
     public LauncherCliLaunch? Launch { get; set; }
+    public LauncherCliDirectorySession? DirectorySession { get; set; }
     public LauncherCliModStateChange? ModStateChange { get; set; }
 }
 
@@ -93,4 +94,11 @@ internal sealed class LauncherCliModStateChange
     public string ModId { get; set; } = string.Empty;
     public bool Enabled { get; set; }
     public string StatePath { get; set; } = string.Empty;
+}
+
+internal sealed class LauncherCliDirectorySession
+{
+    public string Token { get; set; } = string.Empty;
+    public string SteamId { get; set; } = string.Empty;
+    public DateTime ExpiresAtUtc { get; set; }
 }

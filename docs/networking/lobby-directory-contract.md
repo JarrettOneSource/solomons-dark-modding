@@ -16,6 +16,22 @@ Steam friends may always join through a host invite. For password-protected
 lobbies, immediate Steam friends bypass the website ticket check so the invite
 path still works during a website outage.
 
+## Directory viewer authentication
+
+The desktop UI never reads or submits a registry SteamID. It periodically asks
+the x86 CLI for a directory session. The CLI initializes Steamworks as Spacewar
+(AppID `480`), requests `GetAuthTicketForWebApi` using identity
+`solomon-dark-directory-v1`, exchanges the resulting ticket with
+`POST /api/auth/steam/session`, then cancels the Steam ticket and shuts the
+temporary Steamworks session down.
+
+Only the backend-issued 15-minute bearer token returns to the UI. It is kept in
+memory and attached to lobby-list requests. Without that verified token the UI
+still receives Public and Private rows, but Friends Only rows stay hidden.
+
+The backend must configure its Steam Web API key as `Steam:WebApiKey` (or the
+`Steam__WebApiKey` environment variable). The key is server-only.
+
 ## Privacy mapping
 
 | Launcher value | Website token | Steam lobby type | Native admission |
@@ -114,6 +130,3 @@ addition to the existing transport state, protocol `60` publishes:
 The file remains local. The detached publisher combines it with the launcher
 host inputs and sends a heartbeat to `POST /api/lobbies/announce` every 20
 seconds. It sends `DELETE /api/lobbies/{lobbyId}` when the game exits cleanly.
-
-The website endpoint shapes, list visibility rules, password KDF, and response
-examples live in `backend/LOBBY_API.md` in the website repository.

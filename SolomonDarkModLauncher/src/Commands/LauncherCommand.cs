@@ -17,4 +17,5 @@ internal sealed record LauncherCommand(
     bool TemporaryProfile,
     string? SteamAppIdOverride,
     string? SteamApiDllOverride,
+    string DirectoryBaseUrl,
     MultiplayerLaunchOptions Multiplayer);

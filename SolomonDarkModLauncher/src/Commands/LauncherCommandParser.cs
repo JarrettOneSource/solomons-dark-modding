@@ -49,7 +49,7 @@ internal static class LauncherCommandParser
                 continue;
             }
 
-            if (arg is "launch" or "stage" or "list-mods")
+            if (arg is "launch" or "directory-auth" or "stage" or "list-mods")
             {
                 mode = ParseMode(arg);
                 continue;
@@ -278,6 +278,7 @@ internal static class LauncherCommandParser
             temporaryProfile,
             steamAppId,
             steamApiDll,
+            host.DirectoryBaseUrl,
             multiplayer);
     }
 
@@ -286,6 +287,7 @@ internal static class LauncherCommandParser
         return value switch
         {
             "launch" => LauncherMode.Launch,
+            "directory-auth" => LauncherMode.DirectoryAuth,
             "stage" => LauncherMode.Stage,
             "list-mods" => LauncherMode.ListMods,
             "enable-mod" => LauncherMode.EnableMod,
