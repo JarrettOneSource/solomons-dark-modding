@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Win32;
 using SolomonDarkModLauncher.UI.Infrastructure;
@@ -34,6 +35,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private string directoryLobbiesSignature_ = string.Empty;
     private string directoryUrl_;
     private CancellationTokenSource? lobbyBrowserPollCancellation_;
+    private bool isHostSetupOpen_;
+    private bool hostPrivacyFriends_ = true;
+    private bool hostPrivacyPublic_;
+    private bool hostPrivacyPassword_;
+    private string hostSetupErrorText_ = string.Empty;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
@@ -49,11 +55,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RefreshLobbiesCommand = new RelayCommand(
             _ => _ = RefreshLobbyDirectoryAsync(CancellationToken.None),
             _ => IsLobbyBrowserOpen);
-        HostSteamCommand = new RelayCommand(
-            _ => _ = ExecuteActionAsync(
-                LauncherUiCommandMode.HostSteam,
-                "Creating lobby…"),
-            _ => CanLaunch());
+        HostSteamCommand = new RelayCommand(_ => OpenHostSetup(), _ => CanLaunch());
         JoinSteamCommand = new RelayCommand(
             _ => _ = ExecuteActionAsync(
                 LauncherUiCommandMode.JoinSteam,
@@ -158,9 +160,66 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref isLobbyBrowserOpen_, value))
             {
+                OnPropertyChanged(nameof(BrowseLobbiesButtonText));
                 RefreshLobbiesCommand.RaiseCanExecuteChanged();
             }
         }
+    }
+
+    public string BrowseLobbiesButtonText => IsLobbyBrowserOpen ? "Back to Mods" : "Browse Lobbies";
+
+    public bool IsHostSetupOpen
+    {
+        get => isHostSetupOpen_;
+        private set => SetProperty(ref isHostSetupOpen_, value);
+    }
+
+    public bool HostPrivacyFriends
+    {
+        get => hostPrivacyFriends_;
+        set
+        {
+            if (SetProperty(ref hostPrivacyFriends_, value) && value)
+            {
+                HostPrivacyPublic = false;
+                HostPrivacyPassword = false;
+                HostSetupErrorText = string.Empty;
+            }
+        }
+    }
+
+    public bool HostPrivacyPublic
+    {
+        get => hostPrivacyPublic_;
+        set
+        {
+            if (SetProperty(ref hostPrivacyPublic_, value) && value)
+            {
+                HostPrivacyFriends = false;
+                HostPrivacyPassword = false;
+                HostSetupErrorText = string.Empty;
+            }
+        }
+    }
+
+    public bool HostPrivacyPassword
+    {
+        get => hostPrivacyPassword_;
+        set
+        {
+            if (SetProperty(ref hostPrivacyPassword_, value) && value)
+            {
+                HostPrivacyFriends = false;
+                HostPrivacyPublic = false;
+                HostSetupErrorText = string.Empty;
+            }
+        }
+    }
+
+    public string HostSetupErrorText
+    {
+        get => hostSetupErrorText_;
+        private set => SetProperty(ref hostSetupErrorText_, value);
     }
 
     public string LobbyBrowserSummaryText
@@ -364,7 +423,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private async Task ExecuteUiCommandAsync(
         LauncherUiCommandMode mode,
         string statusText,
-        string? targetModId = null)
+        string? targetModId = null,
+        LauncherHostOptions? hostOptions = null)
     {
         if (mode is LauncherUiCommandMode.HostSteam or
             LauncherUiCommandMode.JoinSteam or
@@ -376,11 +436,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         IsBusy = true;
         StatusText = statusText;
-        CommandPreviewText = client_.BuildCommandPreview(mode, targetModId);
+        CommandPreviewText = client_.BuildCommandPreview(mode, targetModId, hostOptions);
         LauncherUiInvocationResult invocation;
         try
         {
-            invocation = await client_.InvokeAsync(mode, targetModId);
+            invocation = await client_.InvokeAsync(mode, targetModId, hostOptions);
         }
         catch (Exception ex)
         {
@@ -528,6 +588,62 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         };
     }
 
+    private void OpenHostSetup()
+    {
+        HostPrivacyFriends = true;
+        HostSetupErrorText = string.Empty;
+        IsHostSetupOpen = true;
+    }
+
+    public void CancelHostSetup()
+    {
+        IsHostSetupOpen = false;
+    }
+
+    public async void ConfirmHostSetup(string password)
+    {
+        if (IsBusy || !IsHostSetupOpen)
+        {
+            return;
+        }
+
+        var privacy = HostPrivacyPassword ? "password" : HostPrivacyPublic ? "public" : "friends";
+        if (privacy == "password" && string.IsNullOrEmpty(password))
+        {
+            HostSetupErrorText = "Enter a password, or pick another visibility.";
+            return;
+        }
+
+        IsHostSetupOpen = false;
+
+        // The contract default (Friends Only) passes no extra arguments, so
+        // hosting keeps working against a CLI without the lobby-privacy flags.
+        LauncherHostOptions? hostOptions = null;
+        if (privacy != "friends")
+        {
+            string? saltHex = null;
+            string? hashHex = null;
+            if (privacy == "password")
+            {
+                var salt = RandomNumberGenerator.GetBytes(16);
+                var hash = await Task.Run(() => Rfc2898DeriveBytes.Pbkdf2(
+                    password,
+                    salt,
+                    210_000,
+                    HashAlgorithmName.SHA256,
+                    32));
+                saltHex = Convert.ToHexString(salt).ToLowerInvariant();
+                hashHex = Convert.ToHexString(hash).ToLowerInvariant();
+            }
+            hostOptions = new LauncherHostOptions(privacy, saltHex, hashHex);
+        }
+
+        await ExecuteUiCommandAsync(
+            LauncherUiCommandMode.HostSteam,
+            "Creating lobby…",
+            hostOptions: hostOptions);
+    }
+
     private void ToggleLobbyBrowser()
     {
         if (IsLobbyBrowserOpen)
@@ -614,7 +730,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             ? string.Empty
             : $"{list.Items.Count} open · {list.PlayerCount} playing";
         LobbyBrowserStatusText = list.Items.Count == 0
-            ? "No open lobbies right now. Friends' games arrive as Steam invites either way."
+            ? "No lobbies right now."
             : string.Empty;
     }
 

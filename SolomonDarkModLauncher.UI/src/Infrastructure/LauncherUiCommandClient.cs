@@ -89,18 +89,22 @@ internal sealed class LauncherUiCommandClient
         settingsStore_.SaveDirectoryUrl(trimmed);
     }
 
-    public string BuildCommandPreview(LauncherUiCommandMode mode, string? targetModId = null)
+    public string BuildCommandPreview(
+        LauncherUiCommandMode mode,
+        string? targetModId = null,
+        LauncherHostOptions? hostOptions = null)
     {
-        var arguments = BuildArguments(mode, targetModId);
+        var arguments = BuildArguments(mode, targetModId, hostOptions);
         return $"SolomonDarkModLauncher.exe {string.Join(" ", arguments.Select(QuoteArgument))}";
     }
 
     public async Task<LauncherUiInvocationResult> InvokeAsync(
         LauncherUiCommandMode mode,
         string? targetModId = null,
+        LauncherHostOptions? hostOptions = null,
         CancellationToken cancellationToken = default)
     {
-        var arguments = BuildArguments(mode, targetModId);
+        var arguments = BuildArguments(mode, targetModId, hostOptions);
         var executablePath = LauncherExecutableResolver.Resolve();
         var startInfo = new ProcessStartInfo(executablePath)
         {
@@ -153,7 +157,10 @@ internal sealed class LauncherUiCommandClient
             errorMessage);
     }
 
-    private IReadOnlyList<string> BuildArguments(LauncherUiCommandMode mode, string? targetModId)
+    private IReadOnlyList<string> BuildArguments(
+        LauncherUiCommandMode mode,
+        string? targetModId,
+        LauncherHostOptions? hostOptions = null)
     {
         var arguments = new List<string> { GetModeToken(mode), "--json" };
 
@@ -195,6 +202,24 @@ internal sealed class LauncherUiCommandClient
             case LauncherUiCommandMode.HostSteam:
                 arguments.Add("--multiplayer");
                 arguments.Add("host");
+                if (hostOptions is not null)
+                {
+                    arguments.Add("--lobby-privacy");
+                    arguments.Add(hostOptions.Privacy);
+                    if (hostOptions.PasswordSaltHex is not null &&
+                        hostOptions.PasswordHashHex is not null)
+                    {
+                        arguments.Add("--lobby-password-salt");
+                        arguments.Add(hostOptions.PasswordSaltHex);
+                        arguments.Add("--lobby-password-hash");
+                        arguments.Add(hostOptions.PasswordHashHex);
+                    }
+                    if (directoryUrl_ != LobbyDirectoryClient.DefaultDirectoryUrl)
+                    {
+                        arguments.Add("--directory-url");
+                        arguments.Add(directoryUrl_);
+                    }
+                }
                 break;
             case LauncherUiCommandMode.JoinSteam:
                 arguments.Add("--multiplayer");
