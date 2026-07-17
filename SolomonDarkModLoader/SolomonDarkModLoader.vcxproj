@@ -91,6 +91,7 @@
     <ClInclude Include="include\debug_ui_overlay.h" />
     <ClInclude Include="include\ui_navigation.h" />
     <ClInclude Include="include\logger.h" />
+    <ClInclude Include="include\lobby_access.h" />
     <ClInclude Include="include\lua_engine.h" />
     <ClInclude Include="include\lua_engine_events.h" />
     <ClInclude Include="include\memory_access.h" />
@@ -405,6 +406,7 @@
     <ClCompile Include="src\debug_ui_config_ini.cpp" />
     <ClCompile Include="src\debug_ui_overlay.cpp" />
     <ClCompile Include="src\dllmain.cpp" />
+    <ClCompile Include="src\lobby_access.cpp" />
     <ClCompile Include="src\gameplay_seams.cpp" />
     <ClCompile Include="src\logger_core.cpp" />
     <ClCompile Include="src\logger_crash_reporting.cpp" />

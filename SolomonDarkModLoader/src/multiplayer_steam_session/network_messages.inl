@@ -24,6 +24,10 @@ void SendClientHello(std::uint64_t now_ms) {
         packet.manifest_sha256,
         g_session.manifest_sha256.data(),
         g_session.manifest_sha256.size());
+    CopyDisplayName(
+        g_session.join_ticket,
+        packet.join_ticket,
+        sizeof(packet.join_ticket));
     SteamSendNetworkMessage(
         g_session.host_steam_id,
         &packet,

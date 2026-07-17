@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace sdmod {
 
@@ -36,7 +37,13 @@ struct MultiplayerSessionStatusSnapshot {
     std::string phase;
     std::uint32_t app_id = 0;
     std::uint64_t lobby_id = 0;
+    std::uint64_t local_steam_id = 0;
     std::uint64_t host_steam_id = 0;
+    std::string persona_name;
+    std::string privacy;
+    std::uint32_t protocol_version = 0;
+    std::string manifest_sha256;
+    std::vector<std::uint64_t> friend_steam_ids;
     std::uint32_t max_participants = 0;
     std::uint32_t authenticated_peer_count = 0;
     bool overlay_enabled = false;

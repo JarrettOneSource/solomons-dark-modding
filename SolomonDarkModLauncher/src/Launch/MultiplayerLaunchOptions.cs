@@ -5,7 +5,9 @@ internal sealed record MultiplayerLaunchOptions(
     ulong? LobbyId,
     ulong? InviteSteamId,
     int MaxParticipants,
-    bool OpenInviteDialog)
+    bool OpenInviteDialog,
+    LobbyHostOptions Host,
+    string? JoinTicket)
 {
     public const int DefaultMaxParticipants = 4;
     public const int MaximumSupportedParticipants = 4;
@@ -15,7 +17,9 @@ internal sealed record MultiplayerLaunchOptions(
         ulong? lobbyId,
         ulong? inviteSteamId,
         int maxParticipants,
-        bool openInviteDialog)
+        bool openInviteDialog,
+        LobbyHostOptions host,
+        string? joinTicket)
     {
         if (maxParticipants is < 2 or > MaximumSupportedParticipants)
         {
@@ -50,11 +54,28 @@ internal sealed record MultiplayerLaunchOptions(
                 "--no-invite-dialog requires --multiplayer host.");
         }
 
+        joinTicket = string.IsNullOrWhiteSpace(joinTicket) ? null : joinTicket.Trim();
+        if (joinTicket is not null &&
+            (mode != MultiplayerLaunchMode.Join || lobbyId is null))
+        {
+            throw new InvalidOperationException(
+                "--join-ticket requires --multiplayer join and --lobby-id.");
+        }
+
+        if (joinTicket is { Length: > 159 } ||
+            (joinTicket is not null && joinTicket.Any(character =>
+                !(char.IsAsciiLetterOrDigit(character) || character is '.' or '-' or '_'))))
+        {
+            throw new InvalidOperationException("The lobby join ticket is malformed.");
+        }
+
         return new MultiplayerLaunchOptions(
             mode,
             lobbyId,
             inviteSteamId,
             maxParticipants,
-            openInviteDialog);
+            openInviteDialog,
+            host,
+            joinTicket);
     }
 }

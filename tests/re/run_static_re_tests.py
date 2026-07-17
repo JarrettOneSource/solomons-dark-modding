@@ -24,6 +24,7 @@ from static_multiplayer_runtime_contracts import (
     test_host_run_exit_is_authoritative_and_self_correcting,
     test_hub_shops_preserve_participant_ownership,
     test_level_up_barrier_waits_for_forced_picker_confirmation,
+    test_lobby_directory_privacy_contract_is_end_to_end,
     test_exact_native_equipment_identity_and_color_replicate,
     test_native_local_player_keeps_stock_input_and_equipment_ownership,
     test_lua_exec_timeout_cancels_pending_work,
@@ -2130,7 +2131,7 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
             "Lightning Chaining verifier still competes with the permanent target hook")
 
     required_network_tokens = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 59;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 60;"),
         (protocol_text, "AirChainSnapshot = 15"),
         (protocol_text, "kAirChainSnapshotMaxTargets = 8"),
         (protocol_text, "struct AirChainTargetPacketState"),
@@ -5205,7 +5206,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 59;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 60;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
@@ -6372,8 +6373,8 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 59;"),
-        (compatibility_materializer_text, "CurrentProtocolVersion = 59;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 60;"),
+        (compatibility_materializer_text, "CurrentProtocolVersion = 60;"),
         (protocol_text, "SessionCapabilityHostAuthority"),
         (protocol_text, "struct SessionHelloPacket"),
         (protocol_text, "struct SessionHelloAckPacket"),
@@ -6392,7 +6393,9 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
         (bootstrap_api_text, '"SteamAPI_ISteamMatchmaking_InviteUserToLobby"'),
         (steam_bridge_text, "steamabi::kLobbyTypeFriendsOnly"),
         (steam_bridge_text, "SteamInviteUserToLobby"),
-        (session_text, "SteamCreateFriendsOnlyLobby("),
+        (session_text, "SteamCreateLobby("),
+        (session_text, "ValidatePasswordLobbyJoinTicket("),
+        (session_text, "SteamHasImmediateFriend(message.sender_steam_id)"),
         (session_text, "SteamInviteUserToLobby(lobby_id, g_session.invite_steam_id)"),
         (session_text, "g_session.phase == SteamSessionPhase::Error &&"),
         (session_text, "g_session.lobby_id == 0"),
@@ -6474,7 +6477,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
             "WPF launcher still waits for inherited game pipe EOF instead of the CLI JSON response"
         )
     return (
-        "Steam friends-only lobby, authenticated v59 handshake, idle keepalive, owner-checked gameplay "
+        "Steam lobby, authenticated v60 handshake, idle keepalive, owner-checked gameplay "
         "routing, Spacewar launch, x86 runtime staging, and a live launch-token-bound "
         "Steam-friend connection indicator are wired"
     )
@@ -9173,6 +9176,10 @@ def test_main_menu_new_game_dispatches_on_app_update_thread() -> str:
 
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "lobby directory privacy contract is end-to-end",
+        test_lobby_directory_privacy_contract_is_end_to_end,
+    ),
     (
         "Lua exec timeouts cancel pending gameplay mutations",
         test_lua_exec_timeout_cancels_pending_work,

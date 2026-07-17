@@ -4,7 +4,8 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 59;
+constexpr std::uint16_t kProtocolVersion = 60;
+constexpr std::uint32_t kLobbyJoinTicketBytes = 160;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -57,6 +58,7 @@ enum class SessionHelloResultCode : std::uint8_t {
     LobbyFull = 6,
     HostMismatch = 7,
     CapabilityMismatch = 8,
+    AccessDenied = 9,
 };
 
 enum class SessionGoodbyeReason : std::uint8_t {
@@ -418,6 +420,7 @@ struct SessionHelloPacket {
     std::uint8_t reserved[3] = {};
     char display_name[kParticipantDisplayNameBytes];
     std::uint8_t manifest_sha256[32];
+    char join_ticket[kLobbyJoinTicketBytes];
 };
 
 struct CastPacket {
@@ -892,7 +895,7 @@ static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpec
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 56, "Unexpected derived stat packet size");
 static_assert(sizeof(StatePacket) == 4196, "Unexpected state packet size");
-static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");
+static_assert(sizeof(SessionHelloPacket) == 288, "Unexpected session hello packet size");
 static_assert(sizeof(CastPacket) == 120, "Unexpected cast packet size");
 static_assert(sizeof(SessionHelloAckPacket) == 92, "Unexpected session hello acknowledgement packet size");
 static_assert(sizeof(SessionGoodbyePacket) == 44, "Unexpected session goodbye packet size");

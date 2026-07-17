@@ -53,12 +53,7 @@ internal static class LauncherCommandExecutor
         ModCatalog catalog)
     {
         var stageResult = StageBuilder.Build(configuration, catalog);
-        var multiplayer = MultiplayerLaunchOptions.Create(
-            command.MultiplayerMode,
-            command.SteamLobbyId,
-            command.InviteSteamId,
-            command.MultiplayerMaxParticipants,
-            command.OpenSteamInviteDialog);
+        var multiplayer = command.Multiplayer;
         if (multiplayer.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join &&
             !stageResult.SteamBootstrap.ReadyForInitialization)
         {
@@ -106,7 +101,7 @@ internal static class LauncherCommandExecutor
             return command.SteamAppIdOverride;
         }
 
-        return command.MultiplayerMode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join
+        return command.Multiplayer.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join
             ? SteamBootstrapConfiguration.SpacewarDevelopmentAppId
             : null;
     }

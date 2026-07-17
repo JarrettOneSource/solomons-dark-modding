@@ -51,14 +51,21 @@ internal static class StagedGameLauncher
             StageSandboxCompatibilityLinks.Materialize(stage.StageRootPath, options.SavegamesRootPath);
         }
         options = ApplySandboxEnvironment(configuration, options);
-        options = MultiplayerLaunchEnvironment.Apply(
-            options,
-            multiplayer ?? MultiplayerLaunchOptions.Create(
+        multiplayer ??= MultiplayerLaunchOptions.Create(
                 MultiplayerLaunchMode.Unspecified,
                 null,
                 null,
                 MultiplayerLaunchOptions.DefaultMaxParticipants,
-                openInviteDialog: true));
+                openInviteDialog: true,
+                LobbyHostOptions.CreateDefault(),
+                joinTicket: null);
+        var directorySecret = multiplayer.Mode == MultiplayerLaunchMode.Host
+            ? LobbyDirectorySecret.Create()
+            : null;
+        options = MultiplayerLaunchEnvironment.Apply(
+            options,
+            multiplayer,
+            directorySecret);
         options = ApplySteamBootstrap(configuration, stage, options);
         var launchToken = Guid.NewGuid().ToString("N");
         options = ApplyLaunchToken(options, launchToken);
@@ -89,7 +96,7 @@ internal static class StagedGameLauncher
                 throw new InvalidOperationException(
                     $"SolomonDarkModLoader startup failed ({startupStatus.Code}): {startupStatus.Message}");
             }
-            if (multiplayer?.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join &&
+            if (multiplayer.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join &&
                 (!startupStatus.SteamTransportReady ||
                  !startupStatus.MultiplayerFoundationReady))
             {
@@ -99,7 +106,7 @@ internal static class StagedGameLauncher
             }
 
             MultiplayerSessionStatus? multiplayerSessionStatus = null;
-            if (multiplayer?.Mode == MultiplayerLaunchMode.Host)
+            if (multiplayer.Mode == MultiplayerLaunchMode.Host)
             {
                 multiplayerSessionStatus =
                     MultiplayerSessionStatusMonitor.WaitForHostReady(
@@ -107,7 +114,7 @@ internal static class StagedGameLauncher
                         launchToken,
                         process);
             }
-            else if (multiplayer?.Mode == MultiplayerLaunchMode.Join)
+            else if (multiplayer.Mode == MultiplayerLaunchMode.Join)
             {
                 multiplayerSessionStatus = multiplayer.LobbyId.HasValue
                     ? MultiplayerSessionStatusMonitor.WaitForConnectedJoin(
@@ -118,6 +125,18 @@ internal static class StagedGameLauncher
                         stage.StageRootPath,
                         launchToken,
                         process);
+            }
+
+            if (multiplayer.Mode == MultiplayerLaunchMode.Host &&
+                multiplayerSessionStatus is not null &&
+                directorySecret is not null)
+            {
+                TryStartLobbyDirectoryPublisher(
+                    stage.StageRootPath,
+                    process.Id,
+                    launchToken,
+                    multiplayer.Host,
+                    directorySecret);
             }
 
             return new InjectedGame(
@@ -331,6 +350,37 @@ internal static class StagedGameLauncher
         }
         catch
         {
+        }
+    }
+
+    private static void TryStartLobbyDirectoryPublisher(
+        string stageRootPath,
+        int gameProcessId,
+        string launchToken,
+        LobbyHostOptions host,
+        string directorySecret)
+    {
+        try
+        {
+            LobbyDirectoryPublisher.Start(
+                stageRootPath,
+                gameProcessId,
+                launchToken,
+                host,
+                directorySecret);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            var logPath = Path.Combine(stageRootPath, ".sdmod", "lobby-directory.log");
+            try
+            {
+                File.AppendAllText(
+                    logPath,
+                    $"{DateTime.UtcNow:O} Could not start directory publisher: {ex.Message}{Environment.NewLine}");
+            }
+            catch (Exception logError) when (logError is IOException or UnauthorizedAccessException)
+            {
+            }
         }
     }
 }

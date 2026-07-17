@@ -20,6 +20,15 @@ bool InitializeSteamSession() {
     TryParseUnsigned64(
         TrimAscii(ReadEnvironmentVariable(kInviteSteamIdEnvironmentVariable)),
         &g_session.invite_steam_id);
+    if (!TryParseLobbyPrivacy(
+            ReadEnvironmentVariable(kLobbyPrivacyEnvironmentVariable),
+            &g_session.privacy)) {
+        g_session.privacy = LobbyPrivacy::FriendsOnly;
+    }
+    g_session.directory_secret = ToLowerAscii(TrimAscii(
+        ReadEnvironmentVariable(kDirectorySecretEnvironmentVariable)));
+    g_session.join_ticket = TrimAscii(
+        ReadEnvironmentVariable(kJoinTicketEnvironmentVariable));
 
     const auto steam = GetSteamBootstrapSnapshot();
     g_session.app_id = steam.app_id;
@@ -42,9 +51,11 @@ bool InitializeSteamSession() {
     g_session.initialized = true;
     g_session.overlay_enabled = SteamIsOverlayEnabled();
     g_session.local_session_nonce = GenerateSessionNonce();
+    g_session.immediate_friends = SteamGetImmediateFriends();
 
     if (g_session.is_host) {
-        g_session.pending_api_call = SteamCreateFriendsOnlyLobby(
+        g_session.pending_api_call = SteamCreateLobby(
+            ToSteamLobbyVisibility(g_session.privacy),
             static_cast<std::int32_t>(g_session.max_participants));
         if (g_session.pending_api_call == 0) {
             SetError("Steam rejected the CreateLobby request before it was queued.", false);

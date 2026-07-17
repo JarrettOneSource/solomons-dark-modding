@@ -27,7 +27,9 @@ remain position-strict.
 ## Implementation boundary
 
 The current source has the multiplayer foundation, participant rail, and a
-friends-only Steam development transport. See
+Steam lobby transport with Public, Private, and Friends Only hosting. The
+website directory and password-ticket boundary is documented in
+[`lobby-directory-contract.md`](lobby-directory-contract.md). See
 [`steam-friend-playtest.md`](steam-friend-playtest.md) for the two-account
 Spacewar playtest flow and the remaining external verification boundary.
 
@@ -175,7 +177,7 @@ Spacewar playtest flow and the remaining external verification boundary.
   paths consume the one process-local scene inventory root without a participant
   parameter. Remote inventory therefore remains authoritative replicated rows,
   while remote equipment that affects presentation is materialized on the
-  native remote actor. Protocol v59 also gives every gameplay process a fresh
+  native remote actor. Protocol v60 also gives every gameplay process a fresh
   session nonce;
   a same-identity reconnect resets the old participant's packet-stream epochs
   before its new state is accepted, while packets from retired nonces are
