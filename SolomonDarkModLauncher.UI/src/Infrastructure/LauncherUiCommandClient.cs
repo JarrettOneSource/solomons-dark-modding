@@ -18,6 +18,7 @@ internal sealed class LauncherUiCommandClient
     private bool debugUiEnabled_ = true;
     private string lobbyId_ = string.Empty;
     private string gameDirectory_;
+    private string directoryUrl_;
 
     public LauncherUiCommandClient()
     {
@@ -25,6 +26,8 @@ internal sealed class LauncherUiCommandClient
         gameDirectory_ = settingsStore_.LoadGameDirectory() ??
             FindDevelopmentGameDirectory(workspaceRoot) ??
             string.Empty;
+        directoryUrl_ = settingsStore_.LoadDirectoryUrl() ??
+            LobbyDirectoryClient.DefaultDirectoryUrl;
         var portableMarkerPath = Path.Combine(
             workspaceRoot,
             DistributionLayout.PortableRootMarkerFileName);
@@ -61,6 +64,29 @@ internal sealed class LauncherUiCommandClient
         var normalizedPath = Path.GetFullPath(gameDirectory.Trim());
         gameDirectory_ = normalizedPath;
         settingsStore_.SaveGameDirectory(normalizedPath);
+    }
+
+    public string DirectoryUrl => directoryUrl_;
+
+    public void UpdateDirectoryUrl(string? directoryUrl)
+    {
+        var trimmed = directoryUrl?.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            directoryUrl_ = LobbyDirectoryClient.DefaultDirectoryUrl;
+            settingsStore_.SaveDirectoryUrl(null);
+            return;
+        }
+
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https"))
+        {
+            throw new InvalidOperationException(
+                "The lobby directory must be an absolute http(s) URL.");
+        }
+
+        directoryUrl_ = trimmed;
+        settingsStore_.SaveDirectoryUrl(trimmed);
     }
 
     public string BuildCommandPreview(LauncherUiCommandMode mode, string? targetModId = null)
