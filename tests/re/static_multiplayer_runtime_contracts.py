@@ -29,6 +29,101 @@ def _require_in_order(text: str, *tokens: str) -> None:
         cursor = position + len(token)
 
 
+def test_lobby_directory_privacy_contract_is_end_to_end() -> str:
+    privacy = _read(
+        "SolomonDarkModLauncher/src/Launch/MultiplayerLobbyPrivacy.cs"
+    )
+    parser = _read("SolomonDarkModLauncher/src/Commands/LauncherCommandParser.cs")
+    environment = _read(
+        "SolomonDarkModLauncher/src/Launch/MultiplayerLaunchEnvironment.cs"
+    )
+    staged_launcher = _read(
+        "SolomonDarkModLauncher/src/Launch/StagedGameLauncher.cs"
+    )
+    publisher = _read(
+        "SolomonDarkModLauncher/src/Launch/LobbyDirectoryPublisher.cs"
+    )
+    protocol_handler = _read(
+        "SolomonDarkModLauncher/src/Launch/SdrProtocolHandler.cs"
+    )
+    steam_bridge = _read("SolomonDarkModLoader/src/steam_api_bridge.cpp")
+    steam_session = _read_many(
+        "SolomonDarkModLoader/src/multiplayer_steam_session/state_and_helpers.inl",
+        "SolomonDarkModLoader/src/multiplayer_steam_session/public_lifecycle.inl",
+        "SolomonDarkModLoader/src/multiplayer_steam_session/lobby_and_events.inl",
+        "SolomonDarkModLoader/src/multiplayer_steam_session/network_messages.inl",
+    )
+    access = _read("SolomonDarkModLoader/src/lobby_access.cpp")
+    protocol = _read("SolomonDarkModLoader/include/multiplayer_runtime_protocol.h")
+    status = _read("SolomonDarkModLoader/src/startup_status.cpp")
+
+    for token in (
+        '"public"',
+        '"passwordProtected"',
+        '"friendsOnly"',
+        'arg == "--lobby-privacy"',
+        'arg == "--lobby-password-hash"',
+        'arg == "--join-ticket"',
+    ):
+        assert token in privacy + parser, f"launcher privacy contract lacks: {token}"
+
+    for token in (
+        'LobbyPrivacyVariable = "SDMOD_LOBBY_PRIVACY"',
+        'DirectorySecretVariable = "SDMOD_LOBBY_DIRECTORY_SECRET"',
+        'JoinTicketVariable = "SDMOD_LOBBY_JOIN_TICKET"',
+        "LobbyDirectoryPublisher.Start(",
+        'new HttpRequestMessage(HttpMethod.Post, "api/lobbies/announce")',
+        "while (!gameProcess.HasExited)",
+    ):
+        assert token in environment + staged_launcher + publisher, (
+            f"directory publisher lacks: {token}"
+        )
+
+    for token in (
+        "SteamLobbyVisibility::Public",
+        "SteamLobbyVisibility::Invisible",
+        "SteamLobbyVisibility::FriendsOnly",
+        "SteamGetImmediateFriends()",
+        "SteamHasImmediateFriend(message.sender_steam_id)",
+        "ValidatePasswordLobbyJoinTicket(",
+        "SessionHelloResultCode::AccessDenied",
+        "packet.join_ticket",
+    ):
+        assert token in steam_bridge + steam_session, f"native lobby access lacks: {token}"
+
+    for token in (
+        "constexpr std::uint16_t kProtocolVersion = 60;",
+        "char join_ticket[kLobbyJoinTicketBytes];",
+        "AccessDenied = 9",
+        '"  \\"localSteamId\\": "',
+        '"  \\"friendSteamIds\\": ["',
+    ):
+        assert token in protocol + status, f"session/status contract lacks: {token}"
+
+    for token in (
+        'const std::string& secret_hex',
+        "BCRYPT_SHA256_ALGORITHM",
+        "ticket_steam_id != steam_id",
+        "expires_at + kClockSkewSeconds < now_unix_seconds",
+        "FixedTimeEquals(expected_digest, provided_digest)",
+    ):
+        assert token in access, f"password ticket validation lacks: {token}"
+
+    for token in (
+        'string.Equals(args[0], "protocol"',
+        "Registry.CurrentUser.CreateSubKey(RegistryPath",
+        "commandKey?.SetValue(null",
+        'string.Equals(args[0], "open-uri"',
+        '"--join-ticket"',
+    ):
+        assert token in protocol_handler, f"sdr protocol backend lacks: {token}"
+
+    return (
+        "all lobby privacy modes publish through a detached best-effort directory worker; "
+        "Steam transport and invites remain native, and protected joins are SteamID-bound"
+    )
+
+
 def test_unreliable_snapshot_ordering_is_wrap_safe() -> str:
     protocol = _read("SolomonDarkModLoader/include/multiplayer_runtime_protocol.h")
     transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")
@@ -300,7 +395,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
     verifier = _read("tools/verify_multiplayer_powerup_sync.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 59;",
+        "constexpr std::uint16_t kProtocolVersion = 60;",
         "Powerup = 5",
         "enum class PowerupRewardKind",
         "BonusSkillPoint = 0",
@@ -437,7 +532,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
     verifier = _read("tools/verify_multiplayer_native_item_inventory_sync.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 59;",
+        "constexpr std::uint16_t kProtocolVersion = 60;",
         "ParticipantPresentationFlagEquipmentState = 1 << 5",
         "std::uint32_t primary_visual_link_recipe_uid;",
         "std::uint32_t secondary_visual_link_recipe_uid;",
@@ -574,7 +669,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
 
     return (
         "exact hat/robe/staff-or-wand presentation plus all three ring slots and the amulet "
-        "flow from stock local ownership through protocol v59; visible lanes self-correct natively"
+        "flow from stock local ownership through protocol v60; visible lanes self-correct natively"
     )
 
 
@@ -1285,7 +1380,7 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 59;",
+        "constexpr std::uint16_t kProtocolVersion = 60;",
         "LevelUpBarrier = 19",
         "struct LevelUpBarrierPacket",
         "kLevelUpChoiceResultFlagAutoPicked",

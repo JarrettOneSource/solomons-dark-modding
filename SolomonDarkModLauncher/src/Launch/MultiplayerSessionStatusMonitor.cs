@@ -10,6 +10,12 @@ internal sealed record MultiplayerSessionStatus(
     string Phase,
     uint AppId,
     ulong LobbyId,
+    ulong LocalSteamId,
+    string PersonaName,
+    string Privacy,
+    int ProtocolVersion,
+    string ManifestSha256,
+    ulong[] FriendSteamIds,
     uint MaxParticipants,
     uint AuthenticatedPeerCount,
     bool OverlayEnabled,
@@ -84,6 +90,42 @@ internal static class MultiplayerSessionStatusMonitor
                 status.AuthenticatedPeerCount > 0,
             "an authenticated Steam host connection",
             timeoutSeconds);
+
+    public static MultiplayerSessionStatus? TryRead(
+        string stageRootPath,
+        string expectedLaunchToken)
+    {
+        var statusPath = GetStatusPath(stageRootPath);
+        if (!File.Exists(statusPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var status = JsonSerializer.Deserialize<MultiplayerSessionStatus>(
+                ReadAllTextShared(statusPath),
+                JsonOptions);
+            return status is not null && string.Equals(
+                status.LaunchToken,
+                expectedLaunchToken,
+                StringComparison.OrdinalIgnoreCase)
+                ? status
+                : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     private static MultiplayerSessionStatus WaitFor(
         string stageRootPath,

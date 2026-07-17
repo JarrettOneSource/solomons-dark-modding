@@ -7,6 +7,9 @@ constexpr const char* kMaxParticipantsEnvironmentVariable = "SDMOD_MULTIPLAYER_M
 constexpr const char* kOpenInviteEnvironmentVariable = "SDMOD_STEAM_OPEN_INVITE";
 constexpr const char* kInviteSteamIdEnvironmentVariable = "SDMOD_STEAM_INVITE_STEAM_ID";
 constexpr const char* kLaunchTokenEnvironmentVariable = "SDMOD_LAUNCH_TOKEN";
+constexpr const char* kLobbyPrivacyEnvironmentVariable = "SDMOD_LOBBY_PRIVACY";
+constexpr const char* kDirectorySecretEnvironmentVariable = "SDMOD_LOBBY_DIRECTORY_SECRET";
+constexpr const char* kJoinTicketEnvironmentVariable = "SDMOD_LOBBY_JOIN_TICKET";
 
 constexpr const char* kLobbyProtocolKey = "sdmod_protocol";
 constexpr const char* kLobbyManifestKey = "sdmod_manifest";
@@ -14,6 +17,7 @@ constexpr const char* kLobbyHostKey = "sdmod_host";
 constexpr const char* kLobbyAppIdKey = "sdmod_app_id";
 constexpr const char* kLobbyMaxParticipantsKey = "sdmod_max_players";
 constexpr const char* kLobbyStateKey = "sdmod_state";
+constexpr const char* kLobbyPrivacyKey = "sdmod_privacy";
 constexpr const char* kLobbyStateOpen = "open";
 constexpr const char* kLobbyStateClosed = "closed";
 constexpr const char* kMemberProtocolKey = "sdmod_protocol";
@@ -29,6 +33,9 @@ constexpr std::uint64_t kRouteStatusIntervalMs = 1000;
 constexpr std::uint64_t kSessionStatusWriteIntervalMs = 1000;
 constexpr std::int32_t kReceiveBatchSize = 64;
 
+std::string TrimAscii(std::string value);
+std::string ToLowerAscii(std::string value);
+
 enum class SteamSessionPhase {
     Disabled,
     WaitingForInvite,
@@ -39,6 +46,56 @@ enum class SteamSessionPhase {
     Connected,
     Error,
 };
+
+enum class LobbyPrivacy {
+    Public,
+    PasswordProtected,
+    FriendsOnly,
+};
+
+const char* LobbyPrivacyToken(LobbyPrivacy privacy) {
+    switch (privacy) {
+    case LobbyPrivacy::Public:
+        return "public";
+    case LobbyPrivacy::PasswordProtected:
+        return "passwordProtected";
+    case LobbyPrivacy::FriendsOnly:
+    default:
+        return "friendsOnly";
+    }
+}
+
+bool TryParseLobbyPrivacy(const std::string& value, LobbyPrivacy* privacy) {
+    if (privacy == nullptr) {
+        return false;
+    }
+    const auto normalized = ToLowerAscii(TrimAscii(value));
+    if (normalized == "public") {
+        *privacy = LobbyPrivacy::Public;
+        return true;
+    }
+    if (normalized == "passwordprotected") {
+        *privacy = LobbyPrivacy::PasswordProtected;
+        return true;
+    }
+    if (normalized == "friendsonly") {
+        *privacy = LobbyPrivacy::FriendsOnly;
+        return true;
+    }
+    return false;
+}
+
+SteamLobbyVisibility ToSteamLobbyVisibility(LobbyPrivacy privacy) {
+    switch (privacy) {
+    case LobbyPrivacy::Public:
+        return SteamLobbyVisibility::Public;
+    case LobbyPrivacy::PasswordProtected:
+        return SteamLobbyVisibility::Invisible;
+    case LobbyPrivacy::FriendsOnly:
+    default:
+        return SteamLobbyVisibility::FriendsOnly;
+    }
+}
 
 const char* SteamSessionPhaseLabel(SteamSessionPhase phase) {
     switch (phase) {
@@ -81,6 +138,7 @@ struct SteamSessionState {
     bool invite_dialog_opened = false;
     bool invite_sent = false;
     bool overlay_enabled = false;
+    LobbyPrivacy privacy = LobbyPrivacy::FriendsOnly;
     SteamSessionPhase phase = SteamSessionPhase::Disabled;
     std::uint32_t app_id = 0;
     std::uint32_t max_participants = kDefaultMaxParticipants;
@@ -99,10 +157,13 @@ struct SteamSessionState {
     std::uint64_t last_status_write_ms = 0;
     std::array<std::uint8_t, 32> manifest_sha256{};
     std::string manifest_sha256_text;
+    std::string directory_secret;
+    std::string join_ticket;
     std::string launch_token;
     std::string last_status_signature;
     std::string error_text;
     std::unordered_set<std::uint64_t> lobby_members;
+    std::vector<std::uint64_t> immediate_friends;
     std::unordered_map<std::uint64_t, SteamSessionPeer> peers;
 };
 
@@ -312,6 +373,8 @@ const char* HelloResultLabel(SessionHelloResultCode result) {
         return "host_mismatch";
     case SessionHelloResultCode::CapabilityMismatch:
         return "capability_mismatch";
+    case SessionHelloResultCode::AccessDenied:
+        return "access_denied";
     }
     return "unknown";
 }

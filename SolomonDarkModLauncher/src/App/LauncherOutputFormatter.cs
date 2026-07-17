@@ -21,6 +21,10 @@ internal static class LauncherOutputFormatter
             "  list-mods            Discover overlay or runtime manifests and print enabled or disabled mods.",
             "  enable-mod <mod-id>  Persistently enable a discovered overlay or runtime mod.",
             "  disable-mod <mod-id> Persistently disable a discovered overlay or runtime mod.",
+            "  protocol register     Register sdr:// for the current Windows user (no administrator rights required).",
+            "  protocol unregister   Remove the current-user sdr:// registration.",
+            "  protocol status       Report whether sdr:// is registered.",
+            "  open-uri <sdr://...>  Resolve a website lobby link into the normal launch/join path.",
             string.Empty,
             "Options:",
             "  --json                  Emit structured JSON output for wrapper tools.",
@@ -38,6 +42,19 @@ internal static class LauncherOutputFormatter
             "  --lobby-id <id>         Join a specific Steam lobby; otherwise join mode waits for a friend invite.",
             "  --invite-steam-id <id>  Host development option: send a real lobby invite when the overlay is unavailable.",
             "  --max-players <2-4>     Set the host lobby capacity. Default: 4.",
+            "  --lobby-privacy <mode>  Host as public, password, or friends. Default: friends.",
+            "  --lobby-password-salt <hex>  Password mode: 16-byte lowercase-hex PBKDF2 salt.",
+            "  --lobby-password-hash <hex>  Password mode: 32-byte lowercase-hex PBKDF2-SHA256 result.",
+            "  --directory-url <url>   Override the optional lobby directory base URL.",
+            "  --join-ticket <ticket>  Short-lived website authorization for a password lobby.",
+            "  --boneyard-id <id>      Stable boneyard identifier published with the lobby.",
+            "  --boneyard-name <name>  Display boneyard name published with the lobby.",
+            "  --boneyard-sha256 <hex> Optional boneyard content fingerprint.",
+            "  --lobby-phase <phase>   Publish hub, loading, session, or results. Default: hub.",
+            "  --lobby-wave <number>   Optional current boneyard wave.",
+            "  --lobby-difficulty <name> Optional current difficulty label.",
+            "  --lobby-elapsed-seconds <seconds> Optional current run duration.",
+            "  --lobby-status-text <text> Optional short status text.",
             "  --no-invite-dialog      Host without automatically opening Steam's friend invite dialog.",
             "  --help                  Show this help text.",
             string.Empty,
@@ -46,7 +63,7 @@ internal static class LauncherOutputFormatter
             "  staged file mirroring",
             "  isolated profile roots under runtime/",
             "  x86 native loader injection on launch",
-            "  friends-only Steam lobbies, invite/join flow, compatibility handshake, and Steam Networking Messages transport",
+            "  public, password-protected, and friends-only Steam lobbies with website-optional discovery",
             "  staged runtime flags, runtime bootstrap manifests, and native-mod host plumbing",
             "  embedded Lua runtime with sd.runtime, sd.events, sd.ui, sd.input, sd.hub, and sd.bots APIs",
             "  in-process memory-access layer and D3D9 overlay backbone for UI automation"
@@ -184,6 +201,10 @@ internal static class LauncherOutputFormatter
             builder.AppendLine($"Steam session phase: {session.Phase}");
             builder.AppendLine($"Steam AppID: {session.AppId}");
             builder.AppendLine($"Steam lobby id: {session.LobbyId}");
+            builder.AppendLine($"Steam lobby privacy: {session.Privacy}");
+            builder.AppendLine($"Steam local user: {session.LocalSteamId} ({session.PersonaName})");
+            builder.AppendLine(
+                $"Multiplayer protocol: {session.ProtocolVersion}; manifest: {session.ManifestSha256}");
             builder.AppendLine(
                 $"Steam authenticated peers: {session.AuthenticatedPeerCount}; " +
                 $"lobby capacity: {session.MaxParticipants}");
