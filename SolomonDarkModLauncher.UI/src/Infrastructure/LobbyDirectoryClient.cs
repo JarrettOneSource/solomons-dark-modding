@@ -27,8 +27,15 @@ internal static class LobbyDirectoryClient
         string directoryUrl,
         CancellationToken cancellationToken)
     {
+        var url = $"{directoryUrl.TrimEnd('/')}/api/lobbies";
+        var viewerSteamId = SteamLocalUser.GetActiveSteamId();
+        if (viewerSteamId is not null)
+        {
+            url += $"?viewerSteamId={viewerSteamId}";
+        }
+
         var list = await Http.GetFromJsonAsync<DirectoryLobbyList>(
-            new Uri($"{directoryUrl.TrimEnd('/')}/api/lobbies", UriKind.Absolute),
+            new Uri(url, UriKind.Absolute),
             JsonOptions,
             cancellationToken);
         return list ?? new DirectoryLobbyList();

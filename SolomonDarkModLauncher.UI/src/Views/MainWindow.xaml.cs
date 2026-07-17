@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using SolomonDarkModLauncher.UI.ViewModels;
 
 namespace SolomonDarkModLauncher.UI.Views;
 
@@ -30,6 +31,39 @@ public partial class MainWindow : Window
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    private void HostSetupCreate_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        viewModel.ConfirmHostSetup(HostPasswordBox.Password);
+        if (!viewModel.IsHostSetupOpen)
+        {
+            HostPasswordBox.Clear();
+        }
+    }
+
+    private void HostSetupCancel_Click(object sender, RoutedEventArgs e)
+    {
+        CancelHostSetup();
+    }
+
+    private void HostSetupScrim_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        CancelHostSetup();
+    }
+
+    private void CancelHostSetup()
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.CancelHostSetup();
+        }
+        HostPasswordBox.Clear();
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
