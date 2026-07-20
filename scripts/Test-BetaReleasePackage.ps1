@@ -50,6 +50,9 @@ $result = [ordered]@{
     uiWindowTitle = $null
     uiCatalogStatus = $null
     uiMultiplayerActions = @()
+    uiProtocolHandler = $null
+    uiSingleInstanceForwarding = $false
+    uiLobbyLinkForwarding = $false
     uiMissingGameError = $null
     uiMissingGameRecoveryAvailable = $false
 }
@@ -62,6 +65,16 @@ $originalUiSettings = if ($hadUiSettings) {
 }
 else {
     $null
+}
+$protocolRegistrySubkey = "Software\Classes\solomondarkrevived"
+$protocolRegistryPath = "HKCU:\$protocolRegistrySubkey"
+$protocolRegistryBackupPath = Join-Path $env:TEMP "SolomonDarkMultiplayerBeta-scheme-$version.reg"
+$hadProtocolRegistration = Test-Path $protocolRegistryPath
+if ($hadProtocolRegistration) {
+    & reg.exe export "HKCU\$protocolRegistrySubkey" $protocolRegistryBackupPath /y | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not preserve the existing Solomon Dark lobby protocol registration."
+    }
 }
 
 function Invoke-JsonLauncher {
@@ -174,6 +187,35 @@ try {
         if ($result.uiWindowTitle -notlike "Solomon Dark Revived*") {
             throw "Unexpected desktop launcher title: $($result.uiWindowTitle)"
         }
+
+        if (-not (Test-Path $protocolRegistryPath)) {
+            throw "Desktop launcher did not register website lobby links."
+        }
+        $protocolKey = Get-Item $protocolRegistryPath
+        if ($protocolKey.GetValueNames() -notcontains "URL Protocol") {
+            throw "Desktop launcher protocol registration is not a URL handler."
+        }
+        $protocolCommandPath = Join-Path $protocolRegistryPath "shell/open/command"
+        $protocolCommand = [string](Get-Item $protocolCommandPath).GetValue("")
+        $expectedProtocolCommand = "`"$uiExecutable`" `"%1`""
+        if (-not [string]::Equals(
+                $protocolCommand,
+                $expectedProtocolCommand,
+                [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Desktop launcher registered the wrong lobby-link command: $protocolCommand"
+        }
+        $result.uiProtocolHandler = $protocolCommand
+
+        $secondUiProcess = Start-Process -FilePath $uiExecutable -PassThru
+        if (-not $secondUiProcess.WaitForExit(10000)) {
+            Stop-Process -Id $secondUiProcess.Id -Force -ErrorAction SilentlyContinue
+            throw "A second desktop launcher did not forward activation to the open launcher."
+        }
+        $uiProcess.Refresh()
+        if ($uiProcess.HasExited) {
+            throw "The primary desktop launcher exited during single-instance activation."
+        }
+        $result.uiSingleInstanceForwarding = $true
 
         Add-Type -AssemblyName UIAutomationClient
         $automationRoot = [System.Windows.Automation.AutomationElement]::FromHandle(
@@ -289,6 +331,41 @@ try {
         if (-not $result.uiMissingGameRecoveryAvailable) {
             throw "Desktop launcher exposed no Select Game Folder action after the saved game path failed."
         }
+
+        $testLobbyId = "109775243840973240"
+        $lobbyLinkProcess = Start-Process `
+            -FilePath $uiExecutable `
+            -ArgumentList "solomondarkrevived://join/$testLobbyId" `
+            -PassThru
+        if (-not $lobbyLinkProcess.WaitForExit(10000)) {
+            Stop-Process -Id $lobbyLinkProcess.Id -Force -ErrorAction SilentlyContinue
+            throw "The website lobby link did not reach the open desktop launcher."
+        }
+
+        $forwardDeadline = (Get-Date).AddSeconds(10)
+        while ((Get-Date) -lt $forwardDeadline -and -not $uiProcess.HasExited) {
+            $elements = $automationRoot.FindAll(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)
+            for ($index = 0; $index -lt $elements.Count; $index++) {
+                $element = $elements.Item($index)
+                $valuePattern = $null
+                if ($element.TryGetCurrentPattern(
+                        [System.Windows.Automation.ValuePattern]::Pattern,
+                        [ref]$valuePattern) -and
+                    $valuePattern.Current.Value -eq $testLobbyId) {
+                    $result.uiLobbyLinkForwarding = $true
+                    break
+                }
+            }
+            if ($result.uiLobbyLinkForwarding) {
+                break
+            }
+            Start-Sleep -Milliseconds 100
+        }
+        if (-not $result.uiLobbyLinkForwarding) {
+            throw "The open desktop launcher did not receive the website Lobby ID."
+        }
     }
     finally {
         if ($null -ne $uiProcess -and -not $uiProcess.HasExited) {
@@ -306,6 +383,18 @@ finally {
     }
     elseif (Test-Path $uiSettingsPath) {
         Remove-Item $uiSettingsPath -Force
+    }
+    if (Test-Path $protocolRegistryPath) {
+        Remove-Item $protocolRegistryPath -Recurse -Force
+    }
+    if ($hadProtocolRegistration) {
+        & reg.exe import $protocolRegistryBackupPath | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not restore the previous lobby protocol registration."
+        }
+    }
+    if (Test-Path $protocolRegistryBackupPath) {
+        Remove-Item $protocolRegistryBackupPath -Force
     }
     $outputDirectory = Split-Path -Parent $OutputPath
     New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null

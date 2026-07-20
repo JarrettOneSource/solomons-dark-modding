@@ -739,7 +739,7 @@
                     <TextBlock Margin="0,5,0,0"
                                FontSize="12"
                                Foreground="{StaticResource TextSecondaryBrush}"
-                               Text="1. Click Host Game, then choose Friends Only or Public.&#x0a;2. Pick a loadout and enter the hub.&#x0a;3. Invite a friend through Steam, or share the Lobby ID."
+                               Text="1. Click Host Game, then choose Friends Only or Public.&#x0a;2. Pick a loadout and enter the hub.&#x0a;3. Your friends can select the lobby on the website, join through Steam, or use the Lobby ID."
                                TextWrapping="Wrap" />
 
                     <TextBlock Margin="0,16,0,0"
@@ -750,7 +750,7 @@
                     <TextBlock Margin="0,5,0,0"
                                FontSize="12"
                                Foreground="{StaticResource TextSecondaryBrush}"
-                               Text="1. Join the host's lobby through Steam, or use a Lobby ID.&#x0a;2. Pick a loadout.&#x0a;3. Enter the hub."
+                               Text="1. Select the lobby on the website, join through Steam, or use a Lobby ID.&#x0a;2. Pick a loadout.&#x0a;3. Enter the hub."
                                TextWrapping="Wrap" />
 
                     <Button Margin="0,18,0,0"

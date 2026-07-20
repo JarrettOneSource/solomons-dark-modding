@@ -39,7 +39,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool isHowToPlayOpen_;
     private bool hostPrivacyFriends_ = true;
     private bool hostPrivacyPublic_;
-    private SteamInviteNotification? pendingAcceptedInvite_;
+    private ulong? pendingLobbyJoinId_;
     private int activeGameProcessId_;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
@@ -433,7 +433,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             {
                 StartSteamInviteListener();
             }
-            TryLaunchPendingInvite();
+            TryLaunchPendingLobbyJoin();
             return;
         }
 
@@ -453,7 +453,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             {
                 StartSteamInviteListener();
             }
-            TryLaunchPendingInvite();
+            TryLaunchPendingLobbyJoin();
             return;
         }
 
@@ -490,7 +490,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             _ => "Ready"
         };
         IsBusy = false;
-        TryLaunchPendingInvite();
+        TryLaunchPendingLobbyJoin();
     }
 
     private async Task MonitorGameProcessExitAsync(int processId)
@@ -510,6 +510,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             activeGameProcessId_ = 0;
             RaiseCommandStates();
             StartSteamInviteListener();
+            TryLaunchPendingLobbyJoin();
         });
     }
 
@@ -692,29 +693,30 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 break;
 
             case "accepted" when notification.LobbyId is { } acceptedLobbyId:
-                LobbyId = acceptedLobbyId.ToString();
-                pendingAcceptedInvite_ = notification;
-                TryLaunchPendingInvite();
+                QueueLobbyJoin(acceptedLobbyId);
                 break;
         }
     }
 
-    private void TryLaunchPendingInvite()
+    public void QueueLobbyJoin(ulong lobbyId)
     {
-        if (pendingAcceptedInvite_ is not { LobbyId: { } lobbyId } notification ||
-            !CanLaunch())
+        LobbyId = lobbyId.ToString();
+        pendingLobbyJoinId_ = lobbyId;
+        TryLaunchPendingLobbyJoin();
+    }
+
+    private void TryLaunchPendingLobbyJoin()
+    {
+        if (pendingLobbyJoinId_ is not { } lobbyId || !CanLaunch())
         {
             return;
         }
 
-        pendingAcceptedInvite_ = null;
+        pendingLobbyJoinId_ = null;
         LobbyId = lobbyId.ToString();
-        var host = string.IsNullOrWhiteSpace(notification.FriendName)
-            ? "Steam host"
-            : notification.FriendName;
         _ = ExecuteActionAsync(
             LauncherUiCommandMode.JoinSteam,
-            $"The launcher connects to {host}'s lobby.");
+            $"The launcher joins lobby {lobbyId}.");
     }
 
     private void StopSteamInviteListener()

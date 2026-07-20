@@ -204,6 +204,9 @@ emit(
 emit(
   "replicated.apply_presentation_available",
   replicated and replicated.apply_presentation_available or false)
+emit(
+  "replicated.apply_actors_available",
+  replicated and replicated.apply_actors_available or false)
 
 local function emit_snapshot_actor(prefix, actor)
   emit(prefix .. ".network_id", actor.network_actor_id or 0)
@@ -234,9 +237,15 @@ if replicated ~= nil and replicated.actors ~= nil then
   end
 end
 
+if replicated ~= nil and replicated.apply_actors ~= nil then
+  for index, actor in ipairs(replicated.apply_actors) do
+    emit_snapshot_actor("applyactor." .. tostring(index), actor)
+  end
+end
+
 if replicated ~= nil and replicated.apply_presentation_actors ~= nil then
   for index, actor in ipairs(replicated.apply_presentation_actors) do
-    emit_snapshot_actor("appactor." .. tostring(index), actor)
+    emit_snapshot_actor("presactor." .. tostring(index), actor)
   end
 end
 
@@ -370,23 +379,27 @@ def match_snapshot_actor(
 def build_client_snapshot(values: dict[str, str]) -> dict[str, Any]:
     actors = parse_indexed(values, "actor")
     repactors = parse_indexed(values, "repactor")
-    appactors = parse_indexed(values, "appactor")
+    applyactors = parse_indexed(values, "applyactor")
+    presentationactors = parse_indexed(values, "presactor")
     bindings = parse_indexed(values, "binding")
     local_by_address = {parse_int(actor.get("address")): actor for actor in actors}
     binding_by_id = {
         parse_int(binding.get("network_id")): binding
         for binding in bindings
-        if binding.get("matched") == "true" and binding.get("parked") != "true"
+        if binding.get("matched") == "true"
+        and binding.get("parked") != "true"
+        and binding.get("removed") != "true"
     }
     return {
         "scene_name": values.get("scene.name", ""),
         "scene_kind": values.get("scene.kind", ""),
         "actors": actors,
         "repactors": repactors,
-        "appactors": appactors,
-        "appactor_by_id": {
+        "applyactors": applyactors,
+        "presentationactors": presentationactors,
+        "presentationactor_by_id": {
             parse_int(actor.get("network_id")): actor
-            for actor in appactors
+            for actor in presentationactors
             if parse_int(actor.get("network_id")) != 0
         },
         "repactor_by_id": {
@@ -405,6 +418,9 @@ def build_client_snapshot(values: dict[str, str]) -> dict[str, Any]:
         "replicated_apply_valid": values.get("replicated.apply_valid") == "true",
         "replicated_apply_presentation_available": (
             values.get("replicated.apply_presentation_available") == "true"
+        ),
+        "replicated_apply_actors_available": (
+            values.get("replicated.apply_actors_available") == "true"
         ),
         "replicated_apply_sequence": parse_int(values.get("replicated.apply_sequence")),
         "replicated_apply_scene_epoch": parse_int(values.get("replicated.apply_scene_epoch")),
@@ -455,6 +471,10 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
         client["replicated_apply_valid"]
         and client["replicated_apply_presentation_available"]
     )
+    client_apply_actors_available = (
+        client["replicated_apply_valid"]
+        and client["replicated_apply_actors_available"]
+    )
     client_presentation_clock_valid = (
         client["replicated_applied_ms"]
         >= client["replicated_apply_presentation_received_ms"]
@@ -485,14 +505,15 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
         )
 
     comparisons: list[dict[str, Any]] = []
-    for repactor in client["repactors"]:
-        type_id = parse_int(repactor.get("type"))
+    for apply_actor in client["applyactors"]:
+        type_id = parse_int(apply_actor.get("type"))
         if type_id < HUB_NPC_TYPE_MIN or type_id > HUB_NPC_TYPE_MAX:
             continue
-        network_id = parse_int(repactor.get("network_id"))
-        applied_repactor = client["appactor_by_id"].get(network_id)
-        if applied_repactor is None:
-            continue
+        network_id = parse_int(apply_actor.get("network_id"))
+        applied_repactor = client["presentationactor_by_id"].get(
+            network_id,
+            apply_actor,
+        )
         binding = client["binding_by_id"].get(network_id)
         if binding is None:
             continue
@@ -500,7 +521,7 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
         if local_actor is None:
             continue
         host_match = host_actor_by_network_id.get(network_id)
-        host_repactor = host["repactor_by_id"].get(network_id, repactor)
+        host_repactor = host["repactor_by_id"].get(network_id, applied_repactor)
         host_actor, host_distance = host_match if host_match is not None else ({}, math.inf)
 
         row = {
@@ -611,8 +632,12 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
         "client_replicated_apply_presentation_received_ms": client[
             "replicated_apply_presentation_received_ms"
         ],
+        "client_apply_actors_available": client_apply_actors_available,
+        "client_applied_actor_count": len(client["applyactors"]),
         "client_apply_presentation_available": client_apply_presentation_available,
-        "client_applied_presentation_actor_count": len(client["appactors"]),
+        "client_presentation_source_actor_count": len(
+            client["presentationactors"]
+        ),
         "client_presentation_clock_valid": client_presentation_clock_valid,
         "client_presentation_age_ms": client_presentation_age_ms,
         "client_replicated_applied_ms": client["replicated_applied_ms"],
@@ -733,6 +758,18 @@ def main() -> int:
             bool(summary["client_replicated_valid"])
             for summary in summaries
         ),
+        "all_apply_actors_available": all(
+            bool(summary["client_apply_actors_available"])
+            for summary in summaries
+        ),
+        "all_apply_presentation_available": all(
+            bool(summary["client_apply_presentation_available"])
+            for summary in summaries
+        ),
+        "all_presentation_clocks_valid": all(
+            bool(summary["client_presentation_clock_valid"])
+            for summary in summaries
+        ),
         "any_replicated_truncated": any(
             bool(summary["client_replicated_truncated"])
             for summary in summaries
@@ -803,6 +840,9 @@ def main() -> int:
     if args.fail_on_divergence:
         diverged = (
             not aggregate["all_replicated_valid"] or
+            not aggregate["all_apply_actors_available"] or
+            not aggregate["all_apply_presentation_available"] or
+            not aggregate["all_presentation_clocks_valid"] or
             aggregate["any_replicated_truncated"] or
             aggregate["maximum_failed_remove_actor_count"] > 0 or
             aggregate["maximum_failed_remove_actor_total_count"] > 0 or

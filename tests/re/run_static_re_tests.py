@@ -79,6 +79,7 @@ from static_multiplayer_runtime_contracts import (
     test_packaged_ui_accepts_single_file_launcher,
     test_packaged_ui_does_not_inherit_test_world_overrides,
     test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery,
+    test_website_lobby_links_register_and_route_to_launcher,
     test_pair_launcher_drains_redirected_json_output,
     test_pointer_list_batch_rejects_stale_managed_release_callbacks,
     test_reconnect_verifier_has_a_dedicated_cold_launch_timeout,
@@ -7012,6 +7013,12 @@ def test_steam_friend_hub_lifecycle_soak_is_wired() -> str:
         (lua_gameplay_text, '"apply_presentation_received_ms"'),
         (lua_gameplay_text, '"apply_presentation_available"'),
         (lua_gameplay_text, '"apply_presentation_actors"'),
+        (lua_gameplay_text, '"apply_actors_available"'),
+        (lua_gameplay_text, '"apply_actors"'),
+        (
+            lua_gameplay_text,
+            "candidate.sequence == runtime.world_snapshot_apply.sequence",
+        ),
         (
             reconciliation_text,
             "state.world_snapshot_apply.presentation_sequence = presentation_snapshot.sequence;",
@@ -7024,14 +7031,24 @@ def test_steam_friend_hub_lifecycle_soak_is_wired() -> str:
             presentation_probe_text,
             'client["replicated_applied_ms"]\n        - client["replicated_apply_presentation_received_ms"]',
         ),
-        (presentation_probe_text, '"appactor"'),
+        (presentation_probe_text, '"applyactor"'),
+        (
+            presentation_probe_text,
+            'for apply_actor in client["applyactors"]:',
+        ),
+        (presentation_probe_text, 'binding.get("removed") != "true"'),
         (presentation_probe_text, '"client_apply_presentation_available"'),
         (soak_text, '"same_machine": PAIR_BACKEND == "wsl"'),
+        (
+            soak_text,
+            'applied_authoritative = hub_records(client_values, "applyactor")',
+        ),
         (soak_text, "def convergence_errors("),
         (soak_text, "ThreadPoolExecutor(max_workers=2)"),
         (soak_text, "host_future = executor.submit("),
         (soak_text, "client_future = executor.submit("),
-        (soak_text, '"authoritative hub actor IDs are not unique"'),
+        (soak_text, '"latest authoritative hub actor IDs are not unique"'),
+        (soak_text, '"applied authoritative hub actor IDs are not unique"'),
         (soak_text, '"retired hub IDs remain bound"'),
         (soak_text, '"a persistent named hub NPC remains unbound"'),
         (soak_text, '"applied hub presentation source is unavailable"'),
@@ -11511,6 +11528,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "launcher auto-accepts Steam invites and hub-gates discovery",
         test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery,
+    ),
+    (
+        "website lobby links register and route to the launcher",
+        test_website_lobby_links_register_and_route_to_launcher,
     ),
     (
         "progression matrices prearm quiet spawning before run entry",

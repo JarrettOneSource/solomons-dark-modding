@@ -61,7 +61,7 @@ credentials.
   state; stale item/equipment identities did not leak into the replacement.
 - The explicit flat Boneyard matches on both staged copies and contains no
   scenery, roads, fences, or static collision circles. The embedded Lua runtime
-  contract passes on both peers with 10 namespaces and 87 required functions.
+  contract passes on both peers with 10 namespaces and 89 required functions.
 
 A genuine cross-account Steam peer handshake has been exercised on this
 machine with a Windows host and a WSLg/Proton joiner. The joiner accepted a
@@ -128,22 +128,16 @@ PULSE_SERVER=unix:/dev/null SDL_AUDIODRIVER=dummy ~/.steam/debian-installation/s
    .\scripts\Build-All.ps1 -Configuration Release
    ```
 
-## Recommended invite flow
+## Join a lobby
 
-1. On the joining PC, open `SolomonDarkMultiplayerBeta.exe` and leave it open.
-   The status line should say **Steam invites ready**.
-2. On the hosting PC, open the same launcher, click **Host Game**, and choose
-   **Friends Only** or **Public**.
-3. Wait for the host to enter the hub and for the launcher to show the lobby ID.
-4. The host sends an invitation from the Steam overlay or Friends window.
-5. The joiner accepts the invite. The launcher detects the accepted lobby and
-   starts the modded game automatically.
-6. Do not begin the run until every player is visible in the shared hub and both
+1. The host opens `SolomonDarkMultiplayerBeta.exe`, clicks **Host Game**, and
+   chooses **Friends Only** or **Public**.
+2. The host picks a loadout and enters the hub.
+3. The other player selects the lobby on the website, joins it through Steam,
+   or enters its Lobby ID in the launcher.
+4. The other player picks a loadout and enters the hub.
+5. Do not begin the run until every player is visible in the shared hub and both
    runtimes report an authenticated peer.
-
-The shared Spacewar AppID cannot start this launcher by itself. Keep the beta
-launcher open before accepting an invite so its Steam callback listener can
-route the accepted lobby into Solomon Dark instead of Steam opening Spacewar.
 
 ## Direct Lobby ID
 
@@ -153,11 +147,10 @@ records it after `Steam multiplayer lobby ready`. Share it privately, paste it
 into the joining launcher, and click **Join Lobby ID**. The join does not report
 success until the host compatibility handshake authenticates.
 
-**Browse Lobbies** is an additional discovery path. Public lobbies are visible
-to signed-in users and friends-only lobbies are returned only to verified Steam
-friends. A listing is published only after the host reaches the hub. The
-directory is not in the gameplay path: invitations and Lobby IDs continue to
-work if the website is unavailable.
+The website lists public lobbies and the friends-only lobbies that the signed-in
+Steam user can enter. A lobby appears after its host reaches the hub. Its
+**Connect** action opens the installed beta launcher and joins that lobby. If
+the website is unavailable, join through Steam or use the Lobby ID.
 
 The equivalent command-line launches are:
 

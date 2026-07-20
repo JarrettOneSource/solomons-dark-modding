@@ -787,6 +787,7 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
     local_verifier = _read("tools/verify_local_multiplayer_sync.py")
     steam_driver = _read("tools/drive_steam_friend_active_pair.py")
     lua_contract_verifier = _read("tools/verify_lua_runtime_contract.py")
+    playtest_guide = _read("docs/networking/steam-friend-playtest.md")
     spell_behavior_verifier = _read(
         "tools/verify_steam_friend_active_pair_spell_behavior.py"
     )
@@ -832,6 +833,19 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         assert token in lua_contract_verifier, (
             f"real-Steam Lua runtime contract lacks: {token}"
         )
+
+    required_functions = next(
+        ast.literal_eval(node.value)
+        for node in ast.parse(lua_contract_verifier).body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.target.id == "REQUIRED_FUNCTIONS"
+    )
+    required_function_count = sum(map(len, required_functions.values()))
+    assert (
+        f"with {len(required_functions)} namespaces and "
+        f"{required_function_count} required functions."
+    ) in playtest_guide, "playtest guide has a stale Lua runtime contract count"
 
     _require_in_order(
         engine,
@@ -2683,9 +2697,10 @@ def test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery() -> str:
     ):
         assert token in listener_client, f"launcher invite client lacks: {token}"
     for token in (
-        "pendingAcceptedInvite_",
-        "TryLaunchPendingInvite",
-        "The launcher connects to",
+        "pendingLobbyJoinId_",
+        "QueueLobbyJoin(acceptedLobbyId)",
+        "TryLaunchPendingLobbyJoin",
+        "The launcher joins lobby",
         "LauncherUiCommandMode.JoinSteam",
         "DescribeLobbyConnection",
         "response.Stage?.StageRoot",
@@ -2713,6 +2728,86 @@ def test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery() -> str:
     return (
         "accepted Steam callbacks auto-launch lobby-ID joins, connection details "
         "are visible, and website discovery begins only after a real hub state"
+    )
+
+
+def test_website_lobby_links_register_and_route_to_launcher() -> str:
+    app = _read("SolomonDarkModLauncher.UI/App.xaml.cs")
+    join_uri = _read(
+        "SolomonDarkModLauncher.UI/src/Infrastructure/LauncherJoinUri.cs"
+    )
+    protocol_registration = _read(
+        "SolomonDarkModLauncher.UI/src/Infrastructure/"
+        "LauncherProtocolRegistration.cs"
+    )
+    activation_broker = _read(
+        "SolomonDarkModLauncher.UI/src/Infrastructure/LauncherActivationBroker.cs"
+    )
+    view_model = _read(
+        "SolomonDarkModLauncher.UI/src/ViewModels/MainWindowViewModel.cs"
+    )
+    package_smoke = _read("scripts/Test-BetaReleasePackage.ps1")
+    playtest_guide = _read("docs/networking/steam-friend-playtest.md")
+
+    for token in (
+        "LauncherProtocolRegistration.RegisterCurrentExecutable()",
+        "LauncherActivationBroker",
+        "LauncherJoinUri.TryParse",
+        "viewModel.QueueLobbyJoin(lobbyId)",
+    ):
+        assert token in app, f"desktop launcher startup lacks: {token}"
+    for token in (
+        'private const string Scheme = "solomondarkrevived";',
+        '!string.Equals(uri.Host, "join", StringComparison.Ordinal)',
+        "ulong.TryParse",
+        "uri.Query.Length != 0",
+    ):
+        assert token in join_uri, f"website lobby URI parser lacks: {token}"
+    for token in (
+        '@"Software\\Classes\\solomondarkrevived"',
+        'protocolKey.SetValue("URL Protocol", string.Empty)',
+        '@"shell\\open\\command"',
+        'commandKey.SetValue(null, $"\\\"{executablePath}\\\" \\"%1\\\"")',
+    ):
+        assert token in protocol_registration, f"sdr protocol registration lacks: {token}"
+    for token in (
+        'private const string MutexName = @"Local\\SolomonDarkMultiplayerBeta";',
+        "NamedPipeServerStream",
+        "NamedPipeClientStream",
+        "ForwardActivation",
+    ):
+        assert token in activation_broker, f"single-instance lobby activation lacks: {token}"
+    for token in (
+        "public void QueueLobbyJoin(ulong lobbyId)",
+        "pendingLobbyJoinId_ = lobbyId;",
+        "TryLaunchPendingLobbyJoin();",
+    ):
+        assert token in view_model, f"unified pending lobby join lacks: {token}"
+    process_exit_monitor = view_model[
+        view_model.index("private async Task MonitorGameProcessExitAsync") :
+        view_model.index("private void StartSteamSessionMonitoring")
+    ]
+    assert "TryLaunchPendingLobbyJoin();" in process_exit_monitor, (
+        "a website lobby link queued during gameplay is not retried after exit"
+    )
+    for token in (
+        '"Software\\Classes\\solomondarkrevived"',
+        '"URL Protocol"',
+        '$expectedProtocolCommand = "`"$uiExecutable`" `"%1`""',
+        "$result.uiSingleInstanceForwarding = $true",
+        '"solomondarkrevived://join/$testLobbyId"',
+        "$result.uiLobbyLinkForwarding = $true",
+    ):
+        assert token in package_smoke, f"package protocol smoke check lacks: {token}"
+
+    for stale_text in ("Steam invites ready", "Browse Lobbies"):
+        assert stale_text not in playtest_guide, (
+            "playtest guide still documents removed launcher copy: " + stale_text
+        )
+
+    return (
+        "website lobby links register the packaged launcher, forward to one active "
+        "window, and use the same pending lobby join as Steam callbacks"
     )
 
 
@@ -4923,19 +5018,23 @@ def test_hub_presentation_uses_stored_authority_across_lifecycle_rotation() -> s
     import probe_hub_npc_presentation_sync as presentation
 
     client = {
-        "repactor.1.network_id": "123",
+        "repactor.1.network_id": "456",
         "repactor.1.type": str(presentation.STUDENT_TYPE_ID),
-        "appactor.1.network_id": "123",
-        "appactor.1.type": str(presentation.STUDENT_TYPE_ID),
-        "appactor.1.student_book_palette_count": "0",
+        "applyactor.1.network_id": "123",
+        "applyactor.1.type": str(presentation.STUDENT_TYPE_ID),
+        "presactor.1.network_id": "123",
+        "presactor.1.type": str(presentation.STUDENT_TYPE_ID),
+        "presactor.1.student_book_palette_count": "0",
         "binding.1.network_id": "123",
         "binding.1.address": "0x1000",
         "binding.1.type": str(presentation.STUDENT_TYPE_ID),
         "binding.1.matched": "true",
         "binding.1.parked": "false",
+        "binding.1.removed": "false",
         "actor.1.address": "0x1000",
         "actor.1.type": str(presentation.STUDENT_TYPE_ID),
         "replicated.apply_valid": "true",
+        "replicated.apply_actors_available": "true",
         "replicated.apply_presentation_available": "true",
         "replicated.apply_presentation_received_ms": "90",
         "replicated.applied_ms": "100",

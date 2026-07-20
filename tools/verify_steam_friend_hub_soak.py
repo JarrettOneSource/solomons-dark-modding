@@ -68,7 +68,8 @@ def capture(pair: SteamFriendActivePair, timeout: float) -> dict[str, Any]:
     # wire IDs identify host presentation snapshots, while each client binds as
     # many of those snapshots as its own stock Student pool currently exposes.
     # Persistent named NPCs still require exact one-to-one convergence.
-    authoritative = hub_records(client_values, "repactor")
+    latest_authoritative = hub_records(client_values, "repactor")
+    applied_authoritative = hub_records(client_values, "applyactor")
     bindings = [
         binding
         for binding in hub_records(client_values, "binding")
@@ -78,9 +79,14 @@ def capture(pair: SteamFriendActivePair, timeout: float) -> dict[str, Any]:
     ]
     local_actors = hub_records(client_values, "actor")
 
-    authoritative_ids = [
+    latest_authoritative_ids = [
         presentation.parse_int(actor.get("network_id"))
-        for actor in authoritative
+        for actor in latest_authoritative
+        if presentation.parse_int(actor.get("network_id")) != 0
+    ]
+    applied_authoritative_ids = [
+        presentation.parse_int(actor.get("network_id"))
+        for actor in applied_authoritative
         if presentation.parse_int(actor.get("network_id")) != 0
     ]
     binding_ids = [
@@ -98,17 +104,20 @@ def capture(pair: SteamFriendActivePair, timeout: float) -> dict[str, Any]:
         for actor in local_actors
         if presentation.parse_int(actor.get("address")) != 0
     ]
-    authoritative_id_set = set(authoritative_ids)
+    latest_authoritative_id_set = set(latest_authoritative_ids)
+    applied_authoritative_id_set = set(applied_authoritative_ids)
     binding_id_set = set(binding_ids)
     binding_address_set = set(binding_addresses)
     local_address_set = set(local_addresses)
-    authoritative_named_ids = {
+    applied_authoritative_named_ids = {
         presentation.parse_int(actor.get("network_id"))
-        for actor in authoritative
+        for actor in applied_authoritative
         if presentation.parse_int(actor.get("type"))
         != presentation.STUDENT_TYPE_ID
     }
-    authoritative_student_ids = authoritative_id_set - authoritative_named_ids
+    applied_authoritative_student_ids = (
+        applied_authoritative_id_set - applied_authoritative_named_ids
+    )
     binding_named_ids = {
         presentation.parse_int(binding.get("network_id"))
         for binding in bindings
@@ -136,6 +145,9 @@ def capture(pair: SteamFriendActivePair, timeout: float) -> dict[str, Any]:
         "client_scene": client_values.get("scene.name", ""),
         "snapshot_valid": client_values.get("replicated.valid") == "true",
         "apply_valid": client_values.get("replicated.apply_valid") == "true",
+        "apply_actors_available": bool(
+            summary["client_apply_actors_available"]
+        ),
         "apply_presentation_available": bool(
             summary["client_apply_presentation_available"]
         ),
@@ -152,11 +164,21 @@ def capture(pair: SteamFriendActivePair, timeout: float) -> dict[str, Any]:
         "snapshot_total_count": presentation.parse_int(
             client_values.get("replicated.total_count")
         ),
-        "authoritative_ids": sorted(authoritative_id_set),
-        "authoritative_actor_count": len(authoritative_ids),
-        "unique_authoritative_actor_count": len(authoritative_id_set),
-        "authoritative_named_actor_count": len(authoritative_named_ids),
-        "authoritative_student_actor_count": len(authoritative_student_ids),
+        "latest_authoritative_ids": sorted(latest_authoritative_id_set),
+        "latest_authoritative_actor_count": len(latest_authoritative_ids),
+        "unique_latest_authoritative_actor_count": len(
+            latest_authoritative_id_set
+        ),
+        "applied_authoritative_actor_count": len(applied_authoritative_ids),
+        "unique_applied_authoritative_actor_count": len(
+            applied_authoritative_id_set
+        ),
+        "applied_authoritative_named_actor_count": len(
+            applied_authoritative_named_ids
+        ),
+        "applied_authoritative_student_actor_count": len(
+            applied_authoritative_student_ids
+        ),
         "matched_binding_count": len(binding_ids),
         "unique_binding_id_count": len(binding_id_set),
         "unique_binding_address_count": len(binding_address_set),
@@ -166,19 +188,23 @@ def capture(pair: SteamFriendActivePair, timeout: float) -> dict[str, Any]:
         "unique_local_actor_count": len(local_address_set),
         "local_named_actor_count": len(local_named_addresses),
         "local_student_actor_count": len(local_student_addresses),
-        "missing_binding_ids": sorted(authoritative_id_set - binding_id_set),
+        "missing_binding_ids": sorted(
+            applied_authoritative_id_set - binding_id_set
+        ),
         "missing_named_binding_ids": sorted(
-            authoritative_named_ids - binding_named_ids
+            applied_authoritative_named_ids - binding_named_ids
         ),
         "missing_student_binding_ids": sorted(
-            authoritative_student_ids - binding_student_ids
+            applied_authoritative_student_ids - binding_student_ids
         ),
-        "stale_binding_ids": sorted(binding_id_set - authoritative_id_set),
+        "stale_binding_ids": sorted(
+            binding_id_set - applied_authoritative_id_set
+        ),
         "stale_named_binding_ids": sorted(
-            binding_named_ids - authoritative_named_ids
+            binding_named_ids - applied_authoritative_named_ids
         ),
         "stale_student_binding_ids": sorted(
-            binding_student_ids - authoritative_student_ids
+            binding_student_ids - applied_authoritative_student_ids
         ),
         "unbound_local_actor_count": len(
             local_address_set - binding_address_set
@@ -235,24 +261,29 @@ def capture(pair: SteamFriendActivePair, timeout: float) -> dict[str, Any]:
 
 
 def convergence_errors(sample: dict[str, Any]) -> list[str]:
-    authoritative_count = int(sample["authoritative_actor_count"])
+    latest_count = int(sample["latest_authoritative_actor_count"])
+    applied_count = int(sample["applied_authoritative_actor_count"])
     errors: list[str] = []
     if sample["host_scene"] != "hub" or sample["client_scene"] != "hub":
         errors.append("both participants must remain in the shared hub")
     if not sample["snapshot_valid"] or not sample["apply_valid"]:
         errors.append("replicated hub snapshot/apply state is invalid")
+    if not sample["apply_actors_available"]:
+        errors.append("applied hub actor source is unavailable")
     if not sample["apply_presentation_available"]:
         errors.append("applied hub presentation source is unavailable")
     if not sample["presentation_clock_valid"]:
         errors.append("replicated hub presentation clock order is invalid")
-    if authoritative_count <= 0:
-        errors.append("authoritative hub actor set is empty")
-    if sample["snapshot_actor_count"] != authoritative_count:
+    if latest_count <= 0 or applied_count <= 0:
+        errors.append("latest or applied authoritative hub actor set is empty")
+    if sample["snapshot_actor_count"] != latest_count:
         errors.append("snapshot actor count differs from authoritative IDs")
-    if sample["snapshot_total_count"] != authoritative_count:
+    if sample["snapshot_total_count"] != latest_count:
         errors.append("snapshot total count differs from authoritative IDs")
-    if sample["unique_authoritative_actor_count"] != authoritative_count:
-        errors.append("authoritative hub actor IDs are not unique")
+    if sample["unique_latest_authoritative_actor_count"] != latest_count:
+        errors.append("latest authoritative hub actor IDs are not unique")
+    if sample["unique_applied_authoritative_actor_count"] != applied_count:
+        errors.append("applied authoritative hub actor IDs are not unique")
     if sample["unique_binding_id_count"] != sample["matched_binding_count"]:
         errors.append("matched hub binding IDs are not unique")
     if sample["unique_binding_address_count"] != sample["matched_binding_count"]:
@@ -260,16 +291,16 @@ def convergence_errors(sample: dict[str, Any]) -> list[str]:
     if sample["unique_local_actor_count"] != sample["local_actor_count"]:
         errors.append("local hub actor addresses are not unique")
     if (
-        sample["authoritative_named_actor_count"] <= 0
-        or sample["authoritative_student_actor_count"] <= 0
+        sample["applied_authoritative_named_actor_count"] <= 0
+        or sample["applied_authoritative_student_actor_count"] <= 0
         or sample["local_student_actor_count"] <= 0
     ):
         errors.append("named-NPC or Student lifecycle coverage is empty")
     if (
         sample["matched_named_binding_count"]
-        != sample["authoritative_named_actor_count"]
+        != sample["applied_authoritative_named_actor_count"]
         or sample["local_named_actor_count"]
-        != sample["authoritative_named_actor_count"]
+        != sample["applied_authoritative_named_actor_count"]
     ):
         errors.append("persistent named hub NPCs did not converge one-to-one")
     if sample["missing_named_binding_ids"]:
@@ -277,7 +308,7 @@ def convergence_errors(sample: dict[str, Any]) -> list[str]:
     if sample["matched_student_binding_count"] <= 0:
         errors.append("no stock local Student is bound for presentation sync")
     if sample["matched_student_binding_count"] > min(
-        sample["authoritative_student_actor_count"],
+        sample["applied_authoritative_student_actor_count"],
         sample["local_student_actor_count"],
     ):
         errors.append("Student bindings exceed a stock actor population")
@@ -297,7 +328,10 @@ def convergence_errors(sample: dict[str, Any]) -> list[str]:
         errors.append("presentation comparison did not cover every bound hub actor")
     if sample["student_compared"] != sample["matched_student_binding_count"]:
         errors.append("Student presentation comparison missed a bound stock actor")
-    if sample["named_compared"] != sample["authoritative_named_actor_count"]:
+    if (
+        sample["named_compared"]
+        != sample["applied_authoritative_named_actor_count"]
+    ):
         errors.append("named-NPC presentation comparison is incomplete")
     if any(
         int(sample[field]) != 0
@@ -370,7 +404,7 @@ def run(
             lua_timeout,
             convergence_timeout,
         )
-        current_ids = set(sample.pop("authoritative_ids"))
+        current_ids = set(sample.pop("latest_authoritative_ids"))
         if retired_ids & current_ids:
             raise VerifyFailure(
                 "a retired hub network actor ID was reused in the same scene"
@@ -455,7 +489,7 @@ def run(
         "unique_authoritative_actor_count": len(observed_ids),
         "retired_authoritative_actor_count": len(retired_ids),
         "maximum_live_actor_count": max(
-            int(sample["authoritative_actor_count"])
+            int(sample["latest_authoritative_actor_count"])
             for sample in samples
         ),
         "maximum_convergence_attempts": max(

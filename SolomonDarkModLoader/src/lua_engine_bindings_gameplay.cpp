@@ -1194,6 +1194,41 @@ int LuaWorldGetReplicatedActors(lua_State* state) {
     }
     lua_setfield(state, -2, "actors");
 
+    const multiplayer::WorldSnapshotRuntimeInfo* applied_snapshot = nullptr;
+    const auto matches_applied_snapshot = [&](const multiplayer::WorldSnapshotRuntimeInfo& candidate) {
+        return candidate.valid &&
+               candidate.sequence == runtime.world_snapshot_apply.sequence &&
+               candidate.scene_epoch == runtime.world_snapshot_apply.scene_epoch;
+    };
+    if (runtime.world_snapshot_apply.valid && matches_applied_snapshot(snapshot)) {
+        applied_snapshot = &snapshot;
+    } else if (runtime.world_snapshot_apply.valid) {
+        for (auto it = runtime.world_snapshot_history.rbegin();
+             it != runtime.world_snapshot_history.rend();
+             ++it) {
+            if (matches_applied_snapshot(*it)) {
+                applied_snapshot = &*it;
+                break;
+            }
+        }
+    }
+
+    lua_pushboolean(state, applied_snapshot != nullptr ? 1 : 0);
+    lua_setfield(state, -2, "apply_actors_available");
+    lua_createtable(
+        state,
+        applied_snapshot != nullptr ? static_cast<int>(applied_snapshot->actors.size()) : 0,
+        0);
+    lua_index = 1;
+    if (applied_snapshot != nullptr) {
+        for (const auto& actor : applied_snapshot->actors) {
+            PushReplicatedWorldActor(state, actor);
+            lua_rawseti(state, -2, static_cast<lua_Integer>(lua_index));
+            ++lua_index;
+        }
+    }
+    lua_setfield(state, -2, "apply_actors");
+
     const multiplayer::WorldSnapshotRuntimeInfo* applied_presentation = nullptr;
     const auto matches_applied_presentation = [&](const multiplayer::WorldSnapshotRuntimeInfo& candidate) {
         return candidate.valid &&
