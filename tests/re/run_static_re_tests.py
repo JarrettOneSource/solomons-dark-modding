@@ -19,6 +19,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from repository_identity_contract import (
+    test_repository_history_uses_approved_identities,
+)
 from static_multiplayer_runtime_contracts import (
     read_source_unit,
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
@@ -11373,6 +11376,10 @@ def test_participant_native_state_is_owned_by_current_scene() -> str:
 
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "Repository history uses approved project identities",
+        test_repository_history_uses_approved_identities,
+    ),
     (
         "App-thread transport verifier tracks the named cadence gap",
         test_app_thread_transport_verifier_tracks_named_cadence_gap,
