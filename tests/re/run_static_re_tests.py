@@ -58,6 +58,7 @@ from static_multiplayer_runtime_contracts import (
     test_native_item_recipe_selection_excludes_equipped_items,
     test_native_project_uses_repo_local_lua_sources,
     test_natural_offer_expectation_clamps_to_native_maximum,
+    test_native_remote_fireball_inverts_presentation_heading_for_stock_fire,
     test_native_remote_fireball_retains_cast_heading_until_projectile_birth,
     test_native_unregister_retires_address_bound_network_identity,
     test_new_run_retires_the_prior_host_run_exit_latch,
@@ -11603,6 +11604,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "primary spell-effect snapshots do not fight native replay",
         test_primary_spell_effect_snapshots_do_not_fight_native_replay,
+    ),
+    (
+        "native remote Fireball inverts presentation heading for stock Fire",
+        test_native_remote_fireball_inverts_presentation_heading_for_stock_fire,
     ),
     (
         "native remote Fireball retains cast heading until projectile birth",

@@ -3917,6 +3917,40 @@ def test_native_remote_fireball_retains_cast_heading_until_projectile_birth() ->
     )
 
 
+def test_native_remote_fireball_inverts_presentation_heading_for_stock_fire() -> str:
+    playback = read_source_unit(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/"
+        "native_remote_playback.inl"
+    )
+
+    converted_heading = (
+        "NormalizeWizardActorHeadingForWrite(90.0f - ongoing_cast.aim_heading)"
+    )
+    assert converted_heading in playback, (
+        "remote Fire replay must invert the presentation heading before stock "
+        "projectile initialization"
+    )
+    assert (
+        "NormalizeWizardActorHeadingForWrite(ongoing_cast.aim_heading)"
+        not in playback
+    ), "presentation heading must not be written directly into stock Fire direction"
+
+    cardinal_cases = {
+        90.0: 0.0,
+        0.0: 90.0,
+        270.0: 180.0,
+        180.0: 270.0,
+    }
+    for presentation_heading, expected_native_heading in cardinal_cases.items():
+        native_heading = (90.0 - presentation_heading) % 360.0
+        assert native_heading == expected_native_heading
+
+    return (
+        "remote Fire replay converts all cardinal presentation headings into "
+        "stock native directions"
+    )
+
+
 def test_native_item_recipe_selection_excludes_equipped_items() -> str:
     verifier = _read("tools/verify_multiplayer_native_item_inventory_sync.py")
     for token in (
