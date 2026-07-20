@@ -2539,6 +2539,25 @@ def test_packaged_ui_accepts_single_file_launcher() -> str:
     )
 
 
+def test_beta_release_smoke_canonicalizes_packaged_steam_path() -> str:
+    smoke = _read("scripts/Test-BetaReleasePackage.ps1")
+
+    canonical_expected_root = (
+        "$expectedSteamRoot = [System.IO.Path]::GetFullPath("
+    )
+    assert canonical_expected_root in smoke, (
+        "the package smoke test must canonicalize its expected Steam root so "
+        "equivalent Windows short and long paths compare equal"
+    )
+    _require_in_order(
+        smoke,
+        canonical_expected_root,
+        "$result.steamApiSource.StartsWith(",
+    )
+
+    return "package smoke canonicalizes 8.3 path aliases before containment checks"
+
+
 def test_packaged_ui_does_not_inherit_test_world_overrides() -> str:
     command_client = _read(
         "SolomonDarkModLauncher.UI/src/Infrastructure/LauncherUiCommandClient.cs"

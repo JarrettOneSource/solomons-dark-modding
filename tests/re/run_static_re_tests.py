@@ -68,6 +68,7 @@ from static_multiplayer_runtime_contracts import (
     test_primary_kill_stress_resumes_only_a_contiguous_passed_prefix,
     test_primary_kill_stress_accepts_a_late_death_from_the_prior_cast,
     test_animated_loot_comparison_bounds_snapshot_phase_skew,
+    test_beta_release_smoke_canonicalizes_packaged_steam_path,
     test_packaged_ui_accepts_single_file_launcher,
     test_packaged_ui_does_not_inherit_test_world_overrides,
     test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery,
@@ -11470,6 +11471,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "packaged desktop UI accepts its single-file launcher",
         test_packaged_ui_accepts_single_file_launcher,
+    ),
+    (
+        "beta package smoke canonicalizes Windows path aliases",
+        test_beta_release_smoke_canonicalizes_packaged_steam_path,
     ),
     (
         "packaged desktop UI strips test-only world overrides",

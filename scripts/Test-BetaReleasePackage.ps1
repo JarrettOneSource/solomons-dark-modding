@@ -144,7 +144,8 @@ try {
     if ($result.steamAppId -ne "480" -or -not $result.steamApiReady) {
         throw "Extracted host stage did not materialize the Spacewar Steam runtime."
     }
-    $expectedSteamRoot = Join-Path $extractedRoot "launcher/assets/steam/win32"
+    $expectedSteamRoot = [System.IO.Path]::GetFullPath(
+        (Join-Path $extractedRoot "launcher/assets/steam/win32"))
     if (-not $result.steamApiSource.StartsWith(
             $expectedSteamRoot,
             [System.StringComparison]::OrdinalIgnoreCase)) {
