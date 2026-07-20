@@ -21,6 +21,7 @@ from typing import Callable
 
 from static_multiplayer_runtime_contracts import (
     read_source_unit,
+    test_app_thread_transport_verifier_tracks_named_cadence_gap,
     test_active_steam_behavior_harnesses_preserve_fixture_state,
     test_staff_target_selection_skips_local_only_enemies,
     test_client_loot_pickup_requests_are_single_flight_per_drop,
@@ -11150,8 +11151,12 @@ def test_multiplayer_native_transport_is_app_thread_owned() -> str:
         "if (owner_thread_id != current_thread_id)",
         app_tick_definition,
     )
+    cadence_calculation = service_loop_text.find(
+        "const auto tick_gap_ms = now_ms - g_last_session_transport_tick_ms;",
+        app_tick_definition,
+    )
     cadence_gate = service_loop_text.find(
-        "now_ms - g_last_session_transport_tick_ms < kServiceTickIntervalMs",
+        "tick_gap_ms < kServiceTickIntervalMs",
         app_tick_definition,
     )
     cadence_commit = service_loop_text.find(
@@ -11177,6 +11182,7 @@ def test_multiplayer_native_transport_is_app_thread_owned() -> str:
     if (
         app_tick_definition == -1
         or owner_gate == -1
+        or cadence_calculation == -1
         or cadence_gate == -1
         or cadence_commit == -1
         or steam_bootstrap_tick == -1
@@ -11186,6 +11192,7 @@ def test_multiplayer_native_transport_is_app_thread_owned() -> str:
         or not (
             app_tick_definition
             < owner_gate
+            < cadence_calculation
             < cadence_gate
             < cadence_commit
             < steam_bootstrap_tick
@@ -11361,6 +11368,10 @@ def test_participant_native_state_is_owned_by_current_scene() -> str:
 
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "App-thread transport verifier tracks the named cadence gap",
+        test_app_thread_transport_verifier_tracks_named_cadence_gap,
+    ),
     (
         "Lua exec timeouts cancel pending gameplay mutations",
         test_lua_exec_timeout_cancels_pending_work,

@@ -83,6 +83,15 @@ def _require_in_order(text: str, *tokens: str) -> None:
         cursor = position + len(token)
 
 
+def test_app_thread_transport_verifier_tracks_named_cadence_gap() -> str:
+    verifier = _read("tests/re/run_static_re_tests.py")
+    assert '"tick_gap_ms < kServiceTickIntervalMs"' in verifier, (
+        "the app-thread transport verifier must recognize the named cadence gap "
+        "used by transport diagnostics"
+    )
+    return "the app-thread ownership verifier accepts the diagnostic cadence variable"
+
+
 def test_unreliable_snapshot_ordering_is_wrap_safe() -> str:
     protocol = _read("SolomonDarkModLoader/include/multiplayer_runtime_protocol.h")
     transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")
