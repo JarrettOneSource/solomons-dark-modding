@@ -40,6 +40,7 @@ from static_multiplayer_runtime_contracts import (
     test_mana_up_contract_replaces_the_initial_rank_bonus,
     test_world_stale_hold_controls_the_exact_remote_host_process,
     test_hub_presentation_uses_stored_authority_across_lifecycle_rotation,
+    test_hub_service_fragments_are_visual_studio_project_items,
     test_hub_services_use_typed_native_lua_dispatch,
     test_level_up_barrier_waits_for_forced_picker_confirmation,
     test_level_up_choice_result_advances_owned_book_before_resume,
@@ -11371,6 +11372,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "App-thread transport verifier tracks the named cadence gap",
         test_app_thread_transport_verifier_tracks_named_cadence_gap,
+    ),
+    (
+        "Hub service fragments are Visual Studio project items",
+        test_hub_service_fragments_are_visual_studio_project_items,
     ),
     (
         "Lua exec timeouts cancel pending gameplay mutations",

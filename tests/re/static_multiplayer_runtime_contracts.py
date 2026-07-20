@@ -92,6 +92,19 @@ def test_app_thread_transport_verifier_tracks_named_cadence_gap() -> str:
     return "the app-thread ownership verifier accepts the diagnostic cadence variable"
 
 
+def test_hub_service_fragments_are_visual_studio_project_items() -> str:
+    project = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj")
+    filters = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj.filters")
+    for path in (
+        r"src\mod_loader_gameplay\hub_service_runtime.inl",
+        r"src\mod_loader_gameplay\public_api_hub.inl",
+    ):
+        item = f'<ClInclude Include="{path}"'
+        assert item in project, f"Visual Studio project omits {path}"
+        assert item in filters, f"Visual Studio filters omit {path}"
+    return "the split hub runtime and API remain visible to Visual Studio tooling"
+
+
 def test_unreliable_snapshot_ordering_is_wrap_safe() -> str:
     protocol = _read("SolomonDarkModLoader/include/multiplayer_runtime_protocol.h")
     transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")

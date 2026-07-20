@@ -332,6 +332,7 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks_effect_and_dispatch.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_control_hooks.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\hub_service_runtime.inl" />
     <ClInclude Include="src\mod_loader_gameplay\nav_grid_snapshot_service.inl" />
     <ClInclude Include="src\mod_loader_gameplay\native_defense_behavior_probes.inl" />
     <ClInclude Include="src\mod_loader_gameplay\host_loot_drop_deactivation.inl" />
@@ -339,6 +340,7 @@
     <ClInclude Include="src\mod_loader_gameplay\native_item_materialization.inl" />
     <ClInclude Include="src\mod_loader_gameplay\native_staff_behavior_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_hub.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_inventory.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl" />
