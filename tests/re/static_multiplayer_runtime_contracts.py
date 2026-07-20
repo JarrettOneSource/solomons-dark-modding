@@ -135,6 +135,18 @@ def test_native_project_uses_repo_local_lua_sources() -> str:
     return "the native project builds from the Lua sources owned by the clone"
 
 
+def test_build_all_rebuilds_native_loader_from_clean_intermediates() -> str:
+    build_script = _read("scripts/Build-All.ps1")
+    assert "& $msbuild $loader /t:Rebuild /m /nologo" in build_script, (
+        "the release build must clean native intermediates before compiling so "
+        "objects and PDBs from another platform toolset cannot be reused"
+    )
+    assert "Remove-OrphanedLoaderObjects" not in build_script, (
+        "a full native rebuild supersedes partial stale-object cleanup"
+    )
+    return "native builds start from clean toolset-specific compiler state"
+
+
 def test_unreliable_snapshot_ordering_is_wrap_safe() -> str:
     protocol = _read("SolomonDarkModLoader/include/multiplayer_runtime_protocol.h")
     transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")

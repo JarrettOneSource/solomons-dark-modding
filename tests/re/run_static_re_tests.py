@@ -23,6 +23,7 @@ from static_multiplayer_runtime_contracts import (
     read_source_unit,
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
     test_active_steam_behavior_harnesses_preserve_fixture_state,
+    test_build_all_rebuilds_native_loader_from_clean_intermediates,
     test_staff_target_selection_skips_local_only_enemies,
     test_client_loot_pickup_requests_are_single_flight_per_drop,
     test_client_replicated_enemy_movement_is_host_authored,
@@ -11381,6 +11382,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native project uses repository-local Lua sources",
         test_native_project_uses_repo_local_lua_sources,
+    ),
+    (
+        "Build-All cleans native intermediates across toolsets",
+        test_build_all_rebuilds_native_loader_from_clean_intermediates,
     ),
     (
         "Lua exec timeouts cancel pending gameplay mutations",
