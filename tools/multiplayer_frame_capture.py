@@ -33,7 +33,7 @@ def convert_and_validate_backbuffer(
     output_path: Path,
     *,
     minimum_unique_colors: int = 1000,
-    maximum_dominant_fraction: float = 0.70,
+    maximum_dominant_fraction: float = 0.85,
 ) -> dict[str, Any]:
     """Validate one captured frame and persist its normalized PNG."""
 
@@ -72,7 +72,7 @@ def capture_game_backbuffer(
     *,
     game_path_kind: GamePathKind = "windows",
     minimum_unique_colors: int = 1000,
-    maximum_dominant_fraction: float = 0.70,
+    maximum_dominant_fraction: float = 0.85,
 ) -> dict[str, Any]:
     raw_path = output_path.with_name(f"{output_path.stem}_backbuffer.bmp")
     raw_path.parent.mkdir(parents=True, exist_ok=True)
