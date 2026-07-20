@@ -37,7 +37,7 @@ internal sealed record MultiplayerLaunchOptions(
 
         if (inviteSteamId is not null && inviteSteamId == 0)
         {
-            throw new InvalidOperationException("Steam invite user id must be greater than zero.");
+            throw new InvalidOperationException("Steam user ID must be greater than zero.");
         }
 
         if (inviteSteamId is not null && mode != MultiplayerLaunchMode.Host)

@@ -1,7 +1,5 @@
 # Solomon Dark Multiplayer Beta v0.1.0-beta.7
 
-These notes use ASD-STE100 Simplified Technical English.
-
 - The launcher shows lobby status in the lobby panel.
 - The lobby privacy text is light on the dark background.
 - Steam sessions can recover after a network interruption.

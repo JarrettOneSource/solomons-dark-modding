@@ -88,7 +88,7 @@ internal static class SteamInviteListener
         var steamApiPath = SteamBootstrapMaterializer.ResolveSteamApiSourcePath(
             steamConfiguration)
             ?? throw new InvalidOperationException(
-                "Automatic Steam invite handling requires the packaged x86 steam_api.dll.");
+                "Automatic Steam lobby handling needs the packaged x86 steam_api.dll.");
 
         using var dispatch = new SteamManualDispatchSession(steamApiPath);
         var steamFriends = dispatch.GetInterface("SteamAPI_SteamFriends_v017");

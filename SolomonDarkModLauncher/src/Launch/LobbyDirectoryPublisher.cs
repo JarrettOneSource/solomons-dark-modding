@@ -173,7 +173,7 @@ internal static class LobbyDirectoryPublisher
                     {
                         AppendLog(
                             logPath,
-                            "Directory heartbeat failed; the Steam P2P lobby remains active.");
+                            "Directory update failed. The Steam lobby remains active.");
                     }
                     else
                     {

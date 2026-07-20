@@ -80,7 +80,7 @@ internal static class MultiplayerSessionStatusMonitor
             status =>
                 !status.IsHost &&
                 status.Phase == "WaitingForInvite",
-            "Steam invite wait mode",
+            "a Steam lobby selection",
             timeoutSeconds);
 
     public static MultiplayerSessionStatus WaitForConnectedJoin(

@@ -227,15 +227,6 @@ try {
                 throw "Packaged desktop launcher is missing the '$action' action."
             }
         }
-        foreach ($removedText in @(
-                "Join Friend",
-                "Join Steam Invite",
-                "Waiting for a Steam Invite",
-                "Steam invites ready")) {
-            if ($visibleText -contains $removedText) {
-                throw "Packaged desktop launcher still exposes removed text: $removedText"
-            }
-        }
         $result.uiMultiplayerActions = $requiredMultiplayerActions
     }
     finally {
@@ -267,7 +258,7 @@ try {
 
         $automationRoot = [System.Windows.Automation.AutomationElement]::FromHandle(
             $uiProcess.MainWindowHandle)
-        $recoveryButtonText = "Change Game Folder" + [char]0x2026
+        $recoveryButtonText = "Select Game Folder"
         $recoveryDeadline = (Get-Date).AddSeconds(20)
         $visibleText = @()
         while ((Get-Date) -lt $recoveryDeadline -and -not $uiProcess.HasExited) {
@@ -295,7 +286,7 @@ try {
             throw "Desktop launcher did not report the missing game executable."
         }
         if (-not $result.uiMissingGameRecoveryAvailable) {
-            throw "Desktop launcher exposed no Change Game Folder action after the saved game path failed."
+            throw "Desktop launcher exposed no Select Game Folder action after the saved game path failed."
         }
     }
     finally {

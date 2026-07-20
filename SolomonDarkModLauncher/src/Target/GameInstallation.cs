@@ -21,7 +21,7 @@ internal sealed class GameInstallation
         {
             throw new DirectoryNotFoundException(
                 $"{LegacyVersionName} folder not found: {installDirectory}. " +
-                "Choose the folder containing SolomonDark.exe in the desktop launcher.");
+                "Select the folder that contains SolomonDark.exe.");
         }
 
         var executablePath = Path.Combine(installDirectory, DefaultExecutableName);
@@ -31,12 +31,12 @@ internal sealed class GameInstallation
             if (File.Exists(remakeExecutablePath))
             {
                 throw new InvalidOperationException(
-                    "The selected folder contains the current Solomon's Boneyard remake (SB.exe). " +
-                    $"This beta supports only the legacy {LegacyVersionName} build containing SolomonDark.exe.");
+                    "The selected folder has the current Solomon's Boneyard remake (SB.exe). " +
+                    $"Select the legacy {LegacyVersionName} folder that contains SolomonDark.exe.");
             }
 
             throw new FileNotFoundException(
-                $"{LegacyVersionName} executable not found. Choose the folder containing SolomonDark.exe.",
+                $"{LegacyVersionName} executable not found. Select the folder that contains SolomonDark.exe.",
                 executablePath);
         }
 
@@ -47,8 +47,9 @@ internal sealed class GameInstallation
                 StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"Unsupported SolomonDark.exe build. This beta requires {LegacyVersionName} " +
-                $"(SHA-256 {SupportedExecutableSha256}); the selected file is {executableSha256}.");
+                $"This beta supports only {LegacyVersionName}. " +
+                $"The selected SolomonDark.exe has SHA-256 {executableSha256}. " +
+                $"The necessary SHA-256 value is {SupportedExecutableSha256}.");
         }
 
         return new GameInstallation

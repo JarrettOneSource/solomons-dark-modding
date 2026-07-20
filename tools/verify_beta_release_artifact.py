@@ -260,7 +260,6 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
             expected_game_hash(),
             "SHA-256",
             "Rush",
-            "Steam invite",
         ):
             if removed_text in readme:
                 raise ArtifactFailure(

@@ -246,7 +246,7 @@ internal static class LauncherCommandParser
         return ulong.TryParse(value, out var steamId) && steamId != 0
             ? steamId
             : throw new InvalidOperationException(
-                $"Steam invite user id must be a positive unsigned integer: {value}");
+                $"Steam user ID must be a positive unsigned integer: {value}");
     }
 
     private static int ParseMaxParticipants(string value)
