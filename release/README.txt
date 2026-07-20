@@ -21,12 +21,9 @@ HOW TO PLAY
 5. Select the folder that contains the original SolomonDark.exe.
 6. The host clicks Host Game and selects Friends Only or Public.
 7. The host goes to the hub.
-8. Select the host's lobby through Steam, Browse Lobbies, or a Lobby ID.
+8. Select the host's lobby through Steam, or use a Lobby ID.
 9. Wait until every wizard is visible in the hub.
 10. Start a run.
-
-Browse Lobbies shows public lobbies and Friends Only lobbies. The website shows
-the host after the host goes to the hub. Steam P2P sends all gameplay data.
 
 LIMITS
 

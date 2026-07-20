@@ -24,6 +24,7 @@ from repository_identity_contract import (
 )
 from static_multiplayer_runtime_contracts import (
     read_source_unit,
+    test_active_pair_visual_capture_routes_by_pair_backend,
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
     test_active_steam_behavior_harnesses_preserve_fixture_state,
     test_build_all_rebuilds_native_loader_from_clean_intermediates,
@@ -48,6 +49,8 @@ from static_multiplayer_runtime_contracts import (
     test_hub_services_use_typed_native_lua_dispatch,
     test_level_up_barrier_waits_for_forced_picker_confirmation,
     test_level_up_choice_result_advances_owned_book_before_resume,
+    test_boneyard_generator_skips_empty_candidate_interpolation,
+    test_lightning_manual_cluster_stays_inside_flat_arena_spatial_grid,
     test_loot_materialization_waits_for_native_field_convergence,
     test_mana_recovery_tolerance_respects_float32_precision,
     test_mana_recovery_precondition_holds_zero_until_replication,
@@ -62,7 +65,7 @@ from static_multiplayer_runtime_contracts import (
     test_native_project_uses_repo_local_lua_sources,
     test_natural_offer_expectation_clamps_to_native_maximum,
     test_native_remote_fireball_inverts_presentation_heading_for_stock_fire,
-    test_native_remote_fireball_retains_cast_heading_until_projectile_birth,
+    test_native_remote_fireball_converts_cast_heading_until_projectile_birth,
     test_native_unregister_retires_address_bound_network_identity,
     test_new_run_retires_the_prior_host_run_exit_latch,
     test_orb_pickup_verifier_preserves_native_maxima,
@@ -1742,6 +1745,19 @@ def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
         raise StaticReTestFailure(
             "primary kill stress verifier is missing no-wave manual-spawn token(s): " +
             ", ".join(missing))
+    bootstrap_start = verifier_text.find("def enable_manual_stock_spawner_combat()")
+    bootstrap_end = verifier_text.find("\ndef cleanup_live_enemies()", bootstrap_start)
+    bootstrap_text = verifier_text[bootstrap_start:bootstrap_end]
+    manual_mode = bootstrap_text.find('result["client_manual_spawner_mode"]')
+    pre_prime_cleanup = bootstrap_text.find(
+        'result["pre_prime_cleanup"] = cleanup_live_enemies()'
+    )
+    combat_prelude = bootstrap_text.find('result["host_enable"]')
+    if not 0 <= manual_mode < pre_prime_cleanup < combat_prelude:
+        raise StaticReTestFailure(
+            "manual stock-spawner bootstrap must suppress ambient waves and remove "
+            "pre-existing enemies before it attributes any enemy to spawner priming"
+        )
     native_required_tokens = (
         (verifier_text, "primary kill verifier", "START_WAVES_LUA"),
         (verifier_text, "primary kill verifier", "sd.gameplay.get_manual_enemy_spawner_state"),
@@ -11405,6 +11421,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_remote_windows_lua_bridge_is_persistent_and_framed,
     ),
     (
+        "active-pair visual capture routes by pair backend",
+        test_active_pair_visual_capture_routes_by_pair_backend,
+    ),
+    (
         "unreliable multiplayer snapshots reject stale visual state",
         test_unreliable_snapshot_ordering_is_wrap_safe,
     ),
@@ -11617,8 +11637,16 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_native_remote_fireball_inverts_presentation_heading_for_stock_fire,
     ),
     (
-        "native remote Fireball retains cast heading until projectile birth",
-        test_native_remote_fireball_retains_cast_heading_until_projectile_birth,
+        "native remote Fireball converts cast heading until projectile birth",
+        test_native_remote_fireball_converts_cast_heading_until_projectile_birth,
+    ),
+    (
+        "manual Lightning cluster stays inside flat-arena spatial grid",
+        test_lightning_manual_cluster_stays_inside_flat_arena_spatial_grid,
+    ),
+    (
+        "Boneyard generator skips empty candidate interpolation",
+        test_boneyard_generator_skips_empty_candidate_interpolation,
     ),
     (
         "native item recipe selection includes equipped ownership",

@@ -207,9 +207,11 @@ NativeRemotePlaybackResult ApplyNativeRemoteParticipantPlayback(
     const auto& ongoing_cast = binding->ongoing_cast;
     // Fire's native projectile allocator samples actor+0x6C when the projectile
     // is born, several stock ticks after the replicated cast was prepared.
-    // Transform playback runs after each stock tick. Until that birth is
-    // observed, cast aim therefore owns heading; applying an older transform
-    // heading here would seed Fireball+0x13C/+0x140 in the wrong direction.
+    // The replay aim heading uses the wizard presentation convention, while
+    // Fire converts actor+0x6C through (cos(angle), -sin(angle)). Convert to
+    // that native direction convention until projectile birth; an older
+    // transform heading or the presentation heading would seed the wrong
+    // Fireball+0x13C/+0x140 velocity.
     const bool cast_heading_owns_native_initialization =
         ongoing_cast.active &&
         ongoing_cast.have_aim_heading &&
@@ -217,7 +219,7 @@ NativeRemotePlaybackResult ApplyNativeRemoteParticipantPlayback(
         !ongoing_cast.remote_per_cast_projectile_observed;
     const float next_heading =
         cast_heading_owns_native_initialization
-            ? NormalizeWizardActorHeadingForWrite(ongoing_cast.aim_heading)
+            ? NormalizeWizardActorHeadingForWrite(90.0f - ongoing_cast.aim_heading)
             : binding->replicated_target_heading;
 
     const float dx = binding->replicated_target_x - x;

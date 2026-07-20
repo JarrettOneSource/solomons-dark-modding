@@ -62,6 +62,7 @@ namespace {
 #include "mod_loader_gameplay/core/standalone_progression_slot_context.inl"
 #include "mod_loader_gameplay/core/stock_dampen_effect_context.inl"
 #include "mod_loader_gameplay/core/run_generation_seed_helpers.inl"
+#include "mod_loader_gameplay/core/boneyard_generator_patch.inl"
 
 #include "mod_loader_gameplay/scene_and_animation.inl"
 #include "mod_loader_gameplay/standalone_materialization.inl"

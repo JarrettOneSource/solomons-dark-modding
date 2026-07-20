@@ -4,21 +4,29 @@
 from __future__ import annotations
 
 import base64
+from dataclasses import dataclass
+import math
 import os
 from pathlib import Path
 import subprocess
 import threading
 import time
-from typing import Callable, Literal, Protocol
+from typing import Callable, Literal
 
 import verify_multiplayer_hub_inventory_shop_sync as hub_inventory
-from steam_friend_active_pair import ROOT
+from steam_friend_active_pair import (
+    CLIENT_ENDPOINT,
+    HOST_ENDPOINT,
+    PAIR_BACKEND,
+    ROOT,
+)
 from verify_local_multiplayer_sync import VerifyFailure, parse_key_values
 
 
 LuaExecutor = Callable[[str, str, float], str]
 PROTON_CLICK_HOLD_SECONDS = 0.30
 HUB_DIALOG_DONE_Y = 388.0
+HUB_INVENTORY_DONE_STOCK = (320.0, 205.0)
 ACTIVATE_WINDOW = ROOT / "scripts/activate_window.py"
 REMOTE_UI_HELPER_FILES = (
     ROOT / "scripts/capture_window.py",
@@ -39,11 +47,68 @@ _REMOTE_HELPERS_LOCK = threading.Lock()
 _remote_helpers_staged = False
 
 
-class HubInputTarget(Protocol):
+@dataclass(frozen=True)
+class HubInputTarget:
     label: str
     owner_endpoint: str
     input_window_pid: int
     pointer_input: Literal["windows", "proton", "remote_windows"]
+
+
+def local_windows_game_process_id() -> int:
+    command = (
+        "$matches=@(Get-Process SolomonDark -ErrorAction SilentlyContinue); "
+        "if ($matches.Count -ne 1) { exit 1 }; $matches[0].Id"
+    )
+    completed = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", command],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=10.0,
+        check=False,
+    )
+    value = completed.stdout.strip()
+    if completed.returncode != 0 or not value.isdigit() or int(value) <= 0:
+        raise VerifyFailure(
+            "the hub test requires exactly one local Windows SolomonDark process"
+        )
+    return int(value)
+
+
+def resolve_hub_input_targets() -> dict[str, HubInputTarget]:
+    if PAIR_BACKEND == "wsl":
+        return {
+            HOST_ENDPOINT: HubInputTarget(
+                "windows",
+                HOST_ENDPOINT,
+                local_windows_game_process_id(),
+                "windows",
+            ),
+            CLIENT_ENDPOINT: HubInputTarget(
+                "proton",
+                CLIENT_ENDPOINT,
+                proton_input_process_id(),
+                "proton",
+            ),
+        }
+    if PAIR_BACKEND == "remote-windows-host":
+        return {
+            HOST_ENDPOINT: HubInputTarget(
+                "remote_windows",
+                HOST_ENDPOINT,
+                remote_windows_process_id(),
+                "remote_windows",
+            ),
+            CLIENT_ENDPOINT: HubInputTarget(
+                "local_windows",
+                CLIENT_ENDPOINT,
+                local_windows_game_process_id(),
+                "windows",
+            ),
+        }
+    raise VerifyFailure(f"unsupported Steam pair backend: {PAIR_BACKEND!r}")
 
 
 def remote_ssh_settings() -> tuple[str, str, Path]:
@@ -393,11 +458,11 @@ def click_centered_top(
             x_offset,
             minimum_x,
         )
-    if target.pointer_input == "remote_windows":
-        raise VerifyFailure(
-            "remote Windows hub actions must use the typed Lua hub API"
-        )
-    window_id, width, height = proton_window()
+    if target.pointer_input == "proton":
+        window_id, width, height = proton_window()
+    else:
+        width = round(hub_inventory.STOCK_UI_WIDTH)
+        height = round(hub_inventory.STOCK_UI_HEIGHT)
     x_fraction, y_fraction = hub_inventory.stock_ui_viewport_point(
         float(width),
         float(height),
@@ -405,6 +470,13 @@ def click_centered_top(
         x_offset,
         minimum_x,
     )
+    if target.pointer_input == "remote_windows":
+        return run_remote_windows_input(
+            "click",
+            target.input_window_pid,
+            x=x_fraction,
+            y=y_fraction,
+        )
     point_x = max(0, min(width - 1, round(width * x_fraction)))
     point_y = max(0, min(height - 1, round(height * y_fraction)))
     activate_proton_window(target.input_window_pid)
@@ -511,6 +583,10 @@ print('inventory_shop_active=' .. tostring(surface.inventory_shop_active))
             5.0,
         )
     )
+    return (
+        values.get("surface_active") == "true",
+        values.get("chat_active") == "true",
+    )
 
 
 def open_hub_service(
@@ -527,54 +603,74 @@ def open_hub_service(
 
 
 def click_hub_stock(
-    lua: LuaExecutor,
-    endpoint: str,
+    target: HubInputTarget,
     stock_x: float,
     stock_y: float,
 ) -> str:
-    return lua(
-        endpoint,
-        f"assert(sd.hub.click_stock({stock_x:.6f}, {stock_y:.6f}))\n"
-        "print('queued=true')",
-        5.0,
-    ).strip()
+    x, y = normalized_stock_point(stock_x, stock_y)
+    return click_pointer(target, x, y)
 
 
 def drag_hub_stock(
-    lua: LuaExecutor,
-    endpoint: str,
+    target: HubInputTarget,
     source_stock_x: float,
     source_stock_y: float,
     destination_stock_x: float,
     destination_stock_y: float,
 ) -> str:
-    return lua(
-        endpoint,
-        "assert(sd.hub.drag_stock("
-        f"{source_stock_x:.6f}, {source_stock_y:.6f}, "
-        f"{destination_stock_x:.6f}, {destination_stock_y:.6f}))\n"
-        "print('queued=true')",
-        5.0,
-    ).strip()
-
-
-def press_hub_menu(lua: LuaExecutor, endpoint: str) -> str:
-    return lua(
-        endpoint,
-        "assert(sd.input.press_key('menu'))\nprint('queued=true')",
-        5.0,
-    ).strip()
-    return (
-        values.get("surface_active") == "true",
-        values.get("chat_active") == "true",
+    source_x, source_y = normalized_stock_point(
+        source_stock_x,
+        source_stock_y,
     )
+    destination_x, destination_y = normalized_stock_point(
+        destination_stock_x,
+        destination_stock_y,
+    )
+    return drag_pointer(
+        target,
+        source_x,
+        source_y,
+        destination_x,
+        destination_y,
+    )
+
+
+def normalized_stock_point(stock_x: float, stock_y: float) -> tuple[float, float]:
+    width = hub_inventory.STOCK_UI_WIDTH
+    height = hub_inventory.STOCK_UI_HEIGHT
+    if (
+        not math.isfinite(stock_x)
+        or not math.isfinite(stock_y)
+        or stock_x < 0.0
+        or stock_x >= width
+        or stock_y < 0.0
+        or stock_y >= height
+    ):
+        raise VerifyFailure(
+            f"stock coordinate is outside the {width:g}x{height:g} logical UI: "
+            f"({stock_x}, {stock_y})"
+        )
+    return stock_x / width, stock_y / height
+
+
+def close_native_hub_surface(
+    target: HubInputTarget,
+    surface_active: bool,
+    chat_active: bool,
+) -> str:
+    if surface_active:
+        return click_hub_stock(target, *HUB_INVENTORY_DONE_STOCK)
+    if chat_active:
+        return click_centered_top(target, HUB_DIALOG_DONE_Y)
+    raise VerifyFailure(f"{target.label} has no native hub surface to close")
 
 
 def reset_native_hub_surfaces(
     target: HubInputTarget, lua: LuaExecutor, timeout: float
-) -> None:
+) -> list[str]:
     deadline = time.monotonic() + timeout
     stable_since: float | None = None
+    actions: list[str] = []
     while time.monotonic() < deadline:
         surface_active, chat_active = native_hub_surface_state(
             lua, target.owner_endpoint
@@ -584,11 +680,17 @@ def reset_native_hub_surfaces(
             if stable_since is None:
                 stable_since = now
             if now - stable_since >= 2.0:
-                return
+                return actions
             time.sleep(0.1)
             continue
         stable_since = None
-        press_hub_menu(lua, target.owner_endpoint)
+        actions.append(
+            close_native_hub_surface(
+                target,
+                surface_active,
+                chat_active,
+            )
+        )
         time.sleep(0.5)
     raise VerifyFailure(
         f"{target.label} could not close its pre-existing native hub surface"

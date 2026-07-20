@@ -22,10 +22,13 @@ from steam_friend_active_pair import (
     SteamFriendActivePair,
 )
 from steam_friend_hub_automation import (
+    HubInputTarget,
     click_hub_stock,
+    close_native_hub_surface,
     native_hub_surface_state,
     open_hub_service,
-    press_hub_menu,
+    reset_native_hub_surfaces,
+    resolve_hub_input_targets,
 )
 from verify_local_multiplayer_sync import VerifyFailure
 from verify_steam_friend_active_pair_state import configure_modules
@@ -33,12 +36,9 @@ from verify_steam_friend_active_pair_state import configure_modules
 
 DEFAULT_OUTPUT = ROOT / "runtime/steam_friend_hub_shop_ownership.json"
 TEST_GOLD = 1200
-FOMENTIUS_HEALTH_X_OFFSET = -225.0
-FOMENTIUS_HEALTH_Y = 92.0
-HAGATHA_LIFE_CHARM_X_OFFSET = -225.0
-HAGATHA_LIFE_CHARM_Y = 92.0
+FOMENTIUS_HEALTH_STOCK = (232.0, 50.0)
+HAGATHA_LIFE_CHARM_STOCK = (232.0, 50.0)
 SHOP_OPEN_SETTLE_SECONDS = 2.0
-STOCK_UI_CENTER_X = 320.0
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,7 @@ class Direction:
     other_inventory_key: str
     observer_view_owner_key: str
     observer_gold_key: str
+    input_target: HubInputTarget
 
 
 def configure_shop(pair: SteamFriendActivePair) -> None:
@@ -103,9 +104,14 @@ def close_shop_surface(
     direction: Direction,
     timeout: float,
 ) -> str:
-    queued = press_hub_menu(
+    surface_active, chat_active = native_hub_surface_state(
         local_sync.lua,
         direction.owner_endpoint,
+    )
+    queued = close_native_hub_surface(
+        direction.input_target,
+        surface_active,
+        chat_active,
     )
     wait_for_shop_surface_closed(direction, timeout)
     return queued
@@ -157,22 +163,20 @@ def open_vendor(
 
 def purchase_item(
     direction: Direction,
-    x_offset: float,
-    y: float,
+    stock_x: float,
+    stock_y: float,
     selection_settle_seconds: float,
 ) -> dict[str, str]:
     selected = click_hub_stock(
-        local_sync.lua,
-        direction.owner_endpoint,
-        STOCK_UI_CENTER_X + x_offset,
-        y,
+        direction.input_target,
+        stock_x,
+        stock_y,
     )
     time.sleep(selection_settle_seconds)
     purchased = click_hub_stock(
-        local_sync.lua,
-        direction.owner_endpoint,
-        STOCK_UI_CENTER_X + x_offset,
-        y,
+        direction.input_target,
+        stock_x,
+        stock_y,
     )
     return {
         "selected": selected,
@@ -195,8 +199,7 @@ def verify_fomentius(direction: Direction, timeout: float) -> dict[str, Any]:
     opened = open_vendor(direction, "fomentius")
     purchase = purchase_item(
         direction,
-        FOMENTIUS_HEALTH_X_OFFSET,
-        FOMENTIUS_HEALTH_Y,
+        *FOMENTIUS_HEALTH_STOCK,
         1.0,
     )
 
@@ -285,8 +288,7 @@ def verify_hagatha(direction: Direction, timeout: float) -> dict[str, Any]:
     opened = open_vendor(direction, "hagatha")
     purchase = purchase_item(
         direction,
-        HAGATHA_LIFE_CHARM_X_OFFSET,
-        HAGATHA_LIFE_CHARM_Y,
+        *HAGATHA_LIFE_CHARM_STOCK,
         2.0,
     )
 
@@ -394,6 +396,7 @@ def run(timeout: float) -> dict[str, Any]:
         pair_state = pair.discover()
         names = configure_modules(pair)
         configure_shop(pair)
+        input_targets = resolve_hub_input_targets()
         directions = (
             Direction(
                 "host_owner",
@@ -405,6 +408,7 @@ def run(timeout: float) -> dict[str, Any]:
                 "client_local_inventory",
                 "client_view_host",
                 "client_view_host_gold",
+                input_targets[HOST_ENDPOINT],
             ),
             Direction(
                 "client_owner",
@@ -416,10 +420,15 @@ def run(timeout: float) -> dict[str, Any]:
                 "host_local_inventory",
                 "host_view_client",
                 "host_view_client_gold",
+                input_targets[CLIENT_ENDPOINT],
             ),
         )
         for direction in directions:
-            require_shop_surface_closed(direction)
+            reset_native_hub_surfaces(
+                direction.input_target,
+                local_sync.lua,
+                timeout,
+            )
 
         initial = shop.wait_for("initial hub shop state", shop.assert_baseline, timeout)
         original_gold = {

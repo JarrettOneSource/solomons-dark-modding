@@ -13,11 +13,12 @@ from typing import Any, Callable
 import verify_local_multiplayer_sync as local_sync
 import verify_multiplayer_hub_inventory_shop_sync as hub_inventory
 from steam_friend_hub_automation import (
+    HubInputTarget,
     drag_hub_stock,
     native_hub_surface_state,
     open_hub_service,
-    press_hub_menu,
     reset_native_hub_surfaces,
+    resolve_hub_input_targets,
 )
 from steam_friend_active_pair import (
     CLIENT_ENDPOINT,
@@ -45,6 +46,7 @@ class Direction:
     other_local_key: str
     observer_view_owner_key: str
     owner_view_other_key: str
+    input_target: HubInputTarget
 
 
 def configure_hub_inventory(pair: SteamFriendActivePair) -> None:
@@ -101,54 +103,15 @@ def wait_for_storage_surface(
     )
 
 
-def wait_for_luthacus_surface_closed(
-    direction: Direction,
-    timeout: float,
-) -> None:
-    deadline = time.monotonic() + timeout
-    stable_since: float | None = None
-    while time.monotonic() < deadline:
-        storage_active, chat_active = native_hub_surface_state(
-            local_sync.lua, direction.owner_endpoint
-        )
-        if not storage_active and not chat_active:
-            now = time.monotonic()
-            if stable_since is None:
-                stable_since = now
-            if now - stable_since >= 0.5:
-                return
-        else:
-            stable_since = None
-        time.sleep(0.1)
-    raise VerifyFailure(
-        f"{direction.label} native Luthacus surface did not close"
-    )
-
-
 def close_luthacus_surface(
     direction: Direction,
     timeout: float,
 ) -> list[str]:
-    storage_active, chat_active = native_hub_surface_state(
+    return reset_native_hub_surfaces(
+        direction.input_target,
         local_sync.lua,
-        direction.owner_endpoint,
+        timeout,
     )
-    actions: list[str] = []
-    if storage_active:
-        actions.append(
-            press_hub_menu(local_sync.lua, direction.owner_endpoint)
-        )
-        wait_for_storage_surface(direction, False, timeout)
-        _, chat_active = native_hub_surface_state(
-            local_sync.lua,
-            direction.owner_endpoint,
-        )
-    if chat_active:
-        actions.append(
-            press_hub_menu(local_sync.lua, direction.owner_endpoint)
-        )
-    wait_for_luthacus_surface_closed(direction, timeout)
-    return actions
 
 
 def open_luthacus(direction: Direction) -> dict[str, Any]:
@@ -183,8 +146,7 @@ def run_direction(direction: Direction, timeout: float) -> dict[str, Any]:
         "raw_item_count"
     ]
     outbound_drag = drag_hub_stock(
-        local_sync.lua,
-        direction.owner_endpoint,
+        direction.input_target,
         *BACKPACK_FIRST_ITEM_STOCK,
         *STORAGE_FIRST_ITEM_STOCK,
     )
@@ -227,8 +189,7 @@ def run_direction(direction: Direction, timeout: float) -> dict[str, Any]:
     )
     stored_revision = stored[direction.observer_view_owner_key]["revision"]
     return_drag = drag_hub_stock(
-        local_sync.lua,
-        direction.owner_endpoint,
+        direction.input_target,
         *STORAGE_FIRST_ITEM_STOCK,
         *BACKPACK_RETURN_STOCK,
     )
@@ -309,6 +270,7 @@ def run(timeout: float) -> dict[str, Any]:
         pair_state = pair.discover()
         names = configure_modules(pair)
         configure_hub_inventory(pair)
+        input_targets = resolve_hub_input_targets()
         directions = (
             Direction(
                 "host_owner",
@@ -318,6 +280,7 @@ def run(timeout: float) -> dict[str, Any]:
                 "client_local",
                 "client_view_host",
                 "host_view_client",
+                input_targets[HOST_ENDPOINT],
             ),
             Direction(
                 "client_owner",
@@ -327,10 +290,15 @@ def run(timeout: float) -> dict[str, Any]:
                 "host_local",
                 "host_view_client",
                 "client_view_host",
+                input_targets[CLIENT_ENDPOINT],
             ),
         )
         for direction in directions:
-            reset_native_hub_surfaces(direction, local_sync.lua, timeout)
+            reset_native_hub_surfaces(
+                direction.input_target,
+                local_sync.lua,
+                timeout,
+            )
         trials = {
             direction.label: run_direction(direction, timeout)
             for direction in directions

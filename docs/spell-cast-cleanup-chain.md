@@ -247,11 +247,13 @@ that heading to a unit vector through `0x00410500`, and copies the result into
 
 Remote transform playback runs after the remote actor's stock tick. A Fire cast
 can arm its native action before the projectile is allocated, so a delayed
-participant-frame heading must not overwrite the captured cast heading during
-that window. Native remote playback retains the cast aim heading until the new
-per-cast projectile is observed; after birth, participant transform authority
-owns heading again. This preserves the stock Fire initializer without steering
-an already-created projectile.
+participant-frame heading must not overwrite the captured cast direction during
+that window. The replicated aim uses the wizard presentation convention
+(`atan2(dy, dx) + 90`), but `0x00410500` expects the native clockwise direction
+heading. Native remote playback therefore writes `90 - aim_heading`, normalized
+to `[0, 360)`, until the new per-cast projectile is observed. After birth,
+participant transform authority owns heading again. This preserves the stock
+Fire initializer without steering an already-created projectile.
 
 ## Player cleanup path
 

@@ -11,14 +11,6 @@ internal sealed class LauncherCliResponse
     public LauncherCliStage? Stage { get; set; }
     public LauncherCliLaunch? Launch { get; set; }
     public LauncherCliModStateChange? ModStateChange { get; set; }
-    public LauncherCliDirectorySession? DirectorySession { get; set; }
-}
-
-internal sealed class LauncherCliDirectorySession
-{
-    public string Token { get; set; } = string.Empty;
-    public string SteamId { get; set; } = string.Empty;
-    public DateTimeOffset ExpiresAtUtc { get; set; }
 }
 
 internal sealed class LauncherCliConfiguration

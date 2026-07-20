@@ -34,17 +34,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private string lobbyBoneyardText_ = string.Empty;
     private string lobbyConnectionDetailsText_ = string.Empty;
     private string lobbyMembersSignature_ = string.Empty;
-    private bool isLobbyBrowserOpen_;
-    private string lobbyBrowserSummaryText_ = string.Empty;
-    private string lobbyBrowserStatusText_ = string.Empty;
-    private string directoryLobbiesSignature_ = string.Empty;
     private string directoryUrl_;
-    private CancellationTokenSource? lobbyBrowserPollCancellation_;
     private bool isHostSetupOpen_;
     private bool isHowToPlayOpen_;
     private bool hostPrivacyFriends_ = true;
     private bool hostPrivacyPublic_;
-    private LauncherCliDirectorySession? directorySession_;
     private SteamInviteNotification? pendingAcceptedInvite_;
     private int activeGameProcessId_;
 
@@ -58,11 +52,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         directoryUrl_ = client.DirectoryUrl;
 
         RefreshCommand = new RelayCommand(_ => _ = RefreshAsync(), _ => CanInteract());
-        BrowseLobbiesCommand = new RelayCommand(_ => ToggleLobbyBrowser());
         HowToPlayCommand = new RelayCommand(_ => IsHowToPlayOpen = true);
-        RefreshLobbiesCommand = new RelayCommand(
-            _ => _ = RefreshLobbyDirectoryAsync(CancellationToken.None),
-            _ => IsLobbyBrowserOpen);
         HostSteamCommand = new RelayCommand(_ => OpenHostSetup(), _ => CanLaunch());
         JoinSteamCommand = new RelayCommand(
             _ => _ = ExecuteActionAsync(
@@ -101,8 +91,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public ObservableCollection<LobbyMemberViewModel> LobbyMembers { get; } = [];
 
     public ObservableCollection<string> LobbySharedMods { get; } = [];
-
-    public ObservableCollection<DirectoryLobbyViewModel> DirectoryLobbies { get; } = [];
 
     public string Title => "Solomon Dark Revived";
     public string Version
@@ -184,21 +172,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         private set => SetProperty(ref lobbyConnectionDetailsText_, value);
     }
 
-    public bool IsLobbyBrowserOpen
-    {
-        get => isLobbyBrowserOpen_;
-        private set
-        {
-            if (SetProperty(ref isLobbyBrowserOpen_, value))
-            {
-                OnPropertyChanged(nameof(BrowseLobbiesButtonText));
-                RefreshLobbiesCommand.RaiseCanExecuteChanged();
-            }
-        }
-    }
-
-    public string BrowseLobbiesButtonText => IsLobbyBrowserOpen ? "Show Mods" : "Browse Lobbies";
-
     public bool IsHowToPlayOpen
     {
         get => isHowToPlayOpen_;
@@ -235,18 +208,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public string LobbyBrowserSummaryText
-    {
-        get => lobbyBrowserSummaryText_;
-        private set => SetProperty(ref lobbyBrowserSummaryText_, value);
-    }
-
-    public string LobbyBrowserStatusText
-    {
-        get => lobbyBrowserStatusText_;
-        private set => SetProperty(ref lobbyBrowserStatusText_, value);
-    }
-
     public string DirectoryUrl
     {
         get => directoryUrl_;
@@ -272,10 +233,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             {
                 directoryUrl_ = client_.DirectoryUrl;
                 OnPropertyChanged();
-            }
-            if (IsLobbyBrowserOpen)
-            {
-                _ = RefreshLobbyDirectoryAsync(CancellationToken.None);
             }
         }
     }
@@ -355,9 +312,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         : GameDirectory;
 
     public RelayCommand RefreshCommand { get; }
-    public RelayCommand BrowseLobbiesCommand { get; }
     public RelayCommand HowToPlayCommand { get; }
-    public RelayCommand RefreshLobbiesCommand { get; }
     public RelayCommand HostSteamCommand { get; }
     public RelayCommand JoinSteamCommand { get; }
     public RelayCommand LaunchSinglePlayerCommand { get; }
@@ -720,122 +675,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             hostOptions: new LauncherHostOptions(privacy));
     }
 
-    private void ToggleLobbyBrowser()
-    {
-        if (IsLobbyBrowserOpen)
-        {
-            CloseLobbyBrowser();
-            return;
-        }
-
-        IsLobbyBrowserOpen = true;
-        var pollCancellation = new CancellationTokenSource();
-        lobbyBrowserPollCancellation_ = pollCancellation;
-        _ = PollLobbyDirectoryAsync(pollCancellation);
-    }
-
-    private void CloseLobbyBrowser()
-    {
-        lobbyBrowserPollCancellation_?.Cancel();
-        lobbyBrowserPollCancellation_?.Dispose();
-        lobbyBrowserPollCancellation_ = null;
-        IsLobbyBrowserOpen = false;
-    }
-
-    private async Task PollLobbyDirectoryAsync(CancellationTokenSource pollCancellation)
-    {
-        var cancellationToken = pollCancellation.Token;
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                await RefreshLobbyDirectoryAsync(cancellationToken);
-                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
-    }
-
-    private async Task RefreshLobbyDirectoryAsync(CancellationToken cancellationToken)
-    {
-        if (DirectoryLobbies.Count == 0)
-        {
-            LobbyBrowserStatusText = "The launcher reads the lobby directory.";
-        }
-
-        DirectoryLobbyList list;
-        try
-        {
-            if (directorySession_ is null ||
-                directorySession_.ExpiresAtUtc <= DateTimeOffset.UtcNow.AddSeconds(30))
-            {
-                LobbyBrowserStatusText = "The launcher checks your Steam account.";
-                directorySession_ = await client_.AuthenticateDirectoryAsync(cancellationToken);
-            }
-
-            list = await LobbyDirectoryClient.ListAsync(
-                client_.DirectoryUrl,
-                directorySession_.Token,
-                cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return;
-        }
-        catch (Exception ex)
-        {
-            DirectoryLobbies.Clear();
-            directoryLobbiesSignature_ = string.Empty;
-            LobbyBrowserSummaryText = string.Empty;
-            LobbyBrowserStatusText = ex.Message;
-            return;
-        }
-
-        var supportedLobbies = list.Items
-            .Where(lobby => !string.IsNullOrWhiteSpace(lobby.Join?.LobbyId))
-            .ToArray();
-        var signature = string.Join(
-            "\n",
-            supportedLobbies.Select(lobby =>
-                $"{lobby.Id}|{lobby.HostPlayer}|{lobby.Access}|{lobby.Players}|{lobby.MaxPlayers}|" +
-                $"{lobby.Game.Phase}|{lobby.Game.BoneyardName}|{lobby.Game.Wave}|{lobby.Game.StatusText}"));
-        if (signature != directoryLobbiesSignature_)
-        {
-            directoryLobbiesSignature_ = signature;
-            DirectoryLobbies.Clear();
-            foreach (var lobby in supportedLobbies)
-            {
-                DirectoryLobbies.Add(new DirectoryLobbyViewModel(
-                    lobby,
-                    JoinDirectoryLobby));
-            }
-        }
-
-        LobbyBrowserSummaryText = supportedLobbies.Length == 0
-            ? string.Empty
-            : $"Open lobbies: {supportedLobbies.Length} · " +
-              $"Players: {supportedLobbies.Sum(lobby => lobby.Players)}";
-        LobbyBrowserStatusText = supportedLobbies.Length == 0
-            ? "The directory has no lobbies."
-            : string.Empty;
-    }
-
-    private void JoinDirectoryLobby(DirectoryLobbyViewModel lobby)
-    {
-        if (lobby.LobbyId is null || !CanLaunch())
-        {
-            return;
-        }
-
-        LobbyId = lobby.LobbyId;
-        CloseLobbyBrowser();
-        _ = ExecuteActionAsync(
-            LauncherUiCommandMode.JoinSteam,
-            $"The launcher joins {lobby.HostName}'s lobby.");
-    }
-
     private void OnSteamInviteNotification(
         object? sender,
         SteamInviteNotification notification)
@@ -923,7 +762,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         StopSteamSessionMonitoring(clearStatus: false);
-        CloseLobbyBrowser();
         steamInviteListener_.NotificationReceived -= OnSteamInviteNotification;
         steamInviteListener_.Dispose();
     }

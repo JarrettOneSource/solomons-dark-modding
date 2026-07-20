@@ -130,6 +130,7 @@ extern uintptr_t kSpellCast3F0SlotGateBranch;
 extern uintptr_t kFireballHitSecondaryEffectProjectileGroupGateBranch;
 extern uintptr_t kMagicMissileHitDamageProjectileGroupGateBranch;
 extern uintptr_t kDampenStockEffectBlock;
+extern uintptr_t kBoneyardEmptyCandidateInterpolationBranch;
 extern uintptr_t kPuppetManagerVtable;
 
 extern uintptr_t kMenuKeybindingGlobal;

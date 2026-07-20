@@ -770,6 +770,17 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
+    std::string boneyard_patch_error;
+    if (!InstallBoneyardGeneratorPatch(&boneyard_patch_error)) {
+        ShutdownGameplayKeyboardInjection();
+        if (error_message != nullptr) {
+            *error_message =
+                "Failed to install Boneyard generator patch: " +
+                boneyard_patch_error;
+        }
+        return false;
+    }
+
     g_gameplay_keyboard_injection.initialized = true;
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
@@ -908,6 +919,7 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.powerup_pickup_hook);
     RestoreNativeCastGatePatches();
+    RestoreBoneyardGeneratorPatch();
     {
         std::lock_guard<std::mutex> lock(g_native_spell_effect_actor_mutex);
         g_recent_native_spell_effect_actors.clear();

@@ -164,6 +164,30 @@ def disable_test_manual_enemy_mode(
     return values
 
 
+def parse_run_generation_seed(value: str) -> int:
+    seed = int(value, 0)
+    if not 0 <= seed <= 0xFFFFFFFF:
+        raise argparse.ArgumentTypeError("run generation seed must fit in uint32")
+    return seed
+
+
+def set_run_generation_seed(
+    pair: SteamFriendActivePair,
+    seed: int,
+) -> dict[str, str]:
+    values = parse_key_values(
+        pair.lua(
+            HOST_ENDPOINT,
+            "print('ok=' .. tostring(sd.debug.set_run_generation_seed(" +
+            str(seed) + ")))"
+        )
+    )
+    if values.get("ok") != "true":
+        raise VerifyFailure(f"failed to set run generation seed: {values}")
+    values["seed"] = f"0x{seed:08X}"
+    return values
+
+
 def query_navigation_state(
     pair: SteamFriendActivePair, endpoint: str
 ) -> dict[str, Any]:
@@ -335,12 +359,19 @@ def main() -> int:
     parser.add_argument("--client-element", default="air")
     parser.add_argument("--discipline", default="arcane")
     parser.add_argument("--start-run", action="store_true")
+    parser.add_argument(
+        "--run-generation-seed",
+        type=parse_run_generation_seed,
+        help="Set an exact host run seed before --start-run.",
+    )
     parser.add_argument("--test-godmode", action="store_true")
     parser.add_argument("--test-manual-enemy-mode", action="store_true")
     parser.add_argument("--exercise-last-game-redirect", action="store_true")
     parser.add_argument("--timeout", type=float, default=90.0)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
+    if args.run_generation_seed is not None and not args.start_run:
+        parser.error("--run-generation-seed requires --start-run")
 
     pair = SteamFriendActivePair()
     output: dict[str, Any] = {"ok": False}
@@ -399,6 +430,10 @@ def main() -> int:
                 host_view.get("scene") == "testrun"
                 and host_view.get("local.in_run") == "true"
             ):
+                if args.run_generation_seed is not None:
+                    raise VerifyFailure(
+                        "cannot set a run generation seed after the host entered a run"
+                    )
                 # A reconnecting client can reach its hub after the host is
                 # already in a run. The replicated host-run state immediately
                 # advances that client into the same run, so there is no hub
@@ -411,6 +446,11 @@ def main() -> int:
                     "scene": "testrun",
                 }
             else:
+                if args.run_generation_seed is not None:
+                    output["run_generation_seed"] = set_run_generation_seed(
+                        pair,
+                        args.run_generation_seed,
+                    )
                 output["client_start_blocked"] = (
                     local_sync.assert_client_start_testrun_blocked()
                 )

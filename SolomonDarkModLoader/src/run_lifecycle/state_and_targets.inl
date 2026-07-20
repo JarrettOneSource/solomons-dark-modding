@@ -13,6 +13,7 @@ using SpawnExactEnemyGroupFn = void(__thiscall*)(
     int placement_mode,
     int placement_argument,
     int random_placement);
+using GameFreeFn = void(__cdecl*)(void* memory);
 using EnemySpawnedFn =
     void* (__fastcall*)(void* self, void* unused_edx, void* param_2, int enemy_config, void* param_4, int param_5, int param_6, char param_7);
 using EnemyDeathFn = int(__fastcall*)(void* self, void* unused_edx);

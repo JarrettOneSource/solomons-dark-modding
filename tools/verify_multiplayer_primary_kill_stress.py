@@ -1905,6 +1905,7 @@ def enable_manual_stock_spawner_combat() -> dict[str, Any]:
     result["client_manual_spawner_mode"] = set_manual_spawner_test_mode(CLIENT_PIPE, True)
     if result["client_manual_spawner_mode"].get("ok") != "true":
         raise VerifyFailure(f"failed to enable client manual spawner test mode: {result['client_manual_spawner_mode']}")
+    result["pre_prime_cleanup"] = cleanup_live_enemies()
     result["vector_after_manual_mode"] = probe_stock_placement_vectors("combat.after_manual_mode")
     result["host_enable"] = values(HOST_PIPE, ENABLE_PRELUDE_LUA)
     result["client_enable"] = values(CLIENT_PIPE, ENABLE_PRELUDE_LUA)

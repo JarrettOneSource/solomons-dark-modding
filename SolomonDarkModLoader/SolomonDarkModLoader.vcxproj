@@ -283,6 +283,7 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_spawn_and_modifiers.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_tick_and_movement.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\actor_world_target_slot_state.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\core\boneyard_generator_patch.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\crash_summary_builders.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\gameplay_constants.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\gameplay_state_globals.inl" />

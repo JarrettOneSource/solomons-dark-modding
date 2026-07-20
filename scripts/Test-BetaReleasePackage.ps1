@@ -220,7 +220,7 @@ try {
         $requiredMultiplayerActions = @(
             "Host Game",
             "Join Lobby ID",
-            "Browse Lobbies",
+            "Play Solo",
             "How to Play"
         )
         foreach ($action in $requiredMultiplayerActions) {

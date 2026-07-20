@@ -348,16 +348,21 @@ bool CallSpawnExactEnemyGroupSafe(
     SpawnExactEnemyGroupFn spawn,
     uintptr_t arena_address,
     std::uint32_t native_type_id,
+    uintptr_t modifier_array_vtable,
+    uintptr_t free_address,
     ManualRunEnemySpawnerDispatchException* exception) {
     if (exception != nullptr) {
         *exception = ManualRunEnemySpawnerDispatchException{};
     }
     if (spawn == nullptr || arena_address == 0 ||
+        modifier_array_vtable == 0 || free_address == 0 ||
         !IsArenaCombatActorType(native_type_id)) {
         return false;
     }
 
     EmptyEnemyModifierArray no_modifiers;
+    no_modifiers.vtable = modifier_array_vtable;
+    bool call_ok = false;
     __try {
         spawn(
             reinterpret_cast<void*>(arena_address),
@@ -368,11 +373,22 @@ bool CallSpawnExactEnemyGroupSafe(
             0,
             0,
             0);
-        return true;
+        call_ok = true;
     } __except (CaptureManualRunEnemySpawnerDispatchException(
         GetExceptionInformation(), exception)) {
-        return false;
+        call_ok = false;
     }
+
+    if (no_modifiers.entries != 0) {
+        auto* free_fn = reinterpret_cast<GameFreeFn>(free_address);
+        __try {
+            free_fn(reinterpret_cast<void*>(no_modifiers.entries));
+        } __except (CaptureManualRunEnemySpawnerDispatchException(
+            GetExceptionInformation(), exception)) {
+            call_ok = false;
+        }
+    }
+    return call_ok;
 }
 
 ManualRunEnemySpawnerDispatchResult DispatchReplicatedExactRunEnemySpawn(
@@ -381,8 +397,13 @@ ManualRunEnemySpawnerDispatchResult DispatchReplicatedExactRunEnemySpawn(
     auto& memory = ProcessMemory::Instance();
     const auto spawn_address =
         memory.ResolveGameAddressOrZero(kSpawnExactEnemyGroup);
+    const auto modifier_array_vtable =
+        memory.ResolveGameAddressOrZero(kNativeIntArrayVtable);
+    const auto free_address = memory.ResolveGameAddressOrZero(kGameFree);
     SDModGameplayCombatState combat_state;
     if (spawn_address == 0 ||
+        modifier_array_vtable == 0 ||
+        free_address == 0 ||
         !TryGetGameplayCombatState(&combat_state) ||
         !combat_state.valid ||
         combat_state.arena_address == 0 ||
@@ -407,6 +428,8 @@ ManualRunEnemySpawnerDispatchResult DispatchReplicatedExactRunEnemySpawn(
         reinterpret_cast<SpawnExactEnemyGroupFn>(spawn_address),
         combat_state.arena_address,
         static_cast<std::uint32_t>(request.type_id),
+        modifier_array_vtable,
+        free_address,
         &exception);
 
     g_manual_run_enemy_spawner_tick_active = previous_manual_tick;

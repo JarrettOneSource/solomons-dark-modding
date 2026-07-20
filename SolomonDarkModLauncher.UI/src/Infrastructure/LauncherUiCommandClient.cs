@@ -7,6 +7,8 @@ namespace SolomonDarkModLauncher.UI.Infrastructure;
 
 internal sealed class LauncherUiCommandClient
 {
+    private const string DefaultDirectoryUrl = "https://solomon.genericproject.xyz";
+
     private static readonly string[] TestOnlyChildEnvironmentVariables =
     {
         "SDMOD_TEST_BLANK_BONEYARD",
@@ -34,7 +36,7 @@ internal sealed class LauncherUiCommandClient
             FindDevelopmentGameDirectory(workspaceRoot) ??
             string.Empty;
         directoryUrl_ = settingsStore_.LoadDirectoryUrl() ??
-            LobbyDirectoryClient.DefaultDirectoryUrl;
+            DefaultDirectoryUrl;
         var portableMarkerPath = Path.Combine(
             workspaceRoot,
             DistributionLayout.PortableRootMarkerFileName);
@@ -80,7 +82,7 @@ internal sealed class LauncherUiCommandClient
         var trimmed = directoryUrl?.Trim();
         if (string.IsNullOrEmpty(trimmed))
         {
-            directoryUrl_ = LobbyDirectoryClient.DefaultDirectoryUrl;
+            directoryUrl_ = DefaultDirectoryUrl;
             settingsStore_.SaveDirectoryUrl(null);
             return;
         }
@@ -168,36 +170,12 @@ internal sealed class LauncherUiCommandClient
             errorMessage);
     }
 
-    public async Task<LauncherCliDirectorySession> AuthenticateDirectoryAsync(
-        CancellationToken cancellationToken)
-    {
-        var invocation = await InvokeAsync(
-            LauncherUiCommandMode.AuthenticateDirectory,
-            cancellationToken: cancellationToken);
-        var session = invocation.Response?.DirectorySession;
-        if (!invocation.Succeeded || session is null ||
-            string.IsNullOrWhiteSpace(session.Token))
-        {
-            throw new InvalidOperationException(
-                invocation.ErrorMessage ?? "The Steam account check failed.");
-        }
-
-        return session;
-    }
-
     private IReadOnlyList<string> BuildArguments(
         LauncherUiCommandMode mode,
         string? targetModId,
         LauncherHostOptions? hostOptions = null)
     {
         var arguments = new List<string> { GetModeToken(mode), "--json" };
-
-        if (mode == LauncherUiCommandMode.AuthenticateDirectory)
-        {
-            arguments.Add("--directory-url");
-            arguments.Add(directoryUrl_);
-            return arguments;
-        }
 
         if (mode is LauncherUiCommandMode.EnableMod or LauncherUiCommandMode.DisableMod)
         {
@@ -263,7 +241,6 @@ internal sealed class LauncherUiCommandClient
             LauncherUiCommandMode.LaunchSinglePlayer => "launch",
             LauncherUiCommandMode.HostSteam => "launch",
             LauncherUiCommandMode.JoinSteam => "launch",
-            LauncherUiCommandMode.AuthenticateDirectory => "directory-auth",
             LauncherUiCommandMode.Stage => "stage",
             LauncherUiCommandMode.ListMods => "list-mods",
             LauncherUiCommandMode.EnableMod => "enable-mod",

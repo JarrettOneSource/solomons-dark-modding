@@ -118,6 +118,13 @@ Spacewar playtest flow and the remaining external verification boundary.
   carry the recovered run-static prop families (`0x1391`, `0x1392`) so trees,
   tombstones, and their movement blockers converge to the host instead of
   depending on global-RNG lockstep.
+  The stock Boneyard generator can produce an empty local candidate list for
+  some seeds. Its original count check at `0x0063D78F` then synthesizes a null
+  candidate and dereferences `candidate + 0x1C` at `0x0063D7C3`. The loader
+  replaces that exact eight-byte count branch only when the supported stock
+  bytes match; an empty list now jumps to the generator's existing cleanup and
+  outer-loop continuation at `0x0063DA59`. The patch is restored on loader
+  shutdown.
   `tools/verify_run_static_layout_sync.py` compares the resulting movement
   circle/shape/static-actor digests across the two local clients. The host also
   sends an empty Run

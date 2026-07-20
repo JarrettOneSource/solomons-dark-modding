@@ -248,7 +248,6 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
             "HOW TO PLAY",
             "Host Game",
             "Select the host's lobby through Steam",
-            "Browse Lobbies",
             "Lobby ID",
             "The launcher does not store or package Steam credentials.",
         ):

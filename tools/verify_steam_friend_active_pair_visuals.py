@@ -21,6 +21,7 @@ import verify_player_health_death_sync as health
 from steam_friend_active_pair import (
     CLIENT_ENDPOINT,
     HOST_ENDPOINT,
+    PAIR_BACKEND,
     ROOT,
     SteamFriendActivePair,
 )
@@ -118,8 +119,9 @@ def successful_ally_rows(
     }
 
 
-def capture_remote_host_backbuffer(
+def capture_remote_windows_backbuffer(
     pair: SteamFriendActivePair,
+    endpoint: str,
     output_path: Path,
 ) -> dict[str, Any]:
     remote_path = os.environ.get(
@@ -133,7 +135,7 @@ def capture_remote_host_backbuffer(
         "local ok,err=sd.debug.capture_backbuffer(" + json.dumps(remote_path) + ");"
         "print('ok='..tostring(ok));print('error='..tostring(err or ''))"
     )
-    capture = parse_key_values(pair.lua(HOST_ENDPOINT, command, timeout=20.0))
+    capture = parse_key_values(pair.lua(endpoint, command, timeout=20.0))
     if capture.get("ok") != "true":
         raise VerifyFailure(f"remote D3D9 backbuffer capture failed: {capture}")
 
@@ -175,6 +177,29 @@ def capture_remote_host_backbuffer(
         "capture_method": "remote_d3d9_backbuffer",
         "quality": quality,
     }
+
+
+def capture_participant_backbuffer(
+    pair: SteamFriendActivePair,
+    endpoint: str,
+    output_path: Path,
+) -> dict[str, Any]:
+    remote_endpoint = {
+        "remote-windows-host": HOST_ENDPOINT,
+        "remote-windows-client": CLIENT_ENDPOINT,
+    }.get(PAIR_BACKEND)
+    if endpoint == remote_endpoint:
+        return capture_remote_windows_backbuffer(pair, endpoint, output_path)
+    game_path_kind = (
+        "proton"
+        if PAIR_BACKEND == "wsl" and endpoint == CLIENT_ENDPOINT
+        else "windows"
+    )
+    return frame_capture.capture_game_backbuffer(
+        endpoint,
+        output_path,
+        game_path_kind=game_path_kind,
+    )
 
 
 def verify_capture_resolution_contract(
@@ -510,10 +535,11 @@ def main() -> int:
         output["active_step"] = "screenshots"
         frame_capture.lua = pair.lua
         output["screenshots"] = {
-            "host": capture_remote_host_backbuffer(pair, HOST_SCREENSHOT),
-            "client": frame_capture.capture_game_backbuffer(
-                CLIENT_ENDPOINT,
-                CLIENT_SCREENSHOT,
+            "host": capture_participant_backbuffer(
+                pair, HOST_ENDPOINT, HOST_SCREENSHOT
+            ),
+            "client": capture_participant_backbuffer(
+                pair, CLIENT_ENDPOINT, CLIENT_SCREENSHOT
             ),
         }
         output["resolution_contract"] = verify_capture_resolution_contract(

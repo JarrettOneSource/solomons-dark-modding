@@ -116,7 +116,11 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
         "spawn_reward",
         "trigger_enemy_death",
     ),
-    "hub": ("start_testrun",),
+    "hub": (
+        "start_testrun",
+        "open_service",
+        "get_surface_state",
+    ),
     # sd.debug is intentionally development-facing. Check the read/probe spine
     # used by today's live verification without declaring every raw memory
     # helper a compatibility promise.
@@ -131,6 +135,7 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
         "get_world_movement_geometry",
         "resolve_native_primary_spell_stats",
         "capture_backbuffer",
+        "set_run_generation_seed",
     ),
 }
 

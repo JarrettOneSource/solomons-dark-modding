@@ -113,6 +113,7 @@ uintptr_t kSpellCast3F0SlotGateBranch = 0;
 uintptr_t kFireballHitSecondaryEffectProjectileGroupGateBranch = 0;
 uintptr_t kMagicMissileHitDamageProjectileGroupGateBranch = 0;
 uintptr_t kDampenStockEffectBlock = 0;
+uintptr_t kBoneyardEmptyCandidateInterpolationBranch = 0;
 uintptr_t kPuppetManagerVtable = 0;
 
 uintptr_t kMenuKeybindingGlobal = 0;

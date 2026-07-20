@@ -102,7 +102,6 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0"
@@ -198,22 +197,18 @@
                                 MinWidth="142"
                                 Margin="5,4"
                                 Style="{StaticResource OutlineButtonStyle}" />
-                        <Button Command="{Binding BrowseLobbiesCommand}"
-                                Content="{Binding BrowseLobbiesButtonText}"
+                        <Button Command="{Binding LaunchSinglePlayerCommand}"
+                                Content="Play Solo"
                                 MinWidth="146"
                                 Margin="5,4"
-                                Style="{StaticResource OutlineButtonStyle}" />
+                                Padding="20,10"
+                                FontSize="13"
+                                Style="{StaticResource SecondaryButtonStyle}" />
                         <Button Command="{Binding HowToPlayCommand}"
                                 Content="How to Play"
                                 MinWidth="128"
                                 Margin="5,4"
                                 Style="{StaticResource OutlineButtonStyle}" />
-                        <Button Command="{Binding LaunchSinglePlayerCommand}"
-                                Content="Play Solo"
-                                Margin="5,4"
-                                Padding="20,10"
-                                FontSize="13"
-                                Style="{StaticResource SecondaryButtonStyle}" />
                     </WrapPanel>
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">
@@ -231,161 +226,8 @@
                 </StackPanel>
             </Border>
 
-            <!-- Lobby browser: live lobbies from the website directory -->
-            <Border Grid.Row="3"
-                    Margin="0,14,0,0"
-                    Padding="20,16">
-                <Border.Style>
-                    <Style TargetType="Border" BasedOn="{StaticResource CardStyle}">
-                        <Setter Property="Visibility" Value="Collapsed" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsLobbyBrowserOpen}" Value="True">
-                                <Setter Property="Visibility" Value="Visible" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <StackPanel>
-                    <DockPanel>
-                        <Button DockPanel.Dock="Right"
-                                Content="Refresh"
-                                Margin="0"
-                                Command="{Binding RefreshLobbiesCommand}"
-                                Style="{StaticResource SecondaryButtonStyle}" />
-                        <TextBlock DockPanel.Dock="Right"
-                                   Margin="0,0,14,0"
-                                   VerticalAlignment="Center"
-                                   FontSize="12"
-                                   Foreground="{StaticResource TextMutedBrush}"
-                                   Text="{Binding LobbyBrowserSummaryText}" />
-                        <TextBlock VerticalAlignment="Center"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Text="Open Lobbies" />
-                    </DockPanel>
-
-                    <ScrollViewer MaxHeight="430"
-                                  Margin="0,10,0,0"
-                                  VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding DirectoryLobbies}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Padding="12,9"
-                                            Margin="0,0,4,2"
-                                            CornerRadius="6">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background" Value="Transparent" />
-                                                <Style.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="{StaticResource CardHoverBackgroundBrush}" />
-                                                    </Trigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-
-                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock FontSize="13"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="{StaticResource TextPrimaryBrush}"
-                                                               Text="{Binding HostName}"
-                                                               TextTrimming="CharacterEllipsis" />
-                                                    <Border Margin="10,0,0,0"
-                                                            Padding="7,2"
-                                                            VerticalAlignment="Center"
-                                                            BorderThickness="1"
-                                                            CornerRadius="3">
-                                                        <Border.Style>
-                                                            <Style TargetType="Border">
-                                                                <Setter Property="Background" Value="{StaticResource InputBackgroundBrush}" />
-                                                                <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsFriendAccess}" Value="True">
-                                                                        <Setter Property="Background" Value="#1E2C38" />
-                                                                        <Setter Property="BorderBrush" Value="#1E2C38" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Border.Style>
-                                                        <TextBlock FontSize="10"
-                                                                   FontWeight="SemiBold"
-                                                                   Text="{Binding AccessText}">
-                                                            <TextBlock.Style>
-                                                                <Style TargetType="TextBlock">
-                                                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding IsFriendAccess}" Value="True">
-                                                                            <Setter Property="Foreground" Value="#7FB4D9" />
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </TextBlock.Style>
-                                                        </TextBlock>
-                                                    </Border>
-                                                </StackPanel>
-                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                    <TextBlock FontSize="12"
-                                                               Foreground="{StaticResource GoldOutlineTextBrush}"
-                                                               Text="{Binding BoneyardText}"
-                                                               TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Margin="8,0,0,0"
-                                                               FontSize="12"
-                                                               Foreground="{StaticResource TextMutedBrush}"
-                                                               Text="{Binding DetailText}"
-                                                               TextTrimming="CharacterEllipsis" />
-                                                </StackPanel>
-                                            </StackPanel>
-
-                                            <TextBlock Grid.Column="1"
-                                                       Margin="12,0"
-                                                       VerticalAlignment="Center"
-                                                       FontSize="12"
-                                                       Foreground="{StaticResource TextMutedBrush}"
-                                                       Text="{Binding PlayersText}" />
-
-                                            <StackPanel Grid.Column="2"
-                                                        Orientation="Horizontal"
-                                                        VerticalAlignment="Center">
-                                                <Button Content="Join"
-                                                        Padding="16,7"
-                                                        Command="{Binding JoinCommand}"
-                                                        Style="{StaticResource PrimaryButtonStyle}" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-
-                    <TextBlock Margin="0,8,0,0"
-                               FontSize="12"
-                               Foreground="{StaticResource TextMutedBrush}"
-                               Text="{Binding LobbyBrowserStatusText}"
-                               TextWrapping="Wrap">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding LobbyBrowserStatusText}" Value="">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </StackPanel>
-            </Border>
-
             <!-- Lobby: who's in the session; boneyard + mod list fill in when the lobby shares them -->
-            <Border Grid.Row="4"
+            <Border Grid.Row="3"
                     Margin="0,14,0,0"
                     Padding="20,16">
                 <Border.Style>
@@ -531,16 +373,7 @@
                 </StackPanel>
             </Border>
 
-            <DockPanel Grid.Row="5" Margin="0,18,0,10">
-                <DockPanel.Style>
-                    <Style TargetType="DockPanel">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsLobbyBrowserOpen}" Value="True">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </DockPanel.Style>
+            <DockPanel Grid.Row="4" Margin="0,18,0,10">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="{Binding ModSummaryText}"
                                Margin="0,0,14,0"
@@ -562,16 +395,7 @@
                            FontWeight="SemiBold" />
             </DockPanel>
 
-            <Grid Grid.Row="6" MinHeight="160" MaxHeight="344">
-                <Grid.Style>
-                    <Style TargetType="Grid">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsLobbyBrowserOpen}" Value="True">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Grid.Style>
+            <Grid Grid.Row="5" MinHeight="160" MaxHeight="344">
                 <Border Style="{StaticResource CardStyle}" />
 
                 <ListBox ItemsSource="{Binding Mods}"
@@ -693,18 +517,10 @@
                 </StackPanel>
             </Grid>
 
-            <Expander Grid.Row="7"
+            <Expander Grid.Row="6"
                       Margin="0,12,0,0"
-                      Header="Advanced">
-                <Expander.Style>
-                    <Style TargetType="Expander" BasedOn="{StaticResource AdvancedExpanderStyle}">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsLobbyBrowserOpen}" Value="True">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Expander.Style>
+                      Header="Advanced"
+                      Style="{StaticResource AdvancedExpanderStyle}">
                 <StackPanel Margin="0,8,0,0">
                     <DockPanel LastChildFill="False">
                         <TextBlock DockPanel.Dock="Left"
@@ -849,7 +665,7 @@
                             <TextBlock Margin="0,3,0,0"
                                        FontSize="12"
                                        Foreground="{StaticResource TextMutedBrush}"
-                                       Text="Your Steam friends can find this lobby in Browse Lobbies."
+                                       Text="Only your Steam friends can find this lobby."
                                        TextWrapping="Wrap" />
                         </StackPanel>
                     </RadioButton>
@@ -863,7 +679,7 @@
                             <TextBlock Margin="0,3,0,0"
                                        FontSize="12"
                                        Foreground="{StaticResource TextMutedBrush}"
-                                       Text="All players can find this lobby in Browse Lobbies."
+                                       Text="All Steam players can find this lobby."
                                        TextWrapping="Wrap" />
                         </StackPanel>
                     </RadioButton>
@@ -923,7 +739,7 @@
                     <TextBlock Margin="0,5,0,0"
                                FontSize="12"
                                Foreground="{StaticResource TextSecondaryBrush}"
-                               Text="1. Click Host Game.&#x0a;2. Select Friends Only or Public.&#x0a;3. Go to the hub.&#x0a;4. Select a friend in Steam, or give the Lobby ID to a friend."
+                               Text="1. Click Host Game, then choose Friends Only or Public.&#x0a;2. Pick a loadout and enter the hub.&#x0a;3. Invite a friend through Steam, or share the Lobby ID."
                                TextWrapping="Wrap" />
 
                     <TextBlock Margin="0,16,0,0"
@@ -934,20 +750,8 @@
                     <TextBlock Margin="0,5,0,0"
                                FontSize="12"
                                Foreground="{StaticResource TextSecondaryBrush}"
-                               Text="1. Keep this launcher open.&#x0a;2. Select the host's lobby through Steam, Browse Lobbies, or a Lobby ID.&#x0a;3. Wait for the modded game to start."
+                               Text="1. Join the host's lobby through Steam, or use a Lobby ID.&#x0a;2. Pick a loadout.&#x0a;3. Enter the hub."
                                TextWrapping="Wrap" />
-
-                    <Border Margin="0,18,0,0"
-                            Padding="12,10"
-                            Background="{StaticResource InputBackgroundBrush}"
-                            BorderBrush="{StaticResource BorderSubtleBrush}"
-                            BorderThickness="1"
-                            CornerRadius="4">
-                        <TextBlock FontSize="11"
-                                   Foreground="{StaticResource TextMutedBrush}"
-                                   Text="The website shows the available lobbies. Steam P2P sends all gameplay data. Steam connections do not use the website."
-                                   TextWrapping="Wrap" />
-                    </Border>
 
                     <Button Margin="0,18,0,0"
                             Padding="22,9"

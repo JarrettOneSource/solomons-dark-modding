@@ -716,6 +716,9 @@
     <ClInclude Include="src\mod_loader_gameplay\core\actor_world_target_slot_state.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\boneyard_generator_patch.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\core\gameplay_constants.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>

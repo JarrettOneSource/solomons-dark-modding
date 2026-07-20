@@ -44,7 +44,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 66);
+    lua_createtable(state, 0, 67);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -81,6 +81,7 @@ void RegisterLuaDebugBindings(lua_State* state) {
     RegisterFunction(state, &LuaDebugReadPtr, "read_ptr");
     RegisterFunction(state, &LuaDebugReadPtrField, "read_ptr_field");
     RegisterFunction(state, &LuaDebugSwitchRegion, "switch_region");
+    RegisterFunction(state, &LuaDebugSetRunGenerationSeed, "set_run_generation_seed");
     RegisterFunction(state, &LuaDebugReadU8, "read_u8");
     RegisterFunction(state, &LuaDebugReadI8, "read_i8");
     RegisterFunction(state, &LuaDebugReadI16, "read_i16");

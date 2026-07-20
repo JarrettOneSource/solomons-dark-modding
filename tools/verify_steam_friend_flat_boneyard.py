@@ -107,8 +107,16 @@ def run(
         "proton": flat.wait_for_blank_arena_census(CLIENT_ENDPOINT, timeout),
     }
     result["nav"] = {
-        "windows": flat.nav_summary(HOST_ENDPOINT, timeout),
-        "proton": flat.nav_summary(CLIENT_ENDPOINT, timeout),
+        "windows": flat.nav_summary(
+            HOST_ENDPOINT,
+            timeout,
+            expected_actor_count=0,
+        ),
+        "proton": flat.nav_summary(
+            CLIENT_ENDPOINT,
+            timeout,
+            expected_actor_count=0,
+        ),
     }
     for label, summary in result["nav"].items():
         actor_set = {

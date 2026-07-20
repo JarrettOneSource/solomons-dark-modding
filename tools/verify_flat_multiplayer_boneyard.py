@@ -154,7 +154,12 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def nav_summary(pipe_name: str, timeout: float = 8.0) -> dict[str, Any]:
+def nav_summary(
+    pipe_name: str,
+    timeout: float = 8.0,
+    *,
+    expected_actor_count: int | None = None,
+) -> dict[str, Any]:
     # get_nav_grid() queues its first snapshot rebuild on the gameplay thread,
     # so the first Lua call after run entry is expected to report no grid.
     deadline = time.monotonic() + timeout
@@ -184,10 +189,26 @@ def nav_summary(pipe_name: str, timeout: float = 8.0) -> dict[str, Any]:
             values.get("scene") == "testrun"
             and values.get("replicated_valid") == "true"
             and summary["broad_nav_grid"]
+            and (
+                expected_actor_count is None
+                or (
+                    summary["replicated_actor_count"] == expected_actor_count
+                    and summary["replicated_actor_total_count"]
+                    == expected_actor_count
+                )
+            )
         ):
             return summary
         time.sleep(0.1)
-    raise VerifyFailure(f"flat boneyard did not expose a broad replicated nav grid: {summary}")
+    expectation = (
+        ""
+        if expected_actor_count is None
+        else f" with {expected_actor_count} replicated actors"
+    )
+    raise VerifyFailure(
+        f"flat boneyard did not expose a broad replicated nav grid{expectation}: "
+        f"{summary}"
+    )
 
 
 def wait_for_blank_arena_census(
@@ -333,8 +354,8 @@ def run() -> dict[str, Any]:
         "client": wait_for_blank_arena_census(CLIENT_PIPE),
     }
     result["nav"] = {
-        "host": nav_summary(HOST_PIPE),
-        "client": nav_summary(CLIENT_PIPE),
+        "host": nav_summary(HOST_PIPE, expected_actor_count=0),
+        "client": nav_summary(CLIENT_PIPE, expected_actor_count=0),
     }
     result["initial_actor_set"] = {
         label: {

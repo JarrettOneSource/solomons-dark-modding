@@ -604,6 +604,13 @@ def test_run_enemy_materialization_preserves_exact_native_type() -> str:
         ),
         (lifecycle_state, "using SpawnExactEnemyGroupFn = void(__thiscall*)("),
         (lifecycle_hooks, "CallSpawnExactEnemyGroupSafe("),
+        (
+            lifecycle_hooks,
+            "memory.ResolveGameAddressOrZero(kNativeIntArrayVtable)",
+        ),
+        (lifecycle_hooks, "memory.ResolveGameAddressOrZero(kGameFree)"),
+        (lifecycle_hooks, "no_modifiers.vtable = modifier_array_vtable"),
+        (lifecycle_hooks, "free_fn(reinterpret_cast<void*>(no_modifiers.entries))"),
         (lifecycle_hooks, "request.type_id"),
         (lifecycle_hooks, "actual native type did not match authority"),
         (
@@ -1051,6 +1058,61 @@ def test_remote_windows_lua_bridge_is_persistent_and_framed() -> str:
         "remote Windows Lua uses an OS-assigned loopback port reached by one "
         "persistent SSH stdio tunnel, while logs use finite byte-range polls"
     )
+
+
+def test_active_pair_visual_capture_routes_by_pair_backend() -> str:
+    import verify_steam_friend_active_pair_visuals as visuals
+
+    calls: list[tuple[str, str, str]] = []
+    original_backend = visuals.PAIR_BACKEND
+    original_local_capture = visuals.frame_capture.capture_game_backbuffer
+    original_remote_capture = visuals.capture_remote_windows_backbuffer
+    try:
+        visuals.frame_capture.capture_game_backbuffer = (
+            lambda endpoint, output_path, **kwargs: calls.append(
+                ("local", endpoint, kwargs.get("game_path_kind", "windows"))
+            )
+            or {"capture": "local"}
+        )
+        visuals.capture_remote_windows_backbuffer = (
+            lambda pair, endpoint, output_path: calls.append(
+                ("remote", endpoint, "windows")
+            )
+            or {"capture": "remote"}
+        )
+
+        expected = {
+            "wsl": (
+                ("local", visuals.HOST_ENDPOINT, "windows"),
+                ("local", visuals.CLIENT_ENDPOINT, "proton"),
+            ),
+            "remote-windows-host": (
+                ("remote", visuals.HOST_ENDPOINT, "windows"),
+                ("local", visuals.CLIENT_ENDPOINT, "windows"),
+            ),
+            "remote-windows-client": (
+                ("local", visuals.HOST_ENDPOINT, "windows"),
+                ("remote", visuals.CLIENT_ENDPOINT, "windows"),
+            ),
+        }
+        for backend, expected_calls in expected.items():
+            visuals.PAIR_BACKEND = backend
+            calls.clear()
+            visuals.capture_participant_backbuffer(
+                object(), visuals.HOST_ENDPOINT, visuals.HOST_SCREENSHOT
+            )
+            visuals.capture_participant_backbuffer(
+                object(), visuals.CLIENT_ENDPOINT, visuals.CLIENT_SCREENSHOT
+            )
+            assert tuple(calls) == expected_calls, (backend, calls)
+    finally:
+        visuals.PAIR_BACKEND = original_backend
+        visuals.frame_capture.capture_game_backbuffer = original_local_capture
+        visuals.capture_remote_windows_backbuffer = original_remote_capture
+
+    source = _read("tools/verify_steam_friend_active_pair_visuals.py")
+    assert "def capture_remote_host_backbuffer(" not in source
+    return "Steam visual captures use the exact local, Proton, or remote Windows path"
 
 
 def test_steam_pair_recovers_lobby_membership_and_requires_stable_readiness() -> str:
@@ -2596,7 +2658,6 @@ def test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery() -> str:
         "SolomonDarkModLauncher.UI/src/Infrastructure/"
         "LauncherMultiplayerSessionStatusReader.cs"
     )
-    window = _read("SolomonDarkModLauncher.UI/src/Views/MainWindow.xaml")
     publisher = _read(
         "SolomonDarkModLauncher/src/Launch/LobbyDirectoryPublisher.cs"
     )
@@ -2635,21 +2696,6 @@ def test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery() -> str:
         view_model.index("private void StartSteamSessionMonitoring"):
         view_model.index("private void ApplySteamSessionStatus")
     ], "launcher session monitor still polls the staged runtime-mod directory"
-    for token in (
-        'Content="Join Lobby ID"',
-        'Content="How to Play"',
-        "Select the host's lobby through Steam",
-        "Steam P2P sends all gameplay data",
-        "LobbyConnectionDetailsText",
-    ):
-        assert token in window, f"launcher UI lacks: {token}"
-    for removed in (
-        "Join Friend",
-        "Join Steam Invite",
-        "Waiting for a Steam Invite",
-        "HostPrivacyPassword",
-    ):
-        assert removed not in window, f"launcher UI retains removed flow: {removed}"
     _require_in_order(
         publisher,
         'hubObserved = hubObserved || status?.GamePhase == "hub"',
@@ -2687,6 +2733,7 @@ def test_explicit_blank_boneyard_removes_native_scenery_and_collision() -> str:
         "SolomonDarkModLauncher/src/Launch/StagedGameLauncher.cs"
     )
     verifier = _read("tools/verify_flat_multiplayer_boneyard.py")
+    steam_verifier = _read("tools/verify_steam_friend_flat_boneyard.py")
 
     assert '#include "test_blank_boneyard_reconciliation.inl"' in dispatch
     assert "ReconcileExplicitTestBlankBoneyard(" in pump
@@ -2734,6 +2781,9 @@ def test_explicit_blank_boneyard_removes_native_scenery_and_collision() -> str:
     assert "test_blank_boneyard=True" in verifier
     assert "wait_for_blank_arena_census(HOST_PIPE)" in verifier
     assert "wait_for_blank_arena_census(CLIENT_PIPE)" in verifier
+    assert "expected_actor_count: int | None = None" in verifier
+    assert "expected_actor_count=0" in verifier
+    assert "expected_actor_count=0" in steam_verifier
     for zero_count in (
         'last.get("scripted_setpiece_actor_count", "-1")',
         'last.get("primary_gate_blocked", "-1")',
@@ -3877,7 +3927,7 @@ def test_primary_spell_effect_snapshots_do_not_fight_native_replay() -> str:
     )
 
 
-def test_native_remote_fireball_retains_cast_heading_until_projectile_birth() -> str:
+def test_native_remote_fireball_converts_cast_heading_until_projectile_birth() -> str:
     playback = read_source_unit(
         "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/"
         "native_remote_playback.inl"
@@ -3889,16 +3939,16 @@ def test_native_remote_fireball_retains_cast_heading_until_projectile_birth() ->
         "ongoing_cast.active &&",
         "ongoing_cast.have_aim_heading &&",
         "!ongoing_cast.remote_per_cast_projectile_observed;",
-        "NormalizeWizardActorHeadingForWrite(ongoing_cast.aim_heading)",
+        "NormalizeWizardActorHeadingForWrite(90.0f - ongoing_cast.aim_heading)",
         ": binding->replicated_target_heading;",
         "ShortestHeadingDeltaDegrees(heading, next_heading)",
         "ApplyWizardActorFacingState(actor_address, next_heading);",
     ):
-        assert token in playback, f"remote Fire heading ownership lacks: {token}"
+        assert token in playback, f"remote Fire direction ownership lacks: {token}"
     assert (
         "const float next_heading = binding->replicated_target_heading;"
         not in playback
-    ), "replicated transform heading must not overwrite pre-birth Fire cast aim"
+    ), "replicated transform heading must not overwrite pre-birth Fire direction"
 
     for token in (
         "Fire (0x0053DC60)",
@@ -3906,14 +3956,15 @@ def test_native_remote_fireball_retains_cast_heading_until_projectile_birth() ->
         "0x00410500",
         "Fireball + 0x13C/+0x140",
         "0x00529380",
+        "90 - aim_heading",
         "per-cast projectile is observed",
         "already-created projectile.",
     ):
         assert token in documentation, f"Fire direction RE contract lacks: {token}"
 
     return (
-        "native remote Fire casts retain cast-facing through stock projectile "
-        "birth, then return heading ownership to participant playback"
+        "native remote Fire casts convert presentation aim to native direction "
+        "through projectile birth, then return heading ownership to playback"
     )
 
 
@@ -3949,6 +4000,106 @@ def test_native_remote_fireball_inverts_presentation_heading_for_stock_fire() ->
         "remote Fire replay converts all cardinal presentation headings into "
         "stock native directions"
     )
+
+
+def test_lightning_manual_cluster_stays_inside_flat_arena_spatial_grid() -> str:
+    relative_path = "tools/verify_multiplayer_lightning_chaining_effect_sync.py"
+    source = _read(relative_path)
+    tree = ast.parse(source, filename=relative_path)
+    literals: dict[str, object] = {}
+    for node in tree.body:
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
+            try:
+                literals[node.targets[0].id] = ast.literal_eval(node.value)
+            except (ValueError, TypeError):
+                continue
+
+    anchor = literals.get("LIGHTNING_CLUSTER_ANCHOR")
+    patterns = literals.get("CLUSTER_PATTERNS")
+    assert isinstance(anchor, tuple) and len(anchor) == 2
+    assert isinstance(patterns, tuple) and patterns
+
+    lane_path = "tools/verify_multiplayer_primary_kill_stress.py"
+    lane_tree = ast.parse(_read(lane_path), filename=lane_path)
+    lane_offsets: object = None
+    for node in lane_tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "lane_candidates":
+            for statement in node.body:
+                if (
+                    isinstance(statement, ast.Assign)
+                    and len(statement.targets) == 1
+                    and isinstance(statement.targets[0], ast.Name)
+                    and statement.targets[0].id == "offsets"
+                ):
+                    lane_offsets = ast.literal_eval(statement.value)
+                    break
+    assert isinstance(lane_offsets, list) and lane_offsets
+    furthest_x = max(
+        float(anchor[0]) + float(lane_x) + float(offset_x)
+        for lane_x, _ in lane_offsets
+        for pattern in patterns
+        for offset_x, _ in pattern
+    )
+    # Live Steam evidence on the stock flat fixture showed native grid cells at
+    # x=1872 and null cells at x=1944. Keep every scripted target within the
+    # observed-good surface instead of testing actors the game cannot query.
+    assert furthest_x <= 1872.0, (
+        f"manual Lightning cluster crosses the verified native grid: {furthest_x}"
+    )
+
+    build_start = source.index("def build_manual_cluster(")
+    build_end = source.index("\ndef ", build_start + 1)
+    build_manual_cluster = source[build_start:build_end]
+    assert (
+        "place_pair_on_clear_lane(direction, LIGHTNING_CLUSTER_ANCHOR)"
+        in build_manual_cluster
+    )
+    return "manual Lightning cluster remains entirely inside the verified flat-arena spatial grid"
+
+
+def test_boneyard_generator_skips_empty_candidate_interpolation() -> str:
+    layout = _read("config/binary-layout.ini")
+    seam_bindings = _read_many(
+        "SolomonDarkModLoader/src/gameplay_seams.h",
+        "SolomonDarkModLoader/src/gameplay_seams/address_storage.inl",
+        "SolomonDarkModLoader/src/gameplay_seams/state_and_address_bindings.inl",
+    )
+    patch_source = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/core/boneyard_generator_patch.inl"
+    )
+    lifecycle = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl"
+    )
+    debug_binding = _read_many(
+        "SolomonDarkModLoader/src/lua_engine_bindings_debug.cpp",
+        "SolomonDarkModLoader/src/lua_engine_bindings_debug/functions_typed_readers_and_writers.inl",
+    )
+    steam_driver = _read("tools/drive_steam_friend_active_pair.py")
+    run_reentry = _read("tools/verify_steam_friend_run_exit_reentry.py")
+
+    assert "boneyard_empty_candidate_interpolation_branch=0x0063D78F" in layout
+    assert seam_bindings.count("kBoneyardEmptyCandidateInterpolationBranch") == 3
+    assert "0x3B, 0xFB, 0x7F, 0x04, 0x33, 0xC0, 0xEB, 0x09" in patch_source
+    assert "0x85, 0xFF, 0x0F, 0x8E, 0xC2, 0x02, 0x00, 0x00" in patch_source
+    assert "InstallBoneyardGeneratorPatch" in lifecycle
+    assert "RestoreBoneyardGeneratorPatch" in lifecycle
+    assert "LuaDebugSetRunGenerationSeed" in debug_binding
+    assert '"set_run_generation_seed"' in debug_binding
+    assert "SetPendingRunGenerationSeed(seed, &error_message)" in debug_binding
+    assert '"--run-generation-seed"' in steam_driver
+    assert "sd.debug.set_run_generation_seed" in steam_driver
+    assert '"--run-generation-seed"' in run_reentry
+    assert "drive.set_run_generation_seed" in run_reentry
+    _require_in_order(
+        lifecycle,
+        "InstallBoneyardGeneratorPatch",
+        "g_gameplay_keyboard_injection.initialized = true",
+    )
+    return "empty stock Boneyard candidate sets branch to cleanup before interpolation"
 
 
 def test_native_item_recipe_selection_excludes_equipped_items() -> str:

@@ -46,7 +46,6 @@ from verify_multiplayer_targeted_spell_matrix import (
     host_enemy_by_id,
 )
 from verify_multiplayer_primary_kill_stress import (
-    CLIENT_TARGET,
     cleanup_live_enemies,
     enable_manual_stock_spawner_combat,
     find_target,
@@ -92,6 +91,10 @@ MAX_LEVEL_STEPS = 25
 PIN_INTERVAL = 0.05
 TARGET_REFRESH_DURATION = 1.8
 MAX_AIR_CHAIN_ENDPOINT_ERROR = 2.0
+# Leave enough horizontal room for every clear-lane candidate and the widest
+# chain pattern. The flat fixture exposes native grid cells through x=1872;
+# actors observed at x=1944 are outside the stock spell-selection surface.
+LIGHTNING_CLUSTER_ANCHOR = (1200.0, 1750.0)
 CLUSTER_PATTERNS = (
     ((72.0, 36.0), (72.0, -36.0), (144.0, 36.0), (144.0, -36.0)),
     ((60.0, 36.0), (60.0, -36.0), (120.0, 36.0), (120.0, -36.0)),
@@ -1120,7 +1123,7 @@ def build_manual_cluster(
     direction: Direction,
     secondary_offsets: tuple[tuple[float, float], ...],
 ) -> dict[str, Any]:
-    lane = place_pair_on_clear_lane(direction, CLIENT_TARGET)
+    lane = place_pair_on_clear_lane(direction, LIGHTNING_CLUSTER_ANCHOR)
     primary_x = float(lane["x"])
     primary_y = float(lane["y"])
     target_positions = ((0.0, 0.0),) + secondary_offsets

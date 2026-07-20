@@ -23,6 +23,21 @@ int LuaDebugSwitchRegion(lua_State* state) {
     return 1;
 }
 
+// sd.debug.set_run_generation_seed(seed) -> boolean
+int LuaDebugSetRunGenerationSeed(lua_State* state) {
+    const auto seed = CheckLuaUnsignedInteger<std::uint32_t>(state, 1, "seed");
+    std::string error_message;
+    if (!SetPendingRunGenerationSeed(seed, &error_message)) {
+        return luaL_error(
+            state,
+            "sd.debug.set_run_generation_seed failed: %s",
+            error_message.c_str());
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 int LuaDebugReadU8(lua_State* state) {
     const auto address = CheckLuaAddress(state, 1, "address");
     return PushLuaAbsoluteValueResult<std::uint8_t>(state, address);
@@ -113,4 +128,3 @@ int LuaDebugWritePtr(lua_State* state) {
     lua_pushboolean(state, TryWriteLuaAbsoluteValue(address, value) ? 1 : 0);
     return 1;
 }
-

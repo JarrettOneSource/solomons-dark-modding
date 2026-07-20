@@ -234,6 +234,7 @@ def start_shared_run(
     *,
     test_godmode: bool = False,
     test_manual_enemy_mode: bool = False,
+    run_generation_seed: int | None = None,
 ) -> dict[str, Any]:
     host_view = local_sync.query(HOST_ENDPOINT)
     client_view = local_sync.query(CLIENT_ENDPOINT)
@@ -256,11 +257,17 @@ def start_shared_run(
             "host": drive.arm_test_manual_enemy_mode(pair, HOST_ENDPOINT),
             "client": drive.arm_test_manual_enemy_mode(pair, CLIENT_ENDPOINT),
         }
+    seed_result = (
+        drive.set_run_generation_seed(pair, run_generation_seed)
+        if run_generation_seed is not None
+        else None
+    )
     client_start_blocked = local_sync.assert_client_start_testrun_blocked()
     run_entry = local_sync.start_host_testrun_and_wait_for_clients(timeout=60.0)
     bootstrap = local_sync.verify_run_entry_bootstrap(timeout=20.0)
     return {
         "test_protections": protections,
+        "run_generation_seed": seed_result,
         "client_start_blocked": client_start_blocked,
         "run_entry": run_entry,
         "bootstrap": bootstrap,
@@ -302,6 +309,7 @@ def run(
     host_element: str = "fire",
     client_element: str = "air",
     discipline: str = "arcane",
+    run_generation_seeds: tuple[int, ...] = (),
 ) -> dict[str, Any]:
     host_instance, client_instance = require_instance_environment()
     instances = (host_instance, client_instance)
@@ -353,6 +361,11 @@ def run(
             pair,
             test_godmode=test_godmode,
             test_manual_enemy_mode=test_manual_enemy_mode,
+            run_generation_seed=(
+                run_generation_seeds[cycle - 1]
+                if run_generation_seeds
+                else None
+            ),
         )
         after_processes = process_ids(host_instance, client_instance)
         record["processes_after"] = after_processes
@@ -385,12 +398,21 @@ def main() -> int:
     parser.add_argument("--host-element", default="fire")
     parser.add_argument("--client-element", default="air")
     parser.add_argument("--discipline", default="arcane")
+    parser.add_argument(
+        "--run-generation-seed",
+        action="append",
+        type=drive.parse_run_generation_seed,
+        default=[],
+        help="Set one exact host run seed per re-entry cycle.",
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
     if args.cycles <= 0:
         parser.error("--cycles must be positive")
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
+    if args.run_generation_seed and len(args.run_generation_seed) != args.cycles:
+        parser.error("provide exactly one --run-generation-seed per cycle")
 
     pair = SteamFriendActivePair()
     result: dict[str, Any] = {"ok": False}
@@ -405,6 +427,7 @@ def main() -> int:
             host_element=args.host_element,
             client_element=args.client_element,
             discipline=args.discipline,
+            run_generation_seeds=tuple(args.run_generation_seed),
         )
         return_code = 0
     except Exception as exc:
