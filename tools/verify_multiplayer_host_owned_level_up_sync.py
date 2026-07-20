@@ -113,7 +113,7 @@ def wait_for_bidirectional_progression_parity(timeout: float) -> dict[str, Any]:
                 "build_skill_id",
                 "current_spell_id",
                 "progression_level",
-                "output_count",
+                "logical_output_count",
                 "secondary_damage_available",
                 "mana_cost_available",
                 "mana_spend_cost_available",

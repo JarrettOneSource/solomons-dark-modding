@@ -56,11 +56,14 @@ def display_name(stem: str) -> str:
     return " ".join(part.capitalize() for part in stem.split("_"))
 
 
-def load_skill_configs() -> list[dict[str, Any]]:
-    if not SKILL_CONFIG_DIR.is_dir():
-        raise VerifyFailure(f"wizard skill config directory is missing: {SKILL_CONFIG_DIR}")
+def load_skill_configs(
+    config_dir: Path | None = None,
+) -> list[dict[str, Any]]:
+    source = config_dir if config_dir is not None else SKILL_CONFIG_DIR
+    if not source.is_dir():
+        raise VerifyFailure(f"wizard skill config directory is missing: {source}")
     configs: list[dict[str, Any]] = []
-    for path in sorted(SKILL_CONFIG_DIR.glob("*.cfg")):
+    for path in sorted(source.glob("*.cfg")):
         text = path.read_text(encoding="utf-8", errors="ignore")
         configs.append(
             {

@@ -224,21 +224,10 @@ def _parse_values(stdout: str) -> dict[str, str]:
     return values
 
 
-def run(clients: list[tuple[str, str]], launch: bool) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "ok": False,
-        "launched_pair": launch,
-        "required_namespaces": sorted(REQUIRED_FUNCTIONS),
-        "required_function_count": sum(map(len, REQUIRED_FUNCTIONS.values())),
-    }
-    if launch:
-        stop_games()
-        launch_pair(god_mode=True)
-        disable_bots()
-        wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
-        wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")
-
-    peer_results = run_all(clients, build_probe(), timeout=12.0)
+def validate_peer_results(
+    result: dict[str, Any],
+    peer_results: list[dict[str, Any]],
+) -> None:
     result["peers"] = peer_results
     failures: list[str] = []
     for peer in peer_results:
@@ -257,7 +246,63 @@ def run(clients: list[tuple[str, str]], launch: bool) -> dict[str, Any]:
             )
     result["failures"] = failures
     result["ok"] = not failures
+
+
+def base_result(*, launched_pair: bool, steam_friend_pair: bool) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "launched_pair": launched_pair,
+        "steam_friend_pair": steam_friend_pair,
+        "required_namespaces": sorted(REQUIRED_FUNCTIONS),
+        "required_function_count": sum(map(len, REQUIRED_FUNCTIONS.values())),
+    }
+
+
+def run(clients: list[tuple[str, str]], launch: bool) -> dict[str, Any]:
+    result = base_result(launched_pair=launch, steam_friend_pair=False)
+    if launch:
+        stop_games()
+        launch_pair(god_mode=True)
+        disable_bots()
+        wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
+        wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")
+
+    validate_peer_results(
+        result,
+        run_all(clients, build_probe(), timeout=12.0),
+    )
     return result
+
+
+def run_steam_friend_pair() -> dict[str, Any]:
+    from steam_friend_active_pair import (  # Local import keeps UDP-only use standalone.
+        CLIENT_ENDPOINT,
+        HOST_ENDPOINT,
+        SteamFriendActivePair,
+    )
+
+    pair = SteamFriendActivePair()
+    result = base_result(launched_pair=False, steam_friend_pair=True)
+    try:
+        result["pair"] = pair.discover()
+        probe = build_probe()
+        peer_results = []
+        for name, endpoint in (
+            ("host", HOST_ENDPOINT),
+            ("client", CLIENT_ENDPOINT),
+        ):
+            peer_results.append(
+                {
+                    "name": name,
+                    "returncode": 0,
+                    "stdout": pair.lua(endpoint, probe, timeout=12.0),
+                    "stderr": "",
+                }
+            )
+        validate_peer_results(result, peer_results)
+        return pair.redact(result)
+    finally:
+        pair.close()
 
 
 def main() -> int:
@@ -268,16 +313,29 @@ def main() -> int:
         type=parse_client,
         help="Lua exec endpoint as NAME=PIPE; defaults to local host/client.",
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--launch-pair",
         action="store_true",
         help="Stage and launch a local UDP host/client pair before probing.",
     )
+    mode.add_argument(
+        "--steam-friend",
+        action="store_true",
+        help="Probe an already-authenticated Windows/Proton Steam friend pair.",
+    )
+    parser.add_argument("--output", type=Path, default=OUTPUT)
     args = parser.parse_args()
+    if args.steam_friend and args.client:
+        parser.error("--client cannot be combined with --steam-friend")
 
     result: dict[str, Any] = {"ok": False}
     try:
-        result = run(args.client or list(DEFAULT_CLIENTS), args.launch_pair)
+        result = (
+            run_steam_friend_pair()
+            if args.steam_friend
+            else run(args.client or list(DEFAULT_CLIENTS), args.launch_pair)
+        )
         return_code = 0 if result["ok"] else 1
     except Exception as exc:  # noqa: BLE001 - verifier reports structured failure.
         result["error"] = str(exc)
@@ -286,8 +344,11 @@ def main() -> int:
         if args.launch_pair:
             stop_games()
 
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
+        json.dumps(result, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     print(
         json.dumps(
             {
@@ -295,7 +356,7 @@ def main() -> int:
                 "error": result.get("error"),
                 "failures": result.get("failures", []),
                 "required_function_count": result.get("required_function_count"),
-                "output": str(OUTPUT),
+                "output": str(args.output),
             },
             indent=2,
             sort_keys=True,

@@ -40,6 +40,7 @@ from verify_multiplayer_level_up_offer_sync import (
     wait_for_waiting_ids,
 )
 from verify_multiplayer_primary_kill_stress import (
+    cleanup_live_enemies,
     enable_manual_stock_spawner_combat,
     parse_float,
     parse_int,
@@ -73,6 +74,32 @@ def read_log_from(path: Path, offset: int) -> str:
     with path.open("rb") as handle:
         handle.seek(offset)
         return handle.read().decode("utf-8", errors="replace")
+
+
+def wait_for_hud_draw(
+    path: Path,
+    offset: int,
+    text: str,
+    timeout: float,
+) -> dict[str, Any]:
+    prefix = (
+        "Multiplayer level-up wait HUD draw. "
+        "source=dx9_level_up_barrier ok=1 "
+    )
+    text_token = f'text="{text}"'
+    deadline = time.monotonic() + timeout
+    tail = ""
+    while time.monotonic() < deadline:
+        tail = read_log_from(path, offset)
+        if any(
+            prefix in line and text_token in line
+            for line in tail.splitlines()
+        ):
+            return {"text": text, "draw_ok": True}
+        time.sleep(0.05)
+    raise VerifyFailure(
+        f"level-up HUD did not draw {text!r} through the native DX9 overlay"
+    )
 
 
 def next_shared_level() -> tuple[int, int, dict[str, Any]]:
@@ -337,6 +364,7 @@ def verify_normal_barrier(
     timeout: float,
     world_activity_probe: dict[str, Any],
 ) -> dict[str, Any]:
+    client_log_offset = CLIENT_LOG.stat().st_size if CLIENT_LOG.exists() else 0
     level, experience, before = next_shared_level()
     publish = publish_barrier_offer(level, experience)
     host_offer = wait_for_host_offer(level, timeout)
@@ -423,28 +451,29 @@ def verify_normal_barrier(
             f"offered={client_option_id} result={client_result}"
         )
     resulting_active = client_result["resulting_active"]
-    host_remote_entry = query_progression_entry(
-        HOST_PIPE,
+    if resulting_active != expected_client_active:
+        raise VerifyFailure(
+            "manual remote result reported an unexpected native rank: "
+            f"expected_active={expected_client_active} result={client_result}"
+        )
+    client_native_upgrade = wait_for_native_upgrade_convergence(
+        owner_pipe=CLIENT_PIPE,
+        observer_pipe=HOST_PIPE,
+        owner_participant_id=CLIENT_ID,
         option_id=client_option_id,
-        participant_id=CLIENT_ID,
+        expected_active=expected_client_active,
+        timeout=timeout,
     )
-    client_local_entry = query_progression_entry(
-        CLIENT_PIPE,
-        option_id=client_option_id,
-    )
+    host_remote_entry = client_native_upgrade["observer"]
+    client_local_entry = client_native_upgrade["owner"]
     if not (
         resulting_active == expected_client_active
-        and host_remote_entry["available"]
-        and client_local_entry["available"]
         and host_remote_entry["active"] == resulting_active
         and client_local_entry["active"] == resulting_active
     ):
         raise VerifyFailure(
             "manual remote level-up did not converge exactly once on both native "
             f"progressions: option_id={client_option_id} "
-            f"apply_count={client_apply_count} expected_active={expected_client_active} "
-            f"resulting_active={resulting_active} before_host={host_remote_before} "
-            f"before_client={client_local_before} "
             f"host_remote={host_remote_entry} client_local={client_local_entry}"
         )
 
@@ -461,6 +490,12 @@ def verify_normal_barrier(
             "unresolved host did not retain its choice prompt while the client "
             f"waited: {waiting_host}"
         )
+    client_wait_hud = wait_for_hud_draw(
+        CLIENT_LOG,
+        client_log_offset,
+        "Waiting on 1 player",
+        timeout,
+    )
 
     paused_world_activity = verify_world_activity_paused(world_activity_probe)
 
@@ -549,6 +584,7 @@ def verify_normal_barrier(
         "client_waiting_for_host": {
             "host": waiting_host,
             "client": waiting_client,
+            "client_hud": client_wait_hud,
         },
         "world_activity": {
             "probe": world_activity_probe,
@@ -693,6 +729,12 @@ def verify_timeout_barrier(setup_timeout: float, auto_timeout: float) -> dict[st
         require_timed_out=False,
     )
     waiting_host = summarize_wait(waiting["host"])
+    host_wait_hud = wait_for_hud_draw(
+        HOST_LOG,
+        host_log_offset,
+        "Waiting on 1 player",
+        setup_timeout,
+    )
 
     auto_result = wait_for_timeout_auto_pick(
         barrier_id=active_host["barrier_id"],
@@ -719,29 +761,33 @@ def verify_timeout_barrier(setup_timeout: float, auto_timeout: float) -> dict[st
         )
 
     option_id = auto_result["option_id"]
-    host_remote_entry = query_progression_entry(
-        HOST_PIPE,
-        option_id=option_id,
-        participant_id=CLIENT_ID,
-    )
-    client_local_entry = query_progression_entry(
-        CLIENT_PIPE,
-        option_id=option_id,
-    )
     resulting_active = auto_result["resulting_active"]
     selected_baseline = client_option_baselines.get(option_id)
+    if selected_baseline is None or (
+        resulting_active != selected_baseline["expected_active"]
+    ):
+        raise VerifyFailure(
+            "timeout auto-pick reported an unexpected native rank: "
+            f"resulting_active={resulting_active} "
+            f"baseline={selected_baseline}"
+        )
+    timeout_native_upgrade = wait_for_native_upgrade_convergence(
+        owner_pipe=CLIENT_PIPE,
+        observer_pipe=HOST_PIPE,
+        owner_participant_id=CLIENT_ID,
+        option_id=option_id,
+        expected_active=resulting_active,
+        timeout=setup_timeout,
+    )
+    host_remote_entry = timeout_native_upgrade["observer"]
+    client_local_entry = timeout_native_upgrade["owner"]
     if not (
-        selected_baseline is not None
-        and resulting_active == selected_baseline["expected_active"]
-        and host_remote_entry["available"]
-        and client_local_entry["available"]
+        resulting_active == selected_baseline["expected_active"]
         and host_remote_entry["active"] == resulting_active
         and client_local_entry["active"] == resulting_active
     ):
         raise VerifyFailure(
             "timeout auto-pick did not converge the selected upgrade exactly once: "
-            f"resulting_active={resulting_active} "
-            f"baseline={selected_baseline} "
             f"host_remote={host_remote_entry} client_local={client_local_entry}"
         )
 
@@ -773,6 +819,7 @@ def verify_timeout_barrier(setup_timeout: float, auto_timeout: float) -> dict[st
         "host_choice": host_choice,
         "host_result_option_id": host_result["result_option_id"],
         "waiting_for_client": waiting_host,
+        "host_wait_hud": host_wait_hud,
         "auto_result": {
             "option_id": option_id,
             "resulting_active": resulting_active,
@@ -791,6 +838,39 @@ def verify_timeout_barrier(setup_timeout: float, auto_timeout: float) -> dict[st
             "host_accepted_packets": host_confirmation_accept_count,
         },
     }
+
+
+def run_prepared_barrier_matrix(
+    timeout: float,
+    auto_timeout: float,
+    *,
+    normal_only: bool,
+) -> dict[str, Any]:
+    """Run both barrier contracts in an already-running shared test run."""
+
+    output: dict[str, Any] = {
+        "manual_spawner_mode": {
+            "host": set_manual_spawner_test_mode(HOST_PIPE, True),
+            "client": set_manual_spawner_test_mode(CLIENT_PIPE, True),
+        },
+        "combat_bootstrap": enable_manual_stock_spawner_combat(),
+    }
+    output["world_activity_probe"] = prepare_world_activity_probe()
+    output["normal_barrier"] = verify_normal_barrier(
+        timeout,
+        output["world_activity_probe"],
+    )
+    # The moving enemy proves the normal barrier freezes and resumes the
+    # world. It has no role in the 60-second auto-pick contract, so retire it
+    # before the deliberately long wait rather than letting it attack players
+    # while the harness performs cross-machine observations.
+    output["post_normal_combat_cleanup"] = cleanup_live_enemies()
+    if not normal_only:
+        output["timeout_barrier"] = verify_timeout_barrier(
+            timeout,
+            auto_timeout,
+        )
+    return output
 
 
 def main() -> int:
@@ -846,17 +926,12 @@ def main() -> int:
                 "testrun",
             ),
         }
-        output["combat_bootstrap"] = enable_manual_stock_spawner_combat()
-        output["world_activity_probe"] = prepare_world_activity_probe()
-        output["normal_barrier"] = verify_normal_barrier(
+        prepared = run_prepared_barrier_matrix(
             args.timeout,
-            output["world_activity_probe"],
+            args.auto_timeout,
+            normal_only=args.normal_only,
         )
-        if not args.normal_only:
-            output["timeout_barrier"] = verify_timeout_barrier(
-                args.timeout,
-                args.auto_timeout,
-            )
+        output.update(prepared)
         output["ok"] = True
     except (VerifyFailure, subprocess.TimeoutExpired) as exc:
         output["error"] = str(exc)

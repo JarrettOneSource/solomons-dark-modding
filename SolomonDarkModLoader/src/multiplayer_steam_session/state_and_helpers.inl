@@ -6,6 +6,7 @@ constexpr const char* kManifestEnvironmentVariable = "SDMOD_MULTIPLAYER_MANIFEST
 constexpr const char* kMaxParticipantsEnvironmentVariable = "SDMOD_MULTIPLAYER_MAX_PARTICIPANTS";
 constexpr const char* kOpenInviteEnvironmentVariable = "SDMOD_STEAM_OPEN_INVITE";
 constexpr const char* kInviteSteamIdEnvironmentVariable = "SDMOD_STEAM_INVITE_STEAM_ID";
+constexpr const char* kLobbyPrivacyEnvironmentVariable = "SDMOD_STEAM_LOBBY_PRIVACY";
 constexpr const char* kLaunchTokenEnvironmentVariable = "SDMOD_LAUNCH_TOKEN";
 
 constexpr const char* kLobbyProtocolKey = "sdmod_protocol";
@@ -14,6 +15,7 @@ constexpr const char* kLobbyHostKey = "sdmod_host";
 constexpr const char* kLobbyAppIdKey = "sdmod_app_id";
 constexpr const char* kLobbyMaxParticipantsKey = "sdmod_max_players";
 constexpr const char* kLobbyStateKey = "sdmod_state";
+constexpr const char* kLobbyPrivacyKey = "sdmod_privacy";
 constexpr const char* kLobbyStateOpen = "open";
 constexpr const char* kLobbyStateClosed = "closed";
 constexpr const char* kMemberProtocolKey = "sdmod_protocol";
@@ -27,6 +29,9 @@ constexpr std::uint64_t kAuthenticatedPeerTimeoutMs = 10000;
 constexpr std::uint64_t kLobbyReconcileIntervalMs = 500;
 constexpr std::uint64_t kRouteStatusIntervalMs = 1000;
 constexpr std::uint64_t kSessionStatusWriteIntervalMs = 1000;
+constexpr std::uint64_t kFriendListRefreshIntervalMs = 5000;
+constexpr std::uint64_t kClientLobbyRecoveryRetryMs = 3000;
+constexpr std::uint64_t kClientLobbyRecoveryTimeoutMs = 120000;
 constexpr std::int32_t kReceiveBatchSize = 64;
 
 enum class SteamSessionPhase {
@@ -34,6 +39,7 @@ enum class SteamSessionPhase {
     WaitingForInvite,
     CreatingLobby,
     JoiningLobby,
+    Reconnecting,
     Handshaking,
     LobbyReady,
     Connected,
@@ -48,6 +54,8 @@ const char* SteamSessionPhaseLabel(SteamSessionPhase phase) {
         return "CreatingLobby";
     case SteamSessionPhase::JoiningLobby:
         return "JoiningLobby";
+    case SteamSessionPhase::Reconnecting:
+        return "Reconnecting";
     case SteamSessionPhase::Handshaking:
         return "Handshaking";
     case SteamSessionPhase::LobbyReady:
@@ -81,6 +89,9 @@ struct SteamSessionState {
     bool invite_dialog_opened = false;
     bool invite_sent = false;
     bool overlay_enabled = false;
+    bool steam_servers_connected = true;
+    bool client_lobby_recovery = false;
+    SteamLobbyVisibility lobby_visibility = SteamLobbyVisibility::FriendsOnly;
     SteamSessionPhase phase = SteamSessionPhase::Disabled;
     std::uint32_t app_id = 0;
     std::uint32_t max_participants = kDefaultMaxParticipants;
@@ -91,19 +102,27 @@ struct SteamSessionState {
     std::uint64_t host_steam_id = 0;
     std::uint64_t invite_steam_id = 0;
     std::uint64_t pending_api_call = 0;
+    std::uint64_t recovery_lobby_id = 0;
+    std::uint64_t recovery_started_ms = 0;
+    std::uint64_t last_join_attempt_ms = 0;
     std::uint64_t local_session_nonce = 0;
     std::uint64_t last_hello_send_ms = 0;
     std::uint64_t last_keepalive_send_ms = 0;
+    std::uint64_t last_keepalive_send_success_ms = 0;
+    std::int32_t last_keepalive_send_result = 0;
     std::uint64_t last_lobby_reconcile_ms = 0;
     std::uint64_t last_route_status_ms = 0;
     std::uint64_t last_status_write_ms = 0;
+    std::uint64_t last_friend_list_refresh_ms = 0;
     std::array<std::uint8_t, 32> manifest_sha256{};
     std::string manifest_sha256_text;
+    std::string privacy = "friendsOnly";
     std::string launch_token;
     std::string last_status_signature;
     std::string error_text;
     std::unordered_set<std::uint64_t> lobby_members;
     std::unordered_map<std::uint64_t, SteamSessionPeer> peers;
+    std::vector<std::uint64_t> immediate_friend_ids;
 };
 
 SteamSessionState g_session;
@@ -151,6 +170,20 @@ bool ReadBooleanEnvironmentVariable(const char* name, bool default_value) {
         return false;
     }
     return default_value;
+}
+
+SteamLobbyVisibility ReadLobbyVisibility() {
+    const auto value = ToLowerAscii(TrimAscii(
+        ReadEnvironmentVariable(kLobbyPrivacyEnvironmentVariable)));
+    return value == "public"
+        ? SteamLobbyVisibility::Public
+        : SteamLobbyVisibility::FriendsOnly;
+}
+
+const char* LobbyPrivacyToken(SteamLobbyVisibility visibility) {
+    return visibility == SteamLobbyVisibility::Public
+        ? "public"
+        : "friendsOnly";
 }
 
 bool TryParseUnsigned64(const std::string& text, std::uint64_t* value) {
@@ -335,30 +368,59 @@ bool IsLobbyMember(std::uint64_t steam_id) {
            g_session.lobby_members.find(steam_id) != g_session.lobby_members.end();
 }
 
-void RemovePeer(std::uint64_t steam_id) {
+void SuspendPeerForReauthentication(std::uint64_t steam_id) {
+    const auto peer_it = g_session.peers.find(steam_id);
+    if (steam_id == 0 || peer_it == g_session.peers.end()) {
+        return;
+    }
+    UnregisterSteamGameplayPeer(steam_id);
+    auto& peer = peer_it->second;
+    peer.authenticated = false;
+    peer.last_packet_ms = 0;
+}
+
+void ResetPeerForReauthentication(std::uint64_t steam_id) {
     if (steam_id == 0) {
         return;
     }
     UnregisterSteamGameplayPeer(steam_id);
-    SteamCloseNetworkSession(steam_id);
     g_session.peers.erase(steam_id);
+}
+
+void RemovePeer(std::uint64_t steam_id) {
+    if (steam_id == 0) {
+        return;
+    }
+    ResetPeerForReauthentication(steam_id);
+    SteamCloseNetworkSession(steam_id);
 }
 
 void RestartClientHostHandshake(
     std::uint64_t host_steam_id,
-    const char* reason) {
+    const char* reason,
+    bool reset_failed_route) {
     if (g_session.is_host ||
         host_steam_id == 0 ||
         host_steam_id != g_session.host_steam_id ||
         !IsLobbyMember(host_steam_id)) {
         return;
     }
-    RemovePeer(host_steam_id);
+    ResetPeerForReauthentication(host_steam_id);
+    if (reset_failed_route) {
+        const bool route_reset = SteamCloseNetworkSession(host_steam_id);
+        Log(
+            "Steam multiplayer reset terminal host route. steam_id=" +
+            std::to_string(host_steam_id) +
+            " close_result=" + (route_reset ? "1" : "0"));
+    }
     auto& peer = g_session.peers[host_steam_id];
     peer.steam_id = host_steam_id;
     peer.display_name = SteamGetFriendPersonaName(host_steam_id);
     g_session.local_session_nonce = GenerateSessionNonce();
-    g_session.last_hello_send_ms = 0;
+    // A normal application heartbeat timeout deliberately reuses the live
+    // message route. A terminal Steam failure must close that dead route, then
+    // leave one retry interval for Steam's teardown before opening a new one.
+    g_session.last_hello_send_ms = reset_failed_route ? GetTickCount64() : 0;
     g_session.phase = SteamSessionPhase::Handshaking;
     Log(
         "Steam multiplayer restarting host handshake. reason=" +

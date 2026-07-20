@@ -310,6 +310,16 @@ bool QueueRunLifecycleManualEnemySpawn(
     bool freeze_on_spawn,
     std::string* error_message,
     std::uint64_t* request_id) {
+    if (!IsRunLifecycleManualEnemySpawnerReady()) {
+        if (error_message != nullptr) {
+            *error_message =
+                "manual run enemy spawn: stock wave spawner is not ready.";
+        }
+        if (request_id != nullptr) {
+            *request_id = 0;
+        }
+        return false;
+    }
     return QueueRunLifecycleEnemySpawnRequestInternal(
         0,
         type_id,
@@ -362,6 +372,23 @@ void CancelQueuedRunLifecycleReplicatedEnemyCatchupSpawn(std::uint64_t network_a
     }
 }
 
+bool CompletePendingDirectManualRunEnemySpawnFailure(
+    std::string_view error_message) {
+    ManualRunEnemySpawnRequest request;
+    {
+        std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+        if (!g_have_pending_manual_run_enemy_spawn ||
+            g_pending_manual_run_enemy_spawn.network_actor_id != 0) {
+            return false;
+        }
+        request = g_pending_manual_run_enemy_spawn;
+        g_pending_manual_run_enemy_spawn = ManualRunEnemySpawnRequest{};
+        g_have_pending_manual_run_enemy_spawn = false;
+    }
+    CompleteManualRunEnemySpawnFailure(request, error_message);
+    return true;
+}
+
 bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
@@ -379,30 +406,13 @@ bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message) {
     uintptr_t spawner_address = 0;
     uintptr_t remembered_vtable = 0;
     if (!TryGetPreferredManualRunEnemySpawner(&spawner_address, &remembered_vtable)) {
-        const auto fallback_spawner = g_state.last_wave_spawner.load(std::memory_order_acquire);
-        const auto fallback_vtable = g_state.last_wave_spawner_vtable.load(std::memory_order_acquire);
-        const auto last_tick_ms = g_state.last_wave_spawner_tick_ms.load(std::memory_order_acquire);
-        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-        if (fallback_spawner == 0) {
-            if (error_message != nullptr) {
-                *error_message = "manual run enemy spawn: no remembered stock wave spawner is available.";
-            }
-            return false;
-        }
-        if (fallback_vtable == 0) {
-            if (error_message != nullptr) {
-                *error_message = "manual run enemy spawn: remembered stock wave spawner has no verified vtable.";
-            }
-            return false;
-        }
-        if (last_tick_ms == 0 || now_ms - last_tick_ms > kManualRunEnemySpawnerFreshnessWindowMs) {
-            if (error_message != nullptr) {
-                *error_message = "manual run enemy spawn: remembered stock wave spawner is stale.";
-            }
-            return false;
+        constexpr std::string_view kSpawnerUnavailable =
+            "manual run enemy spawn: stock wave spawner became unavailable.";
+        if (CompletePendingDirectManualRunEnemySpawnFailure(kSpawnerUnavailable)) {
+            return true;
         }
         if (error_message != nullptr) {
-            *error_message = "manual run enemy spawn: remembered stock wave spawner vtable changed.";
+            *error_message = std::string(kSpawnerUnavailable);
         }
         return false;
     }
@@ -410,8 +420,14 @@ bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message) {
     const auto original =
         GetX86HookTrampoline<WaveSpawnerTickFn>(g_state.hooks[kHookWaveSpawnerTick]);
     if (original == nullptr) {
+        constexpr std::string_view kTrampolineUnavailable =
+            "manual run enemy spawn: stock wave spawner trampoline is unavailable.";
+        if (CompletePendingDirectManualRunEnemySpawnFailure(
+                kTrampolineUnavailable)) {
+            return true;
+        }
         if (error_message != nullptr) {
-            *error_message = "manual run enemy spawn: stock wave spawner trampoline is unavailable.";
+            *error_message = std::string(kTrampolineUnavailable);
         }
         return false;
     }
@@ -425,9 +441,6 @@ bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message) {
             "manual run enemy spawn: pumped remembered stock spawner. spawner=" +
             HexString(spawner_address));
         return true;
-    }
-    if (dispatch_result == ManualRunEnemySpawnerDispatchResult::RetryLater) {
-        return false;
     }
     if (error_message != nullptr) {
         *error_message = "manual run enemy spawn: remembered stock wave spawner did not accept the request.";
@@ -490,7 +503,12 @@ void SetRunLifecycleWaveStartEnemyTracking(bool enabled) {
 }
 
 void SetRunLifecycleManualEnemySpawnerTestMode(bool enabled) {
-    g_state.manual_enemy_spawner_test_mode.store(enabled, std::memory_order_release);
+    const bool previous = g_state.manual_enemy_spawner_test_mode.exchange(
+        enabled,
+        std::memory_order_acq_rel);
+    if (previous == enabled) {
+        return;
+    }
     Log(
         "manual run enemy spawn: stock-spawner test mode " +
         std::string(enabled ? "enabled" : "disabled") + ".");
@@ -524,7 +542,7 @@ bool InitializeRunLifecycleHooks(std::string* error_message) {
 
     void* detours[] = {
         reinterpret_cast<void*>(&HookCreateArena),
-        reinterpret_cast<void*>(&HookMainMenuRunTransition),
+        reinterpret_cast<void*>(&HookMainMenuControlAction),
         reinterpret_cast<void*>(&HookStartGame),
         reinterpret_cast<void*>(&HookRunEnded),
         reinterpret_cast<void*>(&HookActorWorldTick),
@@ -547,7 +565,7 @@ bool InitializeRunLifecycleHooks(std::string* error_message) {
     };
     const char* names[] = {
         "create_arena",
-        "main_menu.run_transition",
+        "main_menu.control_action",
         "start_game",
         "run.ended",
         "actor_world.tick",

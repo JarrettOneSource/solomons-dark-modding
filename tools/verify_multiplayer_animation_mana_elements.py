@@ -491,7 +491,7 @@ def verify_cast_log_flow(
     receiver_offset: int,
     *,
     require_held: bool,
-    allow_targetless_air_defer: bool = False,
+    require_remote_release: bool = False,
 ) -> dict[str, object]:
     required = {"pressed": 1, "released": 1}
     if require_held:
@@ -502,54 +502,84 @@ def verify_cast_log_flow(
         required,
         timeout=6.0,
     )
-    receiver_log = log_after(direction.receiver_log, receiver_offset)
     native_sequences = parse_local_pressed_sequences(source_log, direction.source_id)
-    remote_queue_sequences = parse_remote_queue_sequences(receiver_log, direction.source_id)
-    remote_prep_sequences = parse_remote_prep_sequences(receiver_log, direction.source_id)
-    remote_settle_sequences = parse_remote_settle_sequences(
-        receiver_log,
-        direction.source_id,
-        observed_only=False,
-    )
-    deferred_air_sequences = [
+    expected_sequences = set(native_sequences)
+    receiver_deadline = time.monotonic() + 8.0
+    receiver_log = ""
+    remote_queue_sequences: list[int] = []
+    remote_prep_sequences: list[int] = []
+    remote_settle_sequences: list[int] = []
+    remote_release_sequences: list[int] = []
+    while time.monotonic() < receiver_deadline:
+        receiver_log = log_after(direction.receiver_log, receiver_offset)
+        remote_queue_sequences = parse_remote_queue_sequences(
+            receiver_log,
+            direction.source_id,
+        )
+        remote_prep_sequences = parse_remote_prep_sequences(
+            receiver_log,
+            direction.source_id,
+        )
+        remote_settle_sequences = parse_remote_settle_sequences(
+            receiver_log,
+            direction.source_id,
+            observed_only=False,
+        )
+        remote_release_sequences = [
+            int(sequence)
+            for sequence in re.findall(
+                rf"Multiplayer remote cast input release\. participant_id={direction.source_id} "
+                rf"cast_sequence=(\d+) skill_id=\d+",
+                receiver_log,
+            )
+        ]
+        queue_ready = bool(expected_sequences.intersection(remote_queue_sequences))
+        prep_ready = bool(expected_sequences.intersection(remote_prep_sequences))
+        release_ready = (
+            not require_remote_release
+            or expected_sequences.issubset(set(remote_release_sequences))
+        )
+        if queue_ready and prep_ready and release_ready:
+            break
+        if count_lines(receiver_log, "remote_input_timeout"):
+            break
+        time.sleep(0.05)
+    local_targetless_sequences = [
         int(sequence)
         for sequence in re.findall(
-            rf"Multiplayer remote Air cast start deferred until exact target resolves\. "
-            rf"participant_id={direction.source_id} cast_sequence=(\d+) "
-            rf"phase=(?:pressed|held) target_network_actor_id=0",
-            receiver_log,
+            rf"Multiplayer local cast sent\. participant_id={direction.source_id} "
+            rf"cast_sequence=(\d+) kind=primary secondary_slot=-1 "
+            rf"phase=pressed skill_id=\d+ target_network_actor_id=0",
+            source_log,
         )
     ]
-    remote_release_sequences = [
+    remote_targetless_queue_sequences = [
         int(sequence)
         for sequence in re.findall(
-            rf"Multiplayer remote cast input release\. participant_id={direction.source_id} "
-            rf"cast_sequence=(\d+) skill_id=\d+",
+            rf"Multiplayer remote cast queued\. participant_id={direction.source_id} "
+            rf"cast_sequence=(\d+) phase=pressed skill_id=\d+ "
+            rf"target_network_actor_id=0 target_actor=0x0+ target_source=none",
             receiver_log,
         )
     ]
     timeout_count = count_lines(receiver_log, "remote_input_timeout")
     if native_hook_count < 1 or not native_sequences:
         raise VerifyFailure(f"{direction.name}: no native cast hook/sequence observed")
-    targetless_air_deferred = (
-        allow_targetless_air_defer
-        and set(native_sequences).issubset(set(deferred_air_sequences))
-    )
-    if not set(native_sequences).intersection(remote_queue_sequences) and not targetless_air_deferred:
+    if not set(native_sequences).intersection(remote_queue_sequences):
         raise VerifyFailure(
             f"{direction.name}: remote queue did not include local sequence; "
-            f"native={native_sequences} queue={remote_queue_sequences} "
-            f"air_deferred={deferred_air_sequences}"
+            f"native={native_sequences} queue={remote_queue_sequences}"
         )
-    if not set(native_sequences).intersection(remote_prep_sequences) and not targetless_air_deferred:
+    if not set(native_sequences).intersection(remote_prep_sequences):
         raise VerifyFailure(
             f"{direction.name}: remote prep did not include local sequence; "
-            f"native={native_sequences} prep={remote_prep_sequences} "
-            f"air_deferred={deferred_air_sequences}"
+            f"native={native_sequences} prep={remote_prep_sequences}"
         )
-    if targetless_air_deferred and not set(native_sequences).issubset(set(remote_release_sequences)):
+    if require_remote_release and not expected_sequences.issubset(
+        set(remote_release_sequences)
+    ):
         raise VerifyFailure(
-            f"{direction.name}: targetless Air defer did not receive release; "
+            f"{direction.name}: remote release did not include local sequence; "
             f"native={native_sequences} release={remote_release_sequences}"
         )
     if timeout_count:
@@ -566,9 +596,9 @@ def verify_cast_log_flow(
         "remote_queue_sequences": remote_queue_sequences,
         "remote_prep_sequences": remote_prep_sequences,
         "remote_settle_sequences": remote_settle_sequences,
-        "deferred_air_sequences": deferred_air_sequences,
         "remote_release_sequences": remote_release_sequences,
-        "targetless_air_deferred": targetless_air_deferred,
+        "local_targetless_sequences": local_targetless_sequences,
+        "remote_targetless_queue_sequences": remote_targetless_queue_sequences,
         "timeout_count": timeout_count,
     }
 
@@ -783,7 +813,7 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
                 source_offset,
                 receiver_offset,
                 require_held=True,
-                allow_targetless_air_defer=spec.element == "air",
+                require_remote_release=True,
             )
         except VerifyFailure as exc:
             input_attempts.append({

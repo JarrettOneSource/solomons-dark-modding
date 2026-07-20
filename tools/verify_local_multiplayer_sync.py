@@ -27,8 +27,10 @@ THIRD_NAME = "Observer Player"
 HOST_PIPE = "SolomonDarkModLoader_LuaExec_local-mp-host"
 CLIENT_PIPE = "SolomonDarkModLoader_LuaExec_local-mp-client"
 THIRD_PIPE = "SolomonDarkModLoader_LuaExec_local-mp-third"
+NATIVE_UI_LUA_TIMEOUT_SECONDS = 35.0
 REMOTE_PRIMARY_VISUAL_TYPE_ID = 0x1B5E
 REMOTE_SECONDARY_VISUAL_TYPE_ID = 0x1B5D
+REMOTE_ATTACHMENT_VISUAL_TYPE_ID = 0x1B5C
 REMOTE_RENDER_SELECTION_BY_ELEMENT = {
     0: 1,  # Fire
     1: 3,  # Water
@@ -468,7 +470,9 @@ emit('action_found', action ~= nil)
 emit('action_enabled', action and action.enabled or false)
 emit('action_interactive', action and action.interactive or false)
 """
-    return parse_key_values(lua(pipe_name, code, timeout=5.0))
+    return parse_key_values(
+        lua(pipe_name, code, timeout=NATIVE_UI_LUA_TIMEOUT_SECONDS)
+    )
 
 
 def activate_native_ui_action(
@@ -484,7 +488,7 @@ local ok, request = sd.ui.activate_action({json.dumps(action_id)}, {json.dumps(s
 print('ok=' .. tostring(ok))
 print('request=' .. tostring(request))
 """,
-            timeout=5.0,
+            timeout=NATIVE_UI_LUA_TIMEOUT_SECONDS,
         )
     )
     if requested.get("ok") != "true":
@@ -503,7 +507,7 @@ local d = sd.ui.get_action_dispatch({request_id})
 print('status=' .. tostring(d and d.status or ''))
 print('error=' .. tostring(d and d.error_message or ''))
 """,
-                timeout=5.0,
+                timeout=NATIVE_UI_LUA_TIMEOUT_SECONDS,
             )
         )
         status = last.get("status", "")
@@ -592,7 +596,7 @@ def complete_native_create(
         last_scene = lua(
             pipe_name,
             "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')",
-            timeout=5.0,
+            timeout=NATIVE_UI_LUA_TIMEOUT_SECONDS,
         ).strip()
         if last_scene in ("hub", "testrun"):
             return {"scene": last_scene, "actions": actions}
@@ -837,6 +841,12 @@ local function visual_link_type(lane)
   end
   return lane.current_object_type_id or 0
 end
+local function visual_link_address(lane)
+  if lane == nil then
+    return 0
+  end
+  return lane.current_object_address or 0
+end
 local function render_selector(state)
   if state == nil then
     return ""
@@ -858,6 +868,8 @@ emit("player.primary_visual_type", player and visual_link_type(player.primary_vi
 emit("player.primary_visual_block", player and visual_link_block(player.primary_visual_lane) or "")
 emit("player.secondary_visual_type", player and visual_link_type(player.secondary_visual_lane) or 0)
 emit("player.secondary_visual_block", player and visual_link_block(player.secondary_visual_lane) or "")
+emit("player.attachment_visual_type", player and visual_link_type(player.attachment_visual_lane) or 0)
+emit("player.attachment_visual_address", player and visual_link_address(player.attachment_visual_lane) or 0)
 local peers = sd.bots.get_participants()
 emit("peer.count", #peers)
 for i, peer in ipairs(peers) do
@@ -881,6 +893,8 @@ for i, peer in ipairs(peers) do
   emit(prefix .. "primary_visual_block", visual_link_block(peer.primary_visual_lane))
   emit(prefix .. "secondary_visual_type", visual_link_type(peer.secondary_visual_lane))
   emit(prefix .. "secondary_visual_block", visual_link_block(peer.secondary_visual_lane))
+  emit(prefix .. "attachment_visual_type", visual_link_type(peer.attachment_visual_lane))
+  emit(prefix .. "attachment_visual_address", visual_link_address(peer.attachment_visual_lane))
   local nameplate = nil
   if peer.actor_address ~= nil and peer.actor_address ~= 0 then
     nameplate = sd.bots.get_nameplate(peer.actor_address)
@@ -907,6 +921,17 @@ emit("replicated.apply_valid", replicated and replicated.apply_valid or false)
 -- instance that must choose (the target), so callers act on the pipe that
 -- reports levelup.offer_valid=true.
 local mp = sd.runtime and sd.runtime.get_multiplayer_state and sd.runtime.get_multiplayer_state() or nil
+local local_participant = nil
+for _, participant in ipairs(mp and mp.participants or {}) do
+  if participant.is_owner then
+    local_participant = participant
+    break
+  end
+end
+emit("local.runtime_valid", local_participant and local_participant.runtime_valid or false)
+emit("local.in_run", local_participant and local_participant.in_run or false)
+emit("local.run_nonce", local_participant and local_participant.run_nonce or 0)
+emit("local.scene_kind", local_participant and local_participant.scene_kind or "")
 local offer = mp and mp.active_level_up_offer or nil
 emit("levelup.offer_valid", offer and offer.valid or false)
 emit("levelup.offer_id", offer and offer.offer_id or 0)

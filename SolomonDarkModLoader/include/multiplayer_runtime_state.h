@@ -109,8 +109,10 @@ struct ParticipantRuntimeInfo {
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
-    float render_drive_effect_timer = 0.0f;
-    float render_drive_effect_progress = 0.0f;
+    float magic_shield_absorb_remaining = 0.0f;
+    float magic_shield_absorb_capacity = 0.0f;
+    float magic_shield_explosion_fraction = 0.0f;
+    float magic_shield_hit_flash = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     ParticipantSceneIntent scene_intent;
@@ -274,8 +276,10 @@ struct ParticipantTransformSample {
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
-    float render_drive_effect_timer = 0.0f;
-    float render_drive_effect_progress = 0.0f;
+    float magic_shield_absorb_remaining = 0.0f;
+    float magic_shield_absorb_capacity = 0.0f;
+    float magic_shield_explosion_fraction = 0.0f;
+    float magic_shield_hit_flash = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
 };
@@ -354,6 +358,10 @@ struct WorldActorSnapshot {
     std::uint8_t render_weapon_type = 0;
     std::uint8_t render_selection_byte = 0;
     std::uint8_t render_variant_tertiary = 0;
+    std::uint8_t status_flags = 0;
+    std::int32_t turn_undead_duration_ticks = 0;
+    float turn_undead_flee_heading = 0.0f;
+    float turn_undead_activation_scalar = 0.0f;
     std::array<std::uint8_t, kWorldActorStudentVisualStateBytes> student_visual_state = {};
     std::uint32_t student_book_palette_count = 0;
     std::array<StudentBookPaletteEntryState, kWorldActorStudentBookPaletteMaxEntries>
@@ -379,154 +387,10 @@ struct WorldSnapshotRuntimeInfo {
     std::uint32_t scene_epoch = 0;
     std::uint32_t run_nonce = 0;
     std::uint32_t actor_total_count = 0;
-    bool truncated = false;
     ParticipantSceneIntent scene_intent;
     std::vector<WorldActorSnapshot> actors;
 };
 
-struct LootDropSnapshot {
-    std::uint64_t network_drop_id = 0;
-    std::uint32_t native_type_id = 0;
-    LootDropKind drop_kind = LootDropKind::Unknown;
-    bool active = false;
-    std::uint8_t presentation_state = 0;
-    std::int32_t amount = 0;
-    std::int32_t amount_tier = 0;
-    float value = 0.0f;
-    float motion = 0.0f;
-    float progress = 0.0f;
-    float auxiliary = 0.0f;
-    std::uint32_t item_type_id = 0;
-    std::uint32_t item_recipe_uid = 0;
-    bool item_color_state_valid = false;
-    std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> item_color_state = {};
-    std::int32_t item_slot = -1;
-    std::int32_t stack_count = 0;
-    std::int32_t actor_slot = -1;
-    std::int32_t world_slot = -1;
-    std::uint32_t lifetime = 0;
-    float position_x = 0.0f;
-    float position_y = 0.0f;
-    float radius = 0.0f;
-};
-
-struct LootSnapshotRuntimeInfo {
-    bool valid = false;
-    std::uint64_t authority_participant_id = 0;
-    std::uint64_t received_ms = 0;
-    std::uint32_t sequence = 0;
-    std::uint32_t scene_epoch = 0;
-    std::uint32_t run_nonce = 0;
-    std::uint32_t drop_total_count = 0;
-    bool truncated = false;
-    ParticipantSceneIntent scene_intent;
-    std::vector<LootDropSnapshot> drops;
-};
-
-struct SpellEffectSnapshot {
-    std::uint32_t effect_serial = 0;
-    std::uint32_t cast_sequence = 0;
-    std::uint32_t native_type_id = 0;
-    std::uint16_t effect_ordinal = 0;
-    bool active = false;
-    bool terminal = false;
-    bool transform_valid = false;
-    bool motion_valid = false;
-    bool ember_runtime_valid = false;
-    bool firewalker_runtime_valid = false;
-    float position_x = 0.0f;
-    float position_y = 0.0f;
-    float radius = 0.0f;
-    float heading = 0.0f;
-    float motion_x = 0.0f;
-    float motion_y = 0.0f;
-    float ember_vertical_position = 0.0f;
-    float ember_vertical_velocity = 0.0f;
-    float ember_damage = 0.0f;
-    float ember_lifetime = 0.0f;
-    float ember_initial_lifetime = 0.0f;
-    float ember_animation_progress = 0.0f;
-    std::uint32_t ember_variant = 0;
-    std::uint32_t ember_frame_interval = 0;
-    std::uint16_t ember_config_primary = 0;
-    std::uint16_t ember_config_secondary = 0;
-    std::uint16_t ember_config_tertiary = 0;
-    float firewalker_collision_scale = 0.0f;
-    float firewalker_phase = 0.0f;
-    float firewalker_phase_step = 0.0f;
-    float firewalker_lifetime = 0.0f;
-    float firewalker_fade = 0.0f;
-    float firewalker_direction = 0.0f;
-    float firewalker_visual_scale = 0.0f;
-    float firewalker_damage = 0.0f;
-    std::int8_t firewalker_source_slot = -1;
-    std::uint8_t firewalker_active = 0;
-    std::uint8_t firewalker_variant = 0;
-    std::int32_t firewalker_aux = 0;
-    std::uint32_t firewalker_damage_mask = 0;
-};
-
-struct SpellEffectSnapshotRuntimeInfo {
-    bool valid = false;
-    std::uint64_t owner_participant_id = 0;
-    std::uint64_t received_ms = 0;
-    std::uint32_t sequence = 0;
-    std::uint32_t run_nonce = 0;
-    std::uint32_t scene_epoch = 0;
-    std::uint32_t effect_total_count = 0;
-    bool truncated = false;
-    std::vector<SpellEffectSnapshot> effects;
-};
-
-struct SpellEffectBindingRuntimeInfo {
-    std::uint64_t owner_participant_id = 0;
-    std::int32_t owner_gameplay_slot = -1;
-    std::int32_t owner_actor_slot = -1;
-    std::uint32_t effect_serial = 0;
-    std::uint32_t cast_sequence = 0;
-    std::uint32_t native_type_id = 0;
-    std::uint16_t effect_ordinal = 0;
-    uintptr_t local_actor_address = 0;
-    std::int32_t local_actor_slot = -1;
-    std::int32_t local_firewalker_source_slot = -1;
-    bool matched = false;
-    bool active = false;
-    bool terminal = false;
-    float authoritative_x = 0.0f;
-    float authoritative_y = 0.0f;
-    float local_x = 0.0f;
-    float local_y = 0.0f;
-    float position_error = 0.0f;
-};
-
-struct SpellEffectApplyRuntimeInfo {
-    bool valid = false;
-    std::uint64_t applied_ms = 0;
-    std::uint64_t reconcile_revision = 0;
-    std::uint32_t snapshot_count = 0;
-    std::uint32_t effect_count = 0;
-    std::uint32_t matched_effect_count = 0;
-    std::uint32_t matched_ember_effect_count = 0;
-    std::uint32_t matched_firewalker_effect_count = 0;
-    std::uint32_t created_ember_effect_count = 0;
-    std::uint32_t created_firewalker_effect_count = 0;
-    std::uint32_t terminal_effect_count = 0;
-    std::uint32_t max_matched_effect_count = 0;
-    std::uint32_t max_matched_ember_effect_count = 0;
-    std::uint32_t max_matched_firewalker_effect_count = 0;
-    std::uint32_t transform_write_count = 0;
-    std::uint32_t motion_write_count = 0;
-    std::uint32_t ember_runtime_write_count = 0;
-    std::uint32_t firewalker_runtime_write_count = 0;
-    std::uint32_t terminal_write_count = 0;
-    std::uint64_t cumulative_transform_write_count = 0;
-    std::uint64_t cumulative_motion_write_count = 0;
-    std::uint64_t cumulative_ember_runtime_write_count = 0;
-    std::uint64_t cumulative_ember_create_count = 0;
-    std::uint64_t cumulative_firewalker_create_count = 0;
-    std::uint64_t cumulative_firewalker_runtime_write_count = 0;
-    std::uint64_t cumulative_terminal_write_count = 0;
-    std::vector<SpellEffectBindingRuntimeInfo> bindings;
-};
+#include "multiplayer_runtime_snapshot_state.inl"
 
 #include "multiplayer_runtime_effect_state.inl"

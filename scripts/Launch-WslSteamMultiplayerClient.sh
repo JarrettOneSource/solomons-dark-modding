@@ -9,7 +9,9 @@ steam_root="${SDMOD_LINUX_STEAM_ROOT:-$HOME/.steam/debian-installation}"
 proton="${SDMOD_PROTON_PATH:-$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-1/proton}"
 compat_data="${SDMOD_STEAM_COMPAT_DATA:-$HOME/.local/share/Steam/steamapps/compatdata/480}"
 steam_api="${SDMOD_STEAM_API_DLL:-/mnt/c/Program Files (x86)/Steam/steamapps/common/SteamVR/bin/win32/steam_api.dll}"
+test_boneyard_override="${SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE:-}"
 publish_dir="$root/runtime/wsl-steam-launcher"
+build_artifacts="$root/runtime/wsl-steam-build-artifacts"
 launcher="$publish_dir/SolomonDarkModLauncher.exe"
 loader="$root/bin/Release/Win32/SolomonDarkModLoader.dll"
 
@@ -36,12 +38,30 @@ pgrep -f "$steam_root/ubuntu12_32/steam" >/dev/null ||
     fail "Release loader not found; run scripts/Build-All.ps1 -Configuration Release first"
 [[ -f "$steam_api" ]] || fail "x86 steam_api.dll not found: $steam_api"
 
+test_environment=()
+if [[ -n "$test_boneyard_override" ]]; then
+    [[ -f "$test_boneyard_override" ]] ||
+        fail "test survival boneyard override not found: $test_boneyard_override"
+    [[ "${test_boneyard_override,,}" == *.boneyard ]] ||
+        fail "test survival boneyard override must be a .boneyard file"
+    test_environment+=(
+        "SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE=$(proton_path "$test_boneyard_override")"
+    )
+fi
+if [[ "${SDMOD_TEST_BLANK_BONEYARD:-}" == "1" ]]; then
+    test_environment+=("SDMOD_TEST_BLANK_BONEYARD=1")
+fi
+
+mkdir -p "$build_artifacts"
 dotnet publish "$root/SolomonDarkModLauncher/SolomonDarkModLauncher.csproj" \
     -c Release \
     -r win-x86 \
     --self-contained true \
+    --artifacts-path "$build_artifacts" \
     -o "$publish_dir"
-cp "$loader" "$publish_dir/SolomonDarkModLoader.dll"
+if ! cmp -s "$loader" "$publish_dir/SolomonDarkModLoader.dll"; then
+    cp "$loader" "$publish_dir/SolomonDarkModLoader.dll"
+fi
 
 args=(
     "$(proton_path "$launcher")"
@@ -61,8 +81,10 @@ fi
 
 mkdir -p "$compat_data"
 exec env \
+    LP_NUM_THREADS=4 \
     STEAM_COMPAT_CLIENT_INSTALL_PATH="$steam_root" \
     STEAM_COMPAT_DATA_PATH="$compat_data" \
     SteamAppId=480 \
     SteamGameId=480 \
+    "${test_environment[@]}" \
     "$proton" run "${args[@]}"

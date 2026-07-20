@@ -4,6 +4,7 @@
 #include "gameplay_seams.h"
 #include "memory_access.h"
 #include "mod_loader.h"
+#include "multiplayer_local_transport.h"
 #include "native_spell_stats.h"
 #include "runtime_debug.h"
 
@@ -43,7 +44,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 63);
+    lua_createtable(state, 0, 66);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -134,6 +135,15 @@ void RegisterLuaDebugBindings(lua_State* state) {
     RegisterFunction(state, &LuaDebugResolveNativePrimarySpellStats, "resolve_native_primary_spell_stats");
     RegisterFunction(state, &LuaDebugResolveNativeSecondaryManaStats, "resolve_native_secondary_mana_stats");
     RegisterFunction(state, &LuaDebugCaptureBackBuffer, "capture_backbuffer");
+    RegisterFunction(
+        state,
+        &LuaDebugResetLocalCastObservation,
+        "reset_local_cast_observation");
+    RegisterFunction(
+        state,
+        &LuaDebugGetLocalCastObservation,
+        "get_local_cast_observation");
+    RegisterFunction(state, &LuaDebugGetActorModifiers, "get_actor_modifiers");
     lua_setfield(state, -2, "debug");
 }
 

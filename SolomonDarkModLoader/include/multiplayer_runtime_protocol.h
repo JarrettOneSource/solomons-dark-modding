@@ -1,17 +1,19 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 59;
+constexpr std::uint16_t kProtocolVersion = 64;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
 constexpr std::uint32_t kParticipantInventorySnapshotMaxItems = 64;
 constexpr std::uint32_t kParticipantRingSlotCount = 3;
 constexpr std::uint32_t kParticipantProgressionBookSnapshotMaxEntries = 128;
-constexpr std::uint32_t kWorldSnapshotMaxActors = 64;
+constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 4;
+constexpr std::uint32_t kWorldSnapshotMaxLogicalActors = 512;
 constexpr std::uint32_t kWorldActorStudentVisualStateBytes = 32;
 constexpr std::uint32_t kWorldActorStudentBookPaletteMaxEntries = 5;
 constexpr std::uint32_t kLootSnapshotMaxDrops = 64;
@@ -41,6 +43,7 @@ enum class PacketKind : std::uint16_t {
     SessionGoodbye = 17,
     SessionKeepalive = 18,
     LevelUpBarrier = 19,
+    ParticipantFrame = 20,
 };
 
 enum class SessionPeerRole : std::uint8_t {
@@ -171,9 +174,26 @@ enum WorldActorPresentationFlags : std::uint16_t {
     WorldActorPresentationFlagNamedHubNpcTeacherCycle = 1 << 9,
 };
 
-enum WorldSnapshotFlags : std::uint8_t {
-    WorldSnapshotFlagTruncated = 1 << 0,
+enum WorldActorStatusFlags : std::uint8_t {
+    WorldActorStatusFlagTurnUndeadStateValid = 1 << 0,
+    WorldActorStatusFlagTurnUndeadActive = 1 << 1,
 };
+
+constexpr std::uint8_t kWorldActorStatusKnownFlags =
+    WorldActorStatusFlagTurnUndeadStateValid |
+    WorldActorStatusFlagTurnUndeadActive;
+
+inline bool IsTurnUndeadEligibleRunEnemyType(std::uint32_t native_type_id) {
+    switch (native_type_id) {
+    case 1001:
+    case 1002:
+    case 1003:
+    case 1006:
+        return true;
+    default:
+        return false;
+    }
+}
 
 enum LootDropSnapshotFlags : std::uint8_t {
     LootDropSnapshotFlagActive = 1 << 0,
@@ -231,12 +251,16 @@ constexpr std::uint8_t kParticipantPersistentStatusValueMask =
 enum ParticipantTransientStatusFlags : std::uint8_t {
     ParticipantTransientStatusFlagPoisoned = 1 << 0,
     ParticipantTransientStatusFlagDamageX4 = 1 << 1,
+    ParticipantTransientStatusFlagPlanewalker = 1 << 2,
+    ParticipantTransientStatusFlagStoneskin = 1 << 3,
     ParticipantTransientStatusFlagSnapshotValid = 1 << 7,
 };
 
 constexpr std::uint8_t kParticipantTransientStatusValueMask =
     ParticipantTransientStatusFlagPoisoned |
-    ParticipantTransientStatusFlagDamageX4;
+    ParticipantTransientStatusFlagDamageX4 |
+    ParticipantTransientStatusFlagPlanewalker |
+    ParticipantTransientStatusFlagStoneskin;
 constexpr std::int32_t kParticipantPoisonMaxDurationTicks = 100000;
 constexpr std::int32_t kParticipantDamageX4MaxDurationTicks = 100000;
 
@@ -399,8 +423,75 @@ struct StatePacket {
     float render_drive_stride;
     float render_advance_rate;
     float render_advance_phase;
-    float render_drive_effect_timer;
-    float render_drive_effect_progress;
+    float magic_shield_absorb_remaining;
+    float magic_shield_absorb_capacity;
+    float magic_shield_explosion_fraction;
+    float magic_shield_hit_flash;
+    float render_drive_overlay_alpha;
+    float render_drive_move_blend;
+};
+
+struct ParticipantFramePacket {
+    PacketHeader header;
+    std::uint64_t participant_id;
+    std::uint64_t participant_session_nonce;
+    std::uint64_t authority_participant_id;
+    std::uint8_t ready;
+    std::uint8_t in_run;
+    std::uint8_t transform_valid;
+    std::uint8_t controller_kind;
+    std::uint8_t scene_kind;
+    std::uint8_t scene_reserved[3] = {};
+    std::uint32_t run_nonce;
+    std::uint32_t participant_vitals_correction_ack_sequence;
+    std::int32_t region_index;
+    std::int32_t region_type_id;
+    std::int32_t level;
+    std::int32_t wave;
+    float life_current;
+    float life_max;
+    float mana_current;
+    float mana_max;
+    float move_speed;
+    std::int32_t experience_current;
+    std::int32_t experience_next;
+    float position_x;
+    float position_y;
+    float heading;
+    std::uint8_t anim_drive_state;
+    std::uint8_t persistent_status_flags;
+    std::uint8_t transient_status_flags;
+    std::uint8_t transient_status_reserved = 0;
+    std::int32_t poison_remaining_ticks;
+    std::int32_t damage_x4_remaining_ticks;
+    std::uint16_t presentation_flags;
+    std::uint32_t attachment_staff_visual_state;
+    std::uint8_t render_variant_primary;
+    std::uint8_t render_variant_secondary;
+    std::uint8_t render_weapon_type;
+    std::uint8_t render_selection_byte;
+    std::uint8_t render_variant_tertiary;
+    std::uint8_t visual_link_reserved[3] = {};
+    std::uint32_t primary_visual_link_type_id;
+    std::uint32_t secondary_visual_link_type_id;
+    std::uint32_t primary_visual_link_recipe_uid;
+    std::uint32_t secondary_visual_link_recipe_uid;
+    std::uint32_t attachment_visual_link_type_id;
+    std::uint32_t attachment_visual_link_recipe_uid;
+    std::uint8_t primary_visual_link_color_block
+        [kParticipantVisualLinkColorBlockBytes];
+    std::uint8_t secondary_visual_link_color_block
+        [kParticipantVisualLinkColorBlockBytes];
+    std::uint32_t anim_drive_state_word;
+    float walk_cycle_primary;
+    float walk_cycle_secondary;
+    float render_drive_stride;
+    float render_advance_rate;
+    float render_advance_phase;
+    float magic_shield_absorb_remaining;
+    float magic_shield_absorb_capacity;
+    float magic_shield_explosion_fraction;
+    float magic_shield_hit_flash;
     float render_drive_overlay_alpha;
     float render_drive_move_blend;
 };
@@ -604,7 +695,11 @@ struct WorldActorSnapshotPacketState {
     std::uint8_t render_weapon_type;
     std::uint8_t render_selection_byte;
     std::uint8_t render_variant_tertiary;
-    std::uint8_t presentation_reserved[3];
+    std::uint8_t status_flags;
+    std::uint8_t presentation_reserved[2];
+    std::int32_t turn_undead_duration_ticks;
+    float turn_undead_flee_heading;
+    float turn_undead_activation_scalar;
     std::uint8_t student_visual_state[kWorldActorStudentVisualStateBytes];
     std::uint32_t student_book_palette_count;
     StudentBookPaletteEntryPacketState
@@ -617,11 +712,15 @@ struct WorldSnapshotPacket {
     std::uint64_t authority_participant_id;
     std::uint32_t scene_epoch;
     std::uint32_t run_nonce;
+    std::uint32_t snapshot_id;
+    std::uint16_t fragment_index;
+    std::uint16_t fragment_count;
+    std::uint16_t actor_start_index;
+    std::uint16_t actor_count;
+    std::uint32_t actor_total_count;
     std::uint8_t scene_kind;
-    std::uint8_t actor_count;
-    std::uint8_t actor_total_count;
-    std::uint8_t snapshot_flags;
-    WorldActorSnapshotPacketState actors[kWorldSnapshotMaxActors];
+    std::uint8_t reserved[3] = {};
+    WorldActorSnapshotPacketState actors[kWorldSnapshotActorsPerFragment];
 };
 
 struct LootDropSnapshotPacketState {
@@ -661,6 +760,22 @@ struct LootSnapshotPacket {
     std::uint8_t snapshot_flags;
     LootDropSnapshotPacketState drops[kLootSnapshotMaxDrops];
 };
+
+constexpr std::size_t kLootSnapshotPacketPrefixBytes =
+    offsetof(LootSnapshotPacket, drops);
+
+constexpr std::size_t LootSnapshotPacketWireSize(std::uint8_t drop_count) {
+    return kLootSnapshotPacketPrefixBytes +
+           static_cast<std::size_t>(drop_count) *
+               sizeof(LootDropSnapshotPacketState);
+}
+
+constexpr bool IsValidLootSnapshotPacketWireSize(
+    std::size_t received_bytes,
+    std::uint8_t drop_count) {
+    return drop_count <= kLootSnapshotMaxDrops &&
+           received_bytes == LootSnapshotPacketWireSize(drop_count);
+}
 
 struct SpellEffectPacketState {
     std::uint32_t effect_serial;
@@ -712,6 +827,24 @@ struct SpellEffectSnapshotPacket {
     std::uint16_t snapshot_flags;
     SpellEffectPacketState effects[kSpellEffectSnapshotMaxEffects];
 };
+
+constexpr std::size_t kSpellEffectSnapshotPacketPrefixBytes =
+    offsetof(SpellEffectSnapshotPacket, effects);
+
+constexpr std::size_t SpellEffectSnapshotPacketWireSize(
+    std::uint8_t effect_count) {
+    return kSpellEffectSnapshotPacketPrefixBytes +
+           static_cast<std::size_t>(effect_count) *
+               sizeof(SpellEffectPacketState);
+}
+
+constexpr bool IsValidSpellEffectSnapshotPacketWireSize(
+    std::size_t received_bytes,
+    std::uint8_t effect_count) {
+    return effect_count <= kSpellEffectSnapshotMaxEffects &&
+           received_bytes ==
+               SpellEffectSnapshotPacketWireSize(effect_count);
+}
 
 struct AirChainTargetPacketState {
     std::uint64_t network_actor_id;
@@ -891,7 +1024,9 @@ static_assert(sizeof(ParticipantEquippedItemPacketState) == 8, "Unexpected equip
 static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpected progression book entry packet size");
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 56, "Unexpected derived stat packet size");
-static_assert(sizeof(StatePacket) == 4196, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 4204, "Unexpected state packet size");
+static_assert(sizeof(ParticipantFramePacket) == 270,
+              "Unexpected participant frame packet size");
 static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");
 static_assert(sizeof(CastPacket) == 120, "Unexpected cast packet size");
 static_assert(sizeof(SessionHelloAckPacket) == 92, "Unexpected session hello acknowledgement packet size");
@@ -909,12 +1044,27 @@ static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24,
               "Unexpected Student book palette entry size");
 static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40,
               "Unexpected named hub NPC presentation size");
-static_assert(sizeof(WorldActorSnapshotPacketState) == 292, "Unexpected world actor snapshot size");
-static_assert(sizeof(WorldSnapshotPacket) == 18720, "Unexpected world snapshot packet size");
+static_assert(sizeof(WorldActorSnapshotPacketState) == 304, "Unexpected world actor snapshot size");
+static_assert(sizeof(WorldSnapshotPacket) == 1264, "Unexpected world snapshot packet size");
 static_assert(sizeof(LootDropSnapshotPacketState) == 112, "Unexpected loot drop snapshot size");
 static_assert(sizeof(LootSnapshotPacket) == 7200, "Unexpected loot snapshot packet size");
+static_assert(kLootSnapshotPacketPrefixBytes == 32,
+              "Unexpected loot snapshot packet prefix size");
+static_assert(LootSnapshotPacketWireSize(0) == 32,
+              "Empty loot snapshots must only contain their fixed prefix");
+static_assert(LootSnapshotPacketWireSize(kLootSnapshotMaxDrops) ==
+                  sizeof(LootSnapshotPacket),
+              "A full loot snapshot must consume the packet buffer exactly");
 static_assert(sizeof(SpellEffectPacketState) == 124, "Unexpected spell effect packet state size");
 static_assert(sizeof(SpellEffectSnapshotPacket) == 4000, "Unexpected spell effect snapshot packet size");
+static_assert(kSpellEffectSnapshotPacketPrefixBytes == 32,
+              "Unexpected spell effect snapshot prefix size");
+static_assert(SpellEffectSnapshotPacketWireSize(0) == 32,
+              "Empty spell effect snapshots must only contain their fixed prefix");
+static_assert(SpellEffectSnapshotPacketWireSize(
+                  kSpellEffectSnapshotMaxEffects) ==
+                  sizeof(SpellEffectSnapshotPacket),
+              "A full spell effect snapshot must consume the packet buffer exactly");
 static_assert(sizeof(AirChainTargetPacketState) == 28, "Unexpected Air chain target packet size");
 static_assert(sizeof(AirChainSnapshotPacket) == 260, "Unexpected Air chain snapshot packet size");
 static_assert(sizeof(ParticipantVitalsCorrectionPacket) == 56, "Unexpected participant vitals correction packet size");

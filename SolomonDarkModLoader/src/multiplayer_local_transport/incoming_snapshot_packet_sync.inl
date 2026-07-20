@@ -1,33 +1,23 @@
 // World and loot snapshot runtime publication and inbound application.
 
 WorldSnapshotRuntimeInfo BuildWorldSnapshotRuntimeInfo(
-    const WorldSnapshotPacket& packet,
+    const CompleteWorldSnapshotPacketState& complete_snapshot,
     std::uint64_t now_ms) {
-    const auto actor_count = static_cast<std::uint8_t>(
-        (std::min<std::uint32_t>)(packet.actor_count, kWorldSnapshotMaxActors));
-    const auto scene_kind = static_cast<WorldSceneKind>(packet.scene_kind);
     WorldSnapshotRuntimeInfo snapshot;
     snapshot.valid = true;
-    snapshot.authority_participant_id = packet.authority_participant_id;
+    snapshot.authority_participant_id =
+        complete_snapshot.authority_participant_id;
     snapshot.received_ms = now_ms;
-    snapshot.sequence = packet.header.sequence;
-    snapshot.scene_epoch = packet.scene_epoch;
-    snapshot.run_nonce = packet.run_nonce;
-    snapshot.actor_total_count = packet.actor_total_count;
-    snapshot.truncated = (packet.snapshot_flags & WorldSnapshotFlagTruncated) != 0;
-    snapshot.scene_intent = SceneIntentFromWorldSceneKind(scene_kind);
-    snapshot.actors.reserve(actor_count);
+    snapshot.sequence = complete_snapshot.snapshot_id;
+    snapshot.scene_epoch = complete_snapshot.scene_epoch;
+    snapshot.run_nonce = complete_snapshot.run_nonce;
+    snapshot.actor_total_count = static_cast<std::uint32_t>(
+        complete_snapshot.actors.size());
+    snapshot.scene_intent =
+        SceneIntentFromWorldSceneKind(complete_snapshot.scene_kind);
+    snapshot.actors.reserve(complete_snapshot.actors.size());
 
-    for (std::uint8_t index = 0; index < actor_count; ++index) {
-        const auto& packet_actor = packet.actors[index];
-        if (packet_actor.network_actor_id == 0 ||
-            packet_actor.native_type_id == 0 ||
-            !std::isfinite(packet_actor.position_x) ||
-            !std::isfinite(packet_actor.position_y) ||
-            !std::isfinite(packet_actor.radius) ||
-            packet_actor.radius < 0.0f) {
-            continue;
-        }
+    for (const auto& packet_actor : complete_snapshot.actors) {
 
         WorldActorSnapshot actor;
         actor.network_actor_id = packet_actor.network_actor_id;
@@ -66,6 +56,13 @@ WorldSnapshotRuntimeInfo BuildWorldSnapshotRuntimeInfo(
         actor.render_weapon_type = packet_actor.render_weapon_type;
         actor.render_selection_byte = packet_actor.render_selection_byte;
         actor.render_variant_tertiary = packet_actor.render_variant_tertiary;
+        actor.status_flags = packet_actor.status_flags;
+        actor.turn_undead_duration_ticks =
+            packet_actor.turn_undead_duration_ticks;
+        actor.turn_undead_flee_heading =
+            packet_actor.turn_undead_flee_heading;
+        actor.turn_undead_activation_scalar =
+            packet_actor.turn_undead_activation_scalar;
         std::memcpy(
             actor.student_visual_state.data(),
             packet_actor.student_visual_state,
@@ -177,9 +174,15 @@ WorldSnapshotRuntimeInfo BuildWorldSnapshotRuntimeInfo(
     return snapshot;
 }
 
-void PublishWorldSnapshotRuntimeInfo(const WorldSnapshotPacket& packet, std::uint64_t now_ms) {
+void PublishWorldSnapshotRuntimeInfo(
+    const CompleteWorldSnapshotPacketState& complete_snapshot,
+    std::uint64_t now_ms) {
     UpdateRuntimeState([&](RuntimeState& state) {
-        AppendWorldSnapshot(&state, BuildWorldSnapshotRuntimeInfo(packet, now_ms));
+        AppendWorldSnapshot(
+            &state,
+            BuildWorldSnapshotRuntimeInfo(
+                complete_snapshot,
+                now_ms));
     });
 }
 
@@ -194,7 +197,15 @@ void ApplyWorldSnapshotPacket(
     }
 
     UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
-    PublishWorldSnapshotRuntimeInfo(packet, now_ms);
+    CompleteWorldSnapshotPacketState complete_snapshot;
+    if (!TryAcceptWorldSnapshotFragment(
+            packet,
+            now_ms,
+            &g_local_transport.pending_world_snapshots,
+            &complete_snapshot)) {
+        return;
+    }
+    PublishWorldSnapshotRuntimeInfo(complete_snapshot, now_ms);
 }
 
 LootSnapshotRuntimeInfo BuildLootSnapshotRuntimeInfo(
@@ -326,4 +337,5 @@ void ApplyLootSnapshotPacket(
 #include "multiplayer_local_transport/air_chain_sync.inl"
 #include "multiplayer_local_transport/participant_vitals_authority.inl"
 
-using TransportPacketBuffer = std::array<char, sizeof(WorldSnapshotPacket)>;
+using TransportPacketBuffer =
+    std::array<char, sizeof(LootSnapshotPacket)>;

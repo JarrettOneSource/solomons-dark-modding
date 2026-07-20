@@ -18,6 +18,7 @@ from verify_local_multiplayer_sync import (
     query,
 )
 from verify_multiplayer_primary_kill_stress import (
+    COMBAT_STATE_LUA,
     ENABLE_PRELUDE_LUA,
     PLAYER_HEADING_EAST,
     START_WAVES_LUA,
@@ -230,6 +231,24 @@ def start_natural_staff_waves(minimum_actors: int = 3) -> dict[str, Any]:
     for label, state in manual_mode.items():
         if state.get("ok") != "true" or state.get("active") != "false":
             raise VerifyFailure(f"failed to enable retail waves on {label}: {state}")
+    combat_before = values(HOST_PIPE, COMBAT_STATE_LUA)
+    stock_wave_already_active = (
+        combat_before.get("active") == "true"
+        and (
+            parse_int_text(combat_before.get("wave_index"), 0) != 0
+            or parse_int_text(combat_before.get("wave_counter"), 0)
+            != 999999999
+        )
+    )
+    if stock_wave_already_active:
+        return {
+            "manual_mode": manual_mode,
+            "combat_before": combat_before,
+            "already_active": True,
+            "prelude": None,
+            "start": None,
+            "actors": wait_for_natural_staff_actors(minimum_actors),
+        }
     prelude = values(HOST_PIPE, ENABLE_PRELUDE_LUA)
     start = values(HOST_PIPE, START_WAVES_LUA)
     if prelude.get("ok") != "true" or start.get("ok") != "true":
@@ -239,6 +258,8 @@ def start_natural_staff_waves(minimum_actors: int = 3) -> dict[str, Any]:
     actors = wait_for_natural_staff_actors(minimum_actors)
     return {
         "manual_mode": manual_mode,
+        "combat_before": combat_before,
+        "already_active": False,
         "prelude": prelude,
         "start": start,
         "actors": actors,
@@ -323,13 +344,15 @@ def configure_natural_staff_targets(
         if arena.get(f"actor.{index}.live") == "true"
     }
     network_ids: list[int] = []
+    selected_actor_addresses: list[int] = []
     claimed_network_ids: set[int] = set()
     identity_diagnostics: list[dict[str, Any]] = []
-    for index, host_actor in enumerate(actor_addresses[: len(positions)], start=1):
+    for candidate_index, host_actor in enumerate(actor_addresses, start=1):
         parked = parked_by_actor.get(host_actor, (math.nan, math.nan))
         if not all(math.isfinite(value) for value in parked):
             raise VerifyFailure(
-                f"natural staff actor lacks a parked identity: index={index} actor={host_actor} arena={arena}"
+                "natural staff actor lacks a parked identity: "
+                f"candidate_index={candidate_index} actor={host_actor} arena={arena}"
             )
         host = find_target(
             HOST_PIPE,
@@ -339,25 +362,33 @@ def configure_natural_staff_targets(
             require_local_binding=False,
         )
         network_id = parse_int_text(host.get("network_id"), 0)
+        diagnostic = {
+            "candidate_index": candidate_index,
+            "host_actor": host_actor,
+            "parked": parked,
+            "network_id": network_id,
+            "host": host,
+        }
+        identity_diagnostics.append(diagnostic)
         if network_id == 0 or network_id in claimed_network_ids:
-            raise VerifyFailure(
-                f"natural staff target has ambiguous network identity: index={index} host={host}"
-            )
+            diagnostic["selected"] = False
+            continue
         claimed_network_ids.add(network_id)
         network_ids.append(network_id)
-        identity_diagnostics.append(
-            {
-                "index": index,
-                "host_actor": host_actor,
-                "parked": parked,
-                "network_id": network_id,
-                "host": host,
-            }
+        selected_actor_addresses.append(host_actor)
+        diagnostic["selected"] = True
+        if len(selected_actor_addresses) == len(positions):
+            break
+    if len(selected_actor_addresses) != len(positions):
+        raise VerifyFailure(
+            "natural staff target layout lacks enough authoritative network "
+            f"identities: required={len(positions)} selected="
+            f"{len(selected_actor_addresses)} diagnostics={identity_diagnostics}"
         )
 
     set_natural_staff_layout(positions)
     configured = [
-        configure_enemy(actor_addresses[index], x, y, hp)
+        configure_enemy(selected_actor_addresses[index], x, y, hp)
         for index, (x, y) in enumerate(positions)
     ]
     if any(item.get("ok") != "true" for item in configured):
@@ -365,7 +396,7 @@ def configure_natural_staff_targets(
 
     targets: list[StaffTarget] = []
     for index, ((x, y), host_actor, network_id) in enumerate(
-        zip(positions, actor_addresses, network_ids),
+        zip(positions, selected_actor_addresses, network_ids),
         start=1,
     ):
         client = find_target(

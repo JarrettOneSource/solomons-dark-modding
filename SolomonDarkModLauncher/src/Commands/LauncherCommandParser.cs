@@ -26,6 +26,8 @@ internal static class LauncherCommandParser
         ulong? inviteSteamId = null;
         var multiplayerMaxParticipants = MultiplayerLaunchOptions.DefaultMaxParticipants;
         var openSteamInviteDialog = true;
+        var lobbyPrivacy = MultiplayerLobbyPrivacy.FriendsOnly;
+        string? directoryBaseUrl = null;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -36,7 +38,7 @@ internal static class LauncherCommandParser
                 continue;
             }
 
-            if (arg is "launch" or "stage" or "list-mods")
+            if (arg is "launch" or "stage" or "list-mods" or "directory-auth")
             {
                 mode = ParseMode(arg);
                 continue;
@@ -134,6 +136,19 @@ internal static class LauncherCommandParser
                 continue;
             }
 
+            if (arg == "--lobby-privacy")
+            {
+                lobbyPrivacy = MultiplayerLobbyPrivacyTokens.Parse(
+                    ReadValue(args, ref index, arg));
+                continue;
+            }
+
+            if (arg == "--directory-url")
+            {
+                directoryBaseUrl = ReadValue(args, ref index, arg);
+                continue;
+            }
+
             if (arg == "--invite-steam-id")
             {
                 inviteSteamId = ParseSteamId(ReadValue(args, ref index, arg));
@@ -149,12 +164,14 @@ internal static class LauncherCommandParser
             throw new InvalidOperationException($"Unknown argument: {arg}");
         }
 
+        var lobbyHost = LobbyHostOptions.Create(lobbyPrivacy, directoryBaseUrl);
         var multiplayer = MultiplayerLaunchOptions.Create(
             multiplayerMode,
             steamLobbyId,
             inviteSteamId,
             multiplayerMaxParticipants,
-            openSteamInviteDialog);
+            openSteamInviteDialog,
+            lobbyHost);
 
         return new LauncherCommand(
             mode,
@@ -175,7 +192,8 @@ internal static class LauncherCommandParser
             multiplayer.LobbyId,
             multiplayer.InviteSteamId,
             multiplayer.MaxParticipants,
-            multiplayer.OpenInviteDialog);
+            multiplayer.OpenInviteDialog,
+            multiplayer.Host);
     }
 
     private static LauncherMode ParseMode(string value)
@@ -185,6 +203,7 @@ internal static class LauncherCommandParser
             "launch" => LauncherMode.Launch,
             "stage" => LauncherMode.Stage,
             "list-mods" => LauncherMode.ListMods,
+            "directory-auth" => LauncherMode.AuthenticateDirectory,
             "enable-mod" => LauncherMode.EnableMod,
             "disable-mod" => LauncherMode.DisableMod,
             _ => throw new InvalidOperationException($"Unsupported mode: {value}")

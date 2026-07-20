@@ -6,86 +6,100 @@ bool TryGetParticipantGameplayState(
     }
 
     *state = SDModParticipantGameplayState{};
-    std::lock_guard<std::mutex> lock(g_wizard_bot_snapshot_mutex);
-    const auto it = std::find_if(
-        g_participant_gameplay_snapshots.begin(),
-        g_participant_gameplay_snapshots.end(),
-        [&](const ParticipantGameplaySnapshot& snapshot) {
-            return snapshot.bot_id == participant_id;
-        });
-    if (it == g_participant_gameplay_snapshots.end()) {
-        return false;
+    ParticipantGameplaySnapshot snapshot;
+    {
+        std::lock_guard<std::mutex> lock(g_wizard_bot_snapshot_mutex);
+        const auto it = std::find_if(
+            g_participant_gameplay_snapshots.begin(),
+            g_participant_gameplay_snapshots.end(),
+            [&](const ParticipantGameplaySnapshot& candidate) {
+                return candidate.bot_id == participant_id;
+            });
+        if (it == g_participant_gameplay_snapshots.end()) {
+            return false;
+        }
+        snapshot = *it;
     }
 
     state->available = true;
-    state->entity_materialized = it->entity_materialized;
-    state->moving = it->moving;
-    state->entity_kind = it->entity_kind;
-    state->movement_intent_revision = it->movement_intent_revision;
-    state->participant_id = it->bot_id;
-    state->character_profile = it->character_profile;
-    state->scene_intent = it->scene_intent;
-    state->actor_address = it->actor_address;
-    state->world_address = it->world_address;
-    state->animation_state_ptr = it->animation_state_ptr;
-    state->render_frame_table = it->render_frame_table;
-    state->hub_visual_attachment_ptr = it->hub_visual_attachment_ptr;
-    state->hub_visual_source_profile_address = it->hub_visual_source_profile_address;
-    state->hub_visual_descriptor_signature = it->hub_visual_descriptor_signature;
-    state->hub_visual_proxy_address = it->hub_visual_proxy_address;
-    state->progression_handle_address = it->progression_handle_address;
-    state->equip_handle_address = it->equip_handle_address;
-    state->progression_runtime_state_address = it->progression_runtime_state_address;
-    state->equip_runtime_state_address = it->equip_runtime_state_address;
-    state->gameplay_slot = it->gameplay_slot;
-    state->actor_slot = it->actor_slot;
-    state->slot_anim_state_index = it->slot_anim_state_index;
-    state->resolved_animation_state_id = it->resolved_animation_state_id;
-    state->hub_visual_source_kind = it->hub_visual_source_kind;
-    state->render_drive_flags = it->render_drive_flags;
-    state->anim_drive_state = it->anim_drive_state;
-    state->no_interrupt = it->no_interrupt;
-    state->active_cast_group = it->active_cast_group;
-    state->active_cast_slot = it->active_cast_slot;
-    state->render_variant_primary = it->render_variant_primary;
-    state->render_variant_secondary = it->render_variant_secondary;
-    state->render_weapon_type = it->render_weapon_type;
-    state->render_selection_byte = it->render_selection_byte;
-    state->render_variant_tertiary = it->render_variant_tertiary;
-    state->cast_active = it->cast_active;
-    state->cast_startup_in_progress = it->cast_startup_in_progress;
-    state->cast_saw_activity = it->cast_saw_activity;
-    state->cast_skill_id = it->cast_skill_id;
-    state->cast_ticks_waiting = it->cast_ticks_waiting;
-    state->cast_target_actor_address = it->cast_target_actor_address;
-    state->native_action_cooldown_ticks = it->native_action_cooldown_ticks;
-    state->active_spell_object_readable = it->active_spell_object_readable;
-    state->active_spell_object_address = it->active_spell_object_address;
-    state->active_spell_object_type = it->active_spell_object_type;
-    state->active_spell_object_x = it->active_spell_object_x;
-    state->active_spell_object_y = it->active_spell_object_y;
-    state->active_spell_object_radius = it->active_spell_object_radius;
-    state->active_spell_object_charge = it->active_spell_object_charge;
-    state->x = it->x;
-    state->y = it->y;
-    state->heading = it->heading;
-    state->hp = it->hp;
-    state->max_hp = it->max_hp;
-    state->mp = it->mp;
-    state->max_mp = it->max_mp;
-    state->walk_cycle_primary = it->walk_cycle_primary;
-    state->walk_cycle_secondary = it->walk_cycle_secondary;
-    state->render_drive_stride = it->render_drive_stride;
-    state->render_advance_rate = it->render_advance_rate;
-    state->render_advance_phase = it->render_advance_phase;
-    state->render_drive_effect_timer = it->render_drive_effect_timer;
-    state->render_drive_effect_progress = it->render_drive_effect_progress;
-    state->render_drive_overlay_alpha = it->render_drive_overlay_alpha;
-    state->render_drive_move_blend = it->render_drive_move_blend;
-    state->gameplay_attach_applied = it->gameplay_attach_applied;
-    state->primary_visual_lane = it->primary_visual_lane;
-    state->secondary_visual_lane = it->secondary_visual_lane;
-    state->attachment_visual_lane = it->attachment_visual_lane;
+    state->moving = snapshot.moving;
+    state->entity_kind = snapshot.entity_kind;
+    state->movement_intent_revision = snapshot.movement_intent_revision;
+    state->participant_id = snapshot.bot_id;
+    state->character_profile = snapshot.character_profile;
+    state->scene_intent = snapshot.scene_intent;
+    if (!snapshot.entity_materialized ||
+        !IsParticipantMaterializationOwnedByCurrentScene(
+            snapshot.scene_intent,
+            snapshot.materialized_scene_address,
+            snapshot.materialized_world_address)) {
+        return true;
+    }
+
+    state->entity_materialized = true;
+    state->actor_address = snapshot.actor_address;
+    state->world_address = snapshot.world_address;
+    state->animation_state_ptr = snapshot.animation_state_ptr;
+    state->render_frame_table = snapshot.render_frame_table;
+    state->hub_visual_attachment_ptr = snapshot.hub_visual_attachment_ptr;
+    state->hub_visual_source_profile_address = snapshot.hub_visual_source_profile_address;
+    state->hub_visual_descriptor_signature = snapshot.hub_visual_descriptor_signature;
+    state->hub_visual_proxy_address = snapshot.hub_visual_proxy_address;
+    state->progression_handle_address = snapshot.progression_handle_address;
+    state->equip_handle_address = snapshot.equip_handle_address;
+    state->progression_runtime_state_address = snapshot.progression_runtime_state_address;
+    state->equip_runtime_state_address = snapshot.equip_runtime_state_address;
+    state->gameplay_slot = snapshot.gameplay_slot;
+    state->actor_slot = snapshot.actor_slot;
+    state->slot_anim_state_index = snapshot.slot_anim_state_index;
+    state->resolved_animation_state_id = snapshot.resolved_animation_state_id;
+    state->hub_visual_source_kind = snapshot.hub_visual_source_kind;
+    state->render_drive_flags = snapshot.render_drive_flags;
+    state->anim_drive_state = snapshot.anim_drive_state;
+    state->no_interrupt = snapshot.no_interrupt;
+    state->active_cast_group = snapshot.active_cast_group;
+    state->active_cast_slot = snapshot.active_cast_slot;
+    state->render_variant_primary = snapshot.render_variant_primary;
+    state->render_variant_secondary = snapshot.render_variant_secondary;
+    state->render_weapon_type = snapshot.render_weapon_type;
+    state->render_selection_byte = snapshot.render_selection_byte;
+    state->render_variant_tertiary = snapshot.render_variant_tertiary;
+    state->cast_active = snapshot.cast_active;
+    state->cast_startup_in_progress = snapshot.cast_startup_in_progress;
+    state->cast_saw_activity = snapshot.cast_saw_activity;
+    state->cast_skill_id = snapshot.cast_skill_id;
+    state->cast_ticks_waiting = snapshot.cast_ticks_waiting;
+    state->cast_target_actor_address = snapshot.cast_target_actor_address;
+    state->native_action_cooldown_ticks = snapshot.native_action_cooldown_ticks;
+    state->active_spell_object_readable = snapshot.active_spell_object_readable;
+    state->active_spell_object_address = snapshot.active_spell_object_address;
+    state->active_spell_object_type = snapshot.active_spell_object_type;
+    state->active_spell_object_x = snapshot.active_spell_object_x;
+    state->active_spell_object_y = snapshot.active_spell_object_y;
+    state->active_spell_object_radius = snapshot.active_spell_object_radius;
+    state->active_spell_object_charge = snapshot.active_spell_object_charge;
+    state->x = snapshot.x;
+    state->y = snapshot.y;
+    state->heading = snapshot.heading;
+    state->hp = snapshot.hp;
+    state->max_hp = snapshot.max_hp;
+    state->mp = snapshot.mp;
+    state->max_mp = snapshot.max_mp;
+    state->walk_cycle_primary = snapshot.walk_cycle_primary;
+    state->walk_cycle_secondary = snapshot.walk_cycle_secondary;
+    state->render_drive_stride = snapshot.render_drive_stride;
+    state->render_advance_rate = snapshot.render_advance_rate;
+    state->render_advance_phase = snapshot.render_advance_phase;
+    state->magic_shield_absorb_remaining = snapshot.magic_shield_absorb_remaining;
+    state->magic_shield_absorb_capacity = snapshot.magic_shield_absorb_capacity;
+    state->magic_shield_explosion_fraction = snapshot.magic_shield_explosion_fraction;
+    state->magic_shield_hit_flash = snapshot.magic_shield_hit_flash;
+    state->render_drive_overlay_alpha = snapshot.render_drive_overlay_alpha;
+    state->render_drive_move_blend = snapshot.render_drive_move_blend;
+    state->gameplay_attach_applied = snapshot.gameplay_attach_applied;
+    state->primary_visual_lane = snapshot.primary_visual_lane;
+    state->secondary_visual_lane = snapshot.secondary_visual_lane;
+    state->attachment_visual_lane = snapshot.attachment_visual_lane;
     (void)TryReadWizardActorPersistentStatusFlags(
         state->actor_address,
         &state->native_persistent_status_flags);
@@ -174,6 +188,68 @@ bool TryListRecentNativeSpellEffectActors(
     return true;
 }
 
+bool TryListNativeActorModifiers(
+    uintptr_t actor_address,
+    std::vector<SDModNativeModifierState>* modifiers) {
+    if (actor_address == 0 || modifiers == nullptr) {
+        return false;
+    }
+    modifiers->clear();
+
+    auto& memory = ProcessMemory::Instance();
+    std::int32_t modifier_count = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorModifierListCountOffset,
+            &modifier_count) ||
+        modifier_count < 0 ||
+        modifier_count > 512) {
+        return false;
+    }
+    if (modifier_count == 0) {
+        return true;
+    }
+
+    uintptr_t modifier_storage = 0;
+    const auto storage_bytes =
+        static_cast<std::size_t>(modifier_count) * sizeof(uintptr_t);
+    if (!memory.TryReadField(
+            actor_address,
+            kActorModifierListStorageOffset,
+            &modifier_storage) ||
+        modifier_storage == 0 ||
+        !memory.IsReadableRange(modifier_storage, storage_bytes)) {
+        return false;
+    }
+
+    modifiers->reserve(static_cast<std::size_t>(modifier_count));
+    for (std::int32_t index = 0; index < modifier_count; ++index) {
+        uintptr_t control_block = 0;
+        uintptr_t modifier = 0;
+        SDModNativeModifierState state;
+        if (!memory.TryReadValue(
+                modifier_storage +
+                    static_cast<std::size_t>(index) * sizeof(uintptr_t),
+                &control_block) ||
+            control_block == 0 ||
+            !memory.TryReadValue(control_block, &modifier) ||
+            modifier == 0 ||
+            !memory.TryReadField(
+                modifier,
+                kNativeModifierTypeIdOffset,
+                &state.type_id) ||
+            !memory.TryReadField(
+                modifier,
+                kNativeModifierDurationTicksOffset,
+                &state.duration_ticks)) {
+            modifiers->clear();
+            return false;
+        }
+        modifiers->push_back(state);
+    }
+    return true;
+}
+
 bool TryRefreshParticipantGameplayState(
     std::uint64_t participant_id,
     SDModParticipantGameplayState* state) {
@@ -189,12 +265,16 @@ bool TryRefreshParticipantGameplayState(
 bool TryGetGameplayHudParticipantDisplayNameForActor(
     uintptr_t active_actor_address,
     std::string* display_name,
-    std::uint64_t* participant_id) {
+    std::uint64_t* participant_id,
+    float* health_ratio) {
     if (display_name != nullptr) {
         display_name->clear();
     }
     if (participant_id != nullptr) {
         *participant_id = 0;
+    }
+    if (health_ratio != nullptr) {
+        *health_ratio = 0.0f;
     }
     if (active_actor_address == 0) {
         return false;
@@ -211,16 +291,35 @@ bool TryGetGameplayHudParticipantDisplayNameForActor(
         resolved_participant_id = binding->bot_id;
     }
 
-    const auto runtime = multiplayer::SnapshotRuntimeState();
-    const auto* participant = multiplayer::FindParticipant(runtime, resolved_participant_id);
-    if (participant == nullptr ||
-        !multiplayer::IsRemoteParticipant(*participant) ||
-        participant->name.empty()) {
+    std::string resolved_display_name;
+    multiplayer::ParticipantRuntimeInfo resolved_runtime;
+    if (!multiplayer::TryGetRemoteParticipantDisplayState(
+            resolved_participant_id,
+            &resolved_display_name,
+            health_ratio != nullptr ? &resolved_runtime : nullptr,
+            nullptr)) {
         return false;
     }
 
+    if (health_ratio != nullptr) {
+        // The nameplate bar must track the replicated authoritative vitals.
+        // The materialized actor's progression HP is only rewritten by the
+        // player-actor tick, which pauses (level-up barrier, death quiesce)
+        // while the render pass keeps drawing.
+        if (!resolved_runtime.valid ||
+            !std::isfinite(resolved_runtime.life_current) ||
+            !std::isfinite(resolved_runtime.life_max) ||
+            resolved_runtime.life_max <= 0.0f) {
+            return false;
+        }
+        *health_ratio = std::clamp(
+            resolved_runtime.life_current / resolved_runtime.life_max,
+            0.0f,
+            1.0f);
+    }
+
     if (display_name != nullptr) {
-        *display_name = participant->name;
+        *display_name = std::move(resolved_display_name);
     }
     if (participant_id != nullptr) {
         *participant_id = resolved_participant_id;
@@ -423,8 +522,10 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveStrideScaleOffset, &state->render_drive_stride);
     (void)TryReadFiniteFloatField(actor_address, kActorRenderAdvanceRateOffset, &state->render_advance_rate);
     (void)TryReadFiniteFloatField(actor_address, kActorRenderAdvancePhaseOffset, &state->render_advance_phase);
-    (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveEffectTimerOffset, &state->render_drive_effect_timer);
-    (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveEffectProgressOffset, &state->render_drive_effect_progress);
+    (void)TryReadFiniteFloatField(actor_address, kActorMagicShieldAbsorbRemainingOffset, &state->magic_shield_absorb_remaining);
+    (void)TryReadFiniteFloatField(actor_address, kActorMagicShieldAbsorbCapacityOffset, &state->magic_shield_absorb_capacity);
+    (void)TryReadFiniteFloatField(actor_address, kActorMagicShieldExplosionFractionOffset, &state->magic_shield_explosion_fraction);
+    (void)TryReadFiniteFloatField(actor_address, kActorMagicShieldHitFlashOffset, &state->magic_shield_hit_flash);
     (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveOverlayAlphaOffset, &state->render_drive_overlay_alpha);
     (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveMoveBlendOffset, &state->render_drive_move_blend);
     if (state->equip_runtime_state_address != 0) {
@@ -916,13 +1017,19 @@ bool TryBuildSceneActorState(
     (void)memory.TryReadField(actor_address, kActorAnimationDriveStateByteOffset, &state.anim_drive_state);
     (void)memory.TryReadField(actor_address, kActorProgressionHandleOffset, &state.progression_handle_address);
     ActorHealthRuntime actor_health;
+    // Only the player-family actor owns the wizard progression fields at
+    // +0x200 and +0x300. Reward carriers and spell effects are smaller native
+    // objects; reading those offsets from them can turn adjacent heap bytes
+    // into a bogus progression pointer and reject an otherwise valid actor.
+    const bool owns_wizard_progression = state.object_type_id == 1;
     if (IsArenaEnemyActorHealthType(state.object_type_id) &&
         TryReadArenaEnemyActorHealth(actor_address, &actor_health)) {
         state.progression_runtime_address = 0;
         state.hp = actor_health.hp;
         state.max_hp = actor_health.max_hp;
         state.dead = state.hp <= 0.0f && state.max_hp > 0.0f;
-    } else if (TryResolveActorProgressionRuntime(actor_address, &state.progression_runtime_address) &&
+    } else if (owns_wizard_progression &&
+        TryResolveActorProgressionRuntime(actor_address, &state.progression_runtime_address) &&
         state.progression_runtime_address != 0 &&
         memory.IsReadableRange(state.progression_runtime_address + kProgressionHpOffset, sizeof(float)) &&
         memory.IsReadableRange(state.progression_runtime_address + kProgressionMaxHpOffset, sizeof(float))) {

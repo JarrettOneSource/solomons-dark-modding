@@ -338,7 +338,62 @@ std::uint8_t __fastcall HookPlayerActorApplyManaDelta(
     }
 
     if (!bot_actor) {
-        return original(self, delta, allow_prompt);
+        bool observe_local_delta = false;
+        {
+            std::lock_guard<std::mutex> lock(
+                g_local_mana_delta_observation_mutex);
+            observe_local_delta =
+                g_local_mana_delta_observation.armed &&
+                g_local_mana_delta_observation.actor_address == actor_address;
+        }
+        if (!observe_local_delta) {
+            return original(self, delta, allow_prompt);
+        }
+
+        uintptr_t progression_address = 0;
+        float mp_before = 0.0f;
+        float max_mp_before = 0.0f;
+        const bool have_before =
+            TryResolveActorProgressionRuntime(
+                actor_address,
+                &progression_address) &&
+            progression_address != 0 &&
+            TryReadProgressionMana(
+                progression_address,
+                &mp_before,
+                &max_mp_before);
+        const auto result = original(self, delta, allow_prompt);
+        float mp_after = 0.0f;
+        float max_mp_after = 0.0f;
+        const bool have_after =
+            have_before &&
+            TryReadProgressionMana(
+                progression_address,
+                &mp_after,
+                &max_mp_after);
+        if (have_after &&
+            std::isfinite(mp_before) &&
+            std::isfinite(mp_after)) {
+            const float applied_delta = mp_after - mp_before;
+            std::lock_guard<std::mutex> lock(
+                g_local_mana_delta_observation_mutex);
+            auto& observation = g_local_mana_delta_observation;
+            if (!observation.armed ||
+                observation.actor_address != actor_address) {
+                return result;
+            }
+            observation.valid = true;
+            ++observation.call_count;
+            observation.last_delta = applied_delta;
+            if (applied_delta < 0.0f) {
+                ++observation.spend_call_count;
+                observation.spent_total -= applied_delta;
+            } else if (applied_delta > 0.0f) {
+                ++observation.recovery_call_count;
+                observation.recovered_total += applied_delta;
+            }
+        }
+        return result;
     }
 
     (void)EnsureActorProgressionRuntimeFieldFromHandle(

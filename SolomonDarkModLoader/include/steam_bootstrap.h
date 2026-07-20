@@ -26,6 +26,8 @@ struct SteamBootstrapSnapshot {
 };
 
 enum class SteamEventKind {
+    SteamServersConnected,
+    SteamServersDisconnected,
     LobbyCreated,
     LobbyEntered,
     LobbyJoinRequested,
@@ -73,13 +75,22 @@ enum class SteamNetworkSendMode {
     ReliableNoNagle,
 };
 
+enum class SteamLobbyVisibility {
+    Private,
+    FriendsOnly,
+    Public,
+    Invisible,
+};
+
 bool InitializeSteamBootstrap();
 void ShutdownSteamBootstrap();
 void SteamBootstrapTick();
 SteamBootstrapSnapshot GetSteamBootstrapSnapshot();
 std::vector<SteamEvent> DrainSteamEvents();
 
-std::uint64_t SteamCreateFriendsOnlyLobby(std::int32_t max_members);
+std::uint64_t SteamCreateLobby(
+    SteamLobbyVisibility visibility,
+    std::int32_t max_members);
 std::uint64_t SteamJoinLobby(std::uint64_t lobby_id);
 void SteamLeaveLobby(std::uint64_t lobby_id);
 bool SteamRequestLobbyData(std::uint64_t lobby_id);
@@ -98,6 +109,8 @@ void SteamOpenLobbyInviteDialog(std::uint64_t lobby_id);
 bool SteamIsOverlayEnabled();
 bool SteamSetRichPresence(const char* key, const char* value);
 std::string SteamGetFriendPersonaName(std::uint64_t steam_id);
+std::vector<std::uint64_t> SteamGetImmediateFriends();
+bool SteamHasImmediateFriend(std::uint64_t steam_id);
 
 bool SteamSendNetworkMessage(
     std::uint64_t remote_steam_id,

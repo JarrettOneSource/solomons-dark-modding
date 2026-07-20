@@ -182,8 +182,17 @@ end
 """
 
 
+LEVEL_UP_CAPTURE_LUA_TIMEOUT_SECONDS = 15.0
+
+
 def capture(pipe_name: str) -> dict[str, str]:
-    return parse_key_values(lua(pipe_name, CAPTURE_LUA, timeout=5.0))
+    return parse_key_values(
+        lua(
+            pipe_name,
+            CAPTURE_LUA,
+            timeout=LEVEL_UP_CAPTURE_LUA_TIMEOUT_SECONDS,
+        )
+    )
 
 
 def participant_row(values: dict[str, str], participant_id: int) -> dict[str, Any] | None:
@@ -396,6 +405,36 @@ end
             "direct": values.get("statbook.name_direct", ""),
         },
     }
+
+
+def wait_for_progression_entry_active(
+    pipe_name: str,
+    *,
+    option_id: int,
+    expected_active: int,
+    timeout: float,
+    participant_id: int | None = None,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        last = query_progression_entry(
+            pipe_name,
+            option_id=option_id,
+            participant_id=participant_id,
+        )
+        if (
+            last["available"]
+            and last["active"] == expected_active
+            and last["visible"] > 0
+        ):
+            return last
+        time.sleep(0.05)
+    raise VerifyFailure(
+        "native progression entry did not converge to the authoritative "
+        f"choice: option_id={option_id} expected_active={expected_active} "
+        f"participant_id={participant_id} last={last}"
+    )
 
 
 def query_progression_stats(
@@ -945,8 +984,13 @@ def wait_for_choice_result(
     level: int,
     timeout: float,
     *,
-    target_participant_id: int = CLIENT_ID,
+    target_participant_id: int | None = None,
 ) -> dict[str, Any]:
+    if target_participant_id is None:
+        # Steam wrappers replace CLIENT_ID after importing this module. Resolve
+        # the default at call time instead of capturing the local-UDP fixture ID
+        # in the function object at import time.
+        target_participant_id = CLIENT_ID
     deadline = time.monotonic() + timeout
     last_host: dict[str, str] = {}
     last_client: dict[str, str] = {}
@@ -1121,14 +1165,18 @@ def verify_level_up_offer_sync(timeout: float) -> dict[str, Any]:
         if result["host_remote_client"] is None or result["host_remote_client"]["level"] < target_level:
             raise VerifyFailure(f"host did not retain client participant target level: {result}")
 
-        after_host_selected = query_progression_entry(
+        after_host_selected = wait_for_progression_entry_active(
             HOST_PIPE,
             option_id=selected_option_id,
+            expected_active=result["resulting_active"],
+            timeout=timeout,
             participant_id=CLIENT_ID,
         )
-        after_client_selected = query_progression_entry(
+        after_client_selected = wait_for_progression_entry_active(
             CLIENT_PIPE,
             option_id=selected_option_id,
+            expected_active=result["resulting_active"],
+            timeout=timeout,
         )
         step_record = {
             "step": step,

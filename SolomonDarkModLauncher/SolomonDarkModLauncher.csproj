@@ -19,18 +19,20 @@
     </Content>
   </ItemGroup>
 
+  <!-- The native loader is a single Release artifact for every managed configuration;
+       a Debug CLI paired with a stale Debug loader silently injects outdated hooks. -->
   <Target Name="BuildNativeLoader"
           BeforeTargets="Build"
           Condition="'$(OS)' == 'Windows_NT' and '$(MSBuildRuntimeType)' != 'Core'">
     <PropertyGroup>
       <NativeLoaderProjectPath>$(MSBuildProjectDirectory)\..\SolomonDarkModLoader\SolomonDarkModLoader.vcxproj</NativeLoaderProjectPath>
-      <NativeLoaderPath>$(MSBuildProjectDirectory)\..\bin\$(Configuration)\Win32\SolomonDarkModLoader.dll</NativeLoaderPath>
+      <NativeLoaderPath>$(MSBuildProjectDirectory)\..\bin\Release\Win32\SolomonDarkModLoader.dll</NativeLoaderPath>
     </PropertyGroup>
 
     <MSBuild
       Projects="$(NativeLoaderProjectPath)"
       Targets="Build"
-      Properties="Configuration=$(Configuration);Platform=Win32" />
+      Properties="Configuration=Release;Platform=Win32" />
 
     <Error
       Condition="!Exists('$(NativeLoaderPath)')"
@@ -39,7 +41,7 @@
 
   <Target Name="CopyNativeLoader" AfterTargets="Build">
     <PropertyGroup>
-      <NativeLoaderPath>$(MSBuildProjectDirectory)\..\bin\$(Configuration)\Win32\SolomonDarkModLoader.dll</NativeLoaderPath>
+      <NativeLoaderPath>$(MSBuildProjectDirectory)\..\bin\Release\Win32\SolomonDarkModLoader.dll</NativeLoaderPath>
     </PropertyGroup>
 
     <Copy

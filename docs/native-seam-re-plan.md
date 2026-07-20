@@ -88,6 +88,14 @@ they exit reserve, rather than direct MP writes or a shared player pool.
   - `0x00666020`: native Skills_Wizard primary build-skill/stat builder; pure
     primary outputs expose damage and mana at indices 0/1, while combo outputs
     expose damage channels and mana at index 2.
+- The builder's progression array at `+0x774/+0x778` is grow-only storage:
+  `0x00666020` calls the vector growth helper only when the existing count is
+  smaller than the current branch requires, and it never shrinks the count.
+  Different spell branches write between two and nine values, so an owner and
+  observer can retain different unused tails after otherwise identical cast
+  histories. Multiplayer verification therefore compares the resolved damage,
+  mana, rank, availability, scaling, and builder-status fields; raw array counts
+  and values remain diagnostics rather than replicated progression state.
 - `runtime/ghidra_primary_spell_builder_resource_paths.txt` records that
   `0x00666020` writes the current spell id and the output array at
   progression `+0x774/+0x778`, not HP/MP resource fields. Cast preparation now

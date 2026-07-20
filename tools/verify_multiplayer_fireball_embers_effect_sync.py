@@ -441,6 +441,10 @@ def run_fragment_phase(
     samples: dict[str, dict[str, str]] = {}
     clears: dict[str, dict[str, str]] = {}
     effect_sync: dict[str, Any] = {}
+    terminal_sync: dict[str, Any] = {
+        "ok": True,
+        "not_applicable": phase == "baseline",
+    }
     suppression: dict[str, Any] = {}
     pre_materialization = query_replicated_ember_sync(
         direction.receiver_pipe,
@@ -463,7 +467,7 @@ def run_fragment_phase(
         return arm
 
     def capture_effect_sync() -> dict[str, Any]:
-        nonlocal effect_sync
+        nonlocal effect_sync, terminal_sync
         # This callback starts when the Fireball is dispatched, not when it
         # reaches the target.  The deterministic Steam fixture can take a
         # little over two seconds to impact, so leave enough time to observe
@@ -474,6 +478,16 @@ def run_fragment_phase(
             timeout=4.0 if phase != "baseline" else 0.35,
             required=phase != "baseline",
         )
+        # Start observing teardown immediately after the active four-fragment
+        # state converges. Physical Steam peers can spend several seconds in
+        # the later trace and damage queries; waiting until those finish would
+        # begin the assertion after the sender's terminal retention window.
+        if phase != "baseline":
+            terminal_sync = wait_for_replicated_ember_terminal(
+                direction.receiver_pipe,
+                direction.source_id,
+                timeout=8.0,
+            )
         return effect_sync
 
     try:
@@ -531,14 +545,6 @@ def run_fragment_phase(
         side: parse_int_text(sample.get("fragment_count"), -1)
         for side, sample in samples.items()
     }
-    terminal_sync = (
-        wait_for_replicated_ember_terminal(
-            direction.receiver_pipe,
-            direction.source_id,
-        )
-        if phase != "baseline"
-        else {"ok": True, "not_applicable": True}
-    )
     post_materialization = query_replicated_ember_sync(
         direction.receiver_pipe,
         direction.source_id,

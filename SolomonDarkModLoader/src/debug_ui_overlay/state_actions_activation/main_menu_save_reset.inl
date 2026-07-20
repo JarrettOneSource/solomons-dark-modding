@@ -20,7 +20,7 @@ bool TryDeleteStagedSurvivalSaveDirectory(std::string* error_message) {
     return false;
 }
 
-bool TryPrepareMainMenuNewGameSaveReset(uintptr_t main_menu_address, std::string* error_message) {
+bool TryPrepareMainMenuNewGameSaveResetImpl(uintptr_t main_menu_address, std::string* error_message) {
     if (main_menu_address == 0) {
         return true;
     }

@@ -32,7 +32,6 @@ from verify_local_multiplayer_sync import (
     wait_for_remote_convergence,
 )
 from verify_multiplayer_primary_kill_stress import set_manual_spawner_test_mode
-from verify_real_input_spell_cast_sync import detect_instance_pids
 
 
 OUTPUT = ROOT / "runtime" / "multiplayer_player_visibility.json"
@@ -223,10 +222,9 @@ def run(result: dict[str, Any]) -> None:
         "hub",
     )
     result["hub_capture_placement"] = place_pair_for_visibility()
-    pids = detect_instance_pids()
     result["hub_screenshots"] = {
-        "host": capture_game_backbuffer(HOST_PIPE, pids["host"], HOST_SCREENSHOT),
-        "client": capture_game_backbuffer(CLIENT_PIPE, pids["client"], CLIENT_SCREENSHOT),
+        "host": capture_game_backbuffer(HOST_PIPE, HOST_SCREENSHOT),
+        "client": capture_game_backbuffer(CLIENT_PIPE, CLIENT_SCREENSHOT),
     }
     result["manual_spawner_prearm"] = {
         "host": set_manual_spawner_test_mode(HOST_PIPE, True),
@@ -259,12 +257,10 @@ def run(result: dict[str, Any]) -> None:
     result["run_screenshots"] = {
         "host": capture_game_backbuffer(
             HOST_PIPE,
-            pids["host"],
             HOST_RUN_SCREENSHOT,
         ),
         "client": capture_game_backbuffer(
             CLIENT_PIPE,
-            pids["client"],
             CLIENT_RUN_SCREENSHOT,
         ),
     }

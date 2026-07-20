@@ -761,6 +761,7 @@ void ClearManualSpawnerSuppressedLocalPrimaryCastState(uintptr_t actor_address) 
     }
 
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_mouse_right_frames.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.store(
         0,
@@ -772,7 +773,9 @@ void ClearManualSpawnerSuppressedLocalPrimaryCastState(uintptr_t actor_address) 
         0,
         std::memory_order_release);
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
+    g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_left_active.store(false, std::memory_order_release);
+    g_gameplay_keyboard_injection.injected_mouse_right_active.store(false, std::memory_order_release);
 
     auto& memory = ProcessMemory::Instance();
     uintptr_t gameplay_address = 0;
@@ -1155,6 +1158,11 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
             (void)RefreshAndApplyWizardBindingFacingState(binding, actor_address);
         }
     }
+    // Stock primary startup refreshes aim from the OS cursor. In explicit
+    // manual-spawner tests, restore the pinned world target after that refresh
+    // so native projectile direction and the owner-authored packet agree at
+    // every window resolution.
+    (void)ApplyPinnedManualSpawnerPrimaryTarget(actor_address);
     (void)QueueLocalPlayerPrimaryCastForMultiplayer(actor_address);
     if (log_this) {
         Log(

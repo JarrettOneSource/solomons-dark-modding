@@ -254,6 +254,16 @@ void RememberActiveLocalCastInput(
     active.last_sent_ms = now_ms;
 }
 
+void RememberRecentLocalCast(
+    const CastPacket& packet,
+    std::uint64_t now_ms) {
+    g_local_transport.recent_local_cast_sequence = packet.cast_sequence;
+    g_local_transport.recent_local_cast_skill_id = packet.skill_id;
+    g_local_transport.recent_local_cast_ms = now_ms;
+    g_local_transport.recent_local_cast_target_network_actor_id =
+        packet.target_network_actor_id;
+}
+
 void SendCastPacketToEndpoints(
     const CastPacket& packet,
     const std::vector<TransportPeerEndpoint>& endpoints) {
@@ -363,9 +373,6 @@ void SendQueuedCastEvents(std::uint64_t now_ms) {
         }
 
         const auto cast_sequence = g_local_transport.next_cast_sequence++;
-        g_local_transport.recent_local_cast_sequence = cast_sequence;
-        g_local_transport.recent_local_cast_skill_id = event.skill_id;
-        g_local_transport.recent_local_cast_ms = now_ms;
         CastPacket packet{};
         if (!BuildLocalCastPacket(
                 runtime_state,
@@ -376,11 +383,10 @@ void SendQueuedCastEvents(std::uint64_t now_ms) {
                 &packet)) {
             continue;
         }
+        RememberRecentLocalCast(packet, now_ms);
         if (event.cast_kind == CastKind::Primary) {
             CaptureHostLocalFireballExplodeBaseline(*local, packet, now_ms);
         }
-        g_local_transport.recent_local_cast_target_network_actor_id =
-            packet.target_network_actor_id;
 
         SendCastPacketToEndpoints(packet, endpoints);
         if (event.cast_kind == CastKind::Secondary &&
@@ -471,6 +477,7 @@ void SendActiveLocalCastInput(std::uint64_t now_ms) {
         return;
     }
 
+    RememberRecentLocalCast(packet, now_ms);
     SendCastPacketToEndpoints(packet, endpoints);
     if (still_held) {
         RememberActiveLocalCastInput(event, packet, now_ms);

@@ -246,6 +246,7 @@ bool QueueMultiplayerDampenEffect(
 }
 
 bool QueueLocalPlayerPoisonCorrection(
+    std::uint32_t correction_sequence,
     std::int32_t duration_ticks,
     float damage_per_tick,
     std::string* error_message) {
@@ -258,7 +259,8 @@ bool QueueLocalPlayerPoisonCorrection(
         }
         return false;
     }
-    if (duration_ticks <= 0 ||
+    if (correction_sequence == 0 ||
+        duration_ticks <= 0 ||
         duration_ticks > multiplayer::kParticipantPoisonMaxDurationTicks ||
         !std::isfinite(damage_per_tick) ||
         damage_per_tick < 0.0f ||
@@ -270,6 +272,7 @@ bool QueueLocalPlayerPoisonCorrection(
     }
 
     PendingLocalPlayerPoisonCorrection request{};
+    request.correction_sequence = correction_sequence;
     request.duration_ticks = duration_ticks;
     request.damage_per_tick = damage_per_tick;
 
@@ -279,6 +282,11 @@ bool QueueLocalPlayerPoisonCorrection(
         g_gameplay_keyboard_injection.pending_local_player_poison_corrections;
     if (!pending.empty()) {
         auto& existing = pending.back();
+        if (multiplayer::IsPacketSequenceNewer(
+                request.correction_sequence,
+                existing.correction_sequence)) {
+            existing.correction_sequence = request.correction_sequence;
+        }
         existing.duration_ticks =
             (std::max)(existing.duration_ticks, request.duration_ticks);
         existing.damage_per_tick =

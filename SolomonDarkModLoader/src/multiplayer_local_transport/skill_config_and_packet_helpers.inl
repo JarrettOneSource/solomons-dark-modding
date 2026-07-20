@@ -228,7 +228,7 @@ bool ConfigureLocalTransport() {
         std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
         g_queued_local_cast_events.clear();
         g_queued_local_enemy_damage_claims.clear();
-        g_queued_local_loot_pickup_requests.clear();
+        ClearLocalLootPickupRequestStateLocked();
         g_queued_local_level_up_choices.clear();
         g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
         g_have_queued_local_air_chain_frame = false;
@@ -275,7 +275,7 @@ bool ConfigureLocalTransport() {
         std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
         g_queued_local_cast_events.clear();
         g_queued_local_enemy_damage_claims.clear();
-        g_queued_local_loot_pickup_requests.clear();
+        ClearLocalLootPickupRequestStateLocked();
         g_queued_local_level_up_choices.clear();
         g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
         g_have_queued_local_air_chain_frame = false;
@@ -347,6 +347,27 @@ ParticipantSceneIntent SceneIntentFromPacket(const StatePacket& packet) {
     ParticipantSceneIntent intent;
     intent.kind = packet.in_run != 0 ? ParticipantSceneIntentKind::Run
                                      : ParticipantSceneIntentKind::SharedHub;
+    return intent;
+}
+
+ParticipantSceneIntent SceneIntentFromPacket(
+    const ParticipantFramePacket& packet) {
+    ParticipantSceneIntent intent;
+    switch (static_cast<WorldSceneKind>(packet.scene_kind)) {
+    case WorldSceneKind::Run:
+        intent.kind = ParticipantSceneIntentKind::Run;
+        break;
+    case WorldSceneKind::PrivateRegion:
+        intent.kind = ParticipantSceneIntentKind::PrivateRegion;
+        intent.region_index = packet.region_index;
+        intent.region_type_id = packet.region_type_id;
+        break;
+    case WorldSceneKind::SharedHub:
+    case WorldSceneKind::Unknown:
+    default:
+        intent.kind = ParticipantSceneIntentKind::SharedHub;
+        break;
+    }
     return intent;
 }
 

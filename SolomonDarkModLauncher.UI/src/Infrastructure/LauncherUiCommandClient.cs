@@ -7,6 +7,13 @@ namespace SolomonDarkModLauncher.UI.Infrastructure;
 
 internal sealed class LauncherUiCommandClient
 {
+    private static readonly string[] TestOnlyChildEnvironmentVariables =
+    {
+        "SDMOD_TEST_BLANK_BONEYARD",
+        "SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE",
+        "SDMOD_TEST_WAVE_OVERRIDE"
+    };
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -18,6 +25,7 @@ internal sealed class LauncherUiCommandClient
     private bool debugUiEnabled_ = true;
     private string lobbyId_ = string.Empty;
     private string gameDirectory_;
+    private string directoryUrl_;
 
     public LauncherUiCommandClient()
     {
@@ -25,6 +33,8 @@ internal sealed class LauncherUiCommandClient
         gameDirectory_ = settingsStore_.LoadGameDirectory() ??
             FindDevelopmentGameDirectory(workspaceRoot) ??
             string.Empty;
+        directoryUrl_ = settingsStore_.LoadDirectoryUrl() ??
+            LobbyDirectoryClient.DefaultDirectoryUrl;
         var portableMarkerPath = Path.Combine(
             workspaceRoot,
             DistributionLayout.PortableRootMarkerFileName);
@@ -63,18 +73,45 @@ internal sealed class LauncherUiCommandClient
         settingsStore_.SaveGameDirectory(normalizedPath);
     }
 
-    public string BuildCommandPreview(LauncherUiCommandMode mode, string? targetModId = null)
+    public string DirectoryUrl => directoryUrl_;
+
+    public void UpdateDirectoryUrl(string? directoryUrl)
     {
-        var arguments = BuildArguments(mode, targetModId);
+        var trimmed = directoryUrl?.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            directoryUrl_ = LobbyDirectoryClient.DefaultDirectoryUrl;
+            settingsStore_.SaveDirectoryUrl(null);
+            return;
+        }
+
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https"))
+        {
+            throw new InvalidOperationException(
+                "Enter an absolute HTTP or HTTPS URL for the lobby directory.");
+        }
+
+        directoryUrl_ = trimmed;
+        settingsStore_.SaveDirectoryUrl(trimmed);
+    }
+
+    public string BuildCommandPreview(
+        LauncherUiCommandMode mode,
+        string? targetModId = null,
+        LauncherHostOptions? hostOptions = null)
+    {
+        var arguments = BuildArguments(mode, targetModId, hostOptions);
         return $"SolomonDarkModLauncher.exe {string.Join(" ", arguments.Select(QuoteArgument))}";
     }
 
     public async Task<LauncherUiInvocationResult> InvokeAsync(
         LauncherUiCommandMode mode,
         string? targetModId = null,
+        LauncherHostOptions? hostOptions = null,
         CancellationToken cancellationToken = default)
     {
-        var arguments = BuildArguments(mode, targetModId);
+        var arguments = BuildArguments(mode, targetModId, hostOptions);
         var executablePath = LauncherExecutableResolver.Resolve();
         var startInfo = new ProcessStartInfo(executablePath)
         {
@@ -83,6 +120,10 @@ internal sealed class LauncherUiCommandClient
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+        foreach (var variableName in TestOnlyChildEnvironmentVariables)
+        {
+            startInfo.Environment.Remove(variableName);
+        }
 
         foreach (var argument in arguments)
         {
@@ -112,7 +153,7 @@ internal sealed class LauncherUiCommandClient
         if (string.IsNullOrWhiteSpace(errorMessage))
         {
             errorMessage = process.ExitCode == 0
-                ? "Launcher returned no JSON response."
+                ? "The launcher did not return a JSON response."
                 : $"Launcher exited with code {process.ExitCode}.";
             if (!string.IsNullOrWhiteSpace(readResult.Diagnostics))
             {
@@ -127,9 +168,36 @@ internal sealed class LauncherUiCommandClient
             errorMessage);
     }
 
-    private IReadOnlyList<string> BuildArguments(LauncherUiCommandMode mode, string? targetModId)
+    public async Task<LauncherCliDirectorySession> AuthenticateDirectoryAsync(
+        CancellationToken cancellationToken)
+    {
+        var invocation = await InvokeAsync(
+            LauncherUiCommandMode.AuthenticateDirectory,
+            cancellationToken: cancellationToken);
+        var session = invocation.Response?.DirectorySession;
+        if (!invocation.Succeeded || session is null ||
+            string.IsNullOrWhiteSpace(session.Token))
+        {
+            throw new InvalidOperationException(
+                invocation.ErrorMessage ?? "The Steam account check failed.");
+        }
+
+        return session;
+    }
+
+    private IReadOnlyList<string> BuildArguments(
+        LauncherUiCommandMode mode,
+        string? targetModId,
+        LauncherHostOptions? hostOptions = null)
     {
         var arguments = new List<string> { GetModeToken(mode), "--json" };
+
+        if (mode == LauncherUiCommandMode.AuthenticateDirectory)
+        {
+            arguments.Add("--directory-url");
+            arguments.Add(directoryUrl_);
+            return arguments;
+        }
 
         if (mode is LauncherUiCommandMode.EnableMod or LauncherUiCommandMode.DisableMod)
         {
@@ -169,6 +237,10 @@ internal sealed class LauncherUiCommandClient
             case LauncherUiCommandMode.HostSteam:
                 arguments.Add("--multiplayer");
                 arguments.Add("host");
+                arguments.Add("--lobby-privacy");
+                arguments.Add(hostOptions?.Privacy ?? "friends");
+                arguments.Add("--directory-url");
+                arguments.Add(directoryUrl_);
                 break;
             case LauncherUiCommandMode.JoinSteam:
                 arguments.Add("--multiplayer");
@@ -191,6 +263,7 @@ internal sealed class LauncherUiCommandClient
             LauncherUiCommandMode.LaunchSinglePlayer => "launch",
             LauncherUiCommandMode.HostSteam => "launch",
             LauncherUiCommandMode.JoinSteam => "launch",
+            LauncherUiCommandMode.AuthenticateDirectory => "directory-auth",
             LauncherUiCommandMode.Stage => "stage",
             LauncherUiCommandMode.ListMods => "list-mods",
             LauncherUiCommandMode.EnableMod => "enable-mod",
@@ -210,7 +283,7 @@ internal sealed class LauncherUiCommandClient
         if (trimmed.Length == 0 || trimmed.Length > 64)
         {
             throw new InvalidOperationException(
-                "Instance names may only use letters, digits, '.', '-', and '_' and must include at least one letter or digit.");
+                "Instance names can contain only letters, numbers, periods, hyphens, and underscores. Include one or more letters or numbers.");
         }
 
         var builder = new StringBuilder(trimmed.Length);
@@ -231,13 +304,13 @@ internal sealed class LauncherUiCommandClient
             }
 
             throw new InvalidOperationException(
-                "Instance names may only use letters, digits, '.', '-', and '_' and must include at least one letter or digit.");
+                "Instance names can contain only letters, numbers, periods, hyphens, and underscores. Include one or more letters or numbers.");
         }
 
         if (!hasLetterOrDigit)
         {
             throw new InvalidOperationException(
-                "Instance names may only use letters, digits, '.', '-', and '_' and must include at least one letter or digit.");
+                "Instance names can contain only letters, numbers, periods, hyphens, and underscores. Include one or more letters or numbers.");
         }
 
         return builder.ToString();

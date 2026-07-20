@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -17,6 +18,7 @@ void TickLocalTransport(std::uint64_t now_ms);
 bool IsLocalTransportEnabled();
 bool IsLocalTransportHost();
 bool IsLocalTransportClient();
+void NotifyLocalRunStarted();
 void NotifyLocalRunEnded(std::string_view reason);
 bool TryAuthorizeLocalClientRunSwitch(std::string* error_message);
 std::uint64_t GetLocalTransportParticipantId();
@@ -25,6 +27,8 @@ bool RegisterSteamGameplayPeer(
     std::uint64_t steam_id,
     bool authoritative_host);
 void UnregisterSteamGameplayPeer(std::uint64_t steam_id);
+void ConfirmLocalParticipantVitalsCorrection(
+    std::uint32_t correction_sequence);
 bool SubmitSteamGameplayPacket(
     std::uint64_t sender_steam_id,
     const void* data,
@@ -83,6 +87,26 @@ void QueueHostParticipantVitalsCorrection(
 bool HasReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id);
 void MarkReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id, float authoritative_hp);
 void ClearReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id);
+constexpr std::size_t kLocalEnemyDamageClaimObservationMaxSamples = 128;
+struct LocalEnemyDamageClaimObservation {
+    bool valid = false;
+    std::uint64_t network_actor_id = 0;
+    std::uint32_t claim_count = 0;
+    std::uint32_t associated_claim_count = 0;
+    std::uint32_t unassociated_claim_count = 0;
+    std::int32_t associated_skill_id = -1;
+    bool associated_skill_consistent = true;
+    float claimed_damage_total = 0.0f;
+    float minimum_claimed_damage = 0.0f;
+    float maximum_claimed_damage = 0.0f;
+    std::size_t sample_count = 0;
+    std::array<float, kLocalEnemyDamageClaimObservationMaxSamples>
+        claimed_damage_samples = {};
+};
+void ResetLocalEnemyDamageClaimObservation(std::uint64_t network_actor_id);
+bool TakeLocalEnemyDamageClaimObservation(
+    std::uint64_t network_actor_id,
+    LocalEnemyDamageClaimObservation* observation);
 bool HasLocalPendingLethalEnemyDamageClaim(
     std::uint64_t network_actor_id,
     std::uint64_t now_ms);
@@ -142,6 +166,7 @@ void RecordReplicatedAirChainTargetOverride(
     bool applied);
 bool TrySetRunEnemyHealth(uintptr_t actor_address, float hp, float max_hp);
 void NotifyLocalRunEnemyDeath(uintptr_t actor_address);
+void NotifyLocalWorldActorUnregistered(uintptr_t actor_address);
 struct LootPickupRequestCapture {
     bool valid = false;
     float requester_position_x = 0.0f;

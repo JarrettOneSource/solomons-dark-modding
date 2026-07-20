@@ -39,7 +39,9 @@ internal static class SteamBootstrapMaterializer
             {
                 File.Delete(stageApiDllPath);
             }
-            steamApiSourcePath = ResolveSteamApiSourcePath(configuration);
+            steamApiSourcePath = ResolveSteamApiSourcePath(
+                configuration.Steam,
+                configuration.Workspace.RuntimeRootPath);
             if (!string.IsNullOrWhiteSpace(steamApiSourcePath))
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(stageApiDllPath)!);
@@ -56,9 +58,11 @@ internal static class SteamBootstrapMaterializer
             File.Exists(stageApiDllPath));
     }
 
-    private static string? ResolveSteamApiSourcePath(LauncherConfiguration configuration)
+    internal static string? ResolveSteamApiSourcePath(
+        SteamBootstrapConfiguration configuration,
+        string? runtimeRootPath = null)
     {
-        foreach (var candidate in EnumerateSteamApiCandidates(configuration))
+        foreach (var candidate in EnumerateSteamApiCandidates(configuration, runtimeRootPath))
         {
             if (string.IsNullOrWhiteSpace(candidate))
             {
@@ -72,7 +76,7 @@ internal static class SteamBootstrapMaterializer
             }
             if (string.Equals(
                     normalizedPath,
-                    configuration.Steam.ApiDllOverridePath,
+                    configuration.ApiDllOverridePath,
                     StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
@@ -83,11 +87,16 @@ internal static class SteamBootstrapMaterializer
         return null;
     }
 
-    private static IEnumerable<string?> EnumerateSteamApiCandidates(LauncherConfiguration configuration)
+    private static IEnumerable<string?> EnumerateSteamApiCandidates(
+        SteamBootstrapConfiguration configuration,
+        string? runtimeRootPath)
     {
-        yield return configuration.Steam.ApiDllOverridePath;
+        yield return configuration.ApiDllOverridePath;
         yield return Path.Combine(AppContext.BaseDirectory, "assets", "steam", "win32", SteamBootstrapConfiguration.ApiDllFileName);
-        yield return Path.Combine(configuration.Workspace.RuntimeRootPath, "steam", "win32", SteamBootstrapConfiguration.ApiDllFileName);
+        if (!string.IsNullOrWhiteSpace(runtimeRootPath))
+        {
+            yield return Path.Combine(runtimeRootPath, "steam", "win32", SteamBootstrapConfiguration.ApiDllFileName);
+        }
         var sdkRoot = Environment.GetEnvironmentVariable("STEAMWORKS_SDK_PATH");
         if (!string.IsNullOrWhiteSpace(sdkRoot))
         {

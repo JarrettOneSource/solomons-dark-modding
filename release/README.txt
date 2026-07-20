@@ -1,67 +1,52 @@
 SOLOMON DARK MULTIPLAYER BETA
-Version {{VERSION}} | Multiplayer protocol {{PROTOCOL_VERSION}}
+Version {{VERSION}}
 
-This is an early friends-only co-op beta for the original 32-bit Solomon's Dark
-0.72.5. It does not include the game. Every player needs the same beta ZIP, the
-same original game version, Steam running, and a separate Steam account.
+ABOUT THIS BETA
 
-QUICK START
+This beta adds Steam multiplayer to the original 32-bit Solomon's Dark 0.72.5.
+The beta does not include the game.
 
-1. Extract the entire ZIP to a normal folder. Do not run it from inside the ZIP.
-2. Start Steam and sign in. Friends must already be friends on Steam.
-3. Double-click SolomonDarkMultiplayerBeta.exe.
-4. Choose the folder containing the original SolomonDark.exe when prompted.
-   The supported executable is Solomon's Dark 0.72.5 with SHA-256:
-   {{SUPPORTED_EXECUTABLE_SHA256}}
-5. The joining player clicks Join Friend FIRST and leaves the lobby ID empty.
-6. After the joiner's game is open and waiting, the host clicks
-   Host & Invite Friends.
-7. The host invites the waiting friend through Steam. If the overlay does not
-   open, use Steam Friends > Invite to Game or privately share the lobby ID
-   shown by the launcher.
-8. Wait until both full wizard bodies are visible in the hub before starting a
-   run.
+Each player needs:
 
-LOBBY-ID FALLBACK
+- The complete beta folder
+- The original game
+- An active Steam account
 
-The host's launcher displays a lobby ID after the lobby is ready. The joining
-player may paste that ID into the optional Lobby ID box and click Join Friend.
+HOW TO PLAY
 
-IMPORTANT BETA NOTES
+1. Extract the entire ZIP to a normal folder.
+2. Start Steam.
+3. Make sure that your Steam account is active.
+4. Start SolomonDarkMultiplayerBeta.exe.
+5. Select the folder that contains the original SolomonDark.exe.
+6. The host clicks Host Game and selects Friends Only or Public.
+7. The host goes to the hub.
+8. Select the host's lobby through Steam, Browse Lobbies, or a Lobby ID.
+9. Wait until every wizard is visible in the hub.
+10. Start a run.
 
-- Multiplayer uses Valve's Spacewar development AppID 480 for testing. Accept
-  an invite only while the joining Solomon Dark process is already open;
-  otherwise Steam may start the Spacewar sample instead.
-- Sessions are trusted-host, friends-only, and currently limited to four
-  players. There is no host migration.
-- All players must use the exact same beta build. Compatibility mismatches fail
-  closed instead of attempting to connect.
-- Player bodies, movement, vitals, deaths, spells, skill/stat books, level-up
-  upgrades, upgraded spell behavior, enemies, drops, and the verified potion
-  and item inventory paths are synchronized. Equipment, powerups, and verified
-  storage/shop actions are also synchronized. Nested sacks, the remaining
-  Hagatha catalog, non-shop quest rewards, and durable cross-session inventory
-  and book persistence are still incomplete.
-- Level-up cohorts pause together. After choosing, the UI shows Waiting on N
-  players. The host resumes everyone after all choices arrive, or auto-picks
-  for an idle player after 60 seconds. A forced choice is applied and closed on
-  that player's client before the synchronized pause ends.
-- This is a beta. Back up any save/profile data you care about. The launcher
-  uses an isolated mod profile and disposable staged game copy, but bugs remain
-  possible.
+Browse Lobbies shows public lobbies and Friends Only lobbies. The website shows
+the host after the host goes to the hub. Steam P2P sends all gameplay data.
 
-TROUBLESHOOTING
+LIMITS
 
-- "Unsupported executable": choose the original 0.72.5 folder, not the current
-  Steam remake.
-- Steam lobby/API error: restart Steam normally (not as a different Windows
-  privilege level), verify both accounts are online, then retry.
-- Invite opens Spacewar: close it, reopen this launcher, have the joiner click
-  Join Friend first, and then send/accept the invite again.
-- Invisible or stale peer: wait in the hub for authentication. If it does not
-  recover, both players close the game and start a fresh lobby.
-- Logs and disposable stages are under:
+- Multiplayer supports a maximum of four players.
+- Host migration is not available.
+- All players must use the same beta build.
+- Level-ups pause all players until all players select an upgrade.
+- After 60 seconds, the host selects an upgrade for each player who did not select one.
+- Most combat, upgrades, enemies, drops, equipment, and inventory data synchronize.
+- Some inventory, quest reward, and saved data do not synchronize.
+
+Make a copy of important profile data before you play.
+
+PROBLEM SOLVING
+
+- Unsupported game: Select the original Solomon's Dark 0.72.5 folder.
+- Steam does not start: Start Steam. Make sure that your Steam account is active.
+- Missing player: Wait in the hub. If the connection does not recover, close both games.
+- After you close both games, start a new lobby.
+- The log files are in:
   %LOCALAPPDATA%\SolomonDarkMultiplayerBeta\runtime
 
-The launcher never packages or copies Steam credentials. See
-THIRD-PARTY-NOTICES.txt for bundled dependency notices.
+The launcher does not store or package Steam credentials.

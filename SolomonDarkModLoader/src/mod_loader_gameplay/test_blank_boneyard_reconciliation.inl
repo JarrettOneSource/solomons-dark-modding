@@ -2,6 +2,8 @@ constexpr char kTestBlankBoneyardEnvironmentVariable[] =
     "SDMOD_TEST_BLANK_BONEYARD";
 constexpr std::int32_t kTestBlankBoneyardMaximumListEntries = 4096;
 constexpr std::uint64_t kTestBlankBoneyardRetryDelayMs = 250;
+constexpr std::uint32_t kTestBlankBoneyardSolomonDigTypeId = 0x1391;
+constexpr std::uint32_t kTestBlankBoneyardLanternTypeId = 0x1392;
 
 struct NativePointerListView {
     uintptr_t address = 0;
@@ -48,6 +50,96 @@ bool IsExpectedBlankBoneyardSceneryType(std::uint32_t object_type_id) {
                kExpectedTypes.begin(),
                kExpectedTypes.end(),
                object_type_id) != kExpectedTypes.end();
+}
+
+bool IsExpectedBlankBoneyardScriptedSetpieceType(
+    std::uint32_t object_type_id) {
+    // The stock arena generator adds the Solomon_Dig intro controller and its
+    // Lantern even when the custom Boneyard source contains no placed props.
+    // Solomon_Dig owns the pre-wave intro rail and asserts the stock input
+    // gates until that rail completes, so neither object belongs in the
+    // explicitly blank multiplayer test arena.
+    return object_type_id == kTestBlankBoneyardSolomonDigTypeId ||
+           object_type_id == kTestBlankBoneyardLanternTypeId;
+}
+
+bool TryRequestBlankBoneyardScriptedSetpieceRetirement(
+    uintptr_t world_address,
+    std::int32_t* active_count,
+    std::int32_t* requested_count,
+    std::string* error_message) {
+    if (active_count != nullptr) {
+        *active_count = 0;
+    }
+    if (requested_count != nullptr) {
+        *requested_count = 0;
+    }
+
+    std::vector<SDModSceneActorState> actors;
+    if (world_address == 0 || !TryListSceneActors(&actors)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "could not enumerate scripted actors in the blank-test Boneyard";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::int32_t observed = 0;
+    std::int32_t requested = 0;
+    for (const auto& actor : actors) {
+        if (actor.owner_address != world_address ||
+            !IsExpectedBlankBoneyardScriptedSetpieceType(
+                actor.object_type_id)) {
+            continue;
+        }
+
+        ++observed;
+        std::uint8_t pending_remove = 0;
+        if (!memory.TryReadField(
+                actor.actor_address,
+                kActorPendingRemoveOffset,
+                &pending_remove)) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "could not read blank-test scripted actor retirement state. type=" +
+                    std::to_string(actor.object_type_id) +
+                    " address=" + HexString(actor.actor_address);
+            }
+            return false;
+        }
+        if (pending_remove != 0) {
+            continue;
+        }
+
+        DWORD exception_code = 0;
+        if (!CallActorRequestRetirementSafe(
+                actor.actor_address,
+                &exception_code) ||
+            !memory.TryReadField(
+                actor.actor_address,
+                kActorPendingRemoveOffset,
+                &pending_remove) ||
+            pending_remove == 0) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "blank-test scripted actor retirement failed. type=" +
+                    std::to_string(actor.object_type_id) +
+                    " address=" + HexString(actor.actor_address) +
+                    " seh=0x" + HexString(exception_code);
+            }
+            return false;
+        }
+        ++requested;
+    }
+
+    if (active_count != nullptr) {
+        *active_count = observed;
+    }
+    if (requested_count != nullptr) {
+        *requested_count = requested;
+    }
+    return true;
 }
 
 bool TryReadNativePointerList(
@@ -346,6 +438,8 @@ bool TryDestroyOwnedPointerList(
 
 bool TryApplyExplicitTestBlankBoneyard(
     uintptr_t world_address,
+    std::int32_t* scripted_setpieces_active,
+    std::int32_t* scripted_setpieces_retired,
     std::int32_t* scenery_removed,
     std::int32_t* roads_removed,
     std::int32_t* fences_removed,
@@ -364,6 +458,14 @@ bool TryApplyExplicitTestBlankBoneyard(
         if (error_message != nullptr) {
             *error_message = "explicit blank-test Boneyard layout is unavailable";
         }
+        return false;
+    }
+
+    if (!TryRequestBlankBoneyardScriptedSetpieceRetirement(
+            world_address,
+            scripted_setpieces_active,
+            scripted_setpieces_retired,
+            error_message)) {
         return false;
     }
 
@@ -486,6 +588,8 @@ void ReconcileExplicitTestBlankBoneyard(
         return;
     }
 
+    std::int32_t scripted_setpieces_active = 0;
+    std::int32_t scripted_setpieces_retired = 0;
     std::int32_t scenery_removed = 0;
     std::int32_t roads_removed = 0;
     std::int32_t fences_removed = 0;
@@ -494,18 +598,37 @@ void ReconcileExplicitTestBlankBoneyard(
     std::string error_message;
     if (TryApplyExplicitTestBlankBoneyard(
             scene_context.world_address,
+            &scripted_setpieces_active,
+            &scripted_setpieces_retired,
             &scenery_removed,
             &roads_removed,
             &fences_removed,
             &remaining_movement_circles,
             &remaining_static_circles,
             &error_message)) {
+        if (scripted_setpieces_active != 0) {
+            g_test_blank_boneyard_state.retry_not_before_ms =
+                now_ms + kTestBlankBoneyardRetryDelayMs;
+            if (scripted_setpieces_retired != 0) {
+                Log(
+                    "Explicit multiplayer blank-test Boneyard retired stock "
+                    "scripted setpieces. world=" +
+                    HexString(scene_context.world_address) +
+                    " active=" +
+                    std::to_string(scripted_setpieces_active) +
+                    " requested=" +
+                    std::to_string(scripted_setpieces_retired));
+            }
+            return;
+        }
+
         g_test_blank_boneyard_state.applied_world_address =
             scene_context.world_address;
         g_test_blank_boneyard_state.retry_not_before_ms = 0;
         Log(
             "Explicit multiplayer blank-test Boneyard applied. world=" +
             HexString(scene_context.world_address) +
+            " scripted_setpieces=0" +
             " scenery_removed=" + std::to_string(scenery_removed) +
             " roads_removed=" + std::to_string(roads_removed) +
             " fences_removed=" + std::to_string(fences_removed) +

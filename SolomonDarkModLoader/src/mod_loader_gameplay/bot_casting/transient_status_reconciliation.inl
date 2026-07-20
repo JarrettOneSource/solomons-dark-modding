@@ -346,161 +346,149 @@ bool InstallReplicatedPoisonModifier(
     return verified;
 }
 
-bool ReconcileNativeRemoteParticipantTransientStatuses(
-    ParticipantEntityBinding* binding,
-    std::uint64_t now_ms) {
-    if (binding == nullptr ||
-        binding->actor_address == 0 ||
-        binding->bot_id == 0 ||
-        !IsNativeRemoteParticipantBinding(binding)) {
+struct NativeTransientStatusMapping {
+    std::uint8_t flag = 0;
+    std::int32_t skill_entry = -1;
+    std::uint32_t installed_modifier_type = 0;
+    const char* label = "unknown";
+};
+
+constexpr std::array<NativeTransientStatusMapping, 2>
+    kNativeTransientStatusMappings = {{
+        {
+            multiplayer::ParticipantTransientStatusFlagPlanewalker,
+            0x0C,
+            0,
+            "planewalker",
+        },
+        {
+            multiplayer::ParticipantTransientStatusFlagStoneskin,
+            0x2E,
+            kNativeStoneskinModifierTypeId,
+            "stoneskin",
+        },
+    }};
+
+constexpr std::uint8_t kNativeTransientStatusValueMask =
+    multiplayer::ParticipantTransientStatusFlagPlanewalker |
+    multiplayer::ParticipantTransientStatusFlagStoneskin;
+
+bool RemoveAllNativeActorModifiersByType(
+    uintptr_t actor_address,
+    std::uint32_t modifier_type,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (actor_address == 0 || modifier_type == 0) {
+        if (error_message != nullptr) {
+            *error_message = "invalid native modifier removal request";
+        }
         return false;
     }
 
-    const auto runtime = multiplayer::SnapshotRuntimeState();
-    const auto* participant =
-        multiplayer::FindParticipant(runtime, binding->bot_id);
-    if (participant == nullptr) {
-        return false;
-    }
-    const auto desired_flags =
-        participant->runtime.transient_status_flags;
-    if ((desired_flags &
-         multiplayer::ParticipantTransientStatusFlagSnapshotValid) == 0) {
-        return false;
-    }
-
-    std::uint8_t native_flags = 0;
-    std::int32_t native_duration = 0;
-    uintptr_t poison_modifier = 0;
-    uintptr_t poison_control_block = 0;
-    if (!TryReadWizardActorTransientStatusState(
-            binding->actor_address,
-            &native_flags,
-            &native_duration,
-            &poison_modifier,
-            &poison_control_block)) {
-        return false;
-    }
-
-    const bool desired_poisoned =
-        participant->runtime.life_current > 0.0f &&
-        (desired_flags &
-         multiplayer::ParticipantTransientStatusFlagPoisoned) != 0 &&
-        participant->runtime.poison_remaining_ticks > 0;
     auto& memory = ProcessMemory::Instance();
-    if (!desired_poisoned) {
-        if (poison_modifier == 0) {
+    const auto modifier_list_address =
+        actor_address + kActorModifierListOffset;
+    uintptr_t modifier_list_vtable = 0;
+    uintptr_t remove_address = 0;
+    if (!memory.TryReadValue(
+            modifier_list_address,
+            &modifier_list_vtable) ||
+        modifier_list_vtable == 0 ||
+        !memory.TryReadValue(
+            modifier_list_vtable + kPointerListRemoveValueVtableOffset,
+            &remove_address) ||
+        remove_address == 0 ||
+        !memory.IsExecutableRange(remove_address, 1)) {
+        if (error_message != nullptr) {
+            *error_message = "native modifier list removal seam unavailable";
+        }
+        return false;
+    }
+
+    constexpr std::int32_t kMaximumRemovalCount = 32;
+    for (std::int32_t removal_count = 0;
+         removal_count < kMaximumRemovalCount;
+         ++removal_count) {
+        std::int32_t modifier_count = 0;
+        if (!memory.TryReadField(
+                actor_address,
+                kActorModifierListCountOffset,
+                &modifier_count) ||
+            modifier_count < 0 ||
+            modifier_count > 512) {
+            if (error_message != nullptr) {
+                *error_message = "native modifier list count is invalid";
+            }
+            return false;
+        }
+        if (modifier_count == 0) {
             return true;
         }
-        const float zero_damage = 0.0f;
-        const std::int8_t remote_visual_source_slot = 1;
-        const bool neutralized =
-            memory.TryWriteField(
-                poison_modifier,
-                kNativeModifierDurationTicksOffset,
-                std::int32_t{0}) &&
-            memory.TryWriteField(
-                poison_modifier,
-                kNativePoisonDamagePerTickOffset,
-                zero_damage) &&
-            memory.TryWriteField(
-                poison_modifier,
-                kNativePoisonSourceSlotOffset,
-                remote_visual_source_slot);
-        const auto modifier_list_address =
-            binding->actor_address + kActorModifierListOffset;
-        uintptr_t modifier_list_vtable = 0;
-        uintptr_t remove_address = 0;
+
+        uintptr_t modifier_storage = 0;
+        if (!memory.TryReadField(
+                actor_address,
+                kActorModifierListStorageOffset,
+                &modifier_storage) ||
+            modifier_storage == 0) {
+            if (error_message != nullptr) {
+                *error_message = "native modifier list storage is unavailable";
+            }
+            return false;
+        }
+
+        uintptr_t matching_control_block = 0;
+        uintptr_t matching_modifier = 0;
+        for (std::int32_t index = 0; index < modifier_count; ++index) {
+            uintptr_t control_block = 0;
+            uintptr_t modifier = 0;
+            std::uint32_t type_id = 0;
+            if (memory.TryReadValue(
+                    modifier_storage +
+                        static_cast<std::size_t>(index) * sizeof(uintptr_t),
+                    &control_block) &&
+                control_block != 0 &&
+                memory.TryReadValue(control_block, &modifier) &&
+                modifier != 0 &&
+                memory.TryReadField(
+                    modifier,
+                    kNativeModifierTypeIdOffset,
+                    &type_id) &&
+                type_id == modifier_type) {
+                matching_control_block = control_block;
+                matching_modifier = modifier;
+                break;
+            }
+        }
+        if (matching_control_block == 0 || matching_modifier == 0) {
+            return true;
+        }
+
         DWORD exception_code = 0;
-        const bool removed =
-            neutralized &&
-            poison_control_block != 0 &&
-            memory.TryReadValue(
-                modifier_list_address,
-                &modifier_list_vtable) &&
-            modifier_list_vtable != 0 &&
-            memory.TryReadValue(
-                modifier_list_vtable +
-                    kPointerListRemoveValueVtableOffset,
-                &remove_address) &&
-            remove_address != 0 &&
-            memory.IsExecutableRange(remove_address, 1) &&
-            CallPointerListRemoveValueSafe(
+        if (!memory.TryWriteField(
+                matching_modifier,
+                kNativeModifierDurationTicksOffset,
+                std::int32_t{0}) ||
+            !CallPointerListRemoveValueSafe(
                 remove_address,
                 modifier_list_address,
-                poison_control_block,
-                &exception_code);
-        std::uint8_t verified_flags = 0;
-        std::int32_t verified_duration = 0;
-        uintptr_t verified_modifier = 0;
-        const bool cleared =
-            removed &&
-            TryReadWizardActorTransientStatusState(
-                binding->actor_address,
-                &verified_flags,
-                &verified_duration,
-                &verified_modifier) &&
-            verified_modifier == 0;
-        if (cleared) {
-            Log(
-                "[bots] remote transient poison cleared. bot_id=" +
-                std::to_string(binding->bot_id) +
-                " actor=" + HexString(binding->actor_address));
-        } else {
-            Log(
-                "[bots] remote transient poison clear failed. bot_id=" +
-                std::to_string(binding->bot_id) +
-                " actor=" + HexString(binding->actor_address) +
-                " control=" + HexString(poison_control_block) +
-                " seh=0x" + HexString(exception_code));
+                matching_control_block,
+                &exception_code)) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "native modifier removal failed seh=0x" +
+                    HexString(exception_code);
+            }
+            return false;
         }
-        return cleared;
     }
 
-    const auto desired_duration = (std::clamp)(
-        participant->runtime.poison_remaining_ticks,
-        std::int32_t{1},
-        multiplayer::kParticipantPoisonMaxDurationTicks);
-    if (poison_modifier == 0) {
-        std::string error_message;
-        const bool installed = InstallReplicatedPoisonModifier(
-            binding->actor_address,
-            desired_duration,
-            &error_message);
-        Log(
-            "[bots] remote transient poison install. bot_id=" +
-            std::to_string(binding->bot_id) +
-            " actor=" + HexString(binding->actor_address) +
-            " desired_ticks=" + std::to_string(desired_duration) +
-            " installed=" + std::to_string(installed ? 1 : 0) +
-            " error=" + error_message);
-        return installed;
+    if (error_message != nullptr) {
+        *error_message = "native modifier removal exceeded safety bound";
     }
-
-    const float zero_damage = 0.0f;
-    const std::int8_t remote_visual_source_slot = 1;
-    bool reconciled =
-        memory.TryWriteField(
-            poison_modifier,
-            kNativePoisonDamagePerTickOffset,
-            zero_damage) &&
-        memory.TryWriteField(
-            poison_modifier,
-            kNativePoisonSourceSlotOffset,
-            remote_visual_source_slot);
-    constexpr std::int32_t kPoisonDurationDriftToleranceTicks = 20;
-    const auto duration_delta =
-        static_cast<std::int64_t>(native_duration) -
-        static_cast<std::int64_t>(desired_duration);
-    if (duration_delta < -kPoisonDurationDriftToleranceTicks ||
-        duration_delta > kPoisonDurationDriftToleranceTicks) {
-        reconciled =
-            memory.TryWriteField(
-                poison_modifier,
-                kNativeModifierDurationTicksOffset,
-                desired_duration) &&
-            reconciled;
-    }
-    (void)now_ms;
-    return reconciled;
+    return false;
 }
+
+#include "transient_status_participant_reconciliation.inl"

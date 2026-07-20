@@ -37,11 +37,13 @@ from verify_multiplayer_loot_drop_materialization import (
     ROBE_HELPER_TYPE_ID,
     actor_rows,
     capture as capture_loot,
+    drop_rows,
     field_comparison,
     require_host_spawn,
     select_actor,
     setup_pair,
     values,
+    wait_for_drop_metadata,
     wait_for_materialized_drop,
 )
 from verify_multiplayer_native_potion_inventory_sync import (
@@ -264,6 +266,26 @@ def select_recipe(
         for item in item_rows(client_inventory)
         if item["valid"]
     }
+    local_owner = find_local_participant(client_inventory)
+    if local_owner is not None:
+        for slot in (
+            "primary",
+            "secondary",
+            "attachment",
+            "hat",
+            "robe",
+            "weapon",
+            "amulet",
+            "ring_1",
+            "ring_2",
+        ):
+            equipped = local_owner["equipment"][slot]
+            identity = (
+                int(equipped["type_id"]),
+                int(equipped["recipe_uid"]),
+            )
+            if identity[0] > 0 and identity[1] > 0:
+                owned_identities.add(identity)
     type_preference = (
         (preferred_type_id,)
         if preferred_type_id is not None
@@ -378,6 +400,7 @@ def queue_client_equip(recipe_uid: int) -> dict[str, str]:
 
 def wait_for_host_actor(
     *,
+    excluded_actor_addresses: set[int],
     item_type_id: int,
     recipe_uid: int,
     x: float,
@@ -389,7 +412,11 @@ def wait_for_host_actor(
     while time.monotonic() < deadline:
         last = capture_loot(HOST_PIPE)
         selected = select_actor(
-            actor_rows(last),
+            [
+                row
+                for row in actor_rows(last)
+                if row["address"] not in excluded_actor_addresses
+            ],
             type_id=ITEM_DROP_TYPE_ID,
             amount=None,
             resource_kind=None,
@@ -403,7 +430,7 @@ def wait_for_host_actor(
             return selected
         time.sleep(0.1)
     raise VerifyFailure(
-        f"host did not materialize recipe-backed item type=0x{item_type_id:04X} "
+        f"host did not create a new recipe-backed item type=0x{item_type_id:04X} "
         f"recipe={recipe_uid}: {last}"
     )
 
@@ -621,16 +648,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         drop_y=item_y,
         timeout=args.timeout,
     )
+    host_loot_before = capture_loot(HOST_PIPE)
+    host_drop_ids_before = {
+        row["network_id"]
+        for row in drop_rows(host_loot_before)
+        if row["network_id"] != 0
+    }
+    host_actor_addresses_before = {
+        row["address"] for row in actor_rows(host_loot_before)
+    }
     result["spawn"] = require_host_spawn("item", recipe["uid"], item_x, item_y)
 
-    host_actor = wait_for_host_actor(
-        item_type_id=recipe["type_id"],
-        recipe_uid=recipe["uid"],
-        x=item_x,
-        y=item_y,
-        timeout=args.timeout,
-    )
-    materialized = wait_for_materialized_drop(
+    host_drop = wait_for_drop_metadata(
+        pipe_name=HOST_PIPE,
+        excluded_network_ids=host_drop_ids_before,
         type_id=ITEM_DROP_TYPE_ID,
         item_type_id=recipe["type_id"],
         item_recipe_uid=recipe["uid"],
@@ -639,6 +670,26 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         y=item_y,
         timeout=args.timeout,
     )["drop"]
+    host_actor = wait_for_host_actor(
+        excluded_actor_addresses=host_actor_addresses_before,
+        item_type_id=recipe["type_id"],
+        recipe_uid=recipe["uid"],
+        x=item_x,
+        y=item_y,
+        timeout=args.timeout,
+    )
+    network_id = int(host_drop["network_id"])
+    materialized = wait_for_materialized_drop(
+        network_id=network_id,
+        type_id=ITEM_DROP_TYPE_ID,
+        item_type_id=recipe["type_id"],
+        item_recipe_uid=recipe["uid"],
+        stack_count=1,
+        x=item_x,
+        y=item_y,
+        timeout=args.timeout,
+    )["drop"]
+    result["host_drop"] = host_drop
     comparison = field_comparison("recipe_item", host_actor, materialized)
     if not comparison["ok"]:
         raise VerifyFailure(f"recipe-backed item presentation mismatch: {comparison}")
@@ -651,6 +702,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         else ""
     )
     result["client_pickup_position"] = move_client_into_pickup_range(
+        network_drop_id=network_drop_id,
         drop_x=float(materialized["x"]),
         drop_y=float(materialized["y"]),
         timeout=args.timeout,
@@ -658,22 +710,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     accepted = wait_for_pickup_result(
         network_drop_id,
         "Accepted",
-        min(1.5, args.timeout),
+        min(5.0, args.timeout),
     )
     if accepted is None:
-        request = request_pickup(network_drop_id)
-        request_sequence = parse_int_text(request.get("request_sequence"), 0)
-        accepted = wait_for_pickup_result(
-            network_drop_id,
-            "Accepted",
-            args.timeout,
-            request_sequence,
+        raise VerifyFailure(
+            "client item-drop proximity hook did not accept the in-range pickup"
         )
-        result["request"] = request
-    else:
-        result["request"] = {"path": "client_proximity_hook"}
-    if accepted is None:
-        raise VerifyFailure(f"client did not receive Accepted for item drop {network_drop_id}")
+    result["request"] = {"path": "client_proximity_hook"}
 
     accepted_revision = parse_int_text(accepted.get("inventory_revision"), 0)
     if (

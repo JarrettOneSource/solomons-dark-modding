@@ -28,7 +28,7 @@ from verify_multiplayer_fireball_explode_effect_sync import launch_pair_ready
 from verify_multiplayer_focus_behavior_sync import (
     Direction as SecondaryDirection,
     acquire_secondary_to_rank,
-    press_secondary_belt_slot,
+    cast_secondary_belt_slot,
     wait_for_remote_delivery,
 )
 from verify_multiplayer_primary_kill_stress import (
@@ -43,10 +43,8 @@ from verify_player_health_death_sync import set_local_player_vitals
 from verify_real_input_spell_cast_sync import (
     CLIENT_LOG,
     HOST_LOG,
-    click_process,
     detect_instance_pids,
     read_log,
-    wait_click,
 )
 
 
@@ -152,7 +150,6 @@ def require_dense(label: str, snapshot: dict[str, str]) -> None:
 def wait_for_accepted_cast(
     direction: SecondaryDirection,
     belt_slot: int,
-    source_pid: int,
     source_offset: int,
     timeout: float,
 ) -> dict[str, Any]:
@@ -163,14 +160,12 @@ def wait_for_accepted_cast(
     input_modes: list[str] = []
     while time.monotonic() < deadline:
         attempts += 1
-        try:
-            press_secondary_belt_slot(direction, belt_slot)
-            input_modes.append("keyboard_binding")
-        except VerifyFailure as exc:
-            if "mouse-backed" not in str(exc):
-                raise
-            wait_click(click_process(source_pid, hold_ms=90, button="right"))
-            input_modes.append("right_mouse_binding")
+        cast_secondary_belt_slot(
+            direction,
+            belt_slot,
+            deadline - time.monotonic(),
+        )
+        input_modes.append("live_native_binding")
         time.sleep(0.12)
         current = read_log(direction.source_log)[source_offset:]
         if accepted_token in current:
@@ -308,7 +303,6 @@ def run_verifier(timeout: float, result: dict[str, Any]) -> dict[str, Any]:
     result["cast"] = wait_for_accepted_cast(
         direction,
         belt_slot,
-        int(result["pids"]["client"]),
         source_offset,
         timeout,
     )

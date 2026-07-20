@@ -69,6 +69,11 @@ std::deque<std::shared_ptr<PendingLuaExecRequest>>& LuaExecQueueStorage() {
     return storage;
 }
 
+std::atomic<std::uint64_t>& LuaExecPumpGeneration() {
+    static std::atomic<std::uint64_t> generation{0};
+    return generation;
+}
+
 QueuedLuaExecRequest EnqueueLuaExecRequest(std::string code) {
     auto request = std::make_shared<PendingLuaExecRequest>();
     request->code = std::move(code);
@@ -453,11 +458,13 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     Log("Lua runtime directory: " + runtime_directory.string());
     Log("Lua bootstrap manifest root: " + bootstrap.runtime_root.string());
     Log("Lua runtime mods loaded: " + std::to_string(loaded_mods.size()));
+    detail::StartLuaEventQueue();
     detail::LuaEngineInitializedFlag() = true;
     return true;
 }
 
 void ShutdownLuaEngine() {
+    detail::StopLuaEventQueue();
     // Drain any pending pipe-exec requests first so waiters don't
     // deadlock behind the engine mutex while we tear down Lua states.
     auto drained = detail::DrainLuaExecQueue();
@@ -500,7 +507,10 @@ bool HasLuaRuntimeTickHandlers() {
     return detail::LuaEngineInitializedFlag() && detail::HasAnyLuaRuntimeTickHandlers();
 }
 
-LuaExecResult QueueLuaExecRequestAndWait(const std::string& code, std::uint32_t timeout_ms) {
+LuaExecResult QueueLuaExecRequestAndWait(
+    const std::string& code,
+    std::uint32_t timeout_ms,
+    const std::atomic<bool>* service_running) {
     LuaExecResult result;
     if (code.empty()) {
         result.error = "No Lua code was provided.";
@@ -525,18 +535,65 @@ LuaExecResult QueueLuaExecRequestAndWait(const std::string& code, std::uint32_t 
         }
         queued = detail::EnqueueLuaExecRequest(code);
     }
-    bool ready =
-        queued.future.wait_for(std::chrono::milliseconds(timeout_ms)) ==
-        std::future_status::ready;
+    const auto pump_generation_at_enqueue =
+        detail::LuaExecPumpGeneration().load(std::memory_order_acquire);
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    bool ready = false;
+    bool service_stopped = false;
+    bool pump_skipped_request = false;
+    for (;;) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) {
+            break;
+        }
+        const auto remaining =
+            std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+        const auto wait_slice =
+            (std::min)(remaining, std::chrono::milliseconds(100));
+        if (queued.future.wait_for(wait_slice) == std::future_status::ready) {
+            ready = true;
+            break;
+        }
+        if (service_running != nullptr &&
+            !service_running->load(std::memory_order_acquire)) {
+            service_stopped = true;
+            break;
+        }
+        const auto pump_generation =
+            detail::LuaExecPumpGeneration().load(std::memory_order_acquire);
+        const auto request_state =
+            queued.request->state.load(std::memory_order_acquire);
+        if (pump_generation - pump_generation_at_enqueue >= 2 &&
+            request_state == detail::LuaExecRequestState::Pending) {
+            pump_skipped_request = true;
+            break;
+        }
+    }
     if (!ready) {
         const bool canceled = detail::TryCancelLuaExecRequest(queued.request);
         if (!canceled) {
-            // Completion can race the timeout. Prefer the completed result if
-            // the gameplay thread published it before this second check.
+            // Completion can race any wait exit. Prefer the completed result
+            // if the gameplay thread published it before this second check.
             ready = queued.future.wait_for(std::chrono::milliseconds(0)) ==
                 std::future_status::ready;
         }
         if (!ready) {
+            if (service_stopped) {
+                result.error = canceled
+                    ? "Lua exec request was canceled because the pipe server is stopping."
+                    : "Lua exec pipe server stopped after gameplay-thread execution began.";
+                return result;
+            }
+            if (pump_skipped_request) {
+                Log(
+                    "[lua-exec-diag] invariant failure: gameplay-thread pump "
+                    "advanced without claiming a queued request.");
+                result.error = canceled
+                    ? "Lua exec gameplay-thread pump skipped a queued request."
+                    : "Lua exec gameplay-thread pump advanced after request execution began.";
+                return result;
+            }
             const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
             const auto endscene_ms =
                 lua_exec_diag::g_last_endscene_ms.load(std::memory_order_acquire);
@@ -574,69 +631,10 @@ namespace detail {
 namespace {
 
 // Drain the exec queue and execute every pending chunk under the
-// engine mutex. Must be called on the main thread (the same one that
-// runs HookPlayerActorTick and D3D9 EndScene), because the executed
-// Lua snippets may reach into stock gameplay state via sd.* bindings.
+// engine mutex. Must be called on the main thread from MyApp's update
+// tick while in the front end, or from HookPlayerActorTick while
+// gameplay is active, because executed Lua snippets may reach into
+// stock gameplay state via sd.* bindings.
 // Returns immediately if nothing is queued, without taking the engine
 // mutex.
-void ProcessLuaExecQueueOnMainThread() {
-    auto drained = DrainLuaExecQueue();
-    if (drained.empty()) {
-        return;
-    }
-
-    std::unique_lock<std::mutex> lock(LuaEngineMutex());
-    lua_exec_diag::g_last_lua_locked_ms.store(
-        static_cast<std::uint64_t>(GetTickCount64()),
-        std::memory_order_release);
-    if (!LuaEngineInitializedFlag()) {
-        lock.unlock();
-        ResolveDrainedAsError(drained, "Lua engine is not initialized.");
-        return;
-    }
-
-    auto& mods = LoadedLuaModsStorage();
-    lua_State* shared_state =
-        (mods.empty() || mods.front() == nullptr) ? nullptr : mods.front()->state;
-
-    for (const auto& request : drained) {
-        if (!TryClaimLuaExecRequest(request)) {
-            continue;
-        }
-        LuaExecResult result = ExecuteLuaCodeOnLockedState(shared_state, request->code);
-        FinishLuaExecRequest(request, std::move(result));
-    }
-}
-
-}  // namespace
-}  // namespace detail
-
-void PumpLuaExecQueueOnMainThread() {
-    detail::ProcessLuaExecQueueOnMainThread();
-}
-
-void PumpLuaWorkOnMainThread(const SDModRuntimeTickContext& context) {
-    detail::ProcessLuaExecQueueOnMainThread();
-
-    std::scoped_lock lock(detail::LuaEngineMutex());
-    if (!detail::LuaEngineInitializedFlag()) {
-        return;
-    }
-    if (detail::HasAnyLuaRuntimeTickHandlers()) {
-        detail::DispatchRuntimeTickToLuaMods(context);
-    }
-}
-
-void PumpLuaWorkOnGameplayThread(const SDModRuntimeTickContext& context) {
-    detail::ProcessLuaExecQueueOnMainThread();
-
-    std::scoped_lock lock(detail::LuaEngineMutex());
-    if (!detail::LuaEngineInitializedFlag()) {
-        return;
-    }
-    if (detail::HasAnyLuaRuntimeTickHandlers()) {
-        detail::DispatchRuntimeTickToLuaMods(context);
-    }
-}
-
-}  // namespace sdmod
+#include "lua_engine_main_thread_pump.inl"

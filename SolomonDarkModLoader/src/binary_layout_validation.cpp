@@ -6,10 +6,6 @@ namespace sdmod {
 
 namespace {
 
-bool IsKnownDispatchTiming(std::string_view value) {
-    return value.empty() || value == "overlay_frame" || value == "app_tick";
-}
-
 bool IsKnownDispatchKind(std::string_view value) {
     return value.empty() ||
            value == "owner_control" ||
@@ -47,15 +43,6 @@ bool ValidateBinaryLayout(const BinaryLayout& layout, std::string* error_message
             return false;
         }
 
-        if (!IsKnownDispatchTiming(surface.dispatch_timing)) {
-            if (error_message != nullptr) {
-                *error_message =
-                    "Binary layout surface '" + surface.id + "' has an unknown dispatch_timing value '" +
-                    surface.dispatch_timing + "'.";
-            }
-            return false;
-        }
-
         known_surface_ids.insert(surface.id);
     }
 
@@ -71,15 +58,6 @@ bool ValidateBinaryLayout(const BinaryLayout& layout, std::string* error_message
         if (!action.surface_id.empty() && known_surface_ids.find(action.surface_id) == known_surface_ids.end()) {
             if (error_message != nullptr) {
                 *error_message = "Binary layout action '" + action.id + "' references unknown surface '" + action.surface_id + "'.";
-            }
-            return false;
-        }
-
-        if (!IsKnownDispatchTiming(action.dispatch_timing)) {
-            if (error_message != nullptr) {
-                *error_message =
-                    "Binary layout action '" + action.id + "' has an unknown dispatch_timing value '" +
-                    action.dispatch_timing + "'.";
             }
             return false;
         }

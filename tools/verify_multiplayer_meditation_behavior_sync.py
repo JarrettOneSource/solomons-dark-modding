@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from multiplayer_log_probe import log_after, log_position
 from multiplayer_progression_probe import query_progression_snapshot
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
@@ -54,7 +55,6 @@ from verify_multiplayer_primary_kill_stress import (
 from verify_real_input_spell_cast_sync import (
     CLIENT_LOG,
     HOST_LOG,
-    read_log,
 )
 
 
@@ -329,7 +329,7 @@ emit('current', progression ~= 0 and mp_offset ~= nil and
         raise VerifyFailure(
             f"{direction.name} could not fill mana for interrupt cast: {resource_fill}"
         )
-    log_offset = len(read_log(direction.source_log))
+    log_offset = log_position(direction.source_log)
     queued = prepare_and_queue_caster(
         direction,
         int(target["primary_actor_address"]),
@@ -347,13 +347,19 @@ emit('current', progression ~= 0 and mp_offset ~= nil and
     samples: list[dict[str, str]] = []
     cast_observed = False
     reset_observed = False
+    reset_sample: dict[str, str] | None = None
     while time.monotonic() < deadline:
         current = query_meditation_runtime(direction.owner_pipe)
         samples.append(current)
-        segment = read_log(direction.source_log)[log_offset:]
-        cast_observed = marker in segment and participant_marker in segment
+        segment = log_after(direction.source_log, log_offset)
+        cast_observed = cast_observed or (
+            marker in segment and participant_marker in segment
+        )
         idle_elapsed = parse_int_text(current.get("idle_elapsed"), -1)
-        reset_observed = 0 <= idle_elapsed <= 25
+        if 0 <= idle_elapsed <= 25:
+            reset_observed = True
+            if reset_sample is None:
+                reset_sample = current
         if cast_observed and reset_observed:
             break
         time.sleep(0.02)
@@ -380,6 +386,7 @@ emit('current', progression ~= 0 and mp_offset ~= nil and
         "samples": samples,
         "cast_observed": cast_observed,
         "reset_observed": reset_observed,
+        "reset_sample": reset_sample,
         "clear": cleared,
         "minimum_idle_elapsed": min(
             parse_int_text(sample.get("idle_elapsed"), 1_000_000_000)

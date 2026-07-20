@@ -58,7 +58,8 @@ internal static class LauncherCommandExecutor
             command.SteamLobbyId,
             command.InviteSteamId,
             command.MultiplayerMaxParticipants,
-            command.OpenSteamInviteDialog);
+            command.OpenSteamInviteDialog,
+            command.LobbyHost);
         if (multiplayer.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join &&
             !stageResult.SteamBootstrap.ReadyForInitialization)
         {

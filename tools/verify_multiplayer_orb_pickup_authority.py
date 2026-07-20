@@ -36,7 +36,8 @@ HEALTH_DELTA = 25.0
 MANA_DELTA = 40.0
 VITAL_TOLERANCE = 0.75
 POSITION_TOLERANCE = 260.0
-PICKUP_POSITION_TOLERANCE = 60.0
+STOCK_ORB_WORLD_UNITS_PER_PICKUP_RANGE = 60.0
+PICKUP_RANGE_TEST_MARGIN = 0.95
 PICKUP_SUPPRESSION_RADIUS = 335.0
 PICKUP_PARKING_MIN_DISTANCE = 520.0
 LOCAL_RUNTIME_PARTICIPANT_ID = 1
@@ -188,6 +189,9 @@ if mp and mp.participants then
     emit(prefix .. "mana_max", string.format("%.3f", tonumber(participant.mana_max) or 0))
     emit(prefix .. "x", string.format("%.3f", tonumber(participant.x) or 0))
     emit(prefix .. "y", string.format("%.3f", tonumber(participant.y) or 0))
+    local owned = participant.owned_progression or {}
+    local derived = owned.derived_stats or {}
+    emit(prefix .. "pickup_range", string.format("%.3f", tonumber(derived.pickup_range) or 0))
   end
 end
 """
@@ -201,7 +205,7 @@ emit(ok and "request_sequence" or "error", value or "")
 """
 
 
-SET_CLIENT_VITALS_LUA = r"""
+SET_CLIENT_RESOURCES_LUA = r"""
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
 local player = sd.player.get_state()
 if player == nil or player.actor_address == nil or player.actor_address == 0 then
@@ -218,15 +222,17 @@ local ohp = sd.debug.layout_offset("progression_hp")
 local omaxhp = sd.debug.layout_offset("progression_max_hp")
 local omp = sd.debug.layout_offset("progression_mp")
 local omaxmp = sd.debug.layout_offset("progression_max_mp")
-emit("write.max_hp", sd.debug.write_float(progression + omaxhp, %.3f))
-emit("write.hp", sd.debug.write_float(progression + ohp, %.3f))
-emit("write.max_mp", sd.debug.write_float(progression + omaxmp, %.3f))
-emit("write.mp", sd.debug.write_float(progression + omp, %.3f))
+local target_hp = %s
+local target_mp = %s
+emit("write.hp", target_hp == nil or sd.debug.write_float(progression + ohp, target_hp))
+emit("write.mp", target_mp == nil or sd.debug.write_float(progression + omp, target_mp))
 local after = sd.player.get_state()
 emit("after.hp", after and after.hp or -1)
 emit("after.max_hp", after and after.max_hp or -1)
 emit("after.mp", after and after.mp or -1)
 emit("after.max_mp", after and after.max_mp or -1)
+emit("native.max_hp", sd.debug.read_float(progression + omaxhp))
+emit("native.max_mp", sd.debug.read_float(progression + omaxmp))
 """
 
 
@@ -322,6 +328,9 @@ def participant_rows(capture_values: dict[str, str]) -> list[dict[str, Any]]:
             "mana_max": parse_float_text(capture_values.get(row_prefix + "mana_max")),
             "x": parse_float_text(capture_values.get(row_prefix + "x")),
             "y": parse_float_text(capture_values.get(row_prefix + "y")),
+            "pickup_range": parse_float_text(
+                capture_values.get(row_prefix + "pickup_range")
+            ),
         })
     return rows
 
@@ -333,19 +342,52 @@ def find_participant(capture_values: dict[str, str], participant_id: int) -> dic
     return None
 
 
-def set_client_vitals(hp: float, max_hp: float, mp: float, max_mp: float) -> dict[str, str]:
-    result = values(CLIENT_PIPE, SET_CLIENT_VITALS_LUA % (max_hp, hp, max_mp, mp))
-    for key in ("write.max_hp", "write.hp", "write.max_mp", "write.mp"):
+def lua_optional_float(value: float | None) -> str:
+    if value is None:
+        return "nil"
+    if not math.isfinite(value):
+        raise VerifyFailure(f"resource fixture value is not finite: {value}")
+    return f"{value:.3f}"
+
+
+def set_client_resources(
+    *,
+    hp: float | None = None,
+    mp: float | None = None,
+) -> dict[str, str]:
+    result = values(
+        CLIENT_PIPE,
+        SET_CLIENT_RESOURCES_LUA % (
+            lua_optional_float(hp),
+            lua_optional_float(mp),
+        ),
+    )
+    for key in ("write.hp", "write.mp"):
         if result.get(key) != "true":
-            raise VerifyFailure(f"failed to set client vitals: {result}")
+            raise VerifyFailure(f"failed to set client resources: {result}")
     return result
 
 
-def wait_for_host_client_vitals(
+def capture_client_vitals() -> dict[str, float]:
+    snapshot = capture(CLIENT_PIPE)
+    vitals = {
+        "hp": parse_float_text(snapshot.get("player.hp")),
+        "max_hp": parse_float_text(snapshot.get("player.max_hp")),
+        "mp": parse_float_text(snapshot.get("player.mp")),
+        "max_mp": parse_float_text(snapshot.get("player.max_mp")),
+    }
+    if (
+        not all(math.isfinite(value) for value in vitals.values())
+        or vitals["max_hp"] <= 0.0
+        or vitals["max_mp"] <= 0.0
+    ):
+        raise VerifyFailure(f"client vitals are unavailable before orb test: {vitals}")
+    return vitals
+
+
+def wait_for_host_client_native_maxima(
     *,
-    expected_hp: float,
     expected_max_hp: float,
-    expected_mp: float,
     expected_max_mp: float,
     timeout: float,
 ) -> dict[str, Any]:
@@ -357,58 +399,54 @@ def wait_for_host_client_vitals(
         last_row = find_participant(last, CLIENT_ID)
         if (
             last_row is not None
-            and approximately(last_row["life_current"], expected_hp)
+            and math.isfinite(last_row["life_current"])
+            and -VITAL_TOLERANCE <= last_row["life_current"] <= expected_max_hp + VITAL_TOLERANCE
             and approximately(last_row["life_max"], expected_max_hp)
-            and approximately(last_row["mana_current"], expected_mp)
+            and math.isfinite(last_row["mana_current"])
+            and -VITAL_TOLERANCE <= last_row["mana_current"] <= expected_max_mp + VITAL_TOLERANCE
             and approximately(last_row["mana_max"], expected_max_mp)
         ):
             return {"capture": last, "participant": last_row}
         time.sleep(0.1)
-    raise VerifyFailure(f"host did not observe client vitals: row={last_row} capture={last}")
+    raise VerifyFailure(
+        f"host did not preserve client native maxima: row={last_row} capture={last}"
+    )
 
 
-def wait_for_host_client_vitals_sample(timeout: float) -> dict[str, Any]:
+def wait_for_host_client_resource_window(
+    *,
+    resource_kind: int,
+    minimum_current: float,
+    maximum_current: float,
+    expected_max: float,
+    timeout: float,
+) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
     last_row: dict[str, Any] | None = None
     while time.monotonic() < deadline:
         last = capture(HOST_PIPE)
         last_row = find_participant(last, CLIENT_ID)
-        if (
-            last_row is not None
-            and math.isfinite(last_row["life_current"])
-            and math.isfinite(last_row["life_max"])
-            and math.isfinite(last_row["mana_current"])
-            and math.isfinite(last_row["mana_max"])
-            and last_row["life_max"] > 0.0
-            and last_row["mana_max"] > 0.0
-        ):
-            return {"capture": last, "participant": last_row}
+        if last_row is not None:
+            if resource_kind == HEALTH_RESOURCE_KIND:
+                current = last_row["life_current"]
+                maximum = last_row["life_max"]
+            else:
+                current = last_row["mana_current"]
+                maximum = last_row["mana_max"]
+            if (
+                math.isfinite(current)
+                and current + VITAL_TOLERANCE >= minimum_current
+                and current <= maximum_current + VITAL_TOLERANCE
+                and approximately(maximum, expected_max)
+            ):
+                return {"capture": last, "participant": last_row}
         time.sleep(0.1)
-    raise VerifyFailure(f"host did not expose a usable client vitals sample: row={last_row} capture={last}")
-
-
-def wait_for_client_local_vitals(
-    *,
-    expected_hp: float,
-    expected_max_hp: float,
-    expected_mp: float,
-    expected_max_mp: float,
-    timeout: float,
-) -> dict[str, str]:
-    deadline = time.monotonic() + timeout
-    last: dict[str, str] = {}
-    while time.monotonic() < deadline:
-        last = capture(CLIENT_PIPE)
-        if (
-            approximately(parse_float_text(last.get("player.hp")), expected_hp)
-            and approximately(parse_float_text(last.get("player.max_hp")), expected_max_hp)
-            and approximately(parse_float_text(last.get("player.mp")), expected_mp)
-            and approximately(parse_float_text(last.get("player.max_mp")), expected_max_mp)
-        ):
-            return last
-        time.sleep(0.1)
-    raise VerifyFailure(f"client local vitals did not converge: {last}")
+    raise VerifyFailure(
+        "host did not observe the bounded client orb fixture: "
+        f"resource={resource_kind} expected_current={minimum_current}..{maximum_current} "
+        f"expected_max={expected_max} row={last_row} capture={last}"
+    )
 
 
 def wait_for_client_local_resource(
@@ -428,7 +466,11 @@ def wait_for_client_local_resource(
         else:
             current = parse_float_text(last.get("player.mp"))
             maximum = parse_float_text(last.get("player.max_mp"))
-        if current + VITAL_TOLERANCE >= expected_current and approximately(maximum, expected_max):
+        if (
+            current + VITAL_TOLERANCE >= expected_current
+            and current <= expected_max + VITAL_TOLERANCE
+            and approximately(maximum, expected_max)
+        ):
             return last
         time.sleep(0.1)
     raise VerifyFailure(
@@ -457,7 +499,11 @@ def wait_for_host_client_resource(
             else:
                 current = last_row["mana_current"]
                 maximum = last_row["mana_max"]
-            if current + VITAL_TOLERANCE >= expected_current and approximately(maximum, expected_max):
+            if (
+                current + VITAL_TOLERANCE >= expected_current
+                and current <= expected_max + VITAL_TOLERANCE
+                and approximately(maximum, expected_max)
+            ):
                 return {"capture": last, "participant": last_row}
         time.sleep(0.1)
     raise VerifyFailure(
@@ -471,74 +517,6 @@ def request_pickup(network_drop_id: int) -> dict[str, str]:
     if result.get("ok") != "true":
         raise VerifyFailure(f"client request_loot_pickup failed: {result}")
     return result
-
-
-def request_pickup_when_ready(
-    *,
-    network_drop_id: int,
-    drop_x: float,
-    drop_y: float,
-    timeout: float,
-) -> dict[str, str]:
-    code = f"""
-local function emit(key, value) print(key .. "=" .. tostring(value)) end
-local network_drop_id = {network_drop_id}
-local drop_x = {drop_x:.3f}
-local drop_y = {drop_y:.3f}
-local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
-if player == nil then
-  emit("ok", false)
-  emit("error", "player_missing")
-  return
-end
-local loot = sd.world and sd.world.get_replicated_loot and sd.world.get_replicated_loot() or nil
-local found = false
-if loot and loot.drops then
-  for _, drop in ipairs(loot.drops) do
-    if tonumber(drop.network_drop_id) == network_drop_id then
-      found = true
-      drop_x = tonumber(drop.x) or drop_x
-      drop_y = tonumber(drop.y) or drop_y
-      break
-    end
-  end
-end
-local dx = (tonumber(player.x) or 0) - drop_x
-local dy = (tonumber(player.y) or 0) - drop_y
-local dist = math.sqrt((dx * dx) + (dy * dy))
-emit("drop_present", found)
-emit("player.x", player.x or 0)
-emit("player.y", player.y or 0)
-emit("drop.x", drop_x)
-emit("drop.y", drop_y)
-emit("distance", dist)
-if not found then
-  emit("ok", false)
-  emit("error", "drop_missing")
-  return
-end
-if dist > {PICKUP_POSITION_TOLERANCE:.3f} then
-  emit("ok", false)
-  emit("error", "player_out_of_range")
-  return
-end
-local ok, value = sd.world.request_loot_pickup(network_drop_id)
-emit("ok", ok)
-emit(ok and "request_sequence" or "error", value or "")
-"""
-    deadline = time.monotonic() + timeout
-    last: dict[str, str] = {}
-    while time.monotonic() < deadline:
-        last = values(CLIENT_PIPE, code)
-        if last.get("ok") == "true":
-            return last
-        if last.get("error") == "player_out_of_range":
-            place_player(CLIENT_PIPE, drop_x, drop_y, 90.0)
-        time.sleep(0.1)
-    raise VerifyFailure(
-        "client could not queue orb pickup from an in-range replicated snapshot: "
-        f"drop={network_drop_id} last={last}"
-    )
 
 
 def try_wait_for_client_pickup_result(
@@ -568,6 +546,7 @@ def try_wait_for_client_pickup_result(
 
 def move_client_into_pickup_range(
     *,
+    network_drop_id: int,
     drop_x: float,
     drop_y: float,
     timeout: float,
@@ -586,16 +565,51 @@ def move_client_into_pickup_range(
         player_y = parse_float_text(last_client.get("player.y"))
         local_row = find_participant(last_client, LOCAL_RUNTIME_PARTICIPANT_ID)
         host_row = find_participant(last_host, CLIENT_ID)
-        player_in_range = distance(player_x, player_y, drop_x, drop_y) <= PICKUP_POSITION_TOLERANCE
+        local_range_limit = (
+            local_row["pickup_range"]
+            * STOCK_ORB_WORLD_UNITS_PER_PICKUP_RANGE
+            * PICKUP_RANGE_TEST_MARGIN
+            if local_row is not None
+            and math.isfinite(local_row["pickup_range"])
+            and local_row["pickup_range"] > 0.0
+            else 0.0
+        )
+        host_range_limit = (
+            host_row["pickup_range"]
+            * STOCK_ORB_WORLD_UNITS_PER_PICKUP_RANGE
+            * PICKUP_RANGE_TEST_MARGIN
+            if host_row is not None
+            and math.isfinite(host_row["pickup_range"])
+            and host_row["pickup_range"] > 0.0
+            else 0.0
+        )
+        player_distance = distance(player_x, player_y, drop_x, drop_y)
+        runtime_distance = (
+            distance(local_row["x"], local_row["y"], drop_x, drop_y)
+            if local_row is not None else math.inf
+        )
+        authority_distance = (
+            distance(host_row["x"], host_row["y"], drop_x, drop_y)
+            if host_row is not None else math.inf
+        )
+        player_in_range = local_range_limit > 0.0 and player_distance <= local_range_limit
         runtime_in_range = (
-            local_row is not None
-            and distance(local_row["x"], local_row["y"], drop_x, drop_y) <= PICKUP_POSITION_TOLERANCE
+            local_range_limit > 0.0 and runtime_distance <= local_range_limit
         )
         authority_in_range = (
-            host_row is not None
-            and distance(host_row["x"], host_row["y"], drop_x, drop_y) <= PICKUP_POSITION_TOLERANCE
+            host_range_limit > 0.0 and authority_distance <= host_range_limit
         )
-        if player_in_range and runtime_in_range and authority_in_range:
+        accepted_during_positioning = (
+            last_client.get("pickup.valid") == "true"
+            and parse_int_text(
+                last_client.get("pickup.network_drop_id"), 0
+            ) == network_drop_id
+            and last_client.get("pickup.result") == "Accepted"
+        )
+        if (
+            accepted_during_positioning
+            or (player_in_range and runtime_in_range and authority_in_range)
+        ):
             return {
                 "place": place,
                 "client_capture": last_client,
@@ -604,8 +618,17 @@ def move_client_into_pickup_range(
                 "host_participant": host_row,
                 "drop_x": drop_x,
                 "drop_y": drop_y,
+                "client_range_limit": local_range_limit,
+                "host_range_limit": host_range_limit,
+                "player_distance": player_distance,
+                "runtime_distance": runtime_distance,
+                "authority_distance": authority_distance,
+                "accepted_during_positioning": accepted_during_positioning,
             }
-        if (not player_in_range or not runtime_in_range) and time.monotonic() >= next_reposition_at:
+        if (
+            not (player_in_range and runtime_in_range and authority_in_range)
+            and time.monotonic() >= next_reposition_at
+        ):
             place = place_player(CLIENT_PIPE, drop_x, drop_y, 90.0)
             next_reposition_at = time.monotonic() + 0.5
         time.sleep(0.1)
@@ -838,18 +861,44 @@ def verify_one_orb_pickup(
     kind: str,
     resource_kind: int,
     expected_delta: float,
+    native_max_hp: float,
+    native_max_mp: float,
     anchor_x: float,
     anchor_y: float,
     timeout: float,
 ) -> dict[str, Any]:
-    base_hp = 50.0
-    base_max_hp = 100.0
-    base_mp = 20.0
-    base_max_mp = 200.0 if resource_kind == MANA_RESOURCE_KIND else 100.0
+    resource_max = (
+        native_max_hp
+        if resource_kind == HEALTH_RESOURCE_KIND
+        else native_max_mp
+    )
+    headroom = max(2.0, min(10.0, resource_max * 0.1))
+    base_current = resource_max - expected_delta - headroom
+    if base_current <= VITAL_TOLERANCE:
+        raise VerifyFailure(
+            f"native {label} maximum is too small for a full orb delta: "
+            f"maximum={resource_max} delta={expected_delta}"
+        )
+    fixture_ceiling = resource_max - expected_delta - VITAL_TOLERANCE
 
-    result: dict[str, Any] = {"label": label}
-    result["set_client_vitals"] = set_client_vitals(base_hp, base_max_hp, base_mp, base_max_mp)
-    result["host_client_vitals_before"] = wait_for_host_client_vitals_sample(timeout=timeout)
+    result: dict[str, Any] = {
+        "label": label,
+        "native_max_hp": native_max_hp,
+        "native_max_mp": native_max_mp,
+        "fixture_base_current": base_current,
+        "fixture_ceiling": fixture_ceiling,
+    }
+    result["set_client_resources"] = set_client_resources(
+        hp=base_current if resource_kind == HEALTH_RESOURCE_KIND else None,
+        mp=base_current if resource_kind == MANA_RESOURCE_KIND else None,
+    )
+    result["host_client_vitals_before"] = wait_for_host_client_resource_window(
+        resource_kind=resource_kind,
+        minimum_current=base_current,
+        maximum_current=fixture_ceiling,
+        expected_max=resource_max,
+        timeout=timeout,
+    )
     before_addresses = {row["address"] for row in orb_rows(capture(HOST_PIPE))}
     spawn_x = anchor_x
     spawn_y = anchor_y
@@ -875,43 +924,31 @@ def verify_one_orb_pickup(
         timeout=timeout,
     )
     replicated_drop = result["client_replicated_orb"]["drop"]
+    network_drop_id = int(replicated_drop["network_id"])
     result["client_pickup_position"] = move_client_into_pickup_range(
+        network_drop_id=network_drop_id,
         drop_x=float(replicated_drop["x"]),
         drop_y=float(replicated_drop["y"]),
         timeout=timeout,
     )
     result["pre_request_pair"] = capture_pair()
-    network_drop_id = int(replicated_drop["network_id"])
     accepted = try_wait_for_client_pickup_result(
         network_drop_id=network_drop_id,
         request_sequence=None,
         expected_result="Accepted",
-        timeout=min(1.5, timeout),
+        timeout=min(5.0, timeout),
     )
-    if accepted is not None:
-        request_sequence = parse_int_text(accepted.get("pickup.request_sequence"), 0)
-        result["request"] = {
-            "ok": "true",
-            "path": "client_proximity_hook",
-            "request_sequence": str(request_sequence),
-        }
-        result["accepted_result"] = accepted
-    else:
-        request = request_pickup_when_ready(
-            network_drop_id=network_drop_id,
-            drop_x=float(replicated_drop["x"]),
-            drop_y=float(replicated_drop["y"]),
-            timeout=timeout,
+    if accepted is None:
+        raise VerifyFailure(
+            "client orb proximity hook did not accept the in-range pickup"
         )
-        request_sequence = parse_int_text(request.get("request_sequence"), 0)
-        result["request"] = request
-        result["accepted_result"] = wait_for_client_pickup_result(
-            network_drop_id=network_drop_id,
-            request_sequence=request_sequence,
-            expected_result="Accepted",
-            timeout=timeout,
-        )
-    accepted = result["accepted_result"]
+    request_sequence = parse_int_text(accepted.get("pickup.request_sequence"), 0)
+    result["request"] = {
+        "ok": "true",
+        "path": "client_proximity_hook",
+        "request_sequence": str(request_sequence),
+    }
+    result["accepted_result"] = accepted
     expected_hp = parse_float_text(accepted.get("pickup.resulting_life_current"))
     expected_max_hp = parse_float_text(accepted.get("pickup.resulting_life_max"))
     expected_mp = parse_float_text(accepted.get("pickup.resulting_mana_current"))
@@ -961,6 +998,14 @@ def verify_one_orb_pickup(
             parse_float_text(accepted.get("pickup.amount")),
             expected_delta,
         ),
+        "accepted_native_max_preserved": approximately(
+            expected_max_hp if resource_kind == HEALTH_RESOURCE_KIND else expected_max_mp,
+            resource_max,
+        ),
+        "accepted_result_includes_full_delta": (
+            (expected_hp if resource_kind == HEALTH_RESOURCE_KIND else expected_mp) +
+            VITAL_TOLERANCE >= base_current + expected_delta
+        ),
         "client_resource_reached_authority": (
             parse_float_text(client_after.get("player.hp" if resource_kind == HEALTH_RESOURCE_KIND else "player.mp")) +
             VITAL_TOLERANCE >= (expected_hp if resource_kind == HEALTH_RESOURCE_KIND else expected_mp)
@@ -982,6 +1027,8 @@ def verify_orb_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:
     if not args.no_launch:
         result["setup"] = setup_live_run_pair_without_waves(max_attempts=args.attempts)
 
+    baseline = capture_client_vitals()
+    result["baseline_client_vitals"] = baseline
     anchor = select_host_spawn_anchor(timeout=args.timeout)
     result["anchor"] = anchor
     anchor_x = float(anchor["target_x"])
@@ -991,6 +1038,8 @@ def verify_orb_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:
         kind="health_orb",
         resource_kind=HEALTH_RESOURCE_KIND,
         expected_delta=HEALTH_DELTA,
+        native_max_hp=baseline["max_hp"],
+        native_max_mp=baseline["max_mp"],
         anchor_x=anchor_x,
         anchor_y=anchor_y,
         timeout=args.timeout,
@@ -1000,13 +1049,27 @@ def verify_orb_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:
         kind="mana_orb",
         resource_kind=MANA_RESOURCE_KIND,
         expected_delta=MANA_DELTA,
+        native_max_hp=baseline["max_hp"],
+        native_max_mp=baseline["max_mp"],
         anchor_x=anchor_x,
         anchor_y=anchor_y,
         timeout=args.timeout,
     )
+    result["final_client_vitals"] = capture_client_vitals()
+    result["final_host_client_vitals"] = wait_for_host_client_native_maxima(
+        expected_max_hp=baseline["max_hp"],
+        expected_max_mp=baseline["max_mp"],
+        timeout=args.timeout,
+    )
+    final_client = result["final_client_vitals"]
+    result["native_maxima_preserved"] = (
+        approximately(final_client["max_hp"], baseline["max_hp"]) and
+        approximately(final_client["max_mp"], baseline["max_mp"])
+    )
     result["ok"] = (
         all(result["health_orb"]["conclusion"].values()) and
-        all(result["mana_orb"]["conclusion"].values())
+        all(result["mana_orb"]["conclusion"].values()) and
+        result["native_maxima_preserved"]
     )
     return result
 

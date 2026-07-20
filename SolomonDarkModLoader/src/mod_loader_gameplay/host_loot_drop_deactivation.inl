@@ -45,10 +45,11 @@ bool ExecuteHostLootDropDeactivationNow(
     }
 
     auto& memory = ProcessMemory::Instance();
+    bool neutralized = true;
     if (request.drop_kind == multiplayer::LootDropKind::Gold) {
         const std::uint8_t inactive = 0;
         const std::uint32_t zero = 0;
-        result->deactivated =
+        neutralized =
             memory.TryWriteField(
                 request.actor_address,
                 kReplicatedGoldActiveOffset,
@@ -61,14 +62,11 @@ bool ExecuteHostLootDropDeactivationNow(
                 request.actor_address,
                 kReplicatedGoldLifetimeOffset,
                 zero);
-        return result->deactivated;
-    }
-
-    if (request.drop_kind == multiplayer::LootDropKind::Orb) {
+    } else if (request.drop_kind == multiplayer::LootDropKind::Orb) {
         const float zero_value = 0.0f;
         const float settled_motion = 0.0f;
         const std::uint32_t expired_lifetime = 0;
-        result->deactivated =
+        neutralized =
             memory.TryWriteField(
                 request.actor_address,
                 kReplicatedOrbValueOffset,
@@ -81,38 +79,26 @@ bool ExecuteHostLootDropDeactivationNow(
                 request.actor_address,
                 kReplicatedOrbMotionOffset,
                 settled_motion);
-        return result->deactivated;
-    }
-
-    if (request.drop_kind == multiplayer::LootDropKind::Powerup) {
-        ReplicatedLootPresentationBinding binding;
-        binding.actor_address = request.actor_address;
-        binding.drop_kind = request.drop_kind;
-        result->deactivated =
-            ParkReplicatedLootPresentationActor(binding);
-        return result->deactivated;
-    }
-
-    uintptr_t world_address = 0;
-    if (kActorOwnerOffset == 0 ||
-        !memory.TryReadField(
+    } else if (request.drop_kind == multiplayer::LootDropKind::Powerup) {
+        const std::uint32_t expired_lifetime = 0;
+        neutralized = memory.TryWriteField(
             request.actor_address,
-            kActorOwnerOffset,
-            &world_address) ||
-        world_address == 0) {
+            kReplicatedPowerupLifetimeOffset,
+            expired_lifetime);
+    }
+    if (!neutralized) {
         return false;
     }
 
-    const auto unregister_address = memory.ResolveGameAddressOrZero(kActorWorldUnregister);
     DWORD exception_code = 0;
-    result->deactivated =
-        unregister_address != 0 &&
-        CallActorWorldUnregisterSafe(
-            unregister_address,
-            world_address,
-            request.actor_address,
-            1,
-            &exception_code);
+    // Gold::Tick (0x005E66B0), Orb::Tick (0x005E62E0),
+    // Sack::Tick (0x005E6B50), and Bonus::Tick (0x006039C0) all retire
+    // collected actors through vtable+0x18. The shared stock implementation
+    // (0x00401FD0) marks actor+0x05 terminal; the world removes it only after
+    // every current-frame reader has drained.
+    result->deactivated = CallActorRequestRetirementSafe(
+        request.actor_address,
+        &exception_code);
     result->exception_code = static_cast<std::uint32_t>(exception_code);
     return result->deactivated;
 }
@@ -237,7 +223,8 @@ void PumpHostLootDropDeactivation() {
     }
 
     Log(
-        "native_loot: host drop deactivation completed on gameplay thread. "
+        "native_loot: stock deferred-retirement request completed at the post-stock "
+        "AppMainTick boundary. "
         "network_drop_id=" + std::to_string(request.network_drop_id) +
         " kind=" + multiplayer::LootDropKindLabel(request.drop_kind) +
         " actor=" + HexString(request.actor_address) +

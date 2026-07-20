@@ -505,12 +505,12 @@ local function emit_history(prefix, history, filter_owner)
       table.insert(selected, snapshot)
     end
   end
-  -- The runtime retains 64 frames. A remote replay can apply near the start of
+  -- The runtime retains 128 frames. A remote replay can apply near the start of
   -- a 170-frame held cast while the owner continues publishing until release;
   -- emitting only 48 then drops the exact applied frame even though the apply
   -- binding and all later chain frames are correct. Preserve the full runtime
   -- window so frame-exact endpoint parity remains provable for every owner.
-  local first = math.max(1, #selected - 63)
+  local first = math.max(1, #selected - 127)
   local output_index = 0
   for index = first, #selected do
     output_index = output_index + 1

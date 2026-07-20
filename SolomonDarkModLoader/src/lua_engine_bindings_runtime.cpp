@@ -445,7 +445,7 @@ void PushLevelUpWaitStatusRuntimeInfo(
 int LuaRuntimeGetMultiplayerState(lua_State* state) {
     const auto runtime = multiplayer::SnapshotRuntimeState();
 
-    lua_createtable(state, 0, 12);
+    lua_createtable(state, 0, 17);
     lua_pushboolean(state, runtime.foundation_ready ? 1 : 0);
     lua_setfield(state, -2, "foundation_ready");
     lua_pushboolean(state, runtime.transport_ready ? 1 : 0);
@@ -458,6 +458,20 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
     lua_setfield(state, -2, "local_steam_id");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.participants.size()));
     lua_setfield(state, -2, "participant_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.transport_packets_sent));
+    lua_setfield(state, -2, "transport_packets_sent");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.transport_packets_received));
+    lua_setfield(state, -2, "transport_packets_received");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.steam_send_failures));
+    lua_setfield(state, -2, "steam_send_failures");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(runtime.steam_reliable_send_failures));
+    lua_setfield(state, -2, "steam_reliable_send_failures");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(runtime.last_steam_send_failure_result));
+    lua_setfield(state, -2, "last_steam_send_failure_result");
 
     lua_createtable(state, static_cast<int>(runtime.participants.size()), 0);
     int lua_index = 1;

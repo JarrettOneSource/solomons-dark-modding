@@ -157,9 +157,24 @@ void WriteMultiplayerSessionStatus(
            << (snapshot.is_host ? "true" : "false") << ",\n";
     stream << "  \"phase\": \""
            << EscapeJsonString(snapshot.phase) << "\",\n";
+    stream << "  \"gamePhase\": \""
+           << EscapeJsonString(snapshot.game_phase) << "\",\n";
     stream << "  \"appId\": " << snapshot.app_id << ",\n";
     stream << "  \"lobbyId\": " << snapshot.lobby_id << ",\n";
     stream << "  \"hostSteamId\": " << snapshot.host_steam_id << ",\n";
+    stream << "  \"localSteamId\": " << snapshot.local_steam_id << ",\n";
+    stream << "  \"personaName\": \""
+           << EscapeJsonString(snapshot.persona_name) << "\",\n";
+    stream << "  \"privacy\": \""
+           << EscapeJsonString(snapshot.privacy) << "\",\n";
+    stream << "  \"protocolVersion\": " << snapshot.protocol_version << ",\n";
+    stream << "  \"manifestSha256\": \""
+           << EscapeJsonString(snapshot.manifest_sha256) << "\",\n";
+    stream << "  \"friendSteamIds\": [";
+    for (std::size_t index = 0; index < snapshot.friend_steam_ids.size(); ++index) {
+        stream << (index == 0 ? "" : ", ") << snapshot.friend_steam_ids[index];
+    }
+    stream << "],\n";
     stream << "  \"maxParticipants\": "
            << snapshot.max_participants << ",\n";
     stream << "  \"authenticatedPeerCount\": "
@@ -173,6 +188,17 @@ void WriteMultiplayerSessionStatus(
     stream << "  \"routeRelayed\": "
            << (snapshot.route_relayed ? "true" : "false") << ",\n";
     stream << "  \"routePingMs\": " << snapshot.route_ping_ms << ",\n";
+    stream << "  \"members\": [";
+    for (std::size_t index = 0; index < snapshot.members.size(); ++index) {
+        const auto& member = snapshot.members[index];
+        stream << (index == 0 ? "\n" : ",\n")
+               << "    {\"steamId\": " << member.steam_id
+               << ", \"name\": \"" << EscapeJsonString(member.name)
+               << "\", \"isHost\": " << (member.is_host ? "true" : "false")
+               << ", \"isLocal\": " << (member.is_local ? "true" : "false")
+               << "}";
+    }
+    stream << (snapshot.members.empty() ? "],\n" : "\n  ],\n");
     stream << "  \"statusText\": \""
            << EscapeJsonString(snapshot.status_text) << "\",\n";
     stream << "  \"errorText\": \""

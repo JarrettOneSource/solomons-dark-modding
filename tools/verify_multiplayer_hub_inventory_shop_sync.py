@@ -33,6 +33,9 @@ from verify_multiplayer_inventory_audit import (
 OUTPUT = ROOT / "runtime/multiplayer_hub_inventory_shop_sync.json"
 CLICK_WINDOW = ROOT / "scripts/click_window.py"
 SEND_WINDOW_KEYS = ROOT / "scripts/send_window_keys.py"
+WINDOWS_CLICK_HOLD_MS = 300
+STOCK_UI_WIDTH = 640.0
+STOCK_UI_HEIGHT = 480.0
 POTION_TYPE_ID = 0x1B59
 PLACEHOLDER_TYPE_ID = 0x1B58
 
@@ -70,7 +73,12 @@ def run_windows_python(script: Path, arguments: list[str], timeout: float = 10.0
     return completed.stdout.strip()
 
 
-def hold_real_key(pid: int, key: str, hold_ms: int) -> str:
+def hold_real_key(
+    pid: int,
+    key: str,
+    hold_ms: int,
+    timeout: float = 10.0,
+) -> str:
     return run_windows_python(
         SEND_WINDOW_KEYS,
         [
@@ -81,6 +89,7 @@ def hold_real_key(pid: int, key: str, hold_ms: int) -> str:
             "--post-delay-ms", "150",
             key,
         ],
+        timeout,
     )
 
 
@@ -95,11 +104,64 @@ def click_relative(pid: int, x: float, y: float) -> str:
             "--activate",
             "--activation-delay-ms", "250",
             "--post-delay-ms", "200",
-            "--hold-ms", "90",
+            "--hold-ms", str(WINDOWS_CLICK_HOLD_MS),
             "--button", "left",
             "--global-only",
         ],
     )
+
+
+def click_centered_top(
+    pid: int,
+    y: float,
+    x_offset: float = 0.0,
+    minimum_x: float = 0.0,
+) -> str:
+    x_fraction, y_fraction = stock_ui_viewport_point(
+        STOCK_UI_WIDTH,
+        STOCK_UI_HEIGHT,
+        y,
+        x_offset,
+        minimum_x,
+    )
+    return run_windows_python(
+        CLICK_WINDOW,
+        [
+            "--pid", str(pid),
+            "--relative",
+            "--x", str(x_fraction),
+            "--y", str(y_fraction),
+            "--activate",
+            "--activation-delay-ms", "250",
+            "--post-delay-ms", "200",
+            "--hold-ms", str(WINDOWS_CLICK_HOLD_MS),
+            "--button", "left",
+            "--global-only",
+        ],
+    )
+
+
+def stock_ui_viewport_point(
+    viewport_width: float,
+    viewport_height: float,
+    y: float,
+    x_offset: float = 0.0,
+    minimum_x: float = 0.0,
+) -> tuple[float, float]:
+    if viewport_width < STOCK_UI_WIDTH or viewport_height < STOCK_UI_HEIGHT:
+        raise VerifyFailure(
+            "stock UI requires a viewport of at least 640x480: "
+            f"{viewport_width}x{viewport_height}"
+        )
+    if y < 0.0 or y >= STOCK_UI_HEIGHT or y >= viewport_height:
+        raise VerifyFailure(f"invalid stock UI y coordinate: {y}")
+    stock_x = max(
+        STOCK_UI_WIDTH * 0.5 + x_offset,
+        minimum_x,
+    )
+    if stock_x < 0.0 or stock_x >= STOCK_UI_WIDTH:
+        raise VerifyFailure(f"invalid stock UI x coordinate: {stock_x}")
+    return stock_x / STOCK_UI_WIDTH, y / STOCK_UI_HEIGHT
 
 
 def drag_relative(

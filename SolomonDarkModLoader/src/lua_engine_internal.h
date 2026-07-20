@@ -69,6 +69,10 @@ void LogLuaMessage(const LoadedLuaMod& mod, const std::string& message);
 LoadedLuaMod* GetLoadedLuaMod(lua_State* state);
 const LoadedLuaMod* GetLoadedLuaMod(const lua_State* state);
 
+void StartLuaEventQueue();
+void StopLuaEventQueue();
+void DispatchPendingLuaEventsToLuaMods();
+
 bool ParseBotCreateRequest(lua_State* state, int index, multiplayer::BotCreateRequest* request, std::string* error_message);
 bool ParseBotUpdateRequest(lua_State* state, int index, multiplayer::BotUpdateRequest* request, std::string* error_message);
 bool ParseBotCastRequest(lua_State* state, int index, multiplayer::BotCastRequest* request, std::string* error_message);

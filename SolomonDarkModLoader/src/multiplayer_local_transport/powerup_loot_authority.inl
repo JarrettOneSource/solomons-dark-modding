@@ -51,8 +51,10 @@ bool TryResolveDamageX4DurationTicks(std::int32_t* duration_ticks) {
 bool TrySelectRandomSkillRankPowerupOption(
     const LootDropSnapshotPacketState& drop,
     const ParticipantInfo& participant,
+    std::uint64_t owner_participant_id,
     BotSkillChoiceOption* option) {
-    if (option == nullptr ||
+    if (owner_participant_id == 0 ||
+        option == nullptr ||
         participant.owned_progression.progression_book_truncated) {
         return false;
     }
@@ -78,7 +80,7 @@ bool TrySelectRandomSkillRankPowerupOption(
 
     std::uint64_t mixed =
         drop.network_drop_id ^
-        (participant.participant_id +
+        (owner_participant_id +
          0x9E3779B97F4A7C15ull);
     mixed ^= mixed >> 30;
     mixed *= 0xBF58476D1CE4E5B9ull;
@@ -97,10 +99,11 @@ bool TrySelectRandomSkillRankPowerupOption(
 bool TryPreparePowerupReward(
     const LootDropSnapshotPacketState& drop,
     const ParticipantInfo& participant,
+    std::uint64_t owner_participant_id,
     bool host_self,
     PreparedPowerupReward* prepared,
     std::string* error_message) {
-    if (prepared == nullptr) {
+    if (owner_participant_id == 0 || prepared == nullptr) {
         return false;
     }
     *prepared = {};
@@ -119,7 +122,7 @@ bool TryPreparePowerupReward(
 
     if (kind == PowerupRewardKind::BonusSkillPoint) {
         if (HasUnresolvedIssuedLevelUpOfferForParticipant(
-                participant.participant_id)) {
+                owner_participant_id)) {
             if (error_message != nullptr) {
                 *error_message =
                     "participant_level_up_offer_already_active";
@@ -133,7 +136,7 @@ bool TryPreparePowerupReward(
                   &prepared->skill_choice_options,
                   &roll_error)
             : RollParticipantSkillChoiceOptions(
-                  participant.participant_id,
+                  owner_participant_id,
                   &prepared->skill_choice_options,
                   &roll_error);
         if (!rolled ||
@@ -152,6 +155,7 @@ bool TryPreparePowerupReward(
         if (!TrySelectRandomSkillRankPowerupOption(
                 drop,
                 participant,
+                owner_participant_id,
                 &prepared->skill_rank_option)) {
             if (error_message != nullptr) {
                 *error_message =
@@ -344,15 +348,16 @@ bool TryApplyPreparedPowerupReward(
     if (pending->powerup.kind ==
         PowerupRewardKind::RandomSkillRank) {
         std::string apply_error;
-        const bool applied =
-            pending->host_self
-                ? ApplyLocalPlayerSkillChoiceOption(
-                      pending->powerup.skill_rank_option,
-                      &apply_error)
-                : ApplyParticipantSkillChoiceOption(
-                      pending->packet.participant_id,
-                      pending->powerup.skill_rank_option,
-                      &apply_error);
+        const bool applied = pending->host_self
+            ? ApplyLocalPlayerSkillChoiceOption(
+                  pending->powerup.skill_rank_option,
+                  &apply_error)
+            : HydrateAuthoritativeRemoteProgressionEntryState(
+                  pending->packet.participant_id,
+                  pending->powerup.skill_rank_option.option_id,
+                  pending->powerup.skill_rank_resulting_active,
+                  1,
+                  &apply_error);
         if (pending->host_self) {
             std::uint16_t native_active = 0;
             if (!applied ||
@@ -371,7 +376,7 @@ bool TryApplyPreparedPowerupReward(
             }
         } else if (!applied) {
             Log(
-                "Multiplayer remote powerup skill rank native apply "
+                "Multiplayer remote powerup skill rank native hydration "
                 "deferred to progression reconciliation. participant_id=" +
                 std::to_string(pending->packet.participant_id) +
                 " entry_index=" +
@@ -565,6 +570,7 @@ void ProcessQueuedLocalHostPowerupPickups(
         if (!TryPreparePowerupReward(
                 drop,
                 *local,
+                g_local_transport.local_peer_id,
                 true,
                 &prepared,
                 &prepare_error)) {

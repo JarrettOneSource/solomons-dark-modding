@@ -45,6 +45,7 @@ constexpr int kWizardSourceActorFactoryTypeId = 0x1397;
 // stop exactly at the 8-byte boundary.
 constexpr std::size_t kActorAnimationAdvanceHookPatchSize = 8;
 constexpr std::size_t kMonsterPathfindingRefreshTargetHookMinimumPatchSize = 5;
+constexpr std::size_t kBadguyMoveStepHookMinimumPatchSize = 5;
 constexpr std::size_t kGoldPickupHookMinimumPatchSize = 5;
 constexpr std::size_t kOrbPickupHookMinimumPatchSize = 5;
 constexpr std::size_t kItemDropPickupHookMinimumPatchSize = 5;
@@ -58,7 +59,7 @@ constexpr std::size_t kWizardProfileMindstarActiveOffset = 0x8DD;
 constexpr std::size_t kWizardProfileRegenerateActiveOffset = 0x8DE;
 // PlayerActor owns a PointerList<SmartPointer<Mod>> at +0x104. Its count and
 // storage lanes expose active stock modifiers without inventing parallel
-// status state. Mod_Poisoned is native type 0x1B72.
+// status state. These IDs come from the stock modifier constructors.
 constexpr std::size_t kActorModifierListOffset = 0x104;
 constexpr std::size_t kActorModifierListCountOffset = 0x10C;
 constexpr std::size_t kActorModifierListStorageOffset = 0x118;
@@ -67,7 +68,10 @@ constexpr std::size_t kNativeModifierTypeIdOffset = 0x08;
 constexpr std::size_t kNativeModifierDurationTicksOffset = 0x14;
 constexpr std::size_t kNativePoisonDamagePerTickOffset = 0x1C;
 constexpr std::size_t kNativePoisonSourceSlotOffset = 0x20;
+constexpr std::uint32_t kNativeStoneskinModifierTypeId = 0x1B71;
 constexpr std::uint32_t kNativePoisonModifierTypeId = 0x1B72;
+constexpr std::uint32_t kNativePrismaticModifierTypeId = 0x1B76;
+constexpr std::uint32_t kNativeRingIceModifierTypeId = 0x1B6F;
 constexpr std::size_t kStandaloneWizardVisualLinkSize = 0xA8;
 constexpr std::size_t kStandaloneWizardVisualLinkColorBlockOffset = 0x88;
 constexpr std::size_t kStandaloneWizardVisualLinkResetStateOffset = 0x1C;
@@ -155,10 +159,12 @@ constexpr std::uint64_t kBotManaReserveRecoveryIntervalMs = 250;
 constexpr float kBotManaReserveRecoveryRatioPerSecond = 0.10f;
 
 bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id) {
-    // 1001 and 1002 are stock wave-spawned enemy actor variants observed in
-    // arena runs. Solomon/NPC helper actors can look hostile while waves start,
-    // but they are not the wave combat targets the autonomous bot should attack.
-    return object_type_id == 1001 || object_type_id == 1002;
+    // FUN_005B7080 owns the stock GameNPC factory. 1000 is Solomon; the
+    // contiguous 1001..1013 cases are its complete native enemy family.
+    constexpr std::uint32_t kFirstArenaCombatActorType = 1001;
+    constexpr std::uint32_t kLastArenaCombatActorType = 1013;
+    return object_type_id >= kFirstArenaCombatActorType &&
+           object_type_id <= kLastArenaCombatActorType;
 }
 constexpr std::size_t kQueuedGameplayWorldActionLimit = 64;
 constexpr std::uint64_t kNativeInventoryCreditRetryDelayMs = 100;

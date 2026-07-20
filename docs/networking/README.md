@@ -16,7 +16,7 @@ perform local movement and presentation immediately, then the host or dedicated
 authority accepts, corrects, or rejects the claim. Clients never own canonical
 HP, deaths, drops, XP, or wave state.
 
-Protocol v54 distinguishes automatically observed native enemy-damage claims
+Protocol v64 distinguishes automatically observed native enemy-damage claims
 from explicit damage requests. Native collision callbacks may report damage
 without asserting target-transform authority because their local knockback can
 precede the next world snapshot. The host still validates the participant, run,
@@ -163,7 +163,7 @@ Spacewar playtest flow and the remaining external verification boundary.
   progression-book/statbook/skillbook/spellbook rows, and current ability loadout
   in `StatePacket`, so peers can inspect each other's starter potion rows,
   active/visible native book entries, and primary/secondary loadout. Protocol
-  v59 carries exact hat, robe, staff, wand, three-ring-slot, and amulet equipment
+  v60 carries exact hat, robe, staff, wand, three-ring-slot, and amulet equipment
   identity: recipe UIDs and wearable colors are owner-authored, visible lanes
   are applied to native remote participants and periodically self-corrected,
   and nonvisual ring/amulet identity remains inspectable on every peer. The
@@ -175,7 +175,7 @@ Spacewar playtest flow and the remaining external verification boundary.
   paths consume the one process-local scene inventory root without a participant
   parameter. Remote inventory therefore remains authoritative replicated rows,
   while remote equipment that affects presentation is materialized on the
-  native remote actor. Protocol v59 also gives every gameplay process a fresh
+  native remote actor. Protocol v60 also gives every gameplay process a fresh
   session nonce;
   a same-identity reconnect resets the old participant's packet-stream epochs
   before its new state is accepted, while packets from retired nonces are

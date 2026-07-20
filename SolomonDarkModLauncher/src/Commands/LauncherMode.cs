@@ -6,5 +6,6 @@ internal enum LauncherMode
     Stage,
     ListMods,
     EnableMod,
-    DisableMod
+    DisableMod,
+    AuthenticateDirectory
 }

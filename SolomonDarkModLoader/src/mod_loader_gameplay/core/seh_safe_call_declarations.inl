@@ -12,6 +12,9 @@ bool CallActorWorldUnregisterSafe(
     uintptr_t actor_address,
     char remove_from_container,
     DWORD* exception_code);
+bool CallActorRequestRetirementSafe(
+    uintptr_t actor_address,
+    DWORD* exception_code);
 bool CallPuppetManagerDeletePuppetSafe(
     uintptr_t delete_puppet_address,
     uintptr_t manager_address,

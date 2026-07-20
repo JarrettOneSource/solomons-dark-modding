@@ -404,6 +404,7 @@ if progression ~= 0 then
     if stats then
       for _, key in ipairs({{
         'build_skill_id',
+        'resolved_build_skill_id',
         'current_spell_id',
         'progression_level',
         'output_count',
@@ -507,7 +508,23 @@ def query_progression_snapshot(
     )
     native_entries = _parse_book_entries(values, "native")
     ledger_entries = _parse_book_entries(values, "ledger")
-    spell_output_count = parse_int_text(values.get("spell.output_count_emitted"), 0)
+    raw_spell_output_count = parse_int_text(
+        values.get("spell.output_count_emitted"), 0
+    )
+    spell_resolved = values.get("spell.resolved") == "true"
+    secondary_damage_available = (
+        values.get("spell.secondary_damage_available") == "true"
+    )
+    mana_cost_available = values.get("spell.mana_cost_available") == "true"
+    spell_damage = _parse_float(values, "spell.damage")
+    spell_secondary_damage = _parse_float(values, "spell.secondary_damage")
+    spell_mana_cost = _parse_float(values, "spell.mana_cost")
+    logical_spell_outputs: list[float] = []
+    if spell_resolved and mana_cost_available:
+        logical_spell_outputs.append(spell_damage)
+        if secondary_damage_available:
+            logical_spell_outputs.append(spell_secondary_damage)
+        logical_spell_outputs.append(spell_mana_cost)
     return {
         "available": values.get("available") == "true",
         "progression": parse_int_text(values.get("progression"), 0),
@@ -662,26 +679,30 @@ def query_progression_snapshot(
             "entries": native_entries,
         },
         "spell": {
-            "resolved": values.get("spell.resolved") == "true",
-            "build_skill_id": parse_int_text(values.get("spell.build_skill_id"), -1),
+            "resolved": spell_resolved,
+            "build_skill_id": parse_int_text(
+                values.get("spell.resolved_build_skill_id"), -1
+            ),
             "current_spell_id": parse_int_text(values.get("spell.current_spell_id"), -1),
             "progression_level": parse_int_text(values.get("spell.progression_level"), 0),
-            "output_count": parse_int_text(values.get("spell.output_count"), 0),
-            "damage": _parse_float(values, "spell.damage"),
-            "secondary_damage": _parse_float(values, "spell.secondary_damage"),
-            "secondary_damage_available": values.get("spell.secondary_damage_available") == "true",
-            "mana_cost": _parse_float(values, "spell.mana_cost"),
-            "mana_cost_available": values.get("spell.mana_cost_available") == "true",
+            "logical_output_count": len(logical_spell_outputs),
+            "outputs": logical_spell_outputs,
+            "raw_output_count": parse_int_text(values.get("spell.output_count"), 0),
+            "raw_outputs": [
+                _parse_float(values, f"spell.output.{index}")
+                for index in range(1, raw_spell_output_count + 1)
+            ],
+            "damage": spell_damage,
+            "secondary_damage": spell_secondary_damage,
+            "secondary_damage_available": secondary_damage_available,
+            "mana_cost": spell_mana_cost,
+            "mana_cost_available": mana_cost_available,
             "mana_spend_cost": _parse_float(values, "spell.mana_spend_cost"),
             "mana_spend_cost_available": values.get("spell.mana_spend_cost_available") == "true",
             "mana_output_scale": _parse_float(values, "spell.mana_output_scale"),
             "mana_output_scaled": values.get("spell.mana_output_scaled") == "true",
             "builder_seh_code": parse_int_text(values.get("spell.builder_seh_code"), 0),
             "error": values.get("spell.error", ""),
-            "outputs": [
-                _parse_float(values, f"spell.output.{index}")
-                for index in range(1, spell_output_count + 1)
-            ],
         },
         "raw": values,
     }

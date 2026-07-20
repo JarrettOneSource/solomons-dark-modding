@@ -38,7 +38,9 @@ def find_symbol_exact_or_contains(name):
     it = sym_table.getAllSymbols(True)
     while it.hasNext():
         sym = it.next()
-        if name.lower() in sym.getName().lower():
+        qualified_name = sym.getName(True)
+        if (name.lower() in sym.getName().lower() or
+                name.lower() in qualified_name.lower()):
             hits.append(sym)
     return hits
 
@@ -75,14 +77,14 @@ for name in names:
         try:
             target = toAddr(read_program_pointer(mem, slot_addr))
         except MemoryAccessException as exc:
-            print("%s @ %s slot_addr=%s ERROR %s" % (sym.getName(), addr, slot_addr, exc))
+            print("%s @ %s slot_addr=%s ERROR %s" % (sym.getName(True), addr, slot_addr, exc))
             continue
         func = fm.getFunctionContaining(target)
         if func is None:
             print("%s @ %s slot_addr=%s -> %s [no containing function]" %
-                  (sym.getName(), addr, slot_addr, target))
+                  (sym.getName(True), addr, slot_addr, target))
         else:
             print("%s @ %s slot_addr=%s -> %s %s" %
-                  (sym.getName(), addr, slot_addr, target, func.getName()))
+                  (sym.getName(True), addr, slot_addr, target, func.getName()))
 
 print("=== DONE ===")

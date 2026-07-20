@@ -1,0 +1,628 @@
+{
+  "sources": {
+    "atlas": "BadGuys.png",
+    "atlas_sha256": "af5717b37c81306d515eed6d9f8717fa97bd1c63b9530a7079738c457c97443e",
+    "bundle": "BadGuys.bundle",
+    "bundle_sha256": "a7b13b464e035e2099081ce942db4aa231fc7c20de1ecacbd9d0a590132c88d3",
+    "atlas_size": {
+      "width": 2048,
+      "height": 2048
+    },
+    "bundle_record_count": 2509
+  },
+  "native_references": {
+    "skeleton_vftable": "0x00786604",
+    "death_presenter_slot": "0x50",
+    "death_presenter": "0x0048D2A0",
+    "badguys_builder": "0x004E0DD0",
+    "anim_bouncer_ctor": "0x00453060",
+    "anim_bouncer_tick": "0x00456720",
+    "anim_bouncer_render": "0x00456A60"
+  },
+  "runtime_groups": {
+    "base_shatter": {
+      "bundle_object_offset": "0x46CC",
+      "records": [
+        113,
+        114,
+        115,
+        116,
+        117,
+        118,
+        119,
+        120,
+        121
+      ],
+      "normal_spawn_sequence_before_shuffle": [
+        113,
+        115,
+        118,
+        121,
+        120,
+        119,
+        116,
+        117,
+        117
+      ],
+      "enhanced_spawn_sequence_before_shuffle": [
+        113,
+        113,
+        113,
+        115,
+        118,
+        121,
+        120,
+        119,
+        116,
+        121,
+        120,
+        119,
+        116,
+        117,
+        117,
+        117,
+        117,
+        117
+      ]
+    },
+    "body_variant": {
+      "actor_field": "+0x230",
+      "bundle_object_offset": "0x46AC",
+      "records": [
+        92,
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99
+      ]
+    },
+    "extra_variant": {
+      "actor_field": "+0x233",
+      "bundle_object_offset": "0x46AC",
+      "records": [
+        100,
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109
+      ]
+    },
+    "skull": {
+      "bundle_object_offset": "0x49FC",
+      "records": [
+        1819,
+        1820,
+        1821,
+        1822
+      ]
+    },
+    "weapon": {
+      "actor_field": "+0x231",
+      "bundle_object_offset": "0x4AAC",
+      "records": [
+        2063,
+        2064,
+        2065,
+        2066
+      ]
+    },
+    "inline": {
+      "additive_flash": {
+        "object_offset": "0x0BB4",
+        "record": 15
+      },
+      "special_weapon_fragment": {
+        "object_offset": "0x2A54",
+        "record": 55
+      },
+      "unbind_flash": {
+        "object_offset": "0x4210",
+        "record": 86
+      }
+    }
+  },
+  "assets": [
+    {
+      "name": "additive-flash",
+      "use": "extra-variant flag and special weapon variant 5",
+      "record_index": 15,
+      "bundle_offset": 675,
+      "output": "badguys-0015-additive-flash.png",
+      "atlas_crop": {
+        "x": 804,
+        "y": 1090,
+        "width": 38,
+        "height": 37
+      }
+    },
+    {
+      "name": "special-weapon-fragment",
+      "use": "seven bouncers for weapon variant 5",
+      "record_index": 55,
+      "bundle_offset": 2475,
+      "output": "badguys-0055-special-weapon-fragment.png",
+      "atlas_crop": {
+        "x": 60,
+        "y": 435,
+        "width": 4,
+        "height": 23
+      }
+    },
+    {
+      "name": "unbind-flash",
+      "use": "always-spawned rotating fade",
+      "record_index": 86,
+      "bundle_offset": 3870,
+      "output": "badguys-0086-unbind-flash.png",
+      "atlas_crop": {
+        "x": 431,
+        "y": 462,
+        "width": 94,
+        "height": 94
+      }
+    },
+    {
+      "name": "body-variant-00",
+      "use": "actor byte +0x230",
+      "record_index": 92,
+      "bundle_offset": 4140,
+      "output": "badguys-0092-body-variant-00.png",
+      "atlas_crop": {
+        "x": 356,
+        "y": 1247,
+        "width": 22,
+        "height": 23
+      }
+    },
+    {
+      "name": "body-variant-01",
+      "use": "actor byte +0x230",
+      "record_index": 93,
+      "bundle_offset": 4185,
+      "output": "badguys-0093-body-variant-01.png",
+      "atlas_crop": {
+        "x": 1929,
+        "y": 913,
+        "width": 24,
+        "height": 22
+      }
+    },
+    {
+      "name": "body-variant-02",
+      "use": "actor byte +0x230",
+      "record_index": 94,
+      "bundle_offset": 4230,
+      "output": "badguys-0094-body-variant-02.png",
+      "atlas_crop": {
+        "x": 1767,
+        "y": 1432,
+        "width": 37,
+        "height": 28
+      }
+    },
+    {
+      "name": "body-variant-03",
+      "use": "actor byte +0x230",
+      "record_index": 95,
+      "bundle_offset": 4275,
+      "output": "badguys-0095-body-variant-03.png",
+      "atlas_crop": {
+        "x": 526,
+        "y": 921,
+        "width": 38,
+        "height": 35
+      }
+    },
+    {
+      "name": "body-variant-04",
+      "use": "actor byte +0x230",
+      "record_index": 96,
+      "bundle_offset": 4320,
+      "output": "badguys-0096-body-variant-04.png",
+      "atlas_crop": {
+        "x": 1441,
+        "y": 1882,
+        "width": 43,
+        "height": 37
+      }
+    },
+    {
+      "name": "body-variant-05",
+      "use": "actor byte +0x230",
+      "record_index": 97,
+      "bundle_offset": 4365,
+      "output": "badguys-0097-body-variant-05.png",
+      "atlas_crop": {
+        "x": 142,
+        "y": 1942,
+        "width": 34,
+        "height": 34
+      }
+    },
+    {
+      "name": "body-variant-06",
+      "use": "actor byte +0x230",
+      "record_index": 98,
+      "bundle_offset": 4410,
+      "output": "badguys-0098-body-variant-06.png",
+      "atlas_crop": {
+        "x": 189,
+        "y": 1025,
+        "width": 29,
+        "height": 29
+      }
+    },
+    {
+      "name": "body-variant-07",
+      "use": "actor byte +0x230",
+      "record_index": 99,
+      "bundle_offset": 4455,
+      "output": "badguys-0099-body-variant-07.png",
+      "atlas_crop": {
+        "x": 1331,
+        "y": 1815,
+        "width": 30,
+        "height": 26
+      }
+    },
+    {
+      "name": "extra-variant-00",
+      "use": "actor flag +0x233",
+      "record_index": 100,
+      "bundle_offset": 4500,
+      "output": "badguys-0100-extra-variant-00.png",
+      "atlas_crop": {
+        "x": 117,
+        "y": 281,
+        "width": 21,
+        "height": 24
+      }
+    },
+    {
+      "name": "extra-variant-01",
+      "use": "actor flag +0x233",
+      "record_index": 101,
+      "bundle_offset": 4545,
+      "output": "badguys-0101-extra-variant-01.png",
+      "atlas_crop": {
+        "x": 117,
+        "y": 564,
+        "width": 23,
+        "height": 20
+      }
+    },
+    {
+      "name": "extra-variant-02",
+      "use": "actor flag +0x233",
+      "record_index": 102,
+      "bundle_offset": 4590,
+      "output": "badguys-0102-extra-variant-02.png",
+      "atlas_crop": {
+        "x": 1995,
+        "y": 1281,
+        "width": 26,
+        "height": 33
+      }
+    },
+    {
+      "name": "extra-variant-03",
+      "use": "actor flag +0x233",
+      "record_index": 103,
+      "bundle_offset": 4635,
+      "output": "badguys-0103-extra-variant-03.png",
+      "atlas_crop": {
+        "x": 1826,
+        "y": 324,
+        "width": 30,
+        "height": 31
+      }
+    },
+    {
+      "name": "extra-variant-04",
+      "use": "actor flag +0x233",
+      "record_index": 104,
+      "bundle_offset": 4680,
+      "output": "badguys-0104-extra-variant-04.png",
+      "atlas_crop": {
+        "x": 365,
+        "y": 638,
+        "width": 13,
+        "height": 18
+      }
+    },
+    {
+      "name": "extra-variant-05",
+      "use": "actor flag +0x233",
+      "record_index": 105,
+      "bundle_offset": 4725,
+      "output": "badguys-0105-extra-variant-05.png",
+      "atlas_crop": {
+        "x": 347,
+        "y": 811,
+        "width": 20,
+        "height": 13
+      }
+    },
+    {
+      "name": "extra-variant-06",
+      "use": "actor flag +0x233",
+      "record_index": 106,
+      "bundle_offset": 4770,
+      "output": "badguys-0106-extra-variant-06.png",
+      "atlas_crop": {
+        "x": 417,
+        "y": 1930,
+        "width": 13,
+        "height": 20
+      }
+    },
+    {
+      "name": "extra-variant-07",
+      "use": "actor flag +0x233",
+      "record_index": 107,
+      "bundle_offset": 4815,
+      "output": "badguys-0107-extra-variant-07.png",
+      "atlas_crop": {
+        "x": 690,
+        "y": 341,
+        "width": 20,
+        "height": 13
+      }
+    },
+    {
+      "name": "extra-variant-08",
+      "use": "actor flag +0x233",
+      "record_index": 108,
+      "bundle_offset": 4860,
+      "output": "badguys-0108-extra-variant-08.png",
+      "atlas_crop": {
+        "x": 1655,
+        "y": 688,
+        "width": 22,
+        "height": 27
+      }
+    },
+    {
+      "name": "extra-variant-09",
+      "use": "actor flag +0x233",
+      "record_index": 109,
+      "bundle_offset": 4905,
+      "output": "badguys-0109-extra-variant-09.png",
+      "atlas_crop": {
+        "x": 1855,
+        "y": 913,
+        "width": 21,
+        "height": 28
+      }
+    },
+    {
+      "name": "base-shard-00",
+      "use": "base shuffled shatter",
+      "record_index": 113,
+      "bundle_offset": 5085,
+      "output": "badguys-0113-base-shard-00.png",
+      "atlas_crop": {
+        "x": 1317,
+        "y": 131,
+        "width": 11,
+        "height": 12
+      }
+    },
+    {
+      "name": "base-shard-01",
+      "use": "base shuffled shatter",
+      "record_index": 114,
+      "bundle_offset": 5130,
+      "output": "badguys-0114-base-shard-01.png",
+      "atlas_crop": {
+        "x": 559,
+        "y": 0,
+        "width": 11,
+        "height": 10
+      }
+    },
+    {
+      "name": "base-shard-02",
+      "use": "base shuffled shatter",
+      "record_index": 115,
+      "bundle_offset": 5175,
+      "output": "badguys-0115-base-shard-02.png",
+      "atlas_crop": {
+        "x": 1212,
+        "y": 0,
+        "width": 9,
+        "height": 8
+      }
+    },
+    {
+      "name": "base-shard-03",
+      "use": "base shuffled shatter",
+      "record_index": 116,
+      "bundle_offset": 5220,
+      "output": "badguys-0116-base-shard-03.png",
+      "atlas_crop": {
+        "x": 683,
+        "y": 0,
+        "width": 12,
+        "height": 7
+      }
+    },
+    {
+      "name": "base-shard-04",
+      "use": "base shuffled shatter",
+      "record_index": 117,
+      "bundle_offset": 5265,
+      "output": "badguys-0117-base-shard-04.png",
+      "atlas_crop": {
+        "x": 32,
+        "y": 5,
+        "width": 5,
+        "height": 5
+      }
+    },
+    {
+      "name": "base-shard-05",
+      "use": "base shuffled shatter",
+      "record_index": 118,
+      "bundle_offset": 5310,
+      "output": "badguys-0118-base-shard-05.png",
+      "atlas_crop": {
+        "x": 710,
+        "y": 0,
+        "width": 8,
+        "height": 9
+      }
+    },
+    {
+      "name": "base-shard-06",
+      "use": "base shuffled shatter",
+      "record_index": 119,
+      "bundle_offset": 5355,
+      "output": "badguys-0119-base-shard-06.png",
+      "atlas_crop": {
+        "x": 346,
+        "y": 0,
+        "width": 12,
+        "height": 9
+      }
+    },
+    {
+      "name": "base-shard-07",
+      "use": "base shuffled shatter",
+      "record_index": 120,
+      "bundle_offset": 5400,
+      "output": "badguys-0120-base-shard-07.png",
+      "atlas_crop": {
+        "x": 1283,
+        "y": 0,
+        "width": 9,
+        "height": 7
+      }
+    },
+    {
+      "name": "base-shard-08",
+      "use": "base shuffled shatter",
+      "record_index": 121,
+      "bundle_offset": 5445,
+      "output": "badguys-0121-base-shard-08.png",
+      "atlas_crop": {
+        "x": 1980,
+        "y": 0,
+        "width": 9,
+        "height": 7
+      }
+    },
+    {
+      "name": "skull-00",
+      "use": "one random skull is always spawned",
+      "record_index": 1819,
+      "bundle_offset": 86991,
+      "output": "badguys-1819-skull-00.png",
+      "atlas_crop": {
+        "x": 1959,
+        "y": 1059,
+        "width": 23,
+        "height": 22
+      }
+    },
+    {
+      "name": "skull-01",
+      "use": "one random skull is always spawned",
+      "record_index": 1820,
+      "bundle_offset": 87036,
+      "output": "badguys-1820-skull-01.png",
+      "atlas_crop": {
+        "x": 647,
+        "y": 748,
+        "width": 22,
+        "height": 22
+      }
+    },
+    {
+      "name": "skull-02",
+      "use": "one random skull is always spawned",
+      "record_index": 1821,
+      "bundle_offset": 87081,
+      "output": "badguys-1821-skull-02.png",
+      "atlas_crop": {
+        "x": 1527,
+        "y": 1055,
+        "width": 22,
+        "height": 21
+      }
+    },
+    {
+      "name": "skull-03",
+      "use": "one random skull is always spawned",
+      "record_index": 1822,
+      "bundle_offset": 87126,
+      "output": "badguys-1822-skull-03.png",
+      "atlas_crop": {
+        "x": 1448,
+        "y": 1128,
+        "width": 22,
+        "height": 22
+      }
+    },
+    {
+      "name": "weapon-01-sword",
+      "use": "actor byte +0x231 value 1",
+      "record_index": 2063,
+      "bundle_offset": 97971,
+      "output": "badguys-2063-weapon-01-sword.png",
+      "atlas_crop": {
+        "x": 478,
+        "y": 1970,
+        "width": 25,
+        "height": 64
+      }
+    },
+    {
+      "name": "weapon-02-mace",
+      "use": "actor byte +0x231 value 2",
+      "record_index": 2064,
+      "bundle_offset": 98016,
+      "output": "badguys-2064-weapon-02-mace.png",
+      "atlas_crop": {
+        "x": 500,
+        "y": 619,
+        "width": 19,
+        "height": 33
+      }
+    },
+    {
+      "name": "weapon-03-flail",
+      "use": "actor byte +0x231 value 3",
+      "record_index": 2065,
+      "bundle_offset": 98061,
+      "output": "badguys-2065-weapon-03-flail.png",
+      "atlas_crop": {
+        "x": 356,
+        "y": 1271,
+        "width": 20,
+        "height": 19
+      }
+    },
+    {
+      "name": "weapon-04-axe",
+      "use": "actor byte +0x231 value 4",
+      "record_index": 2066,
+      "bundle_offset": 98106,
+      "output": "badguys-2066-weapon-04-axe.png",
+      "atlas_crop": {
+        "x": 671,
+        "y": 716,
+        "width": 26,
+        "height": 48
+      }
+    }
+  ]
+}

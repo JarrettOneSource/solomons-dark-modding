@@ -1,4 +1,4 @@
-constexpr std::size_t kAirChainRuntimeHistoryCapacity = 64;
+constexpr std::size_t kAirChainRuntimeHistoryCapacity = 128;
 
 float AirChainEndpointDistance(float left_x, float left_y, float right_x, float right_y) {
     const float dx = left_x - right_x;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify remote-player damage flash presentation syncs and clears."""
+"""Verify complete Magic Shield state replication in both directions."""
 
 from __future__ import annotations
 
@@ -25,16 +25,35 @@ from verify_local_multiplayer_sync import (
 )
 
 
-PULSE_TIMER = 18.0
-PULSE_PROGRESS = 1.0
-VISUAL_EPSILON = 0.01
+ACTIVE_SHIELD = {
+    "absorb_remaining": 25.0,
+    "absorb_capacity": 25.0,
+    "explosion_fraction": 0.5,
+    "hit_flash": 0.0,
+}
+HIT_SHIELD = {
+    "absorb_remaining": 5.0,
+    "absorb_capacity": 25.0,
+    "explosion_fraction": 0.5,
+    "hit_flash": 1.0,
+}
+CLEARED_SHIELD = {
+    "absorb_remaining": 0.0,
+    "absorb_capacity": 0.0,
+    "explosion_fraction": 0.0,
+    "hit_flash": 0.0,
+}
+STATE_TOLERANCE = 0.01
 
 
 def lua_id(participant_id: int) -> str:
     return f"0x{participant_id:X}"
 
 
-def set_local_damage_visual(pipe_name: str, timer: float, progress: float) -> dict[str, str]:
+def set_local_magic_shield_state(
+    pipe_name: str,
+    state: dict[str, float],
+) -> dict[str, str]:
     code = f"""
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
 local player = sd.player.get_state()
@@ -42,113 +61,104 @@ if player == nil or player.actor_address == nil or player.actor_address == 0 the
   error("player actor unavailable")
 end
 local actor = tonumber(player.actor_address) or 0
-local otimer = sd.debug.layout_offset("actor_render_drive_effect_timer")
-local oprogress = sd.debug.layout_offset("actor_render_drive_effect_progress")
-emit("actor", actor)
-emit("write.effect_timer", sd.debug.write_float(actor + otimer, {timer}))
-emit("write.effect_progress", sd.debug.write_float(actor + oprogress, {progress}))
-emit("effect_timer", sd.debug.read_float(actor + otimer) or 0)
-emit("effect_progress", sd.debug.read_float(actor + oprogress) or 0)
+local oremaining = sd.debug.layout_offset("actor_magic_shield_absorb_remaining")
+local ocapacity = sd.debug.layout_offset("actor_magic_shield_absorb_capacity")
+local oexplosion = sd.debug.layout_offset("actor_magic_shield_explosion_fraction")
+local oflash = sd.debug.layout_offset("actor_magic_shield_hit_flash")
+emit("write.absorb_remaining", sd.debug.write_float(actor + oremaining, {state['absorb_remaining']}))
+emit("write.absorb_capacity", sd.debug.write_float(actor + ocapacity, {state['absorb_capacity']}))
+emit("write.explosion_fraction", sd.debug.write_float(actor + oexplosion, {state['explosion_fraction']}))
+emit("write.hit_flash", sd.debug.write_float(actor + oflash, {state['hit_flash']}))
+emit("absorb_remaining", sd.debug.read_float(actor + oremaining) or 0)
+emit("absorb_capacity", sd.debug.read_float(actor + ocapacity) or 0)
+emit("explosion_fraction", sd.debug.read_float(actor + oexplosion) or 0)
+emit("hit_flash", sd.debug.read_float(actor + oflash) or 0)
 """
     values = parse_key_values(lua(pipe_name, code))
-    if values.get("write.effect_timer") != "true" or values.get("write.effect_progress") != "true":
-        raise VerifyFailure(f"failed to set local damage visual on {pipe_name}: {values}")
+    write_keys = (
+        "write.absorb_remaining",
+        "write.absorb_capacity",
+        "write.explosion_fraction",
+        "write.hit_flash",
+    )
+    if any(values.get(key) != "true" for key in write_keys):
+        raise VerifyFailure(f"failed to set local Magic Shield state on {pipe_name}: {values}")
     return values
 
 
-def query_local_damage_visual(pipe_name: str) -> dict[str, str]:
+def query_local_magic_shield_state(pipe_name: str) -> dict[str, str]:
     code = """
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
 local player = sd.player.get_state()
-if player == nil or player.actor_address == nil or player.actor_address == 0 then
+if player == nil then
   emit("available", false)
   return
 end
-local actor = tonumber(player.actor_address) or 0
-local otimer = sd.debug.layout_offset("actor_render_drive_effect_timer")
-local oprogress = sd.debug.layout_offset("actor_render_drive_effect_progress")
-local ooverlay = sd.debug.layout_offset("actor_render_drive_overlay_alpha")
-local ophase = sd.debug.layout_offset("actor_render_drive_move_blend")
 emit("available", true)
-emit("actor", actor)
-emit("effect_timer", sd.debug.read_float(actor + otimer) or 0)
-emit("effect_progress", sd.debug.read_float(actor + oprogress) or 0)
-emit("overlay_alpha", sd.debug.read_float(actor + ooverlay) or 0)
-emit("overlay_phase", sd.debug.read_float(actor + ophase) or 0)
+emit("absorb_remaining", player.magic_shield_absorb_remaining or 0)
+emit("absorb_capacity", player.magic_shield_absorb_capacity or 0)
+emit("explosion_fraction", player.magic_shield_explosion_fraction or 0)
+emit("hit_flash", player.magic_shield_hit_flash or 0)
 """
     return parse_key_values(lua(pipe_name, code))
 
 
-def query_remote_damage_visual(observer_pipe: str, participant_id: int) -> dict[str, str]:
+def query_remote_magic_shield_state(
+    observer_pipe: str,
+    participant_id: int,
+) -> dict[str, str]:
     code = f"""
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
-local id = {lua_id(participant_id)}
-local snapshot = sd.bots.get_participant_state(id)
+local snapshot = sd.bots.get_participant_state({lua_id(participant_id)})
 if snapshot == nil then
   emit("available", false)
   return
 end
 emit("available", snapshot.available)
 emit("materialized", snapshot.entity_materialized)
-emit("actor", snapshot.actor_address or 0)
-emit("hp", snapshot.hp or 0)
-emit("max_hp", snapshot.max_hp or 0)
-local actor = tonumber(snapshot.actor_address) or 0
-if actor == 0 then
-  emit("effect_timer", 0)
-  emit("effect_progress", 0)
-  emit("overlay_alpha", 0)
-  emit("overlay_phase", 0)
-  return
-end
-local otimer = sd.debug.layout_offset("actor_render_drive_effect_timer")
-local oprogress = sd.debug.layout_offset("actor_render_drive_effect_progress")
-local ooverlay = sd.debug.layout_offset("actor_render_drive_overlay_alpha")
-local ophase = sd.debug.layout_offset("actor_render_drive_move_blend")
-emit("effect_timer", sd.debug.read_float(actor + otimer) or 0)
-emit("effect_progress", sd.debug.read_float(actor + oprogress) or 0)
-emit("overlay_alpha", sd.debug.read_float(actor + ooverlay) or 0)
-emit("overlay_phase", sd.debug.read_float(actor + ophase) or 0)
+emit("absorb_remaining", snapshot.magic_shield_absorb_remaining or 0)
+emit("absorb_capacity", snapshot.magic_shield_absorb_capacity or 0)
+emit("explosion_fraction", snapshot.magic_shield_explosion_fraction or 0)
+emit("hit_flash", snapshot.magic_shield_hit_flash or 0)
 """
     return parse_key_values(lua(observer_pipe, code))
 
 
 def number(values: dict[str, str], key: str) -> float:
     try:
-        value = float(values.get(key, "nan"))
+        return float(values.get(key, "nan"))
     except ValueError:
         return math.nan
-    return value
 
 
-def visual_active(values: dict[str, str]) -> bool:
-    return (
-        number(values, "effect_timer") > VISUAL_EPSILON
-        or number(values, "effect_progress") > VISUAL_EPSILON
+def state_matches(values: dict[str, str], expected: dict[str, float]) -> bool:
+    return all(
+        math.isclose(number(values, key), value, rel_tol=0.0, abs_tol=STATE_TOLERANCE)
+        for key, value in expected.items()
     )
 
 
-def wait_for_remote_visual_state(
+def wait_for_remote_magic_shield_state(
     observer_pipe: str,
     participant_id: int,
+    expected: dict[str, float],
     *,
-    expect_active: bool,
     timeout: float,
 ) -> dict[str, str]:
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
     while time.monotonic() < deadline:
-        last = query_remote_damage_visual(observer_pipe, participant_id)
+        last = query_remote_magic_shield_state(observer_pipe, participant_id)
         if (
             last.get("available") == "true"
             and last.get("materialized") == "true"
-            and visual_active(last) == expect_active
+            and state_matches(last, expected)
         ):
             return last
         time.sleep(0.12)
     raise VerifyFailure(
-        f"remote participant {participant_id:#x} damage visual did not reach "
-        f"active={expect_active} on {observer_pipe}; last={last}"
+        f"remote Magic Shield state did not converge on {observer_pipe}; "
+        f"expected={expected} last={last}"
     )
 
 
@@ -159,45 +169,32 @@ def verify_one_direction(
     observer_pipe: str,
     participant_id: int,
 ) -> dict[str, object]:
-    clear_before = set_local_damage_visual(owner_pipe, 0.0, 0.0)
-    owner_clear_seen = query_local_damage_visual(owner_pipe)
-    remote_clear_seen = wait_for_remote_visual_state(
-        observer_pipe,
-        participant_id,
-        expect_active=False,
-        timeout=3.0,
-    )
-
-    pulse = set_local_damage_visual(owner_pipe, PULSE_TIMER, PULSE_PROGRESS)
-    owner_pulse_seen = query_local_damage_visual(owner_pipe)
-    remote_pulse_seen = wait_for_remote_visual_state(
-        observer_pipe,
-        participant_id,
-        expect_active=True,
-        timeout=5.0,
-    )
-
-    cleared = set_local_damage_visual(owner_pipe, 0.0, 0.0)
-    owner_cleared_seen = query_local_damage_visual(owner_pipe)
-    remote_cleared_seen = wait_for_remote_visual_state(
-        observer_pipe,
-        participant_id,
-        expect_active=False,
-        timeout=5.0,
-    )
-
-    return {
-        "owner": owner_name,
-        "clear_before": clear_before,
-        "owner_clear_seen": owner_clear_seen,
-        "remote_clear_seen": remote_clear_seen,
-        "pulse": pulse,
-        "owner_pulse_seen": owner_pulse_seen,
-        "remote_pulse_seen": remote_pulse_seen,
-        "cleared": cleared,
-        "owner_cleared_seen": owner_cleared_seen,
-        "remote_cleared_seen": remote_cleared_seen,
-    }
+    observations: dict[str, object] = {"owner": owner_name}
+    for label, expected in (
+        ("cleared_before", CLEARED_SHIELD),
+        ("active", ACTIVE_SHIELD),
+        ("hit", HIT_SHIELD),
+        ("cleared_after", CLEARED_SHIELD),
+    ):
+        written = set_local_magic_shield_state(owner_pipe, expected)
+        owner_seen = query_local_magic_shield_state(owner_pipe)
+        if not state_matches(owner_seen, expected):
+            raise VerifyFailure(
+                f"local Magic Shield state mismatch on {owner_pipe}; "
+                f"expected={expected} actual={owner_seen}"
+            )
+        remote_seen = wait_for_remote_magic_shield_state(
+            observer_pipe,
+            participant_id,
+            expected,
+            timeout=5.0,
+        )
+        observations[label] = {
+            "written": written,
+            "owner_seen": owner_seen,
+            "remote_seen": remote_seen,
+        }
+    return observations
 
 
 def main() -> int:

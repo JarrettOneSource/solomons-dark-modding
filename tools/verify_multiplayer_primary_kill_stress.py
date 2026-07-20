@@ -48,6 +48,7 @@ from verify_multiplayer_level_up_offer_sync import (
     publish_offer,
     query_progression_entry,
     query_progression_stats,
+    wait_for_progression_entry_active,
     wait_for_choice_result,
     wait_for_client_offer,
     wait_for_wait_status,
@@ -63,6 +64,7 @@ from verify_multiplayer_level_up_offer_sync import (
 # are still captured independently in run_verifier's except handler. Pass
 # --diagnostics to re-enable the full per-kill capture when investigating.
 DIAGNOSTICS_ENABLED = False
+FAST_LUA_TIMEOUT_SECONDS = 8.0
 
 _RUN_START_MONOTONIC: float | None = None
 
@@ -136,6 +138,7 @@ LOOT_GOLD_TYPE_ID = 0x07DC
 LOOT_ORB_TYPE_ID = 0x07DB
 LOOT_ITEM_DROP_TYPE_ID = 0x07DD
 LOOT_POSITION_TOLERANCE = 1.0
+ANIMATED_LOOT_POSITION_TOLERANCE = 8.0
 LOOT_RADIUS_TOLERANCE = 0.25
 LOOT_VALUE_TOLERANCE = 0.01
 NATURAL_DROP_WAIT_SECONDS = 1.8
@@ -417,7 +420,11 @@ def append_runtime_context(record: dict[str, Any], label: str) -> None:
 
 
 def clear_gameplay_mouse_left(pipe_name: str) -> dict[str, str]:
-    return values(pipe_name, FAST_CLEAR_GAMEPLAY_PRIMARY_INPUT_LUA, timeout=2.5)
+    return values(
+        pipe_name,
+        FAST_CLEAR_GAMEPLAY_PRIMARY_INPUT_LUA,
+        timeout=FAST_LUA_TIMEOUT_SECONDS,
+    )
 
 
 def clear_gameplay_mouse_left_diagnostics(pipe_name: str) -> dict[str, str]:
@@ -851,6 +858,7 @@ local wanted_network_id = tonumber("__NETWORK_ID__") or 0
 local target_x = tonumber("__X__") or 0
 local target_y = tonumber("__Y__") or 0
 local radius = tonumber("__RADIUS__") or 360
+local verbose = __VERBOSE__
 local radius_sq = radius * radius
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
 local function hx(v) return string.format("0x%08X", tonumber(v) or 0) end
@@ -863,7 +871,7 @@ for _, actor in ipairs(sd.world.list_actors and sd.world.list_actors() or {}) do
   if address ~= 0 then local_by_address[address] = actor end
   if actor.tracked_enemy and not actor.dead and (tonumber(actor.hp) or 0) > 0.05 then
     live_local = live_local + 1
-    if live_diag_count < 8 then
+    if verbose and live_diag_count < 8 then
       local prefix = "live." .. tostring(live_diag_count)
       emit(prefix .. ".actor_address", hx(address))
       emit(prefix .. ".type_id", actor.object_type_id or 0)
@@ -884,6 +892,19 @@ local replicated = sd.world.get_replicated_actors and sd.world.get_replicated_ac
 emit("rep.valid", replicated ~= nil)
 emit("rep.actor_count", replicated and replicated.actor_count or 0)
 emit("rep.binding_count", replicated and replicated.binding_count or 0)
+emit("rep.apply_valid", replicated and replicated.apply_valid or false)
+emit("rep.apply_holding_stale_snapshot", replicated and replicated.apply_holding_stale_snapshot or false)
+emit("rep.apply_source_snapshot_age_ms", replicated and replicated.apply_source_snapshot_age_ms or 0)
+emit("rep.sequence", replicated and replicated.sequence or 0)
+emit("rep.scene_epoch", replicated and replicated.scene_epoch or 0)
+emit("rep.received_ms", replicated and replicated.received_ms or 0)
+emit("rep.age_ms", replicated and math.max(0, (tonumber(replicated.sampled_ms) or 0) - (tonumber(replicated.received_ms) or 0)) or 0)
+emit("rep.apply_sequence", replicated and replicated.apply_sequence or 0)
+emit("rep.apply_scene_epoch", replicated and replicated.apply_scene_epoch or 0)
+emit("rep.applied_ms", replicated and replicated.applied_ms or 0)
+emit("rep.apply_age_ms", replicated and math.max(0, (tonumber(replicated.sampled_ms) or 0) - (tonumber(replicated.applied_ms) or 0)) or 0)
+emit("rep.local_actor_count", replicated and replicated.local_actor_count or 0)
+emit("rep.matched_actor_count", replicated and replicated.matched_actor_count or 0)
 local local_by_network = {}
 if replicated and replicated.bindings then
   local binding_diag_count = 0
@@ -893,7 +914,7 @@ if replicated and replicated.bindings then
     if id ~= 0 and address ~= 0 and binding.matched and not binding.parked and not binding.removed then
       local_by_network[id] = local_by_address[address]
     end
-    if binding_diag_count < 8 then
+    if verbose and binding_diag_count < 8 then
       local prefix = "binding." .. tostring(binding_diag_count)
       emit(prefix .. ".network_id", string.format("%.0f", id))
       emit(prefix .. ".local_actor_address", hx(address))
@@ -909,6 +930,7 @@ local best_d2 = nil
 local nearest = nil
 local nearest_d2 = nil
 local rep_diag_count = 0
+local replicated_tracked_actor_count = 0
 if replicated and replicated.actors then
   for _, actor in ipairs(replicated.actors) do
     local id = tonumber(actor.network_actor_id) or 0
@@ -918,6 +940,9 @@ if replicated and replicated.actors then
     local max_hp = tonumber(actor.max_hp) or 0
     local dead = actor.dead and true or false
     local tracked = actor.tracked_enemy and true or false
+    if tracked then
+      replicated_tracked_actor_count = replicated_tracked_actor_count + 1
+    end
     local matches_id = wanted_network_id ~= 0 and id == wanted_network_id
     local dx = x - target_x
     local dy = y - target_y
@@ -926,7 +951,7 @@ if replicated and replicated.actors then
       nearest = actor
       nearest_d2 = d2
     end
-    if rep_diag_count < 8 then
+    if verbose and rep_diag_count < 8 then
       local prefix = "rep." .. tostring(rep_diag_count)
       emit(prefix .. ".network_id", string.format("%.0f", id))
       emit(prefix .. ".type_id", actor.object_type_id or 0)
@@ -948,8 +973,9 @@ if replicated and replicated.actors then
     end
   end
 end
+emit("rep.tracked_actor_count", replicated_tracked_actor_count)
 emit("found", best ~= nil)
-if best == nil and nearest ~= nil then
+if verbose and best == nil and nearest ~= nil then
   emit("nearest.network_id", string.format("%.0f", tonumber(nearest.network_actor_id) or 0))
   emit("nearest.type_id", nearest.object_type_id or 0)
   emit("nearest.enemy_type", nearest.enemy_type or -1)
@@ -1463,6 +1489,23 @@ for _, actor in ipairs(sd.world.list_actors and sd.world.list_actors() or {}) do
   end
 end
 emit("gold.count", count)
+"""
+
+
+ACTOR_LIST_MEMBERSHIP_LUA = r"""
+local actor_address = tonumber("__ACTOR__") or 0
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local found = false
+local object_type_id = 0
+for _, actor in ipairs(sd.world.list_actors and sd.world.list_actors() or {}) do
+  if (tonumber(actor.actor_address) or 0) == actor_address then
+    found = true
+    object_type_id = tonumber(actor.object_type_id) or 0
+    break
+  end
+end
+emit("found", found)
+emit("object_type_id", object_type_id)
 """
 
 
@@ -2034,6 +2077,12 @@ def spawn_one_enemy(
     actor_address = parse_int(result.get("actor_address"))
     if actor_address == 0:
         raise VerifyFailure(f"manual run enemy spawn returned no actor: spawn={spawn} result={result}")
+    network_actor_id = parse_int(result.get("network_actor_id"))
+    if network_actor_id == 0:
+        raise VerifyFailure(
+            "manual run enemy spawn returned no network actor id: "
+            f"spawn={spawn} result={result}"
+        )
     config = configure_enemy(actor_address, x, y, setup_hp)
     inspect = inspect_spawned_actor(actor_address, x, y)
     return {
@@ -2042,6 +2091,7 @@ def spawn_one_enemy(
         "config": config,
         "inspect": inspect,
         "actor_address": actor_address,
+        "network_actor_id": network_actor_id,
         "setup_hp": setup_hp,
         "freeze_on_spawn": freeze_on_spawn,
         "x": x,
@@ -2065,23 +2115,20 @@ def find_target(
     *,
     require_local_binding: bool = True,
 ) -> dict[str, str]:
-    code = (
-        FIND_TARGET_LUA
-        .replace("__NETWORK_ID__", str(network_id))
-        .replace("__X__", f"{x:.3f}")
-        .replace("__Y__", f"{y:.3f}")
-        .replace("__RADIUS__", "480")
-    )
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
     while time.monotonic() < deadline:
-        last = values(pipe_name, code)
+        last = find_target_or_last(pipe_name, x, y, network_id)
         if last.get("found") == "true" and (
             not require_local_binding or last.get("local.found") == "true"
         ):
             return last
         time.sleep(0.12)
-    raise VerifyFailure(f"{pipe_name} did not find exact manual enemy target: network_id={network_id} last={last}")
+    diagnostic = diagnose_target_or_last(pipe_name, x, y, network_id)
+    raise VerifyFailure(
+        f"{pipe_name} did not find exact manual enemy target: "
+        f"network_id={network_id} last={last} diagnostic={diagnostic}"
+    )
 
 
 def require_target_alive(label: str, target_state: dict[str, str], diagnostics: dict[str, Any]) -> None:
@@ -2947,6 +2994,49 @@ def target_state_alive(state: dict[str, str]) -> bool:
     return not target_state_dead(state)
 
 
+def finalize_late_primary_death(
+    direction: Direction,
+    target: dict[str, Any],
+    attempt: dict[str, Any],
+    settled_target: dict[str, dict[str, str]],
+) -> bool:
+    if attempt.get("status") != "native_primary_no_kill":
+        return False
+    death_visible = any(
+        target_state_dead(settled_target.get(side, {}))
+        for side in ("host", "client")
+    )
+    target_removed = all(
+        settled_target.get(side, {}).get("found") == "false"
+        and parse_int(
+            settled_target.get(side, {}).get("live_local_count")
+        ) == 0
+        for side in ("host", "client")
+    )
+    if not death_visible and not target_removed:
+        return False
+
+    death_logs = require_death_logs(
+        direction,
+        {
+            "network_id": int(target["network_id"]),
+            "actor_address": int(target["host_actor_address"]),
+            "x": float(target["x"]),
+            "y": float(target["y"]),
+        },
+        int(attempt["source_log_offset"]),
+        int(attempt["receiver_log_offset"]),
+        timeout=8.0,
+    )
+    attempt["target_after_late_settle"] = settled_target
+    if target_removed:
+        attempt["target_removed_after_late_death"] = True
+    attempt["death_logs"] = death_logs
+    attempt["late_death_observed"] = True
+    attempt["status"] = "death_logs_observed"
+    return True
+
+
 def cast_timeline_has_source_effect(timeline: list[dict[str, Any]]) -> bool:
     for sample in timeline:
         source = sample.get("source")
@@ -3033,13 +3123,34 @@ def wait_for_death(
     )
 
 
-def find_target_or_last(pipe_name: str, x: float, y: float, network_id: int) -> dict[str, str]:
-    code = (
+def build_find_target_lua(
+    x: float,
+    y: float,
+    network_id: int,
+    *,
+    verbose: bool,
+) -> str:
+    return (
         FIND_TARGET_LUA
         .replace("__NETWORK_ID__", str(network_id))
         .replace("__X__", f"{x:.3f}")
         .replace("__Y__", f"{y:.3f}")
         .replace("__RADIUS__", "480")
+        .replace("__VERBOSE__", "true" if verbose else "false")
+    )
+
+
+def find_target_or_last(pipe_name: str, x: float, y: float, network_id: int) -> dict[str, str]:
+    code = build_find_target_lua(x, y, network_id, verbose=False)
+    try:
+        return values(pipe_name, code)
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def diagnose_target_or_last(pipe_name: str, x: float, y: float, network_id: int) -> dict[str, str]:
+    code = (
+        build_find_target_lua(x, y, network_id, verbose=True)
     )
     try:
         return values(pipe_name, code)
@@ -3074,7 +3185,8 @@ def wait_for_target_hp(
         time.sleep(0.1)
     raise VerifyFailure(
         f"{pipe_name} did not converge target hp to {expected_hp}: "
-        f"network_id={network_id} last={last}"
+        f"network_id={network_id} last={last} "
+        f"diagnostic={diagnose_target_or_last(pipe_name, x, y, network_id)}"
     )
 
 
@@ -3111,7 +3223,8 @@ def wait_for_target_hp_at_least(
         time.sleep(0.1)
     raise VerifyFailure(
         f"{pipe_name} did not converge target hp to at least {min_hp}: "
-        f"network_id={network_id} last={last}"
+        f"network_id={network_id} last={last} "
+        f"diagnostic={diagnose_target_or_last(pipe_name, x, y, network_id)}"
     )
 
 
@@ -3131,6 +3244,16 @@ def require_death_logs(
         last_source = log_after(direction.source_log, source_offset)
         last_receiver = log_after(direction.receiver_log, receiver_offset)
         if direction.source_pipe == HOST_PIPE:
+            receiver_removed_without_death = (
+                "world_snapshot: unregistered extra run actor" in last_receiver
+                and f"network_actor_id={network_id}" in last_receiver
+            )
+            if receiver_removed_without_death:
+                raise VerifyFailure(
+                    f"{direction.name}: receiver structurally removed target {network_id} "
+                    "before its authoritative native death presentation. "
+                    f"receiver_tail={last_receiver[-3000:]}"
+                )
             source_ok = "enemy.death hook invoked" in last_source and actor_hex in last_source
             receiver_ok = (
                 "world_snapshot: triggered replicated run enemy death" in last_receiver
@@ -3167,6 +3290,28 @@ def list_host_active_native_gold_addresses() -> set[int]:
         and parse_int(row.get("amount")) > 0
         and parse_int(row.get("lifetime")) != 0
     }
+
+
+def wait_for_native_actor_absent(
+    pipe_name: str,
+    actor_address: int,
+    label: str,
+    timeout: float = 6.0,
+) -> dict[str, str]:
+    if actor_address == 0:
+        raise VerifyFailure(f"{label}: native actor address is missing")
+    code = ACTOR_LIST_MEMBERSHIP_LUA.replace("__ACTOR__", str(actor_address))
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = values(pipe_name, code)
+        if last.get("found") != "true":
+            return last
+        time.sleep(0.1)
+    raise VerifyFailure(
+        f"{label}: native actor remained registered after accepted pickup: "
+        f"actor={actor_address:#x} last={last}"
+    )
 
 
 def lua_excluded_address_table(addresses: set[int]) -> str:
@@ -3266,6 +3411,16 @@ def verify_forced_gold_drop(amount: int, x: float, y: float, pickup_pipe: str) -
         }
         pickup_result = post_placement_pickup_state["pickup_result"]
     absent = wait_for_replicated_gold_absent(CLIENT_PIPE, amount, x, y, timeout=6.0)
+    host_actor_absent = wait_for_native_actor_absent(
+        HOST_PIPE,
+        parse_int(host_drop.get("actor_address")),
+        f"forced_gold.{network_drop_id}.host",
+    )
+    client_actor_absent = wait_for_native_actor_absent(
+        CLIENT_PIPE,
+        parse_int(client_drop.get("local_actor_address")),
+        f"forced_gold.{network_drop_id}.client",
+    )
     return {
         "before_host_gold_count": len(before_addresses),
         "pre_spawn_client_loot": pre_spawn_client_loot,
@@ -3287,6 +3442,8 @@ def verify_forced_gold_drop(amount: int, x: float, y: float, pickup_pipe: str) -
         "pickup": pickup,
         "pickup_result": pickup_result,
         "absent_after_pickup": absent,
+        "host_native_actor_absent_after_pickup": host_actor_absent,
+        "client_native_actor_absent_after_pickup": client_actor_absent,
     }
 
 
@@ -3460,32 +3617,74 @@ def find_loot_row_by_id(capture: dict[str, str], network_drop_id: int) -> dict[s
     return None
 
 
+def client_loot_presentation_converged(drop: dict[str, Any]) -> bool:
+    if (
+        not drop["active"]
+        or not drop["materialized"]
+        or drop["local_actor_address"] == 0
+        or drop["actor_type_id"] != drop["type_id"]
+        or distance(
+            drop["x"],
+            drop["y"],
+            drop["actor_x"],
+            drop["actor_y"],
+        ) > LOOT_POSITION_TOLERANCE
+        or abs(drop["radius"] - drop["actor_radius"])
+        > LOOT_RADIUS_TOLERANCE
+    ):
+        return False
+
+    if drop["type_id"] == LOOT_GOLD_TYPE_ID:
+        return (
+            drop["actor_amount"] == drop["amount"]
+            and drop["actor_amount_tier"] == drop["amount_tier"]
+        )
+    if drop["type_id"] == LOOT_ORB_TYPE_ID:
+        return (
+            drop["actor_amount_tier"] == drop["amount_tier"]
+            and abs(drop["actor_value"] - drop["value"])
+            <= LOOT_VALUE_TOLERANCE
+        )
+    if drop["type_id"] == LOOT_ITEM_DROP_TYPE_ID:
+        return (
+            drop["actor_item_type_id"] == drop["item_type_id"]
+            and drop["actor_item_slot"] == drop["item_slot"]
+            and drop["actor_stack_count"] == drop["stack_count"]
+        )
+    return False
+
+
 def wait_for_client_materialized_loot(
     network_drop_id: int,
     authority_participant_id: int,
     timeout: float = 5.0,
 ) -> dict[str, Any]:
+    started = time.monotonic()
     deadline = time.monotonic() + timeout
+    attempts = 0
     last_capture: dict[str, str] = {}
     last_row: dict[str, Any] | None = None
     while time.monotonic() < deadline:
+        attempts += 1
         last_capture = capture_replicated_loot(CLIENT_PIPE)
         last_row = find_loot_row_by_id(last_capture, network_drop_id)
         authority_id = parse_int(last_capture.get("loot.authority_participant_id"))
         if (
             last_row is not None
-            and last_row["active"]
-            and last_row["materialized"]
-            and last_row["local_actor_address"] != 0
+            and client_loot_presentation_converged(last_row)
             and authority_id == authority_participant_id
         ):
             return {
                 "capture": summarize_replicated_loot_capture(last_capture),
                 "drop": last_row,
+                "presentation_convergence": {
+                    "attempts": attempts,
+                    "elapsed_seconds": time.monotonic() - started,
+                },
             }
-        time.sleep(0.1)
+        time.sleep(0.03)
     raise VerifyFailure(
-        "client did not materialize host-authored natural loot drop "
+        "client natural-loot actor did not converge to its received snapshot "
         f"network_drop_id={network_drop_id}: last_row={last_row} "
         f"last_capture={summarize_replicated_loot_capture(last_capture)}"
     )
@@ -3507,17 +3706,24 @@ def compare_replicated_loot_drop(host_drop: dict[str, Any], client_drop: dict[st
         fail("client did not materialize a presentation actor")
     if client_drop["actor_type_id"] != host_drop["type_id"]:
         fail("client presentation actor native type differs")
+    if client_drop["presentation_state"] != host_drop["presentation_state"]:
+        fail("drop presentation state differs")
 
     snapshot_position_delta = distance(
         host_drop["x"], host_drop["y"], client_drop["x"], client_drop["y"])
     actor_position_delta = distance(
-        host_drop["x"], host_drop["y"], client_drop["actor_x"], client_drop["actor_y"])
+        client_drop["x"], client_drop["y"], client_drop["actor_x"], client_drop["actor_y"])
     snapshot_radius_delta = abs(host_drop["radius"] - client_drop["radius"])
     actor_radius_delta = abs(host_drop["radius"] - client_drop["actor_radius"])
-    if snapshot_position_delta > LOOT_POSITION_TOLERANCE:
+    snapshot_position_tolerance = (
+        ANIMATED_LOOT_POSITION_TOLERANCE
+        if host_drop["type_id"] in {LOOT_GOLD_TYPE_ID, LOOT_ORB_TYPE_ID}
+        else LOOT_POSITION_TOLERANCE
+    )
+    if snapshot_position_delta > snapshot_position_tolerance:
         fail("client snapshot drop position differs from host")
     if actor_position_delta > LOOT_POSITION_TOLERANCE:
-        fail("client presentation actor position differs from host")
+        fail("client presentation actor position differs from received snapshot")
     if snapshot_radius_delta > LOOT_RADIUS_TOLERANCE:
         fail("client snapshot drop radius differs from host")
     if actor_radius_delta > LOOT_RADIUS_TOLERANCE:
@@ -3564,6 +3770,7 @@ def compare_replicated_loot_drop(host_drop: dict[str, Any], client_drop: dict[st
         "host_drop": host_drop,
         "client_drop": client_drop,
         "snapshot_position_delta": round(snapshot_position_delta, 4),
+        "snapshot_position_tolerance": snapshot_position_tolerance,
         "actor_position_delta": round(actor_position_delta, 4),
         "snapshot_radius_delta": round(snapshot_radius_delta, 4),
         "actor_radius_delta": round(actor_radius_delta, 4),
@@ -3655,6 +3862,7 @@ def verify_natural_death_loot(before_capture: dict[str, str]) -> dict[str, Any]:
         )
         comparison = compare_replicated_loot_drop(host_drop, client["drop"])
         comparison["client_capture"] = client["capture"]
+        comparison["presentation_convergence"] = client["presentation_convergence"]
         client_authority_id = parse_int(client["capture"].get("authority_participant_id"))
         if client_authority_id != expected_authority_id:
             comparison["ok"] = False
@@ -3808,17 +4016,16 @@ def verify_one_kill(direction: Direction, kill_index: int, record: dict[str, Any
     append_runtime_context(record, f"{direction.name}.{kill_index}.after_spawn")
     vector_after_spawn = probe_stock_placement_vectors(f"{direction.name}.{kill_index}.after_spawn")
     record.setdefault("stock_placement_vectors", {})["after_spawn"] = vector_after_spawn
+    network_id = int(spawn["network_actor_id"])
     initial_host_target = find_target(
         HOST_PIPE,
         target_x,
         target_y,
+        network_id,
         timeout=6.0,
         require_local_binding=False,
     )
     record["initial_host_target"] = initial_host_target
-    network_id = parse_int(initial_host_target.get("network_id"))
-    if network_id == 0:
-        raise VerifyFailure(f"{direction.name}: host target had no network id: {initial_host_target}")
     stage(f"  kill {kill_index}: enemy spawned net_id={network_id} actor=0x{int(spawn['actor_address']):08X}")
     host_target = wait_for_target_hp_at_least(
         HOST_PIPE,
@@ -4017,20 +4224,37 @@ def verify_one_kill(direction: Direction, kill_index: int, record: dict[str, Any
                 pipe_name=direction.source_pipe,
             )
             retry_target = sample_target_state(direction, target_descriptor)
-            record["cast_attempts"].append({
+            rearm_record = {
                 "attempt": attempt_index,
                 "status": "rearm",
                 "clear": retry_clear,
                 "placement": retry_placement,
                 "lane_probe": retry_lane_probe,
                 "target": retry_target,
-            })
+            }
+            record["cast_attempts"].append(rearm_record)
             if (
                 retry_lane_probe.get("ok") != "true"
                 or parse_int(retry_lane_probe.get("blocker_count")) != 0
-                or not target_state_alive(retry_target.get("host", {}))
-                or not target_state_alive(retry_target.get("client", {}))
             ):
+                raise VerifyFailure(
+                    f"{direction.name}: unable to re-arm scripted primary kill attempt "
+                    f"{attempt_index}: lane={retry_lane_probe} target={retry_target}"
+                )
+            target_alive_on_both = (
+                target_state_alive(retry_target.get("host", {}))
+                and target_state_alive(retry_target.get("client", {}))
+            )
+            if not target_alive_on_both:
+                if finalize_late_primary_death(
+                    direction,
+                    target_descriptor,
+                    attempt,
+                    retry_target,
+                ):
+                    rearm_record["status"] = "late_death_observed"
+                    selected_attempt = attempt
+                    break
                 raise VerifyFailure(
                     f"{direction.name}: unable to re-arm scripted primary kill attempt "
                     f"{attempt_index}: lane={retry_lane_probe} target={retry_target}"
@@ -4123,8 +4347,19 @@ def verify_level_up_choice_without_waves(timeout: float = 12.0) -> dict[str, Any
     choice = choose_client_option(offer["offer_id"], selected_option_index)
     result = wait_for_choice_result(offer["offer_id"], target_level, timeout)
     wait_cleared = wait_for_wait_status(participant_id=CLIENT_ID, pause_active=False, timeout=timeout)
-    after_host = query_progression_entry(HOST_PIPE, option_id=selected_option_id, participant_id=CLIENT_ID)
-    after_client = query_progression_entry(CLIENT_PIPE, option_id=selected_option_id)
+    after_host = wait_for_progression_entry_active(
+        HOST_PIPE,
+        option_id=selected_option_id,
+        expected_active=result["resulting_active"],
+        timeout=timeout,
+        participant_id=CLIENT_ID,
+    )
+    after_client = wait_for_progression_entry_active(
+        CLIENT_PIPE,
+        option_id=selected_option_id,
+        expected_active=result["resulting_active"],
+        timeout=timeout,
+    )
     if after_host["active"] <= before_host["active"]:
         raise VerifyFailure(
             f"host did not apply selected client skill option: before={before_host} after={after_host}"
@@ -4233,6 +4468,93 @@ def crash_log_tail(path: Path, offset: int) -> str:
     return text[offset:]
 
 
+def validated_resume_kills(
+    prior: dict[str, Any],
+    direction_names: tuple[str, ...],
+    kills_per_participant: int,
+) -> list[dict[str, Any]]:
+    records = prior.get("kills")
+    if not isinstance(records, list):
+        raise VerifyFailure("primary-kill resume evidence has no kill list")
+
+    planned_directions = [
+        direction_name
+        for direction_name in direction_names
+        for _ in range(kills_per_participant)
+    ]
+    passed_prefix: list[dict[str, Any]] = []
+    gap_seen = False
+    for expected_index, record in enumerate(records, start=1):
+        if not isinstance(record, dict):
+            raise VerifyFailure(
+                f"primary-kill resume record {expected_index} is not an object"
+            )
+        if expected_index > len(planned_directions):
+            raise VerifyFailure(
+                "primary-kill resume evidence contains more records than the "
+                "requested matrix"
+            )
+        if record.get("kill_index") != expected_index:
+            raise VerifyFailure(
+                "primary-kill resume evidence is not sequential: "
+                f"expected kill {expected_index}, got {record.get('kill_index')!r}"
+            )
+        expected_direction = planned_directions[expected_index - 1]
+        if record.get("direction") != expected_direction:
+            raise VerifyFailure(
+                "primary-kill resume direction mismatch at kill "
+                f"{expected_index}: expected {expected_direction}, "
+                f"got {record.get('direction')!r}"
+            )
+        if record.get("status") == "passed":
+            if gap_seen:
+                raise VerifyFailure(
+                    "primary-kill resume evidence contains a passed kill after "
+                    "an incomplete record"
+                )
+            passed_prefix.append(dict(record))
+        else:
+            gap_seen = True
+    return passed_prefix
+
+
+def load_resume_kills(
+    path: Path,
+    direction_names: tuple[str, ...],
+    kills_per_participant: int,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    try:
+        prior = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise VerifyFailure(
+            f"cannot read primary-kill resume evidence {path}: {exc}"
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise VerifyFailure(
+            f"primary-kill resume evidence is not valid JSON: {path}"
+        ) from exc
+    if not isinstance(prior, dict):
+        raise VerifyFailure("primary-kill resume evidence root is not an object")
+    parameters = prior.get("parameters")
+    if not isinstance(parameters, dict):
+        raise VerifyFailure("primary-kill resume evidence has no parameters")
+    if parameters.get("kills_per_participant") != kills_per_participant:
+        raise VerifyFailure(
+            "primary-kill resume count does not match this run: "
+            f"evidence={parameters.get('kills_per_participant')!r} "
+            f"requested={kills_per_participant}"
+        )
+    if prior.get("host_crash_delta") or prior.get("client_crash_delta"):
+        raise VerifyFailure(
+            "primary-kill resume evidence contains a new crash-log delta"
+        )
+    return prior, validated_resume_kills(
+        prior,
+        direction_names,
+        kills_per_participant,
+    )
+
+
 def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
     result: dict[str, Any] = {
         "parameters": {
@@ -4257,15 +4579,41 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
             probe_stock_placement_vectors("before_run_entry")
         )
         result["run_entry_mode"] = "stock_testrun"
-        stage("entering stock testrun, waiting for both clients in scene")
-        result["run_entry"] = start_host_testrun_and_wait_for_clients(timeout=60.0)
+        host_scene = query(HOST_PIPE).get("scene", "")
+        client_scene = query(CLIENT_PIPE).get("scene", "")
+        if args.attach and host_scene == "testrun" and client_scene == "testrun":
+            stage("using already-running shared stock testrun")
+            result["run_entry"] = {
+                "already_testrun": True,
+                "host_scene": host_scene,
+                "client_scene": client_scene,
+            }
+        else:
+            stage("entering stock testrun, waiting for both clients in scene")
+            result["run_entry"] = start_host_testrun_and_wait_for_clients(timeout=60.0)
         wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "testrun")
         wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "testrun")
         result.setdefault("stock_placement_vectors", {})["after_run_entry"] = (
             probe_stock_placement_vectors("after_run_entry")
         )
-        stage("enabling manual stock spawner combat")
-        result["combat_bootstrap"] = enable_manual_stock_spawner_combat()
+        existing_manual_spawners = {
+            "host": manual_spawner_state(HOST_PIPE),
+            "client": manual_spawner_state(CLIENT_PIPE),
+        }
+        manual_spawners_ready = all(
+            state.get("manual_mode") == "true"
+            and state.get("has_spawner") == "true"
+            for state in existing_manual_spawners.values()
+        )
+        if args.attach and manual_spawners_ready:
+            stage("using already-ready native manual stock spawners")
+            result["combat_bootstrap"] = {
+                "already_ready": True,
+                "spawners": existing_manual_spawners,
+            }
+        else:
+            stage("enabling manual stock spawner combat")
+            result["combat_bootstrap"] = enable_manual_stock_spawner_combat()
         result.setdefault("stock_placement_vectors", {})["after_combat_bootstrap"] = (
             probe_stock_placement_vectors("after_combat_bootstrap")
         )
@@ -4277,33 +4625,58 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
             Direction("host_to_client", HOST_ID, HOST_NAME, HOST_PIPE, HOST_LOG, result["pids"]["host"], CLIENT_PIPE, CLIENT_LOG),
             Direction("client_to_host", CLIENT_ID, CLIENT_NAME, CLIENT_PIPE, CLIENT_LOG, result["pids"]["client"], HOST_PIPE, HOST_LOG),
         ]
-        kill_index = 1
-        total_kills = len(directions) * args.kills_per_participant
+        direction_names = tuple(direction.name for direction in directions)
+        resume_output = args.resume_output
+        if resume_output is not None:
+            if not args.attach:
+                raise VerifyFailure("--resume-output requires --attach")
+            prior, resumed_kills = load_resume_kills(
+                resume_output,
+                direction_names,
+                args.kills_per_participant,
+            )
+            result["kills"] = resumed_kills
+            result["resume"] = {
+                "source": str(resume_output),
+                "passed_prefix_count": len(resumed_kills),
+                "prior_ok": bool(prior.get("ok")),
+                "prior_error_type": prior.get("error_type"),
+            }
+            stage(
+                "accepted contiguous passed resume prefix: "
+                f"{len(resumed_kills)} kills"
+            )
+        planned_directions = [
+            direction
+            for direction in directions
+            for _ in range(args.kills_per_participant)
+        ]
+        total_kills = len(planned_directions)
         stage(
             f"entering kill loop: {total_kills} kills "
             f"({args.kills_per_participant}/participant x {len(directions)} directions)"
         )
-        for direction in directions:
-            for _ in range(args.kills_per_participant):
-                kill_started = time.monotonic()
-                stage(f"=== kill {kill_index}/{total_kills} [{direction.name}] begin ===")
-                record = {
-                    "direction": direction.name,
-                    "kill_index": kill_index,
-                    "status": "created",
-                }
-                result["kills"].append(record)
-                verify_one_kill(direction, kill_index, record)
-                stage(
-                    f"=== kill {kill_index}/{total_kills} [{direction.name}] PASSED "
-                    f"in {time.monotonic() - kill_started:.1f}s ==="
-                )
-                kill_index += 1
-                if kill_index % 4 == 0:
-                    result.setdefault("vitals", []).append({
-                        "host": set_local_player_vitals(HOST_PIPE, 5000.0, 5000.0),
-                        "client": set_local_player_vitals(CLIENT_PIPE, 5000.0, 5000.0),
-                    })
+        for kill_index, direction in enumerate(planned_directions, start=1):
+            if kill_index <= len(result["kills"]):
+                continue
+            kill_started = time.monotonic()
+            stage(f"=== kill {kill_index}/{total_kills} [{direction.name}] begin ===")
+            record = {
+                "direction": direction.name,
+                "kill_index": kill_index,
+                "status": "created",
+            }
+            result["kills"].append(record)
+            verify_one_kill(direction, kill_index, record)
+            stage(
+                f"=== kill {kill_index}/{total_kills} [{direction.name}] PASSED "
+                f"in {time.monotonic() - kill_started:.1f}s ==="
+            )
+            if (kill_index + 1) % 4 == 0:
+                result.setdefault("vitals", []).append({
+                    "host": set_local_player_vitals(HOST_PIPE, 5000.0, 5000.0),
+                    "client": set_local_player_vitals(CLIENT_PIPE, 5000.0, 5000.0),
+                })
         result["natural_loot_summary"] = summarize_natural_loot_records(result["kills"])
         if args.require_natural_drop and result["natural_loot_summary"]["drop_count"] <= 0:
             raise VerifyFailure(
@@ -4350,6 +4723,11 @@ def main() -> int:
         "--require-natural-drop",
         action="store_true",
         help="Fail unless at least one real host-authored death-roll loot drop is observed and verified.",
+    )
+    parser.add_argument(
+        "--resume-output",
+        type=Path,
+        help="Resume only the contiguous passed prefix in prior evidence (attach mode only).",
     )
     parser.add_argument("--output", type=Path, default=RUNTIME_OUTPUT)
     args = parser.parse_args()

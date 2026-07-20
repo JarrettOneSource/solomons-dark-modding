@@ -48,8 +48,20 @@ struct DebugUiActionDispatchSnapshot {
 bool InitializeDebugUiOverlay();
 void ShutdownDebugUiOverlay();
 bool IsDebugUiOverlayInitialized();
+void BeginDebugUiGameplayParticipantNameplateCapture(
+    std::uint64_t participant_id,
+    std::string_view exact_text,
+    float health_ratio,
+    float world_width);
+void EndDebugUiGameplayParticipantNameplateCapture();
 void ObserveDebugUiExactTextGlyph(float x, float y);
+void QueueDebugUiMultiplayerDampenPresentation(
+    std::uint64_t owner_participant_id,
+    std::uint32_t cast_sequence);
 void DispatchPendingDebugUiActionOnAppTick();
+bool TryPrepareMainMenuNewGameSaveReset(
+    std::uintptr_t main_menu_address,
+    std::string* error_message);
 bool TryGetLatestDebugUiSurfaceSnapshot(DebugUiSurfaceSnapshot* snapshot);
 bool TryFindDebugUiActionElement(std::string_view action_id, std::string_view surface_id, DebugUiSnapshotElement* element);
 bool TryGetDebugUiActionDispatchSnapshot(std::uint64_t request_id, DebugUiActionDispatchSnapshot* snapshot);

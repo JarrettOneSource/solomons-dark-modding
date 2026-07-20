@@ -11,6 +11,14 @@ internal sealed class LauncherCliResponse
     public LauncherCliStage? Stage { get; set; }
     public LauncherCliLaunch? Launch { get; set; }
     public LauncherCliModStateChange? ModStateChange { get; set; }
+    public LauncherCliDirectorySession? DirectorySession { get; set; }
+}
+
+internal sealed class LauncherCliDirectorySession
+{
+    public string Token { get; set; } = string.Empty;
+    public string SteamId { get; set; } = string.Empty;
+    public DateTimeOffset ExpiresAtUtc { get; set; }
 }
 
 internal sealed class LauncherCliConfiguration
@@ -76,16 +84,33 @@ internal sealed class LauncherCliMultiplayerSession
     public bool Enabled { get; set; }
     public bool IsHost { get; set; }
     public string Phase { get; set; } = string.Empty;
+    public string GamePhase { get; set; } = string.Empty;
     public uint AppId { get; set; }
     public ulong LobbyId { get; set; }
+    public ulong HostSteamId { get; set; }
+    public ulong LocalSteamId { get; set; }
+    public string PersonaName { get; set; } = string.Empty;
+    public string Privacy { get; set; } = string.Empty;
+    public int ProtocolVersion { get; set; }
+    public string ManifestSha256 { get; set; } = string.Empty;
+    public List<ulong> FriendSteamIds { get; set; } = [];
     public uint MaxParticipants { get; set; }
     public uint AuthenticatedPeerCount { get; set; }
     public bool OverlayEnabled { get; set; }
     public bool InviteDialogOpened { get; set; }
     public bool RouteRelayed { get; set; }
     public int RoutePingMs { get; set; }
+    public List<LauncherCliLobbyMember> Members { get; set; } = [];
     public string StatusText { get; set; } = string.Empty;
     public string ErrorText { get; set; } = string.Empty;
+}
+
+internal sealed class LauncherCliLobbyMember
+{
+    public ulong SteamId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool IsHost { get; set; }
+    public bool IsLocal { get; set; }
 }
 
 internal sealed class LauncherCliModStateChange

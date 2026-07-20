@@ -835,10 +835,14 @@ int LuaPlayerGetState(lua_State* state) {
     lua_setfield(state, -2, "render_advance_rate");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.render_advance_phase));
     lua_setfield(state, -2, "render_advance_phase");
-    lua_pushnumber(state, static_cast<lua_Number>(player_state.render_drive_effect_timer));
-    lua_setfield(state, -2, "render_drive_effect_timer");
-    lua_pushnumber(state, static_cast<lua_Number>(player_state.render_drive_effect_progress));
-    lua_setfield(state, -2, "render_drive_effect_progress");
+    lua_pushnumber(state, static_cast<lua_Number>(player_state.magic_shield_absorb_remaining));
+    lua_setfield(state, -2, "magic_shield_absorb_remaining");
+    lua_pushnumber(state, static_cast<lua_Number>(player_state.magic_shield_absorb_capacity));
+    lua_setfield(state, -2, "magic_shield_absorb_capacity");
+    lua_pushnumber(state, static_cast<lua_Number>(player_state.magic_shield_explosion_fraction));
+    lua_setfield(state, -2, "magic_shield_explosion_fraction");
+    lua_pushnumber(state, static_cast<lua_Number>(player_state.magic_shield_hit_flash));
+    lua_setfield(state, -2, "magic_shield_hit_flash");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.render_drive_overlay_alpha));
     lua_setfield(state, -2, "render_drive_overlay_alpha");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.render_drive_move_blend));
@@ -1104,7 +1108,7 @@ int LuaWorldGetReplicatedActors(lua_State* state) {
 
     const auto sampled_ms =
         static_cast<std::uint64_t>(GetTickCount64());
-    lua_createtable(state, 0, 18);
+    lua_createtable(state, 0, 36);
     lua_pushinteger(state, static_cast<lua_Integer>(sampled_ms));
     lua_setfield(state, -2, "sampled_ms");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.authority_participant_id));
@@ -1123,10 +1127,27 @@ int LuaWorldGetReplicatedActors(lua_State* state) {
     lua_setfield(state, -2, "actor_count");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.actor_total_count));
     lua_setfield(state, -2, "actor_total_count");
-    lua_pushboolean(state, snapshot.truncated ? 1 : 0);
-    lua_setfield(state, -2, "truncated");
     lua_pushboolean(state, runtime.world_snapshot_apply.valid ? 1 : 0);
     lua_setfield(state, -2, "apply_valid");
+    lua_pushboolean(
+        state,
+        runtime.world_snapshot_apply.holding_stale_snapshot ? 1 : 0);
+    lua_setfield(state, -2, "apply_holding_stale_snapshot");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            runtime.world_snapshot_apply.source_snapshot_age_ms));
+    lua_setfield(state, -2, "apply_source_snapshot_age_ms");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.sequence));
+    lua_setfield(state, -2, "apply_sequence");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.scene_epoch));
+    lua_setfield(state, -2, "apply_scene_epoch");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.presentation_sequence));
+    lua_setfield(state, -2, "apply_presentation_sequence");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.presentation_scene_epoch));
+    lua_setfield(state, -2, "apply_presentation_scene_epoch");
+    lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.presentation_received_ms));
+    lua_setfield(state, -2, "apply_presentation_received_ms");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.applied_ms));
     lua_setfield(state, -2, "applied_ms");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.local_actor_count));
@@ -1149,8 +1170,18 @@ int LuaWorldGetReplicatedActors(lua_State* state) {
     lua_setfield(state, -2, "parked_actor_count");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.removed_actor_count));
     lua_setfield(state, -2, "removed_actor_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            runtime.world_snapshot_apply.removed_actor_total_count));
+    lua_setfield(state, -2, "removed_actor_total_count");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.failed_remove_actor_count));
     lua_setfield(state, -2, "failed_remove_actor_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            runtime.world_snapshot_apply.failed_remove_actor_total_count));
+    lua_setfield(state, -2, "failed_remove_actor_total_count");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.world_snapshot_apply.actor_bindings.size()));
     lua_setfield(state, -2, "binding_count");
 
@@ -1162,6 +1193,42 @@ int LuaWorldGetReplicatedActors(lua_State* state) {
         ++lua_index;
     }
     lua_setfield(state, -2, "actors");
+
+    const multiplayer::WorldSnapshotRuntimeInfo* applied_presentation = nullptr;
+    const auto matches_applied_presentation = [&](const multiplayer::WorldSnapshotRuntimeInfo& candidate) {
+        return candidate.valid &&
+               candidate.sequence == runtime.world_snapshot_apply.presentation_sequence &&
+               candidate.scene_epoch == runtime.world_snapshot_apply.presentation_scene_epoch &&
+               candidate.received_ms == runtime.world_snapshot_apply.presentation_received_ms;
+    };
+    if (runtime.world_snapshot_apply.valid && matches_applied_presentation(snapshot)) {
+        applied_presentation = &snapshot;
+    } else if (runtime.world_snapshot_apply.valid) {
+        for (auto it = runtime.world_snapshot_history.rbegin();
+             it != runtime.world_snapshot_history.rend();
+             ++it) {
+            if (matches_applied_presentation(*it)) {
+                applied_presentation = &*it;
+                break;
+            }
+        }
+    }
+
+    lua_pushboolean(state, applied_presentation != nullptr ? 1 : 0);
+    lua_setfield(state, -2, "apply_presentation_available");
+    lua_createtable(
+        state,
+        applied_presentation != nullptr ? static_cast<int>(applied_presentation->actors.size()) : 0,
+        0);
+    lua_index = 1;
+    if (applied_presentation != nullptr) {
+        for (const auto& actor : applied_presentation->actors) {
+            PushReplicatedWorldActor(state, actor);
+            lua_rawseti(state, -2, static_cast<lua_Integer>(lua_index));
+            ++lua_index;
+        }
+    }
+    lua_setfield(state, -2, "apply_presentation_actors");
 
     lua_createtable(state, static_cast<int>(runtime.world_snapshot_apply.actor_bindings.size()), 0);
     lua_index = 1;

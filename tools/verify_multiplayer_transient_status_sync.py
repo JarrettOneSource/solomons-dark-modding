@@ -37,6 +37,11 @@ from verify_player_health_death_sync import set_local_player_vitals
 OUTPUT = ROOT / "runtime/multiplayer_transient_status_sync.json"
 POISON_DURATION_TICKS = 1200
 POISON_DAMAGE_PER_TICK = 0.125
+POISON_REPLICATION_MAX_TICK_DRIFT = 30
+POISON_OWNER_CORRECTION_MAX_TICK_DRIFT = (
+    2 * POISON_REPLICATION_MAX_TICK_DRIFT
+)
+POISON_HP_QUANTIZATION_TOLERANCE = 0.2
 
 
 @dataclass(frozen=True)
@@ -71,26 +76,72 @@ def wait_for_owner_damage(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     deadline = time.monotonic() + timeout
     last_owner: dict[str, Any] = {}
+    last_owner_before_observer: dict[str, Any] = {}
     last_observer: dict[str, Any] = {}
+    maximum_hp_drift = (
+        POISON_REPLICATION_MAX_TICK_DRIFT * POISON_DAMAGE_PER_TICK
+        + POISON_HP_QUANTIZATION_TOLERANCE
+    )
     while time.monotonic() < deadline:
-        last_owner = query_poison_status(direction.owner_pipe)
+        last_owner_before_observer = query_poison_status(direction.owner_pipe)
         last_observer = query_poison_status(
             direction.observer_pipe,
             participant_id=direction.participant_id,
         )
+        last_owner = query_poison_status(direction.owner_pipe)
         if (
             last_owner["hp"] < hp_before - 0.01
-            and math.isclose(last_observer["hp"], last_owner["hp"], abs_tol=0.2)
+            and last_observer["hp"] < hp_before - 0.01
+            # The observer sample is bracketed by owner samples, but its
+            # authoritative HP snapshot can precede the first sample by the
+            # same bounded tick drift accepted for the poison duration. It
+            # must never run ahead of the later owner sample as though the
+            # inert visual clone were applying its own damage.
+            and last_observer["hp"]
+            >= last_owner["hp"] - POISON_HP_QUANTIZATION_TOLERANCE
+            and last_observer["hp"]
+            <= last_owner_before_observer["hp"] + maximum_hp_drift
         ):
             return last_owner, last_observer
         time.sleep(0.05)
     raise VerifyFailure(
         f"{direction.name} stock poison damage did not remain owner-authoritative: "
-        f"before={hp_before} owner={last_owner} observer={last_observer}"
+        f"before={hp_before} owner_before_observer={last_owner_before_observer} "
+        f"owner_after_observer={last_owner} observer={last_observer} "
+        f"maximum_hp_drift={maximum_hp_drift}"
+    )
+
+
+def wait_for_observer_duration_advance(
+    direction: Direction,
+    *,
+    active_modifier_ticks: int,
+    timeout: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        last = query_poison_status(
+            direction.observer_pipe,
+            participant_id=direction.participant_id,
+        )
+        duration_drift = abs(last["native_ticks"] - last["runtime_ticks"])
+        if (
+            last["poison_count"] == 1
+            and last["modifier_ticks"] < active_modifier_ticks
+            and duration_drift <= POISON_REPLICATION_MAX_TICK_DRIFT
+        ):
+            return last
+        time.sleep(0.05)
+    raise VerifyFailure(
+        f"{direction.name} observer poison duration did not self-correct within "
+        f"{POISON_REPLICATION_MAX_TICK_DRIFT} ticks: active_ticks="
+        f"{active_modifier_ticks} last={last}"
     )
 
 
 def run_direction(direction: Direction, timeout: float) -> dict[str, Any]:
+    resources = set_local_player_vitals(direction.owner_pipe, 1000.0, 1000.0)
     owner_before = wait_for_poison_state(
         direction.owner_pipe,
         participant_id=None,
@@ -124,6 +175,7 @@ def run_direction(direction: Direction, timeout: float) -> dict[str, Any]:
         participant_id=direction.participant_id,
         poisoned=True,
         timeout=timeout,
+        maximum_tick_drift=POISON_REPLICATION_MAX_TICK_DRIFT,
     )
 
     expected_flags = TRANSIENT_SNAPSHOT_VALID | TRANSIENT_POISONED
@@ -172,7 +224,10 @@ def run_direction(direction: Direction, timeout: float) -> dict[str, Any]:
         raise VerifyFailure(
             f"{direction.name} owner poison lost stock damage behavior: {owner_active}"
         )
-    if abs(observer_active["native_ticks"] - observer_active["runtime_ticks"]) > 30:
+    if (
+        abs(observer_active["native_ticks"] - observer_active["runtime_ticks"])
+        > POISON_REPLICATION_MAX_TICK_DRIFT
+    ):
         raise VerifyFailure(
             f"{direction.name} observer native duration drifted from protocol: "
             f"{observer_active}"
@@ -182,7 +237,7 @@ def run_direction(direction: Direction, timeout: float) -> dict[str, Any]:
     # Reconciliation therefore advances the inert visual clone in bounded
     # <=20-tick steps. Observe beyond one full tolerance window.
     time.sleep(0.75)
-    owner_damaged, observer_damaged = wait_for_owner_damage(
+    owner_damaged, observer_hp_sample = wait_for_owner_damage(
         direction,
         hp_before=owner_before["hp"],
         timeout=min(timeout, 8.0),
@@ -192,11 +247,11 @@ def run_direction(direction: Direction, timeout: float) -> dict[str, Any]:
             f"{direction.name} owner poison duration did not advance: "
             f"active={owner_active} later={owner_damaged}"
         )
-    if observer_damaged["modifier_ticks"] >= observer_active["modifier_ticks"]:
-        raise VerifyFailure(
-            f"{direction.name} observer poison duration did not advance: "
-            f"active={observer_active} later={observer_damaged}"
-        )
+    observer_damaged = wait_for_observer_duration_advance(
+        direction,
+        active_modifier_ticks=observer_active["modifier_ticks"],
+        timeout=min(timeout, 4.0),
+    )
     if not math.isclose(observer_damaged["damage_per_tick"], 0.0, abs_tol=1e-7):
         raise VerifyFailure(
             f"{direction.name} observer poison became damaging after reconciliation: "
@@ -222,12 +277,14 @@ def run_direction(direction: Direction, timeout: float) -> dict[str, Any]:
     assert_clear(unrelated_cleared, f"{direction.name} unrelated local participant cleared")
 
     return {
+        "resources": resources,
         "owner_before": owner_before,
         "observer_before": observer_before,
         "injection": injection,
         "owner_active": owner_active,
         "observer_active": observer_active,
         "owner_damaged": owner_damaged,
+        "observer_hp_sample": observer_hp_sample,
         "observer_damaged": observer_damaged,
         "owner_hp_delta": owner_before["hp"] - owner_damaged["hp"],
         "clear_request": cleared,
@@ -309,7 +366,16 @@ def run_host_mirror_owner_correction(timeout: float) -> dict[str, Any]:
             "host mirror correction was not converted to one inert observer clone: "
             f"{mirror_active}"
         )
-    if abs(owner_active["modifier_ticks"] - injection["duration_after_apply"]) > 30:
+    injected_ticks = int(injection["duration_after_apply"])
+    owner_ticks = int(owner_active["modifier_ticks"])
+    # A host-native hit on a client-owned actor first transfers authority to
+    # the client, then returns as the inert host mirror. Preserve elapsed
+    # countdown time across those two bounded replication windows; never
+    # refresh or increase the client's authoritative duration.
+    if (
+        owner_ticks > injected_ticks
+        or injected_ticks - owner_ticks > POISON_OWNER_CORRECTION_MAX_TICK_DRIFT
+    ):
         raise VerifyFailure(
             "client owner correction changed the host-transformed poison duration: "
             f"injection={injection} owner={owner_active}"

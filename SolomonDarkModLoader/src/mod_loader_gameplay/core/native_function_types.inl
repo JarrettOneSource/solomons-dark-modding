@@ -13,6 +13,7 @@ using PuppetManagerDeletePuppetFn = void(__thiscall*)(void* self, void* actor);
 using PointerListDeleteBatchFn = void(__thiscall*)(void* self, void* list);
 using ObjectDeleteFn = void(__thiscall*)(void* self);
 using GameplaySwitchRegionFn = void(__thiscall*)(void* self, int region_index);
+using HubServiceDispatchFn = void(__thiscall*)(void* self, void* action);
 using ArenaStartWavesFn = void(__thiscall*)(void* self);
 using GameplayCombatPreludeModeFn = void(__thiscall*)(void* self, std::uint32_t arg0, std::uint32_t arg1);
 using ArenaCombatPreludeDispatchFn = void(__thiscall*)(void* self, int mode);
@@ -25,11 +26,17 @@ using GameObjectFactoryFn = uintptr_t(__thiscall*)(void* self, int type_id);
 using GameOperatorNewFn = void*(__cdecl*)(std::size_t size);
 using ActorWorldRegisterFn = std::uint32_t(__thiscall*)(void* self, int actor_group, void* actor, int slot_index, char use_alt_list);
 using ActorWorldUnregisterFn = void(__thiscall*)(void* self, void* actor, char remove_from_container);
+using ActorRequestRetirementFn = void(__thiscall*)(void* self);
 using ActorWorldRegisterGameplaySlotActorFn = void(__thiscall*)(void* self, int slot_index);
 using ActorWorldUnregisterGameplaySlotActorFn = void(__thiscall*)(void* self, int slot_index);
 using ActorWorldLookupObjectByHandleFn = uintptr_t(__thiscall*)(void* self, void* handle);
 using WorldCellGridRebindActorFn = void(__thiscall*)(void* self, void* actor);
 using MonsterPathfindingRefreshTargetFn = void(__fastcall*)(void* self, void* unused_edx);
+using BadguyMoveStepFn = std::uint32_t(__thiscall*)(
+    void* movement_context,
+    void* actor,
+    float move_x,
+    float move_y);
 using PlayerActorMoveStepFn = std::uint32_t(__thiscall*)(void* self, void* actor, float move_x, float move_y, unsigned int flags);
 using SpellCastDispatcherFn = void(__thiscall*)(void* actor);
 using PurePrimarySpellStartFn = void(__thiscall*)(void* actor);

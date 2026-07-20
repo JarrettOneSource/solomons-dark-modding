@@ -19,6 +19,7 @@ import verify_multiplayer_animation_mana_elements as animation
 import verify_multiplayer_inventory_audit as inventory
 import verify_multiplayer_transient_status_sync as transient
 import verify_player_health_death_sync as health
+from drive_steam_friend_active_pair import disable_test_godmode
 from steam_friend_active_pair import (
     CLIENT_ENDPOINT,
     HOST_ENDPOINT,
@@ -38,17 +39,23 @@ HOST_INSTANCE = os.environ.get("SDMOD_STEAM_HOST_INSTANCE", "steam-host-gameplay
 CLIENT_INSTANCE = os.environ.get(
     "SDMOD_STEAM_CLIENT_INSTANCE", "wsl-steam-gameplay12"
 )
-HOST_LOG = (
-    ROOT
-    / "runtime/instances"
-    / HOST_INSTANCE
-    / "stage/.sdmod/logs/solomondarkmodloader.log"
+HOST_LOG = Path(
+    os.environ.get(
+        "SDMOD_STEAM_HOST_LOG_PATH",
+        ROOT
+        / "runtime/instances"
+        / HOST_INSTANCE
+        / "stage/.sdmod/logs/solomondarkmodloader.log",
+    )
 )
-CLIENT_LOG = (
-    ROOT
-    / "runtime/instances"
-    / CLIENT_INSTANCE
-    / "stage/.sdmod/logs/solomondarkmodloader.log"
+CLIENT_LOG = Path(
+    os.environ.get(
+        "SDMOD_STEAM_CLIENT_LOG_PATH",
+        ROOT
+        / "runtime/instances"
+        / CLIENT_INSTANCE
+        / "stage/.sdmod/logs/solomondarkmodloader.log",
+    )
 )
 
 
@@ -191,6 +198,11 @@ def compact_scene(result: dict[str, Any]) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument(
+        "--skip-death",
+        action="store_true",
+        help="Keep both native player actors alive for subsequent live tests.",
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
@@ -209,6 +221,10 @@ def main() -> int:
                 f"Steam friend pair is not in the shared test run: {output['pair']}"
             )
         names = configure_modules(pair)
+        output["test_godmode_disabled"] = {
+            "host": disable_test_godmode(pair, HOST_ENDPOINT),
+            "client": disable_test_godmode(pair, CLIENT_ENDPOINT),
+        }
         output["offer_drain"] = stats.drain_pending_natural_offers(args.timeout)
         output["progression_ready"] = upgrades.wait_for_post_run_progression_ready(
             args.timeout
@@ -260,25 +276,29 @@ def main() -> int:
         # but it does not invoke a native local-player revive. Keep this
         # destructive check last so it cannot silently invalidate the cast,
         # status, or stat checks above it.
-        vitals_recovery = {
-            "host_owned": health.verify_one_direction(
-                owner_pipe=HOST_ENDPOINT,
-                owner_name="host",
-                observer_pipe=CLIENT_ENDPOINT,
-                participant_id=pair.host_participant_id,
-            ),
-            "client_owned": health.verify_one_direction(
-                owner_pipe=CLIENT_ENDPOINT,
-                owner_name="client",
-                observer_pipe=HOST_ENDPOINT,
-                participant_id=pair.client_participant_id,
-            ),
-        }
-        output["vitals_remote_death_recovery"] = vitals_recovery
-        output["post_suite_scene_reset_required"] = any(
-            bool(result["owner_gameplay_actor_requires_scene_reset"])
-            for result in vitals_recovery.values()
-        )
+        if args.skip_death:
+            output["vitals_remote_death_recovery_skipped"] = True
+            output["post_suite_scene_reset_required"] = False
+        else:
+            vitals_recovery = {
+                "host_owned": health.verify_one_direction(
+                    owner_pipe=HOST_ENDPOINT,
+                    owner_name="host",
+                    observer_pipe=CLIENT_ENDPOINT,
+                    participant_id=pair.host_participant_id,
+                ),
+                "client_owned": health.verify_one_direction(
+                    owner_pipe=CLIENT_ENDPOINT,
+                    owner_name="client",
+                    observer_pipe=HOST_ENDPOINT,
+                    participant_id=pair.client_participant_id,
+                ),
+            }
+            output["vitals_remote_death_recovery"] = vitals_recovery
+            output["post_suite_scene_reset_required"] = any(
+                bool(result["owner_gameplay_actor_requires_scene_reset"])
+                for result in vitals_recovery.values()
+            )
         output["new_crash_artifacts"] = find_new_crash_artifacts(started_at)
         if output["new_crash_artifacts"]:
             raise VerifyFailure(

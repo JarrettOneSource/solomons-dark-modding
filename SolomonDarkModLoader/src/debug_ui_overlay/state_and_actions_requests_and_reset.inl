@@ -167,120 +167,42 @@ bool FindBestSnapshotActionElement(
     return has_match;
 }
 
+bool IsSemanticUiActionSnapshotIndependent(std::string_view action_id) {
+    const auto* action_definition = FindUiActionDefinition(action_id);
+    return action_definition != nullptr &&
+           (action_definition->dispatch_kind == "direct_write" ||
+            action_definition->dispatch_kind == "owner_point_click");
+}
+
+bool TryCopyUsableDebugUiSurfaceSnapshot(DebugUiSurfaceSnapshot* snapshot) {
+    if (snapshot == nullptr) {
+        return false;
+    }
+
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    if (!g_debug_ui_overlay_state.initialized ||
+        !IsUsableDebugUiSurfaceSnapshot(g_debug_ui_overlay_state.latest_surface_snapshot)) {
+        return false;
+    }
+
+    *snapshot = g_debug_ui_overlay_state.latest_surface_snapshot;
+    return true;
+}
+
 std::uint64_t QueueSemanticUiActionRequestUnlocked(
     std::string_view action_id,
     std::string_view target_label,
-    std::string_view surface_id) {
+    std::string_view surface_id,
+    std::uint64_t snapshot_generation) {
     auto& request = g_debug_ui_overlay_state.pending_semantic_ui_action;
     request.active = true;
     request.request_id = ++g_debug_ui_overlay_state.next_semantic_ui_action_request_id;
     request.queued_at = GetTickCount64();
+    request.snapshot_generation = snapshot_generation;
     request.action_id = std::string(action_id);
     request.target_label = std::string(target_label);
     request.surface_id = std::string(surface_id);
     return request.request_id;
-}
-
-bool TryDispatchSemanticUiActionRequestImmediately(
-    std::string_view action_id,
-    std::string_view surface_id,
-    uintptr_t owner_address,
-    std::uint64_t* request_id,
-    std::string* error_message) {
-    if (owner_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Immediate semantic UI dispatch requires a live owner object.";
-        }
-        return false;
-    }
-
-    const auto* action_definition = FindUiActionDefinition(action_id);
-    if (action_definition == nullptr) {
-        if (error_message != nullptr) {
-            *error_message = "UI action '" + std::string(action_id) + "' is not defined in binary-layout.ini.";
-        }
-        return false;
-    }
-
-    const auto queued_at = GetTickCount64();
-    std::uint64_t queued_request_id = 0;
-    {
-        std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
-        if (g_debug_ui_overlay_state.pending_semantic_ui_action.active) {
-            if (error_message != nullptr) {
-                *error_message =
-                    "UI action request " +
-                    std::to_string(g_debug_ui_overlay_state.pending_semantic_ui_action.request_id) +
-                    " is already queued for action " + g_debug_ui_overlay_state.pending_semantic_ui_action.action_id +
-                    " on surface " + g_debug_ui_overlay_state.pending_semantic_ui_action.surface_id + ".";
-            }
-            return false;
-        }
-
-        if (g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.active) {
-            if (error_message != nullptr) {
-                *error_message =
-                    "UI action request " +
-                    std::to_string(g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.request_id) +
-                    " is still dispatching action " +
-                    g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.action_id + " on surface " +
-                    g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.surface_id + ".";
-            }
-            return false;
-        }
-
-        queued_request_id = ++g_debug_ui_overlay_state.next_semantic_ui_action_request_id;
-        auto& active = g_debug_ui_overlay_state.active_semantic_ui_action_dispatch;
-        active.active = true;
-        active.request_id = queued_request_id;
-        active.queued_at = queued_at;
-        active.started_at = queued_at;
-        active.snapshot_generation = 0;
-        active.action_id = std::string(action_id);
-        active.target_label.clear();
-        active.surface_id = std::string(surface_id);
-        active.status = "dispatching";
-    }
-
-    DebugUiSnapshotElement snapshot_element;
-    snapshot_element.action_id = std::string(action_id);
-    snapshot_element.label = action_definition->label;
-    snapshot_element.surface_id = std::string(surface_id);
-    snapshot_element.surface_object_ptr = owner_address;
-
-    std::string dispatch_error;
-    const auto dispatched = ::sdmod::TryActivateDebugUiSnapshotElement(snapshot_element, &dispatch_error);
-    {
-        std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
-        StoreCompletedSemanticUiActionDispatchUnlocked(
-            &g_debug_ui_overlay_state,
-            dispatched ? "dispatched" : "failed",
-            dispatch_error);
-    }
-
-    if (request_id != nullptr) {
-        *request_id = queued_request_id;
-    }
-
-    if (dispatched) {
-        Log(
-            "Debug UI overlay dispatched semantic UI action immediately. request=" +
-            std::to_string(queued_request_id) + " target=" + std::string(action_id) +
-            " surface=" + std::string(surface_id) +
-            " owner=" + HexString(owner_address));
-        return true;
-    }
-
-    if (error_message != nullptr) {
-        *error_message = dispatch_error;
-    }
-    Log(
-        "Debug UI overlay failed immediate semantic UI dispatch. request=" +
-        std::to_string(queued_request_id) + " target=" + std::string(action_id) +
-        " surface=" + std::string(surface_id) +
-        " owner=" + HexString(owner_address) +
-        " reason=" + dispatch_error);
-    return false;
 }
 
 bool TryQueueSemanticUiActionRequest(
@@ -315,16 +237,27 @@ bool TryQueueSemanticUiActionRequest(
         return false;
     }
 
-    if (expectation.dispatch_kind == "direct_write") {
-        uintptr_t owner_address = 0;
-        if (TryResolveLiveUiSurfaceOwner(surface_root_id, 0, &owner_address) && owner_address != 0) {
-            return TryDispatchSemanticUiActionRequestImmediately(
-                action_id,
-                effective_surface_id,
-                owner_address,
-                request_id,
-                error_message);
+    std::uint64_t snapshot_generation = 0;
+    if (!IsSemanticUiActionSnapshotIndependent(action_id)) {
+        DebugUiSurfaceSnapshot snapshot;
+        if (!TryCopyUsableDebugUiSurfaceSnapshot(&snapshot)) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "No current UI render observation is available for action '" + std::string(action_id) + "'.";
+            }
+            return false;
         }
+
+        DebugUiSnapshotElement element;
+        if (!FindBestSnapshotActionElement(snapshot, action_id, effective_surface_id, &element)) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "UI action '" + std::string(action_id) + "' is not available on the current rendered surface.";
+            }
+            return false;
+        }
+
+        snapshot_generation = snapshot.generation;
     }
 
     std::uint64_t queued_request_id = 0;
@@ -353,7 +286,11 @@ bool TryQueueSemanticUiActionRequest(
             return false;
         }
 
-        queued_request_id = QueueSemanticUiActionRequestUnlocked(action_id, "", effective_surface_id);
+        queued_request_id = QueueSemanticUiActionRequestUnlocked(
+            action_id,
+            "",
+            effective_surface_id,
+            snapshot_generation);
     }
 
     if (request_id != nullptr) {
@@ -378,6 +315,23 @@ bool TryQueueSemanticUiElementRequest(
     }
 
     const auto effective_surface_id = std::string(surface_id);
+    DebugUiSurfaceSnapshot snapshot;
+    if (!TryCopyUsableDebugUiSurfaceSnapshot(&snapshot)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "No current UI render observation is available for element '" + std::string(label) + "'.";
+        }
+        return false;
+    }
+
+    if (FindBestSnapshotLabelElement(snapshot, label, effective_surface_id) == nullptr) {
+        if (error_message != nullptr) {
+            *error_message =
+                "UI element '" + std::string(label) + "' is not available on the current rendered surface.";
+        }
+        return false;
+    }
+
     std::uint64_t queued_request_id = 0;
     {
         std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
@@ -404,7 +358,11 @@ bool TryQueueSemanticUiElementRequest(
             return false;
         }
 
-        queued_request_id = QueueSemanticUiActionRequestUnlocked("", label, effective_surface_id);
+        queued_request_id = QueueSemanticUiActionRequestUnlocked(
+            "",
+            label,
+            effective_surface_id,
+            snapshot.generation);
     }
 
     if (request_id != nullptr) {
@@ -417,9 +375,7 @@ bool TryQueueSemanticUiElementRequest(
     return true;
 }
 
-void DispatchPendingSemanticUiActionRequest(
-    std::string_view expected_dispatch_timing,
-    std::string_view dispatch_context) {
+void DispatchPendingSemanticUiActionRequest() {
     PendingSemanticUiActionRequest request;
     DebugUiSurfaceSnapshot snapshot;
     {
@@ -428,23 +384,7 @@ void DispatchPendingSemanticUiActionRequest(
             return;
         }
 
-        const auto pending_surface_root_id =
-            GetOverlaySurfaceRootId(g_debug_ui_overlay_state.pending_semantic_ui_action.surface_id);
-        if (ResolveUiActionDispatchTiming(
-                pending_surface_root_id,
-                g_debug_ui_overlay_state.pending_semantic_ui_action.action_id) !=
-            expected_dispatch_timing) {
-            return;
-        }
-
-        const auto pending_skips_snapshot_match = [&]() {
-            const auto* def = FindUiActionDefinition(g_debug_ui_overlay_state.pending_semantic_ui_action.action_id);
-            return def != nullptr &&
-                   (def->dispatch_kind == "direct_write" || def->dispatch_kind == "owner_point_click");
-        }();
-        if (g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.active ||
-            (!pending_skips_snapshot_match &&
-             !IsUsableDebugUiSurfaceSnapshot(g_debug_ui_overlay_state.latest_surface_snapshot))) {
+        if (g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.active) {
             return;
         }
 
@@ -455,51 +395,61 @@ void DispatchPendingSemanticUiActionRequest(
         g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.request_id = request.request_id;
         g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.queued_at = request.queued_at;
         g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.started_at = GetTickCount64();
-        g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.snapshot_generation = snapshot.generation;
+        g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.snapshot_generation = request.snapshot_generation;
         g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.action_id = request.action_id;
         g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.target_label = request.target_label;
         g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.surface_id = request.surface_id;
         g_debug_ui_overlay_state.active_semantic_ui_action_dispatch.status = "dispatching";
     }
 
-    const auto surface_root_id = GetOverlaySurfaceRootId(request.surface_id);
     const auto dispatch_identity = !request.action_id.empty() ? request.action_id : request.target_label;
+    const auto fail_dispatch = [&](const std::string& error_message) {
+        {
+            std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+            StoreCompletedSemanticUiActionDispatchUnlocked(&g_debug_ui_overlay_state, "failed", error_message);
+        }
+        Log(
+            "Debug UI overlay failed to dispatch semantic UI action on the app update thread. request=" +
+            std::to_string(request.request_id) + " target=" + dispatch_identity + " surface=" + request.surface_id +
+            " reason=" + error_message);
+    };
+
+    const auto now = GetTickCount64();
+    if (now < request.queued_at || now - request.queued_at > kPendingSemanticUiActionRequestMaximumAgeMs) {
+        fail_dispatch(
+            "The queued UI action expired before the app update thread could dispatch it.");
+        return;
+    }
+
+    if (request.snapshot_generation != 0 &&
+        (!IsUsableDebugUiSurfaceSnapshot(snapshot) || snapshot.generation != request.snapshot_generation)) {
+        fail_dispatch(
+            "The rendered UI surface changed or became unavailable before the app update thread could dispatch the "
+            "request.");
+        return;
+    }
 
     DebugUiSnapshotElement resolved_snapshot_element;
     const DebugUiSnapshotElement* snapshot_element = nullptr;
-    if (!request.action_id.empty()) {
+    if (!request.action_id.empty() && IsSemanticUiActionSnapshotIndependent(request.action_id)) {
+        const auto* action_definition = FindUiActionDefinition(request.action_id);
+        resolved_snapshot_element.action_id = request.action_id;
+        resolved_snapshot_element.surface_id = request.surface_id;
+        resolved_snapshot_element.label = action_definition->label;
+        snapshot_element = &resolved_snapshot_element;
+    } else if (!request.action_id.empty()) {
         if (FindBestSnapshotActionElement(snapshot, request.action_id, request.surface_id, &resolved_snapshot_element)) {
             snapshot_element = &resolved_snapshot_element;
         }
     } else {
         snapshot_element = FindBestSnapshotLabelElement(snapshot, request.target_label, request.surface_id);
     }
-    if (snapshot_element == nullptr && !request.action_id.empty()) {
-        const auto* action_definition = FindUiActionDefinition(request.action_id);
-        if (action_definition != nullptr &&
-            (action_definition->dispatch_kind == "direct_write" ||
-             action_definition->dispatch_kind == "owner_point_click")) {
-            resolved_snapshot_element = DebugUiSnapshotElement{};
-            resolved_snapshot_element.action_id = request.action_id;
-            resolved_snapshot_element.surface_id = request.surface_id;
-            resolved_snapshot_element.label = action_definition->label;
-            snapshot_element = &resolved_snapshot_element;
-        }
-    }
 
     if (snapshot_element == nullptr) {
         const auto error_message =
             "No live snapshot element matched target '" + dispatch_identity + "' on surface '" + request.surface_id +
             "' at dispatch time.";
-        {
-            std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
-            StoreCompletedSemanticUiActionDispatchUnlocked(&g_debug_ui_overlay_state, "failed", error_message);
-        }
-        Log(
-            "Debug UI overlay failed to dispatch semantic UI action on the " + std::string(dispatch_context) +
-            ". request=" +
-            std::to_string(request.request_id) + " target=" + dispatch_identity + " surface=" + request.surface_id +
-            " reason=" + error_message);
+        fail_dispatch(error_message);
         return;
     }
 
@@ -516,16 +466,14 @@ void DispatchPendingSemanticUiActionRequest(
 
     if (dispatched) {
         Log(
-            "Debug UI overlay dispatched semantic UI action on the " + std::string(dispatch_context) +
-            ". request=" +
+            "Debug UI overlay dispatched semantic UI action on the app update thread. request=" +
             std::to_string(request.request_id) + " target=" + dispatch_identity +
             " surface=" + request.surface_id);
         return;
     }
 
     Log(
-        "Debug UI overlay failed to dispatch semantic UI action on the " + std::string(dispatch_context) +
-        ". request=" +
+        "Debug UI overlay failed to dispatch semantic UI action on the app update thread. request=" +
         std::to_string(request.request_id) + " target=" + dispatch_identity +
         " surface=" + request.surface_id + " reason=" + dispatch_error);
 }
@@ -601,6 +549,7 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     state->frame_exact_text_elements.clear();
     state->frame_exact_control_elements.clear();
     state->active_exact_text_renders.clear();
+    state->multiplayer_dampen_presentations.clear();
     state->recent_assigned_strings.clear();
     state->recent_assigned_strings_updated_at = 0;
     state->tracked_title_main_menu_object = 0;

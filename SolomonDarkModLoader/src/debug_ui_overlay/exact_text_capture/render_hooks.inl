@@ -67,11 +67,19 @@ void __fastcall HookGlyphDrawHelper(void* self, void* /*unused_edx*/, float arg2
 }
 
 void __fastcall HookTextQuadDrawHelper(void* self, void* /*unused_edx*/, const float* arg2, const float* arg3) {
-    ObserveActiveExactTextQuad(arg2, arg3);
+    std::array<float, 8> adjusted_vertices{};
+    const float* draw_vertices = arg2;
+    if (TryApplyGameplayNameplateViewportClamp(
+            self,
+            arg2,
+            &adjusted_vertices)) {
+        draw_vertices = adjusted_vertices.data();
+    }
+    ObserveActiveExactTextQuad(self, draw_vertices, arg3);
 
     const auto original = GetX86HookTrampoline<TextQuadDrawHelperFn>(g_debug_ui_overlay_state.text_quad_draw_hook);
     if (original != nullptr) {
-        original(self, arg2, arg3);
+        original(self, draw_vertices, arg3);
     }
 }
 

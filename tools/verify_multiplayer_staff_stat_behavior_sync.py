@@ -254,6 +254,94 @@ def run_fortunate_variant_with_retries(
     )
 
 
+def run_prepared_staff_matrix(
+    directions: tuple[Direction, ...],
+    timeout: float,
+    session: dict[str, Any],
+) -> dict[str, Any]:
+    """Run the strict staff matrix in an already-running shared test run."""
+
+    output: dict[str, Any] = {
+        "quiet_progression_test_mode": session["quiet"],
+        "post_run_progression_ready": session["ready"],
+    }
+    catalog = session["catalog"]
+    contract_values = session["contract_values"]
+    initial_by_target = session["initial"]
+
+    output["arena_arm"] = arm_natural_staff_arena()
+    output["waves"] = start_natural_staff_waves(minimum_actors=1)
+    actor_addresses = [int(value) for value in output["waves"]["actors"]]
+    output["baseline_resolver"] = {
+        direction.name: run_native_staff_resolver_trial(
+            direction,
+            actor_addresses,
+            "baseline",
+            variant=0,
+            target_offsets=CLUSTER_OFFSETS,
+        )
+        for direction in directions
+    }
+    output["enchant_staff_upgrades"] = max_stats(
+        directions,
+        catalog,
+        ENCHANT_STAFF_ROW,
+        initial_by_target,
+        contract_values,
+        timeout,
+    )
+    output["enchant_damage_property_parity"] = verify_ranked_property_views(
+        ENCHANT_STAFF_ROW,
+        "mDamage",
+        15,
+        36.0,
+    )
+    output["enchanted_resolver"] = {
+        direction.name: run_native_staff_resolver_trial(
+            direction,
+            actor_addresses,
+            "enchant_staff_max",
+            variant=0,
+            target_offsets=CLUSTER_OFFSETS,
+        )
+        for direction in directions
+    }
+    output["enchant_contracts"] = verify_enchant_contracts(
+        output["baseline_resolver"],
+        output["enchanted_resolver"],
+    )
+    output["fortunate_flailing_upgrades"] = max_stats(
+        directions,
+        catalog,
+        FORTUNATE_FLAILING_ROW,
+        initial_by_target,
+        contract_values,
+        timeout,
+    )
+    output["fortunate_chance_parity"] = verify_ranked_property_views(
+        FORTUNATE_FLAILING_ROW,
+        "mChance",
+        9,
+        100.0,
+    )
+    output["fortunate_variants"] = {
+        direction.name: {
+            str(variant): run_fortunate_variant_with_retries(
+                direction,
+                actor_addresses,
+                variant,
+            )
+            for variant in FORTUNATE_VARIANTS
+        }
+        for direction in directions
+    }
+    output["fortunate_contracts"] = verify_fortunate_contracts(
+        output["fortunate_chance_parity"],
+        output["fortunate_variants"],
+    )
+    return output
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=float, default=45.0)
@@ -274,96 +362,28 @@ def main() -> int:
         )
         output["launch"] = startup["launch"]
         output["startup"] = {"attempt": startup["attempt"]}
-        output["quiet_progression_test_mode"] = enable_quiet_progression_test_mode()
-        output["post_run_progression_ready"] = wait_for_post_run_progression_ready(
-            args.timeout
+        pids = detect_instance_pids()
+        directions = tuple(
+            direction_for_owner(owner, pids) for owner in ("client", "host")
         )
+        quiet = enable_quiet_progression_test_mode()
+        ready = wait_for_post_run_progression_ready(args.timeout)
         catalog_result = build_and_verify_catalog(
             wait_for_catalog_views(args.timeout),
             load_skill_configs(),
         )
         catalog = catalog_result["catalog"]
-        contract_values = load_stat_contract_values(catalog)
-        initial_by_target = {
-            HOST_ID: query_progression_snapshot(HOST_PIPE),
-            CLIENT_ID: query_progression_snapshot(CLIENT_PIPE),
+        session = {
+            "quiet": quiet,
+            "ready": ready,
+            "catalog": catalog,
+            "contract_values": load_stat_contract_values(catalog),
+            "initial": {
+                HOST_ID: query_progression_snapshot(HOST_PIPE),
+                CLIENT_ID: query_progression_snapshot(CLIENT_PIPE),
+            },
         }
-        pids = detect_instance_pids()
-        directions = tuple(
-            direction_for_owner(owner, pids) for owner in ("client", "host")
-        )
-
-        output["arena_arm"] = arm_natural_staff_arena()
-        output["waves"] = start_natural_staff_waves(minimum_actors=1)
-        actor_addresses = [int(value) for value in output["waves"]["actors"]]
-
-        output["baseline_resolver"] = {
-            direction.name: run_native_staff_resolver_trial(
-                direction,
-                actor_addresses,
-                "baseline",
-                variant=0,
-                target_offsets=CLUSTER_OFFSETS,
-            )
-            for direction in directions
-        }
-        output["enchant_staff_upgrades"] = max_stats(
-            directions,
-            catalog,
-            ENCHANT_STAFF_ROW,
-            initial_by_target,
-            contract_values,
-            args.timeout,
-        )
-        output["enchant_damage_property_parity"] = verify_ranked_property_views(
-            ENCHANT_STAFF_ROW,
-            "mDamage",
-            15,
-            36.0,
-        )
-        output["enchanted_resolver"] = {
-            direction.name: run_native_staff_resolver_trial(
-                direction,
-                actor_addresses,
-                "enchant_staff_max",
-                variant=0,
-                target_offsets=CLUSTER_OFFSETS,
-            )
-            for direction in directions
-        }
-        output["enchant_contracts"] = verify_enchant_contracts(
-            output["baseline_resolver"],
-            output["enchanted_resolver"],
-        )
-        output["fortunate_flailing_upgrades"] = max_stats(
-            directions,
-            catalog,
-            FORTUNATE_FLAILING_ROW,
-            initial_by_target,
-            contract_values,
-            args.timeout,
-        )
-        output["fortunate_chance_parity"] = verify_ranked_property_views(
-            FORTUNATE_FLAILING_ROW,
-            "mChance",
-            9,
-            100.0,
-        )
-        output["fortunate_variants"] = {
-            direction.name: {
-                str(variant): run_fortunate_variant_with_retries(
-                    direction,
-                    actor_addresses,
-                    variant,
-                )
-                for variant in FORTUNATE_VARIANTS
-            }
-            for direction in directions
-        }
-        output["fortunate_contracts"] = verify_fortunate_contracts(
-            output["fortunate_chance_parity"],
-            output["fortunate_variants"],
-        )
+        output.update(run_prepared_staff_matrix(directions, args.timeout, session))
         output["new_crash_artifacts"] = new_crash_artifacts(started_at)
         if output["new_crash_artifacts"]:
             raise VerifyFailure(

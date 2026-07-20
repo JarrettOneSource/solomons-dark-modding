@@ -330,15 +330,15 @@ def select_actor(
     rows: list[dict[str, Any]],
     *,
     type_id: int,
-    amount: int | None,
-    resource_kind: int | None,
-    raw_value: int | None,
+    x: float,
+    y: float,
+    amount: int | None = None,
+    resource_kind: int | None = None,
+    raw_value: int | None = None,
     item_type_id: int | None = None,
     item_recipe_uid: int | None = None,
     item_slot: int | None = None,
     stack_count: int | None = None,
-    x: float,
-    y: float,
 ) -> dict[str, Any] | None:
     candidates: list[dict[str, Any]] = []
     for row in rows:
@@ -370,9 +370,12 @@ def select_actor(
     return candidates[0]
 
 
-def select_materialized_drop(
+def matching_drop_metadata(
     capture_values: dict[str, str],
     *,
+    network_id: int | None = None,
+    local_actor_address: int | None = None,
+    excluded_network_ids: set[int] | None = None,
     type_id: int,
     amount: int | None,
     resource_kind: int | None,
@@ -383,11 +386,22 @@ def select_materialized_drop(
     stack_count: int | None = None,
     x: float,
     y: float,
-) -> dict[str, Any] | None:
-    actors = actor_rows(capture_values)
+) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     for drop in drop_rows(capture_values):
         if drop["type"] != type_id or drop["network_id"] == 0:
+            continue
+        if network_id is not None and drop["network_id"] != network_id:
+            continue
+        if (
+            excluded_network_ids is not None
+            and drop["network_id"] in excluded_network_ids
+        ):
+            continue
+        if (
+            local_actor_address is not None
+            and drop["local_actor_address"] != local_actor_address
+        ):
             continue
         if amount is not None and drop["amount"] != amount:
             continue
@@ -403,10 +417,92 @@ def select_materialized_drop(
             continue
         if stack_count is not None and drop["stack_count"] != stack_count:
             continue
-        if not drop["active"] or not drop["materialized"] or drop["local_actor_address"] == 0:
-            continue
         drop_distance = distance(drop["x"], drop["y"], x, y)
         if drop_distance > MATCH_RADIUS:
+            continue
+        candidate = dict(drop)
+        candidate["distance"] = round(drop_distance, 3)
+        candidates.append(candidate)
+    candidates.sort(key=lambda row: row["distance"])
+    return candidates
+
+
+def select_drop_metadata(
+    capture_values: dict[str, str],
+    *,
+    type_id: int,
+    x: float,
+    y: float,
+    network_id: int | None = None,
+    local_actor_address: int | None = None,
+    excluded_network_ids: set[int] | None = None,
+    amount: int | None = None,
+    resource_kind: int | None = None,
+    raw_value: int | None = None,
+    item_type_id: int | None = None,
+    item_recipe_uid: int | None = None,
+    item_slot: int | None = None,
+    stack_count: int | None = None,
+) -> dict[str, Any] | None:
+    candidates = matching_drop_metadata(
+        capture_values,
+        network_id=network_id,
+        local_actor_address=local_actor_address,
+        excluded_network_ids=excluded_network_ids,
+        type_id=type_id,
+        amount=amount,
+        resource_kind=resource_kind,
+        raw_value=raw_value,
+        item_type_id=item_type_id,
+        item_recipe_uid=item_recipe_uid,
+        item_slot=item_slot,
+        stack_count=stack_count,
+        x=x,
+        y=y,
+    )
+    return candidates[0] if candidates else None
+
+
+def select_materialized_drop(
+    capture_values: dict[str, str],
+    *,
+    type_id: int,
+    x: float,
+    y: float,
+    network_id: int | None = None,
+    local_actor_address: int | None = None,
+    excluded_network_ids: set[int] | None = None,
+    amount: int | None = None,
+    resource_kind: int | None = None,
+    raw_value: int | None = None,
+    item_type_id: int | None = None,
+    item_recipe_uid: int | None = None,
+    item_slot: int | None = None,
+    stack_count: int | None = None,
+) -> dict[str, Any] | None:
+    actors = actor_rows(capture_values)
+    candidates: list[dict[str, Any]] = []
+    for drop in matching_drop_metadata(
+        capture_values,
+        network_id=network_id,
+        local_actor_address=local_actor_address,
+        excluded_network_ids=excluded_network_ids,
+        type_id=type_id,
+        amount=amount,
+        resource_kind=resource_kind,
+        raw_value=raw_value,
+        item_type_id=item_type_id,
+        item_recipe_uid=item_recipe_uid,
+        item_slot=item_slot,
+        stack_count=stack_count,
+        x=x,
+        y=y,
+    ):
+        if (
+            not drop["active"]
+            or not drop["materialized"]
+            or drop["local_actor_address"] == 0
+        ):
             continue
         actor = find_matching_actor(
             actors,
@@ -418,13 +514,9 @@ def select_materialized_drop(
         if actor is None:
             continue
         candidate = dict(drop)
-        candidate["distance"] = round(drop_distance, 3)
         candidate["actor"] = actor
         candidates.append(candidate)
-    if not candidates:
-        return None
-    candidates.sort(key=lambda row: row["distance"])
-    return candidates[0]
+    return candidates[0] if candidates else None
 
 
 def field_comparison(
@@ -543,8 +635,10 @@ def log_tail(path, max_lines: int = 160) -> list[str]:
     return lines[-max_lines:]
 
 
-def wait_for_materialized_drop(
+def wait_for_drop_metadata(
     *,
+    pipe_name: str,
+    excluded_network_ids: set[int],
     type_id: int,
     amount: int | None = None,
     resource_kind: int | None = None,
@@ -560,9 +654,60 @@ def wait_for_materialized_drop(
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
     while time.monotonic() < deadline:
-        last = capture(CLIENT_PIPE)
+        last = capture(pipe_name)
+        selected = select_drop_metadata(
+            last,
+            network_id=None,
+            local_actor_address=None,
+            excluded_network_ids=excluded_network_ids,
+            type_id=type_id,
+            amount=amount,
+            resource_kind=resource_kind,
+            raw_value=raw_value,
+            item_type_id=item_type_id,
+            item_recipe_uid=item_recipe_uid,
+            item_slot=item_slot,
+            stack_count=stack_count,
+            x=x,
+            y=y,
+        )
+        if selected is not None:
+            return {"capture": last, "drop": selected}
+        time.sleep(0.1)
+    raise VerifyFailure(
+        "host did not publish newly authored loot metadata; "
+        f"type=0x{type_id:04X} item_type=0x{item_type_id or 0:04X} "
+        f"item_slot={item_slot} x={x:.3f} y={y:.3f} last={last}"
+    )
+
+
+def wait_for_materialized_drop(
+    *,
+    pipe_name: str | None = None,
+    network_id: int | None = None,
+    local_actor_address: int | None = None,
+    excluded_network_ids: set[int] | None = None,
+    type_id: int,
+    amount: int | None = None,
+    resource_kind: int | None = None,
+    raw_value: int | None = None,
+    item_type_id: int | None = None,
+    item_recipe_uid: int | None = None,
+    item_slot: int | None = None,
+    stack_count: int | None = None,
+    x: float,
+    y: float,
+    timeout: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = capture(CLIENT_PIPE if pipe_name is None else pipe_name)
         selected = select_materialized_drop(
             last,
+            network_id=network_id,
+            local_actor_address=local_actor_address,
+            excluded_network_ids=excluded_network_ids,
             type_id=type_id,
             amount=amount,
             resource_kind=resource_kind,
@@ -585,6 +730,149 @@ def wait_for_materialized_drop(
         f"type=0x{type_id:04X} amount={amount} resource_kind={resource_kind} "
         f"raw_value={raw_value} item_type=0x{item_type_id or 0:04X} "
         f"item_slot={item_slot} stack_count={stack_count} x={x:.3f} y={y:.3f} last={last}"
+    )
+
+
+def select_probe_materialized(
+    capture_values: dict[str, str],
+    positions: dict[str, tuple[float, float]],
+) -> dict[str, dict[str, Any] | None]:
+    gold_x, gold_y = positions["gold"]
+    health_x, health_y = positions["health_orb"]
+    mana_x, mana_y = positions["mana_orb"]
+    potion_x, potion_y = positions["mana_potion"]
+    return {
+        "gold": select_materialized_drop(
+            capture_values,
+            type_id=GOLD_TYPE_ID,
+            amount=PROBE_GOLD_AMOUNT,
+            x=gold_x,
+            y=gold_y,
+        ),
+        "health_orb": select_materialized_drop(
+            capture_values,
+            type_id=ORB_TYPE_ID,
+            resource_kind=0,
+            raw_value=PROBE_HEALTH_RAW_VALUE,
+            x=health_x,
+            y=health_y,
+        ),
+        "mana_orb": select_materialized_drop(
+            capture_values,
+            type_id=ORB_TYPE_ID,
+            resource_kind=1,
+            raw_value=PROBE_MANA_RAW_VALUE,
+            x=mana_x,
+            y=mana_y,
+        ),
+        "mana_potion": select_materialized_drop(
+            capture_values,
+            type_id=ITEM_DROP_TYPE_ID,
+            item_type_id=POTION_ITEM_TYPE_ID,
+            item_slot=PROBE_POTION_SLOT,
+            stack_count=PROBE_POTION_STACK,
+            x=potion_x,
+            y=potion_y,
+        ),
+    }
+
+
+def select_probe_host_actors(
+    capture_values: dict[str, str],
+    positions: dict[str, tuple[float, float]],
+) -> dict[str, dict[str, Any] | None]:
+    actors = actor_rows(capture_values)
+    gold_x, gold_y = positions["gold"]
+    health_x, health_y = positions["health_orb"]
+    mana_x, mana_y = positions["mana_orb"]
+    potion_x, potion_y = positions["mana_potion"]
+    return {
+        "gold": select_actor(
+            actors,
+            type_id=GOLD_TYPE_ID,
+            amount=PROBE_GOLD_AMOUNT,
+            x=gold_x,
+            y=gold_y,
+        ),
+        "health_orb": select_actor(
+            actors,
+            type_id=ORB_TYPE_ID,
+            resource_kind=0,
+            raw_value=PROBE_HEALTH_RAW_VALUE,
+            x=health_x,
+            y=health_y,
+        ),
+        "mana_orb": select_actor(
+            actors,
+            type_id=ORB_TYPE_ID,
+            resource_kind=1,
+            raw_value=PROBE_MANA_RAW_VALUE,
+            x=mana_x,
+            y=mana_y,
+        ),
+        "mana_potion": select_actor(
+            actors,
+            type_id=ITEM_DROP_TYPE_ID,
+            item_type_id=POTION_ITEM_TYPE_ID,
+            item_slot=PROBE_POTION_SLOT,
+            stack_count=PROBE_POTION_STACK,
+            x=potion_x,
+            y=potion_y,
+        ),
+    }
+
+
+def wait_for_probe_field_convergence(
+    positions: dict[str, tuple[float, float]],
+    timeout: float,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    deadline = started + timeout
+    attempts = 0
+    last_summary: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        attempts += 1
+        host_capture = capture(HOST_PIPE)
+        client_capture = capture(CLIENT_PIPE)
+        materialized = select_probe_materialized(client_capture, positions)
+        host_actors = select_probe_host_actors(host_capture, positions)
+        missing_client = [
+            label for label, drop in materialized.items() if drop is None
+        ]
+        missing_host = [
+            label for label, actor in host_actors.items() if actor is None
+        ]
+        comparisons = {
+            label: field_comparison(label, host_actors[label], materialized[label])
+            for label in materialized
+            if host_actors[label] is not None and materialized[label] is not None
+        }
+        failures = {
+            label: comparison["failures"]
+            for label, comparison in comparisons.items()
+            if not comparison["ok"]
+        }
+        last_summary = {
+            "missing_client": missing_client,
+            "missing_host": missing_host,
+            "failures": failures,
+        }
+        if not missing_client and not missing_host and not failures:
+            return {
+                "host_capture": host_capture,
+                "client_capture": client_capture,
+                "materialized": materialized,
+                "host_actors": host_actors,
+                "field_comparisons": comparisons,
+                "convergence": {
+                    "attempts": attempts,
+                    "elapsed_seconds": time.monotonic() - started,
+                },
+            }
+        time.sleep(0.1)
+    raise VerifyFailure(
+        f"native loot fields did not converge after {attempts} samples: "
+        f"{last_summary}"
     )
 
 
@@ -669,49 +957,19 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
             timeout=args.timeout,
         )["drop"],
     }
-    result["final_host_capture"] = capture(HOST_PIPE)
-    result["final_client_capture"] = capture(CLIENT_PIPE)
-    result["materialized"] = {
-        "gold": select_materialized_drop(
-            result["final_client_capture"],
-            type_id=GOLD_TYPE_ID,
-            amount=PROBE_GOLD_AMOUNT,
-            resource_kind=None,
-            raw_value=None,
-            x=gold_x,
-            y=gold_y,
-        ),
-        "health_orb": select_materialized_drop(
-            result["final_client_capture"],
-            type_id=ORB_TYPE_ID,
-            amount=None,
-            resource_kind=0,
-            raw_value=PROBE_HEALTH_RAW_VALUE,
-            x=health_x,
-            y=health_y,
-        ),
-        "mana_orb": select_materialized_drop(
-            result["final_client_capture"],
-            type_id=ORB_TYPE_ID,
-            amount=None,
-            resource_kind=1,
-            raw_value=PROBE_MANA_RAW_VALUE,
-            x=mana_x,
-            y=mana_y,
-        ),
-        "mana_potion": select_materialized_drop(
-            result["final_client_capture"],
-            type_id=ITEM_DROP_TYPE_ID,
-            amount=None,
-            resource_kind=None,
-            raw_value=None,
-            item_type_id=POTION_ITEM_TYPE_ID,
-            item_slot=PROBE_POTION_SLOT,
-            stack_count=PROBE_POTION_STACK,
-            x=potion_x,
-            y=potion_y,
-        ),
-    }
+    field_state = wait_for_probe_field_convergence(
+        {
+            "gold": (gold_x, gold_y),
+            "health_orb": (health_x, health_y),
+            "mana_orb": (mana_x, mana_y),
+            "mana_potion": (potion_x, potion_y),
+        },
+        args.timeout,
+    )
+    result["field_convergence"] = field_state["convergence"]
+    result["final_host_capture"] = field_state["host_capture"]
+    result["final_client_capture"] = field_state["client_capture"]
+    result["materialized"] = field_state["materialized"]
     missing_client = [
         label
         for label, drop in result["materialized"].items()
@@ -719,48 +977,7 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
     ]
     if missing_client and any(result["initial_materialized"].get(label) is None for label in missing_client):
         raise VerifyFailure(f"client materialized drop actor(s) missing in final capture: {missing_client}")
-    host_actors = actor_rows(result["final_host_capture"])
-    result["host_actors"] = {
-        "gold": select_actor(
-            host_actors,
-            type_id=GOLD_TYPE_ID,
-            amount=PROBE_GOLD_AMOUNT,
-            resource_kind=None,
-            raw_value=None,
-            x=gold_x,
-            y=gold_y,
-        ),
-        "health_orb": select_actor(
-            host_actors,
-            type_id=ORB_TYPE_ID,
-            amount=None,
-            resource_kind=0,
-            raw_value=PROBE_HEALTH_RAW_VALUE,
-            x=health_x,
-            y=health_y,
-        ),
-        "mana_orb": select_actor(
-            host_actors,
-            type_id=ORB_TYPE_ID,
-            amount=None,
-            resource_kind=1,
-            raw_value=PROBE_MANA_RAW_VALUE,
-            x=mana_x,
-            y=mana_y,
-        ),
-        "mana_potion": select_actor(
-            host_actors,
-            type_id=ITEM_DROP_TYPE_ID,
-            amount=None,
-            resource_kind=None,
-            raw_value=None,
-            item_type_id=POTION_ITEM_TYPE_ID,
-            item_slot=PROBE_POTION_SLOT,
-            stack_count=PROBE_POTION_STACK,
-            x=potion_x,
-            y=potion_y,
-        ),
-    }
+    result["host_actors"] = field_state["host_actors"]
     missing_host = [
         label
         for label, actor in result["host_actors"].items()
@@ -768,10 +985,7 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
     ]
     if missing_host:
         raise VerifyFailure(f"host drop actor(s) missing after spawn: {missing_host}")
-    result["field_comparisons"] = {
-        label: field_comparison(label, result["host_actors"][label], drop or result["initial_materialized"][label])
-        for label, drop in result["materialized"].items()
-    }
+    result["field_comparisons"] = field_state["field_comparisons"]
     result["log_tails"] = {
         "host": log_tail(HOST_LOG),
         "client": log_tail(CLIENT_LOG),

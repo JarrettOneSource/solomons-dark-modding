@@ -452,7 +452,6 @@ void ApplyLevelUpBarrierPacket(
             participant.apply_count <= 0) {
             continue;
         }
-
         LevelUpChoiceResultPacket result{};
         result.header = MakePacketHeader(
             PacketKind::LevelUpChoiceResult,

@@ -11,13 +11,29 @@ that callback, lets the original wizard render finish, and then draws:
 
 - the connected participant's display name with command-aware ExactText
   (`0x0043BCD0`) at half scale;
-- a centered, thin ASCII health strip immediately below it at quarter scale.
+- a 7-pixel-tall D3D9 health bar flush beneath the rendered name (one pixel
+  under the captured glyph bounds), spanning the captured name width with a
+  64-pixel minimum.
 
-The strip is `[` plus twelve `=`/`-` cells plus `]`. Its fill count is derived
-from the actor's native progression HP and max-HP fields, so it follows the same
-replicated runtime state as the remote actor. The health bar is intentionally
-text-based: attempts to inject filled rectangles into this scene transform
-produced black wedge artifacts.
+The native name draw carries the participant identity and the participant's
+authoritative replicated HP ratio into the exact-glyph capture. The ratio is
+resolved from the multiplayer runtime snapshot at render time, not from the
+materialized actor's progression memory: that memory is only rewritten by the
+player-actor tick, which pauses (level-up barrier, death quiesce) while the
+render pass keeps drawing, so it goes stale exactly when remote vitals change
+the most. Runtime vitals refresh from 50 ms participant frames plus host
+corrections, so the bar follows the authority promptly and any real
+client/host divergence stays visible instead of being smoothed over. The glyph
+hook records the actual screen-space name bounds. During the same D3D9 frame,
+the overlay pass centers a bordered red bar beneath those bounds and fills it
+to the captured HP ratio. The primitive setup and every `DrawPrimitiveUP` call
+must succeed before the draw is recorded as successful. There is no text or
+ASCII fallback.
+
+Drawing the rectangles inside the native scene transform produced black wedge
+artifacts. The final path keeps the name in the native `PlayerWizard` render
+pass and draws only the bar later in the screen-space EndScene pass, using the
+captured native glyph bounds as its anchor.
 
 ## Top-center ally rows
 
@@ -51,8 +67,9 @@ with that participant's quarter-scale ExactText name inside the already-active
 HUD transform. The name begins two HUD units after the bar and must end inside
 the reserved 128-unit label slot. The protocol carries at most 31 display-name
 bytes; even 31 widest glyphs consume 124 units at this scale, leaving the
-required two-unit padding on both sides. The original sprite draw is suppressed
-only after the name draw and layout checks succeed; failures retain `ALLY`.
+required two-unit padding on both sides. The original `ALLY` sprite is
+suppressed for multiplayer rows. A failed name draw is logged and does not
+substitute a generic label.
 
 ## Rejected paths
 
@@ -72,7 +89,9 @@ only after the name draw and layout checks succeed; failures retain `ALLY`.
 
 `tools/verify_multiplayer_hud_names.py` launches three independent instances,
 waits for all six observer/participant relationships, changes one participant
-to half health, captures every backbuffer, and requires successful world-name,
-thin-health-strip, and ally-row name draw records for both remote participants
-on every instance. It also parses the native HUD coordinates and fails if a
-name begins over its bar or extends beyond the reserved label slot.
+to half health, and captures every D3D9 backbuffer. For each remote participant
+on each observer it requires a successful native world-name draw, a successful
+DX9 health-bar draw, and a successful ally-row name draw. The half-health case
+must produce a second successful DX9 draw at 50 percent. The verifier also
+parses the native HUD coordinates and fails if a name begins over its bar or
+extends beyond the reserved label slot.

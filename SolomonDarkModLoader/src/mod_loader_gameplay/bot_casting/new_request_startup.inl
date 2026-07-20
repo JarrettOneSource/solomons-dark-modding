@@ -153,9 +153,9 @@ bool StartPendingBotCastRequest(
         (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux0Offset, 0);
         (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
     }
-    // Force non-spread path in FUN_0052BB60 so projectile copies actor aim
-    // fields (0x2a8/0x2ac) into projectile target (0x168/0x16c) instead of
-    // using a random spawn angle.
+    // Force the non-spread path for projectile families that consume the
+    // actor aim fields at +0x2A8/+0x2AC. Fire is direction-driven instead:
+    // FUN_0053DC60 samples actor heading at projectile birth.
     (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
 
     (void)memory.TryWriteField<std::int32_t>(

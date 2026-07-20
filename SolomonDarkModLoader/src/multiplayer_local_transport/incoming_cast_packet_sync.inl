@@ -261,31 +261,6 @@ void ApplyRemoteCastPacket(
         return;
     }
 
-    // Lightning can kill its initial target inside the stock pressed-frame
-    // dispatcher before the post-dispatch cast hook publishes the packet. The
-    // receiver may therefore see one or more packets whose exact network target
-    // is already dead or not materialized yet, followed by a held packet for a
-    // live target. Starting remote playback before that target resolves leaves
-    // Lightning's native target validation false for the whole action, so an
-    // upgraded cast never enters Chaining's extra-target loop on observers.
-    // Other elements retain their targetless directional/projectile behavior.
-    const bool air_primary_packet =
-        packet.element_id == 3 &&
-        (packet.primary_entry_index == 0x18 || packet.skill_id == 0x18);
-    if (!input_tracker.start_queued && air_primary_packet && !resolved_target_by_id) {
-        input_tracker.deferred_start_packet_count += 1;
-        if (input_tracker.deferred_start_packet_count <= 3 ||
-            input_tracker.deferred_start_packet_count % 10 == 0) {
-            Log(
-                "Multiplayer remote Air cast start deferred until exact target resolves. participant_id=" +
-                std::to_string(packet.participant_id) +
-                " cast_sequence=" + std::to_string(packet.cast_sequence) +
-                " phase=" + CastInputPhaseLabel(packet.input_phase) +
-                " target_network_actor_id=" + std::to_string(packet.target_network_actor_id) +
-                " deferred_packets=" + std::to_string(input_tracker.deferred_start_packet_count));
-        }
-        return;
-    }
     if (!input_tracker.start_queued) {
         if (QueueBotCast(request)) {
             input_tracker.start_queued = true;

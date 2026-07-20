@@ -8,34 +8,49 @@ bool TryResolveLiveUiSurfaceOwner(
 
     *owner_address = 0;
     const auto* config = TryGetDebugUiOverlayConfig();
+    uintptr_t candidate_owner_address = 0;
+    uintptr_t expected_vftable_address = GetUiSurfaceAddress(surface_root_id, "vftable");
     if (surface_root_id == "dark_cloud_browser") {
-        if (TryGetCurrentDarkCloudBrowser(owner_address) && *owner_address != 0) {
-            return true;
+        (void)TryGetCurrentDarkCloudBrowser(&candidate_owner_address);
+        if (expected_vftable_address == 0 && config != nullptr) {
+            expected_vftable_address = config->dark_cloud_browser_vftable;
         }
     } else if (surface_root_id == "main_menu") {
-        if (config != nullptr && TryReadActiveTitleMainMenu(*config, nullptr, owner_address) && *owner_address != 0) {
-            return true;
+        if (config != nullptr) {
+            (void)TryReadActiveTitleMainMenu(*config, nullptr, &candidate_owner_address);
+            if (expected_vftable_address == 0) {
+                expected_vftable_address = config->title_main_menu_vftable;
+            }
         }
     } else if (surface_root_id == "dialog") {
-        if (TryReadTrackedDialogObject(owner_address) && *owner_address != 0) {
-            return true;
+        (void)TryReadTrackedDialogObject(&candidate_owner_address);
+        if (expected_vftable_address == 0 && config != nullptr) {
+            expected_vftable_address = config->msgbox_vftable;
         }
     } else if (surface_root_id == "settings") {
-        if (TryGetActiveSettingsRender(owner_address) && *owner_address != 0) {
-            return true;
-        }
+        (void)TryGetActiveSettingsRender(&candidate_owner_address);
     } else if (surface_root_id == "dark_cloud_search" || surface_root_id == "quick_panel") {
-        if (TryReadTrackedMyQuickPanel(owner_address) && *owner_address != 0) {
-            return true;
+        (void)TryReadTrackedMyQuickPanel(&candidate_owner_address);
+        if (expected_vftable_address == 0 && config != nullptr) {
+            expected_vftable_address = config->myquick_panel_vftable;
         }
     } else if (surface_root_id == "simple_menu" || surface_root_id == "pause_menu") {
-        if (TryGetActiveSimpleMenu(owner_address) && *owner_address != 0) {
-            return true;
+        (void)TryGetActiveSimpleMenu(&candidate_owner_address);
+        if (expected_vftable_address == 0 && config != nullptr) {
+            expected_vftable_address = config->simple_menu_vftable;
+        }
+    } else if (surface_root_id == "hall_of_fame") {
+        (void)TryGetCurrentHallOfFame(&candidate_owner_address);
+        if (expected_vftable_address == 0 && config != nullptr) {
+            expected_vftable_address = config->hall_of_fame_vftable;
+        }
+    } else if (surface_root_id == "spell_picker") {
+        (void)TryGetCurrentSpellPicker(&candidate_owner_address);
+        if (expected_vftable_address == 0 && config != nullptr) {
+            expected_vftable_address = config->spell_picker_vftable;
         }
     } else if (surface_root_id == "create") {
         const auto* surface_definition = FindUiSurfaceDefinition("create");
-        const auto expected_create_vftable =
-            surface_definition != nullptr ? GetDefinitionAddress(surface_definition->addresses, "vftable") : 0;
         if (surface_definition != nullptr) {
             const auto object_global = GetDefinitionAddress(surface_definition->addresses, "object_global");
             if (object_global != 0) {
@@ -45,41 +60,36 @@ bool TryResolveLiveUiSurfaceOwner(
                         std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
                         g_debug_ui_overlay_state.last_create_owner_object = create_object;
                     }
-                    *owner_address = create_object;
-                    return true;
+                    candidate_owner_address = create_object;
                 }
             }
         }
 
-        uintptr_t cached_create_object = 0;
-        {
+        if (candidate_owner_address == 0) {
             std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
-            cached_create_object = g_debug_ui_overlay_state.last_create_owner_object;
-        }
-        if (cached_create_object != 0) {
-            uintptr_t validated_create_object = 0;
-            if (TryResolveValidatedUiOwnerPointer(
-                    cached_create_object,
-                    expected_create_vftable,
-                    &validated_create_object) &&
-                validated_create_object != 0) {
-                *owner_address = validated_create_object;
-                return true;
-            }
-
-            std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
-            if (g_debug_ui_overlay_state.last_create_owner_object == cached_create_object) {
-                g_debug_ui_overlay_state.last_create_owner_object = 0;
-            }
+            g_debug_ui_overlay_state.last_create_owner_object = 0;
         }
     }
 
-    if (snapshot_owner_address != 0) {
-        *owner_address = snapshot_owner_address;
-        return true;
+    uintptr_t validated_owner_address = 0;
+    if (candidate_owner_address == 0 || expected_vftable_address == 0 ||
+        !TryResolveValidatedUiOwnerPointer(
+            candidate_owner_address,
+            expected_vftable_address,
+            &validated_owner_address) ||
+        validated_owner_address == 0) {
+        return false;
     }
 
-    return false;
+    // Snapshot-backed dispatch must still refer to the exact surface object
+    // that is live now. A matching vftable alone cannot make a cached pointer
+    // authoritative after a surface transition or allocator reuse.
+    if (snapshot_owner_address != 0 && snapshot_owner_address != validated_owner_address) {
+        return false;
+    }
+
+    *owner_address = validated_owner_address;
+    return true;
 }
 
 bool TryResolveUiActionDispatchExpectation(

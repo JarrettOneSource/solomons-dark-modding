@@ -37,7 +37,6 @@ from verify_multiplayer_primary_kill_stress import (
     set_manual_spawner_test_mode,
     spawn_one_enemy,
 )
-from verify_real_input_spell_cast_sync import detect_instance_pids
 
 
 FIXTURE = ROOT / "tests" / "fixtures" / "boneyards" / "flat_multiplayer_test.boneyard"
@@ -93,10 +92,13 @@ emit('replicated_actor_total_count', replicated and replicated.actor_total_count
 BLANK_ARENA_CENSUS_LUA = r"""
 local function emit(key, value) print(key .. '=' .. tostring(value)) end
 local function offset(name) return tonumber(sd.debug.layout_offset(name)) or 0 end
+local function u8(address) return tonumber(sd.debug.read_u8(address)) or 0 end
 local function u32(address) return tonumber(sd.debug.read_u32(address)) or 0 end
 local function ptr(address) return tonumber(sd.debug.read_ptr(address)) or 0 end
 local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
+local scene = sd.world and sd.world.get_scene and sd.world.get_scene() or nil
 local world = tonumber(player and player.world_address) or 0
+local gameplay = tonumber(scene and (scene.scene_id or scene.id)) or 0
 local pointer_count = offset('pointer_list_count')
 local function list_count(offset_name)
   local list_offset = offset(offset_name)
@@ -122,8 +124,18 @@ for index = 0, movement_circle_count - 1 do
   local object_type = object ~= 0 and u32(object + object_type_offset) or 0
   if scenery_types[object_type] then scenery_circle_count = scenery_circle_count + 1 end
 end
+local scripted_setpiece_actor_count = 0
+for _, actor in ipairs(sd.world.list_actors() or {}) do
+  local type_id = tonumber(actor.object_type_id) or 0
+  if type_id == 0x1391 or type_id == 0x1392 then
+    scripted_setpiece_actor_count = scripted_setpiece_actor_count + 1
+  end
+end
 emit('blank_mode', sd.runtime.get_environment_variable('SDMOD_TEST_BLANK_BONEYARD') or '')
 emit('world', string.format('0x%08X', world))
+emit('scripted_setpiece_actor_count', scripted_setpiece_actor_count)
+emit('primary_gate_blocked', gameplay ~= 0 and u8(gameplay + offset('gameplay_primary_gate_block_flag')) or -1)
+emit('cast_ui_blocked', gameplay ~= 0 and u8(gameplay + offset('gameplay_cast_ui_block_flag')) or -1)
 emit('scenery_count', list_count('actor_world_scenery_object_list'))
 emit('road_count', list_count('actor_world_road_list'))
 emit('fence_count', list_count('actor_world_fence_list'))
@@ -188,6 +200,9 @@ def wait_for_blank_arena_census(
         last = parse_key_values(lua(pipe_name, BLANK_ARENA_CENSUS_LUA))
         if (
             last.get("blank_mode") == "1"
+            and int(last.get("scripted_setpiece_actor_count", "-1")) == 0
+            and int(last.get("primary_gate_blocked", "-1")) == 0
+            and int(last.get("cast_ui_blocked", "-1")) == 0
             and int(last.get("scenery_count", "-1")) == 0
             and int(last.get("road_count", "-1")) == 0
             and int(last.get("fence_count", "-1")) == 0
@@ -197,6 +212,11 @@ def wait_for_blank_arena_census(
             return {
                 "blank_mode": last["blank_mode"],
                 "world": last["world"],
+                "scripted_setpiece_actor_count": int(
+                    last["scripted_setpiece_actor_count"]
+                ),
+                "primary_gate_blocked": int(last["primary_gate_blocked"]),
+                "cast_ui_blocked": int(last["cast_ui_blocked"]),
                 "scenery_count": int(last["scenery_count"]),
                 "road_count": int(last["road_count"]),
                 "fence_count": int(last["fence_count"]),
@@ -329,7 +349,6 @@ def run() -> dict[str, Any]:
                 f"{label} flat boneyard was not empty before manual test spawning: {actor_set}"
             )
 
-    pids = detect_instance_pids()
     # The explicit test mode removes stock-generated scenery while preserving
     # native floor and weather rendering. Keep the strong unique-color check,
     # but allow more dominant background area than the generic default.
@@ -337,13 +356,11 @@ def run() -> dict[str, Any]:
     result["screenshots"] = {
         "host": capture_game_backbuffer(
             HOST_PIPE,
-            pids["host"],
             HOST_SCREENSHOT,
             maximum_dominant_fraction=flat_capture_dominant_limit,
         ),
         "client": capture_game_backbuffer(
             CLIENT_PIPE,
-            pids["client"],
             CLIENT_SCREENSHOT,
             maximum_dominant_fraction=flat_capture_dominant_limit,
         ),

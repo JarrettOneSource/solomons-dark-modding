@@ -5,6 +5,19 @@ bool IsReplicatedSpellEffectNativeType(std::uint32_t native_type_id) {
     case kWaterPrimaryNativeTypeId:
     case kFireEmberNativeTypeId:
     case kFirewalkerTrailNativeTypeId:
+    case kMagicStormNativeTypeId:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool IsReplicatedSpellEffectMotionNativeType(std::uint32_t native_type_id) {
+    switch (native_type_id) {
+    case kEtherPrimaryNativeTypeId:
+    case kFireballPrimaryNativeTypeId:
+    case kWaterPrimaryNativeTypeId:
+    case kFireEmberNativeTypeId:
         return true;
     default:
         return false;
@@ -38,7 +51,7 @@ bool TryCaptureLocalSpellEffectState(
     auto& memory = ProcessMemory::Instance();
     float motion_x = 0.0f;
     float motion_y = 0.0f;
-    if (actor.object_type_id != kFirewalkerTrailNativeTypeId &&
+    if (IsReplicatedSpellEffectMotionNativeType(actor.object_type_id) &&
         memory.TryReadField(actor.actor_address, kSpellEffectMotionXOffset, &motion_x) &&
         memory.TryReadField(actor.actor_address, kSpellEffectMotionYOffset, &motion_y) &&
         std::isfinite(motion_x) &&
@@ -395,12 +408,21 @@ void SendSpellEffectSnapshot(std::uint64_t now_ms) {
         kLocalTransportSpellEffectSnapshotIntervalMs) {
         return;
     }
-    g_local_transport.last_spell_effect_snapshot_send_ms = now_ms;
-
     SpellEffectSnapshotPacket packet{};
     if (!BuildLocalSpellEffectSnapshotPacket(now_ms, &packet)) {
         return;
     }
+
+    const auto wire_size =
+        SpellEffectSnapshotPacketWireSize(packet.effect_count);
+    const auto send_interval_ms = BandwidthLimitedSnapshotIntervalMs(
+        wire_size,
+        kLocalTransportSpellEffectSnapshotIntervalMs);
+    if (now_ms - g_local_transport.last_spell_effect_snapshot_send_ms <
+        send_interval_ms) {
+        return;
+    }
+    g_local_transport.last_spell_effect_snapshot_send_ms = now_ms;
 
     const bool snapshot_has_effects = packet.effect_count != 0;
     if (!snapshot_has_effects &&
@@ -411,7 +433,11 @@ void SendSpellEffectSnapshot(std::uint64_t now_ms) {
         snapshot_has_effects;
 
     for (const auto& endpoint : BuildKnownSendEndpoints()) {
-        SendPacketToEndpoint(packet, endpoint);
+        SendBufferToEndpoint(
+            &packet,
+            wire_size,
+            endpoint,
+            SteamSendModeForPacket(packet));
     }
 }
 
@@ -572,6 +598,10 @@ void ApplySpellEffectSnapshotPacket(
     last_sequence = packet.header.sequence;
 
     UpsertPeerEndpoint(from, packet.owner_participant_id, now_ms);
-    RelayPacketToPeers(packet, from);
+    RelayPacketBufferToPeers(
+        &packet,
+        SpellEffectSnapshotPacketWireSize(packet.effect_count),
+        from,
+        SteamSendModeForPacket(packet));
     PublishSpellEffectSnapshotRuntimeInfo(packet, now_ms);
 }

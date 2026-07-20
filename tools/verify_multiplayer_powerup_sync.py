@@ -72,7 +72,11 @@ DROP_BASE_X = 1500.0
 DROP_BASE_Y = 800.0
 
 
-CAPTURE_LUA = rf"""
+_CAPTURE_HOST_ID_TOKEN = "__SDMOD_HOST_PARTICIPANT_ID__"
+_CAPTURE_CLIENT_ID_TOKEN = "__SDMOD_CLIENT_PARTICIPANT_ID__"
+
+
+CAPTURE_LUA_TEMPLATE = rf"""
 local function emit(key, value)
   print(key .. "=" .. tostring(value == nil and "" or value))
 end
@@ -99,6 +103,7 @@ emit("player.transient_status_flags", player and player.transient_status_flags o
 local position_x_offset = sd.debug.layout_offset("actor_position_x")
 local position_y_offset = sd.debug.layout_offset("actor_position_y")
 local radius_offset = sd.debug.layout_offset("actor_collision_radius")
+local pending_remove_offset = sd.debug.layout_offset("actor_pending_remove")
 local actors = sd.world and sd.world.list_actors and sd.world.list_actors() or {{}}
 local actor_count = 0
 for _, actor in ipairs(actors) do
@@ -109,6 +114,7 @@ for _, actor in ipairs(actors) do
       local prefix = "actor." .. tostring(actor_count) .. "."
       emit(prefix .. "address", hx(address))
       emit(prefix .. "kind_id", u8(address + 0x13C))
+      emit(prefix .. "pending_remove", u8(address + pending_remove_offset))
       emit(prefix .. "x", f32(address + position_x_offset))
       emit(prefix .. "y", f32(address + position_y_offset))
       emit(prefix .. "radius", f32(address + radius_offset))
@@ -183,7 +189,7 @@ if mp and mp.participants then
   end
 end
 
-for _, participant_id in ipairs({{{HOST_ID}, {CLIENT_ID}}}) do
+for _, participant_id in ipairs({{{_CAPTURE_HOST_ID_TOKEN}, {_CAPTURE_CLIENT_ID_TOKEN}}}) do
   local bot = sd.bots and sd.bots.get_participant_state and
     sd.bots.get_participant_state(participant_id) or nil
   local prefix = "bot." .. tostring(participant_id) .. "."
@@ -220,7 +226,20 @@ end
 """
 
 
-def values(pipe_name: str, code: str = CAPTURE_LUA, timeout: float = 8.0) -> dict[str, str]:
+def capture_lua() -> str:
+    return (
+        CAPTURE_LUA_TEMPLATE.replace(_CAPTURE_HOST_ID_TOKEN, str(HOST_ID))
+        .replace(_CAPTURE_CLIENT_ID_TOKEN, str(CLIENT_ID))
+    )
+
+
+def values(
+    pipe_name: str,
+    code: str | None = None,
+    timeout: float = 8.0,
+) -> dict[str, str]:
+    if code is None:
+        code = capture_lua()
     return parse_key_values(lua(pipe_name, code, timeout=timeout))
 
 
@@ -246,6 +265,9 @@ def actor_rows(raw: dict[str, str]) -> list[dict[str, Any]]:
         rows.append({
             "address": parse_address(raw.get(prefix + "address")),
             "kind_id": parse_int_text(raw.get(prefix + "kind_id"), -1),
+            "pending_remove": parse_int_text(
+                raw.get(prefix + "pending_remove"), 0
+            ),
             "x": parse_float(raw.get(prefix + "x")),
             "y": parse_float(raw.get(prefix + "y")),
             "radius": parse_float(raw.get(prefix + "radius")),
@@ -561,6 +583,122 @@ def wait_for_accepted_pickup(
     )
 
 
+def wait_for_carrier_unregistered(
+    carrier: dict[str, Any],
+    timeout: float,
+) -> dict[str, Any]:
+    network_drop_id = int(carrier["network_drop_id"])
+    host_actor_address = int(carrier["host_actor"]["address"])
+    client_actor_address = int(carrier["client_actor"]["address"])
+    deadline = time.monotonic() + timeout
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        host = capture(HOST_PIPE)
+        client = capture(CLIENT_PIPE)
+        host_actor_present = any(
+            row["address"] == host_actor_address for row in actor_rows(host)
+        )
+        client_actor_present = any(
+            row["address"] == client_actor_address for row in actor_rows(client)
+        )
+        host_drop_active = any(
+            row["network_id"] == network_drop_id and row["active"]
+            for row in drop_rows(host)
+        )
+        client_drop_active = any(
+            row["network_id"] == network_drop_id and row["active"]
+            for row in drop_rows(client)
+        )
+        last = {
+            "network_drop_id": network_drop_id,
+            "host_actor_address": host_actor_address,
+            "client_actor_address": client_actor_address,
+            "host_actor_present": host_actor_present,
+            "client_actor_present": client_actor_present,
+            "host_drop_active": host_drop_active,
+            "client_drop_active": client_drop_active,
+        }
+        if not any(
+            (
+                host_actor_present,
+                client_actor_present,
+                host_drop_active,
+                client_drop_active,
+            )
+        ):
+            return last
+        time.sleep(0.1)
+    raise VerifyFailure(f"accepted powerup carrier was not unregistered: {last}")
+
+
+def wait_for_carrier_retirement_requested(
+    carrier: dict[str, Any],
+    timeout: float,
+) -> dict[str, Any]:
+    network_drop_id = int(carrier["network_drop_id"])
+    host_actor_address = int(carrier["host_actor"]["address"])
+    client_actor_address = int(carrier["client_actor"]["address"])
+    deadline = time.monotonic() + timeout
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        host = capture(HOST_PIPE)
+        client = capture(CLIENT_PIPE)
+        host_actor = next(
+            (
+                row
+                for row in actor_rows(host)
+                if row["address"] == host_actor_address
+            ),
+            None,
+        )
+        client_actor = next(
+            (
+                row
+                for row in actor_rows(client)
+                if row["address"] == client_actor_address
+            ),
+            None,
+        )
+        host_drop_active = any(
+            row["network_id"] == network_drop_id and row["active"]
+            for row in drop_rows(host)
+        )
+        client_drop_active = any(
+            row["network_id"] == network_drop_id and row["active"]
+            for row in drop_rows(client)
+        )
+        last = {
+            "network_drop_id": network_drop_id,
+            "host_actor_address": host_actor_address,
+            "client_actor_address": client_actor_address,
+            "host_actor_present": host_actor is not None,
+            "client_actor_present": client_actor is not None,
+            "host_actor_pending_remove": (
+                int(host_actor["pending_remove"])
+                if host_actor is not None
+                else None
+            ),
+            "client_actor_pending_remove": (
+                int(client_actor["pending_remove"])
+                if client_actor is not None
+                else None
+            ),
+            "host_drop_active": host_drop_active,
+            "client_drop_active": client_drop_active,
+        }
+        if (
+            not host_drop_active
+            and not client_drop_active
+            and (host_actor is None or host_actor["pending_remove"] != 0)
+            and (client_actor is None or client_actor["pending_remove"] != 0)
+        ):
+            return last
+        time.sleep(0.1)
+    raise VerifyFailure(
+        f"accepted powerup carrier retirement was not requested: {last}"
+    )
+
+
 def owner_context(owner_id: int) -> tuple[str, str, int]:
     if owner_id == HOST_ID:
         return HOST_PIPE, CLIENT_PIPE, CLIENT_ID
@@ -666,6 +804,7 @@ def verify_random_skill(
         carrier["network_drop_id"],
         timeout,
     )
+    cleanup = wait_for_carrier_unregistered(carrier, timeout)
     result = accepted["host"]
     expected_active = selected["active"] + 1
     if (
@@ -693,6 +832,7 @@ def verify_random_skill(
         },
         "movement": movement,
         "accepted": accepted,
+        "cleanup": cleanup,
         "parity": parity,
     }
 
@@ -782,6 +922,7 @@ def verify_damage_x4(
         carrier["network_drop_id"],
         timeout,
     )
+    cleanup = wait_for_carrier_unregistered(carrier, timeout)
     result_ticks = accepted["host"]["damage_x4_remaining_ticks"]
     if result_ticks <= 0:
         raise VerifyFailure(f"DamageX4 result did not carry a duration: {accepted}")
@@ -791,6 +932,7 @@ def verify_damage_x4(
         "carrier": carrier,
         "movement": movement,
         "accepted": accepted,
+        "cleanup": cleanup,
         "parity": parity,
     }
 
@@ -815,6 +957,7 @@ def verify_bonus_skill(
         carrier["network_drop_id"],
         timeout,
     )
+    retirement_requested = wait_for_carrier_retirement_requested(carrier, timeout)
     offer = wait_for_local_offer(
         owner_pipe,
         owner_id,
@@ -861,6 +1004,7 @@ def verify_bonus_skill(
         timeout,
         require_timed_out=False,
     )
+    cleanup = wait_for_carrier_unregistered(carrier, timeout)
     expected_active = choice_result["resulting_active"]
     if (
         choice_result["result_option_id"] != selected_entry
@@ -880,6 +1024,8 @@ def verify_bonus_skill(
         "carrier": carrier,
         "movement": movement,
         "accepted": accepted,
+        "retirement_requested": retirement_requested,
+        "cleanup": cleanup,
         "offer": {
             "offer_id": offer["offer_id"],
             "option_ids": offer["option_ids"],
@@ -915,33 +1061,13 @@ def verify_bonus_skill(
     }
 
 
-def run_verifier(
+def run_cases(
     timeout: float,
     selected_cases: set[str] | None = None,
 ) -> dict[str, Any]:
-    output: dict[str, Any] = {"ok": False}
-    output["launch"] = launch_pair(
-        god_mode=True,
-        test_survival_boneyard_override=FLAT_BONEYARD,
-        test_blank_boneyard=True,
-    )
-    disable_bots()
-    output["hub_ready"] = {
-        "host": wait_for_remote(
-            HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub", timeout
-        ),
-        "client": wait_for_remote(
-            CLIENT_PIPE, HOST_ID, HOST_NAME, "hub", timeout
-        ),
-    }
-    output["quiet_mode"] = enable_quiet_progression_test_mode()
-    output["run_entry"] = start_host_testrun_and_wait_for_clients(timeout=timeout)
-    output["pair_ready"] = wait_for_pair_ready(timeout)
-
     base_x = DROP_BASE_X
     base_y = DROP_BASE_Y
     cases: dict[str, Any] = {}
-    output["cases"] = cases
 
     requested = selected_cases or set(CASE_NAMES)
     if "client_random_skill" in requested:
@@ -968,6 +1094,33 @@ def run_verifier(
         cases["host_bonus_skill"] = verify_bonus_skill(
             HOST_ID, base_x, base_y + DROP_STEP * 5.0, timeout
         )
+
+    return cases
+
+
+def run_verifier(
+    timeout: float,
+    selected_cases: set[str] | None = None,
+) -> dict[str, Any]:
+    output: dict[str, Any] = {"ok": False}
+    output["launch"] = launch_pair(
+        god_mode=True,
+        test_survival_boneyard_override=FLAT_BONEYARD,
+        test_blank_boneyard=True,
+    )
+    disable_bots()
+    output["hub_ready"] = {
+        "host": wait_for_remote(
+            HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub", timeout
+        ),
+        "client": wait_for_remote(
+            CLIENT_PIPE, HOST_ID, HOST_NAME, "hub", timeout
+        ),
+    }
+    output["quiet_mode"] = enable_quiet_progression_test_mode()
+    output["run_entry"] = start_host_testrun_and_wait_for_clients(timeout=timeout)
+    output["pair_ready"] = wait_for_pair_ready(timeout)
+    output["cases"] = run_cases(timeout, selected_cases)
 
     output["ok"] = True
     return output

@@ -13,6 +13,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
+from multiplayer_log_probe import log_after, log_position, read_log
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
@@ -139,29 +140,6 @@ def ensure_host_combat_started() -> dict[str, object]:
             return {"started": True, "before": before, "after": last}
         time.sleep(0.1)
     raise VerifyFailure(f"host combat did not become active after start_waves: last={last}")
-
-
-def read_log(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8", errors="replace")
-    except FileNotFoundError:
-        return ""
-
-
-def log_position(path: Path) -> int:
-    try:
-        return path.stat().st_size
-    except FileNotFoundError:
-        return 0
-
-
-def log_after(path: Path, offset: int) -> str:
-    try:
-        with path.open("rb") as stream:
-            stream.seek(offset)
-            return stream.read().decode("utf-8", errors="replace")
-    except FileNotFoundError:
-        return ""
 
 
 def query_scene(pipe_name: str) -> str:

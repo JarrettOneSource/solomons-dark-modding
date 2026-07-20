@@ -1,6 +1,7 @@
 using System.Text.Json;
 using SolomonDarkModLauncher.Commands;
 using SolomonDarkModLauncher.Staging;
+using SolomonDarkModLauncher.Steam;
 
 namespace SolomonDarkModLauncher.App;
 
@@ -88,8 +89,16 @@ internal static class LauncherJsonConsole
                             Enabled = session.Enabled,
                             IsHost = session.IsHost,
                             Phase = session.Phase,
+                            GamePhase = session.GamePhase,
                             AppId = session.AppId,
                             LobbyId = session.LobbyId,
+                            HostSteamId = session.HostSteamId,
+                            LocalSteamId = session.LocalSteamId,
+                            PersonaName = session.PersonaName,
+                            Privacy = session.Privacy,
+                            ProtocolVersion = session.ProtocolVersion,
+                            ManifestSha256 = session.ManifestSha256,
+                            FriendSteamIds = session.FriendSteamIds,
                             MaxParticipants = session.MaxParticipants,
                             AuthenticatedPeerCount = session.AuthenticatedPeerCount,
                             OverlayEnabled = session.OverlayEnabled,
@@ -97,6 +106,14 @@ internal static class LauncherJsonConsole
                             InviteSent = session.InviteSent,
                             RouteRelayed = session.RouteRelayed,
                             RoutePingMs = session.RoutePingMs,
+                            Members = session.Members.Select(member =>
+                                new LauncherJsonLobbyMember
+                                {
+                                    SteamId = member.SteamId,
+                                    Name = member.Name,
+                                    IsHost = member.IsHost,
+                                    IsLocal = member.IsLocal
+                                }).ToArray(),
                             StatusText = session.StatusText,
                             ErrorText = session.ErrorText
                         }
@@ -131,6 +148,16 @@ internal static class LauncherJsonConsole
         };
 
         Console.Error.WriteLine(JsonSerializer.Serialize(response, JsonOptions));
+    }
+
+    public static void PrintDirectorySession(SteamDirectorySession session)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            success = true,
+            mode = "directory-auth",
+            directorySession = session
+        }, JsonOptions));
     }
 
     private static string GetModeToken(LauncherMode mode)
@@ -226,8 +253,16 @@ internal static class LauncherJsonConsole
         public required bool Enabled { get; init; }
         public required bool IsHost { get; init; }
         public required string Phase { get; init; }
+        public required string GamePhase { get; init; }
         public required uint AppId { get; init; }
         public required ulong LobbyId { get; init; }
+        public required ulong HostSteamId { get; init; }
+        public required ulong LocalSteamId { get; init; }
+        public required string PersonaName { get; init; }
+        public required string Privacy { get; init; }
+        public required int ProtocolVersion { get; init; }
+        public required string ManifestSha256 { get; init; }
+        public required IReadOnlyList<ulong> FriendSteamIds { get; init; }
         public required uint MaxParticipants { get; init; }
         public required uint AuthenticatedPeerCount { get; init; }
         public required bool OverlayEnabled { get; init; }
@@ -235,8 +270,17 @@ internal static class LauncherJsonConsole
         public required bool InviteSent { get; init; }
         public required bool RouteRelayed { get; init; }
         public required int RoutePingMs { get; init; }
+        public required IReadOnlyList<LauncherJsonLobbyMember> Members { get; init; }
         public required string StatusText { get; init; }
         public required string ErrorText { get; init; }
+    }
+
+    private sealed class LauncherJsonLobbyMember
+    {
+        public required ulong SteamId { get; init; }
+        public required string Name { get; init; }
+        public required bool IsHost { get; init; }
+        public required bool IsLocal { get; init; }
     }
 
     private sealed class LauncherJsonModStateChange

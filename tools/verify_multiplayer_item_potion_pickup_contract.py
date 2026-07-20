@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 CHECKS = (
-    ("protocol version", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "kProtocolVersion = 59"),
+    ("protocol version", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "kProtocolVersion = 63"),
     ("drop item type", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "std::uint32_t item_type_id;"),
     ("drop recipe identity", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "std::uint32_t item_recipe_uid;"),
     ("drop wearable color", "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h", "LootDropSnapshotFlagItemColorState"),

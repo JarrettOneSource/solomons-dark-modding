@@ -4,6 +4,7 @@ bool SetHostLobbyMetadata() {
            SteamSetLobbyData(lobby_id, kLobbyManifestKey, g_session.manifest_sha256_text.c_str()) &&
            SteamSetLobbyData(lobby_id, kLobbyHostKey, std::to_string(g_session.local_steam_id).c_str()) &&
            SteamSetLobbyData(lobby_id, kLobbyAppIdKey, std::to_string(g_session.app_id).c_str()) &&
+           SteamSetLobbyData(lobby_id, kLobbyPrivacyKey, g_session.privacy.c_str()) &&
            SteamSetLobbyData(
                lobby_id,
                kLobbyMaxParticipantsKey,
@@ -25,6 +26,12 @@ void SetLocalLobbyMemberMetadata() {
         kMemberManifestKey,
         g_session.manifest_sha256_text.c_str());
 }
+
+bool BeginJoinLobby(std::uint64_t lobby_id, bool recovery = false);
+void BeginClientLobbyRecovery(
+    std::uint64_t lobby_id,
+    std::uint64_t now_ms,
+    const char* reason);
 
 bool ValidateJoinedLobby(std::string* error_message) {
     const auto owner = SteamGetLobbyOwner(g_session.lobby_id);
@@ -69,6 +76,18 @@ bool ValidateJoinedLobby(std::string* error_message) {
         *error_message = "Lobby is no longer accepting players.";
         return false;
     }
+    const auto advertised_privacy =
+        SteamGetLobbyData(g_session.lobby_id, kLobbyPrivacyKey);
+    if (advertised_privacy == "public") {
+        g_session.lobby_visibility = SteamLobbyVisibility::Public;
+        g_session.privacy = "public";
+    } else if (advertised_privacy == "friendsOnly") {
+        g_session.lobby_visibility = SteamLobbyVisibility::FriendsOnly;
+        g_session.privacy = "friendsOnly";
+    } else {
+        *error_message = "Lobby privacy metadata is invalid.";
+        return false;
+    }
     g_session.host_steam_id = owner;
     g_session.max_participants = static_cast<std::uint32_t>(advertised_max);
     return true;
@@ -81,6 +100,14 @@ void ReconcileLobbyMembers(std::uint64_t now_ms) {
     const auto members = SteamGetLobbyMembers(g_session.lobby_id);
     std::unordered_set<std::uint64_t> current(members.begin(), members.end());
     if (current.find(g_session.local_steam_id) == current.end()) {
+        if (!g_session.is_host) {
+            const auto lobby_id = g_session.lobby_id;
+            BeginClientLobbyRecovery(
+                lobby_id,
+                now_ms,
+                "local_lobby_membership_missing");
+            return;
+        }
         SetError("Local Steam user is no longer a lobby member.", false);
         return;
     }
@@ -131,16 +158,99 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         maximum_ping = (std::max)(maximum_ping, peer.network_status.ping_ms);
     }
 
+    const auto steam_snapshot = GetSteamBootstrapSnapshot();
+    std::string game_phase = "loading";
+    ParticipantRuntimeInfo local_runtime;
+    if (TryGetLocalParticipantRuntimeInfo(&local_runtime)) {
+        switch (local_runtime.scene_intent.kind) {
+        case ParticipantSceneIntentKind::SharedHub:
+            game_phase = "hub";
+            break;
+        case ParticipantSceneIntentKind::Run:
+            game_phase = "session";
+            break;
+        case ParticipantSceneIntentKind::PrivateRegion:
+            game_phase = "loading";
+            break;
+        }
+    }
+
+    if (g_session.is_host &&
+        (g_session.last_friend_list_refresh_ms == 0 ||
+         now_ms >= g_session.last_friend_list_refresh_ms +
+             kFriendListRefreshIntervalMs)) {
+        g_session.immediate_friend_ids = SteamGetImmediateFriends();
+        g_session.immediate_friend_ids.erase(
+            std::remove_if(
+                g_session.immediate_friend_ids.begin(),
+                g_session.immediate_friend_ids.end(),
+                [](std::uint64_t steam_id) {
+                    return steam_id == 0 || steam_id == g_session.local_steam_id;
+                }),
+            g_session.immediate_friend_ids.end());
+        std::sort(
+            g_session.immediate_friend_ids.begin(),
+            g_session.immediate_friend_ids.end());
+        g_session.immediate_friend_ids.erase(
+            std::unique(
+                g_session.immediate_friend_ids.begin(),
+                g_session.immediate_friend_ids.end()),
+            g_session.immediate_friend_ids.end());
+        g_session.last_friend_list_refresh_ms = now_ms;
+    }
+    const auto& friend_steam_ids = g_session.immediate_friend_ids;
+
+    std::vector<MultiplayerSessionMemberSnapshot> members;
+    if (g_session.lobby_id != 0 && !g_session.lobby_members.empty()) {
+        members.reserve(g_session.lobby_members.size());
+        for (const auto member_steam_id : g_session.lobby_members) {
+            MultiplayerSessionMemberSnapshot member;
+            member.steam_id = member_steam_id;
+            member.is_host = member_steam_id == g_session.host_steam_id;
+            member.is_local = member_steam_id == g_session.local_steam_id;
+            if (member.is_local) {
+                member.name = steam_snapshot.persona_name;
+            } else if (const auto peer = g_session.peers.find(member_steam_id);
+                       peer != g_session.peers.end() &&
+                       !peer->second.display_name.empty()) {
+                member.name = peer->second.display_name;
+            } else {
+                member.name = SteamGetFriendPersonaName(member_steam_id);
+            }
+            members.push_back(std::move(member));
+        }
+        std::sort(
+            members.begin(),
+            members.end(),
+            [](const MultiplayerSessionMemberSnapshot& left,
+               const MultiplayerSessionMemberSnapshot& right) {
+                if (left.is_host != right.is_host) {
+                    return left.is_host;
+                }
+                if (left.is_local != right.is_local) {
+                    return left.is_local;
+                }
+                return left.steam_id < right.steam_id;
+            });
+    }
+
     std::ostringstream status;
     switch (g_session.phase) {
     case SteamSessionPhase::WaitingForInvite:
-        status << "Steam multiplayer waiting for a lobby invite.";
+        status << "Steam join mode ready; accept an invite or enter a lobby ID.";
         break;
     case SteamSessionPhase::CreatingLobby:
-        status << "Creating friends-only Steam lobby.";
+        status << "Creating "
+               << (g_session.lobby_visibility == SteamLobbyVisibility::Public
+                       ? "public"
+                       : "friends-only")
+               << " Steam lobby.";
         break;
     case SteamSessionPhase::JoiningLobby:
         status << "Joining Steam lobby " << g_session.desired_lobby_id << '.';
+        break;
+    case SteamSessionPhase::Reconnecting:
+        status << "Steam multiplayer reconnecting after Steam service interruption.";
         break;
     case SteamSessionPhase::Handshaking:
         status << "Steam lobby " << g_session.lobby_id
@@ -190,6 +300,9 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
             break;
         case SteamSessionPhase::JoiningLobby:
             state.session_status = SessionStatus::JoiningLobby;
+            break;
+        case SteamSessionPhase::Reconnecting:
+            state.session_status = SessionStatus::Handshaking;
             break;
         case SteamSessionPhase::Handshaking:
             state.session_status = SessionStatus::Handshaking;
@@ -244,12 +357,22 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
     signature << SteamSessionPhaseLabel(g_session.phase) << '|'
               << g_session.lobby_id << '|'
               << g_session.host_steam_id << '|'
+              << g_session.local_steam_id << '|'
+              << g_session.privacy << '|'
+              << game_phase << '|'
               << authenticated_count << '|'
               << (g_session.overlay_enabled ? 1 : 0) << '|'
               << (g_session.invite_dialog_opened ? 1 : 0) << '|'
               << (any_relayed ? 1 : 0) << '|'
               << maximum_ping << '|'
               << g_session.error_text;
+    for (const auto friend_steam_id : friend_steam_ids) {
+        signature << "|f:" << friend_steam_id;
+    }
+    for (const auto& member : members) {
+        signature << '|' << member.steam_id << ':'
+                  << (member.is_host ? 'h' : '-') << ':' << member.name;
+    }
     const auto status_signature = signature.str();
     if (status_signature != g_session.last_status_signature ||
         g_session.last_status_write_ms == 0 ||
@@ -260,9 +383,16 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         snapshot.enabled = g_session.configured;
         snapshot.is_host = g_session.is_host;
         snapshot.phase = SteamSessionPhaseLabel(g_session.phase);
+        snapshot.game_phase = game_phase;
         snapshot.app_id = g_session.app_id;
         snapshot.lobby_id = g_session.lobby_id;
         snapshot.host_steam_id = g_session.host_steam_id;
+        snapshot.local_steam_id = g_session.local_steam_id;
+        snapshot.persona_name = steam_snapshot.persona_name;
+        snapshot.privacy = g_session.privacy;
+        snapshot.protocol_version = kProtocolVersion;
+        snapshot.manifest_sha256 = g_session.manifest_sha256_text;
+        snapshot.friend_steam_ids = friend_steam_ids;
         snapshot.max_participants = g_session.max_participants;
         snapshot.authenticated_peer_count = authenticated_count;
         snapshot.overlay_enabled = g_session.overlay_enabled;
@@ -270,6 +400,7 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         snapshot.invite_sent = g_session.invite_sent;
         snapshot.route_relayed = any_relayed;
         snapshot.route_ping_ms = maximum_ping;
+        snapshot.members = members;
         snapshot.status_text = status_text;
         snapshot.error_text = g_session.error_text;
         WriteMultiplayerSessionStatus(
@@ -280,8 +411,33 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
     }
 }
 
-bool BeginJoinLobby(std::uint64_t lobby_id) {
+bool BeginJoinLobby(std::uint64_t lobby_id, bool recovery) {
     if (lobby_id == 0 || g_session.is_host) {
+        return false;
+    }
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (recovery) {
+        if (!g_session.client_lobby_recovery) {
+            g_session.recovery_started_ms =
+                g_session.steam_servers_connected ? now_ms : 0;
+        }
+        g_session.client_lobby_recovery = true;
+        g_session.recovery_lobby_id = lobby_id;
+    } else {
+        g_session.client_lobby_recovery = false;
+        g_session.recovery_lobby_id = 0;
+        g_session.recovery_started_ms = 0;
+    }
+    g_session.last_join_attempt_ms = now_ms;
+    if (!g_session.steam_servers_connected) {
+        RemoveAllPeers();
+        g_session.lobby_members.clear();
+        g_session.lobby_id = 0;
+        g_session.host_steam_id = 0;
+        g_session.desired_lobby_id = lobby_id;
+        g_session.pending_api_call = 0;
+        g_session.phase = SteamSessionPhase::Reconnecting;
+        g_session.error_text.clear();
         return false;
     }
     if (g_session.lobby_id != 0) {
@@ -295,13 +451,71 @@ bool BeginJoinLobby(std::uint64_t lobby_id) {
     g_session.local_session_nonce = GenerateSessionNonce();
     g_session.pending_api_call = SteamJoinLobby(lobby_id);
     if (g_session.pending_api_call == 0) {
+        if (recovery) {
+            g_session.phase = SteamSessionPhase::Reconnecting;
+            g_session.error_text.clear();
+            Log(
+                "Steam multiplayer client lobby rejoin was not queued; "
+                "the recovery state machine will retry.");
+            return false;
+        }
         SetError("Steam rejected the JoinLobby request before it was queued.", false);
         return false;
     }
     g_session.phase = SteamSessionPhase::JoiningLobby;
     g_session.error_text.clear();
-    Log("Steam multiplayer joining lobby_id=" + std::to_string(lobby_id));
+    Log(
+        std::string(
+            recovery
+                ? "Steam multiplayer rejoining lobby_id="
+                : "Steam multiplayer joining lobby_id=") +
+        std::to_string(lobby_id));
     return true;
+}
+
+void BeginClientLobbyRecovery(
+    std::uint64_t lobby_id,
+    std::uint64_t now_ms,
+    const char* reason) {
+    if (g_session.is_host || lobby_id == 0) {
+        return;
+    }
+    if (!g_session.client_lobby_recovery) {
+        g_session.recovery_started_ms =
+            g_session.steam_servers_connected ? now_ms : 0;
+    }
+    g_session.client_lobby_recovery = true;
+    g_session.recovery_lobby_id = lobby_id;
+    Log(
+        "Steam multiplayer client starting lobby recovery. reason=" +
+        std::string(reason != nullptr ? reason : "unknown"));
+    (void)BeginJoinLobby(lobby_id, true);
+}
+
+void ServiceClientLobbyRecovery(std::uint64_t now_ms) {
+    if (g_session.is_host ||
+        !g_session.client_lobby_recovery ||
+        g_session.recovery_lobby_id == 0) {
+        return;
+    }
+    if (!g_session.steam_servers_connected) {
+        return;
+    }
+    if (g_session.recovery_started_ms != 0 &&
+        now_ms >= g_session.recovery_started_ms &&
+        now_ms - g_session.recovery_started_ms >=
+            kClientLobbyRecoveryTimeoutMs) {
+        SetError(
+            "Steam reconnected, but the authenticated host lobby could not be rejoined.",
+            false);
+        return;
+    }
+    if (g_session.last_join_attempt_ms != 0 &&
+         now_ms < g_session.last_join_attempt_ms +
+             kClientLobbyRecoveryRetryMs) {
+        return;
+    }
+    (void)BeginJoinLobby(g_session.recovery_lobby_id, true);
 }
 
 void RefreshOverlayAndInviteDialog() {
@@ -326,249 +540,4 @@ void RefreshOverlayAndInviteDialog() {
     }
 }
 
-void OnHostLobbyReady(std::uint64_t lobby_id, std::uint64_t now_ms) {
-    if (g_session.lobby_id == lobby_id &&
-        (g_session.phase == SteamSessionPhase::LobbyReady ||
-         g_session.phase == SteamSessionPhase::Connected)) {
-        return;
-    }
-    if (lobby_id == 0 || SteamGetLobbyOwner(lobby_id) != g_session.local_steam_id) {
-        SetError("Created lobby does not report the local Steam user as owner.", true);
-        return;
-    }
-    g_session.lobby_id = lobby_id;
-    g_session.host_steam_id = g_session.local_steam_id;
-    g_session.pending_api_call = 0;
-    if (!SetHostLobbyMetadata()) {
-        SetError("Could not publish required build metadata to the Steam lobby.", true);
-        return;
-    }
-    SetLocalLobbyMemberMetadata();
-    ReconcileLobbyMembers(now_ms);
-    if (g_session.phase == SteamSessionPhase::Error) {
-        return;
-    }
-    g_session.phase = SteamSessionPhase::LobbyReady;
-    SteamSetRichPresence("status", "Hosting Solomon Dark multiplayer");
-    const auto connect = "+connect_lobby " + std::to_string(lobby_id);
-    SteamSetRichPresence("connect", connect.c_str());
-    if (g_session.invite_steam_id != 0) {
-        if (g_session.invite_steam_id == g_session.local_steam_id ||
-            !SteamInviteUserToLobby(lobby_id, g_session.invite_steam_id)) {
-            SetError("Steam rejected the requested lobby invite.", true);
-            return;
-        }
-        g_session.invite_sent = true;
-        Log("Steam multiplayer sent the requested lobby invite.");
-    }
-    RefreshOverlayAndInviteDialog();
-    Log("Steam multiplayer lobby ready. lobby_id=" + std::to_string(lobby_id));
-}
-
-void OnClientLobbyEntered(std::uint64_t lobby_id, std::uint64_t now_ms) {
-    g_session.lobby_id = lobby_id;
-    g_session.pending_api_call = 0;
-    std::string error;
-    if (!ValidateJoinedLobby(&error)) {
-        SetError(std::move(error), true);
-        return;
-    }
-    SetLocalLobbyMemberMetadata();
-    ReconcileLobbyMembers(now_ms);
-    if (g_session.phase == SteamSessionPhase::Error) {
-        return;
-    }
-    g_session.phase = SteamSessionPhase::Handshaking;
-    g_session.last_hello_send_ms = 0;
-    SteamSetRichPresence("status", "Joining Solomon Dark multiplayer");
-    Log(
-        "Steam multiplayer lobby entered. lobby_id=" + std::to_string(lobby_id) +
-        " host_steam_id=" + std::to_string(g_session.host_steam_id));
-}
-
-void HandleSteamEvent(const SteamEvent& event, std::uint64_t now_ms) {
-    switch (event.kind) {
-    case SteamEventKind::LobbyCreated:
-        if (!g_session.is_host ||
-            (event.api_call != 0 && event.api_call != g_session.pending_api_call)) {
-            return;
-        }
-        if (!event.success) {
-            SetError(
-                "CreateLobby failed with Steam result " +
-                    std::to_string(event.result_code) + '.',
-                false);
-            return;
-        }
-        OnHostLobbyReady(event.lobby_id, now_ms);
-        return;
-    case SteamEventKind::LobbyEntered:
-        if (!event.success) {
-            if (!g_session.is_host &&
-                g_session.phase == SteamSessionPhase::JoiningLobby &&
-                (event.api_call == 0 || event.api_call == g_session.pending_api_call)) {
-                SetError(
-                    "JoinLobby failed with response " +
-                        std::to_string(event.result_code) + '.',
-                    false);
-            }
-            return;
-        }
-        if (g_session.is_host) {
-            if (g_session.phase == SteamSessionPhase::CreatingLobby ||
-                event.lobby_id == g_session.lobby_id) {
-                OnHostLobbyReady(event.lobby_id, now_ms);
-            }
-        } else if (g_session.phase == SteamSessionPhase::JoiningLobby &&
-                   event.lobby_id == g_session.desired_lobby_id &&
-                   (event.api_call == 0 || event.api_call == g_session.pending_api_call)) {
-            OnClientLobbyEntered(event.lobby_id, now_ms);
-        }
-        return;
-    case SteamEventKind::LobbyJoinRequested:
-        if (!g_session.is_host && event.lobby_id != 0) {
-            BeginJoinLobby(event.lobby_id);
-        }
-        return;
-    case SteamEventKind::RichPresenceJoinRequested: {
-        std::uint64_t lobby_id = 0;
-        if (!g_session.is_host &&
-            TryParseLobbyIdFromConnectString(event.connect_string, &lobby_id)) {
-            BeginJoinLobby(lobby_id);
-        }
-        return;
-    }
-    case SteamEventKind::LobbyMemberChanged:
-        if (event.lobby_id == g_session.lobby_id) {
-            ReconcileLobbyMembers(now_ms);
-        }
-        return;
-    case SteamEventKind::LobbyDataUpdated:
-        if (!g_session.is_host && event.lobby_id == g_session.lobby_id) {
-            std::string error;
-            if (!ValidateJoinedLobby(&error)) {
-                SetError(std::move(error), true);
-            }
-        }
-        return;
-    case SteamEventKind::NetworkSessionRequested:
-        if (IsLobbyMember(event.user_id)) {
-            SteamAcceptNetworkSession(event.user_id);
-        } else if (event.user_id != 0) {
-            SteamCloseNetworkSession(event.user_id);
-        }
-        return;
-    case SteamEventKind::NetworkSessionFailed:
-        if (event.user_id == 0 || !IsLobbyMember(event.user_id)) {
-            return;
-        }
-        if (!g_session.is_host && event.user_id == g_session.host_steam_id) {
-            RestartClientHostHandshake(event.user_id, "network_session_failed");
-        } else {
-            RemovePeer(event.user_id);
-        }
-        return;
-    case SteamEventKind::LobbyInviteReceived:
-        if (!g_session.is_host &&
-            (g_session.phase == SteamSessionPhase::WaitingForInvite ||
-             (g_session.phase == SteamSessionPhase::Error &&
-              g_session.lobby_id == 0)) &&
-            event.lobby_id != 0) {
-            BeginJoinLobby(event.lobby_id);
-        }
-        return;
-    }
-}
-
-bool SendHelloAck(
-    std::uint64_t remote_steam_id,
-    std::uint64_t session_nonce,
-    SessionHelloResultCode result) {
-    SessionHelloAckPacket packet{};
-    packet.header = MakePacketHeader(PacketKind::SessionHelloAck, g_session.next_sequence++);
-    packet.lobby_id = g_session.lobby_id;
-    packet.authority_participant_id = g_session.local_steam_id;
-    packet.target_participant_id = remote_steam_id;
-    packet.target_steam_id = remote_steam_id;
-    packet.session_nonce = session_nonce;
-    packet.capabilities = kRequiredSessionCapabilities;
-    packet.result_code = static_cast<std::uint8_t>(result);
-    packet.authority_role = static_cast<std::uint8_t>(SessionPeerRole::Host);
-    packet.max_participants = static_cast<std::uint8_t>(g_session.max_participants);
-    std::memcpy(
-        packet.manifest_sha256,
-        g_session.manifest_sha256.data(),
-        g_session.manifest_sha256.size());
-    return SteamSendNetworkMessage(
-        remote_steam_id,
-        &packet,
-        sizeof(packet),
-        SteamNetworkSendMode::ReliableNoNagle);
-}
-
-void HandleSessionHello(
-    const SteamNetworkMessage& message,
-    const SessionHelloPacket& packet,
-    bool protocol_matches,
-    std::uint64_t now_ms) {
-    if (!g_session.is_host ||
-        (g_session.phase != SteamSessionPhase::LobbyReady &&
-         g_session.phase != SteamSessionPhase::Connected)) {
-        return;
-    }
-    SessionHelloResultCode result = SessionHelloResultCode::Accepted;
-    if (!protocol_matches) {
-        result = SessionHelloResultCode::ProtocolMismatch;
-    } else if (!IsLobbyMember(message.sender_steam_id) ||
-               packet.lobby_id != g_session.lobby_id) {
-        result = SessionHelloResultCode::LobbyMismatch;
-    } else if (packet.participant_id != message.sender_steam_id ||
-               packet.steam_id != message.sender_steam_id ||
-               packet.session_nonce == 0 ||
-               packet.role != static_cast<std::uint8_t>(SessionPeerRole::Client)) {
-        result = SessionHelloResultCode::IdentityMismatch;
-    } else if (packet.host_steam_id != g_session.local_steam_id) {
-        result = SessionHelloResultCode::HostMismatch;
-    } else if (packet.app_id != g_session.app_id) {
-        result = SessionHelloResultCode::LobbyMismatch;
-    } else if ((packet.capabilities & kRequiredSessionCapabilities) !=
-               kRequiredSessionCapabilities) {
-        result = SessionHelloResultCode::CapabilityMismatch;
-    } else if (std::memcmp(
-                   packet.manifest_sha256,
-                   g_session.manifest_sha256.data(),
-                   g_session.manifest_sha256.size()) != 0) {
-        result = SessionHelloResultCode::ManifestMismatch;
-    } else {
-        std::uint32_t authenticated_count = 1;
-        for (const auto& [steam_id, peer] : g_session.peers) {
-            if (steam_id != message.sender_steam_id && peer.authenticated) {
-                authenticated_count += 1;
-            }
-        }
-        if (authenticated_count >= g_session.max_participants) {
-            result = SessionHelloResultCode::LobbyFull;
-        }
-    }
-
-    auto& peer = g_session.peers[message.sender_steam_id];
-    peer.steam_id = message.sender_steam_id;
-    peer.session_nonce = packet.session_nonce;
-    peer.last_packet_ms = now_ms;
-    peer.display_name = PacketDisplayName(packet.display_name, sizeof(packet.display_name));
-    if (result == SessionHelloResultCode::Accepted) {
-        peer.authenticated = true;
-        peer.rejected = false;
-        SteamAcceptNetworkSession(message.sender_steam_id);
-        RegisterSteamGameplayPeer(message.sender_steam_id, false);
-        g_session.phase = SteamSessionPhase::Connected;
-    } else {
-        peer.authenticated = false;
-        peer.rejected = true;
-    }
-    SendHelloAck(message.sender_steam_id, packet.session_nonce, result);
-    Log(
-        "Steam multiplayer hello result. steam_id=" +
-        std::to_string(message.sender_steam_id) +
-        " result=" + HelloResultLabel(result));
-}
+#include "lobby_event_handlers.inl"

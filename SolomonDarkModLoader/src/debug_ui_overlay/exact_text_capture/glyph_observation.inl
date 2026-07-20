@@ -27,22 +27,9 @@ bool IsExactTextSampleNearExpectedOrigin(
 }
 
 void ObserveActiveExactTextGlyph(float glyph_offset_x, float glyph_offset_y) {
-    uintptr_t render_context_address = 0;
-    if (!TryReadUiRenderContext(g_debug_ui_overlay_state.config, &render_context_address) || render_context_address == 0) {
-        return;
-    }
-
     float base_x = 0.0f;
     float base_y = 0.0f;
-    const auto* render_context = reinterpret_cast<const void*>(render_context_address);
-    if (!TryReadPlainField(
-            render_context,
-            g_debug_ui_overlay_state.config.ui_render_context_base_x_offset,
-            &base_x) ||
-        !TryReadPlainField(
-            render_context,
-            g_debug_ui_overlay_state.config.ui_render_context_base_y_offset,
-            &base_y)) {
+    if (!TryReadUiRenderBase(&base_x, &base_y)) {
         return;
     }
 
@@ -68,6 +55,12 @@ void ObserveActiveExactTextGlyph(float glyph_offset_x, float glyph_offset_y) {
     if (!capture.capture_enabled) {
         return;
     }
+    // Gameplay nameplates need the full TextQuad XYZ projection. Mixing these
+    // unprojected glyph origins into the projected quad bounds would recreate
+    // camera-distance drift.
+    if (capture.surface_id == "gameplay_nameplate") {
+        return;
+    }
 
     if (!IsExactTextSampleNearExpectedOrigin(capture, glyph_x, glyph_y, glyph_x, glyph_y)) {
         return;
@@ -80,13 +73,17 @@ void ObserveActiveExactTextGlyph(float glyph_offset_x, float glyph_offset_y) {
     ++capture.glyph_count;
 }
 
-bool TryBuildGlyphQuadBounds(
-    const float* candidate,
+bool TryBuildDestinationQuadBounds(
+    const float* destination_vertices,
     float* left,
     float* top,
     float* right,
     float* bottom) {
-    if (candidate == nullptr || left == nullptr || top == nullptr || right == nullptr || bottom == nullptr) {
+    if (destination_vertices == nullptr ||
+        left == nullptr ||
+        top == nullptr ||
+        right == nullptr ||
+        bottom == nullptr) {
         return false;
     }
 
@@ -95,8 +92,8 @@ bool TryBuildGlyphQuadBounds(
     float max_x = (std::numeric_limits<float>::lowest)();
     float max_y = (std::numeric_limits<float>::lowest)();
     for (int index = 0; index < 8; index += 2) {
-        const auto x = candidate[index];
-        const auto y = candidate[index + 1];
+        const auto x = destination_vertices[index];
+        const auto y = destination_vertices[index + 1];
         min_x = (std::min)(min_x, x);
         min_y = (std::min)(min_y, y);
         max_x = (std::max)(max_x, x);
@@ -119,35 +116,28 @@ bool TryBuildGlyphQuadBounds(
     return true;
 }
 
-void ObserveActiveExactTextQuad(const float* arg2, const float* arg3) {
+void ObserveActiveExactTextQuad(
+    void* draw_state,
+    const float* destination_vertices,
+    const float* /*texture_coordinates*/) {
+    float base_x = 0.0f;
+    float base_y = 0.0f;
+    if (!TryReadUiRenderBase(&base_x, &base_y)) {
+        return;
+    }
+
     float left = 0.0f;
     float top = 0.0f;
     float right = 0.0f;
     float bottom = 0.0f;
 
-    float alternate_left = 0.0f;
-    float alternate_top = 0.0f;
-    float alternate_right = 0.0f;
-    float alternate_bottom = 0.0f;
-
-    const auto primary_valid = TryBuildGlyphQuadBounds(arg2, &left, &top, &right, &bottom);
-    const auto alternate_valid =
-        TryBuildGlyphQuadBounds(arg3, &alternate_left, &alternate_top, &alternate_right, &alternate_bottom);
-
-    if (!primary_valid && !alternate_valid) {
+    if (!TryBuildDestinationQuadBounds(
+            destination_vertices,
+            &left,
+            &top,
+            &right,
+            &bottom)) {
         return;
-    }
-
-    if (alternate_valid) {
-        const auto primary_area = primary_valid ? (right - left) * (bottom - top) : -1.0f;
-        const auto alternate_area =
-            (alternate_right - alternate_left) * (alternate_bottom - alternate_top);
-        if (!primary_valid || alternate_area > primary_area) {
-            left = alternate_left;
-            top = alternate_top;
-            right = alternate_right;
-            bottom = alternate_bottom;
-        }
     }
 
     std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
@@ -168,8 +158,38 @@ void ObserveActiveExactTextQuad(const float* arg2, const float* arg3) {
         return;
     }
 
-    if (!IsExactTextSampleNearExpectedOrigin(capture, left, top, right, bottom)) {
-        return;
+    if (capture.surface_id == "gameplay_nameplate") {
+        // TextQuad_Draw submits XYZ + diffuse + UV. Resolve the exact
+        // backbuffer bounds synchronously while its per-draw fixed-function
+        // transforms are still active.
+        if (!TryProjectGameplayNameplateQuadBounds(
+                draw_state,
+                destination_vertices,
+                base_x,
+                base_y,
+                &left,
+                &top,
+                &right,
+                &bottom)) {
+            return;
+        }
+    } else {
+        left += base_x;
+        right += base_x;
+        top += base_y;
+        bottom += base_y;
+        if (!IsPlausibleTitleCoordinate(left) ||
+            !IsPlausibleTitleCoordinate(top) ||
+            !IsPlausibleTitleCoordinate(right) ||
+            !IsPlausibleTitleCoordinate(bottom) ||
+            !IsExactTextSampleNearExpectedOrigin(
+                capture,
+                left,
+                top,
+                right,
+                bottom)) {
+            return;
+        }
     }
 
     capture.min_x = (std::min)(capture.min_x, left);

@@ -11,6 +11,8 @@ internal static class StagedGameLauncher
         "SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE";
     internal const string TestWaveOverrideEnvironmentVariable =
         "SDMOD_TEST_WAVE_OVERRIDE";
+    internal const string TestBlankBoneyardEnvironmentVariable =
+        "SDMOD_TEST_BLANK_BONEYARD";
 
     private static readonly string[] SandboxEnvironmentVariables =
     {
@@ -29,7 +31,8 @@ internal static class StagedGameLauncher
         "SDMOD_MULTIPLAYER_REMOTE_PORT",
         "SDMOD_MULTIPLAYER_PARTICIPANT_ID",
         "SDMOD_MULTIPLAYER_PLAYER_NAME",
-        "SDMOD_LUA_EXEC_PIPE_NAME"
+        "SDMOD_LUA_EXEC_PIPE_NAME",
+        TestBlankBoneyardEnvironmentVariable
     };
 
     public static InjectedGame Launch(
@@ -58,7 +61,8 @@ internal static class StagedGameLauncher
                 null,
                 null,
                 MultiplayerLaunchOptions.DefaultMaxParticipants,
-                openInviteDialog: true));
+                openInviteDialog: true,
+                LobbyHostOptions.CreateDefault()));
         options = ApplySteamBootstrap(configuration, stage, options);
         var launchToken = Guid.NewGuid().ToString("N");
         options = ApplyLaunchToken(options, launchToken);
@@ -106,6 +110,11 @@ internal static class StagedGameLauncher
                         stage.StageRootPath,
                         launchToken,
                         process);
+                LobbyDirectoryPublisher.TryStart(
+                    stage.StageRootPath,
+                    process.Id,
+                    launchToken,
+                    multiplayer.Host);
             }
             else if (multiplayer?.Mode == MultiplayerLaunchMode.Join)
             {

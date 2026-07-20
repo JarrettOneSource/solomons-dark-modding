@@ -166,68 +166,6 @@ bool IsNativeSecondaryToggleSkill(std::int32_t skill_entry_index) {
            skill_entry_index == 0x4F;
 }
 
-bool TryConsumeLocalMultiplayerDampenMana(
-    uintptr_t actor_address,
-    std::int32_t belt_slot,
-    float* mana_before,
-    float* mana_after,
-    float* mana_cost) {
-    if (mana_before != nullptr) {
-        *mana_before = 0.0f;
-    }
-    if (mana_after != nullptr) {
-        *mana_after = 0.0f;
-    }
-    if (mana_cost != nullptr) {
-        *mana_cost = 0.0f;
-    }
-
-    uintptr_t progression = 0;
-    if (!TryResolveActorProgressionRuntime(actor_address, &progression) ||
-        progression == 0) {
-        return false;
-    }
-    NativeSecondarySpellManaStats resolved{};
-    std::string resolve_error;
-    if (!TryResolveNativeSecondarySpellManaStats(
-        progression,
-        0x33,
-        &resolved,
-        &resolve_error)) {
-        Log(
-            "Multiplayer local Dampen mana resolution failed. actor=" +
-            HexString(actor_address) +
-            " belt_slot=" + std::to_string(belt_slot) +
-            " error=" + resolve_error);
-        return false;
-    }
-
-    float current = 0.0f;
-    float maximum = 0.0f;
-    if (!TryReadProgressionMana(progression, &current, &maximum) ||
-        current + 0.001f < resolved.spend_cost) {
-        return false;
-    }
-    const auto resulting = (std::max)(0.0f, current - resolved.spend_cost);
-    if (!ProcessMemory::Instance().TryWriteField(
-            progression,
-            kProgressionMpOffset,
-            resulting)) {
-        return false;
-    }
-
-    if (mana_before != nullptr) {
-        *mana_before = current;
-    }
-    if (mana_after != nullptr) {
-        *mana_after = resulting;
-    }
-    if (mana_cost != nullptr) {
-        *mana_cost = resolved.spend_cost;
-    }
-    return true;
-}
-
 }  // namespace
 
 bool InvokeOriginalPlayerActorSecondarySpellCast(
@@ -269,23 +207,20 @@ bool InvokeOriginalPlayerActorSecondarySpellCast(
             " toggled=" + std::to_string(toggled ? 1 : 0));
         return toggled;
     }
-    if (skill_entry_index == 0x33 && multiplayer::IsLocalTransportEnabled()) {
-        // Stock Dampen corrupts the engine's shared pointer-list heap even in
-        // an otherwise empty two-player arena. Remote observers replay the
-        // loader-owned authoritative effect instead of entering that branch.
-        if (result != nullptr) {
-            *result = 1;
-        }
-        Log(
-            "Multiplayer remote Dampen used the safe replicated dispatcher. "
-            "actor=" + HexString(actor_address));
-        return true;
-    }
-
     ++g_remote_secondary_spell_dispatch_depth;
-    const auto native_result =
-        original(reinterpret_cast<void*>(actor_address), skill_entry_index);
+    std::uint8_t native_result = 0;
+    const bool stock_context_ok =
+        InvokeWithStockDampenEffectSuppressed(
+            skill_entry_index,
+            [&] {
+                native_result = original(
+                    reinterpret_cast<void*>(actor_address),
+                    skill_entry_index);
+            });
     --g_remote_secondary_spell_dispatch_depth;
+    if (!stock_context_ok) {
+        return false;
+    }
     if (result != nullptr) {
         *result = native_result;
     }
@@ -304,6 +239,10 @@ std::uint8_t __fastcall HookPlayerActorSecondarySpellCast(
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    const auto turn_undead_precast_state =
+        CaptureAuthoritativeTurnUndeadPrecastState(
+            actor_address,
+            skill_entry_index);
     LocalSecondaryCastCapture capture{};
     const bool should_capture =
         g_remote_secondary_spell_dispatch_depth == 0 &&
@@ -312,29 +251,34 @@ std::uint8_t __fastcall HookPlayerActorSecondarySpellCast(
             actor_address,
             skill_entry_index,
             &capture);
+    if (skill_entry_index == 0x33 &&
+        multiplayer::IsLocalTransportEnabled() &&
+        !should_capture) {
+        Log(
+            "Multiplayer local Dampen rejected because its authoritative "
+            "cast context was unavailable. actor=" +
+            HexString(actor_address));
+        return 0;
+    }
     std::uint8_t native_result = 0;
-    if (skill_entry_index == 0x33 && multiplayer::IsLocalTransportEnabled()) {
-        float mana_before = 0.0f;
-        float mana_after = 0.0f;
-        float mana_cost = 0.0f;
-        if (should_capture &&
-            TryConsumeLocalMultiplayerDampenMana(
-                actor_address,
-                capture.belt_slot,
-                &mana_before,
-                &mana_after,
-                &mana_cost)) {
-            native_result = 1;
-            Log(
-                "Multiplayer local Dampen used the safe replicated dispatcher. "
-                "actor=" + HexString(actor_address) +
-                " mana_before=" + std::to_string(mana_before) +
-                " mana_after=" + std::to_string(mana_after) +
-                " mana_cost=" + std::to_string(mana_cost));
-        }
+    bool stock_context_ok = true;
+    if (multiplayer::IsLocalTransportEnabled()) {
+        stock_context_ok = InvokeWithStockDampenEffectSuppressed(
+            skill_entry_index,
+            [&] {
+                native_result = original(self, skill_entry_index);
+            });
     } else {
         native_result = original(self, skill_entry_index);
     }
+    if (!stock_context_ok) {
+        return 0;
+    }
+    RegisterAuthoritativeTurnUndeadCasterTargets(
+        actor_address,
+        multiplayer::GetLocalTransportParticipantId(),
+        turn_undead_precast_state,
+        native_result != 0);
     if (!should_capture ||
         (native_result == 0 &&
          !IsNativeSecondaryToggleSkill(skill_entry_index))) {

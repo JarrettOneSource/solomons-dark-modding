@@ -270,6 +270,48 @@ RuntimeState SnapshotRuntimeState() {
     return g_runtime_state;
 }
 
+bool TryGetLocalParticipantRuntimeInfo(ParticipantRuntimeInfo* runtime) {
+    if (runtime == nullptr) {
+        return false;
+    }
+
+    std::scoped_lock lock(g_runtime_state_mutex);
+    const auto* participant = FindLocalParticipant(g_runtime_state);
+    if (participant == nullptr || !participant->runtime.valid) {
+        return false;
+    }
+
+    *runtime = participant->runtime;
+    return true;
+}
+
+bool TryGetRemoteParticipantDisplayState(
+    std::uint64_t participant_id,
+    std::string* display_name,
+    ParticipantRuntimeInfo* runtime,
+    bool* transport_connected) {
+    if (participant_id == 0 || display_name == nullptr) {
+        return false;
+    }
+
+    std::scoped_lock lock(g_runtime_state_mutex);
+    const auto* participant = FindParticipant(g_runtime_state, participant_id);
+    if (participant == nullptr ||
+        !IsRemoteParticipant(*participant) ||
+        participant->name.empty()) {
+        return false;
+    }
+
+    *display_name = participant->name;
+    if (runtime != nullptr) {
+        *runtime = participant->runtime;
+    }
+    if (transport_connected != nullptr) {
+        *transport_connected = participant->transport_connected;
+    }
+    return true;
+}
+
 void ApplySteamSnapshotToRuntime(std::uint64_t now_ms, const SteamBootstrapSnapshot& steam_snapshot) {
     UpdateRuntimeState([&](RuntimeState& state) {
         auto* local = UpsertLocalParticipant(state);
@@ -473,12 +515,9 @@ bool TrySampleParticipantTransform(
             before->render_advance_rate + (after->render_advance_rate - before->render_advance_rate) * alpha;
         sample->render_advance_phase =
             before->render_advance_phase + (after->render_advance_phase - before->render_advance_phase) * alpha;
-        sample->render_drive_effect_timer =
-            before->render_drive_effect_timer +
-            (after->render_drive_effect_timer - before->render_drive_effect_timer) * alpha;
-        sample->render_drive_effect_progress =
-            before->render_drive_effect_progress +
-            (after->render_drive_effect_progress - before->render_drive_effect_progress) * alpha;
+        // Shield capacity is gameplay state, not motion. Keep the newest
+        // owner-authored values copied above instead of delaying hit and break
+        // transitions behind transform interpolation.
         sample->render_drive_overlay_alpha =
             before->render_drive_overlay_alpha +
             (after->render_drive_overlay_alpha - before->render_drive_overlay_alpha) * alpha;

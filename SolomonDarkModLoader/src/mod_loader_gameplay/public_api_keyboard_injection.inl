@@ -67,6 +67,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplaySwitchRegion);
     const auto monster_pathfinding_refresh_target =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kMonsterPathfindingRefreshTarget);
+    const auto badguy_move_step =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kBadguyMoveStep);
     const auto gold_pickup = ProcessMemory::Instance().ResolveGameAddressOrZero(kGoldPickupCaller);
     const auto orb_pickup = ProcessMemory::Instance().ResolveGameAddressOrZero(kOrbPickup);
     const auto item_drop_pickup = ProcessMemory::Instance().ResolveGameAddressOrZero(kItemDropPickupCaller);
@@ -100,6 +102,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         actor_world_unregister == 0 ||
         gameplay_switch_region == 0 ||
         monster_pathfinding_refresh_target == 0 ||
+        badguy_move_step == 0 ||
         gold_pickup == 0 ||
         orb_pickup == 0 ||
         item_drop_pickup == 0 ||
@@ -752,12 +755,29 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(badguy_move_step),
+            reinterpret_cast<void*>(&HookBadguyMoveStep),
+            kBadguyMoveStepHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.badguy_move_step_hook,
+            &hook_error)) {
+        ShutdownGameplayKeyboardInjection();
+        if (error_message != nullptr) {
+            *error_message =
+                "Failed to install authoritative hostile movement hook: " +
+                hook_error;
+        }
+        return false;
+    }
+
     g_gameplay_keyboard_injection.initialized = true;
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(false, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_mouse_right_frames.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.input_state_address.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_movement_x.store(0.0f, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_movement_y.store(0.0f, std::memory_order_release);
@@ -775,9 +795,11 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         0,
         std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_left_active.store(false, std::memory_order_release);
+    g_gameplay_keyboard_injection.injected_mouse_right_active.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.gameplay_region_switch_not_before_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.scene_churn_not_before_ms.store(0, std::memory_order_release);
+    ResetLocalPlayerTickOwnershipState();
     {
         std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
         g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.clear();
@@ -799,13 +821,13 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         g_gameplay_keyboard_injection.native_staff_effect_probe_result = {};
         g_gameplay_keyboard_injection.pending_participant_destroy_requests.clear();
     }
+    ClearAuthoritativeTurnUndeadTargetLocks();
     g_participant_entities.clear();
     {
         std::lock_guard<std::mutex> lock(g_wizard_bot_snapshot_mutex);
         g_participant_gameplay_snapshots.clear();
         RefreshWizardBotCrashSummaryLocked();
     }
-    SetD3d9FrameActionPump(&PumpQueuedGameplayActions);
     Log(
         "Gameplay input injection hooks installed. mouse_refresh=" + HexString(mouse_helper) +
         " keyboard_edge=" + HexString(helper) +
@@ -842,6 +864,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " world_unregister=" + HexString(actor_world_unregister) +
         " gameplay_switch_region=" + HexString(gameplay_switch_region) +
         " hostile_target_refresh=" + HexString(monster_pathfinding_refresh_target) +
+        " hostile_move_step=" + HexString(badguy_move_step) +
         " gold_pickup=" + HexString(gold_pickup) +
         " orb_pickup=" + HexString(orb_pickup) +
         " item_drop_pickup=" + HexString(item_drop_pickup) +
@@ -850,7 +873,6 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
 }
 
 void ShutdownGameplayKeyboardInjection() {
-    SetD3d9FrameActionPump(nullptr);
     ClearReplicatedSpellEffectBindings();
     RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
@@ -880,6 +902,7 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.badguy_move_step_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.gold_pickup_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.orb_pickup_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook);
@@ -897,6 +920,8 @@ void ShutdownGameplayKeyboardInjection() {
     g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(false, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_mouse_right_frames.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.input_state_address.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_movement_x.store(0.0f, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_movement_y.store(0.0f, std::memory_order_release);
@@ -914,7 +939,9 @@ void ShutdownGameplayKeyboardInjection() {
         0,
         std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_left_active.store(false, std::memory_order_release);
+    g_gameplay_keyboard_injection.injected_mouse_right_active.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_hub_service_request.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_start_waves_requests.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_enable_combat_prelude_requests.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_run_generation_seed.store(0, std::memory_order_release);
@@ -924,6 +951,7 @@ void ShutdownGameplayKeyboardInjection() {
     g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.gameplay_region_switch_not_before_ms.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.scene_churn_not_before_ms.store(0, std::memory_order_release);
+    ResetLocalPlayerTickOwnershipState();
     {
         std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
         g_gameplay_keyboard_injection.pending_reward_spawn_requests.clear();
@@ -948,6 +976,7 @@ void ShutdownGameplayKeyboardInjection() {
         g_gameplay_keyboard_injection.pending_participant_destroy_requests.clear();
     }
     ClearReplicatedLootPresentationBindingsForSceneSwitch("gameplay injection shutdown");
+    ClearAuthoritativeTurnUndeadTargetLocks();
     g_participant_entities.clear();
     {
         std::lock_guard<std::mutex> lock(g_wizard_bot_snapshot_mutex);

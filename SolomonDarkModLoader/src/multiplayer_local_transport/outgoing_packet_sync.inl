@@ -1,20 +1,18 @@
-SteamNetworkSendMode SteamSendModeForPacket(const void* packet, std::size_t packet_size) {
-    if (packet == nullptr || packet_size < sizeof(PacketHeader)) {
-        return SteamNetworkSendMode::ReliableNoNagle;
-    }
-    PacketHeader header{};
-    std::memcpy(&header, packet, sizeof(header));
-    const auto kind = static_cast<PacketKind>(header.kind);
-    if (kind == PacketKind::Cast && packet_size == sizeof(CastPacket)) {
-        CastPacket cast{};
-        std::memcpy(&cast, packet, sizeof(cast));
-        return cast.input_phase == static_cast<std::uint8_t>(CastInputPhase::Held)
-            ? SteamNetworkSendMode::UnreliableNoDelay
-            : SteamNetworkSendMode::ReliableNoNagle;
-    }
+SteamNetworkSendMode SteamSendModeForPacket(const CastPacket& packet) {
+    return packet.input_phase == static_cast<std::uint8_t>(CastInputPhase::Held)
+        ? SteamNetworkSendMode::UnreliableNoDelay
+        : SteamNetworkSendMode::ReliableNoNagle;
+}
+
+template <typename Packet>
+SteamNetworkSendMode SteamSendModeForPacket(const Packet& packet) {
+    const auto kind = static_cast<PacketKind>(packet.header.kind);
     switch (kind) {
-    case PacketKind::State:
     case PacketKind::WorldSnapshot:
+        // Ordinary generations are disposable visual updates. Never queue
+        // them behind newer generations; periodic reliable generations own
+        // structural convergence.
+    case PacketKind::ParticipantFrame:
     case PacketKind::LootSnapshot:
     case PacketKind::SpellEffectSnapshot:
     case PacketKind::AirChainSnapshot:
@@ -26,7 +24,8 @@ SteamNetworkSendMode SteamSendModeForPacket(const void* packet, std::size_t pack
 void SendBufferToEndpoint(
     const void* packet,
     std::size_t packet_size,
-    const TransportPeerEndpoint& endpoint) {
+    const TransportPeerEndpoint& endpoint,
+    SteamNetworkSendMode steam_send_mode) {
     if (packet == nullptr || packet_size == 0 || packet_size > static_cast<std::size_t>((std::numeric_limits<int>::max)())) {
         return;
     }
@@ -36,9 +35,30 @@ void SendBufferToEndpoint(
                 endpoint.steam_id,
                 packet,
                 packet_size,
-                SteamSendModeForPacket(packet, packet_size),
+                steam_send_mode,
                 &result_code)) {
             g_local_transport.packets_sent += 1;
+        } else {
+            g_local_transport.steam_send_failures += 1;
+            if (steam_send_mode == SteamNetworkSendMode::ReliableNoNagle) {
+                g_local_transport.steam_reliable_send_failures += 1;
+            }
+            g_local_transport.last_steam_send_failure_result = result_code;
+            const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+            if (now_ms - g_local_transport.last_steam_send_failure_log_ms >= 1000) {
+                g_local_transport.last_steam_send_failure_log_ms = now_ms;
+                Log(
+                    "Steam gameplay packet send rejected. result=" +
+                    std::to_string(result_code) +
+                    " bytes=" + std::to_string(packet_size) +
+                    " reliable=" +
+                    std::to_string(
+                        steam_send_mode == SteamNetworkSendMode::ReliableNoNagle ? 1 : 0) +
+                    " failures=" +
+                    std::to_string(g_local_transport.steam_send_failures) +
+                    " reliable_failures=" +
+                    std::to_string(g_local_transport.steam_reliable_send_failures));
+            }
         }
         return;
     }
@@ -56,10 +76,28 @@ void SendBufferToEndpoint(
 
 template <typename Packet>
 void SendPacketToEndpoint(const Packet& packet, const TransportPeerEndpoint& endpoint) {
-    SendBufferToEndpoint(&packet, sizeof(packet), endpoint);
+    SendBufferToEndpoint(
+        &packet,
+        sizeof(packet),
+        endpoint,
+        SteamSendModeForPacket(packet));
 }
 
-void PublishWorldSnapshotRuntimeInfo(const WorldSnapshotPacket& packet, std::uint64_t now_ms);
+template <typename Packet>
+void SendPacketToEndpoint(
+    const Packet& packet,
+    const TransportPeerEndpoint& endpoint,
+    SteamNetworkSendMode steam_send_mode) {
+    SendBufferToEndpoint(
+        &packet,
+        sizeof(packet),
+        endpoint,
+        steam_send_mode);
+}
+
+void PublishWorldSnapshotRuntimeInfo(
+    const CompleteWorldSnapshotPacketState& complete_snapshot,
+    std::uint64_t now_ms);
 bool PublishLootSnapshotRuntimeInfo(const LootSnapshotPacket& packet, std::uint64_t now_ms);
 int ApplyHostAcceptedFireballExplodeSplash(
     const EnemyDamageClaimPacket& packet,
@@ -73,14 +111,38 @@ void CaptureHostLocalFireballExplodeBaseline(
 void ReconcileHostLocalFireballExplodeSplash(std::uint64_t now_ms);
 
 void SendLocalState(std::uint64_t now_ms) {
-    if (now_ms - g_local_transport.last_send_ms < kLocalTransportSendIntervalMs) {
+    if (now_ms - g_local_transport.last_state_checkpoint_send_ms <
+        kLocalTransportStateCheckpointIntervalMs) {
         return;
     }
-    g_local_transport.last_send_ms = now_ms;
+    g_local_transport.last_state_checkpoint_send_ms = now_ms;
 
     const auto packet = BuildLocalStatePacket();
     if (packet.transform_valid == 0 &&
         !(g_local_transport.is_host && packet.run_nonce != 0 && packet.in_run == 0)) {
+        return;
+    }
+
+    const auto endpoints = BuildKnownSendEndpoints();
+    for (const auto& endpoint : endpoints) {
+        SendPacketToEndpoint(
+            packet,
+            endpoint,
+            SteamNetworkSendMode::ReliableNoNagle);
+    }
+}
+
+void SendLocalParticipantFrame(std::uint64_t now_ms) {
+    if (now_ms - g_local_transport.last_participant_frame_send_ms <
+        kLocalTransportParticipantFrameIntervalMs) {
+        return;
+    }
+    g_local_transport.last_participant_frame_send_ms = now_ms;
+
+    const auto packet = BuildLocalParticipantFramePacket();
+    if (packet.transform_valid == 0 &&
+        !(g_local_transport.is_host && packet.run_nonce != 0 &&
+          packet.in_run == 0)) {
         return;
     }
 
@@ -95,24 +157,68 @@ void SendWorldSnapshot(std::uint64_t now_ms) {
         now_ms - g_local_transport.last_world_snapshot_send_ms < kLocalTransportWorldSnapshotIntervalMs) {
         return;
     }
-    g_local_transport.last_world_snapshot_send_ms = now_ms;
 
     ReconcileHostLocalFireballExplodeSplash(now_ms);
 
-    WorldSnapshotPacket packet{};
-    if (!BuildLocalWorldSnapshotPacket(&packet)) {
+    CompleteWorldSnapshotPacketState complete_snapshot;
+    if (!BuildLocalWorldSnapshot(&complete_snapshot)) {
         return;
     }
-    const auto scene_kind = static_cast<WorldSceneKind>(packet.scene_kind);
-    if (packet.actor_count == 0 && scene_kind != WorldSceneKind::Run) {
+    if (complete_snapshot.actors.empty() &&
+        complete_snapshot.scene_kind != WorldSceneKind::Run) {
         return;
     }
 
-    PublishWorldSnapshotRuntimeInfo(packet, now_ms);
+    const auto fragment_count = (std::max<std::size_t>)(
+        1,
+        (complete_snapshot.actors.size() +
+         kWorldSnapshotActorsPerFragment - 1u) /
+            kWorldSnapshotActorsPerFragment);
+    const auto generation_wire_size =
+        fragment_count * sizeof(WorldSnapshotPacket);
+    const auto send_interval_ms = BandwidthLimitedSnapshotIntervalMs(
+        generation_wire_size,
+        kLocalTransportWorldSnapshotIntervalMs,
+        kLocalTransportWorldSnapshotBudgetBytesPerSecond);
+    if (now_ms - g_local_transport.last_world_snapshot_send_ms <
+        send_interval_ms) {
+        return;
+    }
+    g_local_transport.last_world_snapshot_send_ms = now_ms;
 
+    std::vector<WorldSnapshotPacket> packets;
+    if (!BuildWorldSnapshotFragmentPackets(
+            complete_snapshot,
+            &g_local_transport.next_sequence,
+            &packets)) {
+        return;
+    }
+
+    PublishWorldSnapshotRuntimeInfo(complete_snapshot, now_ms);
+
+    const bool reliable_checkpoint =
+        now_ms -
+                g_local_transport
+                    .last_world_snapshot_reliable_checkpoint_ms >=
+            BandwidthLimitedSnapshotIntervalMs(
+                generation_wire_size,
+                kLocalTransportWorldSnapshotReliableCheckpointIntervalMs,
+                kLocalTransportWorldReliableCheckpointBudgetBytesPerSecond);
+    if (reliable_checkpoint) {
+        g_local_transport.last_world_snapshot_reliable_checkpoint_ms = now_ms;
+    }
     const auto endpoints = BuildKnownSendEndpoints();
     for (const auto& endpoint : endpoints) {
-        SendPacketToEndpoint(packet, endpoint);
+        for (const auto& packet : packets) {
+            if (reliable_checkpoint) {
+                SendPacketToEndpoint(
+                    packet,
+                    endpoint,
+                    SteamNetworkSendMode::ReliableNoNagle);
+            } else {
+                SendPacketToEndpoint(packet, endpoint);
+            }
+        }
     }
 }
 
@@ -134,16 +240,29 @@ void SendLootSnapshot(std::uint64_t now_ms) {
 
     PublishLootSnapshotRuntimeInfo(packet, now_ms);
 
+    const auto wire_size = LootSnapshotPacketWireSize(packet.drop_count);
     const auto endpoints = BuildKnownSendEndpoints();
     for (const auto& endpoint : endpoints) {
-        SendPacketToEndpoint(packet, endpoint);
+        SendBufferToEndpoint(
+            &packet,
+            wire_size,
+            endpoint,
+            SteamSendModeForPacket(packet));
     }
 }
 
-std::vector<QueuedLocalLootPickupRequest> TakeQueuedLocalLootPickupRequests() {
+std::vector<QueuedLocalLootPickupRequest> TakeQueuedLocalLootPickupRequests(
+    std::uint64_t now_ms) {
     std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
     std::vector<QueuedLocalLootPickupRequest> requests;
     requests.swap(g_queued_local_loot_pickup_requests);
+    for (const auto& request : requests) {
+        g_in_flight_local_loot_pickup_requests_by_drop_id[
+            request.network_drop_id] = {
+                request.request_sequence,
+                now_ms,
+            };
+    }
     return requests;
 }
 
@@ -160,11 +279,6 @@ const LootDropSnapshot* FindLootDropSnapshotByNetworkId(
 
 void SendQueuedLootPickupRequests() {
     if (!IsLocalTransportClient()) {
-        return;
-    }
-
-    auto requests = TakeQueuedLocalLootPickupRequests();
-    if (requests.empty()) {
         return;
     }
 
@@ -189,13 +303,44 @@ void SendQueuedLootPickupRequests() {
         return;
     }
 
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    auto requests = TakeQueuedLocalLootPickupRequests(now_ms);
+    if (requests.empty()) {
+        return;
+    }
+
     for (const auto& request : requests) {
+        const auto& last_result = runtime_state.last_loot_pickup_result;
+        const bool automatic_request_already_terminal =
+            request.automatic_proximity_request &&
+            last_result.valid &&
+            last_result.participant_id == g_local_transport.local_peer_id &&
+            last_result.run_nonce == local->runtime.run_nonce &&
+            last_result.network_drop_id == request.network_drop_id &&
+            (last_result.result_code == LootPickupResultCode::Accepted ||
+             last_result.result_code == LootPickupResultCode::AlreadyGone);
+        if (automatic_request_already_terminal) {
+            CompleteInFlightLocalLootPickupRequest(
+                request.network_drop_id,
+                request.request_sequence);
+            Log(
+                "Multiplayer automatic loot pickup retry suppressed after terminal result. "
+                "network_drop_id=" +
+                std::to_string(request.network_drop_id) +
+                " request_sequence=" + std::to_string(request.request_sequence) +
+                " result=" + LootPickupResultCodeLabel(last_result.result_code));
+            continue;
+        }
+
         const auto* drop =
             FindLootDropSnapshotByNetworkId(runtime_state.loot_snapshot, request.network_drop_id);
         const bool have_recent_pickup_result =
             runtime_state.last_loot_pickup_result.valid &&
             runtime_state.last_loot_pickup_result.network_drop_id == request.network_drop_id;
         if (drop == nullptr && !have_recent_pickup_result) {
+            CompleteInFlightLocalLootPickupRequest(
+                request.network_drop_id,
+                request.request_sequence);
             Log(
                 "Multiplayer loot pickup request skipped; replicated drop not found. network_drop_id=" +
                 std::to_string(request.network_drop_id) +

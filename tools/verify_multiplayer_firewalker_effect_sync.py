@@ -341,6 +341,33 @@ def wait_for_factory_parity(
     )
 
 
+def wait_for_empty_baseline(
+    direction: Direction,
+    timeout: float,
+) -> dict[str, Any]:
+    owner_pipe = direction.source_pipe
+    remote_pipe = observer_pipe(direction)
+    deadline = time.monotonic() + timeout
+    baseline: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        baseline = {
+            "owner": query_firewalker_native_actors(owner_pipe),
+            "observer": query_replicated_firewalker_sync(
+                remote_pipe,
+                direction.source_id,
+            ),
+        }
+        if baseline["owner"]["count"] == 0 and parse_int_text(
+            baseline["observer"].get("native.count"),
+            -1,
+        ) == 0:
+            return baseline
+        time.sleep(0.04)
+    raise VerifyFailure(
+        f"{direction.name} Firewalker baseline did not quiesce: {baseline}"
+    )
+
+
 def run_direction(
     direction: Direction,
     acquisition: dict[str, Any],
@@ -350,20 +377,7 @@ def run_direction(
     observer_trace_name = f"firewalker.{direction.name}.observer"
     owner_pipe = direction.source_pipe
     remote_pipe = observer_pipe(direction)
-    baseline = {
-        "owner": query_firewalker_native_actors(owner_pipe),
-        "observer": query_replicated_firewalker_sync(
-            remote_pipe,
-            direction.source_id,
-        ),
-    }
-    if baseline["owner"]["count"] != 0 or parse_int_text(
-        baseline["observer"].get("native.count"),
-        -1,
-    ) != 0:
-        raise VerifyFailure(
-            f"{direction.name} Firewalker baseline was not empty: {baseline}"
-        )
+    baseline = wait_for_empty_baseline(direction, min(timeout, 4.0))
 
     arms = {
         "owner": arm_native_factory_trace(owner_pipe, owner_trace_name),

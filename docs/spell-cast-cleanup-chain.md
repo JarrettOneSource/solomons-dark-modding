@@ -238,6 +238,21 @@ Bot casting must keep those lanes separate:
 - when movement and attack happen on the same tick, target-facing beats fallback
   movement heading, while movement direction stays on the movement lane
 
+### Fire projectile direction ownership
+
+`Fire (0x0053DC60)` does not use `actor + 0x2A8/+0x2AC` as its flight
+direction. At the projectile-allocation tick it reads `actor + 0x6C`, converts
+that heading to a unit vector through `0x00410500`, and copies the result into
+`Fireball + 0x13C/+0x140` through `0x00529380`.
+
+Remote transform playback runs after the remote actor's stock tick. A Fire cast
+can arm its native action before the projectile is allocated, so a delayed
+participant-frame heading must not overwrite the captured cast heading during
+that window. Native remote playback retains the cast aim heading until the new
+per-cast projectile is observed; after birth, participant transform authority
+owns heading again. This preserves the stock Fire initializer without steering
+an already-created projectile.
+
 ## Player cleanup path
 
 `PlayerActorTick` runs `FUN_00548A00` every tick. Its skill-transition block

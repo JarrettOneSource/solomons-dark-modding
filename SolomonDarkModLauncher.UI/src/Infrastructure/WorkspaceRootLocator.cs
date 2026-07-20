@@ -29,7 +29,7 @@ internal static class WorkspaceRootLocator
         }
 
         throw new DirectoryNotFoundException(
-            $"Could not locate {DistributionLayout.PortableRootMarkerFileName} or " +
-            $"{SolutionFileName} by walking up from {launcherBaseDirectory}");
+            $"The launcher cannot find {DistributionLayout.PortableRootMarkerFileName} or " +
+            $"{SolutionFileName} above {launcherBaseDirectory}.");
     }
 }

@@ -39,6 +39,7 @@ from verify_multiplayer_loot_drop_materialization import (
     require_host_spawn,
     setup_pair,
     values,
+    wait_for_drop_metadata,
     wait_for_materialized_drop,
 )
 
@@ -213,13 +214,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         drop_y=potion_y,
         timeout=args.timeout,
     )
+    host_drop_ids_before = {
+        row["network_id"]
+        for row in drop_rows(capture_loot(HOST_PIPE))
+        if row["network_id"] != 0
+    }
     result["spawn"] = require_host_spawn(
         "mana_potion",
         PROBE_POTION_SLOT,
         potion_x,
         potion_y,
     )
-    materialized = wait_for_materialized_drop(
+    host_drop = wait_for_drop_metadata(
+        pipe_name=HOST_PIPE,
+        excluded_network_ids=host_drop_ids_before,
         type_id=ITEM_DROP_TYPE_ID,
         item_type_id=POTION_ITEM_TYPE_ID,
         item_slot=PROBE_POTION_SLOT,
@@ -228,10 +236,22 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         y=potion_y,
         timeout=args.timeout,
     )["drop"]
-    network_drop_id = int(materialized["network_id"])
+    network_drop_id = int(host_drop["network_id"])
+    materialized = wait_for_materialized_drop(
+        network_id=network_drop_id,
+        type_id=ITEM_DROP_TYPE_ID,
+        item_type_id=POTION_ITEM_TYPE_ID,
+        item_slot=PROBE_POTION_SLOT,
+        stack_count=PROBE_POTION_STACK,
+        x=potion_x,
+        y=potion_y,
+        timeout=args.timeout,
+    )["drop"]
+    result["host_drop"] = host_drop
     result["materialized"] = materialized
 
     result["client_pickup_position"] = move_client_into_pickup_range(
+        network_drop_id=network_drop_id,
         drop_x=float(materialized["x"]),
         drop_y=float(materialized["y"]),
         timeout=args.timeout,
@@ -239,22 +259,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     accepted = wait_for_pickup_result(
         network_drop_id,
         "Accepted",
-        min(1.5, args.timeout),
+        min(5.0, args.timeout),
     )
     if accepted is None:
-        request = request_pickup(network_drop_id)
-        request_sequence = parse_int_text(request.get("request_sequence"), 0)
-        accepted = wait_for_pickup_result(
-            network_drop_id,
-            "Accepted",
-            args.timeout,
-            request_sequence,
+        raise VerifyFailure(
+            "client item-drop proximity hook did not accept the in-range potion pickup"
         )
-        result["request"] = request
-    else:
-        result["request"] = {"path": "client_proximity_hook"}
-    if accepted is None:
-        raise VerifyFailure(f"client did not receive Accepted for potion drop {network_drop_id}")
+    result["request"] = {"path": "client_proximity_hook"}
 
     result["accepted_result"] = accepted
     accepted_revision = parse_int_text(accepted.get("inventory_revision"), 0)

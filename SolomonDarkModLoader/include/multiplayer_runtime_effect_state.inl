@@ -96,9 +96,14 @@ struct LootPickupResultRuntimeInfo {
 
 struct WorldSnapshotApplyRuntimeInfo {
     bool valid = false;
+    bool holding_stale_snapshot = false;
     std::uint64_t applied_ms = 0;
+    std::uint64_t source_snapshot_age_ms = 0;
     std::uint32_t sequence = 0;
     std::uint32_t scene_epoch = 0;
+    std::uint32_t presentation_sequence = 0;
+    std::uint32_t presentation_scene_epoch = 0;
+    std::uint64_t presentation_received_ms = 0;
     std::uint32_t local_actor_count = 0;
     std::uint32_t matched_actor_count = 0;
     std::uint32_t created_actor_count = 0;
@@ -109,7 +114,9 @@ struct WorldSnapshotApplyRuntimeInfo {
     std::uint32_t dead_actor_count = 0;
     std::uint32_t parked_actor_count = 0;
     std::uint32_t removed_actor_count = 0;
+    std::uint32_t removed_actor_total_count = 0;
     std::uint32_t failed_remove_actor_count = 0;
+    std::uint32_t failed_remove_actor_total_count = 0;
     std::vector<WorldSnapshotActorBindingRuntimeInfo> actor_bindings;
 };
 
@@ -150,6 +157,11 @@ struct RuntimeState {
     std::uint64_t last_service_tick_ms = 0;
     std::uint64_t steam_callback_pump_count = 0;
     std::uint64_t last_steam_callback_pump_ms = 0;
+    std::uint64_t transport_packets_sent = 0;
+    std::uint64_t transport_packets_received = 0;
+    std::uint64_t steam_send_failures = 0;
+    std::uint64_t steam_reliable_send_failures = 0;
+    std::int32_t last_steam_send_failure_result = 0;
     std::string multiplayer_manifest_sha256;
     std::uint32_t next_outbound_sequence = 1;
     SessionStatus session_status = SessionStatus::Idle;
@@ -194,6 +206,12 @@ template <typename Fn>
 void UpdateRuntimeState(Fn&& updater);
 
 RuntimeState SnapshotRuntimeState();
+bool TryGetLocalParticipantRuntimeInfo(ParticipantRuntimeInfo* runtime);
+bool TryGetRemoteParticipantDisplayState(
+    std::uint64_t participant_id,
+    std::string* display_name,
+    ParticipantRuntimeInfo* runtime,
+    bool* transport_connected);
 void ApplySteamSnapshotToRuntime(std::uint64_t now_ms, const SteamBootstrapSnapshot& steam_snapshot);
 
 ParticipantInfo* FindParticipant(RuntimeState& state, std::uint64_t participant_id);

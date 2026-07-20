@@ -6,13 +6,16 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import statistics
 import subprocess
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from multiplayer_log_probe import log_after, log_position
 from multiplayer_progression_probe import query_progression_snapshot
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
@@ -44,7 +47,6 @@ from verify_player_health_death_sync import set_local_player_vitals
 from verify_real_input_spell_cast_sync import (
     CLIENT_LOG,
     HOST_LOG,
-    read_log,
 )
 
 
@@ -73,65 +75,135 @@ DIRECTIONS = (
 )
 
 
-def log_after(path: Path, offset: int) -> str:
-    return read_log(path)[offset:]
-
-
-def press_secondary_belt_slot(direction: Direction, belt_slot: int) -> dict[str, str]:
+def secondary_binding_details(belt_slot: int) -> tuple[str, bool, str]:
     if belt_slot < 0 or belt_slot >= 8:
-        raise VerifyFailure(f"{direction.name} invalid secondary belt slot: {belt_slot}")
+        raise VerifyFailure(f"invalid secondary belt slot: {belt_slot}")
+
     binding = f"belt_slot_{belt_slot + 1}"
-    values = parse_key_values(
+    mouse_backed = belt_slot == 0
+    consumption_marker = (
+        "Injected gameplay mouse-right click."
+        if mouse_backed
+        else "Consumed queued gameplay keyboard edge."
+    )
+    return binding, mouse_backed, consumption_marker
+
+
+def queue_secondary_belt_slot(
+    direction: Direction,
+    belt_slot: int,
+) -> dict[str, str]:
+    """Queue one exact live binding without waiting on mirrored log delivery."""
+    binding, mouse_backed, _ = secondary_binding_details(belt_slot)
+    cast = parse_key_values(
         lua(
             direction.source_pipe,
             f"""
 local function emit(key, value) print(key .. '=' .. tostring(value)) end
-local ok, result = pcall(sd.input.press_key, {json.dumps(binding)})
+local ok, value = pcall(sd.input.press_binding, {json.dumps(binding)})
 emit('pcall_ok', ok)
-emit('result', result)
+emit('result', value)
 """,
             timeout=5.0,
         )
     )
-    if values.get("pcall_ok") != "true" or values.get("result") != "true":
+    if cast.get("pcall_ok") != "true" or cast.get("result") != "true":
         raise VerifyFailure(
-            f"{direction.name} could not inject native {binding}: {values}"
+            f"{direction.name} could not inject native {binding}: {cast}"
         )
-    return values
+    return {
+        "binding": binding,
+        "input_kind": "mouse_right" if mouse_backed else "keyboard",
+        "pcall_ok": cast["pcall_ok"],
+        "result": cast["result"],
+    }
 
 
-def accepted_marker(direction: Direction) -> str:
-    return (
-        "Multiplayer local secondary cast queued from native dispatcher. "
-        f"actor="
+def cast_secondary_belt_slot(
+    direction: Direction,
+    belt_slot: int,
+    timeout: float,
+) -> dict[str, str]:
+    """Cast a secondary belt entry through its exact live stock binding."""
+    binding, _, consumption_marker = secondary_binding_details(belt_slot)
+    source_offset = log_position(direction.source_log)
+    cast = queue_secondary_belt_slot(direction, belt_slot)
+    deadline = time.monotonic() + timeout
+    while True:
+        if consumption_marker in log_after(direction.source_log, source_offset):
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.0:
+            raise VerifyFailure(
+                f"{direction.name} native {binding} activation was not consumed"
+            )
+        time.sleep(min(0.05, remaining))
+    return {**cast, "consumed": "true"}
+
+
+def parse_secondary_accept_times(
+    log_text: str,
+    belt_slot: int,
+) -> list[datetime]:
+    pattern = re.compile(
+        r"^\[(?P<timestamp>[^\]]+)\] "
+        r"Multiplayer local secondary cast queued from native dispatcher\. "
+        rf".*?skill_entry={TEST_SECONDARY_ROW} belt_slot={belt_slot}\b",
+        re.MULTILINE,
     )
+    return [
+        datetime.fromisoformat(match.group("timestamp"))
+        for match in pattern.finditer(log_text)
+    ]
 
 
-def wait_for_next_accept(
+def queue_until_accepted_casts(
     direction: Direction,
     source_offset: int,
-    accepted_before: int,
-    timeout: float,
     belt_slot: int,
-) -> tuple[float, int, int]:
-    started = time.monotonic()
-    accepted = accepted_before
-    rejected = 0
-    accept_token = accepted_marker(direction)
-    reject_token = "Multiplayer local secondary cast rejected by native dispatcher."
-    deadline = started + timeout
-    while time.monotonic() < deadline:
-        press_secondary_belt_slot(direction, belt_slot)
-        time.sleep(0.10)
-        current = log_after(direction.source_log, source_offset)
-        accepted = current.count(accept_token)
-        rejected = current.count(reject_token)
-        if accepted > accepted_before:
-            return time.monotonic() - started, accepted, rejected
-    raise VerifyFailure(
-        f"{direction.name} secondary did not recharge within {timeout:.1f}s; "
-        f"accepted={accepted} rejected={rejected}"
+    required_count: int,
+    timeout: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    queued_count = 0
+    input_kinds: set[str] = set()
+    last_log = ""
+    accepted_times: list[datetime] = []
+    while True:
+        last_log = log_after(direction.source_log, source_offset)
+        accepted_times = parse_secondary_accept_times(last_log, belt_slot)
+        if len(accepted_times) >= required_count:
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.0:
+            break
+        queued = queue_secondary_belt_slot(direction, belt_slot)
+        queued_count += 1
+        input_kinds.add(queued["input_kind"])
+        time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
+
+    if len(accepted_times) < required_count:
+        raise VerifyFailure(
+            f"{direction.name} secondary produced {len(accepted_times)}/"
+            f"{required_count} native accepts within {timeout:.1f}s; "
+            f"queued_inputs={queued_count}"
+        )
+    reject_token = (
+        "Multiplayer local secondary cast rejected by native dispatcher."
     )
+    rejected = sum(
+        reject_token in line
+        and f"skill_entry={TEST_SECONDARY_ROW}" in line
+        and f"belt_slot={belt_slot}" in line
+        for line in last_log.splitlines()
+    )
+    return {
+        "accepted_times": accepted_times,
+        "accepted_count": len(accepted_times),
+        "rejected_count": rejected,
+        "queued_input_count": queued_count,
+        "input_kinds": sorted(input_kinds),
+    }
 
 
 def wait_for_remote_delivery(
@@ -170,33 +242,27 @@ def measure_recharge(
             f"{direction.name} Phasing is missing from native belt: {belt}"
         )
     belt_slot = belt.index(TEST_SECONDARY_ROW)
-    source_offset = len(read_log(direction.source_log))
-    observer_offset = len(read_log(direction.observer_log))
+    source_offset = log_position(direction.source_log)
+    observer_offset = log_position(direction.observer_log)
 
-    # The previous stage may still be cooling down. Obtain one accepted cast as
-    # a deterministic start boundary, then time complete recharge intervals.
-    _, accepted, rejected = wait_for_next_accept(
+    required_count = TRIAL_COUNT + 1
+    cadence = queue_until_accepted_casts(
         direction,
         source_offset,
-        accepted_before=0,
-        timeout=timeout,
         belt_slot=belt_slot,
+        required_count=required_count,
+        timeout=timeout,
     )
-    intervals: list[float] = []
-    for _ in range(TRIAL_COUNT):
-        elapsed, accepted, rejected = wait_for_next_accept(
-            direction,
-            source_offset,
-            accepted_before=accepted,
-            timeout=timeout,
-            belt_slot=belt_slot,
-        )
-        intervals.append(elapsed)
+    sample_times = cadence["accepted_times"][:required_count]
+    intervals = [
+        (current - previous).total_seconds()
+        for previous, current in zip(sample_times, sample_times[1:])
+    ]
 
     remote_count = wait_for_remote_delivery(
         direction,
         observer_offset,
-        expected_count=TRIAL_COUNT + 1,
+        expected_count=required_count,
     )
     snapshot = query_progression_snapshot(direction.source_pipe)
     return {
@@ -204,10 +270,16 @@ def measure_recharge(
         "secondary_row": TEST_SECONDARY_ROW,
         "belt_slot": belt_slot,
         "belt": belt,
+        "queued_input_count": cadence["queued_input_count"],
+        "input_kinds": cadence["input_kinds"],
+        "native_accept_timestamps": [
+            timestamp.isoformat(timespec="milliseconds")
+            for timestamp in sample_times
+        ],
         "intervals_seconds": intervals,
         "median_seconds": statistics.median(intervals),
-        "accepted_count": accepted,
-        "rejected_count": rejected,
+        "accepted_count": cadence["accepted_count"],
+        "rejected_count": cadence["rejected_count"],
         "remote_delivery_count": remote_count,
         "secondary_recharge_multiplier": snapshot["native"]["derived"][
             "secondary_recharge_multiplier"
@@ -410,6 +482,41 @@ emit('active', active)
     raise VerifyFailure(f"native combat prelude did not activate: {last}")
 
 
+def verify_recharge_contracts(
+    directions: tuple[Direction, ...],
+    baseline: dict[str, dict[str, Any]],
+    upgraded: dict[str, dict[str, Any]],
+) -> dict[str, float]:
+    ratios: dict[str, float] = {}
+    for direction in directions:
+        baseline_seconds = float(baseline[direction.name]["median_seconds"])
+        upgraded_seconds = float(upgraded[direction.name]["median_seconds"])
+        if baseline_seconds < 0.65:
+            raise VerifyFailure(
+                f"{direction.name} baseline recharge was bypassed by the test "
+                f"harness: {baseline_seconds:.3f}s"
+            )
+        ratio = upgraded_seconds / baseline_seconds
+        ratios[direction.name] = ratio
+        multiplier = float(
+            upgraded[direction.name]["secondary_recharge_multiplier"]
+        )
+        if multiplier < 1.99:
+            raise VerifyFailure(
+                f"{direction.name} Focus native multiplier is not maxed: "
+                f"{multiplier}"
+            )
+        if ratio >= 0.72:
+            raise VerifyFailure(
+                f"{direction.name} Focus did not materially shorten real recharge: "
+                f"baseline={baseline_seconds:.3f}s "
+                f"upgraded={upgraded_seconds:.3f}s ratio={ratio:.3f}"
+            )
+    if abs(ratios["host_owned"] - ratios["client_owned"]) > 0.15:
+        raise VerifyFailure(f"Focus behavior diverged by owner: {ratios}")
+    return ratios
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=float, default=18.0)
@@ -472,32 +579,11 @@ def main() -> int:
             for direction in DIRECTIONS
         }
 
-        ratios: dict[str, float] = {}
-        for direction in DIRECTIONS:
-            baseline = float(output["baseline"][direction.name]["median_seconds"])
-            upgraded = float(output["upgraded"][direction.name]["median_seconds"])
-            if baseline < 0.65:
-                raise VerifyFailure(
-                    f"{direction.name} baseline recharge was bypassed by the test harness: "
-                    f"{baseline:.3f}s"
-                )
-            ratio = upgraded / baseline
-            ratios[direction.name] = ratio
-            multiplier = float(
-                output["upgraded"][direction.name]["secondary_recharge_multiplier"]
-            )
-            if multiplier < 1.99:
-                raise VerifyFailure(
-                    f"{direction.name} Focus native multiplier is not maxed: {multiplier}"
-                )
-            if ratio >= 0.72:
-                raise VerifyFailure(
-                    f"{direction.name} Focus did not materially shorten real recharge: "
-                    f"baseline={baseline:.3f}s upgraded={upgraded:.3f}s ratio={ratio:.3f}"
-                )
-        if abs(ratios["host_owned"] - ratios["client_owned"]) > 0.15:
-            raise VerifyFailure(f"Focus behavior diverged by owner: {ratios}")
-        output["recharge_ratios"] = ratios
+        output["recharge_ratios"] = verify_recharge_contracts(
+            DIRECTIONS,
+            output["baseline"],
+            output["upgraded"],
+        )
 
         crashes = new_crash_artifacts(started_at)
         output["new_crash_artifacts"] = crashes

@@ -1,4 +1,5 @@
 #include "bot_casting/resource_state.inl"
+#include "bot_casting/turn_undead_caster_target_lock.inl"
 #include "bot_casting/targeting_and_facing.inl"
 #include "bot_movement/locomotion_and_animation.inl"
 #include "bot_movement/native_remote_playback.inl"

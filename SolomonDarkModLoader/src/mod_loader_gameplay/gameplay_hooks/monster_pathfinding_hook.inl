@@ -1,3 +1,34 @@
+std::uint32_t __fastcall HookBadguyMoveStep(
+    void* movement_context,
+    void* /*unused_edx*/,
+    void* actor,
+    float move_x,
+    float move_y) {
+    const auto original = GetX86HookTrampoline<BadguyMoveStepFn>(
+        g_gameplay_keyboard_injection.badguy_move_step_hook);
+    if (original == nullptr) {
+        return 0;
+    }
+
+    const auto actor_address = reinterpret_cast<uintptr_t>(actor);
+    float frozen_x = 0.0f;
+    float frozen_y = 0.0f;
+    if (TryGetRunLifecycleManualEnemyFreezePosition(
+            actor_address,
+            &frozen_x,
+            &frozen_y)) {
+        auto& memory = ProcessMemory::Instance();
+        (void)memory.TryWriteField(actor_address, kActorPositionXOffset, frozen_x);
+        (void)memory.TryWriteField(actor_address, kActorPositionYOffset, frozen_y);
+        return 1;
+    }
+    if (IsBoundReplicatedRunEnemyActorForLocalClient(actor_address)) {
+        return 1;
+    }
+
+    return original(movement_context, actor, move_x, move_y);
+}
+
 bool ClearHostileTargetsForDeadWizardActor(uintptr_t dead_actor_address) {
     if (dead_actor_address == 0 || !IsActorRuntimeDead(dead_actor_address)) {
         return false;
@@ -85,6 +116,10 @@ void __fastcall HookMonsterPathfindingRefreshTarget(void* self, void* /*unused_e
             hostile_actor_address,
             kHostileTargetBucketDeltaOffset,
             0);
+        return;
+    }
+
+    if (ApplyAuthoritativeTurnUndeadCasterTargetLock(hostile_actor_address)) {
         return;
     }
 

@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 import re
+import struct
 import subprocess
 import time
 from pathlib import Path
@@ -56,7 +57,9 @@ ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "runtime/multiplayer_all_stat_sync.json"
 STAT_ROWS = tuple(range(56, 72))
 SECONDARY_ROWS = tuple(range(48, 56)) + tuple(range(72, 80))
+SECONDARY_COST_QUERY_TIMEOUT_SECONDS = 30.0
 FLOAT_TOLERANCE = 0.002
+NATIVE_WIZARD_DEFAULT_HP = 50.0
 DERIVED_FLOAT_FIELDS = (
     "cast_speed_multiplier",
     "mana_recovery_multiplier",
@@ -381,9 +384,51 @@ def compact_snapshot(snapshot: dict[str, Any], row: int | None = None) -> dict[s
         "ledger_concentration_entry_a": snapshot["ledger"]["concentration_entry_a"],
         "ledger_concentration_entry_b": snapshot["ledger"]["concentration_entry_b"],
     }
+    if "initial_stat_active" in native:
+        result["initial_stat_active"] = native["initial_stat_active"]
     if row is not None:
         result["row"] = snapshot["native"]["entries"].get(row)
     return result
+
+
+def capture_initial_stat_snapshot(pipe_name: str) -> dict[str, Any]:
+    snapshot = query_progression_snapshot(pipe_name)
+    snapshot["native"]["initial_stat_active"] = {
+        str(row): int(snapshot["native"]["entries"][row]["active"])
+        for row in STAT_ROWS
+    }
+    return snapshot
+
+
+def expected_ranked_max_mp(
+    initial_max_mp: float,
+    initial_active: int,
+    active: int,
+    ranked_values: tuple[float, ...] | list[float],
+) -> float:
+    if not ranked_values:
+        raise ValueError("MANA UP contract has no ranked values")
+    initial_bonus = float(ranked_values[min(initial_active, len(ranked_values) - 1)])
+    active_bonus = float(ranked_values[min(active, len(ranked_values) - 1)])
+    return float(initial_max_mp) - initial_bonus + active_bonus
+
+
+def expected_ranked_max_hp(
+    initial_max_hp: float,
+    initial_active: int,
+    active: int,
+    ranked_values: tuple[float, ...] | list[float],
+    native_default_hp: float = NATIVE_WIZARD_DEFAULT_HP,
+) -> float:
+    if not ranked_values:
+        raise ValueError("HEALTH UP contract has no ranked values")
+    initial_bonus = float(ranked_values[min(initial_active, len(ranked_values) - 1)])
+    active_bonus = float(ranked_values[min(active, len(ranked_values) - 1)])
+    initial_unscaled_max = native_default_hp + initial_bonus
+    if initial_unscaled_max <= 0.0:
+        raise ValueError("HEALTH UP contract produced a non-positive initial maximum")
+    persistent_multiplier = float(initial_max_hp) / initial_unscaled_max
+    return (native_default_hp + active_bonus) * persistent_multiplier
 
 
 def assert_untargeted_unchanged(
@@ -457,7 +502,12 @@ def assert_stat_contract(
         return field_values[min(active, len(field_values) - 1)]
 
     if row == 56:
-        expected["max_mp"] = float(initial["native"]["max_mp"]) + value("mValue")
+        expected["max_mp"] = expected_ranked_max_mp(
+            float(initial["native"]["max_mp"]),
+            int(initial["native"]["initial_stat_active"][str(row)]),
+            active,
+            values[row]["mValue"],
+        )
     elif row == 57:
         expected["mana_recovery_multiplier"] = (
             float(initial["native"]["derived"]["mana_recovery_multiplier"])
@@ -485,7 +535,12 @@ def assert_stat_contract(
         if concentrated:
             expected["resist_magic_fraction"] += value("mConcentration") / 100.0
     elif row == 64:
-        expected["max_hp"] = float(initial["native"]["max_hp"]) + value("mValue")
+        expected["max_hp"] = expected_ranked_max_hp(
+            float(initial["native"]["max_hp"]),
+            int(initial["native"]["initial_stat_active"][str(row)]),
+            active,
+            values[row]["mValue"],
+        )
     elif row == 65:
         expected["staff_melee_damage_a"] = (
             float(initial["native"]["derived"]["staff_melee_damage_a"])
@@ -548,6 +603,43 @@ def assert_stat_contract(
     }
 
 
+def wait_for_stat_contract(
+    row: int,
+    active: int,
+    target_id: int,
+    initial: dict[str, Any],
+    values: dict[int, dict[str, list[float]]],
+    timeout: float,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    started = time.monotonic()
+    deadline = started + timeout
+    attempts = 0
+    last_error = "no samples"
+    while time.monotonic() < deadline:
+        attempts += 1
+        owner, observer = query_target_views(target_id)
+        mismatches = derived_mismatches(owner, observer)
+        if mismatches:
+            last_error = f"derived parity mismatches={mismatches}"
+        else:
+            try:
+                owner_contract = assert_stat_contract(
+                    row, active, owner, initial, values
+                )
+                assert_stat_contract(row, active, observer, initial, values)
+                return owner, observer, owner_contract, {
+                    "attempts": attempts,
+                    "elapsed_seconds": time.monotonic() - started,
+                }
+            except VerifyFailure as exc:
+                last_error = str(exc)
+        time.sleep(0.05)
+    raise VerifyFailure(
+        f"stat contract did not converge target={target_id} row={row} "
+        f"active={active} attempts={attempts}: {last_error}"
+    )
+
+
 def apply_stat_batch(
     catalog: list[dict[str, Any]],
     row: int,
@@ -601,20 +693,13 @@ def apply_stat_batch(
         timeout,
     )
     pause_cleared = wait_for_pause(target_id, False, timeout)
-    owner, observer = wait_for_derived_parity(target_id, timeout)
-    contract = assert_stat_contract(
+    owner, observer, contract, contract_convergence = wait_for_stat_contract(
         row,
         expected_active,
-        owner,
+        target_id,
         initial_by_target[target_id],
         contract_values,
-    )
-    assert_stat_contract(
-        row,
-        expected_active,
-        observer,
-        initial_by_target[target_id],
-        contract_values,
+        timeout,
     )
     untargeted_after = query_progression_snapshot(untargeted_pipe)
     isolation = assert_untargeted_unchanged(
@@ -647,6 +732,7 @@ def apply_stat_batch(
         "pause_cleared": pause_cleared,
         "derived_parity_mismatches": derived_mismatches(owner, observer),
         "contract": contract,
+        "contract_convergence": contract_convergence,
         "owner": compact_snapshot(owner, row),
         "observer": compact_snapshot(observer, row),
         "untargeted_isolation": isolation,
@@ -743,6 +829,21 @@ def parse_matching_natural_offer(
     }
 
 
+def expected_natural_offer_active(
+    native_row: dict[str, Any],
+    apply_count: int,
+) -> int:
+    if apply_count <= 0:
+        raise VerifyFailure(f"natural offer has invalid apply count {apply_count}")
+    active = int(native_row["active"])
+    maximum = int(native_row["statbook_max_level"])
+    if active < 0 or maximum < active:
+        raise VerifyFailure(
+            f"natural offer row has invalid rank active={active} maximum={maximum}"
+        )
+    return min(active + apply_count, maximum)
+
+
 def exercise_natural_offer(target_id: int, expected_count: int, timeout: float) -> dict[str, Any]:
     target_pipe = HOST_PIPE if target_id == HOST_ID else CLIENT_PIPE
     before = query_progression_snapshot(target_pipe)
@@ -762,8 +863,10 @@ def exercise_natural_offer(target_id: int, expected_count: int, timeout: float) 
     level = int(offer["level"])
     pause_active = wait_for_pause(target_id, True, timeout)
     selected = offer["options"][0]
-    before_active = int(before["native"]["entries"][selected["id"]]["active"])
-    expected_active = before_active + int(selected["apply_count"])
+    expected_active = expected_natural_offer_active(
+        before["native"]["entries"][selected["id"]],
+        int(selected["apply_count"]),
+    )
     choice = choose_offer(target_pipe, offer["offer_id"], selected["id"])
     result = wait_for_result(
         offer["offer_id"],
@@ -838,8 +941,10 @@ def resolve_pending_natural_offer(
     target_pipe = HOST_PIPE if target_id == HOST_ID else CLIENT_PIPE
     before = query_progression_snapshot(target_pipe)
     selected = offer["options"][0]
-    before_active = int(before["native"]["entries"][selected["id"]]["active"])
-    expected_active = before_active + int(selected["apply_count"])
+    expected_active = expected_natural_offer_active(
+        before["native"]["entries"][selected["id"]],
+        int(selected["apply_count"]),
+    )
     choice = choose_offer(target_pipe, offer["offer_id"], selected["id"])
     result = wait_for_result(
         offer["offer_id"],
@@ -943,7 +1048,13 @@ for _, row in ipairs({{{row_list}}}) do
   emit(prefix .. 'error', stats and stats.error or '')
 end
 """
-    raw = parse_key_values(lua(pipe_name, code, timeout=10.0))
+    raw = parse_key_values(
+        lua(
+            pipe_name,
+            code,
+            timeout=SECONDARY_COST_QUERY_TIMEOUT_SECONDS,
+        )
+    )
     result: dict[int, dict[str, Any]] = {}
     for row in SECONDARY_ROWS:
         prefix = f"row.{row}."
@@ -1013,25 +1124,172 @@ emit('after', progression ~= 0 and sd.debug.read_float(progression + offset) or 
     return values
 
 
+def set_runtime_test_godmode_enabled(pipe_name: str, enabled: bool) -> bool:
+    enabled_lua = "true" if enabled else "false"
+    values = parse_key_values(
+        lua(
+            pipe_name,
+            f"""
+local previous = _G.__sdmod_steam_test_godmode_enabled == true
+_G.__sdmod_steam_test_godmode_enabled = {enabled_lua}
+print('previous=' .. tostring(previous))
+print('enabled=' .. tostring(_G.__sdmod_steam_test_godmode_enabled))
+""",
+            timeout=5.0,
+        )
+    )
+    if values.get("enabled") != enabled_lua:
+        raise VerifyFailure(
+            f"failed to set runtime test godmode on {pipe_name}: {values}"
+        )
+    return values.get("previous") == "true"
+
+
+def query_mana_observation(
+    pipe_name: str,
+    participant_id: int | None,
+) -> dict[str, float]:
+    participant_selector = "nil" if participant_id is None else str(participant_id)
+    code = f"""
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+local requested = {participant_selector}
+local function find_runtime()
+  local state = sd.runtime.get_multiplayer_state()
+  for _, participant in ipairs(state and state.participants or {{}}) do
+    if (requested == nil and participant.is_owner) or
+       (requested ~= nil and tonumber(participant.participant_id) == requested) then
+      return participant
+    end
+  end
+  return nil
+end
+local player = requested == nil and sd.player.get_state() or nil
+local bot = requested ~= nil and sd.bots.get_participant_state(requested) or nil
+local progression = requested == nil and
+  tonumber(player and player.progression_address) or
+  tonumber(bot and bot.progression_runtime_state_address)
+progression = progression or 0
+local before = find_runtime()
+local runtime_before = tonumber(before and before.mana_current) or -1
+local native = progression ~= 0 and sd.debug.read_float(
+  progression + sd.debug.layout_offset('progression_mp')) or -1
+local after = find_runtime()
+local runtime_after = tonumber(after and after.mana_current) or -1
+emit('runtime_before', runtime_before)
+emit('native', native)
+emit('runtime_after', runtime_after)
+emit('ok', progression ~= 0 and runtime_before >= 0 and native >= 0 and runtime_after >= 0)
+"""
+    values = parse_key_values(lua(pipe_name, code, timeout=5.0))
+    if values.get("ok") != "true":
+        raise VerifyFailure(
+            f"mana observation unavailable pipe={pipe_name} "
+            f"participant={participant_id}: {values}"
+        )
+    return {
+        "runtime_before": float(values["runtime_before"]),
+        "native": float(values["native"]),
+        "runtime_after": float(values["runtime_after"]),
+    }
+
+
+def query_target_mana_observations(
+    target_id: int,
+) -> tuple[dict[str, float], dict[str, float]]:
+    owner_spec, observer_spec = view_specs(target_id)
+    return (
+        query_mana_observation(owner_spec[0], owner_spec[1]),
+        query_mana_observation(observer_spec[0], observer_spec[1]),
+    )
+
+
+def distance_from_runtime_bracket(observation: dict[str, float]) -> float:
+    lower = min(observation["runtime_before"], observation["runtime_after"])
+    upper = max(observation["runtime_before"], observation["runtime_after"])
+    native = observation["native"]
+    return max(lower - native, native - upper, 0.0)
+
+
+def distance_from_runtime_replication_window(
+    observation: dict[str, float],
+    previous_observation: dict[str, float] | None,
+) -> float:
+    runtime_values = [
+        observation["runtime_before"],
+        observation["runtime_after"],
+    ]
+    if previous_observation is not None:
+        runtime_values.extend(
+            (
+                previous_observation["runtime_before"],
+                previous_observation["runtime_after"],
+            )
+        )
+    lower = min(runtime_values)
+    upper = max(runtime_values)
+    native = observation["native"]
+    return max(lower - native, native - upper, 0.0)
+
+
+def float32_ulp(value: float) -> float:
+    """Return one representable step at the native float's magnitude."""
+    magnitude = abs(float(value))
+    if not math.isfinite(magnitude):
+        raise ValueError("float32 ULP requires a finite observation")
+    rounded = struct.unpack("<f", struct.pack("<f", magnitude))[0]
+    bits = struct.unpack("<I", struct.pack("<f", rounded))[0]
+    if bits >= 0x7F7FFFFF:
+        return math.inf
+    next_value = struct.unpack("<f", struct.pack("<I", bits + 1))[0]
+    return float(next_value - rounded)
+
+
+def exceeds_float32_tolerance(
+    error: float,
+    tolerance: float,
+    observations: tuple[float, ...],
+) -> bool:
+    precision_slack = max((float32_ulp(value) for value in observations), default=0.0)
+    return float(error) > float(tolerance) + precision_slack
+
+
 def sample_mana_recovery(target_id: int, duration: float = 2.25) -> dict[str, Any]:
     target_pipe = HOST_PIPE if target_id == HOST_ID else CLIENT_PIPE
+    previous_godmode = set_runtime_test_godmode_enabled(target_pipe, False)
+    try:
+        return _sample_mana_recovery_while_godmode_suspended(target_id, duration)
+    finally:
+        set_runtime_test_godmode_enabled(target_pipe, previous_godmode)
+
+
+def _sample_mana_recovery_while_godmode_suspended(
+    target_id: int,
+    duration: float,
+) -> dict[str, Any]:
+    target_pipe = HOST_PIPE if target_id == HOST_ID else CLIENT_PIPE
     before, _ = query_target_views(target_id)
+    precondition_mp = float(before["native"]["mp"])
     precondition_max_mp = float(before["native"]["max_mp"])
     set_result = set_local_mana(target_pipe, 0.0)
     settle_deadline = time.monotonic() + 4.0
     settle_samples: list[dict[str, Any]] = []
-    settle_ceiling = max(5.0, precondition_max_mp * 0.25)
+    settle_ceiling = max(5.0, min(100.0, precondition_mp * 0.5))
     while time.monotonic() < settle_deadline:
-        owner, observer = query_target_views(target_id)
+        settle_reset = set_local_mana(target_pipe, 0.0)
+        owner, observer = query_target_mana_observations(target_id)
         settle_sample = {
-            "owner_mp": owner["native"]["mp"],
-            "observer_native_mp": observer["native"]["mp"],
-            "observer_runtime_mp": observer["runtime"]["mana_current"],
+            "reset": settle_reset,
+            "owner_mp": owner["native"],
+            "observer_native_mp": observer["native"],
+            "observer_runtime_before_mp": observer["runtime_before"],
+            "observer_runtime_after_mp": observer["runtime_after"],
         }
         settle_samples.append(settle_sample)
         if (
-            float(settle_sample["observer_native_mp"]) < settle_ceiling
-            and float(settle_sample["observer_runtime_mp"]) < settle_ceiling
+            float(settle_sample["owner_mp"]) < settle_ceiling
+            and float(settle_sample["observer_native_mp"]) < settle_ceiling
+            and float(settle_sample["observer_runtime_before_mp"]) < settle_ceiling
+            and float(settle_sample["observer_runtime_after_mp"]) < settle_ceiling
         ):
             break
         time.sleep(0.05)
@@ -1043,40 +1301,81 @@ def sample_mana_recovery(target_id: int, duration: float = 2.25) -> dict[str, An
 
     started = time.monotonic()
     samples: list[dict[str, Any]] = []
+    previous_owner_observation: dict[str, float] | None = owner
+    previous_observer_observation: dict[str, float] | None = observer
     while True:
         elapsed = time.monotonic() - started
-        owner, observer = query_target_views(target_id)
+        owner, observer = query_target_mana_observations(target_id)
+        owner_runtime_window_error = distance_from_runtime_replication_window(
+            owner,
+            previous_owner_observation,
+        )
+        observer_runtime_window_error = distance_from_runtime_replication_window(
+            observer,
+            previous_observer_observation,
+        )
         samples.append(
             {
                 "elapsed": elapsed,
-                "owner_mp": owner["native"]["mp"],
-                "observer_native_mp": observer["native"]["mp"],
-                "observer_runtime_mp": observer["runtime"]["mana_current"],
+                "owner_mp": owner["native"],
+                "owner_runtime_before_mp": owner["runtime_before"],
+                "owner_runtime_after_mp": owner["runtime_after"],
+                "observer_native_mp": observer["native"],
+                "observer_runtime_before_mp": observer["runtime_before"],
+                "observer_runtime_after_mp": observer["runtime_after"],
+                "owner_runtime_bracket_error": distance_from_runtime_bracket(owner),
+                "observer_runtime_bracket_error": distance_from_runtime_bracket(
+                    observer
+                ),
+                "owner_runtime_window_error": owner_runtime_window_error,
+                "observer_runtime_window_error": observer_runtime_window_error,
             }
         )
+        previous_owner_observation = owner
+        previous_observer_observation = observer
         if elapsed >= duration:
             break
         time.sleep(0.2)
     owner_gain = float(samples[-1]["owner_mp"]) - float(samples[0]["owner_mp"])
     native_runtime_errors = [
-        abs(float(sample["observer_native_mp"]) - float(sample["observer_runtime_mp"]))
+        float(sample["observer_runtime_window_error"])
         for sample in samples
     ]
     owner_observer_errors = [
         abs(float(sample["owner_mp"]) - float(sample["observer_native_mp"]))
         for sample in samples
     ]
-    # Owner and observer snapshots are queried sequentially while mana is
-    # changing.  Bound allowed skew by half a second of the measured recovery
-    # rate.  The observer runtime ledger and native clone are also refreshed on
-    # distinct service/gameplay ticks, so allow 150 ms of the same measured
-    # rate there instead of a fixed epsilon that rejects ordinary recovery.
-    observed_rate = max(0.0, owner_gain / max(duration, 0.001))
-    replication_tolerance = max(2.0, observed_rate * 0.5)
-    native_runtime_tolerance = max(1.0, observed_rate * 0.15)
-    if max(native_runtime_errors, default=0.0) > native_runtime_tolerance:
+    # Owner and observer observations are queried sequentially while mana is
+    # changing. Participant frames are disposable 50 ms updates, while the
+    # reliable state checkpoint guarantees convergence once per second. Bound
+    # dynamic cross-peer skew by that checkpoint window plus two service ticks.
+    # Incoming frames update the transport runtime before the remote actor's
+    # next native playback tick, so a native sample may correspond to either
+    # the current or immediately previous runtime observation.
+    sampled_duration = max(
+        float(samples[-1]["elapsed"]) - float(samples[0]["elapsed"]),
+        0.001,
+    )
+    observed_rate = max(0.0, owner_gain / sampled_duration)
+    replication_tolerance = max(1.0, observed_rate * 1.1)
+    native_runtime_tolerance = max(0.5, observed_rate * 0.05)
+    native_runtime_observations = tuple(
+        float(sample[key])
+        for sample in samples
+        for key in (
+            "observer_native_mp",
+            "observer_runtime_before_mp",
+            "observer_runtime_after_mp",
+        )
+    )
+    max_native_runtime_error = max(native_runtime_errors, default=0.0)
+    if exceeds_float32_tolerance(
+        max_native_runtime_error,
+        native_runtime_tolerance,
+        native_runtime_observations,
+    ):
         raise VerifyFailure(
-            f"target={target_id} observer native/runtime mana diverged: "
+            f"target={target_id} remote native/runtime mana diverged: "
             f"errors={native_runtime_errors} "
             f"tolerance={native_runtime_tolerance:.3f}"
         )
@@ -1085,18 +1384,50 @@ def sample_mana_recovery(target_id: int, duration: float = 2.25) -> dict[str, An
             f"target={target_id} live mana recovery did not replicate within bounded skew: "
             f"errors={owner_observer_errors} tolerance={replication_tolerance:.3f}"
         )
+
+    stable_target = precondition_max_mp
+    stable_set_result = set_local_mana(target_pipe, stable_target)
+    stable_deadline = time.monotonic() + 2.0
+    stable_samples: list[dict[str, float]] = []
+    stable_tolerance = 0.5
+    while time.monotonic() < stable_deadline:
+        stable_owner, stable_observer = query_target_mana_observations(target_id)
+        stable_sample = {
+            "owner_native_mp": stable_owner["native"],
+            "observer_native_mp": stable_observer["native"],
+            "observer_runtime_before_mp": stable_observer["runtime_before"],
+            "observer_runtime_after_mp": stable_observer["runtime_after"],
+        }
+        stable_samples.append(stable_sample)
+        if all(
+            abs(float(value) - stable_target) <= stable_tolerance
+            for value in stable_sample.values()
+        ):
+            break
+        time.sleep(0.05)
+    else:
+        raise VerifyFailure(
+            f"target={target_id} mana did not reach stable remote native/runtime "
+            f"convergence at {stable_target:.3f}: samples={stable_samples}"
+        )
     return {
         "target_participant_id": target_id,
         "set": set_result,
+        "precondition_mp": precondition_mp,
         "precondition_max_mp": precondition_max_mp,
         "settle_ceiling": settle_ceiling,
         "settle_samples": settle_samples,
         "gain": owner_gain,
+        "sampled_duration": sampled_duration,
         "observed_rate": observed_rate,
         "replication_tolerance": replication_tolerance,
         "native_runtime_tolerance": native_runtime_tolerance,
         "max_owner_observer_error": max(owner_observer_errors, default=0.0),
         "max_observer_native_runtime_error": max(native_runtime_errors, default=0.0),
+        "stable_set": stable_set_result,
+        "stable_target": stable_target,
+        "stable_tolerance": stable_tolerance,
+        "stable_samples": stable_samples,
         "samples": samples,
     }
 
@@ -1210,8 +1541,8 @@ def main() -> int:
         output["post_run_progression_ready"] = wait_for_post_run_progression_ready(args.timeout)
 
         initial_by_target = {
-            HOST_ID: query_progression_snapshot(HOST_PIPE),
-            CLIENT_ID: query_progression_snapshot(CLIENT_PIPE),
+            HOST_ID: capture_initial_stat_snapshot(HOST_PIPE),
+            CLIENT_ID: capture_initial_stat_snapshot(CLIENT_PIPE),
         }
         output["initial"] = {
             "host": compact_snapshot(initial_by_target[HOST_ID]),

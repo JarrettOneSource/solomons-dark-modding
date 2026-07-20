@@ -103,7 +103,6 @@ void HandleSessionKeepalive(
     std::uint64_t now_ms) {
     const auto peer_it = g_session.peers.find(message.sender_steam_id);
     if (peer_it == g_session.peers.end() ||
-        !peer_it->second.authenticated ||
         packet.lobby_id != g_session.lobby_id ||
         packet.participant_id != message.sender_steam_id ||
         packet.steam_id != message.sender_steam_id ||
@@ -111,7 +110,25 @@ void HandleSessionKeepalive(
         packet.session_nonce != peer_it->second.session_nonce) {
         return;
     }
-    peer_it->second.last_packet_ms = now_ms;
+    auto& peer = peer_it->second;
+    if (!peer.authenticated) {
+        if (!g_session.is_host ||
+            !IsLobbyMember(message.sender_steam_id) ||
+            peer.rejected ||
+            peer.session_nonce == 0 ||
+            (g_session.phase != SteamSessionPhase::LobbyReady &&
+             g_session.phase != SteamSessionPhase::Connected)) {
+            return;
+        }
+        SteamAcceptNetworkSession(message.sender_steam_id);
+        peer.authenticated = true;
+        RegisterSteamGameplayPeer(message.sender_steam_id, false);
+        g_session.phase = SteamSessionPhase::Connected;
+        Log(
+            "Steam multiplayer peer restored by validated keepalive. steam_id=" +
+            std::to_string(message.sender_steam_id));
+    }
+    peer.last_packet_ms = now_ms;
 }
 
 void PumpNetworkMessages(std::uint64_t now_ms) {
@@ -197,11 +214,17 @@ void SendSessionKeepalives(std::uint64_t now_ms) {
         packet.steam_id = g_session.local_steam_id;
         packet.target_steam_id = steam_id;
         packet.session_nonce = peer.session_nonce;
-        SteamSendNetworkMessage(
+        std::int32_t result_code = 0;
+        const bool send_succeeded = SteamSendNetworkMessage(
             steam_id,
             &packet,
             sizeof(packet),
-            SteamNetworkSendMode::UnreliableNoNagle);
+            SteamNetworkSendMode::UnreliableNoNagle,
+            &result_code);
+        g_session.last_keepalive_send_result = result_code;
+        if (send_succeeded) {
+            g_session.last_keepalive_send_success_ms = now_ms;
+        }
         sent = true;
     }
     if (sent) {
@@ -221,14 +244,28 @@ void ExpireInactivePeers(std::uint64_t now_ms) {
     }
 
     for (const auto steam_id : expired) {
-        if (!g_session.is_host && steam_id == g_session.host_steam_id) {
-            RestartClientHostHandshake(steam_id, "authenticated_peer_timeout");
+        const auto peer_it = g_session.peers.find(steam_id);
+        if (peer_it == g_session.peers.end()) {
             continue;
         }
         Log(
             "Steam multiplayer peer timed out. steam_id=" +
-            std::to_string(steam_id));
-        RemovePeer(steam_id);
+            std::to_string(steam_id) +
+            " last_packet_age_ms=" +
+            std::to_string(now_ms - peer_it->second.last_packet_ms) +
+            " last_keepalive_success_age_ms=" +
+            std::to_string(
+                g_session.last_keepalive_send_success_ms == 0
+                    ? 0
+                    : now_ms - g_session.last_keepalive_send_success_ms) +
+            " last_keepalive_result=" +
+            std::to_string(g_session.last_keepalive_send_result));
+        if (!g_session.is_host && steam_id == g_session.host_steam_id) {
+            RestartClientHostHandshake(
+                steam_id, "authenticated_peer_timeout", false);
+            continue;
+        }
+        SuspendPeerForReauthentication(steam_id);
     }
 
     if (g_session.is_host && g_session.phase == SteamSessionPhase::Connected) {

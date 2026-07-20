@@ -162,7 +162,10 @@ int MeasureLabelWidth(const FontAtlas& atlas, std::string_view label) {
     return width;
 }
 
-void DrawFilledRect(IDirect3DDevice9* device, float left, float top, float right, float bottom, D3DCOLOR color) {
+bool DrawFilledRect(IDirect3DDevice9* device, float left, float top, float right, float bottom, D3DCOLOR color) {
+    if (device == nullptr) {
+        return false;
+    }
     const std::array<ColorVertex, 4> vertices = {{
         {left, top, 0.0f, 1.0f, color},
         {right, top, 0.0f, 1.0f, color},
@@ -170,12 +173,19 @@ void DrawFilledRect(IDirect3DDevice9* device, float left, float top, float right
         {right, bottom, 0.0f, 1.0f, color},
     }};
 
-    device->SetFVF(kColorVertexFvf);
-    device->SetTexture(0, nullptr);
-    device->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, vertices.data(), sizeof(ColorVertex));
+    return SUCCEEDED(device->SetFVF(kColorVertexFvf)) &&
+        SUCCEEDED(device->SetTexture(0, nullptr)) &&
+        SUCCEEDED(device->DrawPrimitiveUP(
+            D3DPT_TRIANGLESTRIP,
+            2,
+            vertices.data(),
+            sizeof(ColorVertex)));
 }
 
-void DrawRectOutline(IDirect3DDevice9* device, float left, float top, float right, float bottom, D3DCOLOR color) {
+bool DrawRectOutline(IDirect3DDevice9* device, float left, float top, float right, float bottom, D3DCOLOR color) {
+    if (device == nullptr) {
+        return false;
+    }
     const std::array<ColorVertex, 8> vertices = {{
         {left, top, 0.0f, 1.0f, color},
         {right, top, 0.0f, 1.0f, color},
@@ -187,9 +197,13 @@ void DrawRectOutline(IDirect3DDevice9* device, float left, float top, float righ
         {left, top, 0.0f, 1.0f, color},
     }};
 
-    device->SetFVF(kColorVertexFvf);
-    device->SetTexture(0, nullptr);
-    device->DrawPrimitiveUP(D3DPT_LINELIST, 4, vertices.data(), sizeof(ColorVertex));
+    return SUCCEEDED(device->SetFVF(kColorVertexFvf)) &&
+        SUCCEEDED(device->SetTexture(0, nullptr)) &&
+        SUCCEEDED(device->DrawPrimitiveUP(
+            D3DPT_LINELIST,
+            4,
+            vertices.data(),
+            sizeof(ColorVertex)));
 }
 
 void DrawLabelText(IDirect3DDevice9* device, const FontAtlas& atlas, float left, float top, std::string_view label, D3DCOLOR color) {

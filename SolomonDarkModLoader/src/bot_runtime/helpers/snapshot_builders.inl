@@ -43,6 +43,14 @@ void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) 
         participant.runtime.poison_remaining_ticks;
     snapshot->replicated_damage_x4_remaining_ticks =
         participant.runtime.damage_x4_remaining_ticks;
+    snapshot->replicated_magic_shield_absorb_remaining =
+        participant.runtime.magic_shield_absorb_remaining;
+    snapshot->replicated_magic_shield_absorb_capacity =
+        participant.runtime.magic_shield_absorb_capacity;
+    snapshot->replicated_magic_shield_explosion_fraction =
+        participant.runtime.magic_shield_explosion_fraction;
+    snapshot->replicated_magic_shield_hit_flash =
+        participant.runtime.magic_shield_hit_flash;
     if (const auto* pending_cast = FindPendingCast(participant.participant_id); pending_cast != nullptr) {
         snapshot->cast_pending = true;
         snapshot->queued_cast_count = pending_cast->queued_cast_count;
@@ -157,8 +165,10 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
     snapshot->render_drive_stride = gameplay_state.render_drive_stride;
     snapshot->render_advance_rate = gameplay_state.render_advance_rate;
     snapshot->render_advance_phase = gameplay_state.render_advance_phase;
-    snapshot->render_drive_effect_timer = gameplay_state.render_drive_effect_timer;
-    snapshot->render_drive_effect_progress = gameplay_state.render_drive_effect_progress;
+    snapshot->magic_shield_absorb_remaining = gameplay_state.magic_shield_absorb_remaining;
+    snapshot->magic_shield_absorb_capacity = gameplay_state.magic_shield_absorb_capacity;
+    snapshot->magic_shield_explosion_fraction = gameplay_state.magic_shield_explosion_fraction;
+    snapshot->magic_shield_hit_flash = gameplay_state.magic_shield_hit_flash;
     snapshot->render_drive_overlay_alpha = gameplay_state.render_drive_overlay_alpha;
     snapshot->render_drive_move_blend = gameplay_state.render_drive_move_blend;
     snapshot->gameplay_attach_applied = gameplay_state.gameplay_attach_applied;

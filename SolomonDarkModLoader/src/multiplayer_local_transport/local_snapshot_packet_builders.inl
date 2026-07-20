@@ -1,7 +1,8 @@
 // Local world/loot snapshot packet construction and run-enemy write support.
 
-bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
-    if (packet == nullptr || !g_local_transport.is_host) {
+bool BuildLocalWorldSnapshot(
+    CompleteWorldSnapshotPacketState* complete_snapshot) {
+    if (complete_snapshot == nullptr || !g_local_transport.is_host) {
         return false;
     }
 
@@ -25,11 +26,10 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
     PruneHubWorldActorNetworkIds(actors, scene_intent.kind);
     PruneRunHostLocalWorldActorNetworkIds(actors, scene_intent.kind);
 
-    WorldSnapshotPacket built{};
-    built.header = MakePacketHeader(PacketKind::WorldSnapshot, g_local_transport.next_sequence++);
+    CompleteWorldSnapshotPacketState built;
     built.authority_participant_id = g_local_transport.local_peer_id;
     built.scene_epoch = g_local_transport.world_scene_epoch;
-    built.scene_kind = static_cast<std::uint8_t>(WorldSceneKindFromSceneIntent(scene_intent));
+    built.scene_kind = WorldSceneKindFromSceneIntent(scene_intent);
 
     const auto runtime_state = SnapshotRuntimeState();
     const auto* local = FindLocalParticipant(runtime_state);
@@ -42,31 +42,13 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
     if (run_scene) {
         PruneRecentRunEnemyDeathSnapshots(now_ms);
     }
-    std::uint32_t valid_recent_death_count = 0;
-    if (run_scene) {
-        for (const auto& [network_actor_id, death_snapshot] :
-             g_local_transport.recent_run_enemy_deaths_by_network_id) {
-            if (network_actor_id != 0 &&
-                death_snapshot.native_type_id != 0 &&
-                std::isfinite(death_snapshot.max_hp) &&
-                death_snapshot.max_hp > 0.0f) {
-                valid_recent_death_count += 1;
-            }
-        }
-    }
-    constexpr std::uint32_t kWorldSnapshotRecentDeathReservedSlots = 16;
-    const std::uint32_t reserved_recent_death_slots =
-        run_scene
-            ? (std::min<std::uint32_t>)(
-                  valid_recent_death_count,
-                  (std::min<std::uint32_t>)(kWorldSnapshotRecentDeathReservedSlots, kWorldSnapshotMaxActors))
-            : 0;
-    const std::uint32_t live_actor_snapshot_budget =
-        kWorldSnapshotMaxActors > reserved_recent_death_slots
-            ? kWorldSnapshotMaxActors - reserved_recent_death_slots
-            : 0;
     std::unordered_set<std::uint64_t> included_actor_ids;
-    std::uint32_t total_actor_count = 0;
+    built.actors.reserve(
+        (std::min<std::size_t>)(
+            actors.size() +
+                g_local_transport
+                    .recent_run_enemy_deaths_by_network_id.size(),
+            kWorldSnapshotMaxLogicalActors));
     for (const auto& actor : actors) {
         if (!ShouldReplicateWorldActor(actor, scene_intent.kind)) {
             continue;
@@ -93,12 +75,15 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
             continue;
         }
         included_actor_ids.insert(network_actor_id);
-        total_actor_count += 1;
-        if (built.actor_count >= live_actor_snapshot_budget) {
-            continue;
+        if (built.actors.size() >=
+            kWorldSnapshotMaxLogicalActors) {
+            Log(
+                "Multiplayer world snapshot rejected because the logical actor count exceeded " +
+                std::to_string(kWorldSnapshotMaxLogicalActors) + ".");
+            return false;
         }
 
-        auto& snapshot = built.actors[built.actor_count];
+        WorldActorSnapshotPacketState snapshot{};
         snapshot.network_actor_id = network_actor_id;
         snapshot.native_type_id = actor.object_type_id;
         snapshot.enemy_type = actor.enemy_type;
@@ -110,6 +95,10 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
             snapshot.flags |= WorldActorSnapshotFlagTargetAuthoritative;
             snapshot.target_participant_id = ResolveRunEnemyTargetParticipantId(actor.actor_address);
             (void)PopulateRunEnemyNativeTargetSnapshot(actor.actor_address, &snapshot);
+            (void)PopulateRunEnemyTransientStatusSnapshot(
+                actor.actor_address,
+                actor.object_type_id,
+                &snapshot);
         }
         snapshot.anim_drive_state = actor.anim_drive_state;
         snapshot.position_x = actor.x;
@@ -140,9 +129,46 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
         if (run_scene) {
             snapshot.flags |= WorldActorSnapshotFlagLifecycleOwned;
         }
-        built.actor_count += 1;
+        built.actors.push_back(snapshot);
+        if (run_scene && actor.tracked_enemy) {
+            RetainedRunEnemySnapshot retained;
+            retained.actor_address = actor.actor_address;
+            retained.packet = snapshot;
+            g_local_transport.retained_run_enemy_snapshots_by_network_id[
+                network_actor_id] = retained;
+        }
     }
     if (run_scene) {
+        // Native enemy health can cross zero just before the stock death hook
+        // runs. During that narrow interval TryListSceneActors may omit the
+        // enemy even though its authoritative death tombstone has not been
+        // recorded yet. Keep publishing the last complete tracked-enemy state
+        // until either the death hook replaces it with a tombstone or the
+        // native unregister hook explicitly retires the actor. An omission is
+        // therefore never allowed to overtake the authoritative death effect.
+        for (const auto& [network_actor_id, retained] :
+             g_local_transport.retained_run_enemy_snapshots_by_network_id) {
+            if (network_actor_id == 0 ||
+                included_actor_ids.find(network_actor_id) !=
+                    included_actor_ids.end() ||
+                g_local_transport.recent_run_enemy_deaths_by_network_id.find(
+                    network_actor_id) !=
+                    g_local_transport.recent_run_enemy_deaths_by_network_id.end() ||
+                retained.actor_address == 0 ||
+                retained.packet.network_actor_id != network_actor_id ||
+                (retained.packet.flags & WorldActorSnapshotFlagTrackedEnemy) == 0 ||
+                (retained.packet.flags & WorldActorSnapshotFlagLifecycleOwned) == 0) {
+                continue;
+            }
+            if (built.actors.size() >= kWorldSnapshotMaxLogicalActors) {
+                Log(
+                    "Multiplayer world snapshot rejected because retained tracked enemies exceeded " +
+                    std::to_string(kWorldSnapshotMaxLogicalActors) + ".");
+                return false;
+            }
+            built.actors.push_back(retained.packet);
+            included_actor_ids.insert(network_actor_id);
+        }
         for (const auto& [network_actor_id, death_snapshot] :
              g_local_transport.recent_run_enemy_deaths_by_network_id) {
             if (network_actor_id == 0 ||
@@ -152,12 +178,15 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
                 death_snapshot.max_hp <= 0.0f) {
                 continue;
             }
-            total_actor_count += 1;
-            if (built.actor_count >= kWorldSnapshotMaxActors) {
-                continue;
+            if (built.actors.size() >=
+                kWorldSnapshotMaxLogicalActors) {
+                Log(
+                    "Multiplayer world snapshot rejected because live actors and death tombstones exceeded " +
+                    std::to_string(kWorldSnapshotMaxLogicalActors) + ".");
+                return false;
             }
 
-            auto& snapshot = built.actors[built.actor_count];
+            WorldActorSnapshotPacketState snapshot{};
             snapshot.network_actor_id = network_actor_id;
             snapshot.native_type_id = death_snapshot.native_type_id;
             snapshot.enemy_type = death_snapshot.enemy_type;
@@ -175,15 +204,12 @@ bool BuildLocalWorldSnapshotPacket(WorldSnapshotPacket* packet) {
             snapshot.heading = death_snapshot.heading;
             snapshot.hp = 0.0f;
             snapshot.max_hp = death_snapshot.max_hp;
-            built.actor_count += 1;
+            built.actors.push_back(snapshot);
         }
     }
-    built.actor_total_count = static_cast<std::uint8_t>((std::min<std::uint32_t>)(total_actor_count, 0xFFu));
-    if (total_actor_count > built.actor_count) {
-        built.snapshot_flags |= WorldSnapshotFlagTruncated;
-    }
-
-    *packet = built;
+    built.snapshot_id =
+        g_local_transport.next_world_snapshot_id++;
+    *complete_snapshot = std::move(built);
     return true;
 }
 
@@ -265,6 +291,7 @@ bool BuildLocalLootSnapshotPacket(LootSnapshotPacket* packet) {
 }
 
 std::uint64_t LootSnapshotIntervalForPacket(const LootSnapshotPacket& packet) {
+    bool has_animated_drop = false;
     for (std::size_t index = 0; index < packet.drop_count; ++index) {
         const auto& drop = packet.drops[index];
         const auto drop_kind = LootDropKindFromPacketValue(drop.drop_kind);
@@ -275,10 +302,15 @@ std::uint64_t LootSnapshotIntervalForPacket(const LootSnapshotPacket& packet) {
         if (drop_kind == LootDropKind::Gold ||
             drop_kind == LootDropKind::Orb ||
             drop_kind == LootDropKind::Powerup) {
-            return kLocalTransportAnimatedLootSnapshotIntervalMs;
+            has_animated_drop = true;
+            break;
         }
     }
-    return kLocalTransportLootSnapshotIntervalMs;
+    return BandwidthLimitedSnapshotIntervalMs(
+        LootSnapshotPacketWireSize(packet.drop_count),
+        has_animated_drop
+            ? kLocalTransportAnimatedLootSnapshotIntervalMs
+            : kLocalTransportLootSnapshotIntervalMs);
 }
 
 float ClampEnemyHp(float hp, float max_hp) {

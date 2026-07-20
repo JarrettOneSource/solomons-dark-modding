@@ -217,8 +217,11 @@ Current external CLI fallback already installed:
   - gameplay-world actions were being pumped from the D3D9 frame action pump, which runs in a render-phase hook
   - destroying bots from that phase left the game inside the same-frame render/list sweep and reproduced the `0x002B9A8C` access violation
   - the current safe contract is:
-    - hub/menu actions may still use the frame pump
+    - hub/menu actions and front-end Lua work are pumped from the stock `MyApp` update tick, which continues while Windows is locked even when D3D9 presentation stops
+    - semantic UI actions that depend on a rendered control are bound to that exact surface generation; if presentation stops or the surface changes before the app tick claims the request, it fails immediately instead of firing after unlock
+    - deterministic actions backed by a validated game global may still dispatch without a current D3D9 observation
     - gameplay-world actions are pumped from the local slot-0 `PlayerActorTick` safe phase
+    - D3D9 `EndScene` is presentation-only and never owns gameplay or Lua queues
     - destroy supersedes stale syncs before they reach the gameplay queue
   - `EquipAttachmentSink_Attach` with `item = 0` is now used as the stock detach seam for gameplay-slot visual lanes during destroy
 - Final April 13, 2026 status:

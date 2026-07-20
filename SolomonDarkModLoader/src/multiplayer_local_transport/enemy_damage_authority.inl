@@ -222,13 +222,11 @@ void CaptureHostLocalFireballExplodeBaseline(
     baseline.primary_y = primary_target.y;
     baseline.splash_damage = splash_damage;
     baseline.splash_radius_world = splash_radius_world;
-    baseline.targets.reserve(
-        (std::min)(actors.size(), static_cast<std::size_t>(kWorldSnapshotMaxActors)));
+    baseline.targets.reserve(actors.size());
 
     const auto scene_intent = SceneIntentFromLocalScene();
     for (const auto& actor : actors) {
-        if (baseline.targets.size() >= kWorldSnapshotMaxActors ||
-            !ShouldReplicateWorldActor(actor, scene_intent.kind) ||
+        if (!ShouldReplicateWorldActor(actor, scene_intent.kind) ||
             !actor.tracked_enemy ||
             actor.dead ||
             actor.actor_address == primary_target.actor_address ||

@@ -186,7 +186,7 @@ void AppendGameNpcStateSummary(std::ostringstream* out, uintptr_t actor_address)
          << " source_profile_56_mirror=" << ReadU32FieldHexText(actor_address, kGameNpcSourceProfile56MirrorOffset)
          << " tracked_slot=" << ReadI8FieldText(actor_address, kGameNpcTrackedSlotOffset)
          << " callback=" << ReadU8FieldText(actor_address, kGameNpcTrackedSlotCallbackOffset)
-         << " render_drive_effect_timer=" << ReadI32FieldText(actor_address, kGameNpcLateTimerOffset)
+         << " late_timer=" << ReadI32FieldText(actor_address, kGameNpcLateTimerOffset)
          << "}";
 }
 

@@ -17,8 +17,9 @@ void ResetClientHostRunExitFollow(std::string_view reason) {
         " reason=" + std::string(reason));
 }
 
+template <typename Packet>
 void StageClientHostRunExitFollow(
-    const StatePacket& packet,
+    const Packet& packet,
     bool packet_from_configured_authority,
     std::uint64_t now_ms) {
     if (!IsLocalTransportClient() ||

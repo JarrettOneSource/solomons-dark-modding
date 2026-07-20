@@ -8,6 +8,46 @@ std::uint64_t GetLocalRunEnemyNetworkActorId(uintptr_t actor_address) {
     return ResolveLocalRunEnemyNetworkActorId(actor_address);
 }
 
+void NotifyLocalWorldActorUnregistered(uintptr_t actor_address) {
+    if (!g_local_transport.initialized ||
+        !g_local_transport.is_host ||
+        actor_address == 0) {
+        return;
+    }
+
+    g_local_transport.hub_world_actor_ids_by_address.erase(actor_address);
+    g_local_transport.run_host_local_world_actor_ids_by_address.erase(
+        actor_address);
+    ForgetRetainedRunEnemySnapshotForActor(actor_address);
+    g_local_transport.run_loot_drop_ids_by_address.erase(actor_address);
+}
+
+void ResetLocalEnemyDamageClaimObservation(
+    std::uint64_t network_actor_id) {
+    ResetLocalEnemyDamageClaimObservationInternal(network_actor_id);
+}
+
+bool TakeLocalEnemyDamageClaimObservation(
+    std::uint64_t network_actor_id,
+    LocalEnemyDamageClaimObservation* observation) {
+    if (network_actor_id == 0 || observation == nullptr) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(
+        g_local_enemy_damage_claim_observation_mutex);
+    const auto existing =
+        g_local_enemy_damage_claim_observations.find(network_actor_id);
+    if (existing == g_local_enemy_damage_claim_observations.end() ||
+        !existing->second.valid) {
+        *observation = LocalEnemyDamageClaimObservation{};
+        g_local_enemy_damage_claim_observations.erase(network_actor_id);
+        return false;
+    }
+    *observation = existing->second;
+    g_local_enemy_damage_claim_observations.erase(existing);
+    return true;
+}
+
 void PublishLocalAirChainFrame(
     uintptr_t caster_actor_address,
     const AirChainTargetCapture* targets,
@@ -219,7 +259,7 @@ void ShutdownLocalTransport() {
         g_queued_local_cast_events.clear();
         g_queued_local_enemy_damage_claims.clear();
         g_queued_host_participant_vitals_corrections.clear();
-        g_queued_local_loot_pickup_requests.clear();
+        ClearLocalLootPickupRequestStateLocked();
         g_queued_local_host_powerup_pickups.clear();
         g_queued_local_level_up_choices.clear();
         g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
@@ -245,6 +285,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     ProcessHostLevelUpBarrier(now_ms);
     BroadcastHostLevelUpBarrierState(now_ms, false);
     SendLocalState(now_ms);
+    SendLocalParticipantFrame(now_ms);
     SendActiveLocalCastInput(now_ms);
     SendQueuedCastEvents(now_ms);
     SendAirChainSnapshots(now_ms);
@@ -326,7 +367,16 @@ bool RegisterSteamGameplayPeer(
     TransportPeerEndpoint endpoint;
     endpoint.backend = GameplayTransportBackend::Steam;
     endpoint.steam_id = steam_id;
+    const bool peer_known = std::any_of(
+        g_local_transport.peers.begin(),
+        g_local_transport.peers.end(),
+        [&](const LocalPeerEndpoint& peer) {
+            return SameEndpoint(peer.endpoint, endpoint);
+        });
     UpsertPeerEndpoint(endpoint, steam_id, GetTickCount64());
+    if (!peer_known) {
+        g_local_transport.last_state_checkpoint_send_ms = 0;
+    }
     if (!g_local_transport.is_host && authoritative_host) {
         g_local_transport.configured_remote = endpoint;
         g_local_transport.configured_remote_valid = true;
@@ -374,7 +424,7 @@ bool SubmitSteamGameplayPacket(
         sender_steam_id == 0 ||
         data == nullptr ||
         size < sizeof(PacketHeader) ||
-        size > sizeof(WorldSnapshotPacket)) {
+        size > sizeof(TransportPacketBuffer)) {
         return false;
     }
     const auto peer_it = std::find_if(

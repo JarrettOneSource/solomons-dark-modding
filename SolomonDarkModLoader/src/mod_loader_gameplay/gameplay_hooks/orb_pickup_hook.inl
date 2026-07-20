@@ -153,6 +153,23 @@ bool TryQueueReplicatedLootPickupRequest(
         return false;
     }
 
+    const auto runtime_state = multiplayer::SnapshotRuntimeState();
+    const auto* local = multiplayer::FindLocalParticipant(runtime_state);
+    const auto local_transport_participant_id =
+        multiplayer::GetLocalTransportParticipantId();
+    const auto& last_result = runtime_state.last_loot_pickup_result;
+    if (local != nullptr &&
+        local_transport_participant_id != 0 &&
+        last_result.valid &&
+        last_result.participant_id == local_transport_participant_id &&
+        last_result.run_nonce == local->runtime.run_nonce &&
+        last_result.network_drop_id == presentation.network_drop_id &&
+        (last_result.result_code == multiplayer::LootPickupResultCode::Accepted ||
+         last_result.result_code == multiplayer::LootPickupResultCode::AlreadyGone)) {
+        g_replicated_loot_pickup_request_not_before_ms.erase(presentation.network_drop_id);
+        return true;
+    }
+
     float drop_x = 0.0f;
     float drop_y = 0.0f;
     float drop_radius = 0.0f;

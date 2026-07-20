@@ -131,7 +131,9 @@ bool IssueHostLevelUpOfferForParticipant(
     packet.flags = suppress_native_picker
         ? LevelUpOfferFlagSuppressNativePicker
         : 0;
-    for (std::size_t index = 0; index < options.size(); ++index) {
+    for (std::size_t index = 0;
+         index < kLevelUpOfferMaxOptions && index < options.size();
+         ++index) {
         packet.options[index].option_id = options[index].option_id;
         packet.options[index].apply_count = options[index].apply_count;
     }
@@ -366,6 +368,9 @@ bool IssueLocalHostSelfLevelUpOffer(
     std::vector<BotSkillChoiceOption> options,
     bool suppress_native_picker,
     std::string* error_message) {
+    std::lock_guard<std::recursive_mutex> picker_lock(
+        g_local_level_up_picker_mutex);
+
     auto fail = [&](std::string message) {
         if (error_message != nullptr) {
             *error_message = std::move(message);

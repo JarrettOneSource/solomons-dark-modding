@@ -162,6 +162,9 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         gameplay_address_for_pump != 0 &&
         TryResolvePlayerActorForSlot(gameplay_address_for_pump, 0, &local_actor_address) &&
         local_actor_address == actor_address) {
+        PublishLocalPlayerTickOwnership(
+            gameplay_address_for_pump,
+            actor_address);
         MaybeArmLocalPlayerCastProbe(gameplay_address_for_pump, actor_address);
         const auto previous_allow = g_allow_gameplay_action_pump_in_gameplay;
         g_allow_gameplay_action_pump_in_gameplay = true;

@@ -95,12 +95,14 @@
     <ClInclude Include="include\lua_engine_events.h" />
     <ClInclude Include="include\memory_access.h" />
     <ClInclude Include="include\mod_loader.h" />
+    <ClInclude Include="include\mod_loader_participant_gameplay_state.inl" />
     <ClInclude Include="include\mod_loader_gameplay_api.inl" />
     <ClInclude Include="include\multiplayer_foundation.h" />
     <ClInclude Include="include\multiplayer_local_transport.h" />
     <ClInclude Include="include\multiplayer_runtime_protocol.h" />
     <ClInclude Include="include\multiplayer_runtime_state.h" />
     <ClInclude Include="include\multiplayer_runtime_effect_state.inl" />
+    <ClInclude Include="include\multiplayer_runtime_snapshot_state.inl" />
     <ClInclude Include="include\multiplayer_runtime_state.inl" />
     <ClInclude Include="include\multiplayer_steam_session.h" />
     <ClInclude Include="include\native_enemy_lifecycle.h" />
@@ -142,6 +144,7 @@
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture_and_hooks.inl" />
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture\capture_lifecycle.inl" />
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture\capture_session.inl" />
+    <ClInclude Include="src\debug_ui_overlay\exact_text_capture\gameplay_nameplate_projection.inl" />
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture\glyph_observation.inl" />
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture\render_hooks.inl" />
     <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution.inl" />
@@ -151,6 +154,9 @@
     <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution\recorded_control_rects.inl" />
     <ClInclude Include="src\debug_ui_overlay\dark_cloud_browser_native_tabs.inl" />
     <ClInclude Include="src\debug_ui_overlay\font_atlas_rendering.inl" />
+    <ClInclude Include="src\debug_ui_overlay\gameplay_dampen_rendering.inl" />
+    <ClInclude Include="src\debug_ui_overlay\gameplay_health_bar_rendering.inl" />
+    <ClInclude Include="src\debug_ui_overlay\gameplay_level_up_wait_rendering.inl" />
     <ClInclude Include="src\debug_ui_overlay\install_hooks.inl" />
     <ClInclude Include="src\debug_ui_overlay\label_resolution_and_frame_render.inl" />
     <ClInclude Include="src\debug_ui_overlay\label_resolution_helpers.inl" />
@@ -161,6 +167,7 @@
     <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_settings_helpers.inl" />
     <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_settings_surfaces.inl" />
     <ClInclude Include="src\debug_ui_overlay\public_api.inl" />
+    <ClInclude Include="src\debug_ui_overlay\public_memory_forwarders.inl" />
     <ClInclude Include="src\debug_ui_overlay\public_api_actions.inl" />
     <ClInclude Include="src\debug_ui_overlay\public_api_initialization.inl" />
     <ClInclude Include="src\debug_ui_overlay\public_api_surface_dispatch.inl" />
@@ -195,6 +202,7 @@
     <ClInclude Include="src\mod_loader_internal.h" />
     <ClInclude Include="src\runtime_debug_internal.h" />
     <ClInclude Include="src\lua_engine_internal.h" />
+    <ClInclude Include="src\lua_engine_main_thread_pump.inl" />
     <ClInclude Include="src\bot_runtime\helpers.inl" />
     <ClInclude Include="src\bot_runtime\helpers\controller_motion.inl" />
     <ClInclude Include="src\bot_runtime\helpers\defaults_and_lookup.inl" />
@@ -211,11 +219,13 @@
     <ClInclude Include="src\bot_runtime\public_api\movement_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\scene_intents_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\skill_choices_api.inl" />
+    <ClInclude Include="src\bot_runtime\public_api\skill_choice_application.inl" />
     <ClInclude Include="src\bot_runtime\public_api\bot_skill_choice_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\snapshots_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\tick_service_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\update_api.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions.inl" />
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_combat_observations.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_field_accessors.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_frame_capture.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_hits_and_errors.inl" />
@@ -249,15 +259,18 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\pending_cast_preparation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\pending_cast_processing.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\transient_status_reconciliation.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\transient_status_participant_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\processing_context.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\projectile_observation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\release_and_latch_helpers.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\resource_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\skill_selection_rules.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\targeting_and_facing.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\turn_undead_caster_target_lock.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\local_player_animation_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\locomotion_and_animation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_playback.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_vitals_and_playback.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\participant_collision_response.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\participant_scene_binding_ticks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\native_ranked_stat_values.inl" />
@@ -269,6 +282,7 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_smart_pointer_helpers.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_spawn_and_modifiers.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_tick_and_movement.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\core\actor_world_target_slot_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\crash_summary_builders.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\gameplay_constants.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\gameplay_state_globals.inl" />
@@ -282,6 +296,7 @@
     <ClInclude Include="src\mod_loader_gameplay\core\seh_safe_call_declarations.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\standalone_owner_repair.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\standalone_progression_slot_context.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\core\stock_dampen_effect_context.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_actor_lifecycle_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_execute_requests.inl" />
@@ -294,12 +309,15 @@
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_standalone_wizard.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_gameplay_thread_dispatch.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_mouse_refresh_hook.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_poison_actions.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_pump_loop.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_request_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_standalone_wizard_tracking.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_tick_and_render_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\animation_advance_hook.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\local_player_native_primary_runtime.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\local_player_stock_input_runtime.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\ranked_rush_movement_scale.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\player_actor_tick_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\cast_probe_state.inl" />
@@ -309,14 +327,20 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\item_drop_pickup_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\monster_pathfinding_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\orb_pickup_hook.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\powerup_pickup_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_mana_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks_effect_and_dispatch.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_control_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\nav_grid_snapshot_service.inl" />
     <ClInclude Include="src\mod_loader_gameplay\native_defense_behavior_probes.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\host_loot_drop_deactivation.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\local_player_native_equipment.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\native_item_materialization.inl" />
     <ClInclude Include="src\mod_loader_gameplay\native_staff_behavior_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_inventory.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_gameplay_action_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl" />
@@ -327,6 +351,7 @@
     <ClInclude Include="src\mod_loader_gameplay\native_inventory_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\test_blank_boneyard_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\replicated_loot_reconciliation.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\replicated_loot_public_api.inl" />
     <ClInclude Include="src\mod_loader_gameplay\spell_effect_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\spell_effect_materialization.inl" />
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation.inl" />
@@ -342,7 +367,6 @@
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_actor_render_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_debug_summaries.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_equip_visual_lanes.inl" />
-    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_local_player_cast_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_selection_priming.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_slot_bot_creation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_slot_bot_destruction.inl" />
@@ -357,14 +381,18 @@
     <ClInclude Include="src\multiplayer_local_transport\incoming_cast_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_dispatch.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\incoming_participant_state_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_snapshot_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_barrier_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_barrier_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_choice_and_picker.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\level_up_native_picker_presentation.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_debug_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_packet_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\level_up_packet_handlers.inl" />
     <ClInclude Include="src\multiplayer_local_transport\loot_pickup_authority.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\loot_pickup_packet_handlers.inl" />
     <ClInclude Include="src\multiplayer_local_transport\loot_snapshot_capture.inl" />
     <ClInclude Include="src\multiplayer_local_transport\local_snapshot_packet_builders.inl" />
     <ClInclude Include="src\multiplayer_local_transport\local_state_packet_sync.inl" />
@@ -373,6 +401,7 @@
     <ClInclude Include="src\multiplayer_local_transport\outgoing_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\owned_progression_state.inl" />
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_authority.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\powerup_loot_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_api.inl" />
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_queue_api.inl" />
     <ClInclude Include="src\multiplayer_local_transport\remote_peer_lifecycle.inl" />
@@ -380,7 +409,10 @@
     <ClInclude Include="src\multiplayer_local_transport\skill_config_and_packet_helpers.inl" />
     <ClInclude Include="src\multiplayer_local_transport\spell_effect_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\world_snapshot_capture.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\world_snapshot_hub_presentation_and_loot_helpers.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\world_snapshot_fragmentation.inl" />
     <ClInclude Include="src\multiplayer_steam_session\lobby_and_events.inl" />
+    <ClInclude Include="src\multiplayer_steam_session\lobby_event_handlers.inl" />
     <ClInclude Include="src\multiplayer_steam_session\network_messages.inl" />
     <ClInclude Include="src\multiplayer_steam_session\public_lifecycle.inl" />
     <ClInclude Include="src\multiplayer_steam_session\state_and_helpers.inl" />
@@ -396,6 +428,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\background_focus_bypass.cpp" />
+    <ClCompile Include="src\cpu_lifecycle_guard.cpp" />
     <ClCompile Include="src\binary_layout_parser.cpp" />
     <ClCompile Include="src\binary_layout_state.cpp" />
     <ClCompile Include="src\binary_layout_validation.cpp" />

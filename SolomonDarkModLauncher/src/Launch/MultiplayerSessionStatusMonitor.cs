@@ -8,8 +8,16 @@ internal sealed record MultiplayerSessionStatus(
     bool Enabled,
     bool IsHost,
     string Phase,
+    string GamePhase,
     uint AppId,
     ulong LobbyId,
+    ulong HostSteamId,
+    ulong LocalSteamId,
+    string PersonaName,
+    string Privacy,
+    int ProtocolVersion,
+    string ManifestSha256,
+    ulong[] FriendSteamIds,
     uint MaxParticipants,
     uint AuthenticatedPeerCount,
     bool OverlayEnabled,
@@ -17,8 +25,15 @@ internal sealed record MultiplayerSessionStatus(
     bool InviteSent,
     bool RouteRelayed,
     int RoutePingMs,
+    MultiplayerSessionMember[] Members,
     string StatusText,
     string ErrorText);
+
+internal sealed record MultiplayerSessionMember(
+    ulong SteamId,
+    string Name,
+    bool IsHost,
+    bool IsLocal);
 
 internal static class MultiplayerSessionStatusMonitor
 {
@@ -84,6 +99,42 @@ internal static class MultiplayerSessionStatusMonitor
                 status.AuthenticatedPeerCount > 0,
             "an authenticated Steam host connection",
             timeoutSeconds);
+
+    public static MultiplayerSessionStatus? TryRead(
+        string stageRootPath,
+        string expectedLaunchToken)
+    {
+        var statusPath = GetStatusPath(stageRootPath);
+        if (!File.Exists(statusPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var status = JsonSerializer.Deserialize<MultiplayerSessionStatus>(
+                ReadAllTextShared(statusPath),
+                JsonOptions);
+            return status is not null && string.Equals(
+                status.LaunchToken,
+                expectedLaunchToken,
+                StringComparison.OrdinalIgnoreCase)
+                ? status
+                : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     private static MultiplayerSessionStatus WaitFor(
         string stageRootPath,

@@ -187,7 +187,6 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
             });
         if (it != g_replicated_loot_presentations.end()) {
             carrier_binding = *it;
-            g_client_non_authoritative_loot_suppressed_actors.erase(it->actor_address);
             g_replicated_loot_presentations.erase(it);
             have_carrier = true;
         }

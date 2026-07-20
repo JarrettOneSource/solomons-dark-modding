@@ -152,11 +152,6 @@ UiSurfaceDefinition BuildUiSurfaceDefinition(
         definition.kind = property_it->second;
     }
 
-    property_it = properties.find("dispatch_timing");
-    if (property_it != properties.end()) {
-        definition.dispatch_timing = property_it->second;
-    }
-
     property_it = properties.find("asset");
     if (property_it != properties.end()) {
         definition.asset = property_it->second;
@@ -173,7 +168,7 @@ UiSurfaceDefinition BuildUiSurfaceDefinition(
     }
 
     for (const auto& [key, value] : properties) {
-        if (key == "title" || key == "kind" || key == "dispatch_timing" || key == "asset" || key == "asset_2x" ||
+        if (key == "title" || key == "kind" || key == "asset" || key == "asset_2x" ||
             key == "actions") {
             continue;
         }
@@ -203,18 +198,13 @@ UiActionDefinition BuildUiActionDefinition(
         definition.label = property_it->second;
     }
 
-    property_it = properties.find("dispatch_timing");
-    if (property_it != properties.end()) {
-        definition.dispatch_timing = property_it->second;
-    }
-
     property_it = properties.find("dispatch_kind");
     if (property_it != properties.end()) {
         definition.dispatch_kind = property_it->second;
     }
 
     for (const auto& [key, value] : properties) {
-        if (key == "surface" || key == "label" || key == "dispatch_timing" || key == "dispatch_kind") {
+        if (key == "surface" || key == "label" || key == "dispatch_kind") {
             continue;
         }
 

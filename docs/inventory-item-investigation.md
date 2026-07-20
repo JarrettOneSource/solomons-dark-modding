@@ -178,7 +178,7 @@ Current multiplayer ownership state:
   and amulets; it returns the previous item to inventory, dirties the view,
   refreshes native progression, and verifies exact recipe ownership against
   the same native holder selected at transaction start
-- protocol v59 carries exact hat, robe, staff/wand, three-ring-slot, and amulet
+- protocol v63 carries exact hat, robe, staff/wand, three-ring-slot, and amulet
   recipe identity plus wearable colors; native remote participant actors
   reconcile visible lanes and retry divergence, while every peer retains the
   complete owner-authored equipment snapshot

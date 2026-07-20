@@ -311,6 +311,7 @@ def spell_mismatches(
         "build_skill_id",
         "current_spell_id",
         "progression_level",
+        "logical_output_count",
         "secondary_damage_available",
         "mana_cost_available",
         "mana_spend_cost_available",
@@ -348,12 +349,15 @@ def spell_mismatches(
     # read from the same buffer and are the values combat consumes. Preserve
     # the raw count/array as diagnostics, but do not mistake that transient
     # tail for replicated progression state.
-    if owner["spell"]["output_count"] < 2 or observer["spell"]["output_count"] < 2:
+    if (
+        owner["spell"]["logical_output_count"] < 2
+        or observer["spell"]["logical_output_count"] < 2
+    ):
         mismatches.append(
             {
-                "field": "minimum_output_count",
-                "owner": owner["spell"]["output_count"],
-                "observer": observer["spell"]["output_count"],
+                "field": "minimum_logical_output_count",
+                "owner": owner["spell"]["logical_output_count"],
+                "observer": observer["spell"]["logical_output_count"],
             }
         )
     return mismatches
@@ -607,12 +611,12 @@ def wait_for_target_parity(
                     "outputs": owner["spell"]["outputs"],
                 },
                 "native_output_buffer_diagnostic": {
-                    "owner_count": owner["spell"]["output_count"],
-                    "observer_count": observer["spell"]["output_count"],
-                    "exact_match": owner["spell"]["outputs"]
-                    == observer["spell"]["outputs"],
-                    "owner_outputs": owner["spell"]["outputs"],
-                    "observer_outputs": observer["spell"]["outputs"],
+                    "owner_count": owner["spell"]["raw_output_count"],
+                    "observer_count": observer["spell"]["raw_output_count"],
+                    "exact_match": owner["spell"]["raw_outputs"]
+                    == observer["spell"]["raw_outputs"],
+                    "owner_outputs": owner["spell"]["raw_outputs"],
+                    "observer_outputs": observer["spell"]["raw_outputs"],
                 },
             }
         time.sleep(0.05)

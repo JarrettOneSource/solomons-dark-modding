@@ -39,10 +39,13 @@ struct LuaExecResult {
 // any thread (the Lua state itself is never touched off-thread; the
 // gameplay-thread pump services the queue under the engine mutex).
 //
-// On timeout the caller receives an error result but the queued request
-// may still execute on a later tick — callers must treat exec as
-// advisory when a timeout is returned.
-LuaExecResult QueueLuaExecRequestAndWait(const std::string& code, std::uint32_t timeout_ms);
+// On timeout a request that has not begun is canceled. If execution already
+// began on the gameplay thread, the caller receives a distinct timeout error
+// and must treat the mutation result as unknown.
+LuaExecResult QueueLuaExecRequestAndWait(
+    const std::string& code,
+    std::uint32_t timeout_ms,
+    const std::atomic<bool>* service_running = nullptr);
 
 // Drain any pending Lua exec requests and dispatch a runtime.tick event
 // to all registered handlers. Takes the engine mutex once for the whole
@@ -55,11 +58,10 @@ LuaExecResult QueueLuaExecRequestAndWait(const std::string& code, std::uint32_t 
 void PumpLuaWorkOnGameplayThread(const SDModRuntimeTickContext& context);
 
 // Drain pending Lua exec requests on the main thread without
-// dispatching runtime.tick. Safe to call from the D3D9 EndScene frame
-// pump, which fires every frame on the main thread regardless of
-// whether gameplay is active (main menu, loading screens, etc.). This
-// lets pipe-exec snippets run in contexts where HookPlayerActorTick
-// never fires.
+// dispatching runtime.tick. During gameplay this is called from the
+// local PlayerActorTick safe phase so snippets may access stock world
+// state. Front-end contexts use PumpLuaWorkOnMainThread from MyApp's
+// update tick instead.
 void PumpLuaExecQueueOnMainThread();
 
 // Drain pending Lua exec requests and dispatch runtime.tick from the

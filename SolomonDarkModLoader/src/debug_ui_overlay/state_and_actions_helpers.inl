@@ -110,26 +110,6 @@ bool IsUsableDebugUiSurfaceSnapshot(const DebugUiSurfaceSnapshot& snapshot) {
            now - snapshot.captured_at_milliseconds <= kLatestSurfaceSnapshotMaximumIdleMs;
 }
 
-std::string_view ResolveUiActionDispatchTiming(
-    std::string_view surface_root_id,
-    std::string_view action_id) {
-    if (!action_id.empty()) {
-        if (const auto* action_definition = FindUiActionDefinition(action_id);
-            action_definition != nullptr && !action_definition->dispatch_timing.empty()) {
-            return action_definition->dispatch_timing;
-        }
-    }
-
-    if (!surface_root_id.empty()) {
-        if (const auto* surface_definition = FindUiSurfaceDefinition(surface_root_id);
-            surface_definition != nullptr && !surface_definition->dispatch_timing.empty()) {
-            return surface_definition->dispatch_timing;
-        }
-    }
-
-    return "overlay_frame";
-}
-
 struct UiActionDispatchExpectation {
     uintptr_t expected_vftable_address = 0;
     uintptr_t expected_handler_address = 0;

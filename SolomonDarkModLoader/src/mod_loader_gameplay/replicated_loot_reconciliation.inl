@@ -21,7 +21,6 @@ constexpr std::size_t kReplicatedPowerupValueOffset = 0x15C;
 constexpr std::size_t kReplicatedPowerupAuxiliaryOffset = 0x160;
 constexpr std::uint32_t kReplicatedLootDefaultLifetime = 900;
 constexpr float kReplicatedLootSpawnMatchMaxDistance = 192.0f;
-constexpr float kReplicatedLootParkBase = 900000.0f;
 constexpr std::uint64_t kClientLocalLootSuppressionSettleDelayMs = 150;
 constexpr int kReplicatedOrbPresentationSpawnAmount = 1;
 
@@ -52,7 +51,6 @@ struct ReplicatedLootPresentationBinding {
 
 std::mutex g_replicated_loot_presentation_mutex;
 std::vector<ReplicatedLootPresentationBinding> g_replicated_loot_presentations;
-std::unordered_set<uintptr_t> g_client_non_authoritative_loot_suppressed_actors;
 
 void ClearNativeInventoryCreditState();
 bool IsNativeInventoryCreditCompleted(
@@ -638,40 +636,6 @@ bool SpawnReplicatedLootPresentationActor(
     return true;
 }
 
-bool ParkReplicatedLootPresentationActor(
-    const ReplicatedLootPresentationBinding& binding) {
-    if (binding.actor_address == 0) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    const float address_jitter_x = static_cast<float>((binding.actor_address >> 4) & 0x3FFu);
-    const float address_jitter_y = static_cast<float>((binding.actor_address >> 14) & 0x3FFu);
-    const float park_x = kReplicatedLootParkBase + address_jitter_x * 8.0f;
-    const float park_y = kReplicatedLootParkBase + address_jitter_y * 8.0f;
-    bool wrote =
-        memory.TryWriteField(binding.actor_address, kActorPositionXOffset, park_x) &&
-        memory.TryWriteField(binding.actor_address, kActorPositionYOffset, park_y);
-    const std::uint32_t zero = 0;
-    if (binding.drop_kind == multiplayer::LootDropKind::Gold) {
-        const std::uint8_t inactive = 0;
-        wrote = memory.TryWriteField(binding.actor_address, kReplicatedGoldLifetimeOffset, zero) && wrote;
-        wrote = memory.TryWriteField(binding.actor_address, kReplicatedGoldActiveOffset, inactive) && wrote;
-    } else if (binding.drop_kind == multiplayer::LootDropKind::Orb) {
-        wrote = memory.TryWriteField(binding.actor_address, kReplicatedOrbLifetimeOffset, zero) && wrote;
-    } else if (binding.drop_kind == multiplayer::LootDropKind::Powerup) {
-        wrote =
-            memory.TryWriteField(
-                binding.actor_address,
-                kReplicatedPowerupLifetimeOffset,
-                zero) && wrote;
-        return wrote;
-    }
-    DWORD rebind_exception_code = 0;
-    (void)TryRebindActorToOwnerWorld(binding.actor_address, &rebind_exception_code);
-    return wrote;
-}
-
 bool RemoveReplicatedLootPresentationActor(
     const ReplicatedLootPresentationBinding& binding,
     DWORD* exception_code) {
@@ -681,27 +645,10 @@ bool RemoveReplicatedLootPresentationActor(
     if (binding.actor_address == 0) {
         return false;
     }
-    if (binding.drop_kind == multiplayer::LootDropKind::Powerup) {
-        return ParkReplicatedLootPresentationActor(binding);
-    }
 
-    auto& memory = ProcessMemory::Instance();
-    uintptr_t world_address = 0;
-    if (memory.TryReadField(binding.actor_address, kActorOwnerOffset, &world_address) &&
-        world_address != 0) {
-        const auto unregister_address = memory.ResolveGameAddressOrZero(kActorWorldUnregister);
-        if (unregister_address != 0 &&
-            CallActorWorldUnregisterSafe(
-                unregister_address,
-                world_address,
-                binding.actor_address,
-                1,
-                exception_code)) {
-            return true;
-        }
-    }
-
-    return ParkReplicatedLootPresentationActor(binding);
+    return CallActorRequestRetirementSafe(
+        binding.actor_address,
+        exception_code);
 }
 
 void ClearReplicatedLootPresentationBindingsForSceneSwitch(const char* reason) {
@@ -710,7 +657,6 @@ void ClearReplicatedLootPresentationBindingsForSceneSwitch(const char* reason) {
         std::lock_guard<std::mutex> lock(g_replicated_loot_presentation_mutex);
         count = static_cast<std::uint32_t>(g_replicated_loot_presentations.size());
         g_replicated_loot_presentations.clear();
-        g_client_non_authoritative_loot_suppressed_actors.clear();
     }
     if (count != 0) {
         Log(
@@ -727,7 +673,6 @@ void RemoveAllReplicatedLootPresentationActors(const char* reason) {
         std::lock_guard<std::mutex> lock(g_replicated_loot_presentation_mutex);
         bindings = g_replicated_loot_presentations;
         g_replicated_loot_presentations.clear();
-        g_client_non_authoritative_loot_suppressed_actors.clear();
     }
 
     std::uint32_t removed = 0;
@@ -761,7 +706,6 @@ void RemoveUnboundClientLootActors(const char* reason) {
     }
 
     std::unordered_set<uintptr_t> bound_actor_addresses;
-    std::unordered_set<uintptr_t> suppressed_actor_addresses;
     {
         std::lock_guard<std::mutex> lock(g_replicated_loot_presentation_mutex);
         for (const auto& binding : g_replicated_loot_presentations) {
@@ -769,7 +713,6 @@ void RemoveUnboundClientLootActors(const char* reason) {
                 bound_actor_addresses.insert(binding.actor_address);
             }
         }
-        suppressed_actor_addresses = g_client_non_authoritative_loot_suppressed_actors;
     }
 
     std::vector<SDModSceneActorState> actors;
@@ -791,20 +734,17 @@ void RemoveUnboundClientLootActors(const char* reason) {
         binding.actor_address = actor.actor_address;
         binding.native_type_id = actor.object_type_id;
         binding.drop_kind = LootDropKindFromNativeTypeId(actor.object_type_id);
-        if (suppressed_actor_addresses.find(actor.actor_address) != suppressed_actor_addresses.end()) {
-            continue;
-        }
-        if (ParkReplicatedLootPresentationActor(binding)) {
+        DWORD exception_code = 0;
+        if (RemoveReplicatedLootPresentationActor(binding, &exception_code)) {
             ++removed;
-            std::lock_guard<std::mutex> lock(g_replicated_loot_presentation_mutex);
-            g_client_non_authoritative_loot_suppressed_actors.insert(actor.actor_address);
         } else {
             ++failed;
             Log(
                 "replicated_loot: failed to remove unbound client loot actor. reason=" +
                 std::string(reason != nullptr ? reason : "unknown") +
                 " actor=" + HexString(actor.actor_address) +
-                " type=" + HexString(static_cast<uintptr_t>(actor.object_type_id)));
+                " type=" + HexString(static_cast<uintptr_t>(actor.object_type_id)) +
+                " seh=" + HexString(static_cast<uintptr_t>(exception_code)));
         }
     }
 
@@ -815,50 +755,6 @@ void RemoveUnboundClientLootActors(const char* reason) {
             " removed=" + std::to_string(removed) +
             " failed=" + std::to_string(failed));
     }
-}
-
-bool RemoveUnboundClientLootActorNow(
-    uintptr_t actor_address,
-    multiplayer::LootDropKind drop_kind,
-    const char* reason) {
-    if (!multiplayer::IsLocalTransportClient() ||
-        actor_address == 0 ||
-        IsReplicatedLootPresentationActorInternal(actor_address)) {
-        return false;
-    }
-
-    ReplicatedLootPresentationBinding binding;
-    binding.actor_address = actor_address;
-    binding.drop_kind = drop_kind;
-    bool already_suppressed = false;
-    {
-        std::lock_guard<std::mutex> lock(g_replicated_loot_presentation_mutex);
-        already_suppressed =
-            g_client_non_authoritative_loot_suppressed_actors.find(actor_address) !=
-            g_client_non_authoritative_loot_suppressed_actors.end();
-    }
-    if (already_suppressed) {
-        return true;
-    }
-    if (ParkReplicatedLootPresentationActor(binding)) {
-        {
-            std::lock_guard<std::mutex> lock(g_replicated_loot_presentation_mutex);
-            g_client_non_authoritative_loot_suppressed_actors.insert(actor_address);
-        }
-        Log(
-            "replicated_loot: removed client-local non-authoritative loot actor. reason=" +
-            std::string(reason != nullptr ? reason : "unknown") +
-            " actor=" + HexString(actor_address) +
-            " kind=" + std::string(multiplayer::LootDropKindLabel(drop_kind)));
-        return true;
-    }
-
-    Log(
-        "replicated_loot: failed to remove client-local non-authoritative loot actor. reason=" +
-        std::string(reason != nullptr ? reason : "unknown") +
-        " actor=" + HexString(actor_address) +
-        " kind=" + std::string(multiplayer::LootDropKindLabel(drop_kind)));
-    return false;
 }
 
 
@@ -938,7 +834,6 @@ void ReconcileReplicatedLootSnapshotNow(
                     drop,
                     existing->actor_address,
                     now_ms);
-                g_client_non_authoritative_loot_suppressed_actors.erase(existing->actor_address);
             }
         }
         if (existing != nullptr) {
@@ -966,7 +861,6 @@ void ReconcileReplicatedLootSnapshotNow(
 
         {
             std::lock_guard<std::mutex> lock(g_replicated_loot_presentation_mutex);
-            g_client_non_authoritative_loot_suppressed_actors.erase(actor_address);
             g_replicated_loot_presentations.push_back(
                 ToReplicatedLootPresentationBinding(snapshot, drop, actor_address, now_ms));
         }

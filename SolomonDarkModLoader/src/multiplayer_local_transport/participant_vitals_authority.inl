@@ -24,7 +24,7 @@ void QueueHostParticipantVitalsCorrectionInternal(
     queued.life_current = (std::clamp)(life_current, 0.0f, life_max);
     queued.life_max = life_max;
     queued.transient_status_flags = static_cast<std::uint8_t>(
-        transient_status_flags & kParticipantTransientStatusValueMask);
+        transient_status_flags & ParticipantTransientStatusFlagPoisoned);
     queued.poison_remaining_ticks =
         (queued.transient_status_flags & ParticipantTransientStatusFlagPoisoned) != 0
             ? (std::clamp)(
@@ -284,6 +284,7 @@ void ApplyParticipantVitalsCorrectionPacket(
     if (poison_active) {
         std::string poison_error;
         if (!QueueLocalPlayerPoisonCorrection(
+                packet.correction_sequence,
                 packet.poison_remaining_ticks,
                 packet.poison_damage_per_tick,
                 &poison_error)) {
@@ -302,8 +303,10 @@ void ApplyParticipantVitalsCorrectionPacket(
 
     g_local_transport.last_participant_vitals_correction_sequence_by_authority[
         packet.authority_participant_id] = packet.correction_sequence;
-    g_local_transport.last_applied_participant_vitals_correction_sequence =
-        packet.correction_sequence;
+    if (!poison_active) {
+        g_local_transport.last_applied_participant_vitals_correction_sequence =
+            packet.correction_sequence;
+    }
     UpdateRuntimeState([&](RuntimeState& state) {
         auto* mutable_local = FindLocalParticipant(state);
         if (mutable_local == nullptr) {

@@ -14,6 +14,26 @@ bool SteamPacketOwnerMatches(
     return owner_accessor(packet) == sender_steam_id;
 }
 
+bool SteamSpellEffectPacketOwnerMatches(
+    const void* data,
+    std::size_t size,
+    std::uint64_t sender_steam_id) {
+    if (data == nullptr ||
+        size < kSpellEffectSnapshotPacketPrefixBytes ||
+        size > sizeof(SpellEffectSnapshotPacket)) {
+        return false;
+    }
+    SpellEffectSnapshotPacket packet{};
+    std::memcpy(&packet, data, size);
+    return IsValidHeader(
+               packet.header,
+               PacketKind::SpellEffectSnapshot) &&
+           IsValidSpellEffectSnapshotPacketWireSize(
+               size,
+               packet.effect_count) &&
+           packet.owner_participant_id == sender_steam_id;
+}
+
 bool IsAuthorizedSteamGameplayPacket(
     std::uint64_t sender_steam_id,
     const void* data,
@@ -42,6 +62,16 @@ bool IsAuthorizedSteamGameplayPacket(
                     ? packet.participant_id
                     : std::uint64_t{0};
             });
+    case PacketKind::ParticipantFrame:
+        return SteamPacketOwnerMatches<ParticipantFramePacket>(
+            data,
+            size,
+            sender_steam_id,
+            [](const ParticipantFramePacket& packet) {
+                return packet.authority_participant_id == 0
+                    ? packet.participant_id
+                    : std::uint64_t{0};
+            });
     case PacketKind::Cast:
         return SteamPacketOwnerMatches<CastPacket>(
             data,
@@ -49,13 +79,10 @@ bool IsAuthorizedSteamGameplayPacket(
             sender_steam_id,
             [](const CastPacket& packet) { return packet.participant_id; });
     case PacketKind::SpellEffectSnapshot:
-        return SteamPacketOwnerMatches<SpellEffectSnapshotPacket>(
+        return SteamSpellEffectPacketOwnerMatches(
             data,
             size,
-            sender_steam_id,
-            [](const SpellEffectSnapshotPacket& packet) {
-                return packet.owner_participant_id;
-            });
+            sender_steam_id);
     case PacketKind::AirChainSnapshot:
         return SteamPacketOwnerMatches<AirChainSnapshotPacket>(
             data,
@@ -121,6 +148,20 @@ void DispatchReceivedPacket(
             continue;
         }
 
+        if (kind == PacketKind::ParticipantFrame &&
+            received == static_cast<int>(sizeof(ParticipantFramePacket))) {
+            ParticipantFramePacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::ParticipantFrame)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyRemoteParticipantFramePacket(packet, from, now_ms);
+            continue;
+        }
+
         if (kind == PacketKind::Cast && received == static_cast<int>(sizeof(CastPacket))) {
             CastPacket packet{};
             std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
@@ -133,10 +174,20 @@ void DispatchReceivedPacket(
         }
 
         if (kind == PacketKind::SpellEffectSnapshot &&
-            received == static_cast<int>(sizeof(SpellEffectSnapshotPacket))) {
+            received >= static_cast<int>(
+                kSpellEffectSnapshotPacketPrefixBytes) &&
+            received <= static_cast<int>(sizeof(SpellEffectSnapshotPacket))) {
             SpellEffectSnapshotPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::SpellEffectSnapshot)) {
+            std::memcpy(
+                &packet,
+                packet_buffer.data(),
+                static_cast<std::size_t>(received));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::SpellEffectSnapshot) ||
+                !IsValidSpellEffectSnapshotPacketWireSize(
+                    static_cast<std::size_t>(received),
+                    packet.effect_count)) {
                 continue;
             }
             g_local_transport.packets_received += 1;
@@ -181,10 +232,18 @@ void DispatchReceivedPacket(
             continue;
         }
 
-        if (kind == PacketKind::LootSnapshot && received == static_cast<int>(sizeof(LootSnapshotPacket))) {
+        if (kind == PacketKind::LootSnapshot &&
+            received >= static_cast<int>(kLootSnapshotPacketPrefixBytes) &&
+            received <= static_cast<int>(sizeof(LootSnapshotPacket))) {
             LootSnapshotPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::LootSnapshot)) {
+            std::memcpy(
+                &packet,
+                packet_buffer.data(),
+                static_cast<std::size_t>(received));
+            if (!IsValidHeader(packet.header, PacketKind::LootSnapshot) ||
+                !IsValidLootSnapshotPacketWireSize(
+                    static_cast<std::size_t>(received),
+                    packet.drop_count)) {
                 continue;
             }
             g_local_transport.packets_received += 1;

@@ -138,6 +138,9 @@ constexpr float kDarkCloudBrowserNativeMultiplayerTabGap = 0.0f;
 constexpr float kDarkCloudBrowserMultiplayerTabHorizontalPadding = 16.0f;
 constexpr float kDarkCloudBrowserInactiveTabTextYOffset = 52.0f;
 constexpr std::size_t kUiRenderContextDrawStateOffset = 0x1D0;
+// TextQuad_Draw reads this Z value from its draw-state `this` object before
+// submitting XYZ + diffuse + UV vertices through the fixed-function pipeline.
+constexpr std::size_t kTextQuadDrawStateDepthOffset = 0x448;
 constexpr std::size_t kTextDrawHookPatchSize = 6;
 constexpr std::size_t kStringAssignHookPatchSize = 5;
 constexpr std::size_t kDialogAddLineHookPatchSize = 7;
@@ -195,6 +198,8 @@ struct ObservedUiElement {
     float min_y = 0.0f;
     float max_y = 0.0f;
     std::uint32_t sample_count = 0;
+    std::uint64_t gameplay_participant_id = 0;
+    float gameplay_health_ratio = 0.0f;
     std::string label;
 };
 
@@ -281,6 +286,20 @@ struct ExactTextRenderCapture {
     float max_x = (std::numeric_limits<float>::lowest)();
     float max_y = (std::numeric_limits<float>::lowest)();
     std::uint32_t glyph_count = 0;
+    std::uint64_t gameplay_participant_id = 0;
+    float gameplay_health_ratio = 0.0f;
+    float gameplay_world_width = 0.0f;
+    bool gameplay_viewport_offset_resolved = false;
+    float gameplay_viewport_offset_x = 0.0f;
+    float gameplay_viewport_offset_y = 0.0f;
+};
+
+struct GameplayParticipantNameplateCaptureRequest {
+    bool active = false;
+    std::uint64_t participant_id = 0;
+    float health_ratio = 0.0f;
+    float world_width = 0.0f;
+    std::string exact_text;
 };
 
 struct TrackedDialogState {
@@ -308,6 +327,7 @@ struct PendingSemanticUiActionRequest {
     bool active = false;
     std::uint64_t request_id = 0;
     ULONGLONG queued_at = 0;
+    std::uint64_t snapshot_generation = 0;
     std::string action_id;
     std::string target_label;
     std::string surface_id;
@@ -417,9 +437,11 @@ struct TexturedVertex {
 constexpr DWORD kColorVertexFvf = D3DFVF_XYZRHW | D3DFVF_DIFFUSE;
 constexpr DWORD kTexturedVertexFvf = D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1;
 constexpr ULONGLONG kLatestSurfaceSnapshotMaximumIdleMs = 1000;
+constexpr ULONGLONG kPendingSemanticUiActionRequestMaximumAgeMs = 3000;
 constexpr ULONGLONG kTrackedMyQuickPanelMaximumIdleMs = 250;
 constexpr ULONGLONG kTrackedDarkCloudBrowserMaximumIdleMs = 250;
 constexpr ULONGLONG kTrackedHallOfFameMaximumIdleMs = 250;
+constexpr ULONGLONG kTrackedSpellPickerMaximumIdleMs = 250;
 constexpr ULONGLONG kTrackedSettingsMaximumIdleMs = 1000;
 constexpr ULONGLONG kTrackedDarkCloudBrowserPanelMaximumIdleMs = 250;
 constexpr ULONGLONG kTrackedDarkCloudBrowserModalMaximumIdleMs = 250;
@@ -482,6 +504,14 @@ struct DebugUiOverlayState {
     std::vector<ObservedUiElement> frame_exact_text_elements;
     std::vector<ObservedUiElement> frame_exact_control_elements;
     std::vector<ExactTextRenderCapture> active_exact_text_renders;
+    struct MultiplayerDampenPresentation {
+        std::uint64_t owner_participant_id = 0;
+        std::uint32_t cast_sequence = 0;
+        ULONGLONG started_at_milliseconds = 0;
+        bool draw_logged = false;
+    };
+    std::vector<MultiplayerDampenPresentation>
+        multiplayer_dampen_presentations;
     std::vector<std::string> recent_assigned_strings;
     ULONGLONG recent_assigned_strings_updated_at = 0;
     uintptr_t tracked_title_main_menu_object = 0;
@@ -511,164 +541,16 @@ struct DebugUiOverlayState {
 };
 
 DebugUiOverlayState g_debug_ui_overlay_state;
+thread_local GameplayParticipantNameplateCaptureRequest
+    g_gameplay_participant_nameplate_capture;
 
 bool InitializeFontAtlas(IDirect3DDevice9* device, FontAtlas* atlas, std::string* error_message);
 int MeasureLabelWidth(const FontAtlas& atlas, std::string_view label);
-void DrawFilledRect(IDirect3DDevice9* device, float left, float top, float right, float bottom, D3DCOLOR color);
-void DrawRectOutline(IDirect3DDevice9* device, float left, float top, float right, float bottom, D3DCOLOR color);
+bool DrawFilledRect(IDirect3DDevice9* device, float left, float top, float right, float bottom, D3DCOLOR color);
+bool DrawRectOutline(IDirect3DDevice9* device, float left, float top, float right, float bottom, D3DCOLOR color);
 void DrawLabelText(IDirect3DDevice9* device, const FontAtlas& atlas, float left, float top, std::string_view label, D3DCOLOR color);
 void ConfigureOverlayRenderState(IDirect3DDevice9* device);
 bool IsPlausibleDialogRect(float left, float top, float width, float height);
 std::string TrimAsciiWhitespace(std::string_view value);
 std::string SanitizeDebugLogLabel(std::string value);
-uintptr_t BuildObservationIdentityKey(
-    void* identity_source,
-    float x,
-    float y,
-    uintptr_t caller_address,
-    bool prefer_object_identity);
-bool TryGetActiveDarkCloudBrowserRender(uintptr_t* browser_address);
-bool TryGetCurrentDarkCloudBrowser(uintptr_t* browser_address);
-bool TryReadTrackedDialogObject(uintptr_t* dialog_address);
-bool TryReadActiveTitleMainMenu(
-    const DebugUiOverlayConfig& config,
-    uintptr_t* bundle_address,
-    uintptr_t* main_menu_address);
-void RememberDarkCloudBrowserPanelRect(
-    uintptr_t browser_address,
-    float left,
-    float top,
-    float right,
-    float bottom);
-bool TryReadTrackedDarkCloudBrowserPanelRect(
-    uintptr_t browser_address,
-    float* left,
-    float* top,
-    float* right,
-    float* bottom);
-void RememberDarkCloudBrowserModalRootRect(
-    uintptr_t browser_address,
-    float left,
-    float top,
-    float right,
-    float bottom);
-bool TryReadTrackedDarkCloudBrowserModalRootRect(
-    uintptr_t browser_address,
-    float* left,
-    float* top,
-    float* right,
-    float* bottom);
-bool TryGetLiveSettingsRender(uintptr_t* settings_address);
-bool TryGetActiveSettingsRender(uintptr_t* settings_address);
-bool TryGetActiveMyQuickPanelRender(uintptr_t* quick_panel_address);
-bool TryReadTrackedMyQuickPanel(uintptr_t* quick_panel_address);
-bool TryGetActiveSimpleMenu(uintptr_t* simple_menu_address);
-bool TryGetActiveHallOfFameRender(uintptr_t* hof_address);
-bool TryGetCurrentHallOfFame(uintptr_t* hof_address);
-bool TryGetActiveSpellPickerRender(uintptr_t* picker_address);
-bool TryReadMyQuickPanelBuilderOwnerAddress(
-    const DebugUiOverlayConfig& config,
-    uintptr_t quick_panel_address,
-    uintptr_t* owner_address);
-bool TryReadMyQuickPanelBuilderAddress(
-    const DebugUiOverlayConfig& config,
-    uintptr_t quick_panel_address,
-    uintptr_t* builder_address);
-bool TryReadMyQuickPanelBuilderRootControlAddress(
-    const DebugUiOverlayConfig& config,
-    uintptr_t quick_panel_address,
-    uintptr_t* root_control_address);
-bool TryReadMyQuickPanelBuilderWidgetPointers(
-    const DebugUiOverlayConfig& config,
-    uintptr_t quick_panel_address,
-    std::vector<uintptr_t>* widget_pointers);
-bool TryReadExactControlRect(
-    const DebugUiOverlayConfig& config,
-    const void* control_object,
-    float* left,
-    float* top,
-    float* right,
-    float* bottom);
-bool TryReadDarkCloudBrowserTextOwnerAddress(
-    const DebugUiOverlayConfig& config,
-    uintptr_t text_object_address,
-    uintptr_t* owner_address);
-bool IsLocalSubsurfaceRect(float left, float top, float right, float bottom);
-bool IsWidgetOwnedByRootAtOffset(
-    const DebugUiOverlayConfig& config,
-    uintptr_t root_address,
-    uintptr_t object_address,
-    std::size_t parent_offset);
-bool IsWidgetOwnedByRoot(
-    const DebugUiOverlayConfig& config,
-    uintptr_t root_address,
-    uintptr_t object_address);
-bool TryResolveDarkCloudBrowserModalHeaderTextRect(
-    const DebugUiOverlayConfig& config,
-    uintptr_t caller_address,
-    uintptr_t source_object_ptr,
-    float raw_left,
-    float raw_top,
-    float raw_right,
-    float raw_bottom,
-    float* left,
-    float* top,
-    float* right,
-    float* bottom);
-bool TryReadTranslatedWidgetRectToRootAtOffset(
-    const DebugUiOverlayConfig& config,
-    uintptr_t root_address,
-    uintptr_t object_address,
-    std::size_t parent_offset,
-    float* left,
-    float* top,
-    float* right,
-    float* bottom);
-bool TryReadTranslatedWidgetRectToRoot(
-    const DebugUiOverlayConfig& config,
-    uintptr_t root_address,
-    uintptr_t object_address,
-    float* left,
-    float* top,
-    float* right,
-    float* bottom);
-bool TryReadPointerListEntries(
-    const void* owner_object,
-    std::size_t list_offset,
-    std::size_t list_count_offset,
-    std::size_t list_entries_offset,
-    std::size_t max_entries,
-    std::vector<uintptr_t>* entries);
-bool TryReadSettingsPanelRect(
-    const DebugUiOverlayConfig& config,
-    uintptr_t settings_address,
-    float* left,
-    float* top,
-    float* right,
-    float* bottom);
-bool TryReadPointerField(const void* object, std::size_t byte_offset, uintptr_t* value);
-std::string GetOverlaySurfaceRootId(std::string_view surface_id);
-
-#include "debug_ui_overlay/state_and_actions.inl"
-#include "debug_ui_overlay/string_and_memory_readers.inl"
-#include "debug_ui_overlay/exact_widget_resolution.inl"
-#include "debug_ui_overlay/widget_geometry_readers.inl"
-#include "debug_ui_overlay/control_observers.inl"
-#include "debug_ui_overlay/tracked_surfaces_and_main_menu.inl"
-#include "debug_ui_overlay/dark_cloud_browser_native_tabs.inl"
-#include "debug_ui_overlay/dialog_tracking_and_snapshots.inl"
-#include "debug_ui_overlay/exact_text_capture_and_hooks.inl"
-#include "debug_ui_overlay/surface_render_hooks.inl"
-#include "debug_ui_overlay/font_atlas_rendering.inl"
-#include "debug_ui_overlay/overlay_surface_builders.inl"
-#include "debug_ui_overlay/modal_surface_render_builders.inl"
-#include "debug_ui_overlay/label_resolution_and_frame_render.inl"
-#include "debug_ui_overlay/ui_navigation_element_builders.inl"
-
-}  // namespace
-
-#include "debug_ui_overlay/install_hooks.inl"
-#include "debug_ui_overlay/public_api.inl"
-#include "debug_ui_overlay/ui_navigation_public.inl"
-
-}  // namespace sdmod
+#include "debug_ui_overlay/public_memory_forwarders.inl"

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace sdmod {
 
@@ -29,14 +30,28 @@ struct StartupStatusSnapshot {
     bool runtime_tick_service_running = false;
 };
 
+struct MultiplayerSessionMemberSnapshot {
+    std::uint64_t steam_id = 0;
+    std::string name;
+    bool is_host = false;
+    bool is_local = false;
+};
+
 struct MultiplayerSessionStatusSnapshot {
     std::string launch_token;
     bool enabled = false;
     bool is_host = false;
     std::string phase;
+    std::string game_phase;
     std::uint32_t app_id = 0;
     std::uint64_t lobby_id = 0;
     std::uint64_t host_steam_id = 0;
+    std::uint64_t local_steam_id = 0;
+    std::string persona_name;
+    std::string privacy;
+    std::uint16_t protocol_version = 0;
+    std::string manifest_sha256;
+    std::vector<std::uint64_t> friend_steam_ids;
     std::uint32_t max_participants = 0;
     std::uint32_t authenticated_peer_count = 0;
     bool overlay_enabled = false;
@@ -44,6 +59,7 @@ struct MultiplayerSessionStatusSnapshot {
     bool invite_sent = false;
     bool route_relayed = false;
     std::int32_t route_ping_ms = 0;
+    std::vector<MultiplayerSessionMemberSnapshot> members;
     std::string status_text;
     std::string error_text;
 };

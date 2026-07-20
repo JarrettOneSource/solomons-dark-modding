@@ -1,5 +1,5 @@
 void DispatchPendingDebugUiActionOnAppTick() {
-    DispatchPendingSemanticUiActionRequest("app_tick", "app update thread");
+    DispatchPendingSemanticUiActionRequest();
 }
 
 bool TryGetDebugUiActionDispatchSnapshot(std::uint64_t request_id, DebugUiActionDispatchSnapshot* snapshot) {
@@ -14,6 +14,7 @@ bool TryGetDebugUiActionDispatchSnapshot(std::uint64_t request_id, DebugUiAction
     const auto fill_from_pending = [&](const PendingSemanticUiActionRequest& pending) {
         snapshot->request_id = pending.request_id;
         snapshot->queued_at_milliseconds = pending.queued_at;
+        snapshot->snapshot_generation = pending.snapshot_generation;
         snapshot->action_id = pending.action_id;
         snapshot->target_label = pending.target_label;
         snapshot->surface_id = pending.surface_id;

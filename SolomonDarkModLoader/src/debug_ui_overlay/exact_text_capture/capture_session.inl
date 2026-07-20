@@ -1,3 +1,28 @@
+bool TryReadUiRenderBase(float* base_x, float* base_y) {
+    if (base_x == nullptr || base_y == nullptr) {
+        return false;
+    }
+
+    uintptr_t render_context_address = 0;
+    if (!TryReadUiRenderContext(g_debug_ui_overlay_state.config, &render_context_address) ||
+        render_context_address == 0) {
+        return false;
+    }
+
+    const auto* render_context =
+        reinterpret_cast<const void*>(render_context_address);
+    return TryReadPlainField(
+               render_context,
+               g_debug_ui_overlay_state.config.ui_render_context_base_x_offset,
+               base_x) &&
+        TryReadPlainField(
+               render_context,
+               g_debug_ui_overlay_state.config.ui_render_context_base_y_offset,
+               base_y) &&
+        std::isfinite(*base_x) &&
+        std::isfinite(*base_y);
+}
+
 std::string SanitizeDebugLogLabel(std::string value) {
     for (auto& ch : value) {
         if (ch == '\r' || ch == '\n' || ch == '\t') {
@@ -18,14 +43,43 @@ void BeginExactTextRenderCapture(
     ExactTextRenderCapture capture;
     capture.caller_address = caller_address;
     capture.label = ResolveExactTextRenderLabel(string_object, text);
-    if (IsPlausibleTitleCoordinate(origin_x) && IsPlausibleTitleCoordinate(origin_y)) {
+    float render_base_x = 0.0f;
+    float render_base_y = 0.0f;
+    if (IsPlausibleTitleCoordinate(origin_x) &&
+        IsPlausibleTitleCoordinate(origin_y) &&
+        TryReadUiRenderBase(&render_base_x, &render_base_y) &&
+        IsPlausibleTitleCoordinate(render_base_x + origin_x) &&
+        IsPlausibleTitleCoordinate(render_base_y + origin_y)) {
         capture.has_expected_origin = true;
-        capture.expected_origin_x = origin_x;
-        capture.expected_origin_y = origin_y;
-        capture.min_x = origin_x;
-        capture.max_x = origin_x;
-        capture.min_y = origin_y;
-        capture.max_y = origin_y;
+        capture.expected_origin_x = render_base_x + origin_x;
+        capture.expected_origin_y = render_base_y + origin_y;
+        capture.min_x = capture.expected_origin_x;
+        capture.max_x = capture.expected_origin_x;
+        capture.min_y = capture.expected_origin_y;
+        capture.max_y = capture.expected_origin_y;
+    }
+
+    if (g_gameplay_participant_nameplate_capture.active &&
+        g_gameplay_participant_nameplate_capture.participant_id != 0 &&
+        std::isfinite(
+            g_gameplay_participant_nameplate_capture.health_ratio) &&
+        capture.label ==
+            g_gameplay_participant_nameplate_capture.exact_text) {
+        capture.capture_enabled = capture.has_expected_origin;
+        capture.surface_id = "gameplay_nameplate";
+        capture.surface_title = "Gameplay Participant";
+        capture.gameplay_participant_id =
+            g_gameplay_participant_nameplate_capture.participant_id;
+        capture.gameplay_health_ratio = std::clamp(
+            g_gameplay_participant_nameplate_capture.health_ratio,
+            0.0f,
+            1.0f);
+        capture.gameplay_world_width =
+            g_gameplay_participant_nameplate_capture.world_width;
+        capture.min_x = (std::numeric_limits<float>::max)();
+        capture.min_y = (std::numeric_limits<float>::max)();
+        capture.max_x = (std::numeric_limits<float>::lowest)();
+        capture.max_y = (std::numeric_limits<float>::lowest)();
     }
 
     const auto surface_match = TryResolveSurfaceForDrawCall(caller_address, g_debug_ui_overlay_state.config.stack_scan_slots);
@@ -33,7 +87,8 @@ void BeginExactTextRenderCapture(
     uintptr_t main_menu_address = 0;
     const auto stack_explicitly_rejected =
         surface_match.has_value() && surface_match->range != nullptr && surface_match->range->surface_id != "main_menu";
-    if (!stack_explicitly_rejected && recognized_title_line &&
+    if (!capture.capture_enabled &&
+        !stack_explicitly_rejected && recognized_title_line &&
         TryReadActiveTitleMainMenu(g_debug_ui_overlay_state.config, nullptr, &main_menu_address)) {
         capture.capture_enabled = true;
         capture.surface_id = "main_menu";

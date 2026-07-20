@@ -222,6 +222,28 @@ bool SendLocalEnemyDamageClaim(
     packet.claim_flags = target_position_optional
                              ? kEnemyDamageClaimFlagTargetPositionOptional
                              : 0;
+    if (!force_resend) {
+        std::int32_t associated_skill_id =
+            skill_id > 0 ? skill_id : -1;
+        if (associated_skill_id < 0 &&
+            g_local_transport.active_local_cast_input.active &&
+            g_local_transport.active_local_cast_input.skill_id >= 0) {
+            associated_skill_id =
+                g_local_transport.active_local_cast_input.skill_id;
+        }
+        if (associated_skill_id < 0 &&
+            g_local_transport.recent_local_cast_skill_id >= 0 &&
+            now_ms >= g_local_transport.recent_local_cast_ms &&
+            now_ms - g_local_transport.recent_local_cast_ms <=
+                kRecentLocalCastAssociationWindowMs) {
+            associated_skill_id =
+                g_local_transport.recent_local_cast_skill_id;
+        }
+        RecordLocalEnemyDamageClaimObservationInternal(
+            network_actor_id,
+            packet.claimed_damage,
+            associated_skill_id);
+    }
     if (packet.lethal != 0) {
         g_local_transport.pending_lethal_enemy_damage_claim_until_ms[network_actor_id] =
             now_ms + kEnemyDamageLethalClaimPendingSuppressMs;

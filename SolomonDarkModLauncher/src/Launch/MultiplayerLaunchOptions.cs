@@ -5,7 +5,8 @@ internal sealed record MultiplayerLaunchOptions(
     ulong? LobbyId,
     ulong? InviteSteamId,
     int MaxParticipants,
-    bool OpenInviteDialog)
+    bool OpenInviteDialog,
+    LobbyHostOptions Host)
 {
     public const int DefaultMaxParticipants = 4;
     public const int MaximumSupportedParticipants = 4;
@@ -15,7 +16,8 @@ internal sealed record MultiplayerLaunchOptions(
         ulong? lobbyId,
         ulong? inviteSteamId,
         int maxParticipants,
-        bool openInviteDialog)
+        bool openInviteDialog,
+        LobbyHostOptions? host = null)
     {
         if (maxParticipants is < 2 or > MaximumSupportedParticipants)
         {
@@ -55,6 +57,7 @@ internal sealed record MultiplayerLaunchOptions(
             lobbyId,
             inviteSteamId,
             maxParticipants,
-            openInviteDialog);
+            openInviteDialog,
+            host ?? LobbyHostOptions.CreateDefault());
     }
 }

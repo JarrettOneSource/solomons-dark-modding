@@ -1,79 +1,90 @@
 # Steam Friend Playtest
 
-This checkpoint supports friends-only Steam lobbies and carries the multiplayer
-protocol over Steam Networking Messages. Multiplayer launches use the Steamworks
-Spacewar development AppID (`480`); single-player launches retain the retail
-AppID. The launcher stages the x86 Steam runtime and `steam_appid.txt` into its
-disposable stage. It never copies or stores Steam credentials.
+This checkpoint supports public and friends-only Steam lobbies and carries the
+multiplayer protocol over Steam Networking Messages. Multiplayer launches use
+the Steamworks Spacewar development AppID (`480`); single-player launches retain
+the retail AppID. The launcher stages the x86 Steam runtime and
+`steam_appid.txt` into its disposable stage. It never copies or stores Steam
+credentials.
 
 ## What has been verified
 
-- A Release host launch initializes Steam under AppID 480, creates a
-  friends-only four-player lobby, publishes protocol/build metadata, and reaches
-  `LobbyReady`. The launcher waits for that milestone, returns the real lobby ID,
-  and accurately reports whether the overlay invite dialog opened.
-- A Release join launch initializes Steam under AppID 480 and reaches
-  `WaitingForInvite` without a lobby ID. Redirected CLI launches also return at
-  that milestone while the game remains running, which is the path used by the
-  desktop UI.
-- Protocol v54 statically covers lobby membership checks, host ownership,
+- A Release host launch initializes Steam under AppID 480, creates the selected
+  public or friends-only four-player lobby, publishes protocol/build metadata,
+  and reaches `LobbyReady`. The launcher waits for that milestone, returns the
+  real lobby ID, and accurately reports whether the overlay invite dialog
+  opened.
+- A Release join launch initializes Steam under AppID 480, enters the requested
+  lobby, and completes the host compatibility handshake. The desktop launcher
+  listens for accepted Steam invitations while it is open and launches this
+  join path automatically.
+- Protocol v64 statically covers lobby membership checks, host ownership,
   compatibility handshake, authenticated gameplay routing, goodbye/timeout
   cleanup, automatic re-handshake after silent route loss, and no host
   migration.
-- The gameplay replication matrix has been exercised with the explicit local
-  UDP backend, including player visibility, both player ownership directions,
-  all native stat and upgrade entries, level-up choices, late join, Embers,
-  Fireball Explode, Air Chaining, deaths, drops, and pickup authority.
-- The same-machine two-account Steam run exercised real friend invites twice,
-  native character onboarding, shared run entry, full remote wizard bodies,
-  movement/animation/status/vitals, the participant inventory ledger, and
-  disconnect/rejoin. Disconnect removes the old native proxy and participant
-  replication epoch; a fresh revision-1 rejoin replaced an earlier revision-7
-  skillbook/statbook instead of inheriting its Chaining rank.
+- The gameplay replication matrix now runs through a real two-account Steam
+  session: a Windows host and a Proton client, each signed into a different
+  Steam account. It covers native onboarding, shared run entry, full wizard and
+  staff visuals, stock input ownership, movement/heading correction,
+  animation, transient statuses, vitals, death/revive, inventory, progression,
+  combat, enemies, drops, scene transitions, and reconnect.
 - Every real level-up upgrade row (`8..79`) has been applied and checked in
   both ownership directions (144 owner/observer checks). All 16 native stat
   rows have also been maxed independently on both players, including derived
   values, secondary spell costs, Creativity picker width, Concentrate state,
   and measured mana recovery.
-- The focused Steam behavior pass verified Fireball Explode damage and native
-  impact playback on both peers, four Embers on both peers with terminal and
-  fallback-materialization convergence, and Air Chaining against five victims
-  with identical ordered target IDs and source/target endpoints for every
-  captured frame.
-- The local two-process barrier pass verifies that every player pauses for the
-  same level-up cohort, resolved players see the exact remaining-player count,
-  all accepted choices apply before resume, and an unresolved player receives a
-  host-authored auto-pick after the measured 60-second deadline.
-- Accepted client-owned potion pickups now increase the owning client's real
-  stock native inventory stack and converge back to the host's participant view
-  exactly once.
+- All 23 native right-click abilities were exercised in both ownership
+  directions. Firewalker, Mindstar, and Regenerate persistent behavior also
+  passed both ways. Fireball Explode, exactly four Embers, and Air Chaining
+  against five victims converged with matching targets, endpoints, positions,
+  and terminal state.
+- The Steam level-up barrier pauses both players for the same cohort. A player
+  who has chosen sees the exact remaining-player count; resume waits for every
+  accepted choice, and the host auto-picks for an unresolved player after 60
+  seconds.
+- Host-authored enemy motion was sampled 240 times, deliberate client drift
+  reconciled without ownership leakage, 80 simultaneous enemies converged,
+  stale snapshots held their last valid state, and repeated run exit/re-entry
+  preserved authority.
+- The latest primary-cast stress completed 60/60 real kills, 30 per player. All
+  12 naturally generated drops matched between peers. A separate retirement
+  soak completed 64/64 client-owned gold pickups without a duplicate credit or
+  crash.
+- Gold, health and mana orbs, potions, all six tested native equipment classes,
+  powerups, Luthacus storage, and Fomentius/Hagatha ownership paths were checked
+  through Steam. Exact item recipe, color, equipment identity, participant
+  ownership, and visible native remote lanes converge where the stock actor has
+  a corresponding visual lane.
+- Active-run reconnect removes the old proxy and replication epoch while the
+  host run remains alive. A fresh process for the same Steam identity received
+  new revision-1 inventory, equipment, spellbook, statbook, gold, and loadout
+  state; stale item/equipment identities did not leak into the replacement.
+- The explicit flat Boneyard matches on both staged copies and contains no
+  scenery, roads, fences, or static collision circles. The embedded Lua runtime
+  contract passes on both peers with 10 namespaces and 86 required functions.
 
 A genuine cross-account Steam peer handshake has been exercised on this
-machine with a Windows host and a WSLg/Proton joiner. The joiner waited without
-a lobby ID, accepted the host's friend invite, joined the friends-only lobby,
-completed the authenticated compatibility handshake, and entered the shared
-run. Two physical PCs remain the recommended final player-environment check,
-but they are not required for same-machine development validation.
-
-This does not mean every deterministic verifier was rerun through Proton. The
-broader gameplay matrix uses local UDP; the two-account Steam/Proton path covers
-the real invite, authentication, reconnect, exhaustive stat and upgrade state,
-and the focused Explode, Embers, and Air Chaining behavior passes listed above.
+machine with a Windows host and a WSLg/Proton joiner. The joiner accepted a
+friends-only lobby, completed the authenticated compatibility handshake, and
+entered the shared run. Local UDP remains available for deterministic
+development, but the release gameplay matrix above was rerun through Steam.
+Two physical Windows PCs remain the final player-environment acceptance gate.
 
 The latest local structured evidence is:
 
-- `runtime/steam_friend_active_pair_run_stats33.json` — fresh invited pair and
-  shared run bootstrap.
-- `runtime/steam_friend_active_pair_state_reconnect_final32.json` — active-run
-  reconnect, visible native body lanes, status/vitals, derived stats, costs,
-  inventory ledger, and revision reset.
-- `runtime/steam_friend_spell_behavior_all_post_reconnect_final32.json` —
-  Explode, Embers, and strict Air Chaining after reconnect.
-- `runtime/steam_friend_active_pair_all_stats_final33.json` — exhaustive fresh
-  stat matrix on both Steam owners.
-- `runtime/steam_friend_active_pair_all_upgrade_rows_final27.json` plus
-  `runtime/steam_friend_active_pair_regenerate_upgrade_final28.json` — all 144
-  real upgrade-row ownership checks, including the two level-cap residuals.
+- `runtime/steam_friend_v64_primary_kill_stress_r37.json` — 60 bidirectional
+  primary kills and 12 naturally generated drops.
+- `runtime/steam_friend_v64_native_inventory_sync_r37.json` — stock inventory,
+  equipment, potion, orb, gold, and drop materialization.
+- `runtime/steam_friend_v64_active_run_reconnect_r38.json` — same-identity
+  replacement, fresh revision epoch, and stale-state rejection.
+- `runtime/steam_friend_v64_active_pair_state_r39_auto_disable_godmode.json` —
+  transforms, animation, transient status, derived stats, inventory boundary,
+  and inert-death/revive behavior.
+- `runtime/steam_friend_v64_flat_boneyard_r39_flatcorpse.json` — exact staged
+  flat fixture, blank world census, and authoritative enemy convergence.
+- `runtime/steam_friend_v64_lua_runtime_contract_r38_reconnect.json` — both-peer
+  embedded Lua surface contract.
 
 These files contain no credentials. Steam and lobby identities are operational
 diagnostics and should still be treated as private when sharing raw logs.
@@ -89,8 +100,8 @@ then start its join-wait process from WSL:
 
 The script publishes a self-contained win-x86 launcher into `runtime/`, uses an
 isolated Spacewar Proton prefix, stages AppID 480, and starts the normal join
-flow. Pass the host lobby ID as its only argument to test the direct lobby-ID
-fallback. `SDMOD_PROTON_PATH`, `SDMOD_STEAM_API_DLL`, `SDMOD_GAME_DIR`, and
+flow. Pass the host lobby ID as its only argument to test a direct lobby-ID
+join. `SDMOD_PROTON_PATH`, `SDMOD_STEAM_API_DLL`, `SDMOD_GAME_DIR`, and
 `SDMOD_WSL_STEAM_INSTANCE` override machine-specific defaults. No account name,
 password, refresh token, or Steam Guard code is read or copied by the script.
 
@@ -119,35 +130,34 @@ PULSE_SERVER=unix:/dev/null SDL_AUDIODRIVER=dummy ~/.steam/debian-installation/s
 
 ## Recommended invite flow
 
-The joiner should start the join-wait process before accepting the invite. This
-matters while using the shared Spacewar AppID: accepting an invite while no
-Solomon Dark process is active can cause Steam to start Valve's Spacewar sample
-instead of this development launcher.
+1. On the joining PC, open `SolomonDarkMultiplayerBeta.exe` and leave it open.
+   The status line should say **Steam invites ready**.
+2. On the hosting PC, open the same launcher, click **Host Game**, and choose
+   **Friends Only** or **Public**.
+3. Wait for the host to enter the hub and for the launcher to show the lobby ID.
+4. The host sends an invitation from the Steam overlay or Friends window.
+5. The joiner accepts the invite. The launcher detects the accepted lobby and
+   starts the modded game automatically.
+6. Do not begin the run until every player is visible in the shared hub and both
+   runtimes report an authenticated peer.
 
-1. On the joining PC, open `SolomonDarkMultiplayerBeta.exe` and click
-   **Join Friend** with the lobby ID box empty.
-2. Wait until Solomon Dark is open. Its runtime should report
-   `WaitingForInvite`.
-3. On the hosting PC, open the same launcher UI and click
-   **Host & Invite Friends**.
-4. Wait for the UI to report that the lobby is ready. It fills the
-   **Lobby ID (optional)** box with the created lobby ID. If the Steam overlay
-   invite panel opens, select the already-waiting friend. If the overlay is
-   unavailable, use **Invite to Game** from the Steam Friends window or share
-   that lobby ID privately. The host remains in a valid inviteable lobby either
-   way.
-5. The joiner accepts the invite while their join-wait game is still open.
-6. Do not begin the run until both players are visible in the shared hub and
-   both runtimes report an authenticated peer.
+The shared Spacewar AppID cannot start this launcher by itself. Keep the beta
+launcher open before accepting an invite so its Steam callback listener can
+route the accepted lobby into Solomon Dark instead of Steam opening Spacewar.
 
-## Lobby-ID fallback
+## Direct Lobby ID
 
-The launcher UI fills its **Lobby ID (optional)** box once the host reaches
-`LobbyReady`. The CLI reports the same value at
-`launch.multiplayerSession.lobbyId`, and the host loader log records it after
-`Steam multiplayer lobby ready`. Share it privately, enter it on the joining
-PC, and click **Join Friend**. A lobby-ID join does not return success until the
-host compatibility handshake authenticates.
+The host launcher displays its lobby ID after `LobbyReady`. The CLI reports the
+same value at `launch.multiplayerSession.lobbyId`, and the host loader log
+records it after `Steam multiplayer lobby ready`. Share it privately, paste it
+into the joining launcher, and click **Join Lobby ID**. The join does not report
+success until the host compatibility handshake authenticates.
+
+**Browse Lobbies** is an additional discovery path. Public lobbies are visible
+to signed-in users and friends-only lobbies are returned only to verified Steam
+friends. A listing is published only after the host reaches the hub. The
+directory is not in the gameplay path: invitations and Lobby IDs continue to
+work if the website is unavailable.
 
 The equivalent command-line launches are:
 

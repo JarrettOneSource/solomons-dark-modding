@@ -24,7 +24,7 @@ internal sealed class ModItemViewModel : ViewModelBase
         RuntimeKind = mod.RuntimeKind;
         RequiresText = mod.RequiredMods.Count == 0
             ? string.Empty
-            : $"Requires {string.Join(", ", mod.RequiredMods)}";
+            : $"Required mods: {string.Join(", ", mod.RequiredMods)}";
         RootPath = mod.RootPath;
         ManifestPath = mod.ManifestPath;
         isEnabled_ = mod.Enabled;

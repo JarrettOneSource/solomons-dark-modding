@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -17,10 +18,17 @@ namespace sdmod::multiplayer {
 namespace {
 
 constexpr std::uint32_t kServiceTickIntervalMs = 16;
+constexpr std::uint64_t kTransportTickGapDiagnosticMs = 250;
+constexpr std::uint64_t kTransportStageDurationDiagnosticMs = 100;
 
 std::atomic<bool> g_service_running = false;
 std::thread g_service_thread;
 HANDLE g_service_stop_event = nullptr;
+std::mutex g_session_transport_lifecycle_mutex;
+std::atomic<DWORD> g_session_transport_owner_thread_id{0};
+std::atomic<bool> g_wrong_session_transport_thread_logged{false};
+std::uint64_t g_last_session_transport_tick_ms = 0;
+bool g_has_session_transport_tick = false;
 
 void LogStateTransitionIfNeeded(const RuntimeState& runtime_state,
                                 SessionStatus& last_status,
@@ -48,11 +56,8 @@ void ServiceThreadMain() {
 
     while (g_service_running.load(std::memory_order_acquire)) {
         const auto now_ms = GetTickCount64();
-        SteamBootstrapTick();
         const auto steam_snapshot = GetSteamBootstrapSnapshot();
         ApplySteamSnapshotToRuntime(now_ms, steam_snapshot);
-        TickSteamSession(now_ms);
-        TickLocalTransport(now_ms);
         const auto runtime_state = SnapshotRuntimeState();
 
         if (steam_snapshot.transport_interfaces_ready && !logged_ready) {
@@ -80,30 +85,34 @@ void ServiceThreadMain() {
 }  // namespace
 
 bool StartServiceLoop() {
-    if (g_service_running.exchange(true, std::memory_order_acq_rel)) {
+    std::scoped_lock lifecycle_lock(g_session_transport_lifecycle_mutex);
+    if (g_service_running.load(std::memory_order_acquire)) {
         return true;
     }
 
     if (!InitializeLocalTransport()) {
-        g_service_running.store(false, std::memory_order_release);
         return false;
     }
 
     if (!InitializeSteamSession()) {
-        g_service_running.store(false, std::memory_order_release);
+        ShutdownSteamSession();
         ShutdownLocalTransport();
         return false;
     }
 
     g_service_stop_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     if (g_service_stop_event == nullptr) {
-        g_service_running.store(false, std::memory_order_release);
         ShutdownSteamSession();
         ShutdownLocalTransport();
         Log("Multiplayer foundation: failed to create the service loop stop event.");
         return false;
     }
 
+    g_session_transport_owner_thread_id.store(0, std::memory_order_release);
+    g_wrong_session_transport_thread_logged.store(false, std::memory_order_release);
+    g_last_session_transport_tick_ms = 0;
+    g_has_session_transport_tick = false;
+    g_service_running.store(true, std::memory_order_release);
     try {
         g_service_thread = std::thread(ServiceThreadMain);
         return true;
@@ -130,8 +139,93 @@ void StopServiceLoop() {
         CloseHandle(g_service_stop_event);
         g_service_stop_event = nullptr;
     }
-    ShutdownSteamSession();
-    ShutdownLocalTransport();
+    {
+        std::scoped_lock lifecycle_lock(g_session_transport_lifecycle_mutex);
+        ShutdownSteamSession();
+        ShutdownLocalTransport();
+        g_session_transport_owner_thread_id.store(0, std::memory_order_release);
+        g_wrong_session_transport_thread_logged.store(false, std::memory_order_release);
+        g_last_session_transport_tick_ms = 0;
+        g_has_session_transport_tick = false;
+    }
+}
+
+void TickSessionAndTransportOnAppThread(std::uint64_t now_ms) {
+    if (!g_service_running.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    std::scoped_lock lifecycle_lock(g_session_transport_lifecycle_mutex);
+    if (!g_service_running.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    const auto current_thread_id = GetCurrentThreadId();
+    auto owner_thread_id =
+        g_session_transport_owner_thread_id.load(std::memory_order_acquire);
+    if (owner_thread_id == 0) {
+        auto expected = static_cast<DWORD>(0);
+        if (g_session_transport_owner_thread_id.compare_exchange_strong(
+                expected,
+                current_thread_id,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
+            owner_thread_id = current_thread_id;
+        } else {
+            owner_thread_id = expected;
+        }
+    }
+    if (owner_thread_id != current_thread_id) {
+        if (!g_wrong_session_transport_thread_logged.exchange(
+                true,
+                std::memory_order_acq_rel)) {
+            Log(
+                "Multiplayer session/transport tick rejected outside its "
+                "owning AppMainTick thread.");
+        }
+        return;
+    }
+
+    if (g_has_session_transport_tick &&
+        now_ms >= g_last_session_transport_tick_ms) {
+        const auto tick_gap_ms = now_ms - g_last_session_transport_tick_ms;
+        if (tick_gap_ms < kServiceTickIntervalMs) {
+            return;
+        }
+        if (tick_gap_ms >= kTransportTickGapDiagnosticMs) {
+            Log(
+                "Multiplayer app-thread transport tick gap. gap_ms=" +
+                std::to_string(tick_gap_ms));
+        }
+    }
+    g_last_session_transport_tick_ms = now_ms;
+    g_has_session_transport_tick = true;
+
+    // SteamNetworkingSockets keeps process-global timing state. Pumping Steam
+    // callbacks on this same elected thread keeps ManualDispatch, messaging,
+    // and connection-status calls under one recurring thread owner.
+    const auto bootstrap_started_ms = static_cast<std::uint64_t>(GetTickCount64());
+    SteamBootstrapTick();
+    const auto bootstrap_finished_ms = static_cast<std::uint64_t>(GetTickCount64());
+    ApplySteamSnapshotToRuntime(now_ms, GetSteamBootstrapSnapshot());
+    const auto session_started_ms = static_cast<std::uint64_t>(GetTickCount64());
+    TickSteamSession(now_ms);
+    const auto session_finished_ms = static_cast<std::uint64_t>(GetTickCount64());
+    TickLocalTransport(now_ms);
+    const auto transport_finished_ms = static_cast<std::uint64_t>(GetTickCount64());
+
+    const auto bootstrap_duration_ms = bootstrap_finished_ms - bootstrap_started_ms;
+    const auto session_duration_ms = session_finished_ms - session_started_ms;
+    const auto transport_duration_ms = transport_finished_ms - session_finished_ms;
+    if (bootstrap_duration_ms >= kTransportStageDurationDiagnosticMs ||
+        session_duration_ms >= kTransportStageDurationDiagnosticMs ||
+        transport_duration_ms >= kTransportStageDurationDiagnosticMs) {
+        Log(
+            "Multiplayer app-thread transport stage slow. bootstrap_ms=" +
+            std::to_string(bootstrap_duration_ms) +
+            " session_ms=" + std::to_string(session_duration_ms) +
+            " gameplay_ms=" + std::to_string(transport_duration_ms));
+    }
 }
 
 bool IsServiceLoopRunning() {

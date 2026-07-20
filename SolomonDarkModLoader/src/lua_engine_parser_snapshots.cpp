@@ -138,6 +138,14 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
         state,
         -2,
         "native_damage_x4_remaining_ticks");
+    lua_pushnumber(state, snapshot.replicated_magic_shield_absorb_remaining);
+    lua_setfield(state, -2, "replicated_magic_shield_absorb_remaining");
+    lua_pushnumber(state, snapshot.replicated_magic_shield_absorb_capacity);
+    lua_setfield(state, -2, "replicated_magic_shield_absorb_capacity");
+    lua_pushnumber(state, snapshot.replicated_magic_shield_explosion_fraction);
+    lua_setfield(state, -2, "replicated_magic_shield_explosion_fraction");
+    lua_pushnumber(state, snapshot.replicated_magic_shield_hit_flash);
+    lua_setfield(state, -2, "replicated_magic_shield_hit_flash");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.actor_address));
     lua_setfield(state, -2, "actor_address");
     lua_pushinteger(state, static_cast<lua_Integer>(snapshot.world_address));
@@ -234,10 +242,14 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "render_advance_rate");
     lua_pushnumber(state, snapshot.render_advance_phase);
     lua_setfield(state, -2, "render_advance_phase");
-    lua_pushnumber(state, snapshot.render_drive_effect_timer);
-    lua_setfield(state, -2, "render_drive_effect_timer");
-    lua_pushnumber(state, snapshot.render_drive_effect_progress);
-    lua_setfield(state, -2, "render_drive_effect_progress");
+    lua_pushnumber(state, snapshot.magic_shield_absorb_remaining);
+    lua_setfield(state, -2, "magic_shield_absorb_remaining");
+    lua_pushnumber(state, snapshot.magic_shield_absorb_capacity);
+    lua_setfield(state, -2, "magic_shield_absorb_capacity");
+    lua_pushnumber(state, snapshot.magic_shield_explosion_fraction);
+    lua_setfield(state, -2, "magic_shield_explosion_fraction");
+    lua_pushnumber(state, snapshot.magic_shield_hit_flash);
+    lua_setfield(state, -2, "magic_shield_hit_flash");
     lua_pushnumber(state, snapshot.render_drive_overlay_alpha);
     lua_setfield(state, -2, "render_drive_overlay_alpha");
     lua_pushnumber(state, snapshot.render_drive_move_blend);

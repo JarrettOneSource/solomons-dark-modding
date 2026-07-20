@@ -234,6 +234,59 @@ std::string FormatCapturedStackTrace(unsigned short frames_to_skip, unsigned sho
     return out.str();
 }
 
+std::string FormatX86FrameChain(uintptr_t frame_pointer, unsigned short max_frames) {
+#if !defined(_M_IX86)
+    (void)frame_pointer;
+    (void)max_frames;
+    return std::string();
+#else
+    if (frame_pointer == 0 || max_frames == 0) {
+        return std::string();
+    }
+
+    std::ostringstream out;
+    out << "  x86_frame_chain";
+    uintptr_t current_frame = frame_pointer;
+    for (unsigned short frame_index = 0; frame_index < max_frames; ++frame_index) {
+        std::uint32_t next_frame = 0;
+        std::uint32_t return_address = 0;
+        if (!TryReadCrashU32(current_frame, &next_frame) ||
+            !TryReadCrashU32(current_frame + sizeof(std::uint32_t), &return_address)) {
+            out << "\r\n    [" << std::dec << frame_index
+                << "] frame=0x" << HexString(current_frame)
+                << " <unreadable>";
+            break;
+        }
+
+        out << "\r\n    [" << std::dec << frame_index
+            << "] frame=0x" << HexString(current_frame)
+            << " return=0x" << HexString(return_address)
+            << " " << DescribeAddress(return_address)
+            << " args";
+        for (unsigned int argument_index = 0; argument_index < 4; ++argument_index) {
+            const auto argument_address = current_frame +
+                static_cast<uintptr_t>((argument_index + 2) * sizeof(std::uint32_t));
+            std::uint32_t argument = 0;
+            if (!TryReadCrashU32(argument_address, &argument)) {
+                out << " a" << argument_index << "=<unreadable>";
+                break;
+            }
+            out << " a" << argument_index << "=0x" << HexString(argument);
+        }
+
+        const auto next_frame_address = static_cast<uintptr_t>(next_frame);
+        if (next_frame_address <= current_frame ||
+            next_frame_address - current_frame > 1024U * 1024U ||
+            (next_frame_address & (alignof(std::uint32_t) - 1U)) != 0) {
+            break;
+        }
+        current_frame = next_frame_address;
+    }
+    out << "\r\n";
+    return out.str();
+#endif
+}
+
 std::string DescribeAddress(uintptr_t address) {
     std::ostringstream out;
     out << "addr=0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0') << address;

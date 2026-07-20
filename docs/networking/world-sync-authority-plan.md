@@ -363,8 +363,11 @@ enemy-spawn hook and uses that serial as the authoritative run
 lifecycle serial, the host allocates a stable host-local supplemental ID for that
 actor address instead of dropping it from the authoritative snapshot. Clients
 keep a binding map from those host IDs to their local stock-spawned pool
-actors, then apply host transform, animation, and HP state through that
-binding. This replaces type-local ordinal matching for run enemies, so host
+actors, then apply host transform and HP state through that binding. Native
+animation-drive and presentation fields are applied only when the bound local
+actor has the same native object type as the authority actor; semantic
+cross-variant bindings never copy class-specific animation memory. This
+replaces type-local ordinal matching for run enemies, so host
 enemy identity survives spawn/death order changes without losing serial-less
 tracked actors.
 
@@ -377,7 +380,8 @@ wave enemy family (`0x03E9` / object type `1001`) showed:
   full drive-word serializer is not justified for this run enemy family
 - visible run enemy walk timing still depends on the native walk-cycle floats
   at `+0x220/+0x224`, so the world snapshot carries those two fields behind
-  `WorldActorPresentationFlagLocomotionFloats`
+  `WorldActorPresentationFlagLocomotionFloats` for native type `1001` only;
+  other enemy classes require their own live-validated presentation layout
 - HP-zero death state converged through the existing HP/dead snapshot path
 - the native death-handled byte stayed zero in this forced-HP probe, so there is
   no validated death-handled byte serializer yet

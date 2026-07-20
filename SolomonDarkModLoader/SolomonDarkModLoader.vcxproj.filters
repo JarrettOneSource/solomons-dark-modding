@@ -155,6 +155,9 @@
     <ClInclude Include="include\mod_loader.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\mod_loader_participant_gameplay_state.inl">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\mod_loader_gameplay_api.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -171,6 +174,9 @@
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_effect_state.inl">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\multiplayer_runtime_snapshot_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_state.inl">
@@ -266,6 +272,9 @@
     <ClInclude Include="src\lua_engine_internal.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\lua_engine_main_thread_pump.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_internal.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -317,6 +326,9 @@
     <ClInclude Include="src\bot_runtime\public_api\skill_choices_api.inl">
       <Filter>Header Files\Bot Runtime\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\skill_choice_application.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="src\bot_runtime\public_api\bot_skill_choice_api.inl">
       <Filter>Header Files\Bot Runtime\Public API</Filter>
     </ClInclude>
@@ -330,6 +342,9 @@
       <Filter>Header Files\Bot Runtime\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions.inl">
+      <Filter>Header Files\Lua Debug Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_combat_observations.inl">
       <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_field_accessors.inl">
@@ -401,6 +416,9 @@
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture\capture_session.inl">
       <Filter>Header Files\Debug UI Overlay\Exact Text Capture</Filter>
     </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\exact_text_capture\gameplay_nameplate_projection.inl">
+      <Filter>Header Files\Debug UI Overlay\Exact Text Capture</Filter>
+    </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture\glyph_observation.inl">
       <Filter>Header Files\Debug UI Overlay\Exact Text Capture</Filter>
     </ClInclude>
@@ -426,6 +444,15 @@
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\font_atlas_rendering.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\gameplay_dampen_rendering.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\gameplay_health_bar_rendering.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\gameplay_level_up_wait_rendering.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\install_hooks.inl">
@@ -456,6 +483,9 @@
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\public_api.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\public_memory_forwarders.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\public_api_actions.inl">
@@ -611,6 +641,9 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\transient_status_reconciliation.inl">
       <Filter>Header Files\Gameplay\Bot Casting</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\transient_status_participant_reconciliation.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\processing_context.inl">
       <Filter>Header Files\Gameplay\Bot Casting</Filter>
     </ClInclude>
@@ -629,6 +662,9 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_casting\targeting_and_facing.inl">
       <Filter>Header Files\Gameplay\Bot Casting</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_casting\turn_undead_caster_target_lock.inl">
+      <Filter>Header Files\Gameplay\Bot Casting</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\local_player_animation_probe.inl">
       <Filter>Header Files\Gameplay\Bot Movement</Filter>
     </ClInclude>
@@ -636,6 +672,9 @@
       <Filter>Header Files\Gameplay\Bot Movement</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_playback.inl">
+      <Filter>Header Files\Gameplay\Bot Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_vitals_and_playback.inl">
       <Filter>Header Files\Gameplay\Bot Movement</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\participant_collision_response.inl">
@@ -674,6 +713,9 @@
     <ClInclude Include="src\mod_loader_gameplay\core\crash_summary_builders.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\actor_world_target_slot_state.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\core\gameplay_constants.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
@@ -708,6 +750,9 @@
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\core\standalone_progression_slot_context.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\stock_dampen_effect_context.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks.inl">
@@ -746,6 +791,9 @@
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_mouse_refresh_hook.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_poison_actions.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_pump_loop.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -762,6 +810,12 @@
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\animation_advance_hook.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\local_player_native_primary_runtime.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\local_player_stock_input_runtime.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks\Actor Tick</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\actor_tick\ranked_rush_movement_scale.inl">
@@ -791,6 +845,9 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\orb_pickup_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\powerup_pickup_hook.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_mana_hooks.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
@@ -804,6 +861,12 @@
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_inventory.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl">
@@ -836,6 +899,9 @@
     <ClInclude Include="src\mod_loader_gameplay\replicated_loot_reconciliation.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\replicated_loot_public_api.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\spell_effect_reconciliation.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -846,6 +912,15 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\native_staff_behavior_probe.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\host_loot_drop_deactivation.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\local_player_native_equipment.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\native_item_materialization.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\scene_and_animation.inl">
@@ -885,9 +960,6 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_equip_visual_lanes.inl">
-      <Filter>Header Files\Gameplay</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_local_player_cast_state.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_selection_priming.inl">
@@ -932,6 +1004,9 @@
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\incoming_participant_state_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\incoming_snapshot_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -947,13 +1022,22 @@
     <ClInclude Include="src\multiplayer_local_transport\level_up_choice_and_picker.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\level_up_native_picker_presentation.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\level_up_debug_authority.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\level_up_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\level_up_packet_handlers.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\loot_pickup_authority.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\loot_pickup_packet_handlers.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\loot_snapshot_capture.inl">
@@ -966,6 +1050,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_authority.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\powerup_loot_authority.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\native_progression_sync.inl">
@@ -1001,7 +1088,16 @@
     <ClInclude Include="src\multiplayer_local_transport\world_snapshot_capture.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\world_snapshot_hub_presentation_and_loot_helpers.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\world_snapshot_fragmentation.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_steam_session\lobby_and_events.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_steam_session\lobby_event_handlers.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_steam_session\network_messages.inl">
@@ -1043,6 +1139,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\background_focus_bypass.cpp">
+      <Filter>Source Files\Support</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cpu_lifecycle_guard.cpp">
       <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\binary_layout_parser.cpp">

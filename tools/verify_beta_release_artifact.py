@@ -245,13 +245,27 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
         readme = archive.read(file_members["README.txt"]).decode("utf-8-sig")
         for required_text in (
             version,
-            "Join Friend FIRST",
-            "Host & Invite Friends",
-            "Spacewar development AppID 480",
-            expected_game_hash(),
+            "HOW TO PLAY",
+            "Host Game",
+            "Select the host's lobby through Steam",
+            "Browse Lobbies",
+            "Lobby ID",
+            "The launcher does not store or package Steam credentials.",
         ):
             if required_text not in readme:
                 raise ArtifactFailure(f"README.txt is missing: {required_text}")
+        for removed_text in (
+            "Join Friend FIRST",
+            "Host & Invite Friends",
+            expected_game_hash(),
+            "SHA-256",
+            "Rush",
+            "Steam invite",
+        ):
+            if removed_text in readme:
+                raise ArtifactFailure(
+                    f"README.txt still contains removed text: {removed_text}"
+                )
 
         return {
             "ok": True,

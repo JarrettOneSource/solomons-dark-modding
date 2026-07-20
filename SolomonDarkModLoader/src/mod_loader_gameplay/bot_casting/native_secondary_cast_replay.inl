@@ -4,6 +4,149 @@ bool IsRemoteNativeSecondaryToggleSkill(std::int32_t skill_entry_index) {
            skill_entry_index == 0x4F;
 }
 
+bool RequiresStockSecondaryActorSlotZero(std::int32_t skill_entry_index) {
+    // The row-0x1E dispatcher passes actor+0x5C to the stock routine. That
+    // routine uses it to select gameplay's player actor and explicitly skips
+    // its target modifier branch when the byte is nonzero. The surrounding
+    // gameplay-player context already publishes this actor in table slot 0.
+    // Other secondaries may persist the source slot into spawned actors, so
+    // this stock single-player assumption must not be applied globally.
+    return skill_entry_index == 0x1E;
+}
+
+struct ScopedStockSecondaryActorSlotZeroContext {
+    uintptr_t actor_address = 0;
+    bool requested = false;
+    bool ready = false;
+    bool active = false;
+    bool restore_attempted = false;
+    bool restored = true;
+    std::string status = "not_requested";
+    std::int8_t original_slot = -1;
+
+    ScopedStockSecondaryActorSlotZeroContext(
+        uintptr_t actor_address_in,
+        bool requested_in)
+        : actor_address(actor_address_in), requested(requested_in) {
+        if (!requested) {
+            ready = true;
+            return;
+        }
+        Apply();
+    }
+
+    ScopedStockSecondaryActorSlotZeroContext(
+        const ScopedStockSecondaryActorSlotZeroContext&) = delete;
+    ScopedStockSecondaryActorSlotZeroContext& operator=(
+        const ScopedStockSecondaryActorSlotZeroContext&) = delete;
+
+    ~ScopedStockSecondaryActorSlotZeroContext() {
+        Restore();
+    }
+
+    void Apply() {
+        auto& memory = ProcessMemory::Instance();
+        if (actor_address == 0) {
+            status = "no_actor";
+            return;
+        }
+        if (!memory.TryReadField(
+                actor_address,
+                kActorSlotOffset,
+                &original_slot)) {
+            status = "slot_unreadable";
+            return;
+        }
+        if (original_slot == 0) {
+            ready = true;
+            status = "already_zero";
+            return;
+        }
+        if (!memory.TryWriteField<std::int8_t>(
+                actor_address,
+                kActorSlotOffset,
+                0)) {
+            status = "slot_write_failed";
+            return;
+        }
+
+        active = true;
+        restored = false;
+        std::int8_t applied_slot = -1;
+        if (!memory.TryReadField(
+                actor_address,
+                kActorSlotOffset,
+                &applied_slot) ||
+            applied_slot != 0) {
+            status = "slot_verify_failed";
+            return;
+        }
+        ready = true;
+        status = "active";
+    }
+
+    void Restore() {
+        if (!active || restore_attempted) {
+            return;
+        }
+        restore_attempted = true;
+        active = false;
+        auto& memory = ProcessMemory::Instance();
+        std::int8_t restored_slot = -1;
+        restored =
+            memory.TryWriteField<std::int8_t>(
+                actor_address,
+                kActorSlotOffset,
+                original_slot) &&
+            memory.TryReadField(
+                actor_address,
+                kActorSlotOffset,
+                &restored_slot) &&
+            restored_slot == original_slot;
+        status = restored ? "restored" : "restore_failed";
+        if (!restored) {
+            Log(
+                "[bots] stock secondary actor slot context restore failed. actor=" +
+                HexString(actor_address) +
+                " original_slot=" +
+                std::to_string(static_cast<int>(original_slot)) +
+                " restored_slot=" +
+                std::to_string(static_cast<int>(restored_slot)));
+        }
+    }
+
+    std::string Describe() const {
+        return
+            "requested=" + std::to_string(requested ? 1 : 0) +
+            " ready=" + std::to_string(ready ? 1 : 0) +
+            " status=" + status +
+            " original_slot=" +
+                std::to_string(static_cast<int>(original_slot)) +
+            " restore_attempted=" +
+                std::to_string(restore_attempted ? 1 : 0) +
+            " restored=" + std::to_string(restored ? 1 : 0);
+    }
+};
+
+template <typename InvokeFn>
+bool InvokeWithStockSecondaryActorSlotZeroContext(
+    uintptr_t actor_address,
+    std::int32_t skill_entry_index,
+    InvokeFn&& invoke,
+    std::string* context_description = nullptr) {
+    ScopedStockSecondaryActorSlotZeroContext slot_context(
+        actor_address,
+        RequiresStockSecondaryActorSlotZero(skill_entry_index));
+    if (slot_context.ready) {
+        invoke();
+    }
+    slot_context.Restore();
+    if (context_description != nullptr) {
+        *context_description = slot_context.Describe();
+    }
+    return slot_context.ready && slot_context.restored;
+}
+
 struct PersistentStatusToggleMapping {
     std::uint8_t flag = 0;
     std::int32_t skill_entry = -1;
@@ -17,7 +160,7 @@ constexpr std::array<PersistentStatusToggleMapping, 3>
         {multiplayer::ParticipantPersistentStatusFlagRegenerate, 0x4F, "regenerate"},
     }};
 
-bool RemoteParticipantOwnsPersistentStatusSkill(
+bool RemoteParticipantOwnsSkill(
     std::uint64_t participant_id,
     std::int32_t skill_entry) {
     const auto runtime = multiplayer::SnapshotRuntimeState();
@@ -34,6 +177,52 @@ bool RemoteParticipantOwnsPersistentStatusSkill(
         }
     }
     return false;
+}
+
+bool InvokeNativeRemoteParticipantSecondarySkill(
+    ParticipantEntityBinding* binding,
+    std::int32_t skill_entry,
+    std::uint8_t* native_result,
+    std::string* progression_owner_context,
+    std::string* player_actor_owner_context) {
+    if (native_result != nullptr) {
+        *native_result = 0;
+    }
+    if (progression_owner_context != nullptr) {
+        progression_owner_context->clear();
+    }
+    if (player_actor_owner_context != nullptr) {
+        player_actor_owner_context->clear();
+    }
+    if (binding == nullptr ||
+        binding->actor_address == 0 ||
+        skill_entry < 0) {
+        return false;
+    }
+
+    bool invoked = false;
+    InvokeWithParticipantConcentrationContext(
+        binding,
+        [&] {
+            InvokeWithBotProgressionSlotOwnerContext(
+                binding->actor_address,
+                true,
+                [&] {
+                    InvokeWithGameplayPlayerActorSlotContext(
+                        binding->actor_address,
+                        true,
+                        [&] {
+                            invoked = InvokeOriginalPlayerActorSecondarySpellCast(
+                                binding->actor_address,
+                                skill_entry,
+                                native_result);
+                        },
+                        player_actor_owner_context);
+                },
+                progression_owner_context);
+        },
+        nullptr);
+    return invoked;
 }
 
 bool ReconcileNativeRemoteParticipantPersistentStatuses(
@@ -96,38 +285,22 @@ bool ReconcileNativeRemoteParticipantPersistentStatuses(
         }
     }
     if (mismatch == nullptr ||
-        !RemoteParticipantOwnsPersistentStatusSkill(
+        !RemoteParticipantOwnsSkill(
             binding->bot_id,
             mismatch->skill_entry)) {
         binding->persistent_status_reconcile_not_before_ms = now_ms + 1000;
         return false;
     }
 
-    bool invoked = false;
     std::uint8_t native_result = 0;
     std::string progression_owner_context;
     std::string player_actor_owner_context;
-    InvokeWithParticipantConcentrationContext(
+    const bool invoked = InvokeNativeRemoteParticipantSecondarySkill(
         binding,
-        [&] {
-            InvokeWithBotProgressionSlotOwnerContext(
-                binding->actor_address,
-                true,
-                [&] {
-                    InvokeWithGameplayPlayerActorSlotContext(
-                        binding->actor_address,
-                        true,
-                        [&] {
-                            invoked = InvokeOriginalPlayerActorSecondarySpellCast(
-                                binding->actor_address,
-                                mismatch->skill_entry,
-                                &native_result);
-                        },
-                        &player_actor_owner_context);
-                },
-                &progression_owner_context);
-        },
-        nullptr);
+        mismatch->skill_entry,
+        &native_result,
+        &progression_owner_context,
+        &player_actor_owner_context);
 
     std::uint8_t verified_flags = 0;
     const bool verified =
@@ -293,6 +466,12 @@ bool ReplayPendingNativeSecondaryCast(
     }
     std::string progression_owner_context;
     std::string player_actor_owner_context;
+    std::string stock_slot_context;
+    bool stock_slot_context_ok = false;
+    const auto turn_undead_precast_state =
+        CaptureAuthoritativeTurnUndeadPrecastState(
+            actor_address,
+            request.skill_id);
     InvokeWithParticipantConcentrationContext(
         binding,
         [&] {
@@ -304,10 +483,18 @@ bool ReplayPendingNativeSecondaryCast(
                         actor_address,
                         true,
                         [&] {
-                            invoked = InvokeOriginalPlayerActorSecondarySpellCast(
-                                actor_address,
-                                request.skill_id,
-                                &native_result);
+                            stock_slot_context_ok =
+                                InvokeWithStockSecondaryActorSlotZeroContext(
+                                    actor_address,
+                                    request.skill_id,
+                                    [&] {
+                                        invoked =
+                                            InvokeOriginalPlayerActorSecondarySpellCast(
+                                                actor_address,
+                                                request.skill_id,
+                                                &native_result);
+                                    },
+                                    &stock_slot_context);
                         },
                         &player_actor_owner_context);
                 },
@@ -322,11 +509,38 @@ bool ReplayPendingNativeSecondaryCast(
             replay_mana_before);
     }
 
+    const bool stock_effect_verification_required =
+        RequiresStockSecondaryActorSlotZero(request.skill_id) &&
+        request.target_actor_address != 0;
+    bool stock_effect_verified = !stock_effect_verification_required;
+    if (stock_effect_verification_required) {
+        std::vector<SDModNativeModifierState> target_modifiers;
+        stock_effect_verified =
+            TryListNativeActorModifiers(
+                request.target_actor_address,
+                &target_modifiers) &&
+            std::any_of(
+                target_modifiers.begin(),
+                target_modifiers.end(),
+                [](const SDModNativeModifierState& modifier) {
+                    return modifier.type_id ==
+                               kNativePrismaticModifierTypeId &&
+                           modifier.duration_ticks > 0;
+                });
+    }
+
     binding->ongoing_cast = ParticipantEntityBinding::OngoingCastState{};
     const bool native_success =
         invoked &&
+        stock_slot_context_ok &&
+        stock_effect_verified &&
         (native_result != 0 ||
          IsRemoteNativeSecondaryToggleSkill(request.skill_id));
+    RegisterAuthoritativeTurnUndeadCasterTargets(
+        actor_address,
+        binding->bot_id,
+        turn_undead_precast_state,
+        native_success);
     if (native_success && IsRemoteNativeSecondaryToggleSkill(request.skill_id)) {
         // Cast packets normally arrive before the owner's next state packet.
         // Do not let the still-old persistent snapshot immediately undo a
@@ -361,14 +575,26 @@ bool ReplayPendingNativeSecondaryCast(
         " replay_mana_primed=" + std::to_string(replay_mana_primed ? 1 : 0) +
         " replay_mana_restored=" +
             std::to_string(replay_mana_restored ? 1 : 0) +
+        " stock_slot_context_ok=" +
+            std::to_string(stock_slot_context_ok ? 1 : 0) +
+        " stock_slot_context={" + stock_slot_context + "}" +
+        " stock_effect_verification_required=" +
+            std::to_string(stock_effect_verification_required ? 1 : 0) +
+        " stock_effect_verified=" +
+            std::to_string(stock_effect_verified ? 1 : 0) +
         " progression_owner_context={" + progression_owner_context + "}" +
         " player_actor_owner_context={" + player_actor_owner_context + "}");
 
     if (!native_success && error_message != nullptr) {
-        *error_message =
-            invoked
-                ? "native remote secondary dispatcher rejected the cast"
-                : "native remote secondary dispatcher trampoline unavailable";
+        if (invoked && !stock_effect_verified) {
+            *error_message =
+                "native remote secondary cast did not apply its target modifier";
+        } else {
+            *error_message =
+                invoked
+                    ? "native remote secondary dispatcher rejected the cast"
+                    : "native remote secondary dispatcher trampoline unavailable";
+        }
     }
     return native_success;
 }

@@ -5,6 +5,7 @@ constexpr float kMultiplayerDampenMinimumRepelSpeed = 8.0f;
 constexpr float kMultiplayerDampenMaximumRepelSpeed = 64.0f;
 constexpr int kMultiplayerDampenMageTypeADisruptTicks = 600;
 constexpr int kMultiplayerDampenMageTypeBDisruptTicks = 500;
+constexpr std::uint32_t kMultiplayerDampenDisruptableFlag = 0x2u;
 constexpr std::uint32_t kMultiplayerDampenProjectileFlag = 0x100u;
 constexpr std::uint32_t kMultiplayerDampenMageTypeA = 0x03EBu;
 constexpr std::uint32_t kMultiplayerDampenMageTypeB = 0x03F2u;
@@ -217,7 +218,12 @@ bool ExecuteMultiplayerDampenEffectNow(
             }
         }
 
-        if (!actor.tracked_enemy) {
+        // The stock Dampen dispatcher gates shields and the two mage families
+        // on object-header bit 0x2. That capability is not equivalent to
+        // arena-enemy membership, so tracked_enemy is not a valid behavior
+        // gate for this spell.
+        if ((actor.object_header_word &
+             kMultiplayerDampenDisruptableFlag) == 0) {
             continue;
         }
         if (TryDisruptDampenMage(actor)) {
@@ -241,6 +247,9 @@ bool ExecuteMultiplayerDampenEffectNow(
         }
         return stream.str();
     };
+    QueueDebugUiMultiplayerDampenPresentation(
+        request.owner_participant_id,
+        request.cast_sequence);
     Log(
         "Multiplayer Dampen behavior applied. owner_participant_id=" +
         std::to_string(request.owner_participant_id) +

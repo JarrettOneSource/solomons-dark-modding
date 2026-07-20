@@ -20,6 +20,148 @@ from verify_local_multiplayer_sync import VerifyFailure, parse_key_values
 
 
 DEFAULT_OUTPUT = ROOT / "runtime/steam_friend_active_pair_onboarding.json"
+READY_SCENE_STABILITY_SECONDS = 1.0
+BLOCKING_ONBOARDING_SURFACES = frozenset(
+    ("dialog", "main_menu", "create", "simple_menu")
+)
+
+
+TEST_GODMODE_LUA = r"""
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+local function sustain()
+  if _G.__sdmod_steam_test_godmode_enabled ~= true then
+    return false, 'disabled'
+  end
+  local player = sd.player.get_state()
+  if type(player) ~= 'table' then return false, 'player_unavailable' end
+  local progression = tonumber(player.progression_address) or 0
+  if progression == 0 then return false, 'progression_unavailable' end
+  local hp_offset = sd.debug.layout_offset('progression_hp')
+  local max_hp_offset = sd.debug.layout_offset('progression_max_hp')
+  local mp_offset = sd.debug.layout_offset('progression_mp')
+  local max_mp_offset = sd.debug.layout_offset('progression_max_mp')
+  local max_hp = tonumber(sd.debug.read_float(progression + max_hp_offset)) or 0
+  local max_mp = tonumber(sd.debug.read_float(progression + max_mp_offset)) or 0
+  if max_hp > 0 then sd.debug.write_float(progression + hp_offset, max_hp) end
+  if max_mp > 0 then sd.debug.write_float(progression + mp_offset, max_mp) end
+  return true, 'ok'
+end
+if not _G.__sdmod_steam_test_godmode_enabled then
+  _G.__sdmod_steam_test_godmode_enabled = true
+  sd.events.on('runtime.tick', sustain)
+end
+local applied, status = sustain()
+emit('registered', true)
+emit('initial_apply', applied)
+emit('status', status)
+"""
+
+
+DISABLE_TEST_GODMODE_LUA = r"""
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+_G.__sdmod_steam_test_godmode_enabled = false
+emit('enabled', _G.__sdmod_steam_test_godmode_enabled)
+"""
+
+
+TEST_MANUAL_ENEMY_MODE_LUA = r"""
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+local function local_participant_in_run()
+  local state = sd.runtime.get_multiplayer_state()
+  for _, participant in ipairs(state and state.participants or {}) do
+    if participant.is_owner then
+      return participant.in_run == true
+    end
+  end
+  return false
+end
+local function sustain()
+  if _G.__sdmod_steam_test_manual_enemy_mode_enabled ~= true then
+    return false, 'disabled'
+  end
+  if not local_participant_in_run() then
+    return false, 'not_in_run'
+  end
+  local state = sd.gameplay.get_manual_enemy_spawner_state()
+  if state and state.manual_mode then
+    return true, 'ok'
+  end
+  local ok, active = sd.gameplay.set_manual_enemy_spawner_test_mode(true)
+  return ok == true and active == true, active and 'ok' or 'activation_failed'
+end
+if not _G.__sdmod_steam_test_manual_enemy_mode_registered then
+  sd.events.on('runtime.tick', sustain)
+  _G.__sdmod_steam_test_manual_enemy_mode_registered = true
+end
+_G.__sdmod_steam_test_manual_enemy_mode_enabled = true
+local applied, status = sustain()
+emit('registered', _G.__sdmod_steam_test_manual_enemy_mode_registered)
+emit('initial_apply', applied)
+emit('status', status)
+"""
+
+
+DISABLE_TEST_MANUAL_ENEMY_MODE_LUA = r"""
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+_G.__sdmod_steam_test_manual_enemy_mode_enabled = false
+local ok, active = sd.gameplay.set_manual_enemy_spawner_test_mode(false)
+emit('ok', ok)
+emit('active', active)
+emit('enabled', _G.__sdmod_steam_test_manual_enemy_mode_enabled)
+"""
+
+
+def arm_test_godmode(
+    pair: SteamFriendActivePair, endpoint: str
+) -> dict[str, str]:
+    values = parse_key_values(pair.lua(endpoint, TEST_GODMODE_LUA, timeout=8.0))
+    if values.get("registered") != "true":
+        raise VerifyFailure(f"failed to register test godmode on {endpoint}: {values}")
+    return values
+
+
+def disable_test_godmode(
+    pair: SteamFriendActivePair, endpoint: str
+) -> dict[str, str]:
+    values = parse_key_values(
+        pair.lua(endpoint, DISABLE_TEST_GODMODE_LUA, timeout=8.0)
+    )
+    if values.get("enabled") != "false":
+        raise VerifyFailure(
+            f"failed to disable test godmode on {endpoint}: {values}"
+        )
+    return values
+
+
+def arm_test_manual_enemy_mode(
+    pair: SteamFriendActivePair, endpoint: str
+) -> dict[str, str]:
+    values = parse_key_values(
+        pair.lua(endpoint, TEST_MANUAL_ENEMY_MODE_LUA, timeout=8.0)
+    )
+    if values.get("registered") != "true":
+        raise VerifyFailure(
+            f"failed to register test manual enemy mode on {endpoint}: {values}"
+        )
+    return values
+
+
+def disable_test_manual_enemy_mode(
+    pair: SteamFriendActivePair,
+    endpoint: str,
+) -> dict[str, str]:
+    values = parse_key_values(
+        pair.lua(endpoint, DISABLE_TEST_MANUAL_ENEMY_MODE_LUA, timeout=8.0)
+    )
+    if (
+        values.get("ok") != "true"
+        or values.get("active") != "false"
+        or values.get("enabled") != "false"
+    ):
+        raise VerifyFailure(
+            f"failed to disable test manual enemy mode on {endpoint}: {values}"
+        )
+    return values
 
 
 def query_navigation_state(
@@ -46,7 +188,7 @@ for _, element in ipairs(snapshot and snapshot.elements or {}) do
 end
 emit('action_count', count)
 """,
-            timeout=5.0,
+            timeout=local_sync.NATIVE_UI_LUA_TIMEOUT_SECONDS,
         )
     )
     count = local_sync.parse_int_text(values.get("action_count"), 0)
@@ -96,21 +238,36 @@ def drive_one_to_hub(
     element: str,
     discipline: str,
     timeout: float,
+    exercise_last_game_redirect: bool = False,
 ) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     actions: list[dict[str, str]] = []
     last: dict[str, Any] = {}
     main_menu_first_seen_at: float | None = None
+    ready_scene = ""
+    ready_since: float | None = None
     run_entry_dispatched = False
     while time.monotonic() < deadline:
         last = query_navigation_state(pair, endpoint)
-        if last["scene"] in ("hub", "testrun"):
-            return {"scene": last["scene"], "actions": actions}
-
         available = set(last["actions"])
         action: tuple[str, str] | None = None
         if last["surface"] == "dialog" and "dialog.primary" in available:
             action = ("dialog.primary", "dialog")
+        elif (
+            last["scene"] in ("hub", "testrun")
+            and last["surface"] not in BLOCKING_ONBOARDING_SURFACES
+        ):
+            now = time.monotonic()
+            if ready_scene != last["scene"]:
+                ready_scene = last["scene"]
+                ready_since = now
+            elif (
+                ready_since is not None
+                and now - ready_since >= READY_SCENE_STABILITY_SECONDS
+            ):
+                return {"scene": last["scene"], "actions": actions}
+            time.sleep(0.1)
+            continue
         elif last["surface"] == "main_menu":
             if main_menu_first_seen_at is None:
                 main_menu_first_seen_at = time.monotonic()
@@ -122,18 +279,18 @@ def drive_one_to_hub(
                 continue
             if "main_menu.play" in available:
                 action = ("main_menu.play", "main_menu")
-            # A reconnecting profile can expose both LAST GAME and NEW GAME.
-            # Prefer the stock resume route: the multiplayer transition hook
-            # redirects it to canonical character setup without invalidating
-            # the menu's live task list. NEW GAME remains the fresh-profile
-            # fallback when no saved run exists.
-            elif (
-                "main_menu.resume_last_game" in available
-                and not run_entry_dispatched
-            ):
-                action = ("main_menu.resume_last_game", "main_menu")
-            elif "main_menu.new_game" in available and not run_entry_dispatched:
-                action = ("main_menu.new_game", "main_menu")
+            elif not run_entry_dispatched:
+                if exercise_last_game_redirect:
+                    if "main_menu.resume_last_game" in available:
+                        action = ("main_menu.resume_last_game", "main_menu")
+                    elif "main_menu.new_game" in available:
+                        raise VerifyFailure(
+                            "LAST GAME redirect regression requested, but the saved-run action is unavailable"
+                        )
+                # Normal connected multiplayer always starts from the native
+                # New Game preparation path; saved-run geometry is not shared.
+                elif "main_menu.new_game" in available:
+                    action = ("main_menu.new_game", "main_menu")
         elif last["surface"] == "create":
             created = local_sync.complete_native_create(
                 endpoint,
@@ -142,14 +299,22 @@ def drive_one_to_hub(
                 timeout=min(45.0, max(5.0, deadline - time.monotonic())),
             )
             actions.extend(created["actions"])
-            return {"scene": created["scene"], "actions": actions}
+            ready_scene = ""
+            ready_since = None
+            continue
+
+        if last["scene"] not in ("hub", "testrun"):
+            ready_scene = ""
+            ready_since = None
 
         if action is None:
             time.sleep(0.1)
             continue
 
+        ready_scene = ""
+        ready_since = None
         action_id, surface_id = action
-        if action_id in ("main_menu.resume_last_game", "main_menu.new_game"):
+        if action_id in ("main_menu.new_game", "main_menu.resume_last_game"):
             run_entry_dispatched = True
         actions.append(
             local_sync.activate_native_ui_action(endpoint, action_id, surface_id)
@@ -170,6 +335,9 @@ def main() -> int:
     parser.add_argument("--client-element", default="air")
     parser.add_argument("--discipline", default="arcane")
     parser.add_argument("--start-run", action="store_true")
+    parser.add_argument("--test-godmode", action="store_true")
+    parser.add_argument("--test-manual-enemy-mode", action="store_true")
+    parser.add_argument("--exercise-last-game-redirect", action="store_true")
     parser.add_argument("--timeout", type=float, default=90.0)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
@@ -190,14 +358,34 @@ def main() -> int:
             element=args.host_element,
             discipline=args.discipline,
             timeout=args.timeout,
+            exercise_last_game_redirect=args.exercise_last_game_redirect,
         )
+        host_view_before_client = local_sync.query(HOST_ENDPOINT)
+        if (
+            host_view_before_client.get("scene") == "testrun"
+            and host_view_before_client.get("local.in_run") != "true"
+        ):
+            raise VerifyFailure(
+                "host is still presenting an ended run; refusing to start a competing client scene load"
+            )
         output["client"] = drive_one_to_hub(
             pair,
             CLIENT_ENDPOINT,
             element=args.client_element,
             discipline=args.discipline,
             timeout=args.timeout,
+            exercise_last_game_redirect=args.exercise_last_game_redirect,
         )
+        if args.test_godmode:
+            output["test_godmode"] = {
+                "host": arm_test_godmode(pair, HOST_ENDPOINT),
+                "client": arm_test_godmode(pair, CLIENT_ENDPOINT),
+            }
+        if args.test_manual_enemy_mode:
+            output["test_manual_enemy_mode"] = {
+                "host": arm_test_manual_enemy_mode(pair, HOST_ENDPOINT),
+                "client": arm_test_manual_enemy_mode(pair, CLIENT_ENDPOINT),
+            }
         if args.start_run:
             host_view = local_sync.query(HOST_ENDPOINT)
             client_view = local_sync.query(CLIENT_ENDPOINT)
@@ -207,7 +395,10 @@ def main() -> int:
             local_sync.HOST_NAME = client_view.get(
                 f"peer.{pair.host_participant_id}.name", ""
             )
-            if host_view.get("scene") == "testrun":
+            if (
+                host_view.get("scene") == "testrun"
+                and host_view.get("local.in_run") == "true"
+            ):
                 # A reconnecting client can reach its hub after the host is
                 # already in a run. The replicated host-run state immediately
                 # advances that client into the same run, so there is no hub

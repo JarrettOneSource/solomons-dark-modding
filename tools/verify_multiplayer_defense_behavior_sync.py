@@ -55,6 +55,10 @@ DEFLECT_ROW = 68
 RESIST_POISON_ROW = 69
 POISON_DURATION_TICKS = 1200
 POISON_DAMAGE_PER_TICK = 0.125
+# The deferred native apply and the first cross-process observation do not
+# happen in one game tick. Bound that sampling delay without weakening the
+# expected stock duration or the ranked reduction contract.
+POISON_DURATION_OBSERVATION_TOLERANCE_TICKS = 12
 # PlayerActor's downstream damage path caps a single hit at 25% of current
 # native max life. Keep this below the stock test character's 25-point cap so
 # the trial isolates the +0xA4 Resist Magic multiplier.
@@ -89,6 +93,14 @@ def prepare_progression_session(
         prearm_manual_spawner=True,
         wave_override=wave_override,
     )
+    session = prepare_progression_state(timeout)
+    session["startup"] = startup
+    return session
+
+
+def prepare_progression_state(timeout: float) -> dict[str, Any]:
+    """Capture progression inputs for an already-running shared test run."""
+
     quiet = enable_quiet_progression_test_mode()
     ready = wait_for_post_run_progression_ready(timeout)
     catalog_result = build_and_verify_catalog(
@@ -97,7 +109,6 @@ def prepare_progression_session(
     )
     catalog = catalog_result["catalog"]
     return {
-        "startup": startup,
         "quiet": quiet,
         "ready": ready,
         "catalog_result": catalog_result,
@@ -329,12 +340,22 @@ def run_magic_trial(direction: Direction, label: str, timeout: float) -> dict[st
 
 
 def run_magic_stat_session(timeout: float) -> dict[str, Any]:
-    session = prepare_progression_session(timeout, wave_override=None)
+    return run_prepared_magic_stat_session(
+        prepare_progression_session(timeout, wave_override=None),
+        timeout,
+    )
+
+
+def run_prepared_magic_stat_session(
+    session: dict[str, Any],
+    timeout: float,
+) -> dict[str, Any]:
     result: dict[str, Any] = {
-        "startup": session["startup"],
         "quiet": session["quiet"],
         "ready": session["ready"],
     }
+    if "startup" in session:
+        result["startup"] = session["startup"]
     result["baseline"] = {
         direction.name: run_magic_trial(direction, "baseline", timeout)
         for direction in DIRECTIONS
@@ -409,33 +430,10 @@ def run_deflect_trial(direction: Direction, label: str, timeout: float) -> dict[
     }
 
 
-def run_deflect_stat_direction(
+def build_deflect_contract(
+    result: dict[str, Any],
     direction: Direction,
-    timeout: float,
 ) -> dict[str, Any]:
-    session = prepare_progression_session(timeout, wave_override=None)
-    result: dict[str, Any] = {
-        "startup": session["startup"],
-        "quiet": session["quiet"],
-        "ready": session["ready"],
-    }
-    result["baseline"] = run_deflect_trial(direction, "baseline", timeout)
-    result["upgrade"] = max_stat_for_target(
-        session["catalog"],
-        DEFLECT_ROW,
-        direction.participant_id,
-        session["initial"],
-        session["contract_values"],
-        timeout,
-    )
-    owner, observer = wait_for_derived_parity(direction.participant_id, timeout)
-    result["view"] = {
-        "owner": compact_snapshot(owner, DEFLECT_ROW),
-        "observer": compact_snapshot(observer, DEFLECT_ROW),
-        "derived": owner["native"]["derived"],
-    }
-    result["upgraded"] = run_deflect_trial(direction, "upgraded", timeout)
-
     chance_percent = float(result["view"]["derived"]["deflect_chance"])
     chance = max(0, min(int(round(chance_percent)), 100))
     expected_deflected_fraction = (chance + min(chance, 28)) / 128.0
@@ -474,7 +472,37 @@ def run_deflect_stat_direction(
             f"{direction.name} native Deflect behavior was not stock-like: "
             f"{contract}"
         )
-    result["contract"] = contract
+    return contract
+
+
+def run_deflect_stat_direction(
+    direction: Direction,
+    timeout: float,
+) -> dict[str, Any]:
+    session = prepare_progression_session(timeout, wave_override=None)
+    result: dict[str, Any] = {
+        "startup": session["startup"],
+        "quiet": session["quiet"],
+        "ready": session["ready"],
+    }
+    result["baseline"] = run_deflect_trial(direction, "baseline", timeout)
+    result["upgrade"] = max_stat_for_target(
+        session["catalog"],
+        DEFLECT_ROW,
+        direction.participant_id,
+        session["initial"],
+        session["contract_values"],
+        timeout,
+    )
+    owner, observer = wait_for_derived_parity(direction.participant_id, timeout)
+    result["view"] = {
+        "owner": compact_snapshot(owner, DEFLECT_ROW),
+        "observer": compact_snapshot(observer, DEFLECT_ROW),
+        "derived": owner["native"]["derived"],
+    }
+    result["upgraded"] = run_deflect_trial(direction, "upgraded", timeout)
+
+    result["contract"] = build_deflect_contract(result, direction)
     return result
 
 
@@ -498,6 +526,61 @@ def run_deflect_stat_session(timeout: float) -> dict[str, Any]:
             name: value["upgraded"] for name, value in directions.items()
         },
     }
+
+
+def run_prepared_deflect_stat_session(
+    session: dict[str, Any],
+    timeout: float,
+) -> dict[str, Any]:
+    directions = {
+        direction.name: run_prepared_deflect_stat_direction(
+            direction,
+            session,
+            timeout,
+        )
+        for direction in DIRECTIONS
+    }
+    return {
+        "directions": directions,
+        "contracts": {
+            name: value["contract"] for name, value in directions.items()
+        },
+        "baseline": {
+            name: value["baseline"] for name, value in directions.items()
+        },
+        "upgraded": {
+            name: value["upgraded"] for name, value in directions.items()
+        },
+    }
+
+
+def run_prepared_deflect_stat_direction(
+    direction: Direction,
+    session: dict[str, Any],
+    timeout: float,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "quiet": session["quiet"],
+        "ready": session["ready"],
+    }
+    result["baseline"] = run_deflect_trial(direction, "baseline", timeout)
+    result["upgrade"] = max_stat_for_target(
+        session["catalog"],
+        DEFLECT_ROW,
+        direction.participant_id,
+        session["initial"],
+        session["contract_values"],
+        timeout,
+    )
+    owner, observer = wait_for_derived_parity(direction.participant_id, timeout)
+    result["view"] = {
+        "owner": compact_snapshot(owner, DEFLECT_ROW),
+        "observer": compact_snapshot(observer, DEFLECT_ROW),
+        "derived": owner["native"]["derived"],
+    }
+    result["upgraded"] = run_deflect_trial(direction, "upgraded", timeout)
+    result["contract"] = build_deflect_contract(result, direction)
+    return result
 
 
 def run_poison_trial(direction: Direction, label: str, timeout: float) -> dict[str, Any]:
@@ -602,12 +685,22 @@ def run_poison_trial(direction: Direction, label: str, timeout: float) -> dict[s
 
 
 def run_poison_stat_session(timeout: float) -> dict[str, Any]:
-    session = prepare_progression_session(timeout, wave_override=None)
+    return run_prepared_poison_stat_session(
+        prepare_progression_session(timeout, wave_override=None),
+        timeout,
+    )
+
+
+def run_prepared_poison_stat_session(
+    session: dict[str, Any],
+    timeout: float,
+) -> dict[str, Any]:
     result: dict[str, Any] = {
-        "startup": session["startup"],
         "quiet": session["quiet"],
         "ready": session["ready"],
     }
+    if "startup" in session:
+        result["startup"] = session["startup"]
     result["baseline"] = {
         direction.name: run_poison_trial(direction, "baseline", timeout)
         for direction in DIRECTIONS
@@ -641,11 +734,17 @@ def run_poison_stat_session(timeout: float) -> dict[str, Any]:
             "expected_duration_ticks": expected_ticks,
         }
         contracts[direction.name] = contract
-        if abs(baseline_ticks - POISON_DURATION_TICKS) > 3:
+        if (
+            abs(baseline_ticks - POISON_DURATION_TICKS)
+            > POISON_DURATION_OBSERVATION_TOLERANCE_TICKS
+        ):
             raise VerifyFailure(
                 f"{direction.name} baseline poison duration was not stock: {contract}"
             )
-        if abs(upgraded_ticks - expected_ticks) > 3:
+        if (
+            abs(upgraded_ticks - expected_ticks)
+            > POISON_DURATION_OBSERVATION_TOLERANCE_TICKS
+        ):
             raise VerifyFailure(
                 f"{direction.name} Resist Poison duration was not stock-like: {contract}"
             )

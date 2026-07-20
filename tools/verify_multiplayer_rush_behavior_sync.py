@@ -10,8 +10,9 @@ import math
 import subprocess
 import time
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from multiplayer_progression_probe import (
     query_progression_snapshot,
@@ -50,6 +51,9 @@ from verify_multiplayer_all_upgrade_sync import (
     wait_for_result,
     wait_for_target_parity,
 )
+
+
+KeyboardDriver = Callable[[str, int, float], str]
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -709,7 +713,7 @@ emit('allowance_cleared', allowance_ok and allowance_result == true)
 
 def run_real_keyboard_movement_trial(
     direction: Direction,
-    pid: int,
+    keyboard_driver: KeyboardDriver,
     label: str,
     timeout: float,
 ) -> dict[str, Any]:
@@ -730,7 +734,7 @@ def run_real_keyboard_movement_trial(
     )
     before_runtime = query_native_movement_runtime(direction.owner_pipe)
     monitor_start = arm_keyboard_movement_monitor(direction.owner_pipe)
-    key_output = hold_real_key(pid, "d", KEYBOARD_HOLD_MS, timeout)
+    key_output = keyboard_driver("d", KEYBOARD_HOLD_MS, timeout)
     settled_x, settled_y, settled_heading = wait_for_local_transform_settled(
         direction.owner_pipe,
         timeout=min(timeout, 10.0),
@@ -911,6 +915,207 @@ def assert_rush_contexts(
     }
 
 
+def run_prepared_rush_matrix(
+    keyboard_drivers: dict[str, KeyboardDriver],
+    timeout: float,
+    native_rush_evidence: dict[str, Any],
+    *,
+    minimum_concentrate_motion_ratio: float,
+    minimum_ranked_rush_step_ratio: float,
+) -> dict[str, Any]:
+    output: dict[str, Any] = {
+        "native_rush_evidence": native_rush_evidence,
+        "baseline_rush_contexts": assert_rush_contexts(
+            0,
+            0.0,
+            expect_concentration=False,
+        ),
+    }
+    output["baseline"] = {
+        direction.name: run_movement_trial(direction, "baseline", timeout)
+        for direction in DIRECTIONS
+    }
+    output["real_keyboard_baseline"] = {
+        direction.name: run_real_keyboard_movement_trial(
+            direction,
+            keyboard_drivers[direction.name],
+            "baseline",
+            timeout,
+        )
+        for direction in DIRECTIONS
+    }
+    output["rush_applications"] = {
+        direction.name: apply_rush_to_max(direction.participant_id, timeout)
+        for direction in DIRECTIONS
+    }
+    output["rush_contexts"] = assert_rush_contexts(
+        RUSH_MAX_RANK,
+        RUSH_MAX_SPEED_PERCENT,
+        expect_concentration=True,
+    )
+    output["upgraded"] = {
+        direction.name: run_movement_trial(direction, "max_rush", timeout)
+        for direction in DIRECTIONS
+    }
+    output["real_keyboard_upgraded"] = {
+        direction.name: run_real_keyboard_movement_trial(
+            direction,
+            keyboard_drivers[direction.name],
+            "max_rush",
+            timeout,
+        )
+        for direction in DIRECTIONS
+    }
+
+    standing_speed_ratios: dict[str, float] = {}
+    baseline_views = output["baseline_rush_contexts"]["views"]
+    upgraded_views = output["rush_contexts"]["views"]
+    for label in baseline_views:
+        baseline_speed = float(baseline_views[label]["move_speed"])
+        upgraded_speed = float(upgraded_views[label]["move_speed"])
+        ratio = upgraded_speed / baseline_speed
+        standing_speed_ratios[label] = ratio
+        if not math.isclose(
+            ratio,
+            CONCENTRATE_SPEED_MULTIPLIER,
+            rel_tol=0.0,
+            abs_tol=0.002,
+        ):
+            raise VerifyFailure(
+                f"{label} Concentrate standing speed ratio diverged: "
+                f"baseline={baseline_speed:.6f} upgraded={upgraded_speed:.6f} "
+                f"ratio={ratio:.6f} expected={CONCENTRATE_SPEED_MULTIPLIER:.6f}"
+            )
+    output["speed_contract"] = {
+        "ranked_rush_max_percent": RUSH_MAX_SPEED_PERCENT,
+        "ranked_rush_max_multiplier": RUSH_MAX_SPEED_MULTIPLIER,
+        "concentrate_speed_percent": CONCENTRATE_SPEED_PERCENT,
+        "concentrate_speed_multiplier": CONCENTRATE_SPEED_MULTIPLIER,
+        "combined_max_multiplier": COMBINED_MAX_SPEED_MULTIPLIER,
+        "standing_speed_ratios": standing_speed_ratios,
+        "motion_measurement_scope": (
+            "scripted local input is downstream of the ranked Rush evaluator; "
+            "that trial measures Concentrate movement plus position replication. "
+            "The real-keyboard trial enters through stock input and separately "
+            "proves ranked Rush."
+        ),
+        "ranked_behavior_evidence": native_rush_evidence,
+    }
+
+    motion_ratios: dict[str, float] = {}
+    for direction in DIRECTIONS:
+        baseline = float(output["baseline"][direction.name]["displacement"])
+        upgraded = float(output["upgraded"][direction.name]["displacement"])
+        ratio = upgraded / baseline
+        motion_ratios[direction.name] = ratio
+        if ratio < minimum_concentrate_motion_ratio:
+            raise VerifyFailure(
+                f"{direction.name} Concentrate did not materially accelerate "
+                f"downstream motion: baseline={baseline:.4f} "
+                f"upgraded={upgraded:.4f} ratio={ratio:.4f} "
+                f"minimum={minimum_concentrate_motion_ratio:.4f}"
+            )
+    if abs(motion_ratios["host_owned"] - motion_ratios["client_owned"]) > 0.05:
+        raise VerifyFailure(
+            f"host/client Concentrate motion ratios diverged: {motion_ratios}"
+        )
+    output["concentrate_motion_ratios"] = motion_ratios
+
+    keyboard_contract: dict[str, dict[str, float]] = {}
+    ranked_step_ratios: dict[str, float] = {}
+    for direction in DIRECTIONS:
+        baseline_trial = output["real_keyboard_baseline"][direction.name]
+        upgraded_trial = output["real_keyboard_upgraded"][direction.name]
+        displacement_ratio = (
+            float(upgraded_trial["displacement"])
+            / float(baseline_trial["displacement"])
+        )
+        accumulator_ratio = (
+            float(upgraded_trial["peak_accumulator_speed"])
+            / float(baseline_trial["peak_accumulator_speed"])
+        )
+        position_step_ratio = (
+            float(upgraded_trial["peak_position_step"])
+            / float(baseline_trial["peak_position_step"])
+        )
+        ranked_step_ratio = position_step_ratio / CONCENTRATE_SPEED_MULTIPLIER
+        keyboard_contract[direction.name] = {
+            "displacement_ratio": displacement_ratio,
+            "peak_accumulator_ratio": accumulator_ratio,
+            "peak_position_step_ratio": position_step_ratio,
+            "concentrate_multiplier": CONCENTRATE_SPEED_MULTIPLIER,
+            "ranked_rush_step_ratio": ranked_step_ratio,
+            "expected_combined_step_multiplier": COMBINED_MAX_SPEED_MULTIPLIER,
+            "expected_ranked_rush_multiplier": RUSH_MAX_SPEED_MULTIPLIER,
+        }
+        ranked_step_ratios[direction.name] = ranked_step_ratio
+        if not math.isclose(
+            accumulator_ratio,
+            1.0,
+            rel_tol=0.0,
+            abs_tol=0.03,
+        ):
+            raise VerifyFailure(
+                f"{direction.name} Rush unexpectedly changed the stock input "
+                f"accumulator: baseline="
+                f"{baseline_trial['peak_accumulator_speed']:.6f} upgraded="
+                f"{upgraded_trial['peak_accumulator_speed']:.6f} "
+                f"ratio={accumulator_ratio:.6f}"
+            )
+        if not math.isclose(
+            position_step_ratio,
+            COMBINED_MAX_SPEED_MULTIPLIER,
+            rel_tol=0.0,
+            abs_tol=0.08,
+        ):
+            raise VerifyFailure(
+                f"{direction.name} combined Rush/Concentrate movement step "
+                f"diverged: measured={position_step_ratio:.6f} "
+                f"expected={COMBINED_MAX_SPEED_MULTIPLIER:.6f}"
+            )
+        if not math.isclose(
+            displacement_ratio,
+            COMBINED_MAX_SPEED_MULTIPLIER,
+            rel_tol=0.0,
+            abs_tol=0.08,
+        ):
+            raise VerifyFailure(
+                f"{direction.name} combined Rush/Concentrate displacement "
+                f"diverged: measured={displacement_ratio:.6f} "
+                f"expected={COMBINED_MAX_SPEED_MULTIPLIER:.6f}"
+            )
+        if not math.isclose(
+            ranked_step_ratio,
+            RUSH_MAX_SPEED_MULTIPLIER,
+            rel_tol=0.0,
+            abs_tol=0.06,
+        ):
+            raise VerifyFailure(
+                f"{direction.name} ranked Rush movement-step ratio diverged: "
+                f"measured={ranked_step_ratio:.6f} "
+                f"expected={RUSH_MAX_SPEED_MULTIPLIER:.6f}"
+            )
+        if ranked_step_ratio < minimum_ranked_rush_step_ratio:
+            raise VerifyFailure(
+                f"{direction.name} stock keyboard movement did not apply ranked "
+                f"Rush: baseline_step={baseline_trial['peak_position_step']:.6f} "
+                f"upgraded_step={upgraded_trial['peak_position_step']:.6f} "
+                f"combined_ratio={position_step_ratio:.6f} "
+                f"ranked_ratio={ranked_step_ratio:.6f} "
+                f"minimum={minimum_ranked_rush_step_ratio:.6f}"
+            )
+    if abs(
+        ranked_step_ratios["host_owned"]
+        - ranked_step_ratios["client_owned"]
+    ) > 0.08:
+        raise VerifyFailure(
+            "host/client real-keyboard ranked Rush movement-step ratios "
+            f"diverged: {ranked_step_ratios}"
+        )
+    output["real_keyboard_contract"] = keyboard_contract
+    return output
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--timeout", type=float, default=45.0)
@@ -959,9 +1164,15 @@ def main() -> int:
             test_blank_boneyard=True,
             allow_focus_steal=True,
         )
-        process_ids = {
-            "host_owned": int(output["launch"]["hostProcessId"]),
-            "client_owned": int(output["launch"]["clientProcessId"]),
+        keyboard_drivers: dict[str, KeyboardDriver] = {
+            "host_owned": partial(
+                hold_real_key,
+                int(output["launch"]["hostProcessId"]),
+            ),
+            "client_owned": partial(
+                hold_real_key,
+                int(output["launch"]["clientProcessId"]),
+            ),
         }
         disable_bots()
         output["hub_ready"] = {
@@ -974,194 +1185,19 @@ def main() -> int:
         output["quiet_stock_input_mode"] = enable_quiet_stock_input_mode(
             args.timeout
         )
-        output["baseline_rush_contexts"] = assert_rush_contexts(
-            0,
-            0.0,
-            expect_concentration=False,
-        )
-
-        output["baseline"] = {
-            direction.name: run_movement_trial(direction, "baseline", args.timeout)
-            for direction in DIRECTIONS
-        }
-        output["real_keyboard_baseline"] = {
-            direction.name: run_real_keyboard_movement_trial(
-                direction,
-                process_ids[direction.name],
-                "baseline",
+        output.update(
+            run_prepared_rush_matrix(
+                keyboard_drivers,
                 args.timeout,
+                output["native_rush_evidence"],
+                minimum_concentrate_motion_ratio=(
+                    args.minimum_concentrate_motion_ratio
+                ),
+                minimum_ranked_rush_step_ratio=(
+                    args.minimum_ranked_rush_step_ratio
+                ),
             )
-            for direction in DIRECTIONS
-        }
-        output["rush_applications"] = {
-            direction.name: apply_rush_to_max(direction.participant_id, args.timeout)
-            for direction in DIRECTIONS
-        }
-        output["rush_contexts"] = assert_rush_contexts(
-            RUSH_MAX_RANK,
-            RUSH_MAX_SPEED_PERCENT,
-            expect_concentration=True,
         )
-        output["upgraded"] = {
-            direction.name: run_movement_trial(direction, "max_rush", args.timeout)
-            for direction in DIRECTIONS
-        }
-        output["real_keyboard_upgraded"] = {
-            direction.name: run_real_keyboard_movement_trial(
-                direction,
-                process_ids[direction.name],
-                "max_rush",
-                args.timeout,
-            )
-            for direction in DIRECTIONS
-        }
-
-        standing_speed_ratios: dict[str, float] = {}
-        baseline_views = output["baseline_rush_contexts"]["views"]
-        upgraded_views = output["rush_contexts"]["views"]
-        for label in baseline_views:
-            baseline_speed = float(baseline_views[label]["move_speed"])
-            upgraded_speed = float(upgraded_views[label]["move_speed"])
-            ratio = upgraded_speed / baseline_speed
-            standing_speed_ratios[label] = ratio
-            if not math.isclose(
-                ratio,
-                CONCENTRATE_SPEED_MULTIPLIER,
-                rel_tol=0.0,
-                abs_tol=0.002,
-            ):
-                raise VerifyFailure(
-                    f"{label} Concentrate standing speed ratio diverged: "
-                    f"baseline={baseline_speed:.6f} upgraded={upgraded_speed:.6f} "
-                    f"ratio={ratio:.6f} expected={CONCENTRATE_SPEED_MULTIPLIER:.6f}"
-                )
-        output["speed_contract"] = {
-            "ranked_rush_max_percent": RUSH_MAX_SPEED_PERCENT,
-            "ranked_rush_max_multiplier": RUSH_MAX_SPEED_MULTIPLIER,
-            "concentrate_speed_percent": CONCENTRATE_SPEED_PERCENT,
-            "concentrate_speed_multiplier": CONCENTRATE_SPEED_MULTIPLIER,
-            "combined_max_multiplier": COMBINED_MAX_SPEED_MULTIPLIER,
-            "standing_speed_ratios": standing_speed_ratios,
-            "motion_measurement_scope": (
-                "scripted local input is downstream of the ranked Rush evaluator; "
-                "that trial measures Concentrate movement plus position replication. "
-                "The real-keyboard trial enters through stock input and separately "
-                "proves ranked Rush."
-            ),
-            "ranked_behavior_evidence": output["native_rush_evidence"],
-        }
-
-        motion_ratios: dict[str, float] = {}
-        for direction in DIRECTIONS:
-            baseline = float(output["baseline"][direction.name]["displacement"])
-            upgraded = float(output["upgraded"][direction.name]["displacement"])
-            ratio = upgraded / baseline
-            motion_ratios[direction.name] = ratio
-            if ratio < args.minimum_concentrate_motion_ratio:
-                raise VerifyFailure(
-                    f"{direction.name} Concentrate did not materially accelerate downstream motion: "
-                    f"baseline={baseline:.4f} upgraded={upgraded:.4f} ratio={ratio:.4f} "
-                    f"minimum={args.minimum_concentrate_motion_ratio:.4f}"
-                )
-        if abs(motion_ratios["host_owned"] - motion_ratios["client_owned"]) > 0.05:
-            raise VerifyFailure(
-                f"host/client Concentrate motion ratios diverged: {motion_ratios}"
-            )
-        output["concentrate_motion_ratios"] = motion_ratios
-
-        keyboard_contract: dict[str, dict[str, float]] = {}
-        ranked_step_ratios: dict[str, float] = {}
-        for direction in DIRECTIONS:
-            baseline_trial = output["real_keyboard_baseline"][direction.name]
-            upgraded_trial = output["real_keyboard_upgraded"][direction.name]
-            displacement_ratio = (
-                float(upgraded_trial["displacement"])
-                / float(baseline_trial["displacement"])
-            )
-            accumulator_ratio = (
-                float(upgraded_trial["peak_accumulator_speed"])
-                / float(baseline_trial["peak_accumulator_speed"])
-            )
-            position_step_ratio = (
-                float(upgraded_trial["peak_position_step"])
-                / float(baseline_trial["peak_position_step"])
-            )
-            ranked_step_ratio = (
-                position_step_ratio / CONCENTRATE_SPEED_MULTIPLIER
-            )
-            keyboard_contract[direction.name] = {
-                "displacement_ratio": displacement_ratio,
-                "peak_accumulator_ratio": accumulator_ratio,
-                "peak_position_step_ratio": position_step_ratio,
-                "concentrate_multiplier": CONCENTRATE_SPEED_MULTIPLIER,
-                "ranked_rush_step_ratio": ranked_step_ratio,
-                "expected_combined_step_multiplier": COMBINED_MAX_SPEED_MULTIPLIER,
-                "expected_ranked_rush_multiplier": RUSH_MAX_SPEED_MULTIPLIER,
-            }
-            ranked_step_ratios[direction.name] = ranked_step_ratio
-            if not math.isclose(
-                accumulator_ratio,
-                1.0,
-                rel_tol=0.0,
-                abs_tol=0.03,
-            ):
-                raise VerifyFailure(
-                    f"{direction.name} Rush unexpectedly changed the stock input accumulator: "
-                    f"baseline={baseline_trial['peak_accumulator_speed']:.6f} "
-                    f"upgraded={upgraded_trial['peak_accumulator_speed']:.6f} "
-                    f"ratio={accumulator_ratio:.6f}"
-                )
-            if not math.isclose(
-                position_step_ratio,
-                COMBINED_MAX_SPEED_MULTIPLIER,
-                rel_tol=0.0,
-                abs_tol=0.08,
-            ):
-                raise VerifyFailure(
-                    f"{direction.name} combined Rush/Concentrate movement step diverged: "
-                    f"measured={position_step_ratio:.6f} "
-                    f"expected={COMBINED_MAX_SPEED_MULTIPLIER:.6f}"
-                )
-            if not math.isclose(
-                displacement_ratio,
-                COMBINED_MAX_SPEED_MULTIPLIER,
-                rel_tol=0.0,
-                abs_tol=0.08,
-            ):
-                raise VerifyFailure(
-                    f"{direction.name} combined Rush/Concentrate displacement diverged: "
-                    f"measured={displacement_ratio:.6f} "
-                    f"expected={COMBINED_MAX_SPEED_MULTIPLIER:.6f}"
-                )
-            if not math.isclose(
-                ranked_step_ratio,
-                RUSH_MAX_SPEED_MULTIPLIER,
-                rel_tol=0.0,
-                abs_tol=0.06,
-            ):
-                raise VerifyFailure(
-                    f"{direction.name} ranked Rush movement-step ratio diverged: "
-                    f"measured={ranked_step_ratio:.6f} "
-                    f"expected={RUSH_MAX_SPEED_MULTIPLIER:.6f}"
-                )
-            if ranked_step_ratio < args.minimum_ranked_rush_step_ratio:
-                raise VerifyFailure(
-                    f"{direction.name} stock keyboard movement did not apply ranked Rush: "
-                    f"baseline_step={baseline_trial['peak_position_step']:.6f} "
-                    f"upgraded_step={upgraded_trial['peak_position_step']:.6f} "
-                    f"combined_ratio={position_step_ratio:.6f} "
-                    f"ranked_ratio={ranked_step_ratio:.6f} "
-                    f"minimum={args.minimum_ranked_rush_step_ratio:.6f}"
-                )
-        if abs(
-            ranked_step_ratios["host_owned"]
-            - ranked_step_ratios["client_owned"]
-        ) > 0.08:
-            raise VerifyFailure(
-                "host/client real-keyboard ranked Rush movement-step ratios diverged: "
-                f"{ranked_step_ratios}"
-            )
-        output["real_keyboard_contract"] = keyboard_contract
 
         crashes = new_crash_artifacts(started_at)
         output["new_crash_artifacts"] = crashes

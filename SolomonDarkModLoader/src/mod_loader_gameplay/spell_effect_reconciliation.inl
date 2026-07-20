@@ -16,6 +16,9 @@ std::unordered_map<std::uint64_t, std::unordered_set<std::uint32_t>>
 
 constexpr std::uint64_t kReplicatedSpellEffectSnapshotFreshMs = 500;
 constexpr float kReplicatedSpellEffectBindingMaxDistance = 1024.0f;
+constexpr std::uint32_t kReplicatedEtherPrimaryNativeTypeId = 0x07D3;
+constexpr std::uint32_t kReplicatedFireballPrimaryNativeTypeId = 0x07D4;
+constexpr std::uint32_t kReplicatedWaterPrimaryNativeTypeId = 0x07D5;
 constexpr std::uint32_t kReplicatedFireEmberNativeTypeId = 0x07D6;
 constexpr std::uint32_t kReplicatedFirewalkerTrailNativeTypeId = 0x07EE;
 
@@ -44,6 +47,17 @@ const SDModSceneActorState* FindSpellEffectSceneActor(
     return it == actors.end() ? nullptr : &*it;
 }
 
+bool IsNativeReplayDrivenPrimarySpellEffect(std::uint32_t native_type_id) {
+    switch (native_type_id) {
+    case kReplicatedEtherPrimaryNativeTypeId:
+    case kReplicatedFireballPrimaryNativeTypeId:
+    case kReplicatedWaterPrimaryNativeTypeId:
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool TryApplyReplicatedSpellEffectState(
     uintptr_t actor_address,
     int owner_gameplay_slot,
@@ -55,7 +69,15 @@ bool TryApplyReplicatedSpellEffectState(
 
     auto& memory = ProcessMemory::Instance();
     bool wrote_any = false;
-    if (effect.transform_valid) {
+    // These projectiles are already recreated by the remote participant's
+    // native cast. Reapplying an authoritative terminal snapshot here pins the
+    // live projectile at its last network position before stock collision can
+    // run, suppressing Fireball impact/Explode/Embers on the observer. Native
+    // replay owns their motion and collision lifecycle; snapshot application
+    // remains authoritative for child effects that are not cast independently.
+    const bool native_replay_driven_primary =
+        IsNativeReplayDrivenPrimarySpellEffect(effect.native_type_id);
+    if (effect.transform_valid && !native_replay_driven_primary) {
         const bool wrote_transform =
             memory.TryWriteField(
                 actor_address,
@@ -79,7 +101,7 @@ bool TryApplyReplicatedSpellEffectState(
         }
     }
 
-    if (effect.motion_valid) {
+    if (effect.motion_valid && !native_replay_driven_primary) {
         const bool wrote_motion =
             memory.TryWriteField(
                 actor_address,

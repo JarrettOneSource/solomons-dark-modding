@@ -261,18 +261,6 @@ bool QueueLocalLootPickupRequest(
         return fail("network_drop_id is not present in the replicated loot snapshot");
     }
 
-    std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
-    constexpr std::size_t kMaxQueuedLocalLootPickupRequests = 32;
-    if (g_queued_local_loot_pickup_requests.size() >= kMaxQueuedLocalLootPickupRequests) {
-        g_queued_local_loot_pickup_requests.erase(g_queued_local_loot_pickup_requests.begin());
-    }
-
-    QueuedLocalLootPickupRequest request;
-    request.network_drop_id = network_drop_id;
-    request.request_sequence = g_next_local_loot_pickup_request_sequence++;
-    if (g_next_local_loot_pickup_request_sequence == 0) {
-        g_next_local_loot_pickup_request_sequence = 1;
-    }
     LootPickupRequestCapture resolved_capture{};
     if (capture != nullptr && capture->valid) {
         resolved_capture = *capture;
@@ -286,11 +274,68 @@ bool QueueLocalLootPickupRequest(
             resolved_capture.drop_position_y = queued_drop->position_y;
         }
     }
-    if (resolved_capture.valid &&
+    const bool resolved_capture_valid =
+        resolved_capture.valid &&
         std::isfinite(resolved_capture.requester_position_x) &&
         std::isfinite(resolved_capture.requester_position_y) &&
         std::isfinite(resolved_capture.drop_position_x) &&
-        std::isfinite(resolved_capture.drop_position_y)) {
+        std::isfinite(resolved_capture.drop_position_y);
+
+    std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
+    const auto queued_request_it = std::find_if(
+        g_queued_local_loot_pickup_requests.begin(),
+        g_queued_local_loot_pickup_requests.end(),
+        [&](const QueuedLocalLootPickupRequest& queued_request) {
+            return queued_request.network_drop_id == network_drop_id;
+        });
+    if (queued_request_it != g_queued_local_loot_pickup_requests.end()) {
+        if (resolved_capture_valid) {
+            queued_request_it->has_pickup_positions = true;
+            queued_request_it->requester_position_x =
+                resolved_capture.requester_position_x;
+            queued_request_it->requester_position_y =
+                resolved_capture.requester_position_y;
+            queued_request_it->drop_position_x =
+                resolved_capture.drop_position_x;
+            queued_request_it->drop_position_y =
+                resolved_capture.drop_position_y;
+        }
+        if (request_sequence != nullptr) {
+            *request_sequence = queued_request_it->request_sequence;
+        }
+        return true;
+    }
+
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    const auto in_flight_it =
+        g_in_flight_local_loot_pickup_requests_by_drop_id.find(
+            network_drop_id);
+    if (in_flight_it !=
+        g_in_flight_local_loot_pickup_requests_by_drop_id.end()) {
+        if (now_ms - in_flight_it->second.sent_ms <
+            kLocalLootPickupRequestRetryMs) {
+            if (request_sequence != nullptr) {
+                *request_sequence = in_flight_it->second.request_sequence;
+            }
+            return true;
+        }
+        g_in_flight_local_loot_pickup_requests_by_drop_id.erase(
+            in_flight_it);
+    }
+
+    constexpr std::size_t kMaxQueuedLocalLootPickupRequests = 32;
+    if (g_queued_local_loot_pickup_requests.size() >= kMaxQueuedLocalLootPickupRequests) {
+        g_queued_local_loot_pickup_requests.erase(g_queued_local_loot_pickup_requests.begin());
+    }
+
+    QueuedLocalLootPickupRequest request;
+    request.network_drop_id = network_drop_id;
+    request.request_sequence = g_next_local_loot_pickup_request_sequence++;
+    request.automatic_proximity_request = capture != nullptr && capture->valid;
+    if (g_next_local_loot_pickup_request_sequence == 0) {
+        g_next_local_loot_pickup_request_sequence = 1;
+    }
+    if (resolved_capture_valid) {
         request.has_pickup_positions = true;
         request.requester_position_x = resolved_capture.requester_position_x;
         request.requester_position_y = resolved_capture.requester_position_y;

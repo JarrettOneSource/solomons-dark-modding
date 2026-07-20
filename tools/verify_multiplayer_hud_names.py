@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Verify remote world nameplates, thin health bars, and named ally HUD rows."""
+"""Verify remote world nameplates, DX9 health bars, and named ally HUD rows."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import time
 from dataclasses import dataclass
@@ -44,9 +45,12 @@ from verify_real_input_spell_cast_sync import detect_instance_pids
 OUTPUT = ROOT / "runtime" / "multiplayer_hud_names.json"
 CLIENT_TEST_HP = 250.0
 CLIENT_TEST_MAX_HP = 500.0
-EXPECTED_HALF_HEALTH_SEGMENTS = 6
+EXPECTED_HALF_HEALTH_PERCENT = 50
 RUN_FORMATION_LEASE_SECONDS = 5.5
 MIN_ALLY_HUD_NAME_GAP = 1.0
+MIN_DX9_NAMEPLATE_BAR_WIDTH = 64.0
+DX9_NAMEPLATE_BAR_HEIGHT = 7.0
+DX9_NAMEPLATE_BAR_VERTICAL_GAP = 1.0
 
 
 @dataclass(frozen=True)
@@ -182,7 +186,10 @@ def place_trio_for_capture(timeout: float) -> dict[str, Any]:
 
 
 def matching_line(log_text: str, required_tokens: tuple[str, ...]) -> str:
-    for line in log_text.splitlines():
+    # A physical pair reuses its log across focused regressions. Resolve the
+    # newest matching render so geometry reflects the placement exercised by
+    # this run instead of an earlier centered frame.
+    for line in reversed(log_text.splitlines()):
         if all(token in line for token in required_tokens):
             return line
     raise VerifyFailure(
@@ -221,6 +228,97 @@ def verify_ally_hud_name_layout(line: str) -> dict[str, float]:
     return values
 
 
+def verify_dx9_nameplate_health_bar_geometry(
+    line: str,
+    expected_percent: int | None = None,
+) -> dict[str, float]:
+    ratio_match = re.search(r"(?:^| )health_ratio=([0-9.]+)", line)
+    percent_match = re.search(r"(?:^| )health_percent=([0-9]+)", line)
+    bounds_match = re.search(
+        r"(?:^| )bounds=\((-?[0-9.]+),(-?[0-9.]+),"
+        r"(-?[0-9.]+),(-?[0-9.]+)\)",
+        line,
+    )
+    name_bounds_match = re.search(
+        r"(?:^| )name_bounds=\((-?[0-9.]+),(-?[0-9.]+),"
+        r"(-?[0-9.]+),(-?[0-9.]+)\)",
+        line,
+    )
+    if (
+        ratio_match is None
+        or percent_match is None
+        or bounds_match is None
+        or name_bounds_match is None
+    ):
+        raise VerifyFailure(f"DX9 health draw has incomplete geometry: {line}")
+
+    health_ratio = float(ratio_match.group(1))
+    health_percent = int(percent_match.group(1))
+    left, top, right, bottom = (
+        float(value) for value in bounds_match.groups()
+    )
+    name_left, name_top, name_right, name_bottom = (
+        float(value) for value in name_bounds_match.groups()
+    )
+    width = right - left
+    height = bottom - top
+    name_width = name_right - name_left
+    name_height = name_bottom - name_top
+    if expected_percent is not None:
+        expected_ratio = expected_percent / 100.0
+        if health_percent != expected_percent or abs(
+            health_ratio - expected_ratio
+        ) > 0.01:
+            raise VerifyFailure(
+                "DX9 health draw ratio mismatch: "
+                f"expected={expected_ratio} line={line}"
+            )
+    if (
+        width + 0.01 < MIN_DX9_NAMEPLATE_BAR_WIDTH
+        or not math.isclose(
+            height,
+            DX9_NAMEPLATE_BAR_HEIGHT,
+            rel_tol=0.0,
+            abs_tol=0.01,
+        )
+        or name_width <= 0.0
+        or name_height <= 0.0
+        or width + 0.01 < name_width
+    ):
+        raise VerifyFailure(f"DX9 health draw has invalid dimensions: {line}")
+    if not math.isclose(
+        (left + right) * 0.5,
+        (name_left + name_right) * 0.5,
+        rel_tol=0.0,
+        abs_tol=0.01,
+    ):
+        raise VerifyFailure(f"DX9 health bar is not centered under its name: {line}")
+    if not math.isclose(
+        top,
+        name_bottom + DX9_NAMEPLATE_BAR_VERTICAL_GAP,
+        rel_tol=0.0,
+        abs_tol=0.01,
+    ):
+        raise VerifyFailure(f"DX9 health bar is not flush under its name: {line}")
+
+    return {
+        "health_ratio": health_ratio,
+        "health_percent": float(health_percent),
+        "left": left,
+        "top": top,
+        "right": right,
+        "bottom": bottom,
+        "width": width,
+        "height": height,
+        "name_left": name_left,
+        "name_top": name_top,
+        "name_right": name_right,
+        "name_bottom": name_bottom,
+        "name_width": name_width,
+        "name_height": name_height,
+    }
+
+
 def verify_render_logs() -> dict[str, Any]:
     evidence: dict[str, Any] = {}
     for observer in PARTICIPANTS:
@@ -237,8 +335,19 @@ def verify_render_logs() -> dict[str, Any]:
                     participant_token,
                     f"name={owner.name}",
                     "ok=1",
-                    "health_bar=1",
-                    "health_segments=",
+                    "health_bar=dx9",
+                    "health_valid=1",
+                    "health_percent=",
+                ),
+            )
+            dx9_health_line = matching_line(
+                log_text,
+                (
+                    "source=dx9_nameplate_healthbar",
+                    participant_token,
+                    "ok=1",
+                    "health_ratio=",
+                    "health_percent=",
                 ),
             )
             ally_hud_line = matching_line(
@@ -254,6 +363,10 @@ def verify_render_logs() -> dict[str, Any]:
             )
             observer_evidence[owner.label] = {
                 "world": world_line,
+                "dx9_health_bar": dx9_health_line,
+                "dx9_health_bar_geometry": (
+                    verify_dx9_nameplate_health_bar_geometry(dx9_health_line)
+                ),
                 "ally_hud": ally_hud_line,
                 "ally_hud_layout": verify_ally_hud_name_layout(ally_hud_line),
             }
@@ -264,26 +377,46 @@ def verify_render_logs() -> dict[str, Any]:
                 (
                     "source=playerwizard_render",
                     f"participant={CLIENT.participant_id}",
-                    "health_bar=1",
-                    f"health_segments={EXPECTED_HALF_HEALTH_SEGMENTS}/12",
+                    "health_bar=dx9",
+                    f"health_percent={EXPECTED_HALF_HEALTH_PERCENT}",
                 ),
             )
-            ratio_match = re.search(r"health_ratio=([0-9.]+)", half_health_line)
-            if ratio_match is None:
-                raise VerifyFailure(
-                    f"half-health draw record has no numeric ratio: {half_health_line}"
-                )
-            health_ratio = float(ratio_match.group(1))
-            if abs(health_ratio - 0.5) > 0.01:
-                raise VerifyFailure(
-                    f"half-health draw ratio is outside tolerance: {half_health_line}"
-                )
+            half_health_dx9_line = matching_line(
+                log_text,
+                (
+                    "source=dx9_nameplate_healthbar",
+                    f"participant={CLIENT.participant_id}",
+                    "ok=1",
+                    f"health_percent={EXPECTED_HALF_HEALTH_PERCENT}",
+                ),
+            )
+            half_health_geometry = verify_dx9_nameplate_health_bar_geometry(
+                half_health_dx9_line,
+                EXPECTED_HALF_HEALTH_PERCENT,
+            )
             observer_evidence["client_half_health"] = {
-                "health_ratio": health_ratio,
-                "line": half_health_line,
+                "health_ratio": half_health_geometry["health_ratio"],
+                "world_line": half_health_line,
+                "dx9_health_bar_line": half_health_dx9_line,
+                "dx9_health_bar_geometry": half_health_geometry,
             }
         evidence[observer.label] = observer_evidence
     return evidence
+
+
+def wait_for_render_logs(timeout: float) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last_error = ""
+    while time.monotonic() < deadline:
+        try:
+            return verify_render_logs()
+        except (OSError, VerifyFailure) as exc:
+            last_error = str(exc)
+        time.sleep(0.1)
+    raise VerifyFailure(
+        "multiplayer name/health render evidence did not converge: "
+        f"{last_error}"
+    )
 
 
 def run(timeout: float) -> dict[str, Any]:
@@ -315,7 +448,7 @@ def run(timeout: float) -> dict[str, Any]:
         )
         for observer in (HOST, THIRD)
     }
-    time.sleep(0.5)
+    result["render_logs"] = wait_for_render_logs(timeout)
 
     pids = detect_instance_pids()
     if "third" not in pids:
@@ -323,19 +456,18 @@ def run(timeout: float) -> dict[str, Any]:
     result["screenshots"] = {
         participant.label: capture_game_backbuffer(
             participant.pipe,
-            pids[participant.label],
             participant.screenshot,
         )
         for participant in PARTICIPANTS
     }
-    result["render_logs"] = verify_render_logs()
     result["summary"] = {
         "participant_count": len(PARTICIPANTS),
         "observer_relationship_count": 6,
         "world_nameplate_checks": 6,
+        "dx9_health_bar_checks": 6,
         "ally_hud_name_checks": 6,
         "half_health_owner": CLIENT.name,
-        "half_health_segments": EXPECTED_HALF_HEALTH_SEGMENTS,
+        "half_health_percent": EXPECTED_HALF_HEALTH_PERCENT,
     }
     result["ok"] = True
     return result

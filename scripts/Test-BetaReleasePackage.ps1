@@ -49,6 +49,9 @@ $result = [ordered]@{
     steamApiSource = $null
     uiWindowTitle = $null
     uiCatalogStatus = $null
+    uiMultiplayerActions = @()
+    uiMissingGameError = $null
+    uiMissingGameRecoveryAvailable = $false
 }
 
 $uiSettingsDirectory = Join-Path $env:LOCALAPPDATA "SolomonDarkMultiplayerBeta"
@@ -124,7 +127,12 @@ try {
         throw "Portable workspace discovery escaped the extracted root: $($result.workspaceRoot)"
     }
 
-    $stage = Invoke-JsonLauncher -Arguments (@("stage", "--multiplayer", "host") + $commonArguments)
+    $stage = Invoke-JsonLauncher -Arguments (@(
+            "stage",
+            "--multiplayer", "host",
+            "--lobby-privacy", "public",
+            "--directory-url", "https://solomon.genericproject.xyz"
+        ) + $commonArguments)
     $result.stagedExecutable = $stage.stage.stageExecutablePath
     if (-not (Test-Path $result.stagedExecutable -PathType Leaf)) {
         throw "Packaged launcher did not stage SolomonDark.exe."
@@ -171,7 +179,7 @@ try {
             $uiProcess.MainWindowHandle)
         $catalogDeadline = (Get-Date).AddSeconds(20)
         $modSummaryPattern =
-            '^\d+ of ' + [regex]::Escape([string]$result.modCount) + ' enabled$'
+            '^Enabled mods: \d+ of ' + [regex]::Escape([string]$result.modCount) + '$'
         $visibleText = @()
         while ((Get-Date) -lt $catalogDeadline -and -not $uiProcess.HasExited) {
             $elements = $automationRoot.FindAll(
@@ -206,6 +214,88 @@ try {
                 Where-Object { $_ -match "failed|error|launcher|catalog" } |
                 Select-Object -Unique) -join "; "
             throw "Packaged desktop launcher did not refresh its mod catalog. $diagnostics"
+        }
+
+        $requiredMultiplayerActions = @(
+            "Host Game",
+            "Join Lobby ID",
+            "Browse Lobbies",
+            "How to Play"
+        )
+        foreach ($action in $requiredMultiplayerActions) {
+            if ($visibleText -notcontains $action) {
+                throw "Packaged desktop launcher is missing the '$action' action."
+            }
+        }
+        foreach ($removedText in @(
+                "Join Friend",
+                "Join Steam Invite",
+                "Waiting for a Steam Invite",
+                "Steam invites ready")) {
+            if ($visibleText -contains $removedText) {
+                throw "Packaged desktop launcher still exposes removed text: $removedText"
+            }
+        }
+        $result.uiMultiplayerActions = $requiredMultiplayerActions
+    }
+    finally {
+        if ($null -ne $uiProcess -and -not $uiProcess.HasExited) {
+            Stop-Process -Id $uiProcess.Id -Force -ErrorAction SilentlyContinue
+            $uiProcess.WaitForExit(5000) | Out-Null
+        }
+    }
+
+    $missingGameDirectory = Join-Path $smokeRoot "missing-game-executable"
+    New-Item -ItemType Directory -Path $missingGameDirectory -Force | Out-Null
+    $missingGameSettings = [ordered]@{ gameDirectory = $missingGameDirectory } | ConvertTo-Json
+    [System.IO.File]::WriteAllText($uiSettingsPath, $missingGameSettings, $utf8NoBom)
+
+    $uiProcess = Start-Process -FilePath $uiExecutable -PassThru
+    try {
+        $deadline = (Get-Date).AddSeconds(20)
+        while ((Get-Date) -lt $deadline -and -not $uiProcess.HasExited) {
+            $uiProcess.Refresh()
+            if ($uiProcess.MainWindowHandle -ne 0) {
+                break
+            }
+            Start-Sleep -Milliseconds 100
+        }
+        $uiProcess.Refresh()
+        if ($uiProcess.HasExited -or $uiProcess.MainWindowHandle -eq 0) {
+            throw "Desktop launcher did not open for the missing-game recovery check."
+        }
+
+        $automationRoot = [System.Windows.Automation.AutomationElement]::FromHandle(
+            $uiProcess.MainWindowHandle)
+        $recoveryButtonText = "Change Game Folder" + [char]0x2026
+        $recoveryDeadline = (Get-Date).AddSeconds(20)
+        $visibleText = @()
+        while ((Get-Date) -lt $recoveryDeadline -and -not $uiProcess.HasExited) {
+            $elements = $automationRoot.FindAll(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)
+            $visibleText = @(
+                for ($index = 0; $index -lt $elements.Count; $index++) {
+                    $name = $elements.Item($index).Current.Name
+                    if (-not [string]::IsNullOrWhiteSpace($name)) {
+                        $name
+                    }
+                })
+            $result.uiMissingGameError = $visibleText |
+                Where-Object { $_ -like "*executable not found*" } |
+                Select-Object -First 1
+            $result.uiMissingGameRecoveryAvailable = $visibleText -contains $recoveryButtonText
+            if ($result.uiMissingGameError -and $result.uiMissingGameRecoveryAvailable) {
+                break
+            }
+            Start-Sleep -Milliseconds 100
+            $uiProcess.Refresh()
+        }
+        if (-not $result.uiMissingGameError) {
+            throw "Desktop launcher did not report the missing game executable."
+        }
+        if (-not $result.uiMissingGameRecoveryAvailable) {
+            throw "Desktop launcher exposed no Change Game Folder action after the saved game path failed."
         }
     }
     finally {

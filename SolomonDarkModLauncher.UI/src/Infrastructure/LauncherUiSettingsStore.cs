@@ -25,34 +25,55 @@ internal sealed class LauncherUiSettingsStore
 
     public string? LoadGameDirectory()
     {
-        if (!File.Exists(settingsPath_))
-        {
-            return null;
-        }
-
-        var document = JsonSerializer.Deserialize<SettingsDocument>(
-            File.ReadAllText(settingsPath_),
-            JsonOptions);
-        return string.IsNullOrWhiteSpace(document?.GameDirectory)
+        var gameDirectory = Load().GameDirectory;
+        return string.IsNullOrWhiteSpace(gameDirectory)
             ? null
-            : Path.GetFullPath(document.GameDirectory);
+            : Path.GetFullPath(gameDirectory);
     }
 
     public void SaveGameDirectory(string gameDirectory)
     {
+        Save(Load() with { GameDirectory = Path.GetFullPath(gameDirectory) });
+    }
+
+    public string? LoadDirectoryUrl()
+    {
+        var directoryUrl = Load().DirectoryUrl;
+        return string.IsNullOrWhiteSpace(directoryUrl) ? null : directoryUrl.Trim();
+    }
+
+    public void SaveDirectoryUrl(string? directoryUrl)
+    {
+        Save(Load() with
+        {
+            DirectoryUrl = string.IsNullOrWhiteSpace(directoryUrl) ? null : directoryUrl.Trim()
+        });
+    }
+
+    private SettingsDocument Load()
+    {
+        if (!File.Exists(settingsPath_))
+        {
+            return new SettingsDocument();
+        }
+
+        return JsonSerializer.Deserialize<SettingsDocument>(
+            File.ReadAllText(settingsPath_),
+            JsonOptions) ?? new SettingsDocument();
+    }
+
+    private void Save(SettingsDocument document)
+    {
         var directoryPath = Path.GetDirectoryName(settingsPath_)!;
         Directory.CreateDirectory(directoryPath);
         var temporaryPath = settingsPath_ + ".tmp";
-        var document = new SettingsDocument
-        {
-            GameDirectory = Path.GetFullPath(gameDirectory)
-        };
         File.WriteAllText(temporaryPath, JsonSerializer.Serialize(document, JsonOptions));
         File.Move(temporaryPath, settingsPath_, overwrite: true);
     }
 
-    private sealed class SettingsDocument
+    private sealed record SettingsDocument
     {
         public string? GameDirectory { get; init; }
+        public string? DirectoryUrl { get; init; }
     }
 }

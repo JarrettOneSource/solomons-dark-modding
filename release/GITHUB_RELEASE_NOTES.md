@@ -1,11 +1,10 @@
-# Solomon Dark Multiplayer Beta v0.1.0-beta.4
+# Solomon Dark Multiplayer Beta v0.1.0-beta.7
 
-- Fixed player visibility, movement, rotation, staff visuals, ally health bars,
-  and player names.
-- Expanded synchronization for level-ups, upgraded spells, equipment, inventory,
-  powerups, hub NPCs, storage, and shops.
-- Improved late-join recovery and self-correction for player, enemy, and world
-  state.
-- Refreshed the launcher and multiplayer session status.
+These notes use ASD-STE100 Simplified Technical English.
 
-Download the ZIP, extract it, and run `SolomonDarkMultiplayerBeta.exe`.
+- The launcher shows lobby status in the lobby panel.
+- The lobby privacy text is light on the dark background.
+- Steam sessions can recover after a network interruption.
+- This build has fixes for combat, player state, enemies, and loot.
+
+Download the ZIP. Extract the ZIP. Start `SolomonDarkMultiplayerBeta.exe`.

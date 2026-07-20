@@ -24,9 +24,10 @@ constexpr wchar_t kPipeNameEnvironmentVariable[] = L"SDMOD_LUA_EXEC_PIPE_NAME";
 constexpr DWORD kPipeBufferSize = 64 * 1024;
 constexpr DWORD kPipeReconnectDelayMs = 250;
 constexpr size_t kMaxPipeMessageSize = 1024 * 1024;
-// Gameplay thread ticks ~every 50 ms, so a 2 s timeout gives the pump a
-// generous budget (>20 ticks) before we report back to the pipe client.
-constexpr std::uint32_t kLuaExecTimeoutMs = 2000;
+// Stock scene construction can block every game-thread pump for several
+// seconds. This is a hang backstop, not a frame budget; pump-generation checks
+// in the Lua engine detect a running pump that actually skips queued work.
+constexpr std::uint32_t kLuaExecHangBackstopMs = 30000;
 
 std::atomic<bool> g_pipe_running = false;
 std::thread g_pipe_thread;
@@ -405,7 +406,10 @@ void PipeServerMain() {
         std::string code;
         switch (ReadPipeMessage(pipe, &code)) {
         case PipeReadStatus::Success: {
-            const LuaExecResult response = QueueLuaExecRequestAndWait(code, kLuaExecTimeoutMs);
+            const LuaExecResult response = QueueLuaExecRequestAndWait(
+                code,
+                kLuaExecHangBackstopMs,
+                &g_pipe_running);
             std::string payload = SerializeResponse(response);
             if (payload.size() > kMaxPipeMessageSize) {
                 payload =

@@ -36,6 +36,7 @@ void HandleLocalPlayerActorDestructorTeardown(uintptr_t actor_address, uintptr_t
     }
 
     s_handling_local_player_teardown = true;
+    ClearLocalPlayerTickOwnership();
     const bool ended_active_run = EndRunLifecycleFromExternal("leave_game");
     Log(
         "[bots] local player destructor teardown" +
@@ -513,6 +514,10 @@ void __fastcall HookActorWorldUnregister(
         }
     }
 
+    ForgetAuthoritativeTurnUndeadTargetLocksForActor(actor_address);
+    if (actor_address != 0 && remove_from_container == 1) {
+        multiplayer::NotifyLocalWorldActorUnregistered(actor_address);
+    }
     original(self, actor, remove_from_container);
     if (tracked_standalone_scene_churn_actor ||
         (actor_address != 0 && remove_from_container == 1 && now_ms < scene_churn_until)) {
@@ -540,6 +545,7 @@ void __fastcall HookGameplaySwitchRegion(void* self, void* /*unused_edx*/, int r
         Log("Authorized client run switch_region from fresh authenticated host intent.");
     }
 
+    ClearAuthoritativeTurnUndeadTargetLocks();
     const auto gameplay_address = reinterpret_cast<uintptr_t>(self);
     (void)PrepareGameplaySceneSwitchOnGameThread(
         gameplay_address,

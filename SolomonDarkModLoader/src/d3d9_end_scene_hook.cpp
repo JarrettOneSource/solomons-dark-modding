@@ -26,7 +26,6 @@ constexpr DWORD kDeviceAcquirePollMilliseconds = 50;
 
 D3d9FrameCallback g_callback = nullptr;
 D3d9FrameCallback g_post_callback = nullptr;
-D3d9FrameActionPump g_action_pump = nullptr;
 EndSceneFn g_original_end_scene = nullptr;
 void** g_end_scene_slot = nullptr;
 IDirect3DDevice9* g_last_seen_device = nullptr;
@@ -118,9 +117,6 @@ HRESULT STDMETHODCALLTYPE HookEndScene(IDirect3DDevice9* device) {
         static_cast<std::uint64_t>(GetTickCount64()),
         std::memory_order_release);
     const auto result = g_original_end_scene != nullptr ? g_original_end_scene(device) : D3D_OK;
-    if (g_action_pump != nullptr) {
-        g_action_pump();
-    }
     if (g_callback != nullptr) {
         g_callback(device);
     }
@@ -234,10 +230,6 @@ bool InstallD3d9FrameHook(uintptr_t device_pointer_global, D3d9FrameCallback cal
     g_hook_installed = true;
     Log("Debug UI overlay D3D9 hook: EndScene slot patched on the live device.");
     return true;
-}
-
-void SetD3d9FrameActionPump(D3d9FrameActionPump pump) {
-    g_action_pump = pump;
 }
 
 void SetD3d9PostFrameCallback(D3d9FrameCallback callback) {

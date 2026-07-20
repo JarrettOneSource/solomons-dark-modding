@@ -64,8 +64,12 @@ bool TrySendHostProcessLeftClickNormalized(
         if (QueueGameplayMouseLeftClick(&gameplay_click_error)) {
             return true;
         }
-
-        Log("Gameplay click queue failed; falling back to windowed SendInput: " + gameplay_click_error);
+        if (error_message != nullptr) {
+            *error_message =
+                "Native gameplay mouse-left queue failed: " +
+                gameplay_click_error;
+        }
+        return false;
     }
 
     HWND window = nullptr;
@@ -149,6 +153,61 @@ int LuaHubStartTestrun(lua_State* state) {
     return 1;
 }
 
+int LuaHubOpenService(lua_State* state) {
+    const auto* service_name = luaL_checkstring(state, 1);
+    std::string error_message;
+    if (!QueueHubOpenService(
+            service_name == nullptr ? std::string_view{} :
+                                      std::string_view(service_name),
+            &error_message)) {
+        return luaL_error(
+            state,
+            "sd.hub.open_service failed: %s",
+            error_message.c_str());
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaHubGetSurfaceState(lua_State* state) {
+    SDModHubSurfaceState surface;
+    std::string error_message;
+    if (!TryGetHubSurfaceState(&surface, &error_message)) {
+        return luaL_error(
+            state,
+            "sd.hub.get_surface_state failed: %s",
+            error_message.c_str());
+    }
+
+    lua_createtable(state, 0, 12);
+    lua_pushboolean(state, surface.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushboolean(state, surface.shared_hub ? 1 : 0);
+    lua_setfield(state, -2, "shared_hub");
+    lua_pushboolean(state, surface.chat_active ? 1 : 0);
+    lua_setfield(state, -2, "chat_active");
+    lua_pushboolean(state, surface.surface_active ? 1 : 0);
+    lua_setfield(state, -2, "surface_active");
+    lua_pushboolean(state, surface.inventory_screen_active ? 1 : 0);
+    lua_setfield(state, -2, "inventory_screen_active");
+    lua_pushboolean(state, surface.inventory_shop_active ? 1 : 0);
+    lua_setfield(state, -2, "inventory_shop_active");
+    lua_pushinteger(state, static_cast<lua_Integer>(surface.gameplay_address));
+    lua_setfield(state, -2, "gameplay_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(surface.courtyard_address));
+    lua_setfield(state, -2, "courtyard_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(surface.surface_address));
+    lua_setfield(state, -2, "surface_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(surface.surface_vtable));
+    lua_setfield(state, -2, "surface_vtable");
+    lua_pushinteger(state, static_cast<lua_Integer>(surface.shop_address));
+    lua_setfield(state, -2, "shop_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(surface.shop_vtable));
+    lua_setfield(state, -2, "shop_vtable");
+    return 1;
+}
+
 int LuaInputPressKey(lua_State* state) {
     const auto* binding_name = luaL_checkstring(state, 1);
     std::string error_message;
@@ -156,6 +215,23 @@ int LuaInputPressKey(lua_State* state) {
             binding_name == nullptr ? std::string_view{} : std::string_view(binding_name),
             &error_message)) {
         return luaL_error(state, "sd.input.press_key failed: %s", error_message.c_str());
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaInputPressBinding(lua_State* state) {
+    const auto* binding_name = luaL_checkstring(state, 1);
+    std::string error_message;
+    if (!QueueGameplayBindingPress(
+            binding_name == nullptr ? std::string_view{} :
+                                      std::string_view(binding_name),
+            &error_message)) {
+        return luaL_error(
+            state,
+            "sd.input.press_binding failed: %s",
+            error_message.c_str());
     }
 
     lua_pushboolean(state, 1);
@@ -179,6 +255,23 @@ int LuaInputHoldMouseLeftFrames(lua_State* state) {
     if (raw <= 0 || raw > 3600 ||
         !QueueGameplayMouseLeftHoldFrames(static_cast<std::uint32_t>(raw), &error_message)) {
         return luaL_error(state, "sd.input.hold_mouse_left_frames failed: %s", error_message.c_str());
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaInputHoldMouseRightFrames(lua_State* state) {
+    const auto raw = luaL_checkinteger(state, 1);
+    std::string error_message;
+    if (raw <= 0 || raw > 3600 ||
+        !QueueGameplayMouseRightHoldFrames(
+            static_cast<std::uint32_t>(raw),
+            &error_message)) {
+        return luaL_error(
+            state,
+            "sd.input.hold_mouse_right_frames failed: %s",
+            error_message.c_str());
     }
 
     lua_pushboolean(state, 1);
@@ -247,6 +340,12 @@ int LuaInputClearMouseLeft(lua_State* state) {
     return 1;
 }
 
+int LuaInputClearMouseRight(lua_State* state) {
+    ClearQueuedGameplayMouseRight();
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 int LuaInputClearLocalCastState(lua_State* state) {
     std::string error_message;
     if (!ClearLocalPlayerGameplayCastState(&error_message)) {
@@ -268,6 +367,13 @@ int LuaInputGetMouseLeftState(lua_State* state) {
     lua_setfield(state, -2, "edge_serial");
     lua_pushinteger(state, static_cast<lua_Integer>(GetGameplayMouseLeftEdgeTickMs()));
     lua_setfield(state, -2, "edge_tick_ms");
+    return 1;
+}
+
+int LuaInputGetMouseRightState(lua_State* state) {
+    lua_createtable(state, 0, 1);
+    lua_pushboolean(state, IsGameplayMouseRightDown() ? 1 : 0);
+    lua_setfield(state, -2, "down");
     return 1;
 }
 
@@ -328,11 +434,13 @@ int LuaInputQueueLocalEnemyDamageClaim(lua_State* state) {
 }  // namespace
 
 void RegisterLuaInputBindings(lua_State* state) {
-    lua_createtable(state, 0, 12);
+    lua_createtable(state, 0, 16);
     RegisterFunction(state, &LuaInputPressKey, "press_key");
+    RegisterFunction(state, &LuaInputPressBinding, "press_binding");
     RegisterFunction(state, &LuaInputPressScancode, "press_scancode");
     RegisterFunction(state, &LuaInputClickNormalized, "click_normalized");
     RegisterFunction(state, &LuaInputHoldMouseLeftFrames, "hold_mouse_left_frames");
+    RegisterFunction(state, &LuaInputHoldMouseRightFrames, "hold_mouse_right_frames");
     RegisterFunction(state, &LuaInputHoldMovementFrames, "hold_movement_frames");
     RegisterFunction(
         state,
@@ -340,16 +448,20 @@ void RegisterLuaInputBindings(lua_State* state) {
         "set_native_control_allowance_frames");
     RegisterFunction(state, &LuaInputPinManualPrimaryTarget, "pin_manual_primary_target");
     RegisterFunction(state, &LuaInputClearMouseLeft, "clear_mouse_left");
+    RegisterFunction(state, &LuaInputClearMouseRight, "clear_mouse_right");
     RegisterFunction(state, &LuaInputClearLocalCastState, "clear_local_cast_state");
     RegisterFunction(state, &LuaInputGetMouseLeftState, "get_mouse_left_state");
+    RegisterFunction(state, &LuaInputGetMouseRightState, "get_mouse_right_state");
     RegisterFunction(state, &LuaInputQueueLocalSpellCast, "queue_local_spell_cast");
     RegisterFunction(state, &LuaInputQueueLocalEnemyDamageClaim, "queue_local_enemy_damage_claim");
     lua_setfield(state, -2, "input");
 }
 
 void RegisterLuaHubBindings(lua_State* state) {
-    lua_createtable(state, 0, 1);
+    lua_createtable(state, 0, 3);
     RegisterFunction(state, &LuaHubStartTestrun, "start_testrun");
+    RegisterFunction(state, &LuaHubOpenService, "open_service");
+    RegisterFunction(state, &LuaHubGetSurfaceState, "get_surface_state");
     lua_setfield(state, -2, "hub");
 }
 

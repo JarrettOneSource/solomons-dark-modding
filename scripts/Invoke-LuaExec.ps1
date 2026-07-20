@@ -13,6 +13,10 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$PipeName,
 
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(100, 300000)]
+    [int]$ResponseTimeoutMilliseconds = 35000,
+
     [Parameter(ValueFromPipeline = $true)]
     [AllowEmptyString()]
     [string[]]$InputObject
@@ -92,15 +96,17 @@ function Invoke-LuaExecCode {
 
     $pipe = $null
     $memory = $null
+    $connected = $false
 
     try {
         $pipe = [System.IO.Pipes.NamedPipeClientStream]::new(
             '.',
             $pipeName,
             [System.IO.Pipes.PipeDirection]::InOut,
-            [System.IO.Pipes.PipeOptions]::None
+            [System.IO.Pipes.PipeOptions]::Asynchronous
         )
         $pipe.Connect(5000)
+        $connected = $true
         $pipe.ReadMode = [System.IO.Pipes.PipeTransmissionMode]::Message
 
         $bytes = $utf8.GetBytes($LuaCode)
@@ -109,9 +115,21 @@ function Invoke-LuaExecCode {
 
         $memory = [System.IO.MemoryStream]::new()
         $buffer = New-Object byte[] 4096
+        $responseClock = [System.Diagnostics.Stopwatch]::StartNew()
 
         while ($true) {
-            $read = $pipe.Read($buffer, 0, $buffer.Length)
+            $remaining = $ResponseTimeoutMilliseconds - [int]$responseClock.ElapsedMilliseconds
+            if ($remaining -le 0) {
+                throw [System.TimeoutException]::new(
+                    "Timed out waiting for pipe '$pipeName' after $ResponseTimeoutMilliseconds ms.")
+            }
+
+            $readTask = $pipe.ReadAsync($buffer, 0, $buffer.Length)
+            if (-not $readTask.Wait($remaining)) {
+                throw [System.TimeoutException]::new(
+                    "Timed out waiting for pipe '$pipeName' after $ResponseTimeoutMilliseconds ms.")
+            }
+            $read = [int]$readTask.Result
             if ($read -le 0) {
                 break
             }
@@ -125,6 +143,10 @@ function Invoke-LuaExecCode {
 
         return $utf8.GetString($memory.ToArray())
     } catch [System.TimeoutException] {
+        if ($connected) {
+            throw $_.Exception.Message
+        }
+
         if (-not (Test-SolomonDarkRunning)) {
             throw "Cannot connect to pipe '$pipeName'. $(Get-SolomonDarkCrashDiagnostics)"
         }

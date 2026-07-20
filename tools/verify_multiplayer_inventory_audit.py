@@ -128,6 +128,7 @@ if mp and mp.participants then
     emit(prefix .. "gold", owned.gold or 0)
     emit(prefix .. "gold_revision", owned.gold_revision or 0)
     emit(prefix .. "inventory_revision", owned.inventory_revision or 0)
+    emit(prefix .. "equipment_revision", owned.equipment_revision or 0)
     emit(prefix .. "spellbook_revision", owned.spellbook_revision or 0)
     emit(prefix .. "statbook_revision", owned.statbook_revision or 0)
     emit(prefix .. "loadout_revision", owned.loadout_revision or 0)
@@ -145,6 +146,24 @@ if mp and mp.participants then
         emit(item_prefix .. "stack_count", item.stack_count or 0)
       end
     end
+    local equipment = participant.equipment or {}
+    emit(prefix .. "equipment.valid", equipment.valid or false)
+    emit(prefix .. "equipment.revision", equipment.revision or 0)
+    local function emit_equipped_item(name, item)
+      item = item or {}
+      emit(prefix .. "equipment." .. name .. ".type_id", item.type_id or 0)
+      emit(prefix .. "equipment." .. name .. ".recipe_uid", item.recipe_uid or 0)
+    end
+    emit_equipped_item("primary", equipment.primary)
+    emit_equipped_item("secondary", equipment.secondary)
+    emit_equipped_item("attachment", equipment.attachment)
+    emit_equipped_item("hat", equipment.hat)
+    emit_equipped_item("robe", equipment.robe)
+    emit_equipped_item("weapon", equipment.weapon)
+    emit_equipped_item("amulet", equipment.amulet)
+    local rings = equipment.rings or {}
+    emit_equipped_item("ring_1", rings[1])
+    emit_equipped_item("ring_2", rings[2])
     emit(prefix .. "progression_book_entry_count", owned.progression_book_entry_count or 0)
     emit(prefix .. "progression_book_entry_total_count", owned.progression_book_entry_total_count or 0)
     emit(prefix .. "progression_book_truncated", owned.progression_book_truncated or false)
@@ -266,6 +285,29 @@ def participant_rows(values: dict[str, str]) -> list[dict[str, Any]]:
                 "category": parse_int_text(values.get(entry_prefix + "category"), 0),
                 "statbook_max_level": parse_int_text(values.get(entry_prefix + "statbook_max_level"), -1),
             })
+        equipment: dict[str, Any] = {
+            "valid": bool_text(values.get(prefix + "equipment.valid")),
+            "revision": parse_int_text(values.get(prefix + "equipment.revision"), 0),
+        }
+        for slot in (
+            "primary",
+            "secondary",
+            "attachment",
+            "hat",
+            "robe",
+            "weapon",
+            "amulet",
+            "ring_1",
+            "ring_2",
+        ):
+            equipment[slot] = {
+                "type_id": parse_int_text(
+                    values.get(prefix + f"equipment.{slot}.type_id"), 0
+                ),
+                "recipe_uid": parse_int_text(
+                    values.get(prefix + f"equipment.{slot}.recipe_uid"), 0
+                ),
+            }
         rows.append({
             "index": index,
             "id": parse_int_text(values.get(prefix + "id"), 0),
@@ -276,6 +318,7 @@ def participant_rows(values: dict[str, str]) -> list[dict[str, Any]]:
             "gold": parse_int_text(values.get(prefix + "gold"), 0),
             "gold_revision": parse_int_text(values.get(prefix + "gold_revision"), 0),
             "inventory_revision": parse_int_text(values.get(prefix + "inventory_revision"), 0),
+            "equipment_revision": parse_int_text(values.get(prefix + "equipment_revision"), 0),
             "spellbook_revision": parse_int_text(values.get(prefix + "spellbook_revision"), 0),
             "statbook_revision": parse_int_text(values.get(prefix + "statbook_revision"), 0),
             "loadout_revision": parse_int_text(values.get(prefix + "loadout_revision"), 0),
@@ -285,6 +328,7 @@ def participant_rows(values: dict[str, str]) -> list[dict[str, Any]]:
             "inventory_item_total_count": parse_int_text(values.get(prefix + "inventory_item_total_count"), 0),
             "inventory_truncated": bool_text(values.get(prefix + "inventory_truncated")),
             "inventory_items": inventory_items,
+            "equipment": equipment,
             "progression_book_entry_count": parse_int_text(values.get(prefix + "progression_book_entry_count"), 0),
             "progression_book_entry_total_count": parse_int_text(
                 values.get(prefix + "progression_book_entry_total_count"),

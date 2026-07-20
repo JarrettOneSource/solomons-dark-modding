@@ -11,17 +11,17 @@ internal static class LauncherMultiplayerSessionStatusReader
     };
 
     public static async Task<LauncherCliMultiplayerSession?> ReadAsync(
-        string stageRuntimeRootPath,
+        string stageRootPath,
         string expectedLaunchToken,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(stageRuntimeRootPath) ||
+        if (string.IsNullOrWhiteSpace(stageRootPath) ||
             string.IsNullOrWhiteSpace(expectedLaunchToken))
         {
             return null;
         }
 
-        var statusPath = Path.Combine(stageRuntimeRootPath, StatusFileName);
+        var statusPath = Path.Combine(stageRootPath, ".sdmod", StatusFileName);
         try
         {
             await using var stream = new FileStream(

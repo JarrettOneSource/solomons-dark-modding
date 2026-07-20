@@ -20,21 +20,65 @@ from pathlib import Path
 from typing import Callable
 
 from static_multiplayer_runtime_contracts import (
+    read_source_unit,
+    test_active_steam_behavior_harnesses_preserve_fixture_state,
+    test_staff_target_selection_skips_local_only_enemies,
+    test_client_loot_pickup_requests_are_single_flight_per_drop,
+    test_client_replicated_enemy_movement_is_host_authored,
+    test_scene_tick_keeps_dead_remote_participants_inert,
+    test_cpu_tick_stops_after_virtual_update_marks_object_for_removal,
+    test_hub_students_remain_in_the_stock_transient_lifecycle,
+    test_run_enemy_materialization_preserves_exact_native_type,
+    test_run_enemy_death_tombstones_precede_structural_omission,
+    test_empty_run_snapshot_unregisters_stale_enemies_without_parking,
     test_explicit_blank_boneyard_removes_native_scenery_and_collision,
+    test_frozen_manual_enemy_cell_membership_stays_position_coherent,
     test_host_run_exit_is_authoritative_and_self_correcting,
-    test_hub_shops_preserve_participant_ownership,
+    test_loot_deactivation_uses_stock_deferred_retirement,
+    test_health_up_contract_composes_with_life_charm,
+    test_mana_up_contract_replaces_the_initial_rank_bonus,
+    test_world_stale_hold_controls_the_exact_remote_host_process,
+    test_hub_presentation_uses_stored_authority_across_lifecycle_rotation,
+    test_hub_services_use_typed_native_lua_dispatch,
     test_level_up_barrier_waits_for_forced_picker_confirmation,
+    test_level_up_choice_result_advances_owned_book_before_resume,
+    test_loot_materialization_waits_for_native_field_convergence,
+    test_mana_recovery_tolerance_respects_float32_precision,
+    test_mana_recovery_precondition_holds_zero_until_replication,
+    test_manual_primary_target_survives_stock_cursor_refresh,
     test_exact_native_equipment_identity_and_color_replicate,
     test_native_local_player_keeps_stock_input_and_equipment_ownership,
     test_lua_exec_timeout_cancels_pending_work,
+    test_remote_windows_lua_bridge_is_persistent_and_framed,
     test_meditation_transient_counters_self_repair_to_native_bounds,
     test_native_item_pickup_converges_into_stock_inventory,
+    test_native_item_recipe_selection_excludes_equipped_items,
+    test_natural_offer_expectation_clamps_to_native_maximum,
+    test_native_remote_fireball_retains_cast_heading_until_projectile_birth,
+    test_native_unregister_retires_address_bound_network_identity,
+    test_new_run_retires_the_prior_host_run_exit_latch,
+    test_orb_pickup_verifier_preserves_native_maxima,
+    test_primary_spell_effect_snapshots_do_not_fight_native_replay,
     test_powerup_rewards_are_authoritative_and_native,
+    test_poison_correction_ack_waits_for_native_application,
+    test_primary_kill_stress_resumes_only_a_contiguous_passed_prefix,
+    test_primary_kill_stress_accepts_a_late_death_from_the_prior_cast,
+    test_animated_loot_comparison_bounds_snapshot_phase_skew,
     test_packaged_ui_accepts_single_file_launcher,
+    test_packaged_ui_does_not_inherit_test_world_overrides,
+    test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery,
     test_pair_launcher_drains_redirected_json_output,
     test_pointer_list_batch_rejects_stale_managed_release_callbacks,
+    test_reconnect_verifier_has_a_dedicated_cold_launch_timeout,
     test_progression_matrices_prearm_quiet_spawning_before_run_entry,
+    test_secondary_behavior_matrix_uses_native_two_owner_witnesses,
     test_spell_verifiers_quiesce_input_and_prearm_manual_spawning,
+    test_snapshot_streams_are_compact_and_bandwidth_bounded,
+    test_steam_client_reauthentication_preserves_live_message_session,
+    test_steam_onboarding_waits_out_blocking_dialogs_and_scene_churn,
+    test_steam_pair_recovers_lobby_membership_and_requires_stable_readiness,
+    test_steam_friend_active_run_reconnect_is_wired,
+    test_stat_matrix_waits_for_expected_derived_contract,
     test_unreliable_snapshot_ordering_is_wrap_safe,
 )
 
@@ -87,6 +131,10 @@ MULTIPLAYER_PROTOCOL = ROOT / "SolomonDarkModLoader/include/multiplayer_runtime_
 MULTIPLAYER_RUNTIME_STATE = ROOT / "SolomonDarkModLoader/include/multiplayer_runtime_state.h"
 MULTIPLAYER_LOCAL_TRANSPORT = ROOT / "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
 MULTIPLAYER_LOCAL_TRANSPORT_HEADER = ROOT / "SolomonDarkModLoader/include/multiplayer_local_transport.h"
+WORLD_SNAPSHOT_FRAGMENTATION = (
+    ROOT
+    / "SolomonDarkModLoader/src/multiplayer_local_transport/world_snapshot_fragmentation.inl"
+)
 MULTIPLAYER_SERVICE_LOOP = ROOT / "SolomonDarkModLoader/src/multiplayer_service_loop.cpp"
 NATIVE_ENEMY_LIFECYCLE_HEADER = ROOT / "SolomonDarkModLoader/include/native_enemy_lifecycle.h"
 NATIVE_ENEMY_LIFECYCLE = ROOT / "SolomonDarkModLoader/src/native_enemy_lifecycle.cpp"
@@ -126,6 +174,12 @@ ENEMY_DAMAGE_CLAIM_SYNC_VERIFIER = ROOT / "tools/verify_enemy_damage_claim_sync.
 RUN_STATIC_LAYOUT_SYNC_VERIFIER = ROOT / "tools/verify_run_static_layout_sync.py"
 PLAYER_HEALTH_DEATH_SYNC_VERIFIER = ROOT / "tools/verify_player_health_death_sync.py"
 MULTIPLAYER_HUD_NAMES_VERIFIER = ROOT / "tools/verify_multiplayer_hud_names.py"
+STEAM_FRIEND_HUB_VISUALS_VERIFIER = (
+    ROOT / "tools/verify_steam_friend_hub_visuals.py"
+)
+STEAM_FRIEND_ACTIVE_PAIR_VISUALS_VERIFIER = (
+    ROOT / "tools/verify_steam_friend_active_pair_visuals.py"
+)
 HUD_LABEL_ASSET_MATERIALIZER = (
     ROOT / "SolomonDarkModLauncher/src/Staging/HudLabelAssetMaterializer.cs"
 )
@@ -502,7 +556,7 @@ def read_multiplayer_runtime_state_source() -> str:
         MULTIPLAYER_RUNTIME_STATE,
         ROOT / "SolomonDarkModLoader/include/multiplayer_runtime_effect_state.inl",
     )
-    return "\n".join(read_text(path) for path in paths)
+    return "\n".join(read_source_unit(path) for path in paths)
 
 
 def read_mod_loader_header_source() -> str:
@@ -510,7 +564,7 @@ def read_mod_loader_header_source() -> str:
         MOD_LOADER_HEADER,
         ROOT / "SolomonDarkModLoader/include/mod_loader_gameplay_api.inl",
     )
-    return "\n".join(read_text(path) for path in paths)
+    return "\n".join(read_source_unit(path) for path in paths)
 
 
 def read_gameplay_seams_header_source() -> str:
@@ -1695,6 +1749,9 @@ def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
         (run_lifecycle_public_api_text, "run lifecycle API", "IsRememberedWaveSpawnerVtableValid"),
         (run_lifecycle_public_api_text, "run lifecycle API", "TryDispatchManualRunEnemySpawnFromSpawner("),
         (run_lifecycle_public_api_text, "run lifecycle API", "manual run enemy spawn: pumped remembered stock spawner"),
+        (run_lifecycle_public_api_text, "run lifecycle API", "if (!IsRunLifecycleManualEnemySpawnerReady())"),
+        (run_lifecycle_public_api_text, "run lifecycle API", "CompletePendingDirectManualRunEnemySpawnFailure"),
+        (run_lifecycle_public_api_text, "run lifecycle API", "manual run enemy spawn: stock wave spawner became unavailable."),
         (run_lifecycle_state_text, "run lifecycle state", "last_arena_enemy_wave_spawner"),
         (run_lifecycle_state_text, "run lifecycle state", "g_current_wave_spawner_tick_address"),
         (run_lifecycle_hooks_text, "run lifecycle hooks", "RememberArenaEnemyWaveSpawner"),
@@ -1730,6 +1787,10 @@ def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
         raise StaticReTestFailure(
             "manual enemy spawn requests must be serviced by the gameplay action pump: " +
             ", ".join(native_missing))
+    if "fallback_spawner" in run_lifecycle_public_api_text:
+        raise StaticReTestFailure(
+            "manual enemy spawning retained a fallback spawner path instead of "
+            "failing an unavailable native-spawner request")
     if "if (!manual_spawner_scripted_local_primary_control || selection_pointer == 0)" in player_control_text:
         raise StaticReTestFailure(
             "scripted local primary aiming still requires a bot-owned selection pointer")
@@ -1766,7 +1827,10 @@ def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
         raise StaticReTestFailure(
             "primary kill stress verifier must check clear cast lanes from the casting instance: " +
             ", ".join(missing_source_lane_tokens))
-    return "primary kill stress verifier primes suppressed native spawners on both instances, then uses gameplay-pumped manual frozen spawns"
+    return (
+        "primary kill stress primes exact native spawners, rejects unavailable "
+        "manual requests, and completes accepted readiness races"
+    )
 
 
 def test_bot_equip_materialization_stays_scoped_to_bot_creation() -> str:
@@ -1857,21 +1921,21 @@ def test_hub_start_testrun_uses_gameplay_region_switch() -> str:
     return "hub start testrun dispatches through native Gameplay_SwitchRegion"
 
 
-def test_hub_start_testrun_waits_for_frame_pump() -> str:
+def test_hub_start_testrun_waits_for_app_tick_pump() -> str:
     pump_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_pump_loop.inl")
     pending_index = pump_text.find("pending_hub_start_testrun_requests.load")
-    frame_guard_index = pump_text.find("if (!g_allow_gameplay_action_pump_in_gameplay) {", pending_index)
+    app_tick_guard_index = pump_text.find("if (!g_allow_gameplay_action_pump_in_gameplay) {", pending_index)
     dispatch_index = pump_text.find("TryDispatchHubStartTestrunOnGameThread()", pending_index)
     gameplay_return_guard_index = pump_text.find(
         "if (!g_allow_gameplay_action_pump_in_gameplay && gameplay_active)",
         pending_index)
-    if pending_index < 0 or frame_guard_index < 0 or dispatch_index < 0:
-        raise StaticReTestFailure("hub start testrun pump no longer has frame-pump guarded dispatch")
-    if not (pending_index < frame_guard_index < dispatch_index < gameplay_return_guard_index):
+    if pending_index < 0 or app_tick_guard_index < 0 or dispatch_index < 0:
+        raise StaticReTestFailure("hub start testrun pump no longer has app-tick guarded dispatch")
+    if not (pending_index < app_tick_guard_index < dispatch_index < gameplay_return_guard_index):
         raise StaticReTestFailure(
-            "hub start testrun dispatch must stay inside the frame-pump guard and before the "
+            "hub start testrun dispatch must stay inside the app-tick guard and before the "
             "non-gameplay action return guard")
-    return "hub start testrun remains deferred out of the actor-tick gameplay pump"
+    return "hub start testrun remains app-tick owned and deferred out of the actor-tick gameplay pump"
 
 
 def test_primary_kill_stress_verifier_uses_native_hub_start() -> str:
@@ -2078,6 +2142,12 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
     pending_cast_text = read_text(PENDING_CAST_PREPARATION)
     scene_selection_text = read_text(SCENE_SELECTION)
     targeted_spell_matrix_text = read_text(TARGETED_SPELL_MATRIX_VERIFIER)
+    animation_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_animation_mana_elements.py"
+    )
+    active_pair_spell_text = read_text(
+        ROOT / "tools/verify_steam_friend_active_pair_spell_behavior.py"
+    )
 
     required_layout_tokens = (
         "actor_air_lightning_chain_count=0x284",
@@ -2101,6 +2171,7 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
         '"air_chain_sync"',
         'sd.world.get_replicated_air_chains',
         'build_air_chain_sync_evidence',
+        '#selected - 127',
         '"applied_target_parity"',
         '"endpoint_error_ok"',
         '"applied_source_endpoint_parity"',
@@ -2130,7 +2201,7 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
             "Lightning Chaining verifier still competes with the permanent target hook")
 
     required_network_tokens = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 59;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 64;"),
         (protocol_text, "AirChainSnapshot = 15"),
         (protocol_text, "kAirChainSnapshotMaxTargets = 8"),
         (protocol_text, "struct AirChainTargetPacketState"),
@@ -2151,6 +2222,7 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
         (spell_cast_hooks_text, "kAirLightningChainSourceFromReturnSlotOffset"),
         (spell_cast_hooks_text, "kCallerSourceContractEpsilon"),
         (air_chain_sync_text, "RelayPacketToPeers(packet, from)"),
+        (air_chain_sync_text, "kAirChainRuntimeHistoryCapacity = 128"),
         (air_chain_sync_text, "cumulative_override_success_count"),
         (air_chain_sync_text, "cumulative_unmapped_target_count"),
         (air_chain_sync_text, "cumulative_source_override_success_count"),
@@ -2186,20 +2258,63 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
             ", ".join(missing_enemy_identity))
 
     required_remote_start_tokens = (
-        "air_primary_packet",
-        "!resolved_target_by_id",
-        "packet.element_id == 3",
         "IsSaneExplicitCastTarget(cast_target, packet.position_x, packet.position_y)",
-        "deferred_start_packet_count",
-        "Multiplayer remote Air cast start deferred until exact target resolves",
+        "cast_input_state.target_actor_address = resolved_target_actor_address",
+        "if (!input_tracker.start_queued)",
+        "if (QueueBotCast(request))",
     )
     missing_remote_start = [
         token for token in required_remote_start_tokens if token not in transport_text
     ]
     if missing_remote_start:
         raise StaticReTestFailure(
-            "remote Air playback can still start before its refreshed native target: " +
+            "remote cast playback no longer queues targetless native presentation: " +
             ", ".join(missing_remote_start))
+    forbidden_remote_start_tokens = (
+        "air_primary_packet",
+        "deferred_start_packet_count",
+        "Multiplayer remote Air cast start deferred until exact target resolves",
+    )
+    present_remote_start = [
+        token for token in forbidden_remote_start_tokens if token in transport_text
+    ]
+    if present_remote_start:
+        raise StaticReTestFailure(
+            "remote Air playback still suppresses a valid targetless cast: " +
+            ", ".join(present_remote_start))
+
+    required_targetless_air_regression_tokens = (
+        'choices=("explode", "embers", "chaining", "targetless-air", "all")',
+        "def verify_targetless_air(",
+        'if args.behavior in ("targetless-air", "all"):',
+        'animation.ELEMENT_BY_NAME["air"]',
+        'flow["local_targetless_sequences"]',
+        'flow["remote_targetless_queue_sequences"]',
+        'flow["remote_prep_sequences"]',
+        'flow["remote_release_sequences"]',
+        'if not cast["active_seen"] or not cast["anim_seen"]:',
+    )
+    missing_targetless_air_regression = [
+        token
+        for token in required_targetless_air_regression_tokens
+        if token not in active_pair_spell_text
+    ]
+    if missing_targetless_air_regression:
+        raise StaticReTestFailure(
+            "real-Steam targetless Air regression lacks exact lifecycle witness(es): "
+            + ", ".join(missing_targetless_air_regression)
+        )
+    for token in (
+        '"local_targetless_sequences": local_targetless_sequences',
+        '"remote_targetless_queue_sequences": remote_targetless_queue_sequences',
+        "target_network_actor_id=0 target_actor=0x0+ target_source=none",
+        "require_remote_release=True",
+        "receiver_deadline = time.monotonic() + 8.0",
+    ):
+        if token not in animation_verifier_text:
+            raise StaticReTestFailure(
+                "targetless Air flow parser lacks: " + token
+            )
 
     forbidden_predicted_damage_tokens = (
         "TryResolveLocalPrimaryCastClaimDamage",
@@ -4673,8 +4788,11 @@ def test_lua_bot_constants_are_semantic_or_documented() -> str:
             "Lua enemy semantic producer is missing token(s): " +
             ", ".join(missing_public))
     required_constants_tokens = (
-        "object_type_id == 1001 || object_type_id == 1002",
-        "stock wave-spawned enemy actor variants",
+        "FUN_005B7080 owns the stock GameNPC factory",
+        "kFirstArenaCombatActorType = 1001",
+        "kLastArenaCombatActorType = 1013",
+        "object_type_id >= kFirstArenaCombatActorType",
+        "object_type_id <= kLastArenaCombatActorType",
     )
     missing_constants = [token for token in required_constants_tokens if token not in constants_text]
     if missing_constants:
@@ -5084,7 +5202,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     participant_snapshot_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_snapshot.inl"
     )
-    native_remote_playback_text = read_text(
+    native_remote_playback_text = read_source_unit(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/native_remote_playback.inl"
     )
     orb_pickup_hook_text = read_text(
@@ -5145,7 +5263,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     fireball_explode_verifier_text = read_text(
         ROOT / "tools/verify_multiplayer_fireball_explode_effect_sync.py"
     )
-    skill_choices_api_text = read_text(
+    skill_choices_api_text = read_source_unit(
         ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/skill_choices_api.inl"
     )
     state_getters_text = read_text(
@@ -5169,7 +5287,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     enemy_soft_reconciliation_verifier_text = read_text(
         ROOT / "tools/verify_multiplayer_enemy_soft_reconciliation.py"
     )
-    level_up_choice_and_picker_text = read_text(
+    level_up_choice_and_picker_text = read_source_unit(
         ROOT
         / "SolomonDarkModLoader/src/multiplayer_local_transport/level_up_choice_and_picker.inl"
     )
@@ -5205,15 +5323,16 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 59;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 64;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
-        (protocol_text, "kWorldSnapshotMaxActors"),
+        (protocol_text, "kWorldSnapshotActorsPerFragment"),
+        (protocol_text, "kWorldSnapshotMaxLogicalActors"),
         (protocol_text, "kLootSnapshotMaxDrops"),
         (protocol_text, "kWorldActorStudentVisualStateBytes"),
         (protocol_text, "kWorldActorStudentBookPaletteMaxEntries"),
-        (protocol_text, "WorldSnapshotFlagTruncated"),
+        (protocol_text, "std::uint32_t snapshot_id;"),
         (protocol_text, "LootSnapshotFlagTruncated"),
         (protocol_text, "LootSnapshot = 6"),
         (protocol_text, "EnemyDamageClaim = 7"),
@@ -5304,19 +5423,21 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "std::uint32_t attachment_staff_visual_state;"),
         (protocol_text, "std::uint8_t primary_visual_link_color_block"),
         (protocol_text, "std::uint32_t anim_drive_state_word;"),
-        (protocol_text, "float render_drive_effect_timer;"),
-        (protocol_text, "float render_drive_effect_progress;"),
+        (protocol_text, "float magic_shield_absorb_remaining;"),
+        (protocol_text, "float magic_shield_absorb_capacity;"),
+        (protocol_text, "float magic_shield_explosion_fraction;"),
+        (protocol_text, "float magic_shield_hit_flash;"),
         (protocol_text, "float render_drive_overlay_alpha;"),
         (protocol_text, "float render_drive_move_blend;"),
         (protocol_text, "display_name"),
         (protocol_text, "static_assert(sizeof(ParticipantInventoryItemPacketState) == 16"),
         (protocol_text, "static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20"),
         (protocol_text, "std::uint64_t authority_participant_id;"),
-        (protocol_text, "static_assert(sizeof(StatePacket) == 4196"),
+        (protocol_text, "static_assert(sizeof(StatePacket) == 4204"),
         (protocol_text, "static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24"),
         (protocol_text, "static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40"),
-        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 292"),
-        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 18720"),
+        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 304"),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 1264"),
         (protocol_text, "static_assert(sizeof(LootDropSnapshotPacketState) == 112"),
         (protocol_text, "static_assert(sizeof(LootSnapshotPacket) == 7200"),
         (protocol_text, "static_assert(sizeof(LootPickupRequestPacket) == 56"),
@@ -5377,7 +5498,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (spell_effect_transport_text, "actor.actor_slot != 0"),
         (spell_effect_transport_text, "SpellEffectStateFlagTerminal"),
         (transport_text, "kLocalSpellEffectTombstoneHoldMs = 4000"),
-        (spell_effect_transport_text, "RelayPacketToPeers(packet, from)"),
+        (spell_effect_transport_text, "RelayPacketBufferToPeers("),
         (spell_effect_reconciliation_text, "MatchReplicatedSpellEffectActor"),
         (spell_effect_reconciliation_text, "owner_gameplay.gameplay_slot"),
         (spell_effect_reconciliation_text, "actor.actor_slot != owner_gameplay_slot"),
@@ -5392,8 +5513,10 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (gameplay_seams_header_text, "kEmberLifetimeOffset"),
         (gameplay_seams_size_bindings_text, "ember_lifetime"),
         (runtime_state_text, "std::uint16_t presentation_flags"),
-        (runtime_state_text, "float render_drive_effect_timer"),
-        (runtime_state_text, "float render_drive_effect_progress"),
+        (runtime_state_text, "float magic_shield_absorb_remaining"),
+        (runtime_state_text, "float magic_shield_absorb_capacity"),
+        (runtime_state_text, "float magic_shield_explosion_fraction"),
+        (runtime_state_text, "float magic_shield_hit_flash"),
         (runtime_state_text, "float render_drive_overlay_alpha"),
         (runtime_state_text, "float render_drive_move_blend"),
         (runtime_state_text, "actor_total_count"),
@@ -5405,7 +5528,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (runtime_state_text, "health_write_count"),
         (runtime_state_text, "dead_actor_count"),
         (runtime_state_text, "removed_actor_count"),
+        (runtime_state_text, "removed_actor_total_count"),
         (runtime_state_text, "failed_remove_actor_count"),
+        (runtime_state_text, "failed_remove_actor_total_count"),
         (runtime_state_text, "actor_bindings"),
         (runtime_state_text, "LootDropKindLabel"),
         (transport_header_text, "TickLocalTransport"),
@@ -5422,18 +5547,22 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "SDMOD_MULTIPLAYER_LOCAL_PORT"),
         (transport_text, "SDMOD_MULTIPLAYER_REMOTE_PORT"),
         (transport_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
-        (transport_text, "RelayStatePacketToPeers"),
-        (transport_text, "NormalizeRenderDriveEffectState"),
-        (transport_text, "kRenderDriveEffectTimerEpsilon"),
-        (transport_text, "packet.anim_drive_state_word = local->runtime.anim_drive_state_word"),
-        (transport_text, "packet.render_drive_effect_timer = local->runtime.render_drive_effect_timer"),
-        (transport_text, "participant->runtime.render_drive_effect_timer = effect_state.timer"),
-        (transport_text, "sample.render_drive_effect_timer = effect_state.timer"),
+        (transport_text, "RelayParticipantPacketToPeers"),
+        (transport_text, "NormalizeMagicShieldState"),
+        (transport_text, "kMagicShieldAbsorbEpsilon"),
+        (transport_text, "packet->anim_drive_state_word = local.runtime.anim_drive_state_word"),
+        (transport_text, "packet->magic_shield_absorb_remaining ="),
+        (transport_text, "packet->magic_shield_absorb_capacity ="),
+        (transport_text, "packet->magic_shield_explosion_fraction ="),
+        (transport_text, "participant->runtime.magic_shield_absorb_remaining ="),
+        (transport_text, "participant->runtime.magic_shield_absorb_capacity ="),
+        (transport_text, "participant->runtime.magic_shield_explosion_fraction ="),
+        (transport_text, "sample.magic_shield_absorb_remaining = normalized.magic_shield_absorb_remaining"),
         (transport_text, "sample.render_drive_overlay_alpha = packet.render_drive_overlay_alpha"),
         (transport_text, "staff attachment tail field at +0x84 is native-owned"),
-        (transport_text, "packet.presentation_flags & ~ParticipantPresentationFlagStaffVisualState"),
+        (transport_text, "packet.presentation_flags &"),
         (transport_text, "participant->runtime.attachment_staff_visual_state = 0"),
-        (transport_text, "BuildLocalWorldSnapshotPacket"),
+        (transport_text, "BuildLocalWorldSnapshot"),
         (transport_text, "ResolveRunEnemyTargetParticipantId"),
         (transport_text, "target_native_type_id == 1"),
         (transport_text, "target_actor_slot == 0"),
@@ -5485,7 +5614,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "ParticipantSceneIntentKind::SharedHub"),
         (transport_text, "ParticipantSceneIntentKind::Run"),
         (transport_text, "actor.tracked_enemy"),
-        (transport_text, "WorldSnapshotFlagTruncated"),
+        (transport_text, "TryAcceptWorldSnapshotFragment"),
         (transport_text, "LootSnapshotFlagTruncated"),
         (transport_text, "ApplyWorldSnapshotPacket"),
         (world_snapshot_reconciliation_text, "ResolveReplicatedRunEnemyTargetActor"),
@@ -5536,14 +5665,14 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (skill_picker_visual_identity_verifier_text, "picker_option_ids"),
         (skill_picker_visual_identity_verifier_text, "wait_for_choice_result"),
         (transport_text, "RelayPacketToPeers(result, endpoint)"),
-        (transport_text, "ApplyParticipantSkillChoiceOption(\n                    packet.target_participant_id"),
+        (transport_text, "HydrateAuthoritativeRemoteProgressionEntryState(\n                    packet.target_participant_id"),
         (transport_text, "SendQueuedLevelUpChoices"),
         (transport_text, "SyncParticipantProgressionToSharedLevelUpAndRollChoices"),
         (transport_text, "ReconcileRemoteParticipantNativeProgression"),
         (transport_text, "kNativeProgressionReconcileAuditMs"),
         (transport_text, "SyncParticipantProgressionToSharedLevelUp("),
         (transport_text, "ReconcileRemoteParticipantNativeProgression(now_ms);"),
-        (transport_text, "ApplyParticipantSkillChoiceOption"),
+        (transport_text, "ApplyAuthoritativeRemoteSkillRankDelta"),
         (transport_text, "ApplyLocalPlayerSkillChoiceOption"),
         (transport_text, "LevelUpChoiceResultCode::InvalidOption"),
         (transport_text, "HasLocalLevelUpOfferAwaitingNativePresentation"),
@@ -5562,7 +5691,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "QueueHostLootDropDeactivation("),
         (transport_text, "ProcessCompletedHostLootPickups();"),
         (host_loot_drop_deactivation_text, "PumpHostLootDropDeactivation()"),
-        (host_loot_drop_deactivation_text, "CallActorWorldUnregisterSafe("),
+        (host_loot_drop_deactivation_text, "CallActorRequestRetirementSafe("),
         (transport_text, "TryBuildAcceptedOrbLootPickupPayload"),
         (transport_text, "TryBuildAcceptedItemLootPickupPayload"),
         (transport_text, "ApplyOwnedInventoryLootItem"),
@@ -5639,6 +5768,22 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl"), "RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook)"),
         (orb_pickup_hook_text, "ShouldSuppressRemoteParticipantOrbPickup"),
         (orb_pickup_hook_text, "TryQueueReplicatedLootPickupRequest"),
+        (
+            orb_pickup_hook_text,
+            "last_result.result_code == multiplayer::LootPickupResultCode::Accepted",
+        ),
+        (
+            orb_pickup_hook_text,
+            "last_result.participant_id == local_transport_participant_id",
+        ),
+        (
+            orb_pickup_hook_text,
+            "last_result.result_code == multiplayer::LootPickupResultCode::AlreadyGone",
+        ),
+        (
+            orb_pickup_hook_text,
+            "g_replicated_loot_pickup_request_not_before_ms.erase(presentation.network_drop_id)",
+        ),
         (orb_pickup_hook_text, "LootDropKind::Orb"),
         (orb_pickup_hook_text, "IsLocalTransportHost()"),
         (orb_pickup_hook_text, "IsNativeRemoteParticipantBinding(&binding)"),
@@ -5679,6 +5824,14 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (gameplay_seams_header_text, "kItemDropHeldItemOffset"),
         (gameplay_seams_size_bindings_text, "gameplay_item_list_root"),
         (gameplay_seams_size_bindings_text, "item_drop_held_item"),
+        (
+            read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"),
+            "const bool owns_wizard_progression = state.object_type_id == 1;",
+        ),
+        (
+            read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"),
+            "} else if (owns_wizard_progression &&",
+        ),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"), "TryGetPlayerInventoryState"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"), "kGameplayItemListRootOffset"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"), "kSDModInventorySnapshotMaxItems"),
@@ -5712,9 +5865,23 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (lua_gameplay_text, "\"resulting_mana_current\""),
         (transport_text, "SendLootSnapshot"),
         (transport_text, "SendQueuedLootPickupRequests"),
-        (transport_text, "packet.actor_count == 0 && scene_kind != WorldSceneKind::Run"),
+        (transport_text, "bool automatic_proximity_request = false;"),
+        (
+            transport_text,
+            "request.automatic_proximity_request = capture != nullptr && capture->valid;",
+        ),
+        (transport_text, "automatic_request_already_terminal"),
+        (
+            transport_text,
+            "last_result.participant_id == g_local_transport.local_peer_id",
+        ),
+        (
+            transport_text,
+            "Multiplayer automatic loot pickup retry suppressed after terminal result.",
+        ),
+        (transport_text, "complete_snapshot.actors.empty() &&"),
         (transport_text, "MaybeQueueClientHostRunStart"),
-        (transport_text, "IsAuthoritativeHostStatePacket"),
+        (transport_text, "IsAuthoritativeHostParticipantPacket"),
         (transport_text, "packet.participant_id == packet.authority_participant_id"),
         (transport_text, "kClientHostRunFollowRetryMs"),
         (transport_text, "host-authoritative run entry"),
@@ -5772,6 +5939,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (participant_entity_lifecycle_text, "PublishParticipantGameplaySnapshot(binding)"),
         (participant_entity_lifecycle_text, "abandoned materialized bot entity for scene switch"),
         (world_snapshot_reconciliation_text, "created_actor_total_count += counts.created_actor_count"),
+        (world_snapshot_reconciliation_text, "removed_actor_total_count +="),
+        (world_snapshot_reconciliation_text, "failed_remove_actor_total_count +="),
         (world_snapshot_reconciliation_text, "TryRebindActorToOwnerWorld"),
         (world_snapshot_reconciliation_text, "kWorldSnapshotApplyStaleMs"),
         (world_snapshot_reconciliation_text, "kWorldSnapshotInterpolationDelayMs"),
@@ -5796,8 +5965,14 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "authoritative_count - local_count"),
         (world_snapshot_reconciliation_text, "TryBindAuthoritativeRunActorToLocalPool"),
         (world_snapshot_reconciliation_text, "IsSameReplicatedRunEnemyKind"),
-        (world_snapshot_reconciliation_text, "bound arena run enemy variant"),
-        (world_snapshot_reconciliation_text, "arena-combat family is the binding key"),
+        (
+            world_snapshot_reconciliation_text,
+            "local_actor.object_type_id == authoritative_actor.native_type_id",
+        ),
+        (
+            world_snapshot_reconciliation_text,
+            "queued replicated manual run enemy materialization",
+        ),
         (world_snapshot_reconciliation_text, "authoritative_actor.player_created"),
         (world_snapshot_reconciliation_text, "BindReplicatedRunActor"),
         (world_snapshot_reconciliation_text, "RecordWorldSnapshotBinding"),
@@ -5855,13 +6030,13 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (lua_gameplay_text, "request_loot_pickup"),
         (lua_gameplay_text, "last_pickup_result"),
         (transport_text, "TryGetWorldState"),
-        (transport_text, "packet.wave = local->runtime.wave"),
+        (transport_text, "packet->wave = local.runtime.wave"),
         (lua_input_text, "host-only while connected to a multiplayer session"),
         (lua_input_text, "QueueGameplayMouseLeftClick(&gameplay_click_error)"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "Blocked client run switch_region while connected to multiplayer"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_gameplay_thread_dispatch.inl"), "g_multiplayer_client_authorized_hub_run_switch_depth"),
         (service_loop_text, "InitializeLocalTransport()"),
-        (service_loop_text, "TickLocalTransport(now_ms)"),
+        (service_loop_text, "TickSessionAndTransportOnAppThread"),
         (service_loop_text, "ShutdownLocalTransport()"),
         (lua_exec_pipe_text, "SDMOD_LUA_EXEC_PIPE_NAME"),
         (staged_game_launcher_text, "SDMOD_MULTIPLAYER_TRANSPORT"),
@@ -5884,6 +6059,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (read_text(LUA_ENGINE_BOTS_BINDING), "LuaBotsGetNameplate"),
         (entity_sync_text, "ReadParticipantSnapshot(request.bot_id"),
         (scene_binding_text, "ReadParticipantSnapshot(binding.bot_id"),
+        (scene_binding_text, "RefreshNativeRemoteParticipantTransformTarget"),
+        (scene_binding_text, "ApplyNativeRemoteParticipantPlayback"),
         (native_remote_playback_text, "ApplyNativeRemoteParticipantPlayback"),
         (native_remote_playback_text, "ApplyNativeRemoteParticipantVitalState"),
         (native_remote_playback_text, "ApplyNativeRemoteParticipantPresentationState"),
@@ -6150,8 +6327,22 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         missing.append("gold loot availability must not use the +0x148 state byte")
     if "ExecuteHostLootDropDeactivationNow(" not in host_loot_drop_deactivation_text:
         missing.append("gameplay-thread loot deactivation helper")
-    if "CallActorWorldUnregisterSafe(" not in host_loot_drop_deactivation_text:
-        missing.append("item/potion loot deactivation must unregister the native drop actor")
+    if "CallActorRequestRetirementSafe(" not in host_loot_drop_deactivation_text:
+        missing.append("accepted loot must enter the stock deferred-retirement lifecycle")
+    if "CallActorRequestRetirementSafe(" not in replicated_loot_reconciliation_text:
+        missing.append("client loot must enter the stock deferred-retirement lifecycle")
+    if "CallActorWorldUnregisterSafe(" in host_loot_drop_deactivation_text:
+        missing.append("accepted loot must not unregister actors while stock readers retain them")
+    if "CallActorWorldUnregisterSafe(" in replicated_loot_reconciliation_text:
+        missing.append("client loot cleanup must not unregister actors while stock readers retain them")
+    if "ParkReplicatedLootPresentationActor" in host_loot_drop_deactivation_text:
+        missing.append("host loot deactivation must not park native drop actors")
+    if "ParkReplicatedLootPresentationActor" in replicated_loot_reconciliation_text:
+        missing.append("client loot cleanup must not park native drop actors")
+    if "g_client_non_authoritative_loot_suppressed_actors" in replicated_loot_reconciliation_text:
+        missing.append("client loot cleanup must not retain suppressed actor tombstones")
+    if "RemoveReplicatedLootPresentationActor(binding, &exception_code)" not in replicated_loot_reconciliation_text:
+        missing.append("unbound client loot cleanup must unregister native drop actors")
     if "kItemDropHeldItemOffset" in host_loot_drop_deactivation_text:
         missing.append("item/potion loot deactivation must not null the native held-item pointer")
     if "CallActorWorldUnregisterSafe(" in transport_text:
@@ -6286,6 +6477,282 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     return "local UDP dev transport is wired through protocol, service loop, interpolated participant/world sync, docs, and launch script"
 
 
+def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
+    protocol_text = read_text(MULTIPLAYER_PROTOCOL)
+    transport_text = read_multiplayer_transport_source()
+    fragmentation_text = read_text(WORLD_SNAPSHOT_FRAGMENTATION)
+    reconciliation_text = read_text(WORLD_SNAPSHOT_RECONCILIATION)
+    run_lifecycle_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks.inl"
+    )
+
+    required_tokens = (
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 64;"),
+        (protocol_text, "constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 4;"),
+        (protocol_text, "constexpr std::uint32_t kWorldSnapshotMaxLogicalActors = 512;"),
+        (protocol_text, "std::uint32_t snapshot_id;"),
+        (protocol_text, "std::uint16_t fragment_index;"),
+        (protocol_text, "std::uint16_t fragment_count;"),
+        (protocol_text, "std::uint16_t actor_start_index;"),
+        (protocol_text, "std::uint16_t actor_count;"),
+        (protocol_text, "std::uint32_t actor_total_count;"),
+        (
+            protocol_text,
+            "WorldActorSnapshotPacketState actors[kWorldSnapshotActorsPerFragment];",
+        ),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 1264"),
+        (fragmentation_text, "struct CompleteWorldSnapshotPacketState"),
+        (fragmentation_text, "struct PendingWorldSnapshotAssembly"),
+        (fragmentation_text, "struct PendingWorldSnapshotAssemblies"),
+        (
+            fragmentation_text,
+            "constexpr std::size_t kPendingWorldSnapshotAssemblyLimit = 8;",
+        ),
+        (
+            fragmentation_text,
+            "constexpr std::uint64_t kPendingWorldSnapshotAssemblyMaxAgeMs = 500;",
+        ),
+        (fragmentation_text, "std::deque<PendingWorldSnapshotAssembly> assemblies;"),
+        (fragmentation_text, "PrunePendingWorldSnapshotAssemblies("),
+        (fragmentation_text, "bool TryAcceptWorldSnapshotFragment("),
+        (
+            fragmentation_text,
+            "assembly->received_fragment_count == assembly->fragment_count",
+        ),
+        (transport_text, "BuildLocalWorldSnapshot("),
+        (transport_text, "BuildWorldSnapshotFragmentPackets("),
+        (transport_text, "for (const auto& packet : packets)"),
+        (transport_text, "TryAcceptWorldSnapshotFragment("),
+        (
+            transport_text,
+            "PublishWorldSnapshotRuntimeInfo(complete_snapshot, now_ms)",
+        ),
+        (
+            transport_text,
+            "kLocalTransportWorldSnapshotReliableCheckpointIntervalMs = 1000",
+        ),
+        (reconciliation_text, "kWorldSnapshotApplyStaleMs = 1200"),
+        (transport_text, "last_world_snapshot_reliable_checkpoint_ms"),
+        (transport_text, "const bool reliable_checkpoint ="),
+        (transport_text, "SteamNetworkSendMode::ReliableNoNagle"),
+        (transport_text, "Steam gameplay packet send rejected."),
+        (transport_text, "steam_reliable_send_failures"),
+    )
+    missing = [token for text, token in required_tokens if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "complete fragmented world snapshot contract is incomplete: "
+            + ", ".join(missing)
+        )
+
+    forbidden_tokens = (
+        (protocol_text, "kWorldSnapshotMaxActors"),
+        (protocol_text, "WorldSnapshotFlagTruncated"),
+        (transport_text, "BuildLocalWorldSnapshotPacket"),
+        (transport_text, "WorldSnapshotFlagTruncated"),
+        (reconciliation_text, "snapshot.truncated"),
+        (run_lifecycle_text, "snapshot.truncated"),
+        (transport_text, "PendingWorldSnapshotAssembly pending_world_snapshot;"),
+    )
+    present = [token for text, token in forbidden_tokens if token in text]
+    if present:
+        raise StaticReTestFailure(
+            "partial world snapshot fallback remains active: " + ", ".join(present)
+        )
+
+    actors_per_fragment_match = re.search(
+        r"kWorldSnapshotActorsPerFragment\s*=\s*(\d+)", protocol_text
+    )
+    maximum_actor_match = re.search(
+        r"kWorldSnapshotMaxLogicalActors\s*=\s*(\d+)", protocol_text
+    )
+    packet_size_match = re.search(
+        r"sizeof\(WorldSnapshotPacket\)\s*==\s*(\d+)", protocol_text
+    )
+    if (
+        not actors_per_fragment_match
+        or not maximum_actor_match
+        or not packet_size_match
+    ):
+        raise StaticReTestFailure(
+            "world snapshot fragment constants are not statically measurable"
+        )
+
+    actors_per_fragment = int(actors_per_fragment_match.group(1))
+    maximum_actors = int(maximum_actor_match.group(1))
+    packet_size = int(packet_size_match.group(1))
+    retail_wave_actor_count = 80
+    if maximum_actors < retail_wave_actor_count:
+        raise StaticReTestFailure(
+            f"logical world snapshots cannot represent a retail {retail_wave_actor_count}-enemy wave"
+        )
+    if packet_size > 1280:
+        raise StaticReTestFailure(
+            f"world snapshot fragment is {packet_size} bytes instead of staying below 1280 bytes"
+        )
+    expected_fragments = math.ceil(
+        retail_wave_actor_count / actors_per_fragment
+    )
+    if expected_fragments != 20:
+        raise StaticReTestFailure(
+            f"retail 80-enemy generation should be 20 fragments, got {expected_fragments}"
+        )
+
+    return (
+        "world snapshots publish only complete generations across "
+        f"{expected_fragments} MTU-sized fragments for an 80-enemy retail wave, "
+        "retain bounded interleaved assemblies, and send reliable convergence checkpoints"
+    )
+
+
+def test_packet_send_mode_dispatch_is_type_safe() -> str:
+    outgoing_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/outgoing_packet_sync.inl"
+    )
+    required_tokens = (
+        "SteamNetworkSendMode SteamSendModeForPacket(const CastPacket& packet)",
+        "template <typename Packet>\nSteamNetworkSendMode SteamSendModeForPacket(const Packet& packet)",
+        "case PacketKind::WorldSnapshot:\n        // Ordinary generations are disposable visual updates.",
+        "return SteamNetworkSendMode::UnreliableNoDelay;",
+        "SteamSendModeForPacket(packet));",
+    )
+    missing = [token for token in required_tokens if token not in outgoing_text]
+    if missing:
+        raise StaticReTestFailure(
+            "typed Steam send-mode dispatch is incomplete: " + ", ".join(missing)
+        )
+
+    forbidden_tokens = (
+        "SteamSendModeForPacket(const void*",
+        "std::memcpy(&cast, packet, sizeof(cast))",
+    )
+    present = [token for token in forbidden_tokens if token in outgoing_text]
+    if present:
+        raise StaticReTestFailure(
+            "raw packet send-mode inspection can read beyond the concrete packet: "
+            + ", ".join(present)
+        )
+
+    world_case = outgoing_text.find("case PacketKind::WorldSnapshot:")
+    no_delay = outgoing_text.find(
+        "return SteamNetworkSendMode::UnreliableNoDelay;", world_case
+    )
+    switch_end = outgoing_text.find("default:", world_case)
+    if not 0 <= world_case < no_delay < switch_end:
+        raise StaticReTestFailure(
+            "ordinary fragmented world generations must be disposable NoDelay updates"
+        )
+
+    return "Steam send-mode selection is type-safe, keeps ordinary world generations disposable, and uses bounded reliable convergence checkpoints"
+
+
+def test_steam_pair_driver_rejects_ended_runs_before_client_navigation() -> str:
+    query_text = read_text(ROOT / "tools/verify_local_multiplayer_sync.py")
+    driver_text = read_text(ROOT / "tools/drive_steam_friend_active_pair.py")
+
+    required_query_tokens = (
+        "if participant.is_owner then",
+        'emit("local.in_run", local_participant and local_participant.in_run or false)',
+    )
+    missing_query = [
+        token for token in required_query_tokens if token not in query_text
+    ]
+    if missing_query:
+        raise StaticReTestFailure(
+            "Steam pair query does not expose authoritative local run ownership: "
+            + ", ".join(missing_query)
+        )
+
+    required_driver_tokens = (
+        'parser.add_argument("--test-godmode", action="store_true")',
+        'parser.add_argument("--test-manual-enemy-mode", action="store_true")',
+        "sd.events.on('runtime.tick', sustain)",
+        "if not local_participant_in_run() then",
+        "sd.gameplay.get_manual_enemy_spawner_state()",
+        "if state and state.manual_mode then",
+        "sd.gameplay.set_manual_enemy_spawner_test_mode(true)",
+        'host_view_before_client.get("local.in_run") != "true"',
+        "host is still presenting an ended run; refusing to start a competing client scene load",
+        'host_view.get("local.in_run") == "true"',
+    )
+    missing_driver = [
+        token for token in required_driver_tokens if token not in driver_text
+    ]
+    if missing_driver:
+        raise StaticReTestFailure(
+            "Steam pair ended-run safety is incomplete: "
+            + ", ".join(missing_driver)
+        )
+
+    host_query = driver_text.find("host_view_before_client = local_sync.query(HOST_ENDPOINT)")
+    ended_run_guard = driver_text.find(
+        'host_view_before_client.get("local.in_run") != "true"', host_query
+    )
+    client_navigation = driver_text.find(
+        'output["client"] = drive_one_to_hub(', ended_run_guard
+    )
+    arm_host = driver_text.find(
+        '"host": arm_test_godmode(pair, HOST_ENDPOINT)', client_navigation
+    )
+    arm_client = driver_text.find(
+        '"client": arm_test_godmode(pair, CLIENT_ENDPOINT)', arm_host
+    )
+    arm_manual_host = driver_text.find(
+        '"host": arm_test_manual_enemy_mode(pair, HOST_ENDPOINT)', arm_client
+    )
+    arm_manual_client = driver_text.find(
+        '"client": arm_test_manual_enemy_mode(pair, CLIENT_ENDPOINT)',
+        arm_manual_host,
+    )
+    run_start = driver_text.find("if args.start_run:", arm_manual_client)
+    if not (
+        0 <= host_query < ended_run_guard < client_navigation
+        < arm_host < arm_client < arm_manual_host < arm_manual_client < run_start
+    ):
+        raise StaticReTestFailure(
+            "Steam pair driver must reject an ended host run before client navigation "
+            "and arm both test-safety callbacks on both peers before run start"
+        )
+
+    return "Steam pair onboarding refuses stale ended runs before client navigation and arms semantic test safety before run start"
+
+
+def test_manual_enemy_test_mode_logging_is_transition_only() -> str:
+    lifecycle_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/run_lifecycle/public_api_and_install.inl"
+    )
+    setter_start = lifecycle_text.find(
+        "void SetRunLifecycleManualEnemySpawnerTestMode(bool enabled)"
+    )
+    setter_end = lifecycle_text.find(
+        "bool IsRunLifecycleManualEnemySpawnerTestModeEnabled()", setter_start
+    )
+    body = lifecycle_text[setter_start:setter_end]
+    required = (
+        "manual_enemy_spawner_test_mode.exchange(",
+        "if (previous == enabled)",
+        "return;",
+        'Log(\n        "manual run enemy spawn: stock-spawner test mode "',
+    )
+    missing = [token for token in required if token not in body]
+    if setter_start == -1 or setter_end == -1 or missing:
+        raise StaticReTestFailure(
+            "manual enemy test-mode setter must log only actual state transitions: "
+            + ", ".join(missing)
+        )
+    if not (
+        body.find("manual_enemy_spawner_test_mode.exchange(")
+        < body.find("if (previous == enabled)")
+        < body.find("return;")
+        < body.find("Log(")
+    ):
+        raise StaticReTestFailure(
+            "manual enemy test-mode transition guard must precede logging"
+        )
+    return "manual enemy test mode is idempotent and logs only real state transitions"
+
+
 def test_steam_friend_multiplayer_contract_is_wired() -> str:
     protocol_text = read_text(
         ROOT / "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
@@ -6372,8 +6839,8 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 59;"),
-        (compatibility_materializer_text, "CurrentProtocolVersion = 59;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 64;"),
+        (compatibility_materializer_text, "CurrentProtocolVersion = 64;"),
         (protocol_text, "SessionCapabilityHostAuthority"),
         (protocol_text, "struct SessionHelloPacket"),
         (protocol_text, "struct SessionHelloAckPacket"),
@@ -6392,7 +6859,9 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
         (bootstrap_api_text, '"SteamAPI_ISteamMatchmaking_InviteUserToLobby"'),
         (steam_bridge_text, "steamabi::kLobbyTypeFriendsOnly"),
         (steam_bridge_text, "SteamInviteUserToLobby"),
-        (session_text, "SteamCreateFriendsOnlyLobby("),
+        (session_text, "SteamCreateLobby("),
+        (session_text, "g_session.lobby_visibility"),
+        (session_text, 'LobbyPrivacyToken(g_session.lobby_visibility)'),
         (session_text, "SteamInviteUserToLobby(lobby_id, g_session.invite_steam_id)"),
         (session_text, "g_session.phase == SteamSessionPhase::Error &&"),
         (session_text, "g_session.lobby_id == 0"),
@@ -6434,13 +6903,11 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
         (ui_view_model_text, "LobbyId = multiplayer.LobbyId.ToString();"),
         (ui_view_model_text, "StartSteamSessionMonitoring("),
         (ui_view_model_text, 'status.Phase == "Connected"'),
-        (ui_view_model_text, '"Connected — 1 friend in the lobby"'),
-        (ui_view_model_text, '"Connected — {status.AuthenticatedPeerCount} friends in the lobby"'),
+        (ui_view_model_text, "DescribeLobbyConnection(status)"),
+        (ui_view_model_text, 'connection += $" · {status.RoutePingMs} ms"'),
         (ui_session_status_reader_text, "FileShare.ReadWrite | FileShare.Delete"),
         (ui_session_status_reader_text, "expectedLaunchToken"),
-        (ui_xaml_text, 'Binding="{Binding HasSteamSession}"'),
-        (ui_xaml_text, 'Binding="{Binding IsSteamFriendConnected}"'),
-        (ui_xaml_text, 'Text="{Binding SteamConnectionText}"'),
+        (ui_xaml_text, 'Text="{Binding LobbyConnectionDetailsText}"'),
         (ui_command_client_text, "LauncherJsonResponseReader.ReadAsync("),
         (ui_response_reader_text, "ReadLineAsync(cancellationToken)"),
         (ui_response_reader_text, 'TryGetProperty("success"'),
@@ -6454,6 +6921,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
         (wsl_lua_client_text, 'export WINEPREFIX="$compat_data/pfx"'),
         (win32_lua_client_text, "PIPE_READMODE_MESSAGE"),
         (win32_lua_client_text, "GENERIC_READ | GENERIC_WRITE"),
+        (win32_lua_client_text, "constexpr DWORD kPipeTimeoutMs = 20000;"),
     )
     missing = [token for text, token in required_pairs if token not in text]
     if missing:
@@ -6462,21 +6930,145 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
             ", ".join(missing)
         )
 
-    forbidden_session_tokens = ("kLobbyTypePublic",)
-    present = [token for token in forbidden_session_tokens if token in session_text]
-    if present:
-        raise StaticReTestFailure(
-            "Steam host session bypasses friends-only or host-authenticated routing: " +
-            ", ".join(present)
-        )
     if "ReadToEndAsync" in ui_command_client_text:
         raise StaticReTestFailure(
             "WPF launcher still waits for inherited game pipe EOF instead of the CLI JSON response"
         )
+    for removed_status in (
+        "Steam invites ready",
+        "HasSteamActivity",
+        "IsSteamFriendConnected",
+        "SteamConnectionText",
+    ):
+        if removed_status in ui_view_model_text or removed_status in ui_xaml_text:
+            raise StaticReTestFailure(
+                "WPF launcher retains the global Steam status: " + removed_status
+            )
     return (
-        "Steam friends-only lobby, authenticated v59 handshake, idle keepalive, owner-checked gameplay "
+        "Steam friends-only lobby, authenticated v64 handshake, idle keepalive, owner-checked gameplay "
         "routing, Spacewar launch, x86 runtime staging, and a live launch-token-bound "
-        "Steam-friend connection indicator are wired"
+        "lobby connection panel are wired"
+    )
+
+
+def test_steam_friend_hub_lifecycle_soak_is_wired() -> str:
+    runtime_state_text = read_multiplayer_runtime_state_source()
+    reconciliation_text = read_text(WORLD_SNAPSHOT_RECONCILIATION)
+    lua_gameplay_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp"
+    )
+    presentation_probe_text = read_text(
+        ROOT / "tools/probe_hub_npc_presentation_sync.py"
+    )
+    soak_text = read_text(
+        ROOT / "tools/verify_steam_friend_hub_soak.py"
+    )
+
+    required_pairs = (
+        (runtime_state_text, "std::uint32_t removed_actor_total_count = 0;"),
+        (
+            runtime_state_text,
+            "std::uint32_t failed_remove_actor_total_count = 0;",
+        ),
+        (
+            reconciliation_text,
+            "state.world_snapshot_apply.removed_actor_total_count +=",
+        ),
+        (
+            reconciliation_text,
+            "state.world_snapshot_apply.failed_remove_actor_total_count +=",
+        ),
+        (lua_gameplay_text, '"removed_actor_total_count"'),
+        (lua_gameplay_text, '"failed_remove_actor_total_count"'),
+        (lua_gameplay_text, '"apply_sequence"'),
+        (lua_gameplay_text, '"apply_scene_epoch"'),
+        (lua_gameplay_text, '"apply_presentation_sequence"'),
+        (lua_gameplay_text, '"apply_presentation_scene_epoch"'),
+        (lua_gameplay_text, '"apply_presentation_received_ms"'),
+        (lua_gameplay_text, '"apply_presentation_available"'),
+        (lua_gameplay_text, '"apply_presentation_actors"'),
+        (
+            reconciliation_text,
+            "state.world_snapshot_apply.presentation_sequence = presentation_snapshot.sequence;",
+        ),
+        (
+            presentation_probe_text,
+            '"replicated.failed_remove_actor_total_count"',
+        ),
+        (
+            presentation_probe_text,
+            'client["replicated_applied_ms"]\n        - client["replicated_apply_presentation_received_ms"]',
+        ),
+        (presentation_probe_text, '"appactor"'),
+        (presentation_probe_text, '"client_apply_presentation_available"'),
+        (soak_text, '"same_machine": PAIR_BACKEND == "wsl"'),
+        (soak_text, "def convergence_errors("),
+        (soak_text, "ThreadPoolExecutor(max_workers=2)"),
+        (soak_text, "host_future = executor.submit("),
+        (soak_text, "client_future = executor.submit("),
+        (soak_text, '"authoritative hub actor IDs are not unique"'),
+        (soak_text, '"retired hub IDs remain bound"'),
+        (soak_text, '"a persistent named hub NPC remains unbound"'),
+        (soak_text, '"applied hub presentation source is unavailable"'),
+        (soak_text, "failed_remove_totals[-1] != failed_remove_totals[0]"),
+        (soak_text, "created_totals[-1] != created_totals[0]"),
+        (soak_text, "removed_totals[-1] != removed_totals[0]"),
+        (soak_text, "if lifecycle_change_count == 0:"),
+        (soak_text, '"final_pair_responsive": True'),
+        (soak_text, '"student_book_palette_mismatches"'),
+        (soak_text, '"named_drive_phase_out_of_tolerance"'),
+    )
+    missing = [
+        token
+        for text, token in required_pairs
+        if token not in text
+    ]
+    if missing:
+        raise StaticReTestFailure(
+            "same-machine Steam hub lifecycle soak is incomplete: "
+            + ", ".join(missing)
+        )
+
+    forbidden_tokens = (
+        "stable slot identity",
+        "allow_failed_remove",
+        "ignore_extra_actor",
+        "sample_delta_ms = (",
+        "sample_time_adjusted_host_drive",
+    )
+    present = [
+        token
+        for token in forbidden_tokens
+        if token in soak_text or token in presentation_probe_text
+    ]
+    if present:
+        raise StaticReTestFailure(
+            "hub soak contains a slot-identity, divergence, or cross-process-clock escape path: "
+            + ", ".join(present)
+        )
+
+    for forbidden in (
+        'if PAIR_BACKEND != "wsl":',
+        "hub soak requires the same-machine Windows plus WSL Steam pair",
+    ):
+        if forbidden in soak_text:
+            raise StaticReTestFailure(
+                "hub soak still rejects a genuine remote Windows Steam pair: "
+                + forbidden
+            )
+
+    if re.search(
+        r'client\["replicated_sampled_ms"\]\s*-\s*host\["replicated_sampled_ms"\]',
+        presentation_probe_text,
+    ):
+        raise StaticReTestFailure(
+            "hub presentation verification subtracts process-local Windows and Proton clocks"
+        )
+
+    return (
+        "Steam hub soak supports both physical-Windows and same-machine test "
+        "topologies while requiring one-to-one named NPC convergence, local-stock "
+        "Student presentation sync, and zero multiplayer hub lifecycle mutation"
     )
 
 
@@ -6829,6 +7421,31 @@ def test_process_termination_skips_loader_shutdown() -> str:
     return "process termination bypasses loader-lock Steam/network shutdown"
 
 
+def test_crash_reports_preserve_faulting_x86_frame_chain() -> str:
+    internal_header = read_text(
+        ROOT / "SolomonDarkModLoader/src/logger_internal.h"
+    )
+    reporting = read_text(
+        ROOT / "SolomonDarkModLoader/src/logger_crash_reporting.cpp"
+    )
+    handlers = read_text(
+        ROOT / "SolomonDarkModLoader/src/logger_exception_handlers.cpp"
+    )
+    for source, token in (
+        (internal_header, "std::string FormatX86FrameChain("),
+        (reporting, "std::string FormatX86FrameChain("),
+        (reporting, "TryReadCrashU32(current_frame, &next_frame)"),
+        (reporting, "DescribeAddress(return_address)"),
+        (handlers, "FormatX86FrameChain(ebp_address, 12)"),
+        (handlers, "FormatX86FrameChain(ebp, 12)"),
+    ):
+        if token not in source:
+            raise StaticReTestFailure(
+                "faulting x86 frame-chain diagnostics are missing: " + token
+            )
+    return "first-chance and unhandled reports preserve the faulting x86 frame chain"
+
+
 def test_stage_mirror_repairs_denied_destination_acl() -> str:
     mirror_text = read_text(
         ROOT / "SolomonDarkModLauncher/src/Staging/FileTreeMirror.cs"
@@ -7128,7 +7745,7 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
     actor_render_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_actor_render_state.inl"
     )
-    native_remote_playback_text = read_text(
+    native_remote_playback_text = read_source_unit(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/native_remote_playback.inl"
     )
     priming_text = read_text(
@@ -7338,17 +7955,21 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
         raise StaticReTestFailure(
             "visual normalizers must not clear the active continuous-primary/orb staging field during active casts")
 
-    native_remote_playback_text = read_text(
+    native_remote_playback_text = read_source_unit(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/native_remote_playback.inl")
     for required_token in (
-        "kActorRenderDriveEffectTimerOffset",
-        "binding->replicated_render_drive_effect_timer",
-        "kActorRenderDriveEffectProgressOffset",
-        "binding->replicated_render_drive_effect_progress",
+        "kActorMagicShieldAbsorbRemainingOffset",
+        "binding->replicated_magic_shield_absorb_remaining",
+        "kActorMagicShieldAbsorbCapacityOffset",
+        "binding->replicated_magic_shield_absorb_capacity",
+        "kActorMagicShieldExplosionFractionOffset",
+        "binding->replicated_magic_shield_explosion_fraction",
+        "kActorMagicShieldHitFlashOffset",
+        "binding->replicated_magic_shield_hit_flash",
     ):
         if required_token not in native_remote_playback_text:
             raise StaticReTestFailure(
-                "native remote playback must sync damage flash effect timer/progress fields")
+                "native remote playback must sync the complete Magic Shield state block")
 
     if re.search(
         r"TryWriteField\(\s*actor_address,\s*kActorRenderDriveOverlayAlphaOffset",
@@ -7539,7 +8160,7 @@ def test_repo_wide_native_reads_do_not_publish_substitute_state() -> str:
     skill_choice_text = "\n".join((
         read_text(ROOT / "SolomonDarkModLoader/src/bot_runtime/helpers/skill_choices.inl"),
         read_text(ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/bot_skill_choice_api.inl"),
-        read_text(ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/skill_choices_api.inl"),
+        read_source_unit(ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/skill_choices_api.inl"),
     ))
     native_stats_text = read_native_spell_stats_source()
     player_state_text = "\n".join((
@@ -8187,6 +8808,31 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
     hud_text = read_text(GAMEPLAY_HUD_HOOKS)
     public_state_text = read_text(GAMEPLAY_PUBLIC_STATE_GETTERS)
     overlay_text = read_text(DEBUG_UI_OVERLAY_FRAME_RENDER)
+    overlay_health_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/gameplay_health_bar_rendering.inl"
+    )
+    overlay_primitives_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/font_atlas_rendering.inl"
+    )
+    overlay_capture_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture/capture_session.inl"
+    )
+    overlay_glyph_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture/glyph_observation.inl"
+    )
+    overlay_projection_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture/"
+        "gameplay_nameplate_projection.inl"
+    )
+    overlay_render_hooks_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture/render_hooks.inl"
+    )
     overlay_header_text = read_text(DEBUG_UI_OVERLAY_HEADER)
     overlay_public_text = read_text(DEBUG_UI_OVERLAY_PUBLIC_SURFACE)
     mod_loader_header_text = read_text(MOD_LOADER_HEADER)
@@ -8197,6 +8843,10 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
     keyboard_injection_text = read_text(GAMEPLAY_KEYBOARD_INJECTION)
     native_types_text = read_text(GAMEPLAY_NATIVE_FUNCTION_TYPES)
     verifier_text = read_text(MULTIPLAYER_HUD_NAMES_VERIFIER)
+    steam_verifier_text = read_text(STEAM_FRIEND_HUB_VISUALS_VERIFIER)
+    physical_steam_verifier_text = read_text(
+        STEAM_FRIEND_ACTIVE_PAIR_VISUALS_VERIFIER
+    )
     hud_label_materializer_text = read_text(HUD_LABEL_ASSET_MATERIALIZER)
 
     required_animation_tokens = (
@@ -8204,12 +8854,14 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "~AnimationAdvanceContextScope()",
         "original(self);",
         "IsTrackedWizardParticipantActorForHud(actor_address)",
-        "TryGetGameplayHudParticipantDisplayNameForActor(actor_address, &display_name, &participant_id)",
-        "DrawGameplayHudParticipantName(actor_address, display_name, &draw_x, &draw_y, &exception_code)",
-        "DrawGameplayParticipantHealthBar(",
+        "TryGetGameplayHudParticipantDisplayNameForActor(",
+        "&health_ratio);",
+        "DrawGameplayHudParticipantName(",
+        "participant_id,",
+        "health_ratio,",
         "source=playerwizard_render",
         "health_ratio=",
-        "health_segments=",
+        "health_bar=dx9",
     )
     missing_animation = [
         token for token in required_animation_tokens
@@ -8224,6 +8876,13 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "TryListGameplayParticipantNameplates(",
         "PublishGameplayParticipantNameplateOverlaySnapshot",
         "source=actor_callback",
+        "DrawGameplayParticipantHealthBar(",
+        "health_segments",
+        # The rendered ratio must come from the authoritative participant
+        # runtime snapshot, never from tick-synced actor progression memory
+        # that freezes while player-actor ticks are paused.
+        "TryGetGameplayParticipantHealthRatio(",
+        "TryReadActorProgressionHealth(",
     )
     present_animation = [
         token for token in forbidden_animation_tokens if token in animation_text
@@ -8264,7 +8923,7 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "&name_layout,",
         "&exception_code);",
         "source=ally_healthbar",
-        "stock_label=",
+        "stock_label=0",
         "BuildGameplayAllyHudExactText(",
         "EstimateGameplayAllyHudTextWidth(",
         "constexpr float kGameplayAllyHudReservedLabelWidth = 128.0f;",
@@ -8300,19 +8959,74 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "float CalculateGameplayNameplateDrawX(float actor_x, std::string_view display_name)",
         "x = CalculateGameplayNameplateDrawX(x, display_name);",
         "const auto nameplate_text = BuildGameplayNameplateExactText(display_name);",
+        "BeginDebugUiGameplayParticipantNameplateCapture(",
+        "EndDebugUiGameplayParticipantNameplateCapture();",
         "CallGameplayExactTextObjectRenderSafe(",
         "nameplate_text.c_str()",
-        "bool DrawGameplayParticipantHealthBar(",
-        "TryReadActorProgressionHealth(actor_address, &health)",
-        "constexpr int kBarSegments = 12;",
-        "std::string bar_text = \"_s(0.25)[\";",
-        "filled_segments",
     )
     missing_hud = [token for token in required_hud_tokens if token not in hud_text]
     if missing_hud:
         raise StaticReTestFailure(
             "native remote-name or thin-health-bar rendering contract is incomplete: " +
             ", ".join(missing_hud))
+
+    if "TryReadActorProgressionHealth(" in hud_text:
+        raise StaticReTestFailure(
+            "native nameplate helpers read tick-synced actor progression health "
+            "instead of the authoritative participant runtime vitals")
+
+    ally_rows = hud_text[
+        hud_text.index("std::vector<GameplayAllyHudRow> BuildGameplayAllyHudRows()") :
+        hud_text.index("\nbool IsGameplayAllyHudLabelGlyphCall(")
+    ]
+    if "SnapshotRuntimeState()" in ally_rows:
+        raise StaticReTestFailure(
+            "the per-row ally HUD path deep-copies the full multiplayer runtime")
+
+    required_authoritative_vitals_tokens = (
+        "bool TryGetGameplayHudParticipantDisplayNameForActor(",
+        "TryGetRemoteParticipantDisplayState(",
+        "!resolved_runtime.valid",
+        "resolved_runtime.life_current / resolved_runtime.life_max",
+        "resolved_runtime.life_max <= 0.0f",
+    )
+    missing_authoritative_vitals = [
+        token for token in required_authoritative_vitals_tokens
+        if token not in public_state_text
+    ]
+    if missing_authoritative_vitals:
+        raise StaticReTestFailure(
+            "nameplate health no longer resolves from the authoritative "
+            "participant runtime snapshot: " +
+            ", ".join(missing_authoritative_vitals))
+
+    if "TryGetGameplayHudParticipantNameplateForActor" in public_state_text + animation_text:
+        raise StaticReTestFailure(
+            "nameplate health retained a redundant display-name API alias")
+
+    nameplate_getter = public_state_text[
+        public_state_text.index("bool TryGetGameplayHudParticipantDisplayNameForActor(") :
+        public_state_text.index("\nbool TryGetPlayerState(")
+    ]
+    if "SnapshotRuntimeState()" in nameplate_getter:
+        raise StaticReTestFailure(
+            "the per-actor nameplate path deep-copies the full multiplayer runtime")
+
+    forbidden_ascii_health_tokens = (
+        "constexpr int kBarSegments",
+        "std::string bar_text",
+        "\"_s(0.25)[\"",
+        "filled_segment_count",
+        "bar_text.append",
+    )
+    present_ascii_health = [
+        token for token in forbidden_ascii_health_tokens if token in hud_text
+    ]
+    if present_ascii_health:
+        raise StaticReTestFailure(
+            "ASCII participant health fallback remains active: "
+            + ", ".join(present_ascii_health)
+        )
 
     required_materializer_tokens = (
         'private const string DefaultAllyLabel = "ALLY";',
@@ -8366,6 +9080,12 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
     )
     combined_overlay_text = "\n".join((
         overlay_text,
+        overlay_health_text,
+        overlay_primitives_text,
+        overlay_capture_text,
+        overlay_glyph_text,
+        overlay_projection_text,
+        overlay_render_hooks_text,
         overlay_header_text,
         overlay_public_text,
         mod_loader_text,
@@ -8375,6 +9095,114 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         raise StaticReTestFailure(
             "D3D gameplay nameplate overlay workaround was reintroduced instead of native commit 35378b3 path: " +
             ", ".join(present_overlay))
+
+    required_dx9_health_tokens = (
+        "BeginDebugUiGameplayParticipantNameplateCapture(",
+        "EndDebugUiGameplayParticipantNameplateCapture()",
+        'capture.surface_id = "gameplay_nameplate";',
+        "BuildGameplayParticipantHealthBarRenderItems(",
+        # The bar sits flush under the captured name bounds and spans the
+        # nameplate width with a readable floor.
+        "constexpr float kBarMinimumWidth = 64.0f;",
+        "constexpr float kBarVerticalGap = 1.0f;",
+        "element.max_x - element.min_x);",
+        "item.top = element.max_y + kBarVerticalGap;",
+        "GameplayParticipantHealthBarDrawResult DrawGameplayParticipantHealthBar(",
+        "GameplayParticipantHealthBarDrawResult::Culled",
+        "GameplayParticipantHealthBarDrawResult::Drawn",
+        "GameplayParticipantHealthBarDrawResult::Failed",
+        "LogGameplayParticipantHealthBarDraw(health_bar, draw_result)",
+        'source=dx9_nameplate_healthbar',
+        '" ok=" + std::string(drew_bar ? "1" : "0")',
+        '" health_percent=" + std::to_string(health_percent)',
+        "render_elements.empty() && gameplay_health_bars.empty()",
+        "for (const auto& health_bar : gameplay_health_bars)",
+        "DrawFilledRect(",
+        "DrawRectOutline(",
+        "SUCCEEDED(device->DrawPrimitiveUP(",
+        "element.gameplay_health_ratio",
+        "std::clamp(",
+        "bool TryReadUiRenderBase(float* base_x, float* base_y)",
+        "capture.expected_origin_x = render_base_x + origin_x;",
+        "capture.expected_origin_y = render_base_y + origin_y;",
+        "capture.capture_enabled = capture.has_expected_origin;",
+        "capture.gameplay_world_width =",
+        "TryBuildDestinationQuadBounds(",
+        "TryProjectGameplayNameplateQuadBounds(",
+        "TryApplyGameplayNameplateViewportClamp(",
+        "constexpr float kViewportMargin = 2.0f;",
+        "constexpr float kMinimumHealthBarWidth = 64.0f;",
+        "const bool intersects_viewport =",
+        "capture.gameplay_viewport_offset_resolved = true;",
+        "GetLastSeenD3d9Device()",
+        "kTextQuadDrawStateDepthOffset",
+        "GetTransform(D3DTS_WORLD, &world)",
+        "GetTransform(D3DTS_VIEW, &view)",
+        "GetTransform(D3DTS_PROJECTION, &projection)",
+        "point = TransformD3dRowVector(point, world);",
+        "point = TransformD3dRowVector(point, view);",
+        "clip.w <= kMinimumPositiveClipW",
+        "name_bounds=(",
+        "ObserveActiveExactTextQuad(self, draw_vertices, arg3);",
+        "original(self, draw_vertices, arg3);",
+        "const float* destination_vertices,",
+        "const float* /*texture_coordinates*/",
+    )
+    missing_dx9_health = [
+        token
+        for token in required_dx9_health_tokens
+        if token not in combined_overlay_text
+    ]
+    if missing_dx9_health:
+        raise StaticReTestFailure(
+            "DX9 participant health-bar rendering contract is incomplete: "
+            + ", ".join(missing_dx9_health)
+        )
+
+    forbidden_quad_heuristics = (
+        "alternate_valid",
+        "alternate_area",
+        "primary_area",
+        "TryBuildGlyphQuadBounds(arg3",
+        "capture.has_expected_origin = false;",
+    )
+    present_quad_heuristics = [
+        token
+        for token in forbidden_quad_heuristics
+        if token in combined_overlay_text
+    ]
+    if present_quad_heuristics:
+        raise StaticReTestFailure(
+            "gameplay nameplate capture reintroduced unverified geometry "
+            "fallbacks: " + ", ".join(present_quad_heuristics)
+        )
+
+    quad_function_start = overlay_glyph_text.index(
+        "void ObserveActiveExactTextQuad("
+    )
+    gameplay_projection_start = overlay_glyph_text.index(
+        'if (capture.surface_id == "gameplay_nameplate")',
+        quad_function_start,
+    )
+    gameplay_projection_end = overlay_glyph_text.index(
+        "capture.min_x =",
+        gameplay_projection_start,
+    )
+    gameplay_projection_branch = overlay_glyph_text[
+        gameplay_projection_start:gameplay_projection_end
+    ]
+    for token in (
+        "TryProjectGameplayNameplateQuadBounds(",
+        "draw_state,",
+        "destination_vertices,",
+        "base_x,",
+        "base_y,",
+    ):
+        if token not in gameplay_projection_branch:
+            raise StaticReTestFailure(
+                "gameplay nameplate quad capture does not project through the "
+                "stock fixed-function transform: " + token
+            )
 
     required_layout_tokens = (
         "gameplay_ui_glyph_draw=0x004143D0",
@@ -8471,15 +9299,23 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "place_trio_for_capture(timeout)",
         "set_local_player_vitals(",
         "wait_for_remote_matches_owner_health(",
-        "abs(health_ratio - 0.5) > 0.01",
-        "health_segments={EXPECTED_HALF_HEALTH_SEGMENTS}/12",
+        "verify_dx9_nameplate_health_bar_geometry(",
+        "name_bounds=",
+        "DX9 health bar is not centered under its name",
+        "DX9 health bar is not flush under its name",
+        "health_percent={EXPECTED_HALF_HEALTH_PERCENT}",
         "source=playerwizard_render",
+        "source=dx9_nameplate_healthbar",
+        '"health_bar=dx9"',
+        '"dx9_health_bar": dx9_health_line',
         "source=ally_healthbar",
         "stock_label=0",
         "layout_ok=1",
+        "wait_for_render_logs(timeout)",
         "verify_ally_hud_name_layout(ally_hud_line)",
         "ally HUD name overlaps its health bar",
         "ally HUD name extends outside its reserved label slot",
+        "reversed(log_text.splitlines())",
         "capture_game_backbuffer(",
     )
     missing_verifier = [
@@ -8490,7 +9326,53 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
             "three-player name/health-bar regression verifier is incomplete: " +
             ", ".join(missing_verifier))
 
-    return "remote names and thin health bars render through native PlayerWizard and ally-HUD passes"
+    required_steam_verifier_tokens = (
+        "suspend_runtime_test_godmode(",
+        "restore_runtime_test_godmode(",
+        "_G.__sdmod_steam_test_godmode_enabled = false",
+        "verify_dx9_nameplate_health_bar_geometry(",
+        "attachment_visual_type",
+        "attachment_visual_address",
+    )
+    missing_steam_verifier = [
+        token
+        for token in required_steam_verifier_tokens
+        if token not in steam_verifier_text
+    ]
+    if missing_steam_verifier:
+        raise StaticReTestFailure(
+            "Steam friend name/health-bar regression verifier is incomplete: "
+            + ", ".join(missing_steam_verifier)
+        )
+
+    required_physical_resolution_tokens = (
+        "def verify_capture_resolution_contract(",
+        'parser.add_argument("--require-distinct-resolutions", action="store_true")',
+        'resolutions["host"] != resolutions["client"]',
+        "participant name/health geometry escaped its",
+        "VIEWPORT_EDGE_EXERCISE_DISTANCE = 24.0",
+        "edge_contained_health_bars",
+        "did not exercise a participant",
+        'output["resolution_contract"] = verify_capture_resolution_contract(',
+        "wait_for_local_transform_settled(",
+        '"host_settled": list(host_target)',
+        '"client_settled": list(client_target)',
+        "suspend_runtime_test_godmode(",
+        "restore_runtime_test_godmode(",
+        "client_godmode_before = suspend_runtime_test_godmode(",
+    )
+    missing_physical_resolution = [
+        token
+        for token in required_physical_resolution_tokens
+        if token not in physical_steam_verifier_text
+    ]
+    if missing_physical_resolution:
+        raise StaticReTestFailure(
+            "physical Steam cross-resolution verifier is incomplete: "
+            + ", ".join(missing_physical_resolution)
+        )
+
+    return "remote names, DX9 health bars, and ally names render through the native PlayerWizard and ally-HUD passes"
 
 
 def test_memory_region_cache_refreshes_newly_committed_native_objects() -> str:
@@ -8670,12 +9552,15 @@ def test_client_run_switch_requires_fresh_authenticated_host_intent() -> str:
     run_reset_text = read_text(
         ROOT / "SolomonDarkModLoader/src/run_lifecycle/enemy_tracking_and_reset.inl"
     )
+    active_pair_driver_text = read_text(
+        ROOT / "tools/drive_steam_friend_active_pair.py"
+    )
 
     required_pairs = (
         (transport_header_text, "TryAuthorizeLocalClientRunSwitch(std::string* error_message)"),
         (transport_text, "struct ClientHostRunAuthorization"),
         (transport_text, "kClientHostRunAuthorizationFreshnessMs = 3000"),
-        (transport_text, "IsAuthoritativeHostStatePacket(packet, from)"),
+        (transport_text, "IsAuthoritativeHostParticipantPacket(packet, from)"),
         (transport_text, "Multiplayer cached authenticated host run intent"),
         (public_api_text, "bool TryAuthorizeLocalClientRunSwitch(std::string* error_message)"),
         (public_api_text, "No fresh authenticated host run intent is available."),
@@ -8685,20 +9570,28 @@ def test_client_run_switch_requires_fresh_authenticated_host_intent() -> str:
         (lifecycle_hook_text, "Authorized client run switch_region from fresh authenticated host intent."),
         (arena_hook_text, 'PrepareMultiplayerRunStart("arena_create")'),
         (arena_hook_text, 'PrepareMultiplayerRunStart("start_game")'),
-        (arena_hook_text, "HookMainMenuRunTransition"),
-        (arena_hook_text, "kMainMenuTransitionKindOffset = 0x46C"),
-        (arena_hook_text, "transition_kind == kMainMenuLastGameTransition &&"),
+        (arena_hook_text, "HookMainMenuControlAction"),
+        (arena_hook_text, "void* /*unused_edx*/, void* control"),
+        (arena_hook_text, "kMainMenuModeOffset = 0x3FC"),
+        (arena_hook_text, "kMainMenuSavedRunMode = 1"),
+        (arena_hook_text, "kMainMenuLastGameControlOffset = 0x78"),
+        (arena_hook_text, "kMainMenuNewGameControlOffset = 0x12C"),
+        (arena_hook_text, "TryPrepareMainMenuNewGameSaveReset(owner_address, &save_reset_error)"),
         (arena_hook_text, "multiplayer::IsLocalTransportClient() ||"),
         (arena_hook_text, "multiplayer::IsLocalTransportHost()"),
-        (arena_hook_text, "kMainMenuNewGameTransition))"),
-        (arena_hook_text, "Redirected connected multiplayer Last Game transition"),
-        (arena_hook_text, "canonical shared-hub character setup"),
+        (arena_hook_text, "dispatched_control = reinterpret_cast<void*>(owner_address + kMainMenuNewGameControlOffset)"),
+        (arena_hook_text, "Redirected connected multiplayer Last Game control activation"),
+        (arena_hook_text, "the native New Game control path."),
         (arena_hook_text, "Blocked multiplayer run start without a host-authoritative run seed."),
-        (lifecycle_state_text, "kHookMainMenuRunTransition"),
-        (lifecycle_state_text, "{kMainMenuRunTransition, 6}"),
-        (lifecycle_install_text, "reinterpret_cast<void*>(&HookMainMenuRunTransition)"),
-        (seam_binding_text, '"main_menu_run_transition", kMainMenuRunTransition'),
-        (binary_layout_text, "main_menu_run_transition=0x0058E8C0"),
+        (lifecycle_state_text, "MainMenuControlActionFn = void(__thiscall*)(void* self, void* control)"),
+        (lifecycle_state_text, "kHookMainMenuControlAction"),
+        (lifecycle_state_text, "{kMainMenuControlAction, 7}"),
+        (lifecycle_install_text, "reinterpret_cast<void*>(&HookMainMenuControlAction)"),
+        (seam_binding_text, '"main_menu_control_action", kMainMenuControlAction'),
+        (binary_layout_text, "main_menu_control_action=0x0058E600"),
+        (active_pair_driver_text, 'action = ("main_menu.new_game", "main_menu")'),
+        (active_pair_driver_text, 'action = ("main_menu.resume_last_game", "main_menu")'),
+        (active_pair_driver_text, 'parser.add_argument("--exercise-last-game-redirect", action="store_true")'),
         (run_seed_api_text, "bool PrepareArenaRunGenerationSeed(const char* source"),
         (run_seed_api_text, "applied_run_generation_seed.load("),
         (run_seed_api_text, "ApplyPendingRunGenerationSeedForSceneSwitch("),
@@ -8719,7 +9612,7 @@ def test_client_run_switch_requires_fresh_authenticated_host_intent() -> str:
     maybe_start = transport_text.find("void MaybeQueueClientHostRunStart(")
     maybe_end = transport_text.find("void ApplyRemoteStatePacket(", maybe_start)
     maybe_body = transport_text[maybe_start:maybe_end]
-    authority_check = maybe_body.find("IsAuthoritativeHostStatePacket(packet, from)")
+    authority_check = maybe_body.find("IsAuthoritativeHostParticipantPacket(packet, from)")
     authorization_write = maybe_body.find("g_client_host_run_authorization.valid = true;")
     if (
         maybe_start == -1 or maybe_end == -1 or authority_check == -1 or
@@ -8728,22 +9621,56 @@ def test_client_run_switch_requires_fresh_authenticated_host_intent() -> str:
         raise StaticReTestFailure(
             "host ownership must be validated before caching client run authorization")
 
-    main_menu_hook_start = arena_hook_text.find("void __fastcall HookMainMenuRunTransition(")
+    main_menu_hook_start = arena_hook_text.find("void __fastcall HookMainMenuControlAction(")
     main_menu_hook_end = arena_hook_text.find("\n}", main_menu_hook_start)
     main_menu_hook_body = arena_hook_text[main_menu_hook_start:main_menu_hook_end]
-    client_redirect = main_menu_hook_body.find("kMainMenuNewGameTransition))")
-    stock_transition = main_menu_hook_body.find("original(self, unused_edx);")
+    last_game_match = main_menu_hook_body.find(
+        "reinterpret_cast<uintptr_t>(control) == owner_address + kMainMenuLastGameControlOffset")
+    native_new_game_redirect = main_menu_hook_body.find(
+        "dispatched_control = reinterpret_cast<void*>(owner_address + kMainMenuNewGameControlOffset)")
+    save_reset = main_menu_hook_body.find(
+        "TryPrepareMainMenuNewGameSaveReset(owner_address, &save_reset_error)")
+    stock_control_action = main_menu_hook_body.find("original(self, dispatched_control);")
     if (
         main_menu_hook_start == -1 or main_menu_hook_end == -1 or
-        client_redirect == -1 or stock_transition == -1 or
-        client_redirect > stock_transition
+        last_game_match == -1 or save_reset == -1 or native_new_game_redirect == -1 or
+        stock_control_action == -1 or
+        last_game_match > save_reset or save_reset > native_new_game_redirect or
+        native_new_game_redirect > stock_control_action
     ):
         raise StaticReTestFailure(
-            "connected Last Game must redirect to canonical shared-hub onboarding before "
-            "dispatching the stock transition")
+            "connected Last Game must substitute the native New Game control before "
+            "dispatching the stock MainMenu handler")
     if "PrepareMultiplayerRunStart" in main_menu_hook_body:
         raise StaticReTestFailure(
             "main-menu New Game/character creation must not require a host run nonce")
+    forbidden_late_redirect_tokens = (
+        "MainMenuRunTransition",
+        "main_menu_run_transition",
+        "kMainMenuTransitionKindOffset",
+        "kMainMenuNewGameTransition",
+        "kMainMenuLastGameTransition",
+    )
+    combined_lifecycle_text = (
+        arena_hook_text + lifecycle_state_text + lifecycle_install_text +
+        seam_binding_text + binary_layout_text
+    )
+    stale_redirects = [
+        token for token in forbidden_late_redirect_tokens
+        if token in combined_lifecycle_text
+    ]
+    if stale_redirects:
+        raise StaticReTestFailure(
+            "late MainMenu transition-kind rewrite was not fully removed: " +
+            ", ".join(stale_redirects))
+    redirect_opt_in = active_pair_driver_text.find("if exercise_last_game_redirect:")
+    resume_dispatch = active_pair_driver_text.find(
+        'action = ("main_menu.resume_last_game", "main_menu")', redirect_opt_in)
+    normal_new_game_dispatch = active_pair_driver_text.find(
+        'action = ("main_menu.new_game", "main_menu")', resume_dispatch)
+    if not 0 <= redirect_opt_in < resume_dispatch < normal_new_game_dispatch:
+        raise StaticReTestFailure(
+            "Steam pair onboarding must keep Last Game behind the explicit redirect regression flag")
 
     hook_start = lifecycle_hook_text.find("void __fastcall HookGameplaySwitchRegion(")
     hook_end = lifecycle_hook_text.find("\n}", hook_start)
@@ -8757,7 +9684,7 @@ def test_client_run_switch_requires_fresh_authenticated_host_intent() -> str:
         raise StaticReTestFailure(
             "client arena switch must consume authenticated host authorization before stock dispatch")
 
-    return "saved-run geometry is rejected in connected multiplayer while New Game remains independent shared-hub onboarding"
+    return "connected Last Game redirects at the native control boundary while automation selects New Game directly"
 
 
 def test_wine_stage_savegames_uses_directory_mirror() -> str:
@@ -8780,6 +9707,46 @@ def test_wine_stage_savegames_uses_directory_mirror() -> str:
     return "Wine/Proton stages a real savegames directory and removes malformed junction residue"
 
 
+def test_wsl_steam_launcher_applies_test_boneyard_before_process_start() -> str:
+    launch_text = read_text(ROOT / "scripts/Launch-WslSteamMultiplayerClient.sh")
+    required_tokens = (
+        'test_boneyard_override="${SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE:-}"',
+        '[[ -f "$test_boneyard_override" ]]',
+        '"SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE=$(proton_path "$test_boneyard_override")"',
+        'test_environment+=("SDMOD_TEST_BLANK_BONEYARD=1")',
+        '"${test_environment[@]}"',
+    )
+    missing = [token for token in required_tokens if token not in launch_text]
+    if missing:
+        raise StaticReTestFailure(
+            "WSL Steam test Boneyard launch contract is missing token(s): "
+            + ", ".join(missing)
+        )
+    staging_environment = launch_text.find('"${test_environment[@]}"')
+    proton_process = launch_text.find('"$proton" run "${args[@]}"')
+    if staging_environment == -1 or proton_process == -1 or staging_environment > proton_process:
+        raise StaticReTestFailure(
+            "WSL Steam test Boneyard environment must be applied before Proton starts"
+        )
+    return "WSL Steam applies translated flat-Boneyard test inputs before Proton starts"
+
+
+def test_wsl_steam_launcher_isolates_build_artifacts_from_live_host() -> str:
+    launch_text = read_text(ROOT / "scripts/Launch-WslSteamMultiplayerClient.sh")
+    required_tokens = (
+        'build_artifacts="$root/runtime/wsl-steam-build-artifacts"',
+        'mkdir -p "$build_artifacts"',
+        '--artifacts-path "$build_artifacts"',
+    )
+    missing = [token for token in required_tokens if token not in launch_text]
+    if missing:
+        raise StaticReTestFailure(
+            "WSL Steam launcher build can overwrite a live Windows host artifact: "
+            + ", ".join(missing)
+        )
+    return "WSL Steam builds into isolated artifacts while the Windows host DLL is mapped"
+
+
 def test_remote_progression_preserves_local_concentration_context() -> str:
     gameplay_api_text = read_text(
         ROOT / "SolomonDarkModLoader/include/mod_loader_gameplay_api.inl"
@@ -8787,7 +9754,7 @@ def test_remote_progression_preserves_local_concentration_context() -> str:
     concentration_api_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_debug_and_spawn.inl"
     )
-    skill_choices_text = read_text(
+    skill_choices_text = read_source_unit(
         ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/skill_choices_api.inl"
     )
 
@@ -8849,77 +9816,97 @@ def test_remote_progression_preserves_local_concentration_context() -> str:
     return "remote native level and skill mutations restore the local player's Concentrate lanes"
 
 
-def test_remote_progression_hydrates_authoritative_rank_after_native_noop() -> str:
-    transport_text = read_text(
+def test_remote_progression_uses_passive_authoritative_hydration() -> str:
+    native_sync_text = read_text(
         ROOT
         / "SolomonDarkModLoader/src/multiplayer_local_transport/native_progression_sync.inl"
     )
-    skill_choices_text = read_text(
-        ROOT / "SolomonDarkModLoader/src/bot_runtime/public_api/skill_choices_api.inl"
+    level_handlers_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/level_up_packet_handlers.inl"
     )
-    bot_runtime_header_text = read_text(BOT_RUNTIME_HEADER)
+    barrier_authority_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/level_up_barrier_authority.inl"
+    )
+    powerup_authority_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/powerup_loot_authority.inl"
+    )
+    loot_result_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/loot_pickup_packet_handlers.inl"
+    )
 
     required_pairs = (
+        (native_sync_text, "bool HydrateAuthoritativeRemoteProgressionEntryState("),
+        (native_sync_text, "participant_id == g_local_transport.local_peer_id"),
+        (native_sync_text, "kStandaloneWizardProgressionActiveFlagOffset,"),
+        (native_sync_text, "kStandaloneWizardProgressionVisibleFlagOffset,"),
+        (native_sync_text, "verified.active != resulting_active"),
+        (native_sync_text, "verified.visible != resulting_visible"),
+        (native_sync_text, "kNativeProgressionReconcileMaxEntryWritesPerTick"),
+        (native_sync_text, "desired.active,\n                            desired.visible,"),
+        (native_sync_text, "TryReconcileParticipantConcentrationRuntimeSelections("),
+        (level_handlers_text, "ApplyAuthoritativeRemoteSkillRankDelta("),
         (
-            transport_text,
-            "TryHydrateAuthoritativeRemoteProgressionRankAfterNativeNoOp(",
+            level_handlers_text,
+            "packet.resulting_active,\n                    1,\n                    &error_message",
+        ),
+        (barrier_authority_text, "ApplyAuthoritativeRemoteSkillRankDelta("),
+        (
+            powerup_authority_text,
+            "pending->powerup.skill_rank_resulting_active,\n                  1,",
         ),
         (
-            transport_text,
-            "kStandaloneWizardProgressionActiveFlagOffset,\n"
-            "            hydrated_active",
+            loot_result_text,
+            "packet.powerup_skill_resulting_active,\n                                  1,",
         ),
-        (transport_text, "RefreshParticipantNativeProgression(participant_id"),
-        (transport_text, "native->active != hydrated_active"),
-        (transport_text, "hydrated_entry_count > 0 || level_synchronized"),
-        (
-            transport_text,
-            "authoritative native progression rank hydrated after native no-op",
-        ),
-        (skill_choices_text, "bool RefreshParticipantNativeProgression("),
-        (skill_choices_text, "CallNativeActorProgressionRefresh("),
-        (skill_choices_text, "RunWithParticipantConcentrationContext("),
-        (bot_runtime_header_text, "bool RefreshParticipantNativeProgression("),
     )
     missing = [token for text, token in required_pairs if token not in text]
     if missing:
         raise StaticReTestFailure(
-            "remote authoritative rank catch-up is missing token(s): "
+            "passive authoritative remote progression hydration is missing token(s): "
             + ", ".join(missing)
         )
 
-    loop_start = transport_text.find(
-        "while (native.active < desired.active &&"
+    observer_paths = (
+        native_sync_text,
+        level_handlers_text,
+        barrier_authority_text,
+        powerup_authority_text,
+        loot_result_text,
     )
-    loop_end = transport_text.find(
-        "if (native.active != desired.active)", loop_start
-    )
-    loop_body = transport_text[loop_start:loop_end]
-    native_apply = loop_body.find("ApplyParticipantSkillChoiceOption(")
-    native_readback = loop_body.find("TryReadNativeProgressionBookEntry(")
-    no_op_check = loop_body.find("if (native.active <= active_before)")
-    hydration = loop_body.find(
-        "TryHydrateAuthoritativeRemoteProgressionRankAfterNativeNoOp("
-    )
-    if (
-        loop_start == -1
-        or loop_end == -1
-        or native_apply == -1
-        or native_readback == -1
-        or no_op_check == -1
-        or hydration == -1
-        or not native_apply < native_readback < no_op_check < hydration
-    ):
+    if any("ApplyParticipantSkillChoiceOption(" in text for text in observer_paths):
         raise StaticReTestFailure(
-            "remote rank catch-up must attempt native apply and verify its readback "
-            "before authoritative hydration"
-        )
-    if loop_body.find("++applied_entry_count;") < loop_body.find("} else {"):
-        raise StaticReTestFailure(
-            "a no-op native rank apply must not be reported as a native-applied entry"
+            "observer-owned progression must not execute the stock skill-choice path"
         )
 
-    return "remote skillbook catch-up preserves native apply first, then exactly hydrates and refreshes no-op ranks"
+    helper_start = native_sync_text.find(
+        "bool HydrateAuthoritativeRemoteProgressionEntryState("
+    )
+    helper_end = native_sync_text.find(
+        "bool ApplyAuthoritativeRemoteSkillRankDelta(", helper_start
+    )
+    helper_body = native_sync_text[helper_start:helper_end]
+    forbidden_helper_calls = (
+        "ApplyParticipantSkillChoiceOption(",
+        "ApplyNativeSkillChoiceToProgression(",
+        "CallNativeActorProgressionRefresh(",
+        "RefreshParticipantNativeProgression(",
+    )
+    present = [token for token in forbidden_helper_calls if token in helper_body]
+    if helper_start == -1 or helper_end == -1 or present:
+        raise StaticReTestFailure(
+            "authoritative remote hydration must remain a verified field-only operation: "
+            + ", ".join(present)
+        )
+    if "TryApplyParticipantConcentrationSelections(" in native_sync_text:
+        raise StaticReTestFailure(
+            "remote progression reconciliation must not invoke stock Concentrate refresh"
+        )
+
+    return "remote skillbook, level-up, and powerup state use exact passive hydration without observer-side stock callbacks"
 
 
 def test_steam_peer_disconnect_resets_remote_session_epoch() -> str:
@@ -8934,7 +9921,7 @@ def test_steam_peer_disconnect_resets_remote_session_epoch() -> str:
     transport_text = read_text(
         ROOT / "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
     )
-    steam_session_text = read_text(
+    steam_session_text = read_source_unit(
         ROOT
         / "SolomonDarkModLoader/src/multiplayer_steam_session/lobby_and_events.inl"
     )
@@ -9017,12 +10004,33 @@ def test_steam_spell_behavior_verifiers_use_real_upgrades_and_wait_for_delivery(
     )
 
     required_pairs = (
+        (behavior_text, 'os.environ.get("SDMOD_STEAM_HOST_INSTANCE", "").strip()'),
+        (behavior_text, 'os.environ.get("SDMOD_STEAM_CLIENT_INSTANCE", "").strip()'),
+        (behavior_text, "both Steam instance environment variables are required"),
+        (behavior_text, "Steam behavior log does not exist"),
+        (behavior_text, '"--owners"'),
+        (behavior_text, 'if args.owners != "both":'),
+        (behavior_text, "def select_matching_owners("),
+        (behavior_text, 'output["owner_primary_spells"] = primary_spell_ids'),
+        (behavior_text, "for label, owner in fire_owner_labels:"),
+        (behavior_text, "for label, owner in air_owner_labels:"),
         (behavior_text, "def ensure_upgrade_rank("),
+        (behavior_text, "def owner_context("),
+        (behavior_text, "def require_primary_spell("),
+        (behavior_text, "FIRE_PRIMARY_SPELL_ID = 1011"),
+        (behavior_text, "AIR_PRIMARY_SPELL_ID = 1013"),
         (behavior_text, "rank_setup = ensure_upgrade_rank("),
         (behavior_text, "explode_rank_setup = ensure_upgrade_rank("),
         (behavior_text, "embers_rank_setup = ensure_upgrade_rank("),
         (behavior_text, '"explode": explode_rank_setup'),
         (behavior_text, '"embers": embers_rank_setup'),
+        (
+            behavior_text,
+            'owner_labels = (("host_owned", "host"), ("client_owned", "client"))',
+        ),
+        (behavior_text, "verify_explode(pair, owner=owner)"),
+        (behavior_text, "verify_embers(pair, owner=owner)"),
+        (behavior_text, "owner=owner,"),
         (explode_text, "delivery_deadline = time.monotonic() + 8.0"),
         (explode_text, "if receiver_cast_queued and receiver_cast_prepped:"),
         (explode_text, "time.sleep(0.05)"),
@@ -9033,6 +10041,12 @@ def test_steam_spell_behavior_verifiers_use_real_upgrades_and_wait_for_delivery(
             "Steam spell behavior verification is missing token(s): "
             + ", ".join(missing)
         )
+    for stale_default in ("steam-host-gameplay10", "wsl-steam-gameplay10"):
+        if stale_default in behavior_text:
+            raise StaticReTestFailure(
+                "Steam spell behavior verification must not silently read a "
+                f"stale default instance log: {stale_default}"
+            )
 
     explode_start = behavior_text.find("def verify_explode(")
     embers_start = behavior_text.find("def verify_embers(", explode_start)
@@ -9072,11 +10086,680 @@ def test_steam_spell_behavior_verifiers_use_real_upgrades_and_wait_for_delivery(
     return "Steam spell behavior tests use authoritative prerequisite upgrades and bounded receiver-delivery polling"
 
 
-def test_main_menu_new_game_dispatches_on_app_update_thread() -> str:
+def test_steam_combat_stat_profiles_isolate_concentration() -> str:
+    verifier_text = read_text(
+        ROOT / "tools/verify_steam_friend_active_pair_combat_stats.py"
+    )
+    context_text = read_text(
+        ROOT / "tools/steam_friend_behavior_context.py"
+    )
+    required_tokens = (
+        "PROFILE_SUITES = {",
+        '"meditation": ("meditation",)',
+        '"faster-caster": ("faster_caster",)',
+        '"faster-caster-air": ("faster_caster_air",)',
+        "def assert_concentrated_row(",
+        "def require_fresh_combat_profile(",
+        'output["initial_profile_state"] = require_fresh_combat_profile(pair)',
+        "launch a fresh run for each",
+        '"owner_process"',
+        '"observer_slot"',
+        "requires a pristine profile with row",
+        'choices=tuple(PROFILE_SUITES)',
+        "suites = PROFILE_SUITES[args.profile]",
+    )
+    missing = [token for token in required_tokens if token not in verifier_text]
+    if missing:
+        raise StaticReTestFailure(
+            "Steam combat-stat profile isolation is missing token(s): "
+            + ", ".join(missing)
+        )
+    context_tokens = (
+        "config_root = steam_skill_config_root()",
+        "upgrades.load_skill_configs(config_root)",
+        "config_root=config_root",
+    )
+    missing_context = [
+        token for token in context_tokens if token not in context_text
+    ]
+    if missing_context:
+        raise StaticReTestFailure(
+            "Steam combat-stat behavior reads non-Steam config state: "
+            + ", ".join(missing_context)
+        )
+    if '"--start-at"' in verifier_text:
+        raise StaticReTestFailure(
+            "Steam combat-stat verification must not resume on a contaminated "
+            "monotonic-progression pair"
+        )
+
+    general_start = verifier_text.find('"general": (')
+    general_end = verifier_text.find('),', general_start)
+    general_profile = verifier_text[general_start:general_end]
+    ordered_suites = (
+        '"transient_status"',
+        '"mindstar"',
+        '"battle_siege"',
+        '"telekinesis"',
+        '"focus"',
+    )
+    positions = [general_profile.find(suite) for suite in ordered_suites]
+    if any(position == -1 for position in positions) or positions != sorted(positions):
+        raise StaticReTestFailure(
+            "the general Steam combat-stat profile must run strict Mindstar before "
+            "remote Fireball trials and omit concentration-sensitive suites"
+        )
+    if (
+        '"meditation"' in general_profile
+        or '"faster_caster"' in general_profile
+        or '"faster_caster_air"' in general_profile
+    ):
+        raise StaticReTestFailure(
+            "Meditation and both Faster Caster modalities require their own "
+            "pristine Steam pairs"
+        )
+
+    mindstar_text = read_text(
+        ROOT / "tools/verify_multiplayer_mindstar_behavior_sync.py"
+    )
+    mindstar_direction_start = mindstar_text.find("def run_direction(")
+    mindstar_direction_end = mindstar_text.find(
+        "\ndef main()", mindstar_direction_start
+    )
+    mindstar_direction = mindstar_text[
+        mindstar_direction_start:mindstar_direction_end
+    ]
+    pre_prime_cleanup = mindstar_direction.find(
+        "pre_prime_cleanup = cleanup_live_enemies()"
+    )
+    spawner_prime = mindstar_direction.find(
+        "manual_spawner_prime = enable_manual_stock_spawner_combat()"
+    )
+    baseline_cast = mindstar_direction.find(
+        "baseline_cast = run_fireball_trial("
+    )
+    if not 0 <= pre_prime_cleanup < spawner_prime < baseline_cast:
+        raise StaticReTestFailure(
+            "Mindstar must remove the previous owner's targets, establish the "
+            "exact stock arena spawner, then begin its manual-target Fireball trial"
+        )
+    mindstar_damage_tokens = (
+        "before_source_cast=lambda: reset_local_cast_observation(",
+        "cast_observation = read_local_cast_observation(",
+        "def measure_primary_damage_trial(",
+        '"method": "single_fire_projectile_authoritative_damage"',
+        '"method": "client_air_damage_claim_quantum"',
+        'observation["damage_claim_samples"]',
+        "authoritative_damage=authoritative_damage",
+        "if primary_entry == FIRE_PRIMARY_ENTRY:",
+        'damage["primary_damaged"] and not damage["secondary_damaged"]',
+        "elif primary_entry == AIR_PRIMARY_ENTRY:",
+        'expected_geometry = "selected-target Air damage"',
+        "receiver_log_offset = log_position(cast_direction.receiver_log)",
+        'float(active_measurement["quantum"])',
+        '/ float(baseline_measurement["quantum"])',
+    )
+    missing_mindstar_damage = [
+        token for token in mindstar_damage_tokens if token not in mindstar_text
+    ]
+    if missing_mindstar_damage:
+        raise StaticReTestFailure(
+            "Mindstar mixed Fire/Air behavior verification is missing semantic "
+            "per-hit measurement token(s): " + ", ".join(missing_mindstar_damage)
+        )
+
+    log_probe_text = read_text(ROOT / "tools/multiplayer_log_probe.py")
+    spell_cast_text = read_text(ROOT / "tools/verify_spell_cast_sync.py")
+    log_probe_tokens = (
+        'with path.open("rb") as stream:',
+        "stream.seek(offset)",
+        "return path.stat().st_size",
+        "exc.errno != errno.ENODATA",
+        "from multiplayer_log_probe import log_after, log_position, read_log",
+    )
+    combined_log_text = log_probe_text + "\n" + spell_cast_text
+    missing_log_probe = [
+        token for token in log_probe_tokens if token not in combined_log_text
+    ]
+    if missing_log_probe or "len(read_log(direction." in spell_cast_text:
+        raise StaticReTestFailure(
+            "multiplayer cast evidence must use byte-positioned cross-variant "
+            "log reads: " + ", ".join(missing_log_probe)
+        )
+    for behavior_path in (
+        ROOT / "tools/verify_multiplayer_focus_behavior_sync.py",
+        ROOT / "tools/verify_multiplayer_meditation_behavior_sync.py",
+        ROOT / "tools/verify_multiplayer_faster_caster_behavior_sync.py",
+    ):
+        behavior_log_text = read_text(behavior_path)
+        if "len(read_log(direction." in behavior_log_text:
+            raise StaticReTestFailure(
+                f"{behavior_path.name} retained character-positioned log offsets"
+            )
+        if "log_position(direction." not in behavior_log_text:
+            raise StaticReTestFailure(
+                f"{behavior_path.name} does not use byte-positioned log offsets"
+            )
+    faster_caster_text = read_text(
+        ROOT / "tools/verify_multiplayer_faster_caster_behavior_sync.py"
+    )
+    faster_claim_tokens = (
+        "CONTINUOUS_PRIMARY_ENTRIES = frozenset((AIR_PRIMARY_ENTRY,))",
+        "if direction.source_pipe == CLIENT_PIPE:",
+        'observation["damage_associated_skill_id"] != primary_entry',
+        'f"{direction.name} continuous Air damage claims were not "',
+    )
+    missing_faster_claims = [
+        token for token in faster_claim_tokens if token not in faster_caster_text
+    ]
+    if missing_faster_claims:
+        raise StaticReTestFailure(
+            "continuous Faster Caster must stay scoped to its exact Air claim path: "
+            + ", ".join(missing_faster_claims)
+        )
+
+    all_stats_text = read_text(ROOT / "tools/verify_multiplayer_all_stat_sync.py")
+    steam_progression_text = read_text(
+        ROOT / "tools/verify_steam_friend_active_pair_progression.py"
+    )
+    mana_probe_tokens = (
+        "def query_mana_observation(",
+        "def set_runtime_test_godmode_enabled(",
+        "previous_godmode = set_runtime_test_godmode_enabled(target_pipe, False)",
+        "return _sample_mana_recovery_while_godmode_suspended(target_id, duration)",
+        "finally:\n        set_runtime_test_godmode_enabled(target_pipe, previous_godmode)",
+        "local runtime_before = tonumber(before and before.mana_current) or -1",
+        "local native = progression ~= 0 and sd.debug.read_float(",
+        "local runtime_after = tonumber(after and after.mana_current) or -1",
+        "def distance_from_runtime_bracket(",
+        "def distance_from_runtime_replication_window(",
+        '"owner_runtime_bracket_error": distance_from_runtime_bracket(owner)',
+        '"observer_runtime_bracket_error": distance_from_runtime_bracket(',
+        '"owner_runtime_window_error": owner_runtime_window_error',
+        '"observer_runtime_window_error": observer_runtime_window_error',
+        "previous_owner_observation: dict[str, float] | None = owner",
+        "previous_observer_observation: dict[str, float] | None = observer",
+        'precondition_mp = float(before["native"]["mp"])',
+        "settle_ceiling = max(5.0, min(100.0, precondition_mp * 0.5))",
+        'float(sample["observer_runtime_window_error"])',
+        "owner_gain / sampled_duration",
+        "replication_tolerance = max(1.0, observed_rate * 1.1)",
+        "stable_set_result = set_local_mana(target_pipe, stable_target)",
+        "stable_deadline = time.monotonic() + 2.0",
+        '"observer_native_mp": stable_observer["native"]',
+        '"observer_runtime_before_mp": stable_observer["runtime_before"]',
+        '"observer_runtime_after_mp": stable_observer["runtime_after"]',
+    )
+    missing_mana_probe = [
+        token for token in mana_probe_tokens if token not in all_stats_text
+    ]
+    if missing_mana_probe:
+        raise StaticReTestFailure(
+            "live mana recovery must use adjacent runtime/native/runtime samples: "
+            + ", ".join(missing_mana_probe)
+        )
+    stat_finalize_tokens = (
+        "def run_stats_finalize_phase(",
+        'choices=("catalog", "upgrades", "stats", "stats-finalize")',
+        '"--resume-output"',
+        'completed_step_count != len(steps)',
+        'for direction in ("host_owned", "client_owned")',
+        'output["final"] = stats.verify_final_maxima(',
+        'output["final_ranked_property_matrix"]',
+        'output["final_mana_recovery"]',
+        'final_gain <= baseline_gain + 0.5',
+    )
+    missing_stat_finalize = [
+        token for token in stat_finalize_tokens if token not in steam_progression_text
+    ]
+    if missing_stat_finalize:
+        raise StaticReTestFailure(
+            "Steam stat finalization must validate a complete matrix before "
+            "measuring max-rank behavior: " + ", ".join(missing_stat_finalize)
+        )
+
+    mindstar_semantic_tokens = (
+        "def compact_native_output_buffer(",
+        '"semantic_exact_match": True',
+        '"native_output_buffer_diagnostic": {',
+        'stable_shape_fields = (\n        "progression_level",',
+        '"count": spell["raw_output_count"]',
+        '"outputs": spell["raw_outputs"]',
+        '"mana_spend_cost_available": spell["mana_spend_cost_available"]',
+        '"builder_seh_code": spell["builder_seh_code"]',
+        "def ensure_mindstar_inactive(",
+        "finally:\n        deactivated = ensure_mindstar_inactive(",
+        "finally:\n        final_deactivated = ensure_mindstar_inactive(",
+    )
+    missing_mindstar_semantics = [
+        token for token in mindstar_semantic_tokens if token not in mindstar_text
+    ]
+    if missing_mindstar_semantics:
+        raise StaticReTestFailure(
+            "Mindstar must compare semantic spell state and retain the stock "
+            "high-water output buffer only as diagnostics: "
+            + ", ".join(missing_mindstar_semantics)
+        )
+
+    transient_status_text = read_text(
+        ROOT / "tools/verify_multiplayer_transient_status_sync.py"
+    )
+    transient_timing_tokens = (
+        "POISON_REPLICATION_MAX_TICK_DRIFT * POISON_DAMAGE_PER_TICK",
+        "last_owner_before_observer = query_poison_status(direction.owner_pipe)",
+        '>= last_owner["hp"] - POISON_HP_QUANTIZATION_TOLERANCE',
+        '<= last_owner_before_observer["hp"] + maximum_hp_drift',
+        "maximum_tick_drift=POISON_REPLICATION_MAX_TICK_DRIFT",
+        "def wait_for_observer_duration_advance(",
+        'last["modifier_ticks"] < active_modifier_ticks',
+        "duration_drift <= POISON_REPLICATION_MAX_TICK_DRIFT",
+        "2 * POISON_REPLICATION_MAX_TICK_DRIFT",
+        "owner_ticks > injected_ticks",
+        "injected_ticks - owner_ticks > POISON_OWNER_CORRECTION_MAX_TICK_DRIFT",
+    )
+    missing_transient_timing = [
+        token for token in transient_timing_tokens if token not in transient_status_text
+    ]
+    if missing_transient_timing:
+        raise StaticReTestFailure(
+            "transient poison HP parity must use bracketed samples and the same "
+            "native-tick drift bound as duration replication: "
+            + ", ".join(missing_transient_timing)
+        )
+    invalid_post_observer_hp_comparison = (
+        'abs(last_observer["hp"] - last_owner["hp"]) <= maximum_hp_drift'
+    )
+    if invalid_post_observer_hp_comparison in transient_status_text:
+        raise StaticReTestFailure(
+            "transient poison HP parity must not compare an observer sample "
+            "to a later owner sample without accounting for owner damage "
+            "during the probe interval"
+        )
+    compact_start = mindstar_text.find("def compact_spell(")
+    compact_end = mindstar_text.find(
+        "\ndef compact_native_output_buffer(", compact_start
+    )
+    compact_spell = mindstar_text[compact_start:compact_end]
+    forbidden_compact_fields = (
+        'spell["raw_output_count"]',
+        'spell["raw_outputs"]',
+    )
+    present_compact_fields = [
+        field for field in forbidden_compact_fields if field in compact_spell
+    ]
+    if present_compact_fields:
+        raise StaticReTestFailure(
+            "Mindstar semantic parity must not treat the stock grow-only output "
+            "buffer as replicated progression state: "
+            + ", ".join(present_compact_fields)
+        )
+
+    battle_siege_text = read_text(
+        ROOT / "tools/verify_multiplayer_battle_siege_behavior_sync.py"
+    )
+    battle_siege_tokens = (
+        "def reset_local_cast_observation(",
+        "sd.debug.reset_local_cast_observation(",
+        "def read_local_cast_observation(",
+        "sd.debug.get_local_cast_observation(",
+        "def estimate_fundamental_damage_quantum(",
+        "    wait_for_cast_runtime_ready,",
+        '"mana_spent_total"',
+        '"client_air_damage_claim_quantum"',
+        "authoritative_damage=damage",
+        '"single_fire_projectile_authoritative_damage"',
+        '"host_primary_entry"] == FIRE_PRIMARY_ENTRY',
+        '"client_primary_entry"] == AIR_PRIMARY_ENTRY',
+        'expected_battle_ratio = (',
+        'actual_battle_ratio = battle_trial["mana_spend"] / base["mana_spend"]',
+        'expected_siege_ratio = (',
+        'siege_trial["native_damage_quantum"]',
+        '/ base["native_damage_quantum"]',
+        'for field in ("battle_actual_mana_ratio", "siege_actual_damage_ratio")',
+    )
+    missing_battle_siege = [
+        token for token in battle_siege_tokens if token not in battle_siege_text
+    ]
+    if missing_battle_siege:
+        raise StaticReTestFailure(
+            "mixed-element Battle/Siege behavior verification is missing token(s): "
+            + ", ".join(missing_battle_siege)
+        )
+    forbidden_battle_siege_tokens = (
+        "sd.debug.watch_write(",
+        "sd.debug.get_write_hits(",
+        "sd.events.on('runtime.tick'",
+        "arm_mana_write_watch",
+        "arm_damage_write_watch",
+        "native_damage_per_write",
+    )
+    present_forbidden = [
+        token
+        for token in forbidden_battle_siege_tokens
+        if token in battle_siege_text
+    ]
+    if present_forbidden:
+        raise StaticReTestFailure(
+            "Battle/Siege must use bounded semantic cast observations, not hot-page "
+            "write watches or net resource sampling: "
+            + ", ".join(present_forbidden)
+        )
+    cast_trial_start = battle_siege_text.find("def run_cast_trial(")
+    cast_trial_end = battle_siege_text.find(
+        "\ndef verify_behavior_contracts(", cast_trial_start
+    )
+    cast_trial = battle_siege_text[cast_trial_start:cast_trial_end]
+    if cast_trial.count("cast_fireball_pair(") != 1:
+        raise StaticReTestFailure(
+            "Battle/Siege must measure mana, damage, and replication from one "
+            "non-intrusively observed native cast"
+        )
+    semantic_observation_sources = (
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_mana_hooks.inl",
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/client_enemy_damage_sync.inl",
+        ROOT
+        / "SolomonDarkModLoader/src/lua_engine_bindings_debug/functions_combat_observations.inl",
+    )
+    semantic_observation_text = "\n".join(
+        read_text(path) for path in semantic_observation_sources
+    )
+    semantic_observation_tokens = (
+        "g_local_mana_delta_observation_mutex",
+        "observation.spent_total -= applied_delta",
+        "RecordLocalEnemyDamageClaimObservationInternal(",
+        "if (!force_resend)",
+        "const bool armed = ResetLocalPlayerManaDeltaObservation();",
+        "TakeLocalPlayerManaDeltaObservation(&mana)",
+        "multiplayer::ResetLocalEnemyDamageClaimObservation(network_actor_id);",
+        "multiplayer::TakeLocalEnemyDamageClaimObservation(",
+        "damage.claimed_damage_samples[index]",
+    )
+    missing_semantic_observation = [
+        token
+        for token in semantic_observation_tokens
+        if token not in semantic_observation_text
+    ]
+    if missing_semantic_observation:
+        raise StaticReTestFailure(
+            "bounded semantic Battle/Siege observation is missing token(s): "
+            + ", ".join(missing_semantic_observation)
+        )
+
+    fireball_cast_text = read_text(
+        ROOT / "tools/verify_multiplayer_fireball_explode_effect_sync.py"
+    )
+    if fireball_cast_text.count(
+        'hp=float(pair.get("target_hp", TARGET_HP))'
+    ) < 2:
+        raise StaticReTestFailure(
+            "shared primary-cast fixtures must preserve the requested target HP "
+            "through their final stock spatial-index refresh"
+        )
+
+    return (
+        "Steam combat-stat behavior runs in concentration-safe pristine-pair "
+        "profiles, primes the exact stock arena spawner, and measures mixed-element "
+        "Battle/Siege behavior through bounded semantic observations and normalized ratios"
+    )
+
+
+def test_semantic_air_damage_quantum_uses_authoritative_total() -> str:
+    from verify_multiplayer_battle_siege_behavior_sync import (
+        estimate_fundamental_damage_quantum,
+    )
+
+    cases = (
+        ([0.08] * 20, 1.72, 0.04, 43.0),
+        ([0.05] * 20, 1.025, 0.025, 41.0),
+    )
+    for samples, authoritative_damage, expected_quantum, expected_multiple in cases:
+        result = estimate_fundamental_damage_quantum(
+            samples,
+            authoritative_damage=authoritative_damage,
+        )
+        if not math.isclose(
+            float(result["quantum"]), expected_quantum, abs_tol=1e-9
+        ) or not math.isclose(
+            float(result["authoritative_multiple"]),
+            expected_multiple,
+            abs_tol=1e-9,
+        ):
+            raise StaticReTestFailure(
+                "semantic Air damage quantum did not use authoritative HP loss "
+                f"to reject bundled half-hit candidates: {result}"
+            )
+    return "semantic Air damage estimation resolves bundled claims against authoritative HP loss"
+
+
+def test_mindstar_semantic_spell_projection_ignores_raw_storage_tail() -> str:
+    from verify_multiplayer_mindstar_behavior_sync import (
+        compact_native_output_buffer,
+        compact_spell,
+    )
+
+    semantic_spell = {
+        "resolved": True,
+        "build_skill_id": 0x3F3,
+        "current_spell_id": 0x3F3,
+        "progression_level": 4,
+        "logical_output_count": 2,
+        "outputs": [4140.0, 370.0],
+        "damage": 4140.0,
+        "secondary_damage": 0.0,
+        "secondary_damage_available": False,
+        "mana_cost": 370.0,
+        "mana_cost_available": True,
+        "mana_spend_cost": 37.0,
+        "mana_spend_cost_available": True,
+        "mana_output_scale": 10.0,
+        "mana_output_scaled": True,
+        "builder_seh_code": 0,
+        "error": "",
+    }
+    owner = {
+        "spell": {
+            **semantic_spell,
+            "raw_output_count": 2,
+            "raw_outputs": [4140.0, 370.0],
+        }
+    }
+    observer = {
+        "spell": {
+            **semantic_spell,
+            "raw_output_count": 9,
+            "raw_outputs": [4140.0, 370.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        }
+    }
+    if compact_spell(owner) != compact_spell(observer):
+        raise StaticReTestFailure(
+            "Mindstar semantic parity still treats a grow-only raw tail as spell state"
+        )
+    if compact_native_output_buffer(owner) == compact_native_output_buffer(observer):
+        raise StaticReTestFailure(
+            "Mindstar raw-buffer diagnostics did not preserve the 2-versus-9 repro"
+        )
+
+    owner_projection = compact_spell(owner)
+    for field, value in owner_projection.items():
+        changed = {**semantic_spell}
+        if isinstance(value, bool):
+            changed[field] = not value
+        elif isinstance(value, int):
+            changed[field] = value + 1
+        elif isinstance(value, float):
+            changed[field] = value + 0.5
+        else:
+            changed[field] = value + "changed"
+        changed_view = {
+            "spell": {
+                **changed,
+                "raw_output_count": 9,
+                "raw_outputs": observer["spell"]["raw_outputs"],
+            }
+        }
+        if compact_spell(owner) == compact_spell(changed_view):
+            raise StaticReTestFailure(
+                f"Mindstar semantic projection omitted identity field {field}"
+            )
+    return (
+        "Mindstar ignores grow-only raw output tails while preserving every "
+        "resolved spell identity field"
+    )
+
+
+def test_regenerate_behavior_traces_stock_native_heal_updates() -> str:
+    verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_regenerate_behavior_sync.py"
+    )
+    required_tokens = (
+        'NATIVE_REGENERATE_HEAL_INSTRUCTION = read_runtime_layout_offset(',
+        '"regenerate_heal_instruction"',
+        'RUNTIME_FRAME_RATE_GLOBAL = read_runtime_layout_offset(',
+        '"game_timing_scale"',
+        'PROGRESSION_HEALTH_REGEN_OFFSET = read_runtime_layout_offset(',
+        '"progression_health_regeneration"',
+        'NATIVE_HEAL_NUMERATOR = 1.5',
+        'NATIVE_BASE_HEAL_DIVISOR = 10.0',
+        "sd.events.on('runtime.tick', function(event)",
+        "sd.debug.trace_function(",
+        "sd.debug.get_trace_hits(monitor.trace_name)",
+        "tonumber(hit.esi) == progression",
+        "base_heal / (frame_rate * monitor.base_heal_divisor)",
+        "def ensure_vital_monitor_registered(",
+        "def start_vital_monitor(",
+        "def collect_vital_monitor(",
+        "concurrent.futures.ThreadPoolExecutor(max_workers=2)",
+        '"observer": executor.submit(',
+        '"owner": executor.submit(',
+        '"owner_native_heal_updates"',
+        '"owner_heal_per_native_update"',
+        '"expected_heal_per_native_update"',
+        "OWNER_OBSERVER_HP_ENVELOPE = 1.05",
+        "post_active_convergence = wait_for_vitals(",
+        '"post_active_convergence": post_active_convergence',
+    )
+    missing = [token for token in required_tokens if token not in verifier_text]
+    if missing:
+        raise StaticReTestFailure(
+            "Regenerate native-update verification is missing token(s): "
+            + ", ".join(missing)
+        )
+    forbidden_tokens = (
+        "EXPECTED_NATIVE_HEAL_PER_SECOND",
+        "EXPECTED_NATIVE_HEAL_PER_TICK",
+        "fallback_ms",
+    )
+    present_forbidden = [
+        token for token in forbidden_tokens if token in verifier_text
+    ]
+    if present_forbidden:
+        raise StaticReTestFailure(
+            "Regenerate verification retained guessed cadence/fallback token(s): "
+            + ", ".join(present_forbidden)
+        )
+
+    sample_start = verifier_text.find("def sample_vitals_for(")
+    sample_end = verifier_text.find(
+        "\ndef assert_regenerate_inactive(", sample_start
+    )
+    sample_body = verifier_text[sample_start:sample_end]
+    if (
+        sample_start == -1
+        or sample_end == -1
+        or "query_persistent_status(" in sample_body
+    ):
+        raise StaticReTestFailure(
+            "Regenerate sampling must stay in-process instead of depressing the "
+            "game tick rate with repeated cross-process Lua queries"
+        )
+
+    return (
+        "Regenerate behavior traces the stock heal instruction and validates "
+        "each native update against the live frame-rate divisor"
+    )
+
+
+def test_steam_rush_reuses_strict_prepared_matrix() -> str:
+    behavior_text = read_text(
+        ROOT / "tools/verify_multiplayer_rush_behavior_sync.py"
+    )
+    steam_text = read_text(
+        ROOT / "tools/verify_steam_friend_active_pair_rush.py"
+    )
+    required_behavior_tokens = (
+        "def run_prepared_rush_matrix(",
+        'output["real_keyboard_baseline"]',
+        'output["real_keyboard_upgraded"]',
+        "COMBINED_MAX_SPEED_MULTIPLIER",
+        "minimum_ranked_rush_step_ratio",
+    )
+    required_steam_tokens = (
+        "require_shared_test_run(output[\"pair\"])",
+        "configure_behavior_context(pair)",
+        "rush.load_native_rush_evidence(",
+        "real_input_control.windows_process_id(HOST_INSTANCE)",
+        "hold_proton_key",
+        "resolve_keyboard_drivers()",
+        "rush.run_prepared_rush_matrix(",
+    )
+    missing = [
+        token
+        for token in required_behavior_tokens
+        if token not in behavior_text
+    ] + [token for token in required_steam_tokens if token not in steam_text]
+    if missing:
+        raise StaticReTestFailure(
+            "Steam Rush behavior verification is missing token(s): "
+            + ", ".join(missing)
+        )
+    if "launch_pair(" in steam_text or "stop_games(" in steam_text:
+        raise StaticReTestFailure(
+            "Steam Rush verification must consume the genuine active friend pair "
+            "without a local-transport launch or fallback"
+        )
+
+    main_start = behavior_text.find("def main() -> int:")
+    main_body = behavior_text[main_start:]
+    if main_body.count("run_prepared_rush_matrix(") != 1:
+        raise StaticReTestFailure(
+            "the standalone Rush entry point must call the shared strict matrix "
+            "exactly once instead of duplicating its behavior assertions"
+        )
+
+    return "Windows/Proton Steam Rush verification reuses the strict native-evidence and real-input matrix"
+
+
+def test_semantic_ui_actions_dispatch_only_on_app_update_thread() -> str:
     layout_text = read_text(ROOT / "config/binary-layout.ini")
+    layout_header_text = read_text(
+        ROOT / "SolomonDarkModLoader/include/binary_layout.h"
+    )
+    layout_parser_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/binary_layout_parser.cpp"
+    )
+    layout_validation_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/binary_layout_validation.cpp"
+    )
+    action_helpers_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/state_and_actions_helpers.inl"
+    )
     request_text = read_text(
         ROOT
         / "SolomonDarkModLoader/src/debug_ui_overlay/state_and_actions_requests_and_reset.inl"
+    )
+    owner_resolution_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/state_and_actions_surface_owner_resolution.inl"
+    )
+    tracked_surfaces_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/tracked_surfaces_and_main_menu.inl"
+    )
+    overlay_source_text = read_source_unit(
+        ROOT / "SolomonDarkModLoader/src/debug_ui_overlay.cpp"
     )
     overlay_frame_text = read_text(DEBUG_UI_OVERLAY_FRAME_RENDER)
     public_actions_text = read_text(
@@ -9085,47 +10768,54 @@ def test_main_menu_new_game_dispatches_on_app_update_thread() -> str:
     background_tick_text = read_text(
         ROOT / "SolomonDarkModLoader/src/background_focus_bypass.cpp"
     )
-    layout_validation_text = read_text(
-        ROOT / "SolomonDarkModLoader/src/binary_layout_validation.cpp"
-    )
     onboarding_text = read_text(ROOT / "tools/drive_steam_friend_active_pair.py")
 
-    section_start = layout_text.find("[action.main_menu.new_game]")
-    section_end = layout_text.find("\n[", section_start + 1)
-    section = layout_text[section_start:section_end]
-    if section_start == -1 or "dispatch_timing=app_tick" not in section:
+    stale_timing_owners = [
+        name
+        for name, text in (
+            ("binary layout", layout_text),
+            ("binary layout declarations", layout_header_text),
+            ("binary layout parser", layout_parser_text),
+            ("binary layout validation", layout_validation_text),
+            ("semantic action helpers", action_helpers_text),
+            ("semantic action request path", request_text),
+        )
+        if "dispatch_timing" in text or "ResolveUiActionDispatchTiming" in text
+    ]
+    if stale_timing_owners:
         raise StaticReTestFailure(
-            "main_menu.new_game must be explicitly owned by the app update thread"
+            "semantic UI dispatch still exposes selectable thread ownership in: "
+            + ", ".join(stale_timing_owners)
         )
 
     required_pairs = (
-        (
-            request_text,
-            "ResolveUiActionDispatchTiming(\n"
-            "                pending_surface_root_id,",
-        ),
-        (request_text, "expected_dispatch_timing"),
-        (
-            overlay_frame_text,
-            'DispatchPendingSemanticUiActionRequest("overlay_frame", "render thread");',
-        ),
+        (request_text, "void DispatchPendingSemanticUiActionRequest()"),
         (
             public_actions_text,
-            'DispatchPendingSemanticUiActionRequest("app_tick", "app update thread");',
+            "DispatchPendingSemanticUiActionRequest();",
         ),
         (background_tick_text, "DispatchPendingDebugUiActionOnAppTick();"),
-        (layout_validation_text, 'value == "app_tick"'),
+        (
+            request_text,
+            "Debug UI overlay dispatched semantic UI action on the app update thread.",
+        ),
+        (overlay_source_text, "kPendingSemanticUiActionRequestMaximumAgeMs = 3000"),
+        (request_text, "request.snapshot_generation = snapshot_generation;"),
+        (request_text, "snapshot.generation != request.snapshot_generation"),
+        (request_text, "TryCopyUsableDebugUiSurfaceSnapshot(&snapshot)"),
+        (public_actions_text, "snapshot->snapshot_generation = pending.snapshot_generation;"),
+        (owner_resolution_text, "TryResolveValidatedUiOwnerPointer("),
+        (owner_resolution_text, "snapshot_owner_address != validated_owner_address"),
+        (owner_resolution_text, "TryGetCurrentSpellPicker(&candidate_owner_address)"),
+        (tracked_surfaces_text, "*browser_address = tracked_browser.tracked_object_ptr;"),
         (onboarding_text, "run_entry_dispatched = False"),
+        (onboarding_text, "if exercise_last_game_redirect:"),
         (
             onboarding_text,
-            '"main_menu.resume_last_game" in available\n'
-            "                and not run_entry_dispatched",
+            'elif "main_menu.new_game" in available:',
         ),
-        (
-            onboarding_text,
-            '"main_menu.new_game" in available and not run_entry_dispatched',
-        ),
-        (onboarding_text, 'if host_view.get("scene") == "testrun":'),
+        (onboarding_text, 'host_view.get("scene") == "testrun"'),
+        (onboarding_text, 'host_view.get("local.in_run") == "true"'),
         (
             onboarding_text,
             'local_sync.wait_for_scene(CLIENT_ENDPOINT, "testrun", timeout=45.0)',
@@ -9135,8 +10825,27 @@ def test_main_menu_new_game_dispatches_on_app_update_thread() -> str:
     missing = [token for text, token in required_pairs if token not in text]
     if missing:
         raise StaticReTestFailure(
-            "app-thread New Game dispatch regression is missing token(s): "
+            "app-thread semantic UI dispatch regression is missing token(s): "
             + ", ".join(missing)
+        )
+
+    forbidden_render_or_caller_thread_dispatch = (
+        "DispatchPendingSemanticUiActionRequest(",
+        "TryDispatchSemanticUiActionRequestImmediately",
+        '"overlay_frame"',
+        '"render thread"',
+    )
+    stale_render_tokens = [
+        token
+        for token in forbidden_render_or_caller_thread_dispatch
+        if token in overlay_frame_text
+        or token == "TryDispatchSemanticUiActionRequestImmediately"
+        and token in request_text
+    ]
+    if stale_render_tokens:
+        raise StaticReTestFailure(
+            "semantic UI mutation still has a render/caller-thread path: "
+            + ", ".join(stale_render_tokens)
         )
 
     pump = background_tick_text.find("DispatchPendingDebugUiActionOnAppTick();")
@@ -9146,30 +10855,509 @@ def test_main_menu_new_game_dispatches_on_app_update_thread() -> str:
             "pending update-owned UI actions must run before the stock MyApp update loop"
         )
 
-    resume_choice = onboarding_text.find(
-        '"main_menu.resume_last_game" in available'
-    )
     new_game_choice = onboarding_text.find(
-        '"main_menu.new_game" in available and not run_entry_dispatched'
+        'elif "main_menu.new_game" in available:'
     )
-    if resume_choice == -1 or new_game_choice == -1 or resume_choice > new_game_choice:
+    redirect_opt_in = onboarding_text.find("if exercise_last_game_redirect:")
+    resume_choice = onboarding_text.find(
+        'action = ("main_menu.resume_last_game", "main_menu")', redirect_opt_in
+    )
+    if not 0 <= redirect_opt_in < resume_choice < new_game_choice:
         raise StaticReTestFailure(
-            "connected onboarding must prefer Last Game before the fresh-profile "
-            "New Game fallback"
+            "connected onboarding must select native New Game by default and isolate Last Game to its regression flag"
         )
 
-    timing_check = request_text.find("ResolveUiActionDispatchTiming(")
     claim = request_text.find(
         "g_debug_ui_overlay_state.pending_semantic_ui_action = "
         "PendingSemanticUiActionRequest{};",
-        timing_check,
     )
-    if timing_check == -1 or claim == -1 or timing_check > claim:
+    dispatch_entry = request_text.find("void DispatchPendingSemanticUiActionRequest()")
+    if dispatch_entry == -1 or claim == -1 or dispatch_entry > claim:
         raise StaticReTestFailure(
-            "a dispatcher must verify timing ownership before claiming the pending UI action"
+            "the app-thread dispatcher must claim pending semantic UI actions"
         )
 
-    return "connected onboarding prefers the safe Last Game redirect while fresh-profile New Game preserves stock update-thread lifetime ownership"
+    expiry_check = request_text.find(
+        "now - request.queued_at > kPendingSemanticUiActionRequestMaximumAgeMs",
+        claim,
+    )
+    generation_check = request_text.find(
+        "snapshot.generation != request.snapshot_generation",
+        claim,
+    )
+    if not 0 <= claim < expiry_check < generation_check:
+        raise StaticReTestFailure(
+            "the app-thread dispatcher must claim, expire, and generation-check every queued UI request"
+        )
+
+    forbidden_stale_owner_paths = (
+        "*owner_address = snapshot_owner_address",
+        "pending_skips_snapshot_match",
+    )
+    stale_owner_tokens = [
+        token
+        for token in forbidden_stale_owner_paths
+        if token in request_text or token in owner_resolution_text
+    ]
+    if stale_owner_tokens:
+        raise StaticReTestFailure(
+            "semantic UI dispatch still contains a stale-observation escape hatch: "
+            + ", ".join(stale_owner_tokens)
+        )
+
+    return (
+        "all semantic UI mutation is queued, generation-bound, expiry-bounded, "
+        "and live-owner-validated on the app thread"
+    )
+
+
+def test_main_thread_work_pump_is_not_render_owned() -> str:
+    background_tick_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/background_focus_bypass.cpp"
+    )
+    internal_header_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_internal.h"
+    )
+    public_api_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api.inl"
+    )
+    public_pump_path = (
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_main_thread_pump.inl"
+    )
+    if not public_pump_path.exists():
+        raise StaticReTestFailure(
+            "main-thread gameplay/Lua work needs a public app-tick pump seam"
+        )
+    public_pump_text = read_text(public_pump_path)
+    keyboard_injection_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl"
+    )
+    pump_loop_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_pump_loop.inl"
+    )
+    runtime_request_state_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/core/runtime_request_state.inl"
+    )
+    player_tick_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl"
+    )
+    gameplay_dispatch_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_gameplay_thread_dispatch.inl"
+    )
+    actor_lifecycle_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"
+    )
+    d3d_header_text = read_text(
+        ROOT / "SolomonDarkModLoader/include/d3d9_end_scene_hook.h"
+    )
+    d3d_source_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/d3d9_end_scene_hook.cpp"
+    )
+
+    required_pairs = (
+        (internal_header_text, "void PumpGameplayMainThreadWork();"),
+        (
+            public_api_text,
+            '#include "public_api_main_thread_pump.inl"',
+        ),
+        (public_pump_text, "void PumpGameplayMainThreadWork()"),
+        (public_pump_text, "if (!g_gameplay_keyboard_injection.initialized)"),
+        (public_pump_text, "PumpQueuedGameplayActions();"),
+        (background_tick_text, "PumpGameplayMainThreadWork();"),
+        (pump_loop_text, "AppMainTick and HookPlayerActorTick"),
+        (pump_loop_text, "TryResolvePlayerActorForSlot("),
+        (pump_loop_text, "&local_player_actor_address"),
+        (pump_loop_text, "generation_before == generation_after"),
+        (pump_loop_text, "generation_after != previously_observed_generation"),
+        (pump_loop_text, "tick_scene_address == active_gameplay_address"),
+        (pump_loop_text, "tick_actor_address == local_player_actor_address"),
+        (
+            pump_loop_text,
+            "creation publishes a game object and a slot-zero preview actor",
+        ),
+        (
+            runtime_request_state_text,
+            "void PublishLocalPlayerTickOwnership(",
+        ),
+        (
+            runtime_request_state_text,
+            "void ClearLocalPlayerTickOwnership()",
+        ),
+        (
+            runtime_request_state_text,
+            "void ResetLocalPlayerTickOwnershipState()",
+        ),
+        (player_tick_text, "PublishLocalPlayerTickOwnership("),
+        (gameplay_dispatch_text, "ClearLocalPlayerTickOwnership();"),
+        (actor_lifecycle_text, "ClearLocalPlayerTickOwnership();"),
+    )
+    missing = [token for text, token in required_pairs if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "app-tick main-thread work ownership is missing token(s): "
+            + ", ".join(missing)
+        )
+
+    main_pump = background_tick_text.find("PumpGameplayMainThreadWork();")
+    ui_dispatch = background_tick_text.find(
+        "DispatchPendingDebugUiActionOnAppTick();",
+        main_pump,
+    )
+    stock_tick = background_tick_text.find("original(app, edx);", ui_dispatch)
+    if (
+        main_pump == -1
+        or ui_dispatch == -1
+        or stock_tick == -1
+        or not main_pump < ui_dispatch < stock_tick
+    ):
+        raise StaticReTestFailure(
+            "MyApp tick must pump queued main-thread work, dispatch resulting UI "
+            "actions, then enter the stock update loop"
+        )
+
+    render_owned_tokens = (
+        "D3d9FrameActionPump",
+        "SetD3d9FrameActionPump",
+        "g_action_pump",
+    )
+    render_owned_text = (
+        d3d_header_text
+        + d3d_source_text
+        + keyboard_injection_text
+    )
+    stale = [token for token in render_owned_tokens if token in render_owned_text]
+    if stale:
+        raise StaticReTestFailure(
+            "D3D EndScene must remain presentation-only; stale work-pump token(s): "
+            + ", ".join(stale)
+        )
+
+    forbidden_ownership_heuristics = (
+        "kLocalPlayerTickOwnershipFreshnessMs",
+        "last_local_player_tick_ms",
+        "now_ms - last_local_player_tick_ms",
+    )
+    present_heuristics = [
+        token
+        for token in forbidden_ownership_heuristics
+        if token in pump_loop_text or token in runtime_request_state_text
+    ]
+    if present_heuristics:
+        raise StaticReTestFailure(
+            "main-thread Lua ownership still uses wall-clock freshness "
+            "heuristics: " + ", ".join(present_heuristics)
+        )
+
+    return "main-thread Lua/menu work is app-tick owned and D3D EndScene remains presentation-only"
+
+
+def test_multiplayer_native_transport_is_app_thread_owned() -> str:
+    service_loop_text = read_text(MULTIPLAYER_SERVICE_LOOP)
+    service_loop_header_text = read_text(
+        ROOT / "SolomonDarkModLoader/include/multiplayer_service_loop.h"
+    )
+    public_pump_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_main_thread_pump.inl"
+    )
+    run_exit_reentry_verifier_text = read_text(
+        ROOT / "tools/verify_steam_friend_run_exit_reentry.py"
+    )
+
+    service_thread_start = service_loop_text.find("void ServiceThreadMain()")
+    service_thread_end = service_loop_text.find(
+        "\n}  // namespace",
+        service_thread_start,
+    )
+    if service_thread_start == -1 or service_thread_end == -1:
+        raise StaticReTestFailure("multiplayer service-thread body is unavailable")
+    service_thread_body = service_loop_text[
+        service_thread_start:service_thread_end
+    ]
+    forbidden_service_thread_calls = (
+        "SteamBootstrapTick(",
+        "TickSteamSession(",
+        "TickLocalTransport(",
+    )
+    stale_calls = [
+        token
+        for token in forbidden_service_thread_calls
+        if token in service_thread_body
+    ]
+    if stale_calls:
+        raise StaticReTestFailure(
+            "native multiplayer work still runs on the background service thread: "
+            + ", ".join(stale_calls)
+        )
+
+    required_pairs = (
+        (
+            service_loop_header_text,
+            "void TickSessionAndTransportOnAppThread(std::uint64_t now_ms);",
+        ),
+        (service_loop_text, "g_session_transport_lifecycle_mutex"),
+        (service_loop_text, "g_session_transport_owner_thread_id"),
+        (service_loop_text, "g_last_session_transport_tick_ms"),
+        (service_loop_text, "g_has_session_transport_tick"),
+        (service_loop_text, "GetCurrentThreadId()"),
+        (service_loop_text, "void TickSessionAndTransportOnAppThread"),
+        (public_pump_text, "multiplayer::TickSessionAndTransportOnAppThread("),
+        (run_exit_reentry_verifier_text, 'PAIR_BACKEND == "wsl"'),
+        (
+            run_exit_reentry_verifier_text,
+            'PAIR_BACKEND == "remote-windows-host"',
+        ),
+        (run_exit_reentry_verifier_text, "remote_windows_process_id()"),
+        (run_exit_reentry_verifier_text, "pause_menu.leave_game"),
+        (run_exit_reentry_verifier_text, "drive_pair_to_hub"),
+        (run_exit_reentry_verifier_text, "after_processes != initial_processes"),
+        (run_exit_reentry_verifier_text, "new_crash_artifacts(started_at, instances)"),
+    )
+    missing = [token for text, token in required_pairs if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "app-thread multiplayer ownership is missing token(s): "
+            + ", ".join(missing)
+        )
+
+    app_tick_call = public_pump_text.find(
+        "multiplayer::TickSessionAndTransportOnAppThread("
+    )
+    gameplay_injection_guard = public_pump_text.find(
+        "if (!g_gameplay_keyboard_injection.initialized)"
+    )
+    if (
+        app_tick_call == -1
+        or gameplay_injection_guard == -1
+        or app_tick_call > gameplay_injection_guard
+    ):
+        raise StaticReTestFailure(
+            "Steam session and gameplay transport must tick from AppMainTick even "
+            "when gameplay injection is unavailable"
+        )
+
+    app_tick_definition = service_loop_text.find(
+        "void TickSessionAndTransportOnAppThread"
+    )
+    owner_gate = service_loop_text.find(
+        "if (owner_thread_id != current_thread_id)",
+        app_tick_definition,
+    )
+    cadence_gate = service_loop_text.find(
+        "now_ms - g_last_session_transport_tick_ms < kServiceTickIntervalMs",
+        app_tick_definition,
+    )
+    cadence_commit = service_loop_text.find(
+        "g_last_session_transport_tick_ms = now_ms;",
+        app_tick_definition,
+    )
+    steam_bootstrap_tick = service_loop_text.find(
+        "SteamBootstrapTick();",
+        app_tick_definition,
+    )
+    steam_snapshot_apply = service_loop_text.find(
+        "ApplySteamSnapshotToRuntime(now_ms, GetSteamBootstrapSnapshot());",
+        app_tick_definition,
+    )
+    steam_tick = service_loop_text.find(
+        "TickSteamSession(now_ms);",
+        app_tick_definition,
+    )
+    transport_tick = service_loop_text.find(
+        "TickLocalTransport(now_ms);",
+        app_tick_definition,
+    )
+    if (
+        app_tick_definition == -1
+        or owner_gate == -1
+        or cadence_gate == -1
+        or cadence_commit == -1
+        or steam_bootstrap_tick == -1
+        or steam_snapshot_apply == -1
+        or steam_tick == -1
+        or transport_tick == -1
+        or not (
+            app_tick_definition
+            < owner_gate
+            < cadence_gate
+            < cadence_commit
+            < steam_bootstrap_tick
+            < steam_snapshot_apply
+            < steam_tick
+            < transport_tick
+        )
+    ):
+        raise StaticReTestFailure(
+            "the elected AppMainTick owner must enforce the service cadence, pump "
+            "Steam callbacks, and refresh the bootstrap snapshot before session "
+            "messages and gameplay transport"
+        )
+
+    return (
+        "Steam callbacks, session messages, packets, snapshots, progression, and "
+        "native gameplay work share one elected AppMainTick owner"
+    )
+
+
+def test_participant_native_state_is_owned_by_current_scene() -> str:
+    snapshot_types_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/core/participant_snapshot_types.inl"
+    )
+    scene_context_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_scene_context.inl"
+    )
+    snapshot_builder_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_snapshot.inl"
+    )
+    state_getter_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"
+    )
+    progression_sync_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/native_progression_sync.inl"
+    )
+
+    required_pairs = (
+        (snapshot_types_text, "uintptr_t materialized_scene_address = 0;"),
+        (snapshot_types_text, "uintptr_t materialized_world_address = 0;"),
+        (scene_context_text, "bool IsParticipantMaterializationOwnedByCurrentScene("),
+        (scene_context_text, "current_gameplay_address != materialized_scene_address"),
+        (scene_context_text, "current_context.world_address == materialized_world_address"),
+        (scene_context_text, "ShouldParticipantSceneIntentMaterializeInScene(scene_intent, current_context)"),
+        (snapshot_builder_text, "snapshot.materialized_scene_address = binding.materialized_scene_address;"),
+        (snapshot_builder_text, "snapshot.materialized_world_address = binding.materialized_world_address;"),
+        (state_getter_text, "snapshot = *it;"),
+        (state_getter_text, "snapshot.materialized_scene_address"),
+        (state_getter_text, "snapshot.materialized_world_address"),
+        (progression_sync_text, "DoesLocalSceneMatchParticipantIntent(participant.runtime.scene_intent)"),
+        (progression_sync_text, "!gameplay_state.entity_materialized"),
+        (progression_sync_text, "native_progression_reconcile_by_participant.erase("),
+    )
+    missing = [token for text, token in required_pairs if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "participant native scene ownership is missing token(s): "
+            + ", ".join(missing)
+        )
+
+    ownership_start = scene_context_text.find(
+        "bool IsParticipantMaterializationOwnedByCurrentScene("
+    )
+    ownership_end = scene_context_text.find(
+        "\nbool ShouldBotBeMaterializedInScene(",
+        ownership_start,
+    )
+    ownership_body = scene_context_text[ownership_start:ownership_end]
+    forbidden_ownership_heuristics = (
+        "GetTickCount64",
+        "freshness",
+        "retry",
+        "grace",
+    )
+    stale_heuristics = [
+        token for token in forbidden_ownership_heuristics if token in ownership_body
+    ]
+    if stale_heuristics:
+        raise StaticReTestFailure(
+            "participant native ownership must be exact, not time-based: "
+            + ", ".join(stale_heuristics)
+        )
+
+    builder_owner_check = snapshot_builder_text.find(
+        "!IsParticipantMaterializationOwnedByCurrentScene("
+    )
+    builder_native_probe = snapshot_builder_text.find(
+        "IsParticipantActorMemoryFreshReadable(",
+        builder_owner_check,
+    )
+    if (
+        builder_owner_check == -1
+        or builder_native_probe == -1
+        or builder_owner_check > builder_native_probe
+    ):
+        raise StaticReTestFailure(
+            "participant snapshots must prove current scene ownership before "
+            "probing actor memory"
+        )
+
+    getter_owner_check = state_getter_text.find(
+        "!IsParticipantMaterializationOwnedByCurrentScene("
+    )
+    getter_native_publish = state_getter_text.find(
+        "state->actor_address = snapshot.actor_address;",
+        getter_owner_check,
+    )
+    getter_native_read = state_getter_text.find(
+        "TryReadWizardActorPersistentStatusFlags(",
+        getter_owner_check,
+    )
+    if not (
+        0 <= getter_owner_check < getter_native_publish < getter_native_read
+    ):
+        raise StaticReTestFailure(
+            "participant state getters must reject stale scene bindings before "
+            "publishing or reading native pointers"
+        )
+
+    progression_start = progression_sync_text.find(
+        "void ReconcileRemoteParticipantNativeProgression("
+    )
+    semantic_scene_check = progression_sync_text.find(
+        "DoesLocalSceneMatchParticipantIntent(participant.runtime.scene_intent)",
+        progression_start,
+    )
+    gameplay_state_lookup = progression_sync_text.find(
+        "TryGetParticipantGameplayState(",
+        progression_start,
+    )
+    progression_write = progression_sync_text.find(
+        "ReconcileRemoteParticipantDamageX4State(",
+        gameplay_state_lookup,
+    )
+    if not (
+        0 <= progression_start < semantic_scene_check < gameplay_state_lookup < progression_write
+    ):
+        raise StaticReTestFailure(
+            "remote progression reconciliation must prove semantic scene intent "
+            "and current native materialization before any write"
+        )
+
+    run_exit_reentry_verifier_text = read_text(
+        ROOT / "tools/verify_steam_friend_run_exit_reentry.py"
+    )
+    live_release_tokens = (
+        "verify_run_exit_releases_native_participants(",
+        "participant.progression_runtime_state_address",
+        "participant.equip_runtime_state_address",
+        "outgoing-scene native participant pointers",
+        'record["transition_native_release"]',
+    )
+    missing_live_release = [
+        token
+        for token in live_release_tokens
+        if token not in run_exit_reentry_verifier_text
+    ]
+    if missing_live_release:
+        raise StaticReTestFailure(
+            "real-Steam run re-entry lacks native transition release checks: "
+            + ", ".join(missing_live_release)
+        )
+
+    return (
+        "participant native pointers are exact scene/world-owned and remote "
+        "progression writes stop immediately during semantic transitions"
+    )
 
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
@@ -9178,12 +11366,52 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_lua_exec_timeout_cancels_pending_work,
     ),
     (
+        "remote Windows Lua uses a bounded persistent framed bridge",
+        test_remote_windows_lua_bridge_is_persistent_and_framed,
+    ),
+    (
         "unreliable multiplayer snapshots reject stale visual state",
         test_unreliable_snapshot_ordering_is_wrap_safe,
     ),
     (
+        "snapshot streams are compact and bandwidth bounded",
+        test_snapshot_streams_are_compact_and_bandwidth_bounded,
+    ),
+    (
+        "empty run snapshots unregister stale enemies without parking",
+        test_empty_run_snapshot_unregisters_stale_enemies_without_parking,
+    ),
+    (
+        "run-enemy death tombstones precede structural omission",
+        test_run_enemy_death_tombstones_precede_structural_omission,
+    ),
+    (
+        "Steam pairs recover lobby membership and require stable readiness",
+        test_steam_pair_recovers_lobby_membership_and_requires_stable_readiness,
+    ),
+    (
+        "Steam client reauthentication preserves the live message session",
+        test_steam_client_reauthentication_preserves_live_message_session,
+    ),
+    (
+        "poison correction acknowledgements wait for native application",
+        test_poison_correction_ack_waits_for_native_application,
+    ),
+    (
         "accepted remote item pickups converge into native inventory",
         test_native_item_pickup_converges_into_stock_inventory,
+    ),
+    (
+        "loot removal uses stock deferred retirement",
+        test_loot_deactivation_uses_stock_deferred_retirement,
+    ),
+    (
+        "client loot pickup requests stay single-flight per drop",
+        test_client_loot_pickup_requests_are_single_flight_per_drop,
+    ),
+    (
+        "native unregister retires address-bound network identity",
+        test_native_unregister_retires_address_bound_network_identity,
     ),
     (
         "stock powerups remain host-authoritative and native",
@@ -9194,8 +11422,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_exact_native_equipment_identity_and_color_replicate,
     ),
     (
-        "hub shops preserve participant ownership",
-        test_hub_shops_preserve_participant_ownership,
+        "hub services use typed native Lua dispatch",
+        test_hub_services_use_typed_native_lua_dispatch,
     ),
     (
         "explicit blank Boneyard removes native scenery and collision",
@@ -9218,8 +11446,44 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_packaged_ui_accepts_single_file_launcher,
     ),
     (
+        "packaged desktop UI strips test-only world overrides",
+        test_packaged_ui_does_not_inherit_test_world_overrides,
+    ),
+    (
+        "launcher auto-accepts Steam invites and hub-gates discovery",
+        test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery,
+    ),
+    (
         "progression matrices prearm quiet spawning before run entry",
         test_progression_matrices_prearm_quiet_spawning_before_run_entry,
+    ),
+    (
+        "active Steam behavior harnesses preserve fixture state",
+        test_active_steam_behavior_harnesses_preserve_fixture_state,
+    ),
+    (
+        "staff target selection skips local-only enemies",
+        test_staff_target_selection_skips_local_only_enemies,
+    ),
+    (
+        "frozen manual enemy cells stay position-coherent",
+        test_frozen_manual_enemy_cell_membership_stays_position_coherent,
+    ),
+    (
+        "Steam onboarding waits out blocking dialogs and scene churn",
+        test_steam_onboarding_waits_out_blocking_dialogs_and_scene_churn,
+    ),
+    (
+        "manual primary targets survive stock cursor refresh",
+        test_manual_primary_target_survives_stock_cursor_refresh,
+    ),
+    (
+        "new runs retire the prior host run-exit latch",
+        test_new_run_retires_the_prior_host_run_exit_latch,
+    ),
+    (
+        "secondary behavior matrix uses native two-owner witnesses",
+        test_secondary_behavior_matrix_uses_native_two_owner_witnesses,
     ),
     (
         "spell verifiers quiesce input and prearm manual spawning",
@@ -9230,12 +11494,92 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_meditation_transient_counters_self_repair_to_native_bounds,
     ),
     (
+        "mana recovery tolerance respects native float precision",
+        test_mana_recovery_tolerance_respects_float32_precision,
+    ),
+    (
+        "HEALTH UP contract composes with Life Charm",
+        test_health_up_contract_composes_with_life_charm,
+    ),
+    (
+        "MANA UP contract replaces inherited rank bonuses",
+        test_mana_up_contract_replaces_the_initial_rank_bonus,
+    ),
+    (
+        "world stale hold controls the exact remote host process",
+        test_world_stale_hold_controls_the_exact_remote_host_process,
+    ),
+    (
+        "hub presentation uses stored authority across lifecycle rotation",
+        test_hub_presentation_uses_stored_authority_across_lifecycle_rotation,
+    ),
+    (
+        "natural offer expectations clamp to native maxima",
+        test_natural_offer_expectation_clamps_to_native_maximum,
+    ),
+    (
+        "stat matrix waits for the expected derived contract",
+        test_stat_matrix_waits_for_expected_derived_contract,
+    ),
+    (
+        "mana recovery holds its zero precondition until replication",
+        test_mana_recovery_precondition_holds_zero_until_replication,
+    ),
+    (
+        "reconnect verifier separates cold launch and gameplay timeouts",
+        test_reconnect_verifier_has_a_dedicated_cold_launch_timeout,
+    ),
+    (
+        "loot materialization waits for native field convergence",
+        test_loot_materialization_waits_for_native_field_convergence,
+    ),
+    (
+        "primary kill stress resumes only a contiguous passed prefix",
+        test_primary_kill_stress_resumes_only_a_contiguous_passed_prefix,
+    ),
+    (
+        "primary kill stress attributes late death to the prior cast",
+        test_primary_kill_stress_accepts_a_late_death_from_the_prior_cast,
+    ),
+    (
+        "animated loot bounds transport-phase position skew",
+        test_animated_loot_comparison_bounds_snapshot_phase_skew,
+    ),
+    (
         "level-up barrier waits for forced picker confirmation",
         test_level_up_barrier_waits_for_forced_picker_confirmation,
     ),
     (
+        "level-up choice results advance owned books before resume",
+        test_level_up_choice_result_advances_owned_book_before_resume,
+    ),
+    (
         "pointer-list batches reject stale managed release callbacks",
         test_pointer_list_batch_rejects_stale_managed_release_callbacks,
+    ),
+    (
+        "CPU ticks stop after virtual updates mark objects for removal",
+        test_cpu_tick_stops_after_virtual_update_marks_object_for_removal,
+    ),
+    (
+        "active Steam reconnect starts a clean owned-state epoch",
+        test_steam_friend_active_run_reconnect_is_wired,
+    ),
+    (
+        "orb pickup verifier preserves native resource maxima",
+        test_orb_pickup_verifier_preserves_native_maxima,
+    ),
+    (
+        "primary spell-effect snapshots do not fight native replay",
+        test_primary_spell_effect_snapshots_do_not_fight_native_replay,
+    ),
+    (
+        "native remote Fireball retains cast heading until projectile birth",
+        test_native_remote_fireball_retains_cast_heading_until_projectile_birth,
+    ),
+    (
+        "native item recipe selection includes equipped ownership",
+        test_native_item_recipe_selection_excludes_equipped_items,
     ),
     ("primary mana resolver uses native live spell stats", test_primary_mana_resolver_uses_native_live_spell_stats),
     ("Earth boulder damage uses native live spell stats", test_earth_boulder_damage_uses_native_live_spell_stats),
@@ -9281,12 +11625,16 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_wine_stage_savegames_uses_directory_mirror,
     ),
     (
+        "WSL Steam stages the test Boneyard before Proton starts",
+        test_wsl_steam_launcher_applies_test_boneyard_before_process_start,
+    ),
+    (
         "remote progression preserves local Concentrate context",
         test_remote_progression_preserves_local_concentration_context,
     ),
     (
         "remote progression hydrates authoritative ranks after native no-op",
-        test_remote_progression_hydrates_authoritative_rank_after_native_noop,
+        test_remote_progression_uses_passive_authoritative_hydration,
     ),
     (
         "Steam peer disconnect resets participant replication epoch",
@@ -9297,6 +11645,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_process_termination_skips_loader_shutdown,
     ),
     (
+        "crash reports preserve the faulting x86 frame chain",
+        test_crash_reports_preserve_faulting_x86_frame_chain,
+    ),
+    (
         "stage mirror repairs denied destination ACLs",
         test_stage_mirror_repairs_denied_destination_acl,
     ),
@@ -9305,11 +11657,43 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_steam_spell_behavior_verifiers_use_real_upgrades_and_wait_for_delivery,
     ),
     (
-        "Main Menu New Game dispatch preserves update-thread ownership",
-        test_main_menu_new_game_dispatches_on_app_update_thread,
+        "Steam combat-stat profiles isolate concentration-sensitive behavior",
+        test_steam_combat_stat_profiles_isolate_concentration,
+    ),
+    (
+        "semantic Air damage quantum uses authoritative HP loss",
+        test_semantic_air_damage_quantum_uses_authoritative_total,
+    ),
+    (
+        "Mindstar spell parity ignores only grow-only native output tails",
+        test_mindstar_semantic_spell_projection_ignores_raw_storage_tail,
+    ),
+    (
+        "Regenerate behavior traces stock native heal updates",
+        test_regenerate_behavior_traces_stock_native_heal_updates,
+    ),
+    (
+        "Steam Rush reuses the strict prepared behavior matrix",
+        test_steam_rush_reuses_strict_prepared_matrix,
+    ),
+    (
+        "Semantic UI actions dispatch only on the app update thread",
+        test_semantic_ui_actions_dispatch_only_on_app_update_thread,
+    ),
+    (
+        "Main-thread work pump is not render-owned",
+        test_main_thread_work_pump_is_not_render_owned,
+    ),
+    (
+        "Multiplayer native transport is app-thread owned",
+        test_multiplayer_native_transport_is_app_thread_owned,
+    ),
+    (
+        "Participant native state is owned by the current scene",
+        test_participant_native_state_is_owned_by_current_scene,
     ),
     ("hub start testrun uses gameplay region switch", test_hub_start_testrun_uses_gameplay_region_switch),
-    ("hub start testrun waits for frame pump", test_hub_start_testrun_waits_for_frame_pump),
+    ("hub start testrun waits for app-tick pump", test_hub_start_testrun_waits_for_app_tick_pump),
     ("primary kill stress verifier uses native hub start", test_primary_kill_stress_verifier_uses_native_hub_start),
     ("unverified play boneyard shortcut is not exposed", test_unverified_play_boneyard_shortcut_is_not_exposed),
     ("replicated manual run enemy materialization is client bounded", test_replicated_manual_run_enemy_materialization_is_client_bounded),
@@ -9340,7 +11724,43 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("accepted native shims are documented", test_accepted_native_shims_are_documented),
     ("hot-path diagnostics are default-off and gated", test_hot_path_diagnostics_are_default_off_and_gated),
     ("local multiplayer UDP transport is wired", test_local_multiplayer_udp_transport_is_wired),
+    (
+        "world snapshots are complete MTU-sized generations",
+        test_world_snapshots_are_complete_mtu_sized_generations,
+    ),
+    (
+        "run enemy materialization preserves exact native type",
+        test_run_enemy_materialization_preserves_exact_native_type,
+    ),
+    (
+        "hub Students remain in the stock transient lifecycle",
+        test_hub_students_remain_in_the_stock_transient_lifecycle,
+    ),
+    (
+        "client replicated enemy movement remains host-authored",
+        test_client_replicated_enemy_movement_is_host_authored,
+    ),
+    (
+        "scene ticks keep dead remote participants inert",
+        test_scene_tick_keeps_dead_remote_participants_inert,
+    ),
+    (
+        "packet send-mode dispatch is type-safe",
+        test_packet_send_mode_dispatch_is_type_safe,
+    ),
+    (
+        "Steam pair driver refuses ended runs before client navigation",
+        test_steam_pair_driver_rejects_ended_runs_before_client_navigation,
+    ),
+    (
+        "manual enemy test mode logs only state transitions",
+        test_manual_enemy_test_mode_logging_is_transition_only,
+    ),
     ("Steam friend multiplayer contract is wired", test_steam_friend_multiplayer_contract_is_wired),
+    (
+        "Steam friend hub lifecycle soak is wired",
+        test_steam_friend_hub_lifecycle_soak_is_wired,
+    ),
     ("player state exports native heading for bot spawn", test_player_state_exports_native_heading_for_bot_spawn),
     ("investigation register has static coverage", test_investigation_register_has_static_coverage),
     ("staged binary matches analysis binary", test_staged_binary_matches_analysis_binary),

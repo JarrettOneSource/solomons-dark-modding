@@ -195,6 +195,10 @@ struct BotSnapshot {
     std::int32_t native_poison_remaining_ticks = 0;
     std::int32_t replicated_damage_x4_remaining_ticks = 0;
     std::int32_t native_damage_x4_remaining_ticks = 0;
+    float replicated_magic_shield_absorb_remaining = 0.0f;
+    float replicated_magic_shield_absorb_capacity = 0.0f;
+    float replicated_magic_shield_explosion_fraction = 0.0f;
+    float replicated_magic_shield_hit_flash = 0.0f;
     bool entity_materialized = false;
     uintptr_t actor_address = 0;
     uintptr_t world_address = 0;
@@ -244,8 +248,10 @@ struct BotSnapshot {
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
-    float render_drive_effect_timer = 0.0f;
-    float render_drive_effect_progress = 0.0f;
+    float magic_shield_absorb_remaining = 0.0f;
+    float magic_shield_absorb_capacity = 0.0f;
+    float magic_shield_explosion_fraction = 0.0f;
+    float magic_shield_hit_flash = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;

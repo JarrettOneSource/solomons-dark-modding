@@ -13,7 +13,10 @@
 
 namespace {
 
-constexpr DWORD kPipeTimeoutMs = 5000;
+// A cold Proton helper can spend several seconds starting Wine before it can
+// enter the game process's named-pipe namespace. Keep this below the Python
+// bridge's 35-second transition deadline while covering that one-time startup.
+constexpr DWORD kPipeTimeoutMs = 20000;
 constexpr DWORD kPipeReconnectPollMs = 10;
 constexpr DWORD kWineHandlesClosedError = 676;
 constexpr std::size_t kMaximumRequestBytes = 1024 * 1024;

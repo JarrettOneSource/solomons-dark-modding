@@ -138,6 +138,7 @@ void RefreshStartupStatusSnapshot(StartupStatusSnapshot* snapshot) {
 
 void ShutdownPartialRuntime() {
     StopLuaExecPipeServer();
+    ShutdownCpuLifecycleGuard();
     ShutdownBackgroundFocusBypass();
     ShutdownGameplayKeyboardInjection();
     ShutdownRunLifecycleHooks();
@@ -296,6 +297,19 @@ void Initialize(HMODULE module_handle) {
             }
         }
 
+        {
+            std::string cpu_lifecycle_guard_error;
+            if (!InitializeCpuLifecycleGuard(&cpu_lifecycle_guard_error)) {
+                const auto message = cpu_lifecycle_guard_error.empty()
+                    ? std::string("CPU lifecycle guard failed to initialize.")
+                    : cpu_lifecycle_guard_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status("cpu-lifecycle-guard-failed", message);
+                return;
+            }
+        }
+
         if (runtime_flags.multiplayer.steam_bootstrap) {
             InitializeSteamBootstrap();
         } else {
@@ -424,6 +438,7 @@ void Shutdown() {
 
     Log("SolomonDarkModLoader shutting down.");
     RunShutdownStep("lua exec pipe", &StopLuaExecPipeServer);
+    RunShutdownStep("CPU lifecycle guard", &ShutdownCpuLifecycleGuard);
     RunShutdownStep("background focus bypass", &ShutdownBackgroundFocusBypass);
     RunShutdownStep("gameplay keyboard injection", &ShutdownGameplayKeyboardInjection);
     RunShutdownStep("run lifecycle hooks", &ShutdownRunLifecycleHooks);

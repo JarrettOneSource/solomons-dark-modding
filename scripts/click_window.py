@@ -2,6 +2,7 @@
 import argparse
 import ctypes
 import os
+from pathlib import Path
 import sys
 import time
 from ctypes import wintypes
@@ -133,6 +134,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pid", type=int, help="Require the window to belong to this process ID.")
     parser.add_argument("--x", type=float, help="Client X coordinate. Use pixels by default or a 0-1 fraction with --relative.")
     parser.add_argument("--y", type=float, help="Client Y coordinate. Use pixels by default or a 0-1 fraction with --relative.")
+    parser.add_argument("--center-x", action="store_true", help="Use the horizontal center of the client area while keeping --y in client pixels.")
+    parser.add_argument("--x-offset", type=float, default=0.0, help="Pixel offset from --center-x. Default: 0.")
+    parser.add_argument("--minimum-x", type=float, help="Clamp a --center-x coordinate to this minimum client X position.")
+    parser.add_argument("--result-path", help="Optional UTF-8 file that receives the completed action description.")
     parser.add_argument("--drag-x", type=float, help="Optional drag destination X coordinate in the same coordinate space as --x.")
     parser.add_argument("--drag-y", type=float, help="Optional drag destination Y coordinate in the same coordinate space as --y.")
     parser.add_argument("--relative", action="store_true", help="Interpret --x and --y as 0-1 fractions of client width and height.")
@@ -177,6 +182,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def emit_result(result_path: str | None, message: str) -> None:
+    print(message)
+    if result_path:
+        Path(result_path).write_text(message + "\n", encoding="utf-8")
+
+
 def main() -> int:
     if os.name != "nt":
         print("click_window.py must be run with Windows Python.", file=sys.stderr)
@@ -187,10 +198,21 @@ def main() -> int:
 
     if args.release_only:
         release_mouse_button(args.button)
-        print(f"released global {args.button} mouse button")
+        emit_result(
+            args.result_path,
+            f"released global {args.button} mouse button",
+        )
         return 0
-    if args.x is None or args.y is None:
-        parser.error("--x and --y are required unless --release-only is used.")
+    if args.y is None or (args.x is None and not args.center_x):
+        parser.error("--y and either --x or --center-x are required unless --release-only is used.")
+    if args.center_x and args.x is not None:
+        parser.error("--center-x cannot be combined with --x.")
+    if not args.center_x and args.x_offset != 0.0:
+        parser.error("--x-offset requires --center-x.")
+    if not args.center_x and args.minimum_x is not None:
+        parser.error("--minimum-x requires --center-x.")
+    if args.center_x and args.drag_x is not None:
+        parser.error("--center-x does not support dragging.")
     if (args.drag_x is None) != (args.drag_y is None):
         parser.error("--drag-x and --drag-y must be provided together.")
 
@@ -202,6 +224,14 @@ def main() -> int:
     origin_x, origin_y, client_width, client_height = get_client_origin(window.hwnd)
     click_x = args.x
     click_y = args.y
+    if args.center_x:
+        if args.screen or args.relative:
+            parser.error("--center-x cannot be combined with --screen or --relative.")
+        if args.virtual_width is not None or args.virtual_height is not None:
+            parser.error("--center-x cannot be combined with virtual dimensions.")
+        click_x = (client_width - 1) * 0.5 + args.x_offset
+        if args.minimum_x is not None:
+            click_x = max(click_x, args.minimum_x)
     if args.screen and args.relative:
         parser.error("--screen and --relative cannot be used together.")
     if args.screen and (args.virtual_width is not None or args.virtual_height is not None):
@@ -268,7 +298,8 @@ def main() -> int:
         if drag_client_point is not None
         else ""
     )
-    print(
+    emit_result(
+        args.result_path,
         f"{args.button}-{action} {window.title} at "
         f"client=({int(round(click_x))},{int(round(click_y))}) "
         f"screen=({absolute_x},{absolute_y}){destination}"

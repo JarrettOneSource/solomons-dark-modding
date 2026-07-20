@@ -121,6 +121,7 @@ bool PrepareGameplaySceneSwitchOnGameThread(
     uintptr_t gameplay_address,
     int region_index,
     const char* source) {
+    ClearLocalPlayerTickOwnership();
     const bool seeded = ApplyPendingRunGenerationSeedForSceneSwitch(region_index, source);
     LogLocalPlayerSceneSwitchState("before_cleanup", gameplay_address);
     const auto scene_churn_until =

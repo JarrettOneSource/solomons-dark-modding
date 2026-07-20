@@ -34,7 +34,7 @@ from verify_multiplayer_focus_behavior_sync import (
     Direction,
     acquire_secondary_to_rank,
     enable_unsuppressed_combat_prelude,
-    press_secondary_belt_slot,
+    cast_secondary_belt_slot,
 )
 from verify_player_health_death_sync import set_local_player_vitals
 from verify_real_input_spell_cast_sync import read_log
@@ -78,7 +78,13 @@ def press_until_cast_delivery(
     remote_count = 0
     presses: list[dict[str, str]] = []
     while time.monotonic() < deadline:
-        presses.append(press_secondary_belt_slot(direction, belt_slot))
+        presses.append(
+            cast_secondary_belt_slot(
+                direction,
+                belt_slot,
+                deadline - time.monotonic(),
+            )
+        )
         poll_deadline = min(deadline, time.monotonic() + 0.35)
         while time.monotonic() < poll_deadline:
             local_count = read_log(direction.source_log)[source_offset:].count(

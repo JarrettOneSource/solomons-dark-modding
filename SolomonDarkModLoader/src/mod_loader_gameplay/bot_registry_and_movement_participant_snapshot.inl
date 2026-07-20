@@ -62,20 +62,26 @@ void FillParticipantActiveSpellObjectSnapshot(ParticipantGameplaySnapshot* snaps
 ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEntityBinding& binding) {
     ParticipantGameplaySnapshot snapshot;
     snapshot.bot_id = binding.bot_id;
-    snapshot.entity_materialized = binding.actor_address != 0;
     snapshot.moving = binding.movement_active;
     snapshot.entity_kind = static_cast<int>(binding.kind);
     snapshot.movement_intent_revision = binding.movement_intent_revision;
     snapshot.character_profile = binding.character_profile;
     snapshot.scene_intent = binding.scene_intent;
-    snapshot.actor_address = binding.actor_address;
+    snapshot.materialized_scene_address = binding.materialized_scene_address;
+    snapshot.materialized_world_address = binding.materialized_world_address;
     snapshot.hub_visual_proxy_address = 0;
     snapshot.gameplay_slot = binding.gameplay_slot;
     snapshot.gameplay_attach_applied = binding.gameplay_attach_applied;
 
-    if (binding.actor_address == 0) {
+    if (binding.actor_address == 0 ||
+        !IsParticipantMaterializationOwnedByCurrentScene(
+            binding.scene_intent,
+            binding.materialized_scene_address,
+            binding.materialized_world_address)) {
         return snapshot;
     }
+    snapshot.entity_materialized = true;
+    snapshot.actor_address = binding.actor_address;
     if (!IsParticipantActorMemoryFreshReadable(binding.actor_address)) {
         snapshot.entity_materialized = false;
         snapshot.actor_address = 0;
@@ -181,8 +187,10 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
     (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveStrideScaleOffset, &snapshot.render_drive_stride);
     (void)TryReadFiniteFloatField(render_probe_address, kActorRenderAdvanceRateOffset, &snapshot.render_advance_rate);
     (void)TryReadFiniteFloatField(render_probe_address, kActorRenderAdvancePhaseOffset, &snapshot.render_advance_phase);
-    (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveEffectTimerOffset, &snapshot.render_drive_effect_timer);
-    (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveEffectProgressOffset, &snapshot.render_drive_effect_progress);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorMagicShieldAbsorbRemainingOffset, &snapshot.magic_shield_absorb_remaining);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorMagicShieldAbsorbCapacityOffset, &snapshot.magic_shield_absorb_capacity);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorMagicShieldExplosionFractionOffset, &snapshot.magic_shield_explosion_fraction);
+    (void)TryReadFiniteFloatField(render_probe_address, kActorMagicShieldHitFlashOffset, &snapshot.magic_shield_hit_flash);
     (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveOverlayAlphaOffset, &snapshot.render_drive_overlay_alpha);
     (void)TryReadFiniteFloatField(render_probe_address, kActorRenderDriveMoveBlendOffset, &snapshot.render_drive_move_blend);
 

@@ -12,41 +12,43 @@ bool PrepareMultiplayerRunStart(const char* source) {
     return false;
 }
 
-void __fastcall HookMainMenuRunTransition(void* self, void* unused_edx) {
-    const auto original = GetX86HookTrampoline<MainMenuRunTransitionFn>(
-        g_state.hooks[kHookMainMenuRunTransition]);
+void __fastcall HookMainMenuControlAction(void* self, void* /*unused_edx*/, void* control) {
+    const auto original = GetX86HookTrampoline<MainMenuControlActionFn>(
+        g_state.hooks[kHookMainMenuControlAction]);
     if (original == nullptr) {
         return;
     }
 
-    constexpr std::size_t kMainMenuTransitionKindOffset = 0x46C;
-    constexpr std::int32_t kMainMenuNewGameTransition = 3;
-    constexpr std::int32_t kMainMenuLastGameTransition = 4;
-    std::int32_t transition_kind = 0;
+    constexpr std::size_t kMainMenuModeOffset = 0x3FC;
+    constexpr std::int32_t kMainMenuSavedRunMode = 1;
+    constexpr std::size_t kMainMenuLastGameControlOffset = 0x78;
+    constexpr std::size_t kMainMenuNewGameControlOffset = 0x12C;
+
+    auto* dispatched_control = control;
     const auto owner_address = reinterpret_cast<uintptr_t>(self);
-    if (owner_address != 0 &&
+    std::int32_t menu_mode = 0;
+    if ((multiplayer::IsLocalTransportClient() || multiplayer::IsLocalTransportHost()) &&
+        owner_address != 0 &&
+        reinterpret_cast<uintptr_t>(control) == owner_address + kMainMenuLastGameControlOffset &&
         ProcessMemory::Instance().TryReadField(
             owner_address,
-            kMainMenuTransitionKindOffset,
-            &transition_kind) &&
-        transition_kind == kMainMenuLastGameTransition &&
-        (multiplayer::IsLocalTransportClient() ||
-         multiplayer::IsLocalTransportHost())) {
-        if (!ProcessMemory::Instance().TryWriteField<std::int32_t>(
-                owner_address,
-                kMainMenuTransitionKindOffset,
-                kMainMenuNewGameTransition)) {
+            kMainMenuModeOffset,
+            &menu_mode) &&
+        menu_mode == kMainMenuSavedRunMode) {
+        std::string save_reset_error;
+        if (!TryPrepareMainMenuNewGameSaveReset(owner_address, &save_reset_error)) {
             Log(
-                "Blocked connected multiplayer Last Game transition because the "
-                "canonical shared-hub character setup redirect could not be written.");
+                "Blocked connected multiplayer Last Game control activation because "
+                "the native New Game save reset failed. error=" + save_reset_error);
             return;
         }
+        dispatched_control = reinterpret_cast<void*>(owner_address + kMainMenuNewGameControlOffset);
         Log(
-            "Redirected connected multiplayer Last Game transition to canonical "
-            "shared-hub character setup.");
+            "Redirected connected multiplayer Last Game control activation through "
+            "the native New Game control path.");
     }
 
-    original(self, unused_edx);
+    original(self, dispatched_control);
 }
 
 void __fastcall HookCreateArena(void* self, void* unused_edx) {
@@ -72,6 +74,7 @@ void __fastcall HookCreateArena(void* self, void* unused_edx) {
     }
     ClearRememberedEnemyTracking();
     original(self, unused_edx);
+    multiplayer::NotifyLocalRunStarted();
     DispatchLuaRunStarted();
 }
 
@@ -98,6 +101,7 @@ void __fastcall HookStartGame(void* self, void* unused_edx) {
     }
     ClearRememberedEnemyTracking();
     original(self, unused_edx);
+    multiplayer::NotifyLocalRunStarted();
     DispatchLuaRunStarted();
 }
 
@@ -117,7 +121,6 @@ bool ShouldSuppressClientAuthoritativeRunWaveSpawner(std::uint64_t now_ms) {
     const auto runtime_state = multiplayer::SnapshotRuntimeState();
     const auto& snapshot = runtime_state.world_snapshot;
     if (!snapshot.valid ||
-        snapshot.truncated ||
         snapshot.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run ||
         snapshot.actors.empty() ||
         snapshot.authority_participant_id == 0 ||
@@ -318,10 +321,16 @@ struct ManualRunEnemySpawnerDispatchException {
     DWORD code = 0;
 };
 
+struct EmptyEnemyModifierArray {
+    uintptr_t vtable = 0;
+    uintptr_t entries = 0;
+    std::int32_t count = 0;
+    std::int32_t capacity = 0;
+};
+
 enum class ManualRunEnemySpawnerDispatchResult {
     NoRequest = 0,
     Handled,
-    RetryLater,
 };
 
 int CaptureManualRunEnemySpawnerDispatchException(
@@ -333,6 +342,95 @@ int CaptureManualRunEnemySpawnerDispatchException(
 
     exception->code = exception_pointers->ExceptionRecord->ExceptionCode;
     return EXCEPTION_EXECUTE_HANDLER;
+}
+
+bool CallSpawnExactEnemyGroupSafe(
+    SpawnExactEnemyGroupFn spawn,
+    uintptr_t arena_address,
+    std::uint32_t native_type_id,
+    ManualRunEnemySpawnerDispatchException* exception) {
+    if (exception != nullptr) {
+        *exception = ManualRunEnemySpawnerDispatchException{};
+    }
+    if (spawn == nullptr || arena_address == 0 ||
+        !IsArenaCombatActorType(native_type_id)) {
+        return false;
+    }
+
+    EmptyEnemyModifierArray no_modifiers;
+    __try {
+        spawn(
+            reinterpret_cast<void*>(arena_address),
+            1,
+            native_type_id,
+            0,
+            &no_modifiers,
+            0,
+            0,
+            0);
+        return true;
+    } __except (CaptureManualRunEnemySpawnerDispatchException(
+        GetExceptionInformation(), exception)) {
+        return false;
+    }
+}
+
+ManualRunEnemySpawnerDispatchResult DispatchReplicatedExactRunEnemySpawn(
+    const ManualRunEnemySpawnRequest& request,
+    uintptr_t spawner_address) {
+    auto& memory = ProcessMemory::Instance();
+    const auto spawn_address =
+        memory.ResolveGameAddressOrZero(kSpawnExactEnemyGroup);
+    SDModGameplayCombatState combat_state;
+    if (spawn_address == 0 ||
+        !TryGetGameplayCombatState(&combat_state) ||
+        !combat_state.valid ||
+        combat_state.arena_address == 0 ||
+        !IsArenaCombatActorType(static_cast<std::uint32_t>(request.type_id))) {
+        CompleteManualRunEnemySpawnFailure(
+            request,
+            "exact replicated run enemy spawn is unavailable.");
+        return ManualRunEnemySpawnerDispatchResult::Handled;
+    }
+
+    const auto previous_current_spawner =
+        g_current_wave_spawner_tick_address;
+    const auto previous_manual_spawner =
+        g_manual_run_enemy_spawner_tick_address;
+    const bool previous_manual_tick = g_manual_run_enemy_spawner_tick_active;
+    g_current_wave_spawner_tick_address = spawner_address;
+    g_manual_run_enemy_spawner_tick_address = 0;
+    g_manual_run_enemy_spawner_tick_active = true;
+
+    ManualRunEnemySpawnerDispatchException exception;
+    const bool call_ok = CallSpawnExactEnemyGroupSafe(
+        reinterpret_cast<SpawnExactEnemyGroupFn>(spawn_address),
+        combat_state.arena_address,
+        static_cast<std::uint32_t>(request.type_id),
+        &exception);
+
+    g_manual_run_enemy_spawner_tick_active = previous_manual_tick;
+    g_manual_run_enemy_spawner_tick_address = previous_manual_spawner;
+    g_current_wave_spawner_tick_address = previous_current_spawner;
+
+    bool still_active = false;
+    {
+        std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+        still_active =
+            g_have_active_manual_run_enemy_spawn &&
+            g_active_manual_run_enemy_spawn.request_id == request.request_id;
+    }
+    if (!call_ok) {
+        CompleteManualRunEnemySpawnFailure(
+            request,
+            "exact replicated run enemy spawn raised 0x" +
+                HexString(exception.code) + ".");
+    } else if (still_active) {
+        CompleteManualRunEnemySpawnFailure(
+            request,
+            "exact replicated run enemy spawn created no enemy.");
+    }
+    return ManualRunEnemySpawnerDispatchResult::Handled;
 }
 
 void RememberArenaEnemyWaveSpawner(uintptr_t spawner_address) {
@@ -398,6 +496,16 @@ ManualRunEnemySpawnerDispatchResult TryDispatchManualRunEnemySpawnFromSpawner(
     }
 
     const auto spawner_address = reinterpret_cast<uintptr_t>(self);
+    const bool is_replicated_catchup_request =
+        request.network_actor_id != 0 &&
+        request.allow_active_waves &&
+        !request.freeze_on_spawn;
+    if (is_replicated_catchup_request) {
+        return DispatchReplicatedExactRunEnemySpawn(
+            request,
+            spawner_address);
+    }
+
     auto& memory = ProcessMemory::Instance();
     if (!memory.IsReadableRange(spawner_address, kWaveSpawnerLongDelayCountdownOffset + sizeof(std::int32_t))) {
         CompleteManualRunEnemySpawnFailure(request, "stock wave spawner is not readable.");
@@ -462,23 +570,6 @@ ManualRunEnemySpawnerDispatchResult TryDispatchManualRunEnemySpawnFromSpawner(
     }
 
     if (still_active) {
-        const bool is_replicated_catchup_request =
-            request.network_actor_id != 0 &&
-            request.allow_active_waves &&
-            !request.freeze_on_spawn;
-        if (is_replicated_catchup_request &&
-            request.retry_count < kReplicatedCatchupSpawnRetryLimit) {
-            std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
-            if (g_have_active_manual_run_enemy_spawn &&
-                g_active_manual_run_enemy_spawn.request_id == request.request_id) {
-                g_have_active_manual_run_enemy_spawn = false;
-                g_active_manual_run_enemy_spawn = ManualRunEnemySpawnRequest{};
-                request.retry_count += 1;
-                g_queued_replicated_run_enemy_spawns.push_front(request);
-            }
-            return ManualRunEnemySpawnerDispatchResult::RetryLater;
-        }
-
         CompleteManualRunEnemySpawnFailure(
             request,
             "stock wave spawner tick completed without creating an enemy.");
@@ -660,8 +751,7 @@ void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
                 dispatched_any = true;
                 continue;
             }
-            if (dispatch_result == ManualRunEnemySpawnerDispatchResult::RetryLater ||
-                dispatch_result == ManualRunEnemySpawnerDispatchResult::NoRequest) {
+            if (dispatch_result == ManualRunEnemySpawnerDispatchResult::NoRequest) {
                 break;
             }
         }
@@ -828,7 +918,11 @@ void* __fastcall HookEnemySpawned(
 
             SDModManualRunEnemySpawnResult result;
             result.valid = true;
-            result.ok = wrote_x && wrote_y && rebind_ok;
+            const bool exact_native_type =
+                request.network_actor_id == 0 ||
+                (have_actor_object_type &&
+                 actor_object_type == static_cast<std::uint32_t>(request.type_id));
+            result.ok = wrote_x && wrote_y && rebind_ok && exact_native_type;
             result.request_id = request.request_id;
             result.type_id = enemy_type >= 0 ? enemy_type : request.type_id;
             result.actor_address = enemy_address;
@@ -846,6 +940,9 @@ void* __fastcall HookEnemySpawned(
                 result.error_message =
                     "stock-spawned manual enemy was relocated but cell rebind failed: " +
                     rebind_error_message;
+            } else if (!exact_native_type) {
+                result.error_message =
+                    "actual native type did not match authority.";
             }
             x = final_x;
             y = final_y;
@@ -867,7 +964,7 @@ void* __fastcall HookEnemySpawned(
             }
 
             Log(
-                "manual run enemy spawn: completed through stock spawner. request_id=" +
+                "manual run enemy spawn: completed through stock enemy path. request_id=" +
                 std::to_string(result.request_id) +
                 " requested_type_id=" + std::to_string(request.type_id) +
                 " actual_type_id=" + std::to_string(result.type_id) +

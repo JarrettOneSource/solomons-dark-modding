@@ -14,6 +14,11 @@ bool IsGameplayMouseLeftDown() {
     return g_gameplay_keyboard_injection.last_observed_mouse_left_down.load(std::memory_order_acquire);
 }
 
+bool IsGameplayMouseRightDown() {
+    return g_gameplay_keyboard_injection.last_observed_mouse_right_down.load(
+        std::memory_order_acquire);
+}
+
 bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
@@ -56,6 +61,12 @@ bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address) {
 
 bool QueueGameplayMouseLeftClick(std::string* error_message) {
     return QueueGameplayMouseLeftHoldFrames(kInjectedGameplayMouseClickFrames, error_message);
+}
+
+bool QueueGameplayMouseRightClick(std::string* error_message) {
+    return QueueGameplayMouseRightHoldFrames(
+        kInjectedGameplayMouseClickFrames,
+        error_message);
 }
 
 bool QueueGameplayMovementHoldFrames(
@@ -186,6 +197,46 @@ bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_m
     return true;
 }
 
+bool QueueGameplayMouseRightHoldFrames(
+    std::uint32_t frames,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay input injection is not initialized.";
+        }
+        return false;
+    }
+    if (frames == 0 || frames > 3600) {
+        if (error_message != nullptr) {
+            *error_message = "Mouse-right hold frames must be in the range 1..3600.";
+        }
+        return false;
+    }
+
+    uintptr_t scene_address = 0;
+    if (!TryResolveCurrentGameplayScene(&scene_address) || scene_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay scene is not active.";
+        }
+        return false;
+    }
+
+    g_gameplay_keyboard_injection.pending_mouse_right_frames.fetch_add(
+        frames,
+        std::memory_order_acq_rel);
+    constexpr std::uint32_t kInjectedMouseControlFrames = 3;
+    g_gameplay_keyboard_injection.pending_injected_keyboard_control_frames.store(
+        kInjectedMouseControlFrames,
+        std::memory_order_release);
+    Log(
+        "Queued gameplay mouse-right hold. gameplay=" + HexString(scene_address) +
+        " frames=" + std::to_string(frames));
+    return true;
+}
+
 void ClearQueuedGameplayMouseLeft() {
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
@@ -216,12 +267,38 @@ void ClearQueuedGameplayMouseLeft() {
         " raw_mouse_left=" + std::to_string(cleared_raw_mouse_left ? 1 : 0));
 }
 
+void ClearQueuedGameplayMouseRight() {
+    g_gameplay_keyboard_injection.pending_mouse_right_frames.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(
+        false,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.injected_mouse_right_active.store(
+        true,
+        std::memory_order_release);
+
+    const auto input_state_address =
+        g_gameplay_keyboard_injection.input_state_address.load(
+            std::memory_order_acquire);
+    const bool cleared_raw_mouse_right =
+        ClearRawGameplayMouseRight(input_state_address);
+    Log(
+        "Cleared queued gameplay mouse-right input. input_state=" +
+        (input_state_address != 0
+             ? HexString(input_state_address)
+             : std::string("0x00000000")) +
+        " raw_mouse_right=" +
+        std::to_string(cleared_raw_mouse_right ? 1 : 0));
+}
+
 bool ClearLocalPlayerGameplayCastState(std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
     }
 
     ClearQueuedGameplayMouseLeft();
+    ClearQueuedGameplayMouseRight();
 
     uintptr_t gameplay_address = 0;
     if (!TryResolveCurrentGameplayScene(&gameplay_address) || gameplay_address == 0) {
@@ -376,10 +453,55 @@ bool QueueGameplayKeyPress(std::string_view binding_name, std::string* error_mes
     if (raw_binding_code > 0xFF) {
         if (error_message != nullptr) {
             *error_message =
-                "The live gameplay binding is mouse-backed. Use sd.input.click_normalized for mouse-bound actions.";
+                "The live gameplay binding is mouse-backed. Use sd.input.press_binding "
+                "to dispatch the current binding exactly.";
         }
         return false;
     }
 
     return QueueGameplayScancodePress(raw_binding_code, error_message);
+}
+
+bool QueueGameplayBindingPress(
+    std::string_view binding_name,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+
+    uintptr_t absolute_global = 0;
+    if (!TryResolveInjectedBindingGlobal(binding_name, &absolute_global)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Unknown gameplay binding. Use menu, inventory, skills, or "
+                "belt_slot_1..belt_slot_8.";
+        }
+        return false;
+    }
+
+    std::uint32_t raw_binding_code = 0;
+    if (!TryReadInjectedBindingCode(absolute_global, &raw_binding_code)) {
+        if (error_message != nullptr) {
+            *error_message = "Failed to read the live gameplay binding.";
+        }
+        return false;
+    }
+
+    constexpr std::uint32_t kMouseLeftBindingCode = 0x200;
+    constexpr std::uint32_t kMouseRightBindingCode = 0x201;
+    if (raw_binding_code <= 0xFF) {
+        return QueueGameplayScancodePress(raw_binding_code, error_message);
+    }
+    if (raw_binding_code == kMouseLeftBindingCode) {
+        return QueueGameplayMouseLeftClick(error_message);
+    }
+    if (raw_binding_code == kMouseRightBindingCode) {
+        return QueueGameplayMouseRightClick(error_message);
+    }
+    if (error_message != nullptr) {
+        *error_message =
+            "The live gameplay binding uses an unsupported mouse button code " +
+            std::to_string(raw_binding_code) + ".";
+    }
+    return false;
 }

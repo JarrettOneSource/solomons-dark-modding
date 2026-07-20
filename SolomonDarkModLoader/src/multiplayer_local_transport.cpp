@@ -27,9 +27,11 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
+#include <iterator>
 #include <limits>
 #include <mutex>
 #include <random>
@@ -75,11 +77,20 @@ constexpr std::uint64_t kLocalDevParticipantIdBase = 0x2000000000000000ull;
 constexpr std::uint64_t kRunWorldActorNetworkIdBase = 0x1000000000000ull;
 constexpr std::uint64_t kRunHostLocalWorldActorNetworkIdBase = 0x1001000000000ull;
 constexpr std::uint64_t kRunLootDropNetworkIdBase = 0x1002000000000ull;
-constexpr std::uint64_t kLocalTransportSendIntervalMs = 50;
-constexpr std::uint64_t kLocalTransportWorldSnapshotIntervalMs = 100;
-constexpr std::uint64_t kLocalTransportLootSnapshotIntervalMs = 100;
-constexpr std::uint64_t kLocalTransportAnimatedLootSnapshotIntervalMs = 16;
+constexpr std::uint64_t kLocalTransportParticipantFrameIntervalMs = 50;
+constexpr std::uint64_t kLocalTransportStateCheckpointIntervalMs = 1000;
+constexpr std::uint64_t kLocalTransportWorldSnapshotIntervalMs = 200;
+constexpr std::uint64_t kLocalTransportWorldSnapshotReliableCheckpointIntervalMs = 1000;
+constexpr std::uint64_t kLocalTransportLootSnapshotIntervalMs = 250;
+constexpr std::uint64_t kLocalTransportAnimatedLootSnapshotIntervalMs = 50;
 constexpr std::uint64_t kLocalTransportSpellEffectSnapshotIntervalMs = 16;
+constexpr std::size_t kLocalTransportAuxiliarySnapshotBudgetBytesPerSecond =
+    48u * 1024u;
+constexpr std::size_t kLocalTransportWorldSnapshotBudgetBytesPerSecond =
+    96u * 1024u;
+constexpr std::size_t
+    kLocalTransportWorldReliableCheckpointBudgetBytesPerSecond =
+        24u * 1024u;
 constexpr std::uint64_t kAirChainSnapshotFreshnessMs = 750;
 constexpr std::uint64_t kAirChainTerminalHoldMs = 1000;
 constexpr std::uint64_t kAirChainTerminalResendIntervalMs = 50;
@@ -98,13 +109,36 @@ constexpr std::uint64_t kClientHostRunExitActionRetryMs = 500;
 constexpr std::uint32_t kClientHostRunExitMenuMaxAttempts = 3;
 constexpr std::uint64_t kNativeProgressionReconcileRetryMs = 250;
 constexpr std::uint64_t kNativeProgressionReconcileAuditMs = 1000;
-constexpr int kNativeProgressionReconcileMaxApplyCallsPerTick = 8;
+constexpr int kNativeProgressionReconcileMaxEntryWritesPerTick = 8;
 constexpr std::size_t kGameplayBeltButtonArrayOffset = 0x5EC;
 constexpr std::size_t kGameplayBeltButtonStride = 0xEC;
 constexpr std::size_t kBeltButtonTypeOffset = 0xB4;
 constexpr std::size_t kBeltButtonSkillEntryIndexOffset = 0xB8;
 constexpr std::uint32_t kBeltButtonSkillTypeId = 0x1B67;
 constexpr std::uint64_t kRecentRunEnemyDeathSnapshotHoldMs = 2500;
+
+std::uint64_t BandwidthLimitedSnapshotIntervalMs(
+    std::size_t wire_size,
+    std::uint64_t minimum_interval_ms,
+    std::size_t budget_bytes_per_second) {
+    if (wire_size == 0) {
+        return minimum_interval_ms;
+    }
+    const auto budget_interval_ms = static_cast<std::uint64_t>(
+        (wire_size * 1000u +
+         budget_bytes_per_second - 1u) /
+        budget_bytes_per_second);
+    return (std::max)(minimum_interval_ms, budget_interval_ms);
+}
+
+std::uint64_t BandwidthLimitedSnapshotIntervalMs(
+    std::size_t wire_size,
+    std::uint64_t minimum_interval_ms) {
+    return BandwidthLimitedSnapshotIntervalMs(
+        wire_size,
+        minimum_interval_ms,
+        kLocalTransportAuxiliarySnapshotBudgetBytesPerSecond);
+}
 constexpr float kEnemyDamageClaimHpEpsilon = 0.05f;
 constexpr float kEnemyDamageObservationEpsilon = 0.0001f;
 constexpr std::uint64_t kEnemyDamageClaimResultRetryMs = 3000;
@@ -119,6 +153,7 @@ constexpr float kFireballExplodeConfigFootToWorldUnits = 2.4f;
 constexpr float kLootPickupDropDriftMaxDistance = 160.0f;
 constexpr float kLootPickupResourceEpsilon = 0.001f;
 constexpr float kLootPickupMaxResourceDelta = 10000.0f;
+constexpr std::uint64_t kLocalLootPickupRequestRetryMs = 3000;
 constexpr std::uint64_t kPowerupPreparationMaterializationTimeoutMs = 60000;
 constexpr std::uint32_t kOrbRewardNativeTypeId = 0x07DB;
 constexpr std::uint32_t kGoldRewardNativeTypeId = 0x07DC;
@@ -130,6 +165,7 @@ constexpr std::uint32_t kFireballPrimaryNativeTypeId = 0x07D4;
 constexpr std::uint32_t kWaterPrimaryNativeTypeId = 0x07D5;
 constexpr std::uint32_t kFireEmberNativeTypeId = 0x07D6;
 constexpr std::uint32_t kFirewalkerTrailNativeTypeId = 0x07EE;
+constexpr std::uint32_t kMagicStormNativeTypeId = 0x07F0;
 constexpr std::uint32_t kSolomonDigNativeTypeId = 0x1391;
 constexpr std::uint32_t kSolomonRunStaticNativeTypeId = 0x1392;
 constexpr std::size_t kGoldRewardAmountTierOffset = 0x13C;
@@ -155,7 +191,9 @@ constexpr std::uint32_t kAttachmentStaffItemTypeId = 0x1B5C;
 constexpr std::uint32_t kHatItemTypeId = 0x1B5D;
 constexpr std::uint32_t kRobeItemTypeId = 0x1B5E;
 constexpr int kMaxPacketsPerTick = 64;
-constexpr float kRenderDriveEffectTimerEpsilon = 0.001f;
+constexpr float kMagicShieldAbsorbEpsilon = 0.001f;
+constexpr float kMagicShieldMaximumAbsorb = 1'000'000.0f;
+constexpr float kMagicShieldMaximumExplosionFraction = 100.0f;
 constexpr std::size_t kProgressionLevelUpPendingChoiceCountOffset = 0x44;
 constexpr std::size_t kProgressionLevelUpIncomingChoiceCountOffset = 0x48;
 constexpr std::size_t kProgressionLevelUpPickerUiFlagOffset = 0x839;
@@ -191,14 +229,22 @@ struct ArmedLocalLevelUpOptionRoll {
 
 X86Hook g_local_level_up_option_roll_hook;
 std::mutex g_local_level_up_option_roll_mutex;
+// Serializes native picker presentation with local offer creation, selection,
+// cleanup, and retirement. Reconciliation can synchronously queue a choice,
+// so this lock must be recursive. Keep the lock order picker -> runtime state
+// -> transport event -> option roll; RuntimeState update lambdas must not call
+// back into picker operations.
+std::recursive_mutex g_local_level_up_picker_mutex;
 ArmedLocalLevelUpOptionRoll g_armed_local_level_up_option_roll;
 std::atomic<std::uint64_t> g_last_applied_local_level_up_option_roll_offer_id{0};
 
 void ShutdownLocalLevelUpOptionRollHook();
 
-struct RenderDriveEffectState {
-    float timer = 0.0f;
-    float progress = 0.0f;
+struct MagicShieldState {
+    float absorb_remaining = 0.0f;
+    float absorb_capacity = 0.0f;
+    float explosion_fraction = 0.0f;
+    float hit_flash = 0.0f;
 };
 
 struct RecentRunEnemyDeathSnapshot {
@@ -212,6 +258,11 @@ struct RecentRunEnemyDeathSnapshot {
     float heading = 0.0f;
     float max_hp = 0.0f;
     std::uint64_t expires_ms = 0;
+};
+
+struct RetainedRunEnemySnapshot {
+    uintptr_t actor_address = 0;
+    WorldActorSnapshotPacketState packet{};
 };
 
 enum class LootOrbResourceKind : std::uint8_t {
@@ -245,15 +296,29 @@ struct LootPickupResultPayload {
     std::uint32_t statbook_revision = 0;
 };
 
-RenderDriveEffectState NormalizeRenderDriveEffectState(float timer, float progress) {
-    RenderDriveEffectState state;
-    if (!std::isfinite(timer) || timer <= kRenderDriveEffectTimerEpsilon) {
+MagicShieldState NormalizeMagicShieldState(
+    float absorb_remaining,
+    float absorb_capacity,
+    float explosion_fraction,
+    float hit_flash) {
+    MagicShieldState state;
+    if (!std::isfinite(absorb_remaining) ||
+        !std::isfinite(absorb_capacity) ||
+        !std::isfinite(explosion_fraction) ||
+        absorb_remaining <= kMagicShieldAbsorbEpsilon ||
+        absorb_remaining > kMagicShieldMaximumAbsorb ||
+        absorb_capacity < absorb_remaining ||
+        absorb_capacity > kMagicShieldMaximumAbsorb ||
+        explosion_fraction < 0.0f ||
+        explosion_fraction > kMagicShieldMaximumExplosionFraction) {
         return state;
     }
 
-    state.timer = timer;
-    if (std::isfinite(progress)) {
-        state.progress = (std::clamp)(progress, 0.0f, 1.0f);
+    state.absorb_remaining = absorb_remaining;
+    state.absorb_capacity = absorb_capacity;
+    state.explosion_fraction = explosion_fraction;
+    if (std::isfinite(hit_flash)) {
+        state.hit_flash = (std::clamp)(hit_flash, 0.0f, 1.0f);
     }
     return state;
 }
@@ -376,7 +441,6 @@ struct ActiveLocalCastInput {
 struct RemoteCastInputTracker {
     std::uint32_t cast_sequence = 0;
     std::uint32_t last_packet_sequence = 0;
-    std::uint32_t deferred_start_packet_count = 0;
     bool start_queued = false;
     bool release_seen = false;
     std::uint64_t last_packet_ms = 0;
@@ -412,11 +476,17 @@ struct ObservedLocalEnemyDamage {
 struct QueuedLocalLootPickupRequest {
     std::uint64_t network_drop_id = 0;
     std::uint32_t request_sequence = 0;
+    bool automatic_proximity_request = false;
     bool has_pickup_positions = false;
     float requester_position_x = 0.0f;
     float requester_position_y = 0.0f;
     float drop_position_x = 0.0f;
     float drop_position_y = 0.0f;
+};
+
+struct InFlightLocalLootPickupRequest {
+    std::uint32_t request_sequence = 0;
+    std::uint64_t sent_ms = 0;
 };
 
 struct QueuedLocalHostPowerupPickup {
@@ -548,6 +618,8 @@ struct NativeProgressionReconcileCheckpoint {
     std::int32_t experience = 0;
     float move_speed = 0.0f;
     std::uint64_t last_attempt_ms = 0;
+    std::uint64_t last_concentration_failure_log_ms = 0;
+    std::uint64_t last_derived_stat_failure_log_ms = 0;
     bool complete = false;
 };
 
@@ -600,6 +672,8 @@ struct ClientHostRunExitFollow {
     std::uint32_t menu_request_count = 0;
 };
 
+#include "multiplayer_local_transport/world_snapshot_fragmentation.inl"
+
 struct LocalTransportState {
     bool configured = false;
     bool initialized = false;
@@ -614,17 +688,24 @@ struct LocalTransportState {
     bool configured_remote_valid = false;
     TransportPeerEndpoint configured_remote;
     std::uint64_t local_peer_id = 0;
-    std::uint64_t last_send_ms = 0;
+    std::uint64_t last_participant_frame_send_ms = 0;
+    std::uint64_t last_state_checkpoint_send_ms = 0;
     std::uint64_t last_world_snapshot_send_ms = 0;
+    std::uint64_t last_world_snapshot_reliable_checkpoint_ms = 0;
     std::uint64_t last_loot_snapshot_send_ms = 0;
     std::uint64_t last_spell_effect_snapshot_send_ms = 0;
     std::uint64_t last_client_host_run_request_ms = 0;
     ClientHostRunExitFollow client_host_run_exit_follow;
     std::uint32_t next_sequence = 1;
+    std::uint32_t next_world_snapshot_id = 1;
     std::uint64_t local_session_nonce = 0;
     std::uint32_t world_scene_epoch = 0;
     std::uint64_t packets_sent = 0;
     std::uint64_t packets_received = 0;
+    std::uint64_t steam_send_failures = 0;
+    std::uint64_t steam_reliable_send_failures = 0;
+    std::uint64_t last_steam_send_failure_log_ms = 0;
+    std::int32_t last_steam_send_failure_result = 0;
     std::uint32_t next_cast_sequence = 1;
     std::uint32_t next_spell_effect_serial = 1;
     std::uint32_t next_air_chain_frame_sequence = 1;
@@ -645,6 +726,9 @@ struct LocalTransportState {
     std::unordered_map<uintptr_t, std::uint64_t> run_host_local_world_actor_ids_by_address;
     std::unordered_map<uintptr_t, std::uint64_t> run_loot_drop_ids_by_address;
     std::unordered_map<std::uint64_t, RecentRunEnemyDeathSnapshot> recent_run_enemy_deaths_by_network_id;
+    std::unordered_map<std::uint64_t, RetainedRunEnemySnapshot>
+        retained_run_enemy_snapshots_by_network_id;
+    PendingWorldSnapshotAssemblies pending_world_snapshots;
     std::unordered_map<std::uint64_t, float> last_synced_enemy_hp_by_network_id;
     std::unordered_map<std::uint64_t, float> last_enemy_claimed_hp_by_network_id;
     std::unordered_map<std::uint64_t, ObservedLocalEnemyDamage>
@@ -654,6 +738,8 @@ struct LocalTransportState {
     std::unordered_map<std::uint64_t, std::uint64_t> pending_lethal_enemy_damage_claim_until_ms;
     std::unordered_map<std::uint64_t, std::uint64_t> rejected_enemy_damage_retry_suppressed_until_ms;
     std::unordered_map<std::uint64_t, std::uint32_t> last_state_packet_sequence_by_participant;
+    std::unordered_map<std::uint64_t, std::uint32_t>
+        last_participant_frame_sequence_by_participant;
     std::unordered_map<std::uint64_t, std::uint64_t>
         session_nonce_by_participant;
     std::unordered_map<std::uint64_t, std::unordered_set<std::uint64_t>>
@@ -700,6 +786,9 @@ std::atomic<std::uint32_t> g_local_run_exit_latched_nonce{0};
 std::atomic<std::uint64_t>
     g_remote_native_progression_reconcile_suppressed_for_test{0};
 std::mutex g_local_transport_event_mutex;
+std::mutex g_local_enemy_damage_claim_observation_mutex;
+std::unordered_map<std::uint64_t, LocalEnemyDamageClaimObservation>
+    g_local_enemy_damage_claim_observations;
 ClientHostRunAuthorization g_client_host_run_authorization;
 std::mutex g_client_host_run_authorization_mutex;
 std::vector<QueuedLocalCastEvent> g_queued_local_cast_events;
@@ -708,6 +797,8 @@ std::vector<QueuedLocalEnemyDamageClaim> g_queued_local_enemy_damage_claims;
 std::vector<QueuedHostParticipantVitalsCorrection>
     g_queued_host_participant_vitals_corrections;
 std::vector<QueuedLocalLootPickupRequest> g_queued_local_loot_pickup_requests;
+std::unordered_map<std::uint64_t, InFlightLocalLootPickupRequest>
+    g_in_flight_local_loot_pickup_requests_by_drop_id;
 std::vector<QueuedLocalHostPowerupPickup>
     g_queued_local_host_powerup_pickups;
 std::vector<QueuedLocalLevelUpChoice> g_queued_local_level_up_choices;
@@ -716,6 +807,92 @@ bool g_have_queued_local_air_chain_frame = false;
 std::uint32_t g_next_local_loot_pickup_request_sequence = 1;
 FireballExplodeEffectConfig g_fireball_explode_effect_config;
 bool g_fireball_explode_effect_config_attempted = false;
+
+void ClearLocalLootPickupRequestStateLocked() {
+    g_queued_local_loot_pickup_requests.clear();
+    g_in_flight_local_loot_pickup_requests_by_drop_id.clear();
+}
+
+void CompleteInFlightLocalLootPickupRequest(
+    std::uint64_t network_drop_id,
+    std::uint32_t request_sequence) {
+    std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
+    const auto request_it =
+        g_in_flight_local_loot_pickup_requests_by_drop_id.find(
+            network_drop_id);
+    if (request_it ==
+            g_in_flight_local_loot_pickup_requests_by_drop_id.end() ||
+        request_it->second.request_sequence != request_sequence) {
+        return;
+    }
+    g_in_flight_local_loot_pickup_requests_by_drop_id.erase(request_it);
+}
+
+void ClearLocalEnemyDamageClaimObservationsInternal() {
+    std::lock_guard<std::mutex> lock(
+        g_local_enemy_damage_claim_observation_mutex);
+    g_local_enemy_damage_claim_observations.clear();
+}
+
+void ResetLocalEnemyDamageClaimObservationInternal(
+    std::uint64_t network_actor_id) {
+    if (network_actor_id == 0) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(
+        g_local_enemy_damage_claim_observation_mutex);
+    g_local_enemy_damage_claim_observations[network_actor_id] =
+        LocalEnemyDamageClaimObservation{};
+}
+
+void RecordLocalEnemyDamageClaimObservationInternal(
+    std::uint64_t network_actor_id,
+    float claimed_damage,
+    std::int32_t associated_skill_id) {
+    if (network_actor_id == 0 ||
+        !std::isfinite(claimed_damage) ||
+        claimed_damage <= 0.0f) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(
+        g_local_enemy_damage_claim_observation_mutex);
+    const auto existing =
+        g_local_enemy_damage_claim_observations.find(network_actor_id);
+    if (existing == g_local_enemy_damage_claim_observations.end()) {
+        return;
+    }
+
+    auto& observation = existing->second;
+    observation.valid = true;
+    observation.network_actor_id = network_actor_id;
+    ++observation.claim_count;
+    if (associated_skill_id < 0) {
+        ++observation.unassociated_claim_count;
+        return;
+    }
+    ++observation.associated_claim_count;
+    if (observation.associated_claim_count == 1) {
+        observation.associated_skill_id = associated_skill_id;
+    } else if (observation.associated_skill_id != associated_skill_id) {
+        observation.associated_skill_consistent = false;
+    }
+    observation.claimed_damage_total += claimed_damage;
+    if (observation.associated_claim_count == 1) {
+        observation.minimum_claimed_damage = claimed_damage;
+        observation.maximum_claimed_damage = claimed_damage;
+    } else {
+        observation.minimum_claimed_damage =
+            (std::min)(observation.minimum_claimed_damage, claimed_damage);
+        observation.maximum_claimed_damage =
+            (std::max)(observation.maximum_claimed_damage, claimed_damage);
+    }
+    if (observation.sample_count <
+        observation.claimed_damage_samples.size()) {
+        observation.claimed_damage_samples[observation.sample_count++] =
+            claimed_damage;
+    }
+}
 
 std::mutex g_air_chain_runtime_mutex;
 AirChainSnapshotRuntimeInfo g_local_air_chain_capture_runtime;
@@ -734,6 +911,17 @@ bool TryReadParticipantProgressionEntryActive(
     std::uint64_t participant_id,
     std::int32_t entry_index,
     std::uint16_t* active);
+bool HydrateAuthoritativeRemoteProgressionEntryState(
+    std::uint64_t participant_id,
+    std::int32_t entry_index,
+    std::uint16_t resulting_active,
+    std::uint16_t resulting_visible,
+    std::string* error_message);
+bool ApplyAuthoritativeRemoteSkillRankDelta(
+    std::uint64_t participant_id,
+    const BotSkillChoiceOption& option,
+    std::uint16_t* resulting_active,
+    std::string* error_message);
 LootPickupResultPayload BuildLootPickupResultPayloadFromParticipant(
     const ParticipantInfo* participant);
 
@@ -964,6 +1152,13 @@ void PublishLocalTransportRuntimeState() {
         });
 
     UpdateRuntimeState([&](RuntimeState& state) {
+        state.transport_packets_sent = g_local_transport.packets_sent;
+        state.transport_packets_received = g_local_transport.packets_received;
+        state.steam_send_failures = g_local_transport.steam_send_failures;
+        state.steam_reliable_send_failures =
+            g_local_transport.steam_reliable_send_failures;
+        state.last_steam_send_failure_result =
+            g_local_transport.last_steam_send_failure_result;
         if (g_local_transport.backend == GameplayTransportBackend::LocalUdp) {
             state.transport_ready = true;
             state.session_status = SessionStatus::Ready;
@@ -991,6 +1186,43 @@ void PublishLocalTransportRuntimeState() {
 }
 
 }  // namespace
+
+void ConfirmLocalParticipantVitalsCorrection(
+    std::uint32_t correction_sequence) {
+    if (!g_local_transport.initialized ||
+        g_local_transport.is_host ||
+        correction_sequence == 0) {
+        return;
+    }
+    const auto previous =
+        g_local_transport.last_applied_participant_vitals_correction_sequence;
+    if (previous == 0 ||
+        correction_sequence == previous ||
+        IsPacketSequenceNewer(correction_sequence, previous)) {
+        g_local_transport.last_applied_participant_vitals_correction_sequence =
+            correction_sequence;
+    }
+}
+
+void NotifyLocalRunStarted() {
+    if (!g_local_transport.initialized) {
+        return;
+    }
+
+    const auto previous_exit_nonce =
+        g_local_run_exit_latched_nonce.exchange(0, std::memory_order_acq_rel);
+    const bool cleared_client_exit_follow =
+        g_local_transport.client_host_run_exit_follow.active;
+    g_local_transport.client_host_run_exit_follow = ClientHostRunExitFollow{};
+    if (previous_exit_nonce != 0 || cleared_client_exit_follow) {
+        Log(
+            "Multiplayer new run retired prior run-exit state. role=" +
+            std::string(g_local_transport.is_host ? "host" : "client") +
+            " prior_exit_nonce=" + std::to_string(previous_exit_nonce) +
+            " cleared_client_follow=" +
+            std::to_string(cleared_client_exit_follow ? 1 : 0));
+    }
+}
 
 void NotifyLocalRunEnded(std::string_view reason) {
     if (!g_local_transport.initialized) {

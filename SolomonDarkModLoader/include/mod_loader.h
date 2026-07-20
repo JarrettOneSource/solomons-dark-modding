@@ -164,14 +164,33 @@ struct SDModPlayerState {
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
-    float render_drive_effect_timer = 0.0f;
-    float render_drive_effect_progress = 0.0f;
+    float magic_shield_absorb_remaining = 0.0f;
+    float magic_shield_absorb_capacity = 0.0f;
+    float magic_shield_explosion_fraction = 0.0f;
+    float magic_shield_hit_flash = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;
     SDModEquipVisualLaneState primary_visual_lane;
     SDModEquipVisualLaneState secondary_visual_lane;
     SDModEquipVisualLaneState attachment_visual_lane;
+};
+
+struct SDModLocalManaDeltaObservation {
+    bool armed = false;
+    bool valid = false;
+    uintptr_t actor_address = 0;
+    std::uint32_t call_count = 0;
+    std::uint32_t spend_call_count = 0;
+    std::uint32_t recovery_call_count = 0;
+    float spent_total = 0.0f;
+    float recovered_total = 0.0f;
+    float last_delta = 0.0f;
+};
+
+struct SDModNativeModifierState {
+    std::uint32_t type_id = 0;
+    std::int32_t duration_ticks = 0;
 };
 
 struct SDModWorldState {
@@ -348,81 +367,22 @@ struct SDModHostLootDropDeactivationResult {
     std::uint32_t exception_code = 0;
 };
 
-struct SDModParticipantGameplayState {
-    bool available = false;
-    bool entity_materialized = false;
-    bool moving = false;
-    int entity_kind = kSDModParticipantGameplayKindUnknown;
-    std::uint64_t movement_intent_revision = 0;
-    std::uint64_t participant_id = 0;
-    multiplayer::MultiplayerCharacterProfile character_profile;
-    multiplayer::ParticipantSceneIntent scene_intent;
-    uintptr_t actor_address = 0;
-    uintptr_t world_address = 0;
-    uintptr_t animation_state_ptr = 0;
-    uintptr_t render_frame_table = 0;
-    uintptr_t hub_visual_attachment_ptr = 0;
-    uintptr_t hub_visual_proxy_address = 0;
-    uintptr_t hub_visual_source_profile_address = 0;
-    uintptr_t progression_handle_address = 0;
-    uintptr_t equip_handle_address = 0;
-    uintptr_t progression_runtime_state_address = 0;
-    uintptr_t equip_runtime_state_address = 0;
-    int gameplay_slot = -1;
-    int actor_slot = -1;
-    int slot_anim_state_index = -1;
-    int resolved_animation_state_id = -1;
-    int hub_visual_source_kind = 0;
-    std::uint32_t hub_visual_descriptor_signature = 0;
-    std::uint32_t render_drive_flags = 0;
-    std::uint8_t anim_drive_state = 0;
-    std::uint8_t native_persistent_status_flags = 0;
-    std::uint8_t native_transient_status_flags = 0;
-    std::int32_t native_poison_remaining_ticks = 0;
-    std::int32_t native_damage_x4_remaining_ticks = 0;
-    std::uint8_t no_interrupt = 0;
-    std::uint8_t active_cast_group = 0xFF;
-    std::uint16_t active_cast_slot = 0xFFFF;
-    std::uint8_t render_variant_primary = 0;
-    std::uint8_t render_variant_secondary = 0;
-    std::uint8_t render_weapon_type = 0;
-    std::uint8_t render_selection_byte = 0;
-    std::uint8_t render_variant_tertiary = 0;
-    bool cast_active = false;
-    bool cast_startup_in_progress = false;
-    bool cast_saw_activity = false;
-    std::int32_t cast_skill_id = 0;
-    int cast_ticks_waiting = 0;
-    uintptr_t cast_target_actor_address = 0;
-    int native_action_cooldown_ticks = 0;
-    bool active_spell_object_readable = false;
-    uintptr_t active_spell_object_address = 0;
-    std::uint32_t active_spell_object_type = 0;
-    float active_spell_object_x = 0.0f;
-    float active_spell_object_y = 0.0f;
-    float active_spell_object_radius = 0.0f;
-    float active_spell_object_charge = 0.0f;
-    float x = 0.0f;
-    float y = 0.0f;
-    float heading = 0.0f;
-    float hp = 0.0f;
-    float max_hp = 0.0f;
-    float mp = 0.0f;
-    float max_mp = 0.0f;
-    float walk_cycle_primary = 0.0f;
-    float walk_cycle_secondary = 0.0f;
-    float render_drive_stride = 0.0f;
-    float render_advance_rate = 0.0f;
-    float render_advance_phase = 0.0f;
-    float render_drive_effect_timer = 0.0f;
-    float render_drive_effect_progress = 0.0f;
-    float render_drive_overlay_alpha = 0.0f;
-    float render_drive_move_blend = 0.0f;
-    bool gameplay_attach_applied = false;
-    SDModEquipVisualLaneState primary_visual_lane;
-    SDModEquipVisualLaneState secondary_visual_lane;
-    SDModEquipVisualLaneState attachment_visual_lane;
+struct SDModHubSurfaceState {
+    bool valid = false;
+    bool shared_hub = false;
+    bool chat_active = false;
+    bool surface_active = false;
+    bool inventory_screen_active = false;
+    bool inventory_shop_active = false;
+    uintptr_t gameplay_address = 0;
+    uintptr_t courtyard_address = 0;
+    uintptr_t surface_address = 0;
+    uintptr_t surface_vtable = 0;
+    uintptr_t shop_address = 0;
+    uintptr_t shop_vtable = 0;
 };
+
+#include "mod_loader_participant_gameplay_state.inl"
 
 void Initialize(HMODULE module_handle);
 void Shutdown();
@@ -440,6 +400,8 @@ void ShutdownGameplayKeyboardInjection();
 bool IsGameplayKeyboardInjectionInitialized();
 bool QueueGameplayMouseLeftClick(std::string* error_message);
 bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_message);
+bool QueueGameplayMouseRightClick(std::string* error_message);
+bool QueueGameplayMouseRightHoldFrames(std::uint32_t frames, std::string* error_message);
 bool QueueGameplayMovementHoldFrames(
     float direction_x,
     float direction_y,
@@ -451,15 +413,24 @@ bool SetGameplayNativeControlAllowanceFrames(
 bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_message);
 bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address);
 void ClearQueuedGameplayMouseLeft();
+void ClearQueuedGameplayMouseRight();
 bool ClearLocalPlayerGameplayCastState(std::string* error_message);
 std::uint64_t GetGameplayMouseLeftEdgeSerial();
 std::uint64_t GetGameplayMouseLeftEdgeTickMs();
 bool IsGameplayMouseLeftDown();
+bool IsGameplayMouseRightDown();
+bool QueueGameplayBindingPress(std::string_view binding_name, std::string* error_message);
 bool QueueGameplayKeyPress(std::string_view binding_name, std::string* error_message);
 bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_message);
 bool QueueGameplayStartWaves(std::string* error_message);
 bool QueueGameplayEnableCombatPrelude(std::string* error_message);
 bool QueueHubStartTestrun(std::string* error_message);
+bool QueueHubOpenService(
+    std::string_view service_name,
+    std::string* error_message);
+bool TryGetHubSurfaceState(
+    SDModHubSurfaceState* state,
+    std::string* error_message);
 bool SetPendingRunGenerationSeed(std::uint32_t seed, std::string* error_message);
 bool PrepareArenaRunGenerationSeed(const char* source, std::string* error_message);
 void ClearLocalRunGenerationSeed();
@@ -471,6 +442,7 @@ bool QueueMultiplayerDampenEffect(
     float position_y,
     std::string* error_message);
 bool QueueLocalPlayerPoisonCorrection(
+    std::uint32_t correction_sequence,
     std::int32_t duration_ticks,
     float damage_per_tick,
     std::string* error_message);

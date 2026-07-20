@@ -14,6 +14,8 @@ bool InitializeSteamSession() {
     g_session.is_host = mode == "host" ||
         (mode.empty() && (role.empty() || role == "host" || role == "server"));
     g_session.max_participants = ReadMaxParticipants();
+    g_session.lobby_visibility = ReadLobbyVisibility();
+    g_session.privacy = LobbyPrivacyToken(g_session.lobby_visibility);
     g_session.open_invite_dialog = ReadBooleanEnvironmentVariable(
         kOpenInviteEnvironmentVariable,
         true);
@@ -44,7 +46,8 @@ bool InitializeSteamSession() {
     g_session.local_session_nonce = GenerateSessionNonce();
 
     if (g_session.is_host) {
-        g_session.pending_api_call = SteamCreateFriendsOnlyLobby(
+        g_session.pending_api_call = SteamCreateLobby(
+            g_session.lobby_visibility,
             static_cast<std::int32_t>(g_session.max_participants));
         if (g_session.pending_api_call == 0) {
             SetError("Steam rejected the CreateLobby request before it was queued.", false);
@@ -103,7 +106,13 @@ void TickSteamSession(std::uint64_t now_ms) {
     for (const auto& event : DrainSteamEvents()) {
         HandleSteamEvent(event, now_ms);
     }
+    ServiceClientLobbyRecovery(now_ms);
     if (g_session.phase == SteamSessionPhase::Error) {
+        PublishSessionRuntime(now_ms);
+        return;
+    }
+    if (!g_session.steam_servers_connected ||
+        g_session.phase == SteamSessionPhase::Reconnecting) {
         PublishSessionRuntime(now_ms);
         return;
     }

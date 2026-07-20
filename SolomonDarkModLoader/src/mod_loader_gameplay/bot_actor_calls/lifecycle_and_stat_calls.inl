@@ -23,6 +23,37 @@ bool CallActorWorldUnregisterSafe(
     }
 }
 
+bool CallActorRequestRetirementSafe(
+    uintptr_t actor_address,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (actor_address == 0 || kActorRequestRetirementVfuncOffset == 0) {
+        return false;
+    }
+
+    __try {
+        const auto vtable = *reinterpret_cast<uintptr_t*>(actor_address);
+        if (vtable == 0) {
+            return false;
+        }
+        const auto retire_address = *reinterpret_cast<uintptr_t*>(
+            vtable + kActorRequestRetirementVfuncOffset);
+        if (retire_address == 0 ||
+            !ProcessMemory::Instance().IsExecutableRange(retire_address, 1)) {
+            return false;
+        }
+
+        auto* request_retirement =
+            reinterpret_cast<ActorRequestRetirementFn>(retire_address);
+        request_retirement(reinterpret_cast<void*>(actor_address));
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
 bool CallActorWorldUnregisterGameplaySlotActorSafe(
     uintptr_t unregister_address,
     uintptr_t world_address,
@@ -217,8 +248,20 @@ bool TryReadWizardActorTransientStatusState(
     if (poison_control_block_address != nullptr) {
         *poison_control_block_address = 0;
     }
-
     auto& memory = ProcessMemory::Instance();
+    std::uint32_t render_drive_flags = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorRenderDriveFlagsOffset,
+            &render_drive_flags)) {
+        return false;
+    }
+    std::uint8_t flags =
+        multiplayer::ParticipantTransientStatusFlagSnapshotValid;
+    if ((render_drive_flags & 0x10u) != 0) {
+        flags |= multiplayer::ParticipantTransientStatusFlagPlanewalker;
+    }
+
     std::int32_t modifier_count = 0;
     if (!memory.TryReadField(
             actor_address,
@@ -229,8 +272,6 @@ bool TryReadWizardActorTransientStatusState(
         return false;
     }
 
-    std::uint8_t flags =
-        multiplayer::ParticipantTransientStatusFlagSnapshotValid;
     if (modifier_count == 0) {
         *status_flags = flags;
         return true;
@@ -262,8 +303,15 @@ bool TryReadWizardActorTransientStatusState(
             !memory.TryReadField(
                 modifier,
                 kNativeModifierTypeIdOffset,
-                &type_id) ||
-            type_id != kNativePoisonModifierTypeId) {
+                &type_id)) {
+            continue;
+        }
+
+        if (type_id == kNativeStoneskinModifierTypeId) {
+            flags |= multiplayer::ParticipantTransientStatusFlagStoneskin;
+            continue;
+        }
+        if (type_id != kNativePoisonModifierTypeId) {
             continue;
         }
 
@@ -296,6 +344,7 @@ bool TryReadWizardActorTransientStatusState(
                 multiplayer::kParticipantPoisonMaxDurationTicks);
         }
     }
+
     *status_flags = flags;
     return true;
 }

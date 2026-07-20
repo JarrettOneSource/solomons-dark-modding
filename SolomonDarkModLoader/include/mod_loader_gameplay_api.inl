@@ -35,6 +35,9 @@ bool TryGetRunLifecycleManualEnemyFreezePosition(uintptr_t actor_address, float*
 void PinRunLifecycleFrozenManualEnemies();
 void ClearRunLifecycleManualEnemyFreeze(uintptr_t actor_address = 0);
 bool TryGetPlayerState(SDModPlayerState* state);
+bool ResetLocalPlayerManaDeltaObservation();
+bool TakeLocalPlayerManaDeltaObservation(
+    SDModLocalManaDeltaObservation* observation);
 bool TryGetPlayerInventoryState(SDModInventoryState* state);
 bool QueuePlayerInventoryItemEquip(
     std::uint32_t recipe_uid,
@@ -45,6 +48,9 @@ bool TryGetGameplayCombatState(SDModGameplayCombatState* state);
 bool IsArenaCombatActorType(std::uint32_t object_type_id);
 bool TryGetSceneState(SDModSceneState* state);
 bool TryListSceneActors(std::vector<SDModSceneActorState>* actors);
+bool TryListNativeActorModifiers(
+    uintptr_t actor_address,
+    std::vector<SDModNativeModifierState>* modifiers);
 bool TryListRecentNativeSpellEffectActors(
     std::vector<SDModNativeSpellEffectActorState>* actors);
 bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state);
@@ -76,7 +82,8 @@ bool TryRefreshParticipantGameplayState(
 bool TryGetGameplayHudParticipantDisplayNameForActor(
     uintptr_t actor_address,
     std::string* display_name,
-    std::uint64_t* participant_id = nullptr);
+    std::uint64_t* participant_id = nullptr,
+    float* health_ratio = nullptr);
 bool RebindSceneActorCell(uintptr_t actor_address, std::string* error_message);
 bool QueueManualRunEnemySpawn(
     int type_id,

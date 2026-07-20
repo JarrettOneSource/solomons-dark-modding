@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from multiplayer_log_probe import log_after, log_position, read_log
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
@@ -143,18 +144,6 @@ emit("native_action_cooldown_ticks", bot.native_action_cooldown_ticks or 0)
 
 def values(pipe_name: str, code: str) -> dict[str, str]:
     return parse_key_values(lua(pipe_name, code))
-
-
-def read_log(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8", errors="replace")
-    except FileNotFoundError:
-        return ""
-
-
-def log_after(path: Path, offset: int) -> str:
-    text = read_log(path)
-    return text[offset:]
 
 
 def parse_int(value: str | None, default: int = 0) -> int:
@@ -429,8 +418,8 @@ def observe_no_duplicate_remote_fire(
 
 
 def verify_held_cast_direction(direction: CastDirection) -> dict[str, object]:
-    source_log_offset = len(read_log(direction.source_log))
-    receiver_log_offset = len(read_log(direction.receiver_log))
+    source_log_offset = log_position(direction.source_log)
+    receiver_log_offset = log_position(direction.receiver_log)
     queued_attempt = values(direction.source_pipe, queue_primary_cast_lua(120))
     held_phases = wait_for_local_cast_phase_counts(
         direction,
@@ -484,8 +473,8 @@ def verify_held_cast_direction(direction: CastDirection) -> dict[str, object]:
 
 
 def verify_direction(direction: CastDirection) -> dict[str, object]:
-    source_log_offset = len(read_log(direction.source_log))
-    receiver_log_offset = len(read_log(direction.receiver_log))
+    source_log_offset = log_position(direction.source_log)
+    receiver_log_offset = log_position(direction.receiver_log)
     trigger = trigger_local_cast(direction, source_log_offset)
     presentation = wait_for_remote_cast_presentation(direction, receiver_log_offset)
     duplicate_check = observe_no_duplicate_remote_fire(

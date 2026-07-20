@@ -1,9 +1,18 @@
 using RunStartedFn = void(__fastcall*)(void* self, void* unused_edx);
-using MainMenuRunTransitionFn = void(__fastcall*)(void* self, void* unused_edx);
+using MainMenuControlActionFn = void(__thiscall*)(void* self, void* control);
 using RunEndedFn = void(__cdecl*)();
 using ActorWorldTickFn = void(__fastcall*)(void* self, void* unused_edx);
 using ActorWorldEntryFn = void(__thiscall*)(void* self);
 using WaveSpawnerTickFn = void(__fastcall*)(void* self, void* unused_edx);
+using SpawnExactEnemyGroupFn = void(__thiscall*)(
+    void* arena,
+    int count,
+    std::uint32_t native_type_id,
+    int variant,
+    void* modifiers,
+    int placement_mode,
+    int placement_argument,
+    int random_placement);
 using EnemySpawnedFn =
     void* (__fastcall*)(void* self, void* unused_edx, void* param_2, int enemy_config, void* param_4, int param_5, int param_6, char param_7);
 using EnemyDeathFn = int(__fastcall*)(void* self, void* unused_edx);
@@ -28,7 +37,7 @@ struct HookTarget {
 
 enum HookIndex : size_t {
     kHookCreateArena = 0,
-    kHookMainMenuRunTransition,
+    kHookMainMenuControlAction,
     kHookStartGame,
     kHookRunEnded,
     kHookActorWorldTick,
@@ -83,7 +92,6 @@ struct ManualRunEnemySpawnRequest {
     float y = 0.0f;
     bool allow_active_waves = false;
     bool freeze_on_spawn = true;
-    std::uint8_t retry_count = 0;
 };
 
 struct FrozenManualRunEnemy {
@@ -120,7 +128,6 @@ constexpr std::int32_t kManualRunEnemySpawnerBudget = 2;
 constexpr std::int32_t kManualRunEnemySpawnerLongDelay = 2;
 constexpr std::size_t kQueuedReplicatedRunEnemySpawnLimit = 16;
 constexpr std::size_t kReplicatedCatchupSpawnBurstPerSpawnerTick = 8;
-constexpr std::uint8_t kReplicatedCatchupSpawnRetryLimit = 8;
 
 void BuildHookTargets(HookTarget* targets) {
     if (targets == nullptr) {
@@ -128,8 +135,8 @@ void BuildHookTargets(HookTarget* targets) {
     }
 
     targets[kHookCreateArena] = {kArenaCreate, 6};      // "Create New ARENA" virtual method
-    // MainMenu transition dispatcher: one complete MOV EAX,[ECX+0x46C].
-    targets[kHookMainMenuRunTransition] = {kMainMenuRunTransition, 6};
+    // MainMenu control action: PUSH -1 (2) + PUSH exception handler (5).
+    targets[kHookMainMenuControlAction] = {kMainMenuControlAction, 7};
     targets[kHookStartGame] = {kStartGame, 7};          // "on START GAME" menu-initiated
     targets[kHookRunEnded] = {kRunEnded, 7};            // GameOver trigger (__cdecl)
     // Whole instructions: PUSH ESI, PUSH EDI, XOR EDI,EDI, MOV ESI,ECX.

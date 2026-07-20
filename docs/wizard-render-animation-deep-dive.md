@@ -198,8 +198,10 @@ So `Gameplay_FinalizePlayerStart` is a reference for helper-item construction or
 | `+0x178` | `hub_visual_source_profile` | appearance source profile pointer for `0x005E3080` |
 | `+0x1BC` | `animation_move_duration_ticks` | movement-duration accumulator |
 | `+0x1C0` | `source_profile_56_mirror` | mirror of source profile `+0x56` |
-| `+0x1C4` | `render_drive_effect_timer` | visual effect timer |
-| `+0x1D0` | `render_drive_effect_progress` | effect progress scalar |
+| `+0x1C4` | `magic_shield_absorb_remaining` | damage the active Magic Shield can still absorb |
+| `+0x1C8` | `magic_shield_absorb_capacity` | absorb value established when the shield was cast |
+| `+0x1CC` | `magic_shield_explosion_fraction` | Explosive Shield damage as a fraction of capacity |
+| `+0x1D0` | `magic_shield_hit_flash` | short native shield-hit visual pulse |
 | `+0x1F0` | `render_drive_idle_bob` | idle bob amount |
 | `+0x1FC` | `equip_runtime_state` | standalone equip runtime pointer |
 | `+0x200` | `progression_runtime_state` | progression runtime pointer |

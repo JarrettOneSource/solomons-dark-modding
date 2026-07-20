@@ -1,5 +1,6 @@
 #include "lua_engine_events.h"
 #include "bot_runtime.h"
+#include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
 #include "logger.h"
 #include "memory_access.h"

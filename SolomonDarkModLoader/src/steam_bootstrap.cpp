@@ -160,6 +160,23 @@ void DecodeSteamCallback(
     std::size_t payload_size,
     std::uint64_t api_call) {
     switch (callback_id) {
+    case steamabi::kCallbackSteamServersConnected: {
+        SteamEvent event;
+        event.kind = SteamEventKind::SteamServersConnected;
+        event.success = true;
+        QueueSteamEvent(state, std::move(event));
+        return;
+    }
+    case steamabi::kCallbackSteamServersDisconnected: {
+        SteamEvent event;
+        event.kind = SteamEventKind::SteamServersDisconnected;
+        if (payload != nullptr && payload_size >= sizeof(std::int32_t)) {
+            std::memcpy(&event.result_code, payload, sizeof(event.result_code));
+        }
+        event.success = false;
+        QueueSteamEvent(state, std::move(event));
+        return;
+    }
     case steamabi::kCallbackLobbyCreated: {
         steamabi::LobbyCreated callback{};
         if (!DecodeLobbyCreatedPayload(payload, payload_size, &callback)) {

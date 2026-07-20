@@ -16,7 +16,11 @@ using SteamUser = std::int32_t;
 
 constexpr SteamApiCall kInvalidApiCall = 0;
 constexpr std::int32_t kResultOk = 1;
+constexpr std::int32_t kLobbyTypePrivate = 0;
 constexpr std::int32_t kLobbyTypeFriendsOnly = 1;
+constexpr std::int32_t kLobbyTypePublic = 2;
+constexpr std::int32_t kLobbyTypeInvisible = 3;
+constexpr std::int32_t kFriendFlagImmediate = 0x04;
 constexpr std::uint32_t kLobbyEnterSuccess = 1;
 
 constexpr std::uint32_t kChatMemberStateEntered = 0x01;
@@ -40,6 +44,8 @@ constexpr std::int32_t kNetworkingSendReliableNoNagle = 9;
 
 constexpr std::int32_t kCallbackGameLobbyJoinRequested = 333;
 constexpr std::int32_t kCallbackGameRichPresenceJoinRequested = 337;
+constexpr std::int32_t kCallbackSteamServersConnected = 101;
+constexpr std::int32_t kCallbackSteamServersDisconnected = 103;
 constexpr std::int32_t kCallbackLobbyInvite = 503;
 constexpr std::int32_t kCallbackLobbyEnter = 504;
 constexpr std::int32_t kCallbackLobbyDataUpdate = 505;

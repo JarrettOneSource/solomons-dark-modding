@@ -92,9 +92,11 @@ bool TryAutoPickHostLevelUpBarrierParticipant(
         }
 
         std::string error_message;
-        if (!ApplyParticipantSkillChoiceOption(
+        std::uint16_t resulting_active = 0;
+        if (!ApplyAuthoritativeRemoteSkillRankDelta(
                 participant_id,
                 option,
+                &resulting_active,
                 &error_message)) {
             Log(
                 "Multiplayer level-up timeout auto-pick remote option failed. "
@@ -112,11 +114,6 @@ bool TryAutoPickHostLevelUpBarrierParticipant(
         offer.result_code = LevelUpChoiceResultCode::Accepted;
         g_local_transport.pending_level_up_offer_targets_by_participant.erase(
             participant_id);
-        std::uint16_t resulting_active = 0;
-        (void)TryReadParticipantProgressionEntryActive(
-            participant_id,
-            option.option_id,
-            &resulting_active);
         barrier_participant->option_index = option_index;
         barrier_participant->option_id = option.option_id;
         barrier_participant->apply_count = option.apply_count;

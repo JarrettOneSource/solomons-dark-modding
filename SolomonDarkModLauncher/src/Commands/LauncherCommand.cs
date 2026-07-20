@@ -21,4 +21,5 @@ internal sealed record LauncherCommand(
     ulong? SteamLobbyId,
     ulong? InviteSteamId,
     int MultiplayerMaxParticipants,
-    bool OpenSteamInviteDialog);
+    bool OpenSteamInviteDialog,
+    LobbyHostOptions LobbyHost);

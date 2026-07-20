@@ -412,14 +412,142 @@ void RefreshLocalParticipantFromGameState() {
         local->runtime.render_drive_stride = player_state.render_drive_stride;
         local->runtime.render_advance_rate = player_state.render_advance_rate;
         local->runtime.render_advance_phase = player_state.render_advance_phase;
-        const auto effect_state = NormalizeRenderDriveEffectState(
-            player_state.render_drive_effect_timer,
-            player_state.render_drive_effect_progress);
-        local->runtime.render_drive_effect_timer = effect_state.timer;
-        local->runtime.render_drive_effect_progress = effect_state.progress;
+        const auto shield_state = NormalizeMagicShieldState(
+            player_state.magic_shield_absorb_remaining,
+            player_state.magic_shield_absorb_capacity,
+            player_state.magic_shield_explosion_fraction,
+            player_state.magic_shield_hit_flash);
+        local->runtime.magic_shield_absorb_remaining =
+            shield_state.absorb_remaining;
+        local->runtime.magic_shield_absorb_capacity =
+            shield_state.absorb_capacity;
+        local->runtime.magic_shield_explosion_fraction =
+            shield_state.explosion_fraction;
+        local->runtime.magic_shield_hit_flash = shield_state.hit_flash;
         local->runtime.render_drive_overlay_alpha = player_state.render_drive_overlay_alpha;
         local->runtime.render_drive_move_blend = player_state.render_drive_move_blend;
     });
+}
+
+template <typename Packet>
+void PopulateLocalParticipantFrameFields(
+    const ParticipantInfo& local,
+    Packet* packet) {
+    if (packet == nullptr) {
+        return;
+    }
+
+    packet->ready = local.ready ? 1 : 0;
+    packet->in_run = local.runtime.in_run ? 1 : 0;
+    packet->transform_valid = local.runtime.transform_valid ? 1 : 0;
+    packet->controller_kind =
+        static_cast<std::uint8_t>(ParticipantControllerKind::Native);
+    packet->run_nonce = local.runtime.run_nonce;
+    packet->participant_vitals_correction_ack_sequence =
+        g_local_transport.last_applied_participant_vitals_correction_sequence;
+    packet->level = local.runtime.level;
+    packet->wave = local.runtime.wave;
+    packet->life_current = local.runtime.life_current;
+    packet->life_max = local.runtime.life_max;
+    packet->mana_current = local.runtime.mana_current;
+    packet->mana_max = local.runtime.mana_max;
+    packet->move_speed = local.runtime.move_speed;
+    packet->persistent_status_flags = local.runtime.persistent_status_flags;
+    packet->transient_status_flags = local.runtime.transient_status_flags;
+    packet->poison_remaining_ticks = local.runtime.poison_remaining_ticks;
+    packet->damage_x4_remaining_ticks =
+        local.runtime.damage_x4_remaining_ticks;
+    packet->experience_current = local.runtime.experience_current;
+    packet->experience_next = local.runtime.experience_next;
+    packet->position_x = local.runtime.position_x;
+    packet->position_y = local.runtime.position_y;
+    packet->heading = local.runtime.heading;
+    packet->anim_drive_state = local.runtime.anim_drive_state;
+    packet->presentation_flags = local.runtime.presentation_flags;
+    packet->attachment_staff_visual_state =
+        local.runtime.attachment_staff_visual_state;
+    packet->render_variant_primary = local.runtime.render_variant_primary;
+    packet->render_variant_secondary = local.runtime.render_variant_secondary;
+    packet->render_weapon_type = local.runtime.render_weapon_type;
+    packet->render_selection_byte = local.runtime.render_selection_byte;
+    packet->render_variant_tertiary = local.runtime.render_variant_tertiary;
+    packet->primary_visual_link_type_id =
+        local.runtime.primary_visual_link_type_id;
+    packet->secondary_visual_link_type_id =
+        local.runtime.secondary_visual_link_type_id;
+    packet->primary_visual_link_recipe_uid =
+        local.runtime.primary_visual_link_recipe_uid;
+    packet->secondary_visual_link_recipe_uid =
+        local.runtime.secondary_visual_link_recipe_uid;
+    packet->attachment_visual_link_type_id =
+        local.runtime.attachment_visual_link_type_id;
+    packet->attachment_visual_link_recipe_uid =
+        local.runtime.attachment_visual_link_recipe_uid;
+    std::memcpy(
+        packet->primary_visual_link_color_block,
+        local.runtime.primary_visual_link_color_block.data(),
+        local.runtime.primary_visual_link_color_block.size());
+    std::memcpy(
+        packet->secondary_visual_link_color_block,
+        local.runtime.secondary_visual_link_color_block.data(),
+        local.runtime.secondary_visual_link_color_block.size());
+    packet->anim_drive_state_word = local.runtime.anim_drive_state_word;
+    packet->walk_cycle_primary = local.runtime.walk_cycle_primary;
+    packet->walk_cycle_secondary = local.runtime.walk_cycle_secondary;
+    packet->render_drive_stride = local.runtime.render_drive_stride;
+    packet->render_advance_rate = local.runtime.render_advance_rate;
+    packet->render_advance_phase = local.runtime.render_advance_phase;
+    packet->magic_shield_absorb_remaining =
+        local.runtime.magic_shield_absorb_remaining;
+    packet->magic_shield_absorb_capacity =
+        local.runtime.magic_shield_absorb_capacity;
+    packet->magic_shield_explosion_fraction =
+        local.runtime.magic_shield_explosion_fraction;
+    packet->magic_shield_hit_flash =
+        local.runtime.magic_shield_hit_flash;
+    packet->render_drive_overlay_alpha =
+        local.runtime.render_drive_overlay_alpha;
+    packet->render_drive_move_blend = local.runtime.render_drive_move_blend;
+}
+
+template <typename Packet>
+void ApplyLocalRunExitLatch(Packet* packet) {
+    if (packet == nullptr || !g_local_transport.is_host) {
+        return;
+    }
+    const auto run_exit_nonce =
+        g_local_run_exit_latched_nonce.load(std::memory_order_acquire);
+    if (run_exit_nonce == 0) {
+        return;
+    }
+    packet->in_run = 0;
+    packet->transform_valid = 0;
+    packet->run_nonce = run_exit_nonce;
+}
+
+ParticipantFramePacket BuildLocalParticipantFramePacket() {
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+
+    ParticipantFramePacket packet{};
+    packet.header = MakePacketHeader(
+        PacketKind::ParticipantFrame,
+        g_local_transport.next_sequence++);
+    packet.participant_id = g_local_transport.local_peer_id;
+    packet.participant_session_nonce = g_local_transport.local_session_nonce;
+    packet.authority_participant_id =
+        g_local_transport.is_host ? g_local_transport.local_peer_id : 0;
+    if (local == nullptr) {
+        return packet;
+    }
+
+    PopulateLocalParticipantFrameFields(*local, &packet);
+    packet.scene_kind = static_cast<std::uint8_t>(
+        WorldSceneKindFromSceneIntent(local->runtime.scene_intent));
+    packet.region_index = local->runtime.scene_intent.region_index;
+    packet.region_type_id = local->runtime.scene_intent.region_type_id;
+    ApplyLocalRunExitLatch(&packet);
+    return packet;
 }
 
 StatePacket BuildLocalStatePacket() {
@@ -437,35 +565,12 @@ StatePacket BuildLocalStatePacket() {
     }
 
     CopyPacketDisplayName(local->name, &packet);
-    packet.ready = local->ready ? 1 : 0;
-    packet.in_run = local->runtime.in_run ? 1 : 0;
-    packet.transform_valid = local->runtime.transform_valid ? 1 : 0;
-    packet.controller_kind = static_cast<std::uint8_t>(ParticipantControllerKind::Native);
-    packet.run_nonce = local->runtime.run_nonce;
-    packet.participant_vitals_correction_ack_sequence =
-        g_local_transport.last_applied_participant_vitals_correction_sequence;
+    PopulateLocalParticipantFrameFields(*local, &packet);
     packet.element_id = local->character_profile.element_id;
     packet.discipline_id = static_cast<std::int32_t>(local->character_profile.discipline_id);
     for (std::size_t index = 0; index < local->character_profile.appearance.choice_ids.size(); ++index) {
         packet.appearance_choice_ids[index] = local->character_profile.appearance.choice_ids[index];
     }
-    packet.level = local->runtime.level;
-    packet.wave = local->runtime.wave;
-    packet.life_current = local->runtime.life_current;
-    packet.life_max = local->runtime.life_max;
-    packet.mana_current = local->runtime.mana_current;
-    packet.mana_max = local->runtime.mana_max;
-    packet.move_speed = local->runtime.move_speed;
-    packet.persistent_status_flags =
-        local->runtime.persistent_status_flags;
-    packet.transient_status_flags =
-        local->runtime.transient_status_flags;
-    packet.poison_remaining_ticks =
-        local->runtime.poison_remaining_ticks;
-    packet.damage_x4_remaining_ticks =
-        local->runtime.damage_x4_remaining_ticks;
-    packet.experience_current = local->runtime.experience_current;
-    packet.experience_next = local->runtime.experience_next;
     packet.owned_gold = local->owned_progression.gold;
     packet.gold_revision = local->owned_progression.gold_revision;
     packet.inventory_revision = local->owned_progression.inventory_revision;
@@ -547,47 +652,6 @@ StatePacket BuildLocalStatePacket() {
         packet.queued_secondary_entry_indices[index] =
             local->character_profile.loadout.secondary_entry_indices[index];
     }
-    packet.position_x = local->runtime.position_x;
-    packet.position_y = local->runtime.position_y;
-    packet.heading = local->runtime.heading;
-    packet.anim_drive_state = local->runtime.anim_drive_state;
-    packet.presentation_flags = local->runtime.presentation_flags;
-    packet.attachment_staff_visual_state = local->runtime.attachment_staff_visual_state;
-    packet.render_variant_primary = local->runtime.render_variant_primary;
-    packet.render_variant_secondary = local->runtime.render_variant_secondary;
-    packet.render_weapon_type = local->runtime.render_weapon_type;
-    packet.render_selection_byte = local->runtime.render_selection_byte;
-    packet.render_variant_tertiary = local->runtime.render_variant_tertiary;
-    packet.primary_visual_link_type_id = local->runtime.primary_visual_link_type_id;
-    packet.secondary_visual_link_type_id = local->runtime.secondary_visual_link_type_id;
-    packet.primary_visual_link_recipe_uid = local->runtime.primary_visual_link_recipe_uid;
-    packet.secondary_visual_link_recipe_uid = local->runtime.secondary_visual_link_recipe_uid;
-    packet.attachment_visual_link_type_id = local->runtime.attachment_visual_link_type_id;
-    packet.attachment_visual_link_recipe_uid = local->runtime.attachment_visual_link_recipe_uid;
-    std::memcpy(
-        packet.primary_visual_link_color_block,
-        local->runtime.primary_visual_link_color_block.data(),
-        local->runtime.primary_visual_link_color_block.size());
-    std::memcpy(
-        packet.secondary_visual_link_color_block,
-        local->runtime.secondary_visual_link_color_block.data(),
-        local->runtime.secondary_visual_link_color_block.size());
-    packet.anim_drive_state_word = local->runtime.anim_drive_state_word;
-    packet.walk_cycle_primary = local->runtime.walk_cycle_primary;
-    packet.walk_cycle_secondary = local->runtime.walk_cycle_secondary;
-    packet.render_drive_stride = local->runtime.render_drive_stride;
-    packet.render_advance_rate = local->runtime.render_advance_rate;
-    packet.render_advance_phase = local->runtime.render_advance_phase;
-    packet.render_drive_effect_timer = local->runtime.render_drive_effect_timer;
-    packet.render_drive_effect_progress = local->runtime.render_drive_effect_progress;
-    packet.render_drive_overlay_alpha = local->runtime.render_drive_overlay_alpha;
-    packet.render_drive_move_blend = local->runtime.render_drive_move_blend;
-    const auto run_exit_nonce =
-        g_local_run_exit_latched_nonce.load(std::memory_order_acquire);
-    if (g_local_transport.is_host && run_exit_nonce != 0) {
-        packet.in_run = 0;
-        packet.transform_valid = 0;
-        packet.run_nonce = run_exit_nonce;
-    }
+    ApplyLocalRunExitLatch(&packet);
     return packet;
 }

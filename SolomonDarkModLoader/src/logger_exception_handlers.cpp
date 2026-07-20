@@ -130,6 +130,11 @@ LONG WINAPI CrashExceptionFilter(EXCEPTION_POINTERS* exception_pointers) {
             out << "\r\n";
             AppendCrashText(out.str().c_str());
         }
+
+        const auto frame_chain = FormatX86FrameChain(ebp_address, 12);
+        if (!frame_chain.empty()) {
+            AppendCrashText(frame_chain.c_str());
+        }
     }
 #endif
 
@@ -355,6 +360,10 @@ LONG CALLBACK FirstChanceExceptionLogger(EXCEPTION_POINTERS* exception_pointers)
         }
     }
     sdmod::Log(out.str());
+    const auto frame_chain = FormatX86FrameChain(ebp, 12);
+    if (!frame_chain.empty()) {
+        sdmod::Log(frame_chain);
+    }
     const auto stack_trace = FormatCapturedStackTrace(0, 16);
     if (!stack_trace.empty()) {
         sdmod::Log(stack_trace);

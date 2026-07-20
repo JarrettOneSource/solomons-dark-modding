@@ -1,5 +1,4 @@
 #include "bot_runtime.h"
-#include "d3d9_end_scene_hook.h"
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
 #include "logger.h"
@@ -10,6 +9,7 @@
 #include "native_enemy_lifecycle.h"
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_runtime_state.h"
+#include "multiplayer_service_loop.h"
 #include "native_spell_stats.h"
 #include "runtime_debug.h"
 #include "runtime_tick_service.h"
@@ -17,7 +17,6 @@
 #include "x86_hook.h"
 
 #include <Windows.h>
-#include <d3d9.h>
 #include <intrin.h>
 
 #include <algorithm>
@@ -51,6 +50,7 @@ namespace {
 #include "mod_loader_gameplay/core/native_function_types.inl"
 #include "mod_loader_gameplay/core/seh_safe_call_declarations.inl"
 #include "mod_loader_gameplay/core/gameplay_constants.inl"
+#include "mod_loader_gameplay/core/actor_world_target_slot_state.inl"
 #include "mod_loader_gameplay/core/runtime_request_state.inl"
 #include "mod_loader_gameplay/core/participant_entity_state.inl"
 #include "mod_loader_gameplay/core/participant_kind_helpers.inl"
@@ -60,6 +60,7 @@ namespace {
 #include "mod_loader_gameplay/core/internal_forward_declarations.inl"
 #include "mod_loader_gameplay/core/standalone_owner_repair.inl"
 #include "mod_loader_gameplay/core/standalone_progression_slot_context.inl"
+#include "mod_loader_gameplay/core/stock_dampen_effect_context.inl"
 #include "mod_loader_gameplay/core/run_generation_seed_helpers.inl"
 
 #include "mod_loader_gameplay/scene_and_animation.inl"

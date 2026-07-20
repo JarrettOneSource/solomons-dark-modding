@@ -31,7 +31,7 @@ internal static class LauncherExecutableResolver
         }
 
         throw new FileNotFoundException(
-            "Could not locate SolomonDarkModLauncher.exe. Re-extract the complete beta package and try again.",
+            "SolomonDarkModLauncher.exe is not in the beta package. Extract the complete beta package again.",
             candidates[0]);
     }
 }

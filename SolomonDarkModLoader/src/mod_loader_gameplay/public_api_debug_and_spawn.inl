@@ -1,3 +1,26 @@
+bool ResetLocalPlayerManaDeltaObservation() {
+    SDModPlayerState player;
+    if (!TryGetPlayerState(&player) || player.actor_address == 0) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(g_local_mana_delta_observation_mutex);
+    g_local_mana_delta_observation = SDModLocalManaDeltaObservation{};
+    g_local_mana_delta_observation.armed = true;
+    g_local_mana_delta_observation.actor_address = player.actor_address;
+    return true;
+}
+
+bool TakeLocalPlayerManaDeltaObservation(
+    SDModLocalManaDeltaObservation* observation) {
+    if (observation == nullptr) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(g_local_mana_delta_observation_mutex);
+    *observation = g_local_mana_delta_observation;
+    g_local_mana_delta_observation = SDModLocalManaDeltaObservation{};
+    return observation->valid;
+}
+
 bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state) {
     if (state == nullptr) {
         return false;

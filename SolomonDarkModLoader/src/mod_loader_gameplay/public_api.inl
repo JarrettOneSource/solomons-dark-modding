@@ -1,6 +1,8 @@
+#include "public_api_main_thread_pump.inl"
 #include "public_api_keyboard_injection.inl"
 #include "public_api_input_queueing.inl"
 #include "public_api_gameplay_action_queues.inl"
+#include "public_api_hub.inl"
 #include "public_api_participant_queues.inl"
 #include "public_api_state_getters.inl"
 #include "public_api_inventory.inl"

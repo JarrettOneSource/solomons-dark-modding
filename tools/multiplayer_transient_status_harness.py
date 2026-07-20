@@ -281,6 +281,7 @@ def wait_for_poison_state(
     participant_id: int | None,
     poisoned: bool,
     timeout: float,
+    maximum_tick_drift: int | None = None,
 ) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     last: dict[str, Any] = {}
@@ -290,7 +291,7 @@ def wait_for_poison_state(
         protocol_valid = bool(last["runtime_flags"] & TRANSIENT_SNAPSHOT_VALID)
         native_poisoned = bool(last["native_flags"] & TRANSIENT_POISONED)
         if poisoned:
-            if (
+            active = (
                 protocol_valid
                 and protocol_poisoned
                 and native_poisoned
@@ -298,7 +299,13 @@ def wait_for_poison_state(
                 and last["runtime_ticks"] > 0
                 and last["native_ticks"] > 0
                 and last["modifier_ticks"] > 0
-            ):
+            )
+            duration_settled = (
+                maximum_tick_drift is None
+                or abs(last["native_ticks"] - last["runtime_ticks"])
+                <= maximum_tick_drift
+            )
+            if active and duration_settled:
                 return last
         elif (
             protocol_valid
@@ -312,5 +319,5 @@ def wait_for_poison_state(
         time.sleep(0.05)
     raise VerifyFailure(
         f"poison state did not converge pipe={pipe_name} participant={participant_id} "
-        f"poisoned={poisoned}: {last}"
+        f"poisoned={poisoned} maximum_tick_drift={maximum_tick_drift}: {last}"
     )

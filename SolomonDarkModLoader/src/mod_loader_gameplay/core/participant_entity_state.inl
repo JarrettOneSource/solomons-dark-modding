@@ -103,8 +103,10 @@ struct ParticipantEntityBinding {
     float replicated_render_drive_stride = 0.0f;
     float replicated_render_advance_rate = 0.0f;
     float replicated_render_advance_phase = 0.0f;
-    float replicated_render_drive_effect_timer = 0.0f;
-    float replicated_render_drive_effect_progress = 0.0f;
+    float replicated_magic_shield_absorb_remaining = 0.0f;
+    float replicated_magic_shield_absorb_capacity = 0.0f;
+    float replicated_magic_shield_explosion_fraction = 0.0f;
+    float replicated_magic_shield_hit_flash = 0.0f;
     std::uint64_t replicated_transform_packet_ms = 0;
     std::uint64_t replicated_transform_playback_ms = 0;
     // "Currently facing" heading pinned across ticks. Sources: movement step
@@ -129,6 +131,9 @@ struct ParticipantEntityBinding {
     std::uint8_t persistent_status_reconcile_desired_flags = 0;
     std::uint64_t persistent_status_reconcile_desired_since_ms = 0;
     std::uint64_t persistent_status_reconcile_not_before_ms = 0;
+    std::uint8_t transient_status_reconcile_desired_flags = 0;
+    std::uint64_t transient_status_reconcile_desired_since_ms = 0;
+    std::uint64_t transient_status_reconcile_not_before_ms = 0;
 
     // Ongoing cast state. The loader primes the cast once and keeps a stock-owned
     // startup/watch state alive across ticks. Native slot gates are unlocked at

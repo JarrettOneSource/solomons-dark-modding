@@ -24,6 +24,7 @@ def invoke_native_magic_hit_trial(
     attempts: int,
     label: str,
     timeout: float,
+    require_life_loss: bool = True,
 ) -> dict[str, Any]:
     """Queue the retail PlayerActor magic-hit handler after Lua returns."""
 
@@ -93,7 +94,13 @@ emit('error', err or '')
     except ValueError:
         before = math.nan
         after = math.nan
-    if not math.isfinite(before) or not math.isfinite(after) or after >= before:
+    invalid_life = (
+        not math.isfinite(before)
+        or not math.isfinite(after)
+        or after > before
+        or (require_life_loss and after >= before)
+    )
+    if invalid_life:
         raise VerifyFailure(
             f"native magic-hit trial returned invalid life {label}: {result}"
         )
@@ -104,6 +111,7 @@ emit('error', err or '')
         "projectile_damage": projectile_damage,
         "magic_damage": magic_damage,
         "attempts": attempts,
+        "require_life_loss": require_life_loss,
         "hp_before": before,
         "hp_after": after,
         "hp_delta": before - after,

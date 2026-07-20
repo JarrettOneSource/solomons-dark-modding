@@ -113,6 +113,22 @@ void TickParticipantSceneBindings(uintptr_t gameplay_address, std::uint64_t now_
                 continue;
             }
 
+            if (IsNativeRemoteParticipantBinding(&binding)) {
+                // Distant actors can be culled from the stock actor-tick loop.
+                // Reconcile from the local player's scene tick as well so a
+                // large network correction cannot leave a remote wizard parked
+                // indefinitely at its last in-range position.
+                (void)RefreshNativeRemoteParticipantTransformTarget(
+                    &binding,
+                    now_ms);
+                if (!IsActorRuntimeDead(binding.actor_address)) {
+                    (void)ApplyNativeRemoteParticipantPlayback(
+                        &binding,
+                        binding.actor_address,
+                        now_ms);
+                }
+            }
+
         }
     }
 

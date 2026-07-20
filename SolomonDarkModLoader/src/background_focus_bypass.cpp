@@ -443,9 +443,14 @@ LRESULT __stdcall DetourGameWindowProc(HWND hwnd, UINT message, WPARAM wparam, L
 // We also snapshot all three flags and log on change to document, from the live
 // process, which flag the OS actually sets when the window is backgrounded.
 void __fastcall DetourAppMainTick(void* app, void* edx) {
+    // MyApp keeps updating on the normal user desktop while Windows presents
+    // the secure lock desktop, but D3D9 EndScene stops. Own queued Lua and
+    // menu-time work here so remote control does not depend on presentation.
+    PumpGameplayMainThreadWork();
+
     // Native UI callbacks normally run on the same update thread that owns
-    // CPU/menu lifetimes. Dispatch update-owned semantic actions before the
-    // stock loop so a screen cannot be destroyed concurrently with its tick.
+    // CPU/menu lifetimes. The work pump can queue a semantic action, so dispatch
+    // it immediately afterward and before the stock loop.
     DispatchPendingDebugUiActionOnAppTick();
 
     const auto app_address = reinterpret_cast<uintptr_t>(app);
@@ -490,6 +495,8 @@ void __fastcall DetourAppMainTick(void* app, void* edx) {
     if (original != nullptr) {
         original(app, edx);
     }
+    PumpGameplayPostStockTickWork();
+    LogCpuLifecycleGuardActivity();
 }
 
 }  // namespace

@@ -7,3 +7,4 @@
 #include "functions_nav_grid_and_copy.inl"
 #include "functions_field_accessors.inl"
 #include "functions_frame_capture.inl"
+#include "functions_combat_observations.inl"

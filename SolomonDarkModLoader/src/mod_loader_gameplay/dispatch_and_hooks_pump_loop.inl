@@ -11,9 +11,51 @@ void PumpQueuedGameplayActions() {
 
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
     uintptr_t active_gameplay_address = 0;
-    const bool gameplay_active =
+    uintptr_t local_player_actor_address = 0;
+    const bool has_local_player_actor =
         TryResolveCurrentGameplayScene(&active_gameplay_address) &&
-        active_gameplay_address != 0;
+        active_gameplay_address != 0 &&
+        TryResolvePlayerActorForSlot(
+            active_gameplay_address,
+            0,
+            &local_player_actor_address) &&
+        local_player_actor_address != 0;
+    bool gameplay_active = false;
+    if (g_allow_gameplay_action_pump_in_gameplay) {
+        gameplay_active = has_local_player_actor;
+    } else {
+        const auto generation_before =
+            g_gameplay_keyboard_injection.local_player_tick_generation.load(
+                std::memory_order_acquire);
+        const auto tick_scene_address =
+            g_gameplay_keyboard_injection.local_player_tick_scene_address.load(
+                std::memory_order_relaxed);
+        const auto tick_actor_address =
+            g_gameplay_keyboard_injection.local_player_tick_actor_address.load(
+                std::memory_order_relaxed);
+        const auto generation_after =
+            g_gameplay_keyboard_injection.local_player_tick_generation.load(
+                std::memory_order_acquire);
+        const auto previously_observed_generation =
+            g_gameplay_keyboard_injection
+                .app_tick_observed_local_player_tick_generation.load(
+                    std::memory_order_relaxed);
+        const bool stable_tick_snapshot =
+            generation_before == generation_after;
+        if (stable_tick_snapshot) {
+            g_gameplay_keyboard_injection
+                .app_tick_observed_local_player_tick_generation.store(
+                    generation_after,
+                    std::memory_order_relaxed);
+        }
+        gameplay_active =
+            has_local_player_actor &&
+            stable_tick_snapshot &&
+            generation_after != 0 &&
+            generation_after != previously_observed_generation &&
+            tick_scene_address == active_gameplay_address &&
+            tick_actor_address == local_player_actor_address;
+    }
     if (gameplay_active) {
         ReconcileExplicitTestBlankBoneyard(
             active_gameplay_address,
@@ -21,10 +63,14 @@ void PumpQueuedGameplayActions() {
         PinRunLifecycleFrozenManualEnemies();
     }
 
-    // EndScene and HookPlayerActorTick both call this pump. Always drain
-    // pipe-exec on the main thread. When gameplay is inactive, also emit
-    // runtime.tick here so front-end automation and other menu-time Lua
-    // mods can advance before a gameplay scene exists.
+    // AppMainTick and HookPlayerActorTick both call this pump. Character
+    // creation publishes a game object and a slot-zero preview actor, but never
+    // ticks that actor through PlayerActorTick. Transfer queue ownership only
+    // when the exact scene/actor pair advanced its tick generation since the
+    // preceding AppMainTick. AppMainTick continues while the Windows lock
+    // screen suppresses D3D presentation. During gameplay, defer Lua exec to
+    // the local player tick so snippets that touch world state run in the safe
+    // actor phase.
     if (!gameplay_active) {
         const SDModRuntimeTickContext lua_tick_context = {
             sizeof(SDModRuntimeTickContext),
@@ -33,9 +79,11 @@ void PumpQueuedGameplayActions() {
             now_ms,
         };
         PumpLuaWorkOnMainThread(lua_tick_context);
-    } else {
+    } else if (g_allow_gameplay_action_pump_in_gameplay) {
         PumpLuaExecQueueOnMainThread();
     }
+
+    TryDispatchPendingHubServiceOnGameThread();
 
     const auto wizard_bot_sync_not_before_ms =
         g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.load(std::memory_order_acquire);
@@ -124,8 +172,6 @@ void PumpQueuedGameplayActions() {
             break;
         }
     }
-
-    PumpHostLootDropDeactivation();
 
     PendingRewardSpawnRequest reward_request;
     bool have_reward_request = false;
@@ -290,125 +336,10 @@ void PumpQueuedGameplayActions() {
         }
     }
 
-    if (have_local_player_poison_correction) {
-        SDModPlayerState player_state;
-        std::string poison_error;
-        bool applied = false;
-        if (!TryGetPlayerState(&player_state) ||
-            !player_state.valid ||
-            player_state.actor_address == 0) {
-            poison_error = "local player actor is unavailable";
-        } else {
-            std::uint8_t transient_flags = 0;
-            std::int32_t current_duration_ticks = 0;
-            uintptr_t poison_modifier = 0;
-            const bool have_transient_state =
-                TryReadWizardActorTransientStatusState(
-                    player_state.actor_address,
-                    &transient_flags,
-                    &current_duration_ticks,
-                    &poison_modifier);
-            const bool poison_active =
-                have_transient_state &&
-                (transient_flags &
-                 multiplayer::ParticipantTransientStatusFlagPoisoned) != 0 &&
-                poison_modifier != 0;
-            if (poison_active) {
-                auto& memory = ProcessMemory::Instance();
-                float current_damage_per_tick = 0.0f;
-                if (!memory.TryReadField(
-                        poison_modifier,
-                        kNativePoisonDamagePerTickOffset,
-                        &current_damage_per_tick) ||
-                    !std::isfinite(current_damage_per_tick) ||
-                    current_damage_per_tick < 0.0f) {
-                    current_damage_per_tick = 0.0f;
-                }
-                const auto corrected_duration =
-                    (std::max)(
-                        current_duration_ticks,
-                        local_player_poison_correction.duration_ticks);
-                const auto corrected_damage =
-                    (std::max)(
-                        current_damage_per_tick,
-                        local_player_poison_correction.damage_per_tick);
-                applied =
-                    memory.TryWriteField(
-                        poison_modifier,
-                        kNativeModifierDurationTicksOffset,
-                        corrected_duration) &&
-                    memory.TryWriteField(
-                        poison_modifier,
-                        kNativePoisonDamagePerTickOffset,
-                        corrected_damage);
-                if (!applied) {
-                    poison_error = "failed to refresh native poison modifier";
-                }
-            } else {
-                applied = InstallReplicatedPoisonModifier(
-                    player_state.actor_address,
-                    local_player_poison_correction.duration_ticks,
-                    &poison_error,
-                    local_player_poison_correction.damage_per_tick,
-                    0);
-            }
-        }
-
-        if (applied) {
-            Log(
-                "Multiplayer owner poison correction applied. duration_ticks=" +
-                std::to_string(local_player_poison_correction.duration_ticks) +
-                " damage_per_tick=" +
-                std::to_string(local_player_poison_correction.damage_per_tick));
-        } else {
-            Log(
-                "Multiplayer owner poison correction failed. duration_ticks=" +
-                std::to_string(local_player_poison_correction.duration_ticks) +
-                " damage_per_tick=" +
-                std::to_string(local_player_poison_correction.damage_per_tick) +
-                " error=" + poison_error);
-        }
-    }
-
-    for (const auto& request : native_poison_behavior_probes) {
-        uintptr_t actor_address = 0;
-        if (request.target_participant_id == 0) {
-            SDModPlayerState player_state;
-            if (TryGetPlayerState(&player_state) && player_state.valid) {
-                actor_address = player_state.actor_address;
-            }
-        } else {
-            const auto* binding =
-                FindParticipantEntity(request.target_participant_id);
-            if (binding != nullptr) {
-                actor_address = binding->actor_address;
-            }
-        }
-
-        std::string poison_error;
-        const bool applied =
-            actor_address != 0 &&
-            InstallReplicatedPoisonModifier(
-                actor_address,
-                request.duration_ticks,
-                &poison_error,
-                request.damage_per_tick,
-                request.source_slot,
-                false);
-        Log(
-            std::string("Native poison behavior probe ") +
-            (applied ? "applied" : "failed") +
-            ". target_participant_id=" +
-            std::to_string(request.target_participant_id) +
-            " actor=" + HexString(actor_address) +
-            " duration_ticks=" +
-            std::to_string(request.duration_ticks) +
-            " damage_per_tick=" +
-            std::to_string(request.damage_per_tick) +
-            " source_slot=" +
-            std::to_string(static_cast<int>(request.source_slot)) +
-            (poison_error.empty() ? std::string{} : " error=" + poison_error));
-    }
+    ExecuteQueuedPoisonActions(
+        have_local_player_poison_correction,
+        local_player_poison_correction,
+        native_poison_behavior_probes);
 
     for (const auto& request : native_magic_hit_behavior_probes) {
         std::string probe_error;

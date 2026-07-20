@@ -13,7 +13,6 @@ struct UiSurfaceDefinition {
     std::string id;
     std::string title;
     std::string kind;
-    std::string dispatch_timing;
     std::string asset;
     std::string asset_2x;
     std::vector<std::string> action_ids;
@@ -24,7 +23,6 @@ struct UiActionDefinition {
     std::string id;
     std::string surface_id;
     std::string label;
-    std::string dispatch_timing;
     std::string dispatch_kind;
     std::map<std::string, uintptr_t> addresses;
 };

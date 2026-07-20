@@ -2,6 +2,13 @@ void ResetRemoteParticipantSessionEpoch(
     std::uint64_t participant_id,
     bool configured_authority_disconnected,
     bool preserve_session_nonce_history) {
+    std::unique_lock<std::recursive_mutex> picker_lock(
+        g_local_level_up_picker_mutex,
+        std::defer_lock);
+    if (configured_authority_disconnected) {
+        picker_lock.lock();
+    }
+
     MarkHostLevelUpBarrierParticipantDisconnected(
         participant_id,
         static_cast<std::uint64_t>(GetTickCount64()));
@@ -18,6 +25,8 @@ void ResetRemoteParticipantSessionEpoch(
     }
 
     g_local_transport.last_state_packet_sequence_by_participant.erase(participant_id);
+    g_local_transport.last_participant_frame_sequence_by_participant.erase(
+        participant_id);
     if (!preserve_session_nonce_history) {
         g_local_transport.session_nonce_by_participant.erase(participant_id);
         g_local_transport.retired_session_nonces_by_participant.erase(participant_id);
@@ -66,7 +75,7 @@ void ResetRemoteParticipantSessionEpoch(
         if (configured_authority_disconnected) {
             g_queued_local_cast_events.clear();
             g_queued_local_enemy_damage_claims.clear();
-            g_queued_local_loot_pickup_requests.clear();
+            ClearLocalLootPickupRequestStateLocked();
             g_queued_local_level_up_choices.clear();
             g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
             g_have_queued_local_air_chain_frame = false;

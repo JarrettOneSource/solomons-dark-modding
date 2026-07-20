@@ -110,6 +110,26 @@ bool ShouldParticipantSceneIntentMaterializeInScene(
     return false;
 }
 
+bool IsParticipantMaterializationOwnedByCurrentScene(
+    const multiplayer::ParticipantSceneIntent& scene_intent,
+    uintptr_t materialized_scene_address,
+    uintptr_t materialized_world_address) {
+    if (materialized_scene_address == 0 || materialized_world_address == 0) {
+        return false;
+    }
+
+    uintptr_t current_gameplay_address = 0;
+    if (!TryResolveCurrentGameplayScene(&current_gameplay_address) ||
+        current_gameplay_address != materialized_scene_address) {
+        return false;
+    }
+
+    SceneContextSnapshot current_context;
+    return TryBuildSceneContextSnapshot(current_gameplay_address, &current_context) &&
+           current_context.world_address == materialized_world_address &&
+           ShouldParticipantSceneIntentMaterializeInScene(scene_intent, current_context);
+}
+
 bool ShouldBotBeMaterializedInScene(const ParticipantEntityBinding& binding, const SceneContextSnapshot& scene_context) {
     return ShouldParticipantSceneIntentMaterializeInScene(binding.scene_intent, scene_context);
 }

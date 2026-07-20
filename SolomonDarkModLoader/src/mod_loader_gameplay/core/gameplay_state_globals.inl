@@ -17,6 +17,8 @@ std::uint64_t g_gameplay_slot_hud_probe_until_ms = 0;
 uintptr_t g_gameplay_slot_hud_probe_actor = 0;
 std::mutex g_native_spell_effect_actor_mutex;
 std::vector<SDModNativeSpellEffectActorState> g_recent_native_spell_effect_actors;
+std::mutex g_local_mana_delta_observation_mutex;
+SDModLocalManaDeltaObservation g_local_mana_delta_observation;
 
 ObservedActorAnimationDriveProfile g_observed_idle_animation_profile;
 ObservedActorAnimationDriveProfile g_observed_moving_animation_profile;

@@ -1,14 +1,10 @@
 bool DrawGameplayHudParticipantName(
     uintptr_t actor_address,
+    std::uint64_t participant_id,
     const std::string& display_name,
+    float health_ratio,
     float* draw_x,
     float* draw_y,
-    DWORD* exception_code);
-bool DrawGameplayParticipantHealthBar(
-    uintptr_t actor_address,
-    float nameplate_y,
-    float* health_ratio,
-    int* filled_segment_count,
     DWORD* exception_code);
 bool DrawGameplayHudExactTextAt(
     const std::string& display_text,
@@ -139,7 +135,6 @@ struct GameplayAllyHudNameLayout {
 };
 
 std::vector<GameplayAllyHudRow> BuildGameplayAllyHudRows() {
-    const auto runtime = multiplayer::SnapshotRuntimeState();
     std::vector<GameplayAllyHudRow> rows;
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
@@ -151,21 +146,33 @@ std::vector<GameplayAllyHudRow> BuildGameplayAllyHudRows() {
                 binding.gameplay_slot >= static_cast<int>(kGameplayPlayerSlotCount)) {
                 continue;
             }
-
-            const auto* participant = multiplayer::FindParticipant(runtime, binding.bot_id);
-            if (participant == nullptr ||
-                !multiplayer::IsRemoteParticipant(*participant) ||
-                !participant->transport_connected ||
-                participant->name.empty()) {
-                continue;
-            }
             rows.push_back(GameplayAllyHudRow{
                 binding.gameplay_slot,
                 binding.bot_id,
-                participant->name,
+                {},
             });
         }
     }
+
+    for (auto& row : rows) {
+        bool transport_connected = false;
+        if (!multiplayer::TryGetRemoteParticipantDisplayState(
+                row.participant_id,
+                &row.display_name,
+                nullptr,
+                &transport_connected) ||
+            !transport_connected) {
+            row.participant_id = 0;
+        }
+    }
+    rows.erase(
+        std::remove_if(
+            rows.begin(),
+            rows.end(),
+            [](const GameplayAllyHudRow& row) {
+                return row.participant_id == 0;
+            }),
+        rows.end());
 
     std::sort(
         rows.begin(),
@@ -258,7 +265,9 @@ float CalculateGameplayNameplateDrawX(float actor_x, std::string_view display_na
 
 bool DrawGameplayHudParticipantName(
     uintptr_t actor_address,
+    std::uint64_t participant_id,
     const std::string& display_name,
+    float health_ratio,
     float* draw_x,
     float* draw_y,
     DWORD* exception_code) {
@@ -268,7 +277,10 @@ bool DrawGameplayHudParticipantName(
     if (draw_y != nullptr) {
         *draw_y = 0.0f;
     }
-    if (actor_address == 0 || display_name.empty()) {
+    if (actor_address == 0 ||
+        participant_id == 0 ||
+        display_name.empty() ||
+        !std::isfinite(health_ratio)) {
         return false;
     }
 
@@ -311,6 +323,16 @@ bool DrawGameplayHudParticipantName(
     }
 
     const auto nameplate_text = BuildGameplayNameplateExactText(display_name);
+    BeginDebugUiGameplayParticipantNameplateCapture(
+        participant_id,
+        nameplate_text,
+        health_ratio,
+        EstimateGameplayNameplateTextWidth(display_name));
+    struct GameplayNameplateCaptureScope {
+        ~GameplayNameplateCaptureScope() {
+            EndDebugUiGameplayParticipantNameplateCapture();
+        }
+    } capture_scope;
     return CallGameplayExactTextObjectRenderSafe(
         string_assign_address,
         text_object_render_address,
@@ -319,63 +341,6 @@ bool DrawGameplayHudParticipantName(
         x,
         y,
         exception_code);
-}
-
-bool DrawGameplayParticipantHealthBar(
-    uintptr_t actor_address,
-    float nameplate_y,
-    float* health_ratio,
-    int* filled_segment_count,
-    DWORD* exception_code) {
-    if (health_ratio != nullptr) {
-        *health_ratio = 0.0f;
-    }
-    if (filled_segment_count != nullptr) {
-        *filled_segment_count = 0;
-    }
-    if (exception_code != nullptr) {
-        *exception_code = 0;
-    }
-    if (actor_address == 0 || !std::isfinite(nameplate_y)) {
-        return false;
-    }
-
-    ActorHealthRuntime health;
-    if (!TryReadActorProgressionHealth(actor_address, &health)) {
-        return false;
-    }
-    const float ratio = std::clamp(health.hp / health.max_hp, 0.0f, 1.0f);
-
-    float actor_x = 0.0f;
-    if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &actor_x)) {
-        return false;
-    }
-
-    constexpr int kBarSegments = 12;
-    constexpr float kQuarterScaleGlyphWidth = 4.0f;
-    constexpr int kBarBoundaryGlyphs = 2;
-    constexpr float kBarVerticalGap = 12.0f;
-    const int filled_segments = std::clamp(
-        static_cast<int>(std::lround(ratio * static_cast<float>(kBarSegments))),
-        0,
-        kBarSegments);
-
-    std::string bar_text = "_s(0.25)[";
-    bar_text.append(static_cast<std::size_t>(filled_segments), '=');
-    bar_text.append(static_cast<std::size_t>(kBarSegments - filled_segments), '-');
-    bar_text.push_back(']');
-
-    const float bar_width =
-        static_cast<float>(kBarSegments + kBarBoundaryGlyphs) * kQuarterScaleGlyphWidth;
-    const float bar_x = actor_x - (bar_width * 0.5f);
-    const float bar_y = nameplate_y + kBarVerticalGap;
-    if (health_ratio != nullptr) {
-        *health_ratio = ratio;
-    }
-    if (filled_segment_count != nullptr) {
-        *filled_segment_count = filled_segments;
-    }
-    return DrawGameplayHudExactTextAt(bar_text, bar_x, bar_y, exception_code);
 }
 
 bool DrawGameplayHudExactTextAt(
@@ -460,27 +425,6 @@ bool DrawGameplayHudAllyBarParticipantName(
         exception_code);
 }
 
-void DrawGameplayHudLevelUpWaitStatusForHudPass() {
-    std::string wait_text;
-    if (!multiplayer::TryBuildLevelUpWaitStatusText(&wait_text) || wait_text.empty()) {
-        return;
-    }
-
-    const auto exact_text = BuildGameplayNameplateExactText(wait_text);
-    DWORD exception_code = 0;
-    const bool drew_label =
-        DrawGameplayHudExactTextAt(exact_text, 250.0f, 110.0f, &exception_code);
-    static int s_level_up_wait_status_draw_logs_remaining = 12;
-    if (s_level_up_wait_status_draw_logs_remaining > 0) {
-        --s_level_up_wait_status_draw_logs_remaining;
-        Log(
-            "Multiplayer level-up wait HUD draw. ok=" +
-            std::string(drew_label ? "1" : "0") +
-            " exception=" + HexString(static_cast<uintptr_t>(exception_code)) +
-            " text=\"" + wait_text + "\"");
-    }
-}
-
 void __fastcall HookGameplayUiGlyphDraw(
     void* self,
     void* /*unused_edx*/,
@@ -519,12 +463,7 @@ void __fastcall HookGameplayUiAllyLabelGlyphDraw(
     const auto rows = BuildGameplayAllyHudRows();
     const auto row_index = ResolveGameplayAllyHudRowIndex(y, rows.size());
     if (row_index >= rows.size()) {
-        original(self, x, y);
         return;
-    }
-
-    if (row_index == 0) {
-        DrawGameplayHudLevelUpWaitStatusForHudPass();
     }
 
     DWORD exception_code = 0;
@@ -536,9 +475,6 @@ void __fastcall HookGameplayUiAllyLabelGlyphDraw(
             y,
             &name_layout,
             &exception_code);
-    if (!drew_name) {
-        original(self, x, y);
-    }
 
     static std::unordered_set<std::uint64_t> s_logged_ally_hud_participants;
     static int s_failed_ally_hud_name_draw_logs_remaining = 8;
@@ -557,7 +493,7 @@ void __fastcall HookGameplayUiAllyLabelGlyphDraw(
             " name=" + rows[row_index].display_name +
             " ok=" + std::string(drew_name ? "1" : "0") +
             " exception=" + HexString(static_cast<uintptr_t>(exception_code)) +
-            " stock_label=" + std::string(drew_name ? "0" : "1") +
+            " stock_label=0" +
             " layout_ok=" + std::string(name_layout.valid ? "1" : "0") +
             " bar_right_x=" + std::to_string(name_layout.bar_right_x) +
             " label_width=" + std::to_string(name_layout.label_width) +

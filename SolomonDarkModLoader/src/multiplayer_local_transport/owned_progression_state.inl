@@ -216,6 +216,37 @@ void RefreshOwnedProgressionBookFromSnapshot(
     owned_progression->statbook_revision += 1;
 }
 
+bool ApplyAuthoritativeProgressionBookEntryState(
+    std::int32_t entry_index,
+    std::uint16_t resulting_active,
+    std::uint16_t resulting_visible,
+    ParticipantOwnedProgressionState* owned_progression) {
+    if (owned_progression == nullptr || entry_index < 0) {
+        return false;
+    }
+
+    const auto entry = std::find_if(
+        owned_progression->progression_book_entries.begin(),
+        owned_progression->progression_book_entries.end(),
+        [&](const ParticipantProgressionBookEntryState& candidate) {
+            return candidate.entry_index == entry_index;
+        });
+    if (entry == owned_progression->progression_book_entries.end()) {
+        return false;
+    }
+
+    const bool changed =
+        entry->active != resulting_active ||
+        entry->visible != resulting_visible;
+    entry->active = resulting_active;
+    entry->visible = resulting_visible;
+    if (changed) {
+        owned_progression->spellbook_revision += 1;
+        owned_progression->statbook_revision += 1;
+    }
+    return true;
+}
+
 void RefreshOwnedConcentrationSelections(
     std::int32_t entry_a,
     std::int32_t entry_b,

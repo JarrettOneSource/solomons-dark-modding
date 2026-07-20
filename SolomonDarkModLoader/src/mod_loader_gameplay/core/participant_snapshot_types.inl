@@ -31,6 +31,8 @@ struct ParticipantGameplaySnapshot {
     std::uint64_t movement_intent_revision = 0;
     multiplayer::MultiplayerCharacterProfile character_profile;
     multiplayer::ParticipantSceneIntent scene_intent;
+    uintptr_t materialized_scene_address = 0;
+    uintptr_t materialized_world_address = 0;
     uintptr_t actor_address = 0;
     uintptr_t world_address = 0;
     uintptr_t animation_state_ptr = 0;
@@ -84,8 +86,10 @@ struct ParticipantGameplaySnapshot {
     float render_drive_stride = 0.0f;
     float render_advance_rate = 0.0f;
     float render_advance_phase = 0.0f;
-    float render_drive_effect_timer = 0.0f;
-    float render_drive_effect_progress = 0.0f;
+    float magic_shield_absorb_remaining = 0.0f;
+    float magic_shield_absorb_capacity = 0.0f;
+    float magic_shield_explosion_fraction = 0.0f;
+    float magic_shield_hit_flash = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;

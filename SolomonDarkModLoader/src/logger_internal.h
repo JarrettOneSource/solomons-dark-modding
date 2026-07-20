@@ -50,6 +50,7 @@ bool TryReadCrashU32(uintptr_t address, std::uint32_t* value);
 void AppendMovementContextCandidate(std::ostringstream* out, const char* label, uintptr_t context_address);
 std::string DescribeAddress(uintptr_t address);
 std::string FormatCapturedStackTrace(unsigned short frames_to_skip, unsigned short max_frames);
+std::string FormatX86FrameChain(uintptr_t frame_pointer, unsigned short max_frames);
 std::filesystem::path BuildCrashDumpPath(const SYSTEMTIME& now, DWORD thread_id);
 std::string TryWriteCrashDump(const SYSTEMTIME& now, EXCEPTION_POINTERS* exception_pointers);
 void AppendRecentLogTailToCrashReport();

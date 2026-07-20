@@ -11,9 +11,11 @@ import time
 from pathlib import Path
 from typing import Any
 
+from multiplayer_log_probe import log_position
 from multiplayer_persistent_status_harness import (
     PERSISTENT_MINDSTAR,
     query_persistent_status,
+    wait_for_persistent_status,
 )
 from multiplayer_progression_probe import (
     query_progression_snapshot,
@@ -26,6 +28,13 @@ from verify_local_multiplayer_sync import (
     HOST_PIPE,
     VerifyFailure,
     stop_games,
+)
+from verify_multiplayer_battle_siege_behavior_sync import (
+    AIR_PRIMARY_ENTRY,
+    FIRE_PRIMARY_ENTRY,
+    estimate_fundamental_damage_quantum,
+    read_local_cast_observation,
+    reset_local_cast_observation,
 )
 from verify_multiplayer_all_upgrade_sync import (
     new_crash_artifacts,
@@ -46,9 +55,13 @@ from verify_multiplayer_focus_behavior_sync import (
     acquire_secondary_to_rank,
 )
 from verify_multiplayer_persistent_status_sync import toggle_once
-from verify_multiplayer_primary_kill_stress import cleanup_live_enemies
+from verify_multiplayer_primary_kill_stress import (
+    cleanup_live_enemies,
+    enable_manual_stock_spawner_combat,
+    wait_for_cast_runtime_ready,
+)
 from verify_player_health_death_sync import set_local_player_vitals
-from verify_real_input_spell_cast_sync import detect_instance_pids, read_log
+from verify_real_input_spell_cast_sync import detect_instance_pids
 from verify_spell_cast_sync import (
     remote_cast_state_lua,
     values,
@@ -64,6 +77,35 @@ CONTROLLED_RESOURCE = 100.0
 
 def observer_pipe(direction: Direction) -> str:
     return HOST_PIPE if direction.source_pipe == CLIENT_PIPE else CLIENT_PIPE
+
+
+def ensure_mindstar_inactive(
+    direction: Direction,
+    *,
+    belt_slot: int,
+    timeout: float,
+) -> dict[str, Any]:
+    owner = query_persistent_status(direction.source_pipe)
+    if owner["local_flags"] & PERSISTENT_MINDSTAR:
+        return {
+            "already_inactive": False,
+            "toggle": toggle_once(
+                direction,
+                belt_slot=belt_slot,
+                expected_values=0,
+                timeout=timeout,
+            ),
+        }
+    return {
+        "already_inactive": True,
+        "convergence": wait_for_persistent_status(
+            direction.source_pipe,
+            observer_pipe(direction),
+            direction.source_id,
+            0,
+            timeout=timeout,
+        ),
+    }
 
 
 def query_spell_views(direction: Direction) -> dict[str, Any]:
@@ -94,12 +136,28 @@ def compact_spell(view: dict[str, Any]) -> dict[str, Any]:
     spell = view["spell"]
     return {
         "resolved": spell["resolved"],
+        "build_skill_id": spell["build_skill_id"],
         "current_spell_id": spell["current_spell_id"],
-        "output_count": spell["output_count"],
-        "outputs": spell["outputs"],
+        "progression_level": spell["progression_level"],
+        "secondary_damage_available": spell["secondary_damage_available"],
+        "mana_cost_available": spell["mana_cost_available"],
+        "mana_spend_cost_available": spell["mana_spend_cost_available"],
+        "mana_output_scaled": spell["mana_output_scaled"],
         "damage": spell["damage"],
+        "secondary_damage": spell["secondary_damage"],
         "mana_cost": spell["mana_cost"],
         "mana_spend_cost": spell["mana_spend_cost"],
+        "mana_output_scale": spell["mana_output_scale"],
+        "builder_seh_code": spell["builder_seh_code"],
+        "error": spell["error"],
+    }
+
+
+def compact_native_output_buffer(view: dict[str, Any]) -> dict[str, Any]:
+    spell = view["spell"]
+    return {
+        "count": spell["raw_output_count"],
+        "outputs": spell["raw_outputs"],
     }
 
 
@@ -108,7 +166,7 @@ def wait_for_spell_views(
     label: str,
     timeout: float = 4.0,
 ) -> dict[str, Any]:
-    """Wait until stock cast work releases the shared native output buffer."""
+    """Wait until owner and observer expose the same semantic spell state."""
 
     deadline = time.monotonic() + timeout
     attempts = 0
@@ -123,9 +181,13 @@ def wait_for_spell_views(
             return last
         time.sleep(0.05)
     raise VerifyFailure(
-        f"{direction.name} {label} native primary output buffer did not "
-        f"quiesce: owner={compact_spell(last['owner']) if last else {}} "
-        f"observer={compact_spell(last['observer']) if last else {}}"
+        f"{direction.name} {label} semantic primary spell state did not "
+        f"converge: owner={compact_spell(last['owner']) if last else {}} "
+        f"observer={compact_spell(last['observer']) if last else {}} "
+        f"native_output_buffers={{'owner': "
+        f"{compact_native_output_buffer(last['owner']) if last else {}}, "
+        f"'observer': "
+        f"{compact_native_output_buffer(last['observer']) if last else {}}}}"
     )
 
 
@@ -138,29 +200,61 @@ def verify_owner_observer_spell_parity(
     observer = compact_spell(views["observer"])
     if not owner["resolved"] or not observer["resolved"] or owner != observer:
         raise VerifyFailure(
-            f"{direction.name} {label} native primary outputs diverged: "
-            f"owner={owner} observer={observer}"
+            f"{direction.name} {label} semantic primary spell state diverged: "
+            f"owner={owner} observer={observer} native_output_buffers="
+            f"{{'owner': {compact_native_output_buffer(views['owner'])}, "
+            f"'observer': {compact_native_output_buffer(views['observer'])}}}"
         )
-    return {"owner": owner, "observer": observer, "exact_match": True}
+    owner_buffer = compact_native_output_buffer(views["owner"])
+    observer_buffer = compact_native_output_buffer(views["observer"])
+    return {
+        "owner": owner,
+        "observer": observer,
+        "semantic_exact_match": True,
+        "native_output_buffer_diagnostic": {
+            "owner": owner_buffer,
+            "observer": observer_buffer,
+            "exact_match": owner_buffer == observer_buffer,
+        },
+    }
 
 
 def run_fireball_trial(
     direction: Direction,
     cast_direction: Any,
     label: str,
+    primary_entry: int,
 ) -> dict[str, Any]:
     cleanup = cleanup_live_enemies()
     pair = build_manual_pair(cast_direction, *SECONDARY_OFFSET)
-    receiver_log_offset = len(read_log(cast_direction.receiver_log))
+    network_actor_id = int(pair["primary_network_id"])
+    receiver_log_offset = log_position(cast_direction.receiver_log)
     cast = cast_fireball_pair(
         cast_direction,
         pair,
         f"mindstar.{direction.name}.{label}",
+        before_source_cast=lambda: reset_local_cast_observation(
+            direction.source_pipe,
+            network_actor_id,
+        ),
     )
     damage = cast["damage"]
-    if not damage["primary_damaged"] or damage["secondary_damaged"]:
+    if primary_entry == FIRE_PRIMARY_ENTRY:
+        geometry_valid = (
+            damage["primary_damaged"] and not damage["secondary_damaged"]
+        )
+        expected_geometry = "isolated Fire projectile"
+    elif primary_entry == AIR_PRIMARY_ENTRY:
+        geometry_valid = damage["primary_damaged"]
+        expected_geometry = "selected-target Air damage"
+    else:
         raise VerifyFailure(
-            f"{direction.name} {label} Fireball geometry was not single-target: {damage}"
+            "Mindstar behavior requires the exact Fire/Air Steam profile: "
+            f"primary_entry={primary_entry}"
+        )
+    if not geometry_valid:
+        raise VerifyFailure(
+            f"{direction.name} {label} did not produce {expected_geometry}: {damage}"
         )
     if not cast.get("replicated_cast_delivery", {}).get("ok"):
         raise VerifyFailure(
@@ -189,13 +283,82 @@ def run_fireball_trial(
         raise VerifyFailure(
             f"{direction.name} {label} remote Fireball did not settle: {final_state}"
         )
+    cast_settled = wait_for_cast_runtime_ready(cast_direction, timeout=8.0)
+    cast_observation = read_local_cast_observation(
+        direction.source_pipe,
+        network_actor_id,
+    )
     return {
         "cleanup": cleanup,
         "pair": pair,
         "cast": cast,
         "remote_completion": completion,
         "remote_final_state": final_state,
+        "cast_settled": cast_settled,
+        "cast_observation": cast_observation,
     }
+
+
+def measure_primary_damage_trial(
+    primary_entry: int,
+    trial: dict[str, Any],
+    label: str,
+) -> dict[str, Any]:
+    authoritative_damage = float(trial["cast"]["damage"]["primary_damage"])
+    if primary_entry == FIRE_PRIMARY_ENTRY:
+        quantum = authoritative_damage
+        measurement: dict[str, Any] = {
+            "method": "single_fire_projectile_authoritative_damage",
+            "quantum": quantum,
+        }
+    elif primary_entry == AIR_PRIMARY_ENTRY:
+        observation = trial["cast_observation"]
+        if (
+            not observation["damage_claim_valid"]
+            or observation["damage_associated_skill_id"] != AIR_PRIMARY_ENTRY
+            or not observation["damage_associated_skill_consistent"]
+        ):
+            raise VerifyFailure(
+                f"{label} Air damage claims were not associated exclusively "
+                f"with primary row {AIR_PRIMARY_ENTRY}: {observation}"
+            )
+        measurement = {
+            "method": "client_air_damage_claim_quantum",
+            **estimate_fundamental_damage_quantum(
+                observation["damage_claim_samples"],
+                authoritative_damage=authoritative_damage,
+            ),
+        }
+        quantum = float(measurement["quantum"])
+    else:
+        raise VerifyFailure(
+            "Mindstar behavior requires the exact Fire/Air Steam profile: "
+            f"primary_entry={primary_entry}"
+        )
+
+    if authoritative_damage <= 0.0 or not math.isfinite(quantum) or quantum <= 0.0:
+        raise VerifyFailure(
+            f"{label} primary cast produced invalid damage measurement: "
+            f"damage={authoritative_damage} measurement={measurement}"
+        )
+    authoritative_multiple = authoritative_damage / quantum
+    authoritative_multiple_residual = abs(
+        authoritative_multiple - round(authoritative_multiple)
+    )
+    if authoritative_multiple_residual > 0.15:
+        raise VerifyFailure(
+            f"{label} damage quantum does not explain authoritative HP loss: "
+            f"damage={authoritative_damage} quantum={quantum} "
+            f"multiple={authoritative_multiple}"
+        )
+    measurement.update(
+        {
+            "authoritative_damage": authoritative_damage,
+            "authoritative_multiple": authoritative_multiple,
+            "authoritative_multiple_residual": authoritative_multiple_residual,
+        }
+    )
+    return measurement
 
 
 def wait_for_hoarded_mana(
@@ -246,28 +409,67 @@ def verify_behavior_transition(
         raise VerifyFailure(
             f"{direction.name} Mindstar changed the selected spell instead of its rank"
         )
-    if baseline_spell["output_count"] != active_spell["output_count"]:
+    if baseline_spell["build_skill_id"] != active_spell["build_skill_id"]:
         raise VerifyFailure(
-            f"{direction.name} Mindstar changed the primary output shape"
+            f"{direction.name} Mindstar changed the primary build skill"
+        )
+    stable_shape_fields = (
+        "progression_level",
+        "secondary_damage_available",
+        "mana_cost_available",
+        "mana_spend_cost_available",
+        "mana_output_scaled",
+        "mana_output_scale",
+        "builder_seh_code",
+        "error",
+    )
+    changed_shape_fields = [
+        field
+        for field in stable_shape_fields
+        if baseline_spell[field] != active_spell[field]
+    ]
+    if changed_shape_fields:
+        raise VerifyFailure(
+            f"{direction.name} Mindstar changed primary semantic shape fields "
+            f"{changed_shape_fields}: baseline={baseline_spell} active={active_spell}"
         )
     if (
         active_spell["damage"] <= baseline_spell["damage"]
         or active_spell["mana_cost"] <= baseline_spell["mana_cost"]
     ):
         raise VerifyFailure(
-            f"{direction.name} Mindstar did not advance Fireball by one native rank: "
+            f"{direction.name} Mindstar did not advance the primary native outputs: "
             f"baseline={baseline_spell} active={active_spell}"
         )
 
-    baseline_damage = float(baseline_cast["cast"]["damage"]["primary_damage"])
-    active_damage = float(active_cast["cast"]["damage"]["primary_damage"])
+    primary_entry = int(baseline_views["combo_entry"])
+    if int(active_views["combo_entry"]) != primary_entry:
+        raise VerifyFailure(
+            f"{direction.name} Mindstar changed the primary entry during measurement"
+        )
+    baseline_measurement = measure_primary_damage_trial(
+        primary_entry,
+        baseline_cast,
+        f"{direction.name} baseline",
+    )
+    active_measurement = measure_primary_damage_trial(
+        primary_entry,
+        active_cast,
+        f"{direction.name} active",
+    )
+    baseline_damage = float(baseline_measurement["authoritative_damage"])
+    active_damage = float(active_measurement["authoritative_damage"])
     native_ratio = active_spell["damage"] / baseline_spell["damage"]
-    behavior_ratio = active_damage / baseline_damage
+    behavior_ratio = (
+        float(active_measurement["quantum"])
+        / float(baseline_measurement["quantum"])
+    )
     if not math.isclose(behavior_ratio, native_ratio, rel_tol=0.0, abs_tol=0.08):
         raise VerifyFailure(
-            f"{direction.name} real Fireball damage did not follow Mindstar's native "
-            f"+1 output: native_ratio={native_ratio} behavior_ratio={behavior_ratio} "
-            f"baseline={baseline_damage} active={active_damage}"
+            f"{direction.name} real primary-hit damage did not follow Mindstar's "
+            f"native +1 output: native_ratio={native_ratio} "
+            f"behavior_ratio={behavior_ratio} baseline={baseline_measurement} "
+            f"active={active_measurement}"
         )
     return {
         "baseline_native_damage": baseline_spell["damage"],
@@ -278,6 +480,8 @@ def verify_behavior_transition(
         "active_real_damage": active_damage,
         "native_damage_ratio": native_ratio,
         "real_damage_ratio": behavior_ratio,
+        "baseline_damage_measurement": baseline_measurement,
+        "active_damage_measurement": active_measurement,
         "ok": True,
     }
 
@@ -288,6 +492,12 @@ def run_direction(
     cast_direction: Any,
     timeout: float,
 ) -> dict[str, Any]:
+    belt_slot = int(acquisition["belt_slot"])
+    inactive_before = ensure_mindstar_inactive(
+        direction,
+        belt_slot=belt_slot,
+        timeout=timeout,
+    )
     baseline_views = wait_for_spell_views(direction, "baseline")
     baseline_parity = verify_owner_observer_spell_parity(
         direction,
@@ -299,38 +509,39 @@ def run_direction(
         CONTROLLED_RESOURCE,
         CONTROLLED_RESOURCE,
     )
-    activated = toggle_once(
-        direction,
-        belt_slot=int(acquisition["belt_slot"]),
-        expected_values=PERSISTENT_MINDSTAR,
-        timeout=timeout,
-    )
-    hoard_property = query_ranked_numeric_stat(
-        direction.source_pipe,
-        MINDSTAR_ROW,
-        "mHoard",
-    )
-    if not hoard_property["property_found"]:
-        raise VerifyFailure(
-            f"{direction.name} Mindstar mHoard is unavailable: {hoard_property}"
+    try:
+        activated = toggle_once(
+            direction,
+            belt_slot=belt_slot,
+            expected_values=PERSISTENT_MINDSTAR,
+            timeout=timeout,
         )
-    expected_mana = CONTROLLED_RESOURCE * (
-        1.0 - float(hoard_property["value"]) / 100.0
-    )
-    hoarded_mana = wait_for_hoarded_mana(direction, expected_mana, timeout)
+        hoard_property = query_ranked_numeric_stat(
+            direction.source_pipe,
+            MINDSTAR_ROW,
+            "mHoard",
+        )
+        if not hoard_property["property_found"]:
+            raise VerifyFailure(
+                f"{direction.name} Mindstar mHoard is unavailable: {hoard_property}"
+            )
+        expected_mana = CONTROLLED_RESOURCE * (
+            1.0 - float(hoard_property["value"]) / 100.0
+        )
+        hoarded_mana = wait_for_hoarded_mana(direction, expected_mana, timeout)
 
-    active_views = wait_for_spell_views(direction, "active")
-    active_parity = verify_owner_observer_spell_parity(
-        direction,
-        "active",
-        active_views,
-    )
-    deactivated = toggle_once(
-        direction,
-        belt_slot=int(acquisition["belt_slot"]),
-        expected_values=0,
-        timeout=timeout,
-    )
+        active_views = wait_for_spell_views(direction, "active")
+        active_parity = verify_owner_observer_spell_parity(
+            direction,
+            "active",
+            active_views,
+        )
+    finally:
+        deactivated = ensure_mindstar_inactive(
+            direction,
+            belt_slot=belt_slot,
+            timeout=timeout,
+        )
     restored_views = wait_for_spell_views(direction, "restored")
     restored_parity = verify_owner_observer_spell_parity(
         direction,
@@ -350,44 +561,58 @@ def run_direction(
     # compared. A completed remote Fireball intentionally leaves additional
     # stock construction outputs in its participant-owned native buffer; those
     # trailing values are runtime work state, not Mindstar rank outputs.
+    #
+    # Establish the actual stock arena spawner immediately before the first
+    # manual target. Progression setup can legitimately take longer than the
+    # bounded lifetime of an unproven generic spawner pointer. The first target
+    # then promotes this exact stock spawner to the arena-owned witness on both
+    # peers; no alternate spawning path is used.
+    pre_prime_cleanup = cleanup_live_enemies()
+    manual_spawner_prime = enable_manual_stock_spawner_combat()
     baseline_cast = run_fireball_trial(
         direction,
         cast_direction,
         "baseline",
+        int(baseline_views["combo_entry"]),
     )
     cast_resource_reset = set_local_player_vitals(
         direction.source_pipe,
         CONTROLLED_RESOURCE,
         CONTROLLED_RESOURCE,
     )
-    reactivated = toggle_once(
-        direction,
-        belt_slot=int(acquisition["belt_slot"]),
-        expected_values=PERSISTENT_MINDSTAR,
-        timeout=timeout,
-    )
-    active_cast = run_fireball_trial(
-        direction,
-        cast_direction,
-        "active",
-    )
-    transition = verify_behavior_transition(
-        direction,
-        baseline_views,
-        active_views,
-        baseline_cast,
-        active_cast,
-    )
-    final_deactivated = toggle_once(
-        direction,
-        belt_slot=int(acquisition["belt_slot"]),
-        expected_values=0,
-        timeout=timeout,
-    )
+    try:
+        reactivated = toggle_once(
+            direction,
+            belt_slot=belt_slot,
+            expected_values=PERSISTENT_MINDSTAR,
+            timeout=timeout,
+        )
+        active_cast = run_fireball_trial(
+            direction,
+            cast_direction,
+            "active",
+            int(active_views["combo_entry"]),
+        )
+        transition = verify_behavior_transition(
+            direction,
+            baseline_views,
+            active_views,
+            baseline_cast,
+            active_cast,
+        )
+    finally:
+        final_deactivated = ensure_mindstar_inactive(
+            direction,
+            belt_slot=belt_slot,
+            timeout=timeout,
+        )
     return {
+        "inactive_before": inactive_before,
         "baseline": {
             "views": baseline_views,
             "parity": baseline_parity,
+            "pre_prime_cleanup": pre_prime_cleanup,
+            "manual_spawner_prime": manual_spawner_prime,
             "cast": baseline_cast,
         },
         "resource_reset": resource_reset,

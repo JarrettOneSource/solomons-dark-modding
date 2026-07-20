@@ -516,7 +516,7 @@ def cast_fireball_pair(
             pair["primary_network_id"],
             pair["primary_x"],
             pair["primary_y"],
-            hp=TARGET_HP,
+            hp=float(pair.get("target_hp", TARGET_HP)),
             refresh_binding=True,
         ),
     }
@@ -526,7 +526,7 @@ def cast_fireball_pair(
             pair["secondary_network_id"],
             pair["secondary_x"],
             pair["secondary_y"],
-            hp=TARGET_HP,
+            hp=float(pair.get("target_hp", TARGET_HP)),
             refresh_binding=True,
         )
     else:

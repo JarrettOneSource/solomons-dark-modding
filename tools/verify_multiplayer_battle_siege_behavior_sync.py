@@ -44,6 +44,7 @@ from verify_multiplayer_primary_kill_stress import (
     cleanup_live_enemies,
     parse_float,
     query_run_enemy_by_network_id,
+    wait_for_cast_runtime_ready,
     values,
 )
 from verify_real_input_spell_cast_sync import (
@@ -61,6 +62,9 @@ SIEGE_MAGE_ROW = 61
 TARGET_HP = 100000.0
 RESOURCE_VALUE = 10000.0
 SECONDARY_TARGET_OFFSET = (0.0, 0.0)
+FIRE_PRIMARY_ENTRY = 16
+AIR_PRIMARY_ENTRY = 24
+MINIMUM_AIR_DAMAGE_CLAIM_SAMPLES = 3
 
 
 def direction_for_owner(owner: str, pids: dict[str, int]) -> Direction:
@@ -87,63 +91,174 @@ def direction_for_owner(owner: str, pids: dict[str, int]) -> Direction:
     )
 
 
-def arm_mana_monitor(pipe_name: str) -> dict[str, str]:
-    return values(
-        pipe_name,
-        """
-local function emit(key, value) print(key .. '=' .. tostring(value)) end
-if not _G.__sdmod_stat_mana_monitor_registered then
-  sd.events.on('runtime.tick', function()
-    local monitor = _G.__sdmod_stat_mana_monitor
-    if type(monitor) ~= 'table' or not monitor.active then return end
-    local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
-    local progression = player and tonumber(player.progression_address) or 0
-    if progression == 0 then return end
-    local current = tonumber(sd.debug.read_float(
-      progression + sd.debug.layout_offset('progression_mp'))) or 0
-    monitor.samples = monitor.samples + 1
-    monitor.minimum = math.min(monitor.minimum, current)
-    monitor.latest = current
-  end)
-  _G.__sdmod_stat_mana_monitor_registered = true
-end
-local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
-local progression = player and tonumber(player.progression_address) or 0
-local current = progression ~= 0 and tonumber(sd.debug.read_float(
-  progression + sd.debug.layout_offset('progression_mp'))) or -1
-_G.__sdmod_stat_mana_monitor = {
-  active = true,
-  initial = current,
-  minimum = current,
-  latest = current,
-  samples = 0,
-}
-emit('registered', _G.__sdmod_stat_mana_monitor_registered)
-emit('progression', progression)
-emit('initial', current)
-""",
-    )
-
-
-def stop_mana_monitor(pipe_name: str) -> dict[str, str]:
+def reset_local_cast_observation(
+    pipe_name: str,
+    network_actor_id: int,
+) -> dict[str, str]:
     result = values(
         pipe_name,
-        """
+        f"""
 local function emit(key, value) print(key .. '=' .. tostring(value)) end
-local monitor = _G.__sdmod_stat_mana_monitor or {}
-monitor.active = false
-for _, key in ipairs({'initial','minimum','latest','samples'}) do
-  emit(key, monitor[key])
+emit('reset', sd.debug.reset_local_cast_observation({network_actor_id}))
+""",
+    )
+    if result.get("reset") != "true":
+        raise VerifyFailure(f"local cast observation did not reset: {result}")
+    return result
+
+
+def read_local_cast_observation(
+    pipe_name: str,
+    network_actor_id: int,
+) -> dict[str, Any]:
+    raw = values(
+        pipe_name,
+        f"""
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+local observation = sd.debug.get_local_cast_observation({network_actor_id})
+for _, key in ipairs({{
+  'mana_valid',
+  'mana_actor_address',
+  'mana_call_count',
+  'mana_spend_call_count',
+  'mana_recovery_call_count',
+  'mana_spent_total',
+  'mana_recovered_total',
+  'mana_last_delta',
+  'damage_claim_valid',
+  'damage_claim_count',
+  'damage_associated_claim_count',
+  'damage_unassociated_claim_count',
+  'damage_associated_skill_id',
+  'damage_associated_skill_consistent',
+  'damage_claimed_total',
+  'damage_claimed_minimum',
+  'damage_claimed_maximum',
+  'damage_claim_sample_count',
+}}) do
+  emit(key, observation[key])
+end
+for index, sample in ipairs(observation.damage_claim_samples or {{}}) do
+  emit('damage_claim_sample.' .. tostring(index), sample)
 end
 """,
     )
-    initial = parse_float(result.get("initial"), math.nan)
-    minimum = parse_float(result.get("minimum"), math.nan)
-    samples = parse_int_text(result.get("samples"), 0)
-    if not math.isfinite(initial) or not math.isfinite(minimum) or samples <= 0:
-        raise VerifyFailure(f"native mana monitor captured no valid cast samples: {result}")
-    result["spend"] = f"{initial - minimum:.6f}"
-    return result
+    sample_count = parse_int_text(raw.get("damage_claim_sample_count"), 0)
+    return {
+        "mana_valid": raw.get("mana_valid") == "true",
+        "mana_actor_address": parse_int_text(raw.get("mana_actor_address"), 0),
+        "mana_call_count": parse_int_text(raw.get("mana_call_count"), 0),
+        "mana_spend_call_count": parse_int_text(
+            raw.get("mana_spend_call_count"), 0
+        ),
+        "mana_recovery_call_count": parse_int_text(
+            raw.get("mana_recovery_call_count"), 0
+        ),
+        "mana_spent_total": parse_float(raw.get("mana_spent_total"), math.nan),
+        "mana_recovered_total": parse_float(
+            raw.get("mana_recovered_total"), math.nan
+        ),
+        "mana_last_delta": parse_float(raw.get("mana_last_delta"), math.nan),
+        "damage_claim_valid": raw.get("damage_claim_valid") == "true",
+        "damage_claim_count": parse_int_text(raw.get("damage_claim_count"), 0),
+        "damage_associated_claim_count": parse_int_text(
+            raw.get("damage_associated_claim_count"), 0
+        ),
+        "damage_unassociated_claim_count": parse_int_text(
+            raw.get("damage_unassociated_claim_count"), 0
+        ),
+        "damage_associated_skill_id": parse_int_text(
+            raw.get("damage_associated_skill_id"), -1
+        ),
+        "damage_associated_skill_consistent": (
+            raw.get("damage_associated_skill_consistent") == "true"
+        ),
+        "damage_claimed_total": parse_float(
+            raw.get("damage_claimed_total"), 0.0
+        ),
+        "damage_claimed_minimum": parse_float(
+            raw.get("damage_claimed_minimum"), 0.0
+        ),
+        "damage_claimed_maximum": parse_float(
+            raw.get("damage_claimed_maximum"), 0.0
+        ),
+        "damage_claim_samples": [
+            parse_float(raw.get(f"damage_claim_sample.{index}"), math.nan)
+            for index in range(1, sample_count + 1)
+        ],
+    }
+
+
+def estimate_fundamental_damage_quantum(
+    samples: list[float],
+    *,
+    authoritative_damage: float | None = None,
+) -> dict[str, Any]:
+    positive = [
+        value for value in samples if math.isfinite(value) and value > 0.0
+    ]
+    if len(positive) < MINIMUM_AIR_DAMAGE_CLAIM_SAMPLES:
+        raise VerifyFailure(
+            "Air damage observation did not capture enough native claims: "
+            f"samples={positive}"
+        )
+
+    candidates = {
+        value / multiple
+        for value in positive
+        for multiple in range(1, 65)
+        if value / multiple > 0.0
+    }
+    required_matches = math.ceil(len(positive) * 0.8)
+    smallest_sample = min(positive)
+    if authoritative_damage is not None and (
+        not math.isfinite(authoritative_damage) or authoritative_damage <= 0.0
+    ):
+        raise VerifyFailure(
+            "Air damage observation received invalid authoritative damage: "
+            f"{authoritative_damage}"
+        )
+    for candidate in sorted(candidates, reverse=True):
+        if candidate > smallest_sample * 1.04:
+            continue
+        matches = []
+        for value in positive:
+            multiple = max(1, round(value / candidate))
+            residual = abs(value - candidate * multiple)
+            if multiple <= 128 and residual <= max(0.0002, candidate * 0.04):
+                matches.append(
+                    {
+                        "sample": value,
+                        "multiple": multiple,
+                        "residual": residual,
+                    }
+                )
+        if len(matches) >= required_matches:
+            authoritative_multiple = (
+                authoritative_damage / candidate
+                if authoritative_damage is not None
+                else None
+            )
+            authoritative_residual = (
+                abs(authoritative_multiple - round(authoritative_multiple))
+                if authoritative_multiple is not None
+                else None
+            )
+            if authoritative_residual is not None and authoritative_residual > 0.15:
+                continue
+            return {
+                "quantum": candidate,
+                "sample_count": len(positive),
+                "required_matches": required_matches,
+                "matched_count": len(matches),
+                "matches": matches,
+                "authoritative_multiple": authoritative_multiple,
+                "authoritative_multiple_residual": authoritative_residual,
+            }
+    raise VerifyFailure(
+        "Air damage claims did not share a stable native quantum: "
+        f"samples={positive}"
+    )
 
 
 def max_stat_for_target(
@@ -188,20 +303,95 @@ def run_cast_trial(direction: Direction, label: str) -> dict[str, Any]:
         pair,
         label,
         resource_value=RESOURCE_VALUE,
-        before_source_cast=lambda: arm_mana_monitor(direction.source_pipe),
-        after_source_cast=lambda: stop_mana_monitor(direction.source_pipe),
+        before_source_cast=lambda: reset_local_cast_observation(
+            direction.source_pipe,
+            int(pair["primary_network_id"]),
+        ),
     )
+    cast_settled = wait_for_cast_runtime_ready(direction, timeout=8.0)
+    observation = read_local_cast_observation(
+        direction.source_pipe,
+        int(pair["primary_network_id"]),
+    )
+    mana_spend = float(observation["mana_spent_total"])
     damage = float(cast["damage"]["primary_damage"])
-    mana_spend = parse_float(cast["post_source_cast"].get("spend"), math.nan)
-    if damage <= 0.0 or not math.isfinite(mana_spend) or mana_spend <= 0.0:
+    progression = query_progression_snapshot(direction.source_pipe)
+    primary_entry = int(progression["loadout"]["primary_entry"])
+    damage_measurement: dict[str, Any]
+    if primary_entry == FIRE_PRIMARY_ENTRY:
+        native_damage_quantum = damage
+        damage_measurement = {
+            "method": "single_fire_projectile_authoritative_damage",
+            "quantum": native_damage_quantum,
+        }
+    elif primary_entry == AIR_PRIMARY_ENTRY:
+        if direction.source_pipe != CLIENT_PIPE:
+            raise VerifyFailure(
+                "mixed Battle/Siege profile requires Air to be the client-owned "
+                f"primary so native damage claims are observable: {direction.name}"
+            )
+        if not observation["damage_claim_valid"]:
+            raise VerifyFailure(
+                f"{direction.name} {label} produced no semantic damage claims: "
+                f"{observation}"
+            )
+        if (
+            observation["damage_associated_skill_id"] != AIR_PRIMARY_ENTRY
+            or not observation["damage_associated_skill_consistent"]
+        ):
+            raise VerifyFailure(
+                f"{direction.name} {label} damage claims were not associated "
+                f"exclusively with Air primary row {AIR_PRIMARY_ENTRY}: "
+                f"{observation}"
+            )
+        damage_measurement = {
+            "method": "client_air_damage_claim_quantum",
+            **estimate_fundamental_damage_quantum(
+                observation["damage_claim_samples"],
+                authoritative_damage=damage,
+            ),
+        }
+        native_damage_quantum = float(damage_measurement["quantum"])
+    else:
         raise VerifyFailure(
-            f"{direction.name} {label} did not produce positive damage/mana spend: "
-            f"damage={damage} mana={cast['post_source_cast']}"
+            "mixed Battle/Siege verifier requires Fire/Air primaries: "
+            f"direction={direction.name} primary_entry={primary_entry}"
         )
-    if not cast["replicated_cast_delivery"]["ok"]:
+    if (
+        damage <= 0.0
+        or not observation["mana_valid"]
+        or observation["mana_spend_call_count"] <= 0
+        or not math.isfinite(mana_spend)
+        or mana_spend <= 0.0
+        or not math.isfinite(native_damage_quantum)
+        or native_damage_quantum <= 0.0
+    ):
         raise VerifyFailure(
-            f"{direction.name} {label} cast did not replicate: "
-            f"{cast['replicated_cast_delivery']}"
+            f"{direction.name} {label} did not produce positive native damage/mana: "
+            f"authoritative_damage={damage} observation={observation} "
+            f"damage_measurement={damage_measurement}"
+        )
+    authoritative_multiple = damage / native_damage_quantum
+    authoritative_multiple_residual = abs(
+        authoritative_multiple - round(authoritative_multiple)
+    )
+    if authoritative_multiple_residual > 0.15:
+        raise VerifyFailure(
+            f"{direction.name} {label} semantic damage quantum does not explain "
+            f"the authoritative HP reduction: damage={damage} "
+            f"quantum={native_damage_quantum} "
+            f"multiple={authoritative_multiple}"
+        )
+    damage_measurement["authoritative_damage"] = damage
+    damage_measurement["authoritative_multiple"] = authoritative_multiple
+    damage_measurement["authoritative_multiple_residual"] = (
+        authoritative_multiple_residual
+    )
+    replicated_cast_delivery = cast["replicated_cast_delivery"]
+    if not replicated_cast_delivery["ok"]:
+        raise VerifyFailure(
+            f"{direction.name} {label} measurement cast did not replicate: "
+            f"{replicated_cast_delivery}"
         )
     network_id = int(pair["primary_network_id"])
     host_view = query_run_enemy_by_network_id(HOST_PIPE, network_id)
@@ -213,11 +403,12 @@ def run_cast_trial(direction: Direction, label: str) -> dict[str, Any]:
             f"{direction.name} {label} enemy HP diverged across peers: "
             f"host={host_view} client={client_view}"
         )
-    progression = query_progression_snapshot(direction.source_pipe)
     result = {
         "direction": direction.name,
         "label": label,
         "damage": damage,
+        "native_damage_quantum": native_damage_quantum,
+        "primary_entry": primary_entry,
         "mana_spend": mana_spend,
         "base_damage": float(progression["spell"]["damage"]),
         "base_mana_spend": float(progression["spell"]["mana_spend_cost"]),
@@ -228,8 +419,10 @@ def run_cast_trial(direction: Direction, label: str) -> dict[str, Any]:
             progression["native"]["derived"]["offensive_mana_multiplier"]
         ),
         "progression_level": int(progression["native"]["level"]),
-        "replicated_cast_delivery": cast["replicated_cast_delivery"],
-        "mana_monitor": cast["post_source_cast"],
+        "replicated_cast_delivery": replicated_cast_delivery,
+        "cast_settled": cast_settled,
+        "cast_observation": observation,
+        "damage_measurement": damage_measurement,
         "host_enemy": host_view,
         "client_enemy": client_view,
         "pair": {
@@ -253,15 +446,16 @@ def verify_behavior_contracts(
         base = baseline[direction]
         battle_trial = battle[direction]
         siege_trial = siege[direction]
-        expected_battle_mana = (
-            battle_trial["base_mana_spend"]
-            * battle_trial["offensive_mana_multiplier"]
+        expected_battle_ratio = (
+            battle_trial["offensive_mana_multiplier"]
+            / base["offensive_mana_multiplier"]
         )
-        if abs(battle_trial["mana_spend"] - expected_battle_mana) > 1.1:
+        actual_battle_ratio = battle_trial["mana_spend"] / base["mana_spend"]
+        if abs(actual_battle_ratio - expected_battle_ratio) > 0.12:
             raise VerifyFailure(
                 f"{direction} Battle Mage mana behavior mismatch: "
-                f"actual={battle_trial['mana_spend']:.3f} "
-                f"expected={expected_battle_mana:.3f} trial={battle_trial}"
+                f"actual_ratio={actual_battle_ratio:.3f} "
+                f"expected_ratio={expected_battle_ratio:.3f} trial={battle_trial}"
             )
         if battle_trial["mana_spend"] >= base["mana_spend"] * 0.75:
             raise VerifyFailure(
@@ -269,43 +463,52 @@ def verify_behavior_contracts(
                 f"baseline={base['mana_spend']:.3f} battle={battle_trial['mana_spend']:.3f}"
             )
 
-        damage_scale = base["damage"] / base["base_damage"]
-        expected_siege_damage = (
-            siege_trial["base_damage"]
-            * damage_scale
-            * siege_trial["offensive_damage_multiplier"]
+        expected_siege_ratio = (
+            siege_trial["offensive_damage_multiplier"]
+            / base["offensive_damage_multiplier"]
         )
-        damage_tolerance = max(0.5, expected_siege_damage * 0.08)
-        if abs(siege_trial["damage"] - expected_siege_damage) > damage_tolerance:
+        actual_siege_ratio = (
+            siege_trial["native_damage_quantum"]
+            / base["native_damage_quantum"]
+        )
+        ratio_tolerance = 0.12
+        if abs(actual_siege_ratio - expected_siege_ratio) > ratio_tolerance:
             raise VerifyFailure(
                 f"{direction} Siege Mage damage behavior mismatch: "
-                f"actual={siege_trial['damage']:.3f} expected={expected_siege_damage:.3f} "
-                f"tolerance={damage_tolerance:.3f} trial={siege_trial}"
+                f"actual_ratio={actual_siege_ratio:.3f} "
+                f"expected_ratio={expected_siege_ratio:.3f} "
+                f"tolerance={ratio_tolerance:.3f} trial={siege_trial}"
             )
-        if siege_trial["damage"] <= battle_trial["damage"] * 1.75:
+        if (
+            siege_trial["native_damage_quantum"]
+            <= battle_trial["native_damage_quantum"] * 1.75
+        ):
             raise VerifyFailure(
-                f"{direction} Siege Mage did not materially increase real damage: "
-                f"before={battle_trial['damage']:.3f} siege={siege_trial['damage']:.3f}"
+                f"{direction} Siege Mage did not materially increase native hit damage: "
+                f"before={battle_trial['native_damage_quantum']:.3f} "
+                f"siege={siege_trial['native_damage_quantum']:.3f}"
             )
         contracts[direction] = {
-            "battle_expected_mana_spend": expected_battle_mana,
+            "battle_expected_mana_ratio": expected_battle_ratio,
+            "battle_actual_mana_ratio": actual_battle_ratio,
             "battle_actual_mana_spend": battle_trial["mana_spend"],
-            "baseline_damage_scale": damage_scale,
-            "siege_expected_damage": expected_siege_damage,
+            "siege_expected_damage_ratio": expected_siege_ratio,
+            "siege_actual_damage_ratio": actual_siege_ratio,
+            "siege_native_damage_quantum": siege_trial[
+                "native_damage_quantum"
+            ],
             "siege_actual_damage": siege_trial["damage"],
-            "siege_damage_tolerance": damage_tolerance,
+            "ratio_tolerance": ratio_tolerance,
         }
 
-    for stage_name, stage in (("baseline", baseline), ("battle", battle), ("siege", siege)):
-        left = stage["host_owned"]
-        right = stage["client_owned"]
-        for field in ("damage", "mana_spend"):
-            tolerance = max(0.75, max(abs(left[field]), abs(right[field])) * 0.10)
-            if abs(left[field] - right[field]) > tolerance:
-                raise VerifyFailure(
-                    f"{stage_name} host/client {field} behavior diverged: "
-                    f"host={left[field]} client={right[field]} tolerance={tolerance}"
-                )
+    for field in ("battle_actual_mana_ratio", "siege_actual_damage_ratio"):
+        host_ratio = contracts["host_owned"][field]
+        client_ratio = contracts["client_owned"][field]
+        if abs(host_ratio - client_ratio) > 0.12:
+            raise VerifyFailure(
+                f"host/client normalized {field} diverged across primary spell "
+                f"types: host={host_ratio} client={client_ratio}"
+            )
     return {"directions": contracts, "mismatches": []}
 
 
@@ -337,6 +540,26 @@ def main() -> int:
             HOST_ID: query_progression_snapshot(HOST_PIPE),
             CLIENT_ID: query_progression_snapshot(CLIENT_PIPE),
         }
+        profile_contract = {
+            "host_primary_entry": int(
+                initial_by_target[HOST_ID]["loadout"]["primary_entry"]
+            ),
+            "client_primary_entry": int(
+                initial_by_target[CLIENT_ID]["loadout"]["primary_entry"]
+            ),
+            "expected_host_primary_entry": FIRE_PRIMARY_ENTRY,
+            "expected_client_primary_entry": AIR_PRIMARY_ENTRY,
+        }
+        profile_contract["ok"] = (
+            profile_contract["host_primary_entry"] == FIRE_PRIMARY_ENTRY
+            and profile_contract["client_primary_entry"] == AIR_PRIMARY_ENTRY
+        )
+        output["profile_contract"] = profile_contract
+        if not profile_contract["ok"]:
+            raise VerifyFailure(
+                "Battle/Siege behavior requires the exact mixed Steam profile "
+                f"host=Fire/client=Air: {profile_contract}"
+            )
         pids = detect_instance_pids()
         directions = {
             owner: direction_for_owner(owner, pids)

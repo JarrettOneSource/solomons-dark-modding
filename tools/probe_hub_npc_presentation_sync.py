@@ -167,36 +167,76 @@ emit("replicated.scene_kind", replicated and replicated.scene_kind or "")
 emit("replicated.sampled_ms", replicated and replicated.sampled_ms or 0)
 emit("replicated.received_ms", replicated and replicated.received_ms or 0)
 emit("replicated.sequence", replicated and replicated.sequence or 0)
+emit("replicated.scene_epoch", replicated and replicated.scene_epoch or 0)
 emit("replicated.apply_valid", replicated and replicated.apply_valid or false)
+emit("replicated.apply_sequence", replicated and replicated.apply_sequence or 0)
+emit("replicated.apply_scene_epoch", replicated and replicated.apply_scene_epoch or 0)
+emit(
+  "replicated.apply_presentation_sequence",
+  replicated and replicated.apply_presentation_sequence or 0)
+emit(
+  "replicated.apply_presentation_scene_epoch",
+  replicated and replicated.apply_presentation_scene_epoch or 0)
+emit(
+  "replicated.apply_presentation_received_ms",
+  replicated and replicated.apply_presentation_received_ms or 0)
 emit("replicated.applied_ms", replicated and replicated.applied_ms or 0)
 emit("replicated.actor_count", replicated and replicated.actor_count or 0)
 emit("replicated.total_count", replicated and replicated.actor_total_count or 0)
 emit("replicated.truncated", replicated and replicated.truncated or false)
 emit("replicated.binding_count", replicated and replicated.binding_count or 0)
+emit("replicated.local_actor_count", replicated and replicated.local_actor_count or 0)
+emit("replicated.matched_actor_count", replicated and replicated.matched_actor_count or 0)
+emit("replicated.created_actor_count", replicated and replicated.created_actor_count or 0)
+emit(
+  "replicated.created_actor_total_count",
+  replicated and replicated.created_actor_total_count or 0)
+emit("replicated.removed_actor_count", replicated and replicated.removed_actor_count or 0)
+emit(
+  "replicated.removed_actor_total_count",
+  replicated and replicated.removed_actor_total_count or 0)
+emit(
+  "replicated.failed_remove_actor_count",
+  replicated and replicated.failed_remove_actor_count or 0)
+emit(
+  "replicated.failed_remove_actor_total_count",
+  replicated and replicated.failed_remove_actor_total_count or 0)
+emit(
+  "replicated.apply_presentation_available",
+  replicated and replicated.apply_presentation_available or false)
+
+local function emit_snapshot_actor(prefix, actor)
+  emit(prefix .. ".network_id", actor.network_actor_id or 0)
+  emit(prefix .. ".type", actor.object_type_id or 0)
+  emit(prefix .. ".actor_slot", actor.actor_slot or -1)
+  emit(prefix .. ".world_slot", actor.world_slot or -1)
+  emit(prefix .. ".x", f(actor.x))
+  emit(prefix .. ".y", f(actor.y))
+  emit(prefix .. ".heading", f(actor.heading))
+  emit(prefix .. ".drive", actor.anim_drive_state or 0)
+  emit(prefix .. ".presentation_flags", actor.presentation_flags or 0)
+  emit(prefix .. ".drive_word", hx(actor.anim_drive_state_word or 0))
+  emit(prefix .. ".variant_primary", actor.render_variant_primary or 0)
+  emit(prefix .. ".variant_secondary", actor.render_variant_secondary or 0)
+  emit(prefix .. ".weapon_type", actor.render_weapon_type or 0)
+  emit(prefix .. ".selection_byte", actor.render_selection_byte or 0)
+  emit(prefix .. ".variant_tertiary", actor.render_variant_tertiary or 0)
+  emit(prefix .. ".student_book_palette_count", actor.student_book_palette_count or 0)
+  if tonumber(actor.object_type_id) == 0x138A then
+    emit(prefix .. ".student_color_190", student_visual_state_string(actor))
+    emit(prefix .. ".student_book_palette_1c0", student_book_palette_snapshot_string(actor))
+  end
+end
 
 if replicated ~= nil and replicated.actors ~= nil then
   for index, actor in ipairs(replicated.actors) do
-    local prefix = "repactor." .. tostring(index)
-    emit(prefix .. ".network_id", actor.network_actor_id or 0)
-    emit(prefix .. ".type", actor.object_type_id or 0)
-    emit(prefix .. ".actor_slot", actor.actor_slot or -1)
-    emit(prefix .. ".world_slot", actor.world_slot or -1)
-    emit(prefix .. ".x", f(actor.x))
-    emit(prefix .. ".y", f(actor.y))
-    emit(prefix .. ".heading", f(actor.heading))
-    emit(prefix .. ".drive", actor.anim_drive_state or 0)
-    emit(prefix .. ".presentation_flags", actor.presentation_flags or 0)
-    emit(prefix .. ".drive_word", hx(actor.anim_drive_state_word or 0))
-    emit(prefix .. ".variant_primary", actor.render_variant_primary or 0)
-    emit(prefix .. ".variant_secondary", actor.render_variant_secondary or 0)
-    emit(prefix .. ".weapon_type", actor.render_weapon_type or 0)
-    emit(prefix .. ".selection_byte", actor.render_selection_byte or 0)
-    emit(prefix .. ".variant_tertiary", actor.render_variant_tertiary or 0)
-    emit(prefix .. ".student_book_palette_count", actor.student_book_palette_count or 0)
-    if tonumber(actor.object_type_id) == 0x138A then
-      emit(prefix .. ".student_color_190", student_visual_state_string(actor))
-      emit(prefix .. ".student_book_palette_1c0", student_book_palette_snapshot_string(actor))
-    end
+    emit_snapshot_actor("repactor." .. tostring(index), actor)
+  end
+end
+
+if replicated ~= nil and replicated.apply_presentation_actors ~= nil then
+  for index, actor in ipairs(replicated.apply_presentation_actors) do
+    emit_snapshot_actor("appactor." .. tostring(index), actor)
   end
 end
 
@@ -263,14 +303,9 @@ def drive_phase_distance(left: str | None, right: str | None) -> int:
 
 def advance_drive_phase(drive_word: str | None, elapsed_ms: int) -> int:
     value = parse_int(drive_word)
-    if elapsed_ms >= 0:
-        phase_delta = (
-            elapsed_ms * HUB_ANIMATION_DRIVE_PHASE_UNITS_PER_SECOND + 500
-        ) // 1000
-    else:
-        phase_delta = -((
-            (-elapsed_ms) * HUB_ANIMATION_DRIVE_PHASE_UNITS_PER_SECOND + 500
-        ) // 1000)
+    phase_delta = (
+        elapsed_ms * HUB_ANIMATION_DRIVE_PHASE_UNITS_PER_SECOND + 500
+    ) // 1000
     return (value & 0xFFFF0000) | ((value + phase_delta) & 0xFFFF)
 
 
@@ -335,6 +370,7 @@ def match_snapshot_actor(
 def build_client_snapshot(values: dict[str, str]) -> dict[str, Any]:
     actors = parse_indexed(values, "actor")
     repactors = parse_indexed(values, "repactor")
+    appactors = parse_indexed(values, "appactor")
     bindings = parse_indexed(values, "binding")
     local_by_address = {parse_int(actor.get("address")): actor for actor in actors}
     binding_by_id = {
@@ -347,6 +383,12 @@ def build_client_snapshot(values: dict[str, str]) -> dict[str, Any]:
         "scene_kind": values.get("scene.kind", ""),
         "actors": actors,
         "repactors": repactors,
+        "appactors": appactors,
+        "appactor_by_id": {
+            parse_int(actor.get("network_id")): actor
+            for actor in appactors
+            if parse_int(actor.get("network_id")) != 0
+        },
         "repactor_by_id": {
             parse_int(actor.get("network_id")): actor
             for actor in repactors
@@ -359,17 +401,71 @@ def build_client_snapshot(values: dict[str, str]) -> dict[str, Any]:
         "replicated_sampled_ms": parse_int(values.get("replicated.sampled_ms")),
         "replicated_received_ms": parse_int(values.get("replicated.received_ms")),
         "replicated_sequence": parse_int(values.get("replicated.sequence")),
+        "replicated_scene_epoch": parse_int(values.get("replicated.scene_epoch")),
         "replicated_apply_valid": values.get("replicated.apply_valid") == "true",
+        "replicated_apply_presentation_available": (
+            values.get("replicated.apply_presentation_available") == "true"
+        ),
+        "replicated_apply_sequence": parse_int(values.get("replicated.apply_sequence")),
+        "replicated_apply_scene_epoch": parse_int(values.get("replicated.apply_scene_epoch")),
+        "replicated_apply_presentation_sequence": parse_int(
+            values.get("replicated.apply_presentation_sequence")
+        ),
+        "replicated_apply_presentation_scene_epoch": parse_int(
+            values.get("replicated.apply_presentation_scene_epoch")
+        ),
+        "replicated_apply_presentation_received_ms": parse_int(
+            values.get("replicated.apply_presentation_received_ms")
+        ),
         "replicated_applied_ms": parse_int(values.get("replicated.applied_ms")),
         "replicated_actor_count": parse_int(values.get("replicated.actor_count")),
         "replicated_total_count": parse_int(values.get("replicated.total_count")),
         "replicated_truncated": values.get("replicated.truncated") == "true",
+        "replicated_local_actor_count": parse_int(
+            values.get("replicated.local_actor_count")
+        ),
+        "replicated_matched_actor_count": parse_int(
+            values.get("replicated.matched_actor_count")
+        ),
+        "replicated_created_actor_count": parse_int(
+            values.get("replicated.created_actor_count")
+        ),
+        "replicated_created_actor_total_count": parse_int(
+            values.get("replicated.created_actor_total_count")
+        ),
+        "replicated_removed_actor_count": parse_int(
+            values.get("replicated.removed_actor_count")
+        ),
+        "replicated_removed_actor_total_count": parse_int(
+            values.get("replicated.removed_actor_total_count")
+        ),
+        "replicated_failed_remove_actor_count": parse_int(
+            values.get("replicated.failed_remove_actor_count")
+        ),
+        "replicated_failed_remove_actor_total_count": parse_int(
+            values.get("replicated.failed_remove_actor_total_count")
+        ),
     }
 
 
 def compare_host_to_client(host_values: dict[str, str], client_values: dict[str, str]) -> dict[str, Any]:
     host = build_client_snapshot(host_values)
     client = build_client_snapshot(client_values)
+    client_apply_presentation_available = (
+        client["replicated_apply_valid"]
+        and client["replicated_apply_presentation_available"]
+    )
+    client_presentation_clock_valid = (
+        client["replicated_applied_ms"]
+        >= client["replicated_apply_presentation_received_ms"]
+        and client["replicated_sampled_ms"] >= client["replicated_applied_ms"]
+    )
+    client_presentation_age_ms = (
+        client["replicated_applied_ms"]
+        - client["replicated_apply_presentation_received_ms"]
+        if client_presentation_clock_valid
+        else 0
+    )
     host_actors: list[dict[str, str]] = host["actors"]
     used_host: set[int] = set()
     host_actor_by_network_id: dict[int, tuple[dict[str, str], float]] = {}
@@ -394,6 +490,9 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
         if type_id < HUB_NPC_TYPE_MIN or type_id > HUB_NPC_TYPE_MAX:
             continue
         network_id = parse_int(repactor.get("network_id"))
+        applied_repactor = client["appactor_by_id"].get(network_id)
+        if applied_repactor is None:
+            continue
         binding = client["binding_by_id"].get(network_id)
         if binding is None:
             continue
@@ -401,9 +500,7 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
         if local_actor is None:
             continue
         host_match = host_actor_by_network_id.get(network_id)
-        host_repactor = host["repactor_by_id"].get(network_id)
-        if host_repactor is None:
-            continue
+        host_repactor = host["repactor_by_id"].get(network_id, repactor)
         host_actor, host_distance = host_match if host_match is not None else ({}, math.inf)
 
         row = {
@@ -417,8 +514,8 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
             "weapon_type_match": host_actor.get("weapon_type") == local_actor.get("weapon_type"),
             "selection_byte_match": host_actor.get("selection_byte") == local_actor.get("selection_byte"),
             "variant_tertiary_match": host_actor.get("variant_tertiary") == local_actor.get("variant_tertiary"),
-            "drive_byte_matches_snapshot": local_actor.get("drive_byte") == repactor.get("drive"),
-            "drive_word_matches_snapshot": local_actor.get("drive_raw") == repactor.get("drive_word"),
+            "drive_byte_matches_snapshot": local_actor.get("drive_byte") == applied_repactor.get("drive"),
+            "drive_word_matches_snapshot": local_actor.get("drive_raw") == applied_repactor.get("drive_word"),
             "drive_raw_match": host_actor.get("drive_raw") == local_actor.get("drive_raw"),
             "walk_primary_match": host_actor.get("walk_primary") == local_actor.get("walk_primary"),
             "walk_secondary_match": host_actor.get("walk_secondary") == local_actor.get("walk_secondary"),
@@ -429,60 +526,54 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
             "client_variant_primary": local_actor.get("variant_primary", ""),
             "host_drive_raw": host_actor.get("drive_raw", ""),
             "client_drive_raw": local_actor.get("drive_raw", ""),
-            "snapshot_drive_word": repactor.get("drive_word", ""),
-            "snapshot_presentation_flags": repactor.get("presentation_flags", ""),
+            "snapshot_drive_word": applied_repactor.get("drive_word", ""),
+            "snapshot_presentation_flags": applied_repactor.get("presentation_flags", ""),
             "host_render_phase": host_actor.get("render_phase", ""),
             "client_render_phase": local_actor.get("render_phase", ""),
         }
-        sample_delta_ms = (
-            client["replicated_sampled_ms"] -
-            host["replicated_sampled_ms"]
-        )
-        raw_phase_distance = drive_phase_distance(
-            host_actor.get("drive_raw"),
-            local_actor.get("drive_raw"),
-        )
-        adjusted_host_drive = parse_int(host_actor.get("drive_raw"))
+        expected_client_drive = parse_int(applied_repactor.get("drive_word"))
         if type_id in PHASE_ADVANCING_NPC_TYPES:
-            adjusted_host_drive = advance_drive_phase(
-                host_actor.get("drive_raw"),
-                sample_delta_ms,
+            expected_client_drive = advance_drive_phase(
+                applied_repactor.get("drive_word"),
+                client_presentation_age_ms,
             )
         phase_distance = drive_phase_distance(
-            str(adjusted_host_drive),
-            local_actor.get("drive_raw"),
+            str(expected_client_drive), local_actor.get("drive_raw")
         )
-        row["sample_delta_ms"] = sample_delta_ms
-        row["drive_phase_raw_distance"] = raw_phase_distance
-        row["sample_time_adjusted_host_drive"] = f"0x{adjusted_host_drive:08X}"
+        row["expected_client_drive"] = f"0x{expected_client_drive:08X}"
         row["drive_phase_distance"] = phase_distance
-        row["drive_phase_within_tolerance"] = phase_distance <= DRIVE_PHASE_TOLERANCE
+        row["drive_phase_within_tolerance"] = (
+            phase_distance <= DRIVE_PHASE_TOLERANCE
+            if client_apply_presentation_available
+            and client_presentation_clock_valid
+            else None
+        )
         if type_id == STUDENT_TYPE_ID:
             row["variant_primary_match"] = (
-                local_actor.get("variant_primary") == repactor.get("variant_primary")
+                local_actor.get("variant_primary") == applied_repactor.get("variant_primary")
             )
             row["variant_secondary_match"] = (
-                local_actor.get("variant_secondary") == repactor.get("variant_secondary")
+                local_actor.get("variant_secondary") == applied_repactor.get("variant_secondary")
             )
             row["weapon_type_match"] = (
-                local_actor.get("weapon_type") == repactor.get("weapon_type")
+                local_actor.get("weapon_type") == applied_repactor.get("weapon_type")
             )
             row["selection_byte_match"] = (
-                local_actor.get("selection_byte") == repactor.get("selection_byte")
+                local_actor.get("selection_byte") == applied_repactor.get("selection_byte")
             )
             row["variant_tertiary_match"] = (
-                local_actor.get("variant_tertiary") == repactor.get("variant_tertiary")
+                local_actor.get("variant_tertiary") == applied_repactor.get("variant_tertiary")
             )
             row["student_color_match"] = (
-                repactor.get("student_color_190") == local_actor.get("student_color_190")
+                applied_repactor.get("student_color_190") == local_actor.get("student_color_190")
             )
             row["student_book_palette_match"] = (
-                repactor.get("student_book_palette_1c0") ==
+                applied_repactor.get("student_book_palette_1c0") ==
                 local_actor.get("student_book_palette_1c0")
             )
             row["student_book_palette_count_matches_snapshot"] = (
                 parse_int(local_actor.get("student_book_palette_1c0", "").partition(":")[0]) ==
-                parse_int(repactor.get("student_book_palette_count"))
+                parse_int(applied_repactor.get("student_book_palette_count"))
             )
             row["host_student_color_190"] = host_repactor.get("student_color_190", "")
             row["client_student_color_190"] = local_actor.get("student_color_190", "")
@@ -504,20 +595,54 @@ def compare_host_to_client(host_values: dict[str, str], client_values: dict[str,
         "host_scene": host["scene_name"],
         "client_scene": client["scene_name"],
         "client_replicated_valid": client["replicated_valid"],
-        "host_replicated_sampled_ms": host["replicated_sampled_ms"],
-        "client_replicated_sampled_ms": client["replicated_sampled_ms"],
-        "sample_delta_ms": (
-            client["replicated_sampled_ms"] -
-            host["replicated_sampled_ms"]
-        ),
         "host_replicated_sequence": host["replicated_sequence"],
         "client_replicated_sequence": client["replicated_sequence"],
+        "client_replicated_scene_epoch": client["replicated_scene_epoch"],
         "client_replicated_received_ms": client["replicated_received_ms"],
         "client_replicated_apply_valid": client["replicated_apply_valid"],
+        "client_replicated_apply_sequence": client["replicated_apply_sequence"],
+        "client_replicated_apply_scene_epoch": client["replicated_apply_scene_epoch"],
+        "client_replicated_apply_presentation_sequence": client[
+            "replicated_apply_presentation_sequence"
+        ],
+        "client_replicated_apply_presentation_scene_epoch": client[
+            "replicated_apply_presentation_scene_epoch"
+        ],
+        "client_replicated_apply_presentation_received_ms": client[
+            "replicated_apply_presentation_received_ms"
+        ],
+        "client_apply_presentation_available": client_apply_presentation_available,
+        "client_applied_presentation_actor_count": len(client["appactors"]),
+        "client_presentation_clock_valid": client_presentation_clock_valid,
+        "client_presentation_age_ms": client_presentation_age_ms,
         "client_replicated_applied_ms": client["replicated_applied_ms"],
         "client_replicated_actor_count": client["replicated_actor_count"],
         "client_replicated_total_count": client["replicated_total_count"],
         "client_replicated_truncated": client["replicated_truncated"],
+        "client_replicated_local_actor_count": client[
+            "replicated_local_actor_count"
+        ],
+        "client_replicated_matched_actor_count": client[
+            "replicated_matched_actor_count"
+        ],
+        "client_replicated_created_actor_count": client[
+            "replicated_created_actor_count"
+        ],
+        "client_replicated_created_actor_total_count": client[
+            "replicated_created_actor_total_count"
+        ],
+        "client_replicated_removed_actor_count": client[
+            "replicated_removed_actor_count"
+        ],
+        "client_replicated_removed_actor_total_count": client[
+            "replicated_removed_actor_total_count"
+        ],
+        "client_replicated_failed_remove_actor_count": client[
+            "replicated_failed_remove_actor_count"
+        ],
+        "client_replicated_failed_remove_actor_total_count": client[
+            "replicated_failed_remove_actor_total_count"
+        ],
         "compared_total": len(comparisons),
         "student_compared": len(student_rows),
         "student_variant_primary_mismatches": count_false(student_rows, "variant_primary_match"),
@@ -612,6 +737,14 @@ def main() -> int:
             bool(summary["client_replicated_truncated"])
             for summary in summaries
         ),
+        "maximum_failed_remove_actor_count": max(
+            int(summary["client_replicated_failed_remove_actor_count"])
+            for summary in summaries
+        ),
+        "maximum_failed_remove_actor_total_count": max(
+            int(summary["client_replicated_failed_remove_actor_total_count"])
+            for summary in summaries
+        ),
         "minimum_compared_total": min(
             int(summary["compared_total"])
             for summary in summaries
@@ -671,6 +804,8 @@ def main() -> int:
         diverged = (
             not aggregate["all_replicated_valid"] or
             aggregate["any_replicated_truncated"] or
+            aggregate["maximum_failed_remove_actor_count"] > 0 or
+            aggregate["maximum_failed_remove_actor_total_count"] > 0 or
             aggregate["minimum_compared_total"] <= 0 or
             aggregate["minimum_student_compared"] <= 0 or
             aggregate["minimum_named_compared"] <= 0 or
