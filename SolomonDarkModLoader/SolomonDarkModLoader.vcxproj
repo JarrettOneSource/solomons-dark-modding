@@ -53,7 +53,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;SDMODLOADER_EXPORTS;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)..\..\..\Mod Loader\third_party\lua-5.4.8\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)..\third_party\lua-5.4.8\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -71,7 +71,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;SDMODLOADER_EXPORTS;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)..\..\..\Mod Loader\third_party\lua-5.4.8\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)..\third_party\lua-5.4.8\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -491,7 +491,7 @@
     <ClCompile Include="src\steam_bootstrap.cpp" />
     <ClCompile Include="src\steam_api_bridge.cpp" />
     <ClCompile Include="src\x86_hook.cpp" />
-    <ClCompile Include="..\..\..\Mod Loader\third_party\lua-5.4.8\src\*.c" Exclude="..\..\..\Mod Loader\third_party\lua-5.4.8\src\lua.c;..\..\..\Mod Loader\third_party\lua-5.4.8\src\luac.c">
+    <ClCompile Include="..\third_party\lua-5.4.8\src\*.c" Exclude="..\third_party\lua-5.4.8\src\lua.c;..\third_party\lua-5.4.8\src\luac.c">
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
     </ClCompile>
   </ItemGroup>

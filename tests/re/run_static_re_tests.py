@@ -55,6 +55,7 @@ from static_multiplayer_runtime_contracts import (
     test_meditation_transient_counters_self_repair_to_native_bounds,
     test_native_item_pickup_converges_into_stock_inventory,
     test_native_item_recipe_selection_excludes_equipped_items,
+    test_native_project_uses_repo_local_lua_sources,
     test_natural_offer_expectation_clamps_to_native_maximum,
     test_native_remote_fireball_retains_cast_heading_until_projectile_birth,
     test_native_unregister_retires_address_bound_network_identity,
@@ -11376,6 +11377,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Hub service fragments are Visual Studio project items",
         test_hub_service_fragments_are_visual_studio_project_items,
+    ),
+    (
+        "Native project uses repository-local Lua sources",
+        test_native_project_uses_repo_local_lua_sources,
     ),
     (
         "Lua exec timeouts cancel pending gameplay mutations",

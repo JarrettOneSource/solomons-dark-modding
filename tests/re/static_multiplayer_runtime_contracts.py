@@ -105,6 +105,36 @@ def test_hub_service_fragments_are_visual_studio_project_items() -> str:
     return "the split hub runtime and API remain visible to Visual Studio tooling"
 
 
+def test_native_project_uses_repo_local_lua_sources() -> str:
+    project = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj")
+    lua_source = r"$(ProjectDir)..\third_party\lua-5.4.8\src"
+    legacy_checkout_path = r"$(ProjectDir)..\..\..\Mod Loader\third_party"
+
+    assert legacy_checkout_path not in project, (
+        "the native build must not depend on the original workstation checkout layout"
+    )
+    assert project.count(lua_source) == 2, (
+        "both native configurations must include the repository-local Lua headers"
+    )
+    lua_compile_item = (
+        r'<ClCompile Include="..\third_party\lua-5.4.8\src\*.c" '
+        r'Exclude="..\third_party\lua-5.4.8\src\lua.c;'
+        r'..\third_party\lua-5.4.8\src\luac.c">'
+    )
+    assert lua_compile_item in project, (
+        "the native project must compile the repository-local Lua runtime sources"
+    )
+    for relative_path in (
+        "third_party/lua-5.4.8/src/lua.h",
+        "third_party/lua-5.4.8/src/lauxlib.h",
+        "third_party/lua-5.4.8/src/lapi.c",
+        "third_party/lua-5.4.8/src/linit.c",
+    ):
+        assert (ROOT / relative_path).is_file(), f"repository omits {relative_path}"
+
+    return "the native project builds from the Lua sources owned by the clone"
+
+
 def test_unreliable_snapshot_ordering_is_wrap_safe() -> str:
     protocol = _read("SolomonDarkModLoader/include/multiplayer_runtime_protocol.h")
     transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")
