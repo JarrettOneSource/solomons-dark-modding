@@ -3,8 +3,7 @@ already ship one:
 
   assets/steam/win32/steam_api.dll
 
-The launcher stages steam_appid.txt automatically with AppID 3362180 for normal
-launches and Spacewar AppID 480 for --multiplayer host/join development launches.
+The launcher stages steam_appid.txt automatically with Solomon Dark AppID 3362180.
 It copies this x86 steam_api.dll into the staged game root when needed.
 
 For local development, the launcher also checks STEAMWORKS_SDK_PATH and the local

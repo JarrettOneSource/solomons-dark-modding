@@ -154,8 +154,8 @@ try {
     $result.steamAppId = $stageReport.steamBootstrap.appId
     $result.steamApiReady = [bool]$stageReport.steamBootstrap.readyForInitialization
     $result.steamApiSource = $stageReport.steamBootstrap.steamApiSourcePath
-    if ($result.steamAppId -ne "480" -or -not $result.steamApiReady) {
-        throw "Extracted host stage did not materialize the Spacewar Steam runtime."
+    if ($result.steamAppId -ne "3362180" -or -not $result.steamApiReady) {
+        throw "Extracted host stage did not materialize the Solomon Dark Steam runtime."
     }
     $expectedSteamRoot = [System.IO.Path]::GetFullPath(
         (Join-Path $extractedRoot "launcher/assets/steam/win32"))

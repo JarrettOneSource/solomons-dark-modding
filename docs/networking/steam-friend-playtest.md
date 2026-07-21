@@ -1,20 +1,19 @@
 # Steam Friend Playtest
 
 This checkpoint supports public and friends-only Steam lobbies and carries the
-multiplayer protocol over Steam Networking Messages. Multiplayer launches use
-the Steamworks Spacewar development AppID (`480`); single-player launches retain
-the retail AppID. The launcher stages the x86 Steam runtime and
+multiplayer protocol over Steam Networking Messages. All launches use Solomon
+Dark AppID `3362180`. The launcher stages the x86 Steam runtime and
 `steam_appid.txt` into its disposable stage. It never copies or stores Steam
 credentials.
 
 ## What has been verified
 
-- A Release host launch initializes Steam under AppID 480, creates the selected
+- A Release host launch initializes Steam under AppID 3362180, creates the selected
   public or friends-only four-player lobby, publishes protocol/build metadata,
   and reaches `LobbyReady`. The launcher waits for that milestone, returns the
   real lobby ID, and accurately reports whether the overlay invite dialog
   opened.
-- A Release join launch initializes Steam under AppID 480, enters the requested
+- A Release join launch initializes Steam under AppID 3362180, enters the requested
   lobby, and completes the host compatibility handshake. The desktop launcher
   listens for accepted Steam invitations while it is open and launches this
   join path automatically.
@@ -99,7 +98,7 @@ then start its join-wait process from WSL:
 ```
 
 The script publishes a self-contained win-x86 launcher into `runtime/`, uses an
-isolated Spacewar Proton prefix, stages AppID 480, and starts the normal join
+isolated Proton prefix, stages AppID 3362180, and starts the normal join
 flow. Pass the host lobby ID as its only argument to test a direct lobby-ID
 join. `SDMOD_PROTON_PATH`, `SDMOD_STEAM_API_DLL`, `SDMOD_GAME_DIR`, and
 `SDMOD_WSL_STEAM_INSTANCE` override machine-specific defaults. No account name,
@@ -222,8 +221,3 @@ owner-local stock UI paths whose resulting state replicates to peers. Observer
 processes intentionally retain participant rows rather than a second stock
 inventory root. Nested sack browsing, the remaining Hagatha catalog, non-shop
 quest/reward insertion, and durable cross-session persistence are still open.
-
-Spacewar AppID 480 is a shared development namespace, not a production product
-identity. This public beta deliberately uses it only for development
-playtesting; replace it with the project's assigned Steam AppID before a
-production release.

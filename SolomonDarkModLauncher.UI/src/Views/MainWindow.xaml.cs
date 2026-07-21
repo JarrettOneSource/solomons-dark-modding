@@ -9,11 +9,36 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        FitToWorkingArea(SystemParameters.WorkArea);
 
         StateChanged += (_, _) =>
         {
             MaximizeButton.Content = WindowState == WindowState.Maximized ? "\u2750" : "\u25A1";
         };
+    }
+
+    private void FitToWorkingArea(Rect workingArea)
+    {
+        const double screenMargin = 16.0;
+        const double designMinimumWidth = 560.0;
+        const double designMinimumHeight = 480.0;
+
+        if (workingArea.Width <= 0.0 || workingArea.Height <= 0.0)
+        {
+            return;
+        }
+
+        var fittedWidth = Math.Min(Width, Math.Max(1.0, workingArea.Width - screenMargin));
+        var fittedHeight = Math.Min(Height, Math.Max(1.0, workingArea.Height - screenMargin));
+        MinWidth = Math.Min(designMinimumWidth, fittedWidth);
+        MinHeight = Math.Min(designMinimumHeight, fittedHeight);
+        MaxWidth = workingArea.Width;
+        MaxHeight = workingArea.Height;
+        Width = fittedWidth;
+        Height = fittedHeight;
+        Left = workingArea.Left + ((workingArea.Width - fittedWidth) / 2.0);
+        Top = workingArea.Top + ((workingArea.Height - fittedHeight) / 2.0);
+        WindowStartupLocation = WindowStartupLocation.Manual;
     }
 
     private void MinimizeButton_Click(object sender, RoutedEventArgs e)

@@ -4,7 +4,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 client="$root/runtime/tools/win32_lua_exec_client.exe"
 proton_root="${SDMOD_PROTON_ROOT:-$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-1}"
-compat_data="${SDMOD_STEAM_COMPAT_DATA:-$HOME/.local/share/Steam/steamapps/compatdata/480}"
+compat_data="${SDMOD_STEAM_COMPAT_DATA:-$HOME/.local/share/Steam/steamapps/compatdata/3362180}"
 pipe_name="${SDMOD_WSL_LUA_PIPE_NAME:-SolomonDarkModLoader_LuaExec}"
 
 if [[ $# -gt 1 ]]; then

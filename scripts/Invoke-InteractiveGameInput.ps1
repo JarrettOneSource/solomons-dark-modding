@@ -131,6 +131,8 @@ try {
         -LogonType Interactive `
         -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries `
         -ExecutionTimeLimit (New-TimeSpan -Seconds $TimeoutSeconds) `
         -MultipleInstances IgnoreNew
     $task = Register-ScheduledTask `

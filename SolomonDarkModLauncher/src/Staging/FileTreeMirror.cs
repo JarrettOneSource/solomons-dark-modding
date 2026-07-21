@@ -103,7 +103,11 @@ internal static class FileTreeMirror
     {
         try
         {
-            CopyStageFile(sourceFile, destinationFile, destinationPath);
+            CopyStageFile(
+                sourceFile,
+                destinationFile,
+                destinationDirectoryPath,
+                destinationPath);
         }
         catch (UnauthorizedAccessException)
         {
@@ -115,13 +119,18 @@ internal static class FileTreeMirror
             {
                 PrepareForDeletion(new DirectoryInfo(destinationDirectoryPath));
             }
-            CopyStageFile(sourceFile, destinationFile, destinationPath);
+            CopyStageFile(
+                sourceFile,
+                destinationFile,
+                destinationDirectoryPath,
+                destinationPath);
         }
     }
 
     private static void CopyStageFile(
         FileInfo sourceFile,
         FileInfo destinationFile,
+        string destinationDirectoryPath,
         string destinationPath)
     {
         destinationFile.Refresh();
@@ -129,8 +138,21 @@ internal static class FileTreeMirror
         {
             ClearRestrictedAttributes(destinationFile);
         }
-        File.Copy(sourceFile.FullName, destinationPath, overwrite: true);
-        File.SetLastWriteTimeUtc(destinationPath, sourceFile.LastWriteTimeUtc);
+
+        var tempPath = CreateTemporaryStagePath(
+            destinationDirectoryPath,
+            sourceFile.Name);
+        try
+        {
+            File.Copy(sourceFile.FullName, tempPath, overwrite: false);
+            ClearRestrictedAttributes(new FileInfo(tempPath));
+            File.SetLastWriteTimeUtc(tempPath, sourceFile.LastWriteTimeUtc);
+            File.Move(tempPath, destinationPath, overwrite: true);
+        }
+        finally
+        {
+            DeleteTemporaryStageFile(tempPath);
+        }
     }
 
     private static bool FilesMatch(FileInfo sourceFile, FileInfo destinationFile)
@@ -138,7 +160,66 @@ internal static class FileTreeMirror
         sourceFile.Refresh();
         destinationFile.Refresh();
         return sourceFile.Length == destinationFile.Length &&
-               sourceFile.LastWriteTimeUtc == destinationFile.LastWriteTimeUtc;
+               sourceFile.LastWriteTimeUtc == destinationFile.LastWriteTimeUtc &&
+               FilesHaveEqualContents(sourceFile, destinationFile);
+    }
+
+    private static bool FilesHaveEqualContents(
+        FileInfo sourceFile,
+        FileInfo destinationFile)
+    {
+        const int BufferSize = 128 * 1024;
+        using var source = new FileStream(
+            sourceFile.FullName,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            BufferSize,
+            FileOptions.SequentialScan);
+        using var destination = new FileStream(
+            destinationFile.FullName,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            BufferSize,
+            FileOptions.SequentialScan);
+        var sourceBuffer = new byte[BufferSize];
+        var destinationBuffer = new byte[BufferSize];
+        var remaining = sourceFile.Length;
+        while (remaining > 0)
+        {
+            var count = (int)Math.Min(BufferSize, remaining);
+            source.ReadExactly(sourceBuffer.AsSpan(0, count));
+            destination.ReadExactly(destinationBuffer.AsSpan(0, count));
+            if (!sourceBuffer.AsSpan(0, count).SequenceEqual(
+                    destinationBuffer.AsSpan(0, count)))
+            {
+                return false;
+            }
+            remaining -= count;
+        }
+        return true;
+    }
+
+    private static string CreateTemporaryStagePath(
+        string destinationDirectoryPath,
+        string fileName)
+    {
+        return Path.Combine(
+            destinationDirectoryPath,
+            $".{fileName}.{Guid.NewGuid():N}.sdmod.tmp");
+    }
+
+    private static void DeleteTemporaryStageFile(string tempPath)
+    {
+        var tempFile = new FileInfo(tempPath);
+        tempFile.Refresh();
+        if (!tempFile.Exists)
+        {
+            return;
+        }
+        ClearRestrictedAttributes(tempFile);
+        tempFile.Delete();
     }
 
     private static void DeleteDirectoryTree(DirectoryInfo directory, MirrorCounters counters)

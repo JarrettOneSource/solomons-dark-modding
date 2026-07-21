@@ -35,6 +35,7 @@ PAIR_BACKEND = os.environ.get("SDMOD_STEAM_PAIR_BACKEND", "wsl").strip().lower()
 LUA_TRANSITION_TIMEOUT_SECONDS = 35.0
 PAIR_DISCOVERY_TIMEOUT_SECONDS = 90.0
 PAIR_DISCOVERY_STABLE_SECONDS = 3.0
+NO_LOADED_LUA_STATE_TEXT = "No loaded Lua mod state is available."
 
 
 class WslLuaDaemon:
@@ -702,6 +703,11 @@ end
                 # caller-supplied gameplay mutation here.
                 stable_since = None
                 last_read_error = str(exc)
+                if NO_LOADED_LUA_STATE_TEXT in last_read_error:
+                    raise VerifyFailure(
+                        "Steam pair automation requires a loaded Lua state; "
+                        "enable sample.lua.ui_sandbox_lab before launch."
+                    ) from exc
                 time.sleep(0.25)
                 continue
             host_count, client_id, client_name, host_scene = host_snapshot

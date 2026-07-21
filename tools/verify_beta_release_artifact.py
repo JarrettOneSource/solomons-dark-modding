@@ -22,7 +22,7 @@ DEFAULT_OUTPUT = ROOT / "runtime/beta_release_artifact.json"
 PACKAGE_PREFIX = "SolomonDarkMultiplayerBeta-v"
 EXPECTED_PRODUCT = "Solomon Dark Multiplayer Beta"
 EXPECTED_GAME_VERSION = "0.72.5"
-EXPECTED_STEAM_APP_ID = 480
+EXPECTED_STEAM_APP_ID = 3362180
 PE_I386 = 0x014C
 PE_AMD64 = 0x8664
 
@@ -185,7 +185,7 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
             "protocolVersion": expected_protocol_version(),
             "supportedGameVersion": EXPECTED_GAME_VERSION,
             "supportedExecutableSha256": expected_game_hash(),
-            "steamDevelopmentAppId": EXPECTED_STEAM_APP_ID,
+            "steamAppId": EXPECTED_STEAM_APP_ID,
         }
         marker_mismatches = {
             key: {"actual": marker.get(key), "expected": expected}

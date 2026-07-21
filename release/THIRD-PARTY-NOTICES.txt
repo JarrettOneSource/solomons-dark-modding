@@ -6,7 +6,7 @@ game assets belong to their respective rights holders.
 Steamworks runtime
 ------------------
 The beta bundle includes Valve's 32-bit steam_api.dll solely as a Steamworks
-runtime component for the Spacewar AppID 480 development playtest. Steam and
+runtime component for Solomon Dark AppID 3362180. Steam and
 Steamworks are trademarks of Valve Corporation. Use of this component and the
 Steam service is subject to Valve's applicable agreements and terms.
 

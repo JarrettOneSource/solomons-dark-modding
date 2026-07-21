@@ -3,7 +3,6 @@ namespace SolomonDarkModLauncher.Steam;
 internal sealed class SteamBootstrapConfiguration
 {
     public const string DefaultAppId = "3362180";
-    public const string SpacewarDevelopmentAppId = "480";
     public const string AppIdFileName = "steam_appid.txt";
     public const string ApiDllFileName = "steam_api.dll";
     public const string EnableEnvironmentVariable = "SDMOD_STEAM_BOOTSTRAP";

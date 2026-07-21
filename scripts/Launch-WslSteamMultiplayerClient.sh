@@ -7,7 +7,7 @@ instance="${SDMOD_WSL_STEAM_INSTANCE:-wsl-steam-client}"
 game_dir="${SDMOD_GAME_DIR:-$root/../SolomonDarkAbandonware}"
 steam_root="${SDMOD_LINUX_STEAM_ROOT:-$HOME/.steam/debian-installation}"
 proton="${SDMOD_PROTON_PATH:-$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-1/proton}"
-compat_data="${SDMOD_STEAM_COMPAT_DATA:-$HOME/.local/share/Steam/steamapps/compatdata/480}"
+compat_data="${SDMOD_STEAM_COMPAT_DATA:-$HOME/.local/share/Steam/steamapps/compatdata/3362180}"
 steam_api="${SDMOD_STEAM_API_DLL:-/mnt/c/Program Files (x86)/Steam/steamapps/common/SteamVR/bin/win32/steam_api.dll}"
 test_boneyard_override="${SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE:-}"
 publish_dir="$root/runtime/wsl-steam-launcher"
@@ -69,7 +69,7 @@ args=(
     --json
     --instance "$instance"
     --game-dir "$(proton_path "$game_dir")"
-    --steam-appid 480
+    --steam-appid 3362180
     --steam-api-dll "$(proton_path "$steam_api")"
     --multiplayer join
     --temporary-profile
@@ -84,7 +84,7 @@ exec env \
     LP_NUM_THREADS=4 \
     STEAM_COMPAT_CLIENT_INSTALL_PATH="$steam_root" \
     STEAM_COMPAT_DATA_PATH="$compat_data" \
-    SteamAppId=480 \
-    SteamGameId=480 \
+    SteamAppId=3362180 \
+    SteamGameId=3362180 \
     "${test_environment[@]}" \
     "$proton" run "${args[@]}"

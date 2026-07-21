@@ -20,7 +20,7 @@ internal sealed class SteamManualDispatchSession : IDisposable
     private SteamManualDispatchFreeLastCallback? freeLastCallback_;
     private bool initialized_;
 
-    public SteamManualDispatchSession(string steamApiPath)
+    public SteamManualDispatchSession(string steamApiPath, string appId)
     {
         if (Environment.Is64BitProcess)
         {
@@ -47,12 +47,8 @@ internal sealed class SteamManualDispatchSession : IDisposable
             var previousGameId = Environment.GetEnvironmentVariable("SteamGameId");
             try
             {
-                Environment.SetEnvironmentVariable(
-                    "SteamAppId",
-                    SteamBootstrapConfiguration.SpacewarDevelopmentAppId);
-                Environment.SetEnvironmentVariable(
-                    "SteamGameId",
-                    SteamBootstrapConfiguration.SpacewarDevelopmentAppId);
+                Environment.SetEnvironmentVariable("SteamAppId", appId);
+                Environment.SetEnvironmentVariable("SteamGameId", appId);
                 if (!init())
                 {
                     throw new InvalidOperationException(

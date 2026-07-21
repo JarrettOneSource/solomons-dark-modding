@@ -8,8 +8,8 @@
         Title="Solomon Dark Revived"
         Width="760"
         Height="940"
-        MinWidth="620"
-        MinHeight="720"
+        MinWidth="560"
+        MinHeight="480"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResize"
@@ -90,7 +90,8 @@
             </Rectangle>
         </Grid>
 
-        <ScrollViewer Grid.Row="2"
+        <ScrollViewer x:Name="MainContentScrollViewer"
+                      Grid.Row="2"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
         <Grid Margin="24,14,24,16">
@@ -646,6 +647,8 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Style="{StaticResource CardStyle}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
                     <TextBlock FontSize="16"
                                FontWeight="SemiBold"
@@ -704,6 +707,7 @@
                                 Style="{StaticResource PrimaryButtonStyle}" />
                     </StackPanel>
                 </StackPanel>
+                </ScrollViewer>
             </Border>
         </Grid>
 
@@ -728,6 +732,8 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Style="{StaticResource CardStyle}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
                     <TextBlock FontSize="17" FontWeight="SemiBold" Text="How to Play Multiplayer" />
 
@@ -760,6 +766,7 @@
                             Content="Close"
                             Style="{StaticResource PrimaryButtonStyle}" />
                 </StackPanel>
+                </ScrollViewer>
             </Border>
         </Grid>
     </Grid>

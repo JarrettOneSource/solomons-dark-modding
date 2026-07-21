@@ -83,14 +83,14 @@ internal static class SteamInviteListener
     private static void Listen(Process parentProcess)
     {
         var steamConfiguration = SteamBootstrapConfiguration.CreateDefault(
-            SteamBootstrapConfiguration.SpacewarDevelopmentAppId,
+            appIdOverride: null,
             apiDllOverridePath: null);
         var steamApiPath = SteamBootstrapMaterializer.ResolveSteamApiSourcePath(
             steamConfiguration)
             ?? throw new InvalidOperationException(
                 "Automatic Steam lobby handling needs the packaged x86 steam_api.dll.");
 
-        using var dispatch = new SteamManualDispatchSession(steamApiPath);
+        using var dispatch = new SteamManualDispatchSession(steamApiPath, steamConfiguration.AppId);
         var steamFriends = dispatch.GetInterface("SteamAPI_SteamFriends_v017");
         var getFriendPersonaName = dispatch.Load<SteamGetFriendPersonaName>(
             "SteamAPI_ISteamFriends_GetFriendPersonaName");

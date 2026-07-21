@@ -41,8 +41,8 @@ The launcher stages these files into `runtime/stage/.sdmod/`:
 - `startup-status.json` — per-launch token written by the loader so the launcher can distinguish the current run from stale artifacts.
 - `multiplayer-session-status.json` — launch-token-bound Steam phase, lobby, peer, overlay, route, and error state used by the CLI and desktop UI.
 
-The launcher stages `steam_appid.txt` with retail AppID `3362180` for single
-player and Spacewar development AppID `480` for Steam multiplayer. It also
+The launcher stages `steam_appid.txt` with Solomon Dark AppID `3362180` for all
+launches. It also
 copies an x86 `steam_api.dll` into the staged game root when one is not already
 present. Provide a 32-bit Steamworks runtime at
 `SolomonDarkModLauncher/assets/steam/win32/steam_api.dll` or pass

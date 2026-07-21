@@ -29,7 +29,7 @@ remain position-strict.
 The current source has the multiplayer foundation, participant rail, and a
 friends-only Steam development transport. See
 [`steam-friend-playtest.md`](steam-friend-playtest.md) for the two-account
-Spacewar playtest flow and the remaining external verification boundary.
+Steam playtest flow and the remaining external verification boundary.
 
 - `multiplayer_runtime_state.h` defines the shared `ParticipantInfo`,
   `MultiplayerCharacterProfile`, `ParticipantSceneIntent`, and runtime snapshot

@@ -21,7 +21,7 @@ internal static class LauncherCommandExecutor
             command.InstanceName,
             command.RuntimeProfileOverride,
             command.RuntimeFlagOverrides,
-            ResolveSteamAppId(command),
+            command.SteamAppIdOverride,
             command.SteamApiDllOverride);
 
         var manager = new ModManagerService(configuration);
@@ -60,12 +60,15 @@ internal static class LauncherCommandExecutor
             command.MultiplayerMaxParticipants,
             command.OpenSteamInviteDialog,
             command.LobbyHost);
-        if (multiplayer.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join &&
-            !stageResult.SteamBootstrap.ReadyForInitialization)
+        if (multiplayer.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join)
         {
-            throw new InvalidOperationException(
-                "Steam multiplayer requires an x86 steam_api.dll. Install the Steamworks SDK runtime, " +
-                "place it under assets/steam/win32, or pass --steam-api-dll <path>.");
+            if (!stageResult.SteamBootstrap.ReadyForInitialization)
+            {
+                throw new InvalidOperationException(
+                    "Steam multiplayer requires an x86 steam_api.dll. Install the Steamworks SDK runtime, " +
+                    "place it under assets/steam/win32, or pass --steam-api-dll <path>.");
+            }
+            SteamLaunchPreflight.EnsureAvailable(stageResult.SteamBootstrap);
         }
         var launchedGame = StagedGameLauncher.Launch(
             stageResult,
@@ -100,15 +103,4 @@ internal static class LauncherCommandExecutor
             ModStateChange: new LauncherModStateChange(command.TargetModId, enabled, manager.StatePath));
     }
 
-    private static string? ResolveSteamAppId(LauncherCommand command)
-    {
-        if (!string.IsNullOrWhiteSpace(command.SteamAppIdOverride))
-        {
-            return command.SteamAppIdOverride;
-        }
-
-        return command.MultiplayerMode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join
-            ? SteamBootstrapConfiguration.SpacewarDevelopmentAppId
-            : null;
-    }
 }

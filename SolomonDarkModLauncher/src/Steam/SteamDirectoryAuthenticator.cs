@@ -15,14 +15,14 @@ internal static class SteamDirectoryAuthenticator
         CancellationToken cancellationToken = default)
     {
         var steamConfiguration = SteamBootstrapConfiguration.CreateDefault(
-            SteamBootstrapConfiguration.SpacewarDevelopmentAppId,
-            steamApiDllOverride);
+            appIdOverride: null,
+            apiDllOverridePath: steamApiDllOverride);
         var steamApiPath = SteamBootstrapMaterializer.ResolveSteamApiSourcePath(
             steamConfiguration)
             ?? throw new InvalidOperationException(
                 "Steam directory authentication requires the packaged x86 steam_api.dll.");
 
-        using var steam = new SteamWebApiTicketSession(steamApiPath);
+        using var steam = new SteamWebApiTicketSession(steamApiPath, steamConfiguration.AppId);
         var ticket = steam.GetTicket(TicketIdentity, TimeSpan.FromSeconds(10));
 
         using var client = new HttpClient
@@ -89,9 +89,9 @@ internal static class SteamDirectoryAuthenticator
         private readonly nint steamUser_;
         private uint ticketHandle_;
 
-        public SteamWebApiTicketSession(string steamApiPath)
+        public SteamWebApiTicketSession(string steamApiPath, string appId)
         {
-            dispatch_ = new SteamManualDispatchSession(steamApiPath);
+            dispatch_ = new SteamManualDispatchSession(steamApiPath, appId);
             try
             {
                 steamUser_ = dispatch_.GetInterface("SteamAPI_SteamUser_v023");

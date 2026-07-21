@@ -251,7 +251,7 @@ $marker = [ordered]@{
     protocolVersion = $protocolVersion
     supportedGameVersion = "0.72.5"
     supportedExecutableSha256 = $supportedGameHash.ToLowerInvariant()
-    steamDevelopmentAppId = 480
+    steamAppId = 3362180
     steamApiSha256 = (Get-FileHash $packagedSteamApi -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 $markerJson = $marker | ConvertTo-Json

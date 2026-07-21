@@ -156,6 +156,12 @@ WORLD_SNAPSHOT_RECONCILIATION = (
 )
 LUA_EXEC_PIPE = ROOT / "SolomonDarkModLoader/src/lua_exec_pipe.cpp"
 STAGED_GAME_LAUNCHER = ROOT / "SolomonDarkModLauncher/src/Launch/StagedGameLauncher.cs"
+LAUNCHER_COMMAND_EXECUTOR = (
+    ROOT / "SolomonDarkModLauncher/src/App/LauncherCommandExecutor.cs"
+)
+STEAM_LAUNCH_PREFLIGHT = (
+    ROOT / "SolomonDarkModLauncher/src/Steam/SteamLaunchPreflight.cs"
+)
 MOD_LOADER_HEADER = ROOT / "SolomonDarkModLoader/include/mod_loader.h"
 MOD_LOADER_GAMEPLAY = ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay.cpp"
 MEMORY_ACCESS_REGIONS = ROOT / "SolomonDarkModLoader/src/memory_access_regions.cpp"
@@ -6820,6 +6826,9 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     steam_materializer_text = read_text(
         ROOT / "SolomonDarkModLauncher/src/Steam/SteamBootstrapMaterializer.cs"
     )
+    steam_configuration_text = read_text(
+        ROOT / "SolomonDarkModLauncher/src/Steam/SteamBootstrapConfiguration.cs"
+    )
     compatibility_materializer_text = read_text(
         ROOT / "SolomonDarkModLauncher/src/Staging/MultiplayerCompatibilityMaterializer.cs"
     )
@@ -6912,7 +6921,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
         (launch_environment_text, 'InviteSteamIdVariable = "SDMOD_STEAM_INVITE_STEAM_ID"'),
         (launch_options_text, "InviteSteamId"),
         (command_parser_text, 'arg == "--invite-steam-id"'),
-        (launch_executor_text, "SteamBootstrapConfiguration.SpacewarDevelopmentAppId"),
+        (steam_configuration_text, 'public const string DefaultAppId = "3362180";'),
         (steam_materializer_text, "reader.PEHeaders.CoffHeader.Machine == Machine.I386"),
         (startup_status_text, 'L"multiplayer-session-status.json"'),
         (startup_status_text, '"  \\"inviteSent\\": "'),
@@ -6939,8 +6948,8 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
         (ui_response_reader_text, 'TryGetProperty("success"'),
         (wsl_steam_client_text, "--self-contained true"),
         (wsl_steam_client_text, "STEAM_COMPAT_DATA_PATH"),
-        (wsl_steam_client_text, "SteamAppId=480"),
-        (wsl_steam_client_text, "SteamGameId=480"),
+        (wsl_steam_client_text, "SteamAppId=3362180"),
+        (wsl_steam_client_text, "SteamGameId=3362180"),
         (wsl_steam_client_text, "--multiplayer join"),
         (wsl_steam_client_text, "--steam-api-dll"),
         (wsl_lua_client_text, "win32_lua_exec_client.exe"),
@@ -6972,9 +6981,118 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
             )
     return (
         "Steam friends-only lobby, authenticated v64 handshake, idle keepalive, owner-checked gameplay "
-        "routing, Spacewar launch, x86 runtime staging, and a live launch-token-bound "
+        "routing, Solomon Dark AppID launch, x86 runtime staging, and a live launch-token-bound "
         "lobby connection panel are wired"
     )
+
+
+def test_solomon_dark_steam_app_id_is_consistent() -> str:
+    source_contracts = {
+        "bootstrap configuration": (
+            ROOT / "SolomonDarkModLauncher/src/Steam/SteamBootstrapConfiguration.cs",
+            ('public const string DefaultAppId = "3362180";',),
+        ),
+        "launch routing": (
+            ROOT / "SolomonDarkModLauncher/src/App/LauncherCommandExecutor.cs",
+            ("command.SteamAppIdOverride",),
+        ),
+        "manual dispatch": (
+            ROOT / "SolomonDarkModLauncher/src/Steam/SteamManualDispatchSession.cs",
+            (
+                "SteamManualDispatchSession(string steamApiPath, string appId)",
+                'Environment.SetEnvironmentVariable("SteamAppId", appId);',
+                'Environment.SetEnvironmentVariable("SteamGameId", appId);',
+            ),
+        ),
+        "launch preflight": (
+            ROOT / "SolomonDarkModLauncher/src/Steam/SteamLaunchPreflight.cs",
+            ("new SteamManualDispatchSession(steamApiPath, bootstrap.AppId)",),
+        ),
+        "invite listener": (
+            ROOT / "SolomonDarkModLauncher/src/Steam/SteamInviteListener.cs",
+            (
+                "SteamBootstrapConfiguration.CreateDefault(",
+                "new SteamManualDispatchSession(steamApiPath, steamConfiguration.AppId)",
+            ),
+        ),
+        "directory authentication": (
+            ROOT / "SolomonDarkModLauncher/src/Steam/SteamDirectoryAuthenticator.cs",
+            (
+                "new SteamWebApiTicketSession(steamApiPath, steamConfiguration.AppId)",
+                "new SteamManualDispatchSession(steamApiPath, appId)",
+            ),
+        ),
+        "WSL Steam launch": (
+            ROOT / "scripts/Launch-WslSteamMultiplayerClient.sh",
+            (
+                "compatdata/3362180",
+                "--steam-appid 3362180",
+                "SteamAppId=3362180",
+                "SteamGameId=3362180",
+            ),
+        ),
+        "WSL Lua bridge": (
+            ROOT / "scripts/Invoke-WslLuaExec.sh",
+            ("compatdata/3362180",),
+        ),
+        "package builder": (
+            ROOT / "scripts/New-BetaReleasePackage.ps1",
+            ("steamAppId = 3362180",),
+        ),
+        "package smoke": (
+            ROOT / "scripts/Test-BetaReleasePackage.ps1",
+            ('$result.steamAppId -ne "3362180"',),
+        ),
+        "artifact verifier": (
+            ROOT / "tools/verify_beta_release_artifact.py",
+            (
+                "EXPECTED_STEAM_APP_ID = 3362180",
+                '"steamAppId": EXPECTED_STEAM_APP_ID',
+            ),
+        ),
+    }
+
+    missing: list[str] = []
+    for label, (path, tokens) in source_contracts.items():
+        text = read_text(path)
+        missing.extend(
+            f"{label}: {token}"
+            for token in tokens
+            if token not in text
+        )
+    if missing:
+        raise StaticReTestFailure(
+            "Steam AppID 3362180 cutover is incomplete: " + ", ".join(missing)
+        )
+
+    retired_paths = (
+        ROOT / "README.md",
+        ROOT / "SolomonDarkModLauncher/assets/steam/README.txt",
+        ROOT / "SolomonDarkModLauncher/src",
+        ROOT / "docs/networking",
+        ROOT / "release/THIRD-PARTY-NOTICES.txt",
+        ROOT / "scripts/Launch-WslSteamMultiplayerClient.sh",
+        ROOT / "scripts/Invoke-WslLuaExec.sh",
+        ROOT / "scripts/New-BetaReleasePackage.ps1",
+        ROOT / "scripts/Test-BetaReleasePackage.ps1",
+        ROOT / "tools/verify_beta_release_artifact.py",
+    )
+    retired_hits: list[str] = []
+    for path in retired_paths:
+        files = path.rglob("*") if path.is_dir() else (path,)
+        for file_path in files:
+            if not file_path.is_file() or file_path.suffix in {".dll", ".exe", ".pdb"}:
+                continue
+            text = read_text(file_path)
+            if "Spacewar" in text or "SpacewarDevelopmentAppId" in text:
+                retired_hits.append(str(file_path.relative_to(ROOT)))
+    if retired_hits:
+        raise StaticReTestFailure(
+            "retired Spacewar path remains active in: " +
+            ", ".join(sorted(set(retired_hits)))
+        )
+
+    return "launcher, runtime helpers, packages, and docs use Steam AppID 3362180"
 
 
 def test_steam_friend_hub_lifecycle_soak_is_wired() -> str:
@@ -7520,6 +7638,71 @@ def test_stage_mirror_repairs_denied_destination_acl() -> str:
             "stage ACL recovery still clears attributes before repairing access"
         )
     return "stage mirror removes explicit deny ACLs before retrying destination writes"
+
+
+def test_stage_mirror_publishes_and_verifies_file_contents() -> str:
+    mirror_text = read_text(
+        ROOT / "SolomonDarkModLauncher/src/Staging/FileTreeMirror.cs"
+    )
+    compact = re.sub(r"\s+", "", mirror_text)
+    required_tokens = (
+        "FilesHaveEqualContents(sourceFile, destinationFile)",
+        "CreateTemporaryStagePath(destinationDirectoryPath, sourceFile.Name)",
+        "File.Move(tempPath, destinationPath, overwrite: true)",
+        "DeleteTemporaryStageFile(tempPath)",
+    )
+    missing = [
+        token
+        for token in required_tokens
+        if re.sub(r"\s+", "", token) not in compact
+    ]
+    if missing:
+        raise StaticReTestFailure(
+            "stage mirror does not verify and atomically publish file contents: "
+            + ", ".join(missing)
+        )
+    if (
+        "File.Copy(sourceFile.FullName,destinationPath,overwrite:true)"
+        in compact
+    ):
+        raise StaticReTestFailure(
+            "stage mirror still overwrites live destination files in place"
+        )
+    return "stage mirror verifies bytes and atomically publishes complete files"
+
+
+def test_multiplayer_launch_preflights_steam_before_starting_game() -> str:
+    executor_text = read_text(LAUNCHER_COMMAND_EXECUTOR)
+    preflight_text = read_text(STEAM_LAUNCH_PREFLIGHT)
+
+    preflight_call = (
+        "SteamLaunchPreflight.EnsureAvailable(stageResult.SteamBootstrap);"
+    )
+    launch_call = "var launchedGame = StagedGameLauncher.Launch("
+    if preflight_call not in executor_text:
+        raise StaticReTestFailure(
+            "multiplayer launch does not verify the active Steam session before starting the game"
+        )
+    if executor_text.index(preflight_call) > executor_text.index(launch_call):
+        raise StaticReTestFailure(
+            "Steam readiness is checked only after SolomonDark.exe starts"
+        )
+
+    required_preflight_tokens = (
+        "internal static class SteamLaunchPreflight",
+        "SteamStageBootstrapResult bootstrap",
+        "using var session = new SteamManualDispatchSession(steamApiPath, bootstrap.AppId);",
+        "Open Steam, sign in, and wait until Steam is online.",
+        "Run Steam and this launcher with the same administrator setting.",
+    )
+    missing = [
+        token for token in required_preflight_tokens if token not in preflight_text
+    ]
+    if missing:
+        raise StaticReTestFailure(
+            "Steam launch preflight is incomplete: " + ", ".join(missing)
+        )
+    return "multiplayer launch validates Steam before SolomonDark.exe starts"
 
 
 def test_remaining_native_addresses_and_probe_offsets_are_layout_backed() -> str:
@@ -11745,6 +11928,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_stage_mirror_repairs_denied_destination_acl,
     ),
     (
+        "stage mirror atomically publishes and verifies file contents",
+        test_stage_mirror_publishes_and_verifies_file_contents,
+    ),
+    (
+        "multiplayer launch validates Steam before starting the game",
+        test_multiplayer_launch_preflights_steam_before_starting_game,
+    ),
+    (
         "Steam spell behavior verification uses real upgrades and delivery waits",
         test_steam_spell_behavior_verifiers_use_real_upgrades_and_wait_for_delivery,
     ),
@@ -11849,6 +12040,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_manual_enemy_test_mode_logging_is_transition_only,
     ),
     ("Steam friend multiplayer contract is wired", test_steam_friend_multiplayer_contract_is_wired),
+    ("Solomon Dark Steam AppID is consistent", test_solomon_dark_steam_app_id_is_consistent),
     (
         "Steam friend hub lifecycle soak is wired",
         test_steam_friend_hub_lifecycle_soak_is_wired,
