@@ -319,17 +319,42 @@ def verify_dx9_nameplate_health_bar_geometry(
     }
 
 
-def verify_render_logs() -> dict[str, Any]:
+def verify_render_logs(
+    *,
+    expected_health_percent_by_participant: dict[int, int] | None = None,
+    minimum_log_line_counts: dict[str, int] | None = None,
+) -> dict[str, Any]:
     evidence: dict[str, Any] = {}
     for observer in PARTICIPANTS:
         log_text = observer.log.read_text(encoding="utf-8", errors="replace")
+        log_lines = log_text.splitlines()
+        minimum_line_count = (
+            minimum_log_line_counts.get(observer.label, 0)
+            if minimum_log_line_counts is not None
+            else 0
+        )
+        if minimum_line_count > len(log_lines):
+            raise VerifyFailure(
+                f"{observer.label} loader log was truncated during HUD verification"
+            )
+        dynamic_log_text = "\n".join(log_lines[minimum_line_count:])
         observer_evidence: dict[str, Any] = {}
         for owner in PARTICIPANTS:
             if observer == owner:
                 continue
             participant_token = f"participant={owner.participant_id}"
+            expected_health_percent = (
+                expected_health_percent_by_participant.get(owner.participant_id)
+                if expected_health_percent_by_participant is not None
+                else None
+            )
+            health_percent_token = (
+                f"health_percent={expected_health_percent}"
+                if expected_health_percent is not None
+                else "health_percent="
+            )
             world_line = matching_line(
-                log_text,
+                dynamic_log_text,
                 (
                     "source=playerwizard_render",
                     participant_token,
@@ -337,17 +362,17 @@ def verify_render_logs() -> dict[str, Any]:
                     "ok=1",
                     "health_bar=dx9",
                     "health_valid=1",
-                    "health_percent=",
+                    health_percent_token,
                 ),
             )
             dx9_health_line = matching_line(
-                log_text,
+                dynamic_log_text,
                 (
                     "source=dx9_nameplate_healthbar",
                     participant_token,
                     "ok=1",
                     "health_ratio=",
-                    "health_percent=",
+                    health_percent_token,
                 ),
             )
             ally_hud_line = matching_line(
@@ -365,15 +390,26 @@ def verify_render_logs() -> dict[str, Any]:
                 "world": world_line,
                 "dx9_health_bar": dx9_health_line,
                 "dx9_health_bar_geometry": (
-                    verify_dx9_nameplate_health_bar_geometry(dx9_health_line)
+                    verify_dx9_nameplate_health_bar_geometry(
+                        dx9_health_line,
+                        expected_health_percent,
+                    )
                 ),
                 "ally_hud": ally_hud_line,
                 "ally_hud_layout": verify_ally_hud_name_layout(ally_hud_line),
             }
 
-        if observer != CLIENT:
+        client_expected_percent = (
+            expected_health_percent_by_participant.get(CLIENT.participant_id)
+            if expected_health_percent_by_participant is not None
+            else EXPECTED_HALF_HEALTH_PERCENT
+        )
+        if (
+            observer != CLIENT
+            and client_expected_percent == EXPECTED_HALF_HEALTH_PERCENT
+        ):
             half_health_line = matching_line(
-                log_text,
+                dynamic_log_text,
                 (
                     "source=playerwizard_render",
                     f"participant={CLIENT.participant_id}",
@@ -382,7 +418,7 @@ def verify_render_logs() -> dict[str, Any]:
                 ),
             )
             half_health_dx9_line = matching_line(
-                log_text,
+                dynamic_log_text,
                 (
                     "source=dx9_nameplate_healthbar",
                     f"participant={CLIENT.participant_id}",
@@ -404,12 +440,22 @@ def verify_render_logs() -> dict[str, Any]:
     return evidence
 
 
-def wait_for_render_logs(timeout: float) -> dict[str, Any]:
+def wait_for_render_logs(
+    timeout: float,
+    *,
+    expected_health_percent_by_participant: dict[int, int] | None = None,
+    minimum_log_line_counts: dict[str, int] | None = None,
+) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     last_error = ""
     while time.monotonic() < deadline:
         try:
-            return verify_render_logs()
+            return verify_render_logs(
+                expected_health_percent_by_participant=(
+                    expected_health_percent_by_participant
+                ),
+                minimum_log_line_counts=minimum_log_line_counts,
+            )
         except (OSError, VerifyFailure) as exc:
             last_error = str(exc)
         time.sleep(0.1)

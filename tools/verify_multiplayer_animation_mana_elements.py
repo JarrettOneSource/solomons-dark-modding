@@ -66,6 +66,8 @@ ELEMENT_IDS = {
 ANIMATION_FLOAT_TOLERANCE = 0.04
 ANIMATION_HISTORY_SECONDS = 0.55
 ANIMATION_MATCH_SAMPLE_COUNT = 3
+CAST_FACING_TOLERANCE_DEGREES = 2.0
+CAST_FACING_MATCH_SAMPLE_COUNT = 2
 ANIMATION_MATCH_TOLERANCES = {
     "walk_cycle_primary": 0.18,
     "walk_cycle_secondary": 0.18,
@@ -324,6 +326,7 @@ emit("write.aim_x", sd.debug.write_float(actor + oaimx, x + 320.0))
 emit("write.aim_y", sd.debug.write_float(actor + oaimy, y))
 emit("write.aux0", sd.debug.write_u32(actor + oaux0, 0))
 emit("write.aux1", sd.debug.write_u32(actor + oaux1, 0))
+emit("expected_heading", 90.0)
 emit("mouse_left_frames", sd.input.hold_mouse_left_frames({frames}))
 """,
         timeout=5.0,
@@ -358,8 +361,19 @@ local orate = sd.debug.layout_offset("actor_render_advance_rate")
 local ophase = sd.debug.layout_offset("actor_render_advance_phase")
 local oo = sd.debug.layout_offset("actor_render_drive_overlay_alpha")
 local ob = sd.debug.layout_offset("actor_render_drive_move_blend")
+local oh = sd.debug.layout_offset("actor_heading")
+local ox = sd.debug.layout_offset("actor_position_x")
+local oy = sd.debug.layout_offset("actor_position_y")
+local oaimx = sd.debug.layout_offset("actor_aim_target_x")
+local oaimy = sd.debug.layout_offset("actor_aim_target_y")
 emit("available", true)
 emit("actor", actor)
+emit("x", sd.debug.read_float(actor + ox) or 0)
+emit("y", sd.debug.read_float(actor + oy) or 0)
+emit("heading", bot.heading or 0)
+emit("actor_heading", sd.debug.read_float(actor + oh) or 0)
+emit("aim_x", sd.debug.read_float(actor + oaimx) or 0)
+emit("aim_y", sd.debug.read_float(actor + oaimy) or 0)
 emit("drive_word", sd.debug.read_u32(actor + od) or 0)
 emit("walk_cycle_primary", sd.debug.read_float(actor + ow1) or 0)
 emit("walk_cycle_secondary", sd.debug.read_float(actor + ow2) or 0)
@@ -409,6 +423,52 @@ def number(row: dict[str, str], key: str, default: float = 0.0) -> float:
     except (TypeError, ValueError):
         return default
     return value if math.isfinite(value) else default
+
+
+def heading_error(left: float, right: float) -> float:
+    return abs((left - right + 180.0) % 360.0 - 180.0)
+
+
+def cast_facing_sample(
+    proxy: dict[str, str],
+    expected_heading: float,
+) -> dict[str, float | bool]:
+    proxy_x = number(proxy, "x", float("nan"))
+    proxy_y = number(proxy, "y", float("nan"))
+    proxy_aim_x = number(proxy, "aim_x", float("nan"))
+    proxy_aim_y = number(proxy, "aim_y", float("nan"))
+    proxy_aim_heading = (
+        math.degrees(math.atan2(proxy_aim_y - proxy_y, proxy_aim_x - proxy_x))
+        + 90.0
+    ) % 360.0
+    proxy_actor_heading = number(proxy, "actor_heading", float("nan"))
+    proxy_snapshot_heading = number(proxy, "heading", float("nan"))
+    errors = {
+        "proxy_actor_to_expected": heading_error(
+            proxy_actor_heading,
+            expected_heading,
+        ),
+        "proxy_aim_to_expected": heading_error(
+            proxy_aim_heading,
+            expected_heading,
+        ),
+        "proxy_snapshot_to_expected": heading_error(
+            proxy_snapshot_heading,
+            expected_heading,
+        ),
+    }
+    return {
+        "matched": all(
+            math.isfinite(error)
+            and error <= CAST_FACING_TOLERANCE_DEGREES
+            for error in errors.values()
+        ),
+        "expected_heading": expected_heading,
+        "proxy_aim_heading": proxy_aim_heading,
+        "proxy_actor_heading": proxy_actor_heading,
+        "proxy_snapshot_heading": proxy_snapshot_heading,
+        **errors,
+    }
 
 
 def animation_proxy_within_owner_history(
@@ -799,11 +859,20 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
         active_seen = False
         anim_seen = False
         samples: list[dict[str, str]] = []
+        facing_samples: list[dict[str, float | bool]] = []
+        matching_facing_samples: list[dict[str, float | bool]] = []
+        expected_heading = float(queue_result["expected_heading"])
         deadline = time.monotonic() + 3.0
         while time.monotonic() < deadline:
             proxy = read_proxy_animation(direction.receiver_pipe, direction.source_id)
             samples.append(proxy)
-            active_seen = active_seen or proxy.get("cast_active") == "true"
+            proxy_cast_active = proxy.get("cast_active") == "true"
+            active_seen = active_seen or proxy_cast_active
+            if proxy_cast_active:
+                facing = cast_facing_sample(proxy, expected_heading)
+                facing_samples.append(facing)
+                if bool(facing["matched"]):
+                    matching_facing_samples.append(facing)
             try:
                 anim_seen = (
                     anim_seen
@@ -865,6 +934,13 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
             f"{direction.name} {spec.presentation}: continuous remote cast never became active; "
             f"last={samples[-1] if samples else {}} flow={flow}"
         )
+    if len(matching_facing_samples) < CAST_FACING_MATCH_SAMPLE_COUNT:
+        raise VerifyFailure(
+            f"{direction.name} {spec.presentation}: remote actor did not face "
+            "the owner's live cast direction; "
+            f"matches={len(matching_facing_samples)} "
+            f"samples={facing_samples[-8:]} flow={flow}"
+        )
     receiver_log = log_after(direction.receiver_log, receiver_offset)
     if f"native mana depleted. bot_id={direction.source_id}" in receiver_log:
         raise VerifyFailure(
@@ -877,6 +953,12 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
         "flow": flow,
         "active_seen": active_seen,
         "anim_seen": anim_seen,
+        "cast_facing": {
+            "active_samples": len(facing_samples),
+            "matching_samples": len(matching_facing_samples),
+            "tolerance_degrees": CAST_FACING_TOLERANCE_DEGREES,
+            "last_match": matching_facing_samples[-1],
+        },
         "last_proxy": samples[-1] if samples else {},
     }
 

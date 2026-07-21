@@ -68,7 +68,7 @@ from static_multiplayer_progression_contracts import (
     test_meditation_transient_counters_self_repair_to_native_bounds,
     test_native_item_recipe_selection_excludes_equipped_items,
     test_native_remote_fireball_converts_cast_heading_until_projectile_birth,
-    test_native_remote_fireball_inverts_presentation_heading_for_stock_fire,
+    test_native_remote_fireball_conversion_is_scoped_to_stock_fire,
     test_new_run_retires_the_prior_host_run_exit_latch,
     test_orb_pickup_verifier_preserves_native_maxima,
     test_pointer_list_batch_rejects_stale_managed_release_callbacks,
@@ -524,8 +524,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_primary_spell_effect_snapshots_do_not_fight_native_replay,
     ),
     (
-        "native remote Fireball inverts presentation heading for stock Fire",
-        test_native_remote_fireball_inverts_presentation_heading_for_stock_fire,
+        "native remote Fireball heading conversion is scoped to stock Fire",
+        test_native_remote_fireball_conversion_is_scoped_to_stock_fire,
     ),
     (
         "native remote Fireball converts cast heading until projectile birth",

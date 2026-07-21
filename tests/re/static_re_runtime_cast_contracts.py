@@ -443,6 +443,9 @@ def test_remote_held_input_casts_defer_lifecycle_to_sender_input() -> str:
 
     required_processing_tokens = (
         "Remote-player casts are driven by the sender's input stream.",
+        "constexpr std::uint64_t kRemoteCastInputStallTimeoutMs = 3000;",
+        "now_ms - remote_input_state.last_update_ms >=",
+        "kRemoteCastInputStallTimeoutMs;",
         "remote_input_active_without_release",
         "remote_input_release_settled",
         "!remote_input_active_without_release",
@@ -1115,7 +1118,13 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         '"client_settled": list(client_target)',
         "suspend_runtime_test_godmode(",
         "restore_runtime_test_godmode(",
-        "client_godmode_before = suspend_runtime_test_godmode(",
+        "godmode_before[label] = suspend_runtime_test_godmode(",
+        "vitals_before[label] = health.query_local_player_vitals(endpoint)",
+        "fresh_render_log_lines = log_line_counts(host, client)",
+        "expected_health_percent_by_participant=(",
+        "minimum_log_line_counts=fresh_render_log_lines",
+        '"client_observes_host"',
+        '"host_observes_client"',
     )
     missing_physical_resolution = [
         token

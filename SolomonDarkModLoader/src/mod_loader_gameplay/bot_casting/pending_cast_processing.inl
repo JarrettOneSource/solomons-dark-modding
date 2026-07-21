@@ -1,3 +1,5 @@
+constexpr std::uint64_t kRemoteCastInputStallTimeoutMs = 3000;
+
 struct BotBoulderReleaseHoldWrites {
     bool charge = false;
     bool release_charge = false;
@@ -483,7 +485,8 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     !remote_input_state.release_requested &&
                     remote_input_state.last_update_ms != 0 &&
                     now_ms > remote_input_state.last_update_ms &&
-                    now_ms - remote_input_state.last_update_ms >= 400;
+                    now_ms - remote_input_state.last_update_ms >=
+                        kRemoteCastInputStallTimeoutMs;
                 if (remote_input_state.has_aim_target) {
                     ongoing.have_aim_target = true;
                     ongoing.aim_target_x = remote_input_state.aim_target_x;

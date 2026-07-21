@@ -39,7 +39,10 @@ HOST_SCREENSHOT = ROOT / "runtime/steam_friend_active_pair_visuals_host.png"
 CLIENT_SCREENSHOT = ROOT / "runtime/steam_friend_active_pair_visuals_client.png"
 EXPECTED_BODY_TYPES = {7005, 7006}
 EXPECTED_STAFF_TYPE = 7004
-CAPTURE_HALF_SEPARATION = 330.0
+CAPTURE_HALF_SEPARATION = 280.0
+HOST_RENDER_ARM_PERCENT = 63
+CLIENT_RENDER_ARM_PERCENT = 37
+HOST_RENDER_TEST_PERCENT = 75
 VIEWPORT_GEOMETRY_TOLERANCE = 0.05
 VIEWPORT_EDGE_EXERCISE_DISTANCE = 24.0
 
@@ -381,6 +384,33 @@ def restore_vitals(endpoint: str, snapshot: dict[str, str]) -> dict[str, str]:
     )
 
 
+def set_health_percent(
+    endpoint: str,
+    snapshot: dict[str, str],
+    percent: int,
+) -> dict[str, str]:
+    max_hp = float(snapshot["max_hp"])
+    return health.set_local_player_vitals(
+        endpoint,
+        max_hp * (percent / 100.0),
+        max_hp,
+        mp=float(snapshot["mp"]),
+        max_mp=float(snapshot["max_mp"]),
+    )
+
+
+def log_line_counts(*participants: hud.Participant) -> dict[str, int]:
+    return {
+        participant.label: len(
+            participant.log.read_text(
+                encoding="utf-8",
+                errors="replace",
+            ).splitlines()
+        )
+        for participant in participants
+    }
+
+
 def suspend_runtime_test_godmode(
     pair: SteamFriendActivePair,
     endpoint: str,
@@ -448,8 +478,8 @@ def main() -> int:
     started_at = time.time()
     pair = SteamFriendActivePair()
     output: dict[str, Any] = {"ok": False}
-    client_vitals_before: dict[str, str] | None = None
-    client_godmode_before: str | None = None
+    vitals_before: dict[str, dict[str, str]] = {}
+    godmode_before: dict[str, str] = {}
     return_code = 1
     try:
         output["active_step"] = "discover_pair"
@@ -492,33 +522,105 @@ def main() -> int:
         }
         output["capture_placement"] = place_pair_for_capture(pair)
 
-        output["active_step"] = "half_health_hud"
-        client_godmode_before = suspend_runtime_test_godmode(
-            pair,
-            CLIENT_ENDPOINT,
-            "client",
+        output["active_step"] = "health_hud"
+        for label, endpoint in (
+            ("host", HOST_ENDPOINT),
+            ("client", CLIENT_ENDPOINT),
+        ):
+            godmode_before[label] = suspend_runtime_test_godmode(
+                pair,
+                endpoint,
+                label,
+            )
+            vitals_before[label] = health.query_local_player_vitals(endpoint)
+
+        arming_percentages = {
+            pair.host_participant_id: HOST_RENDER_ARM_PERCENT,
+            pair.client_participant_id: CLIENT_RENDER_ARM_PERCENT,
+        }
+        output["render_log_arming"] = {
+            "writes": {
+                "host": set_health_percent(
+                    HOST_ENDPOINT,
+                    vitals_before["host"],
+                    HOST_RENDER_ARM_PERCENT,
+                ),
+                "client": set_health_percent(
+                    CLIENT_ENDPOINT,
+                    vitals_before["client"],
+                    CLIENT_RENDER_ARM_PERCENT,
+                ),
+            },
+            "observers": {
+                "client_observes_host": (
+                    health.wait_for_remote_matches_owner_health(
+                        HOST_ENDPOINT,
+                        CLIENT_ENDPOINT,
+                        pair.host_participant_id,
+                        float(vitals_before["host"]["max_hp"]),
+                        expect_dead=False,
+                        timeout=args.timeout,
+                    )
+                ),
+                "host_observes_client": (
+                    health.wait_for_remote_matches_owner_health(
+                        CLIENT_ENDPOINT,
+                        HOST_ENDPOINT,
+                        pair.client_participant_id,
+                        float(vitals_before["client"]["max_hp"]),
+                        expect_dead=False,
+                        timeout=args.timeout,
+                    )
+                ),
+            },
+        }
+        output["render_log_arming"]["logs"] = hud.wait_for_render_logs(
+            args.timeout,
+            expected_health_percent_by_participant=arming_percentages,
         )
-        client_vitals_before = health.query_local_player_vitals(CLIENT_ENDPOINT)
-        client_max_hp = float(client_vitals_before["max_hp"])
-        client_half_hp = client_max_hp * 0.5
-        output["client_half_health_write"] = health.set_local_player_vitals(
-            CLIENT_ENDPOINT,
-            client_half_hp,
-            client_max_hp,
-            mp=float(client_vitals_before["mp"]),
-            max_mp=float(client_vitals_before["max_mp"]),
-        )
-        output["client_half_health_observer"] = (
-            health.wait_for_remote_matches_owner_health(
+        fresh_render_log_lines = log_line_counts(host, client)
+
+        expected_health_percentages = {
+            pair.host_participant_id: HOST_RENDER_TEST_PERCENT,
+            pair.client_participant_id: hud.EXPECTED_HALF_HEALTH_PERCENT,
+        }
+        output["health_writes"] = {
+            "host": set_health_percent(
+                HOST_ENDPOINT,
+                vitals_before["host"],
+                HOST_RENDER_TEST_PERCENT,
+            ),
+            "client": set_health_percent(
+                CLIENT_ENDPOINT,
+                vitals_before["client"],
+                hud.EXPECTED_HALF_HEALTH_PERCENT,
+            ),
+        }
+        output["health_observers"] = {
+            "client_observes_host": health.wait_for_remote_matches_owner_health(
+                HOST_ENDPOINT,
+                CLIENT_ENDPOINT,
+                pair.host_participant_id,
+                float(vitals_before["host"]["max_hp"]),
+                expect_dead=False,
+                timeout=args.timeout,
+            ),
+            "host_observes_client": health.wait_for_remote_matches_owner_health(
                 CLIENT_ENDPOINT,
                 HOST_ENDPOINT,
                 pair.client_participant_id,
-                client_max_hp,
+                float(vitals_before["client"]["max_hp"]),
                 expect_dead=False,
                 timeout=args.timeout,
-            )
+            ),
+        }
+        output["render_logs"] = hud.wait_for_render_logs(
+            args.timeout,
+            expected_health_percent_by_participant=(
+                expected_health_percentages
+            ),
+            minimum_log_line_counts=fresh_render_log_lines,
         )
-        output["render_logs"] = hud.wait_for_render_logs(args.timeout)
         output["ally_row_contract"] = {
             "host": successful_ally_rows(
                 host.log,
@@ -559,26 +661,38 @@ def main() -> int:
         output["traceback"] = traceback.format_exc()
         output["new_crash_artifacts"] = find_new_crash_artifacts(started_at)
     finally:
-        if client_vitals_before is not None:
+        for label, endpoint in (
+            ("host", HOST_ENDPOINT),
+            ("client", CLIENT_ENDPOINT),
+        ):
+            snapshot = vitals_before.get(label)
+            if snapshot is None:
+                continue
             try:
-                output["client_vitals_restore"] = restore_vitals(
-                    CLIENT_ENDPOINT,
-                    client_vitals_before,
+                output[f"{label}_vitals_restore"] = restore_vitals(
+                    endpoint,
+                    snapshot,
                 )
             except (VerifyFailure, subprocess.SubprocessError, ValueError, OSError) as exc:
-                output["client_vitals_restore_error"] = str(exc)
+                output[f"{label}_vitals_restore_error"] = str(exc)
                 output["ok"] = False
                 return_code = 1
-        if client_godmode_before is not None:
+        for label, endpoint in (
+            ("host", HOST_ENDPOINT),
+            ("client", CLIENT_ENDPOINT),
+        ):
+            previous = godmode_before.get(label)
+            if previous is None:
+                continue
             try:
                 restore_runtime_test_godmode(
                     pair,
-                    CLIENT_ENDPOINT,
-                    "client",
-                    client_godmode_before,
+                    endpoint,
+                    label,
+                    previous,
                 )
             except (VerifyFailure, subprocess.SubprocessError, ValueError, OSError) as exc:
-                output["client_godmode_restore_error"] = str(exc)
+                output[f"{label}_godmode_restore_error"] = str(exc)
                 output["ok"] = False
                 return_code = 1
         pair.close()

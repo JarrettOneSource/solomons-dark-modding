@@ -914,12 +914,16 @@ def test_native_remote_fireball_converts_cast_heading_until_projectile_birth() -
     documentation = _read("docs/spell-cast-cleanup-chain.md")
 
     for token in (
-        "const bool cast_heading_owns_native_initialization =",
+        "const bool live_cast_heading_valid =",
+        "const bool fireball_heading_owns_native_initialization =",
         "ongoing_cast.active &&",
         "ongoing_cast.have_aim_heading &&",
+        "ongoing_cast.selection_state_target ==",
+        "ResolveNativePrimaryEntryForElement(0)",
         "!ongoing_cast.remote_per_cast_projectile_observed;",
         "NormalizeWizardActorHeadingForWrite(90.0f - ongoing_cast.aim_heading)",
-        ": binding->replicated_target_heading;",
+        "NormalizeWizardActorHeadingForWrite(ongoing_cast.aim_heading)",
+        ": binding->replicated_target_heading);",
         "ShortestHeadingDeltaDegrees(heading, next_heading)",
         "ApplyWizardActorFacingState(actor_address, next_heading);",
     ):
@@ -943,11 +947,11 @@ def test_native_remote_fireball_converts_cast_heading_until_projectile_birth() -
 
     return (
         "native remote Fire casts convert presentation aim to native direction "
-        "through projectile birth, then return heading ownership to playback"
+        "through projectile birth while every live cast keeps presentation facing"
     )
 
 
-def test_native_remote_fireball_inverts_presentation_heading_for_stock_fire() -> str:
+def test_native_remote_fireball_conversion_is_scoped_to_stock_fire() -> str:
     playback = read_source_unit(
         "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/"
         "native_remote_playback.inl"
@@ -960,10 +964,25 @@ def test_native_remote_fireball_inverts_presentation_heading_for_stock_fire() ->
         "remote Fire replay must invert the presentation heading before stock "
         "projectile initialization"
     )
+    fire_guard = re.search(
+        r"const bool fireball_heading_owns_native_initialization =(?P<body>.*?);",
+        playback,
+        re.DOTALL,
+    )
+    assert fire_guard is not None, "remote Fire heading guard was not found"
+    for token in (
+        "live_cast_heading_valid",
+        "ongoing_cast.selection_state_target ==",
+        "ResolveNativePrimaryEntryForElement(0)",
+        "!ongoing_cast.remote_per_cast_projectile_observed",
+    ):
+        assert token in fire_guard.group("body"), (
+            f"remote Fire heading conversion is not scoped to stock Fire: {token}"
+        )
     assert (
         "NormalizeWizardActorHeadingForWrite(ongoing_cast.aim_heading)"
-        not in playback
-    ), "presentation heading must not be written directly into stock Fire direction"
+        in playback
+    ), "non-Fire live casts must retain their presentation-facing heading"
 
     cardinal_cases = {
         90.0: 0.0,
@@ -976,8 +995,8 @@ def test_native_remote_fireball_inverts_presentation_heading_for_stock_fire() ->
         assert native_heading == expected_native_heading
 
     return (
-        "remote Fire replay converts all cardinal presentation headings into "
-        "stock native directions"
+        "remote Fire replay alone converts cardinal presentation headings for "
+        "stock projectile birth while other casts keep presentation facing"
     )
 
 

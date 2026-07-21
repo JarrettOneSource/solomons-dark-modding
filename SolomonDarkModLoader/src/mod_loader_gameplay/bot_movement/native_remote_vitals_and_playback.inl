@@ -254,15 +254,21 @@ NativeRemotePlaybackResult ApplyNativeRemoteParticipantPlayback(
     // that native direction convention until projectile birth; an older
     // transform heading or the presentation heading would seed the wrong
     // Fireball+0x13C/+0x140 velocity.
-    const bool cast_heading_owns_native_initialization =
+    const bool live_cast_heading_valid =
         ongoing_cast.active &&
         ongoing_cast.have_aim_heading &&
-        std::isfinite(ongoing_cast.aim_heading) &&
+        std::isfinite(ongoing_cast.aim_heading);
+    const bool fireball_heading_owns_native_initialization =
+        live_cast_heading_valid &&
+        ongoing_cast.selection_state_target ==
+            ResolveNativePrimaryEntryForElement(0) &&
         !ongoing_cast.remote_per_cast_projectile_observed;
     const float next_heading =
-        cast_heading_owns_native_initialization
+        fireball_heading_owns_native_initialization
             ? NormalizeWizardActorHeadingForWrite(90.0f - ongoing_cast.aim_heading)
-            : binding->replicated_target_heading;
+            : (live_cast_heading_valid
+                   ? NormalizeWizardActorHeadingForWrite(ongoing_cast.aim_heading)
+                   : binding->replicated_target_heading);
 
     const float dx = binding->replicated_target_x - x;
     const float dy = binding->replicated_target_y - y;
