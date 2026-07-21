@@ -9,6 +9,10 @@ import math
 import time
 from typing import Any
 
+from multiplayer_pickup_geometry import (
+    PickupGeometryRuntime,
+    select_reachable_spawn_point,
+)
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_PIPE,
@@ -41,8 +45,6 @@ PICKUP_RANGE_TEST_MARGIN = 0.95
 PICKUP_SUPPRESSION_RADIUS = 335.0
 PICKUP_PARKING_MIN_DISTANCE = 520.0
 LOCAL_RUNTIME_PARTICIPANT_ID = 1
-RUN_SAFE_SPAWN_X = 2350.0
-RUN_SAFE_SPAWN_Y = 2850.0
 
 
 CAPTURE_LUA = r"""
@@ -842,17 +844,19 @@ def setup_live_run_pair_without_waves(max_attempts: int) -> dict[str, Any]:
     raise VerifyFailure(f"failed to prepare live run pair after {max_attempts} attempts: {last_error}")
 
 
-def select_host_spawn_anchor(timeout: float) -> dict[str, Any]:
-    before = capture_pair()
-    _ = timeout
-    target_x, target_y = snap_to_nav(HOST_PIPE, RUN_SAFE_SPAWN_X, RUN_SAFE_SPAWN_Y)
-    if not math.isfinite(target_x) or not math.isfinite(target_y):
-        raise VerifyFailure(f"host spawn anchor unavailable: before={before}")
-    return {
-        "before": before,
-        "target_x": target_x,
-        "target_y": target_y,
-    }
+def select_spawn_anchor(timeout: float) -> dict[str, Any]:
+    return select_reachable_spawn_point(
+        PickupGeometryRuntime(
+            client_pipe=CLIENT_PIPE,
+            client_participant_id=CLIENT_ID,
+            capture_pair=capture_pair,
+            find_participant=find_participant,
+            place_player=place_player,
+            snap_to_nav=snap_to_nav,
+        ),
+        pickup_suppression_radius=PICKUP_SUPPRESSION_RADIUS,
+        timeout=timeout,
+    )
 
 
 def verify_one_orb_pickup(
@@ -1029,10 +1033,10 @@ def verify_orb_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:
 
     baseline = capture_client_vitals()
     result["baseline_client_vitals"] = baseline
-    anchor = select_host_spawn_anchor(timeout=args.timeout)
+    anchor = select_spawn_anchor(timeout=args.timeout)
     result["anchor"] = anchor
-    anchor_x = float(anchor["target_x"])
-    anchor_y = float(anchor["target_y"])
+    anchor_x = float(anchor["snapped_x"])
+    anchor_y = float(anchor["snapped_y"])
     result["health_orb"] = verify_one_orb_pickup(
         label="health",
         kind="health_orb",

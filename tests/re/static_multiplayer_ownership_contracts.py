@@ -614,6 +614,7 @@ def test_native_item_pickup_converges_into_stock_inventory() -> str:
     orb_authority = _read(
         "tools/verify_multiplayer_orb_pickup_authority.py"
     )
+    pickup_geometry = _read("tools/multiplayer_pickup_geometry.py")
     native_item_verifier = _read(
         "tools/verify_multiplayer_native_item_inventory_sync.py"
     )
@@ -699,12 +700,6 @@ def test_native_item_pickup_converges_into_stock_inventory() -> str:
     for token in (
         "STOCK_LOOT_WORLD_UNITS_PER_PICKUP_RANGE = 30.0",
         "PICKUP_RANGE_TEST_MARGIN = 0.95",
-        "SPAWN_SETTLE_TOLERANCE = 3.0",
-        "SPAWN_SETTLE_SECONDS = 0.4",
-        "def settle_reachable_spawn_candidate(",
-        "candidate = settle_reachable_spawn_candidate(",
-        '"snapped_x": local_x',
-        '"snapped_y": local_y',
         'capture_values.get(prefix + "pickup_range")',
         'local_row["pickup_range"]',
         'host_row["pickup_range"]',
@@ -714,11 +709,6 @@ def test_native_item_pickup_converges_into_stock_inventory() -> str:
         assert token in gold_authority, (
             f"gold verifier does not follow synchronized pickup geometry: {token}"
         )
-    select_spawn = gold_authority[
-        gold_authority.index("def select_spawn_point(") :
-        gold_authority.index("\ndef verify_gold_pickup_authority(")
-    ]
-    assert "except Exception" not in select_spawn
     for token in (
         "STOCK_ORB_WORLD_UNITS_PER_PICKUP_RANGE = 60.0",
         "PICKUP_RANGE_TEST_MARGIN = 0.95",
@@ -731,6 +721,21 @@ def test_native_item_pickup_converges_into_stock_inventory() -> str:
         assert token in orb_authority, (
             f"orb verifier does not follow synchronized pickup geometry: {token}"
         )
+    for verifier in (gold_authority, orb_authority):
+        assert "PickupGeometryRuntime(" in verifier
+        assert "select_reachable_spawn_point(" in verifier
+    for token in (
+        '"snapped_x": local_x',
+        '"snapped_y": local_y',
+        "host_participant = runtime.find_participant(",
+        "observer_agrees and separated_from_host and stationary",
+    ):
+        assert token in pickup_geometry, (
+            f"shared pickup geometry does not use settled native position: {token}"
+        )
+    assert "except Exception" not in pickup_geometry
+    assert "RUN_SAFE_SPAWN_X" not in gold_authority + orb_authority
+    assert "RUN_SAFE_SPAWN_Y" not in gold_authority + orb_authority
     assert "PICKUP_POSITION_TOLERANCE" not in gold_authority + orb_authority
     assert "request_pickup_when_ready" not in orb_authority
     for verifier in (

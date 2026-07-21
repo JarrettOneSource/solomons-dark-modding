@@ -9,6 +9,10 @@ import math
 import time
 from typing import Any
 
+from multiplayer_pickup_geometry import (
+    PickupGeometryRuntime,
+    select_reachable_spawn_point,
+)
 from probe_run_reward_sync import (
     PROBE_EXPECTED_TIER,
     PROBE_GOLD_AMOUNT,
@@ -38,19 +42,11 @@ from verify_local_multiplayer_sync import (
 
 RUNTIME_OUTPUT = ROOT / "runtime" / "multiplayer_gold_pickup_authority.json"
 POSITION_TOLERANCE = 260.0
-MIN_HOST_CLIENT_ANCHOR_DISTANCE = 520.0
-GOLD_SPAWN_OFFSET_FROM_CLIENT = 280.0
-GOLD_SPAWN_MAX_CLIENT_DISTANCE = 300.0
-GOLD_SPAWN_MIN_HOST_DISTANCE = 380.0
 STOCK_LOOT_WORLD_UNITS_PER_PICKUP_RANGE = 30.0
 PICKUP_RANGE_TEST_MARGIN = 0.95
 PICKUP_SUPPRESSION_RADIUS = 335.0
 PICKUP_PARKING_MIN_DISTANCE = 520.0
-SPAWN_SETTLE_TOLERANCE = 3.0
-SPAWN_SETTLE_SECONDS = 0.4
 LOCAL_RUNTIME_PARTICIPANT_ID = 1
-RUN_SAFE_SPAWN_X = 2350.0
-RUN_SAFE_SPAWN_Y = 2850.0
 
 
 CAPTURE_LUA = r"""
@@ -550,218 +546,18 @@ def move_client_out_of_pickup_range(
     )
 
 
-def select_remote_spawn_anchor(timeout: float) -> dict[str, Any]:
-    before = capture_pair()
-    client_x = parse_float_text(before["client"].get("player.x"))
-    client_y = parse_float_text(before["client"].get("player.y"))
-    host_x = parse_float_text(before["host"].get("player.x"))
-    host_y = parse_float_text(before["host"].get("player.y"))
-    if (
-        not math.isfinite(client_x)
-        or not math.isfinite(client_y)
-        or not math.isfinite(host_x)
-        or not math.isfinite(host_y)
-    ):
-        raise VerifyFailure(f"player positions unavailable: before={before}")
-
-    candidate_offsets = (
-        (900.0, 0.0),
-        (-900.0, 0.0),
-        (0.0, 900.0),
-        (0.0, -900.0),
-        (700.0, 700.0),
-        (-700.0, 700.0),
-        (700.0, -700.0),
-        (-700.0, -700.0),
-        (1200.0, 0.0),
-        (-1200.0, 0.0),
-    )
-    attempts: list[dict[str, Any]] = []
-    deadline = time.monotonic() + timeout
-    for offset_x, offset_y in candidate_offsets:
-        if time.monotonic() >= deadline:
-            break
-        requested_x = host_x + offset_x
-        requested_y = host_y + offset_y
-        try:
-            target_x, target_y = snap_to_nav(CLIENT_PIPE, requested_x, requested_y)
-        except Exception:
-            target_x, target_y = requested_x, requested_y
-        place = place_player(CLIENT_PIPE, target_x, target_y, 90.0)
-
-        settle_deadline = min(deadline, time.monotonic() + 4.0)
-        last_host: dict[str, str] = {}
-        last_row: dict[str, Any] | None = None
-        while time.monotonic() < settle_deadline:
-            last_host = capture(HOST_PIPE)
-            last_row = find_participant(last_host, CLIENT_ID)
-            if last_row is not None:
-                host_distance = math.hypot(last_row["x"] - host_x, last_row["y"] - host_y)
-                target_distance = math.hypot(last_row["x"] - target_x, last_row["y"] - target_y)
-                if (
-                    host_distance >= MIN_HOST_CLIENT_ANCHOR_DISTANCE
-                    and target_distance <= POSITION_TOLERANCE
-                ):
-                    return {
-                        "before": before,
-                        "host_x": host_x,
-                        "host_y": host_y,
-                        "requested_x": requested_x,
-                        "requested_y": requested_y,
-                        "snapped_x": target_x,
-                        "snapped_y": target_y,
-                        "target_x": last_row["x"],
-                        "target_y": last_row["y"],
-                        "place": place,
-                        "host_participant": last_row,
-                        "host_distance": host_distance,
-                        "target_distance": target_distance,
-                    }
-            time.sleep(0.1)
-        attempts.append({
-            "requested_x": requested_x,
-            "requested_y": requested_y,
-            "snapped_x": target_x,
-            "snapped_y": target_y,
-            "last_row": last_row,
-            "last_host": last_host,
-        })
-
-    raise VerifyFailure(f"host did not observe a separated moved client before gold test: attempts={attempts}")
-
-
-def settle_reachable_spawn_candidate(
-    *,
-    requested_x: float,
-    requested_y: float,
-    nav_x: float,
-    nav_y: float,
-    host_x: float,
-    host_y: float,
-    timeout: float,
-) -> dict[str, Any] | None:
-    place = place_player(CLIENT_PIPE, nav_x, nav_y, 90.0)
-    deadline = time.monotonic() + timeout
-    stable_since: float | None = None
-    previous_position: tuple[float, float] | None = None
-    last_pair: dict[str, dict[str, str]] = {}
-    last_host_row: dict[str, Any] | None = None
-    while time.monotonic() < deadline:
-        last_pair = capture_pair()
-        local_x = parse_float_text(last_pair["client"].get("player.x"))
-        local_y = parse_float_text(last_pair["client"].get("player.y"))
-        last_host_row = find_participant(last_pair["host"], CLIENT_ID)
-        finite = math.isfinite(local_x) and math.isfinite(local_y)
-        observer_agrees = (
-            finite
-            and last_host_row is not None
-            and distance(
-                local_x,
-                local_y,
-                last_host_row["x"],
-                last_host_row["y"],
-            ) <= SPAWN_SETTLE_TOLERANCE
-        )
-        separated_from_host = (
-            finite
-            and distance(local_x, local_y, host_x, host_y)
-            > PICKUP_SUPPRESSION_RADIUS + 20.0
-        )
-        stationary = (
-            finite
-            and previous_position is not None
-            and distance(local_x, local_y, *previous_position)
-            <= SPAWN_SETTLE_TOLERANCE
-        )
-        if observer_agrees and separated_from_host and stationary:
-            now = time.monotonic()
-            if stable_since is None:
-                stable_since = now
-            elif now - stable_since >= SPAWN_SETTLE_SECONDS:
-                return {
-                    "requested_x": requested_x,
-                    "requested_y": requested_y,
-                    "nav_x": nav_x,
-                    "nav_y": nav_y,
-                    "snapped_x": local_x,
-                    "snapped_y": local_y,
-                    "place": place,
-                    "client_capture": last_pair["client"],
-                    "host_capture": last_pair["host"],
-                    "host_participant": last_host_row,
-                }
-        else:
-            stable_since = None
-        if finite:
-            previous_position = (local_x, local_y)
-        time.sleep(0.1)
-    return None
-
-
 def select_spawn_point(timeout: float) -> dict[str, Any]:
-    before = capture_pair()
-    client_x = parse_float_text(before["client"].get("player.x"))
-    client_y = parse_float_text(before["client"].get("player.y"))
-    host_x = parse_float_text(before["host"].get("player.x"))
-    host_y = parse_float_text(before["host"].get("player.y"))
-    away_x = client_x - host_x
-    away_y = client_y - host_y
-    away_length = math.hypot(away_x, away_y)
-    if away_length < 1.0:
-        away_x, away_y, away_length = 1.0, 0.0, 1.0
-    away_x /= away_length
-    away_y /= away_length
-    directions = (
-        (away_x, away_y),
-        (-away_y, away_x),
-        (away_y, -away_x),
-        (-away_x, -away_y),
-    )
-    attempts: list[dict[str, Any]] = []
-    deadline = time.monotonic() + timeout
-    for radius in (440.0, 520.0, 600.0):
-        for direction_x, direction_y in directions:
-            if time.monotonic() >= deadline:
-                break
-            requested_x = client_x + direction_x * radius
-            requested_y = client_y + direction_y * radius
-            nav_x, nav_y = snap_to_nav(CLIENT_PIPE, requested_x, requested_y)
-            candidate = settle_reachable_spawn_candidate(
-                requested_x=requested_x,
-                requested_y=requested_y,
-                nav_x=nav_x,
-                nav_y=nav_y,
-                host_x=host_x,
-                host_y=host_y,
-                timeout=min(4.0, max(0.0, deadline - time.monotonic())),
-            )
-            if candidate is not None:
-                candidate["client_distance"] = distance(
-                    client_x,
-                    client_y,
-                    candidate["snapped_x"],
-                    candidate["snapped_y"],
-                )
-                candidate["host_distance"] = distance(
-                    host_x,
-                    host_y,
-                    candidate["snapped_x"],
-                    candidate["snapped_y"],
-                )
-                return {
-                    "before": before,
-                    **candidate,
-                }
-            attempts.append(
-                {
-                    "requested_x": requested_x,
-                    "requested_y": requested_y,
-                    "nav_x": nav_x,
-                    "nav_y": nav_y,
-                }
-            )
-    raise VerifyFailure(
-        f"no stable reachable gold spawn point separated from the host: {attempts}"
+    return select_reachable_spawn_point(
+        PickupGeometryRuntime(
+            client_pipe=CLIENT_PIPE,
+            client_participant_id=CLIENT_ID,
+            capture_pair=capture_pair,
+            find_participant=find_participant,
+            place_player=place_player,
+            snap_to_nav=snap_to_nav,
+        ),
+        pickup_suppression_radius=PICKUP_SUPPRESSION_RADIUS,
+        timeout=timeout,
     )
 
 
