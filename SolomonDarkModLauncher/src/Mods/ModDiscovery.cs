@@ -11,19 +11,37 @@ internal static class ModDiscovery
         var mods = new List<DiscoveredMod>();
         foreach (var directoryPath in Directory.EnumerateDirectories(modsRootPath))
         {
-            var manifestPath = Path.Combine(directoryPath, ManifestFileName);
-            if (!File.Exists(manifestPath))
+            var mod = TryDiscover(directoryPath);
+            if (mod is null)
             {
                 continue;
             }
-
-            var manifest = LoadManifest(manifestPath);
-            ModManifestValidator.Validate(manifestPath, manifest);
-
-            mods.Add(new DiscoveredMod(directoryPath, manifestPath, manifest));
+            mods.Add(mod);
         }
 
         return mods;
+    }
+
+    public static DiscoveredMod DiscoverRoot(string modRootPath)
+    {
+        var normalizedRoot = Path.GetFullPath(modRootPath);
+        return TryDiscover(normalizedRoot)
+            ?? throw new FileNotFoundException(
+                "Mod root does not contain manifest.json.",
+                Path.Combine(normalizedRoot, ManifestFileName));
+    }
+
+    private static DiscoveredMod? TryDiscover(string directoryPath)
+    {
+        var manifestPath = Path.Combine(directoryPath, ManifestFileName);
+        if (!File.Exists(manifestPath))
+        {
+            return null;
+        }
+
+        var manifest = LoadManifest(manifestPath);
+        ModManifestValidator.Validate(manifestPath, manifest);
+        return new DiscoveredMod(directoryPath, manifestPath, manifest);
     }
 
     private static ModManifest LoadManifest(string manifestPath)

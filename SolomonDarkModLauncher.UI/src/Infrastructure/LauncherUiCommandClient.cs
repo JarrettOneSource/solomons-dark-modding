@@ -28,6 +28,7 @@ internal sealed class LauncherUiCommandClient
     private string lobbyId_ = string.Empty;
     private string gameDirectory_;
     private string directoryUrl_;
+    private string? lobbyTicket_;
 
     public LauncherUiCommandClient()
     {
@@ -67,6 +68,17 @@ internal sealed class LauncherUiCommandClient
         lobbyId_ = lobbyId?.Trim() ?? string.Empty;
     }
 
+    public void UseDirectLobbyJoin()
+    {
+        lobbyTicket_ = null;
+    }
+
+    public void UseWebsiteLobbyJoin(string directoryBaseUrl, string? ticket)
+    {
+        UpdateDirectoryUrl(directoryBaseUrl);
+        lobbyTicket_ = ticket;
+    }
+
     public void UpdateGameDirectory(string gameDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gameDirectory);
@@ -88,14 +100,19 @@ internal sealed class LauncherUiCommandClient
         }
 
         if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
-            uri.Scheme is not ("http" or "https"))
+            (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+             !(string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+               uri.IsLoopback)) ||
+            uri.UserInfo.Length != 0 ||
+            uri.Query.Length != 0 ||
+            uri.Fragment.Length != 0)
         {
             throw new InvalidOperationException(
-                "Enter an absolute HTTP or HTTPS URL for the lobby directory.");
+                "Enter an HTTPS lobby directory URL; loopback development URLs may use HTTP.");
         }
 
-        directoryUrl_ = trimmed;
-        settingsStore_.SaveDirectoryUrl(trimmed);
+        directoryUrl_ = uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
+        settingsStore_.SaveDirectoryUrl(directoryUrl_);
     }
 
     public string BuildCommandPreview(
@@ -227,6 +244,13 @@ internal sealed class LauncherUiCommandClient
                 {
                     arguments.Add("--lobby-id");
                     arguments.Add(lobbyId_);
+                }
+                arguments.Add("--directory-url");
+                arguments.Add(directoryUrl_);
+                if (!string.IsNullOrWhiteSpace(lobbyTicket_))
+                {
+                    arguments.Add("--lobby-ticket");
+                    arguments.Add(lobbyTicket_);
                 }
                 break;
         }

@@ -39,6 +39,32 @@ internal sealed class ModCatalog
         };
     }
 
+    public static ModCatalog CreateExact(IReadOnlyList<DiscoveredMod> exactMods)
+    {
+        var discovered = exactMods
+            .OrderBy(mod => mod.Manifest.Priority)
+            .ThenBy(mod => mod.Manifest.Id, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        EnsureUniqueIds(discovered);
+
+        var discoveredById = discovered.ToDictionary(
+            mod => mod.Manifest.Id,
+            StringComparer.OrdinalIgnoreCase);
+        var resolved = ResolveEnabledModIds(discovered, discoveredById);
+        if (resolved.Count != discovered.Length)
+        {
+            throw new InvalidOperationException(
+                "The exact multiplayer mod set did not resolve to every requested mod.");
+        }
+
+        return new ModCatalog
+        {
+            DiscoveredMods = discovered,
+            EnabledMods = discovered,
+            EnabledModIds = resolved
+        };
+    }
+
     public bool IsEnabled(DiscoveredMod mod)
     {
         return IsEnabled(mod.Manifest.Id);

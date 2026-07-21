@@ -55,9 +55,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         HowToPlayCommand = new RelayCommand(_ => IsHowToPlayOpen = true);
         HostSteamCommand = new RelayCommand(_ => OpenHostSetup(), _ => CanLaunch());
         JoinSteamCommand = new RelayCommand(
-            _ => _ = ExecuteActionAsync(
-                LauncherUiCommandMode.JoinSteam,
-                $"The launcher joins lobby {LobbyId}."),
+            _ => JoinLobbyDirect(),
             _ => CanJoinLobbyId());
         LaunchSinglePlayerCommand = new RelayCommand(
             _ => _ = ExecuteActionAsync(
@@ -700,9 +698,27 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void QueueLobbyJoin(ulong lobbyId)
     {
+        client_.UseDirectLobbyJoin();
         LobbyId = lobbyId.ToString();
         pendingLobbyJoinId_ = lobbyId;
         TryLaunchPendingLobbyJoin();
+    }
+
+    public void QueueWebsiteLobbyJoin(LauncherJoinActivation activation)
+    {
+        DirectoryUrl = activation.DirectoryBaseUrl;
+        LobbyId = activation.LobbyId.ToString();
+        client_.UseWebsiteLobbyJoin(activation.DirectoryBaseUrl, activation.Ticket);
+        pendingLobbyJoinId_ = activation.LobbyId;
+        TryLaunchPendingLobbyJoin();
+    }
+
+    private void JoinLobbyDirect()
+    {
+        client_.UseDirectLobbyJoin();
+        _ = ExecuteActionAsync(
+            LauncherUiCommandMode.JoinSteam,
+            $"The launcher joins lobby {LobbyId}.");
     }
 
     private void TryLaunchPendingLobbyJoin()

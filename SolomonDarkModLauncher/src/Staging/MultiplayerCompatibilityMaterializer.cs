@@ -63,7 +63,13 @@ internal static class MultiplayerCompatibilityMaterializer
         return new MultiplayerCompatibilityStageResult(
             manifestPath,
             fingerprint,
-            CurrentProtocolVersion);
+            CurrentProtocolVersion,
+            compatibility.EnabledMods
+                .Select(mod => new MultiplayerModDescriptor(
+                    mod.Id,
+                    mod.Version,
+                    mod.ContentSha256))
+                .ToArray());
     }
 
     private static CompatibilityMod BuildModIdentity(DiscoveredMod mod)
@@ -74,7 +80,7 @@ internal static class MultiplayerCompatibilityMaterializer
             mod.Manifest.Priority,
             mod.Manifest.RuntimeKind,
             mod.Manifest.Runtime.ApiVersion,
-            HashDirectory(mod.RootPath));
+            ModContentHasher.HashDirectory(mod.RootPath));
     }
 
     private static CompatibilityFile HashRequiredFile(string path)
@@ -87,36 +93,14 @@ internal static class MultiplayerCompatibilityMaterializer
         }
         return new CompatibilityFile(
             Path.GetFileName(path),
-            HashFile(path));
+            ModContentHasher.HashFile(path));
     }
 
     private static CompatibilityFile HashOptionalFile(string path)
     {
         return File.Exists(path)
-            ? new CompatibilityFile(Path.GetFileName(path), HashFile(path))
+            ? new CompatibilityFile(Path.GetFileName(path), ModContentHasher.HashFile(path))
             : new CompatibilityFile(Path.GetFileName(path), "missing");
-    }
-
-    private static string HashDirectory(string rootPath)
-    {
-        using var aggregate = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (var path in Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories)
-                     .OrderBy(
-                         path => Path.GetRelativePath(rootPath, path),
-                         StringComparer.Ordinal))
-        {
-            var relativePath = Path.GetRelativePath(rootPath, path)
-                .Replace(Path.DirectorySeparatorChar, '/');
-            var record = $"{relativePath}\0{HashFile(path)}\n";
-            aggregate.AppendData(Encoding.UTF8.GetBytes(record));
-        }
-        return Convert.ToHexString(aggregate.GetHashAndReset()).ToLowerInvariant();
-    }
-
-    private static string HashFile(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
     private sealed record CompatibilityManifest(

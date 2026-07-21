@@ -148,8 +148,11 @@ success until the host compatibility handshake authenticates.
 
 The website lists public lobbies and the friends-only lobbies that the signed-in
 Steam user can enter. A lobby appears after its host reaches the hub. Its
-**Connect** action opens the installed beta launcher and joins that lobby. If
-the website is unavailable, join through Steam or use the Lobby ID.
+**Join Game** action opens the installed beta launcher and joins that lobby.
+Direct Steam invites and lobby-ID joins also ask the configured website for the
+host's exact mod set when it is available. If the website is unavailable, the
+launcher falls back to the locally enabled set, so all players can still join
+after manually installing and enabling the same exact mods.
 
 The equivalent command-line launches are:
 

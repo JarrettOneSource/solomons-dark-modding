@@ -7,6 +7,7 @@ internal sealed class WorkspacePaths
     public required string ConfigRootPath { get; init; }
     public required string ModsRootPath { get; init; }
     public required string RuntimeRootPath { get; init; }
+    public required string ModCacheRootPath { get; init; }
     public required string ModStatePath { get; init; }
     public required string StageRootPath { get; init; }
     public required string ProfileRootPath { get; init; }
@@ -33,6 +34,7 @@ internal sealed class WorkspacePaths
             ? Path.Combine(runtimeRootPath, "stage")
             : Path.GetFullPath(stageRootOverride);
         var modStatePath = Path.Combine(runtimeRootPath, "mod-manager-state.json");
+        var modCacheRootPath = Path.Combine(runtimeBaseRootPath, "downloaded-mods");
         var profileRootPath = Path.Combine(runtimeRootPath, "profile");
         var appDataRootPath = Path.Combine(profileRootPath, "AppData");
         var roamingAppDataPath = Path.Combine(appDataRootPath, "Roaming");
@@ -43,6 +45,7 @@ internal sealed class WorkspacePaths
         Directory.CreateDirectory(configRootPath);
         Directory.CreateDirectory(runtimeBaseRootPath);
         Directory.CreateDirectory(runtimeRootPath);
+        Directory.CreateDirectory(modCacheRootPath);
         Directory.CreateDirectory(profileRootPath);
         Directory.CreateDirectory(roamingAppDataPath);
         Directory.CreateDirectory(localAppDataPath);
@@ -59,6 +62,7 @@ internal sealed class WorkspacePaths
             ConfigRootPath = configRootPath,
             ModsRootPath = modsRootPath,
             RuntimeRootPath = runtimeRootPath,
+            ModCacheRootPath = modCacheRootPath,
             ModStatePath = modStatePath,
             StageRootPath = stageRootPath,
             ProfileRootPath = profileRootPath,

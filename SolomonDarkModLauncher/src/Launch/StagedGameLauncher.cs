@@ -114,7 +114,8 @@ internal static class StagedGameLauncher
                     stage.StageRootPath,
                     process.Id,
                     launchToken,
-                    multiplayer.Host);
+                    multiplayer.Host,
+                    stage.MultiplayerCompatibility.EnabledMods);
             }
             else if (multiplayer?.Mode == MultiplayerLaunchMode.Join)
             {

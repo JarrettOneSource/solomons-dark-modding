@@ -26,12 +26,31 @@ internal static class LauncherCommandExecutor
 
         var manager = new ModManagerService(configuration);
         var catalog = manager.LoadCatalog();
+        LobbyModSyncResult? lobbyModSync = null;
+        if (command.Mode == LauncherMode.Launch &&
+            command.MultiplayerMode == MultiplayerLaunchMode.Join &&
+            command.SteamLobbyId is { } lobbyId)
+        {
+            lobbyModSync = LobbyModSynchronizer.SynchronizeAsync(
+                    configuration,
+                    catalog,
+                    lobbyId,
+                    command.LobbyHost.DirectoryBaseUrl,
+                    command.LobbyTicket)
+                .GetAwaiter()
+                .GetResult();
+            catalog = lobbyModSync.Catalog;
+        }
 
         return command.Mode switch
         {
             LauncherMode.ListMods => new LauncherCommandExecution(command, configuration, catalog),
             LauncherMode.Stage => ExecuteStage(command, configuration, catalog),
-            LauncherMode.Launch => ExecuteLaunch(command, configuration, catalog),
+            LauncherMode.Launch => ExecuteLaunch(
+                command,
+                configuration,
+                catalog,
+                lobbyModSync),
             LauncherMode.EnableMod => ExecuteSetEnabled(command, configuration, manager, enabled: true),
             LauncherMode.DisableMod => ExecuteSetEnabled(command, configuration, manager, enabled: false),
             _ => throw new InvalidOperationException($"Unsupported mode: {command.Mode}")
@@ -50,7 +69,8 @@ internal static class LauncherCommandExecutor
     private static LauncherCommandExecution ExecuteLaunch(
         LauncherCommand command,
         LauncherConfiguration configuration,
-        ModCatalog catalog)
+        ModCatalog catalog,
+        LobbyModSyncResult? lobbyModSync)
     {
         var stageResult = StageBuilder.Build(configuration, catalog);
         var multiplayer = MultiplayerLaunchOptions.Create(
@@ -79,6 +99,7 @@ internal static class LauncherCommandExecutor
             command,
             configuration,
             catalog,
+            LobbyModSync: lobbyModSync,
             StageResult: stageResult,
             LaunchedGame: launchedGame);
     }

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Text.Json;
+using SolomonDarkModLauncher.Mods;
 
 namespace SolomonDarkModLauncher.Launch;
 
@@ -10,7 +11,8 @@ internal sealed record LobbyPublisherConfiguration(
     string StageRootPath,
     int GameProcessId,
     string LaunchToken,
-    LobbyHostOptions Host);
+    LobbyHostOptions Host,
+    IReadOnlyList<MultiplayerModDescriptor> ActiveMods);
 
 internal static class LobbyDirectoryPublisher
 {
@@ -26,7 +28,8 @@ internal static class LobbyDirectoryPublisher
         string stageRootPath,
         int gameProcessId,
         string launchToken,
-        LobbyHostOptions host)
+        LobbyHostOptions host,
+        IReadOnlyList<MultiplayerModDescriptor> activeMods)
     {
         var runtimeDirectory = Path.Combine(stageRootPath, ".sdmod");
         var logPath = Path.Combine(runtimeDirectory, "lobby-directory.log");
@@ -41,7 +44,8 @@ internal static class LobbyDirectoryPublisher
                 stageRootPath,
                 gameProcessId,
                 launchToken,
-                host);
+                host,
+                activeMods);
             File.WriteAllText(
                 configurationPath,
                 JsonSerializer.Serialize(configuration, JsonOptions));
@@ -167,7 +171,11 @@ internal static class LobbyDirectoryPublisher
                     DateTime.UtcNow >= nextHeartbeatUtc &&
                     IsPublishableHostStatus(configuration.Host, status))
                 {
-                    var result = await AnnounceAsync(client, secret!, status!);
+                    var result = await AnnounceAsync(
+                        client,
+                        secret!,
+                        status!,
+                        configuration.ActiveMods);
                     nextHeartbeatUtc = DateTime.UtcNow + HeartbeatInterval;
                     if (result is null)
                     {
@@ -236,7 +244,8 @@ internal static class LobbyDirectoryPublisher
     private static async Task<AnnounceResponse?> AnnounceAsync(
         HttpClient client,
         string secret,
-        MultiplayerSessionStatus status)
+        MultiplayerSessionStatus status,
+        IReadOnlyList<MultiplayerModDescriptor> activeMods)
     {
         var memberCount = status.Members.Length > 0
             ? status.Members.Length
@@ -268,7 +277,8 @@ internal static class LobbyDirectoryPublisher
                 Wave: null,
                 Difficulty: null,
                 ElapsedSeconds: null,
-                StatusText: null));
+                StatusText: null),
+            activeMods);
 
         try
         {
@@ -398,7 +408,8 @@ internal static class LobbyDirectoryPublisher
         int Players,
         int MaxPlayers,
         BuildDescriptor Build,
-        GameDescriptor Game);
+        GameDescriptor Game,
+        IReadOnlyList<MultiplayerModDescriptor> Mods);
 
     private sealed record BuildDescriptor(
         uint AppId,

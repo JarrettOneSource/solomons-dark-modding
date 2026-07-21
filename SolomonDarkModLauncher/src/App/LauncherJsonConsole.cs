@@ -29,6 +29,7 @@ internal static class LauncherJsonConsole
                 GameDirectory = execution.Configuration.Game.InstallDirectory,
                 ConfigRoot = execution.Configuration.Workspace.ConfigRootPath,
                 ModsRoot = execution.Configuration.Workspace.ModsRootPath,
+                ModCacheRoot = execution.Configuration.Workspace.ModCacheRootPath,
                 ModStatePath = execution.Configuration.Workspace.ModStatePath,
                 StageRoot = execution.Configuration.Workspace.StageRootPath,
                 ProfileRoot = execution.Configuration.Workspace.ProfileRootPath,
@@ -54,6 +55,17 @@ internal static class LauncherJsonConsole
                     ManifestPath = mod.ManifestPath,
                     Enabled = execution.Catalog.IsEnabled(mod)
                 }).ToArray(),
+            LobbyModSync = execution.LobbyModSync is null
+                ? null
+                : new LauncherJsonLobbyModSync
+                {
+                    UsedWebsite = execution.LobbyModSync.UsedWebsite,
+                    FallbackReason = execution.LobbyModSync.FallbackReason,
+                    RequiredModCount = execution.LobbyModSync.RequiredModCount,
+                    ReusedManualModCount = execution.LobbyModSync.ReusedManualModCount,
+                    ReusedCachedModCount = execution.LobbyModSync.ReusedCachedModCount,
+                    DownloadedModCount = execution.LobbyModSync.DownloadedModCount
+                },
             Stage = execution.StageResult is null
                 ? null
                 : new LauncherJsonStage
@@ -142,6 +154,7 @@ internal static class LauncherJsonConsole
             Error = ex.Message,
             Configuration = null,
             Mods = [],
+            LobbyModSync = null,
             Stage = null,
             Launch = null,
             ModStateChange = null
@@ -181,9 +194,20 @@ internal static class LauncherJsonConsole
         public required string? Error { get; init; }
         public required LauncherJsonConfiguration? Configuration { get; init; }
         public required IReadOnlyList<LauncherJsonMod> Mods { get; init; }
+        public required LauncherJsonLobbyModSync? LobbyModSync { get; init; }
         public required LauncherJsonStage? Stage { get; init; }
         public required LauncherJsonLaunch? Launch { get; init; }
         public required LauncherJsonModStateChange? ModStateChange { get; init; }
+    }
+
+    private sealed class LauncherJsonLobbyModSync
+    {
+        public required bool UsedWebsite { get; init; }
+        public required string? FallbackReason { get; init; }
+        public required int RequiredModCount { get; init; }
+        public required int ReusedManualModCount { get; init; }
+        public required int ReusedCachedModCount { get; init; }
+        public required int DownloadedModCount { get; init; }
     }
 
     private sealed class LauncherJsonConfiguration
@@ -193,6 +217,7 @@ internal static class LauncherJsonConsole
         public required string GameDirectory { get; init; }
         public required string ConfigRoot { get; init; }
         public required string ModsRoot { get; init; }
+        public required string ModCacheRoot { get; init; }
         public required string ModStatePath { get; init; }
         public required string StageRoot { get; init; }
         public required string ProfileRoot { get; init; }

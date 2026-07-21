@@ -26,6 +26,7 @@ internal static class LauncherCommandParser
         ulong? inviteSteamId = null;
         var multiplayerMaxParticipants = MultiplayerLaunchOptions.DefaultMaxParticipants;
         var openSteamInviteDialog = true;
+        string? lobbyTicket = null;
         var lobbyPrivacy = MultiplayerLobbyPrivacy.FriendsOnly;
         string? directoryBaseUrl = null;
 
@@ -149,6 +150,12 @@ internal static class LauncherCommandParser
                 continue;
             }
 
+            if (arg == "--lobby-ticket")
+            {
+                lobbyTicket = ParseLobbyTicket(ReadValue(args, ref index, arg));
+                continue;
+            }
+
             if (arg == "--invite-steam-id")
             {
                 inviteSteamId = ParseSteamId(ReadValue(args, ref index, arg));
@@ -172,6 +179,12 @@ internal static class LauncherCommandParser
             multiplayerMaxParticipants,
             openSteamInviteDialog,
             lobbyHost);
+        if (lobbyTicket is not null &&
+            (multiplayer.Mode != MultiplayerLaunchMode.Join || multiplayer.LobbyId is null))
+        {
+            throw new InvalidOperationException(
+                "--lobby-ticket requires --multiplayer join and --lobby-id.");
+        }
 
         return new LauncherCommand(
             mode,
@@ -193,6 +206,7 @@ internal static class LauncherCommandParser
             multiplayer.InviteSteamId,
             multiplayer.MaxParticipants,
             multiplayer.OpenInviteDialog,
+            lobbyTicket,
             multiplayer.Host);
     }
 
@@ -256,5 +270,15 @@ internal static class LauncherCommandParser
             ? count
             : throw new InvalidOperationException(
                 $"--max-players must be between 2 and {MultiplayerLaunchOptions.MaximumSupportedParticipants}: {value}");
+    }
+
+    private static string ParseLobbyTicket(string value)
+    {
+        value = value.Trim();
+        if (value.Length is < 1 or > 512 || value.Any(char.IsControl))
+        {
+            throw new InvalidOperationException("Lobby join tickets must be 1-512 printable characters.");
+        }
+        return value;
     }
 }

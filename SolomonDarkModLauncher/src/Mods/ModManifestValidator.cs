@@ -4,6 +4,19 @@ internal static class ModManifestValidator
 {
     public static void Validate(string manifestPath, ModManifest manifest)
     {
+        if (manifest.Overlays is null || manifest.Runtime is null ||
+            manifest.RequiredMods is null ||
+            manifest.Overlays.Any(overlay => overlay is null) ||
+            manifest.RequiredMods.Any(required => required is null) ||
+            manifest.Runtime.RequiredCapabilities is null ||
+            manifest.Runtime.OptionalCapabilities is null ||
+            manifest.Runtime.RequiredCapabilities.Any(capability => capability is null) ||
+            manifest.Runtime.OptionalCapabilities.Any(capability => capability is null))
+        {
+            throw new InvalidOperationException(
+                $"Manifest contains null fields or list entries: {manifestPath}");
+        }
+
         if (string.IsNullOrWhiteSpace(manifest.Id))
         {
             throw new InvalidOperationException($"Manifest missing id: {manifestPath}");
@@ -12,6 +25,11 @@ internal static class ModManifestValidator
         if (string.IsNullOrWhiteSpace(manifest.Name))
         {
             throw new InvalidOperationException($"Manifest missing name: {manifestPath}");
+        }
+
+        if (string.IsNullOrWhiteSpace(manifest.Version))
+        {
+            throw new InvalidOperationException($"Manifest missing version: {manifestPath}");
         }
 
         if (manifest.Overlays.Count == 0 && !manifest.RequiresRuntime)
@@ -164,9 +182,15 @@ internal static class ModManifestValidator
 
     private static void ValidateRelativePath(string manifestPath, string pathValue, string label)
     {
-        if (Path.IsPathRooted(pathValue) || pathValue.StartsWith('/') || pathValue.StartsWith('\\'))
+        if (Path.IsPathRooted(pathValue) ||
+            pathValue.StartsWith('/') ||
+            pathValue.StartsWith('\\') ||
+            pathValue.Contains('\\') ||
+            pathValue.EndsWith('/') ||
+            pathValue.Split('/').Any(segment => segment.Length == 0 || segment is "." or ".."))
         {
-            throw new InvalidOperationException($"{label} must be relative in {manifestPath}: {pathValue}");
+            throw new InvalidOperationException(
+                $"{label} must be a normalized relative file path in {manifestPath}: {pathValue}");
         }
     }
 

@@ -38,7 +38,8 @@ internal static class LauncherOutputFormatter
             "  --multiplayer <mode>    Select off, host, or join.",
             "  --lobby-id <id>         Join a specific Steam lobby. Without this option, wait for a lobby selection through Steam.",
             "  --lobby-privacy <mode>  Host a public or friends-only Steam lobby. Default: friends.",
-            "  --directory-url <url>   Override the HTTPS lobby-directory origin.",
+            "  --directory-url <url>   Override the HTTPS mod-directory origin used automatically before lobby joins.",
+            "  --lobby-ticket <token>  Signed password-lobby ticket supplied by the website.",
             "  --invite-steam-id <id>  Host development option: send the lobby to one Steam user if the overlay is unavailable.",
             "  --max-players <2-4>     Set the host lobby capacity. Default: 4.",
             "  --no-invite-dialog      Host without automatically opening Steam's friend invite dialog.",
@@ -74,6 +75,7 @@ internal static class LauncherOutputFormatter
                 break;
             case LauncherMode.Launch:
                 AppendConfiguration(builder, execution.Configuration);
+                AppendLobbyModSync(builder, execution.LobbyModSync);
                 AppendModList(builder, execution.Catalog);
                 AppendStageResult(builder, execution.StageResult!);
                 AppendLaunchResult(builder, execution.LaunchedGame!);
@@ -104,6 +106,7 @@ internal static class LauncherOutputFormatter
         builder.AppendLine($"Game: {configuration.Game.InstallDirectory}");
         builder.AppendLine($"Config root: {configuration.Workspace.ConfigRootPath}");
         builder.AppendLine($"Mods root: {configuration.Workspace.ModsRootPath}");
+        builder.AppendLine($"Downloaded mod cache: {configuration.Workspace.ModCacheRootPath}");
         builder.AppendLine($"Mod state: {configuration.Workspace.ModStatePath}");
         builder.AppendLine($"Stage root: {configuration.Workspace.StageRootPath}");
         builder.AppendLine($"Profile root: {configuration.Workspace.ProfileRootPath}");
@@ -134,6 +137,32 @@ internal static class LauncherOutputFormatter
                 $"- {mod.Manifest.Id} [{state}] priority={mod.Manifest.Priority} overlays={mod.Manifest.Overlays.Count} {runtimeSummary} requires={requiredMods}");
         }
 
+        builder.AppendLine();
+    }
+
+    private static void AppendLobbyModSync(
+        StringBuilder builder,
+        LobbyModSyncResult? result)
+    {
+        if (result is null)
+        {
+            return;
+        }
+
+        if (!result.UsedWebsite)
+        {
+            builder.AppendLine(
+                "Website lobby mod metadata was unavailable; using the locally enabled mod set. " +
+                "Steam will still enforce the exact multiplayer fingerprint.");
+            builder.AppendLine($"Website fallback reason: {result.FallbackReason}");
+            builder.AppendLine();
+            return;
+        }
+
+        builder.AppendLine(
+            $"Website lobby mods: required={result.RequiredModCount} " +
+            $"manual={result.ReusedManualModCount} cached={result.ReusedCachedModCount} " +
+            $"downloaded={result.DownloadedModCount}");
         builder.AppendLine();
     }
 

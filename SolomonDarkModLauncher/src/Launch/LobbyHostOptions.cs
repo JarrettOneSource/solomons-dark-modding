@@ -20,12 +20,15 @@ internal sealed record LobbyHostOptions(
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
             (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
              !(string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
-               uri.IsLoopback)))
+               uri.IsLoopback)) ||
+            uri.UserInfo.Length != 0 ||
+            uri.Query.Length != 0 ||
+            uri.Fragment.Length != 0)
         {
             throw new InvalidOperationException(
                 "The lobby directory URL must use HTTPS; loopback development URLs may use HTTP.");
         }
 
-        return uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
+        return uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
     }
 }

@@ -11,5 +11,6 @@ internal sealed record LauncherCommandExecution(
     LauncherConfiguration Configuration,
     ModCatalog Catalog,
     LauncherModStateChange? ModStateChange = null,
+    LobbyModSyncResult? LobbyModSync = null,
     StageBuildResult? StageResult = null,
     InjectedGame? LaunchedGame = null);

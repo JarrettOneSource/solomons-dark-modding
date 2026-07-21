@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>SolomonDarkModLauncher.ContractTests</AssemblyName>
+    <PlatformTarget>x86</PlatformTarget>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\SolomonDarkModLauncher\SolomonDarkModLauncher.csproj" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherJoinUri.cs"
+             Link="LauncherJoinUri.cs" />
+  </ItemGroup>
+</Project>

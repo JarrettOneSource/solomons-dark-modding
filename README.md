@@ -30,6 +30,25 @@ Mods are discovered from `manifest.json`. Each mod may be:
 
 Sample mods: `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`, `wave_fast_start`, `lua_bots`, `lua_dark_cloud_sort_bootstrap`, `lua_ui_sandbox_lab`.
 
+Website-distributed packages use the same root-level manifest and may contain
+data overlays/Boneyards, sandboxed Lua, or both. Native DLL mods remain manual
+installations and are never auto-downloaded. The public authoring guide, JSON
+Schema, and package examples live in the website repository under
+`frontend/public/`.
+
+Before any join with a concrete Steam lobby ID—including website links, direct
+Steam invites, and manual lobby-ID joins—the launcher asks the configured
+website for the host's exact active `id` + `version` + content-hash set. It
+reuses exact manual or cached copies, securely downloads missing versions, and
+stages only that set. This is session-scoped and does not rewrite the user's
+persistent enabled-mod choices.
+
+The website is optional. If its lobby metadata is unavailable, the launcher
+continues with the locally enabled mod set; clients that manually install and
+enable the same exact mods can therefore join over direct P2P with no website.
+The native multiplayer fingerprint still rejects any mod, loader, game-build,
+or runtime mismatch.
+
 ## Runtime contract
 
 The launcher stages these files into `runtime/stage/.sdmod/`:
@@ -69,6 +88,7 @@ pwsh ./scripts/Build-All.ps1
 ```powershell
 pwsh ./scripts/Verify-Workspace.ps1 -Configuration Debug
 pwsh ./scripts/Verify-Workspace.ps1 -Configuration Debug -LaunchAndVerifyLoader
+dotnet run --project ./tests/launcher-contracts/SolomonDarkModLauncher.ContractTests.csproj
 ```
 
 ## Run

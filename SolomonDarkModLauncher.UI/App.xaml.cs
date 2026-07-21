@@ -96,7 +96,7 @@ public partial class App : Application
         {
             return;
         }
-        if (!LauncherJoinUri.TryParse(argument, out var lobbyId))
+        if (!LauncherJoinUri.TryParse(argument, out var activation))
         {
             MessageBox.Show(
                 window,
@@ -107,6 +107,6 @@ public partial class App : Application
             return;
         }
 
-        viewModel.QueueLobbyJoin(lobbyId);
+        viewModel.QueueWebsiteLobbyJoin(activation);
     }
 }

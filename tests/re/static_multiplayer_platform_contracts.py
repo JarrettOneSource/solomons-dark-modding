@@ -680,7 +680,8 @@ def test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery() -> str:
         publisher,
         'hubObserved = hubObserved || status?.GamePhase == "hub"',
         "if (hubObserved &&",
-        "AnnounceAsync(client, secret!, status!)",
+        "var result = await AnnounceAsync(",
+        "configuration.ActiveMods)",
     )
     for token in (
         'std::string game_phase = "loading"',
@@ -698,6 +699,12 @@ def test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery() -> str:
 
 def test_website_lobby_links_register_and_route_to_launcher() -> str:
     app = _read("SolomonDarkModLauncher.UI/App.xaml.cs")
+    command_client = _read(
+        "SolomonDarkModLauncher.UI/src/Infrastructure/LauncherUiCommandClient.cs"
+    )
+    executor = _read(
+        "SolomonDarkModLauncher/src/App/LauncherCommandExecutor.cs"
+    )
     join_uri = _read(
         "SolomonDarkModLauncher.UI/src/Infrastructure/LauncherJoinUri.cs"
     )
@@ -718,14 +725,15 @@ def test_website_lobby_links_register_and_route_to_launcher() -> str:
         "LauncherProtocolRegistration.RegisterCurrentExecutable()",
         "LauncherActivationBroker",
         "LauncherJoinUri.TryParse",
-        "viewModel.QueueLobbyJoin(lobbyId)",
+        "viewModel.QueueWebsiteLobbyJoin(activation)",
     ):
         assert token in app, f"desktop launcher startup lacks: {token}"
     for token in (
         'private const string Scheme = "solomondarkrevived";',
         '!string.Equals(uri.Host, "join", StringComparison.Ordinal)',
         "ulong.TryParse",
-        "uri.Query.Length != 0",
+        "query.Length < 2",
+        "uri.Query.Length == 0",
     ):
         assert token in join_uri, f"website lobby URI parser lacks: {token}"
     for token in (
@@ -748,6 +756,28 @@ def test_website_lobby_links_register_and_route_to_launcher() -> str:
         "TryLaunchPendingLobbyJoin();",
     ):
         assert token in view_model, f"unified pending lobby join lacks: {token}"
+    join_arguments = command_client[
+        command_client.index("case LauncherUiCommandMode.JoinSteam:") :
+        command_client.index("return arguments;")
+    ]
+    for token in ('arguments.Add("--directory-url")', "arguments.Add(directoryUrl_)"):
+        assert token in join_arguments, f"P2P joins do not attempt website mod sync: {token}"
+    assert "--sync-lobby-mods" not in command_client, (
+        "website mod sync is still opt-in instead of automatic for P2P joins"
+    )
+    _require_in_order(
+        executor,
+        "command.MultiplayerMode == MultiplayerLaunchMode.Join",
+        "command.SteamLobbyId is { } lobbyId",
+        "LobbyModSynchronizer.SynchronizeAsync(",
+    )
+    for token in (
+        "TryFetchRequiredModsAsync",
+        "LobbyModSyncResult.Offline(localCatalog",
+    ):
+        assert token in _read(
+            "SolomonDarkModLauncher/src/Mods/LobbyModSynchronizer.cs"
+        ), f"automatic P2P mod sync lacks offline fallback: {token}"
     process_exit_monitor = view_model[
         view_model.index("private async Task MonitorGameProcessExitAsync") :
         view_model.index("private void StartSteamSessionMonitoring")
