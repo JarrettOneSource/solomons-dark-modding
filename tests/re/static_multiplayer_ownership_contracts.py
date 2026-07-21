@@ -466,6 +466,10 @@ def test_steam_client_reauthentication_preserves_live_message_session() -> str:
     reset_body = helpers[reset_start:remove_start]
     remove_body = helpers[remove_start:restart_start]
     restart_body = helpers[restart_start:remove_all_start]
+    assert (
+        "constexpr std::uint64_t kAuthenticatedPeerTimeoutMs = 30000;"
+        in helpers
+    ), "Steam peer liveness must survive a transient 30-second app-thread stall"
     assert "UnregisterSteamGameplayPeer(steam_id);" in suspend_body
     assert "peer.authenticated = false;" in suspend_body
     assert "g_session.peers.erase" not in suspend_body
@@ -490,6 +494,19 @@ def test_steam_client_reauthentication_preserves_live_message_session() -> str:
     assert "peer.session_nonce == 0" in keepalive_body
     assert "peer.authenticated = true;" in keepalive_body
     assert "RegisterSteamGameplayPeer(message.sender_steam_id, false);" in keepalive_body
+
+    send_keepalive_start = messages.index("void SendSessionKeepalives(", pump_start)
+    pump_body = messages[pump_start:send_keepalive_start]
+    assert (
+        "std::unordered_set<std::uint64_t> handled_session_hello_senders;"
+        in pump_body
+    )
+    _require_in_order(
+        pump_body,
+        "CopyNetworkPacket(message, &packet)",
+        "handled_session_hello_senders.insert(message.sender_steam_id).second",
+        "HandleSessionHello(",
+    )
 
     expire_start = messages.index("void ExpireInactivePeers(")
     route_start = messages.index("void RefreshRouteStatus(", expire_start)
@@ -517,7 +534,8 @@ def test_steam_client_reauthentication_preserves_live_message_session() -> str:
 
     return (
         "lobby-member reauthentication preserves the live Steam message session "
-        "and a validated keepalive repairs an asymmetric host timeout"
+        "through transient stalls, deduplicates queued hello bursts, and a validated "
+        "keepalive repairs an asymmetric host timeout"
     )
 
 

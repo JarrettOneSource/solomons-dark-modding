@@ -132,6 +132,7 @@ void HandleSessionKeepalive(
 }
 
 void PumpNetworkMessages(std::uint64_t now_ms) {
+    std::unordered_set<std::uint64_t> handled_session_hello_senders;
     for (auto& message : SteamReceiveNetworkMessages(0, kReceiveBatchSize)) {
         if (!IsLobbyMember(message.sender_steam_id) ||
             message.payload.size() < sizeof(PacketHeader)) {
@@ -146,7 +147,8 @@ void PumpNetworkMessages(std::uint64_t now_ms) {
         const auto kind = static_cast<PacketKind>(header.kind);
         if (kind == PacketKind::SessionHello) {
             SessionHelloPacket packet{};
-            if (CopyNetworkPacket(message, &packet)) {
+            if (CopyNetworkPacket(message, &packet) &&
+                handled_session_hello_senders.insert(message.sender_steam_id).second) {
                 HandleSessionHello(
                     message,
                     packet,

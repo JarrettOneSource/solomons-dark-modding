@@ -27,7 +27,7 @@ from steam_friend_hub_automation import (
     remote_ssh_settings,
     remote_windows_process_id,
 )
-from verify_local_multiplayer_sync import VerifyFailure
+from verify_local_multiplayer_sync import VerifyFailure, parse_key_values
 from verify_steam_friend_primary_kill_stress import configure
 
 
@@ -241,6 +241,50 @@ def compact_sample(values: dict[str, str]) -> dict[str, Any]:
     }
 
 
+def query_client_transport_liveness(
+    pair: SteamFriendActivePair,
+) -> dict[str, Any]:
+    values = parse_key_values(
+        pair.lua(
+            CLIENT_ENDPOINT,
+            r"""
+local function emit(key, value)
+  print(key .. '=' .. tostring(value == nil and '' or value))
+end
+local state = sd.runtime.get_multiplayer_state()
+local remote_count = 0
+local remote_transport_connected = false
+for _, participant in ipairs(state and state.participants or {}) do
+  if participant.kind == 'RemoteParticipant' then
+    remote_count = remote_count + 1
+    remote_transport_connected = participant.transport_connected == true
+  end
+end
+emit('session_status', state and state.session_status or '')
+emit('transport_ready', state and state.transport_ready == true)
+emit('remote_count', remote_count)
+emit('remote_transport_connected', remote_transport_connected)
+""",
+            timeout=8.0,
+        )
+    )
+    sample = {
+        "session_status": values.get("session_status", ""),
+        "transport_ready": values.get("transport_ready") == "true",
+        "remote_count": parse_int(values.get("remote_count")),
+        "remote_transport_connected": (
+            values.get("remote_transport_connected") == "true"
+        ),
+    }
+    sample["ready"] = (
+        sample["session_status"] == "Ready"
+        and sample["transport_ready"]
+        and sample["remote_count"] == 1
+        and sample["remote_transport_connected"]
+    )
+    return sample
+
+
 def assert_held_sample(sample: dict[str, Any]) -> None:
     if not sample["apply_valid"] or not sample["holding_stale_snapshot"]:
         raise VerifyFailure(f"client never entered stale-authority hold: {sample}")
@@ -259,6 +303,7 @@ def assert_held_sample(sample: dict[str, Any]) -> None:
 
 
 def verify_spawned_enemy_stale_hold(
+    pair: SteamFriendActivePair,
     suspend_ms: int,
     manual_prelude: dict[str, Any],
     spawn: dict[str, Any],
@@ -283,12 +328,20 @@ def verify_spawned_enemy_stale_hold(
     )
     if not before["apply_valid"] or before["binding_count"] < 1:
         raise VerifyFailure(f"client enemy binding was not ready before suspension: {before}")
+    transport_before = query_client_transport_liveness(pair)
+    if not transport_before["ready"]:
+        raise VerifyFailure(
+            f"client transport was not ready before suspension: {transport_before}"
+        )
 
     host_pid = find_host_pid()
     suspension = suspend_host_game(host_pid, suspend_ms)
     held_samples: list[dict[str, Any]] = []
+    transport_liveness_samples: list[dict[str, Any]] = []
+    next_transport_sample = time.monotonic()
     try:
-        deadline = time.monotonic() + suspend_ms / 1000.0 - 0.2
+        suspension_started_at = time.monotonic()
+        deadline = suspension_started_at + suspend_ms / 1000.0 - 0.2
         while time.monotonic() < deadline:
             sample = compact_sample(
                 primary.find_target_or_last(
@@ -299,6 +352,19 @@ def verify_spawned_enemy_stale_hold(
                 )
             )
             held_samples.append(sample)
+            now = time.monotonic()
+            if now >= next_transport_sample:
+                liveness = query_client_transport_liveness(pair)
+                liveness["elapsed_ms"] = int(
+                    (now - suspension_started_at) * 1000
+                )
+                transport_liveness_samples.append(liveness)
+                if not liveness["ready"]:
+                    raise VerifyFailure(
+                        "client transport disconnected during the transient host "
+                        f"stall: {liveness}"
+                    )
+                next_transport_sample = now + 0.75
             time.sleep(0.12)
     finally:
         try:
@@ -344,12 +410,21 @@ def verify_spawned_enemy_stale_hold(
     else:
         raise VerifyFailure(f"fresh world snapshots did not resume: {resumed}")
 
+    transport_resumed = query_client_transport_liveness(pair)
+    if not transport_resumed["ready"]:
+        raise VerifyFailure(
+            f"client transport was not ready after host resume: {transport_resumed}"
+        )
+
     return {
         "ok": True,
         "transport": "steam_friend",
         "same_machine": PAIR_BACKEND == "wsl",
         "suspend_ms": suspend_ms,
         "manual_prelude": manual_prelude,
+        "transport_before": transport_before,
+        "transport_liveness_samples": transport_liveness_samples,
+        "transport_resumed": transport_resumed,
         "before": before,
         "held": held,
         "held_sample_count": len(held_samples),
@@ -380,6 +455,7 @@ def run(pair: SteamFriendActivePair, suspend_ms: int) -> dict[str, Any]:
     )
     try:
         return verify_spawned_enemy_stale_hold(
+            pair,
             suspend_ms,
             manual_prelude,
             spawn,
@@ -393,8 +469,8 @@ def main() -> int:
     parser.add_argument("--suspend-ms", type=int, default=4000)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
-    if args.suspend_ms < 1800 or args.suspend_ms > 10000:
-        raise SystemExit("--suspend-ms must be between 1800 and 10000")
+    if args.suspend_ms < 1800 or args.suspend_ms > 25000:
+        raise SystemExit("--suspend-ms must be between 1800 and 25000")
 
     pair = SteamFriendActivePair()
     result: dict[str, Any]

@@ -1460,6 +1460,14 @@ def test_world_stale_hold_controls_the_exact_remote_host_process() -> str:
         "def suspend_remote_windows_game(",
         "[string]::Equals([string]$cim.ExecutablePath,$path,",
         "return suspend_remote_windows_game(pid, duration_ms)",
+        "def query_client_transport_liveness(",
+        "def verify_spawned_enemy_stale_hold(\n    pair: SteamFriendActivePair,",
+        "return verify_spawned_enemy_stale_hold(\n            pair,",
+        'sample["session_status"] == "Ready"',
+        'values.get("transport_ready") == "true"',
+        'values.get("remote_transport_connected") == "true"',
+        '"transport_liveness_samples": transport_liveness_samples',
+        '"--suspend-ms must be between 1800 and 25000"',
     ):
         assert token in verifier, token
     _require_in_order(
