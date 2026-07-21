@@ -24,3 +24,13 @@ the two players, has zero remaining scenery/road/fence objects or static
 movement circles, has no scripted intro setpiece or input gate, renders without
 gravestones, trees, fences, gates, lanterns, or buildings, supports deterministic
 target placement, and synchronizes between the host and clients.
+
+The recovered native parser additionally proves that this exact file is one
+plain (non-XOR) SyncBuffer with no named child buffers: 148,413 bytes, 7,721
+anonymous nodes, 86,641 payload bytes, and maximum anonymous depth 9. Its
+RegionLayout is at node `0.12.0`; the stored scenery, road, fence, terrain, and
+compact-decoration lists are empty. It is not devoid of script data: its one
+`Survival Time line` contains 571 serialized `TimeLineEvent` records. See
+[`native-boneyards-and-world.md`](../../../docs/reverse-engineering/native-boneyards-and-world.md)
+and the generated `native-boneyard-catalog.json` rather than inferring file
+contents from the loader's later blank-arena cleanup.
