@@ -10,6 +10,29 @@ std::uint64_t GetGameplayMouseLeftEdgeTickMs() {
     return g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.load(std::memory_order_acquire);
 }
 
+bool TryClaimGameplayMouseLeftPrimaryCastEdge(std::uint64_t edge_serial) {
+    if (edge_serial == 0 ||
+        edge_serial != g_gameplay_keyboard_injection.mouse_left_edge_serial.load(
+                           std::memory_order_acquire)) {
+        return false;
+    }
+
+    auto claimed =
+        g_gameplay_keyboard_injection.claimed_primary_cast_edge_serial.load(
+            std::memory_order_acquire);
+    while (claimed < edge_serial) {
+        if (g_gameplay_keyboard_injection.claimed_primary_cast_edge_serial
+                .compare_exchange_weak(
+                    claimed,
+                    edge_serial,
+                    std::memory_order_acq_rel,
+                    std::memory_order_acquire)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool IsGameplayMouseLeftDown() {
     return g_gameplay_keyboard_injection.last_observed_mouse_left_down.load(std::memory_order_acquire);
 }

@@ -927,25 +927,106 @@ bool ShouldSuppressManualSpawnerTestLocalPurePrimary(uintptr_t actor_address) {
     return true;
 }
 
-bool QueueLocalPlayerPrimaryCastForMultiplayer(uintptr_t actor_address) {
+enum class LocalPrimaryCastCaptureKind {
+    PurePrimaryStart,
+    TargetlessAir,
+};
+
+constexpr std::int32_t kAirPrimaryEntryIndex = 0x18;
+constexpr std::uint64_t kLocalPrimaryCastEdgeCaptureWindowMs = 1000;
+
+bool TryResolveLocalPlayerPrimaryCastDescriptor(
+    uintptr_t actor_address,
+    ResolvedPrimaryCastDescriptor* descriptor) {
+    if (actor_address == 0 || descriptor == nullptr) {
+        return false;
+    }
+
+    const auto runtime_state = multiplayer::SnapshotRuntimeState();
+    const auto* local_participant =
+        multiplayer::FindLocalParticipant(runtime_state);
+    if (local_participant == nullptr) {
+        return false;
+    }
+
+    uintptr_t progression_address = 0;
+    (void)TryResolveActorProgressionRuntime(
+        actor_address,
+        &progression_address);
+    const auto profile =
+        BuildLocalPlayerNativePrimaryProfile(*local_participant);
+    return TryResolveProfilePrimaryCastDescriptor(
+        profile,
+        progression_address,
+        descriptor);
+}
+
+bool IsActiveTargetlessAirPrimaryCast(
+    uintptr_t actor_address,
+    const ResolvedPrimaryCastDescriptor& descriptor) {
+    if (!IsGameplayMouseLeftDown() ||
+        descriptor.primary_entry_index != kAirPrimaryEntryIndex ||
+        descriptor.combo_entry_index != kAirPrimaryEntryIndex ||
+        descriptor.dispatcher_skill_id != kAirPrimaryEntryIndex) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::int32_t primary_skill_id = 0;
+    std::int32_t previous_skill_id = 0;
+    uintptr_t target_actor_address = 0;
+    return
+        memory.TryReadField(
+            actor_address,
+            kActorPrimarySkillIdOffset,
+            &primary_skill_id) &&
+        memory.TryReadField(
+            actor_address,
+            kActorPreviousSkillIdOffset,
+            &previous_skill_id) &&
+        memory.TryReadField(
+            actor_address,
+            kActorCurrentTargetActorOffset,
+            &target_actor_address) &&
+        target_actor_address == 0 &&
+        (primary_skill_id == kAirPrimaryEntryIndex ||
+         previous_skill_id == kAirPrimaryEntryIndex);
+}
+
+bool QueueLocalPlayerPrimaryCastForMultiplayer(
+    uintptr_t actor_address,
+    LocalPrimaryCastCaptureKind capture_kind =
+        LocalPrimaryCastCaptureKind::PurePrimaryStart) {
     if (!multiplayer::IsLocalTransportEnabled() ||
         !IsActorCurrentLocalPlayerSlotZero(actor_address)) {
         return false;
     }
 
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-
-    static std::atomic<uintptr_t> s_last_multiplayer_primary_actor{0};
-    static std::atomic<std::uint64_t> s_last_multiplayer_primary_tick_ms{0};
-    const auto last_actor =
-        s_last_multiplayer_primary_actor.load(std::memory_order_acquire);
-    const auto last_tick_ms =
-        s_last_multiplayer_primary_tick_ms.load(std::memory_order_acquire);
-    if (last_actor == actor_address && last_tick_ms == now_ms) {
+    const auto edge_serial = GetGameplayMouseLeftEdgeSerial();
+    const auto edge_tick_ms = GetGameplayMouseLeftEdgeTickMs();
+    if (edge_serial == 0 ||
+        edge_tick_ms == 0 ||
+        now_ms < edge_tick_ms ||
+        now_ms - edge_tick_ms > kLocalPrimaryCastEdgeCaptureWindowMs) {
         return false;
     }
-    s_last_multiplayer_primary_actor.store(actor_address, std::memory_order_release);
-    s_last_multiplayer_primary_tick_ms.store(now_ms, std::memory_order_release);
+
+    ResolvedPrimaryCastDescriptor primary_descriptor{};
+    if (!TryResolveLocalPlayerPrimaryCastDescriptor(
+            actor_address,
+            &primary_descriptor)) {
+        Log(
+            "Multiplayer local primary cast skipped: native primary descriptor unavailable. actor=" +
+            HexString(actor_address));
+        return false;
+    }
+    if (capture_kind == LocalPrimaryCastCaptureKind::TargetlessAir &&
+        !IsActiveTargetlessAirPrimaryCast(
+            actor_address,
+            primary_descriptor)) {
+        return false;
+    }
 
     float x = 0.0f;
     float y = 0.0f;
@@ -988,8 +1069,19 @@ bool QueueLocalPlayerPrimaryCastForMultiplayer(uintptr_t actor_address) {
         kActorCurrentTargetActorOffset,
         &target_actor_address);
 
+    if (capture_kind == LocalPrimaryCastCaptureKind::TargetlessAir &&
+        IsRunLifecycleManualEnemySpawnerTestModeEnabled() &&
+        !TryConsumeManualSpawnerPrimaryCastAllowance()) {
+        return false;
+    }
+    if (!TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)) {
+        return false;
+    }
+
     const auto native_queue_id = multiplayer::QueueLocalSpellCastEvent(
-        0,
+        primary_descriptor.dispatcher_skill_id > 0
+            ? primary_descriptor.dispatcher_skill_id
+            : 0,
         x,
         y,
             direction_x,
@@ -1004,9 +1096,18 @@ bool QueueLocalPlayerPrimaryCastForMultiplayer(uintptr_t actor_address) {
         return false;
     }
     Log(
-        "Multiplayer local primary cast queued from native pure-primary. actor=" +
+        "Multiplayer local primary cast queued from native " +
+        std::string(
+            capture_kind == LocalPrimaryCastCaptureKind::TargetlessAir
+                ? "targetless-air"
+                : "pure-primary") +
+        ". actor=" +
         HexString(actor_address) +
         " native_queue_id=" + std::to_string(native_queue_id) +
+        " primary_entry=" +
+            std::to_string(primary_descriptor.primary_entry_index) +
+        " build_skill_id=" +
+            std::to_string(primary_descriptor.build_skill_id) +
         " native_tick_ms=" + std::to_string(now_ms) +
         " pos=(" + std::to_string(x) + "," + std::to_string(y) + ")" +
         " heading=" + std::to_string(heading) +

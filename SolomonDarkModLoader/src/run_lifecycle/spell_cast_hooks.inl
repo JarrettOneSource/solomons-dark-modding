@@ -25,12 +25,6 @@ void DispatchSpellCastForSelf(uintptr_t self_address, int spell_id) {
         return;
     }
 
-    const auto last_consumed_click_serial =
-        g_state.last_consumed_spell_click_serial.load(std::memory_order_acquire);
-    if (last_consumed_click_serial == click_serial) {
-        return;
-    }
-
     float x = 0.0f;
     float y = 0.0f;
     float direction_x = 0.0f;
@@ -43,7 +37,15 @@ void DispatchSpellCastForSelf(uintptr_t self_address, int spell_id) {
             " actor=" + HexString(self_address));
         return;
     }
-    g_state.last_consumed_spell_click_serial.store(click_serial, std::memory_order_release);
+    const auto last_dispatched_click_serial =
+        g_state.last_dispatched_lua_spell_click_serial.load(
+            std::memory_order_acquire);
+    if (last_dispatched_click_serial == click_serial) {
+        return;
+    }
+    g_state.last_dispatched_lua_spell_click_serial.store(
+        click_serial,
+        std::memory_order_release);
 
     uintptr_t target_actor_address = 0;
     (void)ProcessMemory::Instance().TryReadField(
@@ -68,18 +70,6 @@ void DispatchSpellCastForSelf(uintptr_t self_address, int spell_id) {
                 : std::string("<none>")) +
         " target=" + HexString(target_actor_address) +
         " run_active=" + std::to_string(IsRunActive() ? 1 : 0));
-    multiplayer::QueueLocalSpellCastEvent(
-        spell_id,
-        x,
-        y,
-        direction_x,
-        direction_y,
-        0,
-        target_actor_address,
-        0,
-        has_aim_target,
-        aim_target_x,
-        aim_target_y);
     DispatchLuaSpellCast(spell_id, x, y, direction_x, direction_y);
 }
 

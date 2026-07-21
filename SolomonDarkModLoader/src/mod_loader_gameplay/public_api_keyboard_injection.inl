@@ -854,6 +854,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.claimed_primary_cast_edge_serial.store(
+        0,
+        std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(false, std::memory_order_release);
@@ -1014,6 +1017,9 @@ void ShutdownGameplayKeyboardInjection() {
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.claimed_primary_cast_edge_serial.store(
+        0,
+        std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(false, std::memory_order_release);

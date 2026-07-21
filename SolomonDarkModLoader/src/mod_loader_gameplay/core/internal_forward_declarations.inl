@@ -1,4 +1,6 @@
 void PumpQueuedGameplayActions();
+multiplayer::MultiplayerCharacterProfile BuildLocalPlayerNativePrimaryProfile(
+    const multiplayer::ParticipantInfo& local_participant);
 ParticipantEntityBinding* FindParticipantEntity(std::uint64_t participant_id);
 ParticipantEntityBinding* FindParticipantEntityForGameplaySlot(int gameplay_slot);
 bool TryRebindActorToOwnerWorld(uintptr_t actor_address, DWORD* exception_code);

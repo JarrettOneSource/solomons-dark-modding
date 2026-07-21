@@ -686,7 +686,9 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
     for token in (
         '"local_targetless_sequences": local_targetless_sequences',
         '"remote_targetless_queue_sequences": remote_targetless_queue_sequences',
-        "target_network_actor_id=0 target_actor=0x0+ target_source=none",
+        '"target_network_actor_id=0" not in line',
+        '"target_actor=0x0" not in line',
+        '"target_source=none" not in line',
         "require_remote_release=True",
         "receiver_deadline = time.monotonic() + 8.0",
     ):

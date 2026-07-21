@@ -132,7 +132,6 @@ def test_remote_per_cast_primary_settles_without_waiting_for_release() -> str:
         (release_text, "release", "remote_projectile_missing_ticks="),
         (player_control_text, "player_control", "native_tick_ms="),
         (player_control_text, "player_control", "native_queue_id="),
-        (player_control_text, "player_control", "s_last_multiplayer_primary_actor"),
     )
     missing_observation_tokens = [
         f"{label}:{token}" for text, label, token in required_observation_tokens if token not in text
@@ -280,21 +279,6 @@ def test_remote_per_cast_primary_settles_without_waiting_for_release() -> str:
         raise StaticReTestFailure(
             "remote per-cast pure-primary casts must preserve the initial target through release updates")
 
-    stale_click_tokens = [
-        token for token in (
-            "last_multiplayer_primary_cast_click_serial",
-            "kLocalPrimaryCastClickWindowMs",
-            "s_last_multiplayer_primary_edge_serial",
-            "GetGameplayMouseLeftEdgeSerial",
-            "GetGameplayMouseLeftEdgeTickMs",
-            "click_serial=",
-        )
-        if token in player_control_text or token in runtime_state_text
-    ]
-    if stale_click_tokens:
-        raise StaticReTestFailure(
-            "multiplayer primary emission is still click-serial gated: " +
-            ", ".join(stale_click_tokens))
     required_replacement_tokens = (
         "ReleaseActiveLocalCastInputForReplacement",
         "Multiplayer local active cast replaced by native cast",
@@ -486,29 +470,94 @@ def test_remote_held_input_casts_defer_lifecycle_to_sender_input() -> str:
     return "remote held input casts defer lifecycle cleanup to sender release or timeout"
 
 
-def test_run_lifecycle_spell_hooks_only_forward_local_player_casts() -> str:
+def test_local_primary_network_capture_is_single_owner_and_preserves_lua_events() -> str:
     spell_hook_text = read_text(RUN_LIFECYCLE_SPELL_CAST_HOOKS)
-    required_tokens = (
+    player_control_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
+    )
+    stock_input_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/local_player_stock_input_runtime.inl"
+    )
+    player_tick_text = read_text(PLAYER_ACTOR_TICK_HOOK)
+    input_queue_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_input_queueing.inl"
+    )
+    required_lua_tokens = (
         "bool IsLocalPlayerActorForRunLifecycle(uintptr_t actor_address)",
         "ResolveLocalPlayerActorForRunLifecycle()",
         "if (!IsLocalPlayerActorForRunLifecycle(self_address))",
-        "g_state.last_consumed_spell_click_serial.store",
-        "multiplayer::QueueLocalSpellCastEvent(",
+        "last_dispatched_lua_spell_click_serial",
+        "DispatchLuaSpellCast(spell_id, x, y, direction_x, direction_y);",
     )
-    missing = [token for token in required_tokens if token not in spell_hook_text]
-    if missing:
+    missing_lua = [
+        token for token in required_lua_tokens if token not in spell_hook_text
+    ]
+    if missing_lua:
         raise StaticReTestFailure(
-            "run-lifecycle spell hooks can still forward non-local casts: " +
-            ", ".join(missing))
+            "run-lifecycle spell hooks do not preserve local-only Lua events: " +
+            ", ".join(missing_lua))
 
     guard_pos = spell_hook_text.find("if (!IsLocalPlayerActorForRunLifecycle(self_address))")
-    consume_pos = spell_hook_text.find("g_state.last_consumed_spell_click_serial.store")
-    queue_pos = spell_hook_text.find("multiplayer::QueueLocalSpellCastEvent(")
-    if not (guard_pos >= 0 and consume_pos >= 0 and queue_pos >= 0 and guard_pos < consume_pos < queue_pos):
+    lua_dedupe_pos = spell_hook_text.find("last_dispatched_lua_spell_click_serial")
+    lua_dispatch_pos = spell_hook_text.find("DispatchLuaSpellCast(")
+    if not (
+        guard_pos >= 0
+        and lua_dedupe_pos > guard_pos
+        and lua_dispatch_pos > lua_dedupe_pos
+    ):
         raise StaticReTestFailure(
-            "run-lifecycle spell hook must prove local actor before consuming click serial or queueing network cast")
+            "run-lifecycle spell hooks must prove local ownership and deduplicate "
+            "the input before dispatching Lua")
+    if (
+        "TryClaimGameplayMouseLeftPrimaryCastEdge(" in spell_hook_text
+        or "multiplayer::QueueLocalSpellCastEvent(" in spell_hook_text
+    ):
+        raise StaticReTestFailure(
+            "run-lifecycle Lua hooks must not claim or queue the multiplayer "
+            "primary cast input")
 
-    return "run-lifecycle native spell hooks only forward local-player casts"
+    targetless_tokens = (
+        "IsActiveTargetlessAirPrimaryCast(",
+        "descriptor.primary_entry_index != kAirPrimaryEntryIndex",
+        "target_actor_address == 0",
+        "TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)",
+        "LocalPrimaryCastCaptureKind::TargetlessAir",
+        "TryConsumeManualSpawnerPrimaryCastAllowance()",
+        "multiplayer::QueueLocalSpellCastEvent(",
+    )
+    targetless_text = player_control_text + stock_input_text
+    missing_targetless = [
+        token for token in targetless_tokens if token not in targetless_text
+    ]
+    if missing_targetless:
+        raise StaticReTestFailure(
+            "targetless Air capture does not own the exact native input edge: "
+            + ", ".join(missing_targetless)
+        )
+    if (
+        "compare_exchange_weak" not in input_queue_text
+        or "claimed_primary_cast_edge_serial" not in input_queue_text
+    ):
+        raise StaticReTestFailure(
+            "native primary capture does not atomically claim one network cast per input edge"
+        )
+
+    stock_tick_pos = player_tick_text.find("original(self);")
+    post_stock_capture_pos = player_tick_text.find(
+        "CaptureLocalPlayerPostStockPrimaryInput(actor_address);"
+    )
+    if stock_tick_pos < 0 or post_stock_capture_pos <= stock_tick_pos:
+        raise StaticReTestFailure(
+            "targetless Air capture must observe stock actor state after the local player tick"
+        )
+
+    return (
+        "Lua spell notification and multiplayer primary capture have distinct "
+        "dedupe ownership, with post-stock targetless Air capture"
+    )
 
 
 def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:

@@ -71,7 +71,7 @@ struct RunLifecycleState {
     std::atomic<uintptr_t> last_arena_enemy_wave_spawner{0};
     std::atomic<uintptr_t> last_arena_enemy_wave_spawner_vtable{0};
     std::atomic<std::uint64_t> last_arena_enemy_wave_spawner_tick_ms{0};
-    std::atomic<std::uint64_t> last_consumed_spell_click_serial{0};
+    std::atomic<std::uint64_t> last_dispatched_lua_spell_click_serial{0};
     std::atomic<std::uint64_t> run_start_tick_ms{0};
     std::atomic<bool> combat_prelude_only_suppression{false};
     std::atomic<bool> wave_start_enemy_tracking{false};

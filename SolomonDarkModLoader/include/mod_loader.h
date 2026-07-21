@@ -409,6 +409,7 @@ void ClearQueuedGameplayMouseRight();
 bool ClearLocalPlayerGameplayCastState(std::string* error_message);
 std::uint64_t GetGameplayMouseLeftEdgeSerial();
 std::uint64_t GetGameplayMouseLeftEdgeTickMs();
+bool TryClaimGameplayMouseLeftPrimaryCastEdge(std::uint64_t edge_serial);
 bool IsGameplayMouseLeftDown();
 bool IsGameplayMouseRightDown();
 bool QueueGameplayBindingPress(std::string_view binding_name, std::string* error_message);

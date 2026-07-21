@@ -142,7 +142,7 @@ void ResetRunLifecycleBookkeeping(bool clear_enemy_tracking = true) {
     g_state.last_arena_enemy_wave_spawner.store(0, std::memory_order_release);
     g_state.last_arena_enemy_wave_spawner_vtable.store(0, std::memory_order_release);
     g_state.last_arena_enemy_wave_spawner_tick_ms.store(0, std::memory_order_release);
-    g_state.last_consumed_spell_click_serial.store(0, std::memory_order_release);
+    g_state.last_dispatched_lua_spell_click_serial.store(0, std::memory_order_release);
     g_state.run_start_tick_ms.store(0, std::memory_order_release);
     g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
     g_state.wave_start_enemy_tracking.store(false, std::memory_order_release);

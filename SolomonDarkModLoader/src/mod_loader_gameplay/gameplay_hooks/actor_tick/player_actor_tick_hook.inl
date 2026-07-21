@@ -877,6 +877,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             gameplay_address_for_pump);
         ScopedLocalPlayerRushMovementScale rush_movement_scale(actor_address);
         original(self);
+        CaptureLocalPlayerPostStockPrimaryInput(actor_address);
     } else {
         original(self);
     }

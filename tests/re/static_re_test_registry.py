@@ -179,7 +179,7 @@ from static_re_runtime_cast_contracts import (
     test_player_control_brain_requires_published_gameplay_slot,
     test_remote_held_input_casts_defer_lifecycle_to_sender_input,
     test_remote_per_cast_primary_settles_without_waiting_for_release,
-    test_run_lifecycle_spell_hooks_only_forward_local_player_casts,
+    test_local_primary_network_capture_is_single_owner_and_preserves_lua_events,
     test_write_watches_are_transparent_to_loader_memory_access,
 )
 from static_re_runtime_platform_contracts import (
@@ -548,7 +548,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("held primary mana uses native spend scale and start rate", test_held_primary_mana_uses_native_spend_scale_and_start_rate),
     ("remote per-cast primary settles without waiting for release", test_remote_per_cast_primary_settles_without_waiting_for_release),
     ("remote held input casts defer lifecycle to sender input", test_remote_held_input_casts_defer_lifecycle_to_sender_input),
-    ("run-lifecycle spell hooks only forward local player casts", test_run_lifecycle_spell_hooks_only_forward_local_player_casts),
+    (
+        "local primary network capture is single-owner and preserves Lua events",
+        test_local_primary_network_capture_is_single_owner_and_preserves_lua_events,
+    ),
     ("multiplayer nameplates render through native scene passes", test_multiplayer_nameplates_render_from_native_scene_passes),
     ("primary build skill mapping has single runtime owner", test_primary_build_skill_mapping_has_single_runtime_owner),
     ("gameplay selection writes preserve stock run-placement vector", test_gameplay_selection_writes_do_not_corrupt_stock_run_placement_vector),

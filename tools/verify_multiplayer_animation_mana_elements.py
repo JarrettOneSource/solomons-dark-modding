@@ -544,24 +544,41 @@ def verify_cast_log_flow(
         if count_lines(receiver_log, "remote_input_timeout"):
             break
         time.sleep(0.05)
-    local_targetless_sequences = [
-        int(sequence)
-        for sequence in re.findall(
-            rf"Multiplayer local cast sent\. participant_id={direction.source_id} "
-            rf"cast_sequence=(\d+) kind=primary secondary_slot=-1 "
-            rf"phase=pressed skill_id=\d+ target_network_actor_id=0",
-            source_log,
-        )
-    ]
-    remote_targetless_queue_sequences = [
-        int(sequence)
-        for sequence in re.findall(
-            rf"Multiplayer remote cast queued\. participant_id={direction.source_id} "
-            rf"cast_sequence=(\d+) phase=pressed skill_id=\d+ "
-            rf"target_network_actor_id=0 target_actor=0x0+ target_source=none",
-            receiver_log,
-        )
-    ]
+    local_targetless_sequences: list[int] = []
+    local_marker = (
+        f"Multiplayer local cast sent. participant_id={direction.source_id} "
+    )
+    for line in source_log.splitlines():
+        if (
+            local_marker not in line
+            or "kind=primary" not in line
+            or "secondary_slot=-1" not in line
+            or "phase=pressed" not in line
+            or "target_network_actor_id=0" not in line
+        ):
+            continue
+        sequence_match = re.search(r"cast_sequence=(\d+)", line)
+        if sequence_match:
+            local_targetless_sequences.append(int(sequence_match.group(1)))
+
+    remote_targetless_queue_sequences: list[int] = []
+    remote_marker = (
+        f"Multiplayer remote cast queued. participant_id={direction.source_id} "
+    )
+    for line in receiver_log.splitlines():
+        if (
+            remote_marker not in line
+            or "phase=pressed" not in line
+            or "target_network_actor_id=0" not in line
+            or "target_actor=0x0" not in line
+            or "target_source=none" not in line
+        ):
+            continue
+        sequence_match = re.search(r"cast_sequence=(\d+)", line)
+        if sequence_match:
+            remote_targetless_queue_sequences.append(
+                int(sequence_match.group(1))
+            )
     timeout_count = count_lines(receiver_log, "remote_input_timeout")
     if native_hook_count < 1 or not native_sequences:
         raise VerifyFailure(f"{direction.name}: no native cast hook/sequence observed")
