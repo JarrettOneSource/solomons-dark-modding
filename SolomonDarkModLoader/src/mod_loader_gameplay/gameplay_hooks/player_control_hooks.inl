@@ -518,7 +518,9 @@ void __fastcall HookPlayerControlBrainUpdate(
     };
 
     const auto apply_face_control = [&]() {
-        if (!face_control_active || !have_face_vector) {
+        if (sanitize_native_remote_idle_control_brain ||
+            !face_control_active ||
+            !have_face_vector) {
             return;
         }
         (void)write_vector2(param3, face_vector_x, face_vector_y);
@@ -623,6 +625,7 @@ void __fastcall HookPlayerControlBrainUpdate(
     if (sanitize_native_remote_idle_control_brain) {
         ClearIdleNativeRemoteCastReplayState(actor_address, selection_pointer);
         (void)write_vector2(param2, 0.0f, 0.0f);
+        (void)write_vector2(param3, 0.0f, 0.0f);
     }
 
     // Stock attack/cast code consumes the face lane during its own update, so
@@ -647,6 +650,7 @@ void __fastcall HookPlayerControlBrainUpdate(
     if (sanitize_native_remote_idle_control_brain) {
         ClearIdleNativeRemoteCastReplayState(actor_address, selection_pointer);
         (void)write_vector2(param2, 0.0f, 0.0f);
+        (void)write_vector2(param3, 0.0f, 0.0f);
     }
 
     // Manual-spawner mode normally owns and suppresses local control so combat

@@ -339,12 +339,17 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         // consume the previous frame's vector and then our movement step
         // consumes the new vector again.
         const bool native_remote_binding = IsNativeRemoteParticipantBinding(binding);
+        const bool idle_native_remote_binding =
+            native_remote_binding && !binding->ongoing_cast.active;
         const bool loader_owned_movement_vector_present =
             binding->movement_active || binding->last_movement_displacement > 0.0001f;
         const bool stock_tick_may_consume_stale_loader_vector =
             native_remote_binding || loader_owned_movement_vector_present;
         if (stock_tick_may_consume_stale_loader_vector) {
             ClearWizardBotMovementVectorInputs(actor_address);
+        }
+        if (idle_native_remote_binding) {
+            ClearIdleNativeRemoteCastReplayState(actor_address);
         }
         if (binding->ongoing_cast.active && !native_remote_binding) {
             (void)StopOngoingBotCastForManaReserve(
@@ -388,7 +393,11 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             binding->ongoing_cast.active &&
             OngoingCastShouldRefreshNativeTargetState(binding->ongoing_cast) &&
             binding->ongoing_cast.selection_target_seed_active;
-        if (drive_stock_cast_input &&
+        // Every PlayerActor tick reads the one gameplay-scene input buffer.
+        // Mask that local input while ticking an idle remote participant so a
+        // local press cannot start and immediately cancel the remote spell on
+        // every frame. Active remote casts still receive their authored input.
+        if ((drive_stock_cast_input || idle_native_remote_binding) &&
             TryResolveCurrentGameplayScene(&gameplay_address) &&
             gameplay_address != 0) {
             if (memory.TryReadField(
@@ -399,7 +408,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     memory.TryWriteField<std::uint8_t>(
                         gameplay_address,
                         kGameplayCastIntentOffset,
-                        static_cast<std::uint8_t>(1));
+                        static_cast<std::uint8_t>(drive_stock_cast_input ? 1 : 0));
                 int input_buffer_index = -1;
                 if (memory.TryReadField(
                         gameplay_address,
@@ -418,7 +427,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                             memory.TryWriteField<std::uint8_t>(
                                 gameplay_address,
                                 live_mouse_left_offset,
-                                static_cast<std::uint8_t>(1));
+                                static_cast<std::uint8_t>(drive_stock_cast_input ? 1 : 0));
                     }
                 }
             }
