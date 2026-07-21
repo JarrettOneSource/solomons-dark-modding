@@ -20,7 +20,9 @@ def parse_int(text):
     return int(text, 16) if text.lower().startswith("0x") else int(text, 10)
 
 
-args = [a.strip() for a in getScriptArgs() if a.strip()]
+args = []
+for argument in getScriptArgs():
+    args.extend(value.strip() for value in argument.split(";") if value.strip())
 if not args:
     print("usage: <value1> [value2 ...] [--max-hits N] [--decompile N]")
     raise SystemExit(1)

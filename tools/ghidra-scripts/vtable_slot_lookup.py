@@ -16,7 +16,9 @@ def read_program_pointer(mem, addr):
 
 
 def parse_args():
-    args = [a for a in getScriptArgs() if a.strip()]
+    args = []
+    for argument in getScriptArgs():
+        args.extend(value.strip() for value in argument.split(";") if value.strip())
     if len(args) < 2:
         print("ERROR: expected <slot_offset> <vtable_symbol> [more symbols]")
         raise SystemExit(1)
@@ -73,10 +75,17 @@ for name in names:
         continue
     for sym in syms:
         addr = sym.getAddress()
-        slot_addr = addr.add(slot)
+        if not addr.isMemoryAddress():
+            print("%s @ %s [non-memory symbol]" % (sym.getName(True), addr))
+            continue
+        try:
+            slot_addr = addr.add(slot)
+        except Exception:
+            print("%s @ %s [non-memory symbol]" % (sym.getName(True), addr))
+            continue
         try:
             target = toAddr(read_program_pointer(mem, slot_addr))
-        except MemoryAccessException as exc:
+        except Exception as exc:
             print("%s @ %s slot_addr=%s ERROR %s" % (sym.getName(True), addr, slot_addr, exc))
             continue
         func = fm.getFunctionContaining(target)

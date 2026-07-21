@@ -5,7 +5,9 @@
 
 
 def parse_args():
-    args = [a.strip() for a in getScriptArgs() if a.strip()]
+    args = []
+    for argument in getScriptArgs():
+        args.extend(value.strip() for value in argument.split(";") if value.strip())
     if len(args) < 2:
         print("ERROR: expected <count> <func_addr_or_name> [more]")
         raise SystemExit(1)

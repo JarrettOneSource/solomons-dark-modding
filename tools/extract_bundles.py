@@ -60,6 +60,8 @@ class AuxGroup:
     header: tuple[float, float, float]
     kerning_count: int
     glyph_count: int
+    kerning_pairs: tuple[tuple[int, int, float], ...]
+    glyph_ids: tuple[int, ...]
 
 
 def require_bytes(data: bytes, offset: int, size: int, context: str) -> None:
@@ -148,7 +150,7 @@ def parse_aux_groups(
             )
         offset += 12
 
-        kerning_count = 0
+        kerning_pairs: list[tuple[int, int, float]] = []
         while True:
             require_bytes(data, offset, 4, "kerning pair or terminator")
             left_id, right_id = struct.unpack_from("<HH", data, offset)
@@ -162,9 +164,9 @@ def parse_aux_groups(
                     f"non-finite kerning adjustment at 0x{offset:x}"
                 )
             offset += 8
-            kerning_count += 1
+            kerning_pairs.append((left_id, right_id, adjustment))
 
-        glyph_count = 0
+        glyph_ids: list[int] = []
         while True:
             require_bytes(data, offset, 2, "glyph id or terminator")
             glyph_id = struct.unpack_from("<H", data, offset)[0]
@@ -179,15 +181,17 @@ def parse_aux_groups(
 
             record = parse_common_record(data, offset + 14)
             records.append(record)
-            glyph_count += 1
+            glyph_ids.append(glyph_id)
             offset = record.end
 
         groups.append(
             AuxGroup(
                 offset=group_offset,
                 header=header,
-                kerning_count=kerning_count,
-                glyph_count=glyph_count,
+                kerning_count=len(kerning_pairs),
+                glyph_count=len(glyph_ids),
+                kerning_pairs=tuple(kerning_pairs),
+                glyph_ids=tuple(glyph_ids),
             )
         )
 

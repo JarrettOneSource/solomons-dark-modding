@@ -13,16 +13,20 @@ Three addresses matter:
 | `FUN_00548A00` | `0x00548A00` | Spell-cast dispatcher (`__thiscall`). Routes on `actor+0x270`. |
 | `FUN_0052F3B0` | `0x0052F3B0` | Cast-active-handle cleanup (`__thiscall`). Releases the cached spell object. |
 
-The pure-primary startup path also matters for fire, ether, and other
-staff-driven primary effects:
+The one-shot/current-action startup path also matters for fire, ether, Plane
+Orb, and several welded primaries:
 
-- `0x0052DA80` is the live pure-primary allocator/startup path.
-- `runtime/ghidra_pure_primary_equip_sink_paths.txt` proves that startup first
+- `0x0052DA80` is not itself a spell-object allocator. It resolves the actor's
+  current skill, selects an action mode from the equipped item, delegates
+  action selection/startup to `0x0044F5F0`, then scales the returned action or
+  attack object's damage field at `+0x34` for skills `8`, `0x10`, `0x50`, and
+  welded builds `1000`, `1001`, `1002`, and `1009`.
+- `runtime/ghidra_pure_primary_equip_sink_paths.txt` proves that this path first
   reads `actor+0x1FC`; when that actor-owned equip runtime exists, the path uses
   its visual sink at `+0x30` and calls `0x00570D80`, which returns the sink's
   current item from `sink+0x4`.
 - It selects mode `3` for item type `0x1B5C`.
-- The builder call site is `0x0052DB04 -> 0x0044F5F0`.
+- The action-selection/start call site is `0x0052DB04 -> 0x0044F5F0`.
 - `0x0044F5F0` starts with a two-instruction prologue (`push -1`, then
   `push 0x76559B`), so any detour there must cover `7` bytes. A `5`-byte
   patch splits the second instruction and corrupts the trampoline.
@@ -81,11 +85,12 @@ non-zero-slot branches while leaving
 `actor+0x5C` pointed at the bot's real gameplay slot, so stock progression
 lookups use the bot's live slot data.
 
-The former pure-primary local equip sink shim was separate from that slot gate.
+The former one-shot/current-action local equip sink shim was separate from that
+slot gate.
 `0x0052DA80` already has a native actor-owned path through `actor+0x1FC`; the
 loader now requires bots to carry that real equip runtime and no longer hooks
 `0x00570D80`, swaps the local slot sink, or opens a local actor window around
-pure-primary startup.
+that startup.
 
 ## May 1 slot-0 dispatch xref pass
 

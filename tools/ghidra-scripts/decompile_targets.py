@@ -8,11 +8,16 @@ from ghidra.app.decompiler import DecompInterface
 
 
 def get_targets():
-    args = [a.strip() for a in getScriptArgs() if a.strip()]
-    if not args:
+    targets = []
+    for raw in getScriptArgs():
+        for value in raw.split(";"):
+            value = value.strip()
+            if value:
+                targets.append(value)
+    if not targets:
         print("ERROR: expected at least one address or function name")
         raise SystemExit(1)
-    return args
+    return targets
 
 
 def resolve_target(program, text):

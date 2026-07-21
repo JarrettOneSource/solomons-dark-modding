@@ -5,7 +5,9 @@
 
 
 def parse_args():
-    args = [a.strip() for a in getScriptArgs() if a.strip()]
+    args = []
+    for raw in getScriptArgs():
+        args.extend(value.strip() for value in raw.split(";") if value.strip())
     if len(args) != 2:
         print("ERROR: expected <start_addr> <end_addr>")
         raise SystemExit(1)
@@ -26,7 +28,8 @@ while it.hasNext():
 
 syms.sort(key=lambda s: str(s.getAddress()))
 for sym in syms:
-    print("%s %s %s" % (sym.getAddress(), sym.getSymbolType(), sym.getName()))
+    print("%s %s %s" % (
+        sym.getAddress(), sym.getSymbolType(), sym.getName(True)))
 
 print("COUNT %d" % len(syms))
 print("=== DONE ===")

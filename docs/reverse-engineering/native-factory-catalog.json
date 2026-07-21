@@ -1,0 +1,3548 @@
+{
+  "schema": "solomon-dark-native-factory-catalog-v1",
+  "source": {
+    "factory": "0x005B7080",
+    "factory_log": "/tmp/native-art-system-re-20260721/ghidra/decomp-factory-progression.log",
+    "class_catalog": "docs/reverse-engineering/native-class-catalog.json"
+  },
+  "summary": {
+    "type_count": 161,
+    "rtti_resolved_type_count": 161,
+    "unresolved_type_count": 0
+  },
+  "types": [
+    {
+      "type_id": 0,
+      "type_id_hex": "0x0",
+      "allocation_size": 316,
+      "allocation_size_hex": "0x13C",
+      "constructor": "FUN_006287d0",
+      "constructor_address": "0x006287D0",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_ShadowData>",
+          "category": "container",
+          "vtable": "0x0079E61C",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "PointerList<class_SmartPointer<class_Mod>_>",
+          "category": "container",
+          "vtable": "0x0079E628",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Puppet",
+          "category": "object_or_system",
+          "vtable": "0x0079E6C4",
+          "vtable_slot_count": 25
+        },
+        {
+          "name": "SmartObjectManager<class_Action>",
+          "category": "object_or_system",
+          "vtable": "0x0079E690",
+          "vtable_slot_count": 11
+        }
+      ],
+      "class": "Puppet",
+      "vtable": "0x0079E6C4",
+      "class_resolution": "ranked_most_derived"
+    },
+    {
+      "type_id": 1,
+      "type_id_hex": "0x1",
+      "allocation_size": 920,
+      "allocation_size_hex": "0x398",
+      "constructor": "FUN_0052b4c0",
+      "constructor_address": "0x0052B4C0",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "PlayerWizard",
+          "category": "object_or_system",
+          "vtable": "0x00793F74",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "PlayerWizard",
+      "vtable": "0x00793F74",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2,
+      "type_id_hex": "0x2",
+      "allocation_size": 548,
+      "allocation_size_hex": "0x224",
+      "constructor": "FUN_0052c790",
+      "constructor_address": "0x0052C790",
+      "rtti_candidates": [
+        {
+          "name": "PlayerTarget",
+          "category": "object_or_system",
+          "vtable": "0x00793E44",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "PlayerTarget",
+      "vtable": "0x00793E44",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1000,
+      "type_id_hex": "0x3E8",
+      "allocation_size": 528,
+      "allocation_size_hex": "0x210",
+      "constructor": "FUN_00473390",
+      "constructor_address": "0x00473390",
+      "rtti_candidates": [
+        {
+          "name": "Badguy",
+          "category": "object_or_system",
+          "vtable": "0x00785DAC",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Badguy",
+      "vtable": "0x00785DAC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1001,
+      "type_id_hex": "0x3E9",
+      "allocation_size": 584,
+      "allocation_size_hex": "0x248",
+      "constructor": "FUN_004771b0",
+      "constructor_address": "0x004771B0",
+      "rtti_candidates": [
+        {
+          "name": "Skeleton",
+          "category": "object_or_system",
+          "vtable": "0x00786604",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Skeleton",
+      "vtable": "0x00786604",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1002,
+      "type_id_hex": "0x3EA",
+      "allocation_size": 624,
+      "allocation_size_hex": "0x270",
+      "constructor": "FUN_0048a6b0",
+      "constructor_address": "0x0048A6B0",
+      "rtti_candidates": [
+        {
+          "name": "SkeletonArcher",
+          "category": "object_or_system",
+          "vtable": "0x00786CF4",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "SkeletonArcher",
+      "vtable": "0x00786CF4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1003,
+      "type_id_hex": "0x3EB",
+      "allocation_size": 684,
+      "allocation_size_hex": "0x2AC",
+      "constructor": "FUN_0048abb0",
+      "constructor_address": "0x0048ABB0",
+      "rtti_candidates": [
+        {
+          "name": "SkeletonMage",
+          "category": "object_or_system",
+          "vtable": "0x00786DA4",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "SkeletonMage",
+      "vtable": "0x00786DA4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1004,
+      "type_id_hex": "0x3EC",
+      "allocation_size": 572,
+      "allocation_size_hex": "0x23C",
+      "constructor": "FUN_00473e30",
+      "constructor_address": "0x00473E30",
+      "rtti_candidates": [
+        {
+          "name": "Imp",
+          "category": "object_or_system",
+          "vtable": "0x00785E5C",
+          "vtable_slot_count": 41
+        }
+      ],
+      "class": "Imp",
+      "vtable": "0x00785E5C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1005,
+      "type_id_hex": "0x3ED",
+      "allocation_size": 580,
+      "allocation_size_hex": "0x244",
+      "constructor": "FUN_00529fe0",
+      "constructor_address": "0x00529FE0",
+      "rtti_candidates": [
+        {
+          "name": "GoodImp",
+          "category": "object_or_system",
+          "vtable": "0x00793D9C",
+          "vtable_slot_count": 41
+        }
+      ],
+      "class": "GoodImp",
+      "vtable": "0x00793D9C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1006,
+      "type_id_hex": "0x3EE",
+      "allocation_size": 608,
+      "allocation_size_hex": "0x260",
+      "constructor": "FUN_004740c0",
+      "constructor_address": "0x004740C0",
+      "rtti_candidates": [
+        {
+          "name": "Zombie",
+          "category": "object_or_system",
+          "vtable": "0x00785F0C",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Zombie",
+      "vtable": "0x00785F0C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1007,
+      "type_id_hex": "0x3EF",
+      "allocation_size": 564,
+      "allocation_size_hex": "0x234",
+      "constructor": "FUN_00474470",
+      "constructor_address": "0x00474470",
+      "rtti_candidates": [
+        {
+          "name": "Wraith",
+          "category": "object_or_system",
+          "vtable": "0x00785FAC",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Wraith",
+      "vtable": "0x00785FAC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1008,
+      "type_id_hex": "0x3F0",
+      "allocation_size": 628,
+      "allocation_size_hex": "0x274",
+      "constructor": "FUN_00474660",
+      "constructor_address": "0x00474660",
+      "rtti_candidates": [
+        {
+          "name": "DemonSkull",
+          "category": "object_or_system",
+          "vtable": "0x00786074",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "DemonSkull",
+      "vtable": "0x00786074",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1009,
+      "type_id_hex": "0x3F1",
+      "allocation_size": 740,
+      "allocation_size_hex": "0x2E4",
+      "constructor": "FUN_00479150",
+      "constructor_address": "0x00479150",
+      "rtti_candidates": [
+        {
+          "name": "Demon",
+          "category": "object_or_system",
+          "vtable": "0x00786114",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Demon",
+      "vtable": "0x00786114",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1010,
+      "type_id_hex": "0x3F2",
+      "allocation_size": 624,
+      "allocation_size_hex": "0x270",
+      "constructor": "FUN_00474e50",
+      "constructor_address": "0x00474E50",
+      "rtti_candidates": [
+        {
+          "name": "DireFaculty",
+          "category": "object_or_system",
+          "vtable": "0x0078626C",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "DireFaculty",
+      "vtable": "0x0078626C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1011,
+      "type_id_hex": "0x3F3",
+      "allocation_size": 780,
+      "allocation_size_hex": "0x30C",
+      "constructor": "FUN_0048b970",
+      "constructor_address": "0x0048B970",
+      "rtti_candidates": [
+        {
+          "name": "Heartmonger",
+          "category": "object_or_system",
+          "vtable": "0x00786E54",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Heartmonger",
+      "vtable": "0x00786E54",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1012,
+      "type_id_hex": "0x3F4",
+      "allocation_size": 108,
+      "allocation_size_hex": "0x6C",
+      "constructor": "FUN_00475480",
+      "constructor_address": "0x00475480",
+      "rtti_candidates": [
+        {
+          "name": "Crow",
+          "category": "object_or_system",
+          "vtable": "0x00786340",
+          "vtable_slot_count": 7
+        }
+      ],
+      "class": "Crow",
+      "vtable": "0x00786340",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 1013,
+      "type_id_hex": "0x3F5",
+      "allocation_size": 752,
+      "allocation_size_hex": "0x2F0",
+      "constructor": "FUN_00479940",
+      "constructor_address": "0x00479940",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Coffin",
+          "category": "object_or_system",
+          "vtable": "0x00786744",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Coffin",
+      "vtable": "0x00786744",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2000,
+      "type_id_hex": "0x7D0",
+      "allocation_size": 316,
+      "allocation_size_hex": "0x13C",
+      "constructor": "FUN_006287d0",
+      "constructor_address": "0x006287D0",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_ShadowData>",
+          "category": "container",
+          "vtable": "0x0079E61C",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "PointerList<class_SmartPointer<class_Mod>_>",
+          "category": "container",
+          "vtable": "0x0079E628",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Puppet",
+          "category": "object_or_system",
+          "vtable": "0x0079E6C4",
+          "vtable_slot_count": 25
+        },
+        {
+          "name": "SmartObjectManager<class_Action>",
+          "category": "object_or_system",
+          "vtable": "0x0079E690",
+          "vtable_slot_count": 11
+        }
+      ],
+      "class": "Puppet",
+      "vtable": "0x0079E6C4",
+      "class_resolution": "ranked_most_derived"
+    },
+    {
+      "type_id": 2001,
+      "type_id_hex": "0x7D1",
+      "allocation_size": 364,
+      "allocation_size_hex": "0x16C",
+      "constructor": "FUN_005e46d0",
+      "constructor_address": "0x005E46D0",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Tree",
+          "category": "object_or_system",
+          "vtable": "0x0079D584",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Tree",
+      "vtable": "0x0079D584",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2002,
+      "type_id_hex": "0x7D2",
+      "allocation_size": 320,
+      "allocation_size_hex": "0x140",
+      "constructor": "FUN_005e00b0",
+      "constructor_address": "0x005E00B0",
+      "rtti_candidates": [
+        {
+          "name": "ZAnim",
+          "category": "animation_or_effect",
+          "vtable": "0x0079C40C",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "ZAnim",
+      "vtable": "0x0079C40C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2003,
+      "type_id_hex": "0x7D3",
+      "allocation_size": 360,
+      "allocation_size_hex": "0x168",
+      "constructor": "FUN_005e4990",
+      "constructor_address": "0x005E4990",
+      "rtti_candidates": [
+        {
+          "name": "MagicMissile",
+          "category": "object_or_system",
+          "vtable": "0x0079C544",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "MagicMissile",
+      "vtable": "0x0079C544",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2004,
+      "type_id_hex": "0x7D4",
+      "allocation_size": 368,
+      "allocation_size_hex": "0x170",
+      "constructor": "FUN_005e0970",
+      "constructor_address": "0x005E0970",
+      "rtti_candidates": [
+        {
+          "name": "Fireball",
+          "category": "object_or_system",
+          "vtable": "0x0079C5BC",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Fireball",
+      "vtable": "0x0079C5BC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2005,
+      "type_id_hex": "0x7D5",
+      "allocation_size": 540,
+      "allocation_size_hex": "0x21C",
+      "constructor": "FUN_005fa270",
+      "constructor_address": "0x005FA270",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<class_SmartPointer<struct_Boulder::Rock>_>",
+          "category": "container",
+          "vtable": "0x0079D504",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Boulder",
+          "category": "object_or_system",
+          "vtable": "0x0079E014",
+          "vtable_slot_count": 29
+        }
+      ],
+      "class": "Boulder",
+      "vtable": "0x0079E014",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2006,
+      "type_id_hex": "0x7D6",
+      "allocation_size": 364,
+      "allocation_size_hex": "0x16C",
+      "constructor": "FUN_005e0bd0",
+      "constructor_address": "0x005E0BD0",
+      "rtti_candidates": [
+        {
+          "name": "Ember",
+          "category": "object_or_system",
+          "vtable": "0x0079C624",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Ember",
+      "vtable": "0x0079C624",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2007,
+      "type_id_hex": "0x7D7",
+      "allocation_size": 320,
+      "allocation_size_hex": "0x140",
+      "constructor": "FUN_005013f0",
+      "constructor_address": "0x005013F0",
+      "rtti_candidates": [
+        {
+          "name": "CollegeObstacle",
+          "category": "object_or_system",
+          "vtable": "0x0079151C",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "CollegeObstacle",
+      "vtable": "0x0079151C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2008,
+      "type_id_hex": "0x7D8",
+      "allocation_size": 320,
+      "allocation_size_hex": "0x140",
+      "constructor": "FUN_00501440",
+      "constructor_address": "0x00501440",
+      "rtti_candidates": [
+        {
+          "name": "CollegeStatue",
+          "category": "object_or_system",
+          "vtable": "0x00791584",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "CollegeStatue",
+      "vtable": "0x00791584",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2009,
+      "type_id_hex": "0x7D9",
+      "allocation_size": 324,
+      "allocation_size_hex": "0x144",
+      "constructor": "FUN_005e0db0",
+      "constructor_address": "0x005E0DB0",
+      "rtti_candidates": [
+        {
+          "name": "Monument",
+          "category": "object_or_system",
+          "vtable": "0x0079C704",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Monument",
+      "vtable": "0x0079C704",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2010,
+      "type_id_hex": "0x7DA",
+      "allocation_size": 384,
+      "allocation_size_hex": "0x180",
+      "constructor": "FUN_005e1000",
+      "constructor_address": "0x005E1000",
+      "rtti_candidates": [
+        {
+          "name": "Arrow",
+          "category": "object_or_system",
+          "vtable": "0x0079C7E4",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Arrow",
+      "vtable": "0x0079C7E4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2011,
+      "type_id_hex": "0x7DB",
+      "allocation_size": 336,
+      "allocation_size_hex": "0x150",
+      "constructor": "FUN_005e1150",
+      "constructor_address": "0x005E1150",
+      "rtti_candidates": [
+        {
+          "name": "Orb",
+          "category": "object_or_system",
+          "vtable": "0x0079C8BC",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Orb",
+      "vtable": "0x0079C8BC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2012,
+      "type_id_hex": "0x7DC",
+      "allocation_size": 348,
+      "allocation_size_hex": "0x15C",
+      "constructor": "FUN_005e12c0",
+      "constructor_address": "0x005E12C0",
+      "rtti_candidates": [
+        {
+          "name": "Gold",
+          "category": "object_or_system",
+          "vtable": "0x0079C924",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Gold",
+      "vtable": "0x0079C924",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2013,
+      "type_id_hex": "0x7DD",
+      "allocation_size": 336,
+      "allocation_size_hex": "0x150",
+      "constructor": "FUN_005e1460",
+      "constructor_address": "0x005E1460",
+      "rtti_candidates": [
+        {
+          "name": "Sack",
+          "category": "object_or_system",
+          "vtable": "0x0079C98C",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Sack",
+      "vtable": "0x0079C98C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2014,
+      "type_id_hex": "0x7DE",
+      "allocation_size": 380,
+      "allocation_size_hex": "0x17C",
+      "constructor": "FUN_005e4c50",
+      "constructor_address": "0x005E4C50",
+      "rtti_candidates": [
+        {
+          "name": "FireMissile",
+          "category": "object_or_system",
+          "vtable": "0x0079D5F4",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "FireMissile",
+      "vtable": "0x0079D5F4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2015,
+      "type_id_hex": "0x7DF",
+      "allocation_size": 380,
+      "allocation_size_hex": "0x17C",
+      "constructor": "FUN_005e4f30",
+      "constructor_address": "0x005E4F30",
+      "rtti_candidates": [
+        {
+          "name": "BallLightning",
+          "category": "object_or_system",
+          "vtable": "0x0079D66C",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "BallLightning",
+      "vtable": "0x0079D66C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2016,
+      "type_id_hex": "0x7E0",
+      "allocation_size": 400,
+      "allocation_size_hex": "0x190",
+      "constructor": "FUN_005e4fb0",
+      "constructor_address": "0x005E4FB0",
+      "rtti_candidates": [
+        {
+          "name": "FrostMissile",
+          "category": "object_or_system",
+          "vtable": "0x0079D6E4",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "FrostMissile",
+      "vtable": "0x0079D6E4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2017,
+      "type_id_hex": "0x7E1",
+      "allocation_size": 564,
+      "allocation_size_hex": "0x234",
+      "constructor": "FUN_005fa670",
+      "constructor_address": "0x005FA670",
+      "rtti_candidates": [
+        {
+          "name": "EBoulder",
+          "category": "object_or_system",
+          "vtable": "0x0079E08C",
+          "vtable_slot_count": 29
+        }
+      ],
+      "class": "EBoulder",
+      "vtable": "0x0079E08C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2018,
+      "type_id_hex": "0x7E2",
+      "allocation_size": 388,
+      "allocation_size_hex": "0x184",
+      "constructor": "FUN_005e1540",
+      "constructor_address": "0x005E1540",
+      "rtti_candidates": [
+        {
+          "name": "Meteor",
+          "category": "object_or_system",
+          "vtable": "0x0079C9F4",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Meteor",
+      "vtable": "0x0079C9F4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2019,
+      "type_id_hex": "0x7E3",
+      "allocation_size": 384,
+      "allocation_size_hex": "0x180",
+      "constructor": "FUN_005e7130",
+      "constructor_address": "0x005E7130",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Fire",
+          "category": "object_or_system",
+          "vtable": "0x0079D76C",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Fire",
+      "vtable": "0x0079D76C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2020,
+      "type_id_hex": "0x7E4",
+      "allocation_size": 548,
+      "allocation_size_hex": "0x224",
+      "constructor": "FUN_005fac20",
+      "constructor_address": "0x005FAC20",
+      "rtti_candidates": [
+        {
+          "name": "Hailstones",
+          "category": "object_or_system",
+          "vtable": "0x0079E104",
+          "vtable_slot_count": 29
+        }
+      ],
+      "class": "Hailstones",
+      "vtable": "0x0079E104",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2021,
+      "type_id_hex": "0x7E5",
+      "allocation_size": 460,
+      "allocation_size_hex": "0x1CC",
+      "constructor": "FUN_005e76f0",
+      "constructor_address": "0x005E76F0",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "GroundSpark",
+          "category": "object_or_system",
+          "vtable": "0x0079D84C",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "GroundSpark",
+      "vtable": "0x0079D84C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2022,
+      "type_id_hex": "0x7E6",
+      "allocation_size": 404,
+      "allocation_size_hex": "0x194",
+      "constructor": "FUN_005e7890",
+      "constructor_address": "0x005E7890",
+      "rtti_candidates": [
+        {
+          "name": "MovingFire",
+          "category": "object_or_system",
+          "vtable": "0x0079D8BC",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "MovingFire",
+      "vtable": "0x0079D8BC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2023,
+      "type_id_hex": "0x7E7",
+      "allocation_size": 372,
+      "allocation_size_hex": "0x174",
+      "constructor": "FUN_005e7a20",
+      "constructor_address": "0x005E7A20",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<class_Puppet*>",
+          "category": "container",
+          "vtable": "0x0079D4D8",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Shockwave",
+          "category": "object_or_system",
+          "vtable": "0x0079D92C",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Shockwave",
+      "vtable": "0x0079D92C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2024,
+      "type_id_hex": "0x7E8",
+      "allocation_size": 376,
+      "allocation_size_hex": "0x178",
+      "constructor": "FUN_005e7b20",
+      "constructor_address": "0x005E7B20",
+      "rtti_candidates": [
+        {
+          "name": "FreezeWave",
+          "category": "object_or_system",
+          "vtable": "0x0079D994",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "FreezeWave",
+      "vtable": "0x0079D994",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2025,
+      "type_id_hex": "0x7E9",
+      "allocation_size": 348,
+      "allocation_size_hex": "0x15C",
+      "constructor": "FUN_005e7b50",
+      "constructor_address": "0x005E7B50",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<class_Puppet*>",
+          "category": "container",
+          "vtable": "0x0079D4D8",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Knockback",
+          "category": "object_or_system",
+          "vtable": "0x0079D9FC",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Knockback",
+      "vtable": "0x0079D9FC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2026,
+      "type_id_hex": "0x7EA",
+      "allocation_size": 352,
+      "allocation_size_hex": "0x160",
+      "constructor": "FUN_005e1ba0",
+      "constructor_address": "0x005E1BA0",
+      "rtti_candidates": [
+        {
+          "name": "MagicCircle",
+          "category": "object_or_system",
+          "vtable": "0x0079CA64",
+          "vtable_slot_count": 27
+        }
+      ],
+      "class": "MagicCircle",
+      "vtable": "0x0079CA64",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2027,
+      "type_id_hex": "0x7EB",
+      "allocation_size": 412,
+      "allocation_size_hex": "0x19C",
+      "constructor": "FUN_005e1d00",
+      "constructor_address": "0x005E1D00",
+      "rtti_candidates": [
+        {
+          "name": "Firebolt",
+          "category": "object_or_system",
+          "vtable": "0x0079CAD4",
+          "vtable_slot_count": 27
+        }
+      ],
+      "class": "Firebolt",
+      "vtable": "0x0079CAD4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2028,
+      "type_id_hex": "0x7EC",
+      "allocation_size": 396,
+      "allocation_size_hex": "0x18C",
+      "constructor": "FUN_005e7e00",
+      "constructor_address": "0x005E7E00",
+      "rtti_candidates": [
+        {
+          "name": "GuidedMissile",
+          "category": "object_or_system",
+          "vtable": "0x0079DA8C",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "GuidedMissile",
+      "vtable": "0x0079DA8C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2029,
+      "type_id_hex": "0x7ED",
+      "allocation_size": 340,
+      "allocation_size_hex": "0x154",
+      "constructor": "FUN_005e5c30",
+      "constructor_address": "0x005E5C30",
+      "rtti_candidates": [
+        {
+          "name": "Gravestone",
+          "category": "object_or_system",
+          "vtable": "0x0079C774",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Gravestone",
+      "vtable": "0x0079C774",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2030,
+      "type_id_hex": "0x7EE",
+      "allocation_size": 384,
+      "allocation_size_hex": "0x180",
+      "constructor": "FUN_005e76c0",
+      "constructor_address": "0x005E76C0",
+      "rtti_candidates": [
+        {
+          "name": "Fire_Goodguy",
+          "category": "object_or_system",
+          "vtable": "0x0079D7DC",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Fire_Goodguy",
+      "vtable": "0x0079D7DC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2031,
+      "type_id_hex": "0x7EF",
+      "allocation_size": 348,
+      "allocation_size_hex": "0x15C",
+      "constructor": "FUN_005e2180",
+      "constructor_address": "0x005E2180",
+      "rtti_candidates": [
+        {
+          "name": "PlaneOrb",
+          "category": "object_or_system",
+          "vtable": "0x0079CC24",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "PlaneOrb",
+      "vtable": "0x0079CC24",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2032,
+      "type_id_hex": "0x7F0",
+      "allocation_size": 512,
+      "allocation_size_hex": "0x200",
+      "constructor": "FUN_005e22e0",
+      "constructor_address": "0x005E22E0",
+      "rtti_candidates": [
+        {
+          "name": "StormCloud",
+          "category": "object_or_system",
+          "vtable": "0x0079CC8C",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "StormCloud",
+      "vtable": "0x0079CC8C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2033,
+      "type_id_hex": "0x7F1",
+      "allocation_size": 368,
+      "allocation_size_hex": "0x170",
+      "constructor": "FUN_005e8ea0",
+      "constructor_address": "0x005E8EA0",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Earthquake",
+          "category": "object_or_system",
+          "vtable": "0x0079DB44",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Earthquake",
+      "vtable": "0x0079DB44",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2034,
+      "type_id_hex": "0x7F2",
+      "allocation_size": 372,
+      "allocation_size_hex": "0x174",
+      "constructor": "FUN_005e8fb0",
+      "constructor_address": "0x005E8FB0",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Leviathan",
+          "category": "object_or_system",
+          "vtable": "0x0079DBAC",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Leviathan",
+      "vtable": "0x0079DBAC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2035,
+      "type_id_hex": "0x7F3",
+      "allocation_size": 336,
+      "allocation_size_hex": "0x150",
+      "constructor": "FUN_005e2950",
+      "constructor_address": "0x005E2950",
+      "rtti_candidates": [
+        {
+          "name": "EtherBolt",
+          "category": "object_or_system",
+          "vtable": "0x0079CCF4",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "EtherBolt",
+      "vtable": "0x0079CCF4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2036,
+      "type_id_hex": "0x7F4",
+      "allocation_size": 576,
+      "allocation_size_hex": "0x240",
+      "constructor": "FUN_005f57e0",
+      "constructor_address": "0x005F57E0",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Golem",
+          "category": "object_or_system",
+          "vtable": "0x0079DE94",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Golem",
+      "vtable": "0x0079DE94",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2037,
+      "type_id_hex": "0x7F5",
+      "allocation_size": 344,
+      "allocation_size_hex": "0x158",
+      "constructor": "FUN_005e2cc0",
+      "constructor_address": "0x005E2CC0",
+      "rtti_candidates": [
+        {
+          "name": "MagicTrap",
+          "category": "object_or_system",
+          "vtable": "0x0079CD84",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "MagicTrap",
+      "vtable": "0x0079CD84",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2038,
+      "type_id_hex": "0x7F6",
+      "allocation_size": 356,
+      "allocation_size_hex": "0x164",
+      "constructor": "FUN_005e2d90",
+      "constructor_address": "0x005E2D90",
+      "rtti_candidates": [
+        {
+          "name": "Bonus",
+          "category": "object_or_system",
+          "vtable": "0x0079CDEC",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Bonus",
+      "vtable": "0x0079CDEC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2039,
+      "type_id_hex": "0x7F7",
+      "allocation_size": 348,
+      "allocation_size_hex": "0x15C",
+      "constructor": "FUN_005e2f00",
+      "constructor_address": "0x005E2F00",
+      "rtti_candidates": [
+        {
+          "name": "DemonBomb",
+          "category": "object_or_system",
+          "vtable": "0x0079CE54",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "DemonBomb",
+      "vtable": "0x0079CE54",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2040,
+      "type_id_hex": "0x7F8",
+      "allocation_size": 444,
+      "allocation_size_hex": "0x1BC",
+      "constructor": "FUN_005f2c30",
+      "constructor_address": "0x005F2C30",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_Color>",
+          "category": "container",
+          "vtable": "0x00793A44",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<class_RaptPoint>",
+          "category": "container",
+          "vtable": "0x007858A4",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Building",
+          "category": "object_or_system",
+          "vtable": "0x0079DE1C",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Building",
+      "vtable": "0x0079DE1C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2041,
+      "type_id_hex": "0x7F9",
+      "allocation_size": 320,
+      "allocation_size_hex": "0x140",
+      "constructor": "FUN_00502900",
+      "constructor_address": "0x00502900",
+      "rtti_candidates": [
+        {
+          "name": "CustomObject",
+          "category": "object_or_system",
+          "vtable": "0x00791A94",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "CustomObject",
+      "vtable": "0x00791A94",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2042,
+      "type_id_hex": "0x7FA",
+      "allocation_size": 384,
+      "allocation_size_hex": "0x180",
+      "constructor": "FUN_005ea4c0",
+      "constructor_address": "0x005EA4C0",
+      "rtti_candidates": [
+        {
+          "name": "GreenFire",
+          "category": "object_or_system",
+          "vtable": "0x0079DC2C",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "GreenFire",
+      "vtable": "0x0079DC2C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2043,
+      "type_id_hex": "0x7FB",
+      "allocation_size": 360,
+      "allocation_size_hex": "0x168",
+      "constructor": "FUN_005e3470",
+      "constructor_address": "0x005E3470",
+      "rtti_candidates": [
+        {
+          "name": "UnholySpit",
+          "category": "object_or_system",
+          "vtable": "0x0079CF34",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "UnholySpit",
+      "vtable": "0x0079CF34",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2044,
+      "type_id_hex": "0x7FC",
+      "allocation_size": 572,
+      "allocation_size_hex": "0x23C",
+      "constructor": "FUN_00474d20",
+      "constructor_address": "0x00474D20",
+      "rtti_candidates": [
+        {
+          "name": "GreenImp",
+          "category": "object_or_system",
+          "vtable": "0x007861B4",
+          "vtable_slot_count": 41
+        }
+      ],
+      "class": "GreenImp",
+      "vtable": "0x007861B4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2045,
+      "type_id_hex": "0x7FD",
+      "allocation_size": 616,
+      "allocation_size_hex": "0x268",
+      "constructor": "FUN_0047e0f0",
+      "constructor_address": "0x0047E0F0",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_RaptPoint>",
+          "category": "container",
+          "vtable": "0x007858A4",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Maggot",
+          "category": "object_or_system",
+          "vtable": "0x00786B64",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Maggot",
+      "vtable": "0x00786B64",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2046,
+      "type_id_hex": "0x7FE",
+      "allocation_size": 348,
+      "allocation_size_hex": "0x15C",
+      "constructor": "FUN_005e3540",
+      "constructor_address": "0x005E3540",
+      "rtti_candidates": [
+        {
+          "name": "AcidRain",
+          "category": "object_or_system",
+          "vtable": "0x0079CF9C",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "AcidRain",
+      "vtable": "0x0079CF9C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2047,
+      "type_id_hex": "0x7FF",
+      "allocation_size": 336,
+      "allocation_size_hex": "0x150",
+      "constructor": "FUN_005e36c0",
+      "constructor_address": "0x005E36C0",
+      "rtti_candidates": [
+        {
+          "name": "EyeLaser",
+          "category": "object_or_system",
+          "vtable": "0x0079D004",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "EyeLaser",
+      "vtable": "0x0079D004",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2048,
+      "type_id_hex": "0x800",
+      "allocation_size": 396,
+      "allocation_size_hex": "0x18C",
+      "constructor": "FUN_005eb980",
+      "constructor_address": "0x005EB980",
+      "rtti_candidates": [
+        {
+          "name": "SkullMissile",
+          "category": "object_or_system",
+          "vtable": "0x0079DCDC",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "SkullMissile",
+      "vtable": "0x0079DCDC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2049,
+      "type_id_hex": "0x801",
+      "allocation_size": 424,
+      "allocation_size_hex": "0x1A8",
+      "constructor": "FUN_005e3780",
+      "constructor_address": "0x005E3780",
+      "rtti_candidates": [
+        {
+          "name": "RainOfBones",
+          "category": "object_or_system",
+          "vtable": "0x0079D06C",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "RainOfBones",
+      "vtable": "0x0079D06C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2050,
+      "type_id_hex": "0x802",
+      "allocation_size": 352,
+      "allocation_size_hex": "0x160",
+      "constructor": "FUN_005e3840",
+      "constructor_address": "0x005E3840",
+      "rtti_candidates": [
+        {
+          "name": "MagicCircle",
+          "category": "object_or_system",
+          "vtable": "0x0079CA64",
+          "vtable_slot_count": 27
+        },
+        {
+          "name": "TragicCircle",
+          "category": "object_or_system",
+          "vtable": "0x0079D0D4",
+          "vtable_slot_count": 27
+        }
+      ],
+      "class": "TragicCircle",
+      "vtable": "0x0079D0D4",
+      "class_resolution": "ranked_most_derived"
+    },
+    {
+      "type_id": 2052,
+      "type_id_hex": "0x804",
+      "allocation_size": 428,
+      "allocation_size_hex": "0x1AC",
+      "constructor": "FUN_005e3a10",
+      "constructor_address": "0x005E3A10",
+      "rtti_candidates": [
+        {
+          "name": "DarkFireball",
+          "category": "object_or_system",
+          "vtable": "0x0079D144",
+          "vtable_slot_count": 27
+        }
+      ],
+      "class": "DarkFireball",
+      "vtable": "0x0079D144",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2053,
+      "type_id_hex": "0x805",
+      "allocation_size": 408,
+      "allocation_size_hex": "0x198",
+      "constructor": "FUN_005edc90",
+      "constructor_address": "0x005EDC90",
+      "rtti_candidates": [
+        {
+          "name": "DireFire",
+          "category": "object_or_system",
+          "vtable": "0x0079DD64",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "DireFire",
+      "vtable": "0x0079DD64",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2054,
+      "type_id_hex": "0x806",
+      "allocation_size": 336,
+      "allocation_size_hex": "0x150",
+      "constructor": "FUN_005e3b00",
+      "constructor_address": "0x005E3B00",
+      "rtti_candidates": [
+        {
+          "name": "PoisonPool",
+          "category": "object_or_system",
+          "vtable": "0x0079D1BC",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "PoisonPool",
+      "vtable": "0x0079D1BC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2055,
+      "type_id_hex": "0x807",
+      "allocation_size": 516,
+      "allocation_size_hex": "0x204",
+      "constructor": "FUN_005f8360",
+      "constructor_address": "0x005F8360",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_PuppetRef>",
+          "category": "container",
+          "vtable": "0x0079D4CC",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "EtherDrain",
+          "category": "object_or_system",
+          "vtable": "0x0079DF1C",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "EtherDrain",
+      "vtable": "0x0079DF1C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2056,
+      "type_id_hex": "0x808",
+      "allocation_size": 560,
+      "allocation_size_hex": "0x230",
+      "constructor": "FUN_005f05d0",
+      "constructor_address": "0x005F05D0",
+      "rtti_candidates": [
+        {
+          "name": "Silk",
+          "category": "object_or_system",
+          "vtable": "0x0079D294",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Silk",
+      "vtable": "0x0079D294",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2057,
+      "type_id_hex": "0x809",
+      "allocation_size": 596,
+      "allocation_size_hex": "0x254",
+      "constructor": "FUN_004759a0",
+      "constructor_address": "0x004759A0",
+      "rtti_candidates": [
+        {
+          "name": "Spider",
+          "category": "object_or_system",
+          "vtable": "0x0078643C",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Spider",
+      "vtable": "0x0078643C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2058,
+      "type_id_hex": "0x80A",
+      "allocation_size": 540,
+      "allocation_size_hex": "0x21C",
+      "constructor": "FUN_0047bae0",
+      "constructor_address": "0x0047BAE0",
+      "rtti_candidates": [
+        {
+          "name": "Cocoon",
+          "category": "object_or_system",
+          "vtable": "0x0078682C",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Cocoon",
+      "vtable": "0x0078682C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2059,
+      "type_id_hex": "0x80B",
+      "allocation_size": 364,
+      "allocation_size_hex": "0x16C",
+      "constructor": "FUN_005e0cc0",
+      "constructor_address": "0x005E0CC0",
+      "rtti_candidates": [
+        {
+          "name": "EvilEmber",
+          "category": "object_or_system",
+          "vtable": "0x0079C694",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "EvilEmber",
+      "vtable": "0x0079C694",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2060,
+      "type_id_hex": "0x80C",
+      "allocation_size": 344,
+      "allocation_size_hex": "0x158",
+      "constructor": "FUN_005f0c50",
+      "constructor_address": "0x005F0C50",
+      "rtti_candidates": [
+        {
+          "name": "Comet",
+          "category": "object_or_system",
+          "vtable": "0x0079D304",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Comet",
+      "vtable": "0x0079D304",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2061,
+      "type_id_hex": "0x80D",
+      "allocation_size": 332,
+      "allocation_size_hex": "0x14C",
+      "constructor": "FUN_005e3d60",
+      "constructor_address": "0x005E3D60",
+      "rtti_candidates": [
+        {
+          "name": "Goodie",
+          "category": "object_or_system",
+          "vtable": "0x0079D36C",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Goodie",
+      "vtable": "0x0079D36C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2062,
+      "type_id_hex": "0x80E",
+      "allocation_size": 336,
+      "allocation_size_hex": "0x150",
+      "constructor": "FUN_005e4040",
+      "constructor_address": "0x005E4040",
+      "rtti_candidates": [
+        {
+          "name": "Scrub",
+          "category": "object_or_system",
+          "vtable": "0x0079D3DC",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Scrub",
+      "vtable": "0x0079D3DC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 2063,
+      "type_id_hex": "0x80F",
+      "allocation_size": 340,
+      "allocation_size_hex": "0x154",
+      "constructor": "FUN_005e4150",
+      "constructor_address": "0x005E4150",
+      "rtti_candidates": [
+        {
+          "name": "OffscreenMagic",
+          "category": "object_or_system",
+          "vtable": "0x0079D44C",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "OffscreenMagic",
+      "vtable": "0x0079D44C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3002,
+      "type_id_hex": "0xBBA",
+      "allocation_size": 2180,
+      "allocation_size_hex": "0x884",
+      "constructor": "FUN_006594e0",
+      "constructor_address": "0x006594E0",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_Skill>",
+          "category": "container",
+          "vtable": "0x00785BB0",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<float>",
+          "category": "container",
+          "vtable": "0x007846F8",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<int>",
+          "category": "container",
+          "vtable": "0x007848EC",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "PointerList<class_Skill*>",
+          "category": "container",
+          "vtable": "0x007858B0",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Skills",
+          "category": "object_or_system",
+          "vtable": "0x0079FEFC",
+          "vtable_slot_count": 42
+        }
+      ],
+      "class": "Skills",
+      "vtable": "0x0079FEFC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3003,
+      "type_id_hex": "0xBBB",
+      "allocation_size": 2276,
+      "allocation_size_hex": "0x8E4",
+      "constructor": "FUN_00674ee0",
+      "constructor_address": "0x00674EE0",
+      "rtti_candidates": [
+        {
+          "name": "Skills_Wizard",
+          "category": "object_or_system",
+          "vtable": "0x007A0CD4",
+          "vtable_slot_count": 42
+        },
+        {
+          "name": "String",
+          "category": "object_or_system",
+          "vtable": "0x00784704",
+          "vtable_slot_count": 3
+        }
+      ],
+      "class": "Skills_Wizard",
+      "vtable": "0x007A0CD4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3004,
+      "type_id_hex": "0xBBC",
+      "allocation_size": 144,
+      "allocation_size_hex": "0x90",
+      "constructor": "FUN_00645470",
+      "constructor_address": "0x00645470",
+      "rtti_candidates": [
+        {
+          "name": "Array<short>",
+          "category": "container",
+          "vtable": "0x0078534C",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<struct_Vertex2D>",
+          "category": "container",
+          "vtable": "0x00785340",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Road",
+          "category": "object_or_system",
+          "vtable": "0x0079F33C",
+          "vtable_slot_count": 7
+        }
+      ],
+      "class": "Road",
+      "vtable": "0x0079F33C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3005,
+      "type_id_hex": "0xBBD",
+      "allocation_size": 72,
+      "allocation_size_hex": "0x48",
+      "constructor": "FUN_006407b0",
+      "constructor_address": "0x006407B0",
+      "rtti_candidates": [
+        {
+          "name": "Fence",
+          "category": "object_or_system",
+          "vtable": "0x0079F2C4",
+          "vtable_slot_count": 7
+        }
+      ],
+      "class": "Fence",
+      "vtable": "0x0079F2C4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3006,
+      "type_id_hex": "0xBBE",
+      "allocation_size": 328,
+      "allocation_size_hex": "0x148",
+      "constructor": "FUN_005e1e20",
+      "constructor_address": "0x005E1E20",
+      "rtti_candidates": [
+        {
+          "name": "Fencepost",
+          "category": "object_or_system",
+          "vtable": "0x0079CB44",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Fencepost",
+      "vtable": "0x0079CB44",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3007,
+      "type_id_hex": "0xBBF",
+      "allocation_size": 452,
+      "allocation_size_hex": "0x1C4",
+      "constructor": "FUN_005e7fb0",
+      "constructor_address": "0x005E7FB0",
+      "rtti_candidates": [
+        {
+          "name": "FenceGrate",
+          "category": "object_or_system",
+          "vtable": "0x0079CBB4",
+          "vtable_slot_count": 27
+        }
+      ],
+      "class": "FenceGrate",
+      "vtable": "0x0079CBB4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3008,
+      "type_id_hex": "0xBC0",
+      "allocation_size": 128,
+      "allocation_size_hex": "0x80",
+      "constructor": "FUN_00682c10",
+      "constructor_address": "0x00682C10",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_PuppetRef>",
+          "category": "container",
+          "vtable": "0x0079D4CC",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Stack<int>",
+          "category": "container",
+          "vtable": "0x007A0EAC",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "ScriptThread",
+          "category": "object_or_system",
+          "vtable": "0x007A0F4C",
+          "vtable_slot_count": 7
+        }
+      ],
+      "class": "ScriptThread",
+      "vtable": "0x007A0F4C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3009,
+      "type_id_hex": "0xBC1",
+      "allocation_size": 224,
+      "allocation_size_hex": "0xE0",
+      "constructor": "FUN_00646a80",
+      "constructor_address": "0x00646A80",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_RaptPoint>",
+          "category": "container",
+          "vtable": "0x007858A4",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<float>",
+          "category": "container",
+          "vtable": "0x007846F8",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<short>",
+          "category": "container",
+          "vtable": "0x0078534C",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<struct_Vertex2D>",
+          "category": "container",
+          "vtable": "0x00785340",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Terrain",
+          "category": "object_or_system",
+          "vtable": "0x0079F388",
+          "vtable_slot_count": 7
+        }
+      ],
+      "class": "Terrain",
+      "vtable": "0x0079F388",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3010,
+      "type_id_hex": "0xBC2",
+      "allocation_size": 36,
+      "allocation_size_hex": "0x24",
+      "constructor": "FUN_004a30a0",
+      "constructor_address": "0x004A30A0",
+      "rtti_candidates": [
+        {
+          "name": "FX",
+          "category": "object_or_system",
+          "vtable": "0x007873AC",
+          "vtable_slot_count": 7
+        }
+      ],
+      "class": "FX",
+      "vtable": "0x007873AC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3011,
+      "type_id_hex": "0xBC3",
+      "allocation_size": 456,
+      "allocation_size_hex": "0x1C8",
+      "constructor": "FUN_005a7600",
+      "constructor_address": "0x005A7600",
+      "rtti_candidates": [
+        {
+          "name": "FenceGrate_Broken",
+          "category": "object_or_system",
+          "vtable": "0x00799AF4",
+          "vtable_slot_count": 27
+        }
+      ],
+      "class": "FenceGrate_Broken",
+      "vtable": "0x00799AF4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3012,
+      "type_id_hex": "0xBC4",
+      "allocation_size": 516,
+      "allocation_size_hex": "0x204",
+      "constructor": "FUN_005a9c60",
+      "constructor_address": "0x005A9C60",
+      "rtti_candidates": [
+        {
+          "name": "Gate",
+          "category": "object_or_system",
+          "vtable": "0x00799D9C",
+          "vtable_slot_count": 27
+        }
+      ],
+      "class": "Gate",
+      "vtable": "0x00799D9C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3013,
+      "type_id_hex": "0xBC5",
+      "allocation_size": 696,
+      "allocation_size_hex": "0x2B8",
+      "constructor": "FUN_005f88b0",
+      "constructor_address": "0x005F88B0",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_RaptPoint>",
+          "category": "container",
+          "vtable": "0x007858A4",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<float>",
+          "category": "container",
+          "vtable": "0x007846F8",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<int>",
+          "category": "container",
+          "vtable": "0x007848EC",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Wall",
+          "category": "object_or_system",
+          "vtable": "0x0079DF94",
+          "vtable_slot_count": 26
+        }
+      ],
+      "class": "Wall",
+      "vtable": "0x0079DF94",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 3014,
+      "type_id_hex": "0xBC6",
+      "allocation_size": 552,
+      "allocation_size_hex": "0x228",
+      "constructor": "FUN_005a7620",
+      "constructor_address": "0x005A7620",
+      "rtti_candidates": [
+        {
+          "name": "FenceGrate_Rails",
+          "category": "object_or_system",
+          "vtable": "0x00799B64",
+          "vtable_slot_count": 27
+        }
+      ],
+      "class": "FenceGrate_Rails",
+      "vtable": "0x00799B64",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 4000,
+      "type_id_hex": "0xFA0",
+      "allocation_size": 36488,
+      "allocation_size_hex": "0x8E88",
+      "constructor": "FUN_00652830",
+      "constructor_address": "0x00652830",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_Puppet*>",
+          "category": "container",
+          "vtable": "0x007848F8",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<class_SmartPointer<class_AnimPointer>_>",
+          "category": "container",
+          "vtable": "0x0079F1A0",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<class_SmartPointer<class_PuppetPointer>_>",
+          "category": "container",
+          "vtable": "0x0079F194",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<struct_Region::MiscLight>",
+          "category": "container",
+          "vtable": "0x0079F1AC",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "PointerList<class_Puppet*>",
+          "category": "container",
+          "vtable": "0x0079D4D8",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "MyCollider",
+          "category": "object_or_system",
+          "vtable": "0x0079F078",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "PuppetManager",
+          "category": "object_or_system",
+          "vtable": "0x0079F044",
+          "vtable_slot_count": 12
+        },
+        {
+          "name": "Region",
+          "category": "object_or_system",
+          "vtable": "0x0079F3E4",
+          "vtable_slot_count": 83
+        },
+        {
+          "name": "String",
+          "category": "object_or_system",
+          "vtable": "0x00784704",
+          "vtable_slot_count": 3
+        }
+      ],
+      "class": "Region",
+      "vtable": "0x0079F3E4",
+      "class_resolution": "ranked_most_derived"
+    },
+    {
+      "type_id": 4001,
+      "type_id_hex": "0xFA1",
+      "allocation_size": 38316,
+      "allocation_size_hex": "0x95AC",
+      "constructor": "FUN_00506490",
+      "constructor_address": "0x00506490",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_Quad>",
+          "category": "container",
+          "vtable": "0x00791F34",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<int>",
+          "category": "container",
+          "vtable": "0x007848EC",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Courtyard",
+          "category": "object_or_system",
+          "vtable": "0x00792644",
+          "vtable_slot_count": 83
+        }
+      ],
+      "class": "Courtyard",
+      "vtable": "0x00792644",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 4002,
+      "type_id_hex": "0xFA2",
+      "allocation_size": 36864,
+      "allocation_size_hex": "0x9000",
+      "constructor": "FUN_005090a0",
+      "constructor_address": "0x005090A0",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_RaptLine>",
+          "category": "container",
+          "vtable": "0x00791F40",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<class_RaptPoint>",
+          "category": "container",
+          "vtable": "0x007858A4",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Mortuary",
+          "category": "object_or_system",
+          "vtable": "0x007927DC",
+          "vtable_slot_count": 83
+        }
+      ],
+      "class": "Mortuary",
+      "vtable": "0x007927DC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 4003,
+      "type_id_hex": "0xFA3",
+      "allocation_size": 36516,
+      "allocation_size_hex": "0x8EA4",
+      "constructor": "FUN_00509b10",
+      "constructor_address": "0x00509B10",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_RaptPoint>",
+          "category": "container",
+          "vtable": "0x007858A4",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "StoreRoom",
+          "category": "object_or_system",
+          "vtable": "0x0079294C",
+          "vtable_slot_count": 83
+        }
+      ],
+      "class": "StoreRoom",
+      "vtable": "0x0079294C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 4004,
+      "type_id_hex": "0xFA4",
+      "allocation_size": 36512,
+      "allocation_size_hex": "0x8EA0",
+      "constructor": "FUN_0050a360",
+      "constructor_address": "0x0050A360",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_RaptPoint>",
+          "category": "container",
+          "vtable": "0x007858A4",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Library",
+          "category": "object_or_system",
+          "vtable": "0x00792C04",
+          "vtable_slot_count": 83
+        }
+      ],
+      "class": "Library",
+      "vtable": "0x00792C04",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 4005,
+      "type_id_hex": "0xFA5",
+      "allocation_size": 36572,
+      "allocation_size_hex": "0x8EDC",
+      "constructor": "FUN_00509c70",
+      "constructor_address": "0x00509C70",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_RaptPoint>",
+          "category": "container",
+          "vtable": "0x007858A4",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Office",
+          "category": "object_or_system",
+          "vtable": "0x00792AB4",
+          "vtable_slot_count": 83
+        }
+      ],
+      "class": "Office",
+      "vtable": "0x00792AB4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 4006,
+      "type_id_hex": "0xFA6",
+      "allocation_size": 36968,
+      "allocation_size_hex": "0x9068",
+      "constructor": "FUN_00464ee0",
+      "constructor_address": "0x00464EE0",
+      "rtti_candidates": [
+        {
+          "name": "Array<class_RaptPoint>",
+          "category": "container",
+          "vtable": "0x007858A4",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Arena",
+          "category": "object_or_system",
+          "vtable": "0x00785934",
+          "vtable_slot_count": 83
+        }
+      ],
+      "class": "Arena",
+      "vtable": "0x00785934",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5001,
+      "type_id_hex": "0x1389",
+      "allocation_size": 448,
+      "allocation_size_hex": "0x1C0",
+      "constructor": "FUN_005018d0",
+      "constructor_address": "0x005018D0",
+      "rtti_candidates": [
+        {
+          "name": "PerkWitch",
+          "category": "object_or_system",
+          "vtable": "0x00791664",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "PerkWitch",
+      "vtable": "0x00791664",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5002,
+      "type_id_hex": "0x138A",
+      "allocation_size": 592,
+      "allocation_size_hex": "0x250",
+      "constructor": "FUN_00501b80",
+      "constructor_address": "0x00501B80",
+      "rtti_candidates": [
+        {
+          "name": "Student",
+          "category": "object_or_system",
+          "vtable": "0x007916DC",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "Student",
+      "vtable": "0x007916DC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5003,
+      "type_id_hex": "0x138B",
+      "allocation_size": 372,
+      "allocation_size_hex": "0x174",
+      "constructor": "FUN_00502120",
+      "constructor_address": "0x00502120",
+      "rtti_candidates": [
+        {
+          "name": "Annalist",
+          "category": "object_or_system",
+          "vtable": "0x00791754",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "Annalist",
+      "vtable": "0x00791754",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5004,
+      "type_id_hex": "0x138C",
+      "allocation_size": 384,
+      "allocation_size_hex": "0x180",
+      "constructor": "FUN_005023a0",
+      "constructor_address": "0x005023A0",
+      "rtti_candidates": [
+        {
+          "name": "PotionGuy",
+          "category": "object_or_system",
+          "vtable": "0x00791844",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "PotionGuy",
+      "vtable": "0x00791844",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5005,
+      "type_id_hex": "0x138D",
+      "allocation_size": 372,
+      "allocation_size_hex": "0x174",
+      "constructor": "FUN_005024c0",
+      "constructor_address": "0x005024C0",
+      "rtti_candidates": [
+        {
+          "name": "ItemsGuy",
+          "category": "item",
+          "vtable": "0x00791934",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "ItemsGuy",
+      "vtable": "0x00791934",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5006,
+      "type_id_hex": "0x138E",
+      "allocation_size": 372,
+      "allocation_size_hex": "0x174",
+      "constructor": "FUN_00502270",
+      "constructor_address": "0x00502270",
+      "rtti_candidates": [
+        {
+          "name": "Illuminator",
+          "category": "object_or_system",
+          "vtable": "0x007917CC",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "Illuminator",
+      "vtable": "0x007917CC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5007,
+      "type_id_hex": "0x138F",
+      "allocation_size": 384,
+      "allocation_size_hex": "0x180",
+      "constructor": "FUN_00502450",
+      "constructor_address": "0x00502450",
+      "rtti_candidates": [
+        {
+          "name": "Tyrannia",
+          "category": "object_or_system",
+          "vtable": "0x007918BC",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "Tyrannia",
+      "vtable": "0x007918BC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5008,
+      "type_id_hex": "0x1390",
+      "allocation_size": 376,
+      "allocation_size_hex": "0x178",
+      "constructor": "FUN_00502570",
+      "constructor_address": "0x00502570",
+      "rtti_candidates": [
+        {
+          "name": "Teacher",
+          "category": "object_or_system",
+          "vtable": "0x007919AC",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "Teacher",
+      "vtable": "0x007919AC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5009,
+      "type_id_hex": "0x1391",
+      "allocation_size": 732,
+      "allocation_size_hex": "0x2DC",
+      "constructor": "FUN_00481c20",
+      "constructor_address": "0x00481C20",
+      "rtti_candidates": [
+        {
+          "name": "Array<int>",
+          "category": "container",
+          "vtable": "0x007848EC",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Solomon_Dig",
+          "category": "object_or_system",
+          "vtable": "0x00786984",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Solomon_Dig",
+      "vtable": "0x00786984",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5010,
+      "type_id_hex": "0x1392",
+      "allocation_size": 316,
+      "allocation_size_hex": "0x13C",
+      "constructor": "FUN_005e1120",
+      "constructor_address": "0x005E1120",
+      "rtti_candidates": [
+        {
+          "name": "Lantern",
+          "category": "object_or_system",
+          "vtable": "0x0079C854",
+          "vtable_slot_count": 25
+        }
+      ],
+      "class": "Lantern",
+      "vtable": "0x0079C854",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5011,
+      "type_id_hex": "0x1393",
+      "allocation_size": 468,
+      "allocation_size_hex": "0x1D4",
+      "constructor": "FUN_0050b4f0",
+      "constructor_address": "0x0050B4F0",
+      "rtti_candidates": [
+        {
+          "name": "Polisher",
+          "category": "object_or_system",
+          "vtable": "0x00792DB4",
+          "vtable_slot_count": 28
+        },
+        {
+          "name": "String",
+          "category": "object_or_system",
+          "vtable": "0x00784704",
+          "vtable_slot_count": 3
+        }
+      ],
+      "class": "Polisher",
+      "vtable": "0x00792DB4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5012,
+      "type_id_hex": "0x1394",
+      "allocation_size": 376,
+      "allocation_size_hex": "0x178",
+      "constructor": "FUN_00502a80",
+      "constructor_address": "0x00502A80",
+      "rtti_candidates": [
+        {
+          "name": "ArchChancellor",
+          "category": "object_or_system",
+          "vtable": "0x00791AFC",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "ArchChancellor",
+      "vtable": "0x00791AFC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5013,
+      "type_id_hex": "0x1395",
+      "allocation_size": 372,
+      "allocation_size_hex": "0x174",
+      "constructor": "FUN_00502c10",
+      "constructor_address": "0x00502C10",
+      "rtti_candidates": [
+        {
+          "name": "Librarian",
+          "category": "object_or_system",
+          "vtable": "0x00791C64",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "Librarian",
+      "vtable": "0x00791C64",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5015,
+      "type_id_hex": "0x1397",
+      "allocation_size": 616,
+      "allocation_size_hex": "0x268",
+      "constructor": "FUN_005e9a90",
+      "constructor_address": "0x005E9A90",
+      "rtti_candidates": [
+        {
+          "name": "GameNPC",
+          "category": "object_or_system",
+          "vtable": "0x0079CEBC",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "GameNPC",
+      "vtable": "0x0079CEBC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5016,
+      "type_id_hex": "0x1398",
+      "allocation_size": 372,
+      "allocation_size_hex": "0x174",
+      "constructor": "FUN_00502c80",
+      "constructor_address": "0x00502C80",
+      "rtti_candidates": [
+        {
+          "name": "Dowser",
+          "category": "object_or_system",
+          "vtable": "0x00791CDC",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "Dowser",
+      "vtable": "0x00791CDC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5017,
+      "type_id_hex": "0x1399",
+      "allocation_size": 444,
+      "allocation_size_hex": "0x1BC",
+      "constructor": "FUN_00502d90",
+      "constructor_address": "0x00502D90",
+      "rtti_candidates": [
+        {
+          "name": "Memorator",
+          "category": "object_or_system",
+          "vtable": "0x00791D54",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "Memorator",
+      "vtable": "0x00791D54",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5018,
+      "type_id_hex": "0x139A",
+      "allocation_size": 376,
+      "allocation_size_hex": "0x178",
+      "constructor": "FUN_00502f40",
+      "constructor_address": "0x00502F40",
+      "rtti_candidates": [
+        {
+          "name": "Painting",
+          "category": "object_or_system",
+          "vtable": "0x00791DCC",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "Painting",
+      "vtable": "0x00791DCC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5019,
+      "type_id_hex": "0x139B",
+      "allocation_size": 548,
+      "allocation_size_hex": "0x224",
+      "constructor": "FUN_004756c0",
+      "constructor_address": "0x004756C0",
+      "rtti_candidates": [
+        {
+          "name": "Solomon_Riff",
+          "category": "object_or_system",
+          "vtable": "0x00786364",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Solomon_Riff",
+      "vtable": "0x00786364",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5020,
+      "type_id_hex": "0x139C",
+      "allocation_size": 560,
+      "allocation_size_hex": "0x230",
+      "constructor": "FUN_00475dd0",
+      "constructor_address": "0x00475DD0",
+      "rtti_candidates": [
+        {
+          "name": "Solomon_DriveBy",
+          "category": "object_or_system",
+          "vtable": "0x007864DC",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Solomon_DriveBy",
+      "vtable": "0x007864DC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5021,
+      "type_id_hex": "0x139D",
+      "allocation_size": 572,
+      "allocation_size_hex": "0x23C",
+      "constructor": "FUN_0047bd60",
+      "constructor_address": "0x0047BD60",
+      "rtti_candidates": [
+        {
+          "name": "Portal",
+          "category": "object_or_system",
+          "vtable": "0x007868CC",
+          "vtable_slot_count": 38
+        }
+      ],
+      "class": "Portal",
+      "vtable": "0x007868CC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5022,
+      "type_id_hex": "0x139E",
+      "allocation_size": 388,
+      "allocation_size_hex": "0x184",
+      "constructor": "FUN_00503000",
+      "constructor_address": "0x00503000",
+      "rtti_candidates": [
+        {
+          "name": "Annalist2",
+          "category": "object_or_system",
+          "vtable": "0x00791EB4",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "Annalist2",
+      "vtable": "0x00791EB4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5023,
+      "type_id_hex": "0x139F",
+      "allocation_size": 372,
+      "allocation_size_hex": "0x174",
+      "constructor": "FUN_00502ba0",
+      "constructor_address": "0x00502BA0",
+      "rtti_candidates": [
+        {
+          "name": "ArchChancellorDesk",
+          "category": "object_or_system",
+          "vtable": "0x00791BEC",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "ArchChancellorDesk",
+      "vtable": "0x00791BEC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 5024,
+      "type_id_hex": "0x13A0",
+      "allocation_size": 372,
+      "allocation_size_hex": "0x174",
+      "constructor": "FUN_00502b20",
+      "constructor_address": "0x00502B20",
+      "rtti_candidates": [
+        {
+          "name": "ArchChancellorStanding",
+          "category": "object_or_system",
+          "vtable": "0x00791B74",
+          "vtable_slot_count": 28
+        }
+      ],
+      "class": "ArchChancellorStanding",
+      "vtable": "0x00791B74",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 6001,
+      "type_id_hex": "0x1771",
+      "allocation_size": 216,
+      "allocation_size_hex": "0xD8",
+      "constructor": "FUN_006400c0",
+      "constructor_address": "0x006400C0",
+      "rtti_candidates": [
+        {
+          "name": "MonsterRecipe",
+          "category": "object_or_system",
+          "vtable": "0x0079F208",
+          "vtable_slot_count": 7
+        },
+        {
+          "name": "String",
+          "category": "object_or_system",
+          "vtable": "0x00784704",
+          "vtable_slot_count": 3
+        }
+      ],
+      "class": "MonsterRecipe",
+      "vtable": "0x0079F208",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 6002,
+      "type_id_hex": "0x1772",
+      "allocation_size": 100,
+      "allocation_size_hex": "0x64",
+      "constructor": "FUN_005aff00",
+      "constructor_address": "0x005AFF00",
+      "rtti_candidates": [
+        {
+          "name": "Array<int>",
+          "category": "container",
+          "vtable": "0x007848EC",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<void*>",
+          "category": "container",
+          "vtable": "0x0078824C",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "String",
+          "category": "object_or_system",
+          "vtable": "0x00784704",
+          "vtable_slot_count": 3
+        },
+        {
+          "name": "UIDGroup",
+          "category": "object_or_system",
+          "vtable": "0x00799FB4",
+          "vtable_slot_count": 7
+        }
+      ],
+      "class": "UIDGroup",
+      "vtable": "0x00799FB4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 6003,
+      "type_id_hex": "0x1773",
+      "allocation_size": 176,
+      "allocation_size_hex": "0xB0",
+      "constructor": "FUN_00573410",
+      "constructor_address": "0x00573410",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<class_SmartPointer<class_FX>_>",
+          "category": "container",
+          "vtable": "0x00785B80",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "ItemRecipe",
+          "category": "item",
+          "vtable": "0x007963A4",
+          "vtable_slot_count": 7
+        },
+        {
+          "name": "String",
+          "category": "object_or_system",
+          "vtable": "0x00784704",
+          "vtable_slot_count": 3
+        }
+      ],
+      "class": "ItemRecipe",
+      "vtable": "0x007963A4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 6004,
+      "type_id_hex": "0x1774",
+      "allocation_size": 212,
+      "allocation_size_hex": "0xD4",
+      "constructor": "FUN_00640c20",
+      "constructor_address": "0x00640C20",
+      "rtti_candidates": [
+        {
+          "name": "NPCRecipe",
+          "category": "object_or_system",
+          "vtable": "0x0079F2E4",
+          "vtable_slot_count": 8
+        },
+        {
+          "name": "String",
+          "category": "object_or_system",
+          "vtable": "0x00784704",
+          "vtable_slot_count": 3
+        }
+      ],
+      "class": "NPCRecipe",
+      "vtable": "0x0079F2E4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 6005,
+      "type_id_hex": "0x1775",
+      "allocation_size": 92,
+      "allocation_size_hex": "0x5C",
+      "constructor": "FUN_00573cb0",
+      "constructor_address": "0x00573CB0",
+      "rtti_candidates": [
+        {
+          "name": "Array<int>",
+          "category": "container",
+          "vtable": "0x007848EC",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "PointerList<class_SmartPointer<class_FX>_>",
+          "category": "container",
+          "vtable": "0x00785B80",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "ItemSet",
+          "category": "item",
+          "vtable": "0x00796450",
+          "vtable_slot_count": 7
+        },
+        {
+          "name": "String",
+          "category": "object_or_system",
+          "vtable": "0x00784704",
+          "vtable_slot_count": 3
+        }
+      ],
+      "class": "ItemSet",
+      "vtable": "0x00796450",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 6006,
+      "type_id_hex": "0x1776",
+      "allocation_size": 232,
+      "allocation_size_hex": "0xE8",
+      "constructor": "FUN_00640e60",
+      "constructor_address": "0x00640E60",
+      "rtti_candidates": [
+        {
+          "name": "String",
+          "category": "object_or_system",
+          "vtable": "0x00784704",
+          "vtable_slot_count": 3
+        },
+        {
+          "name": "TimeLine",
+          "category": "object_or_system",
+          "vtable": "0x0079F308",
+          "vtable_slot_count": 7
+        }
+      ],
+      "class": "TimeLine",
+      "vtable": "0x0079F308",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 6007,
+      "type_id_hex": "0x1777",
+      "allocation_size": 164,
+      "allocation_size_hex": "0xA4",
+      "constructor": "FUN_004a9e80",
+      "constructor_address": "0x004A9E80",
+      "rtti_candidates": [
+        {
+          "name": "Array<char>",
+          "category": "container",
+          "vtable": "0x00788258",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<class_String>",
+          "category": "container",
+          "vtable": "0x00788234",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<float>",
+          "category": "container",
+          "vtable": "0x007846F8",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<int>",
+          "category": "container",
+          "vtable": "0x007848EC",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "Array<void*>",
+          "category": "container",
+          "vtable": "0x0078824C",
+          "vtable_slot_count": 2
+        },
+        {
+          "name": "PointerList<void*>",
+          "category": "container",
+          "vtable": "0x007846CC",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "TimeLineEvent",
+          "category": "object_or_system",
+          "vtable": "0x00789080",
+          "vtable_slot_count": 7
+        }
+      ],
+      "class": "TimeLineEvent",
+      "vtable": "0x00789080",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 6008,
+      "type_id_hex": "0x1778",
+      "allocation_size": 68,
+      "allocation_size_hex": "0x44",
+      "constructor": "FUN_00463400",
+      "constructor_address": "0x00463400",
+      "rtti_candidates": [
+        {
+          "name": "Spawner",
+          "category": "object_or_system",
+          "vtable": "0x00785884",
+          "vtable_slot_count": 7
+        }
+      ],
+      "class": "Spawner",
+      "vtable": "0x00785884",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7000,
+      "type_id_hex": "0x1B58",
+      "allocation_size": 136,
+      "allocation_size_hex": "0x88",
+      "constructor": "FUN_00572f20",
+      "constructor_address": "0x00572F20",
+      "rtti_candidates": [
+        {
+          "name": "PointerList<class_SmartPointer<class_FX>_>",
+          "category": "container",
+          "vtable": "0x00785B80",
+          "vtable_slot_count": 10
+        },
+        {
+          "name": "Item",
+          "category": "item",
+          "vtable": "0x0079632C",
+          "vtable_slot_count": 14
+        },
+        {
+          "name": "String",
+          "category": "object_or_system",
+          "vtable": "0x00784704",
+          "vtable_slot_count": 3
+        }
+      ],
+      "class": "Item",
+      "vtable": "0x0079632C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7001,
+      "type_id_hex": "0x1B59",
+      "allocation_size": 140,
+      "allocation_size_hex": "0x8C",
+      "constructor": "FUN_005a7580",
+      "constructor_address": "0x005A7580",
+      "rtti_candidates": [
+        {
+          "name": "Item_Potion",
+          "category": "item",
+          "vtable": "0x00799A40",
+          "vtable_slot_count": 14
+        }
+      ],
+      "class": "Item_Potion",
+      "vtable": "0x00799A40",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7002,
+      "type_id_hex": "0x1B5A",
+      "allocation_size": 136,
+      "allocation_size_hex": "0x88",
+      "constructor": "FUN_00461ff0",
+      "constructor_address": "0x00461FF0",
+      "rtti_candidates": [
+        {
+          "name": "Item_Ring",
+          "category": "item",
+          "vtable": "0x00785744",
+          "vtable_slot_count": 14
+        }
+      ],
+      "class": "Item_Ring",
+      "vtable": "0x00785744",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7003,
+      "type_id_hex": "0x1B5B",
+      "allocation_size": 140,
+      "allocation_size_hex": "0x8C",
+      "constructor": "FUN_00462020",
+      "constructor_address": "0x00462020",
+      "rtti_candidates": [
+        {
+          "name": "Item_Amulet",
+          "category": "item",
+          "vtable": "0x00785780",
+          "vtable_slot_count": 14
+        }
+      ],
+      "class": "Item_Amulet",
+      "vtable": "0x00785780",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7004,
+      "type_id_hex": "0x1B5C",
+      "allocation_size": 136,
+      "allocation_size_hex": "0x88",
+      "constructor": "FUN_00462050",
+      "constructor_address": "0x00462050",
+      "rtti_candidates": [
+        {
+          "name": "Item_Staff",
+          "category": "item",
+          "vtable": "0x007857BC",
+          "vtable_slot_count": 15
+        }
+      ],
+      "class": "Item_Staff",
+      "vtable": "0x007857BC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7005,
+      "type_id_hex": "0x1B5D",
+      "allocation_size": 168,
+      "allocation_size_hex": "0xA8",
+      "constructor": "FUN_00461ed0",
+      "constructor_address": "0x00461ED0",
+      "rtti_candidates": [
+        {
+          "name": "Item_Hat",
+          "category": "item",
+          "vtable": "0x007856C4",
+          "vtable_slot_count": 14
+        }
+      ],
+      "class": "Item_Hat",
+      "vtable": "0x007856C4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7006,
+      "type_id_hex": "0x1B5E",
+      "allocation_size": 168,
+      "allocation_size_hex": "0xA8",
+      "constructor": "FUN_00461f70",
+      "constructor_address": "0x00461F70",
+      "rtti_candidates": [
+        {
+          "name": "Item_Robe",
+          "category": "item",
+          "vtable": "0x00785704",
+          "vtable_slot_count": 15
+        }
+      ],
+      "class": "Item_Robe",
+      "vtable": "0x00785704",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7008,
+      "type_id_hex": "0x1B60",
+      "allocation_size": 140,
+      "allocation_size_hex": "0x8C",
+      "constructor": "FUN_005a7520",
+      "constructor_address": "0x005A7520",
+      "rtti_candidates": [
+        {
+          "name": "Item_Sack",
+          "category": "item",
+          "vtable": "0x00796368",
+          "vtable_slot_count": 14
+        }
+      ],
+      "class": "Item_Sack",
+      "vtable": "0x00796368",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7009,
+      "type_id_hex": "0x1B61",
+      "allocation_size": 140,
+      "allocation_size_hex": "0x8C",
+      "constructor": "FUN_00550490",
+      "constructor_address": "0x00550490",
+      "rtti_candidates": [
+        {
+          "name": "Item_Perk",
+          "category": "item",
+          "vtable": "0x00794244",
+          "vtable_slot_count": 15
+        }
+      ],
+      "class": "Item_Perk",
+      "vtable": "0x00794244",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7010,
+      "type_id_hex": "0x1B62",
+      "allocation_size": 140,
+      "allocation_size_hex": "0x8C",
+      "constructor": "FUN_005a75d0",
+      "constructor_address": "0x005A75D0",
+      "rtti_candidates": [
+        {
+          "name": "Item_Map",
+          "category": "item",
+          "vtable": "0x00799AB8",
+          "vtable_slot_count": 14
+        }
+      ],
+      "class": "Item_Map",
+      "vtable": "0x00799AB8",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7011,
+      "type_id_hex": "0x1B63",
+      "allocation_size": 136,
+      "allocation_size_hex": "0x88",
+      "constructor": "FUN_00462070",
+      "constructor_address": "0x00462070",
+      "rtti_candidates": [
+        {
+          "name": "Item_Wand",
+          "category": "item",
+          "vtable": "0x007857FC",
+          "vtable_slot_count": 15
+        }
+      ],
+      "class": "Item_Wand",
+      "vtable": "0x007857FC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7012,
+      "type_id_hex": "0x1B64",
+      "allocation_size": 136,
+      "allocation_size_hex": "0x88",
+      "constructor": "FUN_005a75b0",
+      "constructor_address": "0x005A75B0",
+      "rtti_candidates": [
+        {
+          "name": "Item_Misc",
+          "category": "item",
+          "vtable": "0x00799A7C",
+          "vtable_slot_count": 14
+        }
+      ],
+      "class": "Item_Misc",
+      "vtable": "0x00799A7C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7016,
+      "type_id_hex": "0x1B68",
+      "allocation_size": 28,
+      "allocation_size_hex": "0x1C",
+      "constructor": "FUN_00622fe0",
+      "constructor_address": "0x00622FE0",
+      "rtti_candidates": [
+        {
+          "name": "Mod",
+          "category": "status_modifier",
+          "vtable": "0x0079E2E4",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod",
+      "vtable": "0x0079E2E4",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7017,
+      "type_id_hex": "0x1B69",
+      "allocation_size": 36,
+      "allocation_size_hex": "0x24",
+      "constructor": "FUN_00623050",
+      "constructor_address": "0x00623050",
+      "rtti_candidates": [
+        {
+          "name": "Mod_ColdSlow",
+          "category": "status_modifier",
+          "vtable": "0x0079E310",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_ColdSlow",
+      "vtable": "0x0079E310",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7018,
+      "type_id_hex": "0x1B6A",
+      "allocation_size": 32,
+      "allocation_size_hex": "0x20",
+      "constructor": "FUN_00623180",
+      "constructor_address": "0x00623180",
+      "rtti_candidates": [
+        {
+          "name": "Mod_Stun",
+          "category": "status_modifier",
+          "vtable": "0x0079E368",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_Stun",
+      "vtable": "0x0079E368",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7019,
+      "type_id_hex": "0x1B6B",
+      "allocation_size": 44,
+      "allocation_size_hex": "0x2C",
+      "constructor": "FUN_006231d0",
+      "constructor_address": "0x006231D0",
+      "rtti_candidates": [
+        {
+          "name": "Mod_ElectricBurn",
+          "category": "status_modifier",
+          "vtable": "0x0079E394",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_ElectricBurn",
+      "vtable": "0x0079E394",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7020,
+      "type_id_hex": "0x1B6C",
+      "allocation_size": 52,
+      "allocation_size_hex": "0x34",
+      "constructor": "FUN_006232f0",
+      "constructor_address": "0x006232F0",
+      "rtti_candidates": [
+        {
+          "name": "Mod_Steamed",
+          "category": "status_modifier",
+          "vtable": "0x0079E3C0",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_Steamed",
+      "vtable": "0x0079E3C0",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7021,
+      "type_id_hex": "0x1B6D",
+      "allocation_size": 44,
+      "allocation_size_hex": "0x2C",
+      "constructor": "FUN_006233b0",
+      "constructor_address": "0x006233B0",
+      "rtti_candidates": [
+        {
+          "name": "Mod_Knockback",
+          "category": "status_modifier",
+          "vtable": "0x0079E3EC",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_Knockback",
+      "vtable": "0x0079E3EC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7022,
+      "type_id_hex": "0x1B6E",
+      "allocation_size": 36,
+      "allocation_size_hex": "0x24",
+      "constructor": "FUN_00623450",
+      "constructor_address": "0x00623450",
+      "rtti_candidates": [
+        {
+          "name": "Mod_Dazzle",
+          "category": "status_modifier",
+          "vtable": "0x0079E418",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_Dazzle",
+      "vtable": "0x0079E418",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7023,
+      "type_id_hex": "0x1B6F",
+      "allocation_size": 72,
+      "allocation_size_hex": "0x48",
+      "constructor": "FUN_00623550",
+      "constructor_address": "0x00623550",
+      "rtti_candidates": [
+        {
+          "name": "Mod_Frozen",
+          "category": "status_modifier",
+          "vtable": "0x0079E444",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_Frozen",
+      "vtable": "0x0079E444",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7024,
+      "type_id_hex": "0x1B70",
+      "allocation_size": 36,
+      "allocation_size_hex": "0x24",
+      "constructor": "FUN_00623100",
+      "constructor_address": "0x00623100",
+      "rtti_candidates": [
+        {
+          "name": "Mod_CircleSlow",
+          "category": "status_modifier",
+          "vtable": "0x0079E33C",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_CircleSlow",
+      "vtable": "0x0079E33C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7025,
+      "type_id_hex": "0x1B71",
+      "allocation_size": 28,
+      "allocation_size_hex": "0x1C",
+      "constructor": "FUN_006237a0",
+      "constructor_address": "0x006237A0",
+      "rtti_candidates": [
+        {
+          "name": "Mod_StoneSkin",
+          "category": "status_modifier",
+          "vtable": "0x0079E484",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_StoneSkin",
+      "vtable": "0x0079E484",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7026,
+      "type_id_hex": "0x1B72",
+      "allocation_size": 36,
+      "allocation_size_hex": "0x24",
+      "constructor": "FUN_00623820",
+      "constructor_address": "0x00623820",
+      "rtti_candidates": [
+        {
+          "name": "Mod_Poisoned",
+          "category": "status_modifier",
+          "vtable": "0x0079E4DC",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_Poisoned",
+      "vtable": "0x0079E4DC",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7027,
+      "type_id_hex": "0x1B73",
+      "allocation_size": 36,
+      "allocation_size_hex": "0x24",
+      "constructor": "FUN_00623920",
+      "constructor_address": "0x00623920",
+      "rtti_candidates": [
+        {
+          "name": "Mod_Burn",
+          "category": "status_modifier",
+          "vtable": "0x0079E508",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_Burn",
+      "vtable": "0x0079E508",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7028,
+      "type_id_hex": "0x1B74",
+      "allocation_size": 36,
+      "allocation_size_hex": "0x24",
+      "constructor": "FUN_00623960",
+      "constructor_address": "0x00623960",
+      "rtti_candidates": [
+        {
+          "name": "Mod_EtherBurn",
+          "category": "status_modifier",
+          "vtable": "0x0079E534",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_EtherBurn",
+      "vtable": "0x0079E534",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7029,
+      "type_id_hex": "0x1B75",
+      "allocation_size": 28,
+      "allocation_size_hex": "0x1C",
+      "constructor": "FUN_006237d0",
+      "constructor_address": "0x006237D0",
+      "rtti_candidates": [
+        {
+          "name": "Mod_Planewalker",
+          "category": "status_modifier",
+          "vtable": "0x0079E4B0",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_Planewalker",
+      "vtable": "0x0079E4B0",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7030,
+      "type_id_hex": "0x1B76",
+      "allocation_size": 32,
+      "allocation_size_hex": "0x20",
+      "constructor": "FUN_00623990",
+      "constructor_address": "0x00623990",
+      "rtti_candidates": [
+        {
+          "name": "Mod_Prismatic",
+          "category": "status_modifier",
+          "vtable": "0x0079E560",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_Prismatic",
+      "vtable": "0x0079E560",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7031,
+      "type_id_hex": "0x1B77",
+      "allocation_size": 40,
+      "allocation_size_hex": "0x28",
+      "constructor": "FUN_00623a50",
+      "constructor_address": "0x00623A50",
+      "rtti_candidates": [
+        {
+          "name": "Mod_Pushback",
+          "category": "status_modifier",
+          "vtable": "0x0079E58C",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_Pushback",
+      "vtable": "0x0079E58C",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7032,
+      "type_id_hex": "0x1B78",
+      "allocation_size": 36,
+      "allocation_size_hex": "0x24",
+      "constructor": "FUN_00623ae0",
+      "constructor_address": "0x00623AE0",
+      "rtti_candidates": [
+        {
+          "name": "Mod_FrostBurn",
+          "category": "status_modifier",
+          "vtable": "0x0079E5B8",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_FrostBurn",
+      "vtable": "0x0079E5B8",
+      "class_resolution": "unique"
+    },
+    {
+      "type_id": 7033,
+      "type_id_hex": "0x1B79",
+      "allocation_size": 36,
+      "allocation_size_hex": "0x24",
+      "constructor": "FUN_00623b10",
+      "constructor_address": "0x00623B10",
+      "rtti_candidates": [
+        {
+          "name": "Mod_Webbed",
+          "category": "status_modifier",
+          "vtable": "0x0079E5E4",
+          "vtable_slot_count": 10
+        }
+      ],
+      "class": "Mod_Webbed",
+      "vtable": "0x0079E5E4",
+      "class_resolution": "unique"
+    }
+  ]
+}

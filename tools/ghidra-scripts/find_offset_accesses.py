@@ -11,7 +11,9 @@ from ghidra.program.model.scalar import Scalar
 
 
 def parse_args():
-    raw = [a.strip() for a in getScriptArgs() if a.strip()]
+    raw = []
+    for argument in getScriptArgs():
+        raw.extend(value.strip() for value in argument.split(";") if value.strip())
     if not raw:
         print("ERROR: expected one or more offsets")
         raise SystemExit(1)

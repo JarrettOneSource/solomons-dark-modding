@@ -7,7 +7,9 @@ from ghidra.app.decompiler import DecompInterface
 
 
 def parse_args():
-    args = [a.strip() for a in getScriptArgs() if a.strip()]
+    args = []
+    for raw in getScriptArgs():
+        args.extend(value.strip() for value in raw.split(";") if value.strip())
     if not args:
         print("ERROR: expected at least one address")
         raise SystemExit(1)
