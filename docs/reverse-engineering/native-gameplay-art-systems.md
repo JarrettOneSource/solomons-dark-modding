@@ -38,9 +38,9 @@ Evidence statuses:
 | Enemy families, attacks, death effects, drops | factory/config/tick/render vtables | BadGuys, Demon, Golem, Heartmonger, Unholy, Faculty | Mapped | [native-enemies.md](native-enemies.md); [skeleton-death-effects-re.md](../skeleton-death-effects-re.md) |
 | Boneyard grammar, procedural generation, and outdoor scenery materialization | `0x0046DC60`, `0x006388B0`, `0x00653660`, `0x006531B0` | DeadHawg plus road/fence loose images and generated meshes | Mapped; static pass complete, live validation pending | [native-boneyards-and-world.md](native-boneyards-and-world.md) |
 | World tiles/props/doors/portals/NPCs/boss rooms | world initializer and object factories | College, Library, Office, Storage, Memoratorium, NPCs, loose images | Queued | This document |
-| Item catalog/recipes/effects | `0x00574D60`, `0x00573570`, `0x005722A0` | Inventory, Clothes, Solomon attachments | In progress | [inventory-item-investigation.md](../inventory-item-investigation.md) plus item matrix pending |
-| Equipment attachment and stat application | wizard/equipment render and item FX | Clothes, Inventory, Solomon | In progress | This document |
-| Ground loot spawn/render/pickup/materialization | `0x0046AA90` and loot object vtables | Inventory/UI/effect atlases | In progress | This document |
+| Item catalog/recipes/effects | `0x00574D60`, `0x00573570`, `0x005722A0` | Inventory, Clothes, Solomon attachments | Mapped; static pass complete, live validation pending | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md); [native-item-catalog.json](native-item-catalog.json) |
+| Equipment attachment and stat application | wizard/equipment render and item FX | Clothes, Inventory, Solomon | Mapped; static pass complete, live validation pending | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md) |
+| Ground loot spawn/render/pickup/materialization | `0x0046AA90`, `0x0047C070`, and four reward-actor vtables | BadGuys, Inventory, transient effects | Mapped; static pass complete, live validation pending | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md#ground-reward-actors) |
 | UI, fonts, controls, creation, loader/game-over | UI state/render roots | UI, Fonts, ControlPanel, Controls, Create, Loader, GameOver | Queued | This document |
 | Sound/music/voice asset registry and gameplay triggers | preload/registry beginning `0x004EE010` | 304 WAV plus MO3/music table | Queued | This document |
 
@@ -151,20 +151,27 @@ skill-glyph portion through `0x00665F10`; see
 
 ### Inventory
 
-The 84-record Inventory atlas is visually and structurally grouped as:
+The 84-record Inventory atlas has these exact native item bindings:
 
-| Records | Extracted content | Consumer status |
-| --- | --- | --- |
-| `0` | bag/backpack icon | type/loot render trace in progress |
-| `1..17` | inventory UI/utility and early item symbols | exact IDs in progress |
-| `18..31` | charms/jewelry | item-definition mapping in progress |
-| `32..51` | bottles/potions | potion type mapping in progress |
-| `52..63` | rings | item-definition mapping in progress |
-| `64..71` | robes/sacks | equipment/ground-loot mapping in progress |
-| `72..83` | staffs/wands | equipment/attachment mapping in progress |
+| Records | Native consumer |
+| --- | --- |
+| `0` | bag/backpack presentation |
+| `1..9`, `11..17`, `32..33` | inventory UI/utility records; not recipe-addressable |
+| `10` | `Item_Perk` Bargain Bundle icon |
+| `18..29` | amulet main layer, `18 + image` |
+| `30..31` | amulet secondary layer, `30 + floor(image/6)` |
+| `34..37`, `38..41` | hat color layers, `34 + image` and `38 + image` |
+| `42..45` | miscellaneous dye/key/two-book subtypes |
+| `46..51` | six potion subtypes |
+| `52..63` | rings, `52 + image` |
+| `64..66`, `67..69` | robe color layers, `64 + image` and `67 + image` |
+| `70..71` | nested inventory sacks |
+| `72..77` | staffs, `72 + image` |
+| `78..83` | wands, `78 + image` |
 
-These visual labels are correlations, not yet the final item-ID table. The
-final table will cite the item parser/factory and the exact sprite selector.
+The exact parser fields, selectors, subtype meanings, and corresponding
+Clothes attachment renderers are in
+[native-items-equipment-and-loot.md](native-items-equipment-and-loot.md#exact-item-art-binding).
 
 ## Wizard rendering and equipment attachment
 
@@ -178,9 +185,13 @@ choices. The already recovered state offsets, directional selection, animation
 groups, and layer ordering are maintained in
 [wizard-render-animation-deep-dive.md](../wizard-render-animation-deep-dive.md).
 
-The remaining work here is to join every item-definition selector to the exact
-Clothes/Inventory/Solomon record range and to document attachment lifetime when
-equipment changes.
+The item-definition selectors are now joined to their exact Inventory ranges,
+and the Hat/Robe/Staff/Wand attachment paths, seven sink owners, equip/unequip
+transfers, and refresh lifetime are documented in
+[native-items-equipment-and-loot.md](native-items-equipment-and-loot.md). The
+remaining wizard-side work is isolated live validation of pose-dependent
+Clothes selection and equipment replacement; it is no longer an unresolved
+static item map.
 
 ## Skill and weld logic recovered
 
@@ -239,38 +250,27 @@ labels, and Portal's frequency enum chooses countdown bounds whose exact
 switch arithmetic was not recovered cleanly. Neither uncertainty changes the
 proved object ownership or art-consumer map.
 
-## Item and ground-loot roots already established
+## Item, equipment, and ground-loot map
 
-The item system uses:
+The static item/loot pass is closed in
+[native-items-equipment-and-loot.md](native-items-equipment-and-loot.md). It
+recovers the complete shipped definition grammar (47 recipes, seven sets, and
+39 FX kinds), the separate recipe/live UID allocators, definition cloning and
+random-equipment generation, all item subclasses, consumables, nested sacks,
+perks, exact Inventory/Clothes art binding, and two-pass stat application.
 
-| Function | Role |
-| ---: | --- |
-| `0x00574D60` | `ItemSet`/item-definition parser |
-| `0x00573570` | `ItemRecipe` parser |
-| `0x005722A0` | `ItemFx` parser |
-| `0x0055FF20` | inventory insert/stack path |
-| `0x0047C070` | drop selector using flags at `+0xCC..+0xD1` |
-| `0x0046AA90` | common drop spawn path |
+The gameplay scene owns one inventory root at `+0x13B8` and seven equipment
+sinks: Hat `+0x1428`, Robe `+0x142C`, rings `+0x1430/+0x1434/+0x1438`, Amulet
+`+0x143C`, and Staff/Wand `+0x1440`. Set completion uses exact recipe UIDs from
+all seven sinks; insertion, potion stacking, equip/unequip transfer, and
+progression refresh are mapped.
 
-Known item object fields include type at `+0x08`, slot/side at `+0x1C`, and
-active state at `+0x58`. A scene's inventory root is at `+0x13B8`; confirmed
-equipment sinks include `+0x1428`, `+0x142C`, and `+0x1440`. Confirmed native
-type IDs include potion `0x1B59`, staff attachment `0x1B5C`, hat `0x1B5D`, robe
-`0x1B5E`, and sack `0x1B60`; potion stack/count state is at `+0x88`.
-
-Ground objects already identified are:
-
-| Type | Constructor | Tick/update |
-| --- | ---: | ---: |
-| Orb `0x7DB` | `0x005E1150` | `0x005E62E0` |
-| Gold `0x7DC` | `0x005E12C0` | `0x005E66B0` |
-| Sack `0x7DD` | `0x005E1460` | `0x005E6B50` |
-| Bonus `0x7F6` | `0x005E2D90` | `0x006039C0` |
-
-RTTI identifies the `0x7DD` class as `Sack`; the earlier provisional
-`ItemDrop` label was too broad. The final loot pass must still prove exact probability/materialization paths,
-render selector and atlas range for every ground type, host/owner-independent
-native lifetime, pickup collision, inventory insertion, and destructor.
+The four ground-reward actors are Orb `0x7DB`, Gold `0x7DC`, Sack carrier
+`0x7DD`, and Bonus `0x7F6`. Their category selection, construction, state,
+render records, collision/pickup behavior, ownership transfer, timers, and
+destructors are mapped. In particular, the Sack carrier owns a live item until
+pickup transfers that exact pointer through `Inventory_InsertOrStackItem`; it
+is not merely a generic Inventory icon drawn in the world.
 
 ## Loose world images
 
