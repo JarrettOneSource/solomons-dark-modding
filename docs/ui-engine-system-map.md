@@ -295,11 +295,21 @@ Camera work becomes more important later for:
 
 ## Highest-value next RE targets
 
-1. Map the `Bundle_Title` and `Bundle_Loader` vtable slots used for build, tick, render, and transition.
-2. Recover the base control or widget struct created by `FUN_00437D90` and related helpers.
-3. Find where final rects are stored on controls after layout.
-4. Map the `MsgBox` internal line container and the secondary-button child path so modal dialogs can be enumerated directly without using observed text rows.
-5. Find the bundle switch points for pause, settings, inventory, spell picker, and book picker so the active surface can be identified without relying on text strings.
+The native-art side of the old first target is now closed. `Bundle_Loader` is
+embedded at `MyLoader +0x78`; its builder is `0x004EC1F0`; `MyLoader` uses
+vtable `0x00799BDC`; renderer `0x005BCA40` draws primitive loading/progress
+geometry and does not consume any of the bundle's five sprites; destructor
+`0x005AACF0` releases the bundle. See
+[native-presentation-ui-fonts-and-loader.md](reverse-engineering/native-presentation-ui-fonts-and-loader.md#loader-owned-atlas-primitive-renderer).
+
+The remaining highest-value targets concern semantic UI extraction rather
+than native asset discovery:
+
+1. Recover the base control or widget struct created by `FUN_00437D90` and related helpers.
+2. Find where final rects are stored on controls after layout.
+3. Map the `MsgBox` internal line container and the secondary-button child path so modal dialogs can be enumerated directly without using observed text rows.
+4. Find the bundle switch points for pause, settings, inventory, spell picker, and book picker so the active surface can be identified without relying on text strings.
+5. Finish the `Bundle_Title` transition/lifecycle semantics needed by `sd.ui`; its art consumption is already mapped separately.
 
 ## Immediate guidance for the SD mod stack
 

@@ -36,6 +36,18 @@ The wrapper:
 
 Use `-RefreshReplica` after updating the source analyzed project, and `-ClearReplicaLocks` if a previous run crashed and left stale lock files behind.
 
+Recover the compiled `MyApp` audio registry, including each path literal,
+loader call, and ESI-relative object destination, with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-GhidraHeadless.ps1 `
+  -ScriptPath .\tools\ghidra-scripts\catalog_audio_registry.py `
+  -ScriptArguments 0x004EE010
+```
+
+The script asserts the retail builder's exact 233-entry count. Its output is
+the input to `tools/build_native_audio_catalog.py`.
+
 ## Script Hygiene
 
 Keep reusable scripts in this folder with stable, descriptive names and enough

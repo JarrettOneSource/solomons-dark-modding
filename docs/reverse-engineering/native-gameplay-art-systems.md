@@ -37,12 +37,12 @@ Evidence statuses:
 | Every projectile/transient effect | 46 factory classes and 197 decompiled lifecycle methods | BadGuys, DeadHawg, Golem, Unholy, UI plus child animation art | Mapped | [native-projectiles-and-effects.md](native-projectiles-and-effects.md) |
 | Enemy families, attacks, death effects, drops | factory/config/tick/render vtables | BadGuys, Demon, Golem, Heartmonger, Unholy, Faculty | Mapped | [native-enemies.md](native-enemies.md); [skeleton-death-effects-re.md](../skeleton-death-effects-re.md) |
 | Boneyard grammar, procedural generation, and outdoor scenery materialization | `0x0046DC60`, `0x006388B0`, `0x00653660`, `0x006531B0` | DeadHawg plus road/fence loose images and generated meshes | Mapped; static pass complete, live validation pending | [native-boneyards-and-world.md](native-boneyards-and-world.md) |
-| World tiles/props/doors/portals/NPCs/boss rooms | world initializer and object factories | College, Library, Office, Storage, Memoratorium, NPCs, loose images | Queued | This document |
+| World tiles/props/doors/portals/NPCs/boss rooms | world initializer and object factories | College, Library, Office, Storage, Memoratorium, NPCs, loose images | Mapped; static pass complete, live validation pending | [native-regions-npcs-and-world-props.md](native-regions-npcs-and-world-props.md) |
 | Item catalog/recipes/effects | `0x00574D60`, `0x00573570`, `0x005722A0` | Inventory, Clothes, Solomon attachments | Mapped; static pass complete, live validation pending | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md); [native-item-catalog.json](native-item-catalog.json) |
 | Equipment attachment and stat application | wizard/equipment render and item FX | Clothes, Inventory, Solomon | Mapped; static pass complete, live validation pending | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md) |
 | Ground loot spawn/render/pickup/materialization | `0x0046AA90`, `0x0047C070`, and four reward-actor vtables | BadGuys, Inventory, transient effects | Mapped; static pass complete, live validation pending | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md#ground-reward-actors) |
-| UI, fonts, controls, creation, loader/game-over | UI state/render roots | UI, Fonts, ControlPanel, Controls, Create, Loader, GameOver | Queued | This document |
-| Sound/music/voice asset registry and gameplay triggers | preload/registry beginning `0x004EE010` | 304 WAV plus MO3/music table | Queued | This document |
+| UI, fonts, controls, creation, loader/game-over | UI state/render roots | UI, Fonts, ControlPanel, Controls, Create, Loader, GameOver | Mapped; static pass complete, live validation pending | [native-presentation-ui-fonts-and-loader.md](native-presentation-ui-fonts-and-loader.md) |
+| Sound/music/voice asset registry and gameplay triggers | preload/registry beginning `0x004EE010` | 304 WAV plus MO3/music table | Mapped; static pass complete, live validation pending | [native-audio-system.md](native-audio-system.md); [native-audio-catalog.json](native-audio-catalog.json) |
 
 ## Confirmed cross-system architecture
 

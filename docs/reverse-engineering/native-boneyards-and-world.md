@@ -11,9 +11,12 @@ destruction-relevant state.
 
 The static boneyard and outdoor-scenery pass is complete. Isolated runtime
 validation is still required before the larger native-art phase can be called
-complete, and interior tiles, portals, NPCs, bosses, items, and ground-pickup
-objects have their own remaining passes. No website/mod-download behavior was
-implemented during this work.
+complete. Fixed interiors and NPCs are mapped in
+[`native-regions-npcs-and-world-props.md`](native-regions-npcs-and-world-props.md),
+bosses/portals in [`native-enemies.md`](native-enemies.md), and items plus
+ground pickups in
+[`native-items-equipment-and-loot.md`](native-items-equipment-and-loot.md).
+No website/mod-download behavior was implemented during this work.
 
 All addresses refer to the analyzed retail `SolomonDark.exe` with SHA-256:
 
