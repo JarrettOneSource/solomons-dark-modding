@@ -389,6 +389,9 @@ struct WorldSnapshotActorBindingRuntimeInfo {
     uintptr_t local_actor_address = 0;
     std::uint32_t native_type_id = 0;
     std::int32_t enemy_type = -1;
+    bool sampled_transform_valid = false;
+    float sampled_position_x = 0.0f;
+    float sampled_position_y = 0.0f;
     bool matched = false;
     bool parked = false;
     bool removed = false;

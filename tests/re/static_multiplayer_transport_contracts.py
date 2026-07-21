@@ -704,6 +704,9 @@ def test_client_enemy_hot_path_uses_constant_time_authority_cache() -> str:
         "world_snapshot_reconciliation.inl"
     )
     player_state_header = _read("SolomonDarkModLoader/include/mod_loader.h")
+    runtime_state_header = _read(
+        "SolomonDarkModLoader/include/multiplayer_runtime_state.h"
+    )
     player_state_getter = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"
     )
@@ -731,6 +734,23 @@ def test_client_enemy_hot_path_uses_constant_time_authority_cache() -> str:
             reconciliation,
             "RefreshLatestRunEnemySnapshotCache(runtime_state.world_snapshot, now_ms);",
         ),
+        (runtime_state_header, "bool sampled_transform_valid = false;"),
+        (runtime_state_header, "float sampled_position_x = 0.0f;"),
+        (runtime_state_header, "float sampled_position_y = 0.0f;"),
+        (
+            reconciliation,
+            "binding.sampled_position_x = authoritative_actor.position_x;",
+        ),
+        (
+            reconciliation,
+            "binding.sampled_position_y = authoritative_actor.position_y;",
+        ),
+        (lua_gameplay, 'lua_setfield(state, -2, "sampled_transform_valid");'),
+        (lua_gameplay, 'lua_setfield(state, -2, "sampled_position_x");'),
+        (lua_gameplay, 'lua_setfield(state, -2, "sampled_position_y");'),
+        (large_world, "binding.sampled_transform_valid"),
+        (large_world, "tonumber(binding.sampled_position_x)"),
+        (large_world, "tonumber(binding.sampled_position_y)"),
         (player_state_header, "std::uint64_t local_player_tick_count = 0;"),
         (player_state_header, "std::uint64_t local_player_tick_observed_ms = 0;"),
         (
@@ -760,6 +780,18 @@ def test_client_enemy_hot_path_uses_constant_time_authority_cache() -> str:
         (large_world, 'result["client_render_frame_rate_loaded"]'),
         (large_world, "MINIMUM_CLIENT_RENDER_FRAME_RATE_HZ"),
         (large_world, "MINIMUM_LOADED_TO_BASELINE_RENDER_FRAME_RATE_RATIO"),
+        (large_world, "def prepare_client_performance_sample()"),
+        (large_world, "PAIR_BACKEND == \"wsl\""),
+        (large_world, "proton_input_process_id()"),
+        (large_world, "activate_proton_window(process_id)"),
+        (large_world, '"wslg_copy_mode":'),
+        (large_world, 'result["client_render_frame_rate_floor_applicable"]'),
+        (
+            large_world,
+            'if result.get("spawns") and "zero_after_cleanup" not in result:',
+        ),
+        (large_world, 'result["teardown_cleanup"] = primary.cleanup_live_enemies()'),
+        (large_world, 'result["teardown_zero"] = wait_for_zero('),
         (large_world, "freeze_on_spawn=False"),
     ):
         assert token in source, f"client enemy-load regression lacks: {token}"

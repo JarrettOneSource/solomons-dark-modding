@@ -23,6 +23,7 @@ bool ProcessMemory::TryWrite(uintptr_t address, const void* buffer, size_t size)
         return false;
     }
 
+    const bool target_is_executable = IsExecutableRange(address, size);
     auto protection_changed = false;
     DWORD previous_protect = 0;
     if (!IsWritableRange(address, size)) {
@@ -50,8 +51,12 @@ bool ProcessMemory::TryWrite(uintptr_t address, const void* buffer, size_t size)
         return false;
     }
 
-    FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<const void*>(address), size);
-    InvalidateRange(address, size);
+    if (target_is_executable) {
+        FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<const void*>(address), size);
+    }
+    if (protection_changed) {
+        InvalidateRange(address, size);
+    }
     return true;
 }
 

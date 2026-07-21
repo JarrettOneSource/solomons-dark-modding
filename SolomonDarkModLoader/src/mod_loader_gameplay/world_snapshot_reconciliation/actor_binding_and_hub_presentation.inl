@@ -258,6 +258,13 @@ void RecordWorldSnapshotBinding(
     binding.local_actor_address = local_actor_address;
     binding.native_type_id = authoritative_actor.native_type_id;
     binding.enemy_type = authoritative_actor.enemy_type;
+    binding.sampled_transform_valid =
+        std::isfinite(authoritative_actor.position_x) &&
+        std::isfinite(authoritative_actor.position_y);
+    if (binding.sampled_transform_valid) {
+        binding.sampled_position_x = authoritative_actor.position_x;
+        binding.sampled_position_y = authoritative_actor.position_y;
+    }
     binding.matched = matched;
     binding.parked = parked;
     binding.removed = removed;

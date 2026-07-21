@@ -359,7 +359,7 @@ void PushReplicatedLootDrop(lua_State* state, const multiplayer::LootDropSnapsho
 }
 
 void PushLootPickupResult(lua_State* state, const multiplayer::LootPickupResultRuntimeInfo& result) {
-    lua_createtable(state, 0, 10);
+    lua_createtable(state, 0, 11);
     lua_pushinteger(state, static_cast<lua_Integer>(result.authority_participant_id));
     lua_setfield(state, -2, "authority_participant_id");
     lua_pushinteger(state, static_cast<lua_Integer>(result.participant_id));
@@ -468,7 +468,7 @@ void PushLootPickupResult(lua_State* state, const multiplayer::LootPickupResultR
 void PushReplicatedWorldActorBinding(
     lua_State* state,
     const multiplayer::WorldSnapshotActorBindingRuntimeInfo& binding) {
-    lua_createtable(state, 0, 8);
+    lua_createtable(state, 0, 10);
     lua_pushinteger(state, static_cast<lua_Integer>(binding.network_actor_id));
     lua_setfield(state, -2, "network_actor_id");
     lua_pushinteger(state, static_cast<lua_Integer>(binding.local_actor_address));
@@ -477,6 +477,12 @@ void PushReplicatedWorldActorBinding(
     lua_setfield(state, -2, "object_type_id");
     lua_pushinteger(state, static_cast<lua_Integer>(binding.enemy_type));
     lua_setfield(state, -2, "enemy_type");
+    lua_pushboolean(state, binding.sampled_transform_valid ? 1 : 0);
+    lua_setfield(state, -2, "sampled_transform_valid");
+    lua_pushnumber(state, static_cast<lua_Number>(binding.sampled_position_x));
+    lua_setfield(state, -2, "sampled_position_x");
+    lua_pushnumber(state, static_cast<lua_Number>(binding.sampled_position_y));
+    lua_setfield(state, -2, "sampled_position_y");
     lua_pushboolean(state, binding.matched ? 1 : 0);
     lua_setfield(state, -2, "matched");
     lua_pushboolean(state, binding.parked ? 1 : 0);

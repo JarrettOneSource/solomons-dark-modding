@@ -15,8 +15,13 @@ import verify_multiplayer_primary_kill_stress as primary
 from steam_friend_active_pair import (
     CLIENT_ENDPOINT,
     HOST_ENDPOINT,
+    PAIR_BACKEND,
     ROOT,
     SteamFriendActivePair,
+)
+from steam_friend_hub_automation import (
+    activate_proton_window,
+    proton_input_process_id,
 )
 from verify_local_multiplayer_sync import VerifyFailure, parse_key_values
 
@@ -136,15 +141,17 @@ for _, binding in ipairs(replicated and replicated.bindings or {}) do
   local snapshot = live_snapshot_by_id[network_id]
   local local_actor = local_by_address[address]
   if binding.matched and not binding.parked and network_id ~= 0 and
-      address ~= 0 and snapshot ~= nil and local_actor ~= nil then
+      address ~= 0 and snapshot ~= nil and local_actor ~= nil and
+      binding.sampled_transform_valid then
     matched = matched + 1
     unique_binding_ids[network_id] = true
     unique_local_addresses[address] = true
-    if finite(tonumber(snapshot.x)) and finite(tonumber(snapshot.y)) and
+    if finite(tonumber(binding.sampled_position_x)) and
+        finite(tonumber(binding.sampled_position_y)) and
         finite(tonumber(local_actor.x)) and finite(tonumber(local_actor.y)) then
       compared = compared + 1
-      local dx = tonumber(local_actor.x) - tonumber(snapshot.x)
-      local dy = tonumber(local_actor.y) - tonumber(snapshot.y)
+      local dx = tonumber(local_actor.x) - tonumber(binding.sampled_position_x)
+      local dy = tonumber(local_actor.y) - tonumber(binding.sampled_position_y)
       local distance = math.sqrt(dx * dx + dy * dy)
       if distance > max_distance then max_distance = distance end
     end
@@ -367,6 +374,26 @@ def measure_client_render_frame_rate(
         "observed_ms_delta": observed_ms_delta,
         "frame_rate_hz": frame_delta * 1000.0 / observed_ms_delta,
     }
+
+
+def prepare_client_performance_sample() -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "pair_backend": PAIR_BACKEND,
+        "activated": False,
+        "wslg_copy_mode": False,
+    }
+    if PAIR_BACKEND == "wsl":
+        process_id = proton_input_process_id()
+        activation = activate_proton_window(process_id)
+        result.update(
+            {
+                "activated": True,
+                "process_id": process_id,
+                "activation": activation,
+                "wslg_copy_mode": "[WARN:COPY MODE]" in activation,
+            }
+        )
+    return result
 
 
 def transport_deltas(
@@ -613,7 +640,13 @@ def run(
     result["cleanup"] = primary.cleanup_live_enemies()
     result["zero_state"] = wait_for_zero(pair, timeout)
     result["static_world_baseline"] = static_world_baseline(result["zero_state"])
+    result["client_tick_rate_baseline_environment"] = (
+        prepare_client_performance_sample()
+    )
     result["client_tick_rate_baseline"] = measure_client_tick_rate(pair)
+    result["client_render_frame_rate_baseline_environment"] = (
+        prepare_client_performance_sample()
+    )
     result["client_render_frame_rate_baseline"] = measure_client_render_frame_rate(pair)
 
     spawns: list[dict[str, Any]] = []
@@ -653,7 +686,13 @@ def run(
         samples=result["samples"],
     )
     result["final"] = final
+    result["client_tick_rate_loaded_environment"] = (
+        prepare_client_performance_sample()
+    )
     result["client_tick_rate_loaded"] = measure_client_tick_rate(pair)
+    result["client_render_frame_rate_loaded_environment"] = (
+        prepare_client_performance_sample()
+    )
     result["client_render_frame_rate_loaded"] = measure_client_render_frame_rate(pair)
     baseline_tick_rate = result["client_tick_rate_baseline"]["tick_rate_hz"]
     loaded_tick_rate = result["client_tick_rate_loaded"]["tick_rate_hz"]
@@ -688,7 +727,23 @@ def run(
     result["client_render_frame_rate_loaded_to_baseline_ratio"] = (
         loaded_to_baseline_render_frame_ratio
     )
-    if loaded_render_frame_rate < MINIMUM_CLIENT_RENDER_FRAME_RATE_HZ:
+    baseline_copy_mode = result[
+        "client_render_frame_rate_baseline_environment"
+    ]["wslg_copy_mode"]
+    loaded_copy_mode = result[
+        "client_render_frame_rate_loaded_environment"
+    ]["wslg_copy_mode"]
+    if baseline_copy_mode != loaded_copy_mode:
+        raise VerifyFailure(
+            "client display transport changed during the performance test: "
+            f"baseline_copy_mode={baseline_copy_mode} "
+            f"loaded_copy_mode={loaded_copy_mode}"
+        )
+    result["client_render_frame_rate_floor_applicable"] = not loaded_copy_mode
+    if (
+        result["client_render_frame_rate_floor_applicable"]
+        and loaded_render_frame_rate < MINIMUM_CLIENT_RENDER_FRAME_RATE_HZ
+    ):
         raise VerifyFailure(
             "client render frame rate fell below the loaded-run floor: "
             f"loaded={loaded_render_frame_rate:.2f}Hz "
@@ -758,6 +813,16 @@ def main() -> int:
         result["error_type"] = type(exc).__name__
         result["traceback"] = traceback.format_exc()
     finally:
+        if result.get("spawns") and "zero_after_cleanup" not in result:
+            try:
+                result["teardown_cleanup"] = primary.cleanup_live_enemies()
+                result["teardown_zero"] = wait_for_zero(
+                    pair,
+                    args.timeout,
+                    result.get("static_world_baseline"),
+                )
+            except Exception as cleanup_exc:
+                result["teardown_cleanup_error"] = str(cleanup_exc)
         pair.close()
         result = pair.redact(result)
         args.output.parent.mkdir(parents=True, exist_ok=True)
