@@ -93,9 +93,3 @@ private:
     float saved_y_ = 0.0f;
     bool applied_ = false;
 };
-
-void CaptureLocalPlayerPostStockPrimaryInput(uintptr_t actor_address) {
-    (void)QueueLocalPlayerPrimaryCastForMultiplayer(
-        actor_address,
-        LocalPrimaryCastCaptureKind::TargetlessAir);
-}

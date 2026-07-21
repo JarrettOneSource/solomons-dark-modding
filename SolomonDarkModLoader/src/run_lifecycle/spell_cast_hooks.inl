@@ -417,6 +417,9 @@ void __fastcall HookSpellCast_018(void* self, void* unused_edx) {
                          &context.owner_participant_id);
 
     original(self, unused_edx);
+    if (have_spell_id) {
+        (void)QueueLocalPlayerNativeAirPrimaryCast(self_address, spell_id);
+    }
 
     // The last chained target has no subsequent nearest-target call to restore
     // it. By this point stock code has copied every endpoint it needs.

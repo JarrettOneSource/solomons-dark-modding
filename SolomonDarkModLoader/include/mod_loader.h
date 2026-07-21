@@ -404,6 +404,9 @@ bool SetGameplayNativeControlAllowanceFrames(
     std::string* error_message);
 bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_message);
 bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address);
+bool QueueLocalPlayerNativeAirPrimaryCast(
+    uintptr_t actor_address,
+    std::int32_t dispatched_skill_id);
 void ClearQueuedGameplayMouseLeft();
 void ClearQueuedGameplayMouseRight();
 bool ClearLocalPlayerGameplayCastState(std::string* error_message);

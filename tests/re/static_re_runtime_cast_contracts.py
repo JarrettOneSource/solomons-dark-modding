@@ -475,6 +475,7 @@ def test_remote_held_input_casts_defer_lifecycle_to_sender_input() -> str:
 
 def test_local_primary_network_capture_is_single_owner_and_preserves_lua_events() -> str:
     spell_hook_text = read_text(RUN_LIFECYCLE_SPELL_CAST_HOOKS)
+    mod_loader_header_text = read_text(MOD_LOADER_HEADER)
     player_control_text = read_text(
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
@@ -514,31 +515,28 @@ def test_local_primary_network_capture_is_single_owner_and_preserves_lua_events(
         raise StaticReTestFailure(
             "run-lifecycle spell hooks must prove local ownership and deduplicate "
             "the input before dispatching Lua")
-    if (
-        "TryClaimGameplayMouseLeftPrimaryCastEdge(" in spell_hook_text
-        or "multiplayer::QueueLocalSpellCastEvent(" in spell_hook_text
-    ):
+    if "multiplayer::QueueLocalSpellCastEvent(" in spell_hook_text:
         raise StaticReTestFailure(
-            "run-lifecycle Lua hooks must not claim or queue the multiplayer "
-            "primary cast input")
+            "run-lifecycle spell hooks must delegate multiplayer Air capture "
+            "instead of building transport events")
 
-    targetless_tokens = (
-        "IsActiveTargetlessAirPrimaryCast(",
+    native_air_tokens = (
+        "QueueLocalPlayerNativeAirPrimaryCast(self_address, spell_id)",
+        "bool QueueLocalPlayerNativeAirPrimaryCast(",
+        "LocalPrimaryCastCaptureKind::NativeAirDispatch",
         "descriptor.primary_entry_index != kAirPrimaryEntryIndex",
-        "target_actor_address == 0",
         "TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)",
-        "LocalPrimaryCastCaptureKind::TargetlessAir",
         "TryConsumeManualSpawnerPrimaryCastAllowance()",
         "multiplayer::QueueLocalSpellCastEvent(",
     )
-    targetless_text = player_control_text + stock_input_text
-    missing_targetless = [
-        token for token in targetless_tokens if token not in targetless_text
+    native_air_text = spell_hook_text + mod_loader_header_text + player_control_text + input_queue_text
+    missing_native_air = [
+        token for token in native_air_tokens if token not in native_air_text
     ]
-    if missing_targetless:
+    if missing_native_air:
         raise StaticReTestFailure(
-            "targetless Air capture does not own the exact native input edge: "
-            + ", ".join(missing_targetless)
+            "native Air dispatch does not own the exact multiplayer input edge: "
+            + ", ".join(missing_native_air)
         )
     if (
         "compare_exchange_weak" not in input_queue_text
@@ -548,18 +546,34 @@ def test_local_primary_network_capture_is_single_owner_and_preserves_lua_events(
             "native primary capture does not atomically claim one network cast per input edge"
         )
 
-    stock_tick_pos = player_tick_text.find("original(self);")
-    post_stock_capture_pos = player_tick_text.find(
-        "CaptureLocalPlayerPostStockPrimaryInput(actor_address);"
+    air_hook_pos = spell_hook_text.find("void __fastcall HookSpellCast_018")
+    air_original_pos = spell_hook_text.find("original(self, unused_edx);", air_hook_pos)
+    air_capture_pos = spell_hook_text.find(
+        "QueueLocalPlayerNativeAirPrimaryCast(self_address, spell_id)",
+        air_hook_pos,
     )
-    if stock_tick_pos < 0 or post_stock_capture_pos <= stock_tick_pos:
+    if air_hook_pos < 0 or air_original_pos < air_hook_pos or air_capture_pos <= air_original_pos:
         raise StaticReTestFailure(
-            "targetless Air capture must observe stock actor state after the local player tick"
+            "Air multiplayer capture must follow the successful native Lightning dispatch"
+        )
+    forbidden_heuristics = (
+        "IsActiveTargetlessAirPrimaryCast(",
+        "LocalPrimaryCastCaptureKind::TargetlessAir",
+        "CaptureLocalPlayerPostStockPrimaryInput(actor_address);",
+    )
+    heuristic_text = player_control_text + stock_input_text + player_tick_text
+    present_heuristics = [
+        token for token in forbidden_heuristics if token in heuristic_text
+    ]
+    if present_heuristics:
+        raise StaticReTestFailure(
+            "Air multiplayer capture still depends on post-stock targetless heuristics: "
+            + ", ".join(present_heuristics)
         )
 
     return (
         "Lua spell notification and multiplayer primary capture have distinct "
-        "dedupe ownership, with post-stock targetless Air capture"
+        "dedupe ownership, with Air captured from its native dispatcher"
     )
 
 

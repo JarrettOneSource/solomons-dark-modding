@@ -82,6 +82,15 @@ bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address) {
                target_actor_address);
 }
 
+bool QueueLocalPlayerNativeAirPrimaryCast(
+    uintptr_t actor_address,
+    std::int32_t dispatched_skill_id) {
+    return QueueLocalPlayerPrimaryCastForMultiplayer(
+        actor_address,
+        LocalPrimaryCastCaptureKind::NativeAirDispatch,
+        dispatched_skill_id);
+}
+
 bool QueueGameplayMouseLeftClick(std::string* error_message) {
     return QueueGameplayMouseLeftHoldFrames(kInjectedGameplayMouseClickFrames, error_message);
 }
