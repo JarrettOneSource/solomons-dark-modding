@@ -36,7 +36,7 @@ Evidence statuses:
 | Every primary/secondary spell | skill CFG catalog and native handlers | Skills plus effect atlases | In progress | [native-skills-and-spells.md](native-skills-and-spells.md) |
 | Every projectile/transient effect | object constructors/ticks/renderers | BadGuys/Faculty/etc. | In progress | This document, projectile matrix pending |
 | Enemy families, attacks, death effects, drops | factory/config/tick/render vtables | BadGuys, Demon, Golem, Heartmonger, Unholy, Faculty | In progress | This document; [skeleton-death-effects-re.md](../skeleton-death-effects-re.md) |
-| Boneyard grammar and world materialization | level loaders/factories | Bonedit plus world atlases/loose images | In progress | This document, boneyard map pending |
+| Boneyard grammar and world materialization | `0x0046DC60`, `0x00653660`, `0x006388B0` | Bonedit plus world atlases/loose images | Complete | [boneyard-system.md](boneyard-system.md) |
 | World tiles/props/doors/portals/NPCs/boss rooms | world initializer and object factories | College, Library, Office, Storage, Memoratorium, NPCs, loose images | Queued | This document |
 | Item catalog/recipes/effects | `0x00574D60`, `0x00573570`, `0x005722A0` | Inventory, Clothes, Solomon attachments | In progress | [inventory-item-investigation.md](../inventory-item-investigation.md) plus item matrix pending |
 | Equipment attachment and stat application | wizard/equipment render and item FX | Clothes, Inventory, Solomon | In progress | This document |

@@ -5,6 +5,7 @@ using System.Text;
 using SolomonDarkModLauncher.Commands;
 using SolomonDarkModLauncher.Launch;
 using SolomonDarkModLauncher.Mods;
+using SolomonDarkModLauncher.Staging;
 using SolomonDarkModLauncher.UI.Infrastructure;
 
 var tests = new (string Name, Func<Task> Run)[]
@@ -14,6 +15,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("downloaded native payload rejection", TestDownloadedNativePayloadAsync),
     ("website lobby preflight", TestWebsiteLobbyPreflightAsync),
     ("exact manual catalog", TestExactManualCatalogAsync),
+    ("invalid Boneyard rejection", TestInvalidBoneyardRejectionAsync),
     ("automatic website sync with offline fallback", TestAutomaticWebsiteSyncAsync),
     ("website join URI", TestWebsiteJoinUriAsync)
 };
@@ -48,8 +50,8 @@ static async Task TestWebsitePackageInstallAsync()
               "priority": 20,
               "overlays": [
                 {
-                  "target": "data/levels/survival.boneyard",
-                  "source": "files/survival.boneyard",
+                  "target": "sandbox/DarkCloud/mylevels/Contract Arena.boneyard",
+                  "source": "files/Contract Arena.boneyard",
                   "format": "boneyard"
                 }
               ],
@@ -61,7 +63,7 @@ static async Task TestWebsitePackageInstallAsync()
               }
             }
             """),
-        ["files/survival.boneyard"] = [],
+        ["files/Contract Arena.boneyard"] = BoneyardFixture(),
         ["scripts/main.lua"] = Encoding.UTF8.GetBytes("return true\n")
     };
     var package = CreateZip(entries);
@@ -94,8 +96,24 @@ static async Task TestWebsitePackageInstallAsync()
         Require(installed.Manifest.Overlays.Count == 1, "combined package did not retain Boneyard overlay");
         Require(File.Exists(Path.Combine(installed.RootPath, "scripts", "main.lua")), "Lua script missing");
         Require(
-            File.Exists(Path.Combine(installed.RootPath, "files", "survival.boneyard")),
+            File.Exists(Path.Combine(installed.RootPath, "files", "Contract Arena.boneyard")),
             "Boneyard missing");
+
+        var stageRoot = Path.Combine(cacheRoot, "stage");
+        Directory.CreateDirectory(stageRoot);
+        Require(
+            OverlayStageMaterializer.Materialize(stageRoot, [installed]) == 1,
+            "combined package overlay was not materialized");
+        var stagedBoneyard = Path.Combine(
+            stageRoot,
+            "sandbox",
+            "DarkCloud",
+            "mylevels",
+            "Contract Arena.boneyard");
+        Require(File.Exists(stagedBoneyard), "custom Boneyard was staged outside the native sandbox path");
+        Require(
+            File.ReadAllBytes(stagedBoneyard).SequenceEqual(BoneyardFixture()),
+            "staged custom Boneyard bytes changed");
 
         var cached = WebsiteModPackageInstaller.TryLoadExact(installed.RootPath, required);
         Require(cached is not null, "exact cached package was not reusable");
@@ -244,7 +262,9 @@ static Task TestExactManualCatalogAsync()
               }]
             }
             """);
-        File.WriteAllBytes(Path.Combine(boneyardRoot, "files", "survival.boneyard"), []);
+        File.WriteAllBytes(
+            Path.Combine(boneyardRoot, "files", "survival.boneyard"),
+            BoneyardFixture());
 
         var luaRoot = Path.Combine(root, "lua");
         Directory.CreateDirectory(Path.Combine(luaRoot, "scripts"));
@@ -281,6 +301,75 @@ static Task TestExactManualCatalogAsync()
             missingDependencyRejected = true;
         }
         Require(missingDependencyRejected, "exact sets accepted a missing dependency");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestInvalidBoneyardRejectionAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        Directory.CreateDirectory(Path.Combine(root, "files"));
+        File.WriteAllText(
+            Path.Combine(root, "manifest.json"),
+            """
+            {
+              "id": "tests.invalid-boneyard",
+              "name": "Invalid Boneyard",
+              "version": "1.0.0",
+              "overlays": [{
+                "target": "data/levels/survival.boneyard",
+                "source": "files/survival.boneyard",
+                "format": "boneyard"
+              }]
+            }
+            """);
+        File.WriteAllBytes(Path.Combine(root, "files", "survival.boneyard"), []);
+
+        var rejected = false;
+        try
+        {
+            ModDiscovery.DiscoverRoot(root);
+        }
+        catch (InvalidDataException)
+        {
+            rejected = true;
+        }
+        Require(rejected, "a zero-byte Boneyard was accepted");
+
+        File.WriteAllBytes(
+            Path.Combine(root, "files", "survival.boneyard"),
+            BoneyardFixture());
+        File.WriteAllText(
+            Path.Combine(root, "manifest.json"),
+            """
+            {
+              "id": "tests.wrong-boneyard-target",
+              "name": "Wrong Boneyard Target",
+              "version": "1.0.0",
+              "overlays": [{
+                "target": "DarkCloud/mylevels/Wrong.boneyard",
+                "source": "files/survival.boneyard",
+                "format": "boneyard"
+              }]
+            }
+            """);
+        rejected = false;
+        try
+        {
+            ModDiscovery.DiscoverRoot(root);
+        }
+        catch (InvalidOperationException)
+        {
+            rejected = true;
+        }
+        Require(rejected, "a custom Boneyard target without the native sandbox prefix was accepted");
     }
     finally
     {
@@ -342,7 +431,7 @@ static async Task TestWebsiteLobbyPreflightAsync()
               }]
             }
             """),
-        ["files/survival.boneyard"] = Encoding.UTF8.GetBytes("preflight")
+        ["files/survival.boneyard"] = BoneyardFixture()
     };
     var package = CreateZip(entries);
     var required = new MultiplayerModDescriptor(
@@ -476,6 +565,12 @@ static byte[] CreateZip(IReadOnlyDictionary<string, byte[]> entries)
     }
     return buffer.ToArray();
 }
+
+static byte[] BoneyardFixture() =>
+    File.ReadAllBytes(Path.Combine(
+        AppContext.BaseDirectory,
+        "fixtures",
+        "flat_multiplayer_test.boneyard"));
 
 static string ComputeContentHash(IReadOnlyDictionary<string, byte[]> entries)
 {

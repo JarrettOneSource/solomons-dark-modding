@@ -5,6 +5,11 @@ from the native **Create New Boneyard** workflow and saved before placing any
 editor prop. It is kept byte-for-byte so the multiplayer harness exercises the
 retail boneyard loader instead of a loader-owned synthetic map format.
 
+It contains a valid 7,721-chunk SyncBuffer with the 13-section Arena and
+14-section RegionLayout envelopes. Its placed-object lists are empty, but its
+single stock default TimeLine occupies 7,662 chunks. Zero bytes are therefore
+not a valid stand-in for a blank Boneyard.
+
 The retail run generator decorates even this empty editor source with trees,
 gravestones, fence pieces, gates, roads, goodies, and sometimes buildings. Test
 launches therefore opt into `SDMOD_TEST_BLANK_BONEYARD=1`. That explicit mode

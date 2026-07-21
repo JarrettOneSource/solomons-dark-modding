@@ -36,6 +36,13 @@ installations and are never auto-downloaded. The public authoring guide, JSON
 Schema, and package examples live in the website repository under
 `frontend/public/`.
 
+Boneyard overlays are parsed against the retail SyncBuffer container before
+they are discovered or downloaded. Stock-level replacements target
+`data/levels/*.boneyard`; editor/custom levels target
+`sandbox/DarkCloud/mylevels/*.boneyard`. The recovered native format, load/save
+flow, and inspection tool are documented in
+[`docs/reverse-engineering/boneyard-system.md`](docs/reverse-engineering/boneyard-system.md).
+
 Before any join with a concrete Steam lobby ID—including website links, direct
 Steam invites, and manual lobby-ID joins—the launcher asks the configured
 website for the host's exact active `id` + `version` + content-hash set. It

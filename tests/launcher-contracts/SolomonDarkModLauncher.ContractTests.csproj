@@ -12,5 +12,8 @@
     <ProjectReference Include="..\..\SolomonDarkModLauncher\SolomonDarkModLauncher.csproj" />
     <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherJoinUri.cs"
              Link="LauncherJoinUri.cs" />
+    <None Include="..\fixtures\boneyards\flat_multiplayer_test.boneyard"
+          Link="fixtures\flat_multiplayer_test.boneyard"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

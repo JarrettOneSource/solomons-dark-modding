@@ -151,6 +151,54 @@ internal static class ModManifestValidator
         {
             throw new FileNotFoundException("Overlay source file not found.", sourcePath);
         }
+
+        ValidateBoneyardOverlay(manifestPath, overlay, sourcePath);
+    }
+
+    private static void ValidateBoneyardOverlay(
+        string manifestPath,
+        OverlayDefinition overlay,
+        string sourcePath)
+    {
+        var sourceIsBoneyard = overlay.Source.EndsWith(".boneyard", StringComparison.OrdinalIgnoreCase);
+        var targetIsBoneyard = overlay.Target.EndsWith(".boneyard", StringComparison.OrdinalIgnoreCase);
+        var formatIsBoneyard = string.Equals(
+            overlay.Format,
+            "boneyard",
+            StringComparison.OrdinalIgnoreCase);
+        if (!sourceIsBoneyard && !targetIsBoneyard && !formatIsBoneyard)
+        {
+            return;
+        }
+
+        if (!sourceIsBoneyard || !targetIsBoneyard ||
+            (!string.IsNullOrWhiteSpace(overlay.Format) && !formatIsBoneyard))
+        {
+            throw new InvalidOperationException(
+                $"Boneyard overlays must use .boneyard source and target paths and format 'boneyard' when format is present: {manifestPath}");
+        }
+
+        var normalizedTarget = overlay.Target.Replace('\\', '/');
+        var allowedTarget =
+            normalizedTarget.StartsWith("data/levels/", StringComparison.OrdinalIgnoreCase) ||
+            normalizedTarget.StartsWith(
+                "sandbox/DarkCloud/mylevels/",
+                StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(
+                normalizedTarget,
+                "sandbox/play.boneyard",
+                StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(
+                normalizedTarget,
+                "sandbox/testrun.boneyard",
+                StringComparison.OrdinalIgnoreCase);
+        if (!allowedTarget)
+        {
+            throw new InvalidOperationException(
+                $"Boneyard overlay targets must be a stock level, custom level, play, or testrun path: {manifestPath}: {overlay.Target}");
+        }
+
+        BoneyardFile.Inspect(sourcePath);
     }
 
     private static void ValidateRequiredMods(

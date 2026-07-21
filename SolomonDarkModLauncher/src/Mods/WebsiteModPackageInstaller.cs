@@ -412,7 +412,7 @@ internal static class WebsiteModPackageInstaller
             var target = overlay.Target;
             var allowedDataTarget = target.StartsWith("data/", StringComparison.Ordinal);
             var allowedCustomBoneyard =
-                target.StartsWith("DarkCloud/mylevels/", StringComparison.Ordinal) &&
+                target.StartsWith("sandbox/DarkCloud/mylevels/", StringComparison.Ordinal) &&
                 target.EndsWith(".boneyard", StringComparison.Ordinal);
             if (!allowedDataTarget && !allowedCustomBoneyard)
             {

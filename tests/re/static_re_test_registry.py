@@ -7,6 +7,10 @@ from typing import Callable
 from repository_identity_contract import (
     test_repository_history_uses_approved_identities,
 )
+from static_re_boneyard_contracts import (
+    test_boneyard_parser_rejects_empty_truncated_and_trailing_files,
+    test_flat_boneyard_fixture_matches_native_syncbuffer_envelope,
+)
 from static_multiplayer_transport_contracts import (
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
     test_build_all_rebuilds_native_loader_from_clean_intermediates,
@@ -227,6 +231,14 @@ from static_re_binary_tooling_contracts import (
 )
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "flat Boneyard fixture matches the native SyncBuffer envelope",
+        test_flat_boneyard_fixture_matches_native_syncbuffer_envelope,
+    ),
+    (
+        "Boneyard parser rejects malformed native containers",
+        test_boneyard_parser_rejects_empty_truncated_and_trailing_files,
+    ),
     (
         "Repository history uses approved project identities",
         test_repository_history_uses_approved_identities,
