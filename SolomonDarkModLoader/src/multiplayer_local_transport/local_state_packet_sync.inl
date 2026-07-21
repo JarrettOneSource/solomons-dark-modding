@@ -340,6 +340,8 @@ void RefreshLocalParticipantFromGameState() {
         local->runtime.position_x = player_state.x;
         local->runtime.position_y = player_state.y;
         local->runtime.heading = player_state.heading;
+        local->runtime.movement_intent_x = player_state.movement_intent_x;
+        local->runtime.movement_intent_y = player_state.movement_intent_y;
         local->runtime.anim_drive_state = player_state.anim_drive_state;
         local->runtime.presentation_flags =
             ParticipantPresentationFlagAnimationDriveWord |
@@ -432,6 +434,7 @@ void RefreshLocalParticipantFromGameState() {
 template <typename Packet>
 void PopulateLocalParticipantFrameFields(
     const ParticipantInfo& local,
+    const RuntimeState& runtime_state,
     Packet* packet) {
     if (packet == nullptr) {
         return;
@@ -443,6 +446,7 @@ void PopulateLocalParticipantFrameFields(
     packet->controller_kind =
         static_cast<std::uint8_t>(ParticipantControllerKind::Native);
     packet->run_nonce = local.runtime.run_nonce;
+    PopulateSharedGameplayPausePacketFields(runtime_state, packet);
     packet->participant_vitals_correction_ack_sequence =
         g_local_transport.last_applied_participant_vitals_correction_sequence;
     packet->level = local.runtime.level;
@@ -462,6 +466,8 @@ void PopulateLocalParticipantFrameFields(
     packet->position_x = local.runtime.position_x;
     packet->position_y = local.runtime.position_y;
     packet->heading = local.runtime.heading;
+    packet->movement_intent_x = local.runtime.movement_intent_x;
+    packet->movement_intent_y = local.runtime.movement_intent_y;
     packet->anim_drive_state = local.runtime.anim_drive_state;
     packet->presentation_flags = local.runtime.presentation_flags;
     packet->attachment_staff_visual_state =
@@ -541,7 +547,7 @@ ParticipantFramePacket BuildLocalParticipantFramePacket() {
         return packet;
     }
 
-    PopulateLocalParticipantFrameFields(*local, &packet);
+    PopulateLocalParticipantFrameFields(*local, runtime_state, &packet);
     packet.scene_kind = static_cast<std::uint8_t>(
         WorldSceneKindFromSceneIntent(local->runtime.scene_intent));
     packet.region_index = local->runtime.scene_intent.region_index;
@@ -565,7 +571,7 @@ StatePacket BuildLocalStatePacket() {
     }
 
     CopyPacketDisplayName(local->name, &packet);
-    PopulateLocalParticipantFrameFields(*local, &packet);
+    PopulateLocalParticipantFrameFields(*local, runtime_state, &packet);
     packet.element_id = local->character_profile.element_id;
     packet.discipline_id = static_cast<std::int32_t>(local->character_profile.discipline_id);
     for (std::size_t index = 0; index < local->character_profile.appearance.choice_ids.size(); ++index) {

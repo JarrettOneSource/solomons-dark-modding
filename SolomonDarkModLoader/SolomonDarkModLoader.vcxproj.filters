@@ -155,6 +155,9 @@
     <ClInclude Include="include\mod_loader.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\mod_loader_hub_state.inl">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\mod_loader_participant_gameplay_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -746,6 +749,15 @@
     <ClInclude Include="src\mod_loader_gameplay\core\runtime_request_state.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\scoped_actor_cast_origin_context.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\scoped_secondary_cursor_world_placement_context.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\scoped_actor_slot_context.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\core\seh_safe_call_declarations.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
@@ -794,7 +806,7 @@
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_mouse_refresh_hook.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_poison_actions.inl">
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_participant_vitals_actions.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_pump_loop.inl">
@@ -857,6 +869,12 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_damage_authority_hook.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\webbed_authority_hook.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks_effect_and_dispatch.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
@@ -879,6 +897,9 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_combat_control_queues.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_gameplay_action_queues.inl">
@@ -989,6 +1010,24 @@
     <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation\actor_binding_and_hub_presentation.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation\apply_snapshot.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation\run_enemy_health_and_status.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation\run_enemy_targeting_and_retirement.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation\run_lifecycle_and_materialization.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation\state_timeline_and_formation.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\air_chain_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1014,6 +1053,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\incoming_participant_state_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\shared_gameplay_pause_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\incoming_snapshot_packet_sync.inl">
@@ -1137,6 +1179,21 @@
       <Filter>Header Files\Run Lifecycle</Filter>
     </ClInclude>
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\actor_world_pause_hook.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\enemy_death_reward_level_up_hooks.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\manual_enemy_spawning.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\run_transition_hooks.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\wave_and_enemy_spawn_hooks.inl">
       <Filter>Header Files\Run Lifecycle</Filter>
     </ClInclude>
     <ClInclude Include="src\run_lifecycle\spell_cast_hooks.inl">

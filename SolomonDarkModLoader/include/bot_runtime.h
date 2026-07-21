@@ -88,6 +88,9 @@ struct BotCastRequest {
     float aim_target_y = 0.0f;
     bool has_aim_angle = false;
     float aim_angle = 0.0f;
+    bool has_cursor_world_placement = false;
+    float cursor_world_x = 0.0f;
+    float cursor_world_y = 0.0f;
 };
 
 struct BotCastInputState {
@@ -193,6 +196,8 @@ struct BotSnapshot {
     std::uint8_t native_transient_status_flags = 0;
     std::int32_t replicated_poison_remaining_ticks = 0;
     std::int32_t native_poison_remaining_ticks = 0;
+    std::int32_t native_webbed_remaining_ticks = 0;
+    float native_webbed_strength = 0.0f;
     std::int32_t replicated_damage_x4_remaining_ticks = 0;
     std::int32_t native_damage_x4_remaining_ticks = 0;
     float replicated_magic_shield_absorb_remaining = 0.0f;

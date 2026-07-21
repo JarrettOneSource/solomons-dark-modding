@@ -1,11 +1,36 @@
+bool ReconcileReplicatedWebbedPresentation(
+    uintptr_t actor_address,
+    std::uint8_t desired_flags) {
+    constexpr std::uint32_t kWebbedRenderDriveFlag = 0x20u;
+    auto& memory = ProcessMemory::Instance();
+    std::uint32_t render_drive_flags = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorRenderDriveFlagsOffset,
+            &render_drive_flags)) {
+        return false;
+    }
+
+    const bool desired_webbed =
+        (desired_flags &
+         multiplayer::ParticipantTransientStatusFlagWebbed) != 0;
+    const auto reconciled_flags = desired_webbed
+        ? render_drive_flags | kWebbedRenderDriveFlag
+        : render_drive_flags & ~kWebbedRenderDriveFlag;
+    return reconciled_flags == render_drive_flags ||
+           memory.TryWriteField(
+               actor_address,
+               kActorRenderDriveFlagsOffset,
+               reconciled_flags);
+}
+
 bool ReconcileNativeRemoteParticipantTransientStatuses(
     ParticipantEntityBinding* binding,
     std::uint64_t now_ms) {
     if (binding == nullptr ||
         binding->actor_address == 0 ||
         binding->bot_id == 0 ||
-        !IsNativeRemoteParticipantBinding(binding) ||
-        binding->ongoing_cast.active) {
+        !IsNativeRemoteParticipantBinding(binding)) {
         return false;
     }
 
@@ -21,6 +46,60 @@ bool ReconcileNativeRemoteParticipantTransientStatuses(
          multiplayer::ParticipantTransientStatusFlagSnapshotValid) == 0) {
         return false;
     }
+    const bool webbed_presentation_reconciled =
+        ReconcileReplicatedWebbedPresentation(
+            binding->actor_address,
+            desired_flags);
+    NativeWizardTransientStatusState native_state;
+    if (!TryReadWizardActorTransientStatusState(
+            binding->actor_address,
+            &native_state)) {
+        return false;
+    }
+    const bool desired_webbed =
+        (desired_flags &
+         multiplayer::ParticipantTransientStatusFlagWebbed) != 0;
+    bool webbed_native_reconciled = true;
+    if (desired_webbed) {
+        binding->native_remote_webbed_authority_pending = false;
+        binding->native_remote_webbed_authority_pending_since_ms = 0;
+        binding->native_remote_webbed_owner_acknowledged = true;
+    } else if (binding->native_remote_webbed_owner_acknowledged) {
+        std::string webbed_removal_error;
+        webbed_native_reconciled =
+            native_state.webbed_modifier_address == 0 ||
+            RemoveAllNativeActorModifiersByType(
+                binding->actor_address,
+                kNativeWebbedModifierTypeId,
+                &webbed_removal_error);
+        NativeWizardTransientStatusState verified_state;
+        webbed_native_reconciled =
+            webbed_native_reconciled &&
+            TryReadWizardActorTransientStatusState(
+                binding->actor_address,
+                &verified_state) &&
+            verified_state.webbed_modifier_address == 0;
+        if (webbed_native_reconciled) {
+            binding->native_remote_webbed_owner_acknowledged = false;
+            binding->native_remote_webbed_authority_pending = false;
+            binding->native_remote_webbed_authority_pending_since_ms = 0;
+            native_state = verified_state;
+            Log(
+                "[bots] remote native Webbed authority state cleared. bot_id=" +
+                std::to_string(binding->bot_id) +
+                " actor=" + HexString(binding->actor_address));
+        } else {
+            Log(
+                "[bots] remote native Webbed authority state clear failed. "
+                "bot_id=" + std::to_string(binding->bot_id) +
+                " actor=" + HexString(binding->actor_address) +
+                " error=" + webbed_removal_error);
+        }
+    }
+    if (binding->ongoing_cast.active) {
+        return webbed_presentation_reconciled &&
+               webbed_native_reconciled;
+    }
 
     const auto desired_native_status_values = static_cast<std::uint8_t>(
         desired_flags & kNativeTransientStatusValueMask);
@@ -34,18 +113,10 @@ bool ReconcileNativeRemoteParticipantTransientStatuses(
         binding->transient_status_reconcile_not_before_ms = now_ms + 500;
     }
 
-    std::uint8_t native_flags = 0;
-    std::int32_t native_duration = 0;
-    uintptr_t poison_modifier = 0;
-    uintptr_t poison_control_block = 0;
-    if (!TryReadWizardActorTransientStatusState(
-            binding->actor_address,
-            &native_flags,
-            &native_duration,
-            &poison_modifier,
-            &poison_control_block)) {
-        return false;
-    }
+    const auto native_flags = native_state.flags;
+    const auto native_duration = native_state.poison_remaining_ticks;
+    const auto poison_modifier = native_state.poison_modifier_address;
+    const auto poison_control_block = native_state.poison_control_block_address;
 
     const auto native_status_values = static_cast<std::uint8_t>(
         native_flags & kNativeTransientStatusValueMask);
@@ -96,15 +167,13 @@ bool ReconcileNativeRemoteParticipantTransientStatuses(
             action_error = "participant does not own required skill";
         }
 
-        std::uint8_t verified_flags = 0;
-        std::int32_t verified_duration = 0;
+        NativeWizardTransientStatusState verified_state;
         const bool verified =
             applied &&
             TryReadWizardActorTransientStatusState(
                 binding->actor_address,
-                &verified_flags,
-                &verified_duration) &&
-            ((verified_flags & status_mismatch->flag) ==
+                &verified_state) &&
+            ((verified_state.flags & status_mismatch->flag) ==
              (desired_native_status_values & status_mismatch->flag));
         native_secondary_status_reconciled = verified;
         binding->transient_status_reconcile_not_before_ms =
@@ -118,7 +187,7 @@ bool ReconcileNativeRemoteParticipantTransientStatuses(
             std::to_string(status_mismatch->skill_entry) +
             " desired_flags=" + std::to_string(desired_flags) +
             " native_before=" + std::to_string(native_flags) +
-            " native_after=" + std::to_string(verified_flags) +
+            " native_after=" + std::to_string(verified_state.flags) +
             " invoked=" + std::to_string(invoked ? 1 : 0) +
             " native_result=" + std::to_string(native_result) +
             " verified=" + std::to_string(verified ? 1 : 0) +
@@ -137,7 +206,9 @@ bool ReconcileNativeRemoteParticipantTransientStatuses(
     auto& memory = ProcessMemory::Instance();
     if (!desired_poisoned) {
         if (poison_modifier == 0) {
-            return native_secondary_status_reconciled;
+            return native_secondary_status_reconciled &&
+                   webbed_presentation_reconciled &&
+                   webbed_native_reconciled;
         }
         const float zero_damage = 0.0f;
         const std::int8_t remote_visual_source_slot = 1;
@@ -177,17 +248,13 @@ bool ReconcileNativeRemoteParticipantTransientStatuses(
                 modifier_list_address,
                 poison_control_block,
                 &exception_code);
-        std::uint8_t verified_flags = 0;
-        std::int32_t verified_duration = 0;
-        uintptr_t verified_modifier = 0;
+        NativeWizardTransientStatusState verified_state;
         const bool cleared =
             removed &&
             TryReadWizardActorTransientStatusState(
                 binding->actor_address,
-                &verified_flags,
-                &verified_duration,
-                &verified_modifier) &&
-            verified_modifier == 0;
+                &verified_state) &&
+            verified_state.poison_modifier_address == 0;
         if (cleared) {
             Log(
                 "[bots] remote transient poison cleared. bot_id=" +
@@ -201,7 +268,9 @@ bool ReconcileNativeRemoteParticipantTransientStatuses(
                 " control=" + HexString(poison_control_block) +
                 " seh=0x" + HexString(exception_code));
         }
-        return cleared && native_secondary_status_reconciled;
+        return cleared && native_secondary_status_reconciled &&
+               webbed_presentation_reconciled &&
+               webbed_native_reconciled;
     }
 
     const auto desired_duration = (std::clamp)(
@@ -221,7 +290,9 @@ bool ReconcileNativeRemoteParticipantTransientStatuses(
             " desired_ticks=" + std::to_string(desired_duration) +
             " installed=" + std::to_string(installed ? 1 : 0) +
             " error=" + error_message);
-        return installed && native_secondary_status_reconciled;
+        return installed && native_secondary_status_reconciled &&
+               webbed_presentation_reconciled &&
+               webbed_native_reconciled;
     }
 
     const float zero_damage = 0.0f;
@@ -248,5 +319,7 @@ bool ReconcileNativeRemoteParticipantTransientStatuses(
                 desired_duration) &&
             reconciled;
     }
-    return reconciled && native_secondary_status_reconciled;
+    return reconciled && native_secondary_status_reconciled &&
+           webbed_presentation_reconciled &&
+           webbed_native_reconciled;
 }

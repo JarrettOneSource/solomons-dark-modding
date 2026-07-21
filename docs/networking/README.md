@@ -16,7 +16,7 @@ perform local movement and presentation immediately, then the host or dedicated
 authority accepts, corrects, or rejects the claim. Clients never own canonical
 HP, deaths, drops, XP, or wave state.
 
-Protocol v64 distinguishes automatically observed native enemy-damage claims
+Protocol v65 distinguishes automatically observed native enemy-damage claims
 from explicit damage requests. Native collision callbacks may report damage
 without asserting target-transform authority because their local knockback can
 precede the next world snapshot. The host still validates the participant, run,

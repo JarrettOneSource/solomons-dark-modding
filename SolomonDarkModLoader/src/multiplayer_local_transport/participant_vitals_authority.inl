@@ -8,7 +8,14 @@ void QueueHostParticipantVitalsCorrectionInternal(
     float life_max,
     std::uint8_t transient_status_flags,
     std::int32_t poison_remaining_ticks,
-    float poison_damage_per_tick) {
+    float poison_damage_per_tick,
+    std::int32_t webbed_remaining_ticks,
+    float webbed_strength,
+    std::uint8_t correction_flags,
+    float magic_shield_absorb_remaining,
+    float magic_shield_absorb_capacity,
+    float magic_shield_explosion_fraction,
+    float magic_shield_hit_flash) {
     if (!g_local_transport.initialized ||
         !g_local_transport.is_host ||
         target_participant_id == 0 ||
@@ -23,8 +30,11 @@ void QueueHostParticipantVitalsCorrectionInternal(
     queued.target_participant_id = target_participant_id;
     queued.life_current = (std::clamp)(life_current, 0.0f, life_max);
     queued.life_max = life_max;
+    constexpr std::uint8_t kCorrectableStatusMask =
+        ParticipantTransientStatusFlagPoisoned |
+        ParticipantTransientStatusFlagWebbed;
     queued.transient_status_flags = static_cast<std::uint8_t>(
-        transient_status_flags & ParticipantTransientStatusFlagPoisoned);
+        transient_status_flags & kCorrectableStatusMask);
     queued.poison_remaining_ticks =
         (queued.transient_status_flags & ParticipantTransientStatusFlagPoisoned) != 0
             ? (std::clamp)(
@@ -39,6 +49,44 @@ void QueueHostParticipantVitalsCorrectionInternal(
                 poison_damage_per_tick <= 10000.0f
             ? poison_damage_per_tick
             : 0.0f;
+    queued.webbed_remaining_ticks =
+        (queued.transient_status_flags &
+         ParticipantTransientStatusFlagWebbed) != 0
+            ? (std::clamp)(
+                  webbed_remaining_ticks,
+                  std::int32_t{1},
+                  kParticipantWebbedMaxDurationTicks)
+            : 0;
+    queued.webbed_strength =
+        queued.webbed_remaining_ticks > 0 &&
+                std::isfinite(webbed_strength) &&
+                webbed_strength > 0.0f &&
+                webbed_strength <= kParticipantWebbedMaxStrength
+            ? webbed_strength
+            : 0.0f;
+    if ((queued.transient_status_flags &
+         ParticipantTransientStatusFlagWebbed) != 0 &&
+        queued.webbed_strength == 0.0f) {
+        queued.transient_status_flags = static_cast<std::uint8_t>(
+            queued.transient_status_flags &
+            ~ParticipantTransientStatusFlagWebbed);
+        queued.webbed_remaining_ticks = 0;
+    }
+    queued.correction_flags = static_cast<std::uint8_t>(
+        correction_flags & kParticipantVitalsCorrectionKnownFlags);
+    if ((queued.correction_flags &
+         ParticipantVitalsCorrectionFlagMagicShieldState) != 0) {
+        const auto shield_state = NormalizeMagicShieldState(
+            magic_shield_absorb_remaining,
+            magic_shield_absorb_capacity,
+            magic_shield_explosion_fraction,
+            magic_shield_hit_flash);
+        queued.magic_shield_absorb_remaining = shield_state.absorb_remaining;
+        queued.magic_shield_absorb_capacity = shield_state.absorb_capacity;
+        queued.magic_shield_explosion_fraction =
+            shield_state.explosion_fraction;
+        queued.magic_shield_hit_flash = shield_state.hit_flash;
+    }
 
     std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
     g_queued_host_participant_vitals_corrections.push_back(queued);
@@ -83,6 +131,48 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
                         it->second.poison_damage_per_tick,
                         correction.poison_damage_per_tick);
             }
+            const bool correction_webbed =
+                (correction.transient_status_flags &
+                 ParticipantTransientStatusFlagWebbed) != 0;
+            if (correction_webbed) {
+                it->second.transient_status_flags |=
+                    ParticipantTransientStatusFlagWebbed;
+                it->second.webbed_remaining_ticks =
+                    (std::max)(
+                        it->second.webbed_remaining_ticks,
+                        correction.webbed_remaining_ticks);
+                it->second.webbed_strength =
+                    (std::max)(
+                        it->second.webbed_strength,
+                        correction.webbed_strength);
+            }
+            const bool correction_magic_shield =
+                (correction.correction_flags &
+                 ParticipantVitalsCorrectionFlagMagicShieldState) != 0;
+            const bool accumulated_magic_shield =
+                (it->second.correction_flags &
+                 ParticipantVitalsCorrectionFlagMagicShieldState) != 0;
+            if (correction_magic_shield &&
+                (!accumulated_magic_shield ||
+                 correction.magic_shield_absorb_remaining +
+                         kParticipantVitalsCorrectionEpsilon <
+                     it->second.magic_shield_absorb_remaining)) {
+                it->second.correction_flags |=
+                    ParticipantVitalsCorrectionFlagMagicShieldState;
+                it->second.magic_shield_absorb_remaining =
+                    correction.magic_shield_absorb_remaining;
+                it->second.magic_shield_absorb_capacity =
+                    correction.magic_shield_absorb_capacity;
+                it->second.magic_shield_explosion_fraction =
+                    correction.magic_shield_explosion_fraction;
+                it->second.magic_shield_hit_flash =
+                    correction.magic_shield_hit_flash;
+            } else if (correction_magic_shield &&
+                       accumulated_magic_shield) {
+                it->second.magic_shield_hit_flash = (std::max)(
+                    it->second.magic_shield_hit_flash,
+                    correction.magic_shield_hit_flash);
+            }
         }
     }
     for (const auto& [target_participant_id, correction] :
@@ -114,9 +204,106 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
                 pending_it->second.packet.life_current ||
             (poison_active &&
              (pending_it->second.packet.transient_status_flags &
-              ParticipantTransientStatusFlagPoisoned) == 0);
-        if (!have_stronger_correction) {
+              ParticipantTransientStatusFlagPoisoned) == 0) ||
+            (poison_active &&
+             (correction.poison_remaining_ticks >
+                  pending_it->second.packet.poison_remaining_ticks ||
+              correction.poison_damage_per_tick >
+                  pending_it->second.packet.poison_damage_per_tick));
+        const bool webbed_active =
+            (correction.transient_status_flags &
+             ParticipantTransientStatusFlagWebbed) != 0;
+        const bool have_stronger_status_correction =
+            have_stronger_correction ||
+            (webbed_active &&
+             ((pending_it ==
+               g_local_transport
+                   .pending_participant_vitals_corrections_by_participant.end()) ||
+              (pending_it->second.packet.transient_status_flags &
+               ParticipantTransientStatusFlagWebbed) == 0 ||
+              correction.webbed_remaining_ticks >
+                  pending_it->second.packet.webbed_remaining_ticks ||
+                  correction.webbed_strength >
+                      pending_it->second.packet.webbed_strength));
+        const bool correction_magic_shield =
+            (correction.correction_flags &
+             ParticipantVitalsCorrectionFlagMagicShieldState) != 0;
+        const bool have_stronger_magic_shield_correction =
+            correction_magic_shield &&
+            (pending_it ==
+                 g_local_transport
+                     .pending_participant_vitals_corrections_by_participant.end() ||
+             (pending_it->second.packet.correction_flags &
+              ParticipantVitalsCorrectionFlagMagicShieldState) == 0 ||
+             correction.magic_shield_absorb_remaining +
+                     kParticipantVitalsCorrectionEpsilon <
+                 pending_it->second.packet.magic_shield_absorb_remaining);
+        if (!have_stronger_status_correction &&
+            !have_stronger_magic_shield_correction) {
             continue;
+        }
+
+        auto effective_life_current = correction.life_current;
+        auto effective_status_flags = correction.transient_status_flags;
+        auto effective_poison_ticks = correction.poison_remaining_ticks;
+        auto effective_poison_damage = correction.poison_damage_per_tick;
+        auto effective_webbed_ticks = correction.webbed_remaining_ticks;
+        auto effective_webbed_strength = correction.webbed_strength;
+        auto effective_correction_flags = correction.correction_flags;
+        auto effective_magic_shield_absorb_remaining =
+            correction.magic_shield_absorb_remaining;
+        auto effective_magic_shield_absorb_capacity =
+            correction.magic_shield_absorb_capacity;
+        auto effective_magic_shield_explosion_fraction =
+            correction.magic_shield_explosion_fraction;
+        auto effective_magic_shield_hit_flash =
+            correction.magic_shield_hit_flash;
+        if (pending_it !=
+            g_local_transport
+                .pending_participant_vitals_corrections_by_participant.end()) {
+            const auto& previous = pending_it->second.packet;
+            effective_life_current =
+                (std::min)(effective_life_current, previous.life_current);
+            effective_status_flags = static_cast<std::uint8_t>(
+                effective_status_flags |
+                (previous.transient_status_flags &
+                 (ParticipantTransientStatusFlagPoisoned |
+                  ParticipantTransientStatusFlagWebbed)));
+            effective_poison_ticks = (std::max)(
+                effective_poison_ticks,
+                previous.poison_remaining_ticks);
+            effective_poison_damage = (std::max)(
+                effective_poison_damage,
+                previous.poison_damage_per_tick);
+            effective_webbed_ticks = (std::max)(
+                effective_webbed_ticks,
+                previous.webbed_remaining_ticks);
+            effective_webbed_strength = (std::max)(
+                effective_webbed_strength,
+                previous.webbed_strength);
+            const bool previous_magic_shield =
+                (previous.correction_flags &
+                 ParticipantVitalsCorrectionFlagMagicShieldState) != 0;
+            const bool new_magic_shield =
+                (effective_correction_flags &
+                 ParticipantVitalsCorrectionFlagMagicShieldState) != 0;
+            if (previous_magic_shield &&
+                (!new_magic_shield ||
+                 previous.magic_shield_absorb_remaining <=
+                     effective_magic_shield_absorb_remaining +
+                         kParticipantVitalsCorrectionEpsilon)) {
+                effective_correction_flags |=
+                    ParticipantVitalsCorrectionFlagMagicShieldState;
+                effective_magic_shield_absorb_remaining =
+                    previous.magic_shield_absorb_remaining;
+                effective_magic_shield_absorb_capacity =
+                    previous.magic_shield_absorb_capacity;
+                effective_magic_shield_explosion_fraction =
+                    previous.magic_shield_explosion_fraction;
+                effective_magic_shield_hit_flash = (std::max)(
+                    effective_magic_shield_hit_flash,
+                    previous.magic_shield_hit_flash);
+            }
         }
 
         PendingParticipantVitalsCorrection pending;
@@ -131,15 +318,27 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
             g_local_transport.next_participant_vitals_correction_sequence = 1;
         }
         pending.packet.run_nonce = participant->runtime.run_nonce;
-        pending.packet.life_current = correction.life_current;
+        pending.packet.life_current = effective_life_current;
         pending.packet.life_max = correction.life_max;
         pending.packet.transient_status_flags = static_cast<std::uint8_t>(
             ParticipantTransientStatusFlagSnapshotValid |
-            correction.transient_status_flags);
+            effective_status_flags);
         pending.packet.poison_remaining_ticks =
-            correction.poison_remaining_ticks;
+            effective_poison_ticks;
         pending.packet.poison_damage_per_tick =
-            correction.poison_damage_per_tick;
+            effective_poison_damage;
+        pending.packet.webbed_remaining_ticks =
+            effective_webbed_ticks;
+        pending.packet.webbed_strength = effective_webbed_strength;
+        pending.packet.correction_flags = effective_correction_flags;
+        pending.packet.magic_shield_absorb_remaining =
+            effective_magic_shield_absorb_remaining;
+        pending.packet.magic_shield_absorb_capacity =
+            effective_magic_shield_absorb_capacity;
+        pending.packet.magic_shield_explosion_fraction =
+            effective_magic_shield_explosion_fraction;
+        pending.packet.magic_shield_hit_flash =
+            effective_magic_shield_hit_flash;
         pending.last_sent_ms = 0;
         g_local_transport.pending_participant_vitals_corrections_by_participant[
             correction.target_participant_id] = pending;
@@ -153,12 +352,28 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
             mutable_participant->runtime.life_current =
                 (std::min)(
                     mutable_participant->runtime.life_current,
-                    correction.life_current);
-            if (poison_active) {
+                    pending.packet.life_current);
+            if ((pending.packet.transient_status_flags &
+                 (ParticipantTransientStatusFlagPoisoned |
+                  ParticipantTransientStatusFlagWebbed)) != 0) {
                 mutable_participant->runtime.transient_status_flags =
                     pending.packet.transient_status_flags;
+            }
+            if ((pending.packet.transient_status_flags &
+                 ParticipantTransientStatusFlagPoisoned) != 0) {
                 mutable_participant->runtime.poison_remaining_ticks =
                     pending.packet.poison_remaining_ticks;
+            }
+            if ((pending.packet.correction_flags &
+                 ParticipantVitalsCorrectionFlagMagicShieldState) != 0) {
+                mutable_participant->runtime.magic_shield_absorb_remaining =
+                    pending.packet.magic_shield_absorb_remaining;
+                mutable_participant->runtime.magic_shield_absorb_capacity =
+                    pending.packet.magic_shield_absorb_capacity;
+                mutable_participant->runtime.magic_shield_explosion_fraction =
+                    pending.packet.magic_shield_explosion_fraction;
+                mutable_participant->runtime.magic_shield_hit_flash =
+                    pending.packet.magic_shield_hit_flash;
             }
         });
 
@@ -167,14 +382,24 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
             std::to_string(correction.target_participant_id) +
             " correction_sequence=" +
             std::to_string(pending.packet.correction_sequence) +
-            " life=" + std::to_string(correction.life_current) + "/" +
+            " life=" + std::to_string(pending.packet.life_current) + "/" +
             std::to_string(correction.life_max) +
             " transient_flags=" +
             std::to_string(pending.packet.transient_status_flags) +
             " poison_ticks=" +
             std::to_string(pending.packet.poison_remaining_ticks) +
             " poison_damage=" +
-            std::to_string(pending.packet.poison_damage_per_tick));
+            std::to_string(pending.packet.poison_damage_per_tick) +
+            " webbed_ticks=" +
+            std::to_string(pending.packet.webbed_remaining_ticks) +
+            " webbed_strength=" +
+            std::to_string(pending.packet.webbed_strength) +
+            " correction_flags=" +
+            std::to_string(pending.packet.correction_flags) +
+            " magic_shield=" +
+            std::to_string(pending.packet.magic_shield_absorb_remaining) +
+            "/" +
+            std::to_string(pending.packet.magic_shield_absorb_capacity));
     }
 
     for (auto& [participant_id, pending] :
@@ -206,7 +431,8 @@ void ApplyParticipantVitalsCorrectionPacket(
     const TransportPeerEndpoint& from,
     std::uint64_t now_ms) {
     const auto allowed_transient_flags = static_cast<std::uint8_t>(
-        kParticipantTransientStatusValueMask |
+        ParticipantTransientStatusFlagPoisoned |
+        ParticipantTransientStatusFlagWebbed |
         ParticipantTransientStatusFlagSnapshotValid);
     const bool transient_snapshot_valid =
         (packet.transient_status_flags &
@@ -223,6 +449,44 @@ void ApplyParticipantVitalsCorrectionPacket(
               packet.poison_damage_per_tick <= 10000.0f
         : packet.poison_remaining_ticks == 0 &&
               packet.poison_damage_per_tick == 0.0f;
+    const bool webbed_active =
+        (packet.transient_status_flags &
+         ParticipantTransientStatusFlagWebbed) != 0;
+    const bool webbed_payload_valid = webbed_active
+        ? packet.webbed_remaining_ticks > 0 &&
+              packet.webbed_remaining_ticks <=
+                  kParticipantWebbedMaxDurationTicks &&
+              std::isfinite(packet.webbed_strength) &&
+              packet.webbed_strength > 0.0f &&
+              packet.webbed_strength <= kParticipantWebbedMaxStrength
+        : packet.webbed_remaining_ticks == 0 &&
+              packet.webbed_strength == 0.0f;
+    const bool correction_magic_shield =
+        (packet.correction_flags &
+         ParticipantVitalsCorrectionFlagMagicShieldState) != 0;
+    const bool magic_shield_payload_zero =
+        packet.magic_shield_absorb_remaining == 0.0f &&
+        packet.magic_shield_absorb_capacity == 0.0f &&
+        packet.magic_shield_explosion_fraction == 0.0f &&
+        packet.magic_shield_hit_flash == 0.0f;
+    const bool magic_shield_payload_active =
+        std::isfinite(packet.magic_shield_absorb_remaining) &&
+        std::isfinite(packet.magic_shield_absorb_capacity) &&
+        std::isfinite(packet.magic_shield_explosion_fraction) &&
+        std::isfinite(packet.magic_shield_hit_flash) &&
+        packet.magic_shield_absorb_remaining > kMagicShieldAbsorbEpsilon &&
+        packet.magic_shield_absorb_remaining <= kMagicShieldMaximumAbsorb &&
+        packet.magic_shield_absorb_capacity >=
+            packet.magic_shield_absorb_remaining &&
+        packet.magic_shield_absorb_capacity <= kMagicShieldMaximumAbsorb &&
+        packet.magic_shield_explosion_fraction >= 0.0f &&
+        packet.magic_shield_explosion_fraction <=
+            kMagicShieldMaximumExplosionFraction &&
+        packet.magic_shield_hit_flash >= 0.0f &&
+        packet.magic_shield_hit_flash <= 1.0f;
+    const bool magic_shield_payload_valid = correction_magic_shield
+        ? magic_shield_payload_zero || magic_shield_payload_active
+        : magic_shield_payload_zero;
     if (!IsLocalTransportClient() ||
         !IsConfiguredRemoteAuthorityEndpoint(from) ||
         packet.authority_participant_id == 0 ||
@@ -236,7 +500,11 @@ void ApplyParticipantVitalsCorrectionPacket(
         packet.life_current > packet.life_max ||
         !transient_snapshot_valid ||
         (packet.transient_status_flags & ~allowed_transient_flags) != 0 ||
-        !poison_payload_valid) {
+        (packet.correction_flags &
+         ~kParticipantVitalsCorrectionKnownFlags) != 0 ||
+        !poison_payload_valid ||
+        !webbed_payload_valid ||
+        !magic_shield_payload_valid) {
         return;
     }
 
@@ -281,29 +549,41 @@ void ApplyParticipantVitalsCorrectionPacket(
         return;
     }
 
-    if (poison_active) {
-        std::string poison_error;
-        if (!QueueLocalPlayerPoisonCorrection(
+    if (poison_active || webbed_active || correction_magic_shield) {
+        std::string correction_error;
+        const auto correctable_status_flags = static_cast<std::uint8_t>(
+            packet.transient_status_flags &
+            (ParticipantTransientStatusFlagPoisoned |
+             ParticipantTransientStatusFlagWebbed));
+        if (!QueueLocalPlayerVitalsCorrection(
                 packet.correction_sequence,
+                correctable_status_flags,
                 packet.poison_remaining_ticks,
                 packet.poison_damage_per_tick,
-                &poison_error)) {
+                packet.webbed_remaining_ticks,
+                packet.webbed_strength,
+                packet.correction_flags,
+                packet.magic_shield_absorb_remaining,
+                packet.magic_shield_absorb_capacity,
+                packet.magic_shield_explosion_fraction,
+                packet.magic_shield_hit_flash,
+                &correction_error)) {
             Log(
-                "Multiplayer participant poison correction queue failed. "
+                "Multiplayer participant native vitals correction queue failed. "
                 "authority_participant_id=" +
                 std::to_string(packet.authority_participant_id) +
                 " target_participant_id=" +
                 std::to_string(packet.target_participant_id) +
                 " correction_sequence=" +
                 std::to_string(packet.correction_sequence) +
-                " error=" + poison_error);
+                " error=" + correction_error);
             return;
         }
     }
 
     g_local_transport.last_participant_vitals_correction_sequence_by_authority[
         packet.authority_participant_id] = packet.correction_sequence;
-    if (!poison_active) {
+    if (!poison_active && !webbed_active && !correction_magic_shield) {
         g_local_transport.last_applied_participant_vitals_correction_sequence =
             packet.correction_sequence;
     }
@@ -314,11 +594,23 @@ void ApplyParticipantVitalsCorrectionPacket(
         }
         mutable_local->runtime.life_current = corrected_life;
         mutable_local->runtime.life_max = player_state.max_hp;
-        if (poison_active) {
+        if (poison_active || webbed_active) {
             mutable_local->runtime.transient_status_flags =
                 packet.transient_status_flags;
+        }
+        if (poison_active) {
             mutable_local->runtime.poison_remaining_ticks =
                 packet.poison_remaining_ticks;
+        }
+        if (correction_magic_shield) {
+            mutable_local->runtime.magic_shield_absorb_remaining =
+                packet.magic_shield_absorb_remaining;
+            mutable_local->runtime.magic_shield_absorb_capacity =
+                packet.magic_shield_absorb_capacity;
+            mutable_local->runtime.magic_shield_explosion_fraction =
+                packet.magic_shield_explosion_fraction;
+            mutable_local->runtime.magic_shield_hit_flash =
+                packet.magic_shield_hit_flash;
         }
     });
     UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
@@ -336,5 +628,14 @@ void ApplyParticipantVitalsCorrectionPacket(
         " poison_ticks=" +
         std::to_string(packet.poison_remaining_ticks) +
         " poison_damage=" +
-        std::to_string(packet.poison_damage_per_tick));
+        std::to_string(packet.poison_damage_per_tick) +
+        " webbed_ticks=" +
+        std::to_string(packet.webbed_remaining_ticks) +
+        " webbed_strength=" +
+        std::to_string(packet.webbed_strength) +
+        " correction_flags=" +
+        std::to_string(packet.correction_flags) +
+        " magic_shield=" +
+        std::to_string(packet.magic_shield_absorb_remaining) + "/" +
+        std::to_string(packet.magic_shield_absorb_capacity));
 }

@@ -103,10 +103,17 @@ bool TryGetParticipantGameplayState(
     (void)TryReadWizardActorPersistentStatusFlags(
         state->actor_address,
         &state->native_persistent_status_flags);
-    (void)TryReadWizardActorTransientStatusState(
-        state->actor_address,
-        &state->native_transient_status_flags,
-        &state->native_poison_remaining_ticks);
+    NativeWizardTransientStatusState native_transient_state;
+    if (TryReadWizardActorTransientStatusState(
+            state->actor_address,
+            &native_transient_state)) {
+        state->native_transient_status_flags = native_transient_state.flags;
+        state->native_poison_remaining_ticks =
+            native_transient_state.poison_remaining_ticks;
+        state->native_webbed_remaining_ticks =
+            native_transient_state.webbed_remaining_ticks;
+        state->native_webbed_strength = native_transient_state.webbed_strength;
+    }
     if (state->progression_runtime_state_address != 0 &&
         kProgressionDamageX4RemainingTicksOffset != 0) {
         (void)ProcessMemory::Instance().TryReadField(
@@ -381,6 +388,12 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     }
 
     state->valid = true;
+    state->local_player_tick_count =
+        g_gameplay_keyboard_injection.local_player_tick_generation.load(
+            std::memory_order_acquire);
+    state->local_player_tick_observed_ms =
+        g_gameplay_keyboard_injection.local_player_tick_observed_ms.load(
+            std::memory_order_relaxed);
     state->hp = hp;
     state->max_hp = max_hp;
     state->mp = mp;
@@ -458,15 +471,42 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     state->x = x;
     state->y = y;
     state->heading = heading;
+    constexpr std::uint64_t kMovementIntentFreshnessMs = 250;
+    const auto movement_intent_observed_ms =
+        g_gameplay_keyboard_injection.local_movement_intent_observed_ms.load(
+            std::memory_order_acquire);
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (movement_intent_observed_ms != 0 &&
+        now_ms >= movement_intent_observed_ms &&
+        now_ms - movement_intent_observed_ms <= kMovementIntentFreshnessMs) {
+        const auto movement_intent_x =
+            g_gameplay_keyboard_injection.local_movement_intent_x.load(
+                std::memory_order_relaxed);
+        const auto movement_intent_y =
+            g_gameplay_keyboard_injection.local_movement_intent_y.load(
+                std::memory_order_relaxed);
+        if (std::isfinite(movement_intent_x) &&
+            std::isfinite(movement_intent_y)) {
+            state->movement_intent_x = movement_intent_x;
+            state->movement_intent_y = movement_intent_y;
+        }
+    }
     state->gold = gold;
     state->actor_address = actor_address;
     (void)TryReadWizardActorPersistentStatusFlags(
         actor_address,
         &state->persistent_status_flags);
-    (void)TryReadWizardActorTransientStatusState(
-        actor_address,
-        &state->transient_status_flags,
-        &state->poison_remaining_ticks);
+    NativeWizardTransientStatusState native_transient_state;
+    if (TryReadWizardActorTransientStatusState(
+            actor_address,
+            &native_transient_state)) {
+        state->transient_status_flags = native_transient_state.flags;
+        state->poison_remaining_ticks =
+            native_transient_state.poison_remaining_ticks;
+        state->webbed_remaining_ticks =
+            native_transient_state.webbed_remaining_ticks;
+        state->webbed_strength = native_transient_state.webbed_strength;
+    }
     std::int32_t damage_x4_remaining_ticks = 0;
     if (kProgressionDamageX4RemainingTicksOffset != 0 &&
         memory.TryReadField(

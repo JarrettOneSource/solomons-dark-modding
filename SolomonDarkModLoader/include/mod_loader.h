@@ -107,9 +107,13 @@ struct SDModDerivedProgressionStatState {
 
 struct SDModPlayerState {
     bool valid = false;
+    std::uint64_t local_player_tick_count = 0;
+    std::uint64_t local_player_tick_observed_ms = 0;
     std::uint8_t persistent_status_flags = 0;
     std::uint8_t transient_status_flags = 0;
     std::int32_t poison_remaining_ticks = 0;
+    std::int32_t webbed_remaining_ticks = 0;
+    float webbed_strength = 0.0f;
     std::int32_t damage_x4_remaining_ticks = 0;
     float hp = 0.0f;
     float max_hp = 0.0f;
@@ -122,6 +126,8 @@ struct SDModPlayerState {
     float x = 0.0f;
     float y = 0.0f;
     float heading = 0.0f;
+    float movement_intent_x = 0.0f;
+    float movement_intent_y = 0.0f;
     int gold = 0;
     uintptr_t actor_address = 0;
     uintptr_t render_subject_address = 0;
@@ -367,21 +373,7 @@ struct SDModHostLootDropDeactivationResult {
     std::uint32_t exception_code = 0;
 };
 
-struct SDModHubSurfaceState {
-    bool valid = false;
-    bool shared_hub = false;
-    bool chat_active = false;
-    bool surface_active = false;
-    bool inventory_screen_active = false;
-    bool inventory_shop_active = false;
-    uintptr_t gameplay_address = 0;
-    uintptr_t courtyard_address = 0;
-    uintptr_t surface_address = 0;
-    uintptr_t surface_vtable = 0;
-    uintptr_t shop_address = 0;
-    uintptr_t shop_vtable = 0;
-};
-
+#include "mod_loader_hub_state.inl"
 #include "mod_loader_participant_gameplay_state.inl"
 
 void Initialize(HMODULE module_handle);
@@ -441,10 +433,18 @@ bool QueueMultiplayerDampenEffect(
     float position_x,
     float position_y,
     std::string* error_message);
-bool QueueLocalPlayerPoisonCorrection(
+bool QueueLocalPlayerVitalsCorrection(
     std::uint32_t correction_sequence,
-    std::int32_t duration_ticks,
-    float damage_per_tick,
+    std::uint8_t transient_status_flags,
+    std::int32_t poison_remaining_ticks,
+    float poison_damage_per_tick,
+    std::int32_t webbed_remaining_ticks,
+    float webbed_strength,
+    std::uint8_t correction_flags,
+    float magic_shield_absorb_remaining,
+    float magic_shield_absorb_capacity,
+    float magic_shield_explosion_fraction,
+    float magic_shield_hit_flash,
     std::string* error_message);
 bool QueueNativePoisonBehaviorProbe(
     std::uint64_t target_participant_id,
@@ -456,6 +456,7 @@ bool QueueNativeMagicHitBehaviorProbe(
     float projectile_damage,
     float magic_damage,
     std::uint32_t attempts,
+    std::uint64_t target_participant_id,
     std::uint64_t* request_serial,
     std::string* error_message);
 bool GetNativeMagicHitBehaviorProbeResult(

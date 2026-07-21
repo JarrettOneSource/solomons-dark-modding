@@ -689,6 +689,31 @@ void __fastcall HookPlayerControlBrainUpdate(
     const auto raw_face_mag_sq_after =
         raw_face_x_after * raw_face_x_after + raw_face_y_after * raw_face_y_after;
 
+    if (publication_actor_slot == 0) {
+        float movement_intent_x = raw_move_x_after;
+        float movement_intent_y = raw_move_y_after;
+        const auto magnitude_squared =
+            movement_intent_x * movement_intent_x +
+            movement_intent_y * movement_intent_y;
+        if (!std::isfinite(magnitude_squared) || magnitude_squared <= 0.000001f) {
+            movement_intent_x = 0.0f;
+            movement_intent_y = 0.0f;
+        } else if (magnitude_squared > 1.0f) {
+            const auto inverse_magnitude = 1.0f / std::sqrt(magnitude_squared);
+            movement_intent_x *= inverse_magnitude;
+            movement_intent_y *= inverse_magnitude;
+        }
+        g_gameplay_keyboard_injection.local_movement_intent_x.store(
+            movement_intent_x,
+            std::memory_order_relaxed);
+        g_gameplay_keyboard_injection.local_movement_intent_y.store(
+            movement_intent_y,
+            std::memory_order_relaxed);
+        g_gameplay_keyboard_injection.local_movement_intent_observed_ms.store(
+            static_cast<std::uint64_t>(GetTickCount64()),
+            std::memory_order_release);
+    }
+
     seed_selection_target();
     apply_manual_spawner_local_primary_control();
     apply_face_control();

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import multiplayer_secondary_behavior_harness as secondary
+import verify_multiplayer_primary_kill_stress as primary
 from steam_friend_active_pair import ROOT, SteamFriendActivePair
 from steam_friend_behavior_context import (
     configure_behavior_context,
@@ -92,6 +93,9 @@ def main() -> int:
         output["pair"] = pair.discover()
         require_shared_test_run(output["pair"])
         context = configure_behavior_context(pair)
+
+        output["active_step"] = "combat_bootstrap"
+        output["combat_bootstrap"] = primary.enable_manual_stock_spawner_combat()
 
         output["active_step"] = "initial_arena_reset"
         output["initial_arena_reset"] = reset_quiet_arena()

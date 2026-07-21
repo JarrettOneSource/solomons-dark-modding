@@ -184,6 +184,7 @@ struct RuntimeState {
     LevelUpOfferRuntimeInfo active_level_up_offer;
     LevelUpChoiceResultRuntimeInfo last_level_up_choice_result;
     LevelUpWaitStatusRuntimeInfo level_up_wait_status;
+    SharedGameplayPauseRuntimeInfo shared_gameplay_pause;
 };
 
 constexpr std::uint64_t kLocalParticipantId = 1ull;

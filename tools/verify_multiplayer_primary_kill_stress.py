@@ -85,7 +85,7 @@ def stage(message: str) -> None:
 RUNTIME_OUTPUT = ROOT / "runtime" / "multiplayer_primary_kill_stress.json"
 HOST_CRASH_LOG = ROOT / "runtime/instances/local-mp-host/stage/.sdmod/logs/solomondarkmodloader.crash.log"
 CLIENT_CRASH_LOG = ROOT / "runtime/instances/local-mp-client/stage/.sdmod/logs/solomondarkmodloader.crash.log"
-SKELETON_TYPE_ID = 2012
+SKELETON_TYPE_ID = 1001
 LOW_TARGET_HP = 0.75
 SETUP_TARGET_HP = 50000.0
 CAST_ATTEMPT_FRAMES = (64, 96, 128)

@@ -1,6 +1,8 @@
 #include "lua_engine_bindings_internal.h"
 #include "lua_engine_parsers_internal.h"
 
+#include "lua_engine.h"
+
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_state.h"
 
@@ -442,6 +444,40 @@ void PushLevelUpWaitStatusRuntimeInfo(
     lua_setfield(state, -2, "waiting_participant_ids");
 }
 
+void PushSharedGameplayPauseRuntimeInfo(
+    lua_State* state,
+    const multiplayer::SharedGameplayPauseRuntimeInfo& pause) {
+    lua_createtable(state, 0, 10);
+    lua_pushboolean(state, pause.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushboolean(state, pause.pause_active ? 1 : 0);
+    lua_setfield(state, -2, "pause_active");
+    lua_pushboolean(state, pause.timed_out ? 1 : 0);
+    lua_setfield(state, -2, "timed_out");
+    lua_pushboolean(state, pause.local_request_active ? 1 : 0);
+    lua_setfield(state, -2, "local_request_active");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(pause.local_request_epoch));
+    lua_setfield(state, -2, "local_request_epoch");
+    lua_pushinteger(state, static_cast<lua_Integer>(pause.run_nonce));
+    lua_setfield(state, -2, "run_nonce");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(pause.deadline_remaining_ms));
+    lua_setfield(state, -2, "deadline_remaining_ms");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(pause.authority_participant_id));
+    lua_setfield(state, -2, "authority_participant_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(pause.origin_participant_id));
+    lua_setfield(state, -2, "origin_participant_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(pause.received_ms));
+    lua_setfield(state, -2, "received_ms");
+}
+
 int LuaRuntimeGetMultiplayerState(lua_State* state) {
     const auto runtime = multiplayer::SnapshotRuntimeState();
 
@@ -552,6 +588,14 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         lua_setfield(state, -2, "y");
         lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.heading));
         lua_setfield(state, -2, "heading");
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(participant.runtime.movement_intent_x));
+        lua_setfield(state, -2, "movement_intent_x");
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(participant.runtime.movement_intent_y));
+        lua_setfield(state, -2, "movement_intent_y");
         PushParticipantEquipmentState(
             state,
             participant.runtime,
@@ -569,7 +613,26 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
     lua_setfield(state, -2, "last_level_up_choice_result");
     PushLevelUpWaitStatusRuntimeInfo(state, runtime.level_up_wait_status);
     lua_setfield(state, -2, "level_up_wait_status");
+    PushSharedGameplayPauseRuntimeInfo(
+        state,
+        runtime.shared_gameplay_pause);
+    lua_setfield(state, -2, "shared_gameplay_pause_status");
 
+    return 1;
+}
+
+int LuaRuntimeGetFrameState(lua_State* state) {
+    lua_createtable(state, 0, 2);
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            lua_exec_diag::g_endscene_generation.load(std::memory_order_acquire)));
+    lua_setfield(state, -2, "frame_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            lua_exec_diag::g_last_endscene_ms.load(std::memory_order_acquire)));
+    lua_setfield(state, -2, "observed_ms");
     return 1;
 }
 

@@ -78,6 +78,8 @@ void RememberParticipantEntity(
         binding->replicated_target_x = 0.0f;
         binding->replicated_target_y = 0.0f;
         binding->replicated_target_heading = 0.0f;
+        binding->replicated_movement_intent_x = 0.0f;
+        binding->replicated_movement_intent_y = 0.0f;
         binding->replicated_transform_packet_ms = 0;
         binding->replicated_transform_playback_ms = 0;
     }
@@ -143,6 +145,8 @@ void ResetParticipantEntityMaterializationState(ParticipantEntityBinding* bindin
     binding->replicated_target_x = 0.0f;
     binding->replicated_target_y = 0.0f;
     binding->replicated_target_heading = 0.0f;
+    binding->replicated_movement_intent_x = 0.0f;
+    binding->replicated_movement_intent_y = 0.0f;
     binding->replicated_transform_packet_ms = 0;
     binding->replicated_transform_playback_ms = 0;
 }

@@ -619,7 +619,7 @@ void PushManualRunEnemySpawnResult(
 }
 
 int LuaGameplaySpawnManualRunEnemy(lua_State* state) {
-    int type_id = 2012;
+    int type_id = 1001;
     float x = 0.0f;
     float y = 0.0f;
     bool freeze_on_spawn = true;
@@ -711,7 +711,15 @@ int LuaPlayerGetState(lua_State* state) {
         return 1;
     }
 
-    lua_createtable(state, 0, 60);
+    lua_createtable(state, 0, 62);
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(player_state.local_player_tick_count));
+    lua_setfield(state, -2, "local_player_tick_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(player_state.local_player_tick_observed_ms));
+    lua_setfield(state, -2, "local_player_tick_observed_ms");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.hp));
     lua_setfield(state, -2, "hp");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.max_hp));
@@ -732,6 +740,22 @@ int LuaPlayerGetState(lua_State* state) {
         state,
         static_cast<lua_Integer>(player_state.poison_remaining_ticks));
     lua_setfield(state, -2, "poison_remaining_ticks");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(player_state.webbed_remaining_ticks));
+    lua_setfield(state, -2, "webbed_remaining_ticks");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(player_state.webbed_strength));
+    lua_setfield(state, -2, "webbed_strength");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(player_state.movement_intent_x));
+    lua_setfield(state, -2, "movement_intent_x");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(player_state.movement_intent_y));
+    lua_setfield(state, -2, "movement_intent_y");
     lua_pushinteger(
         state,
         static_cast<lua_Integer>(

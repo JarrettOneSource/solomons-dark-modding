@@ -116,6 +116,9 @@ HRESULT STDMETHODCALLTYPE HookEndScene(IDirect3DDevice9* device) {
     lua_exec_diag::g_last_endscene_ms.store(
         static_cast<std::uint64_t>(GetTickCount64()),
         std::memory_order_release);
+    lua_exec_diag::g_endscene_generation.fetch_add(
+        1,
+        std::memory_order_release);
     const auto result = g_original_end_scene != nullptr ? g_original_end_scene(device) : D3D_OK;
     if (g_callback != nullptr) {
         g_callback(device);

@@ -4,7 +4,14 @@ using PlayerActorTickFn = void(__thiscall*)(void* self);
 using PlayerActorActionManagerTickFn = void(__thiscall*)(void* self);
 using PlayerActorNoArgMethodFn = void(__thiscall*)(void* self);
 using PlayerActorSecondarySpellCastFn = std::uint8_t(__thiscall*)(void* self, int skill_entry_index);
-using PlayerActorMagicDamageFn = void(__thiscall*)(void* self);
+using SecondaryCursorWorldProjectionFn = void*(__thiscall*)(
+    void* self,
+    void* output_point,
+    float screen_x,
+    float screen_y);
+using PlayerActorMagicDamageFn = std::uint32_t(__thiscall*)(void* self);
+using WebbedModifierTickFn = void(__thiscall*)(void* self);
+using DamageContextResetFn = void(__thiscall*)(void* self);
 using StaffEffectResolverFn = void(__thiscall*)(void* self, std::uint32_t variant);
 using NativeSpellEffectCtorFn = uintptr_t(__thiscall*)(void* self);
 using PlayerActorApplyManaDeltaFn = std::uint8_t(__thiscall*)(void* self, float delta, std::uint8_t allow_prompt);

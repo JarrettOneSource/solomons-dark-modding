@@ -417,28 +417,11 @@ bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message) {
         return false;
     }
 
-    const auto original =
-        GetX86HookTrampoline<WaveSpawnerTickFn>(g_state.hooks[kHookWaveSpawnerTick]);
-    if (original == nullptr) {
-        constexpr std::string_view kTrampolineUnavailable =
-            "manual run enemy spawn: stock wave spawner trampoline is unavailable.";
-        if (CompletePendingDirectManualRunEnemySpawnFailure(
-                kTrampolineUnavailable)) {
-            return true;
-        }
-        if (error_message != nullptr) {
-            *error_message = std::string(kTrampolineUnavailable);
-        }
-        return false;
-    }
-
     const auto dispatch_result = TryDispatchManualRunEnemySpawnFromSpawner(
-        reinterpret_cast<void*>(spawner_address),
-        nullptr,
-        original);
+        reinterpret_cast<void*>(spawner_address));
     if (dispatch_result == ManualRunEnemySpawnerDispatchResult::Handled) {
         Log(
-            "manual run enemy spawn: pumped remembered stock spawner. spawner=" +
+            "manual run enemy spawn: dispatched from remembered stock spawner. spawner=" +
             HexString(spawner_address));
         return true;
     }

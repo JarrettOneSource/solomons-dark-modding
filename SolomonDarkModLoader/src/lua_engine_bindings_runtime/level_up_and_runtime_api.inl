@@ -352,9 +352,10 @@ int LuaEventsOn(lua_State* state) {
 }  // namespace
 
 void RegisterLuaRuntimeBindings(lua_State* state) {
-    lua_createtable(state, 0, 8);
+    lua_createtable(state, 0, 9);
     RegisterFunction(state, &LuaRuntimeGetMod, "get_mod");
     RegisterFunction(state, &LuaRuntimeGetMultiplayerState, "get_multiplayer_state");
+    RegisterFunction(state, &LuaRuntimeGetFrameState, "get_frame_state");
     RegisterFunction(state, &LuaRuntimeChooseLevelUpOption, "choose_level_up_option");
     RegisterFunction(state, &LuaRuntimeDebugPublishLevelUpOffer, "debug_publish_level_up_offer");
     RegisterFunction(state, &LuaRuntimeHasCapability, "has_capability");

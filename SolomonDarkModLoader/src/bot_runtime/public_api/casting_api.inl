@@ -206,6 +206,9 @@ bool QueueBotCast(const BotCastRequest& request) {
         pending_cast->aim_target_y = request.aim_target_y;
         pending_cast->has_aim_angle = request.has_aim_angle;
         pending_cast->aim_angle = request.aim_angle;
+        pending_cast->has_cursor_world_placement = request.has_cursor_world_placement;
+        pending_cast->cursor_world_x = request.cursor_world_x;
+        pending_cast->cursor_world_y = request.cursor_world_y;
         pending_cast->queued_cast_count = g_next_cast_sequence++;
         pending_cast->queued_at_ms = now_ms;
         if (request.remote_input_controlled &&
@@ -649,6 +652,9 @@ bool ConsumePendingBotCast(std::uint64_t bot_id, BotCastRequest* request) {
     request->aim_target_y = pending_cast->aim_target_y;
     request->has_aim_angle = pending_cast->has_aim_angle;
     request->aim_angle = pending_cast->aim_angle;
+    request->has_cursor_world_placement = pending_cast->has_cursor_world_placement;
+    request->cursor_world_x = pending_cast->cursor_world_x;
+    request->cursor_world_y = pending_cast->cursor_world_y;
     RemovePendingCast(bot_id);
     return true;
 }

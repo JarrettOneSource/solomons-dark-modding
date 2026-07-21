@@ -75,10 +75,18 @@ struct PendingMultiplayerDampenEffectRequest {
     float position_y = 0.0f;
 };
 
-struct PendingLocalPlayerPoisonCorrection {
+struct PendingLocalPlayerVitalsCorrection {
     std::uint32_t correction_sequence = 0;
-    std::int32_t duration_ticks = 0;
-    float damage_per_tick = 0.0f;
+    std::uint8_t transient_status_flags = 0;
+    std::int32_t poison_remaining_ticks = 0;
+    float poison_damage_per_tick = 0.0f;
+    std::int32_t webbed_remaining_ticks = 0;
+    float webbed_strength = 0.0f;
+    std::uint8_t correction_flags = 0;
+    float magic_shield_absorb_remaining = 0.0f;
+    float magic_shield_absorb_capacity = 0.0f;
+    float magic_shield_explosion_fraction = 0.0f;
+    float magic_shield_hit_flash = 0.0f;
 };
 
 struct PendingNativePoisonBehaviorProbe {
@@ -90,6 +98,7 @@ struct PendingNativePoisonBehaviorProbe {
 
 struct PendingNativeMagicHitBehaviorProbe {
     std::uint64_t request_serial = 0;
+    std::uint64_t target_participant_id = 0;
     float projectile_damage = 0.0f;
     float magic_damage = 0.0f;
     std::uint32_t attempts = 0;
@@ -127,6 +136,9 @@ struct GameplayKeyboardInjectionState {
     X86Hook player_actor_dtor_hook;
     X86Hook player_actor_vtable28_hook;
     X86Hook player_actor_secondary_spell_cast_hook;
+    X86Hook secondary_cursor_world_projection_hook;
+    X86Hook player_actor_magic_damage_hook;
+    X86Hook webbed_modifier_tick_hook;
     X86Hook player_actor_pure_primary_gate_hook;
     X86Hook player_control_brain_update_hook;
     X86Hook pure_primary_spell_start_hook;
@@ -151,6 +163,8 @@ struct GameplayKeyboardInjectionState {
     X86Hook orb_pickup_hook;
     X86Hook item_drop_pickup_hook;
     X86Hook powerup_pickup_hook;
+    uintptr_t damage_context_reset_address = 0;
+    uintptr_t damage_context_source_address = 0;
     bool initialized = false;
     std::array<std::atomic<std::uint32_t>, 256> pending_scancodes{};
     std::atomic<bool> last_observed_mouse_left_down{false};
@@ -164,6 +178,9 @@ struct GameplayKeyboardInjectionState {
     std::atomic<float> pending_movement_x{0.0f};
     std::atomic<float> pending_movement_y{0.0f};
     std::atomic<std::uint32_t> pending_movement_frames{0};
+    std::atomic<float> local_movement_intent_x{0.0f};
+    std::atomic<float> local_movement_intent_y{0.0f};
+    std::atomic<std::uint64_t> local_movement_intent_observed_ms{0};
     std::atomic<std::uint32_t> pending_injected_keyboard_control_frames{0};
     std::atomic<std::uint32_t> pending_manual_spawner_primary_cast_allowances{0};
     std::atomic<std::uint64_t> manual_spawner_primary_cast_control_grace_until_ms{0};
@@ -185,6 +202,7 @@ struct GameplayKeyboardInjectionState {
     std::atomic<uintptr_t> local_player_tick_scene_address{0};
     std::atomic<uintptr_t> local_player_tick_actor_address{0};
     std::atomic<std::uint64_t> local_player_tick_generation{0};
+    std::atomic<std::uint64_t> local_player_tick_observed_ms{0};
     std::atomic<std::uint64_t>
         app_tick_observed_local_player_tick_generation{0};
     std::mutex pending_gameplay_world_actions_mutex;
@@ -207,7 +225,8 @@ struct GameplayKeyboardInjectionState {
     std::deque<PendingParticipantEntitySyncRequest> pending_participant_sync_requests;
     std::deque<PendingGameplayRegionSwitchRequest> pending_gameplay_region_switch_requests;
     std::deque<PendingMultiplayerDampenEffectRequest> pending_multiplayer_dampen_effect_requests;
-    std::deque<PendingLocalPlayerPoisonCorrection> pending_local_player_poison_corrections;
+    std::deque<PendingLocalPlayerVitalsCorrection>
+        pending_local_player_vitals_corrections;
     std::deque<PendingNativePoisonBehaviorProbe> pending_native_poison_behavior_probes;
     std::deque<PendingNativeMagicHitBehaviorProbe> pending_native_magic_hit_behavior_probes;
     std::uint64_t next_native_magic_hit_behavior_probe_serial = 1;
@@ -231,6 +250,9 @@ void PublishLocalPlayerTickOwnership(
     g_gameplay_keyboard_injection.local_player_tick_actor_address.store(
         actor_address,
         std::memory_order_relaxed);
+    g_gameplay_keyboard_injection.local_player_tick_observed_ms.store(
+        static_cast<std::uint64_t>(GetTickCount64()),
+        std::memory_order_relaxed);
     g_gameplay_keyboard_injection.local_player_tick_generation.fetch_add(
         1,
         std::memory_order_release);
@@ -243,6 +265,9 @@ void ClearLocalPlayerTickOwnership() {
     g_gameplay_keyboard_injection.local_player_tick_actor_address.store(
         0,
         std::memory_order_relaxed);
+    g_gameplay_keyboard_injection.local_player_tick_observed_ms.store(
+        0,
+        std::memory_order_relaxed);
     g_gameplay_keyboard_injection.local_player_tick_generation.fetch_add(
         1,
         std::memory_order_release);
@@ -253,6 +278,9 @@ void ResetLocalPlayerTickOwnershipState() {
         0,
         std::memory_order_relaxed);
     g_gameplay_keyboard_injection.local_player_tick_actor_address.store(
+        0,
+        std::memory_order_relaxed);
+    g_gameplay_keyboard_injection.local_player_tick_observed_ms.store(
         0,
         std::memory_order_relaxed);
     g_gameplay_keyboard_injection.local_player_tick_generation.store(

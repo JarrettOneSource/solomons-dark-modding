@@ -50,6 +50,7 @@ void ResetRemoteParticipantSessionEpoch(
         participant_id);
     g_local_transport.native_progression_reconcile_by_participant.erase(
         participant_id);
+    g_local_transport.host_menu_pause_requests_by_participant.erase(participant_id);
 
     for (auto it = g_local_transport.issued_level_up_offers_by_id.begin();
          it != g_local_transport.issued_level_up_offers_by_id.end();) {
@@ -181,6 +182,19 @@ void ResetRemoteParticipantSessionEpoch(
                 std::remove(waiting.begin(), waiting.end(), participant_id),
                 waiting.end());
             state.level_up_wait_status.pause_active = !waiting.empty();
+        }
+        if (configured_authority_disconnected &&
+            state.shared_gameplay_pause.authority_participant_id ==
+                participant_id) {
+            const bool local_request_active =
+                state.shared_gameplay_pause.local_request_active;
+            const auto local_request_epoch =
+                state.shared_gameplay_pause.local_request_epoch;
+            state.shared_gameplay_pause = SharedGameplayPauseRuntimeInfo{};
+            state.shared_gameplay_pause.local_request_active =
+                local_request_active;
+            state.shared_gameplay_pause.local_request_epoch =
+                local_request_epoch;
         }
         if (state.world_snapshot.authority_participant_id == participant_id) {
             state.world_snapshot = WorldSnapshotRuntimeInfo{};

@@ -14,137 +14,17 @@ bool RequiresStockSecondaryActorSlotZero(std::int32_t skill_entry_index) {
     return skill_entry_index == 0x1E;
 }
 
-struct ScopedStockSecondaryActorSlotZeroContext {
-    uintptr_t actor_address = 0;
-    bool requested = false;
-    bool ready = false;
-    bool active = false;
-    bool restore_attempted = false;
-    bool restored = true;
-    std::string status = "not_requested";
-    std::int8_t original_slot = -1;
-
-    ScopedStockSecondaryActorSlotZeroContext(
-        uintptr_t actor_address_in,
-        bool requested_in)
-        : actor_address(actor_address_in), requested(requested_in) {
-        if (!requested) {
-            ready = true;
-            return;
-        }
-        Apply();
-    }
-
-    ScopedStockSecondaryActorSlotZeroContext(
-        const ScopedStockSecondaryActorSlotZeroContext&) = delete;
-    ScopedStockSecondaryActorSlotZeroContext& operator=(
-        const ScopedStockSecondaryActorSlotZeroContext&) = delete;
-
-    ~ScopedStockSecondaryActorSlotZeroContext() {
-        Restore();
-    }
-
-    void Apply() {
-        auto& memory = ProcessMemory::Instance();
-        if (actor_address == 0) {
-            status = "no_actor";
-            return;
-        }
-        if (!memory.TryReadField(
-                actor_address,
-                kActorSlotOffset,
-                &original_slot)) {
-            status = "slot_unreadable";
-            return;
-        }
-        if (original_slot == 0) {
-            ready = true;
-            status = "already_zero";
-            return;
-        }
-        if (!memory.TryWriteField<std::int8_t>(
-                actor_address,
-                kActorSlotOffset,
-                0)) {
-            status = "slot_write_failed";
-            return;
-        }
-
-        active = true;
-        restored = false;
-        std::int8_t applied_slot = -1;
-        if (!memory.TryReadField(
-                actor_address,
-                kActorSlotOffset,
-                &applied_slot) ||
-            applied_slot != 0) {
-            status = "slot_verify_failed";
-            return;
-        }
-        ready = true;
-        status = "active";
-    }
-
-    void Restore() {
-        if (!active || restore_attempted) {
-            return;
-        }
-        restore_attempted = true;
-        active = false;
-        auto& memory = ProcessMemory::Instance();
-        std::int8_t restored_slot = -1;
-        restored =
-            memory.TryWriteField<std::int8_t>(
-                actor_address,
-                kActorSlotOffset,
-                original_slot) &&
-            memory.TryReadField(
-                actor_address,
-                kActorSlotOffset,
-                &restored_slot) &&
-            restored_slot == original_slot;
-        status = restored ? "restored" : "restore_failed";
-        if (!restored) {
-            Log(
-                "[bots] stock secondary actor slot context restore failed. actor=" +
-                HexString(actor_address) +
-                " original_slot=" +
-                std::to_string(static_cast<int>(original_slot)) +
-                " restored_slot=" +
-                std::to_string(static_cast<int>(restored_slot)));
-        }
-    }
-
-    std::string Describe() const {
-        return
-            "requested=" + std::to_string(requested ? 1 : 0) +
-            " ready=" + std::to_string(ready ? 1 : 0) +
-            " status=" + status +
-            " original_slot=" +
-                std::to_string(static_cast<int>(original_slot)) +
-            " restore_attempted=" +
-                std::to_string(restore_attempted ? 1 : 0) +
-            " restored=" + std::to_string(restored ? 1 : 0);
-    }
-};
-
 template <typename InvokeFn>
 bool InvokeWithStockSecondaryActorSlotZeroContext(
     uintptr_t actor_address,
     std::int32_t skill_entry_index,
     InvokeFn&& invoke,
     std::string* context_description = nullptr) {
-    ScopedStockSecondaryActorSlotZeroContext slot_context(
+    return InvokeWithActorSlotZeroContext(
         actor_address,
-        RequiresStockSecondaryActorSlotZero(skill_entry_index));
-    if (slot_context.ready) {
-        invoke();
-    }
-    slot_context.Restore();
-    if (context_description != nullptr) {
-        *context_description = slot_context.Describe();
-    }
-    return slot_context.ready && slot_context.restored;
+        RequiresStockSecondaryActorSlotZero(skill_entry_index),
+        std::forward<InvokeFn>(invoke),
+        context_description);
 }
 
 struct PersistentStatusToggleMapping {
@@ -346,7 +226,19 @@ bool ReplayPendingNativeSecondaryCast(
         request.secondary_slot >=
             static_cast<std::int32_t>(
                 binding->character_profile.loadout.secondary_entry_indices.size()) ||
-        request.skill_id < 0) {
+        request.skill_id < 0 ||
+        !request.has_origin_transform ||
+        !std::isfinite(request.origin_position_x) ||
+        !std::isfinite(request.origin_position_y) ||
+        !request.has_aim_angle ||
+        !std::isfinite(request.aim_angle) ||
+        !request.has_aim_target ||
+        !std::isfinite(request.aim_target_x) ||
+        !std::isfinite(request.aim_target_y) ||
+        (request.has_cursor_world_placement &&
+         (!IsSecondaryCursorWorldPlacementSkill(request.skill_id) ||
+          !std::isfinite(request.cursor_world_x) ||
+          !std::isfinite(request.cursor_world_y)))) {
         if (error_message != nullptr) {
             *error_message = "invalid remote native secondary cast request";
         }
@@ -361,71 +253,27 @@ bool ReplayPendingNativeSecondaryCast(
 
     auto& memory = ProcessMemory::Instance();
     const auto actor_address = binding->actor_address;
-    float aim_heading = 0.0f;
-    bool have_aim_heading = false;
-    float aim_target_x = request.aim_target_x;
-    float aim_target_y = request.aim_target_y;
-    bool have_aim_target =
-        request.has_aim_target &&
-        std::isfinite(aim_target_x) &&
-        std::isfinite(aim_target_y);
-
-    if (request.target_actor_address != 0) {
-        float target_heading = 0.0f;
-        float target_x = 0.0f;
-        float target_y = 0.0f;
-        if (TryComputeActorAimTowardTarget(
-                actor_address,
-                request.target_actor_address,
-                &target_heading,
-                &target_x,
-                &target_y)) {
-            aim_heading = target_heading;
-            have_aim_heading = true;
-            aim_target_x = target_x;
-            aim_target_y = target_y;
-            have_aim_target = true;
-        }
-    }
-    if (!have_aim_heading && have_aim_target) {
-        float actor_x = 0.0f;
-        float actor_y = 0.0f;
-        if (TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &actor_x) &&
-            TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &actor_y)) {
-            const auto dx = aim_target_x - actor_x;
-            const auto dy = aim_target_y - actor_y;
-            if (dx * dx + dy * dy > 0.0001f) {
-                aim_heading = NormalizeWizardActorHeadingForWrite(
-                    static_cast<float>(
-                        std::atan2(dy, dx) * kWizardHeadingRadiansToDegrees +
-                        90.0));
-                have_aim_heading = true;
-            }
-        }
-    }
-    if (!have_aim_heading &&
-        request.has_aim_angle &&
-        std::isfinite(request.aim_angle)) {
-        aim_heading = NormalizeWizardActorHeadingForWrite(request.aim_angle);
-        have_aim_heading = true;
-    }
-    if (have_aim_heading) {
-        ApplyWizardActorFacingState(actor_address, aim_heading);
-        binding->facing_heading_value = aim_heading;
-        binding->facing_heading_valid = true;
-    }
-    if (have_aim_target) {
-        (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, aim_target_x);
-        (void)memory.TryWriteField(actor_address, kActorAimTargetYOffset, aim_target_y);
-        (void)memory.TryWriteField<std::uint32_t>(
-            actor_address,
-            kActorAimTargetAux0Offset,
-            0);
-        (void)memory.TryWriteField<std::uint32_t>(
-            actor_address,
-            kActorAimTargetAux1Offset,
-            0);
-    }
+    const auto aim_heading =
+        NormalizeWizardActorHeadingForWrite(request.aim_angle);
+    ApplyWizardActorFacingState(actor_address, aim_heading);
+    binding->facing_heading_value = aim_heading;
+    binding->facing_heading_valid = true;
+    (void)memory.TryWriteField(
+        actor_address,
+        kActorAimTargetXOffset,
+        request.aim_target_x);
+    (void)memory.TryWriteField(
+        actor_address,
+        kActorAimTargetYOffset,
+        request.aim_target_y);
+    (void)memory.TryWriteField<std::uint32_t>(
+        actor_address,
+        kActorAimTargetAux0Offset,
+        0);
+    (void)memory.TryWriteField<std::uint32_t>(
+        actor_address,
+        kActorAimTargetAux1Offset,
+        0);
     binding->facing_target_actor_address = request.target_actor_address;
     (void)memory.TryWriteField<uintptr_t>(
         actor_address,
@@ -467,7 +315,11 @@ bool ReplayPendingNativeSecondaryCast(
     std::string progression_owner_context;
     std::string player_actor_owner_context;
     std::string stock_slot_context;
+    std::string cast_origin_context;
+    std::string cursor_world_placement_context;
     bool stock_slot_context_ok = false;
+    bool cast_origin_context_ok = false;
+    bool cursor_world_placement_context_ok = false;
     const auto turn_undead_precast_state =
         CaptureAuthoritativeTurnUndeadPrecastState(
             actor_address,
@@ -488,11 +340,29 @@ bool ReplayPendingNativeSecondaryCast(
                                     actor_address,
                                     request.skill_id,
                                     [&] {
-                                        invoked =
-                                            InvokeOriginalPlayerActorSecondarySpellCast(
+                                        cast_origin_context_ok =
+                                            InvokeWithActorCastOriginContext(
                                                 actor_address,
-                                                request.skill_id,
-                                                &native_result);
+                                                request.origin_position_x,
+                                                request.origin_position_y,
+                                                [&] {
+                                                    cursor_world_placement_context_ok =
+                                                        InvokeWithSecondaryCursorWorldPlacementContext(
+                                                            actor_address,
+                                                            request.skill_id,
+                                                            request.has_cursor_world_placement,
+                                                            request.cursor_world_x,
+                                                            request.cursor_world_y,
+                                                            [&] {
+                                                                invoked =
+                                                                    InvokeOriginalPlayerActorSecondarySpellCast(
+                                                                        actor_address,
+                                                                        request.skill_id,
+                                                                        &native_result);
+                                                            },
+                                                            &cursor_world_placement_context);
+                                                },
+                                                &cast_origin_context);
                                     },
                                     &stock_slot_context);
                         },
@@ -533,6 +403,8 @@ bool ReplayPendingNativeSecondaryCast(
     const bool native_success =
         invoked &&
         stock_slot_context_ok &&
+        cast_origin_context_ok &&
+        cursor_world_placement_context_ok &&
         stock_effect_verified &&
         (native_result != 0 ||
          IsRemoteNativeSecondaryToggleSkill(request.skill_id));
@@ -578,6 +450,13 @@ bool ReplayPendingNativeSecondaryCast(
         " stock_slot_context_ok=" +
             std::to_string(stock_slot_context_ok ? 1 : 0) +
         " stock_slot_context={" + stock_slot_context + "}" +
+        " cast_origin_context_ok=" +
+            std::to_string(cast_origin_context_ok ? 1 : 0) +
+        " cast_origin_context={" + cast_origin_context + "}" +
+        " cursor_world_placement_context_ok=" +
+            std::to_string(cursor_world_placement_context_ok ? 1 : 0) +
+        " cursor_world_placement_context={" +
+            cursor_world_placement_context + "}" +
         " stock_effect_verification_required=" +
             std::to_string(stock_effect_verification_required ? 1 : 0) +
         " stock_effect_verified=" +
@@ -586,7 +465,13 @@ bool ReplayPendingNativeSecondaryCast(
         " player_actor_owner_context={" + player_actor_owner_context + "}");
 
     if (!native_success && error_message != nullptr) {
-        if (invoked && !stock_effect_verified) {
+        if (!cast_origin_context_ok) {
+            *error_message =
+                "native remote secondary cast origin transaction failed";
+        } else if (!cursor_world_placement_context_ok) {
+            *error_message =
+                "native remote secondary cursor-placement transaction failed";
+        } else if (invoked && !stock_effect_verified) {
             *error_message =
                 "native remote secondary cast did not apply its target modifier";
         } else {

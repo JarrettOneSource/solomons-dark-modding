@@ -125,6 +125,15 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_pushinteger(
         state,
         static_cast<lua_Integer>(
+            snapshot.native_webbed_remaining_ticks));
+    lua_setfield(state, -2, "native_webbed_remaining_ticks");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(snapshot.native_webbed_strength));
+    lua_setfield(state, -2, "native_webbed_strength");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
             snapshot.replicated_damage_x4_remaining_ticks));
     lua_setfield(
         state,

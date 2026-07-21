@@ -92,8 +92,31 @@ bool BuildLocalCastPacket(
         !std::isfinite(event.position_x) ||
         !std::isfinite(event.position_y) ||
         !std::isfinite(event.direction_x) ||
-        !std::isfinite(event.direction_y)) {
+        !std::isfinite(event.direction_y) ||
+        (event.has_cursor_world_placement &&
+         (event.cast_kind != CastKind::Secondary ||
+          !std::isfinite(event.cursor_world_x) ||
+          !std::isfinite(event.cursor_world_y)))) {
         return false;
+    }
+    const auto cast_direction_length_squared =
+        event.direction_x * event.direction_x +
+        event.direction_y * event.direction_y;
+    if (!std::isfinite(cast_direction_length_squared) ||
+        cast_direction_length_squared <= 0.0001f) {
+        return false;
+    }
+    constexpr float kCastRadiansToDegrees =
+        57.2957795130823208767981548141051703f;
+    float cast_heading = static_cast<float>(
+        std::atan2(event.direction_y, event.direction_x) *
+            kCastRadiansToDegrees +
+        90.0f);
+    while (cast_heading < 0.0f) {
+        cast_heading += 360.0f;
+    }
+    while (cast_heading >= 360.0f) {
+        cast_heading -= 360.0f;
     }
 
     (void)runtime_state;
@@ -104,7 +127,9 @@ bool BuildLocalCastPacket(
     built.cast_kind = static_cast<std::uint8_t>(event.cast_kind);
     built.secondary_slot = static_cast<std::int8_t>(event.secondary_slot);
     built.input_phase = static_cast<std::uint8_t>(phase);
-    built.input_flags = 0;
+    built.input_flags = event.has_cursor_world_placement
+                            ? CastInputFlagCursorWorldPlacement
+                            : 0;
     built.run_nonce = local.runtime.run_nonce;
     built.target_network_actor_id =
         ResolveLocalCastTargetNetworkActorId(
@@ -129,13 +154,19 @@ bool BuildLocalCastPacket(
     }
     built.position_x = event.position_x;
     built.position_y = event.position_y;
-    built.heading = local.runtime.heading;
+    built.heading = cast_heading;
     built.direction_x = event.direction_x;
     built.direction_y = event.direction_y;
     built.aim_target_x =
         event.has_aim_target ? event.aim_target_x : event.position_x + event.direction_x * 512.0f;
     built.aim_target_y =
         event.has_aim_target ? event.aim_target_y : event.position_y + event.direction_y * 512.0f;
+    built.cursor_world_x = event.has_cursor_world_placement
+                               ? event.cursor_world_x
+                               : 0.0f;
+    built.cursor_world_y = event.has_cursor_world_placement
+                               ? event.cursor_world_y
+                               : 0.0f;
 
     *packet = built;
     return true;
@@ -282,6 +313,16 @@ void SendCastPacketToEndpoints(
         " secondary_slot=" + std::to_string(packet.secondary_slot) +
         " phase=" + CastInputPhaseLabel(packet.input_phase) +
         " skill_id=" + std::to_string(packet.skill_id) +
+        " origin=(" + std::to_string(packet.position_x) + "," +
+            std::to_string(packet.position_y) + ")" +
+        " heading=" + std::to_string(packet.heading) +
+        " cursor_world_placement=" +
+            std::to_string(
+                (packet.input_flags & CastInputFlagCursorWorldPlacement) != 0
+                    ? 1
+                    : 0) +
+        " cursor_world=(" + std::to_string(packet.cursor_world_x) + "," +
+            std::to_string(packet.cursor_world_y) + ")" +
         " target_network_actor_id=" + std::to_string(packet.target_network_actor_id));
 }
 

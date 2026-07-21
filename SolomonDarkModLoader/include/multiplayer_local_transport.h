@@ -59,7 +59,10 @@ std::uint64_t QueueLocalSecondarySpellCastEvent(
     float aim_target_x = 0.0f,
     float aim_target_y = 0.0f,
     const std::int32_t* live_secondary_entry_indices = nullptr,
-    std::size_t live_secondary_entry_count = 0);
+    std::size_t live_secondary_entry_count = 0,
+    bool has_cursor_world_placement = false,
+    float cursor_world_x = 0.0f,
+    float cursor_world_y = 0.0f);
 void QueueLocalEnemyDamageClaim(
     std::uint64_t network_actor_id,
     std::int32_t skill_id,
@@ -83,7 +86,14 @@ void QueueHostParticipantVitalsCorrection(
     float life_max,
     std::uint8_t transient_status_flags,
     std::int32_t poison_remaining_ticks,
-    float poison_damage_per_tick);
+    float poison_damage_per_tick,
+    std::int32_t webbed_remaining_ticks,
+    float webbed_strength,
+    std::uint8_t correction_flags,
+    float magic_shield_absorb_remaining,
+    float magic_shield_absorb_capacity,
+    float magic_shield_explosion_fraction,
+    float magic_shield_hit_flash);
 bool HasReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id);
 void MarkReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id, float authoritative_hp);
 void ClearReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id);
@@ -221,7 +231,7 @@ bool QueueLocalLevelUpChoice(
     std::string* error_message);
 void ReconcileLocalLevelUpOfferPresentation(std::uint64_t now_ms, bool allow_native_create = true);
 bool HasLocalLevelUpOfferAwaitingNativePresentation();
-bool ShouldPauseGameplayForLevelUpSelection();
+bool ShouldPauseMultiplayerGameplay();
 bool TryBuildLevelUpWaitStatusText(std::string* text);
 
 }  // namespace sdmod::multiplayer

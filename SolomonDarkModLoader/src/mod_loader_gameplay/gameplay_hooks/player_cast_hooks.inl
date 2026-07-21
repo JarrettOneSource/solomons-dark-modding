@@ -27,7 +27,94 @@ struct LocalSecondaryCastCapture {
     bool has_aim_target = false;
     float aim_target_x = 0.0f;
     float aim_target_y = 0.0f;
+    bool has_cursor_world_placement = false;
+    float cursor_world_x = 0.0f;
+    float cursor_world_y = 0.0f;
 };
+
+struct LocalSecondaryCursorProjectionCaptureContext {
+    LocalSecondaryCastCapture* capture = nullptr;
+    uintptr_t actor_world_address = 0;
+};
+
+thread_local LocalSecondaryCursorProjectionCaptureContext*
+    g_local_secondary_cursor_projection_capture = nullptr;
+
+class ScopedLocalSecondaryCursorProjectionCapture {
+public:
+    ScopedLocalSecondaryCursorProjectionCapture(
+        uintptr_t actor_address,
+        std::int32_t skill_entry_index,
+        LocalSecondaryCastCapture* capture)
+        : previous_(g_local_secondary_cursor_projection_capture) {
+        g_local_secondary_cursor_projection_capture = nullptr;
+        if (actor_address == 0 ||
+            capture == nullptr ||
+            !capture->valid ||
+            !IsSecondaryCursorWorldPlacementSkill(skill_entry_index) ||
+            !ProcessMemory::Instance().TryReadField(
+                actor_address,
+                kActorOwnerOffset,
+                &context_.actor_world_address) ||
+            context_.actor_world_address == 0) {
+            return;
+        }
+        context_.capture = capture;
+        g_local_secondary_cursor_projection_capture = &context_;
+    }
+
+    ScopedLocalSecondaryCursorProjectionCapture(
+        const ScopedLocalSecondaryCursorProjectionCapture&) = delete;
+    ScopedLocalSecondaryCursorProjectionCapture& operator=(
+        const ScopedLocalSecondaryCursorProjectionCapture&) = delete;
+
+    ~ScopedLocalSecondaryCursorProjectionCapture() {
+        g_local_secondary_cursor_projection_capture = previous_;
+    }
+
+private:
+    LocalSecondaryCursorProjectionCaptureContext context_{};
+    LocalSecondaryCursorProjectionCaptureContext* previous_ = nullptr;
+};
+
+void* __fastcall HookSecondaryCursorWorldProjection(
+    void* self,
+    void* /*unused_edx*/,
+    void* output_point,
+    float screen_x,
+    float screen_y) {
+    const auto original =
+        GetX86HookTrampoline<SecondaryCursorWorldProjectionFn>(
+            g_gameplay_keyboard_injection
+                .secondary_cursor_world_projection_hook);
+    if (original == nullptr) {
+        return nullptr;
+    }
+
+    void* result = original(self, output_point, screen_x, screen_y);
+    auto* active = g_local_secondary_cursor_projection_capture;
+    if (active == nullptr ||
+        active->capture == nullptr ||
+        active->actor_world_address != reinterpret_cast<uintptr_t>(self) ||
+        active->capture->has_cursor_world_placement ||
+        result == nullptr) {
+        return result;
+    }
+
+    const auto* world_point = static_cast<const float*>(result);
+    const auto world_x = world_point[0];
+    const auto world_y = world_point[1];
+    constexpr float kMaximumCursorWorldCoordinate = 100000.0f;
+    if (std::isfinite(world_x) &&
+        std::isfinite(world_y) &&
+        std::abs(world_x) <= kMaximumCursorWorldCoordinate &&
+        std::abs(world_y) <= kMaximumCursorWorldCoordinate) {
+        active->capture->has_cursor_world_placement = true;
+        active->capture->cursor_world_x = world_x;
+        active->capture->cursor_world_y = world_y;
+    }
+    return result;
+}
 
 bool IsUsableSecondaryCastAimTarget(
     float position_x,
@@ -50,6 +137,79 @@ bool IsUsableSecondaryCastAimTarget(
            distance <= 4096.0f &&
            std::abs(aim_target_x) <= 20000.0f &&
            std::abs(aim_target_y) <= 20000.0f;
+}
+
+bool TryCaptureLocalSecondaryCastOrigin(
+    uintptr_t actor_address,
+    LocalSecondaryCastCapture* capture) {
+    if (actor_address == 0 || capture == nullptr) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    return
+        memory.TryReadField(
+            actor_address,
+            kActorPositionXOffset,
+            &capture->position_x) &&
+        memory.TryReadField(
+            actor_address,
+            kActorPositionYOffset,
+            &capture->position_y) &&
+        std::isfinite(capture->position_x) &&
+        std::isfinite(capture->position_y);
+}
+
+bool TryRefreshLocalSecondaryCastAim(
+    uintptr_t actor_address,
+    LocalSecondaryCastCapture* capture) {
+    if (actor_address == 0 ||
+        capture == nullptr ||
+        !std::isfinite(capture->position_x) ||
+        !std::isfinite(capture->position_y)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    float heading = 0.0f;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorHeadingOffset,
+            &heading) ||
+        !std::isfinite(heading)) {
+        return false;
+    }
+
+    const auto radians =
+        (NormalizeWizardActorHeadingForWrite(heading) - 90.0f) /
+        kWizardHeadingRadiansToDegrees;
+    capture->direction_x = static_cast<float>(std::cos(radians));
+    capture->direction_y = static_cast<float>(std::sin(radians));
+    if (!std::isfinite(capture->direction_x) ||
+        !std::isfinite(capture->direction_y)) {
+        return false;
+    }
+
+    capture->target_actor_address = 0;
+    (void)memory.TryReadField(
+        actor_address,
+        kActorCurrentTargetActorOffset,
+        &capture->target_actor_address);
+    capture->has_aim_target =
+        memory.TryReadField(
+            actor_address,
+            kActorAimTargetXOffset,
+            &capture->aim_target_x) &&
+        memory.TryReadField(
+            actor_address,
+            kActorAimTargetYOffset,
+            &capture->aim_target_y) &&
+        IsUsableSecondaryCastAimTarget(
+            capture->position_x,
+            capture->position_y,
+            capture->aim_target_x,
+            capture->aim_target_y);
+    return true;
 }
 
 bool TryCaptureLocalSecondaryCast(
@@ -109,53 +269,10 @@ bool TryCaptureLocalSecondaryCast(
         return false;
     }
 
-    float heading = 0.0f;
-    if (!memory.TryReadField(actor_address, kActorPositionXOffset, &capture->position_x) ||
-        !memory.TryReadField(actor_address, kActorPositionYOffset, &capture->position_y) ||
-        !memory.TryReadField(actor_address, kActorHeadingOffset, &heading) ||
-        !std::isfinite(capture->position_x) ||
-        !std::isfinite(capture->position_y) ||
-        !std::isfinite(heading)) {
-        return false;
-    }
-
-    const auto radians =
-        (NormalizeWizardActorHeadingForWrite(heading) - 90.0f) /
-        kWizardHeadingRadiansToDegrees;
-    capture->direction_x = static_cast<float>(std::cos(radians));
-    capture->direction_y = static_cast<float>(std::sin(radians));
-    if (!std::isfinite(capture->direction_x) ||
-        !std::isfinite(capture->direction_y)) {
-        return false;
-    }
-
-    (void)memory.TryReadField(
-        actor_address,
-        kActorCurrentTargetActorOffset,
-        &capture->target_actor_address);
-    if (memory.TryReadField(
-            actor_address,
-            kActorAimTargetXOffset,
-            &capture->aim_target_x) &&
-        memory.TryReadField(
-            actor_address,
-            kActorAimTargetYOffset,
-            &capture->aim_target_y) &&
-        IsUsableSecondaryCastAimTarget(
-            capture->position_x,
-            capture->position_y,
-            capture->aim_target_x,
-            capture->aim_target_y)) {
-        const auto aim_dx = capture->aim_target_x - capture->position_x;
-        const auto aim_dy = capture->aim_target_y - capture->position_y;
-        const auto aim_length = std::sqrt(aim_dx * aim_dx + aim_dy * aim_dy);
-        capture->direction_x = aim_dx / aim_length;
-        capture->direction_y = aim_dy / aim_length;
-        capture->has_aim_target = true;
-    }
-
-    capture->valid = true;
-    return true;
+    capture->valid =
+        TryCaptureLocalSecondaryCastOrigin(actor_address, capture) &&
+        TryRefreshLocalSecondaryCastAim(actor_address, capture);
+    return capture->valid;
 }
 
 bool IsNativeSecondaryToggleSkill(std::int32_t skill_entry_index) {
@@ -262,14 +379,20 @@ std::uint8_t __fastcall HookPlayerActorSecondarySpellCast(
     }
     std::uint8_t native_result = 0;
     bool stock_context_ok = true;
-    if (multiplayer::IsLocalTransportEnabled()) {
-        stock_context_ok = InvokeWithStockDampenEffectSuppressed(
+    {
+        ScopedLocalSecondaryCursorProjectionCapture cursor_projection_capture(
+            actor_address,
             skill_entry_index,
-            [&] {
-                native_result = original(self, skill_entry_index);
-            });
-    } else {
-        native_result = original(self, skill_entry_index);
+            should_capture ? &capture : nullptr);
+        if (multiplayer::IsLocalTransportEnabled()) {
+            stock_context_ok = InvokeWithStockDampenEffectSuppressed(
+                skill_entry_index,
+                [&] {
+                    native_result = original(self, skill_entry_index);
+                });
+        } else {
+            native_result = original(self, skill_entry_index);
+        }
     }
     if (!stock_context_ok) {
         return 0;
@@ -279,16 +402,24 @@ std::uint8_t __fastcall HookPlayerActorSecondarySpellCast(
         multiplayer::GetLocalTransportParticipantId(),
         turn_undead_precast_state,
         native_result != 0);
-    if (!should_capture ||
-        (native_result == 0 &&
-         !IsNativeSecondaryToggleSkill(skill_entry_index))) {
-        if (should_capture && native_result == 0) {
-            Log(
-                "Multiplayer local secondary cast rejected by native dispatcher. actor=" +
-                HexString(actor_address) +
-                " skill_entry=" + std::to_string(skill_entry_index) +
-                " belt_slot=" + std::to_string(capture.belt_slot));
-        }
+    if (!should_capture) {
+        return native_result;
+    }
+    if (native_result == 0 &&
+        !IsNativeSecondaryToggleSkill(skill_entry_index)) {
+        Log(
+            "Multiplayer local secondary cast rejected by native dispatcher. actor=" +
+            HexString(actor_address) +
+            " skill_entry=" + std::to_string(skill_entry_index) +
+            " belt_slot=" + std::to_string(capture.belt_slot));
+        return native_result;
+    }
+    if (!TryRefreshLocalSecondaryCastAim(actor_address, &capture)) {
+        Log(
+            "Multiplayer local secondary cast accepted without a readable "
+            "post-dispatch aim. actor=" + HexString(actor_address) +
+            " skill_entry=" + std::to_string(skill_entry_index) +
+            " belt_slot=" + std::to_string(capture.belt_slot));
         return native_result;
     }
 
@@ -306,7 +437,10 @@ std::uint8_t __fastcall HookPlayerActorSecondarySpellCast(
             capture.aim_target_x,
             capture.aim_target_y,
             capture.secondary_entry_indices.data(),
-            capture.secondary_entry_indices.size());
+            capture.secondary_entry_indices.size(),
+            capture.has_cursor_world_placement,
+            capture.cursor_world_x,
+            capture.cursor_world_y);
     if (native_queue_id != 0) {
         Log(
             "Multiplayer local secondary cast queued from native dispatcher. actor=" +
@@ -314,7 +448,11 @@ std::uint8_t __fastcall HookPlayerActorSecondarySpellCast(
             " skill_entry=" + std::to_string(skill_entry_index) +
             " belt_slot=" + std::to_string(capture.belt_slot) +
             " native_result=" + std::to_string(native_result) +
-            " native_queue_id=" + std::to_string(native_queue_id));
+            " native_queue_id=" + std::to_string(native_queue_id) +
+            " cursor_world_placement=" +
+                std::to_string(capture.has_cursor_world_placement ? 1 : 0) +
+            " cursor_world=(" + std::to_string(capture.cursor_world_x) + "," +
+                std::to_string(capture.cursor_world_y) + ")");
     }
     return native_result;
 }

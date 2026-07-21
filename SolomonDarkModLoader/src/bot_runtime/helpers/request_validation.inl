@@ -19,6 +19,13 @@ bool IsValidCastRequest(const BotCastRequest& request) {
         return false;
     }
 
+    if (request.has_cursor_world_placement &&
+        (request.kind != BotCastKind::Secondary ||
+         !std::isfinite(request.cursor_world_x) ||
+         !std::isfinite(request.cursor_world_y))) {
+        return false;
+    }
+
     return true;
 }
 

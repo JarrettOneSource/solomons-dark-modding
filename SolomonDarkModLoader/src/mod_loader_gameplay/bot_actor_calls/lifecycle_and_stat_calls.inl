@@ -229,25 +229,24 @@ bool TryReadWizardActorPersistentStatusFlags(
     return true;
 }
 
+struct NativeWizardTransientStatusState {
+    std::uint8_t flags = 0;
+    std::int32_t poison_remaining_ticks = 0;
+    uintptr_t poison_modifier_address = 0;
+    uintptr_t poison_control_block_address = 0;
+    std::int32_t webbed_remaining_ticks = 0;
+    float webbed_strength = 0.0f;
+    uintptr_t webbed_modifier_address = 0;
+    uintptr_t webbed_control_block_address = 0;
+};
+
 bool TryReadWizardActorTransientStatusState(
     uintptr_t actor_address,
-    std::uint8_t* status_flags,
-    std::int32_t* poison_remaining_ticks,
-    uintptr_t* poison_modifier_address = nullptr,
-    uintptr_t* poison_control_block_address = nullptr) {
-    if (status_flags == nullptr ||
-        poison_remaining_ticks == nullptr ||
-        actor_address == 0) {
+    NativeWizardTransientStatusState* state) {
+    if (state == nullptr || actor_address == 0) {
         return false;
     }
-    *status_flags = 0;
-    *poison_remaining_ticks = 0;
-    if (poison_modifier_address != nullptr) {
-        *poison_modifier_address = 0;
-    }
-    if (poison_control_block_address != nullptr) {
-        *poison_control_block_address = 0;
-    }
+    *state = NativeWizardTransientStatusState{};
     auto& memory = ProcessMemory::Instance();
     std::uint32_t render_drive_flags = 0;
     if (!memory.TryReadField(
@@ -273,7 +272,7 @@ bool TryReadWizardActorTransientStatusState(
     }
 
     if (modifier_count == 0) {
-        *status_flags = flags;
+        state->flags = flags;
         return true;
     }
 
@@ -289,6 +288,10 @@ bool TryReadWizardActorTransientStatusState(
     std::int32_t longest_poison_duration = 0;
     uintptr_t poison_modifier = 0;
     uintptr_t poison_control_block = 0;
+    std::int32_t longest_webbed_duration = 0;
+    float longest_webbed_strength = 0.0f;
+    uintptr_t webbed_modifier = 0;
+    uintptr_t webbed_control_block = 0;
     for (std::int32_t index = 0; index < modifier_count; ++index) {
         uintptr_t control_block = 0;
         uintptr_t modifier = 0;
@@ -311,6 +314,29 @@ bool TryReadWizardActorTransientStatusState(
             flags |= multiplayer::ParticipantTransientStatusFlagStoneskin;
             continue;
         }
+        if (type_id == kNativeWebbedModifierTypeId) {
+            std::int32_t duration_ticks = 0;
+            float strength = 0.0f;
+            if (!memory.TryReadField(
+                    modifier,
+                    kNativeModifierDurationTicksOffset,
+                    &duration_ticks) ||
+                !memory.TryReadField(
+                    modifier,
+                    kNativeWebbedStrengthOffset,
+                    &strength) ||
+                !std::isfinite(strength)) {
+                return false;
+            }
+            if (webbed_modifier == 0 ||
+                duration_ticks > longest_webbed_duration) {
+                webbed_modifier = modifier;
+                webbed_control_block = control_block;
+                longest_webbed_duration = duration_ticks;
+                longest_webbed_strength = strength;
+            }
+            continue;
+        }
         if (type_id != kNativePoisonModifierTypeId) {
             continue;
         }
@@ -331,21 +357,31 @@ bool TryReadWizardActorTransientStatusState(
     }
 
     if (poison_modifier != 0) {
-        if (poison_modifier_address != nullptr) {
-            *poison_modifier_address = poison_modifier;
-        }
-        if (poison_control_block_address != nullptr) {
-            *poison_control_block_address = poison_control_block;
-        }
+        state->poison_modifier_address = poison_modifier;
+        state->poison_control_block_address = poison_control_block;
         if (longest_poison_duration > 0) {
             flags |= multiplayer::ParticipantTransientStatusFlagPoisoned;
-            *poison_remaining_ticks = (std::min)(
+            state->poison_remaining_ticks = (std::min)(
                 longest_poison_duration,
                 multiplayer::kParticipantPoisonMaxDurationTicks);
         }
     }
+    if (webbed_modifier != 0) {
+        state->webbed_modifier_address = webbed_modifier;
+        state->webbed_control_block_address = webbed_control_block;
+        if (longest_webbed_duration > 0 && longest_webbed_strength > 0.0f) {
+            flags |= multiplayer::ParticipantTransientStatusFlagWebbed;
+            state->webbed_remaining_ticks = (std::min)(
+                longest_webbed_duration,
+                multiplayer::kParticipantWebbedMaxDurationTicks);
+            state->webbed_strength = (std::clamp)(
+                longest_webbed_strength,
+                0.0f,
+                multiplayer::kParticipantWebbedMaxStrength);
+        }
+    }
 
-    *status_flags = flags;
+    state->flags = flags;
     return true;
 }
 

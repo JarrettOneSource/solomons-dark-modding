@@ -24,6 +24,11 @@ from verify_local_multiplayer_sync import VerifyFailure, parse_key_values
 DEFAULT_OUTPUT = ROOT / "runtime/steam_friend_large_enemy_sync.json"
 DEFAULT_ENEMY_COUNT = 80
 POSITION_TOLERANCE = 16.0
+CLIENT_TICK_RATE_SAMPLE_SECONDS = 3.0
+MINIMUM_CLIENT_TICK_RATE_HZ = 30.0
+MINIMUM_LOADED_TO_BASELINE_TICK_RATE_RATIO = 0.75
+MINIMUM_CLIENT_RENDER_FRAME_RATE_HZ = 30.0
+MINIMUM_LOADED_TO_BASELINE_RENDER_FRAME_RATE_RATIO = 0.75
 
 
 HOST_CAPTURE_LUA = r"""
@@ -190,6 +195,25 @@ emit("last_steam_send_failure_result", state and state.last_steam_send_failure_r
 """
 
 
+CLIENT_TICK_RATE_LUA = r"""
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
+emit("valid", player ~= nil)
+emit("tick_count", player and player.local_player_tick_count or 0)
+emit("observed_ms", player and player.local_player_tick_observed_ms or 0)
+"""
+
+
+CLIENT_RENDER_FRAME_RATE_LUA = r"""
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local frame = sd.runtime and sd.runtime.get_frame_state and
+  sd.runtime.get_frame_state() or nil
+emit("valid", frame ~= nil)
+emit("frame_count", frame and frame.frame_count or 0)
+emit("observed_ms", frame and frame.observed_ms or 0)
+"""
+
+
 HOST_REMOVE_SUBSET_LUA = r"""
 local requested = tonumber("__COUNT__") or 0
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
@@ -271,6 +295,78 @@ def capture_transport_diagnostics(pair: SteamFriendActivePair) -> dict[str, Any]
             ),
         }
     return result
+
+
+def capture_client_tick_counter(pair: SteamFriendActivePair) -> dict[str, int]:
+    values = parse_key_values(
+        pair.lua(CLIENT_ENDPOINT, CLIENT_TICK_RATE_LUA, timeout=12.0)
+    )
+    if values.get("valid") != "true":
+        raise VerifyFailure("client player tick counter is unavailable")
+    return {
+        "tick_count": integer(values, "tick_count"),
+        "observed_ms": integer(values, "observed_ms"),
+    }
+
+
+def measure_client_tick_rate(
+    pair: SteamFriendActivePair,
+    sample_seconds: float = CLIENT_TICK_RATE_SAMPLE_SECONDS,
+) -> dict[str, Any]:
+    before = capture_client_tick_counter(pair)
+    time.sleep(sample_seconds)
+    after = capture_client_tick_counter(pair)
+    tick_delta = after["tick_count"] - before["tick_count"]
+    observed_ms_delta = after["observed_ms"] - before["observed_ms"]
+    if tick_delta <= 0 or observed_ms_delta <= 0:
+        raise VerifyFailure(
+            "client player ticks did not advance during the load sample: "
+            f"before={before} after={after}"
+        )
+    return {
+        "before": before,
+        "after": after,
+        "tick_delta": tick_delta,
+        "observed_ms_delta": observed_ms_delta,
+        "tick_rate_hz": tick_delta * 1000.0 / observed_ms_delta,
+    }
+
+
+def capture_client_render_frame_counter(
+    pair: SteamFriendActivePair,
+) -> dict[str, int]:
+    values = parse_key_values(
+        pair.lua(CLIENT_ENDPOINT, CLIENT_RENDER_FRAME_RATE_LUA, timeout=12.0)
+    )
+    if values.get("valid") != "true":
+        raise VerifyFailure("client render frame counter is unavailable")
+    return {
+        "frame_count": integer(values, "frame_count"),
+        "observed_ms": integer(values, "observed_ms"),
+    }
+
+
+def measure_client_render_frame_rate(
+    pair: SteamFriendActivePair,
+    sample_seconds: float = CLIENT_TICK_RATE_SAMPLE_SECONDS,
+) -> dict[str, Any]:
+    before = capture_client_render_frame_counter(pair)
+    time.sleep(sample_seconds)
+    after = capture_client_render_frame_counter(pair)
+    frame_delta = after["frame_count"] - before["frame_count"]
+    observed_ms_delta = after["observed_ms"] - before["observed_ms"]
+    if frame_delta <= 0 or observed_ms_delta <= 0:
+        raise VerifyFailure(
+            "client D3D frames did not advance during the load sample: "
+            f"before={before} after={after}"
+        )
+    return {
+        "before": before,
+        "after": after,
+        "frame_delta": frame_delta,
+        "observed_ms_delta": observed_ms_delta,
+        "frame_rate_hz": frame_delta * 1000.0 / observed_ms_delta,
+    }
 
 
 def transport_deltas(
@@ -517,6 +613,8 @@ def run(
     result["cleanup"] = primary.cleanup_live_enemies()
     result["zero_state"] = wait_for_zero(pair, timeout)
     result["static_world_baseline"] = static_world_baseline(result["zero_state"])
+    result["client_tick_rate_baseline"] = measure_client_tick_rate(pair)
+    result["client_render_frame_rate_baseline"] = measure_client_render_frame_rate(pair)
 
     spawns: list[dict[str, Any]] = []
     for index in range(enemy_count):
@@ -528,7 +626,7 @@ def run(
             x,
             y,
             setup_hp=50000.0,
-            freeze_on_spawn=True,
+            freeze_on_spawn=False,
         )
         spawns.append(
             {
@@ -555,6 +653,59 @@ def run(
         samples=result["samples"],
     )
     result["final"] = final
+    result["client_tick_rate_loaded"] = measure_client_tick_rate(pair)
+    result["client_render_frame_rate_loaded"] = measure_client_render_frame_rate(pair)
+    baseline_tick_rate = result["client_tick_rate_baseline"]["tick_rate_hz"]
+    loaded_tick_rate = result["client_tick_rate_loaded"]["tick_rate_hz"]
+    loaded_to_baseline_ratio = (
+        loaded_tick_rate / baseline_tick_rate if baseline_tick_rate > 0.0 else 0.0
+    )
+    result["client_tick_rate_loaded_to_baseline_ratio"] = loaded_to_baseline_ratio
+    if loaded_tick_rate < MINIMUM_CLIENT_TICK_RATE_HZ:
+        raise VerifyFailure(
+            "client tick rate fell below the loaded-run floor: "
+            f"loaded={loaded_tick_rate:.2f}Hz "
+            f"minimum={MINIMUM_CLIENT_TICK_RATE_HZ:.2f}Hz"
+        )
+    if loaded_to_baseline_ratio < MINIMUM_LOADED_TO_BASELINE_TICK_RATE_RATIO:
+        raise VerifyFailure(
+            "client tick rate regressed under the 80-enemy load: "
+            f"baseline={baseline_tick_rate:.2f}Hz loaded={loaded_tick_rate:.2f}Hz "
+            f"ratio={loaded_to_baseline_ratio:.3f} "
+            f"minimum_ratio={MINIMUM_LOADED_TO_BASELINE_TICK_RATE_RATIO:.3f}"
+        )
+    baseline_render_frame_rate = result["client_render_frame_rate_baseline"][
+        "frame_rate_hz"
+    ]
+    loaded_render_frame_rate = result["client_render_frame_rate_loaded"][
+        "frame_rate_hz"
+    ]
+    loaded_to_baseline_render_frame_ratio = (
+        loaded_render_frame_rate / baseline_render_frame_rate
+        if baseline_render_frame_rate > 0.0
+        else 0.0
+    )
+    result["client_render_frame_rate_loaded_to_baseline_ratio"] = (
+        loaded_to_baseline_render_frame_ratio
+    )
+    if loaded_render_frame_rate < MINIMUM_CLIENT_RENDER_FRAME_RATE_HZ:
+        raise VerifyFailure(
+            "client render frame rate fell below the loaded-run floor: "
+            f"loaded={loaded_render_frame_rate:.2f}Hz "
+            f"minimum={MINIMUM_CLIENT_RENDER_FRAME_RATE_HZ:.2f}Hz"
+        )
+    if (
+        loaded_to_baseline_render_frame_ratio
+        < MINIMUM_LOADED_TO_BASELINE_RENDER_FRAME_RATE_RATIO
+    ):
+        raise VerifyFailure(
+            "client render frame rate regressed under the active 80-enemy load: "
+            f"baseline={baseline_render_frame_rate:.2f}Hz "
+            f"loaded={loaded_render_frame_rate:.2f}Hz "
+            f"ratio={loaded_to_baseline_render_frame_ratio:.3f} "
+            "minimum_ratio="
+            f"{MINIMUM_LOADED_TO_BASELINE_RENDER_FRAME_RATE_RATIO:.3f}"
+        )
     partial_count = enemy_count // 2
     result["cleanup_after_parity"] = remove_host_enemy_subset(pair, partial_count)
     result["partial_samples"] = []

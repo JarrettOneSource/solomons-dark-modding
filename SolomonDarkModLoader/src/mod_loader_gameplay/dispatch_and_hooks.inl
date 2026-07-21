@@ -12,7 +12,7 @@
 #include "native_staff_behavior_probe.inl"
 #include "hub_service_runtime.inl"
 #include "dispatch_and_hooks_gameplay_thread_dispatch.inl"
-#include "dispatch_and_hooks_poison_actions.inl"
+#include "dispatch_and_hooks_participant_vitals_actions.inl"
 #include "dispatch_and_hooks_pump_loop.inl"
 #include "dispatch_and_hooks_mouse_refresh_hook.inl"
 #include "dispatch_and_hooks_standalone_wizard_tracking.inl"

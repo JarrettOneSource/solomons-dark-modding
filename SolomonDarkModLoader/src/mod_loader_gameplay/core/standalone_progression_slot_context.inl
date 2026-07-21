@@ -359,6 +359,7 @@ void InvokeWithStandaloneBotProgressionSlotContext(
 struct ScopedGameplayPlayerActorSlotContext {
     uintptr_t actor_address = 0;
     bool requested = false;
+    bool ready = false;
     bool active = false;
     bool restore_attempted = false;
     bool restored = true;
@@ -370,6 +371,7 @@ struct ScopedGameplayPlayerActorSlotContext {
     ScopedGameplayPlayerActorSlotContext(uintptr_t actor_address_in, bool requested_in)
         : actor_address(actor_address_in), requested(requested_in) {
         if (!requested) {
+            ready = true;
             return;
         }
         Apply();
@@ -400,6 +402,7 @@ struct ScopedGameplayPlayerActorSlotContext {
         player_actor_entry = owner.player_actor_entry;
         original_player_actor = owner.player_actor;
         if (original_player_actor == actor_address) {
+            ready = true;
             status = "already_owned";
             return;
         }
@@ -411,6 +414,7 @@ struct ScopedGameplayPlayerActorSlotContext {
 
         active = true;
         restored = false;
+        ready = true;
         status = "active";
     }
 
@@ -437,6 +441,7 @@ struct ScopedGameplayPlayerActorSlotContext {
     std::string Describe() const {
         return
             "requested=" + std::to_string(requested ? 1 : 0) +
+            " ready=" + std::to_string(ready ? 1 : 0) +
             " status=" + status +
             " gameplay=" + HexString(gameplay_address) +
             " player_actor_entry=" + HexString(player_actor_entry) +

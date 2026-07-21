@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 64;
+constexpr std::uint16_t kProtocolVersion = 69;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -91,6 +91,10 @@ enum class CastInputPhase : std::uint8_t {
     Pressed = 1,
     Held = 2,
     Released = 3,
+};
+
+enum CastInputFlags : std::uint8_t {
+    CastInputFlagCursorWorldPlacement = 1 << 0,
 };
 
 enum class EnemyDamageResultCode : std::uint8_t {
@@ -253,6 +257,7 @@ enum ParticipantTransientStatusFlags : std::uint8_t {
     ParticipantTransientStatusFlagDamageX4 = 1 << 1,
     ParticipantTransientStatusFlagPlanewalker = 1 << 2,
     ParticipantTransientStatusFlagStoneskin = 1 << 3,
+    ParticipantTransientStatusFlagWebbed = 1 << 4,
     ParticipantTransientStatusFlagSnapshotValid = 1 << 7,
 };
 
@@ -260,9 +265,19 @@ constexpr std::uint8_t kParticipantTransientStatusValueMask =
     ParticipantTransientStatusFlagPoisoned |
     ParticipantTransientStatusFlagDamageX4 |
     ParticipantTransientStatusFlagPlanewalker |
-    ParticipantTransientStatusFlagStoneskin;
+    ParticipantTransientStatusFlagStoneskin |
+    ParticipantTransientStatusFlagWebbed;
 constexpr std::int32_t kParticipantPoisonMaxDurationTicks = 100000;
+constexpr std::int32_t kParticipantWebbedMaxDurationTicks = 100000;
+constexpr float kParticipantWebbedMaxStrength = 3.0f;
 constexpr std::int32_t kParticipantDamageX4MaxDurationTicks = 100000;
+
+enum ParticipantVitalsCorrectionFlags : std::uint8_t {
+    ParticipantVitalsCorrectionFlagMagicShieldState = 1 << 0,
+};
+
+constexpr std::uint8_t kParticipantVitalsCorrectionKnownFlags =
+    ParticipantVitalsCorrectionFlagMagicShieldState;
 
 enum ParticipantInventorySnapshotFlags : std::uint16_t {
     ParticipantInventorySnapshotFlagTruncated = 1 << 0,
@@ -336,6 +351,13 @@ struct StatePacket {
     std::uint8_t transform_valid;
     std::uint8_t controller_kind;
     std::uint32_t run_nonce;
+    std::uint32_t local_menu_pause_request_epoch;
+    std::uint32_t shared_gameplay_pause_deadline_remaining_ms;
+    std::uint64_t shared_gameplay_pause_origin_participant_id;
+    std::uint8_t local_menu_pause_requested;
+    std::uint8_t shared_gameplay_pause_active;
+    std::uint8_t shared_gameplay_pause_timed_out;
+    std::uint8_t shared_gameplay_pause_reserved = 0;
     std::uint32_t participant_vitals_correction_ack_sequence;
     std::int32_t element_id;
     std::int32_t discipline_id;
@@ -395,6 +417,8 @@ struct StatePacket {
     float position_x;
     float position_y;
     float heading;
+    float movement_intent_x;
+    float movement_intent_y;
     std::uint8_t anim_drive_state;
     std::uint8_t persistent_status_flags;
     std::uint8_t transient_status_flags;
@@ -443,6 +467,13 @@ struct ParticipantFramePacket {
     std::uint8_t scene_kind;
     std::uint8_t scene_reserved[3] = {};
     std::uint32_t run_nonce;
+    std::uint32_t local_menu_pause_request_epoch;
+    std::uint32_t shared_gameplay_pause_deadline_remaining_ms;
+    std::uint64_t shared_gameplay_pause_origin_participant_id;
+    std::uint8_t local_menu_pause_requested;
+    std::uint8_t shared_gameplay_pause_active;
+    std::uint8_t shared_gameplay_pause_timed_out;
+    std::uint8_t shared_gameplay_pause_reserved = 0;
     std::uint32_t participant_vitals_correction_ack_sequence;
     std::int32_t region_index;
     std::int32_t region_type_id;
@@ -458,6 +489,8 @@ struct ParticipantFramePacket {
     float position_x;
     float position_y;
     float heading;
+    float movement_intent_x;
+    float movement_intent_y;
     std::uint8_t anim_drive_state;
     std::uint8_t persistent_status_flags;
     std::uint8_t transient_status_flags;
@@ -534,6 +567,8 @@ struct CastPacket {
     float direction_y;
     float aim_target_x;
     float aim_target_y;
+    float cursor_world_x;
+    float cursor_world_y;
 };
 
 struct SessionHelloAckPacket {
@@ -878,9 +913,16 @@ struct ParticipantVitalsCorrectionPacket {
     float life_current;
     float life_max;
     std::uint8_t transient_status_flags;
-    std::uint8_t reserved[3] = {};
+    std::uint8_t correction_flags;
+    std::uint8_t reserved[2] = {};
     std::int32_t poison_remaining_ticks;
     float poison_damage_per_tick;
+    std::int32_t webbed_remaining_ticks;
+    float webbed_strength;
+    float magic_shield_absorb_remaining;
+    float magic_shield_absorb_capacity;
+    float magic_shield_explosion_fraction;
+    float magic_shield_hit_flash;
 };
 
 struct EnemyDamageClaimPacket {
@@ -1024,11 +1066,11 @@ static_assert(sizeof(ParticipantEquippedItemPacketState) == 8, "Unexpected equip
 static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpected progression book entry packet size");
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 56, "Unexpected derived stat packet size");
-static_assert(sizeof(StatePacket) == 4204, "Unexpected state packet size");
-static_assert(sizeof(ParticipantFramePacket) == 270,
+static_assert(sizeof(StatePacket) == 4232, "Unexpected state packet size");
+static_assert(sizeof(ParticipantFramePacket) == 298,
               "Unexpected participant frame packet size");
 static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");
-static_assert(sizeof(CastPacket) == 120, "Unexpected cast packet size");
+static_assert(sizeof(CastPacket) == 128, "Unexpected cast packet size");
 static_assert(sizeof(SessionHelloAckPacket) == 92, "Unexpected session hello acknowledgement packet size");
 static_assert(sizeof(SessionGoodbyePacket) == 44, "Unexpected session goodbye packet size");
 static_assert(sizeof(SessionKeepalivePacket) == 52,
@@ -1067,7 +1109,7 @@ static_assert(SpellEffectSnapshotPacketWireSize(
               "A full spell effect snapshot must consume the packet buffer exactly");
 static_assert(sizeof(AirChainTargetPacketState) == 28, "Unexpected Air chain target packet size");
 static_assert(sizeof(AirChainSnapshotPacket) == 260, "Unexpected Air chain snapshot packet size");
-static_assert(sizeof(ParticipantVitalsCorrectionPacket) == 56, "Unexpected participant vitals correction packet size");
+static_assert(sizeof(ParticipantVitalsCorrectionPacket) == 80, "Unexpected participant vitals correction packet size");
 static_assert(sizeof(EnemyDamageClaimPacket) == 72, "Unexpected enemy damage claim packet size");
 static_assert(sizeof(EnemyDamageResultPacket) == 56, "Unexpected enemy damage result packet size");
 static_assert(sizeof(LootPickupRequestPacket) == 56, "Unexpected loot pickup request packet size");

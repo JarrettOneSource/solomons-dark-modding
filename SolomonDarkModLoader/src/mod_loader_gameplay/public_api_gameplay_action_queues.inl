@@ -245,10 +245,18 @@ bool QueueMultiplayerDampenEffect(
     return true;
 }
 
-bool QueueLocalPlayerPoisonCorrection(
+bool QueueLocalPlayerVitalsCorrection(
     std::uint32_t correction_sequence,
-    std::int32_t duration_ticks,
-    float damage_per_tick,
+    std::uint8_t transient_status_flags,
+    std::int32_t poison_remaining_ticks,
+    float poison_damage_per_tick,
+    std::int32_t webbed_remaining_ticks,
+    float webbed_strength,
+    std::uint8_t correction_flags,
+    float magic_shield_absorb_remaining,
+    float magic_shield_absorb_capacity,
+    float magic_shield_explosion_fraction,
+    float magic_shield_hit_flash,
     std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
@@ -259,27 +267,88 @@ bool QueueLocalPlayerPoisonCorrection(
         }
         return false;
     }
+    constexpr std::uint8_t kCorrectableStatusMask =
+        multiplayer::ParticipantTransientStatusFlagPoisoned |
+        multiplayer::ParticipantTransientStatusFlagWebbed;
+    const auto requested_statuses = static_cast<std::uint8_t>(
+        transient_status_flags & kCorrectableStatusMask);
+    const bool poison_requested =
+        (requested_statuses &
+         multiplayer::ParticipantTransientStatusFlagPoisoned) != 0;
+    const bool webbed_requested =
+        (requested_statuses &
+         multiplayer::ParticipantTransientStatusFlagWebbed) != 0;
+    const bool poison_payload_valid = poison_requested
+        ? poison_remaining_ticks > 0 &&
+              poison_remaining_ticks <=
+                  multiplayer::kParticipantPoisonMaxDurationTicks &&
+              std::isfinite(poison_damage_per_tick) &&
+              poison_damage_per_tick >= 0.0f &&
+              poison_damage_per_tick <= 10000.0f
+        : poison_remaining_ticks == 0 && poison_damage_per_tick == 0.0f;
+    const bool webbed_payload_valid = webbed_requested
+        ? webbed_remaining_ticks > 0 &&
+              webbed_remaining_ticks <=
+                  multiplayer::kParticipantWebbedMaxDurationTicks &&
+              std::isfinite(webbed_strength) &&
+              webbed_strength > 0.0f &&
+              webbed_strength <= multiplayer::kParticipantWebbedMaxStrength
+        : webbed_remaining_ticks == 0 && webbed_strength == 0.0f;
+    const bool magic_shield_requested =
+        (correction_flags &
+         multiplayer::ParticipantVitalsCorrectionFlagMagicShieldState) != 0;
+    const bool magic_shield_payload_zero =
+        magic_shield_absorb_remaining == 0.0f &&
+        magic_shield_absorb_capacity == 0.0f &&
+        magic_shield_explosion_fraction == 0.0f &&
+        magic_shield_hit_flash == 0.0f;
+    const bool magic_shield_payload_active =
+        std::isfinite(magic_shield_absorb_remaining) &&
+        std::isfinite(magic_shield_absorb_capacity) &&
+        std::isfinite(magic_shield_explosion_fraction) &&
+        std::isfinite(magic_shield_hit_flash) &&
+        magic_shield_absorb_remaining > 0.001f &&
+        magic_shield_absorb_capacity >= magic_shield_absorb_remaining &&
+        magic_shield_explosion_fraction >= 0.0f &&
+        magic_shield_hit_flash >= 0.0f &&
+        magic_shield_hit_flash <= 1.0f;
+    const bool magic_shield_payload_valid = magic_shield_requested
+        ? magic_shield_payload_zero || magic_shield_payload_active
+        : magic_shield_payload_zero;
     if (correction_sequence == 0 ||
-        duration_ticks <= 0 ||
-        duration_ticks > multiplayer::kParticipantPoisonMaxDurationTicks ||
-        !std::isfinite(damage_per_tick) ||
-        damage_per_tick < 0.0f ||
-        damage_per_tick > 10000.0f) {
+        (requested_statuses == 0 && !magic_shield_requested) ||
+        (transient_status_flags & ~kCorrectableStatusMask) != 0 ||
+        (correction_flags &
+         ~multiplayer::kParticipantVitalsCorrectionKnownFlags) != 0 ||
+        !poison_payload_valid ||
+        !webbed_payload_valid ||
+        !magic_shield_payload_valid) {
         if (error_message != nullptr) {
-            *error_message = "Local-player poison correction is invalid.";
+            *error_message =
+                "Local-player native vitals correction is invalid.";
         }
         return false;
     }
 
-    PendingLocalPlayerPoisonCorrection request{};
+    PendingLocalPlayerVitalsCorrection request{};
     request.correction_sequence = correction_sequence;
-    request.duration_ticks = duration_ticks;
-    request.damage_per_tick = damage_per_tick;
+    request.transient_status_flags = requested_statuses;
+    request.poison_remaining_ticks = poison_remaining_ticks;
+    request.poison_damage_per_tick = poison_damage_per_tick;
+    request.webbed_remaining_ticks = webbed_remaining_ticks;
+    request.webbed_strength = webbed_strength;
+    request.correction_flags = correction_flags;
+    request.magic_shield_absorb_remaining = magic_shield_absorb_remaining;
+    request.magic_shield_absorb_capacity = magic_shield_absorb_capacity;
+    request.magic_shield_explosion_fraction =
+        magic_shield_explosion_fraction;
+    request.magic_shield_hit_flash = magic_shield_hit_flash;
 
     std::lock_guard<std::mutex> lock(
         g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
     auto& pending =
-        g_gameplay_keyboard_injection.pending_local_player_poison_corrections;
+        g_gameplay_keyboard_injection
+            .pending_local_player_vitals_corrections;
     if (!pending.empty()) {
         auto& existing = pending.back();
         if (multiplayer::IsPacketSequenceNewer(
@@ -287,15 +356,48 @@ bool QueueLocalPlayerPoisonCorrection(
                 existing.correction_sequence)) {
             existing.correction_sequence = request.correction_sequence;
         }
-        existing.duration_ticks =
-            (std::max)(existing.duration_ticks, request.duration_ticks);
-        existing.damage_per_tick =
-            (std::max)(existing.damage_per_tick, request.damage_per_tick);
+        existing.transient_status_flags |= request.transient_status_flags;
+        existing.poison_remaining_ticks = (std::max)(
+            existing.poison_remaining_ticks,
+            request.poison_remaining_ticks);
+        existing.poison_damage_per_tick = (std::max)(
+            existing.poison_damage_per_tick,
+            request.poison_damage_per_tick);
+        existing.webbed_remaining_ticks = (std::max)(
+            existing.webbed_remaining_ticks,
+            request.webbed_remaining_ticks);
+        existing.webbed_strength = (std::max)(
+            existing.webbed_strength,
+            request.webbed_strength);
+        const bool request_magic_shield =
+            (request.correction_flags &
+             multiplayer::ParticipantVitalsCorrectionFlagMagicShieldState) !=
+            0;
+        const bool existing_magic_shield =
+            (existing.correction_flags &
+             multiplayer::ParticipantVitalsCorrectionFlagMagicShieldState) !=
+            0;
+        if (request_magic_shield &&
+            (!existing_magic_shield ||
+             request.magic_shield_absorb_remaining <
+                 existing.magic_shield_absorb_remaining)) {
+            existing.correction_flags |=
+                multiplayer::ParticipantVitalsCorrectionFlagMagicShieldState;
+            existing.magic_shield_absorb_remaining =
+                request.magic_shield_absorb_remaining;
+            existing.magic_shield_absorb_capacity =
+                request.magic_shield_absorb_capacity;
+            existing.magic_shield_explosion_fraction =
+                request.magic_shield_explosion_fraction;
+            existing.magic_shield_hit_flash =
+                request.magic_shield_hit_flash;
+        }
         return true;
     }
     if (pending.size() >= kQueuedGameplayWorldActionLimit) {
         if (error_message != nullptr) {
-            *error_message = "The local-player poison correction queue is full.";
+            *error_message =
+                "The local-player native vitals correction queue is full.";
         }
         return false;
     }
@@ -354,6 +456,7 @@ bool QueueNativeMagicHitBehaviorProbe(
     float projectile_damage,
     float magic_damage,
     std::uint32_t attempts,
+    std::uint64_t target_participant_id,
     std::uint64_t* request_serial,
     std::string* error_message) {
     if (request_serial != nullptr) {
@@ -404,6 +507,7 @@ bool QueueNativeMagicHitBehaviorProbe(
     request.projectile_damage = projectile_damage;
     request.magic_damage = magic_damage;
     request.attempts = attempts;
+    request.target_participant_id = target_participant_id;
     pending.push_back(request);
     if (request_serial != nullptr) {
         *request_serial = request.request_serial;
@@ -573,92 +677,4 @@ bool GetNativeStaffEffectProbeResult(
     return true;
 }
 
-bool QueueGameplayStartWaves(std::string* error_message) {
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
-    if (!g_gameplay_keyboard_injection.initialized) {
-        if (error_message != nullptr) {
-            *error_message = "Gameplay action pump is not initialized.";
-        }
-        return false;
-    }
-
-    uintptr_t scene_address = 0;
-    if (!TryResolveCurrentGameplayScene(&scene_address) || scene_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Gameplay scene is not active.";
-        }
-        return false;
-    }
-
-    uintptr_t arena_address = 0;
-    if (!TryResolveArena(&arena_address) || arena_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Arena is not active.";
-        }
-        return false;
-    }
-
-    g_gameplay_keyboard_injection.pending_start_waves_requests.exchange(1, std::memory_order_acq_rel);
-    g_gameplay_keyboard_injection.start_waves_retry_not_before_ms.store(0, std::memory_order_release);
-
-    ArenaWaveStartState arena_state;
-    const bool have_arena_state = TryReadArenaWaveStartState(arena_address, &arena_state);
-    Log(
-        "Queued gameplay start_waves request. scene=" + HexString(scene_address) +
-        " arena=" + HexString(arena_address) +
-        " start_waves=" + HexString(kArenaStartWaves) +
-        " state=" + (have_arena_state ? DescribeArenaWaveStartState(arena_state) : std::string("unreadable")));
-    return true;
-}
-
-bool QueueGameplayEnableCombatPrelude(std::string* error_message) {
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
-    if (!g_gameplay_keyboard_injection.initialized) {
-        if (error_message != nullptr) {
-            *error_message = "Gameplay action pump is not initialized.";
-        }
-        return false;
-    }
-
-    uintptr_t scene_address = 0;
-    if (!TryResolveCurrentGameplayScene(&scene_address) || scene_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Gameplay scene is not active.";
-        }
-        return false;
-    }
-
-    uintptr_t arena_address = 0;
-    if (!TryResolveArena(&arena_address) || arena_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Arena is not active.";
-        }
-        return false;
-    }
-
-    ArenaWaveStartState arena_state;
-    const bool have_arena_state = TryReadArenaWaveStartState(arena_address, &arena_state);
-    if (have_arena_state && arena_state.combat_wave_index > 0) {
-        if (error_message != nullptr) {
-            *error_message = "Arena waves are already active; refusing to switch to prelude-only combat state.";
-        }
-        return false;
-    }
-
-    g_gameplay_keyboard_injection.pending_enable_combat_prelude_requests.exchange(
-        1,
-        std::memory_order_acq_rel);
-
-    Log(
-        "Queued gameplay combat-prelude request. scene=" + HexString(scene_address) +
-        " arena=" + HexString(arena_address) +
-        " prelude_primary=" + HexString(kGameplayCombatPreludePrimaryMode) +
-        " prelude_secondary=" + HexString(kGameplayCombatPreludeSecondaryMode) +
-        " prelude_dispatch=" + HexString(kArenaCombatPreludeDispatch) +
-        " state=" + (have_arena_state ? DescribeArenaWaveStartState(arena_state) : std::string("unreadable")));
-    return true;
-}
+#include "public_api_combat_control_queues.inl"

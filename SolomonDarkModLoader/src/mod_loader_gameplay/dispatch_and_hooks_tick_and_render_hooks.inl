@@ -6,6 +6,8 @@
 #include "gameplay_hooks/powerup_pickup_hook.inl"
 #include "gameplay_hooks/player_mana_hooks.inl"
 #include "gameplay_hooks/player_cast_hooks.inl"
+#include "gameplay_hooks/player_damage_authority_hook.inl"
+#include "gameplay_hooks/webbed_authority_hook.inl"
 #include "gameplay_hooks/player_control_hooks.inl"
 #include "gameplay_hooks/gameplay_hud_hooks.inl"
 #include "gameplay_hooks/actor_tick_hooks.inl"

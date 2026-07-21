@@ -95,6 +95,7 @@
     <ClInclude Include="include\lua_engine_events.h" />
     <ClInclude Include="include\memory_access.h" />
     <ClInclude Include="include\mod_loader.h" />
+    <ClInclude Include="include\mod_loader_hub_state.inl" />
     <ClInclude Include="include\mod_loader_participant_gameplay_state.inl" />
     <ClInclude Include="include\mod_loader_gameplay_api.inl" />
     <ClInclude Include="include\multiplayer_foundation.h" />
@@ -294,6 +295,9 @@
     <ClInclude Include="src\mod_loader_gameplay\core\participant_snapshot_types.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\run_generation_seed_helpers.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\runtime_request_state.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\core\scoped_actor_cast_origin_context.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\core\scoped_secondary_cursor_world_placement_context.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\core\scoped_actor_slot_context.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\seh_safe_call_declarations.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\standalone_owner_repair.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\standalone_progression_slot_context.inl" />
@@ -310,7 +314,7 @@
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_standalone_wizard.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_gameplay_thread_dispatch.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_mouse_refresh_hook.inl" />
-    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_poison_actions.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_participant_vitals_actions.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_pump_loop.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_request_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_standalone_wizard_tracking.inl" />
@@ -331,6 +335,8 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\powerup_pickup_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_mana_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_damage_authority_hook.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\webbed_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks_effect_and_dispatch.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_control_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\hub_service_runtime.inl" />
@@ -345,6 +351,7 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_inventory.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_combat_control_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_gameplay_action_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_keyboard_injection.inl" />
@@ -376,6 +383,12 @@
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_clone_source.inl" />
     <ClInclude Include="src\mod_loader_gameplay\standalone_materialization_wizard_resources.inl" />
     <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation\actor_binding_and_hub_presentation.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation\apply_snapshot.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation\run_enemy_health_and_status.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation\run_enemy_targeting_and_retirement.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation\run_lifecycle_and_materialization.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\world_snapshot_reconciliation\state_timeline_and_formation.inl" />
     <ClInclude Include="src\multiplayer_local_transport\air_chain_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\cast_target_resolution.inl" />
     <ClInclude Include="src\multiplayer_local_transport\client_enemy_damage_sync.inl" />
@@ -385,6 +398,7 @@
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_dispatch.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_participant_state_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\shared_gameplay_pause_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_snapshot_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_barrier_authority.inl" />
@@ -426,6 +440,11 @@
     <ClInclude Include="src\run_lifecycle\enemy_tracking_and_reset.inl" />
     <ClInclude Include="src\run_lifecycle\public_api_and_install.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks.inl" />
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\actor_world_pause_hook.inl" />
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\enemy_death_reward_level_up_hooks.inl" />
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\manual_enemy_spawning.inl" />
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\run_transition_hooks.inl" />
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\wave_and_enemy_spawn_hooks.inl" />
     <ClInclude Include="src\run_lifecycle\spell_cast_hooks.inl" />
     <ClInclude Include="src\run_lifecycle\state_and_targets.inl" />
   </ItemGroup>

@@ -409,6 +409,9 @@ struct QueuedLocalCastEvent {
     bool has_aim_target = false;
     float aim_target_x = 0.0f;
     float aim_target_y = 0.0f;
+    bool has_cursor_world_placement = false;
+    float cursor_world_x = 0.0f;
+    float cursor_world_y = 0.0f;
 };
 
 struct QueuedHostParticipantVitalsCorrection {
@@ -418,6 +421,13 @@ struct QueuedHostParticipantVitalsCorrection {
     std::uint8_t transient_status_flags = 0;
     std::int32_t poison_remaining_ticks = 0;
     float poison_damage_per_tick = 0.0f;
+    std::int32_t webbed_remaining_ticks = 0;
+    float webbed_strength = 0.0f;
+    std::uint8_t correction_flags = 0;
+    float magic_shield_absorb_remaining = 0.0f;
+    float magic_shield_absorb_capacity = 0.0f;
+    float magic_shield_explosion_fraction = 0.0f;
+    float magic_shield_hit_flash = 0.0f;
 };
 
 struct ActiveLocalCastInput {
@@ -672,6 +682,15 @@ struct ClientHostRunExitFollow {
     std::uint32_t menu_request_count = 0;
 };
 
+struct HostMenuPauseRequestState {
+    std::uint32_t request_epoch = 0;
+    std::uint32_t run_nonce = 0;
+    bool requested = false;
+    bool timed_out_until_release = false;
+    std::uint64_t deadline_ms = 0;
+    std::uint64_t last_update_ms = 0;
+};
+
 #include "multiplayer_local_transport/world_snapshot_fragmentation.inl"
 
 struct LocalTransportState {
@@ -696,6 +715,9 @@ struct LocalTransportState {
     std::uint64_t last_spell_effect_snapshot_send_ms = 0;
     std::uint64_t last_client_host_run_request_ms = 0;
     ClientHostRunExitFollow client_host_run_exit_follow;
+    bool local_menu_pause_requested = false;
+    std::uint32_t local_menu_pause_request_epoch = 0;
+    std::string local_menu_pause_surface_id;
     std::uint32_t next_sequence = 1;
     std::uint32_t next_world_snapshot_id = 1;
     std::uint64_t local_session_nonce = 0;
@@ -773,6 +795,8 @@ struct LocalTransportState {
         native_applied_powerup_result_drop_ids;
     std::unordered_map<std::uint64_t, PendingHostLootPickup>
         pending_host_loot_pickups_by_drop_id;
+    std::unordered_map<std::uint64_t, HostMenuPauseRequestState>
+        host_menu_pause_requests_by_participant;
     ActiveLocalCastInput active_local_cast_input;
     std::vector<PendingAirChainTerminal> pending_air_chain_terminals;
     std::uint32_t next_hub_world_actor_serial = 1;
@@ -1067,6 +1091,29 @@ bool ApplyAuthoritativeLevelUpWaitStatus(
     bool timed_out,
     std::vector<std::uint64_t> waiting_participant_ids,
     std::uint64_t now_ms);
+void RefreshLocalMenuPauseRequest(std::uint64_t now_ms);
+void RefreshHostSharedGameplayPause(std::uint64_t now_ms);
+void PopulateSharedGameplayPausePacketFields(
+    const RuntimeState& runtime_state,
+    StatePacket* packet);
+void PopulateSharedGameplayPausePacketFields(
+    const RuntimeState& runtime_state,
+    ParticipantFramePacket* packet);
+void ApplyHostMenuPauseRequest(
+    std::uint64_t participant_id,
+    std::uint32_t run_nonce,
+    std::uint32_t request_epoch,
+    bool requested,
+    std::uint64_t now_ms);
+void ApplyAuthoritativeSharedGameplayPause(
+    std::uint64_t authority_participant_id,
+    std::uint32_t run_nonce,
+    std::uint64_t origin_participant_id,
+    std::uint32_t deadline_remaining_ms,
+    bool pause_active,
+    bool timed_out,
+    std::uint64_t now_ms);
+bool ShouldPauseForSharedGameplayMenu();
 void MarkHostLevelUpBarrierParticipantResolved(
     const LevelUpChoiceResultPacket& result,
     bool auto_picked,
@@ -1117,6 +1164,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/outgoing_cast_packet_sync.inl"
 #include "multiplayer_local_transport/client_enemy_damage_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_sync.inl"
+#include "multiplayer_local_transport/shared_gameplay_pause_sync.inl"
 #include "multiplayer_local_transport/incoming_cast_packet_sync.inl"
 #include "multiplayer_local_transport/incoming_snapshot_packet_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_dispatch.inl"

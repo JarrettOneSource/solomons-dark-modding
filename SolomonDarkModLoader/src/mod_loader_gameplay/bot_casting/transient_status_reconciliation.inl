@@ -84,211 +84,128 @@ bool DestroyUnownedNativeModifier(
         exception_code);
 }
 
-bool InstallReplicatedPoisonModifier(
-    uintptr_t actor_address,
-    std::int32_t desired_duration_ticks,
-    std::string* error_message,
-    float damage_per_tick = 0.0f,
-    std::int8_t source_slot = 1,
-    bool duration_already_resisted = true) {
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
-    if (actor_address == 0 ||
-        desired_duration_ticks <= 0 ||
-        !std::isfinite(damage_per_tick) ||
-        damage_per_tick < 0.0f ||
-        damage_per_tick > 10000.0f) {
-        if (error_message != nullptr) {
-            *error_message = "invalid replicated poison install request";
-        }
+bool CreateNativeModifierByType(
+    std::uint32_t type_id,
+    std::string_view label,
+    uintptr_t* modifier_address,
+    std::string* error_message) {
+    if (modifier_address == nullptr || type_id == 0) {
         return false;
     }
-
+    *modifier_address = 0;
     auto& memory = ProcessMemory::Instance();
     const auto factory_address =
         memory.ResolveGameAddressOrZero(kGameObjectFactory);
     const auto factory_context_address =
         memory.ResolveGameAddressOrZero(kGameObjectFactoryContextGlobal);
-    const auto operator_new_address =
-        memory.ResolveGameAddressOrZero(kGameOperatorNew);
-    const auto damage_target_address =
-        memory.ResolveGameAddressOrZero(kDamageContextTargetGlobal);
+    DWORD exception_code = 0;
     if (factory_address == 0 ||
         factory_context_address == 0 ||
-        operator_new_address == 0 ||
-        damage_target_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "replicated poison native seams unavailable";
-        }
-        return false;
-    }
-
-    uintptr_t poison_modifier = 0;
-    DWORD exception_code = 0;
-    if (!CallGameObjectFactorySafe(
+        !CallGameObjectFactorySafe(
             factory_address,
             factory_context_address,
-            static_cast<int>(kNativePoisonModifierTypeId),
-            &poison_modifier,
+            static_cast<int>(type_id),
+            modifier_address,
             &exception_code) ||
-        poison_modifier == 0) {
+        *modifier_address == 0) {
         if (error_message != nullptr) {
-            *error_message =
-                "Mod_Poisoned factory failed seh=0x" +
-                HexString(exception_code);
+            *error_message = std::string(label) +
+                " factory failed seh=0x" + HexString(exception_code);
         }
         return false;
     }
+    return true;
+}
 
-    const bool seeded =
-        memory.TryWriteField(
-            poison_modifier,
-            kNativeModifierDurationTicksOffset,
-            desired_duration_ticks) &&
-        memory.TryWriteField(
-            poison_modifier,
-            kNativePoisonDamagePerTickOffset,
-            damage_per_tick) &&
-        memory.TryWriteField(
-            poison_modifier,
-            kNativePoisonSourceSlotOffset,
-            source_slot);
-    if (!seeded) {
-        (void)DestroyUnownedNativeModifier(poison_modifier, &exception_code);
-        if (error_message != nullptr) {
-            *error_message = "failed to seed replicated Mod_Poisoned";
-        }
-        return false;
-    }
-
+bool ApplyNativeModifierToActor(
+    uintptr_t modifier_address,
+    uintptr_t actor_address,
+    std::string_view label,
+    std::string* error_message) {
+    auto& memory = ProcessMemory::Instance();
     uintptr_t modifier_vtable = 0;
     uintptr_t apply_address = 0;
-    if (!memory.TryReadValue(poison_modifier, &modifier_vtable) ||
+    const auto damage_target_address =
+        memory.ResolveGameAddressOrZero(kDamageContextTargetGlobal);
+    if (modifier_address == 0 || actor_address == 0 ||
+        damage_target_address == 0 ||
+        !memory.TryReadValue(modifier_address, &modifier_vtable) ||
         modifier_vtable == 0 ||
         !memory.TryReadValue(modifier_vtable + 0x24, &apply_address) ||
         apply_address == 0 ||
         !memory.IsExecutableRange(apply_address, 1)) {
-        (void)DestroyUnownedNativeModifier(poison_modifier, &exception_code);
         if (error_message != nullptr) {
-            *error_message = "Mod_Poisoned apply vfunc unavailable";
+            *error_message = std::string(label) + " apply vfunc unavailable";
         }
         return false;
     }
 
-    // Replicated durations have already paid the owner's Resist Poison
-    // reduction. Suppress the native transform for those installs so observer
-    // and owner-correction clones are not reduced a second time. The queued
-    // behavior probe deliberately leaves the transform enabled.
-    uintptr_t progression_address = 0;
-    float saved_resist_poison = 0.0f;
-    bool saved_resist_poison_valid =
-        kProgressionResistPoisonFractionOffset != 0 &&
-        TryResolveActorProgressionRuntime(
-            actor_address,
-            &progression_address) &&
-        progression_address != 0 &&
-        memory.TryReadField(
-            progression_address,
-            kProgressionResistPoisonFractionOffset,
-            &saved_resist_poison);
     uintptr_t saved_damage_target = 0;
-    const bool saved_damage_target_valid =
-        memory.TryReadValue(damage_target_address, &saved_damage_target);
-    bool context_ready =
-        saved_damage_target_valid &&
+    const bool context_ready =
+        memory.TryReadValue(damage_target_address, &saved_damage_target) &&
         memory.TryWriteValue(damage_target_address, actor_address);
-    if (duration_already_resisted && saved_resist_poison_valid) {
-        context_ready =
-            memory.TryWriteField(
-                progression_address,
-                kProgressionResistPoisonFractionOffset,
-                0.0f) &&
-            context_ready;
-    }
-
     std::uint32_t apply_result = 0;
+    DWORD exception_code = 0;
     const bool applied =
         context_ready &&
         CallNativeModifierApplySafe(
             apply_address,
-            poison_modifier,
+            modifier_address,
             actor_address,
             &apply_result,
             &exception_code);
-    if (duration_already_resisted && saved_resist_poison_valid) {
-        (void)memory.TryWriteField(
-            progression_address,
-            kProgressionResistPoisonFractionOffset,
-            saved_resist_poison);
-    }
-    if (saved_damage_target_valid) {
+    if (context_ready) {
         (void)memory.TryWriteValue(
             damage_target_address,
             saved_damage_target);
     }
     if (!applied || apply_result == 0) {
-        (void)DestroyUnownedNativeModifier(poison_modifier, &exception_code);
         if (error_message != nullptr) {
-            *error_message =
-                "Mod_Poisoned OnApply rejected replicated status seh=0x" +
+            *error_message = std::string(label) +
+                " OnApply rejected status seh=0x" +
                 HexString(exception_code);
         }
         return false;
     }
+    return true;
+}
 
-    std::int32_t finalized_duration_ticks = 0;
-    const bool duration_finalized = duration_already_resisted
-        ? memory.TryWriteField(
-              poison_modifier,
-              kNativeModifierDurationTicksOffset,
-              desired_duration_ticks)
-        : memory.TryReadField(
-              poison_modifier,
-              kNativeModifierDurationTicksOffset,
-              &finalized_duration_ticks) &&
-              finalized_duration_ticks > 0 &&
-              finalized_duration_ticks <=
-                  multiplayer::kParticipantPoisonMaxDurationTicks;
-    // Observer clones pass zero damage; an owner correction carries the
-    // already-resisted native damage captured by the host mirror.
-    if (!duration_finalized ||
-        !memory.TryWriteField(
-            poison_modifier,
-            kNativePoisonDamagePerTickOffset,
-            damage_per_tick) ||
-        !memory.TryWriteField(
-            poison_modifier,
-            kNativePoisonSourceSlotOffset,
-            source_slot)) {
-        (void)DestroyUnownedNativeModifier(poison_modifier, &exception_code);
-        if (error_message != nullptr) {
-            *error_message = "failed to finalize replicated Mod_Poisoned";
-        }
-        return false;
-    }
-
+bool AttachOwnedNativeModifierToActor(
+    uintptr_t modifier_address,
+    uintptr_t actor_address,
+    std::string_view label,
+    std::string* error_message) {
+    auto& memory = ProcessMemory::Instance();
+    const auto operator_new_address =
+        memory.ResolveGameAddressOrZero(kGameOperatorNew);
+    DWORD exception_code = 0;
     uintptr_t control_block = 0;
-    if (!CallGameOperatorNewSafe(
+    if (operator_new_address == 0 ||
+        !CallGameOperatorNewSafe(
             operator_new_address,
             sizeof(std::uint32_t) * 2,
             &control_block,
             &exception_code) ||
         control_block == 0 ||
-        !memory.TryWriteValue(control_block, poison_modifier) ||
+        !memory.TryWriteValue(control_block, modifier_address) ||
         !memory.TryWriteValue(
             control_block + sizeof(std::uint32_t),
             std::int32_t{1})) {
         if (control_block != 0) {
-            const auto free_address = memory.ResolveGameAddressOrZero(kGameFree);
+            const auto free_address =
+                memory.ResolveGameAddressOrZero(kGameFree);
             (void)CallGameFreeSafe(
                 free_address,
                 control_block,
                 &exception_code);
         }
-        (void)DestroyUnownedNativeModifier(poison_modifier, &exception_code);
+        (void)DestroyUnownedNativeModifier(
+            modifier_address,
+            &exception_code);
         if (error_message != nullptr) {
-            *error_message = "failed to allocate replicated poison smart pointer";
+            *error_message = std::string(label) +
+                " smart-pointer allocation failed seh=0x" +
+                HexString(exception_code);
         }
         return false;
     }
@@ -311,37 +228,274 @@ bool InstallReplicatedPoisonModifier(
             modifier_list_address,
             control_block,
             &exception_code)) {
-        // The stock wrapper at 0x00624610 constructs and releases its own
-        // by-value smart pointer around the virtual list insertion. Release
-        // only our original local reference here.
-        (void)ReleaseSmartPointerWrapperSafe(control_block, &exception_code);
+        (void)ReleaseSmartPointerWrapperSafe(
+            control_block,
+            &exception_code);
         if (error_message != nullptr) {
-            *error_message =
-                "failed to insert replicated poison modifier seh=0x" +
+            *error_message = std::string(label) +
+                " list insertion failed seh=0x" +
                 HexString(exception_code);
         }
         return false;
     }
 
-    // The stock wrapper transfers the original reference into the list. Its
-    // two nested by-value temporaries balance internally, and the post-call
-    // count is exactly one: the list's ownership. Releasing here would leave
-    // a dangling modifier in PlayerActor's native list.
+    // The list owns the one remaining smart-pointer reference after its
+    // by-value insertion temporaries balance. Releasing here would leave a
+    // dangling modifier in the actor.
+    return true;
+}
 
-    std::uint8_t verified_flags = 0;
-    std::int32_t verified_duration = 0;
-    uintptr_t verified_modifier = 0;
+bool InstallReplicatedPoisonModifier(
+    uintptr_t actor_address,
+    std::int32_t desired_duration_ticks,
+    std::string* error_message,
+    float damage_per_tick = 0.0f,
+    std::int8_t source_slot = 1,
+    bool duration_already_resisted = true) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (actor_address == 0 ||
+        desired_duration_ticks <= 0 ||
+        desired_duration_ticks >
+            multiplayer::kParticipantPoisonMaxDurationTicks ||
+        !std::isfinite(damage_per_tick) ||
+        damage_per_tick < 0.0f ||
+        damage_per_tick > 10000.0f) {
+        if (error_message != nullptr) {
+            *error_message = "invalid replicated poison install request";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t poison_modifier = 0;
+    DWORD exception_code = 0;
+    if (!CreateNativeModifierByType(
+            kNativePoisonModifierTypeId,
+            "Mod_Poisoned",
+            &poison_modifier,
+            error_message)) {
+        return false;
+    }
+
+    const bool seeded =
+        memory.TryWriteField(
+            poison_modifier,
+            kNativeModifierDurationTicksOffset,
+            desired_duration_ticks) &&
+        memory.TryWriteField(
+            poison_modifier,
+            kNativePoisonDamagePerTickOffset,
+            damage_per_tick) &&
+        memory.TryWriteField(
+            poison_modifier,
+            kNativePoisonSourceSlotOffset,
+            source_slot);
+    if (!seeded) {
+        (void)DestroyUnownedNativeModifier(
+            poison_modifier,
+            &exception_code);
+        if (error_message != nullptr) {
+            *error_message = "failed to seed replicated Mod_Poisoned";
+        }
+        return false;
+    }
+
+    // Replicated durations have already paid the owner's Resist Poison
+    // reduction. Suppress that one native transform during owner correction.
+    uintptr_t progression_address = 0;
+    float saved_resist_poison = 0.0f;
+    const bool saved_resist_poison_valid =
+        kProgressionResistPoisonFractionOffset != 0 &&
+        TryResolveActorProgressionRuntime(
+            actor_address,
+            &progression_address) &&
+        progression_address != 0 &&
+        memory.TryReadField(
+            progression_address,
+            kProgressionResistPoisonFractionOffset,
+            &saved_resist_poison);
+    bool resist_suppressed = true;
+    if (duration_already_resisted && saved_resist_poison_valid) {
+        resist_suppressed = memory.TryWriteField(
+            progression_address,
+            kProgressionResistPoisonFractionOffset,
+            0.0f);
+    }
+    const bool applied =
+        resist_suppressed &&
+        ApplyNativeModifierToActor(
+            poison_modifier,
+            actor_address,
+            "Mod_Poisoned",
+            error_message);
+    if (duration_already_resisted && saved_resist_poison_valid) {
+        (void)memory.TryWriteField(
+            progression_address,
+            kProgressionResistPoisonFractionOffset,
+            saved_resist_poison);
+    }
+    if (!applied) {
+        (void)DestroyUnownedNativeModifier(
+            poison_modifier,
+            &exception_code);
+        return false;
+    }
+
+    std::int32_t finalized_duration_ticks = 0;
+    const bool duration_finalized = duration_already_resisted
+        ? memory.TryWriteField(
+              poison_modifier,
+              kNativeModifierDurationTicksOffset,
+              desired_duration_ticks)
+        : memory.TryReadField(
+              poison_modifier,
+              kNativeModifierDurationTicksOffset,
+              &finalized_duration_ticks) &&
+              finalized_duration_ticks > 0 &&
+              finalized_duration_ticks <=
+                  multiplayer::kParticipantPoisonMaxDurationTicks;
+    if (!duration_finalized ||
+        !memory.TryWriteField(
+            poison_modifier,
+            kNativePoisonDamagePerTickOffset,
+            damage_per_tick) ||
+        !memory.TryWriteField(
+            poison_modifier,
+            kNativePoisonSourceSlotOffset,
+            source_slot)) {
+        (void)DestroyUnownedNativeModifier(
+            poison_modifier,
+            &exception_code);
+        if (error_message != nullptr) {
+            *error_message = "failed to finalize replicated Mod_Poisoned";
+        }
+        return false;
+    }
+
+    if (!AttachOwnedNativeModifierToActor(
+            poison_modifier,
+            actor_address,
+            "Mod_Poisoned",
+            error_message)) {
+        return false;
+    }
+
+    NativeWizardTransientStatusState verified_state;
     const bool verified =
         TryReadWizardActorTransientStatusState(
             actor_address,
-            &verified_flags,
-            &verified_duration,
-            &verified_modifier) &&
-        verified_modifier == poison_modifier &&
-        (verified_flags &
+            &verified_state) &&
+        verified_state.poison_modifier_address == poison_modifier &&
+        (verified_state.flags &
          multiplayer::ParticipantTransientStatusFlagPoisoned) != 0;
     if (!verified && error_message != nullptr) {
         *error_message = "replicated poison modifier was not retained by actor";
+    }
+    return verified;
+}
+
+bool InstallReplicatedWebbedModifier(
+    uintptr_t actor_address,
+    std::int32_t desired_duration_ticks,
+    float strength,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (actor_address == 0 ||
+        desired_duration_ticks <= 0 ||
+        desired_duration_ticks >
+            multiplayer::kParticipantWebbedMaxDurationTicks ||
+        !std::isfinite(strength) ||
+        strength <= 0.0f ||
+        strength > multiplayer::kParticipantWebbedMaxStrength) {
+        if (error_message != nullptr) {
+            *error_message = "invalid replicated webbed install request";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t webbed_modifier = 0;
+    DWORD exception_code = 0;
+    if (!CreateNativeModifierByType(
+            kNativeWebbedModifierTypeId,
+            "Mod_Webbed",
+            &webbed_modifier,
+            error_message)) {
+        return false;
+    }
+
+    const bool seeded =
+        memory.TryWriteField(
+            webbed_modifier,
+            kNativeModifierDurationTicksOffset,
+            desired_duration_ticks) &&
+        memory.TryWriteField(
+            webbed_modifier,
+            kNativeWebbedStrengthOffset,
+            strength) &&
+        memory.TryWriteField(
+            webbed_modifier,
+            kNativeWebbedRequestedStrengthOffset,
+            strength);
+    if (!seeded ||
+        !ApplyNativeModifierToActor(
+            webbed_modifier,
+            actor_address,
+            "Mod_Webbed",
+            error_message)) {
+        (void)DestroyUnownedNativeModifier(
+            webbed_modifier,
+            &exception_code);
+        if (!seeded && error_message != nullptr) {
+            *error_message = "failed to seed replicated Mod_Webbed";
+        }
+        return false;
+    }
+
+    // Preserve the already-elapsed host-native values after the stock Apply
+    // wrapper initializes its working fields.
+    if (!memory.TryWriteField(
+            webbed_modifier,
+            kNativeModifierDurationTicksOffset,
+            desired_duration_ticks) ||
+        !memory.TryWriteField(
+            webbed_modifier,
+            kNativeWebbedStrengthOffset,
+            strength) ||
+        !memory.TryWriteField(
+            webbed_modifier,
+            kNativeWebbedRequestedStrengthOffset,
+            strength)) {
+        (void)DestroyUnownedNativeModifier(
+            webbed_modifier,
+            &exception_code);
+        if (error_message != nullptr) {
+            *error_message = "failed to finalize replicated Mod_Webbed";
+        }
+        return false;
+    }
+    if (!AttachOwnedNativeModifierToActor(
+            webbed_modifier,
+            actor_address,
+            "Mod_Webbed",
+            error_message)) {
+        return false;
+    }
+
+    NativeWizardTransientStatusState verified_state;
+    const bool verified =
+        TryReadWizardActorTransientStatusState(
+            actor_address,
+            &verified_state) &&
+        verified_state.webbed_modifier_address == webbed_modifier &&
+        (verified_state.flags &
+         multiplayer::ParticipantTransientStatusFlagWebbed) != 0;
+    if (!verified && error_message != nullptr) {
+        *error_message = "replicated webbed modifier was not retained by actor";
     }
     return verified;
 }

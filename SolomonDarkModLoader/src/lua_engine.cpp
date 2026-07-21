@@ -32,6 +32,7 @@ namespace sdmod {
 namespace lua_exec_diag {
 
 std::atomic<std::uint64_t> g_last_endscene_ms{0};
+std::atomic<std::uint64_t> g_endscene_generation{0};
 std::atomic<std::uint64_t> g_last_pump_enter_ms{0};
 std::atomic<std::uint64_t> g_last_pump_locked_ms{0};
 std::atomic<std::uint64_t> g_last_lua_locked_ms{0};

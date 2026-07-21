@@ -74,15 +74,20 @@ NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
             progression_address,
             kProgressionMaxHpOffset,
             &native_max_hp);
-    std::uint8_t native_transient_flags = 0;
-    std::int32_t native_poison_remaining_ticks = 0;
-    uintptr_t native_poison_modifier = 0;
+    NativeWizardTransientStatusState native_transient_state;
     const bool native_transient_readable =
         TryReadWizardActorTransientStatusState(
             actor_address,
-            &native_transient_flags,
-            &native_poison_remaining_ticks,
-            &native_poison_modifier);
+            &native_transient_state);
+    const auto native_transient_flags = native_transient_state.flags;
+    const auto native_poison_remaining_ticks =
+        native_transient_state.poison_remaining_ticks;
+    const auto native_poison_modifier =
+        native_transient_state.poison_modifier_address;
+    const auto native_webbed_remaining_ticks =
+        native_transient_state.webbed_remaining_ticks;
+    const auto native_webbed_strength =
+        native_transient_state.webbed_strength;
     float native_poison_damage_per_tick = 0.0f;
     const bool native_poison_damage_readable =
         native_poison_modifier != 0 &&
@@ -134,18 +139,55 @@ NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
         native_poison_source_readable &&
         (native_poison_source_slot != 1 ||
          native_poison_damage_per_tick > 0.000001f);
-    if (native_damage_observed || native_poison_observed) {
+    const bool native_webbed_observed =
+        native_transient_readable &&
+        (native_transient_flags &
+         multiplayer::ParticipantTransientStatusFlagWebbed) != 0 &&
+        (participant->runtime.transient_status_flags &
+         multiplayer::ParticipantTransientStatusFlagWebbed) == 0 &&
+        native_webbed_remaining_ticks > 0 &&
+        std::isfinite(native_webbed_strength) &&
+        native_webbed_strength > 0.0f &&
+        native_webbed_strength <=
+            multiplayer::kParticipantWebbedMaxStrength &&
+        !binding->native_remote_webbed_owner_acknowledged &&
+        (!binding->native_remote_webbed_authority_pending ||
+         static_cast<std::uint64_t>(GetTickCount64()) -
+                 binding->native_remote_webbed_authority_pending_since_ms >=
+             2000);
+    if (native_damage_observed ||
+        native_poison_observed ||
+        native_webbed_observed) {
+        std::uint8_t corrected_status_flags = 0;
+        if (native_poison_observed) {
+            corrected_status_flags |=
+                multiplayer::ParticipantTransientStatusFlagPoisoned;
+        }
+        if (native_webbed_observed) {
+            corrected_status_flags |=
+                multiplayer::ParticipantTransientStatusFlagWebbed;
+            binding->native_remote_webbed_authority_pending = true;
+            binding->native_remote_webbed_authority_pending_since_ms =
+                static_cast<std::uint64_t>(GetTickCount64());
+        }
         multiplayer::QueueHostParticipantVitalsCorrection(
             binding->bot_id,
             native_damage_observed ? native_hp : expected_hp,
             native_max_matches_last_write
                 ? native_max_hp
                 : participant->runtime.life_max,
-            native_poison_observed ? native_transient_flags : 0,
+            corrected_status_flags,
             native_poison_observed ? native_poison_remaining_ticks : 0,
             native_poison_observed && native_poison_damage_readable
                 ? native_poison_damage_per_tick
-                : 0.0f);
+                : 0.0f,
+            native_webbed_observed ? native_webbed_remaining_ticks : 0,
+            native_webbed_observed ? native_webbed_strength : 0.0f,
+            0,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f);
     }
 
     if (std::isfinite(participant->runtime.life_max) &&

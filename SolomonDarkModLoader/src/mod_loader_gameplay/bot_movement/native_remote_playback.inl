@@ -45,6 +45,9 @@ bool RefreshNativeRemoteParticipantTransformTarget(
     if (participant == nullptr || !multiplayer::IsRemoteParticipant(*participant)) {
         binding->replicated_transform_valid = false;
         binding->replicated_presentation_valid = false;
+        binding->replicated_movement_intent_x = 0.0f;
+        binding->replicated_movement_intent_y = 0.0f;
+        binding->native_remote_magic_shield_authority_pending = false;
         return false;
     }
 
@@ -53,6 +56,8 @@ bool RefreshNativeRemoteParticipantTransformTarget(
         !participant->runtime.transform_valid) {
         binding->replicated_transform_valid = false;
         binding->replicated_presentation_valid = false;
+        binding->replicated_movement_intent_x = 0.0f;
+        binding->replicated_movement_intent_y = 0.0f;
         return false;
     }
 
@@ -64,6 +69,8 @@ bool RefreshNativeRemoteParticipantTransformTarget(
             &transform_sample)) {
         binding->replicated_transform_valid = false;
         binding->replicated_presentation_valid = false;
+        binding->replicated_movement_intent_x = 0.0f;
+        binding->replicated_movement_intent_y = 0.0f;
         return false;
     }
 
@@ -72,6 +79,10 @@ bool RefreshNativeRemoteParticipantTransformTarget(
     binding->replicated_target_y = transform_sample.position_y;
     binding->replicated_target_heading =
         NormalizeWizardActorHeadingForWrite(transform_sample.heading);
+    binding->replicated_movement_intent_x =
+        participant->runtime.movement_intent_x;
+    binding->replicated_movement_intent_y =
+        participant->runtime.movement_intent_y;
     binding->replicated_presentation_valid = transform_sample.presentation_flags != 0;
     binding->replicated_anim_drive_state = transform_sample.anim_drive_state;
     binding->replicated_presentation_flags = transform_sample.presentation_flags;
@@ -104,10 +115,34 @@ bool RefreshNativeRemoteParticipantTransformTarget(
     binding->replicated_render_drive_stride = transform_sample.render_drive_stride;
     binding->replicated_render_advance_rate = transform_sample.render_advance_rate;
     binding->replicated_render_advance_phase = transform_sample.render_advance_phase;
-    binding->replicated_magic_shield_absorb_remaining = transform_sample.magic_shield_absorb_remaining;
-    binding->replicated_magic_shield_absorb_capacity = transform_sample.magic_shield_absorb_capacity;
-    binding->replicated_magic_shield_explosion_fraction = transform_sample.magic_shield_explosion_fraction;
-    binding->replicated_magic_shield_hit_flash = transform_sample.magic_shield_hit_flash;
+    constexpr float kMagicShieldAuthorityMatchEpsilon = 0.05f;
+    const bool authoritative_magic_shield_matches_runtime =
+        std::fabs(
+            transform_sample.magic_shield_absorb_remaining -
+            binding->replicated_magic_shield_absorb_remaining) <=
+            kMagicShieldAuthorityMatchEpsilon &&
+        std::fabs(
+            transform_sample.magic_shield_absorb_capacity -
+            binding->replicated_magic_shield_absorb_capacity) <=
+            kMagicShieldAuthorityMatchEpsilon &&
+        std::fabs(
+            transform_sample.magic_shield_explosion_fraction -
+            binding->replicated_magic_shield_explosion_fraction) <=
+            kMagicShieldAuthorityMatchEpsilon;
+    if (binding->native_remote_magic_shield_authority_pending &&
+        authoritative_magic_shield_matches_runtime) {
+        binding->native_remote_magic_shield_authority_pending = false;
+    }
+    if (!binding->native_remote_magic_shield_authority_pending) {
+        binding->replicated_magic_shield_absorb_remaining =
+            transform_sample.magic_shield_absorb_remaining;
+        binding->replicated_magic_shield_absorb_capacity =
+            transform_sample.magic_shield_absorb_capacity;
+        binding->replicated_magic_shield_explosion_fraction =
+            transform_sample.magic_shield_explosion_fraction;
+        binding->replicated_magic_shield_hit_flash =
+            transform_sample.magic_shield_hit_flash;
+    }
     binding->replicated_transform_packet_ms = transform_sample.received_ms;
     return true;
 }
@@ -597,29 +632,30 @@ bool ApplyNativeRemoteParticipantPresentationState(
             kActorRenderAdvancePhaseOffset,
             binding->replicated_render_advance_phase) || wrote;
     }
-    if (std::isfinite(binding->replicated_magic_shield_absorb_remaining)) {
-        wrote = memory.TryWriteField(
-            actor_address,
-            kActorMagicShieldAbsorbRemainingOffset,
-            binding->replicated_magic_shield_absorb_remaining) || wrote;
-    }
-    if (std::isfinite(binding->replicated_magic_shield_absorb_capacity)) {
-        wrote = memory.TryWriteField(
-            actor_address,
-            kActorMagicShieldAbsorbCapacityOffset,
-            binding->replicated_magic_shield_absorb_capacity) || wrote;
-    }
-    if (std::isfinite(binding->replicated_magic_shield_explosion_fraction)) {
-        wrote = memory.TryWriteField(
-            actor_address,
-            kActorMagicShieldExplosionFractionOffset,
-            binding->replicated_magic_shield_explosion_fraction) || wrote;
-    }
-    if (std::isfinite(binding->replicated_magic_shield_hit_flash)) {
-        wrote = memory.TryWriteField(
-            actor_address,
-            kActorMagicShieldHitFlashOffset,
-            binding->replicated_magic_shield_hit_flash) || wrote;
+    const bool magic_shield_state_finite =
+        std::isfinite(binding->replicated_magic_shield_absorb_remaining) &&
+        std::isfinite(binding->replicated_magic_shield_absorb_capacity) &&
+        std::isfinite(binding->replicated_magic_shield_explosion_fraction) &&
+        std::isfinite(binding->replicated_magic_shield_hit_flash);
+    if (magic_shield_state_finite) {
+        const bool wrote_magic_shield =
+            memory.TryWriteField(
+                actor_address,
+                kActorMagicShieldAbsorbRemainingOffset,
+                binding->replicated_magic_shield_absorb_remaining) &&
+            memory.TryWriteField(
+                actor_address,
+                kActorMagicShieldAbsorbCapacityOffset,
+                binding->replicated_magic_shield_absorb_capacity) &&
+            memory.TryWriteField(
+                actor_address,
+                kActorMagicShieldExplosionFractionOffset,
+                binding->replicated_magic_shield_explosion_fraction) &&
+            memory.TryWriteField(
+                actor_address,
+                kActorMagicShieldHitFlashOffset,
+                binding->replicated_magic_shield_hit_flash);
+        wrote = wrote_magic_shield || wrote;
     }
     // The transport keeps +0x248/+0x268 as diagnostics, but remote gameplay-slot
     // actors must leave those native-owned overlay/cache fields alone. Magic

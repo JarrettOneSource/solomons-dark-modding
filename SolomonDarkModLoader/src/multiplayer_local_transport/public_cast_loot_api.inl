@@ -267,6 +267,9 @@ void ShutdownLocalTransport() {
         g_next_local_loot_pickup_request_sequence = 1;
     }
     ResetAirChainRuntimeState();
+    UpdateRuntimeState([](RuntimeState& state) {
+        state.shared_gameplay_pause = SharedGameplayPauseRuntimeInfo{};
+    });
 }
 
 void TickLocalTransport(std::uint64_t now_ms) {
@@ -275,7 +278,9 @@ void TickLocalTransport(std::uint64_t now_ms) {
     }
 
     RefreshLocalParticipantFromGameState();
+    RefreshLocalMenuPauseRequest(now_ms);
     ReceivePackets(now_ms);
+    RefreshHostSharedGameplayPause(now_ms);
     ProcessCompletedHostLootPickups();
     ProcessQueuedLocalHostPowerupPickups(now_ms);
     ServiceClientHostRunExitFollow(now_ms);
@@ -463,17 +468,31 @@ void QueueHostParticipantVitalsCorrection(
     float life_max,
     std::uint8_t transient_status_flags,
     std::int32_t poison_remaining_ticks,
-    float poison_damage_per_tick) {
+    float poison_damage_per_tick,
+    std::int32_t webbed_remaining_ticks,
+    float webbed_strength,
+    std::uint8_t correction_flags,
+    float magic_shield_absorb_remaining,
+    float magic_shield_absorb_capacity,
+    float magic_shield_explosion_fraction,
+    float magic_shield_hit_flash) {
     QueueHostParticipantVitalsCorrectionInternal(
         target_participant_id,
         life_current,
         life_max,
         transient_status_flags,
         poison_remaining_ticks,
-        poison_damage_per_tick);
+        poison_damage_per_tick,
+        webbed_remaining_ticks,
+        webbed_strength,
+        correction_flags,
+        magic_shield_absorb_remaining,
+        magic_shield_absorb_capacity,
+        magic_shield_explosion_fraction,
+        magic_shield_hit_flash);
 }
 
-bool ShouldPauseGameplayForLevelUpSelection() {
+bool ShouldPauseMultiplayerGameplay() {
     if (!g_local_transport.initialized) {
         return false;
     }
@@ -484,12 +503,17 @@ bool ShouldPauseGameplayForLevelUpSelection() {
     }
 
     if (g_local_transport.is_host) {
-        return !CollectUnresolvedLevelUpOfferParticipantIds().empty();
+        if (!CollectUnresolvedLevelUpOfferParticipantIds().empty()) {
+            return true;
+        }
+    } else {
+        const auto& wait_status = runtime_state.level_up_wait_status;
+        if (wait_status.valid && wait_status.pause_active) {
+            return true;
+        }
     }
 
-    const auto& wait_status = runtime_state.level_up_wait_status;
-    return wait_status.valid &&
-           wait_status.pause_active;
+    return ShouldPauseForSharedGameplayMenu();
 }
 
 bool HasLocalLevelUpOfferAwaitingNativePresentation() {

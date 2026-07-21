@@ -287,6 +287,42 @@ def measure_recharge(
     }
 
 
+def wait_for_secondary_belt_parity(
+    direction: Direction,
+    entry_row: int,
+    timeout: float,
+) -> dict[str, list[int]]:
+    observer_pipe = CLIENT_PIPE if direction.source_id == HOST_ID else HOST_PIPE
+    deadline = time.monotonic() + timeout
+    owner_belt: list[int] = []
+    observer_belt: list[int] = []
+    while time.monotonic() < deadline:
+        owner = query_progression_snapshot(direction.source_pipe)
+        observer = query_progression_snapshot(
+            observer_pipe,
+            participant_id=direction.source_id,
+        )
+        owner_belt = owner["loadout"]["secondary_entry_indices"]
+        observer_belt = observer["loadout"]["secondary_entry_indices"]
+        if (
+            owner_belt == observer_belt
+            and owner_belt.count(entry_row) == 1
+            and observer_belt.count(entry_row) == 1
+        ):
+            return {
+                "owner_belt": owner_belt,
+                "observer_belt": observer_belt,
+            }
+        time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
+
+    raise VerifyFailure(
+        f"{direction.name} secondary row {entry_row} belt ownership did not "
+        f"converge: owner={owner_belt} observer={observer_belt} "
+        f"owner_slots={owner_belt.count(entry_row)} "
+        f"observer_slots={observer_belt.count(entry_row)}"
+    )
+
+
 def acquire_secondary_to_rank(
     direction: Direction,
     entry_row: int,
@@ -371,26 +407,15 @@ def acquire_secondary_to_rank(
         current_active = expected_active
         remaining -= apply_count
 
-    owner = query_progression_snapshot(target_pipe)
-    observer_pipe = CLIENT_PIPE if direction.source_id == HOST_ID else HOST_PIPE
-    observer = query_progression_snapshot(
-        observer_pipe,
-        participant_id=direction.source_id,
+    belt_parity = wait_for_secondary_belt_parity(
+        direction,
+        entry_row,
+        timeout,
     )
-    owner_belt = owner["loadout"]["secondary_entry_indices"]
-    observer_belt = observer["loadout"]["secondary_entry_indices"]
+    owner_belt = belt_parity["owner_belt"]
+    observer_belt = belt_parity["observer_belt"]
     owner_slot_count = owner_belt.count(entry_row)
     observer_slot_count = observer_belt.count(entry_row)
-    if (
-        owner_belt != observer_belt
-        or owner_slot_count != 1
-        or observer_slot_count != 1
-    ):
-        raise VerifyFailure(
-            f"{direction.name} secondary row {entry_row} belt ownership did not converge: "
-            f"owner={owner_belt} observer={observer_belt} "
-            f"owner_slots={owner_slot_count} observer_slots={observer_slot_count}"
-        )
     return {
         "entry_row": entry_row,
         "desired_active": desired_active,

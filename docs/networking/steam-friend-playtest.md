@@ -17,7 +17,7 @@ credentials.
   lobby, and completes the host compatibility handshake. The desktop launcher
   listens for accepted Steam invitations while it is open and launches this
   join path automatically.
-- Protocol v64 statically covers lobby membership checks, host ownership,
+- Protocol v65 statically covers lobby membership checks, host ownership,
   compatibility handshake, authenticated gameplay routing, goodbye/timeout
   cleanup, automatic re-handshake after silent route loss, and no host
   migration.

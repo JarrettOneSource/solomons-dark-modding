@@ -169,6 +169,14 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     if (!multiplayer::ConsumePendingBotCast(binding->bot_id, &request)) {
         return false;
     }
+    if (request.kind == multiplayer::BotCastKind::Secondary &&
+        request.remote_input_controlled &&
+        IsNativeRemoteParticipantBinding(binding)) {
+        return ReplayPendingNativeSecondaryCast(
+            binding,
+            request,
+            error_message);
+    }
     const auto queued_target_actor_address = request.target_actor_address;
     if (request.has_origin_transform) {
         if (!std::isfinite(request.origin_position_x) ||
@@ -194,12 +202,6 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     if (request.has_origin_heading && std::isfinite(request.origin_heading)) {
         ApplyWizardActorFacingState(actor_address, request.origin_heading);
     }
-    if (request.kind == multiplayer::BotCastKind::Secondary &&
-        request.remote_input_controlled &&
-        IsNativeRemoteParticipantBinding(binding)) {
-        return ReplayPendingNativeSecondaryCast(binding, request, error_message);
-    }
-
     int requested_skill_id = request.skill_id;
     ResolvedPrimaryCastDescriptor primary_descriptor{};
     bool have_primary_descriptor = false;

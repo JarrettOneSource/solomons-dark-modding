@@ -136,6 +136,10 @@ void ApplyGameplayStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {
         gameplay_state.native_transient_status_flags;
     snapshot->native_poison_remaining_ticks =
         gameplay_state.native_poison_remaining_ticks;
+    snapshot->native_webbed_remaining_ticks =
+        gameplay_state.native_webbed_remaining_ticks;
+    snapshot->native_webbed_strength =
+        gameplay_state.native_webbed_strength;
     snapshot->native_damage_x4_remaining_ticks =
         gameplay_state.native_damage_x4_remaining_ticks;
     snapshot->no_interrupt = gameplay_state.no_interrupt;

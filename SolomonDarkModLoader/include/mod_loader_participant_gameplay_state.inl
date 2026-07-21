@@ -29,6 +29,8 @@ struct SDModParticipantGameplayState {
     std::uint8_t native_persistent_status_flags = 0;
     std::uint8_t native_transient_status_flags = 0;
     std::int32_t native_poison_remaining_ticks = 0;
+    std::int32_t native_webbed_remaining_ticks = 0;
+    float native_webbed_strength = 0.0f;
     std::int32_t native_damage_x4_remaining_ticks = 0;
     std::uint8_t no_interrupt = 0;
     std::uint8_t active_cast_group = 0xFF;

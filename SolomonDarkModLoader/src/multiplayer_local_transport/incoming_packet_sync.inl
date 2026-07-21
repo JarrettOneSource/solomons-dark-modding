@@ -207,6 +207,8 @@ void MaybeQueueClientHostRunStart(
 
 struct NormalizedParticipantFrameState {
     bool transform_valid = false;
+    float movement_intent_x = 0.0f;
+    float movement_intent_y = 0.0f;
     float magic_shield_absorb_remaining = 0.0f;
     float magic_shield_absorb_capacity = 0.0f;
     float magic_shield_explosion_fraction = 0.0f;
@@ -226,6 +228,22 @@ NormalizedParticipantFrameState NormalizeParticipantFramePacket(
         std::isfinite(packet.position_x) &&
         std::isfinite(packet.position_y) &&
         std::isfinite(packet.heading);
+    if (std::isfinite(packet.movement_intent_x) &&
+        std::isfinite(packet.movement_intent_y)) {
+        const auto movement_magnitude_squared =
+            packet.movement_intent_x * packet.movement_intent_x +
+            packet.movement_intent_y * packet.movement_intent_y;
+        if (std::isfinite(movement_magnitude_squared) &&
+            movement_magnitude_squared > 0.000001f) {
+            const auto movement_scale = movement_magnitude_squared > 1.0f
+                ? 1.0f / std::sqrt(movement_magnitude_squared)
+                : 1.0f;
+            normalized.movement_intent_x =
+                packet.movement_intent_x * movement_scale;
+            normalized.movement_intent_y =
+                packet.movement_intent_y * movement_scale;
+        }
+    }
     const auto shield_state = NormalizeMagicShieldState(
         packet.magic_shield_absorb_remaining,
         packet.magic_shield_absorb_capacity,
@@ -292,6 +310,12 @@ NormalizedParticipantFrameState NormalizeParticipantFramePacket(
     const bool correction_poisoned =
         (correction.transient_status_flags &
          ParticipantTransientStatusFlagPoisoned) != 0;
+    const bool correction_webbed =
+        (correction.transient_status_flags &
+         ParticipantTransientStatusFlagWebbed) != 0;
+    const bool correction_magic_shield =
+        (correction.correction_flags &
+         ParticipantVitalsCorrectionFlagMagicShieldState) != 0;
     if (life_acknowledged) {
         g_local_transport.pending_participant_vitals_corrections_by_participant.erase(
             pending_it);
@@ -313,6 +337,21 @@ NormalizedParticipantFrameState NormalizeParticipantFramePacket(
             (std::max)(
                 normalized.poison_remaining_ticks,
                 correction.poison_remaining_ticks);
+    }
+    if (correction_webbed) {
+        normalized.transient_status_flags |=
+            ParticipantTransientStatusFlagSnapshotValid |
+            ParticipantTransientStatusFlagWebbed;
+    }
+    if (correction_magic_shield) {
+        normalized.magic_shield_absorb_remaining =
+            correction.magic_shield_absorb_remaining;
+        normalized.magic_shield_absorb_capacity =
+            correction.magic_shield_absorb_capacity;
+        normalized.magic_shield_explosion_fraction =
+            correction.magic_shield_explosion_fraction;
+        normalized.magic_shield_hit_flash =
+            correction.magic_shield_hit_flash;
     }
     return normalized;
 }
@@ -370,6 +409,8 @@ void ApplyParticipantFrameToRuntime(
         normalized.poison_remaining_ticks;
     participant->runtime.damage_x4_remaining_ticks =
         normalized.damage_x4_remaining_ticks;
+    participant->runtime.movement_intent_x = normalized.movement_intent_x;
+    participant->runtime.movement_intent_y = normalized.movement_intent_y;
     participant->runtime.experience_current = packet.experience_current;
     participant->runtime.experience_next = packet.experience_next;
     participant->runtime.anim_drive_state = packet.anim_drive_state;

@@ -181,8 +181,8 @@ void PumpQueuedGameplayActions() {
     PendingLocalInventoryEquipRequest local_inventory_equip_request;
     bool have_local_inventory_equip_request = false;
     std::vector<PendingMultiplayerDampenEffectRequest> multiplayer_dampen_effect_requests;
-    PendingLocalPlayerPoisonCorrection local_player_poison_correction;
-    bool have_local_player_poison_correction = false;
+    PendingLocalPlayerVitalsCorrection local_player_vitals_correction;
+    bool have_local_player_vitals_correction = false;
     std::vector<PendingNativePoisonBehaviorProbe> native_poison_behavior_probes;
     std::vector<PendingNativeMagicHitBehaviorProbe>
         native_magic_hit_behavior_probes;
@@ -302,13 +302,14 @@ void PumpQueuedGameplayActions() {
                 .pending_multiplayer_dampen_effect_requests.pop_front();
         }
         if (!g_gameplay_keyboard_injection
-                 .pending_local_player_poison_corrections.empty()) {
-            local_player_poison_correction = g_gameplay_keyboard_injection
-                                                 .pending_local_player_poison_corrections
-                                                 .back();
+                 .pending_local_player_vitals_corrections.empty()) {
+            local_player_vitals_correction =
+                g_gameplay_keyboard_injection
+                    .pending_local_player_vitals_corrections
+                    .back();
             g_gameplay_keyboard_injection
-                .pending_local_player_poison_corrections.clear();
-            have_local_player_poison_correction = true;
+                .pending_local_player_vitals_corrections.clear();
+            have_local_player_vitals_correction = true;
         }
         while (!g_gameplay_keyboard_injection
                     .pending_native_poison_behavior_probes.empty()) {
@@ -336,9 +337,9 @@ void PumpQueuedGameplayActions() {
         }
     }
 
-    ExecuteQueuedPoisonActions(
-        have_local_player_poison_correction,
-        local_player_poison_correction,
+    ExecuteQueuedParticipantVitalsActions(
+        have_local_player_vitals_correction,
+        local_player_vitals_correction,
         native_poison_behavior_probes);
 
     for (const auto& request : native_magic_hit_behavior_probes) {
@@ -370,6 +371,8 @@ void PumpQueuedGameplayActions() {
             std::to_string(request.projectile_damage) +
             " magic_damage=" + std::to_string(request.magic_damage) +
             " attempts=" + std::to_string(request.attempts) +
+            " target_participant_id=" +
+            std::to_string(request.target_participant_id) +
             " hp=" + std::to_string(hp_before) + "->" +
             std::to_string(hp_after) +
             (probe_error.empty() ? std::string{} : " error=" + probe_error));

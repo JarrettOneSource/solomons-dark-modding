@@ -25,6 +25,7 @@ def invoke_native_magic_hit_trial(
     label: str,
     timeout: float,
     require_life_loss: bool = True,
+    target_participant_id: int = 0,
 ) -> dict[str, Any]:
     """Queue the retail PlayerActor magic-hit handler after Lua returns."""
 
@@ -40,6 +41,11 @@ def invoke_native_magic_hit_trial(
         raise ValueError("at least one native magic-hit damage lane must be positive")
     if attempts < 1 or attempts > 1000:
         raise ValueError(f"attempts must be in [1,1000], got {attempts}")
+    if target_participant_id < 0:
+        raise ValueError(
+            "target_participant_id must be non-negative, got "
+            f"{target_participant_id}"
+        )
 
     code = f"""
 local function emit(key, value)
@@ -47,7 +53,8 @@ local function emit(key, value)
   print(key .. '=' .. tostring(value))
 end
 local queued, err, serial = sd.debug.queue_native_magic_hit_behavior_probe(
-  {projectile_damage:.9f}, {magic_damage:.9f}, {attempts})
+  {projectile_damage:.9f}, {magic_damage:.9f}, {attempts},
+  {target_participant_id})
 emit('queued', queued)
 emit('error', err or '')
 emit('serial', serial or 0)
@@ -112,6 +119,7 @@ emit('error', err or '')
         "magic_damage": magic_damage,
         "attempts": attempts,
         "require_life_loss": require_life_loss,
+        "target_participant_id": target_participant_id,
         "hp_before": before,
         "hp_after": after,
         "hp_delta": before - after,

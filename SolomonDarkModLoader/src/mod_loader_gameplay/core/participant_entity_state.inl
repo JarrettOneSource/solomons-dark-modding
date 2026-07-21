@@ -77,6 +77,8 @@ struct ParticipantEntityBinding {
     float replicated_target_x = 0.0f;
     float replicated_target_y = 0.0f;
     float replicated_target_heading = 0.0f;
+    float replicated_movement_intent_x = 0.0f;
+    float replicated_movement_intent_y = 0.0f;
     bool replicated_presentation_valid = false;
     std::uint8_t replicated_anim_drive_state = 0;
     std::uint16_t replicated_presentation_flags = 0;
@@ -107,6 +109,7 @@ struct ParticipantEntityBinding {
     float replicated_magic_shield_absorb_capacity = 0.0f;
     float replicated_magic_shield_explosion_fraction = 0.0f;
     float replicated_magic_shield_hit_flash = 0.0f;
+    bool native_remote_magic_shield_authority_pending = false;
     std::uint64_t replicated_transform_packet_ms = 0;
     std::uint64_t replicated_transform_playback_ms = 0;
     // "Currently facing" heading pinned across ticks. Sources: movement step
@@ -125,6 +128,9 @@ struct ParticipantEntityBinding {
     bool native_remote_vital_baseline_valid = false;
     float native_remote_last_written_hp = 0.0f;
     float native_remote_last_written_max_hp = 0.0f;
+    bool native_remote_webbed_authority_pending = false;
+    std::uint64_t native_remote_webbed_authority_pending_since_ms = 0;
+    bool native_remote_webbed_owner_acknowledged = false;
     std::uint64_t mana_recovery_not_before_ms = 0;
     std::uint64_t last_mana_recovery_log_ms = 0;
     std::uint64_t last_mana_reserve_cleanup_log_ms = 0;

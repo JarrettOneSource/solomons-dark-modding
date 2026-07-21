@@ -7,6 +7,13 @@ constexpr std::size_t kPlayerActorDtorHookPatchSize = 12;
 constexpr bool kEnablePlayerActorDtorHook = false;
 constexpr std::size_t kPlayerActorVtable28HookPatchSize = 6;
 constexpr std::size_t kPlayerActorSecondarySpellCastHookMinimumPatchSize = 5;
+// SecondaryCursorWorldProjection starts with a three-byte stack reservation
+// followed by a six-byte world-origin load. The safe hook keeps both whole.
+constexpr std::size_t kSecondaryCursorWorldProjectionHookMinimumPatchSize = 5;
+constexpr std::size_t kPlayerActorMagicDamageHookMinimumPatchSize = 5;
+// Mod_Webbed::Tick starts with `push ecx` followed by the six-byte absolute
+// load of the active actor. Seven bytes preserve whole instructions.
+constexpr std::size_t kWebbedModifierTickHookMinimumPatchSize = 7;
 constexpr std::size_t kPlayerActorPurePrimaryGateHookMinimumPatchSize = 5;
 constexpr std::size_t kPlayerControlBrainUpdateHookMinimumPatchSize = 5;
 constexpr std::size_t kPurePrimarySpellStartHookMinimumPatchSize = 5;
@@ -68,9 +75,12 @@ constexpr std::size_t kNativeModifierTypeIdOffset = 0x08;
 constexpr std::size_t kNativeModifierDurationTicksOffset = 0x14;
 constexpr std::size_t kNativePoisonDamagePerTickOffset = 0x1C;
 constexpr std::size_t kNativePoisonSourceSlotOffset = 0x20;
+constexpr std::size_t kNativeWebbedStrengthOffset = 0x1C;
+constexpr std::size_t kNativeWebbedRequestedStrengthOffset = 0x20;
 constexpr std::uint32_t kNativeStoneskinModifierTypeId = 0x1B71;
 constexpr std::uint32_t kNativePoisonModifierTypeId = 0x1B72;
 constexpr std::uint32_t kNativePrismaticModifierTypeId = 0x1B76;
+constexpr std::uint32_t kNativeWebbedModifierTypeId = 0x1B79;
 constexpr std::uint32_t kNativeRingIceModifierTypeId = 0x1B6F;
 constexpr std::size_t kStandaloneWizardVisualLinkSize = 0xA8;
 constexpr std::size_t kStandaloneWizardVisualLinkColorBlockOffset = 0x88;
@@ -159,12 +169,22 @@ constexpr std::uint64_t kBotManaReserveRecoveryIntervalMs = 250;
 constexpr float kBotManaReserveRecoveryRatioPerSecond = 0.10f;
 
 bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id) {
-    // FUN_005B7080 owns the stock GameNPC factory. 1000 is Solomon; the
-    // contiguous 1001..1013 cases are its complete native enemy family.
+    // WaveData_Parse and FUN_0062D920 identify the stock arena enemy classes.
+    // Most use the original 1001..1013 family. Spider and Imp Portal are
+    // direct wave entries, while Green Imp and Maggot are hostile children
+    // created by those native classes.
     constexpr std::uint32_t kFirstArenaCombatActorType = 1001;
     constexpr std::uint32_t kLastArenaCombatActorType = 1013;
-    return object_type_id >= kFirstArenaCombatActorType &&
-           object_type_id <= kLastArenaCombatActorType;
+    constexpr std::uint32_t kGreenImpArenaCombatActorType = 0x7FC;
+    constexpr std::uint32_t kMaggotArenaCombatActorType = 0x7FD;
+    constexpr std::uint32_t kSpiderArenaCombatActorType = 0x809;
+    constexpr std::uint32_t kImpPortalArenaCombatActorType = 0x139D;
+    return (object_type_id >= kFirstArenaCombatActorType &&
+            object_type_id <= kLastArenaCombatActorType) ||
+           object_type_id == kGreenImpArenaCombatActorType ||
+           object_type_id == kMaggotArenaCombatActorType ||
+           object_type_id == kSpiderArenaCombatActorType ||
+           object_type_id == kImpPortalArenaCombatActorType;
 }
 constexpr std::size_t kQueuedGameplayWorldActionLimit = 64;
 constexpr std::uint64_t kNativeInventoryCreditRetryDelayMs = 100;

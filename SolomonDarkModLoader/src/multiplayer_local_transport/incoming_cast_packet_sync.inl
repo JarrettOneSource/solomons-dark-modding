@@ -6,6 +6,8 @@ void ApplyRemoteCastPacket(
     std::uint64_t now_ms) {
     const auto cast_kind = static_cast<CastKind>(packet.cast_kind);
     const auto input_phase = static_cast<CastInputPhase>(packet.input_phase);
+    const bool has_cursor_world_placement =
+        (packet.input_flags & CastInputFlagCursorWorldPlacement) != 0;
     auto log_cast_drop = [&](const std::string& reason) {
         Log(
             "Multiplayer remote cast ignored. reason=" + reason +
@@ -24,6 +26,7 @@ void ApplyRemoteCastPacket(
         packet.skill_id < 0 ||
         (cast_kind != CastKind::Primary && cast_kind != CastKind::Secondary) ||
         !IsCastInputPhaseValue(packet.input_phase) ||
+        (packet.input_flags & ~CastInputFlagCursorWorldPlacement) != 0 ||
         (cast_kind == CastKind::Primary && packet.secondary_slot != -1) ||
         (cast_kind == CastKind::Secondary &&
          (packet.secondary_slot < 0 ||
@@ -34,7 +37,11 @@ void ApplyRemoteCastPacket(
         !std::isfinite(packet.position_y) ||
         !std::isfinite(packet.heading) ||
         !std::isfinite(packet.aim_target_x) ||
-        !std::isfinite(packet.aim_target_y)) {
+        !std::isfinite(packet.aim_target_y) ||
+        (has_cursor_world_placement &&
+         (cast_kind != CastKind::Secondary ||
+          !std::isfinite(packet.cursor_world_x) ||
+          !std::isfinite(packet.cursor_world_y)))) {
         log_cast_drop("invalid_packet");
         return;
     }
@@ -199,6 +206,9 @@ void ApplyRemoteCastPacket(
     request.aim_target_y = packet.aim_target_y;
     request.has_aim_angle = true;
     request.aim_angle = packet.heading;
+    request.has_cursor_world_placement = has_cursor_world_placement;
+    request.cursor_world_x = packet.cursor_world_x;
+    request.cursor_world_y = packet.cursor_world_y;
 
     SDModSceneActorState cast_target;
     const bool resolved_target_by_id =
@@ -209,8 +219,6 @@ void ApplyRemoteCastPacket(
     if (resolved_target_by_id) {
         resolved_target_actor_address = cast_target.actor_address;
         request.target_actor_address = resolved_target_actor_address;
-        request.aim_target_x = cast_target.x;
-        request.aim_target_y = cast_target.y;
     }
 
     const auto phase = input_phase;
@@ -227,6 +235,11 @@ void ApplyRemoteCastPacket(
                     " cast_sequence=" + std::to_string(packet.cast_sequence) +
                     " skill_id=" + std::to_string(packet.skill_id) +
                     " secondary_slot=" + std::to_string(packet.secondary_slot) +
+                    " cursor_world_placement=" +
+                    std::to_string(has_cursor_world_placement ? 1 : 0) +
+                    " cursor_world=(" +
+                    std::to_string(packet.cursor_world_x) + "," +
+                    std::to_string(packet.cursor_world_y) + ")" +
                     " target_network_actor_id=" +
                     std::to_string(packet.target_network_actor_id) +
                     " target_actor=" + HexString(request.target_actor_address));

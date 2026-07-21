@@ -15,7 +15,10 @@ std::uint64_t QueueLocalCastEventInternal(
     float aim_target_x,
     float aim_target_y,
     const std::int32_t* live_secondary_entry_indices,
-    std::size_t live_secondary_entry_count) {
+    std::size_t live_secondary_entry_count,
+    bool has_cursor_world_placement,
+    float cursor_world_x,
+    float cursor_world_y) {
     if (skill_id < 0 ||
         (cast_kind != CastKind::Primary && cast_kind != CastKind::Secondary) ||
         (cast_kind == CastKind::Primary && secondary_slot != -1) ||
@@ -26,7 +29,10 @@ std::uint64_t QueueLocalCastEventInternal(
         !std::isfinite(position_x) ||
         !std::isfinite(position_y) ||
         !std::isfinite(direction_x) ||
-        !std::isfinite(direction_y)) {
+        !std::isfinite(direction_y) ||
+        (has_cursor_world_placement &&
+         (!std::isfinite(cursor_world_x) ||
+          !std::isfinite(cursor_world_y)))) {
         return 0;
     }
     if (has_aim_target &&
@@ -75,6 +81,9 @@ std::uint64_t QueueLocalCastEventInternal(
     event.has_aim_target = has_aim_target;
     event.aim_target_x = aim_target_x;
     event.aim_target_y = aim_target_y;
+    event.has_cursor_world_placement = has_cursor_world_placement;
+    event.cursor_world_x = cursor_world_x;
+    event.cursor_world_y = cursor_world_y;
     g_queued_local_cast_events.push_back(event);
     return event.native_queue_id;
 }
@@ -106,7 +115,10 @@ std::uint64_t QueueLocalSpellCastEvent(
         aim_target_x,
         aim_target_y,
         nullptr,
-        0);
+        0,
+        false,
+        0.0f,
+        0.0f);
 }
 
 std::uint64_t QueueLocalSecondarySpellCastEvent(
@@ -122,7 +134,10 @@ std::uint64_t QueueLocalSecondarySpellCastEvent(
     float aim_target_x,
     float aim_target_y,
     const std::int32_t* live_secondary_entry_indices,
-    std::size_t live_secondary_entry_count) {
+    std::size_t live_secondary_entry_count,
+    bool has_cursor_world_placement,
+    float cursor_world_x,
+    float cursor_world_y) {
     return QueueLocalCastEventInternal(
         CastKind::Secondary,
         secondary_slot,
@@ -138,7 +153,10 @@ std::uint64_t QueueLocalSecondarySpellCastEvent(
         aim_target_x,
         aim_target_y,
         live_secondary_entry_indices,
-        live_secondary_entry_count);
+        live_secondary_entry_count,
+        has_cursor_world_placement,
+        cursor_world_x,
+        cursor_world_y);
 }
 
 void QueueLocalEnemyDamageClaim(

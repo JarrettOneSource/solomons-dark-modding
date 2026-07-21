@@ -111,7 +111,6 @@ std::deque<ManualRunEnemySpawnRequest> g_queued_replicated_run_enemy_spawns;
 std::unordered_map<uintptr_t, FrozenManualRunEnemy> g_frozen_manual_run_enemies;
 
 thread_local bool g_manual_run_enemy_spawner_tick_active = false;
-thread_local uintptr_t g_manual_run_enemy_spawner_tick_address = 0;
 thread_local uintptr_t g_current_wave_spawner_tick_address = 0;
 
 constexpr std::uint64_t kSpellCastClickWindowMs = 400;
@@ -125,8 +124,6 @@ constexpr std::size_t kWaveSpawnerRemainingBudgetOffset = 0x20;
 constexpr std::size_t kWaveSpawnerSpawnDelayCountdownOffset = 0x24;
 constexpr std::size_t kWaveSpawnerLongDelayCountdownOffset = 0x2C;
 constexpr std::uint64_t kManualRunEnemySpawnerFreshnessWindowMs = 5000;
-constexpr std::int32_t kManualRunEnemySpawnerBudget = 2;
-constexpr std::int32_t kManualRunEnemySpawnerLongDelay = 2;
 constexpr std::size_t kQueuedReplicatedRunEnemySpawnLimit = 16;
 constexpr std::size_t kReplicatedCatchupSpawnBurstPerSpawnerTick = 8;
 

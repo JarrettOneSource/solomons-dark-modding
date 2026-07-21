@@ -81,7 +81,7 @@ SKILLS = (
     SecondarySkillSpec(50, "Magic Trap", "field", True, True),
     SecondarySkillSpec(51, "Dampen", "dampen"),
     SecondarySkillSpec(54, "Magic Shield", "magic_shield"),
-    SecondarySkillSpec(72, "Acid Rain", "field", True, True),
+    SecondarySkillSpec(72, "Acid Rain", "field", True, True, 0x07FE),
     SecondarySkillSpec(73, "Fire Wall", "field", True, True),
     SecondarySkillSpec(74, "Ether Drain", "field", True, True),
     SecondarySkillSpec(76, "Call Comet", "target_damage", True, True),
@@ -889,6 +889,62 @@ def wait_for_secondary_delivery(
         f"local={local_count} remote={replay_count} "
         f"mouse_right={mouse_right_injection_count} "
         f"keyboard={keyboard_edge_count} belt_slot={belt_slot}"
+    )
+
+
+def cast_secondary_until_delivered(
+    direction: focus.Direction,
+    row: int,
+    belt_slot: int,
+    source_offset: int,
+    observer_offset: int,
+    timeout: float,
+) -> tuple[dict[str, Any], dict[str, int]]:
+    local_token = (
+        "Multiplayer local secondary cast queued from native dispatcher."
+    )
+    deadline = time.monotonic() + timeout
+    attempts: list[dict[str, str]] = []
+    while time.monotonic() < deadline:
+        local_log = read_log(direction.source_log)[source_offset:]
+        local_accept_count = sum(
+            local_token in line and f"skill_entry={row}" in line
+            for line in local_log.splitlines()
+        )
+        if local_accept_count >= 1:
+            remaining = max(0.05, deadline - time.monotonic())
+            delivery = wait_for_secondary_delivery(
+                direction,
+                row,
+                belt_slot,
+                source_offset,
+                observer_offset,
+                remaining,
+            )
+            return (
+                {
+                    **attempts[-1],
+                    "attempt_count": len(attempts),
+                    "attempts": attempts,
+                },
+                delivery,
+            )
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.0:
+            break
+        attempts.append(
+            focus.cast_secondary_belt_slot(
+                direction,
+                belt_slot,
+                remaining,
+            )
+        )
+        time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
+
+    raise VerifyFailure(
+        f"{direction.name} secondary row {row} was not accepted after "
+        f"{len(attempts)} consumed native inputs within {timeout:.1f}s"
     )
 
 
@@ -1954,12 +2010,7 @@ def run_native_transient_status(
         pair,
         direction.source_pipe,
     )
-    input_cast = focus.cast_secondary_belt_slot(
-        direction,
-        int(acquisition["belt_slot"]),
-        timeout,
-    )
-    delivery = wait_for_secondary_delivery(
+    input_cast, delivery = cast_secondary_until_delivered(
         direction,
         skill.row,
         int(acquisition["belt_slot"]),
@@ -2279,6 +2330,33 @@ def wait_for_magic_shield_convergence(
     )
 
 
+def invoke_authoritative_magic_shield_hit(
+    direction: focus.Direction,
+    *,
+    magic_damage: float,
+    label: str,
+    timeout: float,
+) -> dict[str, Any]:
+    if direction.source_pipe == HOST_ENDPOINT:
+        authority_endpoint = direction.source_pipe
+        target_participant_id = 0
+    else:
+        authority_endpoint = observer_endpoint(direction)
+        target_participant_id = direction.source_id
+    trial = defense.invoke_native_magic_hit_trial(
+        authority_endpoint,
+        projectile_damage=0.0,
+        magic_damage=magic_damage,
+        attempts=1,
+        label=label,
+        timeout=timeout,
+        require_life_loss=False,
+        target_participant_id=target_participant_id,
+    )
+    trial["authority_endpoint"] = authority_endpoint
+    return trial
+
+
 def run_magic_shield(
     pair: SteamFriendActivePair,
     direction: focus.Direction,
@@ -2318,12 +2396,7 @@ def run_magic_shield(
         pair,
         direction.source_pipe,
     )
-    input_cast = focus.cast_secondary_belt_slot(
-        direction,
-        int(acquisition["belt_slot"]),
-        timeout,
-    )
-    delivery = wait_for_secondary_delivery(
+    input_cast, delivery = cast_secondary_until_delivered(
         direction,
         MAGIC_SHIELD_ROW,
         int(acquisition["belt_slot"]),
@@ -2353,14 +2426,11 @@ def run_magic_shield(
         expected_explosion_fraction=0.0,
         timeout=timeout,
     )
-    first_hit = defense.invoke_native_magic_hit_trial(
-        direction.source_pipe,
-        projectile_damage=0.0,
+    first_hit = invoke_authoritative_magic_shield_hit(
+        direction,
         magic_damage=MAGIC_SHIELD_FIRST_HIT_DAMAGE,
-        attempts=1,
         label=f"{direction.name}_magic_shield_absorb",
         timeout=timeout,
-        require_life_loss=False,
     )
     if abs(float(first_hit["hp_delta"])) > 0.01:
         raise VerifyFailure(
@@ -2389,14 +2459,11 @@ def run_magic_shield(
             f"through native state: {flashes}"
         )
 
-    break_hit = defense.invoke_native_magic_hit_trial(
-        direction.source_pipe,
-        projectile_damage=0.0,
+    break_hit = invoke_authoritative_magic_shield_hit(
+        direction,
         magic_damage=MAGIC_SHIELD_BREAK_HIT_DAMAGE,
-        attempts=1,
         label=f"{direction.name}_magic_shield_break",
         timeout=timeout,
-        require_life_loss=False,
     )
     if abs(float(break_hit["hp_delta"])) > 0.01:
         raise VerifyFailure(
@@ -2474,12 +2541,7 @@ def run_phasing(
         rush_direction.owner_pipe,
         rush.DRIVE_TICKS,
     )
-    input_cast = focus.cast_secondary_belt_slot(
-        direction,
-        int(acquisition["belt_slot"]),
-        timeout,
-    )
-    delivery = wait_for_secondary_delivery(
+    input_cast, delivery = cast_secondary_until_delivered(
         direction,
         15,
         int(acquisition["belt_slot"]),
@@ -2612,12 +2674,7 @@ def run_generic(
         if target is not None and skill.row == TURN_UNDEAD_ROW
         else None
     )
-    input_cast = focus.cast_secondary_belt_slot(
-        direction,
-        int(acquisition["belt_slot"]),
-        timeout,
-    )
-    delivery = wait_for_secondary_delivery(
+    input_cast, delivery = cast_secondary_until_delivered(
         direction,
         skill.row,
         int(acquisition["belt_slot"]),

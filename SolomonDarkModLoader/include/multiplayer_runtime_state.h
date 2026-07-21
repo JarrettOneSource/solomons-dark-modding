@@ -83,6 +83,8 @@ struct ParticipantRuntimeInfo {
     float position_x = 0.0f;
     float position_y = 0.0f;
     float heading = 0.0f;
+    float movement_intent_x = 0.0f;
+    float movement_intent_y = 0.0f;
     std::uint8_t anim_drive_state = 0;
     std::uint8_t persistent_status_flags = 0;
     std::uint8_t transient_status_flags = 0;
@@ -243,6 +245,19 @@ struct LevelUpWaitStatusRuntimeInfo {
     std::uint32_t deadline_remaining_ms = 0;
     std::uint64_t received_ms = 0;
     std::vector<std::uint64_t> waiting_participant_ids;
+};
+
+struct SharedGameplayPauseRuntimeInfo {
+    bool valid = false;
+    bool pause_active = false;
+    bool timed_out = false;
+    bool local_request_active = false;
+    std::uint32_t local_request_epoch = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t deadline_remaining_ms = 0;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t origin_participant_id = 0;
+    std::uint64_t received_ms = 0;
 };
 
 struct ParticipantTransformSample {

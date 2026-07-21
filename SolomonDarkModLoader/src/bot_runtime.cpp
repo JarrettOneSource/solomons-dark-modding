@@ -52,6 +52,9 @@ struct PendingBotCast {
     float aim_target_y = 0.0f;
     bool has_aim_angle = false;
     float aim_angle = 0.0f;
+    bool has_cursor_world_placement = false;
+    float cursor_world_x = 0.0f;
+    float cursor_world_y = 0.0f;
     std::uint64_t queued_cast_count = 0;
     std::uint64_t queued_at_ms = 0;
 };
