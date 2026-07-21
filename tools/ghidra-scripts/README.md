@@ -15,7 +15,16 @@ Run a scan through the wrapper instead of calling `analyzeHeadless.bat` directly
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-GhidraHeadless.ps1 `
   -ScriptPath .\tools\ghidra-scripts\decompile_targets.py `
-  -ScriptArguments 0x00401000 0x00402000
+  -ScriptArguments 0x00401000, 0x00402000
+```
+
+Recover pushed constants and other register/stack setup around every direct
+call to one function with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-GhidraHeadless.ps1 `
+  -ScriptPath .\tools\ghidra-scripts\trace_call_arguments.py `
+  -ScriptArguments 0x005B7080, 12, 4
 ```
 
 The wrapper:

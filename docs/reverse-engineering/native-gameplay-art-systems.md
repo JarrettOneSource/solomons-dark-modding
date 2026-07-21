@@ -33,8 +33,8 @@ Evidence statuses:
 | Skill catalog and level-up picker | `0x00674EE0`, `0x0067C250`, `0x0066F920` | Skills, LevelPicker | Mapped | [skill-picker-re.md](../skill-picker-re.md) |
 | Spell welding | `0x0067CB70`, `0x006566A0`, `0x00666020` | Skills weld icons/effects | Mapped | [spell-welding.md](spell-welding.md) |
 | Cast ownership/cleanup | `0x00548B00`, `0x00548A00`, `0x0052F3B0` | spell-dependent | Mapped | [spell-cast-cleanup-chain.md](../spell-cast-cleanup-chain.md) |
-| Every primary/secondary spell | skill CFG catalog and native handlers | Skills plus effect atlases | In progress | [native-skills-and-spells.md](native-skills-and-spells.md) |
-| Every projectile/transient effect | object constructors/ticks/renderers | BadGuys/Faculty/etc. | In progress | This document, projectile matrix pending |
+| Every primary/secondary spell | skill CFG catalog and native handlers | Skills plus effect atlases | Mapped | [native-skills-and-spells.md](native-skills-and-spells.md) |
+| Every projectile/transient effect | 46 factory classes and 197 decompiled lifecycle methods | BadGuys, DeadHawg, Golem, Unholy, UI plus child animation art | Mapped | [native-projectiles-and-effects.md](native-projectiles-and-effects.md) |
 | Enemy families, attacks, death effects, drops | factory/config/tick/render vtables | BadGuys, Demon, Golem, Heartmonger, Unholy, Faculty | In progress | This document; [skeleton-death-effects-re.md](../skeleton-death-effects-re.md) |
 | Boneyard grammar and world materialization | level loaders/factories | Bonedit plus world atlases/loose images | In progress | This document, boneyard map pending |
 | World tiles/props/doors/portals/NPCs/boss rooms | world initializer and object factories | College, Library, Office, Storage, Memoratorium, NPCs, loose images | Queued | This document |
@@ -188,7 +188,11 @@ equipment changes.
 the ID-to-name resolver at `0x00657C00`. The ordinary level-up path begins at
 `0x0067C250`; `0x0066F920` creates/builds the picker; `0x00671470` applies the
 selected skill and refreshes state. Normally three choices are shown, or four
-when the special skill `0x3F` is visible.
+when Creativity `0x3F` has a nonzero effective rank. Concentrating on
+Creativity gives an exact 20% roll to mark one eligible displayed choice as an
+Insight; choosing it applies that skill twice. The eligibility predicate,
+rank-headroom test, and native index-vs-ID typo are recorded in
+[skill-picker-re.md](../skill-picker-re.md).
 
 Spell welding is the special choice `0x34`. It uses ten hard-coded
 cross-element primary recipes and regenerates the live primary-spell stats
@@ -206,9 +210,15 @@ the common cleanup path releases cast-owned state when a cast finishes or is
 cancelled. The established ownership chain and cleanup evidence is in
 [spell-cast-cleanup-chain.md](../spell-cast-cleanup-chain.md).
 
-The next pass expands this root into one row per CFG spell: gate, handler,
-spawned object types, tick/render/destructor, atlas range, sound triggers, and
-interaction with welded primary stats.
+The native object side is now indexed across 46 projectile/effect classes and
+197 decompiled methods. The vtable roles, construction inheritance, update and
+render roots, contact ABI, modifier creation, and direct class-owned art are in
+[native-projectiles-and-effects.md](native-projectiles-and-effects.md). The
+cast-side map now covers every compiled primary, weld, secondary, and advanced
+case, including passive/concentration refresh, spawned types, initialization
+payloads, status modifiers, and persistent toggles. Remaining closure is
+indirect child-animation record joining and isolated live validation of
+high-risk persistent effects.
 
 ## Item and ground-loot roots already established
 
