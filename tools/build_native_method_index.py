@@ -76,6 +76,16 @@ def extract_methods(paths: list[Path]) -> list[dict[str, Any]]:
                 0,
             )
             source_lines = block[source_start:]
+            done_index = next(
+                (
+                    index
+                    for index, line in enumerate(source_lines)
+                    if line.strip() == "=== DONE ==="
+                ),
+                None,
+            )
+            if done_index is not None:
+                source_lines = source_lines[:done_index]
             while source_lines and source_lines[-1].strip() in {"", "()", "=== DONE ==="}:
                 source_lines.pop()
             source = "\n".join(source_lines).strip()
