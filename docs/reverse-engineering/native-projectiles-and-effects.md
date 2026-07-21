@@ -229,6 +229,7 @@ world color/flash state before removal.
 | TragicCircle effect `0x005F7010` | `0x1B70` | attach `CircleSlow` while its separate logic drains mana |
 | PoisonPool tick `0x005F8030` | `0x1B72` | attach `Poisoned` |
 | Arrow tick `0x005FEA00` | `0x1B72` | optional `Poisoned` payload controlled by arrow state |
+| Silk tick `0x005F8B50` | `0x1B79` | attach/merge `Mod_Webbed`; full severity creates target-owned Cocoon |
 | Shockwave tick `0x005FF8C0` | `0x1B6E` | attach `Dazzle` |
 | FreezeWave tick `0x005FFDC0` | `0x1B69`, `0x1B6F`, `0x1B78` | `ColdSlow` or `Frozen`, optionally `FrostBurn` |
 | Knockback tick `0x00600220` | `0x1B6E` | attach `Dazzle` on final contact |
@@ -243,6 +244,32 @@ This also proves that object IDs and modifier IDs share one native factory but
 are not interchangeable. A projectile can create another world actor, a
 status modifier, or a summon using the same entry point; the caller determines
 how the returned object is registered or wrapped.
+
+### Spider Silk, Webbed modifier, and Cocoon
+
+Spider's attack helper `0x00475AC0` creates `Silk 0x808`, not Cocoon. It
+copies aim/team state and the configured Cocoon-strength value into Silk
+`+0x22C`. Silk extends Arrow for movement/rendering, but its collision tick
+`0x005F8B50` creates `Mod_Webbed 0x1B79`, copies `+0x22C` to modifier `+0x20`,
+and applies the modifier to the struck actor.
+
+`Mod_Webbed` is a real factory type with constructor `0x00623B10` and vtable
+`0x0079E5E4`. It initializes severity `+0x1C` to one. Apply method
+`0x00623B50` sets target flag `+0x138 bit 0x20` and scales target movement
+field `+0x218` by `max(0, 1 - severity/nativeThreshold)`. Merge method
+`0x00627BD0` increments the existing severity, retains the maximum payload at
+modifier `+0x20`, and on the first transition to full severity invokes
+`0x0052C680` with the struck target actor as `this`.
+
+The target actor—not Silk—owns duplicate suppression. `0x0052C680` retains
+the maximum web payload at target `+0x20C`, resolves the Cocoon identity at
+target `+0x214/+0x216`, and returns if it is still live. Otherwise it creates
+`Cocoon 0x80A` at the target position, writes target identity to Cocoon
+`+0x210/+0x212`, registers the Cocoon, and stores the new Cocoon identity back
+on the target. Cocoon snapshots its fixed position in `0x0047BB50` and
+`0x00475D10` keeps it there while the full web state immobilizes the target.
+Its contact/death callback `0x0048BCE0` resolves that target identity and owns
+release/death presentation. Normal enemy drops explicitly exclude Cocoon.
 
 ## Expanding waves
 

@@ -1,0 +1,2518 @@
+{
+  "schema": "solomon-dark-native-enemy-catalog-v1",
+  "source": {
+    "game_object_catalog": "docs/reverse-engineering/native-game-object-catalog.json",
+    "factory": "0x005B7080",
+    "config_parser": "0x004AFBC0",
+    "wave_flag_parser": "0x0062E070",
+    "build_enemy_config": "0x0046B390"
+  },
+  "summary": {
+    "enemy_runtime_type_count": 19,
+    "hostile_or_spawner_count": 18,
+    "ally_count": 1,
+    "direct_art_atlases": [
+      "BadGuys",
+      "DeadHawg",
+      "Demon",
+      "Faculty",
+      "Heartmonger",
+      "Unholy"
+    ],
+    "spawned_type_ids": [
+      1001,
+      1002,
+      1004,
+      1012,
+      2010,
+      2019,
+      2027,
+      2028,
+      2039,
+      2042,
+      2043,
+      2044,
+      2045,
+      2047,
+      2048,
+      2049,
+      2050,
+      2052,
+      2054,
+      2056,
+      2058,
+      7021,
+      7022,
+      7026,
+      7033
+    ]
+  },
+  "shared_pipeline": {
+    "factory": "0x005B7080",
+    "config_parser": "0x004AFBC0",
+    "defaults": "0x00640240",
+    "wave_flag_parser": "0x0062E070",
+    "build_enemy_config": "0x0046B390",
+    "apply_config": "0x00462790",
+    "create_from_config": "0x00463B50",
+    "spawn_and_register": "0x00469580",
+    "target_refresh": "0x00483480",
+    "shared_chase_tick": "0x004835F0",
+    "base_contact": "0x0048A290",
+    "death_rewards": "0x004819D0",
+    "special_death_mode": "0x00477020",
+    "drop_selector": "0x0047C070",
+    "clear_target": "0x00484B30",
+    "release_callbacks": "0x00482E90"
+  },
+  "wave_flags": [
+    {
+      "token": "HPUP",
+      "internal_code": 1,
+      "internal_code_hex": "0x01",
+      "effect": "HP x1.5"
+    },
+    {
+      "token": "HPDOWN",
+      "internal_code": 2,
+      "internal_code_hex": "0x02",
+      "effect": "HP x0.5"
+    },
+    {
+      "token": "STRONG",
+      "internal_code": 3,
+      "internal_code_hex": "0x03",
+      "effect": "damage fields x1.5"
+    },
+    {
+      "token": "WEAK",
+      "internal_code": 4,
+      "internal_code_hex": "0x04",
+      "effect": "damage fields x0.5"
+    },
+    {
+      "token": "FAST",
+      "internal_code": 5,
+      "internal_code_hex": "0x05",
+      "effect": "chase-speed multiplier"
+    },
+    {
+      "token": "SLOW",
+      "internal_code": 6,
+      "internal_code_hex": "0x06",
+      "effect": "chase and attack speed x0.5"
+    },
+    {
+      "token": "XPBONUS",
+      "internal_code": 7,
+      "internal_code_hex": "0x07",
+      "effect": "write the native XP-bonus multiplier constant"
+    },
+    {
+      "token": "BURNING",
+      "internal_code": 8,
+      "internal_code_hex": "0x08",
+      "effect": "FLAMING=1 and chase/attack speed x1.5"
+    },
+    {
+      "token": "HELM",
+      "internal_code": 9,
+      "internal_code_hex": "0x09",
+      "effect": "headgear 1 plus flat HP"
+    },
+    {
+      "token": "HORNED",
+      "internal_code": 10,
+      "internal_code_hex": "0x0A",
+      "effect": "headgear 2 plus flat HP"
+    },
+    {
+      "token": "HOODED",
+      "internal_code": 11,
+      "internal_code_hex": "0x0B",
+      "effect": "headgear 3 plus flat HP"
+    },
+    {
+      "token": "LEADING",
+      "internal_code": 12,
+      "internal_code_hex": "0x0C",
+      "effect": "archer accuracy mode 1"
+    },
+    {
+      "token": "SCATTERSHOT",
+      "internal_code": 13,
+      "internal_code_hex": "0x0D",
+      "effect": "archer accuracy mode 2"
+    },
+    {
+      "token": "RANGEUP",
+      "internal_code": 14,
+      "internal_code_hex": "0x0E",
+      "effect": "range mode 2"
+    },
+    {
+      "token": "RANGEDOWN",
+      "internal_code": 15,
+      "internal_code_hex": "0x0F",
+      "effect": "range mode 1"
+    },
+    {
+      "token": "RANGEEASY",
+      "internal_code": 16,
+      "internal_code_hex": "0x10",
+      "effect": "range mode 3"
+    },
+    {
+      "token": "SHIELD",
+      "internal_code": 17,
+      "internal_code_hex": "0x11",
+      "effect": "self shield; strength 50; interval 10"
+    },
+    {
+      "token": "SHIELDOTHERS",
+      "internal_code": 18,
+      "internal_code_hex": "0x12",
+      "effect": "ally shield; strength 50; interval 10"
+    },
+    {
+      "token": "SHIELDSTRONG",
+      "internal_code": 19,
+      "internal_code_hex": "0x13",
+      "effect": "shield strength x9"
+    },
+    {
+      "token": "SHIELDFAST",
+      "internal_code": 20,
+      "internal_code_hex": "0x14",
+      "effect": "shield interval /2"
+    },
+    {
+      "token": "SPLIT",
+      "internal_code": 21,
+      "internal_code_hex": "0x15",
+      "effect": "random split count 1..2"
+    },
+    {
+      "token": "SPLITMANY",
+      "internal_code": 22,
+      "internal_code_hex": "0x16",
+      "effect": "wave-scaled split count"
+    },
+    {
+      "token": "MANYMAGGOTS",
+      "internal_code": 23,
+      "internal_code_hex": "0x17",
+      "effect": "max maggots 50"
+    },
+    {
+      "token": "STRONGMAGGOTS",
+      "internal_code": 24,
+      "internal_code_hex": "0x18",
+      "effect": "maggot HP=5 and damage=5"
+    },
+    {
+      "token": "POISONARROW",
+      "internal_code": 25,
+      "internal_code_hex": "0x19",
+      "effect": "arrow type 2 and derived extra damage"
+    },
+    {
+      "token": "FIREARROW",
+      "internal_code": 26,
+      "internal_code_hex": "0x1A",
+      "effect": "arrow type 1"
+    },
+    {
+      "token": "ARMOR",
+      "internal_code": 27,
+      "internal_code_hex": "0x1B",
+      "effect": "armor enabled and HP adjusted"
+    },
+    {
+      "token": "SWORD",
+      "internal_code": 28,
+      "internal_code_hex": "0x1C",
+      "effect": "skeleton weapon 1 and stat adjustment"
+    },
+    {
+      "token": "MACE",
+      "internal_code": 29,
+      "internal_code_hex": "0x1D",
+      "effect": "skeleton weapon 2 and stat adjustment"
+    },
+    {
+      "token": "FLAIL",
+      "internal_code": 30,
+      "internal_code_hex": "0x1E",
+      "effect": "skeleton weapon 3 and stat adjustment"
+    },
+    {
+      "token": "AXE",
+      "internal_code": 31,
+      "internal_code_hex": "0x1F",
+      "effect": "skeleton weapon 4 and stat adjustment"
+    },
+    {
+      "token": "PIKE",
+      "internal_code": 32,
+      "internal_code_hex": "0x20",
+      "effect": "skeleton weapon 5 and stat adjustment"
+    },
+    {
+      "token": "CASTFIRE",
+      "internal_code": 33,
+      "internal_code_hex": "0x21",
+      "effect": "mage element fire and damage scaling"
+    },
+    {
+      "token": "CASTLIGHTNING",
+      "internal_code": 34,
+      "internal_code_hex": "0x22",
+      "effect": "mage element lightning and damage scaling"
+    },
+    {
+      "token": "CASTFROST",
+      "internal_code": 35,
+      "internal_code_hex": "0x23",
+      "effect": "mage element frost and damage scaling"
+    },
+    {
+      "token": "CASTPOISON",
+      "internal_code": 36,
+      "internal_code_hex": "0x24",
+      "effect": "mage element poison and damage scaling"
+    },
+    {
+      "token": "ROTTEN",
+      "internal_code": 37,
+      "internal_code_hex": "0x25",
+      "effect": "flyblown zombie plus derived poison fields"
+    },
+    {
+      "token": "DEATHIMPS",
+      "internal_code": 39,
+      "internal_code_hex": "0x27",
+      "effect": "death-imp count 5"
+    },
+    {
+      "token": "DEATHIMPSMANY",
+      "internal_code": 40,
+      "internal_code_hex": "0x28",
+      "effect": "death-imp count 15"
+    },
+    {
+      "token": "ARMORMAYBE",
+      "internal_code": 42,
+      "internal_code_hex": "0x2A",
+      "effect": "random armor byte"
+    },
+    {
+      "token": "NOSKELETONS",
+      "internal_code": 43,
+      "internal_code_hex": "0x2B",
+      "effect": "multiply config +0x60 by the native reduction constant"
+    },
+    {
+      "token": "MORESKELETONS",
+      "internal_code": 44,
+      "internal_code_hex": "0x2C",
+      "effect": "clear config byte +0x94"
+    },
+    {
+      "token": "RANDOMSHOT",
+      "internal_code": 49,
+      "internal_code_hex": "0x31",
+      "effect": "archer accuracy mode 3"
+    }
+  ],
+  "wave_flag_parser_anomalies": [
+    "An unreachable duplicate FLAG_ARMOR comparison maps to internal code 0x29 after the earlier FLAG_ARMOR branch already returns 0x1B.",
+    "FLAG_ARMORMAYBE maps to 0x2A, not 0x29.",
+    "BuildEnemyConfig handles internal codes 0x2D..0x30, but the recovered text parser emits none of them."
+  ],
+  "drop_pipeline": {
+    "selector": "0x0047C070",
+    "rng_seed": "actor +0x1C0",
+    "config_selectors": {
+      "+0xCC": "orbs",
+      "+0xCD": "powerups",
+      "+0xCE": "items",
+      "+0xCF": "gold",
+      "+0xD0": "specific items",
+      "+0xD1": "potions"
+    },
+    "arena_disable_mask_at_0x8F04": {
+      "bit_0": "gold",
+      "bit_1": "potions",
+      "bit_2": "powerups",
+      "bit_3": "orbs",
+      "bit_4": "key",
+      "bit_5": "items"
+    },
+    "selection_rule": "Build eligible candidates independently, then materialize exactly one uniformly selected candidate.",
+    "materializers": [
+      {
+        "kind": "key",
+        "function": "0x00468440",
+        "type_id": 7012
+      },
+      {
+        "kind": "orb",
+        "function": "factory",
+        "type_id": 2011
+      },
+      {
+        "kind": "gold",
+        "function": "0x0046AA90",
+        "type_id": 2012,
+        "notes": "chunks at 25 and merges into sacks"
+      },
+      {
+        "kind": "item",
+        "function": "0x0046A360",
+        "type_id": null
+      },
+      {
+        "kind": "powerup",
+        "function": "factory",
+        "type_id": 2038
+      },
+      {
+        "kind": "potion",
+        "function": "0x0046AE20",
+        "type_id": 7001
+      }
+    ],
+    "explicitly_suppressed_type_ids": [
+      2045,
+      2058
+    ]
+  },
+  "enemies": [
+    {
+      "type_id": 1000,
+      "name": "Badguy",
+      "display_name": "BADGUY BASE",
+      "allegiance": "hostile_base",
+      "family": "shared_base",
+      "config_fields": [
+        "HP",
+        "DAMAGE",
+        "EXTRA DAMAGE",
+        "CHASE SPEED",
+        "ATTACK SPEED",
+        "XP BONUS",
+        "PATHFINDING",
+        "FLANKING",
+        "DROP selectors"
+      ],
+      "behavior": [
+        "Supplies the common target refresh, chase/pathfinding, contact, death/reward, and drop-selection ABI.",
+        "Concrete enemies inherit the base combat fields and override family state, rendering, contact, or death slots as needed."
+      ],
+      "evidence_functions": {
+        "constructor": "0x00473390",
+        "target_refresh": "0x00483480",
+        "shared_chase_tick": "0x004835F0",
+        "base_contact": "0x0048A290",
+        "death_rewards": "0x004819D0",
+        "special_death_mode": "0x00477020",
+        "drop_selector": "0x0047C070"
+      },
+      "spawned_types": [],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x3E8",
+      "allocation_size": 528,
+      "allocation_size_hex": "0x210",
+      "constructor": "0x00473390",
+      "vtable": "0x00785DAC",
+      "selected_vtable_slots": {
+        "0x04": "0x00483480",
+        "0x08": "0x004835F0",
+        "0x1C": "0x0055C300",
+        "0x28": "0x004842A0",
+        "0x4C": "0x0048A290",
+        "0x50": "0x004819D0",
+        "0x6C": "0x004763E0"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 80,
+          "last_record": 80,
+          "consumer_function": "0x004842A0",
+          "vtable_slot": "0x28"
+        }
+      ]
+    },
+    {
+      "type_id": 1001,
+      "name": "Skeleton",
+      "display_name": "SKELETON",
+      "allegiance": "hostile",
+      "family": "skeleton",
+      "config_fields": [
+        "HEADGEAR",
+        "WEAPON",
+        "ARMOR",
+        "FLAMING"
+      ],
+      "behavior": [
+        "Selects unarmed, sword, mace, flail, axe, or pike combat behavior from the weapon field.",
+        "Headgear and armor change both presentation and wave-modified durability; FLAMING owns a Fire child effect.",
+        "Death disassembles the articulated body, preserves equipment-specific pieces, grants rewards, and then runs the common drop selector."
+      ],
+      "evidence_functions": {
+        "tick": "0x00484B90",
+        "render": "0x0048DEE0",
+        "death_presentation": "0x0048D2A0"
+      },
+      "spawned_types": [
+        2019
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x3E9",
+      "allocation_size": 584,
+      "allocation_size_hex": "0x248",
+      "constructor": "0x004771B0",
+      "vtable": "0x00786604",
+      "selected_vtable_slots": {
+        "0x04": "0x00484AA0",
+        "0x08": "0x00484B90",
+        "0x1C": "0x0048DEE0",
+        "0x28": "0x004842A0",
+        "0x4C": "0x0048A600",
+        "0x50": "0x0048D2A0",
+        "0x6C": "0x004773E0"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 92,
+          "last_record": 109,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 113,
+          "last_record": 121,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 775,
+          "last_record": 846,
+          "consumer_function": "0x0048DEE0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 847,
+          "last_record": 918,
+          "consumer_function": "0x0048DEE0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1045,
+          "last_record": 1116,
+          "consumer_function": "0x0048DEE0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1333,
+          "last_record": 1404,
+          "consumer_function": "0x0048DEE0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1405,
+          "last_record": 1458,
+          "consumer_function": "0x0048DEE0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1585,
+          "last_record": 1728,
+          "consumer_function": "0x0048DEE0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1819,
+          "last_record": 1822,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2063,
+          "last_record": 2066,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 46,
+          "last_record": 46,
+          "consumer_function": "0x0048DEE0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 54,
+          "last_record": 54,
+          "consumer_function": "0x0048DEE0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 56,
+          "last_record": 56,
+          "consumer_function": "0x0048DEE0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 80,
+          "last_record": 80,
+          "consumer_function": "0x004842A0",
+          "vtable_slot": "0x28"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 86,
+          "last_record": 86,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 46,
+          "last_record": 77,
+          "consumer_function": "0x0048DEE0",
+          "vtable_slot": "0x1C"
+        }
+      ]
+    },
+    {
+      "type_id": 1002,
+      "name": "SkeletonArcher",
+      "display_name": "SKELETON ARCHER",
+      "allegiance": "hostile",
+      "family": "skeleton",
+      "config_fields": [
+        "WEAPON",
+        "ACCURACY",
+        "RANGE",
+        "ARROW TYPE",
+        "HEADGEAR",
+        "FLAMING",
+        "MULTI-ARROW MODE",
+        "EXTRA ARROWS",
+        "STRAFING"
+      ],
+      "behavior": [
+        "Maintains range and optional strafe state before firing Arrow objects.",
+        "Arrow type chooses normal, fire, or poison payload; accuracy, scatter/random-shot mode, and extra-arrow count are independent controls."
+      ],
+      "evidence_functions": {
+        "tick": "0x00485200",
+        "fire_arrow": "0x00477B90",
+        "render": "0x0048F450"
+      },
+      "spawned_types": [
+        2010
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x3EA",
+      "allocation_size": 624,
+      "allocation_size_hex": "0x270",
+      "constructor": "0x0048A6B0",
+      "vtable": "0x00786CF4",
+      "selected_vtable_slots": {
+        "0x04": "0x00484AA0",
+        "0x08": "0x00485200",
+        "0x1C": "0x0048F450",
+        "0x28": "0x0048A260",
+        "0x4C": "0x0048A600",
+        "0x50": "0x0048D2A0",
+        "0x6C": "0x00477B40"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 92,
+          "last_record": 109,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 113,
+          "last_record": 121,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 255,
+          "last_record": 266,
+          "consumer_function": "0x0048F450",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 271,
+          "last_record": 282,
+          "consumer_function": "0x0048F450",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 451,
+          "last_record": 612,
+          "consumer_function": "0x0048F450",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1585,
+          "last_record": 1728,
+          "consumer_function": "0x0048F450",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1819,
+          "last_record": 1822,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2063,
+          "last_record": 2066,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 86,
+          "last_record": 86,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 46,
+          "last_record": 77,
+          "consumer_function": "0x0048F450",
+          "vtable_slot": "0x1C"
+        }
+      ]
+    },
+    {
+      "type_id": 1003,
+      "name": "SkeletonMage",
+      "display_name": "SKELETON MAGE",
+      "allegiance": "hostile",
+      "family": "skeleton",
+      "config_fields": [
+        "ELEMENT",
+        "RANGE",
+        "HEADGEAR",
+        "CLOAK",
+        "SHIELD SELF",
+        "SHIELD OTHERS",
+        "SHIELD HP",
+        "SHIELD INTERVAL",
+        "FLAMING"
+      ],
+      "behavior": [
+        "Element selection dispatches fire, guided/ether, frost, poison, or lightning-family casting behavior.",
+        "Self-shield and ally-shield toggles have separate strength fields and share the configured recast interval."
+      ],
+      "evidence_functions": {
+        "tick": "0x00490860",
+        "spell_dispatch": "0x0047FDE0",
+        "render": "0x00491720"
+      },
+      "spawned_types": [
+        2027,
+        2028,
+        2019
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x3EB",
+      "allocation_size": 684,
+      "allocation_size_hex": "0x2AC",
+      "constructor": "0x0048ABB0",
+      "vtable": "0x00786DA4",
+      "selected_vtable_slots": {
+        "0x04": "0x00484AA0",
+        "0x08": "0x00490860",
+        "0x1C": "0x00491720",
+        "0x28": "0x0048A260",
+        "0x4C": "0x0048A600",
+        "0x50": "0x0048D2A0",
+        "0x6C": "0x00478380"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 92,
+          "last_record": 109,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 113,
+          "last_record": 121,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 255,
+          "last_record": 266,
+          "consumer_function": "0x00491720",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 381,
+          "last_record": 382,
+          "consumer_function": "0x00491720",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1459,
+          "last_record": 1476,
+          "consumer_function": "0x00491720",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1585,
+          "last_record": 1728,
+          "consumer_function": "0x00491720",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1729,
+          "last_record": 1818,
+          "consumer_function": "0x00490860",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1729,
+          "last_record": 1818,
+          "consumer_function": "0x00491720",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1819,
+          "last_record": 1822,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1836,
+          "last_record": 1839,
+          "consumer_function": "0x00491720",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2063,
+          "last_record": 2066,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 10,
+          "last_record": 10,
+          "consumer_function": "0x00490860",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 11,
+          "last_record": 11,
+          "consumer_function": "0x00490860",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 86,
+          "last_record": 86,
+          "consumer_function": "0x0048D2A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 46,
+          "last_record": 77,
+          "consumer_function": "0x00491720",
+          "vtable_slot": "0x1C"
+        }
+      ]
+    },
+    {
+      "type_id": 1004,
+      "name": "Imp",
+      "display_name": "IMP",
+      "allegiance": "hostile",
+      "family": "imp",
+      "config_fields": [
+        "SPLITS"
+      ],
+      "behavior": [
+        "Uses the shared flying chase/contact loop.",
+        "On death, SPLITS creates child Imps through the enemy-config spawn path; children can retain a reduced split count, so the behavior is recursive."
+      ],
+      "evidence_functions": {
+        "tick": "0x00485DC0",
+        "render": "0x00492E10",
+        "split_death": "0x004824A0"
+      },
+      "spawned_types": [
+        1004
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x3EC",
+      "allocation_size": 572,
+      "allocation_size_hex": "0x23C",
+      "constructor": "0x00473E30",
+      "vtable": "0x00785E5C",
+      "selected_vtable_slots": {
+        "0x04": "0x00483480",
+        "0x08": "0x00485DC0",
+        "0x1C": "0x00492E10",
+        "0x28": "0x0055C300",
+        "0x4C": "0x0048B1C0",
+        "0x50": "0x004824A0",
+        "0x6C": "0x00478560"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 251,
+          "last_record": 254,
+          "consumer_function": "0x00485DC0",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 285,
+          "last_record": 332,
+          "consumer_function": "0x00492E10",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 333,
+          "last_record": 342,
+          "consumer_function": "0x00492E10",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 401,
+          "last_record": 419,
+          "consumer_function": "0x00478860",
+          "vtable_slot": "0x9C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 15,
+          "last_record": 15,
+          "consumer_function": "0x00478A20",
+          "vtable_slot": "0x98"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 86,
+          "last_record": 86,
+          "consumer_function": "0x004824A0",
+          "vtable_slot": "0x50"
+        }
+      ]
+    },
+    {
+      "type_id": 1005,
+      "name": "GoodImp",
+      "display_name": "GOOD IMP",
+      "allegiance": "player_ally",
+      "family": "imp",
+      "config_fields": [
+        "ally lifetime and inherited combat payload"
+      ],
+      "behavior": [
+        "Targets enemies rather than the player and participates as a temporary allied actor.",
+        "Lifetime expiry releases the ally and emits its final Fire presentation rather than using hostile split/drop behavior."
+      ],
+      "evidence_functions": {
+        "initialize": "0x0052A050",
+        "tick": "0x0052C1A0",
+        "render": "0x00492E10"
+      },
+      "spawned_types": [
+        2019
+      ],
+      "drop_policy": "none_ally",
+      "type_id_hex": "0x3ED",
+      "allocation_size": 580,
+      "allocation_size_hex": "0x244",
+      "constructor": "0x00529FE0",
+      "vtable": "0x00793D9C",
+      "selected_vtable_slots": {
+        "0x04": "0x0052A050",
+        "0x08": "0x0052C1A0",
+        "0x1C": "0x00492E10",
+        "0x28": "0x0055C300",
+        "0x4C": "0x0048B1C0",
+        "0x50": "0x004824A0",
+        "0x6C": "0x00478560"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 285,
+          "last_record": 332,
+          "consumer_function": "0x00492E10",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 333,
+          "last_record": 342,
+          "consumer_function": "0x00492E10",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 401,
+          "last_record": 419,
+          "consumer_function": "0x00478860",
+          "vtable_slot": "0x9C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 15,
+          "last_record": 15,
+          "consumer_function": "0x00478A20",
+          "vtable_slot": "0x98"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 86,
+          "last_record": 86,
+          "consumer_function": "0x004824A0",
+          "vtable_slot": "0x50"
+        }
+      ]
+    },
+    {
+      "type_id": 1006,
+      "name": "Zombie",
+      "display_name": "ZOMBIE",
+      "allegiance": "hostile",
+      "family": "zombie",
+      "config_fields": [
+        "FLYBLOWN",
+        "BODY TYPE",
+        "POISON PUNCH DPS",
+        "POISON POOL DPS",
+        "POISON DURATION"
+      ],
+      "behavior": [
+        "Contact applies knockback and can attach a Poisoned modifier using the configured punch DPS and duration.",
+        "The flyblown/body selectors change presentation; death can leave a PoisonPool carrying the configured pool DPS."
+      ],
+      "evidence_functions": {
+        "tick": "0x004863A0",
+        "render": "0x00493390",
+        "attack_and_modifiers": "0x0047DB90"
+      },
+      "spawned_types": [
+        7021,
+        7026,
+        2054
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x3EE",
+      "allocation_size": 608,
+      "allocation_size_hex": "0x260",
+      "constructor": "0x004740C0",
+      "vtable": "0x00785F0C",
+      "selected_vtable_slots": {
+        "0x04": "0x00486380",
+        "0x08": "0x004863A0",
+        "0x1C": "0x00493390",
+        "0x28": "0x004842A0",
+        "0x4C": "0x0048B1E0",
+        "0x50": "0x004947B0",
+        "0x6C": "0x004763E0"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2088,
+          "last_record": 2094,
+          "consumer_function": "0x004947B0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2095,
+          "last_record": 2148,
+          "consumer_function": "0x00493390",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2149,
+          "last_record": 2202,
+          "consumer_function": "0x00493390",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2203,
+          "last_record": 2220,
+          "consumer_function": "0x00493390",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2275,
+          "last_record": 2292,
+          "consumer_function": "0x00493390",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2293,
+          "last_record": 2310,
+          "consumer_function": "0x00493390",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2293,
+          "last_record": 2310,
+          "consumer_function": "0x004947B0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2365,
+          "last_record": 2508,
+          "consumer_function": "0x00493390",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 10,
+          "last_record": 10,
+          "consumer_function": "0x004863A0",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 11,
+          "last_record": 11,
+          "consumer_function": "0x004863A0",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 26,
+          "last_record": 26,
+          "consumer_function": "0x00493390",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 80,
+          "last_record": 80,
+          "consumer_function": "0x004842A0",
+          "vtable_slot": "0x28"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 86,
+          "last_record": 86,
+          "consumer_function": "0x004947B0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "inline",
+          "first_record": 30,
+          "last_record": 30,
+          "consumer_function": "0x004947B0",
+          "vtable_slot": "0x50"
+        }
+      ]
+    },
+    {
+      "type_id": 1007,
+      "name": "Wraith",
+      "display_name": "WRAITH",
+      "allegiance": "hostile",
+      "family": "wraith",
+      "config_fields": [
+        "FLAMING"
+      ],
+      "behavior": [
+        "Alternates approach, orbit/retreat, attack, and fade visibility states rather than using only straight chase.",
+        "Its hit path creates the Dazzle status modifier; FLAMING adds the shared burning presentation."
+      ],
+      "evidence_functions": {
+        "initialize": "0x00486BB0",
+        "tick": "0x00486C30",
+        "render": "0x00496220"
+      },
+      "spawned_types": [
+        7022,
+        2019
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x3EF",
+      "allocation_size": 564,
+      "allocation_size_hex": "0x234",
+      "constructor": "0x00474470",
+      "vtable": "0x00785FAC",
+      "selected_vtable_slots": {
+        "0x04": "0x00486BB0",
+        "0x08": "0x00486C30",
+        "0x1C": "0x00496220",
+        "0x28": "0x0055C300",
+        "0x4C": "0x0048B290",
+        "0x50": "0x00495600",
+        "0x6C": "0x00478EA0"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 113,
+          "last_record": 121,
+          "consumer_function": "0x00495600",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1819,
+          "last_record": 1822,
+          "consumer_function": "0x00495600",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2070,
+          "last_record": 2087,
+          "consumer_function": "0x00496220",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 21,
+          "last_record": 21,
+          "consumer_function": "0x00486C30",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 86,
+          "last_record": 86,
+          "consumer_function": "0x00495600",
+          "vtable_slot": "0x50"
+        }
+      ]
+    },
+    {
+      "type_id": 1008,
+      "name": "DemonSkull",
+      "display_name": "THE DISCORPOREAL",
+      "allegiance": "hostile_boss",
+      "family": "boss",
+      "config_fields": [
+        "EYE LASERS",
+        "MOUTH BEAM",
+        "SPIT FIRE",
+        "SPIT IMPS",
+        "EYE LASER DAMAGE",
+        "BEAM DPS",
+        "FIRE DPS"
+      ],
+      "behavior": [
+        "A bitfield enables eye-laser, mouth-beam, and Unholy Spit scheduling; bite/lunge, scream, and flair are separate animation/action states.",
+        "Eye-laser state creates two EyeLaser objects. Mouth beam performs its own geometric collision scan and leaves Green Fire presentation/remnants.",
+        "SPIT IMPS is copied into Unholy Spit and changes detonation payload; it is not an independently scheduled fourth ranged attack."
+      ],
+      "evidence_functions": {
+        "schedule_attack": "0x00474930",
+        "tick": "0x004963C0",
+        "render": "0x004974D0",
+        "event_dispatch": "0x00498180",
+        "mouth_beam": "0x0044FFE0",
+        "spit_action": "0x00449A00",
+        "unholy_spit_impact": "0x005EA6F0"
+      },
+      "spawned_types": [
+        2047,
+        2043,
+        2042,
+        2044
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x3F0",
+      "allocation_size": 628,
+      "allocation_size_hex": "0x274",
+      "constructor": "0x00474660",
+      "vtable": "0x00786074",
+      "selected_vtable_slots": {
+        "0x04": "0x004871F0",
+        "0x08": "0x004963C0",
+        "0x1C": "0x004974D0",
+        "0x28": "0x00474A20",
+        "0x4C": "0x0048A290",
+        "0x50": "0x004819D0",
+        "0x6C": "0x004763E0"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 375,
+          "last_record": 376,
+          "consumer_function": "0x004963C0",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "inline",
+          "first_record": 16,
+          "last_record": 16,
+          "consumer_function": "0x004963C0",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "Unholy",
+          "destination_kind": "array",
+          "first_record": 99,
+          "last_record": 170,
+          "consumer_function": "0x004974D0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Unholy",
+          "destination_kind": "array",
+          "first_record": 99,
+          "last_record": 170,
+          "consumer_function": "0x00498180",
+          "vtable_slot": "0x58"
+        },
+        {
+          "atlas": "Unholy",
+          "destination_kind": "array",
+          "first_record": 171,
+          "last_record": 218,
+          "consumer_function": "0x004974D0",
+          "vtable_slot": "0x1C"
+        }
+      ]
+    },
+    {
+      "type_id": 1009,
+      "name": "Demon",
+      "display_name": "LESSER DEMON",
+      "allegiance": "hostile_boss",
+      "family": "boss",
+      "config_fields": [
+        "SPLITS"
+      ],
+      "behavior": [
+        "Uses a multi-part articulated Demon-atlas renderer and a dedicated boss action state machine.",
+        "Its attack event creates DemonBomb; death creates the configured number of radial Imp children inheriting team/combat scalars."
+      ],
+      "evidence_functions": {
+        "tick": "0x00487300",
+        "render": "0x00498BA0",
+        "event_dispatch": "0x0049A270",
+        "death_split": "0x00482930"
+      },
+      "spawned_types": [
+        2039,
+        1004,
+        2019
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x3F1",
+      "allocation_size": 740,
+      "allocation_size_hex": "0x2E4",
+      "constructor": "0x00479150",
+      "vtable": "0x00786114",
+      "selected_vtable_slots": {
+        "0x04": "0x00487230",
+        "0x08": "0x00487300",
+        "0x1C": "0x00498BA0",
+        "0x28": "0x00479540",
+        "0x4C": "0x0048A290",
+        "0x50": "0x00482930",
+        "0x6C": "0x004763E0"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 251,
+          "last_record": 254,
+          "consumer_function": "0x00487300",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 251,
+          "last_record": 254,
+          "consumer_function": "0x0049A270",
+          "vtable_slot": "0x58"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 401,
+          "last_record": 419,
+          "consumer_function": "0x00482930",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 46,
+          "last_record": 77,
+          "consumer_function": "0x00479150"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 46,
+          "last_record": 77,
+          "consumer_function": "0x00487300",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 46,
+          "last_record": 77,
+          "consumer_function": "0x00498BA0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Demon",
+          "destination_kind": "array",
+          "first_record": 1,
+          "last_record": 18,
+          "consumer_function": "0x00498BA0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Demon",
+          "destination_kind": "array",
+          "first_record": 19,
+          "last_record": 54,
+          "consumer_function": "0x00498BA0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Demon",
+          "destination_kind": "array",
+          "first_record": 19,
+          "last_record": 54,
+          "consumer_function": "0x0049A270",
+          "vtable_slot": "0x58"
+        },
+        {
+          "atlas": "Demon",
+          "destination_kind": "array",
+          "first_record": 55,
+          "last_record": 61,
+          "consumer_function": "0x00498BA0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Demon",
+          "destination_kind": "array",
+          "first_record": 62,
+          "last_record": 79,
+          "consumer_function": "0x00498BA0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Demon",
+          "destination_kind": "array",
+          "first_record": 80,
+          "last_record": 97,
+          "consumer_function": "0x00498BA0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Demon",
+          "destination_kind": "array",
+          "first_record": 98,
+          "last_record": 115,
+          "consumer_function": "0x00498BA0",
+          "vtable_slot": "0x1C"
+        }
+      ]
+    },
+    {
+      "type_id": 1010,
+      "name": "DireFaculty",
+      "display_name": "DIRE FACULTY",
+      "allegiance": "hostile_boss",
+      "family": "boss",
+      "config_fields": [
+        "PRIMARY ATTACK",
+        "SECONDARY ATTACK",
+        "HAT",
+        "GENDER",
+        "PRIMARY DAMAGE",
+        "SECONDARY DAMAGE"
+      ],
+      "behavior": [
+        "Primary indexes 0..2 dispatch Death Missile, Blightning, and Direball. Secondary indexes 0..2 dispatch Acid Pain, Tragic Circle, and Ring of Dire.",
+        "The stock UI/config strings expose primary index 3 FAUST JET and secondary index 3 THING OF ICE, but the recovered event dispatcher has no corresponding branch; this remains a live-validation item rather than an invented behavior."
+      ],
+      "evidence_functions": {
+        "attack_trigger": "0x00475340",
+        "tick": "0x0049D0D0",
+        "render": "0x0049DF30",
+        "event_dispatch": "0x004804D0",
+        "death": "0x0049E8F0"
+      },
+      "spawned_types": [
+        2048,
+        2049,
+        2050,
+        2052
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x3F2",
+      "allocation_size": 624,
+      "allocation_size_hex": "0x270",
+      "constructor": "0x00474E50",
+      "vtable": "0x0078626C",
+      "selected_vtable_slots": {
+        "0x04": "0x00488E90",
+        "0x08": "0x0049D0D0",
+        "0x1C": "0x0049DF30",
+        "0x28": "0x004842A0",
+        "0x4C": "0x0048A600",
+        "0x50": "0x0049E8F0",
+        "0x6C": "0x004763E0"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 113,
+          "last_record": 121,
+          "consumer_function": "0x0049D0D0",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 113,
+          "last_record": 121,
+          "consumer_function": "0x0049E8F0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 401,
+          "last_record": 419,
+          "consumer_function": "0x0049E8F0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1819,
+          "last_record": 1822,
+          "consumer_function": "0x0049E8F0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 10,
+          "last_record": 10,
+          "consumer_function": "0x004804D0",
+          "vtable_slot": "0x58"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 10,
+          "last_record": 10,
+          "consumer_function": "0x0049D0D0",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 10,
+          "last_record": 10,
+          "consumer_function": "0x0049E8F0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 11,
+          "last_record": 11,
+          "consumer_function": "0x004804D0",
+          "vtable_slot": "0x58"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 11,
+          "last_record": 11,
+          "consumer_function": "0x0049D0D0",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 11,
+          "last_record": 11,
+          "consumer_function": "0x0049E8F0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 80,
+          "last_record": 80,
+          "consumer_function": "0x004842A0",
+          "vtable_slot": "0x28"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 86,
+          "last_record": 86,
+          "consumer_function": "0x0049E8F0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "Faculty",
+          "destination_kind": "array",
+          "first_record": 1,
+          "last_record": 90,
+          "consumer_function": "0x0049DF30",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Faculty",
+          "destination_kind": "array",
+          "first_record": 91,
+          "last_record": 108,
+          "consumer_function": "0x0049DF30",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Faculty",
+          "destination_kind": "array",
+          "first_record": 109,
+          "last_record": 126,
+          "consumer_function": "0x0049DF30",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Faculty",
+          "destination_kind": "array",
+          "first_record": 127,
+          "last_record": 144,
+          "consumer_function": "0x0049DF30",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Faculty",
+          "destination_kind": "array",
+          "first_record": 145,
+          "last_record": 162,
+          "consumer_function": "0x0049DF30",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Faculty",
+          "destination_kind": "array",
+          "first_record": 163,
+          "last_record": 180,
+          "consumer_function": "0x0049DF30",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Faculty",
+          "destination_kind": "array",
+          "first_record": 181,
+          "last_record": 198,
+          "consumer_function": "0x0049DF30",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Faculty",
+          "destination_kind": "array",
+          "first_record": 199,
+          "last_record": 360,
+          "consumer_function": "0x0049DF30",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Faculty",
+          "destination_kind": "array",
+          "first_record": 361,
+          "last_record": 522,
+          "consumer_function": "0x0049DF30",
+          "vtable_slot": "0x1C"
+        }
+      ]
+    },
+    {
+      "type_id": 1011,
+      "name": "Heartmonger",
+      "display_name": "HEARTMONGER",
+      "allegiance": "hostile_boss",
+      "family": "boss",
+      "config_fields": [
+        "CROWS",
+        "CHANCE TO BLIND",
+        "SKELEFRIENDS"
+      ],
+      "behavior": [
+        "Initialization allocates the configured Crow helpers at evenly spaced orbit phases; the parent updates and owns them while alive.",
+        "Crows scan periodically, dive, apply Heartmonger primary damage, and can blind only the player when the configured percentage roll succeeds.",
+        "SKELEFRIENDS selects a randomized summon interval; expiry can spawn Skeleton, SkeletonArcher, or one/two Imps with selected wave modifiers.",
+        "Death detaches surviving crows into the arena helper list before the common reward/drop and fragment presentation completes."
+      ],
+      "evidence_functions": {
+        "initialize": "0x00488F20",
+        "tick": "0x00489000",
+        "render": "0x0049F870",
+        "crow_strike": "0x0047A160",
+        "death": "0x0049FB60"
+      },
+      "spawned_types": [
+        1012,
+        1001,
+        1002,
+        1004
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x3F3",
+      "allocation_size": 780,
+      "allocation_size_hex": "0x30C",
+      "constructor": "0x0048B970",
+      "vtable": "0x00786E54",
+      "selected_vtable_slots": {
+        "0x04": "0x00488F20",
+        "0x08": "0x00489000",
+        "0x1C": "0x0049F870",
+        "0x28": "0x004A0CC0",
+        "0x4C": "0x0048A600",
+        "0x50": "0x0049FB60",
+        "0x6C": "0x004773E0"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 113,
+          "last_record": 121,
+          "consumer_function": "0x0049FB60",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 172,
+          "last_record": 174,
+          "consumer_function": "0x0049FB60",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1819,
+          "last_record": 1822,
+          "consumer_function": "0x0049FB60",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 29,
+          "last_record": 29,
+          "consumer_function": "0x0049FB60",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 86,
+          "last_record": 86,
+          "consumer_function": "0x0049FB60",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "Heartmonger",
+          "destination_kind": "array",
+          "first_record": 110,
+          "last_record": 145,
+          "consumer_function": "0x0049F870",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Heartmonger",
+          "destination_kind": "array",
+          "first_record": 146,
+          "last_record": 199,
+          "consumer_function": "0x0049F870",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Heartmonger",
+          "destination_kind": "array",
+          "first_record": 200,
+          "last_record": 379,
+          "consumer_function": "0x0049F870",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Heartmonger",
+          "destination_kind": "array",
+          "first_record": 200,
+          "last_record": 379,
+          "consumer_function": "0x004A0CC0",
+          "vtable_slot": "0x28"
+        }
+      ]
+    },
+    {
+      "type_id": 1012,
+      "name": "Crow",
+      "display_name": "HEARTMONGER CROW",
+      "allegiance": "hostile_helper",
+      "family": "heartmonger_helper",
+      "config_fields": [
+        "parent identity",
+        "orbit phase",
+        "target identity"
+      ],
+      "behavior": [
+        "Orbits a Heartmonger parent, scans for a valid target on a cadence, dives once selected, and then returns to orbit.",
+        "Parent death clears ownership and registers the helper independently; Crow is not a normal reward/drop-bearing Badguy actor."
+      ],
+      "evidence_functions": {
+        "constructor": "0x00475480",
+        "tick": "0x0047EA70",
+        "strike": "0x0047A160"
+      },
+      "spawned_types": [],
+      "drop_policy": "none_helper",
+      "type_id_hex": "0x3F4",
+      "allocation_size": 108,
+      "allocation_size_hex": "0x6C",
+      "constructor": "0x00475480",
+      "vtable": "0x00786340",
+      "selected_vtable_slots": {
+        "0x04": "0x0055C300",
+        "0x08": "0x0047EA70"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "Heartmonger",
+          "destination_kind": "array",
+          "first_record": 2,
+          "last_record": 109,
+          "consumer_function": "0x004A1490",
+          "vtable_slot": "0x0C"
+        }
+      ]
+    },
+    {
+      "type_id": 1013,
+      "name": "Coffin",
+      "display_name": "COFFIN",
+      "allegiance": "hostile",
+      "family": "coffin",
+      "config_fields": [
+        "MAX MAGGOTS",
+        "MAGGOT HP",
+        "MAGGOT DAMAGE",
+        "MAGGOT POISON DAMAGE"
+      ],
+      "behavior": [
+        "Runs closed, opening/charging, delay, and open/active states; opening creates initial Maggots and the active state can replenish them up to the live-child limit.",
+        "Each Maggot inherits configured HP, primary damage, poison damage, arena/team identity, and a parent identity used for live-count accounting.",
+        "The open state also scans nearby actors for Coffin poison/damage logic and excludes Golem from the poison modifier."
+      ],
+      "evidence_functions": {
+        "initialize": "0x00487F30",
+        "tick": "0x004A2760",
+        "spawn_maggot": "0x00479C30",
+        "render": "0x0049AC90",
+        "alternate_render": "0x0049AEE0",
+        "death": "0x0049B310"
+      },
+      "spawned_types": [
+        2045,
+        7026
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x3F5",
+      "allocation_size": 752,
+      "allocation_size_hex": "0x2F0",
+      "constructor": "0x00479940",
+      "vtable": "0x00786744",
+      "selected_vtable_slots": {
+        "0x04": "0x00487F30",
+        "0x08": "0x004A2760",
+        "0x1C": "0x0049AC90",
+        "0x28": "0x0049AEE0",
+        "0x4C": "0x0048A290",
+        "0x50": "0x0049B310",
+        "0x6C": "0x004763E0"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 113,
+          "last_record": 121,
+          "consumer_function": "0x0049B310",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 175,
+          "last_record": 187,
+          "consumer_function": "0x0049AC90",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 175,
+          "last_record": 187,
+          "consumer_function": "0x0049AEE0",
+          "vtable_slot": "0x28"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 383,
+          "last_record": 392,
+          "consumer_function": "0x0049AC90",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 383,
+          "last_record": 392,
+          "consumer_function": "0x0049AEE0",
+          "vtable_slot": "0x28"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1819,
+          "last_record": 1822,
+          "consumer_function": "0x0049B310",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2013,
+          "last_record": 2062,
+          "consumer_function": "0x0049B310",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2067,
+          "last_record": 2069,
+          "consumer_function": "0x0049B310",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 86,
+          "last_record": 86,
+          "consumer_function": "0x0049B310",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 114,
+          "last_record": 144,
+          "consumer_function": "0x0049B310",
+          "vtable_slot": "0x50"
+        }
+      ]
+    },
+    {
+      "type_id": 2044,
+      "name": "GreenImp",
+      "display_name": "GREEN IMP",
+      "allegiance": "hostile",
+      "family": "imp",
+      "config_fields": [
+        "inherited Unholy Spit payload"
+      ],
+      "behavior": [
+        "Uses the Imp chase logic and a distinct render class.",
+        "Unholy Spit with SPIT IMPS enabled samples its trajectory and spawns Green Imps only where the arena placement predicate succeeds."
+      ],
+      "evidence_functions": {
+        "constructor": "0x00474D20",
+        "tick": "0x00485DC0",
+        "render": "0x004930D0",
+        "spit_spawn_owner": "0x005EA6F0"
+      },
+      "spawned_types": [],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x7FC",
+      "allocation_size": 572,
+      "allocation_size_hex": "0x23C",
+      "constructor": "0x00474D20",
+      "vtable": "0x007861B4",
+      "selected_vtable_slots": {
+        "0x04": "0x00483480",
+        "0x08": "0x00485DC0",
+        "0x1C": "0x004930D0",
+        "0x28": "0x0055C300",
+        "0x4C": "0x0048B1C0",
+        "0x50": "0x004824A0",
+        "0x6C": "0x00478560"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 251,
+          "last_record": 254,
+          "consumer_function": "0x00485DC0",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 401,
+          "last_record": 419,
+          "consumer_function": "0x00480280",
+          "vtable_slot": "0x9C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 15,
+          "last_record": 15,
+          "consumer_function": "0x00478B80",
+          "vtable_slot": "0x98"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 86,
+          "last_record": 86,
+          "consumer_function": "0x004824A0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "Unholy",
+          "destination_kind": "array",
+          "first_record": 41,
+          "last_record": 88,
+          "consumer_function": "0x004930D0",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "Unholy",
+          "destination_kind": "array",
+          "first_record": 89,
+          "last_record": 98,
+          "consumer_function": "0x004930D0",
+          "vtable_slot": "0x1C"
+        }
+      ]
+    },
+    {
+      "type_id": 2045,
+      "name": "Maggot",
+      "display_name": "MAGGOT",
+      "allegiance": "hostile_child",
+      "family": "coffin",
+      "config_fields": [
+        "parent identity",
+        "inherited HP",
+        "inherited damage",
+        "inherited poison damage"
+      ],
+      "behavior": [
+        "Emerges ballistically from one of the Coffin lid/edge launch paths, then transitions to crawling behavior.",
+        "A valid bite applies primary damage and optional poison (except to Golem), then immediately invokes Maggot death; the bite is single-use.",
+        "Parent loss/out-of-range cleanup and the normal bite/death path update the Coffin live-child count through the stored parent identity."
+      ],
+      "evidence_functions": {
+        "initialize": "0x00487F60",
+        "tick": "0x0048B2A0",
+        "emergence": "0x0047E410",
+        "parent_accounting": "0x00487FD0",
+        "contact_behavior": "0x004881A0",
+        "death": "0x0049C830"
+      },
+      "spawned_types": [
+        7026
+      ],
+      "drop_policy": "suppressed_in_drop_selector",
+      "type_id_hex": "0x7FD",
+      "allocation_size": 616,
+      "allocation_size_hex": "0x268",
+      "constructor": "0x0047E0F0",
+      "vtable": "0x00786B64",
+      "selected_vtable_slots": {
+        "0x04": "0x00487F60",
+        "0x08": "0x0048B2A0",
+        "0x1C": "0x0049C190",
+        "0x28": "0x0049C350",
+        "0x4C": "0x0048A290",
+        "0x50": "0x0049C830",
+        "0x6C": "0x004763E0"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 202,
+          "last_record": 237,
+          "consumer_function": "0x0049C190",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 202,
+          "last_record": 237,
+          "consumer_function": "0x0049C350",
+          "vtable_slot": "0x28"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2013,
+          "last_record": 2062,
+          "consumer_function": "0x0049C190",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 2013,
+          "last_record": 2062,
+          "consumer_function": "0x0049C830",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "inline",
+          "first_record": 28,
+          "last_record": 28,
+          "consumer_function": "0x0049C830",
+          "vtable_slot": "0x50"
+        }
+      ]
+    },
+    {
+      "type_id": 2057,
+      "name": "Spider",
+      "display_name": "SPIDER",
+      "allegiance": "hostile",
+      "family": "spider",
+      "config_fields": [
+        "SPIT WEBS",
+        "COCOON HP",
+        "SUCK DPS"
+      ],
+      "behavior": [
+        "The movement/action state machine covers walking, hop/lunge, web-spit startup, and a grab/suck state.",
+        "Web spit creates Silk, not Cocoon directly; Silk collision applies Mod_Webbed with the cocoon-strength payload, and reaching the web threshold asks the target actor to create Cocoon.",
+        "Grab contact applies primary damage once, follows the held target, and applies half of configured suck DPS every 25 ticks while the target remains valid."
+      ],
+      "evidence_functions": {
+        "tick": "0x00489610",
+        "behavior": "0x0047A580",
+        "spit_eligibility": "0x00475DB0",
+        "spawn_silk": "0x00475AC0",
+        "hop_lunge": "0x00475CD0",
+        "contact": "0x0048BC80",
+        "render": "0x004A1670",
+        "death": "0x00482D60"
+      },
+      "spawned_types": [
+        2056,
+        7033,
+        2058
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x809",
+      "allocation_size": 596,
+      "allocation_size_hex": "0x254",
+      "constructor": "0x004759A0",
+      "vtable": "0x0078643C",
+      "selected_vtable_slots": {
+        "0x04": "0x00489600",
+        "0x08": "0x00489610",
+        "0x1C": "0x004A1670",
+        "0x28": "0x00489620",
+        "0x4C": "0x0048BC80",
+        "0x50": "0x00482D60",
+        "0x6C": "0x0047A580"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1840,
+          "last_record": 1911,
+          "consumer_function": "0x004A1670",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1912,
+          "last_record": 1929,
+          "consumer_function": "0x004A1670",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1930,
+          "last_record": 2001,
+          "consumer_function": "0x004A1670",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 27,
+          "last_record": 27,
+          "consumer_function": "0x0047A580",
+          "vtable_slot": "0x6C"
+        }
+      ]
+    },
+    {
+      "type_id": 2058,
+      "name": "Cocoon",
+      "display_name": "COCOON",
+      "allegiance": "hostile_child",
+      "family": "spider",
+      "config_fields": [
+        "target actor identity",
+        "fixed creation position",
+        "target-side maximum web payload"
+      ],
+      "behavior": [
+        "Mod_Webbed reaching its threshold calls the target actor's Cocoon helper; the actor creates Cocoon only when its previously stored Cocoon identity no longer resolves, preventing duplicates on one target.",
+        "Cocoon stores the target actor identity, remains fixed at its initialization position while the web state immobilizes the target, and its contact/death handler monitors that actor before release presentation and common death state."
+      ],
+      "evidence_functions": {
+        "constructor": "0x0047BAE0",
+        "initialize": "0x0047BB50",
+        "tick": "0x00475D10",
+        "contact_or_release": "0x0048BCE0",
+        "web_modifier_merge": "0x00627BD0",
+        "target_create_or_refresh": "0x0052C680"
+      },
+      "spawned_types": [],
+      "drop_policy": "suppressed_in_drop_selector",
+      "type_id_hex": "0x80A",
+      "allocation_size": 540,
+      "allocation_size_hex": "0x21C",
+      "constructor": "0x0047BAE0",
+      "vtable": "0x0078682C",
+      "selected_vtable_slots": {
+        "0x04": "0x0047BB50",
+        "0x08": "0x00475D10",
+        "0x1C": "0x0055C300",
+        "0x28": "0x0055C300",
+        "0x4C": "0x0048BCE0",
+        "0x50": "0x004819D0",
+        "0x6C": "0x004763E0"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 10,
+          "last_record": 10,
+          "consumer_function": "0x0048BCE0",
+          "vtable_slot": "0x4C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 11,
+          "last_record": 11,
+          "consumer_function": "0x0048BCE0",
+          "vtable_slot": "0x4C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 27,
+          "last_record": 27,
+          "consumer_function": "0x0048BCE0",
+          "vtable_slot": "0x4C"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "inline",
+          "first_record": 14,
+          "last_record": 14,
+          "consumer_function": "0x0048BCE0",
+          "vtable_slot": "0x4C"
+        }
+      ]
+    },
+    {
+      "type_id": 5021,
+      "name": "Portal",
+      "display_name": "IMP PORTAL",
+      "allegiance": "hostile_spawner",
+      "family": "portal",
+      "config_fields": [
+        "IMP FREQUENCY"
+      ],
+      "behavior": [
+        "Materializes for ten ticks and then remains stationary while animating.",
+        "A randomized countdown selected by the IMP FREQUENCY enum creates an ejected airborne Imp, copies portal team and primary damage, then resets the countdown."
+      ],
+      "evidence_functions": {
+        "tick": "0x00489CC0",
+        "render": "0x004A1B30",
+        "alternate_render": "0x004A1CB0",
+        "contact": "0x0048C370",
+        "death": "0x004A1FA0"
+      },
+      "spawned_types": [
+        1004
+      ],
+      "drop_policy": "common_selector",
+      "type_id_hex": "0x139D",
+      "allocation_size": 572,
+      "allocation_size_hex": "0x23C",
+      "constructor": "0x0047BD60",
+      "vtable": "0x007868CC",
+      "selected_vtable_slots": {
+        "0x04": "0x00483480",
+        "0x08": "0x00489CC0",
+        "0x1C": "0x004A1B30",
+        "0x28": "0x004A1CB0",
+        "0x4C": "0x0048C370",
+        "0x50": "0x004A1FA0",
+        "0x6C": "0x004763E0"
+      },
+      "direct_class_art_uses": [
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 251,
+          "last_record": 254,
+          "consumer_function": "0x00489CC0",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 401,
+          "last_record": 419,
+          "consumer_function": "0x0048C370",
+          "vtable_slot": "0x4C"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "array",
+          "first_record": 1823,
+          "last_record": 1833,
+          "consumer_function": "0x004A1FA0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "BadGuys",
+          "destination_kind": "inline",
+          "first_record": 27,
+          "last_record": 27,
+          "consumer_function": "0x004A1FA0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 46,
+          "last_record": 77,
+          "consumer_function": "0x0047BD60"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 46,
+          "last_record": 77,
+          "consumer_function": "0x00489CC0",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 46,
+          "last_record": 77,
+          "consumer_function": "0x004A1B30",
+          "vtable_slot": "0x1C"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 114,
+          "last_record": 144,
+          "consumer_function": "0x004A1FA0",
+          "vtable_slot": "0x50"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 180,
+          "last_record": 199,
+          "consumer_function": "0x0047BD60"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 180,
+          "last_record": 199,
+          "consumer_function": "0x00489CC0",
+          "vtable_slot": "0x08"
+        },
+        {
+          "atlas": "DeadHawg",
+          "destination_kind": "array",
+          "first_record": 180,
+          "last_record": 199,
+          "consumer_function": "0x004A1CB0",
+          "vtable_slot": "0x28"
+        }
+      ]
+    }
+  ]
+}

@@ -35,7 +35,7 @@ Evidence statuses:
 | Cast ownership/cleanup | `0x00548B00`, `0x00548A00`, `0x0052F3B0` | spell-dependent | Mapped | [spell-cast-cleanup-chain.md](../spell-cast-cleanup-chain.md) |
 | Every primary/secondary spell | skill CFG catalog and native handlers | Skills plus effect atlases | Mapped | [native-skills-and-spells.md](native-skills-and-spells.md) |
 | Every projectile/transient effect | 46 factory classes and 197 decompiled lifecycle methods | BadGuys, DeadHawg, Golem, Unholy, UI plus child animation art | Mapped | [native-projectiles-and-effects.md](native-projectiles-and-effects.md) |
-| Enemy families, attacks, death effects, drops | factory/config/tick/render vtables | BadGuys, Demon, Golem, Heartmonger, Unholy, Faculty | In progress | This document; [skeleton-death-effects-re.md](../skeleton-death-effects-re.md) |
+| Enemy families, attacks, death effects, drops | factory/config/tick/render vtables | BadGuys, Demon, Golem, Heartmonger, Unholy, Faculty | Mapped | [native-enemies.md](native-enemies.md); [skeleton-death-effects-re.md](../skeleton-death-effects-re.md) |
 | Boneyard grammar and world materialization | level loaders/factories | Bonedit plus world atlases/loose images | In progress | This document, boneyard map pending |
 | World tiles/props/doors/portals/NPCs/boss rooms | world initializer and object factories | College, Library, Office, Storage, Memoratorium, NPCs, loose images | Queued | This document |
 | Item catalog/recipes/effects | `0x00574D60`, `0x00573570`, `0x005722A0` | Inventory, Clothes, Solomon attachments | In progress | [inventory-item-investigation.md](../inventory-item-investigation.md) plus item matrix pending |
@@ -219,6 +219,25 @@ case, including passive/concentration refresh, spawned types, initialization
 payloads, status modifiers, and persistent toggles. Remaining closure is
 indirect child-animation record joining and isolated live validation of
 high-risk persistent effects.
+
+## Enemy families and enemy-owned children
+
+The native enemy census is now closed at 19 participating runtime types,
+including the `Badguy` base, Good/Green Imp variants, Heartmonger Crow helper,
+Coffin Maggot, Spider Cocoon, and stationary Imp Portal. The complete config
+parser, wave-flag transforms, construction/registration path, target/chase
+ABI, family action state machines, child ownership, boss spell dispatch,
+death presentation, reward eligibility, one-candidate drop selector, and
+direct atlas ranges are documented in
+[native-enemies.md](native-enemies.md). The generated
+[native-enemy-catalog.json](native-enemy-catalog.json) preserves the finite
+type list and evidence joins.
+
+Two static edge cases remain intentionally labeled for later live validation:
+Dire Faculty exposes but does not dispatch its index-3 primary/secondary
+labels, and Portal's frequency enum chooses countdown bounds whose exact
+switch arithmetic was not recovered cleanly. Neither uncertainty changes the
+proved object ownership or art-consumer map.
 
 ## Item and ground-loot roots already established
 
