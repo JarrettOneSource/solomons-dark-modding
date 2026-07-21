@@ -9,10 +9,12 @@ from pathlib import Path
 from typing import Any
 
 import multiplayer_defense_behavior_harness as defense_harness
+import multiplayer_natural_defense_harness as natural_defense_harness
 import multiplayer_persistent_status_harness as persistent_harness
 import multiplayer_progression_probe as progression
 import multiplayer_staff_behavior_harness as staff_harness
 import multiplayer_transient_status_harness as transient_harness
+import multiplayer_webbed_status_harness as webbed_harness
 import probe_run_reward_sync as rewards
 import verify_flat_multiplayer_boneyard as flat_boneyard
 import verify_local_multiplayer_sync as local_verify
@@ -34,6 +36,7 @@ import verify_multiplayer_rush_behavior_sync as rush
 import verify_multiplayer_staff_stat_behavior_sync as staff
 import verify_multiplayer_telekinesis_behavior_sync as telekinesis
 import verify_multiplayer_transient_status_sync as transient
+import verify_multiplayer_webbed_status_sync as webbed
 import verify_player_health_death_sync as health
 import verify_real_input_spell_cast_sync as real_input
 import verify_spell_cast_sync as spell_cast
@@ -67,6 +70,7 @@ class BehaviorContext:
     ]
     defense_directions: tuple[defense.Direction, defense.Direction]
     rush_directions: tuple[rush.Direction, rush.Direction]
+    webbed_directions: tuple[webbed.Direction, webbed.Direction]
 
 
 def instance_log(instance: str, override_environment_variable: str) -> Path:
@@ -125,9 +129,12 @@ def configure_behavior_context(pair: SteamFriendActivePair) -> BehaviorContext:
         transient_harness,
         defense,
         defense_harness,
+        natural_defense_harness,
         staff,
         staff_harness,
         rush,
+        webbed,
+        webbed_harness,
     )
     for module in modules:
         for name, value in replacements.items():
@@ -252,6 +259,24 @@ def configure_behavior_context(pair: SteamFriendActivePair) -> BehaviorContext:
             HOST_ENDPOINT,
         ),
     )
+    webbed_directions = (
+        webbed.Direction(
+            "host_owned",
+            pair.host_participant_id,
+            HOST_ENDPOINT,
+            CLIENT_ENDPOINT,
+            False,
+            attack_distance=webbed.LOCAL_OWNER_SPIDER_ATTACK_DISTANCE,
+        ),
+        webbed.Direction(
+            "client_owned",
+            pair.client_participant_id,
+            CLIENT_ENDPOINT,
+            HOST_ENDPOINT,
+            True,
+            attack_distance=webbed.REMOTE_OWNER_SPIDER_ATTACK_DISTANCE,
+        ),
+    )
 
     focus.DIRECTIONS = focus_directions
     faster_caster.DIRECTIONS = faster_directions
@@ -265,6 +290,7 @@ def configure_behavior_context(pair: SteamFriendActivePair) -> BehaviorContext:
     }
     defense.DIRECTIONS = defense_directions
     rush.DIRECTIONS = rush_directions
+    webbed.DIRECTIONS = webbed_directions
 
     return BehaviorContext(
         pair=pair,
@@ -277,6 +303,7 @@ def configure_behavior_context(pair: SteamFriendActivePair) -> BehaviorContext:
         telekinesis_directions=telekinesis_directions,
         defense_directions=defense_directions,
         rush_directions=rush_directions,
+        webbed_directions=webbed_directions,
     )
 
 

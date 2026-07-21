@@ -52,7 +52,11 @@ OUTPUT = ROOT / "runtime/multiplayer_webbed_status_sync.json"
 SPIDER_TYPE_ID = 0x809
 # Native and protocol observations below prove ParticipantTransientStatusFlagWebbed.
 TEST_LIFE = 1_000.0
-SPIDER_ATTACK_DISTANCE = 96.0
+LOCAL_OWNER_SPIDER_ATTACK_DISTANCE = 96.0
+# The pre-wave fixture does not run multiplayer hostile-target widening. Start
+# the Spider in contact with a remote-owned wizard before stock refresh can move
+# it back toward the local host.
+REMOTE_OWNER_SPIDER_ATTACK_DISTANCE = 16.0
 
 
 @dataclass(frozen=True)
@@ -62,11 +66,26 @@ class Direction:
     owner_pipe: str
     observer_pipe: str
     observer_requires_native_modifier: bool
+    attack_distance: float
 
 
 DIRECTIONS = (
-    Direction("host_owned", HOST_ID, HOST_PIPE, CLIENT_PIPE, False),
-    Direction("client_owned", CLIENT_ID, CLIENT_PIPE, HOST_PIPE, True),
+    Direction(
+        "host_owned",
+        HOST_ID,
+        HOST_PIPE,
+        CLIENT_PIPE,
+        False,
+        attack_distance=LOCAL_OWNER_SPIDER_ATTACK_DISTANCE,
+    ),
+    Direction(
+        "client_owned",
+        CLIENT_ID,
+        CLIENT_PIPE,
+        HOST_PIPE,
+        True,
+        attack_distance=REMOTE_OWNER_SPIDER_ATTACK_DISTANCE,
+    ),
 )
 
 
@@ -165,7 +184,7 @@ def run_direction(
     attack = set_enemy_mode(
         "attack",
         direction.participant_id if direction.owner_pipe == CLIENT_PIPE else None,
-        SPIDER_ATTACK_DISTANCE,
+        direction.attack_distance,
         timeout=timeout,
         enemy_actor_address=parse_int_text(
             spider["result"].get("actor_address"),

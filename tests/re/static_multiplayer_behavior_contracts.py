@@ -282,6 +282,10 @@ def test_webbed_status_replicates_stock_state_to_remote_presentation() -> str:
         "dispatch_and_hooks_participant_vitals_actions.inl"
     )
     live_verifier = _read("tools/verify_multiplayer_webbed_status_sync.py")
+    steam_verifier = _read(
+        "tools/verify_steam_friend_active_pair_webbed.py"
+    )
+    steam_context = _read("tools/steam_friend_behavior_context.py")
 
     assert "ParticipantTransientStatusFlagWebbed = 1 << 4" in protocol
     assert "ParticipantTransientStatusFlagWebbed;" in protocol
@@ -344,15 +348,51 @@ def test_webbed_status_replicates_stock_state_to_remote_presentation() -> str:
         assert token in live_verifier, (
             f"genuine two-owner Spider regression lacks {token}"
         )
+    for token in (
+        "context = configure_behavior_context(pair)",
+        "require_shared_test_run(output[\"pair\"])",
+        "context.webbed_directions",
+        "reset_quiet_arena()",
+        "webbed.run_direction(",
+        "find_new_crash_artifacts(started_at)",
+        "primary.cleanup_live_enemies()",
+    ):
+        assert token in steam_verifier, (
+            f"real-Steam Spider/Webbed regression lacks {token}"
+        )
+    assert "launch_pair_ready" not in steam_verifier
+    assert "stop_games" not in steam_verifier
+    for token in (
+        "multiplayer_natural_defense_harness as natural_defense_harness",
+        "multiplayer_webbed_status_harness as webbed_harness",
+        "verify_multiplayer_webbed_status_sync as webbed",
+        "webbed_directions: tuple[webbed.Direction, webbed.Direction]",
+        "webbed.DIRECTIONS = webbed_directions",
+    ):
+        assert token in steam_context, (
+            f"Steam behavior context cannot route Webbed through the active pair: {token}"
+        )
     return (
         "stock Mod_Webbed state transfers from host-simulated Spider hits into "
-        "the client owner and drives matching remote presentation"
+        "the client owner and drives matching remote presentation on real Steam"
     )
 
 
 def test_webbed_fixture_pins_selected_spider_target_until_contact() -> str:
     natural_harness = _read("tools/multiplayer_natural_defense_harness.py")
     live_verifier = _read("tools/verify_multiplayer_webbed_status_sync.py")
+
+    for token in (
+        "LOCAL_OWNER_SPIDER_ATTACK_DISTANCE = 96.0",
+        "REMOTE_OWNER_SPIDER_ATTACK_DISTANCE = 16.0",
+        "attack_distance=LOCAL_OWNER_SPIDER_ATTACK_DISTANCE",
+        "attack_distance=REMOTE_OWNER_SPIDER_ATTACK_DISTANCE",
+        "direction.attack_distance",
+    ):
+        assert token in live_verifier, (
+            "the Spider fixture must use a stock approach for the local owner "
+            "and immediate contact for the remote owner: " + token
+        )
 
     for token in (
         "arena.selected_actor_address = __ENEMY_ACTOR_ADDRESS__",
