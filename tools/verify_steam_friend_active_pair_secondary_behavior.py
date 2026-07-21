@@ -118,9 +118,11 @@ def main() -> int:
 
         output["behaviors"] = {}
         output["arena_resets"] = {}
+        output["post_behavior_retirements"] = {}
         for direction in context.focus_directions:
             output["behaviors"][direction.name] = {}
             output["arena_resets"][direction.name] = {}
+            output["post_behavior_retirements"][direction.name] = {}
             for row in args.rows:
                 skill = secondary.SKILL_BY_ROW[row]
                 output["active_step"] = f"behavior.{direction.name}.{row}"
@@ -137,14 +139,37 @@ def main() -> int:
                         skill.synchronized_effect_type,
                         args.timeout,
                     )
-                output["behaviors"][direction.name][str(row)] = (
-                    secondary.run_skill(
+                behavior = secondary.run_skill(
+                    pair,
+                    direction,
+                    skill,
+                    output["acquisitions"][direction.name][str(row)],
+                    args.timeout,
+                )
+                output["behaviors"][direction.name][str(row)] = behavior
+                shared_effect_types = behavior.get("shared_effect_types", [])
+                retirement_requests = (
+                    secondary.retire_test_player_created_effects(
                         pair,
-                        direction,
-                        skill,
-                        output["acquisitions"][direction.name][str(row)],
+                        shared_effect_types,
                         args.timeout,
                     )
+                )
+                retirements = {
+                    str(native_type_id): secondary.wait_for_effect_type_absent(
+                        pair,
+                        native_type_id,
+                        args.timeout,
+                    )
+                    for native_type_id in sorted(
+                        {int(value) for value in shared_effect_types}
+                    )
+                }
+                output["post_behavior_retirements"][direction.name][str(row)] = (
+                    {
+                        "requests": retirement_requests,
+                        "convergence": retirements,
+                    }
                 )
 
         output["new_crash_artifacts"] = find_new_crash_artifacts(started_at)

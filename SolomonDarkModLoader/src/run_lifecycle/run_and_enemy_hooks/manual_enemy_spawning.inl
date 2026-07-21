@@ -73,7 +73,6 @@ void PinFrozenManualRunEnemies() {
     std::vector<uintptr_t> stale_enemies;
     for (const auto& entry : frozen_enemies) {
         const auto actor_address = entry.first;
-        const auto& freeze = entry.second;
         float hp = 0.0f;
         if (!memory.TryReadField(actor_address, kEnemyCurrentHpOffset, &hp) ||
             !std::isfinite(hp) ||
@@ -82,8 +81,7 @@ void PinFrozenManualRunEnemies() {
             continue;
         }
         ClearFrozenManualRunEnemyControlState(actor_address);
-        (void)memory.TryWriteField(actor_address, kActorPositionXOffset, freeze.x);
-        (void)memory.TryWriteField(actor_address, kActorPositionYOffset, freeze.y);
+        (void)RestoreRunLifecycleFrozenManualEnemyPosition(actor_address);
     }
 
     if (stale_enemies.empty()) {

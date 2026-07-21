@@ -24,6 +24,9 @@ from verify_real_input_spell_cast_sync import read_log
 TARGET_OFFSET_X = 176.0
 TARGET_OFFSET_Y = 0.0
 TARGET_HP = 10000.0
+CURSOR_PLACED_SECONDARY_ROWS = frozenset((11, 27, 45, 49, 50, 72, 73, 74, 76))
+CURSOR_WORLD_TARGET_TOLERANCE = 2.0
+TEST_PLAYER_CREATED_EFFECT_TYPES = frozenset((0x07F4,))
 PLAYER_RESOURCE_MAX = 5000.0
 EFFECT_MONITOR_SECONDS = 3.0
 TARGET_NATIVE_CELL_STABILITY_SECONDS = 0.6
@@ -228,6 +231,18 @@ for _, actor in ipairs(sd.world.list_actors and sd.world.list_actors() or {}) do
 end
 emit('native_type_id', native_type_id)
 emit('count', count)
+"""
+
+
+RETIRE_TEST_PLAYER_CREATED_ACTORS_LUA = r"""
+local native_type_id = tonumber("__NATIVE_TYPE_ID__") or 0
+local function emit(k,v) print(k .. '=' .. tostring(v == nil and '' or v)) end
+local ok, err, requested_count =
+  sd.gameplay.retire_test_run_player_created_actors(native_type_id)
+emit('ok', ok)
+emit('error', err)
+emit('native_type_id', native_type_id)
+emit('requested_count', requested_count)
 """
 
 
@@ -762,6 +777,53 @@ def wait_for_effect_type_absent(
     )
 
 
+def retire_test_player_created_effects(
+    pair: SteamFriendActivePair,
+    native_type_ids: list[int],
+    timeout: float,
+) -> dict[str, dict[str, dict[str, str]]]:
+    endpoints = {
+        "host": HOST_ENDPOINT,
+        "client": CLIENT_ENDPOINT,
+    }
+    result: dict[str, dict[str, dict[str, str]]] = {}
+    for native_type_id in sorted(
+        set(native_type_ids) & TEST_PLAYER_CREATED_EFFECT_TYPES
+    ):
+        code = RETIRE_TEST_PLAYER_CREATED_ACTORS_LUA.replace(
+            "__NATIVE_TYPE_ID__", str(native_type_id)
+        )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {
+                label: executor.submit(
+                    pair.lua,
+                    endpoint,
+                    code,
+                    min(timeout, 12.0),
+                )
+                for label, endpoint in endpoints.items()
+            }
+            peer_values = {
+                label: parse_key_values(future.result())
+                for label, future in futures.items()
+            }
+        for label, values in peer_values.items():
+            if values.get("ok") != "true":
+                raise VerifyFailure(
+                    f"{label} failed to retire its stock-owned test "
+                    f"player-created effect type 0x{native_type_id:X}: "
+                    f"{values}"
+                )
+            if parse_int_text(values.get("requested_count"), 0) < 1:
+                raise VerifyFailure(
+                    f"{label} observed no live stock-owned test "
+                    f"player-created effect type 0x{native_type_id:X} to "
+                    f"retire: {values}"
+                )
+        result[str(native_type_id)] = peer_values
+    return result
+
+
 def verify_synchronized_effect_positions(
     direction: focus.Direction,
     skill: SecondarySkillSpec,
@@ -840,7 +902,9 @@ def wait_for_secondary_delivery(
     source_offset: int,
     observer_offset: int,
     timeout: float,
-) -> dict[str, int]:
+    *,
+    expected_cursor_world: tuple[float, float] | None = None,
+) -> dict[str, Any]:
     local_token = (
         "Multiplayer local secondary cast queued from native dispatcher."
     )
@@ -850,6 +914,13 @@ def wait_for_secondary_delivery(
     replay_count = 0
     mouse_right_injection_count = 0
     keyboard_edge_count = 0
+    cursor_capture: dict[str, float | bool] | None = None
+    cursor_world_error: float | None = None
+    cursor_pattern = re.compile(
+        re.escape(local_token)
+        + rf".*?skill_entry={row}\b.*?cursor_world_placement=(?P<active>[01]) "
+        + r"cursor_world=\((?P<x>[-+0-9.eE]+),(?P<y>[-+0-9.eE]+)\)"
+    )
     while time.monotonic() < deadline:
         local_log = read_log(direction.source_log)[source_offset:]
         observer_log = read_log(direction.observer_log)[observer_offset:]
@@ -869,12 +940,39 @@ def wait_for_secondary_delivery(
         keyboard_edge_count = local_log.count(
             "Consumed queued gameplay keyboard edge."
         )
+        cursor_matches = list(cursor_pattern.finditer(local_log))
+        if cursor_matches:
+            cursor_match = cursor_matches[-1]
+            cursor_capture = {
+                "active": cursor_match.group("active") == "1",
+                "x": float(cursor_match.group("x")),
+                "y": float(cursor_match.group("y")),
+            }
+            if expected_cursor_world is not None:
+                cursor_world_error = math.hypot(
+                    float(cursor_capture["x"]) - expected_cursor_world[0],
+                    float(cursor_capture["y"]) - expected_cursor_world[1],
+                )
         input_witnessed = (
             mouse_right_injection_count >= 1
             if belt_slot == 0
             else keyboard_edge_count >= 1
         )
-        if local_count >= 1 and replay_count >= 1 and input_witnessed:
+        cursor_witnessed = (
+            expected_cursor_world is None
+            or (
+                cursor_capture is not None
+                and bool(cursor_capture["active"])
+                and cursor_world_error is not None
+                and cursor_world_error <= CURSOR_WORLD_TARGET_TOLERANCE
+            )
+        )
+        if (
+            local_count >= 1
+            and replay_count >= 1
+            and input_witnessed
+            and cursor_witnessed
+        ):
             return {
                 "local_accept_count": local_count,
                 "remote_replay_success_count": replay_count,
@@ -882,13 +980,17 @@ def wait_for_secondary_delivery(
                     mouse_right_injection_count
                 ),
                 "native_keyboard_edge_count": keyboard_edge_count,
+                "cursor_capture": cursor_capture,
+                "cursor_world_error": cursor_world_error,
             }
         time.sleep(0.05)
     raise VerifyFailure(
         f"{direction.name} secondary row {row} did not complete native replay: "
         f"local={local_count} remote={replay_count} "
         f"mouse_right={mouse_right_injection_count} "
-        f"keyboard={keyboard_edge_count} belt_slot={belt_slot}"
+        f"keyboard={keyboard_edge_count} belt_slot={belt_slot} "
+        f"expected_cursor_world={expected_cursor_world} "
+        f"cursor_capture={cursor_capture} cursor_world_error={cursor_world_error}"
     )
 
 
@@ -899,7 +1001,9 @@ def cast_secondary_until_delivered(
     source_offset: int,
     observer_offset: int,
     timeout: float,
-) -> tuple[dict[str, Any], dict[str, int]]:
+    *,
+    cursor_world: tuple[float, float] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     local_token = (
         "Multiplayer local secondary cast queued from native dispatcher."
     )
@@ -920,6 +1024,7 @@ def cast_secondary_until_delivered(
                 source_offset,
                 observer_offset,
                 remaining,
+                expected_cursor_world=cursor_world,
             )
             return (
                 {
@@ -938,6 +1043,7 @@ def cast_secondary_until_delivered(
                 direction,
                 belt_slot,
                 remaining,
+                cursor_world=cursor_world,
             )
         )
         time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
@@ -2674,6 +2780,11 @@ def run_generic(
         if target is not None and skill.row == TURN_UNDEAD_ROW
         else None
     )
+    cursor_world = (
+        (float(target["x"]), float(target["y"]))
+        if target is not None and skill.row in CURSOR_PLACED_SECONDARY_ROWS
+        else None
+    )
     input_cast, delivery = cast_secondary_until_delivered(
         direction,
         skill.row,
@@ -2681,6 +2792,7 @@ def run_generic(
         source_offset,
         observer_offset,
         timeout,
+        cursor_world=cursor_world,
     )
     turn_undead_activation = (
         wait_for_turn_undead_activation(

@@ -695,6 +695,32 @@ int LuaGameplayClearManualRunEnemyFreeze(lua_State* state) {
     return 1;
 }
 
+int LuaGameplayRetireTestRunPlayerCreatedActors(lua_State* state) {
+    const auto raw_native_type_id = luaL_checkinteger(state, 1);
+    luaL_argcheck(
+        state,
+        raw_native_type_id > 0 &&
+            static_cast<std::uint64_t>(raw_native_type_id) <=
+                (std::numeric_limits<std::uint32_t>::max)(),
+        1,
+        "native type id is out of range");
+
+    std::uint32_t requested_count = 0;
+    std::string error_message;
+    const bool retired = RetireTestRunPlayerCreatedActors(
+        static_cast<std::uint32_t>(raw_native_type_id),
+        &requested_count,
+        &error_message);
+    lua_pushboolean(state, retired ? 1 : 0);
+    if (error_message.empty()) {
+        lua_pushnil(state);
+    } else {
+        lua_pushstring(state, error_message.c_str());
+    }
+    lua_pushinteger(state, static_cast<lua_Integer>(requested_count));
+    return 3;
+}
+
 int LuaGameplaySetRunEnemyHealth(lua_State* state) {
     const auto actor_address = static_cast<uintptr_t>(luaL_checkinteger(state, 1));
     const auto hp = static_cast<float>(luaL_checknumber(state, 2));
@@ -1854,7 +1880,7 @@ int LuaWorldGetRunEnemyByNetworkId(lua_State* state) {
 }  // namespace
 
 void RegisterLuaGameplayBindings(lua_State* state) {
-    lua_createtable(state, 0, 11);
+    lua_createtable(state, 0, 12);
     RegisterFunction(state, &LuaGameplayStartWaves, "start_waves");
     RegisterFunction(state, &LuaGameplayEnableCombatPrelude, "enable_combat_prelude");
     RegisterFunction(state, &LuaGameplaySetManualEnemySpawnerTestMode, "set_manual_enemy_spawner_test_mode");
@@ -1868,6 +1894,10 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaGameplaySpawnManualRunEnemy, "spawn_manual_run_enemy");
     RegisterFunction(state, &LuaGameplayGetLastManualRunEnemySpawn, "get_last_manual_run_enemy_spawn");
     RegisterFunction(state, &LuaGameplayClearManualRunEnemyFreeze, "clear_manual_run_enemy_freeze");
+    RegisterFunction(
+        state,
+        &LuaGameplayRetireTestRunPlayerCreatedActors,
+        "retire_test_run_player_created_actors");
     RegisterFunction(state, &LuaGameplaySetRunEnemyHealth, "set_run_enemy_health");
     lua_setfield(state, -2, "gameplay");
 

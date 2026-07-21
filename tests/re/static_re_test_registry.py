@@ -92,6 +92,8 @@ from static_multiplayer_behavior_contracts import (
     test_remote_webbed_escape_consumes_owner_movement_intent,
     test_secondary_replay_preserves_owner_authored_aim_when_target_resolves,
     test_secondary_behavior_matrix_uses_native_two_owner_witnesses,
+    test_secondary_matrix_isolates_prior_native_effect_lifetimes,
+    test_secondary_matrix_drives_targeted_stock_cursor_geometry,
     test_shared_menu_pause_is_host_authoritative_and_time_bounded,
     test_stat_matrix_waits_for_expected_derived_contract,
     test_webbed_fixture_requires_canonical_safe_pair_placement,
@@ -168,6 +170,7 @@ from static_re_steam_contracts import (
     test_steam_friend_hub_lifecycle_soak_is_wired,
     test_steam_friend_multiplayer_contract_is_wired,
     test_steam_pair_driver_rejects_ended_runs_before_client_navigation,
+    test_wsl_lua_bridge_bootstraps_from_clean_worktree,
     test_world_snapshots_are_complete_mtu_sized_generations,
 )
 from static_re_runtime_cast_contracts import (
@@ -379,6 +382,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "secondary behavior matrix uses native two-owner witnesses",
         test_secondary_behavior_matrix_uses_native_two_owner_witnesses,
+    ),
+    (
+        "secondary matrix drives targeted stock cursor geometry",
+        test_secondary_matrix_drives_targeted_stock_cursor_geometry,
+    ),
+    (
+        "secondary matrix isolates prior native effect lifetimes",
+        test_secondary_matrix_isolates_prior_native_effect_lifetimes,
     ),
     (
         "secondary replay preserves owner-authored aim",
@@ -712,6 +723,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_manual_enemy_test_mode_logging_is_transition_only,
     ),
     ("Steam friend multiplayer contract is wired", test_steam_friend_multiplayer_contract_is_wired),
+    (
+        "WSL Lua bridge bootstraps from a clean worktree",
+        test_wsl_lua_bridge_bootstraps_from_clean_worktree,
+    ),
     ("Solomon Dark Steam AppID is consistent", test_solomon_dark_steam_app_id_is_consistent),
     (
         "Steam friend hub lifecycle soak is wired",

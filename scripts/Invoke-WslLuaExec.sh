@@ -21,8 +21,9 @@ if [[ -z "$code" ]]; then
 fi
 
 if [[ ! -f "$client" ]]; then
+    build_script_win="$(wslpath -w "$root/scripts/Build-Win32LuaExecClient.ps1")"
     powershell.exe -NoProfile -ExecutionPolicy Bypass \
-        -File "$root/scripts/Build-Win32LuaExecClient.ps1" >/dev/null
+        -File "$build_script_win" >/dev/null
 fi
 wine="$proton_root/files/bin/wine"
 if [[ ! -x "$wine" ]]; then

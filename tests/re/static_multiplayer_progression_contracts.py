@@ -1163,6 +1163,16 @@ def test_cpu_tick_stops_after_virtual_update_marks_object_for_removal() -> str:
 
 
 def test_frozen_manual_enemy_cell_membership_stays_position_coherent() -> str:
+    gameplay_api = _read(
+        "SolomonDarkModLoader/include/mod_loader_gameplay_api.inl"
+    )
+    run_public_api = _read(
+        "SolomonDarkModLoader/src/run_lifecycle/public_api_and_install.inl"
+    )
+    manual_spawning = _read(
+        "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/"
+        "manual_enemy_spawning.inl"
+    )
     monster_pathfinding = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "monster_pathfinding_hook.inl"
@@ -1175,12 +1185,33 @@ def test_frozen_manual_enemy_cell_membership_stays_position_coherent() -> str:
         movement_hook,
         "std::uint32_t __fastcall HookBadguyMoveStep(",
         "TryGetRunLifecycleManualEnemyFreezePosition(",
-        "kActorPositionXOffset, frozen_x",
-        "kActorPositionYOffset, frozen_y",
+        "RestoreRunLifecycleFrozenManualEnemyPosition(actor_address)",
         "return 1;",
         "IsBoundReplicatedRunEnemyActorForLocalClient(actor_address)",
         "return original(movement_context, actor, move_x, move_y);",
     )
+    assert (
+        "bool RestoreRunLifecycleFrozenManualEnemyPosition(uintptr_t actor_address);"
+        in gameplay_api
+    )
+    restore_start = run_public_api.index(
+        "bool RestoreRunLifecycleFrozenManualEnemyPosition("
+    )
+    restore_end = run_public_api.index("\nvoid ", restore_start)
+    restore_body = run_public_api[restore_start:restore_end]
+    _require_in_order(
+        restore_body,
+        "TryGetRunLifecycleManualEnemyFreezePosition(",
+        "kActorPositionXOffset",
+        "kActorPositionYOffset",
+        "RebindSceneActorCell(actor_address, &rebind_error)",
+    )
+    assert "RestoreRunLifecycleFrozenManualEnemyPosition(actor_address)" in (
+        manual_spawning
+    )
+    assert monster_pathfinding.count(
+        "RestoreRunLifecycleFrozenManualEnemyPosition("
+    ) == 2
 
     harness = _read("tools/multiplayer_secondary_behavior_harness.py")
     for token in (

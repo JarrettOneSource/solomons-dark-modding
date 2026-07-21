@@ -390,6 +390,102 @@ void ClearManualRunEnemyFreeze(uintptr_t actor_address) {
     ClearRunLifecycleManualEnemyFreeze(actor_address);
 }
 
+bool RetireTestRunPlayerCreatedActors(
+    std::uint32_t native_type_id,
+    std::uint32_t* requested_count,
+    std::string* error_message) {
+    if (requested_count != nullptr) {
+        *requested_count = 0;
+    }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (!IsRunLifecycleManualEnemySpawnerTestModeEnabled()) {
+        if (error_message != nullptr) {
+            *error_message =
+                "test player-created actor retirement requires manual enemy spawner test mode.";
+        }
+        return false;
+    }
+    if (!multiplayer::IsReplicatedRunPlayerCreatedActorType(native_type_id)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native actor type is not a replicated player-created run actor.";
+        }
+        return false;
+    }
+
+    SDModSceneState scene;
+    if (!TryGetSceneState(&scene) ||
+        !scene.valid ||
+        scene.kind != "arena" ||
+        scene.world_address == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "test player-created actor retirement requires an active arena.";
+        }
+        return false;
+    }
+
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        if (error_message != nullptr) {
+            *error_message = "could not enumerate arena actors for test retirement.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint32_t retired = 0;
+    for (const auto& actor : actors) {
+        if (!actor.valid ||
+            actor.actor_address == 0 ||
+            actor.owner_address != scene.world_address ||
+            actor.object_type_id != native_type_id) {
+            continue;
+        }
+
+        std::uint8_t pending_remove = 0;
+        if (!memory.TryReadField(
+                actor.actor_address,
+                kActorPendingRemoveOffset,
+                &pending_remove)) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "could not read player-created actor retirement state.";
+            }
+            return false;
+        }
+        if (pending_remove != 0) {
+            continue;
+        }
+
+        DWORD exception_code = 0;
+        if (!CallActorRequestRetirementSafe(
+                actor.actor_address,
+                &exception_code) ||
+            !memory.TryReadField(
+                actor.actor_address,
+                kActorPendingRemoveOffset,
+                &pending_remove) ||
+            pending_remove == 0) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "native player-created actor retirement failed. actor=" +
+                    HexString(actor.actor_address) +
+                    " seh=" + HexString(static_cast<uintptr_t>(exception_code));
+            }
+            return false;
+        }
+        ++retired;
+    }
+
+    if (requested_count != nullptr) {
+        *requested_count = retired;
+    }
+    return true;
+}
+
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message) {
     if (!g_gameplay_keyboard_injection.initialized) {
         if (error_message != nullptr) {

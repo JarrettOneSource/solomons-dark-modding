@@ -1264,6 +1264,118 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
     )
 
 
+def test_secondary_matrix_drives_targeted_stock_cursor_geometry() -> str:
+    harness = _read("tools/multiplayer_secondary_behavior_harness.py")
+    focus = _read("tools/verify_multiplayer_focus_behavior_sync.py")
+
+    for token in (
+        "cursor_world: tuple[float, float] | None = None",
+        "actor_world_view_scale",
+        "actor_world_view_origin_x",
+        "actor_world_view_origin_y",
+        "cursor_screen_position",
+        "cursor_secondary_at_mouse",
+        "gameplay_cursor_placement_active",
+        "sd.debug.resolve_game_address",
+        "sd.debug.write_i32(cursor_screen_address, cursor_screen_x)",
+        "sd.debug.write_i32(cursor_screen_address + 4, cursor_screen_y)",
+        "sd.input.press_binding",
+    ):
+        assert token in focus, f"targeted stock-cursor input lacks {token}"
+    _require_in_order(
+        focus,
+        "sd.debug.write_i32(cursor_screen_address, cursor_screen_x)",
+        "sd.input.press_binding",
+    )
+
+    for token in (
+        "CURSOR_PLACED_SECONDARY_ROWS",
+        "CURSOR_WORLD_TARGET_TOLERANCE",
+        "expected_cursor_world=cursor_world",
+        "cursor_world_error <= CURSOR_WORLD_TARGET_TOLERANCE",
+        'float(target["x"])',
+        'float(target["y"])',
+        'SecondarySkillSpec(76, "Call Comet", "target_damage", True, True)',
+    ):
+        assert token in harness, f"targeted secondary witness lacks {token}"
+
+    return (
+        "targeted cursor secondaries drive the owner stock cursor from live "
+        "camera geometry and verify the accepted world point"
+    )
+
+
+def test_secondary_matrix_isolates_prior_native_effect_lifetimes() -> str:
+    runner = _read("tools/verify_steam_friend_active_pair_secondary_behavior.py")
+    harness = _read("tools/multiplayer_secondary_behavior_harness.py")
+    gameplay_api = _read("SolomonDarkModLoader/include/mod_loader_gameplay_api.inl")
+    gameplay_public = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "public_api_debug_and_spawn.inl"
+    )
+    lua_bindings = _read("SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp")
+
+    for token in (
+        'output["post_behavior_retirements"] = {}',
+        'shared_effect_types = behavior.get("shared_effect_types", [])',
+        "secondary.retire_test_player_created_effects(",
+        "secondary.wait_for_effect_type_absent(",
+        'output["post_behavior_retirements"][direction.name][str(row)]',
+    ):
+        assert token in runner, f"secondary case isolation lacks {token}"
+    _require_in_order(
+        runner,
+        "secondary.run_skill(",
+        'shared_effect_types = behavior.get("shared_effect_types", [])',
+        "secondary.retire_test_player_created_effects(",
+        "secondary.wait_for_effect_type_absent(",
+        'output["new_crash_artifacts"] = find_new_crash_artifacts(started_at)',
+    )
+
+    for token in (
+        "TEST_PLAYER_CREATED_EFFECT_TYPES",
+        "RETIRE_TEST_PLAYER_CREATED_ACTORS_LUA",
+        "def retire_test_player_created_effects(",
+        "sd.gameplay.retire_test_run_player_created_actors",
+        'values.get("ok") != "true"',
+        'parse_int_text(values.get("requested_count"), 0) < 1',
+    ):
+        assert token in harness, f"player-created effect cleanup lacks {token}"
+    retire_start = harness.index("def retire_test_player_created_effects(")
+    retire_end = harness.index("\ndef ", retire_start + 4)
+    retire_body = harness[retire_start:retire_end]
+    for token in (
+        '"host": HOST_ENDPOINT',
+        '"client": CLIENT_ENDPOINT',
+        "concurrent.futures.ThreadPoolExecutor(max_workers=2)",
+    ):
+        assert token in retire_body, (
+            f"player-created effect cleanup must retire both stock-owned copies: {token}"
+        )
+
+    assert "RetireTestRunPlayerCreatedActors(" in gameplay_api
+    for token in (
+        "bool RetireTestRunPlayerCreatedActors(",
+        "IsRunLifecycleManualEnemySpawnerTestModeEnabled()",
+        "multiplayer::IsReplicatedRunPlayerCreatedActorType(native_type_id)",
+        'scene.kind != "arena"',
+        "CallActorRequestRetirementSafe(",
+        "kActorPendingRemoveOffset",
+    ):
+        assert token in gameplay_public, f"test actor retirement lacks {token}"
+    for token in (
+        "LuaGameplayRetireTestRunPlayerCreatedActors",
+        '"retire_test_run_player_created_actors"',
+        "RetireTestRunPlayerCreatedActors(",
+    ):
+        assert token in lua_bindings, f"Lua test actor retirement lacks {token}"
+
+    return (
+        "each secondary behavior retires explicit long-lived test actors and "
+        "waits for every observed native effect to leave both peers"
+    )
+
+
 def test_mana_recovery_tolerance_respects_float32_precision() -> str:
     import verify_multiplayer_all_stat_sync as stats
 

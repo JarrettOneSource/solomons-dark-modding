@@ -464,6 +464,55 @@ bool TryGetRunLifecycleManualEnemyFreezePosition(uintptr_t actor_address, float*
     return true;
 }
 
+bool RestoreRunLifecycleFrozenManualEnemyPosition(uintptr_t actor_address) {
+    float frozen_x = 0.0f;
+    float frozen_y = 0.0f;
+    if (!TryGetRunLifecycleManualEnemyFreezePosition(
+            actor_address,
+            &frozen_x,
+            &frozen_y)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    float current_x = 0.0f;
+    float current_y = 0.0f;
+    const bool position_is_current =
+        memory.TryReadField(
+            actor_address,
+            kActorPositionXOffset,
+            &current_x) &&
+        memory.TryReadField(
+            actor_address,
+            kActorPositionYOffset,
+            &current_y) &&
+        std::abs(current_x - frozen_x) <= 0.001f &&
+        std::abs(current_y - frozen_y) <= 0.001f;
+    if (position_is_current) {
+        return true;
+    }
+
+    if (!memory.TryWriteField(
+            actor_address,
+            kActorPositionXOffset,
+            frozen_x) ||
+        !memory.TryWriteField(
+            actor_address,
+            kActorPositionYOffset,
+            frozen_y)) {
+        return false;
+    }
+
+    std::string rebind_error;
+    if (!RebindSceneActorCell(actor_address, &rebind_error)) {
+        Log(
+            "Frozen manual enemy spatial rebind failed. actor=" +
+            HexString(actor_address) + " error=" + rebind_error);
+        return false;
+    }
+    return true;
+}
+
 void PinRunLifecycleFrozenManualEnemies() {
     PinFrozenManualRunEnemies();
 }

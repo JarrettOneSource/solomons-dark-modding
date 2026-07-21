@@ -89,17 +89,77 @@ def secondary_binding_details(belt_slot: int) -> tuple[str, bool, str]:
     return binding, mouse_backed, consumption_marker
 
 
+def cursor_world_input_lua(
+    cursor_world: tuple[float, float] | None,
+) -> str:
+    if cursor_world is None:
+        return "local cursor_ok = true\nemit('cursor_ok', cursor_ok)"
+
+    cursor_world_x, cursor_world_y = cursor_world
+    if not math.isfinite(cursor_world_x) or not math.isfinite(cursor_world_y):
+        raise VerifyFailure(f"invalid cursor world position: {cursor_world}")
+    return f"""
+local cursor_world_x = {json.dumps(cursor_world_x)}
+local cursor_world_y = {json.dumps(cursor_world_y)}
+local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
+local actor = tonumber(player and player.actor_address) or 0
+local function layout(key, section)
+  return tonumber(sd.debug.layout_offset(key, section)) or 0
+end
+local actor_world = tonumber(sd.debug.read_ptr(
+  actor + layout('actor_owner'))) or 0
+local view_scale = tonumber(sd.debug.read_float(
+  actor_world + layout('actor_world_view_scale'))) or 0
+local view_origin_x = tonumber(sd.debug.read_float(
+  actor_world + layout('actor_world_view_origin_x'))) or 0
+local view_origin_y = tonumber(sd.debug.read_float(
+  actor_world + layout('actor_world_view_origin_y'))) or 0
+local function resolve_global(key)
+  return tonumber(sd.debug.resolve_game_address(
+    layout(key, 'gameplay.globals'))) or 0
+end
+local cursor_screen_address = resolve_global('cursor_screen_position')
+local cursor_secondary_address = resolve_global('cursor_secondary_at_mouse')
+local game_object_address = resolve_global('game_object')
+local gameplay = tonumber(sd.debug.read_ptr(game_object_address)) or 0
+local placement_offset = layout('gameplay_cursor_placement_active')
+local function nearest_integer(value)
+  if value >= 0 then return math.floor(value + 0.5) end
+  return math.ceil(value - 0.5)
+end
+local cursor_screen_x = nearest_integer(
+  (cursor_world_x - view_origin_x) * view_scale)
+local cursor_screen_y = nearest_integer(
+  (cursor_world_y - view_origin_y) * view_scale)
+local cursor_ok = actor ~= 0 and actor_world ~= 0 and
+  math.abs(view_scale) > 0.0001 and cursor_screen_address ~= 0 and
+  cursor_secondary_address ~= 0 and gameplay ~= 0 and placement_offset ~= 0
+if cursor_ok then
+  cursor_ok = sd.debug.write_i32(cursor_screen_address, cursor_screen_x) and
+    sd.debug.write_i32(cursor_screen_address + 4, cursor_screen_y) and
+    sd.debug.write_u8(cursor_secondary_address, 1) and
+    sd.debug.write_u8(gameplay + placement_offset, 1)
+end
+emit('cursor_ok', cursor_ok)
+emit('cursor_screen_x', cursor_screen_x)
+emit('cursor_screen_y', cursor_screen_y)
+"""
+
+
 def queue_secondary_belt_slot(
     direction: Direction,
     belt_slot: int,
+    cursor_world: tuple[float, float] | None = None,
 ) -> dict[str, str]:
     """Queue one exact live binding without waiting on mirrored log delivery."""
     binding, mouse_backed, _ = secondary_binding_details(belt_slot)
+    cursor_setup = cursor_world_input_lua(cursor_world)
     cast = parse_key_values(
         lua(
             direction.source_pipe,
             f"""
 local function emit(key, value) print(key .. '=' .. tostring(value)) end
+{cursor_setup}
 local ok, value = pcall(sd.input.press_binding, {json.dumps(binding)})
 emit('pcall_ok', ok)
 emit('result', value)
@@ -111,23 +171,40 @@ emit('result', value)
         raise VerifyFailure(
             f"{direction.name} could not inject native {binding}: {cast}"
         )
-    return {
+    if cursor_world is not None and cast.get("cursor_ok") != "true":
+        raise VerifyFailure(
+            f"{direction.name} could not place the stock cursor at "
+            f"{cursor_world}: {cast}"
+        )
+    result = {
         "binding": binding,
         "input_kind": "mouse_right" if mouse_backed else "keyboard",
         "pcall_ok": cast["pcall_ok"],
         "result": cast["result"],
     }
+    if cursor_world is not None:
+        result.update(
+            cursor_ok=cast["cursor_ok"],
+            cursor_screen_x=cast["cursor_screen_x"],
+            cursor_screen_y=cast["cursor_screen_y"],
+        )
+    return result
 
 
 def cast_secondary_belt_slot(
     direction: Direction,
     belt_slot: int,
     timeout: float,
+    cursor_world: tuple[float, float] | None = None,
 ) -> dict[str, str]:
     """Cast a secondary belt entry through its exact live stock binding."""
     binding, _, consumption_marker = secondary_binding_details(belt_slot)
     source_offset = log_position(direction.source_log)
-    cast = queue_secondary_belt_slot(direction, belt_slot)
+    cast = queue_secondary_belt_slot(
+        direction,
+        belt_slot,
+        cursor_world=cursor_world,
+    )
     deadline = time.monotonic() + timeout
     while True:
         if consumption_marker in log_after(direction.source_log, source_offset):

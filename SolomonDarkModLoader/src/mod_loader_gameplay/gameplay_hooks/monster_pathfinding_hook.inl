@@ -17,9 +17,7 @@ std::uint32_t __fastcall HookBadguyMoveStep(
             actor_address,
             &frozen_x,
             &frozen_y)) {
-        auto& memory = ProcessMemory::Instance();
-        (void)memory.TryWriteField(actor_address, kActorPositionXOffset, frozen_x);
-        (void)memory.TryWriteField(actor_address, kActorPositionYOffset, frozen_y);
+        (void)RestoreRunLifecycleFrozenManualEnemyPosition(actor_address);
         return 1;
     }
     if (IsBoundReplicatedRunEnemyActorForLocalClient(actor_address)) {
@@ -105,9 +103,9 @@ void __fastcall HookMonsterPathfindingRefreshTarget(void* self, void* /*unused_e
             ClearRunLifecycleManualEnemyFreeze(hostile_actor_address);
             return;
         }
+        (void)RestoreRunLifecycleFrozenManualEnemyPosition(
+            hostile_actor_address);
         auto& memory = ProcessMemory::Instance();
-        (void)memory.TryWriteField(hostile_actor_address, kActorPositionXOffset, frozen_x);
-        (void)memory.TryWriteField(hostile_actor_address, kActorPositionYOffset, frozen_y);
         (void)memory.TryWriteField<uintptr_t>(
             hostile_actor_address,
             kActorCurrentTargetActorOffset,

@@ -500,6 +500,30 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     )
 
 
+def test_wsl_lua_bridge_bootstraps_from_clean_worktree() -> str:
+    bridge_text = read_text(ROOT / "scripts/Invoke-WslLuaExec.sh")
+    converted_build_script = (
+        'build_script_win="$(wslpath -w '
+        '"$root/scripts/Build-Win32LuaExecClient.ps1")"'
+    )
+
+    if converted_build_script not in bridge_text:
+        raise StaticReTestFailure(
+            "WSL Lua bridge does not convert its clean-worktree bootstrap script "
+            "path before invoking Windows PowerShell"
+        )
+    if '-File "$root/scripts/Build-Win32LuaExecClient.ps1"' in bridge_text:
+        raise StaticReTestFailure(
+            "WSL Lua bridge still passes a Linux path to Windows PowerShell"
+        )
+    if '-File "$build_script_win"' not in bridge_text:
+        raise StaticReTestFailure(
+            "WSL Lua bridge does not invoke the converted bootstrap script path"
+        )
+
+    return "WSL Lua bridge bootstraps its Win32 client from a clean worktree"
+
+
 def test_solomon_dark_steam_app_id_is_consistent() -> str:
     source_contracts = {
         "bootstrap configuration": (
