@@ -64,6 +64,10 @@ def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
     required_tokens = (
         "sd.gameplay.enable_combat_prelude()",
         "sd.gameplay.set_manual_enemy_spawner_test_mode(enabled)",
+        "ENEMY_CLEANUP_STABLE_SECONDS",
+        "LIVE_ENEMY_DIAGNOSTICS_LUA",
+        "stable_zero_started_at",
+        "cleanup_passes",
         "parse_int(state.get(\"wave_index\")) == 0",
         "parse_int(state.get(\"wave_counter\")) == 999999999",
         "spawn_manual_run_enemy",
@@ -114,6 +118,11 @@ def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
         (run_lifecycle_public_api_text, "run lifecycle API", "g_state.last_wave_spawner_tick_ms.load"),
         (run_lifecycle_public_api_text, "run lifecycle API", "TryGetPreferredManualRunEnemySpawner"),
         (run_lifecycle_public_api_text, "run lifecycle API", "IsRememberedWaveSpawnerVtableValid"),
+        (
+            run_lifecycle_public_api_text,
+            "run lifecycle API",
+            "CancelRememberedWaveSpawnerProductionForManualTestMode",
+        ),
         (run_lifecycle_public_api_text, "run lifecycle API", "TryDispatchManualRunEnemySpawnFromSpawner("),
         (run_lifecycle_public_api_text, "run lifecycle API", "manual run enemy spawn: dispatched from remembered stock spawner"),
         (run_lifecycle_public_api_text, "run lifecycle API", "if (!IsRunLifecycleManualEnemySpawnerReady())"),
@@ -156,6 +165,48 @@ def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
         raise StaticReTestFailure(
             "manual enemy spawn requests must be serviced by the gameplay action pump: " +
             ", ".join(native_missing))
+    setter_match = re.search(
+        r"void SetRunLifecycleManualEnemySpawnerTestMode\(bool enabled\) \{(?P<body>.*?)\n\}",
+        run_lifecycle_public_api_text,
+        re.S,
+    )
+    if setter_match is None:
+        raise StaticReTestFailure("manual enemy spawner test-mode setter was not found")
+    setter_body = setter_match.group("body")
+    pin_index = setter_body.find("PinManualRunEnemySpawnerTestModeArenaState()")
+    cancel_index = setter_body.find(
+        "CancelRememberedWaveSpawnerProductionForManualTestMode()"
+    )
+    unchanged_return_index = setter_body.find("if (previous == enabled)")
+    if not 0 <= pin_index < cancel_index < unchanged_return_index:
+        raise StaticReTestFailure(
+            "re-enabling manual enemy spawner mode must repin the arena and cancel "
+            "an active stock batch before the unchanged-state return"
+        )
+    cleanup_match = re.search(
+        r"def cleanup_live_enemies\(\) -> dict\[str, Any\]:(?P<body>.*?)\n\ndef clear_lane_probe",
+        verifier_text,
+        re.S,
+    )
+    if cleanup_match is None:
+        raise StaticReTestFailure("convergent live-enemy cleanup block was not found")
+    cleanup_body = cleanup_match.group("body")
+    cleanup_tokens = (
+        "while time.monotonic() < deadline:",
+        "stable_zero_started_at",
+        "ENEMY_CLEANUP_STABLE_SECONDS",
+        "LIVE_ENEMY_DIAGNOSTICS_LUA",
+        "cleanup_passes",
+        'result["after.live_enemy_count"] = "0"',
+    )
+    missing_cleanup_tokens = [
+        token for token in cleanup_tokens if token not in cleanup_body
+    ]
+    if missing_cleanup_tokens:
+        raise StaticReTestFailure(
+            "live-enemy cleanup must drain in-flight stock spawns and prove a stable "
+            "zero-enemy window: " + ", ".join(missing_cleanup_tokens)
+        )
     if "fallback_spawner" in run_lifecycle_public_api_text:
         raise StaticReTestFailure(
             "manual enemy spawning retained a fallback spawner path instead of "

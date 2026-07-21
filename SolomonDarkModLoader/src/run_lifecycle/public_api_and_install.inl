@@ -534,10 +534,29 @@ void SetRunLifecycleWaveStartEnemyTracking(bool enabled) {
     g_state.wave_start_enemy_tracking.store(enabled, std::memory_order_release);
 }
 
+static void CancelRememberedWaveSpawnerProductionForManualTestMode() {
+    uintptr_t spawner_address = 0;
+    uintptr_t remembered_vtable = 0;
+    if (!TryGetPreferredManualRunEnemySpawner(
+            &spawner_address,
+            &remembered_vtable)) {
+        return;
+    }
+
+    (void)ProcessMemory::Instance().TryWriteField<std::int32_t>(
+        spawner_address,
+        kWaveSpawnerRemainingBudgetOffset,
+        0);
+}
+
 void SetRunLifecycleManualEnemySpawnerTestMode(bool enabled) {
     const bool previous = g_state.manual_enemy_spawner_test_mode.exchange(
         enabled,
         std::memory_order_acq_rel);
+    if (enabled) {
+        PinManualRunEnemySpawnerTestModeArenaState();
+        CancelRememberedWaveSpawnerProductionForManualTestMode();
+    }
     if (previous == enabled) {
         return;
     }

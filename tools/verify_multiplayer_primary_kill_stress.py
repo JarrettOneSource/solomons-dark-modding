@@ -703,6 +703,31 @@ emit("live_enemy_count", count)
 """
 
 
+LIVE_ENEMY_DIAGNOSTICS_LUA = r"""
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local count = 0
+for _, actor in ipairs(sd.world.list_actors and sd.world.list_actors() or {}) do
+  if actor.tracked_enemy and not actor.dead and (tonumber(actor.hp) or 0) > 0.05 then
+    count = count + 1
+    if count <= 12 then
+      local prefix = "enemy." .. tostring(count) .. "."
+      emit(prefix .. "address", actor.actor_address or 0)
+      emit(prefix .. "type", actor.object_type_id or actor.type_id or 0)
+      emit(prefix .. "hp", actor.hp or 0)
+      emit(prefix .. "x", actor.x or 0)
+      emit(prefix .. "y", actor.y or 0)
+    end
+  end
+end
+emit("live_enemy_count", count)
+"""
+
+
+ENEMY_CLEANUP_TIMEOUT_SECONDS = 8.0
+ENEMY_CLEANUP_STABLE_SECONDS = 2.25
+ENEMY_CLEANUP_POLL_SECONDS = 0.15
+
+
 CLEAR_CAST_LANE_LUA = r"""
 local source_x = tonumber("__SOURCE_X__") or 0
 local source_y = tonumber("__SOURCE_Y__") or 0
@@ -1945,14 +1970,50 @@ def enable_manual_stock_spawner_combat() -> dict[str, Any]:
     raise VerifyFailure(f"manual stock-spawner combat did not settle: host={last_host} client={last_client}")
 
 
-def cleanup_live_enemies() -> dict[str, str]:
-    result = values(HOST_PIPE, CLEANUP_LIVE_ENEMIES_LUA)
-    time.sleep(0.35)
-    count = values(HOST_PIPE, LIVE_ENEMY_COUNT_LUA)
-    if parse_int(count.get("live_enemy_count")) != 0:
-        raise VerifyFailure(f"live enemy cleanup left enemies behind: cleanup={result} count={count}")
-    result.update({f"after.{key}": value for key, value in count.items()})
-    return result
+def cleanup_live_enemies() -> dict[str, Any]:
+    deadline = time.monotonic() + ENEMY_CLEANUP_TIMEOUT_SECONDS
+    stable_zero_started_at: float | None = None
+    cleanup_passes: list[dict[str, Any]] = []
+    total_cleaned = 0
+
+    while time.monotonic() < deadline:
+        cleanup = values(HOST_PIPE, CLEANUP_LIVE_ENEMIES_LUA)
+        cleaned = parse_int(cleanup.get("cleaned"))
+        total_cleaned += cleaned
+        count = values(HOST_PIPE, LIVE_ENEMY_COUNT_LUA)
+        live_enemy_count = parse_int(count.get("live_enemy_count"))
+        if cleaned > 0 or live_enemy_count > 0:
+            cleanup_passes.append(
+                {
+                    "cleaned": cleaned,
+                    "remaining": live_enemy_count,
+                }
+            )
+
+        now = time.monotonic()
+        if live_enemy_count == 0:
+            if stable_zero_started_at is None:
+                stable_zero_started_at = now
+            elif now - stable_zero_started_at >= ENEMY_CLEANUP_STABLE_SECONDS:
+                result: dict[str, Any] = {
+                    "cleaned": str(total_cleaned),
+                    "cleanup_passes": cleanup_passes,
+                    "stable_seconds": round(now - stable_zero_started_at, 3),
+                }
+                result["after.live_enemy_count"] = "0"
+                return result
+        else:
+            stable_zero_started_at = None
+
+        time.sleep(ENEMY_CLEANUP_POLL_SECONDS)
+
+    diagnostics = values(HOST_PIPE, LIVE_ENEMY_DIAGNOSTICS_LUA)
+    raise VerifyFailure(
+        "live enemy cleanup did not converge after manual wave suppression: "
+        f"cleanup_passes={cleanup_passes} diagnostics={diagnostics} "
+        f"manual_spawner={manual_spawner_state(HOST_PIPE)} "
+        f"combat={values(HOST_PIPE, COMBAT_STATE_LUA)}"
+    )
 
 
 def clear_lane_probe(target_x: float, target_y: float, pipe_name: str = HOST_PIPE) -> dict[str, str]:
