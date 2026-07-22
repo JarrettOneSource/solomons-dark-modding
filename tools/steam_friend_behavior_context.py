@@ -235,12 +235,16 @@ def configure_behavior_context(pair: SteamFriendActivePair) -> BehaviorContext:
             pair.host_participant_id,
             HOST_ENDPOINT,
             CLIENT_ENDPOINT,
+            HOST_ENDPOINT,
+            0,
         ),
         defense.Direction(
             "client_owned",
             pair.client_participant_id,
             CLIENT_ENDPOINT,
             HOST_ENDPOINT,
+            HOST_ENDPOINT,
+            pair.client_participant_id,
         ),
     )
     rush_directions = (

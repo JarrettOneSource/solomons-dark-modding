@@ -949,6 +949,33 @@ def test_steam_behavior_arena_reset_waits_for_native_spawner() -> str:
     )
 
 
+def test_defense_probes_follow_host_damage_authority() -> str:
+    defense = _read("tools/verify_multiplayer_defense_behavior_sync.py")
+    behavior_context = _read("tools/steam_friend_behavior_context.py")
+
+    for token in (
+        "authority_pipe: str",
+        "authority_target_participant_id: int",
+    ):
+        assert token in defense, f"defense direction lacks: {token}"
+    assert defense.count("direction.authority_pipe,") == 2
+    assert defense.count(
+        "target_participant_id="
+        "direction.authority_target_participant_id,"
+    ) == 2
+    for token in (
+        "HOST_ENDPOINT,\n            0,",
+        "HOST_ENDPOINT,\n            pair.client_participant_id,",
+    ):
+        assert token in behavior_context, (
+            f"Steam defense probe does not follow host authority: {token}"
+        )
+    return (
+        "native defense probes enter through host damage authority for local "
+        "and remote-owned players"
+    )
+
+
 def test_active_steam_behavior_harnesses_preserve_fixture_state() -> str:
     driver = _read("tools/drive_steam_friend_active_pair.py")
     behavior_context = _read("tools/steam_friend_behavior_context.py")

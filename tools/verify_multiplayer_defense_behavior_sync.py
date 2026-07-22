@@ -73,11 +73,20 @@ class Direction:
     participant_id: int
     owner_pipe: str
     observer_pipe: str
+    authority_pipe: str
+    authority_target_participant_id: int
 
 
 DIRECTIONS = (
-    Direction("host_owned", HOST_ID, HOST_PIPE, CLIENT_PIPE),
-    Direction("client_owned", CLIENT_ID, CLIENT_PIPE, HOST_PIPE),
+    Direction("host_owned", HOST_ID, HOST_PIPE, CLIENT_PIPE, HOST_PIPE, 0),
+    Direction(
+        "client_owned",
+        CLIENT_ID,
+        CLIENT_PIPE,
+        HOST_PIPE,
+        HOST_PIPE,
+        CLIENT_ID,
+    ),
 )
 
 
@@ -316,12 +325,13 @@ def run_magic_trial(direction: Direction, label: str, timeout: float) -> dict[st
         direction, 1000.0, timeout
     )
     trial = invoke_native_magic_hit_trial(
-        direction.owner_pipe,
+        direction.authority_pipe,
         projectile_damage=0.0,
         magic_damage=MAGIC_DAMAGE,
         attempts=1,
         label=f"{direction.name}_{label}",
         timeout=timeout,
+        target_participant_id=direction.authority_target_participant_id,
     )
     exact_delta = float(trial["hp_delta"])
     owner_after, mirror_after = wait_for_owner_mirror_damage_convergence(
@@ -407,12 +417,13 @@ def run_deflect_trial(direction: Direction, label: str, timeout: float) -> dict[
         direction, 1000.0, timeout
     )
     trial = invoke_native_magic_hit_trial(
-        direction.owner_pipe,
+        direction.authority_pipe,
         projectile_damage=DEFLECT_TRIAL_DAMAGE,
         magic_damage=0.0,
         attempts=DEFLECT_TRIAL_ATTEMPTS,
         label=f"{direction.name}_{label}",
         timeout=timeout,
+        target_participant_id=direction.authority_target_participant_id,
     )
     exact_delta = float(trial["hp_delta"])
     owner_after, mirror_after = wait_for_owner_mirror_damage_convergence(

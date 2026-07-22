@@ -44,6 +44,7 @@ from static_multiplayer_ownership_contracts import (
 from static_multiplayer_platform_contracts import (
     test_active_steam_behavior_harnesses_preserve_fixture_state,
     test_beta_release_smoke_canonicalizes_packaged_steam_path,
+    test_defense_probes_follow_host_damage_authority,
     test_explicit_blank_boneyard_removes_native_scenery_and_collision,
     test_host_run_exit_is_authoritative_and_self_correcting,
     test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery,
@@ -376,6 +377,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "active Steam behavior harnesses preserve fixture state",
         test_active_steam_behavior_harnesses_preserve_fixture_state,
+    ),
+    (
+        "native defense probes follow host damage authority",
+        test_defense_probes_follow_host_damage_authority,
     ),
     (
         "staff target selection skips local-only enemies",
