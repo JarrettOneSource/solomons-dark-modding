@@ -629,6 +629,8 @@ StatePacket BuildLocalStatePacket() {
         packet.inventory_items[index].recipe_uid = item.recipe_uid;
         packet.inventory_items[index].slot = item.slot;
         packet.inventory_items[index].stack_count = item.stack_count;
+        packet.inventory_items[index].parent_item_index = item.parent_item_index;
+        packet.inventory_items[index].container_depth = item.container_depth;
     }
     const auto progression_book_packet_count =
         (std::min)(

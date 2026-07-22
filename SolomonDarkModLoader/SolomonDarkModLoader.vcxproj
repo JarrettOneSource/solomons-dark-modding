@@ -311,6 +311,7 @@
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\participant_entity_sync.inl" />
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_gameplay_slot_bot.inl" />
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_reward.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\execute_requests\nested_sack_inventory_fixture.inl" />
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_safe_wrappers.inl" />
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_standalone_wizard.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_gameplay_thread_dispatch.inl" />
@@ -359,6 +360,7 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_keyboard_injection.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_participant_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_replicated_loot.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\inventory_snapshot_tree.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_state_getters.inl" />
     <ClInclude Include="src\mod_loader_gameplay\native_inventory_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\test_blank_boneyard_reconciliation.inl" />

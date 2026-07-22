@@ -278,19 +278,26 @@ Date: 2026-04-15
 - `0x00560380` -> `InventoryScreen_Ctor`
   - constructs the standalone inventory screen object that backs `Inventory_Build`
   - stores the active screen singleton in `DAT_00819E58`
-  - current browsed inventory root lives at `screen + 0x88`
   - the 13 UI category arrays live at `screen + 0xE00..+0xEC0`
   - their paired counts live at `screen + 0xE08..+0xEC8`
-- `0x00570C10` -> `InventoryScreen_GetCurrentInventoryRoot`
-  - trivial accessor for `screen + 0x88`
-  - this is the active inventory root used by drag/drop, equip, and sack browsing
+- `0x00570C10` -> `Item_Sack_GetInventoryRoot`
+  - receives the sack item as `this`
+  - returns the separate child `SdItemListRoot` pointer stored at `sack + 0x88`
+- `0x0056DE50` -> inventory click/drag handler
+  - checks whether the destination item accepts container transfers
+  - gets a destination sack's child root through `Item_Sack_GetInventoryRoot`
+  - passes that root to `Inventory_InsertOrStackItem`
+- `0x0056EC30` -> inventory item transfer handler
+  - checks nonempty sacks before handing the item to the stock transfer path
 - `0x005B4C10` -> `InventoryScreen_ResetCategoryCaches`
   - destroys and zeroes the same `+0xE00..+0xEC8` category arrays/counts that `Inventory_Build` later renders
 
 Current interpretation:
 
 - `Inventory_Build`'s `param_1` is an inventory-screen UI object, not the gameplay scene
-- the rendered slot groups are cached UI category views built on top of the currently selected inventory root, not separate ownership containers in gameplay memory
+- the rendered slot groups are UI category caches, not separate ownership containers
+- moving an item into a sack targets the sack-owned child root
+- it does not replace an inventory-screen browse root
 
 ### Additional inventory and equip helpers
 
@@ -334,8 +341,10 @@ Current interpretation:
 
 - `0x1B60` is now best interpreted as a real nested inventory item
 - stock display name is `Sack`
-- the recursive potion and type-search helpers descend into it as another embedded item-list root
-- the inventory action flow opens it as a nested inventory browse target instead of consuming or equipping it
+- its `sack + 0x88` field points to a separate child `SdItemListRoot`
+- recursive potion and type-search helpers descend into that child root
+- stock drag/drop inserts into the child root; it does not open a replacement
+  inventory-screen browse target
 
 ### FX runtime interpretation (historical snapshot; now resolved)
 
@@ -389,8 +398,10 @@ gold, orbs, and powerup bonuses.
   `DAT_0081C264 + 0x13B8`
 - `Inventory_InsertOrStackItem (0x0055FF20)` already accepts a caller-supplied
   `SdItemListRoot`-compatible root
-- `InventoryScreen + 0x88` / `InventoryScreen_GetCurrentInventoryRoot
-  (0x00570C10)` is the UI browse root, not a separate ownership container
+- `Item_Sack_GetInventoryRoot (0x00570C10)` returns the child root stored at
+  `sack + 0x88`; it is not an `InventoryScreen` accessor
+- the screen's `+0x3CC` transfer target is initialized from `+0x158` during
+  stock setup and is not a nested-container browse-root seam
 - stock gold is still a global scalar at `DAT_0081A388`
 - `Gold_ChangeGlobal (0x005A7C60)` changes that global scalar and has no
   actor / participant context
@@ -584,11 +595,6 @@ void HookedGoldPickup(SdGoldDropActor *gold) {
   participant->inventory.gold += gold->amount;
 }
 
-void BindInventoryScreenToParticipant(InventoryScreen *screen,
-                                      Participant *participant) {
-  screen->current_inventory_root = &participant->inventory.inventory_root;
-  InventoryScreen_ResetCategoryCaches(screen);
-}
 ```
 
 ### Why not hook lower-level helpers first
@@ -598,8 +604,8 @@ void BindInventoryScreenToParticipant(InventoryScreen *screen,
   trader flows, scripts, and nested container operations
 - `Gold_ChangeGlobal` is too late to infer the pickup owner and is also used by
   non-pickup economy flows
-- `InventoryScreen + 0x88` is the right UI browse seam, but changing it alone
-  does not make walk-over pickup participant-owned
+- sack nesting is item-owned through `sack + 0x88`; there is no inventory-screen
+  browse-root seam to remap for container ownership
 
 ### Live Lua sanity check
 
@@ -720,8 +726,9 @@ the buyer's 62.5 HP and exact post-purchase gold. Both merchant cases are in
 - exact equipment sync covers hat, robe, staff, wand, all three ring sinks, and
   the amulet sink; the focused live matrix passes every supported item type,
   including remote wearable-color convergence for hat and robe
-- nested sack ownership and inventory-screen browsing have not had an
-  owner-sensitive multiplayer pass
+- nested sack ownership has a two-owner Steam pass: each owner's native tree is
+  reproduced exactly in the observer ledger, including parent row and depth;
+  the observer's own native inventory remains unchanged
 - per-run owner-authored spellbook/statbook rows and native participant-clone
   reconciliation are verified; durable storage/lifetime rules are still needed
   before loot or progression can mutate those books independently across runs
@@ -736,9 +743,9 @@ the buyer's 62.5 HP and exact post-purchase gold. Both merchant cases are in
   equip API intentionally fills only the two unconditional ring slots
 - extend the verified per-run spellbook/statbook ownership into durable reward
   and persistence rules before new loot paths mutate those books
-- keep `InventoryScreen + 0x88` on the local owner root and verify nested sack
-  browsing does not cross participant boundaries; the Luthacus top-level
-  storage boundary is now explicitly participant-private
+- extend nested inventory beyond replicated observer rows only if a future
+  feature needs remote-native container objects; the Luthacus top-level storage
+  boundary is already participant-private
 - extend the Hagatha pass across charms/curses that alter movement, potion use,
   casting, or statuses, and verify each result through the existing participant
   stat/status/effect channels

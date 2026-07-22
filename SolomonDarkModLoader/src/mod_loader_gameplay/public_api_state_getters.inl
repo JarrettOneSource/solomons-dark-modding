@@ -669,74 +669,13 @@ bool TryGetPlayerInventoryState(SDModInventoryState* state) {
     state->amulet_lane =
         ReadEquipVisualLaneState(gameplay_address, kGameplayEquipmentAmuletOffset);
 
-    if (raw_item_count == 0) {
-        return true;
-    }
-    if (item_array_address == 0) {
-        return false;
-    }
-
-    if (!memory.IsReadableRange(
-            item_array_address,
-            static_cast<std::size_t>(raw_item_count) * sizeof(std::uint32_t))) {
-        return false;
-    }
-
     state->items.reserve((std::min)(
         static_cast<std::size_t>(raw_item_count),
         kSDModInventorySnapshotMaxItems));
-    constexpr std::uint32_t kPotionItemTypeId = 0x1B59;
-    for (int index = 0; index < raw_item_count; ++index) {
-        std::uint32_t raw_item_address = 0;
-        if (!memory.TryReadValue(
-                item_array_address + static_cast<std::size_t>(index) * sizeof(std::uint32_t),
-                &raw_item_address) ||
-            raw_item_address == 0) {
-            continue;
-        }
-
-        const uintptr_t item_address = static_cast<uintptr_t>(raw_item_address);
-        if (!memory.IsReadableRange(item_address, kItemSlotOffset + sizeof(int))) {
-            continue;
-        }
-
-        std::uint32_t item_type_id = 0;
-        if (!memory.TryReadField(item_address, kGameObjectTypeIdOffset, &item_type_id) ||
-            item_type_id == 0 ||
-            item_type_id == kInventoryPlaceholderItemTypeId) {
-            continue;
-        }
-
-        state->item_count += 1;
-        if (state->items.size() >= kSDModInventorySnapshotMaxItems) {
-            state->truncated = true;
-            continue;
-        }
-
-        SDModInventoryItemState item{};
-        item.item_address = item_address;
-        item.type_id = item_type_id;
-        item.valid = true;
-        if (kItemInstanceRecipeUidOffset != 0) {
-            (void)memory.TryReadField(
-                item_address,
-                kItemInstanceRecipeUidOffset,
-                &item.recipe_uid);
-        }
-        (void)memory.TryReadField(item_address, kItemSlotOffset, &item.slot);
-        if (item.type_id == kPotionItemTypeId &&
-            memory.IsReadableRange(item_address + kPotionStackCountOffset, sizeof(int))) {
-            (void)memory.TryReadField(item_address, kPotionStackCountOffset, &item.stack_count);
-        }
-        if ((item.type_id == kStandaloneWizardHatVisualTypeId ||
-             item.type_id == kStandaloneWizardRobeVisualTypeId) &&
-            memory.TryRead(
-                item_address + kItemWearableColorStateOffset,
-                item.color_state.data(),
-                item.color_state.size())) {
-            item.color_state_valid = true;
-        }
-        state->items.push_back(item);
+    InventoryTreeWalkState walk;
+    walk.snapshot = state;
+    if (!EnumerateInventoryItemTree(item_list_root, -1, 0, &walk)) {
+        return false;
     }
     state->enumerated_item_count = static_cast<int>(state->items.size());
     return true;

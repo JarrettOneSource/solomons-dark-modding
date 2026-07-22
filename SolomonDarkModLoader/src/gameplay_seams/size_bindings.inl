@@ -55,6 +55,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "gameplay_inventory_dirty", kGameplayInventoryDirtyOffset),
         SDMOD_SIZE("gameplay.offsets", "item_slot", kItemSlotOffset),
         SDMOD_SIZE("gameplay.offsets", "potion_stack_count", kPotionStackCountOffset),
+        SDMOD_SIZE("gameplay.offsets", "sack_item_inventory_root_pointer", kSackItemInventoryRootPointerOffset),
         SDMOD_SIZE("gameplay.offsets", "item_drop_held_item", kItemDropHeldItemOffset),
         SDMOD_SIZE("gameplay.offsets", "item_instance_recipe_uid", kItemInstanceRecipeUidOffset),
         SDMOD_SIZE("gameplay.offsets", "item_wearable_color_state", kItemWearableColorStateOffset),

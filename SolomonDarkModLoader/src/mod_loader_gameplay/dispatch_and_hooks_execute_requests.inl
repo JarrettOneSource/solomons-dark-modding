@@ -4,4 +4,5 @@
 #include "execute_requests/spawn_standalone_wizard.inl"
 #include "execute_requests/spawn_gameplay_slot_bot.inl"
 #include "execute_requests/spawn_reward.inl"
+#include "execute_requests/nested_sack_inventory_fixture.inl"
 #include "execute_requests/multiplayer_dampen_effect.inl"

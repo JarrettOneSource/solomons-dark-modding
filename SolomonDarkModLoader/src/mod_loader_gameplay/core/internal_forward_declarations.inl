@@ -95,6 +95,11 @@ bool CallGameObjectFactorySafe(
     int type_id,
     uintptr_t* object_address,
     DWORD* exception_code);
+bool CallInventoryInsertOrStackItemSafe(
+    uintptr_t function_address,
+    uintptr_t inventory_root_address,
+    uintptr_t item_address,
+    DWORD* exception_code);
 bool CallGameOperatorNewSafe(
     uintptr_t operator_new_address,
     std::size_t allocation_size,
@@ -124,6 +129,9 @@ bool SpawnNativeItemDropFromRecipe(
     const multiplayer::LootDropSnapshot& drop,
     uintptr_t* carrier_address,
     uintptr_t* held_item_address,
+    std::string* error_message);
+bool ExecuteNestedSackInventoryFixtureNow(
+    const PendingNestedSackInventoryFixture& request,
     std::string* error_message);
 bool CallPlayerActorCtorSafe(
     uintptr_t ctor_address,

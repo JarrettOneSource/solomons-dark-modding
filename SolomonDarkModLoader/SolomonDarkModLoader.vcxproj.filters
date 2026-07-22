@@ -797,6 +797,9 @@
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_reward.inl">
       <Filter>Header Files\Gameplay\Execute Requests</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\execute_requests\nested_sack_inventory_fixture.inl">
+      <Filter>Header Files\Gameplay\Execute Requests</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_safe_wrappers.inl">
       <Filter>Header Files\Gameplay\Execute Requests</Filter>
     </ClInclude>
@@ -921,6 +924,9 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_replicated_loot.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\inventory_snapshot_tree.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_state_getters.inl">

@@ -17,6 +17,11 @@ struct PendingRewardSpawnRequest {
     float y = 0.0f;
 };
 
+struct PendingNestedSackInventoryFixture {
+    std::int32_t potion_slot = 0;
+    std::int32_t stack_count = 1;
+};
+
 struct PendingClientLocalLootSuppressionRequest {
     std::string reason;
     std::uint64_t not_before_ms = 0;
@@ -211,6 +216,8 @@ struct GameplayKeyboardInjectionState {
         app_tick_observed_local_player_tick_generation{0};
     std::mutex pending_gameplay_world_actions_mutex;
     std::deque<PendingRewardSpawnRequest> pending_reward_spawn_requests;
+    std::deque<PendingNestedSackInventoryFixture>
+        pending_nested_sack_inventory_fixtures;
     std::deque<PendingClientLocalLootSuppressionRequest> pending_client_local_loot_suppression_requests;
     std::deque<PendingNativeInventoryCredit> pending_native_inventory_credits;
     std::deque<PendingLocalInventoryEquipRequest>

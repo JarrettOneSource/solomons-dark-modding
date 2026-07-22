@@ -256,6 +256,7 @@ std::size_t kGameplayItemListItemsOffset = 0;
 std::size_t kGameplayInventoryDirtyOffset = 0;
 std::size_t kItemSlotOffset = 0;
 std::size_t kPotionStackCountOffset = 0;
+std::size_t kSackItemInventoryRootPointerOffset = 0;
 std::size_t kItemDropHeldItemOffset = 0;
 std::size_t kItemInstanceRecipeUidOffset = 0;
 std::size_t kItemWearableColorStateOffset = 0;

@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 69;
+constexpr std::uint16_t kProtocolVersion = 70;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -300,6 +300,8 @@ struct ParticipantInventoryItemPacketState {
     std::uint32_t recipe_uid;
     std::int32_t slot;
     std::int32_t stack_count;
+    std::int16_t parent_item_index;
+    std::uint16_t container_depth;
 };
 
 struct ParticipantEquippedItemPacketState {
@@ -1061,12 +1063,12 @@ static_assert(
 static_assert(
     !IsPacketSequenceNewer(0xFFFFFFFFu, 0u),
     "Packet sequence comparison must reject pre-wrap packets after wraparound");
-static_assert(sizeof(ParticipantInventoryItemPacketState) == 16, "Unexpected inventory item packet size");
+static_assert(sizeof(ParticipantInventoryItemPacketState) == 20, "Unexpected inventory item packet size");
 static_assert(sizeof(ParticipantEquippedItemPacketState) == 8, "Unexpected equipped item packet size");
 static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpected progression book entry packet size");
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 56, "Unexpected derived stat packet size");
-static_assert(sizeof(StatePacket) == 4232, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 4488, "Unexpected state packet size");
 static_assert(sizeof(ParticipantFramePacket) == 298,
               "Unexpected participant frame packet size");
 static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");

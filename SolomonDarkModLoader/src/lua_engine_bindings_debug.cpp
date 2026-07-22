@@ -44,7 +44,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 67);
+    lua_createtable(state, 0, 68);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -97,6 +97,10 @@ void RegisterLuaDebugBindings(lua_State* state) {
     RegisterFunction(state, &LuaDebugWriteI32, "write_i32");
     RegisterFunction(state, &LuaDebugWriteFloat, "write_float");
     RegisterFunction(state, &LuaDebugWritePtr, "write_ptr");
+    RegisterFunction(
+        state,
+        &LuaDebugQueueNestedSackInventoryFixture,
+        "queue_nested_sack_inventory_fixture");
     RegisterFunction(state, &LuaDebugCallThiscallU32, "call_thiscall_u32");
     RegisterFunction(state, &LuaDebugCallThiscallU32RetU32, "call_thiscall_u32_ret_u32");
     RegisterFunction(state, &LuaDebugCallThiscallRetU32, "call_thiscall_ret_u32");

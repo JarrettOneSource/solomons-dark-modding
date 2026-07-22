@@ -175,6 +175,8 @@ void PumpQueuedGameplayActions() {
 
     PendingRewardSpawnRequest reward_request;
     bool have_reward_request = false;
+    PendingNestedSackInventoryFixture nested_sack_inventory_fixture;
+    bool have_nested_sack_inventory_fixture = false;
     std::vector<PendingClientLocalLootSuppressionRequest> client_local_loot_suppression_requests;
     PendingNativeInventoryCredit native_inventory_credit;
     bool have_native_inventory_credit = false;
@@ -245,6 +247,15 @@ void PumpQueuedGameplayActions() {
             reward_request = std::move(g_gameplay_keyboard_injection.pending_reward_spawn_requests.front());
             g_gameplay_keyboard_injection.pending_reward_spawn_requests.pop_front();
             have_reward_request = true;
+        }
+        if (!g_gameplay_keyboard_injection
+                 .pending_nested_sack_inventory_fixtures.empty()) {
+            nested_sack_inventory_fixture = g_gameplay_keyboard_injection
+                                                .pending_nested_sack_inventory_fixtures
+                                                .front();
+            g_gameplay_keyboard_injection.pending_nested_sack_inventory_fixtures
+                .pop_front();
+            have_nested_sack_inventory_fixture = true;
         }
         if (!g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.empty()) {
             const auto pending_suppression_count =
@@ -489,6 +500,15 @@ void PumpQueuedGameplayActions() {
                 " x=" + std::to_string(reward_request.x) +
                 " y=" + std::to_string(reward_request.y) +
                 " error=" + error_message);
+        }
+    }
+
+    if (have_nested_sack_inventory_fixture) {
+        std::string error_message;
+        if (!ExecuteNestedSackInventoryFixtureNow(
+                nested_sack_inventory_fixture,
+                &error_message)) {
+            Log("nested_sack_fixture: queued request failed. error=" + error_message);
         }
     }
 

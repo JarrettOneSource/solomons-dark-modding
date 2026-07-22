@@ -23,6 +23,8 @@ std::vector<ParticipantInventoryItemState> BuildOwnedInventoryItems(
         built.recipe_uid = item.recipe_uid;
         built.slot = item.slot;
         built.stack_count = item.stack_count;
+        built.parent_item_index = item.parent_item_index;
+        built.container_depth = item.container_depth;
         items.push_back(built);
     }
     return items;
@@ -38,7 +40,9 @@ bool InventoryItemsEqual(
         if (left[index].type_id != right[index].type_id ||
             left[index].recipe_uid != right[index].recipe_uid ||
             left[index].slot != right[index].slot ||
-            left[index].stack_count != right[index].stack_count) {
+            left[index].stack_count != right[index].stack_count ||
+            left[index].parent_item_index != right[index].parent_item_index ||
+            left[index].container_depth != right[index].container_depth) {
             return false;
         }
     }

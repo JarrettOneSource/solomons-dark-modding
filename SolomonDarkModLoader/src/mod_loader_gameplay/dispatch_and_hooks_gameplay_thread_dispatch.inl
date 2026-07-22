@@ -136,6 +136,7 @@ bool PrepareGameplaySceneSwitchOnGameThread(
         std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
         g_gameplay_keyboard_injection.pending_participant_sync_requests.clear();
         g_gameplay_keyboard_injection.pending_local_inventory_equip_requests.clear();
+        g_gameplay_keyboard_injection.pending_nested_sack_inventory_fixtures.clear();
     }
     RemoveReplicatedCreatedSharedHubActorsForSceneSwitch(source);
     ClearReplicatedLootPresentationBindingsForSceneSwitch(source);

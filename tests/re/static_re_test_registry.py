@@ -186,6 +186,9 @@ from static_re_steam_contracts import (
 from static_re_wsl_steam_stability_contracts import (
     test_wsl_steam_runtime_uses_the_stable_proton_generation,
 )
+from static_re_inventory_container_contracts import (
+    test_nested_sack_inventory_preserves_owner_authored_container_paths,
+)
 from static_re_runtime_cast_contracts import (
     test_memory_region_cache_refreshes_newly_committed_native_objects,
     test_multiplayer_nameplates_render_from_native_scene_passes,
@@ -785,6 +788,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "WSL Steam runtime uses the stable Proton generation",
         test_wsl_steam_runtime_uses_the_stable_proton_generation,
+    ),
+    (
+        "Nested sack inventory preserves owner-authored container paths",
+        test_nested_sack_inventory_preserves_owner_authored_container_paths,
     ),
     ("Solomon Dark Steam AppID is consistent", test_solomon_dark_steam_app_id_is_consistent),
     (

@@ -1,3 +1,42 @@
+bool QueueNestedSackInventoryFixture(
+    std::int32_t potion_slot,
+    std::int32_t stack_count,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay action pump is not initialized.";
+        }
+        return false;
+    }
+    if ((potion_slot != 0 && potion_slot != 1) || stack_count <= 0 ||
+        stack_count > 99) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Nested sack fixture requires potion slot 0 or 1 and stack count 1 through 99.";
+        }
+        return false;
+    }
+
+    PendingNestedSackInventoryFixture request;
+    request.potion_slot = potion_slot;
+    request.stack_count = stack_count;
+    std::lock_guard<std::mutex> lock(
+        g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
+    auto& pending =
+        g_gameplay_keyboard_injection.pending_nested_sack_inventory_fixtures;
+    if (!pending.empty()) {
+        if (error_message != nullptr) {
+            *error_message = "A nested sack fixture is already queued.";
+        }
+        return false;
+    }
+    pending.push_back(request);
+    return true;
+}
+
 bool QueueHubStartTestrun(std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();

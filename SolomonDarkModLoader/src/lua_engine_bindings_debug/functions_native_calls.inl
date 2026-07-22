@@ -1,3 +1,22 @@
+// sd.debug.queue_nested_sack_inventory_fixture(potion_slot, stack_count)
+//     -> boolean, string
+// The native constructors and inventory transfers run after this Lua callback.
+int LuaDebugQueueNestedSackInventoryFixture(lua_State* state) {
+    const auto potion_slot =
+        CheckLuaSignedInteger<std::int32_t>(state, 1, "potion_slot");
+    const auto stack_count =
+        CheckLuaSignedInteger<std::int32_t>(state, 2, "stack_count");
+
+    std::string error_message;
+    const bool queued = QueueNestedSackInventoryFixture(
+        potion_slot,
+        stack_count,
+        &error_message);
+    lua_pushboolean(state, queued ? 1 : 0);
+    lua_pushlstring(state, error_message.c_str(), error_message.size());
+    return 2;
+}
+
 // sd.debug.call_thiscall_u32(function_address, this_ptr, arg0) -> boolean
 int LuaDebugCallThiscallU32(lua_State* state) {
     const auto requested_function_address = CheckLuaAddress(state, 1, "function_address");

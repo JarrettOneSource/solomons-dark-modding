@@ -1020,7 +1020,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
     ]
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 69;",
+        "constexpr std::uint16_t kProtocolVersion = 70;",
         "Powerup = 5",
         "enum class PowerupRewardKind",
         "BonusSkillPoint = 0",
@@ -1031,7 +1031,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
         "std::int32_t powerup_kind;",
         "std::int32_t powerup_skill_entry_index;",
         "std::uint16_t powerup_skill_resulting_active;",
-        "static_assert(sizeof(StatePacket) == 4232",
+        "static_assert(sizeof(StatePacket) == 4488",
         "static_assert(sizeof(LootDropSnapshotPacketState) == 112",
         "static_assert(sizeof(LootSnapshotPacket) == 7200",
         "static_assert(sizeof(LootPickupResultPacket) == 164",
@@ -1193,7 +1193,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
     verifier = _read("tools/verify_multiplayer_native_item_inventory_sync.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 69;",
+        "constexpr std::uint16_t kProtocolVersion = 70;",
         "ParticipantPresentationFlagEquipmentState = 1 << 5",
         "std::uint32_t primary_visual_link_recipe_uid;",
         "std::uint32_t secondary_visual_link_recipe_uid;",
@@ -1203,7 +1203,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
         "std::uint32_t equipment_revision;",
         "ParticipantEquippedItemPacketState equipped_rings[kParticipantRingSlotCount];",
         "ParticipantEquippedItemPacketState equipped_amulet;",
-        "static_assert(sizeof(StatePacket) == 4232",
+        "static_assert(sizeof(StatePacket) == 4488",
     ):
         assert token in protocol, f"exact equipment packet contract lacks: {token}"
 
@@ -1259,13 +1259,17 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
     ):
         assert token in local_equip, f"local native equip transaction lacks: {token}"
     assert "kInventoryPlaceholderItemTypeId" in gameplay_constants
+    inventory_snapshot_tree = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/inventory_snapshot_tree.inl"
+    )
+    inventory_snapshot_sources = inventory_getter + inventory_snapshot_tree
     for token in (
         "state->raw_item_count = raw_item_count;",
         "for (int index = 0; index < raw_item_count; ++index)",
         "item_type_id == kInventoryPlaceholderItemTypeId",
-        "state->item_count += 1;",
+        "++walk->snapshot->item_count;",
     ):
-        assert token in inventory_getter, (
+        assert token in inventory_snapshot_sources, (
             f"native inventory placeholder filtering lacks: {token}"
         )
     assert 'lua_setfield(state, -2, "raw_item_count")' in lua_gameplay

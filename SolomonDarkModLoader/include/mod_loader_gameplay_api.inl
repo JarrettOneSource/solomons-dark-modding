@@ -43,6 +43,10 @@ bool TryGetPlayerInventoryState(SDModInventoryState* state);
 bool QueuePlayerInventoryItemEquip(
     std::uint32_t recipe_uid,
     std::string* error_message);
+bool QueueNestedSackInventoryFixture(
+    std::int32_t potion_slot,
+    std::int32_t stack_count,
+    std::string* error_message);
 bool TryGetPlayerProgressionBookState(SDModProgressionBookState* state);
 bool TryGetWorldState(SDModWorldState* state);
 bool TryGetGameplayCombatState(SDModGameplayCombatState* state);

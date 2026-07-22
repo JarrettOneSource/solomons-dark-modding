@@ -1,3 +1,35 @@
+bool IsSaneParticipantInventorySnapshot(const StatePacket& packet) {
+    if (packet.inventory_item_count > kParticipantInventorySnapshotMaxItems ||
+        packet.inventory_item_total_count < packet.inventory_item_count) {
+        return false;
+    }
+
+    for (std::size_t index = 0; index < packet.inventory_item_count; ++index) {
+        const auto& item = packet.inventory_items[index];
+        if (item.type_id == 0 ||
+            item.container_depth > kSDModInventorySnapshotMaxDepth) {
+            return false;
+        }
+        if (item.container_depth == 0) {
+            if (item.parent_item_index != -1) {
+                return false;
+            }
+            continue;
+        }
+        if (item.parent_item_index < 0 ||
+            static_cast<std::size_t>(item.parent_item_index) >= index) {
+            return false;
+        }
+        const auto& parent = packet.inventory_items[item.parent_item_index];
+        if (parent.type_id != 0x1B60 ||
+            item.container_depth !=
+                static_cast<std::uint16_t>(parent.container_depth + 1)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void ApplyRemoteStatePacket(
     const StatePacket& packet,
     const TransportPeerEndpoint& from,
@@ -80,6 +112,8 @@ void ApplyRemoteStatePacket(
     const auto normalized = NormalizeParticipantFramePacket(packet);
     const bool packet_from_configured_authority =
         IsAuthoritativeHostParticipantPacket(packet, from);
+    const bool inventory_packet_is_sane =
+        IsSaneParticipantInventorySnapshot(packet);
 
     if (IsLocalTransportHost()) {
         ApplyHostMenuPauseRequest(
@@ -156,6 +190,7 @@ void ApplyRemoteStatePacket(
             participant->owned_progression.gold_revision = packet.gold_revision;
         }
         const bool should_apply_inventory =
+            inventory_packet_is_sane &&
             packet.inventory_revision >= participant->owned_progression.inventory_revision;
         if (should_apply_inventory) {
             participant->owned_progression.inventory_revision = packet.inventory_revision;
@@ -178,6 +213,8 @@ void ApplyRemoteStatePacket(
                 item.recipe_uid = packet_item.recipe_uid;
                 item.slot = packet_item.slot;
                 item.stack_count = packet_item.stack_count;
+                item.parent_item_index = packet_item.parent_item_index;
+                item.container_depth = packet_item.container_depth;
                 participant->owned_progression.inventory_items.push_back(item);
             }
         }

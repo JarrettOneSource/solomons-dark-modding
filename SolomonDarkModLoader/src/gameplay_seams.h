@@ -273,6 +273,7 @@ extern std::size_t kGameplayItemListItemsOffset;
 extern std::size_t kGameplayInventoryDirtyOffset;
 extern std::size_t kItemSlotOffset;
 extern std::size_t kPotionStackCountOffset;
+extern std::size_t kSackItemInventoryRootPointerOffset;
 extern std::size_t kItemDropHeldItemOffset;
 extern std::size_t kItemInstanceRecipeUidOffset;
 extern std::size_t kItemWearableColorStateOffset;

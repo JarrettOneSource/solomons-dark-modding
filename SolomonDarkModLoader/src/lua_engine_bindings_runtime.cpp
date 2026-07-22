@@ -264,7 +264,7 @@ void PushOwnedProgressionState(
     lua_createtable(state, static_cast<int>(progression.inventory_items.size()), 0);
     int lua_index = 1;
     for (const auto& item : progression.inventory_items) {
-        lua_createtable(state, 0, 4);
+        lua_createtable(state, 0, 6);
         lua_pushinteger(state, static_cast<lua_Integer>(item.type_id));
         lua_setfield(state, -2, "type_id");
         lua_pushinteger(state, static_cast<lua_Integer>(item.recipe_uid));
@@ -273,6 +273,10 @@ void PushOwnedProgressionState(
         lua_setfield(state, -2, "slot");
         lua_pushinteger(state, static_cast<lua_Integer>(item.stack_count));
         lua_setfield(state, -2, "stack_count");
+        lua_pushinteger(state, static_cast<lua_Integer>(item.parent_item_index));
+        lua_setfield(state, -2, "parent_item_index");
+        lua_pushinteger(state, static_cast<lua_Integer>(item.container_depth));
+        lua_setfield(state, -2, "container_depth");
         lua_rawseti(state, -2, static_cast<lua_Integer>(lua_index));
         ++lua_index;
     }

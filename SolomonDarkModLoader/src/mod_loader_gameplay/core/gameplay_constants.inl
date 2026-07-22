@@ -93,6 +93,8 @@ constexpr std::uint32_t kStandaloneWizardRobeVisualTypeId = 0x1B5E;
 // Stock inventory lists use base Item objects as empty grid placeholders.
 // They are implementation detail, not participant-owned inventory rows.
 constexpr std::uint32_t kInventoryPlaceholderItemTypeId = 0x1B58;
+constexpr std::uint32_t kInventoryPotionItemTypeId = 0x1B59;
+constexpr std::uint32_t kInventorySackItemTypeId = 0x1B60;
 constexpr int kStandaloneWizardHiddenSelectionState = -2;
 constexpr std::size_t kGameplayRegionStride = 4;
 constexpr std::size_t kGameplayPlayerSlotStride = 4;

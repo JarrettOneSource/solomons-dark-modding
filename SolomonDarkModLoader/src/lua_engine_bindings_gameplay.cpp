@@ -54,7 +54,7 @@ void PushEquipVisualLaneState(lua_State* state, const SDModEquipVisualLaneState&
 }
 
 void PushInventoryItemState(lua_State* state, const SDModInventoryItemState& item) {
-    lua_createtable(state, 0, 9);
+    lua_createtable(state, 0, 10);
     lua_pushboolean(state, item.valid ? 1 : 0);
     lua_setfield(state, -2, "valid");
     lua_pushinteger(state, static_cast<lua_Integer>(item.item_address));
@@ -67,6 +67,10 @@ void PushInventoryItemState(lua_State* state, const SDModInventoryItemState& ite
     lua_setfield(state, -2, "slot");
     lua_pushinteger(state, static_cast<lua_Integer>(item.stack_count));
     lua_setfield(state, -2, "stack_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(item.parent_item_index));
+    lua_setfield(state, -2, "parent_item_index");
+    lua_pushinteger(state, static_cast<lua_Integer>(item.container_depth));
+    lua_setfield(state, -2, "container_depth");
     lua_pushboolean(state, item.color_state_valid ? 1 : 0);
     lua_setfield(state, -2, "color_state_valid");
     PushByteArray(state, item.color_state);

@@ -33,6 +33,7 @@ struct SDModEquipVisualLaneState {
 };
 
 constexpr std::size_t kSDModInventorySnapshotMaxItems = 64;
+constexpr std::uint16_t kSDModInventorySnapshotMaxDepth = 8;
 
 struct SDModInventoryItemState {
     bool valid = false;
@@ -41,6 +42,8 @@ struct SDModInventoryItemState {
     std::uint32_t recipe_uid = 0;
     int slot = -1;
     int stack_count = 0;
+    std::int16_t parent_item_index = -1;
+    std::uint16_t container_depth = 0;
     bool color_state_valid = false;
     std::array<std::uint8_t, multiplayer::kParticipantVisualLinkColorBlockBytes>
         color_state = {};
