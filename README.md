@@ -83,7 +83,7 @@ present. Provide a 32-bit Steamworks runtime at
 
 ## Loader features
 
-- Embedded Lua engine with the `sd.*` API (gameplay, runtime, UI, input, debug, bots).
+- Embedded Lua engine with the `sd.*` API (gameplay, runtime, replicated state/events, UI, input, debug, bots).
 - Native DLL mod host (`SDModPlugin_Initialize` / `SDModPlugin_Shutdown`).
 - Scriptable bot runtime exposed through `sd.bots.*`, driven from the runtime tick service.
 - Steam bootstrap: `steam_api.dll` load, `SteamAPI_Init`, and legacy friends/matchmaking/networking interface binding.
@@ -166,6 +166,7 @@ py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-u
 - `docs/networking/README.md` — target networking architecture and current implementation boundary.
 - `docs/participant-entrance-follow.md` — hub/private/run follow semantics for participant bots.
 - `docs/lua-memory-tooling.md` — live Lua memory and reverse-engineering helpers.
+- `docs/lua-state-and-events.md` — authority-owned replicated state, ordered custom events, limits, and live acceptance.
 - `docs/ui-binary-map.md` — recovered UI seams and coverage.
 - `docs/ui-engine-system-map.md` — higher-level UI engine architecture and hook targets.
 - `docs/ui-automation-inventory.md` — semantic `sd.ui` surface coverage and cutover map.

@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "lua_engine_bindings_internal.h"
 #include "lua_engine_internal.h"
+#include "lua_mod_runtime.h"
 #include "mod_loader.h"
 #include "multiplayer_foundation.h"
 
@@ -301,7 +302,10 @@ std::vector<std::string> BuildLuaCapabilitySet() {
     std::vector<std::string> capabilities = {
         "lua.engine",
         "events.runtime.tick",
+        "events.replicated.broadcast",
         "runtime.mod.info",
+        "state.replicated.read",
+        "state.replicated.write",
         "ui.snapshot.read",
         "ui.element.query",
         "ui.action.query",
@@ -419,6 +423,7 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     runtime_directory = bootstrap.runtime_root / "lua";
     std::filesystem::create_directories(runtime_directory);
     loaded_mods.clear();
+    ResetLuaModStateStore();
 
     const auto capabilities = detail::BuildLuaCapabilitySet();
     for (const auto& mod : bootstrap.mods) {
@@ -481,6 +486,7 @@ void ShutdownLuaEngine() {
         detail::CloseLuaStateForMod(it->get());
     }
     loaded_mods.clear();
+    ResetLuaModStateStore();
     detail::LuaRuntimeDirectoryStorage().clear();
     detail::LuaRuntimeBootstrapStorage() = RuntimeBootstrap{};
     detail::LuaEngineInitializedFlag() = false;

@@ -70,6 +70,14 @@ struct LevelUpEvent {
     int xp = 0;
 };
 
+struct CustomEvent {
+    std::string mod_id;
+    std::string event_name;
+    LuaModValue payload;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t stream_sequence = 0;
+};
+
 using PendingLuaEvent = std::variant<
     RunStartedEvent,
     RunEndedEvent,
@@ -80,7 +88,8 @@ using PendingLuaEvent = std::variant<
     SpellCastEvent,
     GoldChangedEvent,
     DropSpawnedEvent,
-    LevelUpEvent>;
+    LevelUpEvent,
+    CustomEvent>;
 
 std::mutex g_pending_lua_event_mutex;
 std::deque<PendingLuaEvent> g_pending_lua_events;
@@ -534,6 +543,13 @@ void DispatchPendingLuaEventsToLuaMods() {
                         value.y);
                 } else if constexpr (std::is_same_v<Event, LevelUpEvent>) {
                     DispatchLevelUpToLuaMods(value.level, value.xp);
+                } else if constexpr (std::is_same_v<Event, CustomEvent>) {
+                    DispatchCustomEventToLuaMods(
+                        value.mod_id,
+                        value.event_name,
+                        value.payload,
+                        value.authority_participant_id,
+                        value.stream_sequence);
                 }
             },
             event);
@@ -597,6 +613,21 @@ void QueueLevelUpEvent(int level, int xp) {
     EnqueueLuaEvent(LevelUpEvent{level, xp});
 }
 
+void QueueCustomEvent(
+    const std::string& mod_id,
+    const std::string& event_name,
+    const LuaModValue& payload,
+    std::uint64_t authority_participant_id,
+    std::uint64_t stream_sequence) {
+    EnqueueLuaEvent(CustomEvent{
+        mod_id,
+        event_name,
+        payload,
+        authority_participant_id,
+        stream_sequence,
+    });
+}
+
 }  // namespace sdmod::detail
 
 namespace sdmod {
@@ -639,6 +670,20 @@ void DispatchLuaDropSpawned(const char* kind, float x, float y) {
 
 void DispatchLuaLevelUp(int level, int xp) {
     detail::QueueLevelUpEvent(level, xp);
+}
+
+void DispatchLuaCustomEvent(
+    const std::string& mod_id,
+    const std::string& event_name,
+    const LuaModValue& payload,
+    std::uint64_t authority_participant_id,
+    std::uint64_t stream_sequence) {
+    detail::QueueCustomEvent(
+        mod_id,
+        event_name,
+        payload,
+        authority_participant_id,
+        stream_sequence);
 }
 
 }  // namespace sdmod

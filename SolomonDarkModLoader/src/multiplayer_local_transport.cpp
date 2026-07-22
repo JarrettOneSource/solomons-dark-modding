@@ -10,6 +10,7 @@
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
 #include "logger.h"
+#include "lua_engine_events.h"
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_runtime_protocol.h"
@@ -34,6 +35,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <random>
 #include <sstream>
@@ -85,6 +87,10 @@ constexpr std::uint64_t kLocalTransportWorldSnapshotReliableCheckpointIntervalMs
 constexpr std::uint64_t kLocalTransportLootSnapshotIntervalMs = 250;
 constexpr std::uint64_t kLocalTransportAnimatedLootSnapshotIntervalMs = 50;
 constexpr std::uint64_t kLocalTransportSpellEffectSnapshotIntervalMs = 16;
+constexpr std::uint64_t kLuaModStateCheckpointIntervalMs = 5000;
+constexpr std::uint64_t kLuaModFragmentAssemblyExpiryMs = 10000;
+constexpr std::size_t kLuaModMaxPendingAssemblies = 64;
+constexpr std::size_t kLuaModMaxCompletedMessages = 128;
 constexpr std::size_t kLocalTransportAuxiliarySnapshotBudgetBytesPerSecond =
     48u * 1024u;
 constexpr std::size_t kLocalTransportWorldSnapshotBudgetBytesPerSecond =
@@ -672,6 +678,34 @@ struct PendingParticipantVitalsCorrection {
     std::uint64_t last_sent_ms = 0;
 };
 
+struct QueuedLuaModStreamMessage {
+    LuaModStreamMessageKind kind = LuaModStreamMessageKind::StateCheckpoint;
+    std::uint64_t stream_sequence = 0;
+    std::uint64_t state_revision = 0;
+    std::vector<std::uint8_t> payload;
+};
+
+struct PendingLuaModStreamAssembly {
+    LuaModStreamMessageKind kind = LuaModStreamMessageKind::StateCheckpoint;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t stream_sequence = 0;
+    std::uint64_t state_revision = 0;
+    std::uint32_t total_payload_bytes = 0;
+    std::uint16_t fragment_count = 0;
+    std::uint16_t received_fragment_count = 0;
+    std::uint64_t last_update_ms = 0;
+    std::vector<std::uint8_t> payload;
+    std::vector<std::uint8_t> received_fragments;
+};
+
+struct CompletedLuaModStreamMessage {
+    LuaModStreamMessageKind kind = LuaModStreamMessageKind::StateCheckpoint;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t stream_sequence = 0;
+    std::uint64_t state_revision = 0;
+    std::vector<std::uint8_t> payload;
+};
+
 struct ClientHostRunAuthorization {
     bool valid = false;
     std::uint64_t authority_participant_id = 0;
@@ -720,6 +754,10 @@ struct LocalTransportState {
     std::uint64_t last_world_snapshot_reliable_checkpoint_ms = 0;
     std::uint64_t last_loot_snapshot_send_ms = 0;
     std::uint64_t last_spell_effect_snapshot_send_ms = 0;
+    std::uint64_t last_lua_mod_checkpoint_send_ms = 0;
+    std::uint64_t last_lua_mod_stream_sent_sequence = 0;
+    std::uint64_t last_lua_mod_stream_applied_sequence = 0;
+    std::uint32_t next_lua_mod_message_id = 1;
     std::uint64_t last_client_host_run_request_ms = 0;
     ClientHostRunExitFollow client_host_run_exit_follow;
     bool local_menu_pause_requested = false;
@@ -803,6 +841,11 @@ struct LocalTransportState {
         pending_host_loot_pickups_by_drop_id;
     std::unordered_map<std::uint64_t, HostMenuPauseRequestState>
         host_menu_pause_requests_by_participant;
+    std::unordered_set<std::uint64_t> lua_mod_checkpointed_participants;
+    std::unordered_map<std::uint32_t, PendingLuaModStreamAssembly>
+        pending_lua_mod_stream_assemblies;
+    std::map<std::uint64_t, CompletedLuaModStreamMessage>
+        completed_lua_mod_stream_messages;
     ActiveLocalCastInput active_local_cast_input;
     std::vector<PendingAirChainTerminal> pending_air_chain_terminals;
     std::uint32_t next_hub_world_actor_serial = 1;
@@ -832,6 +875,8 @@ std::unordered_map<std::uint64_t, InFlightLocalLootPickupRequest>
 std::vector<QueuedLocalHostPowerupPickup>
     g_queued_local_host_powerup_pickups;
 std::vector<QueuedLocalLevelUpChoice> g_queued_local_level_up_choices;
+std::vector<QueuedLuaModStreamMessage> g_queued_lua_mod_stream_messages;
+std::uint64_t g_next_lua_mod_stream_sequence = 1;
 QueuedLocalAirChainFrame g_queued_local_air_chain_frame;
 bool g_have_queued_local_air_chain_frame = false;
 std::uint32_t g_next_local_loot_pickup_request_sequence = 1;
@@ -1171,6 +1216,8 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/outgoing_cast_packet_sync.inl"
 #include "multiplayer_local_transport/client_enemy_damage_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_sync.inl"
+#include "multiplayer_local_transport/lua_mod_stream_codec.inl"
+#include "multiplayer_local_transport/lua_mod_stream_sync.inl"
 #include "multiplayer_local_transport/shared_gameplay_pause_sync.inl"
 #include "multiplayer_local_transport/incoming_cast_packet_sync.inl"
 #include "multiplayer_local_transport/incoming_snapshot_packet_sync.inl"
@@ -1352,6 +1399,7 @@ int CaptureLocalTransportSehCode(EXCEPTION_POINTERS* exception_pointers, DWORD* 
 
 #include "multiplayer_local_transport/public_cast_loot_api.inl"
 #include "multiplayer_local_transport/public_cast_loot_queue_api.inl"
+#include "multiplayer_local_transport/lua_mod_stream_public.inl"
 
 #include "multiplayer_local_transport/level_up_authority.inl"
 #include "multiplayer_local_transport/level_up_debug_authority.inl"

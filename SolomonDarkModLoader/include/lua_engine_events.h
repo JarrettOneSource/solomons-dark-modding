@@ -1,6 +1,10 @@
 #pragma once
 
+#include "lua_mod_runtime.h"
 #include "sdmod_plugin_api.h"
+
+#include <cstdint>
+#include <string>
 
 namespace sdmod {
 
@@ -14,6 +18,12 @@ void DispatchLuaSpellCast(int spell_id, float x, float y, float direction_x, flo
 void DispatchLuaGoldChanged(int gold, int delta, const char* source);
 void DispatchLuaDropSpawned(const char* kind, float x, float y);
 void DispatchLuaLevelUp(int level, int xp);
+void DispatchLuaCustomEvent(
+    const std::string& mod_id,
+    const std::string& event_name,
+    const LuaModValue& payload,
+    std::uint64_t authority_participant_id,
+    std::uint64_t stream_sequence);
 
 }  // namespace sdmod
 
@@ -31,5 +41,11 @@ void DispatchSpellCastToLuaMods(int spell_id, float x, float y, float direction_
 void DispatchGoldChangedToLuaMods(int gold, int delta, const char* source);
 void DispatchDropSpawnedToLuaMods(const char* kind, float x, float y);
 void DispatchLevelUpToLuaMods(int level, int xp);
+void DispatchCustomEventToLuaMods(
+    const std::string& mod_id,
+    const std::string& event_name,
+    const LuaModValue& payload,
+    std::uint64_t authority_participant_id,
+    std::uint64_t stream_sequence);
 
 }  // namespace sdmod::detail

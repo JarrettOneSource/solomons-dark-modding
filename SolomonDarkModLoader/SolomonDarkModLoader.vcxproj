@@ -93,6 +93,7 @@
     <ClInclude Include="include\logger.h" />
     <ClInclude Include="include\lua_engine.h" />
     <ClInclude Include="include\lua_engine_events.h" />
+    <ClInclude Include="include\lua_mod_runtime.h" />
     <ClInclude Include="include\memory_access.h" />
     <ClInclude Include="include\mod_loader.h" />
     <ClInclude Include="include\mod_loader_hub_state.inl" />
@@ -200,6 +201,7 @@
     <ClInclude Include="src\logger_internal.h" />
     <ClInclude Include="src\lua_exec_pipe.h" />
     <ClInclude Include="src\lua_engine_bindings_internal.h" />
+    <ClInclude Include="src\lua_engine_values.h" />
     <ClInclude Include="src\lua_engine_parsers_internal.h" />
     <ClInclude Include="src\mod_loader_internal.h" />
     <ClInclude Include="src\runtime_debug_internal.h" />
@@ -402,6 +404,9 @@
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_dispatch.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_participant_state_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_codec.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_public.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\shared_gameplay_pause_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_snapshot_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_authority.inl" />
@@ -471,6 +476,7 @@
     <ClCompile Include="src\logger.cpp" />
     <ClCompile Include="src\lua_engine.cpp" />
     <ClCompile Include="src\lua_engine_bindings.cpp" />
+    <ClCompile Include="src\lua_engine_bindings_state.cpp" />
     <ClCompile Include="src\lua_engine_bindings_bots.cpp" />
     <ClCompile Include="src\lua_engine_bindings_debug.cpp" />
     <ClCompile Include="src\lua_exec_pipe.cpp" />
@@ -482,6 +488,10 @@
     <ClCompile Include="src\lua_engine_bindings_runtime.cpp" />
     <ClCompile Include="src\lua_engine_bindings_ui.cpp" />
     <ClCompile Include="src\lua_engine_events.cpp" />
+    <ClCompile Include="src\lua_engine_custom_events.cpp" />
+    <ClCompile Include="src\lua_engine_values.cpp" />
+    <ClCompile Include="src\lua_mod_runtime.cpp" />
+    <ClCompile Include="src\lua_mod_state_store.cpp" />
     <ClCompile Include="src\memory_access_core.cpp" />
     <ClCompile Include="src\memory_access_io.cpp" />
     <ClCompile Include="src\memory_access_regions.cpp" />

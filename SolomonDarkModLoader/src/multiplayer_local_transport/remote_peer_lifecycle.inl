@@ -51,6 +51,7 @@ void ResetRemoteParticipantSessionEpoch(
     g_local_transport.native_progression_reconcile_by_participant.erase(
         participant_id);
     g_local_transport.host_menu_pause_requests_by_participant.erase(participant_id);
+    g_local_transport.lua_mod_checkpointed_participants.erase(participant_id);
 
     for (auto it = g_local_transport.issued_level_up_offers_by_id.begin();
          it != g_local_transport.issued_level_up_offers_by_id.end();) {
@@ -91,6 +92,10 @@ void ResetRemoteParticipantSessionEpoch(
         g_local_transport.local_spell_effects_by_address.clear();
         g_local_transport.local_spell_effect_tombstones.clear();
         g_local_transport.spell_effect_snapshot_had_effects = false;
+        g_local_transport.pending_lua_mod_stream_assemblies.clear();
+        g_local_transport.completed_lua_mod_stream_messages.clear();
+        g_local_transport.last_lua_mod_stream_applied_sequence = 0;
+        ResetLuaModStateStore();
     }
 
     auto suppressed_participant = participant_id;

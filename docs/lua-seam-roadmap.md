@@ -67,8 +67,12 @@ shared state; simulation calls auto-route to the owner).
 
 - **`sd.runtime`** — `get_mod`, `get_multiplayer_state`, `get_frame_state`,
   `choose_level_up_option`, `debug_publish_level_up_offer`, `has_capability`,
-  `get_capabilities`, `get_environment_variable`, `get_mod_text_file`, `on`.
-- **Events (notify-only)** — `runtime.tick`, `run.started`, `run.ended`, `wave.started`,
+  `get_capabilities`, `get_environment_variable`, `get_mod_text_file`.
+- **`sd.state`** — per-mod `get/set/delete/clear/snapshot`, global revision reads, and
+  authority discovery. Host mutations replicate in order and late joiners receive a
+  checkpoint.
+- **`sd.events`** — `on` plus authority-only `broadcast` for mod-defined ordered events.
+  Built-in notify events are `runtime.tick`, `run.started`, `run.ended`, `wave.started`,
   `wave.completed`, `enemy.death`, `enemy.spawned`, `spell.cast`, `gold.changed`,
   `drop.spawned`, `level.up`.
 - **`sd.bots`** — full ally-bot runtime: `create/destroy/clear/update`, `move_to/stop/
@@ -116,7 +120,8 @@ shared state; simulation calls auto-route to the owner).
 2. **No output channel** — no drawing, no audio, no UI creation from Lua.
 3. **No content registration** — overlays retune existing skills/items/waves, but new
    content with *scripted behavior* is impossible without native code.
-4. **No blessed persistence, replicated state, or cross-mod contract.**
+4. **No blessed persistence or cross-mod contract.** Replicated run state now has the
+   `sd.state`/broadcast seam; profile persistence and local mod-to-mod contracts remain.
 
 ### Known sharp edges (fix as part of the relevant seam)
 
@@ -159,6 +164,11 @@ mod-defined events delivered to all peers in stream order.
 *Unlocks:* every multiplayer-aware mod without netcode; the backbone of the
 multiplayer-native contract. Build it early so Tier-1 seams are born MP-native.
 *Multiplayer:* this *is* the multiplayer story.
+
+**Implemented 2026-07-22.** Protocol 72 provides a bounded, deterministic Lua value
+codec; per-mod authority-owned state; ordered custom events; fragmented reliable Steam
+delivery; periodic and first-peer state checkpoints; and a three-peer late-join
+acceptance verifier. See `lua-state-and-events.md`.
 
 **4. Content registration.**
 - `sd.spells.register{key, cfg, on_cast, on_tick, on_hit}` — allocate an ID, integrate the

@@ -137,6 +137,27 @@ void DispatchReceivedPacket(
         }
 
         const auto kind = static_cast<PacketKind>(header.kind);
+        if (kind == PacketKind::LuaModStream &&
+            received >= static_cast<int>(kLuaModStreamPacketPrefixBytes) &&
+            received <= static_cast<int>(sizeof(LuaModStreamPacket))) {
+            LuaModStreamPacket packet{};
+            std::memcpy(
+                &packet,
+                packet_buffer.data(),
+                static_cast<std::size_t>(received));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::LuaModStream) ||
+                !IsValidLuaModStreamPacketWireSize(
+                    static_cast<std::size_t>(received),
+                    packet)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaModStreamPacket(packet, from, now_ms);
+            continue;
+        }
+
         if (kind == PacketKind::State && received == static_cast<int>(sizeof(StatePacket))) {
             StatePacket packet{};
             std::memcpy(&packet, packet_buffer.data(), sizeof(packet));

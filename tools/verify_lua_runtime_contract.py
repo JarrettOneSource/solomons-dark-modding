@@ -37,7 +37,16 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
         "get_environment_variable",
         "get_mod_text_file",
     ),
-    "events": ("on",),
+    "events": ("on", "broadcast"),
+    "state": (
+        "get",
+        "set",
+        "delete",
+        "clear",
+        "snapshot",
+        "get_revision",
+        "is_authority",
+    ),
     "bots": (
         "create",
         "destroy",
@@ -197,6 +206,9 @@ end
 check_call('runtime.get_mod', sd.runtime.get_mod, {{'table'}})
 check_call('runtime.get_capabilities', sd.runtime.get_capabilities, {{'table'}})
 check_call('runtime.get_multiplayer_state', sd.runtime.get_multiplayer_state, {{'table'}})
+check_call('state.snapshot', sd.state.snapshot, {{'table'}})
+check_call('state.get_revision', sd.state.get_revision, {{'number'}})
+check_call('state.is_authority', sd.state.is_authority, {{'boolean'}})
 check_call('bots.get_count', sd.bots.get_count, {{'number'}})
 check_call('bots.get_participants', sd.bots.get_participants, {{'table'}})
 check_call('ui.get_surface_id', sd.ui.get_surface_id, {{'string', 'nil'}})

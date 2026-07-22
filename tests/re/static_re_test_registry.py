@@ -11,6 +11,9 @@ from static_re_boneyard_contracts import (
     test_boneyard_parser_rejects_empty_truncated_and_trailing_files,
     test_flat_boneyard_fixture_matches_native_syncbuffer_envelope,
 )
+from static_lua_mod_state_contracts import (
+    test_lua_mod_state_and_events_are_authority_replicated,
+)
 from static_multiplayer_transport_contracts import (
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
     test_build_all_rebuilds_native_loader_from_clean_intermediates,
@@ -251,6 +254,10 @@ from static_re_binary_tooling_contracts import (
 )
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "Lua mod state and events are authority-replicated",
+        test_lua_mod_state_and_events_are_authority_replicated,
+    ),
     (
         "flat Boneyard fixture matches the native SyncBuffer envelope",
         test_flat_boneyard_fixture_matches_native_syncbuffer_envelope,

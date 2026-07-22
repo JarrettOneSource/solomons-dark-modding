@@ -7,7 +7,7 @@ namespace SolomonDarkModLauncher.Staging;
 
 internal static class MultiplayerCompatibilityMaterializer
 {
-    public const int CurrentProtocolVersion = 70;
+    public const int CurrentProtocolVersion = 72;
     public const string FingerprintEnvironmentVariable = "SDMOD_MULTIPLAYER_MANIFEST_SHA256";
     private const int SchemaVersion = 1;
     private const string ManifestFileName = "multiplayer-compatibility.json";

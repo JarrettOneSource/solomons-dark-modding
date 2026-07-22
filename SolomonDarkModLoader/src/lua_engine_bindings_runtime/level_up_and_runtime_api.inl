@@ -274,12 +274,8 @@ int LuaRuntimeGetModTextFile(lua_State* state) {
 }
 
 bool IsSupportedLuaEventName(std::string_view event_name) {
-    return event_name == kRuntimeTickEventName || event_name == kRunStartedEventName ||
-        event_name == kRunEndedEventName || event_name == kWaveStartedEventName ||
-        event_name == kWaveCompletedEventName || event_name == kEnemyDeathEventName ||
-        event_name == kEnemySpawnedEventName || event_name == kSpellCastEventName ||
-        event_name == kGoldChangedEventName || event_name == kDropSpawnedEventName ||
-        event_name == kLevelUpEventName;
+    return IsBuiltInLuaEventName(event_name) ||
+           IsValidCustomLuaEventName(event_name);
 }
 
 void MarkLuaEventRegistered(LoadedLuaMod* mod, std::string_view event_name) {
@@ -366,8 +362,9 @@ void RegisterLuaRuntimeBindings(lua_State* state) {
 }
 
 void RegisterLuaEventBindings(lua_State* state) {
-    lua_createtable(state, 0, 1);
+    lua_createtable(state, 0, 2);
     RegisterFunction(state, &LuaEventsOn, "on");
+    RegisterLuaEventBroadcastBinding(state);
     lua_setfield(state, -2, "events");
 }
 

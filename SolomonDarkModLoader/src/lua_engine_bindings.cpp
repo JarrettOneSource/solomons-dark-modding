@@ -131,10 +131,11 @@ bool RegisterLuaBindings(LoadedLuaMod* mod, std::string* error_message) {
     lua_pushcfunction(mod->state, &LuaPrint);
     lua_setglobal(mod->state, "print");
 
-    // runtime, events, bots, ui, input, gameplay, player, world, hub, debug
-    lua_createtable(mod->state, 0, 10);
+    // runtime, events, state, bots, ui, input, gameplay, player, world, hub, debug
+    lua_createtable(mod->state, 0, 11);
     RegisterLuaRuntimeBindings(mod->state);
     RegisterLuaEventBindings(mod->state);
+    RegisterLuaStateBindings(mod->state);
     RegisterLuaBotBindings(mod->state);
     RegisterLuaUiBindings(mod->state);
     RegisterLuaInputBindings(mod->state);

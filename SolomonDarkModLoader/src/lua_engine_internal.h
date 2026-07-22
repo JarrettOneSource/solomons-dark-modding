@@ -9,6 +9,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <vector>
 
 struct lua_State;
@@ -68,6 +69,8 @@ bool RegisterLuaBindings(LoadedLuaMod* mod, std::string* error_message);
 void LogLuaMessage(const LoadedLuaMod& mod, const std::string& message);
 LoadedLuaMod* GetLoadedLuaMod(lua_State* state);
 const LoadedLuaMod* GetLoadedLuaMod(const lua_State* state);
+bool IsBuiltInLuaEventName(std::string_view event_name);
+bool IsValidCustomLuaEventName(std::string_view event_name);
 
 void StartLuaEventQueue();
 void StopLuaEventQueue();

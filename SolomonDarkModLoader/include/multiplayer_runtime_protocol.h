@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 71;
+constexpr std::uint16_t kProtocolVersion = 72;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -23,6 +23,8 @@ constexpr std::uint32_t kLevelUpWaitStatusMaxParticipants = 8;
 constexpr std::uint32_t kSpellEffectSnapshotMaxEffects = 32;
 constexpr std::uint32_t kAirChainSnapshotMaxTargets = 8;
 constexpr std::uint32_t kSecondaryLoadoutSlotCount = 8;
+constexpr std::uint32_t kLuaModStreamFragmentPayloadBytes = 1024;
+constexpr std::uint16_t kLuaModStreamMaxFragments = 64;
 
 enum class PacketKind : std::uint16_t {
     State = 1,
@@ -45,6 +47,15 @@ enum class PacketKind : std::uint16_t {
     SessionKeepalive = 18,
     LevelUpBarrier = 19,
     ParticipantFrame = 20,
+    LuaModStream = 21,
+};
+
+enum class LuaModStreamMessageKind : std::uint8_t {
+    StateCheckpoint = 1,
+    StateSet = 2,
+    StateDelete = 3,
+    StateClear = 4,
+    Event = 5,
 };
 
 enum class SessionPeerRole : std::uint8_t {
@@ -630,6 +641,64 @@ struct SessionKeepalivePacket {
     std::uint64_t session_nonce;
 };
 
+struct LuaModStreamPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t stream_sequence;
+    std::uint64_t state_revision;
+    std::uint32_t message_id;
+    std::uint32_t total_payload_bytes;
+    std::uint16_t fragment_index;
+    std::uint16_t fragment_count;
+    std::uint16_t payload_bytes;
+    std::uint8_t message_kind;
+    std::uint8_t reserved[5] = {};
+    std::uint8_t payload[kLuaModStreamFragmentPayloadBytes];
+};
+
+constexpr std::size_t kLuaModStreamPacketPrefixBytes =
+    offsetof(LuaModStreamPacket, payload);
+
+constexpr std::size_t LuaModStreamPacketWireSize(
+    std::uint16_t payload_bytes) {
+    return kLuaModStreamPacketPrefixBytes + payload_bytes;
+}
+
+constexpr bool IsValidLuaModStreamPacketWireSize(
+    std::size_t received_bytes,
+    const LuaModStreamPacket& packet) {
+    const auto message_kind =
+        static_cast<LuaModStreamMessageKind>(packet.message_kind);
+    const auto expected_fragment_count = static_cast<std::uint16_t>(
+        (packet.total_payload_bytes + kLuaModStreamFragmentPayloadBytes - 1u) /
+        kLuaModStreamFragmentPayloadBytes);
+    const auto fragment_offset =
+        static_cast<std::uint32_t>(packet.fragment_index) *
+        kLuaModStreamFragmentPayloadBytes;
+    const auto remaining_payload =
+        packet.total_payload_bytes > fragment_offset
+            ? packet.total_payload_bytes - fragment_offset
+            : 0u;
+    const auto expected_payload_bytes = static_cast<std::uint16_t>(
+        remaining_payload > kLuaModStreamFragmentPayloadBytes
+            ? kLuaModStreamFragmentPayloadBytes
+            : remaining_payload);
+    return message_kind >= LuaModStreamMessageKind::StateCheckpoint &&
+           message_kind <= LuaModStreamMessageKind::Event &&
+           packet.authority_participant_id != 0 &&
+           packet.message_id != 0 &&
+           packet.total_payload_bytes != 0 &&
+           packet.total_payload_bytes <=
+               kLuaModStreamFragmentPayloadBytes *
+                   kLuaModStreamMaxFragments &&
+           packet.fragment_count != 0 &&
+           packet.fragment_count <= kLuaModStreamMaxFragments &&
+           packet.fragment_count == expected_fragment_count &&
+           packet.fragment_index < packet.fragment_count &&
+           packet.payload_bytes == expected_payload_bytes &&
+           received_bytes == LuaModStreamPacketWireSize(packet.payload_bytes);
+}
+
 struct LevelUpOfferPacket {
     PacketHeader header;
     std::uint64_t authority_participant_id;
@@ -1107,6 +1176,16 @@ static_assert(sizeof(SessionHelloAckPacket) == 92, "Unexpected session hello ack
 static_assert(sizeof(SessionGoodbyePacket) == 44, "Unexpected session goodbye packet size");
 static_assert(sizeof(SessionKeepalivePacket) == 52,
               "Unexpected session keepalive packet size");
+static_assert(kLuaModStreamPacketPrefixBytes == 56,
+              "Unexpected Lua mod stream packet prefix size");
+static_assert(sizeof(LuaModStreamPacket) == 1080,
+              "Unexpected Lua mod stream packet size");
+static_assert(LuaModStreamPacketWireSize(0) == 56,
+              "Empty Lua mod stream packet prefix size changed");
+static_assert(
+    LuaModStreamPacketWireSize(kLuaModStreamFragmentPayloadBytes) ==
+        sizeof(LuaModStreamPacket),
+    "Full Lua mod stream fragment must consume the packet buffer exactly");
 static_assert(sizeof(LevelUpOfferPacket) == 116, "Unexpected level-up offer packet size");
 static_assert(sizeof(LevelUpChoicePacket) == 40, "Unexpected level-up choice packet size");
 static_assert(sizeof(LevelUpChoiceResultPacket) == 64, "Unexpected level-up choice result packet size");

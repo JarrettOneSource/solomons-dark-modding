@@ -158,7 +158,7 @@ def test_cursor_placed_secondaries_replay_owner_world_position() -> str:
     )
     layout = _read("config/binary-layout.ini")
 
-    assert "constexpr std::uint16_t kProtocolVersion = 71;" in protocol
+    assert "constexpr std::uint16_t kProtocolVersion = 72;" in protocol
     assert "CastInputFlagCursorWorldPlacement" in protocol
     assert "float cursor_world_x;" in protocol
     assert "float cursor_world_y;" in protocol
@@ -564,7 +564,7 @@ def test_remote_webbed_escape_consumes_owner_movement_intent() -> str:
     live_harness = _read("tools/multiplayer_webbed_status_harness.py")
     live_verifier = _read("tools/verify_multiplayer_webbed_status_sync.py")
 
-    assert "constexpr std::uint16_t kProtocolVersion = 71;" in protocol
+    assert "constexpr std::uint16_t kProtocolVersion = 72;" in protocol
     for source_name, source in (
         ("protocol", protocol),
         ("runtime state", runtime_state),
@@ -1321,7 +1321,7 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
     for token in (
         "ParticipantTransientStatusFlagPlanewalker = 1 << 2",
         "ParticipantTransientStatusFlagStoneskin = 1 << 3",
-        "constexpr std::uint16_t kProtocolVersion = 71;",
+        "constexpr std::uint16_t kProtocolVersion = 72;",
     ):
         assert token in protocol, f"native transient status protocol lacks: {token}"
     for token in (
@@ -2071,7 +2071,7 @@ def test_shared_menu_pause_is_host_authoritative_and_time_bounded() -> str:
     verifier = _read("tools/verify_multiplayer_shared_menu_pause.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 71",
+        "constexpr std::uint16_t kProtocolVersion = 72",
         "local_menu_pause_request_epoch",
         "local_menu_pause_requested",
         "shared_gameplay_pause_active",

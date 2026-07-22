@@ -1,5 +1,7 @@
 #pragma once
 
+#include "lua_mod_runtime.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -18,10 +20,35 @@ void TickLocalTransport(std::uint64_t now_ms);
 bool IsLocalTransportEnabled();
 bool IsLocalTransportHost();
 bool IsLocalTransportClient();
+bool IsLuaModSimulationAuthority();
 void NotifyLocalRunStarted();
 void NotifyLocalRunEnded(std::string_view reason);
 bool TryAuthorizeLocalClientRunSwitch(std::string* error_message);
 std::uint64_t GetLocalTransportParticipantId();
+bool PublishAuthoritativeLuaModStateSet(
+    const std::string& mod_id,
+    const std::string& key,
+    const LuaModValue& value,
+    std::uint64_t state_revision,
+    std::uint64_t* stream_sequence,
+    std::string* error_message);
+bool PublishAuthoritativeLuaModStateDelete(
+    const std::string& mod_id,
+    const std::string& key,
+    std::uint64_t state_revision,
+    std::uint64_t* stream_sequence,
+    std::string* error_message);
+bool PublishAuthoritativeLuaModStateClear(
+    const std::string& mod_id,
+    std::uint64_t state_revision,
+    std::uint64_t* stream_sequence,
+    std::string* error_message);
+bool PublishAuthoritativeLuaModEvent(
+    const std::string& mod_id,
+    const std::string& event_name,
+    const LuaModValue& payload,
+    std::uint64_t* stream_sequence,
+    std::string* error_message);
 bool IsSteamGameplayTransportEnabled();
 bool RegisterSteamGameplayPeer(
     std::uint64_t steam_id,

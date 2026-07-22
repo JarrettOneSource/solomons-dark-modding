@@ -17,6 +17,8 @@ bool TryLuaValueToString(lua_State* state, int index, std::string* text, std::st
 
 void RegisterLuaRuntimeBindings(lua_State* state);
 void RegisterLuaEventBindings(lua_State* state);
+void RegisterLuaEventBroadcastBinding(lua_State* state);
+void RegisterLuaStateBindings(lua_State* state);
 void RegisterLuaBotBindings(lua_State* state);
 void RegisterLuaUiBindings(lua_State* state);
 void RegisterLuaInputBindings(lua_State* state);
