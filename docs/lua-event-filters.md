@@ -11,6 +11,7 @@ Implemented filter families are:
 - `damage.taken`
 - `enemy.spawning`
 - `drop.rolling`
+- `wave.spawning`
 
 The damage filters execute at the stock `PlayerActor::MagicDamage` resolution point. The
 loader runs every `damage.dealing` handler first, then every `damage.taken`
@@ -132,6 +133,8 @@ native cancellation contract are documented in
 capabilities it depends on in `runtime.requiredCapabilities`. The enemy loot
 selector advertises `events.filters.drop_roll` and is documented in
 [lua-drop-roll-filter.md](lua-drop-roll-filter.md).
+The stock wave-spawner seam advertises `events.filters.wave_spawn` and is
+documented in [lua-wave-spawn-filter.md](lua-wave-spawn-filter.md).
 
 The live verifier must run against a disposable game process because filter
 registrations last for the life of the Lua state. It invokes the retail damage
@@ -141,6 +144,3 @@ and then proves cancellation leaves HP unchanged:
 ```powershell
 py -3 tools/verify_lua_damage_filters.py --pipe SolomonDarkModLoader_LuaExec
 ```
-
-The wave filter remains a separate roadmap slice; this document does not
-promise that name before its owner seam ships.

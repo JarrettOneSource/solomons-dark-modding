@@ -78,6 +78,7 @@ void ResetLuaEventFilterRegistrations();
 void ClearLuaEventFilterRegistrationsForMod(LoadedLuaMod* mod);
 void ResetLuaEnemySpawnFilterDiagnostics();
 void ResetLuaDropRollFilterDiagnostics();
+void ResetLuaWaveSpawnFilterDiagnostics();
 
 void StartLuaEventQueue();
 void StopLuaEventQueue();

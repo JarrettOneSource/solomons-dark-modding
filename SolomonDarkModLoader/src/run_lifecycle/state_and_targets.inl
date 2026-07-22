@@ -37,6 +37,11 @@ struct HookTarget {
     size_t patch_size;
 };
 
+struct LuaWaveSpawnFilterInstance {
+    uintptr_t action_record_address = 0;
+    uintptr_t vtable_address = 0;
+};
+
 enum HookIndex : size_t {
     kHookCreateArena = 0,
     kHookMainMenuControlAction,
@@ -84,8 +89,16 @@ struct RunLifecycleState {
     std::uint32_t next_enemy_spawn_serial = 1;
     std::mutex wave_spawner_log_mutex;
     std::unordered_set<uintptr_t> logged_wave_spawners;
+    std::mutex wave_spawn_filter_mutex;
+    std::unordered_map<uintptr_t, LuaWaveSpawnFilterInstance>
+        wave_spawn_filter_instances;
     bool initialized = false;
 } g_state;
+
+void ClearLuaWaveSpawnFilterInstances() {
+    std::lock_guard<std::mutex> lock(g_state.wave_spawn_filter_mutex);
+    g_state.wave_spawn_filter_instances.clear();
+}
 
 struct ManualRunEnemySpawnRequest {
     std::uint64_t request_id = 0;
@@ -123,8 +136,12 @@ constexpr char kGoldSourceScript[] = "script";
 constexpr char kGoldSourceUnknown[] = "unknown";
 constexpr char kDropKindGold[] = "gold";
 constexpr std::size_t kWaveSpawnerRemainingBudgetOffset = 0x20;
+constexpr std::size_t kWaveSpawnerActionRecordOffset = 0x18;
 constexpr std::size_t kWaveSpawnerSpawnDelayCountdownOffset = 0x24;
+constexpr std::size_t kWaveSpawnerSpawnDelayBaseOffset = 0x28;
 constexpr std::size_t kWaveSpawnerLongDelayCountdownOffset = 0x2C;
+constexpr std::size_t kWaveSpawnerRandomizeDelayOffset = 0x30;
+constexpr std::size_t kWaveSpawnerSequentialGroupsOffset = 0x31;
 constexpr std::uint64_t kManualRunEnemySpawnerFreshnessWindowMs = 5000;
 constexpr std::size_t kQueuedReplicatedRunEnemySpawnLimit = 16;
 constexpr std::size_t kReplicatedCatchupSpawnBurstPerSpawnerTick = 8;
@@ -136,6 +153,7 @@ constexpr std::size_t kEnemySpawnConfigScaleOffset = 0x74;
 constexpr std::size_t kCanceledEnemySpawnResultSize = 0x400;
 constexpr std::uint32_t kMaximumLuaEnemySpawnFilterHookLogCount = 4;
 constexpr std::uint32_t kMaximumLuaDropRollFilterHookLogCount = 4;
+constexpr std::uint32_t kMaximumLuaWaveSpawnFilterHookLogCount = 4;
 
 alignas(std::uintptr_t)
 std::array<std::uint8_t, kCanceledEnemySpawnResultSize>
@@ -144,6 +162,8 @@ std::atomic<std::uint32_t> g_lua_enemy_spawn_filter_capture_log_count{0};
 std::atomic<std::uint32_t> g_lua_enemy_spawn_filter_write_log_count{0};
 std::atomic<std::uint32_t> g_lua_drop_roll_filter_capture_log_count{0};
 std::atomic<std::uint32_t> g_lua_drop_roll_filter_write_log_count{0};
+std::atomic<std::uint32_t> g_lua_wave_spawn_filter_capture_log_count{0};
+std::atomic<std::uint32_t> g_lua_wave_spawn_filter_write_log_count{0};
 
 void BuildHookTargets(HookTarget* targets) {
     if (targets == nullptr) {

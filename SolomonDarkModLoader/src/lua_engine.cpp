@@ -306,6 +306,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "events.replicated.broadcast",
         "events.filters.drop_roll",
         "events.filters.enemy_spawn",
+        "events.filters.wave_spawn",
         "draw.local.immediate",
         "draw.text",
         "draw.primitives",

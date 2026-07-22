@@ -71,6 +71,7 @@ void __fastcall HookCreateArena(void* self, void* unused_edx) {
         std::lock_guard<std::mutex> lock(g_state.wave_spawner_log_mutex);
         g_state.logged_wave_spawners.clear();
     }
+    ClearLuaWaveSpawnFilterInstances();
     ClearRememberedEnemyTracking();
     original(self, unused_edx);
     multiplayer::NotifyLocalRunStarted();
@@ -98,6 +99,7 @@ void __fastcall HookStartGame(void* self, void* unused_edx) {
         std::lock_guard<std::mutex> lock(g_state.wave_spawner_log_mutex);
         g_state.logged_wave_spawners.clear();
     }
+    ClearLuaWaveSpawnFilterInstances();
     ClearRememberedEnemyTracking();
     original(self, unused_edx);
     multiplayer::NotifyLocalRunStarted();

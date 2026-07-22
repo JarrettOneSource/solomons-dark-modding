@@ -2,6 +2,7 @@
 #include "run_and_enemy_hooks/manual_enemy_spawning.inl"
 #include "run_and_enemy_hooks/actor_world_pause_hook.inl"
 #include "run_and_enemy_hooks/enemy_spawn_filter.inl"
+#include "run_and_enemy_hooks/wave_spawn_filter.inl"
 #include "run_and_enemy_hooks/wave_and_enemy_spawn_hooks.inl"
 #include "run_and_enemy_hooks/drop_roll_filter.inl"
 #include "run_and_enemy_hooks/enemy_death_reward_level_up_hooks.inl"

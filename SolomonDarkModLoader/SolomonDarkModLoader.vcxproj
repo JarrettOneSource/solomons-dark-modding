@@ -461,6 +461,7 @@
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\enemy_death_reward_level_up_hooks.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\manual_enemy_spawning.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\run_transition_hooks.inl" />
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\wave_spawn_filter.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\wave_and_enemy_spawn_hooks.inl" />
     <ClInclude Include="src\run_lifecycle\spell_cast_hooks.inl" />
     <ClInclude Include="src\run_lifecycle\state_and_targets.inl" />
@@ -500,6 +501,7 @@
     <ClCompile Include="src\lua_engine_filters.cpp" />
     <ClCompile Include="src\lua_engine_drop_filters.cpp" />
     <ClCompile Include="src\lua_engine_enemy_spawn_filters.cpp" />
+    <ClCompile Include="src\lua_engine_wave_spawn_filters.cpp" />
     <ClCompile Include="src\lua_engine_custom_events.cpp" />
     <ClCompile Include="src\lua_engine_values.cpp" />
     <ClCompile Include="src\lua_draw_assets.cpp" />

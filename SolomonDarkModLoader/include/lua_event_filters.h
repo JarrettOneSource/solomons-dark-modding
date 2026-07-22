@@ -12,6 +12,7 @@ inline constexpr std::uint32_t kLuaDamageDealingFilterMask = 1u << 0;
 inline constexpr std::uint32_t kLuaDamageTakenFilterMask = 1u << 1;
 inline constexpr std::uint32_t kLuaEnemySpawningFilterMask = 1u << 2;
 inline constexpr std::uint32_t kLuaDropRollingFilterMask = 1u << 3;
+inline constexpr std::uint32_t kLuaWaveSpawningFilterMask = 1u << 4;
 
 struct LuaDamageFilterContext {
     std::uintptr_t source_actor_address = 0;
@@ -67,5 +68,20 @@ struct LuaDropRollFilterContext {
 
 bool HasLuaDropRollFilterHandlers();
 bool ApplyLuaDropRollFilters(LuaDropRollFilterContext* context);
+
+struct LuaWaveSpawnFilterContext {
+    std::uintptr_t spawner_address = 0;
+    std::uintptr_t action_record_address = 0;
+    std::int32_t wave_index = 0;
+    std::int32_t count = 0;
+    std::int32_t spawn_delay_remaining = 0;
+    std::int32_t spawn_delay = 0;
+    std::int32_t wave_delay = 0;
+    bool randomize_spawn_delay = false;
+    bool sequential_groups = false;
+};
+
+bool HasLuaWaveSpawnFilterHandlers();
+bool ApplyLuaWaveSpawnFilters(LuaWaveSpawnFilterContext* context);
 
 }  // namespace sdmod
