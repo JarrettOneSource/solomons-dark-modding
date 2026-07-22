@@ -164,6 +164,11 @@ effects — the shift from telemetry platform to rules engine.
 *Multiplayer:* Filters execute only where the affected entity is simulated; outcomes
 replicate through existing channels. Authors write them as if single-player.
 
+**Damage slice implemented 2026-07-22.** `sd.events.filter` now exposes ordered,
+owner-side `damage.dealing` and `damage.taken` rewrites/cancellation at the complete
+nine-float stock damage context. Spawn, drop, and wave filters remain the next slices.
+See `lua-event-filters.md` and the opt-in `sample.lua.damage_filter_lab` mod.
+
 **3. `sd.state` + `sd.events.broadcast` — replicated mod state & events.**
 Authority-writable KV bundled into the snapshot/apply stream (late joiners sync it), plus
 mod-defined events delivered to all peers in stream order.

@@ -324,6 +324,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
 
     if (IsGameplayKeyboardInjectionInitialized()) {
         capabilities.emplace_back("input.keyboard.inject");
+        capabilities.emplace_back("events.filters.damage");
     }
 
     if (multiplayer::IsBotRuntimeInitialized()) {
@@ -388,12 +389,15 @@ bool CreateLuaStateForMod(LoadedLuaMod* mod, std::string* error_message) {
 }
 
 void CloseLuaStateForMod(LoadedLuaMod* mod) {
-    if (mod == nullptr || mod->state == nullptr) {
+    if (mod == nullptr) {
         return;
     }
 
-    lua_close(mod->state);
-    mod->state = nullptr;
+    ClearLuaEventFilterRegistrationsForMod(mod);
+    if (mod->state != nullptr) {
+        lua_close(mod->state);
+        mod->state = nullptr;
+    }
     mod->runtime_tick_registered = false;
     mod->run_started_registered = false;
     mod->run_ended_registered = false;
@@ -430,6 +434,7 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     std::filesystem::create_directories(runtime_directory);
     loaded_mods.clear();
     ResetLuaModStateStore();
+    detail::ResetLuaEventFilterRegistrations();
     if (!InitializeLuaDrawRuntime(bootstrap.stage_root, error_message)) {
         return false;
     }
@@ -497,6 +502,7 @@ void ShutdownLuaEngine() {
     }
     loaded_mods.clear();
     ResetLuaModStateStore();
+    detail::ResetLuaEventFilterRegistrations();
     ShutdownLuaDrawRuntime();
     detail::LuaRuntimeDirectoryStorage().clear();
     detail::LuaRuntimeBootstrapStorage() = RuntimeBootstrap{};

@@ -37,7 +37,7 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
         "get_environment_variable",
         "get_mod_text_file",
     ),
-    "events": ("on", "broadcast"),
+    "events": ("on", "broadcast", "filter"),
     "state": (
         "get",
         "set",

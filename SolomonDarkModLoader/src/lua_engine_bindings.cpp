@@ -128,6 +128,9 @@ bool RegisterLuaBindings(LoadedLuaMod* mod, std::string* error_message) {
     lua_createtable(mod->state, 0, 1);
     lua_setfield(mod->state, LUA_REGISTRYINDEX, kLuaEventHandlersRegistryKey);
 
+    lua_createtable(mod->state, 0, 1);
+    lua_setfield(mod->state, LUA_REGISTRYINDEX, kLuaEventFiltersRegistryKey);
+
     lua_pushcfunction(mod->state, &LuaPrint);
     lua_setglobal(mod->state, "print");
 

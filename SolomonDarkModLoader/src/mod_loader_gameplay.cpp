@@ -5,6 +5,7 @@
 #include "logger.h"
 #include "lua_draw_runtime.h"
 #include "lua_engine.h"
+#include "lua_event_filters.h"
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"

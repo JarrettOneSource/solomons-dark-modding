@@ -36,6 +36,12 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         ProcessMemory::Instance().ResolveGameAddressOrZero(kDamageContextTargetGlobal);
     const auto damage_context_source =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kDamageContextSourceGlobal);
+    const auto damage_context_flags =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kDamageContextFlagsGlobal);
+    const auto damage_context_primary =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kDamageContextPrimaryGlobal);
+    const auto damage_context_secondary =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kDamageContextSecondaryGlobal);
     const auto player_actor_pure_primary_gate =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorPurePrimaryGate);
     const auto player_control_brain_update =
@@ -102,6 +108,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         damage_context_reset == 0 ||
         damage_context_target == 0 ||
         damage_context_source == 0 ||
+        damage_context_flags == 0 ||
+        damage_context_primary == 0 ||
+        damage_context_secondary != damage_context_primary + sizeof(float) ||
         player_actor_pure_primary_gate == 0 ||
         player_control_brain_update == 0 ||
         pure_primary_spell_start == 0 ||
@@ -810,8 +819,16 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
 
     g_gameplay_keyboard_injection.damage_context_reset_address =
         damage_context_reset;
+    g_gameplay_keyboard_injection.damage_context_target_address =
+        damage_context_target;
     g_gameplay_keyboard_injection.damage_context_source_address =
         damage_context_source;
+    g_gameplay_keyboard_injection.damage_context_flags_address =
+        damage_context_flags;
+    g_gameplay_keyboard_injection.damage_context_primary_address =
+        damage_context_primary;
+    g_gameplay_keyboard_injection.damage_context_secondary_address =
+        damage_context_secondary;
     if (!InstallSafeX86Hook(
             reinterpret_cast<void*>(player_actor_magic_damage),
             reinterpret_cast<void*>(&HookPlayerActorMagicDamage),
@@ -949,6 +966,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " incoming_damage=" + HexString(player_actor_magic_damage) +
         " poisoned_modifier_tick=" + HexString(poisoned_modifier_tick) +
         " damage_context_reset=" + HexString(damage_context_reset) +
+        " damage_context_primary=" + HexString(damage_context_primary) +
         " pure_primary_gate=" + HexString(player_actor_pure_primary_gate) +
         " control_brain_update=" + HexString(player_control_brain_update) +
         " pure_primary_start=" + HexString(pure_primary_spell_start) +
@@ -1026,7 +1044,11 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.item_drop_pickup_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.powerup_pickup_hook);
     g_gameplay_keyboard_injection.damage_context_reset_address = 0;
+    g_gameplay_keyboard_injection.damage_context_target_address = 0;
     g_gameplay_keyboard_injection.damage_context_source_address = 0;
+    g_gameplay_keyboard_injection.damage_context_flags_address = 0;
+    g_gameplay_keyboard_injection.damage_context_primary_address = 0;
+    g_gameplay_keyboard_injection.damage_context_secondary_address = 0;
     RestoreNativeCastGatePatches();
     RestoreBoneyardGeneratorPatch();
     {

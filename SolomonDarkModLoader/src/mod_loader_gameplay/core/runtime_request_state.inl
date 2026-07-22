@@ -170,7 +170,11 @@ struct GameplayKeyboardInjectionState {
     X86Hook item_drop_pickup_hook;
     X86Hook powerup_pickup_hook;
     uintptr_t damage_context_reset_address = 0;
+    uintptr_t damage_context_target_address = 0;
     uintptr_t damage_context_source_address = 0;
+    uintptr_t damage_context_flags_address = 0;
+    uintptr_t damage_context_primary_address = 0;
+    uintptr_t damage_context_secondary_address = 0;
     bool initialized = false;
     std::array<std::atomic<std::uint32_t>, 256> pending_scancodes{};
     std::atomic<bool> last_observed_mouse_left_down{false};

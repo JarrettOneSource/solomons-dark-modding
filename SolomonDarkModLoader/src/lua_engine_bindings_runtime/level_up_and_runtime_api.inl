@@ -362,9 +362,10 @@ void RegisterLuaRuntimeBindings(lua_State* state) {
 }
 
 void RegisterLuaEventBindings(lua_State* state) {
-    lua_createtable(state, 0, 2);
+    lua_createtable(state, 0, 3);
     RegisterFunction(state, &LuaEventsOn, "on");
     RegisterLuaEventBroadcastBinding(state);
+    RegisterLuaEventFilterBinding(state);
     lua_setfield(state, -2, "events");
 }
 

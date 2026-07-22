@@ -6,6 +6,7 @@
 #include "sdmod_plugin_api.h"
 
 #include <filesystem>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -19,6 +20,7 @@ namespace detail {
 
 inline constexpr char kLuaLoadedModRegistryKey[] = "sdmod.loaded_mod";
 inline constexpr char kLuaEventHandlersRegistryKey[] = "sdmod.event_handlers";
+inline constexpr char kLuaEventFiltersRegistryKey[] = "sdmod.event_filters";
 inline constexpr char kLuaSdRegistryKey[] = "sdmod.globals.sd";
 inline constexpr char kRuntimeTickEventName[] = "runtime.tick";
 inline constexpr char kRunStartedEventName[] = "run.started";
@@ -47,6 +49,7 @@ struct LoadedLuaMod {
     bool gold_changed_registered = false;
     bool drop_spawned_registered = false;
     bool level_up_registered = false;
+    std::uint32_t event_filter_mask = 0;
 };
 
 std::mutex& LuaEngineMutex();
@@ -71,6 +74,8 @@ LoadedLuaMod* GetLoadedLuaMod(lua_State* state);
 const LoadedLuaMod* GetLoadedLuaMod(const lua_State* state);
 bool IsBuiltInLuaEventName(std::string_view event_name);
 bool IsValidCustomLuaEventName(std::string_view event_name);
+void ResetLuaEventFilterRegistrations();
+void ClearLuaEventFilterRegistrationsForMod(LoadedLuaMod* mod);
 
 void StartLuaEventQueue();
 void StopLuaEventQueue();

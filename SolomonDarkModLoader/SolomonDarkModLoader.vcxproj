@@ -93,6 +93,7 @@
     <ClInclude Include="include\logger.h" />
     <ClInclude Include="include\lua_engine.h" />
     <ClInclude Include="include\lua_engine_events.h" />
+    <ClInclude Include="include\lua_event_filters.h" />
     <ClInclude Include="include\lua_draw_runtime.h" />
     <ClInclude Include="include\lua_mod_runtime.h" />
     <ClInclude Include="include\memory_access.h" />
@@ -492,6 +493,7 @@
     <ClCompile Include="src\lua_engine_bindings_runtime.cpp" />
     <ClCompile Include="src\lua_engine_bindings_ui.cpp" />
     <ClCompile Include="src\lua_engine_events.cpp" />
+    <ClCompile Include="src\lua_engine_filters.cpp" />
     <ClCompile Include="src\lua_engine_custom_events.cpp" />
     <ClCompile Include="src\lua_engine_values.cpp" />
     <ClCompile Include="src\lua_draw_assets.cpp" />

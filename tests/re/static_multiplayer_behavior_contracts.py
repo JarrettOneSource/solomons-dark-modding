@@ -756,13 +756,11 @@ def test_network_clients_reject_stock_incoming_damage_authority() -> str:
     )
     _require_in_order(
         hook,
-        "if (multiplayer::IsLocalTransportClient())",
-        "if (g_client_owner_poison_tick_target == actor_address)",
-        "return original(self);",
-        "const auto reset = reinterpret_cast<DamageContextResetFn>",
-        "reset(reinterpret_cast<void*>(",
-        "damage_context_source_address",
+        "if (multiplayer::IsLocalTransportClient() &&",
+        "g_client_owner_poison_tick_target != actor_address",
+        "ResetActiveDamageContext();",
         "return 0;",
+        "if (HasLuaDamageFilterHandlers())",
     )
     assert "if (!shield_authority.applicable)" in hook
     assert "return original(self);" in hook

@@ -7,6 +7,131 @@ struct RemoteMagicShieldDamageAuthority {
 constexpr float kRemoteMagicShieldAuthorityEpsilon = 0.001f;
 constexpr float kRemoteMagicShieldMaximumAbsorb = 1'000'000.0f;
 constexpr float kRemoteMagicShieldMaximumExplosionFraction = 100.0f;
+constexpr std::uint32_t kMaximumLuaDamageFilterHookLogCount = 4;
+
+std::atomic<std::uint32_t> g_lua_damage_filter_capture_log_count{0};
+std::atomic<std::uint32_t> g_lua_damage_filter_write_log_count{0};
+
+enum class LuaDamageLaneWriteResult {
+    Applied,
+    RestoredAfterFailure,
+    RestoreFailed,
+};
+
+void LogLuaDamageFilterHookFailure(
+    std::atomic<std::uint32_t>* log_count,
+    const std::string& message) {
+    if (log_count != nullptr &&
+        log_count->fetch_add(1, std::memory_order_relaxed) <
+            kMaximumLuaDamageFilterHookLogCount) {
+        Log("[lua] " + message);
+    }
+}
+
+std::uint64_t ResolveLuaDamageFilterParticipantId(uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return 0;
+    }
+
+    SDModPlayerState local_player;
+    if (TryGetPlayerState(&local_player) &&
+        local_player.valid &&
+        local_player.actor_address == actor_address) {
+        return multiplayer::GetLocalTransportParticipantId();
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    const auto* binding = FindParticipantEntityForActor(actor_address);
+    return binding == nullptr ? 0 : binding->bot_id;
+}
+
+bool TryCaptureLuaDamageFilterContext(
+    uintptr_t actor_address,
+    LuaDamageFilterContext* context) {
+    if (actor_address == 0 || context == nullptr) {
+        return false;
+    }
+
+    auto& state = g_gameplay_keyboard_injection;
+    if (state.damage_context_target_address == 0 ||
+        state.damage_context_source_address == 0 ||
+        state.damage_context_flags_address == 0 ||
+        state.damage_context_primary_address == 0 ||
+        state.damage_context_secondary_address !=
+            state.damage_context_primary_address + sizeof(float)) {
+        return false;
+    }
+
+    *context = LuaDamageFilterContext{};
+    auto& memory = ProcessMemory::Instance();
+    bool captured =
+        memory.TryReadValue(
+            state.damage_context_target_address,
+            &context->target_actor_address) &&
+        memory.TryReadValue(
+            state.damage_context_source_address,
+            &context->source_actor_address) &&
+        memory.TryReadValue(
+            state.damage_context_flags_address,
+            &context->flags);
+    for (std::size_t index = 0; index < context->lanes.size(); ++index) {
+        captured =
+            memory.TryReadValue(
+                state.damage_context_primary_address + index * sizeof(float),
+                &context->lanes[index]) &&
+            captured;
+    }
+    if (!captured || context->target_actor_address != actor_address) {
+        return false;
+    }
+
+    context->source_participant_id =
+        ResolveLuaDamageFilterParticipantId(context->source_actor_address);
+    context->target_participant_id =
+        ResolveLuaDamageFilterParticipantId(context->target_actor_address);
+    return true;
+}
+
+LuaDamageLaneWriteResult WriteLuaDamageFilterLanes(
+    const LuaDamageFilterContext& original,
+    const LuaDamageFilterContext& filtered) {
+    auto& memory = ProcessMemory::Instance();
+    const auto primary_address =
+        g_gameplay_keyboard_injection.damage_context_primary_address;
+    bool wrote_all = primary_address != 0;
+    for (std::size_t index = 0;
+         wrote_all && index < filtered.lanes.size();
+         ++index) {
+        wrote_all = memory.TryWriteValue(
+            primary_address + index * sizeof(float),
+            filtered.lanes[index]);
+    }
+    if (wrote_all) {
+        return LuaDamageLaneWriteResult::Applied;
+    }
+
+    bool restored = primary_address != 0;
+    for (std::size_t index = 0; index < original.lanes.size(); ++index) {
+        restored =
+            memory.TryWriteValue(
+                primary_address + index * sizeof(float),
+                original.lanes[index]) &&
+            restored;
+    }
+    return restored
+        ? LuaDamageLaneWriteResult::RestoredAfterFailure
+        : LuaDamageLaneWriteResult::RestoreFailed;
+}
+
+void ResetActiveDamageContext() {
+    const auto reset = reinterpret_cast<DamageContextResetFn>(
+        g_gameplay_keyboard_injection.damage_context_reset_address);
+    if (reset != nullptr &&
+        g_gameplay_keyboard_injection.damage_context_source_address != 0) {
+        reset(reinterpret_cast<void*>(
+            g_gameplay_keyboard_injection.damage_context_source_address));
+    }
+}
 
 bool TryPrepareRemoteMagicShieldDamageAuthority(
     uintptr_t actor_address,
@@ -264,18 +389,51 @@ std::uint32_t __fastcall HookPlayerActorMagicDamage(
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
-    if (multiplayer::IsLocalTransportClient()) {
-        if (g_client_owner_poison_tick_target == actor_address) {
-            return original(self);
-        }
+    if (multiplayer::IsLocalTransportClient() &&
+        g_client_owner_poison_tick_target != actor_address) {
         // The host owns all incoming wizard damage and transient statuses.
         // Resetting the stock context also releases a rejected queued native
         // modifier so it cannot contaminate a later authoritative correction.
-        const auto reset = reinterpret_cast<DamageContextResetFn>(
-            g_gameplay_keyboard_injection.damage_context_reset_address);
-        reset(reinterpret_cast<void*>(
-            g_gameplay_keyboard_injection.damage_context_source_address));
+        ResetActiveDamageContext();
         return 0;
+    }
+
+    if (HasLuaDamageFilterHandlers()) {
+        LuaDamageFilterContext filtered_context;
+        if (!TryCaptureLuaDamageFilterContext(
+                actor_address,
+                &filtered_context)) {
+            LogLuaDamageFilterHookFailure(
+                &g_lua_damage_filter_capture_log_count,
+                "damage filters skipped because the native context could not "
+                "be captured. actor=" + HexString(actor_address));
+        } else {
+            const auto original_context = filtered_context;
+            if (!ApplyLuaDamageFilters(&filtered_context)) {
+                ResetActiveDamageContext();
+                return 0;
+            }
+            if (filtered_context.lanes != original_context.lanes) {
+                const auto write_result = WriteLuaDamageFilterLanes(
+                    original_context,
+                    filtered_context);
+                if (write_result != LuaDamageLaneWriteResult::Applied) {
+                    LogLuaDamageFilterHookFailure(
+                        &g_lua_damage_filter_write_log_count,
+                        "damage filter rewrite failed. actor=" +
+                            HexString(actor_address) + " restored=" +
+                            (write_result ==
+                                     LuaDamageLaneWriteResult::RestoredAfterFailure
+                                 ? "1"
+                                 : "0"));
+                    if (write_result ==
+                        LuaDamageLaneWriteResult::RestoreFailed) {
+                        ResetActiveDamageContext();
+                        return 0;
+                    }
+                }
+            }
+        }
     }
 
     RemoteMagicShieldDamageAuthority shield_authority;
