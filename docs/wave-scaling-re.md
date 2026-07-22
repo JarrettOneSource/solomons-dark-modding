@@ -89,6 +89,26 @@ Primary functions:
 - `0x0046B390` `BuildEnemyConfig`: applies base enemy stats, wave flags, type
   variants, and global arena stat scalars.
 
+The complete 19-type enemy census, family config fields, child-spawn logic,
+drop selector, and full text-flag mapping are now maintained in
+[`reverse-engineering/native-enemies.md`](reverse-engineering/native-enemies.md)
+and generated
+[`reverse-engineering/native-enemy-catalog.json`](reverse-engineering/native-enemy-catalog.json).
+
+### Flag-parser correction
+
+Direct decompilation of `WaveFlag_ParseModifiers (0x0062E070)` corrected an
+older pseudo-source transcription:
+
+- `FLAG_ARMOR` reaches internal code `0x1B`;
+- an unreachable duplicate `FLAG_ARMOR` comparison later in the function
+  would return `0x29`;
+- `FLAG_ARMORMAYBE` actually returns `0x2A`, not `0x29`.
+
+Any wave/config tooling must preserve `ARMORMAYBE -> 0x2A`. The builder also
+implements internal codes `0x2D..0x30`, but the recovered text parser emits
+none of them.
+
 Live wave-spawner fields recovered from `0x0046C9A0` and `0x0046D000`:
 
 - `+0x18`: current wave/action record pointer

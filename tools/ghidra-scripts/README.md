@@ -15,7 +15,16 @@ Run a scan through the wrapper instead of calling `analyzeHeadless.bat` directly
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-GhidraHeadless.ps1 `
   -ScriptPath .\tools\ghidra-scripts\decompile_targets.py `
-  -ScriptArguments 0x00401000 0x00402000
+  -ScriptArguments 0x00401000, 0x00402000
+```
+
+Recover pushed constants and other register/stack setup around every direct
+call to one function with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-GhidraHeadless.ps1 `
+  -ScriptPath .\tools\ghidra-scripts\trace_call_arguments.py `
+  -ScriptArguments 0x005B7080, 12, 4
 ```
 
 The wrapper:
@@ -26,6 +35,18 @@ The wrapper:
 - releases the slot when the scan finishes
 
 Use `-RefreshReplica` after updating the source analyzed project, and `-ClearReplicaLocks` if a previous run crashed and left stale lock files behind.
+
+Recover the compiled `MyApp` audio registry, including each path literal,
+loader call, and ESI-relative object destination, with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-GhidraHeadless.ps1 `
+  -ScriptPath .\tools\ghidra-scripts\catalog_audio_registry.py `
+  -ScriptArguments 0x004EE010
+```
+
+The script asserts the retail builder's exact 233-entry count. Its output is
+the input to `tools/build_native_audio_catalog.py`.
 
 ## Script Hygiene
 

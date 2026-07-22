@@ -4,6 +4,17 @@ Date: 2026-04-15
 
 ## Latest Pass
 
+- the native-art pass now provides a companion static map for the underlying
+  actor families in
+  [`reverse-engineering/native-regions-npcs-and-world-props.md`](reverse-engineering/native-regions-npcs-and-world-props.md)
+  - `GameNPC` type `0x1397` is an 0x268-byte recipe-configurable actor with
+    tick `0x00608110`, renderer `0x00622430`, and four compiled presentation
+    modes
+  - its branch byte at `+0x181`, movement/follow state, region-list
+    registration, and NPCs-atlas ranges are now tied to the class lifecycle
+  - named hub actors and roaming `Student` actors remain distinct compiled
+    classes and cannot be substituted for `GameNPC` solely by sharing art
+
 - the repo now has a cleaner split between three rails that were easy to
   conflate:
   - ally/NPC **command authoring** under `ScriptingCommand_DispatchBuilder`

@@ -158,8 +158,9 @@ rotates; it is not an animation strip.
 
 ## Conditional equipment and variant effects
 
-The field meanings below are inferred from the extracted art. The offsets,
-accepted values, selected records, and spawned native classes are confirmed.
+The visual labels below describe the exact extracted crops. The offsets,
+accepted values, selected records, and spawned native classes come directly
+from the executable.
 
 | Actor field | Trigger | Confirmed payload |
 | --- | --- | --- |
@@ -173,13 +174,16 @@ its shadow but does not replace that timer with `10.0`.
 
 ## Alternate absorption death
 
-Before playing the shatter, `0x0048D2A0` calls `0x0047BF70`. When world flag
-bit `0x100` is active and a registered special object is within squared
-distance `1600` (40 world units), normal skeleton shatter is suppressed.
-`0x0061DC20` instead builds an `Anim_Sucked` object from the dying enemy's
-current visual and targets that nearby object. The native effect class and
-distance gate are confirmed; the gameplay-facing name of the collector/spell
-is not yet identified.
+Before playing the shatter, `0x0048D2A0` calls `0x0047BF70`. That gate scans
+the gameplay scene's registered Player list at `scene +0x13A8/+0x13B4`.
+When transient damage-event flag `0x100` is active and a Player is within
+squared distance `1600` (40 world units), normal skeleton shatter is
+suppressed. `0x0061DC20` instead builds an `Anim_Sucked` object from the dying
+enemy's current visual and targets the nearby Player. The bit is propagated
+through the shared damage-event flag word rather than enabled by a static
+global toggle. The executable supplies no gameplay-facing label for bit
+`0x100`, so the numeric ABI is authoritative and this document does not invent
+a collector or spell name.
 
 ## Audio and world feedback
 
@@ -196,8 +200,11 @@ argument is uniformly randomized from `0.8` to `1.0`.
 After sound playback, the presenter calls `0x0063EEB0` with `0.1`. That writes
 the scene's damped feedback fields at `+0x8E04/+0x8E08`: the accumulator rises
 by `0.2` up to `3.5`, while its visible magnitude is based on the accumulator
-clamped to `1.0` times `0.1`. This is consistent with a small camera/world shake
-impulse, but the downstream consumer has not yet been semantically named.
+clamped to `1.0` times `0.1`. This is the camera/world-shake channel:
+`Region_Tick (0x0063EFC0)` damps `+0x8E04` and zeros it below threshold, while
+the fixed-room and Arena render paths consume `+0x8E04` in their world/camera
+transform. The skeleton death therefore contributes a confirmed `0.1` shake
+impulse.
 
 ## Extracted assets and reproducibility
 

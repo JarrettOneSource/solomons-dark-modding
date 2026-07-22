@@ -1,0 +1,4032 @@
+{
+  "schema": "solomon-dark-native-item-catalog-v1",
+  "source": {
+    "label": "stock/data/items.cfg",
+    "size": 14755,
+    "sha256": "28e26243457b246ce48ed7f37d4c14820f9e4a67d1ddf5d328e3a0783a641963",
+    "native_itemset_parser": "0x00574D60",
+    "native_recipe_parser": "0x00573570",
+    "native_fx_parser": "0x005722A0",
+    "native_recipe_uid_counter": "0x005B98C0 / Game.ItemRecipeUID",
+    "native_live_object_uid_counter": "0x005B9870 / Game.UID",
+    "source_order_is_not_runtime_recipe_uid": true
+  },
+  "summary": {
+    "item_set_count": 7,
+    "item_count": 47,
+    "set_member_item_count": 29,
+    "top_level_item_count": 18,
+    "fx_count": 86,
+    "item_fx_count": 73,
+    "set_fx_count": 13,
+    "type_counts": {
+      "amulet": 9,
+      "hat": 6,
+      "ring": 13,
+      "robe": 7,
+      "staff": 4,
+      "wand": 8
+    },
+    "rarity_counts": {
+      "Epic": 24,
+      "Rare": 23
+    },
+    "fx_kind_counts": {
+      "FX_ADDSKILL": 19,
+      "FX_ALLSKILLS": 1,
+      "FX_BOOSTSKILL": 6,
+      "FX_BOOSTSKILLCLASS": 2,
+      "FX_CASTSPEED": 1,
+      "FX_GRANTSKILL": 2,
+      "FX_MANARECOVERY": 3,
+      "FX_MAXGOLEM": 1,
+      "FX_MAXHP": 1,
+      "FX_MAXLEVIATHAN": 1,
+      "FX_MAXMAGICSTORM": 1,
+      "FX_MAXMANA": 2,
+      "FX_MAXRINGOFFIRE": 1,
+      "FX_MAXRINGOFICE": 1,
+      "FX_MAXWELD": 1,
+      "FX_MINDBLAST": 1,
+      "FX_ONESPELLDAMAGE": 9,
+      "FX_RECHARGE": 3,
+      "FX_RECHARGECLASS": 1,
+      "FX_RESISTMAGIC": 1,
+      "FX_RESISTPOISON": 1,
+      "FX_SPELLCLASSCASTSPEED": 2,
+      "FX_SPELLCLASSDAMAGE": 9,
+      "FX_SPELLCLASSMANACOST": 7,
+      "FX_SPELLDAMAGE": 2,
+      "FX_WALKSPEED": 1,
+      "FX_WELDCALLING": 1,
+      "FX_WELDEFFECT": 5
+    },
+    "image_declaration_count": 48,
+    "duplicate_image_item_count": 1
+  },
+  "comments": [
+    "A M U L E T S",
+    "S T A V E S",
+    "R I N G S",
+    "H A T S",
+    "W A N D S",
+    "R O B E S"
+  ],
+  "class_ids": {
+    "Ether": 0,
+    "Fire": 1,
+    "Air": 2,
+    "Water": 3,
+    "Earth": 4,
+    "Body": 5,
+    "Mind": 6,
+    "Arcane": 7
+  },
+  "fx_kinds": [
+    {
+      "kind_id": 1,
+      "token": "FX_SPELLDAMAGE",
+      "display_name": "Spell Damage (All Spells)"
+    },
+    {
+      "kind_id": 2,
+      "token": "FX_SPELLCLASSDAMAGE",
+      "display_name": "Spell Damage (Spell Class)"
+    },
+    {
+      "kind_id": 3,
+      "token": "FX_MELEEDAMAGE",
+      "display_name": "Melee Damage"
+    },
+    {
+      "kind_id": 4,
+      "token": "FX_GRANTSKILL",
+      "display_name": "Grant Skill"
+    },
+    {
+      "kind_id": 5,
+      "token": "FX_BOOSTSKILL",
+      "display_name": "Boost Skill"
+    },
+    {
+      "kind_id": 6,
+      "token": "FX_BOOSTSKILLCLASS",
+      "display_name": "Boost Skill Class"
+    },
+    {
+      "kind_id": 7,
+      "token": "FX_ADDSKILL",
+      "display_name": "Add Skill"
+    },
+    {
+      "kind_id": 8,
+      "token": "FX_ALLSKILLS",
+      "display_name": "Modify All Skills"
+    },
+    {
+      "kind_id": 9,
+      "token": "FX_MANARECOVERY",
+      "display_name": "Mana Recovery"
+    },
+    {
+      "kind_id": 10,
+      "token": "FX_MANACOST",
+      "display_name": "Mana Cost (All Spells)"
+    },
+    {
+      "kind_id": 11,
+      "token": "FX_SPELLCLASSMANACOST",
+      "display_name": "Mana Cost (Spell Class)"
+    },
+    {
+      "kind_id": 12,
+      "token": "FX_CASTSPEED",
+      "display_name": "Cast Speed (All Spells)"
+    },
+    {
+      "kind_id": 13,
+      "token": "FX_SPELLCLASSCASTSPEED",
+      "display_name": "Cast Speed (Spell Class)"
+    },
+    {
+      "kind_id": 14,
+      "token": "FX_GOLDBONUS",
+      "display_name": "Gold Bonus"
+    },
+    {
+      "kind_id": 15,
+      "token": "FX_ORBPULL",
+      "display_name": "Pull Orbs"
+    },
+    {
+      "kind_id": 16,
+      "token": "FX_HPRECOVERY",
+      "display_name": "Recover Health"
+    },
+    {
+      "kind_id": 17,
+      "token": "FX_WALKSPEED",
+      "display_name": "Walk Speed"
+    },
+    {
+      "kind_id": 18,
+      "token": "FX_RESISTDAMAGE",
+      "display_name": "Resist Physical Damage"
+    },
+    {
+      "kind_id": 19,
+      "token": "FX_RESISTMAGIC",
+      "display_name": "Resist Magical Damage"
+    },
+    {
+      "kind_id": 20,
+      "token": "FX_RESISTPOISON",
+      "display_name": "Resist Poison Damage"
+    },
+    {
+      "kind_id": 21,
+      "token": "FX_RECHARGE",
+      "display_name": "Recharge Speed (All Spells)"
+    },
+    {
+      "kind_id": 22,
+      "token": "FX_RECHARGECLASS",
+      "display_name": "Recharge Speed (Spell Class)"
+    },
+    {
+      "kind_id": 23,
+      "token": "FX_MAXHP",
+      "display_name": "Modify Max Health"
+    },
+    {
+      "kind_id": 24,
+      "token": "FX_MAXMANA",
+      "display_name": "Modify Max Mana"
+    },
+    {
+      "kind_id": 25,
+      "token": "FX_ONESPELLDAMAGE",
+      "display_name": "Spell Damage (Specific Spell)"
+    },
+    {
+      "kind_id": 26,
+      "token": "FX_MAXLEVIATHAN",
+      "display_name": "Maximize Leviathan"
+    },
+    {
+      "kind_id": 27,
+      "token": "FX_MAXMAGICSTORM",
+      "display_name": "Maximize Magic Storm"
+    },
+    {
+      "kind_id": 28,
+      "token": "FX_MAXRINGOFFIRE",
+      "display_name": "Maximize Ring of Fire"
+    },
+    {
+      "kind_id": 29,
+      "token": "FX_MAXGOLEM",
+      "display_name": "Maximize Golem"
+    },
+    {
+      "kind_id": 30,
+      "token": "FX_MAXRINGOFICE",
+      "display_name": "Maximize Ring of Ice"
+    },
+    {
+      "kind_id": 31,
+      "token": "FX_MAXEMBERSTOIMPS",
+      "display_name": "Maximize Embers To Imps"
+    },
+    {
+      "kind_id": 32,
+      "token": "FX_MAXDISINTEGRATION",
+      "display_name": "Maximize Disintegration"
+    },
+    {
+      "kind_id": 33,
+      "token": "FX_MAXETHERCHARGE",
+      "display_name": "Maximize EtherCharge"
+    },
+    {
+      "kind_id": 34,
+      "token": "FX_MAXHARDEN",
+      "display_name": "Maximize Harden"
+    },
+    {
+      "kind_id": 35,
+      "token": "FX_MAXROCKSURGE",
+      "display_name": "Maximize Rock Surge"
+    },
+    {
+      "kind_id": 36,
+      "token": "FX_MINDBLAST",
+      "display_name": "Emit Mindblast on Levelup"
+    },
+    {
+      "kind_id": 37,
+      "token": "FX_MAXWELD",
+      "display_name": "Energize Weld Components"
+    },
+    {
+      "kind_id": 38,
+      "token": "FX_WELDEFFECT",
+      "display_name": "Enhance Weld Effect"
+    },
+    {
+      "kind_id": 39,
+      "token": "FX_WELDCALLING",
+      "display_name": "+Bias Skills for Welding"
+    }
+  ],
+  "art_bindings": {
+    "ring": {
+      "inventory_atlas": "Inventory",
+      "selector_range": [
+        0,
+        11
+      ],
+      "inventory_record_formula": "52 + IMAGE",
+      "attachment": null
+    },
+    "amulet": {
+      "inventory_atlas": "Inventory",
+      "selector_range": [
+        0,
+        11
+      ],
+      "inventory_record_formula": "18 + IMAGE; secondary 30 + floor(IMAGE / 6)",
+      "attachment": null
+    },
+    "staff": {
+      "inventory_atlas": "Inventory",
+      "selector_range": [
+        0,
+        5
+      ],
+      "inventory_record_formula": "72 + IMAGE",
+      "attachment": {
+        "atlas": "Clothes",
+        "selector_records": "5..10",
+        "optional_glow_records": "11..12",
+        "pose_banks": [
+          "3244..3483",
+          "3484..3723"
+        ],
+        "renderer": "0x00578D20",
+        "attachment_point_helpers": [
+          "0x005795E0",
+          "0x00579680"
+        ],
+        "note": "An optional glow-color argument adds records 11..12 and a generated four-vertex colored/flickering quad; native animation/frame tables select the pose-bank records and attachment points."
+      }
+    },
+    "hat": {
+      "inventory_atlas": "Inventory",
+      "selector_range": [
+        0,
+        3
+      ],
+      "inventory_record_formula": "34 + IMAGE and 38 + IMAGE",
+      "attachment": {
+        "atlas": "Clothes",
+        "records": "dynamic selector/frame tables at DAT_00B2E9A4 and DAT_00B2E9B4",
+        "renderer": "0x005758F0",
+        "note": "Primary and secondary layers are tinted independently from item +0x88/+0x98."
+      }
+    },
+    "robe": {
+      "inventory_atlas": "Inventory",
+      "selector_range": [
+        0,
+        2
+      ],
+      "inventory_record_formula": "64 + IMAGE and 67 + IMAGE",
+      "attachment": {
+        "atlas": "Clothes",
+        "records": [
+          "5..10",
+          "220..315",
+          "1588..3243"
+        ],
+        "renderer": "0x00577DA0",
+        "note": "Primary and secondary layers are tinted independently from item +0x88/+0x98."
+      }
+    },
+    "wand": {
+      "inventory_atlas": "Inventory",
+      "selector_range": [
+        0,
+        5
+      ],
+      "inventory_record_formula": "78 + IMAGE",
+      "attachment": {
+        "atlas": "Clothes",
+        "records": [
+          15
+        ],
+        "renderer": "0x00579820",
+        "note": "The wand beam/line geometry is assembled dynamically around the attachment point."
+      }
+    }
+  },
+  "item_sets": [
+    {
+      "source_index": 0,
+      "name": "The Arcanus Spectrum Paraclosm",
+      "fx": [
+        {
+          "source_index": 0,
+          "scope": "set",
+          "owner": "The Arcanus Spectrum Paraclosm",
+          "raw": "FX_RECHARGE *3",
+          "kind": "FX_RECHARGE",
+          "kind_id": 21,
+          "display_name": "Recharge Speed (All Spells)",
+          "operator": "multiply",
+          "operator_id": 1,
+          "magnitude": 3,
+          "magnitude_declared": true,
+          "magnitude_token": "*3",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "item_source_indexes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "source_index": 1,
+      "name": "Combinator's Coutrement",
+      "fx": [
+        {
+          "source_index": 10,
+          "scope": "set",
+          "owner": "Combinator's Coutrement",
+          "raw": "FX_MAXWELD",
+          "kind": "FX_MAXWELD",
+          "kind_id": 37,
+          "display_name": "Energize Weld Components",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 0,
+          "magnitude_declared": false,
+          "magnitude_token": null,
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 11,
+          "scope": "set",
+          "owner": "Combinator's Coutrement",
+          "raw": "FX_WELDEFFECT +20%",
+          "kind": "FX_WELDEFFECT",
+          "kind_id": 38,
+          "display_name": "Enhance Weld Effect",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 20,
+          "magnitude_declared": true,
+          "magnitude_token": "+20%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "item_source_indexes": [
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "source_index": 2,
+      "name": "Pandimensional Bug-Master's Outfit",
+      "fx": [
+        {
+          "source_index": 19,
+          "scope": "set",
+          "owner": "Pandimensional Bug-Master's Outfit",
+          "raw": "FX_MAXLEVIATHAN",
+          "kind": "FX_MAXLEVIATHAN",
+          "kind_id": 26,
+          "display_name": "Maximize Leviathan",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 0,
+          "magnitude_declared": false,
+          "magnitude_token": null,
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 20,
+          "scope": "set",
+          "owner": "Pandimensional Bug-Master's Outfit",
+          "raw": "FX_ONESPELLDAMAGE *2 \"Call Leviathan\"",
+          "kind": "FX_ONESPELLDAMAGE",
+          "kind_id": 25,
+          "display_name": "Spell Damage (Specific Spell)",
+          "operator": "multiply",
+          "operator_id": 1,
+          "magnitude": 2,
+          "magnitude_declared": true,
+          "magnitude_token": "*2",
+          "target_kind": "skill",
+          "target_id": 11,
+          "target_name": "Call Leviathan",
+          "unparsed_tokens": []
+        }
+      ],
+      "item_source_indexes": [
+        11,
+        12,
+        13,
+        14,
+        15
+      ]
+    },
+    {
+      "source_index": 3,
+      "name": "Tempest Kit",
+      "fx": [
+        {
+          "source_index": 27,
+          "scope": "set",
+          "owner": "Tempest Kit",
+          "raw": "FX_MAXMAGICSTORM",
+          "kind": "FX_MAXMAGICSTORM",
+          "kind_id": 27,
+          "display_name": "Maximize Magic Storm",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 0,
+          "magnitude_declared": false,
+          "magnitude_token": null,
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 28,
+          "scope": "set",
+          "owner": "Tempest Kit",
+          "raw": "FX_ADDSKILL \"Hurricane\" 1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "1",
+          "target_kind": "skill",
+          "target_id": 29,
+          "target_name": "Hurricane",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 29,
+          "scope": "set",
+          "owner": "Tempest Kit",
+          "raw": "FX_SPELLCLASSMANACOST -20% AIR",
+          "kind": "FX_SPELLCLASSMANACOST",
+          "kind_id": 11,
+          "display_name": "Mana Cost (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": -20,
+          "magnitude_declared": true,
+          "magnitude_token": "-20%",
+          "target_kind": "class",
+          "target_id": 2,
+          "target_name": "Air",
+          "unparsed_tokens": []
+        }
+      ],
+      "item_source_indexes": [
+        16,
+        17,
+        18,
+        19
+      ]
+    },
+    {
+      "source_index": 4,
+      "name": "Burning Man",
+      "fx": [
+        {
+          "source_index": 34,
+          "scope": "set",
+          "owner": "Burning Man",
+          "raw": "FX_MAXRINGOFFIRE",
+          "kind": "FX_MAXRINGOFFIRE",
+          "kind_id": 28,
+          "display_name": "Maximize Ring of Fire",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 0,
+          "magnitude_declared": false,
+          "magnitude_token": null,
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "item_source_indexes": [
+        20,
+        21
+      ]
+    },
+    {
+      "source_index": 5,
+      "name": "Frostburn Jewels",
+      "fx": [
+        {
+          "source_index": 39,
+          "scope": "set",
+          "owner": "Frostburn Jewels",
+          "raw": "FX_MAXRINGOFICE",
+          "kind": "FX_MAXRINGOFICE",
+          "kind_id": 30,
+          "display_name": "Maximize Ring of Ice",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 0,
+          "magnitude_declared": false,
+          "magnitude_token": null,
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 40,
+          "scope": "set",
+          "owner": "Frostburn Jewels",
+          "raw": "FX_SPELLCLASSCASTSPEED +10% WATER",
+          "kind": "FX_SPELLCLASSCASTSPEED",
+          "kind_id": 13,
+          "display_name": "Cast Speed (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 10,
+          "magnitude_declared": true,
+          "magnitude_token": "+10%",
+          "target_kind": "class",
+          "target_id": 3,
+          "target_name": "Water",
+          "unparsed_tokens": []
+        }
+      ],
+      "item_source_indexes": [
+        22,
+        23,
+        24
+      ]
+    },
+    {
+      "source_index": 6,
+      "name": "Fete of Clay",
+      "fx": [
+        {
+          "source_index": 45,
+          "scope": "set",
+          "owner": "Fete of Clay",
+          "raw": "FX_MAXGOLEM",
+          "kind": "FX_MAXGOLEM",
+          "kind_id": 29,
+          "display_name": "Maximize Golem",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 0,
+          "magnitude_declared": false,
+          "magnitude_token": null,
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 46,
+          "scope": "set",
+          "owner": "Fete of Clay",
+          "raw": "FX_SPELLCLASSCASTSPEED +10% EARTH",
+          "kind": "FX_SPELLCLASSCASTSPEED",
+          "kind_id": 13,
+          "display_name": "Cast Speed (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 10,
+          "magnitude_declared": true,
+          "magnitude_token": "+10%",
+          "target_kind": "class",
+          "target_id": 4,
+          "target_name": "Earth",
+          "unparsed_tokens": []
+        }
+      ],
+      "item_source_indexes": [
+        25,
+        26,
+        27,
+        28
+      ]
+    }
+  ],
+  "items": [
+    {
+      "source_index": 0,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 0,
+      "parent_set_name": "The Arcanus Spectrum Paraclosm",
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Pentaclostic Ring",
+      "description": "",
+      "image_declarations": [
+        11
+      ],
+      "effective_image": 11,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 1,
+          "scope": "item",
+          "owner": "Pentaclostic Ring",
+          "raw": "FX_ADDSKILL \"Call Leviathan\" +1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 11,
+          "target_name": "Call Leviathan",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          63
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 1,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 0,
+      "parent_set_name": "The Arcanus Spectrum Paraclosm",
+      "type": "robe",
+      "native_type_id": 7006,
+      "native_type_id_hex": "0x1B5E",
+      "name": "Arcanoric Robe",
+      "description": "",
+      "image_declarations": [
+        1
+      ],
+      "effective_image": 1,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [
+        {
+          "raw": "25,25,25",
+          "source_components": [
+            25,
+            25,
+            25
+          ],
+          "normalized_rgba": [
+            0.09803921568627451,
+            0.09803921568627451,
+            0.09803921568627451,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "25,25,25",
+        "source_components": [
+          25,
+          25,
+          25
+        ],
+        "normalized_rgba": [
+          0.09803921568627451,
+          0.09803921568627451,
+          0.09803921568627451,
+          1.0
+        ]
+      },
+      "color2_declarations": [
+        {
+          "raw": "128,255,255",
+          "source_components": [
+            128,
+            255,
+            255
+          ],
+          "normalized_rgba": [
+            0.5019607843137255,
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "effective_color2": {
+        "raw": "128,255,255",
+        "source_components": [
+          128,
+          255,
+          255
+        ],
+        "normalized_rgba": [
+          0.5019607843137255,
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "fx": [
+        {
+          "source_index": 2,
+          "scope": "item",
+          "owner": "Arcanoric Robe",
+          "raw": "FX_ADDSKILL \"Magic Storm\" +1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 27,
+          "target_name": "Magic Storm",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 3,
+          "scope": "item",
+          "owner": "Arcanoric Robe",
+          "raw": "FX_ADDSKILL \"Magic Tornado\" +1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 28,
+          "target_name": "Magic Tornado",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          65,
+          68
+        ],
+        "inventory_renderer": "0x00577B90",
+        "attachment_binding": "robe"
+      }
+    },
+    {
+      "source_index": 2,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 0,
+      "parent_set_name": "The Arcanus Spectrum Paraclosm",
+      "type": "wand",
+      "native_type_id": 7011,
+      "native_type_id_hex": "0x1B63",
+      "name": "Cosmofluxic Wand",
+      "description": "",
+      "image_declarations": [
+        2
+      ],
+      "effective_image": 2,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 4,
+          "scope": "item",
+          "owner": "Cosmofluxic Wand",
+          "raw": "FX_ADDSKILL \"Magic Circle\" +1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 49,
+          "target_name": "Magic Circle",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 5,
+          "scope": "item",
+          "owner": "Cosmofluxic Wand",
+          "raw": "FX_ADDSKILL \"Dampen\" +1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 51,
+          "target_name": "Dampen",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          80
+        ],
+        "inventory_renderer": "0x00579720",
+        "attachment_binding": "wand"
+      }
+    },
+    {
+      "source_index": 3,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 0,
+      "parent_set_name": "The Arcanus Spectrum Paraclosm",
+      "type": "amulet",
+      "native_type_id": 7003,
+      "native_type_id_hex": "0x1B5B",
+      "name": "Theptoplasmar Amulet",
+      "description": "",
+      "image_declarations": [
+        8
+      ],
+      "effective_image": 8,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 6,
+          "scope": "item",
+          "owner": "Theptoplasmar Amulet",
+          "raw": "FX_ADDSKILL \"Ring of Fire\" +1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 21,
+          "target_name": "Ring of Fire",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          26,
+          31
+        ],
+        "inventory_renderer": "0x00578910",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 4,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 0,
+      "parent_set_name": "The Arcanus Spectrum Paraclosm",
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Synertauxic Ring",
+      "description": "",
+      "image_declarations": [
+        11
+      ],
+      "effective_image": 11,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 7,
+          "scope": "item",
+          "owner": "Synertauxic Ring",
+          "raw": "FX_ADDSKILL \"Ring of Ice\" +1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 35,
+          "target_name": "Ring of Ice",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          63
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 5,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 0,
+      "parent_set_name": "The Arcanus Spectrum Paraclosm",
+      "type": "hat",
+      "native_type_id": 7005,
+      "native_type_id_hex": "0x1B5D",
+      "name": "Sublunarous Hat",
+      "description": "",
+      "image_declarations": [
+        0
+      ],
+      "effective_image": 0,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [
+        {
+          "raw": "25,25,25",
+          "source_components": [
+            25,
+            25,
+            25
+          ],
+          "normalized_rgba": [
+            0.09803921568627451,
+            0.09803921568627451,
+            0.09803921568627451,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "25,25,25",
+        "source_components": [
+          25,
+          25,
+          25
+        ],
+        "normalized_rgba": [
+          0.09803921568627451,
+          0.09803921568627451,
+          0.09803921568627451,
+          1.0
+        ]
+      },
+      "color2_declarations": [
+        {
+          "raw": "255,128,255",
+          "source_components": [
+            255,
+            128,
+            255
+          ],
+          "normalized_rgba": [
+            1.0,
+            0.5019607843137255,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "effective_color2": {
+        "raw": "255,128,255",
+        "source_components": [
+          255,
+          128,
+          255
+        ],
+        "normalized_rgba": [
+          1.0,
+          0.5019607843137255,
+          1.0,
+          1.0
+        ]
+      },
+      "fx": [
+        {
+          "source_index": 8,
+          "scope": "item",
+          "owner": "Sublunarous Hat",
+          "raw": "FX_ADDSKILL \"Raise Golem\" +1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 45,
+          "target_name": "Raise Golem",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 9,
+          "scope": "item",
+          "owner": "Sublunarous Hat",
+          "raw": "FX_ADDSKILL \"Earthquake\" +1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 41,
+          "target_name": "Earthquake",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          34,
+          38
+        ],
+        "inventory_renderer": "0x005779B0",
+        "attachment_binding": "hat"
+      }
+    },
+    {
+      "source_index": 6,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 1,
+      "parent_set_name": "Combinator's Coutrement",
+      "type": "hat",
+      "native_type_id": 7005,
+      "native_type_id_hex": "0x1B5D",
+      "name": "Combinator's Cap",
+      "description": "",
+      "image_declarations": [
+        2
+      ],
+      "effective_image": 2,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [
+        {
+          "raw": "192,192,192",
+          "source_components": [
+            192,
+            192,
+            192
+          ],
+          "normalized_rgba": [
+            0.7529411764705882,
+            0.7529411764705882,
+            0.7529411764705882,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "192,192,192",
+        "source_components": [
+          192,
+          192,
+          192
+        ],
+        "normalized_rgba": [
+          0.7529411764705882,
+          0.7529411764705882,
+          0.7529411764705882,
+          1.0
+        ]
+      },
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 12,
+          "scope": "item",
+          "owner": "Combinator's Cap",
+          "raw": "FX_WELDEFFECT +10%",
+          "kind": "FX_WELDEFFECT",
+          "kind_id": 38,
+          "display_name": "Enhance Weld Effect",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 10,
+          "magnitude_declared": true,
+          "magnitude_token": "+10%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          36,
+          40
+        ],
+        "inventory_renderer": "0x005779B0",
+        "attachment_binding": "hat"
+      }
+    },
+    {
+      "source_index": 7,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 1,
+      "parent_set_name": "Combinator's Coutrement",
+      "type": "robe",
+      "native_type_id": 7006,
+      "native_type_id_hex": "0x1B5E",
+      "name": "Combinator's Cape",
+      "description": "",
+      "image_declarations": [
+        2
+      ],
+      "effective_image": 2,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [
+        {
+          "raw": "192,192,192",
+          "source_components": [
+            192,
+            192,
+            192
+          ],
+          "normalized_rgba": [
+            0.7529411764705882,
+            0.7529411764705882,
+            0.7529411764705882,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "192,192,192",
+        "source_components": [
+          192,
+          192,
+          192
+        ],
+        "normalized_rgba": [
+          0.7529411764705882,
+          0.7529411764705882,
+          0.7529411764705882,
+          1.0
+        ]
+      },
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 13,
+          "scope": "item",
+          "owner": "Combinator's Cape",
+          "raw": "FX_WELDEFFECT +10%",
+          "kind": "FX_WELDEFFECT",
+          "kind_id": 38,
+          "display_name": "Enhance Weld Effect",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 10,
+          "magnitude_declared": true,
+          "magnitude_token": "+10%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          66,
+          69
+        ],
+        "inventory_renderer": "0x00577B90",
+        "attachment_binding": "robe"
+      }
+    },
+    {
+      "source_index": 8,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 1,
+      "parent_set_name": "Combinator's Coutrement",
+      "type": "staff",
+      "native_type_id": 7004,
+      "native_type_id_hex": "0x1B5C",
+      "name": "Combinator's Club",
+      "description": "",
+      "image_declarations": [
+        1
+      ],
+      "effective_image": 1,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 14,
+          "scope": "item",
+          "owner": "Combinator's Club",
+          "raw": "FX_WELDCALLING",
+          "kind": "FX_WELDCALLING",
+          "kind_id": 39,
+          "display_name": "+Bias Skills for Welding",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 0,
+          "magnitude_declared": false,
+          "magnitude_token": null,
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          73
+        ],
+        "inventory_renderer": "0x00578A90",
+        "attachment_binding": "staff"
+      }
+    },
+    {
+      "source_index": 9,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 1,
+      "parent_set_name": "Combinator's Coutrement",
+      "type": "amulet",
+      "native_type_id": 7003,
+      "native_type_id_hex": "0x1B5B",
+      "name": "Combinator's Choker",
+      "description": "",
+      "image_declarations": [
+        6
+      ],
+      "effective_image": 6,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 15,
+          "scope": "item",
+          "owner": "Combinator's Choker",
+          "raw": "FX_WELDEFFECT +5%",
+          "kind": "FX_WELDEFFECT",
+          "kind_id": 38,
+          "display_name": "Enhance Weld Effect",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 5,
+          "magnitude_declared": true,
+          "magnitude_token": "+5%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 16,
+          "scope": "item",
+          "owner": "Combinator's Choker",
+          "raw": "FX_MANARECOVERY +5%",
+          "kind": "FX_MANARECOVERY",
+          "kind_id": 9,
+          "display_name": "Mana Recovery",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 5,
+          "magnitude_declared": true,
+          "magnitude_token": "+5%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          24,
+          31
+        ],
+        "inventory_renderer": "0x00578910",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 10,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 1,
+      "parent_set_name": "Combinator's Coutrement",
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Combinator's Circle",
+      "description": "",
+      "image_declarations": [
+        1
+      ],
+      "effective_image": 1,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 17,
+          "scope": "item",
+          "owner": "Combinator's Circle",
+          "raw": "FX_WELDEFFECT +5%",
+          "kind": "FX_WELDEFFECT",
+          "kind_id": 38,
+          "display_name": "Enhance Weld Effect",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 5,
+          "magnitude_declared": true,
+          "magnitude_token": "+5%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 18,
+          "scope": "item",
+          "owner": "Combinator's Circle",
+          "raw": "FX_MANARECOVERY +5%",
+          "kind": "FX_MANARECOVERY",
+          "kind_id": 9,
+          "display_name": "Mana Recovery",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 5,
+          "magnitude_declared": true,
+          "magnitude_token": "+5%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          53
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 11,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 2,
+      "parent_set_name": "Pandimensional Bug-Master's Outfit",
+      "type": "hat",
+      "native_type_id": 7005,
+      "native_type_id_hex": "0x1B5D",
+      "name": "Bug-Master's Cap",
+      "description": "",
+      "image_declarations": [
+        0
+      ],
+      "effective_image": 0,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [
+        {
+          "raw": "255,25,255",
+          "source_components": [
+            255,
+            25,
+            255
+          ],
+          "normalized_rgba": [
+            1.0,
+            0.09803921568627451,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "255,25,255",
+        "source_components": [
+          255,
+          25,
+          255
+        ],
+        "normalized_rgba": [
+          1.0,
+          0.09803921568627451,
+          1.0,
+          1.0
+        ]
+      },
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 21,
+          "scope": "item",
+          "owner": "Bug-Master's Cap",
+          "raw": "FX_ONESPELLDAMAGE +1 \"Call Leviathan\"",
+          "kind": "FX_ONESPELLDAMAGE",
+          "kind_id": 25,
+          "display_name": "Spell Damage (Specific Spell)",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 11,
+          "target_name": "Call Leviathan",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          34,
+          38
+        ],
+        "inventory_renderer": "0x005779B0",
+        "attachment_binding": "hat"
+      }
+    },
+    {
+      "source_index": 12,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 2,
+      "parent_set_name": "Pandimensional Bug-Master's Outfit",
+      "type": "robe",
+      "native_type_id": 7006,
+      "native_type_id_hex": "0x1B5E",
+      "name": "Bug-Master's Robe",
+      "description": "",
+      "image_declarations": [
+        0
+      ],
+      "effective_image": 0,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [
+        {
+          "raw": "255,25,255",
+          "source_components": [
+            255,
+            25,
+            255
+          ],
+          "normalized_rgba": [
+            1.0,
+            0.09803921568627451,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "255,25,255",
+        "source_components": [
+          255,
+          25,
+          255
+        ],
+        "normalized_rgba": [
+          1.0,
+          0.09803921568627451,
+          1.0,
+          1.0
+        ]
+      },
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 22,
+          "scope": "item",
+          "owner": "Bug-Master's Robe",
+          "raw": "FX_ONESPELLDAMAGE +1 \"Call Leviathan\"",
+          "kind": "FX_ONESPELLDAMAGE",
+          "kind_id": 25,
+          "display_name": "Spell Damage (Specific Spell)",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 11,
+          "target_name": "Call Leviathan",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          64,
+          67
+        ],
+        "inventory_renderer": "0x00577B90",
+        "attachment_binding": "robe"
+      }
+    },
+    {
+      "source_index": 13,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 2,
+      "parent_set_name": "Pandimensional Bug-Master's Outfit",
+      "type": "wand",
+      "native_type_id": 7011,
+      "native_type_id_hex": "0x1B63",
+      "name": "Bug-Master's Wand",
+      "description": "",
+      "image_declarations": [
+        4
+      ],
+      "effective_image": 4,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 23,
+          "scope": "item",
+          "owner": "Bug-Master's Wand",
+          "raw": "FX_ADDSKILL \"Call Leviathan\" 1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "1",
+          "target_kind": "skill",
+          "target_id": 11,
+          "target_name": "Call Leviathan",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          82
+        ],
+        "inventory_renderer": "0x00579720",
+        "attachment_binding": "wand"
+      }
+    },
+    {
+      "source_index": 14,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 2,
+      "parent_set_name": "Pandimensional Bug-Master's Outfit",
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Bug-Master's Loop",
+      "description": "",
+      "image_declarations": [
+        7
+      ],
+      "effective_image": 7,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [
+        {
+          "raw": "255,25,255",
+          "source_components": [
+            255,
+            25,
+            255
+          ],
+          "normalized_rgba": [
+            1.0,
+            0.09803921568627451,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "255,25,255",
+        "source_components": [
+          255,
+          25,
+          255
+        ],
+        "normalized_rgba": [
+          1.0,
+          0.09803921568627451,
+          1.0,
+          1.0
+        ]
+      },
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 24,
+          "scope": "item",
+          "owner": "Bug-Master's Loop",
+          "raw": "FX_ONESPELLDAMAGE +1 \"Call Leviathan\"",
+          "kind": "FX_ONESPELLDAMAGE",
+          "kind_id": 25,
+          "display_name": "Spell Damage (Specific Spell)",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 11,
+          "target_name": "Call Leviathan",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          59
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 15,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 2,
+      "parent_set_name": "Pandimensional Bug-Master's Outfit",
+      "type": "amulet",
+      "native_type_id": 7003,
+      "native_type_id_hex": "0x1B5B",
+      "name": "Pan-Dimensional Strangler",
+      "description": "",
+      "image_declarations": [
+        5
+      ],
+      "effective_image": 5,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [
+        {
+          "raw": "255,25,255",
+          "source_components": [
+            255,
+            25,
+            255
+          ],
+          "normalized_rgba": [
+            1.0,
+            0.09803921568627451,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "255,25,255",
+        "source_components": [
+          255,
+          25,
+          255
+        ],
+        "normalized_rgba": [
+          1.0,
+          0.09803921568627451,
+          1.0,
+          1.0
+        ]
+      },
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 25,
+          "scope": "item",
+          "owner": "Pan-Dimensional Strangler",
+          "raw": "FX_GRANTSKILL \"Call Leviathan\" 1",
+          "kind": "FX_GRANTSKILL",
+          "kind_id": 4,
+          "display_name": "Grant Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "1",
+          "target_kind": "skill",
+          "target_id": 11,
+          "target_name": "Call Leviathan",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 26,
+          "scope": "item",
+          "owner": "Pan-Dimensional Strangler",
+          "raw": "FX_ONESPELLDAMAGE +1 \"Call Leviathan\"",
+          "kind": "FX_ONESPELLDAMAGE",
+          "kind_id": 25,
+          "display_name": "Spell Damage (Specific Spell)",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 11,
+          "target_name": "Call Leviathan",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          23,
+          30
+        ],
+        "inventory_renderer": "0x00578910",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 16,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 3,
+      "parent_set_name": "Tempest Kit",
+      "type": "hat",
+      "native_type_id": 7005,
+      "native_type_id_hex": "0x1B5D",
+      "name": "Cloudcover Hood",
+      "description": "",
+      "image_declarations": [
+        3
+      ],
+      "effective_image": 3,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [
+        {
+          "raw": "25,255,255",
+          "source_components": [
+            25,
+            255,
+            255
+          ],
+          "normalized_rgba": [
+            0.09803921568627451,
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "25,255,255",
+        "source_components": [
+          25,
+          255,
+          255
+        ],
+        "normalized_rgba": [
+          0.09803921568627451,
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 30,
+          "scope": "item",
+          "owner": "Cloudcover Hood",
+          "raw": "FX_ONESPELLDAMAGE +10 \"Magic Storm\"",
+          "kind": "FX_ONESPELLDAMAGE",
+          "kind_id": 25,
+          "display_name": "Spell Damage (Specific Spell)",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 10,
+          "magnitude_declared": true,
+          "magnitude_token": "+10",
+          "target_kind": "skill",
+          "target_id": 27,
+          "target_name": "Magic Storm",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          37,
+          41
+        ],
+        "inventory_renderer": "0x005779B0",
+        "attachment_binding": "hat"
+      }
+    },
+    {
+      "source_index": 17,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 3,
+      "parent_set_name": "Tempest Kit",
+      "type": "robe",
+      "native_type_id": 7006,
+      "native_type_id_hex": "0x1B5E",
+      "name": "Ozone Cape",
+      "description": "",
+      "image_declarations": [
+        2
+      ],
+      "effective_image": 2,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [
+        {
+          "raw": "25,255,255",
+          "source_components": [
+            25,
+            255,
+            255
+          ],
+          "normalized_rgba": [
+            0.09803921568627451,
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "25,255,255",
+        "source_components": [
+          25,
+          255,
+          255
+        ],
+        "normalized_rgba": [
+          0.09803921568627451,
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 31,
+          "scope": "item",
+          "owner": "Ozone Cape",
+          "raw": "FX_BOOSTSKILL \"Prismatic Shock\" 2",
+          "kind": "FX_BOOSTSKILL",
+          "kind_id": 5,
+          "display_name": "Boost Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 2,
+          "magnitude_declared": true,
+          "magnitude_token": "2",
+          "target_kind": "skill",
+          "target_id": 30,
+          "target_name": "Prismatic Shock",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          66,
+          69
+        ],
+        "inventory_renderer": "0x00577B90",
+        "attachment_binding": "robe"
+      }
+    },
+    {
+      "source_index": 18,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 3,
+      "parent_set_name": "Tempest Kit",
+      "type": "staff",
+      "native_type_id": 7004,
+      "native_type_id_hex": "0x1B5C",
+      "name": "Lightning Rod",
+      "description": "",
+      "image_declarations": [
+        3
+      ],
+      "effective_image": 3,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 32,
+          "scope": "item",
+          "owner": "Lightning Rod",
+          "raw": "FX_ONESPELLDAMAGE +50% \"Lightning\"",
+          "kind": "FX_ONESPELLDAMAGE",
+          "kind_id": 25,
+          "display_name": "Spell Damage (Specific Spell)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 50,
+          "magnitude_declared": true,
+          "magnitude_token": "+50%",
+          "target_kind": "skill",
+          "target_id": 24,
+          "target_name": "Lightning",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          75
+        ],
+        "inventory_renderer": "0x00578A90",
+        "attachment_binding": "staff"
+      }
+    },
+    {
+      "source_index": 19,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 3,
+      "parent_set_name": "Tempest Kit",
+      "type": "amulet",
+      "native_type_id": 7003,
+      "native_type_id_hex": "0x1B5B",
+      "name": "Storm Choker",
+      "description": "",
+      "image_declarations": [
+        4
+      ],
+      "effective_image": 4,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 33,
+          "scope": "item",
+          "owner": "Storm Choker",
+          "raw": "FX_ADDSKILL \"Magic Storm\" 1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "1",
+          "target_kind": "skill",
+          "target_id": 27,
+          "target_name": "Magic Storm",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          22,
+          30
+        ],
+        "inventory_renderer": "0x00578910",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 20,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 4,
+      "parent_set_name": "Burning Man",
+      "type": "hat",
+      "native_type_id": 7005,
+      "native_type_id_hex": "0x1B5D",
+      "name": "Burning Hat",
+      "description": "",
+      "image_declarations": [
+        2
+      ],
+      "effective_image": 2,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [
+        {
+          "raw": "255,0,0",
+          "source_components": [
+            255,
+            0,
+            0
+          ],
+          "normalized_rgba": [
+            1.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "255,0,0",
+        "source_components": [
+          255,
+          0,
+          0
+        ],
+        "normalized_rgba": [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 35,
+          "scope": "item",
+          "owner": "Burning Hat",
+          "raw": "FX_ONESPELLDAMAGE +5 \"Fireball\"",
+          "kind": "FX_ONESPELLDAMAGE",
+          "kind_id": 25,
+          "display_name": "Spell Damage (Specific Spell)",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 5,
+          "magnitude_declared": true,
+          "magnitude_token": "+5",
+          "target_kind": "skill",
+          "target_id": 16,
+          "target_name": "Fireball",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 36,
+          "scope": "item",
+          "owner": "Burning Hat",
+          "raw": "FX_SPELLCLASSDAMAGE +10% FIRE",
+          "kind": "FX_SPELLCLASSDAMAGE",
+          "kind_id": 2,
+          "display_name": "Spell Damage (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 10,
+          "magnitude_declared": true,
+          "magnitude_token": "+10%",
+          "target_kind": "class",
+          "target_id": 1,
+          "target_name": "Fire",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          36,
+          40
+        ],
+        "inventory_renderer": "0x005779B0",
+        "attachment_binding": "hat"
+      }
+    },
+    {
+      "source_index": 21,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 4,
+      "parent_set_name": "Burning Man",
+      "type": "robe",
+      "native_type_id": 7006,
+      "native_type_id_hex": "0x1B5E",
+      "name": "Burning Robe",
+      "description": "",
+      "image_declarations": [
+        0
+      ],
+      "effective_image": 0,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [
+        {
+          "raw": "255,0,0",
+          "source_components": [
+            255,
+            0,
+            0
+          ],
+          "normalized_rgba": [
+            1.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "255,0,0",
+        "source_components": [
+          255,
+          0,
+          0
+        ],
+        "normalized_rgba": [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 37,
+          "scope": "item",
+          "owner": "Burning Robe",
+          "raw": "FX_ONESPELLDAMAGE *2 \"Firewalker\"",
+          "kind": "FX_ONESPELLDAMAGE",
+          "kind_id": 25,
+          "display_name": "Spell Damage (Specific Spell)",
+          "operator": "multiply",
+          "operator_id": 1,
+          "magnitude": 2,
+          "magnitude_declared": true,
+          "magnitude_token": "*2",
+          "target_kind": "skill",
+          "target_id": 23,
+          "target_name": "Firewalker",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 38,
+          "scope": "item",
+          "owner": "Burning Robe",
+          "raw": "FX_SPELLCLASSDAMAGE +10% FIRE",
+          "kind": "FX_SPELLCLASSDAMAGE",
+          "kind_id": 2,
+          "display_name": "Spell Damage (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 10,
+          "magnitude_declared": true,
+          "magnitude_token": "+10%",
+          "target_kind": "class",
+          "target_id": 1,
+          "target_name": "Fire",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          64,
+          67
+        ],
+        "inventory_renderer": "0x00577B90",
+        "attachment_binding": "robe"
+      }
+    },
+    {
+      "source_index": 22,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 5,
+      "parent_set_name": "Frostburn Jewels",
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Biting Ring",
+      "description": "",
+      "image_declarations": [
+        3
+      ],
+      "effective_image": 3,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 41,
+          "scope": "item",
+          "owner": "Biting Ring",
+          "raw": "FX_SPELLCLASSDAMAGE +10% WATER",
+          "kind": "FX_SPELLCLASSDAMAGE",
+          "kind_id": 2,
+          "display_name": "Spell Damage (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 10,
+          "magnitude_declared": true,
+          "magnitude_token": "+10%",
+          "target_kind": "class",
+          "target_id": 3,
+          "target_name": "Water",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          55
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 23,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 5,
+      "parent_set_name": "Frostburn Jewels",
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Bitter Ring",
+      "description": "",
+      "image_declarations": [
+        3
+      ],
+      "effective_image": 3,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 42,
+          "scope": "item",
+          "owner": "Bitter Ring",
+          "raw": "FX_SPELLCLASSDAMAGE +10% WATER",
+          "kind": "FX_SPELLCLASSDAMAGE",
+          "kind_id": 2,
+          "display_name": "Spell Damage (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 10,
+          "magnitude_declared": true,
+          "magnitude_token": "+10%",
+          "target_kind": "class",
+          "target_id": 3,
+          "target_name": "Water",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          55
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 24,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 5,
+      "parent_set_name": "Frostburn Jewels",
+      "type": "amulet",
+      "native_type_id": 7003,
+      "native_type_id_hex": "0x1B5B",
+      "name": "Glittering Amulet",
+      "description": "",
+      "image_declarations": [
+        11
+      ],
+      "effective_image": 11,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 43,
+          "scope": "item",
+          "owner": "Glittering Amulet",
+          "raw": "FX_BOOSTSKILL \"Permafrost\" 1",
+          "kind": "FX_BOOSTSKILL",
+          "kind_id": 5,
+          "display_name": "Boost Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "1",
+          "target_kind": "skill",
+          "target_id": 39,
+          "target_name": "Permafrost",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 44,
+          "scope": "item",
+          "owner": "Glittering Amulet",
+          "raw": "FX_BOOSTSKILL \"Frost Jet\" 1",
+          "kind": "FX_BOOSTSKILL",
+          "kind_id": 5,
+          "display_name": "Boost Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "1",
+          "target_kind": "skill",
+          "target_id": 32,
+          "target_name": "Frost Jet",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          29,
+          31
+        ],
+        "inventory_renderer": "0x00578910",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 25,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 6,
+      "parent_set_name": "Fete of Clay",
+      "type": "robe",
+      "native_type_id": 7006,
+      "native_type_id_hex": "0x1B5E",
+      "name": "Potter's Apron",
+      "description": "",
+      "image_declarations": [
+        2
+      ],
+      "effective_image": 2,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [
+        {
+          "raw": "25,255,25",
+          "source_components": [
+            25,
+            255,
+            25
+          ],
+          "normalized_rgba": [
+            0.09803921568627451,
+            1.0,
+            0.09803921568627451,
+            1.0
+          ]
+        }
+      ],
+      "effective_color1": {
+        "raw": "25,255,25",
+        "source_components": [
+          25,
+          255,
+          25
+        ],
+        "normalized_rgba": [
+          0.09803921568627451,
+          1.0,
+          0.09803921568627451,
+          1.0
+        ]
+      },
+      "color2_declarations": [
+        {
+          "raw": "200,255,200",
+          "source_components": [
+            200,
+            255,
+            200
+          ],
+          "normalized_rgba": [
+            0.7843137254901961,
+            1.0,
+            0.7843137254901961,
+            1.0
+          ]
+        }
+      ],
+      "effective_color2": {
+        "raw": "200,255,200",
+        "source_components": [
+          200,
+          255,
+          200
+        ],
+        "normalized_rgba": [
+          0.7843137254901961,
+          1.0,
+          0.7843137254901961,
+          1.0
+        ]
+      },
+      "fx": [
+        {
+          "source_index": 47,
+          "scope": "item",
+          "owner": "Potter's Apron",
+          "raw": "FX_RECHARGECLASS +50% EARTH",
+          "kind": "FX_RECHARGECLASS",
+          "kind_id": 22,
+          "display_name": "Recharge Speed (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 50,
+          "magnitude_declared": true,
+          "magnitude_token": "+50%",
+          "target_kind": "class",
+          "target_id": 4,
+          "target_name": "Earth",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          66,
+          69
+        ],
+        "inventory_renderer": "0x00577B90",
+        "attachment_binding": "robe"
+      }
+    },
+    {
+      "source_index": 26,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 6,
+      "parent_set_name": "Fete of Clay",
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Clayshaper's Ring",
+      "description": "",
+      "image_declarations": [
+        5
+      ],
+      "effective_image": 5,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 48,
+          "scope": "item",
+          "owner": "Clayshaper's Ring",
+          "raw": "FX_ADDSKILL \"Raise Golem\" 1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "1",
+          "target_kind": "skill",
+          "target_id": 45,
+          "target_name": "Raise Golem",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          57
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 27,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 6,
+      "parent_set_name": "Fete of Clay",
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Claybaker's Ring",
+      "description": "",
+      "image_declarations": [
+        5
+      ],
+      "effective_image": 5,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 49,
+          "scope": "item",
+          "owner": "Claybaker's Ring",
+          "raw": "FX_ADDSKILL \"Raise Golem\" 1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "1",
+          "target_kind": "skill",
+          "target_id": 45,
+          "target_name": "Raise Golem",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          57
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 28,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": 6,
+      "parent_set_name": "Fete of Clay",
+      "type": "wand",
+      "native_type_id": 7011,
+      "native_type_id_hex": "0x1B63",
+      "name": "Kiln",
+      "description": "",
+      "image_declarations": [
+        3
+      ],
+      "effective_image": 3,
+      "duplicate_image_declaration": false,
+      "level": 0,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 50,
+          "scope": "item",
+          "owner": "Kiln",
+          "raw": "FX_ADDSKILL \"Fireball\" 2",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 2,
+          "magnitude_declared": true,
+          "magnitude_token": "2",
+          "target_kind": "skill",
+          "target_id": 16,
+          "target_name": "Fireball",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          81
+        ],
+        "inventory_renderer": "0x00579720",
+        "attachment_binding": "wand"
+      }
+    },
+    {
+      "source_index": 29,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "amulet",
+      "native_type_id": 7003,
+      "native_type_id_hex": "0x1B5B",
+      "name": "Obfuscate's Meddler",
+      "description": "An amulet, apparently forged by Conchiphus Obfuscate himself.  The runes read \"Interferenal.\"",
+      "image_declarations": [
+        0
+      ],
+      "effective_image": 0,
+      "duplicate_image_declaration": false,
+      "level": 8,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 51,
+          "scope": "item",
+          "owner": "Obfuscate's Meddler",
+          "raw": "FX_SPELLDAMAGE +50%",
+          "kind": "FX_SPELLDAMAGE",
+          "kind_id": 1,
+          "display_name": "Spell Damage (All Spells)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 50,
+          "magnitude_declared": true,
+          "magnitude_token": "+50%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          18,
+          30
+        ],
+        "inventory_renderer": "0x00578910",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 30,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "amulet",
+      "native_type_id": 7003,
+      "native_type_id_hex": "0x1B5B",
+      "name": "Karen You Scandalous Wench",
+      "description": "An amulet known to be forged by the great wizard Basculus.  Much has been written about the unusual name, with some speculating that Basculus finished work on the amulet immediately after an unhappy love affair.",
+      "image_declarations": [
+        8
+      ],
+      "effective_image": 8,
+      "duplicate_image_declaration": false,
+      "level": 15,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 52,
+          "scope": "item",
+          "owner": "Karen You Scandalous Wench",
+          "raw": "FX_RECHARGE +10%",
+          "kind": "FX_RECHARGE",
+          "kind_id": 21,
+          "display_name": "Recharge Speed (All Spells)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 10,
+          "magnitude_declared": true,
+          "magnitude_token": "+10%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 53,
+          "scope": "item",
+          "owner": "Karen You Scandalous Wench",
+          "raw": "FX_MAXMANA +50",
+          "kind": "FX_MAXMANA",
+          "kind_id": 24,
+          "display_name": "Modify Max Mana",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 50,
+          "magnitude_declared": true,
+          "magnitude_token": "+50",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 54,
+          "scope": "item",
+          "owner": "Karen You Scandalous Wench",
+          "raw": "FX_WALKSPEED +50%",
+          "kind": "FX_WALKSPEED",
+          "kind_id": 17,
+          "display_name": "Walk Speed",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 50,
+          "magnitude_declared": true,
+          "magnitude_token": "+50%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 55,
+          "scope": "item",
+          "owner": "Karen You Scandalous Wench",
+          "raw": "FX_BOOSTSKILLCLASS BODY +1",
+          "kind": "FX_BOOSTSKILLCLASS",
+          "kind_id": 6,
+          "display_name": "Boost Skill Class",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "class",
+          "target_id": 5,
+          "target_name": "Body",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          26,
+          31
+        ],
+        "inventory_renderer": "0x00578910",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 31,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "amulet",
+      "native_type_id": 7003,
+      "native_type_id_hex": "0x1B5B",
+      "name": "Poxproof",
+      "description": "An amulet clearly forged during the Great Healing Madness.",
+      "image_declarations": [
+        5
+      ],
+      "effective_image": 5,
+      "duplicate_image_declaration": false,
+      "level": 30,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 56,
+          "scope": "item",
+          "owner": "Poxproof",
+          "raw": "FX_RESISTPOISON +100%",
+          "kind": "FX_RESISTPOISON",
+          "kind_id": 20,
+          "display_name": "Resist Poison Damage",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 100,
+          "magnitude_declared": true,
+          "magnitude_token": "+100%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          23,
+          30
+        ],
+        "inventory_renderer": "0x00578910",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 32,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "amulet",
+      "native_type_id": 7003,
+      "native_type_id_hex": "0x1B5B",
+      "name": "Ethereal Choker",
+      "description": "Designed for those whose passion for Ether Magic surpasses their taste.",
+      "image_declarations": [
+        1
+      ],
+      "effective_image": 1,
+      "duplicate_image_declaration": false,
+      "level": 10,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 57,
+          "scope": "item",
+          "owner": "Ethereal Choker",
+          "raw": "FX_BOOSTSKILL \"Magic Missile\" 2",
+          "kind": "FX_BOOSTSKILL",
+          "kind_id": 5,
+          "display_name": "Boost Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 2,
+          "magnitude_declared": true,
+          "magnitude_token": "2",
+          "target_kind": "skill",
+          "target_id": 8,
+          "target_name": "Magic Missile",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 58,
+          "scope": "item",
+          "owner": "Ethereal Choker",
+          "raw": "FX_BOOSTSKILL \"More Missiles\" 2",
+          "kind": "FX_BOOSTSKILL",
+          "kind_id": 5,
+          "display_name": "Boost Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 2,
+          "magnitude_declared": true,
+          "magnitude_token": "2",
+          "target_kind": "skill",
+          "target_id": 10,
+          "target_name": "More Missiles",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 59,
+          "scope": "item",
+          "owner": "Ethereal Choker",
+          "raw": "FX_BOOSTSKILL \"Smart Missiles\" 2",
+          "kind": "FX_BOOSTSKILL",
+          "kind_id": 5,
+          "display_name": "Boost Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 2,
+          "magnitude_declared": true,
+          "magnitude_token": "2",
+          "target_kind": "skill",
+          "target_id": 9,
+          "target_name": "Smart Missiles",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 60,
+          "scope": "item",
+          "owner": "Ethereal Choker",
+          "raw": "FX_SPELLCLASSMANACOST -15% ETHER",
+          "kind": "FX_SPELLCLASSMANACOST",
+          "kind_id": 11,
+          "display_name": "Mana Cost (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": -15,
+          "magnitude_declared": true,
+          "magnitude_token": "-15%",
+          "target_kind": "class",
+          "target_id": 0,
+          "target_name": "Ether",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          19,
+          30
+        ],
+        "inventory_renderer": "0x00578910",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 33,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "staff",
+      "native_type_id": 7004,
+      "native_type_id_hex": "0x1B5C",
+      "name": "Absolox's Boomstick",
+      "description": "Formerly the property of Archmage Garthus Absolox, who was overly enthusiastic about the Meteor spell.",
+      "image_declarations": [
+        5,
+        0
+      ],
+      "effective_image": 0,
+      "duplicate_image_declaration": true,
+      "level": 5,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 61,
+          "scope": "item",
+          "owner": "Absolox's Boomstick",
+          "raw": "FX_ADDSKILL \"Fireball\" 2",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 2,
+          "magnitude_declared": true,
+          "magnitude_token": "2",
+          "target_kind": "skill",
+          "target_id": 16,
+          "target_name": "Fireball",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 62,
+          "scope": "item",
+          "owner": "Absolox's Boomstick",
+          "raw": "FX_ADDSKILL \"Boulder\" 2",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 2,
+          "magnitude_declared": true,
+          "magnitude_token": "2",
+          "target_kind": "skill",
+          "target_id": 40,
+          "target_name": "Boulder",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          72
+        ],
+        "inventory_renderer": "0x00578A90",
+        "attachment_binding": "staff"
+      }
+    },
+    {
+      "source_index": 34,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "staff",
+      "native_type_id": 7004,
+      "native_type_id_hex": "0x1B5C",
+      "name": "Staff of Dawn",
+      "description": "Forged by the wizard Gnoxis to achieve minimal functionality on mornings without coffee.  The imprints of hands have been squeezed into the wood at the gripping spots.",
+      "image_declarations": [
+        2
+      ],
+      "effective_image": 2,
+      "duplicate_image_declaration": false,
+      "level": 15,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 63,
+          "scope": "item",
+          "owner": "Staff of Dawn",
+          "raw": "FX_BOOSTSKILLCLASS MIND +2",
+          "kind": "FX_BOOSTSKILLCLASS",
+          "kind_id": 6,
+          "display_name": "Boost Skill Class",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 2,
+          "magnitude_declared": true,
+          "magnitude_token": "+2",
+          "target_kind": "class",
+          "target_id": 6,
+          "target_name": "Mind",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          74
+        ],
+        "inventory_renderer": "0x00578A90",
+        "attachment_binding": "staff"
+      }
+    },
+    {
+      "source_index": 35,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Ringwall",
+      "description": "A simple ring, crafted to give unhealthy mages that extra staying power.",
+      "image_declarations": [
+        5
+      ],
+      "effective_image": 5,
+      "duplicate_image_declaration": false,
+      "level": 3,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 64,
+          "scope": "item",
+          "owner": "Ringwall",
+          "raw": "FX_GRANTSKILL \"Magic Shield\" 2",
+          "kind": "FX_GRANTSKILL",
+          "kind_id": 4,
+          "display_name": "Grant Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 2,
+          "magnitude_declared": true,
+          "magnitude_token": "2",
+          "target_kind": "skill",
+          "target_id": 54,
+          "target_name": "Magic Shield",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          57
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 36,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Fleetfinger",
+      "description": "Forged to boost dexterity and allow mages to work faster, this ring was stolen immediately by Casanava Lancashire, history's greatest reputed lover.  The ring only resurfaced again recently, but frequently changes owners because of a tendency to fly off the hand in the heat of casting.",
+      "image_declarations": [
+        8
+      ],
+      "effective_image": 8,
+      "duplicate_image_declaration": false,
+      "level": 10,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 65,
+          "scope": "item",
+          "owner": "Fleetfinger",
+          "raw": "FX_CASTSPEED +100%",
+          "kind": "FX_CASTSPEED",
+          "kind_id": 12,
+          "display_name": "Cast Speed (All Spells)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 100,
+          "magnitude_declared": true,
+          "magnitude_token": "+100%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          60
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 37,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Gritchenscorn",
+      "description": "Created by Blue Mage Wendrell to prove once and for all that a strong mind is worth more that a strong body.",
+      "image_declarations": [
+        10
+      ],
+      "effective_image": 10,
+      "duplicate_image_declaration": false,
+      "level": 10,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 66,
+          "scope": "item",
+          "owner": "Gritchenscorn",
+          "raw": "FX_MAXMANA *3",
+          "kind": "FX_MAXMANA",
+          "kind_id": 24,
+          "display_name": "Modify Max Mana",
+          "operator": "multiply",
+          "operator_id": 1,
+          "magnitude": 3,
+          "magnitude_declared": true,
+          "magnitude_token": "*3",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 67,
+          "scope": "item",
+          "owner": "Gritchenscorn",
+          "raw": "FX_MAXHP -80%",
+          "kind": "FX_MAXHP",
+          "kind_id": 23,
+          "display_name": "Modify Max Health",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": -80,
+          "magnitude_declared": true,
+          "magnitude_token": "-80%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          62
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 38,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Mindblowing Ring",
+      "description": "When presented at the artificer's conclave, this ring garnered much interest because it emits a destructive blast (dealing damage depending on level) when the bearer levels up.  Concern was expressed that the presenter (level 47) was so close to levelling up that even the experience of speaking before a large group might do it, and an early lunch was declared.",
+      "image_declarations": [
+        0
+      ],
+      "effective_image": 0,
+      "duplicate_image_declaration": false,
+      "level": 1,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 68,
+          "scope": "item",
+          "owner": "Mindblowing Ring",
+          "raw": "FX_MINDBLAST",
+          "kind": "FX_MINDBLAST",
+          "kind_id": 36,
+          "display_name": "Emit Mindblast on Levelup",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 0,
+          "magnitude_declared": false,
+          "magnitude_token": null,
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          52
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 39,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "ring",
+      "native_type_id": 7002,
+      "native_type_id_hex": "0x1B5A",
+      "name": "Smartest Ring",
+      "description": "The high level requirments of this ring indicate that it was not necessarily forged to assist in learning, but rather to allow those smug in their knowledge to be more smug.",
+      "image_declarations": [
+        1
+      ],
+      "effective_image": 1,
+      "duplicate_image_declaration": false,
+      "level": 20,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 69,
+          "scope": "item",
+          "owner": "Smartest Ring",
+          "raw": "FX_ALLSKILLS +1",
+          "kind": "FX_ALLSKILLS",
+          "kind_id": 8,
+          "display_name": "Modify All Skills",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          53
+        ],
+        "inventory_renderer": "0x005788B0",
+        "attachment_binding": null
+      }
+    },
+    {
+      "source_index": 40,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "hat",
+      "native_type_id": 7005,
+      "native_type_id_hex": "0x1B5D",
+      "name": "Yzmar's Handicap",
+      "description": "Annoyed at being accused of dueling with opponents below his magical grade, the wizard Yzmar designed this hat to provide a handicap to his challengers and silence accusations of advantage.  Sadly, Yzmar was disintegrated in his next duel.",
+      "image_declarations": [
+        3
+      ],
+      "effective_image": 3,
+      "duplicate_image_declaration": false,
+      "level": 3,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 70,
+          "scope": "item",
+          "owner": "Yzmar's Handicap",
+          "raw": "FX_ADDSKILL \"HEALTH UP\" +1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 64,
+          "target_name": "Health Up",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 71,
+          "scope": "item",
+          "owner": "Yzmar's Handicap",
+          "raw": "FX_ADDSKILL \"MANA UP\" +1",
+          "kind": "FX_ADDSKILL",
+          "kind_id": 7,
+          "display_name": "Add Skill",
+          "operator": "flat",
+          "operator_id": 0,
+          "magnitude": 1,
+          "magnitude_declared": true,
+          "magnitude_token": "+1",
+          "target_kind": "skill",
+          "target_id": 56,
+          "target_name": "Mana Up",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          37,
+          41
+        ],
+        "inventory_renderer": "0x005779B0",
+        "attachment_binding": "hat"
+      }
+    },
+    {
+      "source_index": 41,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "wand",
+      "native_type_id": 7011,
+      "native_type_id_hex": "0x1B63",
+      "name": "Qubar's Ether",
+      "description": "Part of Qubar's \"Elemental Boost\" collection.",
+      "image_declarations": [
+        5
+      ],
+      "effective_image": 5,
+      "duplicate_image_declaration": false,
+      "level": 10,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 72,
+          "scope": "item",
+          "owner": "Qubar's Ether",
+          "raw": "FX_SPELLCLASSDAMAGE +50% ETHER",
+          "kind": "FX_SPELLCLASSDAMAGE",
+          "kind_id": 2,
+          "display_name": "Spell Damage (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 50,
+          "magnitude_declared": true,
+          "magnitude_token": "+50%",
+          "target_kind": "class",
+          "target_id": 0,
+          "target_name": "Ether",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 73,
+          "scope": "item",
+          "owner": "Qubar's Ether",
+          "raw": "FX_SPELLCLASSMANACOST -50% ETHER",
+          "kind": "FX_SPELLCLASSMANACOST",
+          "kind_id": 11,
+          "display_name": "Mana Cost (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": -50,
+          "magnitude_declared": true,
+          "magnitude_token": "-50%",
+          "target_kind": "class",
+          "target_id": 0,
+          "target_name": "Ether",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          83
+        ],
+        "inventory_renderer": "0x00579720",
+        "attachment_binding": "wand"
+      }
+    },
+    {
+      "source_index": 42,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "wand",
+      "native_type_id": 7011,
+      "native_type_id_hex": "0x1B63",
+      "name": "Qubar's Fire",
+      "description": "Part of Qubar's \"Elemental Boost\" collection.",
+      "image_declarations": [
+        5
+      ],
+      "effective_image": 5,
+      "duplicate_image_declaration": false,
+      "level": 10,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 74,
+          "scope": "item",
+          "owner": "Qubar's Fire",
+          "raw": "FX_SPELLCLASSDAMAGE +50% FIRE",
+          "kind": "FX_SPELLCLASSDAMAGE",
+          "kind_id": 2,
+          "display_name": "Spell Damage (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 50,
+          "magnitude_declared": true,
+          "magnitude_token": "+50%",
+          "target_kind": "class",
+          "target_id": 1,
+          "target_name": "Fire",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 75,
+          "scope": "item",
+          "owner": "Qubar's Fire",
+          "raw": "FX_SPELLCLASSMANACOST -50% FIRE",
+          "kind": "FX_SPELLCLASSMANACOST",
+          "kind_id": 11,
+          "display_name": "Mana Cost (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": -50,
+          "magnitude_declared": true,
+          "magnitude_token": "-50%",
+          "target_kind": "class",
+          "target_id": 1,
+          "target_name": "Fire",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          83
+        ],
+        "inventory_renderer": "0x00579720",
+        "attachment_binding": "wand"
+      }
+    },
+    {
+      "source_index": 43,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "wand",
+      "native_type_id": 7011,
+      "native_type_id_hex": "0x1B63",
+      "name": "Qubar's Air",
+      "description": "Part of Qubar's \"Elemental Boost\" collection.",
+      "image_declarations": [
+        5
+      ],
+      "effective_image": 5,
+      "duplicate_image_declaration": false,
+      "level": 10,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 76,
+          "scope": "item",
+          "owner": "Qubar's Air",
+          "raw": "FX_SPELLCLASSDAMAGE +50% AIR",
+          "kind": "FX_SPELLCLASSDAMAGE",
+          "kind_id": 2,
+          "display_name": "Spell Damage (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 50,
+          "magnitude_declared": true,
+          "magnitude_token": "+50%",
+          "target_kind": "class",
+          "target_id": 2,
+          "target_name": "Air",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 77,
+          "scope": "item",
+          "owner": "Qubar's Air",
+          "raw": "FX_SPELLCLASSMANACOST -50% AIR",
+          "kind": "FX_SPELLCLASSMANACOST",
+          "kind_id": 11,
+          "display_name": "Mana Cost (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": -50,
+          "magnitude_declared": true,
+          "magnitude_token": "-50%",
+          "target_kind": "class",
+          "target_id": 2,
+          "target_name": "Air",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          83
+        ],
+        "inventory_renderer": "0x00579720",
+        "attachment_binding": "wand"
+      }
+    },
+    {
+      "source_index": 44,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "wand",
+      "native_type_id": 7011,
+      "native_type_id_hex": "0x1B63",
+      "name": "Qubar's Water",
+      "description": "Part of Qubar's \"Elemental Boost\" collection.",
+      "image_declarations": [
+        5
+      ],
+      "effective_image": 5,
+      "duplicate_image_declaration": false,
+      "level": 10,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 78,
+          "scope": "item",
+          "owner": "Qubar's Water",
+          "raw": "FX_SPELLCLASSDAMAGE +50% WATER",
+          "kind": "FX_SPELLCLASSDAMAGE",
+          "kind_id": 2,
+          "display_name": "Spell Damage (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 50,
+          "magnitude_declared": true,
+          "magnitude_token": "+50%",
+          "target_kind": "class",
+          "target_id": 3,
+          "target_name": "Water",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 79,
+          "scope": "item",
+          "owner": "Qubar's Water",
+          "raw": "FX_SPELLCLASSMANACOST -50% WATER",
+          "kind": "FX_SPELLCLASSMANACOST",
+          "kind_id": 11,
+          "display_name": "Mana Cost (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": -50,
+          "magnitude_declared": true,
+          "magnitude_token": "-50%",
+          "target_kind": "class",
+          "target_id": 3,
+          "target_name": "Water",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          83
+        ],
+        "inventory_renderer": "0x00579720",
+        "attachment_binding": "wand"
+      }
+    },
+    {
+      "source_index": 45,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "wand",
+      "native_type_id": 7011,
+      "native_type_id_hex": "0x1B63",
+      "name": "Qubar's Earth",
+      "description": "Part of Qubar's \"Elemental Boost\" collection.",
+      "image_declarations": [
+        5
+      ],
+      "effective_image": 5,
+      "duplicate_image_declaration": false,
+      "level": 10,
+      "rarity": "Rare",
+      "rarity_id": 1,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 80,
+          "scope": "item",
+          "owner": "Qubar's Earth",
+          "raw": "FX_SPELLCLASSDAMAGE +50% EARTH",
+          "kind": "FX_SPELLCLASSDAMAGE",
+          "kind_id": 2,
+          "display_name": "Spell Damage (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 50,
+          "magnitude_declared": true,
+          "magnitude_token": "+50%",
+          "target_kind": "class",
+          "target_id": 4,
+          "target_name": "Earth",
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 81,
+          "scope": "item",
+          "owner": "Qubar's Earth",
+          "raw": "FX_SPELLCLASSMANACOST -50% EARTH",
+          "kind": "FX_SPELLCLASSMANACOST",
+          "kind_id": 11,
+          "display_name": "Mana Cost (Spell Class)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": -50,
+          "magnitude_declared": true,
+          "magnitude_token": "-50%",
+          "target_kind": "class",
+          "target_id": 4,
+          "target_name": "Earth",
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          83
+        ],
+        "inventory_renderer": "0x00579720",
+        "attachment_binding": "wand"
+      }
+    },
+    {
+      "source_index": 46,
+      "source_index_is_runtime_recipe_uid": false,
+      "parent_set_index": null,
+      "parent_set_name": null,
+      "type": "robe",
+      "native_type_id": 7006,
+      "native_type_id_hex": "0x1B5E",
+      "name": "Robe of Thaumic Unperturbability",
+      "description": "Woven as a defensive outfit for working with demons, this robe absorbs almost all magic in the vicinity.  The only known side effect is that your own magic is harmed as well.",
+      "image_declarations": [
+        0
+      ],
+      "effective_image": 0,
+      "duplicate_image_declaration": false,
+      "level": 15,
+      "rarity": "Epic",
+      "rarity_id": 2,
+      "color1_declarations": [],
+      "effective_color1": null,
+      "color2_declarations": [],
+      "effective_color2": null,
+      "fx": [
+        {
+          "source_index": 82,
+          "scope": "item",
+          "owner": "Robe of Thaumic Unperturbability",
+          "raw": "FX_RESISTMAGIC +95%",
+          "kind": "FX_RESISTMAGIC",
+          "kind_id": 19,
+          "display_name": "Resist Magical Damage",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": 95,
+          "magnitude_declared": true,
+          "magnitude_token": "+95%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 83,
+          "scope": "item",
+          "owner": "Robe of Thaumic Unperturbability",
+          "raw": "FX_SPELLDAMAGE -35%",
+          "kind": "FX_SPELLDAMAGE",
+          "kind_id": 1,
+          "display_name": "Spell Damage (All Spells)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": -35,
+          "magnitude_declared": true,
+          "magnitude_token": "-35%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 84,
+          "scope": "item",
+          "owner": "Robe of Thaumic Unperturbability",
+          "raw": "FX_MANARECOVERY -50%",
+          "kind": "FX_MANARECOVERY",
+          "kind_id": 9,
+          "display_name": "Mana Recovery",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": -50,
+          "magnitude_declared": true,
+          "magnitude_token": "-50%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        },
+        {
+          "source_index": 85,
+          "scope": "item",
+          "owner": "Robe of Thaumic Unperturbability",
+          "raw": "FX_RECHARGE -40%",
+          "kind": "FX_RECHARGE",
+          "kind_id": 21,
+          "display_name": "Recharge Speed (All Spells)",
+          "operator": "percentage",
+          "operator_id": 2,
+          "magnitude": -40,
+          "magnitude_declared": true,
+          "magnitude_token": "-40%",
+          "target_kind": null,
+          "target_id": null,
+          "target_name": null,
+          "unparsed_tokens": []
+        }
+      ],
+      "art": {
+        "inventory_atlas": "Inventory",
+        "inventory_records": [
+          64,
+          67
+        ],
+        "inventory_renderer": "0x00577B90",
+        "attachment_binding": "robe"
+      }
+    }
+  ]
+}

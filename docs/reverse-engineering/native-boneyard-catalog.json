@@ -1,0 +1,854 @@
+{
+  "schema": "solomon-dark-native-boneyard-catalog-v1",
+  "source": {
+    "object_catalog": "docs/reverse-engineering/native-game-object-catalog.json",
+    "region_layout_node_path": "0.12.0"
+  },
+  "container_grammar": {
+    "chunk_node": [
+      "u32 payload_size",
+      "payload bytes",
+      "u32 anonymous_child_count",
+      "recursive anonymous children"
+    ],
+    "sync_buffer": [
+      "root chunk node",
+      "u32 named_child_count",
+      "NUL-terminated length-prefixed name plus recursive SyncBuffer per child"
+    ]
+  },
+  "region_layout_chunks": [
+    {
+      "index": 0,
+      "name": "scenery",
+      "kind": "polymorphic_list"
+    },
+    {
+      "index": 1,
+      "name": "trigger_control",
+      "kind": "object"
+    },
+    {
+      "index": 2,
+      "name": "origin_and_scalar",
+      "kind": "fixed_payload"
+    },
+    {
+      "index": 3,
+      "name": "monster_recipes",
+      "kind": "polymorphic_list",
+      "expected_type_id": 6001
+    },
+    {
+      "index": 4,
+      "name": "uid_groups",
+      "kind": "polymorphic_list",
+      "expected_type_id": 6002
+    },
+    {
+      "index": 5,
+      "name": "roads",
+      "kind": "polymorphic_list",
+      "expected_type_id": 3004
+    },
+    {
+      "index": 6,
+      "name": "fences",
+      "kind": "polymorphic_list",
+      "expected_type_id": 3005
+    },
+    {
+      "index": 7,
+      "name": "item_recipes",
+      "kind": "polymorphic_list",
+      "expected_type_id": 6003
+    },
+    {
+      "index": 8,
+      "name": "item_sets",
+      "kind": "polymorphic_list",
+      "expected_type_id": 6005
+    },
+    {
+      "index": 9,
+      "name": "npc_recipes",
+      "kind": "polymorphic_list",
+      "expected_type_id": 6004
+    },
+    {
+      "index": 10,
+      "name": "layout_flag",
+      "kind": "byte"
+    },
+    {
+      "index": 11,
+      "name": "compact_decorations",
+      "kind": "compact_records"
+    },
+    {
+      "index": 12,
+      "name": "terrain",
+      "kind": "polymorphic_list",
+      "expected_type_id": 3009
+    },
+    {
+      "index": 13,
+      "name": "timelines",
+      "kind": "polymorphic_list",
+      "expected_type_id": 6006
+    }
+  ],
+  "files": [
+    {
+      "label": "stock/data/levels/story0.boneyard",
+      "size": 40565,
+      "sha256": "d596b4915140f5faa23fd1286e3d622c6189ecb00b9667f5e7b3444a84b8322b",
+      "sync_buffer_count": 1,
+      "anonymous_node_count": 879,
+      "payload_bytes": 33529,
+      "maximum_anonymous_node_depth": 9,
+      "named_child_count": 0,
+      "region_layout": {
+        "node_path": "0.12.0",
+        "top_level_chunk_count": 14,
+        "origin": {
+          "x": 855.5478515625,
+          "y": 2465.55029296875
+        },
+        "scalar": 0.0,
+        "layout_flag": 0,
+        "lists": {
+          "scenery": {
+            "count": 116,
+            "type_counts": {
+              "Tree": 60,
+              "Monument": 6,
+              "Gravestone": 50
+            },
+            "serialized_child_chunk_count": 348
+          },
+          "monster_recipes": {
+            "count": 1,
+            "type_counts": {
+              "MonsterRecipe": 1
+            },
+            "serialized_child_chunk_count": 1
+          },
+          "uid_groups": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "roads": {
+            "count": 61,
+            "type_counts": {
+              "Road": 61
+            },
+            "serialized_child_chunk_count": 61
+          },
+          "fences": {
+            "count": 21,
+            "type_counts": {
+              "Fence": 21
+            },
+            "serialized_child_chunk_count": 21
+          },
+          "item_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "item_sets": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "npc_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "terrain": {
+            "count": 12,
+            "type_counts": {
+              "Terrain": 12
+            },
+            "serialized_child_chunk_count": 12
+          },
+          "timelines": {
+            "count": 1,
+            "type_counts": {
+              "TimeLine": 1
+            },
+            "serialized_child_chunk_count": 1
+          }
+        },
+        "compact_decorations": {
+          "count": 133,
+          "record_size": 25,
+          "type_counts": {
+            "0": 31,
+            "1": 11,
+            "2": 11,
+            "3": 10,
+            "4": 1,
+            "5": 2,
+            "6": 1,
+            "7": 10,
+            "8": 15,
+            "14": 1,
+            "18": 1,
+            "21": 5,
+            "22": 15,
+            "23": 2,
+            "24": 17
+          }
+        },
+        "timelines": [
+          {
+            "name": "Skeletons",
+            "uid": 56480,
+            "enabled_byte": 0,
+            "event_count": 26,
+            "event_type_counts": {
+              "TimeLineEvent": 26
+            },
+            "trailing_payload_bytes": 23
+          }
+        ]
+      }
+    },
+    {
+      "label": "stock/data/levels/story1.boneyard",
+      "size": 212160,
+      "sha256": "5876a0130f43a4b63aa22ab9c482d16912240dfbe773b20fd01f3d48e0cb1cda",
+      "sync_buffer_count": 1,
+      "anonymous_node_count": 9015,
+      "payload_bytes": 140036,
+      "maximum_anonymous_node_depth": 9,
+      "named_child_count": 0,
+      "region_layout": {
+        "node_path": "0.12.0",
+        "top_level_chunk_count": 14,
+        "origin": {
+          "x": 864.1810302734375,
+          "y": 3392.1787109375
+        },
+        "scalar": 0.0,
+        "layout_flag": 0,
+        "lists": {
+          "scenery": {
+            "count": 230,
+            "type_counts": {
+              "Tree": 100,
+              "Monument": 12,
+              "Gravestone": 117,
+              "Building": 1
+            },
+            "serialized_child_chunk_count": 690
+          },
+          "monster_recipes": {
+            "count": 2,
+            "type_counts": {
+              "MonsterRecipe": 2
+            },
+            "serialized_child_chunk_count": 2
+          },
+          "uid_groups": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "roads": {
+            "count": 48,
+            "type_counts": {
+              "Road": 48
+            },
+            "serialized_child_chunk_count": 48
+          },
+          "fences": {
+            "count": 34,
+            "type_counts": {
+              "Fence": 34
+            },
+            "serialized_child_chunk_count": 34
+          },
+          "item_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "item_sets": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "npc_recipes": {
+            "count": 2,
+            "type_counts": {
+              "NPCRecipe": 2
+            },
+            "serialized_child_chunk_count": 2
+          },
+          "terrain": {
+            "count": 7,
+            "type_counts": {
+              "Terrain": 7
+            },
+            "serialized_child_chunk_count": 7
+          },
+          "timelines": {
+            "count": 1,
+            "type_counts": {
+              "TimeLine": 1
+            },
+            "serialized_child_chunk_count": 1
+          }
+        },
+        "compact_decorations": {
+          "count": 193,
+          "record_size": 25,
+          "type_counts": {
+            "0": 66,
+            "1": 27,
+            "2": 9,
+            "4": 1,
+            "6": 15,
+            "7": 11,
+            "8": 24,
+            "9": 1,
+            "13": 1,
+            "14": 1,
+            "15": 1,
+            "17": 1,
+            "19": 6,
+            "20": 7,
+            "21": 4,
+            "22": 13,
+            "23": 4,
+            "24": 1
+          }
+        },
+        "timelines": [
+          {
+            "name": "Survival Time line",
+            "uid": 98108,
+            "enabled_byte": 0,
+            "event_count": 603,
+            "event_type_counts": {
+              "TimeLineEvent": 603
+            },
+            "trailing_payload_bytes": 23
+          }
+        ]
+      }
+    },
+    {
+      "label": "stock/data/levels/survival.boneyard",
+      "size": 3059,
+      "sha256": "fe2e01b0ab62f644c3e5bf53f71df3a41968b95c8e22fa44c1d1250ba08cdb5b",
+      "sync_buffer_count": 1,
+      "anonymous_node_count": 73,
+      "payload_bytes": 2471,
+      "maximum_anonymous_node_depth": 9,
+      "named_child_count": 0,
+      "region_layout": {
+        "node_path": "0.12.0",
+        "top_level_chunk_count": 14,
+        "origin": {
+          "x": 1024.0,
+          "y": 1024.0
+        },
+        "scalar": 0.0,
+        "layout_flag": 0,
+        "lists": {
+          "scenery": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "monster_recipes": {
+            "count": 6,
+            "type_counts": {
+              "MonsterRecipe": 6
+            },
+            "serialized_child_chunk_count": 6
+          },
+          "uid_groups": {
+            "count": 6,
+            "type_counts": {
+              "UIDGroup": 6
+            },
+            "serialized_child_chunk_count": 6
+          },
+          "roads": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "fences": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "item_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "item_sets": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "npc_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "terrain": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "timelines": {
+            "count": 1,
+            "type_counts": {
+              "TimeLine": 1
+            },
+            "serialized_child_chunk_count": 1
+          }
+        },
+        "compact_decorations": {
+          "count": 0,
+          "record_size": 25,
+          "type_counts": {}
+        },
+        "timelines": [
+          {
+            "name": "MAIN Time line",
+            "uid": 317369,
+            "enabled_byte": 0,
+            "event_count": 0,
+            "event_type_counts": {},
+            "trailing_payload_bytes": 23
+          }
+        ]
+      }
+    },
+    {
+      "label": "stock/data/levels/tutorial.boneyard",
+      "size": 33220,
+      "sha256": "97802f2ca45d9bc6f90a497e7c12a55926298161e191fa70eee5e666b90106ed",
+      "sync_buffer_count": 1,
+      "anonymous_node_count": 676,
+      "payload_bytes": 27808,
+      "maximum_anonymous_node_depth": 9,
+      "named_child_count": 0,
+      "region_layout": {
+        "node_path": "0.12.0",
+        "top_level_chunk_count": 14,
+        "origin": {
+          "x": 1025.0,
+          "y": 2070.0703125
+        },
+        "scalar": 0.0,
+        "layout_flag": 0,
+        "lists": {
+          "scenery": {
+            "count": 92,
+            "type_counts": {
+              "Tree": 26,
+              "Monument": 1,
+              "Gravestone": 64,
+              "Building": 1
+            },
+            "serialized_child_chunk_count": 276
+          },
+          "monster_recipes": {
+            "count": 7,
+            "type_counts": {
+              "MonsterRecipe": 7
+            },
+            "serialized_child_chunk_count": 7
+          },
+          "uid_groups": {
+            "count": 6,
+            "type_counts": {
+              "UIDGroup": 6
+            },
+            "serialized_child_chunk_count": 6
+          },
+          "roads": {
+            "count": 53,
+            "type_counts": {
+              "Road": 53
+            },
+            "serialized_child_chunk_count": 53
+          },
+          "fences": {
+            "count": 28,
+            "type_counts": {
+              "Fence": 28
+            },
+            "serialized_child_chunk_count": 28
+          },
+          "item_recipes": {
+            "count": 1,
+            "type_counts": {
+              "ItemRecipe": 1
+            },
+            "serialized_child_chunk_count": 1
+          },
+          "item_sets": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "npc_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "terrain": {
+            "count": 4,
+            "type_counts": {
+              "Terrain": 4
+            },
+            "serialized_child_chunk_count": 4
+          },
+          "timelines": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          }
+        },
+        "compact_decorations": {
+          "count": 90,
+          "record_size": 25,
+          "type_counts": {
+            "0": 16,
+            "1": 20,
+            "2": 2,
+            "3": 4,
+            "4": 2,
+            "6": 2,
+            "7": 8,
+            "8": 12,
+            "19": 1,
+            "20": 1,
+            "21": 4,
+            "22": 2,
+            "23": 1,
+            "24": 4,
+            "25": 4,
+            "27": 2,
+            "28": 5
+          }
+        },
+        "timelines": []
+      }
+    },
+    {
+      "label": "stock/sandbox/play.boneyard",
+      "size": 252690,
+      "sha256": "bd3c38468481b7337b1e7382e5503cc214356906571763a68188b23e821e73fb",
+      "sync_buffer_count": 1,
+      "anonymous_node_count": 9704,
+      "payload_bytes": 175054,
+      "maximum_anonymous_node_depth": 9,
+      "named_child_count": 0,
+      "region_layout": {
+        "node_path": "0.12.0",
+        "top_level_chunk_count": 14,
+        "origin": {
+          "x": 1560.07373046875,
+          "y": 150.0
+        },
+        "scalar": 180.0,
+        "layout_flag": 0,
+        "lists": {
+          "scenery": {
+            "count": 408,
+            "type_counts": {
+              "Tree": 105,
+              "Gravestone": 299,
+              "Building": 1,
+              "Goodie": 3
+            },
+            "serialized_child_chunk_count": 1224
+          },
+          "monster_recipes": {
+            "count": 15,
+            "type_counts": {
+              "MonsterRecipe": 15
+            },
+            "serialized_child_chunk_count": 15
+          },
+          "uid_groups": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "roads": {
+            "count": 79,
+            "type_counts": {
+              "Road": 79
+            },
+            "serialized_child_chunk_count": 79
+          },
+          "fences": {
+            "count": 18,
+            "type_counts": {
+              "Fence": 18
+            },
+            "serialized_child_chunk_count": 18
+          },
+          "item_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "item_sets": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "npc_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "terrain": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "timelines": {
+            "count": 1,
+            "type_counts": {
+              "TimeLine": 1
+            },
+            "serialized_child_chunk_count": 1
+          }
+        },
+        "compact_decorations": {
+          "count": 341,
+          "record_size": 25,
+          "type_counts": {
+            "0": 84,
+            "1": 61,
+            "2": 10,
+            "3": 19,
+            "4": 11,
+            "5": 10,
+            "7": 19,
+            "8": 20,
+            "21": 12,
+            "22": 14,
+            "23": 15,
+            "24": 19,
+            "25": 14,
+            "26": 11,
+            "27": 11,
+            "28": 11
+          }
+        },
+        "timelines": [
+          {
+            "name": "Main Time line",
+            "uid": 34414,
+            "enabled_byte": 0,
+            "event_count": 562,
+            "event_type_counts": {
+              "TimeLineEvent": 562
+            },
+            "trailing_payload_bytes": 23
+          }
+        ]
+      }
+    },
+    {
+      "label": "stock/sandbox/DarkCloud/mylevels/New_Boneyard_1.boneyard",
+      "size": 154858,
+      "sha256": "8ae9cd4d371f926b7bf24b05d2a1b1a2a521d797e3f925f3ed9447e8bcff3828",
+      "sync_buffer_count": 1,
+      "anonymous_node_count": 8061,
+      "payload_bytes": 90366,
+      "maximum_anonymous_node_depth": 9,
+      "named_child_count": 0,
+      "region_layout": {
+        "node_path": "0.12.0",
+        "top_level_chunk_count": 14,
+        "origin": {
+          "x": 1024.0,
+          "y": 1024.0
+        },
+        "scalar": 0.0,
+        "layout_flag": 0,
+        "lists": {
+          "scenery": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "monster_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "uid_groups": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "roads": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "fences": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "item_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "item_sets": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "npc_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "terrain": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "timelines": {
+            "count": 1,
+            "type_counts": {
+              "TimeLine": 1
+            },
+            "serialized_child_chunk_count": 1
+          }
+        },
+        "compact_decorations": {
+          "count": 0,
+          "record_size": 25,
+          "type_counts": {}
+        },
+        "timelines": [
+          {
+            "name": "Survival Time line",
+            "uid": 36037,
+            "enabled_byte": 0,
+            "event_count": 593,
+            "event_type_counts": {
+              "TimeLineEvent": 593
+            },
+            "trailing_payload_bytes": 23
+          }
+        ]
+      }
+    },
+    {
+      "label": "fixture/flat_multiplayer_test.boneyard",
+      "size": 148413,
+      "sha256": "7c7d23f2fbfcdf73b5bb7f4af0f836cc9d199997fe9c7dd38183c7659b6d949d",
+      "sync_buffer_count": 1,
+      "anonymous_node_count": 7721,
+      "payload_bytes": 86641,
+      "maximum_anonymous_node_depth": 9,
+      "named_child_count": 0,
+      "region_layout": {
+        "node_path": "0.12.0",
+        "top_level_chunk_count": 14,
+        "origin": {
+          "x": 1024.0,
+          "y": 1024.0
+        },
+        "scalar": 0.0,
+        "layout_flag": 0,
+        "lists": {
+          "scenery": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "monster_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "uid_groups": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "roads": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "fences": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "item_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "item_sets": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "npc_recipes": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "terrain": {
+            "count": 0,
+            "type_counts": {},
+            "serialized_child_chunk_count": 0
+          },
+          "timelines": {
+            "count": 1,
+            "type_counts": {
+              "TimeLine": 1
+            },
+            "serialized_child_chunk_count": 1
+          }
+        },
+        "compact_decorations": {
+          "count": 0,
+          "record_size": 25,
+          "type_counts": {}
+        },
+        "timelines": [
+          {
+            "name": "Survival Time line",
+            "uid": 36679,
+            "enabled_byte": 0,
+            "event_count": 571,
+            "event_type_counts": {
+              "TimeLineEvent": 571
+            },
+            "trailing_payload_bytes": 23
+          }
+        ]
+      }
+    }
+  ]
+}

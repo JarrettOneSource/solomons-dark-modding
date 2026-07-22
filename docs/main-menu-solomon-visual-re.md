@@ -359,11 +359,11 @@ That outer presentation transform is not part of `MainMenu_Render`.
 - [`contact-sheet.png`](assets/main-menu-solomon/contact-sheet.png)
 - [`manifest.json`](assets/main-menu-solomon/manifest.json)
 
-## Open questions and boundaries
+## Closed boundaries
 
-- The binary contains a `Title@2X` selection branch, but the shipped data copy
-  has no matching files. Its exact selection condition is not needed for the
-  retail composition recovered here.
+- The binary contains a `Title@2X` selection branch, but its selector
+  `0x004136F0` always returns false in this retail executable. The alternate
+  branch is compiled but dormant, and the shipped data has no matching files.
 - Fullscreen scaling, DPI behavior, and any letterboxing applied outside the
   menu renderer are upstream concerns. The formulas above describe the
   renderer's own client-coordinate behavior.

@@ -13,6 +13,25 @@ This note focuses on the native actors visible in the shared hub:
 The goal is to separate those families, identify their factory types, and recover
 their movement stack.
 
+## Static art-system closure (2026-07-21)
+
+The later native-art pass now maps the complete fixed-region/NPC class and art
+boundary in
+[`reverse-engineering/native-regions-npcs-and-world-props.md`](reverse-engineering/native-regions-npcs-and-world-props.md):
+
+- `Student` remains the factory type-5002 / `0x138A` roaming family, with
+  constructor `0x00501B80`, tick `0x0050A4E0`, renderer `0x0051B2A0`, and
+  College records 165..500;
+- every named interior NPC now has its constructor, tick, renderer, and exact
+  College/Office/Library/Memoratorium record ranges recorded;
+- `GameNPC` remains the separate type-5015 / `0x1397` recipe-configurable
+  family, with tick `0x00608110` and renderer `0x00622430`; and
+- CollegeObstacle/CollegeStatue remain world objects, not members of either
+  NPC rail.
+
+This closes the static class/art question without changing the live movement
+evidence below.
+
 ## Live Hub Census
 
 Live runtime sampling in the shared hub through the Region-side actor manager at
@@ -160,6 +179,6 @@ What this does **not** currently look like:
   is still not recovered
 - `GameNPC` / `0x1397` remains real, but in the sampled shared hub it is not the
   roaming NPC family
-- the named hub-character families above are mapped from the hub backend builder,
-  but their own tick or interaction methods still need a dedicated pass if we
-  want trader-specific runtime behavior rather than type identity only
+- named hub-character ticks and renderers are now statically indexed in the
+  native region/NPC map; trader-specific commerce/dialogue semantics remain a
+  separate interaction-system question

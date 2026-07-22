@@ -41,7 +41,8 @@ Relevant progression fields are:
 | `+0x778` | active primary stat-vector count/capacity state | Checked before vector growth. |
 | `+0x844` | selected/current synthetic weld build ID | Set by option roll and consumed on activation/render. |
 | `+0x870` | one exceptional skill/unlock ID | Used by general eligibility checks. |
-| `+0x878` | feature/equipment-effect bit field | Bit `0x800` enables Weld Calling behavior. |
+| `+0x878` | feature/equipment-effect bit field | Bit `0x800` energizes unlearned weld components; bit `0x1000` biases level-up choices toward welding-related skills. |
+| `+0x8E0` | weld-effect scalar | Modified by `FX_WELDEFFECT`. |
 
 The finer names of nearby fields remain subject to the broader progression
 layout pass; the offsets and accesses above are confirmed.
@@ -139,13 +140,22 @@ closed alongside the primary spell dispatcher. The important confirmed
 contract is that component levels/config values are authoritative and the
 vector is regenerated when the build or relevant skills change.
 
-## Weld Calling and item effects
+## Welding item effects
 
-If progression `+0x878` has bit `0x800`, `0x00666020` scans eligible component
-rows. An unlearned row is promoted to level 1 when its entry carries the native
-component-eligible flag at `+0x29` and it is not a primary-kind row. This is the
-behavior named `FX_WELDCALLING` in the item parser: **Weld +unlearned
-components**.
+If progression `+0x878` has bit `0x800`, `0x00666020` scans skill IDs 8..79.
+An unlearned row is promoted to level 1 when its entry carries the native
+component-eligible flag at `+0x29` and it is not a primary-kind row. Exact FX
+application at `0x00576AA0` proves that this bit belongs to `FX_MAXWELD`, whose
+native display name is **Energize Weld Components**. The earlier provisional
+association with `FX_WELDCALLING` was incorrect.
+
+`FX_WELDCALLING` sets the separate `+0x878` bit `0x1000`. During ordinary
+level-up candidate construction, `0x0067CB70` normally chooses from the general
+eligible pool. With this bit set, one branch instead builds candidates related
+to learned primary-kind rows through `0x00658450`, adds eligible related rows,
+falls back to unlearned primary-related rows when the pool is small, and chooses
+from that welding-oriented list. This is the native **+Bias Skills for
+Welding** behavior; it does not auto-learn every weld component.
 
 The native item-effect name table at `0x00571560` includes:
 
@@ -155,10 +165,16 @@ The native item-effect name table at `0x00571560` includes:
 | `0x26` | Enhance Weld Effect |
 | `0x27` | +Bias Skills for Welding |
 
-`items.cfg` parsing recognizes `FX_MAXWELD`, `FX_WELDCALLING`, and
-`FX_WELDEFFECT`. Their precise destination fields and formula contributions
-are tracked as part of the item/equipment pass; the Weld Calling bit behavior
-above is already confirmed.
+The exact parser/application mapping is:
+
+| Token | Effect ID | Destination | Behavior |
+| --- | ---: | --- | --- |
+| `FX_MAXWELD` | `0x25` / 37 | `+0x878` bit `0x800` | Energize eligible unlearned weld components. |
+| `FX_WELDEFFECT` | `0x26` / 38 | scalar `+0x8E0` | Flat adds magnitude, `*` multiplies, and percent adds `magnitude / 100`. |
+| `FX_WELDCALLING` | `0x27` / 39 | `+0x878` bit `0x1000` | Bias level-up candidates toward welding-related skills. |
+
+The full item parser, equipment pass, and all 39 FX destinations are in
+[native-items-equipment-and-loot.md](native-items-equipment-and-loot.md).
 
 ## Eligibility and presentation
 

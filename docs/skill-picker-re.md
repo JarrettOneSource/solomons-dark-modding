@@ -90,6 +90,37 @@ with the authoritative offer before control returns to `0x0066F920`. Names,
 icons, and selection consequently share one option list. The hook is removed
 when the local transport shuts down.
 
+### Concentrated Creativity and Insight
+
+The screen constructor initializes `screen + 0xFC` to `-1`; this field is
+the skill ID that will receive the rare Insight Bonus. Immediately after the
+normal option roll, `0x0066F920` reads concentration collection
+`0x00819E70` at index `16`. Only selected skill `63` (Creativity) enters
+the branch. The timed all-concentration field at progression `+0x828` is not
+consulted by this picker path.
+
+The chance is exactly:
+
+```c
+if (concentration[16] == 63 && RandomInt(5) == 1) {
+    // build Insight candidate list
+}
+```
+
+This is one successful value among `0..4`, matching the advertised 20%.
+Each displayed option is admitted only when:
+
+- progression vtable `+0x30(option_id)` is false, or the option already has a
+  nonzero effective rank at skill-row `+0x22`; and
+- that effective rank is less than the compiled maximum recovered from the
+  row property table, minus two.
+
+The game chooses one candidate randomly and stores its option ID at
+`screen + 0xFC`. No candidate leaves the field at `-1`. The binary contains
+an apparent typo while filtering: it compares the loop *index* to `0x34`,
+not the option ID. Since this screen displays only three or four options, that
+comparison cannot exclude Spell Welding.
+
 ## Choice Apply
 
 `0x00671470` is the level-up screen apply handler. For a selected option id it:
@@ -100,8 +131,8 @@ when the local transport shuts down.
 3. Decrements local pending picker count at `progression + 0x44`.
 4. Clears temporary picker fields at `progression + 0x860/+0x864`.
 5. Calls `0x00660320 PlayerAppearance_ApplyChoice(progression, choice, 1)`.
-6. Applies the same choice a second time only if it matches the screen's rare
-   Insight Bonus marker at `screen + 0xFC`.
+6. Applies the same choice a second time only if it matches the concentrated
+   Creativity Insight ID at `screen + 0xFC`.
 7. Handles special option `0x34` by marking entry `0x34` active, invoking
    progression vtable slot `+0x9C`, then after refresh invoking slot `+0x94`.
 8. Calls `0x0065F9A0 ActorProgressionRefresh(progression)`.

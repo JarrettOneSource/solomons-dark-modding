@@ -132,7 +132,17 @@ Recovered from `0x005DAEF0`:
 - A first-pass catalog of screen identities, action labels, vtables, and control-slot globals
 - A semantic `sd.ui` backbone for mapped `dialog`, `main_menu`, `dark_cloud_browser`, `dark_cloud_search`, `settings`, and the current `simple_menu` / `pause_menu` bridge without re-hardcoding coordinates in Lua
 
+The corresponding static art pass is now separate and complete enough for
+runtime validation. It maps the fixed records and consumers for `UI`,
+`Fonts`, `ControlPanel`, `Controls`, `Create`, `Loader`, and `GameOver`,
+including the bitmap-font ABI and the dormant Loader sprite path. See
+[native-presentation-ui-fonts-and-loader.md](reverse-engineering/native-presentation-ui-fonts-and-loader.md).
+
 ## Remaining unknowns
+
+These are semantic surface/API unknowns. They do not mean that the underlying
+native atlas lookup, record layout, or compiled presentation consumers remain
+unmapped.
 
 - First-class gameplay surface promotion is still incomplete for `pause_menu`, `inventory`, `skills`, `spell_picker`, and `book_picker`.
 - The true in-game pause owner still needs to be separated from the current `SimpleMenu` bridge.

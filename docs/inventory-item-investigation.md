@@ -2,6 +2,16 @@
 
 Date: 2026-04-13
 
+> **Status note (2026-07-21):** This document preserves the earlier loader and
+> multiplayer investigation. Its April static-analysis gaps have since been
+> closed. The canonical native recipe, live-item, FX, equipment-art, ground
+> actor, pickup, and ownership map is
+> [native-items-equipment-and-loot.md](reverse-engineering/native-items-equipment-and-loot.md),
+> with definitions in
+> [native-item-catalog.json](reverse-engineering/native-item-catalog.json).
+> Later multiplayer-specific residuals in this document remain separate from
+> that native static closure.
+
 ## Current Repo State
 
 - Item and inventory work is split across three layers:
@@ -327,29 +337,34 @@ Current interpretation:
 - the recursive potion and type-search helpers descend into it as another embedded item-list root
 - the inventory action flow opens it as a nested inventory browse target instead of consuming or equipping it
 
-### FX runtime interpretation
+### FX runtime interpretation (historical snapshot; now resolved)
 
-- current high-confidence runtime seam remains `ActorProgressionRefresh (0x0065F9A0)`
+- the initial high-confidence runtime seam was `ActorProgressionRefresh (0x0065F9A0)`
 - parser-side findings now separate:
   - item / set definition parsing
   - FX object parsing and storage
   - runtime stat rebuild after equip/use changes
-- still unresolved:
-  - the exact native function that walks the parsed FX lists and applies the final stat deltas into live progression fields
+- resolved by the later pass:
+  - `0x0065F5B0` rebuilds progression and runs the skill/passive equipment
+    passes; `0x00577760`, `0x00579D10`, and `0x00576AA0` walk and apply item
+    and completed-set effects. The full formulas are in the canonical map.
 
-### Remaining gaps after follow-up pass
+### Historical gaps after follow-up pass (now resolved)
 
-- unresolved runtime item factory:
-  - we now have the parse-layer objects (`ItemRecipe_Parse`, `ItemSet_Parse`, `ItemFx_Parse`)
-  - we still do not have the exact function that materializes a parsed equipment recipe into a live `SdItemBase`-derived object on demand
-- unresolved non-gold drop factory:
-  - `Drop_Spawn` remains gold-only in the verified path
-  - monster drop flags are still verified on the config side only
-- unresolved walk-over pickup bridge:
-  - `MovementCollision_ResolveDynamicObjects` is too broad to claim as the pickup transfer path
-  - we still need the specific drop-actor callback / collision branch that leads into `Inventory_InsertOrStackItem`
+- runtime item factory: `0x004699B0` clones parsed recipes into the six concrete
+  equipment classes; `0x004645B0` separately synthesizes random equipment.
+- non-gold reward dispatch: `0x0047C070` builds the monster-definition candidate
+  list and dispatches orb, powerup, definition-backed item, gold, key, and
+  potion paths.
+- walk-over pickup bridge: world Sack tick `0x005E6B50` transfers its held live
+  item through `Inventory_InsertOrStackItem (0x0055FF20)` and clears its own
+  pointer; the carrier destructor retains responsibility if transfer never
+  occurs.
 
-## Current Best Next Targets (April 15 Snapshot)
+## Historical next targets (April 15 snapshot; superseded)
+
+The three static targets below were completed by the July canonical pass. They
+remain here only to explain the investigation sequence.
 
 - static:
   - follow the parse-layer handoff from `ItemRecipe_Parse (0x00573570)` into the runtime item factory that produces live `SdItemBase`-derived objects
