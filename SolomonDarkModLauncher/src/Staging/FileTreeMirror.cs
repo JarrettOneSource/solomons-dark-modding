@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.IO;
+using System.Security.AccessControl;
 using System.Security.Principal;
 
 namespace SolomonDarkModLauncher.Staging;
@@ -317,46 +317,63 @@ internal static class FileTreeMirror
 
     private static bool IsReparsePoint(FileSystemInfo entry)
     {
-        return (entry.Attributes & FileAttributes.ReparsePoint) != 0;
+        return (entry.Attributes & FileAttributes.ReparsePoint) != 0 ||
+               entry.LinkTarget is not null;
     }
 
     private static void GrantCurrentUserFullControl(string path, bool isDirectory)
     {
-        var currentIdentity = WindowsIdentity.GetCurrent();
-        var currentUserName = currentIdentity?.Name;
-        if (string.IsNullOrWhiteSpace(currentUserName))
+        var currentUser = WindowsIdentity.GetCurrent().User;
+        if (currentUser is null)
         {
             return;
         }
 
-        RunWindowsTool("takeown.exe", isDirectory
-            ? ["/F", path, "/R", "/D", "Y"]
-            : ["/F", path]);
-        RunWindowsTool("icacls.exe", isDirectory
-            ? [path, "/remove:d", currentUserName, "/T", "/C"]
-            : [path, "/remove:d", currentUserName]);
-        RunWindowsTool("icacls.exe", isDirectory
-            ? [path, "/grant", $"{currentUserName}:F", "/T", "/C"]
-            : [path, "/grant", $"{currentUserName}:F"]);
-    }
-
-    private static void RunWindowsTool(string fileName, IReadOnlyList<string> arguments)
-    {
-        var startInfo = new ProcessStartInfo
+        if (isDirectory)
         {
-            FileName = fileName,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-        };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
+            var directory = new DirectoryInfo(path);
+            var security = directory.GetAccessControl(
+                AccessControlSections.Access | AccessControlSections.Owner);
+            RepairAccessControl(security, currentUser, isDirectory: true);
+            directory.SetAccessControl(security);
+            return;
         }
 
-        using var process = Process.Start(startInfo);
-        process?.WaitForExit();
+        var file = new FileInfo(path);
+        var fileSecurity = file.GetAccessControl(
+            AccessControlSections.Access | AccessControlSections.Owner);
+        RepairAccessControl(fileSecurity, currentUser, isDirectory: false);
+        file.SetAccessControl(fileSecurity);
+    }
+
+    private static void RepairAccessControl(
+        FileSystemSecurity security,
+        SecurityIdentifier currentUser,
+        bool isDirectory)
+    {
+        security.SetOwner(currentUser);
+        var explicitRules = security.GetAccessRules(
+            includeExplicit: true,
+            includeInherited: false,
+            typeof(SecurityIdentifier));
+        foreach (FileSystemAccessRule rule in explicitRules)
+        {
+            if (rule.AccessControlType == AccessControlType.Deny &&
+                rule.IdentityReference.Equals(currentUser))
+            {
+                security.RemoveAccessRuleSpecific(rule);
+            }
+        }
+
+        var inheritanceFlags = isDirectory
+            ? InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit
+            : InheritanceFlags.None;
+        security.AddAccessRule(new FileSystemAccessRule(
+            currentUser,
+            FileSystemRights.FullControl,
+            inheritanceFlags,
+            PropagationFlags.None,
+            AccessControlType.Allow));
     }
 
     private sealed class MirrorCounters

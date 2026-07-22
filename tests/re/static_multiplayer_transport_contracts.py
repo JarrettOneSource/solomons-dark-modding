@@ -25,12 +25,12 @@ def test_app_thread_transport_verifier_tracks_named_cadence_gap() -> str:
     )
     _require_in_order(
         service_loop,
-        "const auto tick_gap_ms = now_ms - g_last_session_transport_tick_ms;",
+        "const auto tick_gap_ms = now_ms - g_last_gameplay_transport_tick_ms;",
         "if (tick_gap_ms < kServiceTickIntervalMs)",
         "if (tick_gap_ms >= kTransportTickGapDiagnosticMs)",
         "std::to_string(tick_gap_ms)",
     )
-    return "the app-thread transport cadence and gap diagnostic share one named interval"
+    return "the app-thread gameplay cadence and gap diagnostic share one named interval"
 
 
 def test_hub_service_fragments_are_visual_studio_project_items() -> str:

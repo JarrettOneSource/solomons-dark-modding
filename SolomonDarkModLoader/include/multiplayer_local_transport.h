@@ -33,7 +33,8 @@ bool SubmitSteamGameplayPacket(
     std::uint64_t sender_steam_id,
     const void* data,
     std::size_t size,
-    std::uint64_t now_ms);
+    std::uint64_t now_ms,
+    bool reliable);
 std::uint64_t QueueLocalSpellCastEvent(
     std::int32_t skill_id,
     float position_x,

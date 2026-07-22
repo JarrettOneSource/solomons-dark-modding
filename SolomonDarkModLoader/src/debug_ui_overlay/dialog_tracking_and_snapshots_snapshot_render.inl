@@ -76,12 +76,6 @@ void StoreLatestSurfaceSnapshotUnlocked(
     }
 
     snapshot.generation = ++state->latest_surface_snapshot_generation;
-    Log(
-        "Debug UI semantic snapshot update: generation=" + std::to_string(snapshot.generation) +
-        " surface=" + snapshot.surface_id + " title=" + SanitizeDebugLogLabel(snapshot.surface_title) +
-        " elements=" + std::to_string(snapshot.elements.size()) +
-        " labels=" + BuildDebugUiSnapshotLabelSummary(snapshot));
-
     state->latest_surface_snapshot = std::move(snapshot);
     TryCompleteActiveSemanticUiActionOnSurfaceTransitionUnlocked(state, state->latest_surface_snapshot);
 }

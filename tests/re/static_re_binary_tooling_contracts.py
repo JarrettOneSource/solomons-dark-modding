@@ -405,8 +405,11 @@ def test_stage_mirror_repairs_denied_destination_acl() -> str:
     required_tokens = (
         "CopyStageFileWithAccessRecovery",
         "PrepareForDeletion(destinationFile)",
-        '"/remove:d"',
-        "currentUserName",
+        "FileSystemAccessRule",
+        "AccessControlType.Deny",
+        "RemoveAccessRuleSpecific",
+        "FileSystemRights.FullControl",
+        "SetAccessControl",
     )
     missing = [token for token in required_tokens if token not in mirror_text]
     if missing:
@@ -429,7 +432,21 @@ def test_stage_mirror_repairs_denied_destination_acl() -> str:
         raise StaticReTestFailure(
             "stage ACL recovery still clears attributes before repairing access"
         )
-    return "stage mirror removes explicit deny ACLs before retrying destination writes"
+    for external_tool in ("takeown.exe", "icacls.exe", "RunWindowsTool"):
+        if external_tool in mirror_text:
+            raise StaticReTestFailure(
+                "stage ACL recovery still depends on an external Windows "
+                f"utility: {external_tool}"
+            )
+    if "entry.LinkTarget is not null" not in mirror_text:
+        raise StaticReTestFailure(
+            "stage mirror identifies junctions only through the reparse "
+            "attribute"
+        )
+    return (
+        "stage mirror repairs ownership and explicit deny ACLs through managed "
+        "Windows security APIs before retrying destination writes"
+    )
 
 
 def test_stage_mirror_publishes_and_verifies_file_contents() -> str:

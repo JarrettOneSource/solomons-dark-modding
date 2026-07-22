@@ -265,26 +265,3 @@ std::string GetOverlaySurfaceRootId(std::string_view surface_id) {
 
     return std::string(surface_id.substr(0, separator_index));
 }
-
-std::string BuildDebugUiSnapshotLabelSummary(const DebugUiSurfaceSnapshot& snapshot) {
-    std::string summary;
-    auto visible_index = 0;
-    for (const auto& element : snapshot.elements) {
-        if (element.label.empty() && element.action_id.empty()) {
-            continue;
-        }
-
-        ++visible_index;
-        if (!summary.empty()) {
-            summary += " || ";
-        }
-
-        summary += std::to_string(visible_index) + ":" + SanitizeDebugLogLabel(element.label);
-        if (!element.action_id.empty()) {
-            summary += "{" + SanitizeDebugLogLabel(element.action_id) + "}";
-        }
-    }
-
-    return summary;
-}
-

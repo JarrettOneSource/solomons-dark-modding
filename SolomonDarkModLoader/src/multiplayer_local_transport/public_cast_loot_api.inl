@@ -158,10 +158,13 @@ bool TrySetRunEnemyHealth(uintptr_t actor_address, float hp, float max_hp) {
     return TryWriteRunEnemyHealth(actor_address, hp, max_hp);
 }
 
+void ApplyQueuedSteamGameplayEvents(std::uint64_t now_ms);
+
 bool InitializeLocalTransport() {
     if (!ConfigureLocalTransport()) {
         return true;
     }
+    ResetSteamGameplayQueues();
 
     std::random_device random;
     g_local_transport.local_session_nonce =
@@ -267,6 +270,7 @@ void ShutdownLocalTransport() {
         g_next_local_loot_pickup_request_sequence = 1;
     }
     ResetAirChainRuntimeState();
+    ResetSteamGameplayQueues();
     UpdateRuntimeState([](RuntimeState& state) {
         state.shared_gameplay_pause = SharedGameplayPauseRuntimeInfo{};
     });
@@ -277,6 +281,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
         return;
     }
 
+    ApplyQueuedSteamGameplayEvents(now_ms);
     RefreshLocalParticipantFromGameState();
     RefreshLocalMenuPauseRequest(now_ms);
     ReceivePackets(now_ms);
@@ -369,6 +374,14 @@ bool RegisterSteamGameplayPeer(
         (g_local_transport.is_host && authoritative_host)) {
         return false;
     }
+    return QueueSteamGameplayPeerConnected(
+        steam_id,
+        authoritative_host);
+}
+
+bool ApplySteamGameplayPeerConnected(
+    std::uint64_t steam_id,
+    bool authoritative_host) {
     TransportPeerEndpoint endpoint;
     endpoint.backend = GameplayTransportBackend::Steam;
     endpoint.steam_id = steam_id;
@@ -395,6 +408,10 @@ void UnregisterSteamGameplayPeer(std::uint64_t steam_id) {
         steam_id == g_local_transport.local_peer_id) {
         return;
     }
+    QueueSteamGameplayPeerDisconnected(steam_id);
+}
+
+void ApplySteamGameplayPeerDisconnected(std::uint64_t steam_id) {
     const bool configured_authority_disconnected =
         g_local_transport.configured_remote_valid &&
         g_local_transport.configured_remote.backend ==
@@ -424,7 +441,8 @@ bool SubmitSteamGameplayPacket(
     std::uint64_t sender_steam_id,
     const void* data,
     std::size_t size,
-    std::uint64_t now_ms) {
+    std::uint64_t now_ms,
+    bool reliable) {
     if (!IsSteamGameplayTransportEnabled() ||
         sender_steam_id == 0 ||
         data == nullptr ||
@@ -432,6 +450,19 @@ bool SubmitSteamGameplayPacket(
         size > sizeof(TransportPacketBuffer)) {
         return false;
     }
+    return QueueSteamGameplayPacketReceived(
+        sender_steam_id,
+        data,
+        size,
+        now_ms,
+        reliable);
+}
+
+bool ApplySteamGameplayPacketReceived(
+    std::uint64_t sender_steam_id,
+    const void* data,
+    std::size_t size,
+    std::uint64_t now_ms) {
     const auto peer_it = std::find_if(
         g_local_transport.peers.begin(),
         g_local_transport.peers.end(),
@@ -460,6 +491,28 @@ bool SubmitSteamGameplayPacket(
         peer_it->endpoint,
         now_ms);
     return true;
+}
+
+void ApplyQueuedSteamGameplayEvents(std::uint64_t now_ms) {
+    for (auto& event : DrainSteamGameplayInboundEvents()) {
+        switch (event.kind) {
+        case SteamGameplayInboundEventKind::PeerConnected:
+            ApplySteamGameplayPeerConnected(
+                event.steam_id,
+                event.authoritative_host);
+            break;
+        case SteamGameplayInboundEventKind::PeerDisconnected:
+            ApplySteamGameplayPeerDisconnected(event.steam_id);
+            break;
+        case SteamGameplayInboundEventKind::PacketReceived:
+            ApplySteamGameplayPacketReceived(
+                event.steam_id,
+                event.payload.data(),
+                event.payload.size(),
+                event.received_ms != 0 ? event.received_ms : now_ms);
+            break;
+        }
+    }
 }
 
 void QueueHostParticipantVitalsCorrection(

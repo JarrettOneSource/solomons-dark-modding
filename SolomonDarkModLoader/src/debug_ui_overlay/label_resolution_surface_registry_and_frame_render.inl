@@ -145,60 +145,14 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
         }
     }
 
-    std::string draw_generation_log;
-    std::string clear_generation_log;
     {
         std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
         StoreLatestSurfaceSnapshotUnlocked(&g_debug_ui_overlay_state, render_elements);
-        if (render_elements.empty()) {
-            const auto& latest_snapshot = g_debug_ui_overlay_state.latest_surface_snapshot;
-            if (latest_snapshot.generation != 0 &&
-                g_debug_ui_overlay_state.last_logged_overlay_clear_generation != latest_snapshot.generation) {
-                g_debug_ui_overlay_state.last_logged_overlay_clear_generation = latest_snapshot.generation;
-                clear_generation_log =
-                    "Debug UI overlay cleared bbox surface after generation=" +
-                    std::to_string(latest_snapshot.generation) +
-                    " surface=" + latest_snapshot.surface_id +
-                    " title=" + SanitizeDebugLogLabel(latest_snapshot.surface_title) +
-                    " labels=" + BuildDebugUiSnapshotLabelSummary(latest_snapshot);
-            }
-        } else {
-            const auto& latest_snapshot = g_debug_ui_overlay_state.latest_surface_snapshot;
-            if (latest_snapshot.generation != 0 &&
-                latest_snapshot.generation != g_debug_ui_overlay_state.last_logged_overlay_draw_generation) {
-                g_debug_ui_overlay_state.last_logged_overlay_draw_generation = latest_snapshot.generation;
-
-                std::string labels_summary;
-                constexpr std::size_t kMaxLoggedElements = 8;
-                const auto logged_element_count = (std::min)(render_elements.size(), kMaxLoggedElements);
-                for (std::size_t index = 0; index < logged_element_count; ++index) {
-                    if (!labels_summary.empty()) {
-                        labels_summary += " || ";
-                    }
-
-                    const auto& element = render_elements[index];
-                    labels_summary += std::to_string(index + 1) + ":" + SanitizeDebugLogLabel(GetOverlayLabel(element));
-                    if (!element.action_id.empty()) {
-                        labels_summary += "{" + SanitizeDebugLogLabel(element.action_id) + "}";
-                    }
-                }
-
-                draw_generation_log =
-                    "Debug UI overlay drew bbox generation=" + std::to_string(latest_snapshot.generation) +
-                    " surface=" + latest_snapshot.surface_id +
-                    " title=" + SanitizeDebugLogLabel(latest_snapshot.surface_title) +
-                    " elements=" + std::to_string(render_elements.size()) +
-                    " labels=" + labels_summary;
-            }
-        }
     }
 
     if (render_elements.empty() && gameplay_health_bars.empty() &&
         gameplay_dampen_presentations.empty() &&
         gameplay_level_up_wait_text.empty()) {
-        if (!clear_generation_log.empty()) {
-            Log(clear_generation_log);
-        }
         return;
     }
 
@@ -230,10 +184,6 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
         LogGameplayLevelUpWaitStatusDraw(
             gameplay_level_up_wait_text,
             draw_result);
-    }
-
-    if (!draw_generation_log.empty()) {
-        Log(draw_generation_log);
     }
 
     if (!g_debug_ui_overlay_state.first_frame_logged) {

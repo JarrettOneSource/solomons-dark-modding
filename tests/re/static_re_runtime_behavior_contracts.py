@@ -426,6 +426,65 @@ def test_semantic_ui_actions_dispatch_only_on_app_update_thread() -> str:
     )
 
 
+def test_debug_ui_frame_render_does_not_log_each_snapshot_generation() -> str:
+    overlay_source_text = "\n".join(
+        (
+            read_text(ROOT / "SolomonDarkModLoader/src/debug_ui_overlay.cpp"),
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/debug_ui_overlay/dialog_tracking_and_snapshots_snapshot_render.inl"
+            ),
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/debug_ui_overlay/dialog_tracking_and_snapshots_observation.inl"
+            ),
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/debug_ui_overlay/label_resolution_surface_registry_and_frame_render.inl"
+            ),
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/debug_ui_overlay/state_and_actions_requests_and_reset.inl"
+            ),
+        )
+    )
+    forbidden_generation_diagnostics = (
+        "Debug UI semantic snapshot update:",
+        "Debug UI overlay drew bbox generation=",
+        "Debug UI overlay cleared bbox surface after generation=",
+        "last_logged_overlay_draw_generation",
+        "last_logged_overlay_clear_generation",
+        "BuildDebugUiSnapshotLabelSummary",
+    )
+    present = [
+        token
+        for token in forbidden_generation_diagnostics
+        if token in overlay_source_text
+    ]
+    if present:
+        raise StaticReTestFailure(
+            "debug UI render still formats or writes generation diagnostics on "
+            "the frame path: "
+            + ", ".join(present)
+        )
+
+    required_transition_diagnostics = (
+        "Debug UI overlay rendered its first ",
+        "Debug UI overlay observed ",
+    )
+    missing = [
+        token
+        for token in required_transition_diagnostics
+        if token not in overlay_source_text
+    ]
+    if missing:
+        raise StaticReTestFailure(
+            "debug UI lost bounded first-frame diagnostics: " + ", ".join(missing)
+        )
+
+    return "debug UI frame rendering keeps bounded startup diagnostics without generation log flooding"
+
+
 def test_main_thread_work_pump_is_not_render_owned() -> str:
     background_tick_text = read_text(
         ROOT / "SolomonDarkModLoader/src/background_focus_bypass.cpp"
@@ -573,10 +632,21 @@ def test_main_thread_work_pump_is_not_render_owned() -> str:
     return "main-thread Lua/menu work is app-tick owned and D3D EndScene remains presentation-only"
 
 
-def test_multiplayer_native_transport_is_app_thread_owned() -> str:
+def test_steam_io_is_service_thread_owned_and_gameplay_application_is_app_thread_owned() -> str:
     service_loop_text = read_text(MULTIPLAYER_SERVICE_LOOP)
     service_loop_header_text = read_text(
         ROOT / "SolomonDarkModLoader/include/multiplayer_service_loop.h"
+    )
+    steam_gameplay_queue_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/multiplayer_steam_gameplay_queue.cpp"
+    )
+    local_transport_public_api_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/public_cast_loot_api.inl"
+    )
+    outgoing_packet_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/outgoing_packet_sync.inl"
     )
     public_pump_text = read_text(
         ROOT
@@ -597,8 +667,6 @@ def test_multiplayer_native_transport_is_app_thread_owned() -> str:
         service_thread_start:service_thread_end
     ]
     forbidden_service_thread_calls = (
-        "SteamBootstrapTick(",
-        "TickSteamSession(",
         "TickLocalTransport(",
     )
     stale_calls = [
@@ -608,22 +676,28 @@ def test_multiplayer_native_transport_is_app_thread_owned() -> str:
     ]
     if stale_calls:
         raise StaticReTestFailure(
-            "native multiplayer work still runs on the background service thread: "
+            "native gameplay work still runs on the Steam service thread: "
             + ", ".join(stale_calls)
         )
 
     required_pairs = (
         (
             service_loop_header_text,
-            "void TickSessionAndTransportOnAppThread(std::uint64_t now_ms);",
+            "void TickGameplayTransportOnAppThread(std::uint64_t now_ms);",
         ),
         (service_loop_text, "g_session_transport_lifecycle_mutex"),
-        (service_loop_text, "g_session_transport_owner_thread_id"),
-        (service_loop_text, "g_last_session_transport_tick_ms"),
-        (service_loop_text, "g_has_session_transport_tick"),
-        (service_loop_text, "GetCurrentThreadId()"),
-        (service_loop_text, "void TickSessionAndTransportOnAppThread"),
-        (public_pump_text, "multiplayer::TickSessionAndTransportOnAppThread("),
+        (service_thread_body, "SteamBootstrapTick();"),
+        (service_thread_body, "TickSteamSession(now_ms);"),
+        (service_thread_body, "ServiceSteamGameplaySendQueue();"),
+        (service_loop_text, "void TickGameplayTransportOnAppThread"),
+        (public_pump_text, "multiplayer::TickGameplayTransportOnAppThread("),
+        (local_transport_public_api_text, "void ApplyQueuedSteamGameplayEvents("),
+        (local_transport_public_api_text, "ApplyQueuedSteamGameplayEvents(now_ms);"),
+        (local_transport_public_api_text, "QueueSteamGameplayPeerConnected("),
+        (local_transport_public_api_text, "QueueSteamGameplayPeerDisconnected("),
+        (local_transport_public_api_text, "QueueSteamGameplayPacketReceived("),
+        (outgoing_packet_text, "QueueSteamGameplayPacketSend("),
+        (steam_gameplay_queue_text, "void ServiceSteamGameplaySendQueue()"),
         (run_exit_reentry_verifier_text, 'PAIR_BACKEND == "wsl"'),
         (
             run_exit_reentry_verifier_text,
@@ -638,12 +712,12 @@ def test_multiplayer_native_transport_is_app_thread_owned() -> str:
     missing = [token for text, token in required_pairs if token not in text]
     if missing:
         raise StaticReTestFailure(
-            "app-thread multiplayer ownership is missing token(s): "
+            "split Steam/gameplay thread ownership is missing token(s): "
             + ", ".join(missing)
         )
 
     app_tick_call = public_pump_text.find(
-        "multiplayer::TickSessionAndTransportOnAppThread("
+        "multiplayer::TickGameplayTransportOnAppThread("
     )
     gameplay_injection_guard = public_pump_text.find(
         "if (!g_gameplay_keyboard_injection.initialized)"
@@ -654,76 +728,60 @@ def test_multiplayer_native_transport_is_app_thread_owned() -> str:
         or app_tick_call > gameplay_injection_guard
     ):
         raise StaticReTestFailure(
-            "Steam session and gameplay transport must tick from AppMainTick even "
-            "when gameplay injection is unavailable"
+            "queued gameplay transport must tick from AppMainTick even when "
+            "gameplay injection is unavailable"
         )
 
     app_tick_definition = service_loop_text.find(
-        "void TickSessionAndTransportOnAppThread"
+        "void TickGameplayTransportOnAppThread"
     )
-    owner_gate = service_loop_text.find(
-        "if (owner_thread_id != current_thread_id)",
+    app_tick_end = service_loop_text.find(
+        "\nbool IsServiceLoopRunning()",
         app_tick_definition,
     )
-    cadence_calculation = service_loop_text.find(
-        "const auto tick_gap_ms = now_ms - g_last_session_transport_tick_ms;",
-        app_tick_definition,
-    )
-    cadence_gate = service_loop_text.find(
-        "tick_gap_ms < kServiceTickIntervalMs",
-        app_tick_definition,
-    )
-    cadence_commit = service_loop_text.find(
-        "g_last_session_transport_tick_ms = now_ms;",
-        app_tick_definition,
-    )
-    steam_bootstrap_tick = service_loop_text.find(
-        "SteamBootstrapTick();",
-        app_tick_definition,
-    )
-    steam_snapshot_apply = service_loop_text.find(
-        "ApplySteamSnapshotToRuntime(now_ms, GetSteamBootstrapSnapshot());",
-        app_tick_definition,
-    )
-    steam_tick = service_loop_text.find(
-        "TickSteamSession(now_ms);",
-        app_tick_definition,
-    )
+    if app_tick_definition == -1 or app_tick_end == -1:
+        raise StaticReTestFailure("app-thread gameplay transport body is unavailable")
+    app_tick_body = service_loop_text[app_tick_definition:app_tick_end]
     transport_tick = service_loop_text.find(
         "TickLocalTransport(now_ms);",
         app_tick_definition,
     )
-    if (
-        app_tick_definition == -1
-        or owner_gate == -1
-        or cadence_calculation == -1
-        or cadence_gate == -1
-        or cadence_commit == -1
-        or steam_bootstrap_tick == -1
-        or steam_snapshot_apply == -1
-        or steam_tick == -1
-        or transport_tick == -1
-        or not (
-            app_tick_definition
-            < owner_gate
-            < cadence_calculation
-            < cadence_gate
-            < cadence_commit
-            < steam_bootstrap_tick
-            < steam_snapshot_apply
-            < steam_tick
-            < transport_tick
-        )
-    ):
+    forbidden_app_thread_steam_calls = (
+        "SteamBootstrapTick(",
+        "TickSteamSession(",
+        "SteamSendNetworkMessage(",
+        "SteamReceiveNetworkMessages(",
+    )
+    present_app_thread_calls = [
+        token for token in forbidden_app_thread_steam_calls if token in app_tick_body
+    ]
+    if transport_tick == -1 or present_app_thread_calls:
         raise StaticReTestFailure(
-            "the elected AppMainTick owner must enforce the service cadence, pump "
-            "Steam callbacks, and refresh the bootstrap snapshot before session "
-            "messages and gameplay transport"
+            "AppMainTick must apply queued gameplay without calling Steam directly: "
+            + ", ".join(present_app_thread_calls)
+        )
+
+    if "SteamSendNetworkMessage(" in outgoing_packet_text:
+        raise StaticReTestFailure(
+            "gameplay packet production still calls Steam on the game thread"
+        )
+    submit_start = local_transport_public_api_text.find(
+        "bool SubmitSteamGameplayPacket("
+    )
+    submit_end = local_transport_public_api_text.find(
+        "\nbool ApplySteamGameplayPacketReceived(",
+        submit_start,
+    )
+    if submit_start == -1 or submit_end == -1:
+        raise StaticReTestFailure("Steam gameplay packet submission body is unavailable")
+    if "DispatchReceivedPacket(" in local_transport_public_api_text[submit_start:submit_end]:
+        raise StaticReTestFailure(
+            "the Steam service thread still dispatches gameplay packets into native state"
         )
 
     return (
-        "Steam callbacks, session messages, packets, snapshots, progression, and "
-        "native gameplay work share one elected AppMainTick owner"
+        "one service thread owns blocking Steam I/O while AppMainTick applies queued "
+        "gameplay packets and native state"
     )
 
 

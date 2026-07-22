@@ -14,6 +14,7 @@
 #include "mod_loader.h"
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_runtime_state.h"
+#include "multiplayer_steam_gameplay_queue.h"
 #include "native_enemy_lifecycle.h"
 #include "native_spell_stats.h"
 #include "steam_bootstrap.h"
@@ -727,7 +728,6 @@ struct LocalTransportState {
     std::uint64_t packets_received = 0;
     std::uint64_t steam_send_failures = 0;
     std::uint64_t steam_reliable_send_failures = 0;
-    std::uint64_t last_steam_send_failure_log_ms = 0;
     std::int32_t last_steam_send_failure_result = 0;
     std::uint32_t next_cast_sequence = 1;
     std::uint32_t next_spell_effect_serial = 1;
@@ -1199,6 +1199,16 @@ void PublishLocalTransportRuntimeState() {
            const AirChainSnapshotRuntimeInfo& right) {
             return left.owner_participant_id < right.owner_participant_id;
         });
+
+    if (g_local_transport.backend == GameplayTransportBackend::Steam) {
+        const auto queue_stats = SnapshotSteamGameplayQueueStats();
+        g_local_transport.packets_sent = queue_stats.packets_sent;
+        g_local_transport.steam_send_failures = queue_stats.send_failures;
+        g_local_transport.steam_reliable_send_failures =
+            queue_stats.reliable_send_failures;
+        g_local_transport.last_steam_send_failure_result =
+            queue_stats.last_send_failure_result;
+    }
 
     UpdateRuntimeState([&](RuntimeState& state) {
         state.transport_packets_sent = g_local_transport.packets_sent;

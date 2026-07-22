@@ -531,8 +531,6 @@ struct DebugUiOverlayState {
     CompletedSemanticUiActionDispatch last_semantic_ui_action_dispatch;
     std::unordered_map<uintptr_t, std::string> object_label_cache;
     std::uint64_t latest_surface_snapshot_generation = 0;
-    std::uint64_t last_logged_overlay_draw_generation = 0;
-    std::uint64_t last_logged_overlay_clear_generation = 0;
     std::uint64_t last_logged_action_query_rejection_generation = 0;
     std::string last_logged_action_query_rejection_action_id;
     std::uint64_t next_semantic_ui_action_request_id = 0;

@@ -178,6 +178,9 @@ from static_re_steam_contracts import (
     test_wsl_lua_bridge_bootstraps_from_clean_worktree,
     test_world_snapshots_are_complete_mtu_sized_generations,
 )
+from static_re_wsl_steam_stability_contracts import (
+    test_wsl_steam_runtime_uses_the_stable_proton_generation,
+)
 from static_re_runtime_cast_contracts import (
     test_memory_region_cache_refreshes_newly_committed_native_objects,
     test_multiplayer_nameplates_render_from_native_scene_passes,
@@ -199,9 +202,10 @@ from static_re_runtime_platform_contracts import (
     test_wsl_steam_launcher_isolates_build_artifacts_from_live_host,
 )
 from static_re_runtime_behavior_contracts import (
+    test_debug_ui_frame_render_does_not_log_each_snapshot_generation,
     test_main_thread_work_pump_is_not_render_owned,
     test_mindstar_semantic_spell_projection_ignores_raw_storage_tail,
-    test_multiplayer_native_transport_is_app_thread_owned,
+    test_steam_io_is_service_thread_owned_and_gameplay_application_is_app_thread_owned,
     test_participant_native_state_is_owned_by_current_scene,
     test_regenerate_behavior_traces_stock_native_heal_updates,
     test_semantic_air_damage_quantum_uses_authoritative_total,
@@ -659,12 +663,16 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_semantic_ui_actions_dispatch_only_on_app_update_thread,
     ),
     (
+        "Debug UI frame rendering does not log each snapshot generation",
+        test_debug_ui_frame_render_does_not_log_each_snapshot_generation,
+    ),
+    (
         "Main-thread work pump is not render-owned",
         test_main_thread_work_pump_is_not_render_owned,
     ),
     (
-        "Multiplayer native transport is app-thread owned",
-        test_multiplayer_native_transport_is_app_thread_owned,
+        "Steam I/O is service-thread owned and gameplay application is app-thread owned",
+        test_steam_io_is_service_thread_owned_and_gameplay_application_is_app_thread_owned,
     ),
     (
         "Participant native state is owned by the current scene",
@@ -746,6 +754,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "WSL Lua bridge bootstraps from a clean worktree",
         test_wsl_lua_bridge_bootstraps_from_clean_worktree,
+    ),
+    (
+        "WSL Steam runtime uses the stable Proton generation",
+        test_wsl_steam_runtime_uses_the_stable_proton_generation,
     ),
     ("Solomon Dark Steam AppID is consistent", test_solomon_dark_steam_app_id_is_consistent),
     (

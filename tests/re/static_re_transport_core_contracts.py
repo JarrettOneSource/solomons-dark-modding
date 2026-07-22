@@ -911,7 +911,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "Blocked client run switch_region while connected to multiplayer"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_gameplay_thread_dispatch.inl"), "g_multiplayer_client_authorized_hub_run_switch_depth"),
         (service_loop_text, "InitializeLocalTransport()"),
-        (service_loop_text, "TickSessionAndTransportOnAppThread"),
+        (service_loop_text, "TickGameplayTransportOnAppThread"),
         (service_loop_text, "ShutdownLocalTransport()"),
         (lua_exec_pipe_text, "SDMOD_LUA_EXEC_PIPE_NAME"),
         (staged_game_launcher_text, "SDMOD_MULTIPLAYER_TRANSPORT"),

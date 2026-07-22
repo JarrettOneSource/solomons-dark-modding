@@ -26,6 +26,9 @@ from static_re_contract_support import (
 def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
     protocol_text = read_text(MULTIPLAYER_PROTOCOL)
     transport_text = read_multiplayer_transport_source()
+    steam_gameplay_queue_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/multiplayer_steam_gameplay_queue.cpp"
+    )
     fragmentation_text = read_text(WORLD_SNAPSHOT_FRAGMENTATION)
     reconciliation_text = read_source_unit(WORLD_SNAPSHOT_RECONCILIATION)
     run_lifecycle_text = read_source_unit(
@@ -81,7 +84,7 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
         (transport_text, "last_world_snapshot_reliable_checkpoint_ms"),
         (transport_text, "const bool reliable_checkpoint ="),
         (transport_text, "SteamNetworkSendMode::ReliableNoNagle"),
-        (transport_text, "Steam gameplay packet send rejected."),
+        (steam_gameplay_queue_text, "Steam gameplay send rejected."),
         (transport_text, "steam_reliable_send_failures"),
     )
     missing = [token for text, token in required_tokens if token not in text]

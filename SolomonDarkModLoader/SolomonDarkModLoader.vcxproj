@@ -105,6 +105,7 @@
     <ClInclude Include="include\multiplayer_runtime_effect_state.inl" />
     <ClInclude Include="include\multiplayer_runtime_snapshot_state.inl" />
     <ClInclude Include="include\multiplayer_runtime_state.inl" />
+    <ClInclude Include="include\multiplayer_steam_gameplay_queue.h" />
     <ClInclude Include="include\multiplayer_steam_session.h" />
     <ClInclude Include="include\native_enemy_lifecycle.h" />
     <ClInclude Include="include\native_spell_stats.h" />
@@ -489,6 +490,7 @@
     <ClCompile Include="src\multiplayer_runtime_labels.cpp" />
     <ClCompile Include="src\multiplayer_runtime_state.cpp" />
     <ClCompile Include="src\multiplayer_service_loop.cpp" />
+    <ClCompile Include="src\multiplayer_steam_gameplay_queue.cpp" />
     <ClCompile Include="src\multiplayer_steam_session.cpp" />
     <ClCompile Include="src\native_enemy_lifecycle.cpp" />
     <ClCompile Include="src\native_spell_stats.cpp" />

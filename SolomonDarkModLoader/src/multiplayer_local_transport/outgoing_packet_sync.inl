@@ -30,36 +30,19 @@ void SendBufferToEndpoint(
         return;
     }
     if (endpoint.backend == GameplayTransportBackend::Steam) {
-        std::int32_t result_code = 0;
-        if (SteamSendNetworkMessage(
+        if (QueueSteamGameplayPacketSend(
                 endpoint.steam_id,
                 packet,
                 packet_size,
-                steam_send_mode,
-                &result_code)) {
-            g_local_transport.packets_sent += 1;
-        } else {
-            g_local_transport.steam_send_failures += 1;
-            if (steam_send_mode == SteamNetworkSendMode::ReliableNoNagle) {
-                g_local_transport.steam_reliable_send_failures += 1;
-            }
-            g_local_transport.last_steam_send_failure_result = result_code;
-            const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-            if (now_ms - g_local_transport.last_steam_send_failure_log_ms >= 1000) {
-                g_local_transport.last_steam_send_failure_log_ms = now_ms;
-                Log(
-                    "Steam gameplay packet send rejected. result=" +
-                    std::to_string(result_code) +
-                    " bytes=" + std::to_string(packet_size) +
-                    " reliable=" +
-                    std::to_string(
-                        steam_send_mode == SteamNetworkSendMode::ReliableNoNagle ? 1 : 0) +
-                    " failures=" +
-                    std::to_string(g_local_transport.steam_send_failures) +
-                    " reliable_failures=" +
-                    std::to_string(g_local_transport.steam_reliable_send_failures));
-            }
+                steam_send_mode)) {
+            return;
         }
+        const auto queue_stats = SnapshotSteamGameplayQueueStats();
+        g_local_transport.steam_send_failures = queue_stats.send_failures;
+        g_local_transport.steam_reliable_send_failures =
+            queue_stats.reliable_send_failures;
+        g_local_transport.last_steam_send_failure_result =
+            queue_stats.last_send_failure_result;
         return;
     }
     const int sent = sendto(

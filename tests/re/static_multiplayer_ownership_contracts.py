@@ -405,6 +405,7 @@ def test_steam_pair_recovers_lobby_membership_and_requires_stable_readiness() ->
         '" end_reason=" + std::to_string(event.network_status.end_reason)',
         '" debug=" + event.network_status.debug_text',
         "LUA_TRANSITION_TIMEOUT_SECONDS = 35.0",
+        "PAIR_DISCOVERY_TIMEOUT_SECONDS = 240.0",
         "PAIR_DISCOVERY_STABLE_SECONDS = 3.0",
         'NO_LOADED_LUA_STATE_TEXT = "No loaded Lua mod state is available."',
         "if NO_LOADED_LUA_STATE_TEXT in last_read_error:",

@@ -191,7 +191,8 @@ void PumpNetworkMessages(std::uint64_t now_ms) {
             message.sender_steam_id,
             message.payload.data(),
             message.payload.size(),
-            now_ms);
+            now_ms,
+            message.reliable);
     }
 }
 

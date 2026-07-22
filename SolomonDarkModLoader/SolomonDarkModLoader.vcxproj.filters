@@ -185,6 +185,9 @@
     <ClInclude Include="include\multiplayer_runtime_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\multiplayer_steam_gameplay_queue.h">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="include\multiplayer_steam_session.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1322,6 +1325,9 @@
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_service_loop.cpp">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\multiplayer_steam_gameplay_queue.cpp">
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_steam_session.cpp">

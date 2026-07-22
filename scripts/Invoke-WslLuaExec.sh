@@ -3,7 +3,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 client="$root/runtime/tools/win32_lua_exec_client.exe"
-proton_root="${SDMOD_PROTON_ROOT:-$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-1}"
+proton_root="${SDMOD_PROTON_ROOT:-$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton10-34}"
 compat_data="${SDMOD_STEAM_COMPAT_DATA:-$HOME/.local/share/Steam/steamapps/compatdata/3362180}"
 pipe_name="${SDMOD_WSL_LUA_PIPE_NAME:-SolomonDarkModLoader_LuaExec}"
 
@@ -34,4 +34,5 @@ fi
 client_win="$(printf 'Z:%s' "$(realpath "$client")" | sed 's#/#\\#g')"
 export WINEPREFIX="$compat_data/pfx"
 export WINEDEBUG=-all
+export WINEFSYNC=1
 exec "$wine" "$client_win" "$pipe_name" "$code"

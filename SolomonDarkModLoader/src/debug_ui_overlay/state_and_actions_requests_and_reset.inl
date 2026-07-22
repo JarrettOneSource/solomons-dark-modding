@@ -569,8 +569,6 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     state->last_semantic_ui_action_dispatch = CompletedSemanticUiActionDispatch{};
     state->object_label_cache.clear();
     state->latest_surface_snapshot_generation = 0;
-    state->last_logged_overlay_draw_generation = 0;
-    state->last_logged_overlay_clear_generation = 0;
     state->last_logged_action_query_rejection_generation = 0;
     state->last_logged_action_query_rejection_action_id.clear();
     state->next_semantic_ui_action_request_id = 0;
