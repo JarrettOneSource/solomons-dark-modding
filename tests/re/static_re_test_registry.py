@@ -93,6 +93,7 @@ from static_multiplayer_behavior_contracts import (
     test_network_clients_reject_stock_incoming_damage_authority,
     test_natural_offer_expectation_clamps_to_native_maximum,
     test_primary_kill_stress_accepts_a_late_death_from_the_prior_cast,
+    test_primary_kill_stress_requires_native_death_evidence_at_epsilon_hp,
     test_primary_kill_stress_resumes_only_a_contiguous_passed_prefix,
     test_reconnect_verifier_has_a_dedicated_cold_launch_timeout,
     test_remote_webbed_escape_consumes_owner_movement_intent,
@@ -505,6 +506,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "primary kill stress attributes late death to the prior cast",
         test_primary_kill_stress_accepts_a_late_death_from_the_prior_cast,
+    ),
+    (
+        "primary kill stress requires native death evidence at epsilon HP",
+        test_primary_kill_stress_requires_native_death_evidence_at_epsilon_hp,
     ),
     (
         "animated loot bounds transport-phase position skew",

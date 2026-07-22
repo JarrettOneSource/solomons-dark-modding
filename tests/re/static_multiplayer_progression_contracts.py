@@ -1293,6 +1293,14 @@ def test_manual_primary_target_survives_stock_cursor_refresh() -> str:
     )
     start = player_control.index("void __fastcall HookPurePrimarySpellStart(")
     body = player_control[start:]
+    dispatch_start = body.index("InvokeWithBotProgressionSlotOwnerContext(")
+    dispatch_end = body.index("&slot_owner_context);", dispatch_start)
+    dispatch = body[dispatch_start:dispatch_end]
+    _require_in_order(
+        dispatch,
+        "ApplyPinnedManualSpawnerPrimaryTarget(actor_address);",
+        "original(self);",
+    )
     _require_in_order(
         body,
         "original(self);",
@@ -1300,8 +1308,8 @@ def test_manual_primary_target_survives_stock_cursor_refresh() -> str:
         "QueueLocalPlayerPrimaryCastForMultiplayer(actor_address);",
     )
     return (
-        "manual primary casts restore their world target after stock cursor "
-        "refresh and before owner-authored packet capture"
+        "manual primary casts pin their world target at native dispatch, then "
+        "restore it before owner-authored packet capture"
     )
 
 

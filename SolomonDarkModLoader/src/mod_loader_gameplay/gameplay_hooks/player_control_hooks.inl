@@ -1273,6 +1273,10 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
         actor_address,
         pure_primary_bot_owner_context,
         [&] {
+            // The local control path can refresh aim from the OS cursor after
+            // this hook begins. Pin again at the last boundary before stock
+            // creates the projectile so scripted casts remain world-relative.
+            (void)ApplyPinnedManualSpawnerPrimaryTarget(actor_address);
             original(self);
         },
         &slot_owner_context);
@@ -1286,10 +1290,8 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
             (void)RefreshAndApplyWizardBindingFacingState(binding, actor_address);
         }
     }
-    // Stock primary startup refreshes aim from the OS cursor. In explicit
-    // manual-spawner tests, restore the pinned world target after that refresh
-    // so native projectile direction and the owner-authored packet agree at
-    // every window resolution.
+    // Preserve the same target for owner-authored packet capture after stock
+    // primary startup mutates its transient cast state.
     (void)ApplyPinnedManualSpawnerPrimaryTarget(actor_address);
     (void)QueueLocalPlayerPrimaryCastForMultiplayer(actor_address);
     if (log_this) {

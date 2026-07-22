@@ -3045,8 +3045,6 @@ def target_state_dead(state: dict[str, str]) -> bool:
         state.get("snapshot.dead") == "true"
         or state.get("local.dead") == "true"
         or parse_int(state.get("local.death_handled")) != 0
-        or parse_float(state.get("snapshot.hp"), 1.0) <= 0.05
-        or parse_float(state.get("local.hp"), 1.0) <= 0.05
     )
 
 

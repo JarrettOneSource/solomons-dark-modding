@@ -1871,6 +1871,25 @@ def test_primary_kill_stress_accepts_a_late_death_from_the_prior_cast() -> str:
     return "a delayed lethal effect is attributed to its real prior native cast"
 
 
+def test_primary_kill_stress_requires_native_death_evidence_at_epsilon_hp() -> str:
+    import verify_multiplayer_primary_kill_stress as primary
+
+    rounded_epsilon_hp = {
+        "found": "true",
+        "snapshot.dead": "false",
+        "snapshot.hp": "0.050",
+        "local.dead": "false",
+        "local.death_handled": "0",
+        "local.hp": "0.050",
+    }
+    assert not primary.target_state_dead(rounded_epsilon_hp)
+    assert primary.target_state_alive(rounded_epsilon_hp)
+    assert primary.target_state_dead(
+        rounded_epsilon_hp | {"local.death_handled": "1"}
+    )
+    return "rounded low HP cannot consume the final retry without a native death signal"
+
+
 def test_animated_loot_comparison_bounds_snapshot_phase_skew() -> str:
     import verify_multiplayer_primary_kill_stress as primary
 
