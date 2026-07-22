@@ -469,6 +469,36 @@ void PushLootPickupResult(lua_State* state, const multiplayer::LootPickupResultR
     lua_setfield(state, -2, "statbook_revision");
 }
 
+void PushReplicatedGoldPickupFeedback(
+    lua_State* state,
+    const SDModReplicatedGoldPickupFeedbackState& feedback) {
+    lua_createtable(state, 0, 12);
+    lua_pushboolean(state, feedback.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushboolean(state, feedback.accepted ? 1 : 0);
+    lua_setfield(state, -2, "accepted");
+    lua_pushboolean(state, feedback.applied ? 1 : 0);
+    lua_setfield(state, -2, "applied");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.network_drop_id));
+    lua_setfield(state, -2, "network_drop_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.run_nonce));
+    lua_setfield(state, -2, "run_nonce");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.actor_address));
+    lua_setfield(state, -2, "actor_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.request_sequence));
+    lua_setfield(state, -2, "request_sequence");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.amount));
+    lua_setfield(state, -2, "amount");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.resulting_gold));
+    lua_setfield(state, -2, "resulting_gold");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.apply_count));
+    lua_setfield(state, -2, "apply_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.accepted_ms));
+    lua_setfield(state, -2, "accepted_ms");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.applied_ms));
+    lua_setfield(state, -2, "applied_ms");
+}
+
 void PushReplicatedWorldActorBinding(
     lua_State* state,
     const multiplayer::WorldSnapshotActorBindingRuntimeInfo& binding) {
@@ -1375,6 +1405,11 @@ int LuaWorldGetReplicatedLoot(lua_State* state) {
     if (runtime.last_loot_pickup_result.valid) {
         PushLootPickupResult(state, runtime.last_loot_pickup_result);
         lua_setfield(state, -2, "last_pickup_result");
+    }
+    SDModReplicatedGoldPickupFeedbackState gold_feedback;
+    if (TryGetLastReplicatedGoldPickupFeedbackState(&gold_feedback)) {
+        PushReplicatedGoldPickupFeedback(state, gold_feedback);
+        lua_setfield(state, -2, "last_gold_feedback");
     }
     return 1;
 }

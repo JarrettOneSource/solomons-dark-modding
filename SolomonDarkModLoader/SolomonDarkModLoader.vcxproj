@@ -374,6 +374,7 @@
     <ClInclude Include="src\mod_loader_gameplay\native_inventory_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\test_blank_boneyard_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\replicated_loot_reconciliation.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\replicated_gold_pickup_feedback.inl" />
     <ClInclude Include="src\mod_loader_gameplay\replicated_loot_public_api.inl" />
     <ClInclude Include="src\mod_loader_gameplay\spell_effect_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\spell_effect_materialization.inl" />

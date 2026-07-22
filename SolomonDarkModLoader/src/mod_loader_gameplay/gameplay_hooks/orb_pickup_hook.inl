@@ -167,6 +167,10 @@ bool TryQueueReplicatedLootPickupRequest(
         (last_result.result_code == multiplayer::LootPickupResultCode::Accepted ||
          last_result.result_code == multiplayer::LootPickupResultCode::AlreadyGone)) {
         g_replicated_loot_pickup_request_not_before_ms.erase(presentation.network_drop_id);
+        if (drop_kind == multiplayer::LootDropKind::Gold &&
+            last_result.result_code == multiplayer::LootPickupResultCode::AlreadyGone) {
+            CancelReplicatedGoldPickupFeedbackInternal(presentation.network_drop_id);
+        }
         return true;
     }
 
@@ -216,6 +220,14 @@ bool TryQueueReplicatedLootPickupRequest(
             &request_sequence,
             &error_message,
             &pickup_capture)) {
+        if (drop_kind == multiplayer::LootDropKind::Gold) {
+            MarkReplicatedGoldPickupAwaitingAuthorityInternal(
+                presentation.run_nonce,
+                presentation.network_drop_id,
+                actor_address,
+                request_sequence,
+                now_ms);
+        }
         g_replicated_loot_pickup_request_not_before_ms[presentation.network_drop_id] =
             now_ms + kReplicatedLootPickupRequestRetryMs;
         Log(

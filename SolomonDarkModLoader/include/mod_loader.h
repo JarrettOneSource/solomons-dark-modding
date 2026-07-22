@@ -369,6 +369,21 @@ struct SDModReplicatedLootPresentationState {
     std::uint64_t last_seen_ms = 0;
 };
 
+struct SDModReplicatedGoldPickupFeedbackState {
+    bool valid = false;
+    bool accepted = false;
+    bool applied = false;
+    std::uint64_t network_drop_id = 0;
+    std::uint32_t run_nonce = 0;
+    uintptr_t actor_address = 0;
+    std::uint32_t request_sequence = 0;
+    std::int32_t amount = 0;
+    std::int32_t resulting_gold = 0;
+    std::uint32_t apply_count = 0;
+    std::uint64_t accepted_ms = 0;
+    std::uint64_t applied_ms = 0;
+};
+
 struct SDModHostLootDropDeactivationResult {
     std::uint32_t run_nonce = 0;
     std::uint64_t network_drop_id = 0;
@@ -409,7 +424,7 @@ bool SetGameplayNativeControlAllowanceFrames(
     std::string* error_message);
 bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_message);
 bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address);
-bool QueueLocalPlayerNativeAirPrimaryCast(
+bool QueueLocalPlayerNativeDispatcherPrimaryCast(
     uintptr_t actor_address,
     std::int32_t dispatched_skill_id);
 void ClearQueuedGameplayMouseLeft();

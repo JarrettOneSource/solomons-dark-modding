@@ -939,10 +939,11 @@ bool ShouldSuppressManualSpawnerTestLocalPurePrimary(uintptr_t actor_address) {
 
 enum class LocalPrimaryCastCaptureKind {
     PurePrimaryStart,
-    NativeAirDispatch,
+    NativeDispatcherPrimary,
 };
 
 constexpr std::int32_t kAirPrimaryEntryIndex = 0x18;
+constexpr std::int32_t kWaterPrimaryEntryIndex = 0x20;
 constexpr std::uint64_t kLocalPrimaryCastEdgeCaptureWindowMs = 1000;
 
 bool TryResolveLocalPlayerPrimaryCastDescriptor(
@@ -983,7 +984,7 @@ bool QueueLocalPlayerPrimaryCastForMultiplayer(
 
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
     std::uint64_t edge_serial = 0;
-    if (capture_kind == LocalPrimaryCastCaptureKind::NativeAirDispatch) {
+    if (capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary) {
         edge_serial = GetGameplayMouseLeftEdgeSerial();
         const auto edge_tick_ms = GetGameplayMouseLeftEdgeTickMs();
         if (edge_serial == 0 ||
@@ -1003,11 +1004,15 @@ bool QueueLocalPlayerPrimaryCastForMultiplayer(
             HexString(actor_address));
         return false;
     }
-    if (capture_kind == LocalPrimaryCastCaptureKind::NativeAirDispatch &&
-        (dispatched_skill_id != kAirPrimaryEntryIndex ||
-         primary_descriptor.primary_entry_index != kAirPrimaryEntryIndex ||
-         primary_descriptor.combo_entry_index != kAirPrimaryEntryIndex ||
-         primary_descriptor.dispatcher_skill_id != kAirPrimaryEntryIndex)) {
+    if (capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary &&
+        dispatched_skill_id != kAirPrimaryEntryIndex &&
+        dispatched_skill_id != kWaterPrimaryEntryIndex) {
+        return false;
+    }
+    if (capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary &&
+        (primary_descriptor.primary_entry_index != dispatched_skill_id ||
+         primary_descriptor.combo_entry_index != dispatched_skill_id ||
+         primary_descriptor.dispatcher_skill_id != dispatched_skill_id)) {
         return false;
     }
 
@@ -1052,19 +1057,19 @@ bool QueueLocalPlayerPrimaryCastForMultiplayer(
         kActorCurrentTargetActorOffset,
         &target_actor_address);
 
-    const bool native_air_manual_cast =
-        capture_kind == LocalPrimaryCastCaptureKind::NativeAirDispatch &&
+    const bool native_dispatcher_manual_cast =
+        capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary &&
         IsRunLifecycleManualEnemySpawnerTestModeEnabled();
-    if (native_air_manual_cast &&
+    if (native_dispatcher_manual_cast &&
         g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.load(
             std::memory_order_acquire) == 0) {
         return false;
     }
-    if (capture_kind == LocalPrimaryCastCaptureKind::NativeAirDispatch &&
+    if (capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary &&
         !TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)) {
         return false;
     }
-    if (native_air_manual_cast &&
+    if (native_dispatcher_manual_cast &&
         !TryConsumeManualSpawnerPrimaryCastAllowance()) {
         return false;
     }
@@ -1100,8 +1105,8 @@ bool QueueLocalPlayerPrimaryCastForMultiplayer(
     Log(
         "Multiplayer local primary cast queued from native " +
         std::string(
-            capture_kind == LocalPrimaryCastCaptureKind::NativeAirDispatch
-                ? "air-dispatch"
+            capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary
+                ? "dispatcher-primary"
                 : "pure-primary") +
         ". actor=" +
         HexString(actor_address) +

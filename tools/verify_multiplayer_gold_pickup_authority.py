@@ -9,6 +9,7 @@ import math
 import time
 from typing import Any
 
+from cast_state_probe import read_runtime_layout_offset
 from multiplayer_pickup_geometry import (
     PickupGeometryRuntime,
     select_reachable_spawn_point,
@@ -47,6 +48,12 @@ PICKUP_RANGE_TEST_MARGIN = 0.95
 PICKUP_SUPPRESSION_RADIUS = 335.0
 PICKUP_PARKING_MIN_DISTANCE = 520.0
 LOCAL_RUNTIME_PARTICIPANT_ID = 1
+GOLD_PICKUP_TICK = read_runtime_layout_offset("gold_pickup")
+GOLD_PICKUP_TICK_END = 0x005E6AC0
+GOLD_PICKUP_TEXT_FEEDBACK = read_runtime_layout_offset("gold_pickup_text_feedback")
+GOLD_PICKUP_SOUND_START = read_runtime_layout_offset("gold_pickup_sound_start")
+GOLD_POPUP_TRACE_NAME = "multiplayer_gold_pickup_stock_popup"
+GOLD_SOUND_TRACE_NAME = "multiplayer_gold_pickup_stock_sound"
 
 
 CAPTURE_LUA = r"""
@@ -84,6 +91,19 @@ if loot and loot.last_pickup_result then
   emit("pickup.gold_revision", result.gold_revision or 0)
 else
   emit("pickup.valid", false)
+end
+if loot and loot.last_gold_feedback then
+  local feedback = loot.last_gold_feedback
+  emit("feedback.valid", feedback.valid and true or false)
+  emit("feedback.accepted", feedback.accepted and true or false)
+  emit("feedback.applied", feedback.applied and true or false)
+  emit("feedback.network_drop_id", feedback.network_drop_id or 0)
+  emit("feedback.request_sequence", feedback.request_sequence or 0)
+  emit("feedback.amount", feedback.amount or 0)
+  emit("feedback.resulting_gold", feedback.resulting_gold or 0)
+  emit("feedback.apply_count", feedback.apply_count or 0)
+else
+  emit("feedback.valid", false)
 end
 
 local loot_gold_count = 0
@@ -198,6 +218,125 @@ def request_pickup(network_drop_id: int) -> dict[str, str]:
     if result.get("ok") != "true":
         raise VerifyFailure(f"client request_loot_pickup failed: {result}")
     return result
+
+
+def arm_gold_feedback_traces() -> dict[str, str]:
+    result = values(
+        CLIENT_PIPE,
+        f"""
+pcall(sd.debug.untrace_function, {GOLD_PICKUP_TEXT_FEEDBACK})
+pcall(sd.debug.untrace_function, {GOLD_PICKUP_SOUND_START})
+pcall(sd.debug.clear_trace_hits, "{GOLD_POPUP_TRACE_NAME}")
+pcall(sd.debug.clear_trace_hits, "{GOLD_SOUND_TRACE_NAME}")
+local popup_ok = sd.debug.trace_function(
+  {GOLD_PICKUP_TEXT_FEEDBACK}, "{GOLD_POPUP_TRACE_NAME}")
+local sound_ok = sd.debug.trace_function(
+  {GOLD_PICKUP_SOUND_START}, "{GOLD_SOUND_TRACE_NAME}")
+print("popup_ok=" .. tostring(popup_ok))
+print("sound_ok=" .. tostring(sound_ok))
+print("error=" .. tostring(sd.debug.get_last_error and sd.debug.get_last_error() or ""))
+""",
+    )
+    if result.get("popup_ok") != "true" or result.get("sound_ok") != "true":
+        raise VerifyFailure(f"failed to arm native gold feedback traces: {result}")
+    return result
+
+
+def clear_gold_feedback_traces() -> None:
+    lua(
+        CLIENT_PIPE,
+        f"""
+pcall(sd.debug.untrace_function, {GOLD_PICKUP_TEXT_FEEDBACK})
+pcall(sd.debug.untrace_function, {GOLD_PICKUP_SOUND_START})
+""",
+    )
+
+
+def gold_feedback_trace_summary() -> dict[str, Any]:
+    trace_values = values(
+        CLIENT_PIPE,
+        f"""
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local popup = sd.debug.get_trace_hits("{GOLD_POPUP_TRACE_NAME}") or {{}}
+local sound = sd.debug.get_trace_hits("{GOLD_SOUND_TRACE_NAME}") or {{}}
+emit("gold_pickup.runtime", sd.debug.resolve_game_address({GOLD_PICKUP_TICK}) or 0)
+emit("popup.count", #popup)
+for index, hit in ipairs(popup) do
+  emit("popup." .. index .. ".caller", hit.ret or 0)
+end
+emit("sound.count", #sound)
+for index, hit in ipairs(sound) do
+  emit("sound." .. index .. ".caller", hit.ret or 0)
+end
+""",
+    )
+
+    gold_pickup_runtime = parse_int_text(trace_values.get("gold_pickup.runtime"), 0)
+    gold_pickup_runtime_end = (
+        gold_pickup_runtime + (GOLD_PICKUP_TICK_END - GOLD_PICKUP_TICK)
+    )
+
+    def stock_callers(prefix: str) -> list[int]:
+        count = parse_int_text(trace_values.get(f"{prefix}.count"), 0)
+        callers = [
+            parse_int_text(trace_values.get(f"{prefix}.{index}.caller"), 0)
+            for index in range(1, count + 1)
+        ]
+        return [
+            caller
+            for caller in callers
+            if gold_pickup_runtime <= caller < gold_pickup_runtime_end
+        ]
+
+    popup_callers = stock_callers("popup")
+    sound_callers = stock_callers("sound")
+    return {
+        "stock_popup_calls": len(popup_callers),
+        "stock_sound_calls": parse_int_text(trace_values.get("sound.count"), 0),
+        "popup_callers": [f"0x{caller:08X}" for caller in popup_callers],
+        "sound_callers": [f"0x{caller:08X}" for caller in sound_callers],
+        "all_popup_calls": parse_int_text(trace_values.get("popup.count"), 0),
+        "all_sound_calls": parse_int_text(trace_values.get("sound.count"), 0),
+    }
+
+
+def gold_feedback_fields(capture_values: dict[str, str]) -> dict[str, str]:
+    return {
+        "valid": capture_values.get("feedback.valid", "false"),
+        "accepted": capture_values.get("feedback.accepted", "false"),
+        "applied": capture_values.get("feedback.applied", "false"),
+        "network_drop_id": capture_values.get("feedback.network_drop_id", "0"),
+        "request_sequence": capture_values.get("feedback.request_sequence", "0"),
+        "amount": capture_values.get("feedback.amount", "0"),
+        "resulting_gold": capture_values.get("feedback.resulting_gold", "0"),
+        "apply_count": capture_values.get("feedback.apply_count", "0"),
+    }
+
+
+def wait_for_client_gold_feedback(
+    *,
+    network_drop_id: int,
+    request_sequence: int,
+    timeout: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    feedback: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = capture(CLIENT_PIPE)
+        feedback = gold_feedback_fields(last)
+        if (
+            feedback.get("applied") == "true"
+            and parse_int_text(feedback.get("network_drop_id"), 0) == network_drop_id
+            and parse_int_text(feedback.get("request_sequence"), 0) == request_sequence
+            and parse_int_text(feedback.get("apply_count"), 0) == 1
+        ):
+            return {"capture": last, "feedback": feedback}
+        time.sleep(0.05)
+    raise VerifyFailure(
+        "client did not apply accepted stock gold feedback exactly once: "
+        f"drop={network_drop_id} request={request_sequence} feedback={feedback} last={last}"
+    )
 
 
 def wait_for_client_pickup_result(
@@ -606,6 +745,7 @@ def verify_gold_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:
     )
     network_drop_id = int(replicated["drop"]["network_id"])
     expected_client_gold = client_gold_before + PROBE_GOLD_AMOUNT
+    result["feedback_trace_arm"] = arm_gold_feedback_traces()
     result["client_pickup_position"] = move_client_into_pickup_range(
         network_drop_id=network_drop_id,
         drop_x=float(replicated["drop"]["x"]),
@@ -629,6 +769,12 @@ def verify_gold_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:
         "request_sequence": str(request_sequence),
     }
     result["accepted_result"] = accepted
+    result["accepted_feedback"] = wait_for_client_gold_feedback(
+        network_drop_id=network_drop_id,
+        request_sequence=request_sequence,
+        timeout=args.timeout,
+    )
+    result["feedback_trace_after_accept"] = gold_feedback_trace_summary()
     result["client_local_gold_after_accept"] = wait_for_client_local_gold(
         expected_gold=expected_client_gold,
         timeout=args.timeout,
@@ -657,6 +803,8 @@ def verify_gold_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:
         timeout=args.timeout,
     )
     result["after_duplicate_pair"] = capture_pair()
+    result["feedback_trace_after_duplicate"] = gold_feedback_trace_summary()
+    clear_gold_feedback_traces()
 
     client_gold_after_duplicate = parse_int_text(
         result["after_duplicate_pair"]["client"].get("player.gold"),
@@ -670,6 +818,10 @@ def verify_gold_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:
         result["after_duplicate_pair"]["host"].get("player.gold"),
         0,
     )
+    accepted_feedback = result["accepted_feedback"]["feedback"]
+    duplicate_feedback = gold_feedback_fields(result["after_duplicate_pair"]["client"])
+    accept_trace = result["feedback_trace_after_accept"]
+    duplicate_trace = result["feedback_trace_after_duplicate"]
 
     result["conclusion"] = {
         "host_gold_unchanged": host_gold_after_duplicate == host_gold_before,
@@ -683,11 +835,26 @@ def verify_gold_pickup_authority(args: argparse.Namespace) -> dict[str, Any]:
         "accepted_tier_matched_before_pickup": replicated["drop"]["amount_tier"] == PROBE_EXPECTED_TIER,
         "host_drop_unregistered": result["host_reward_after_accept"]["unregistered"] is True,
         "client_metadata_deactivated": True,
+        "feedback_applied_once": (
+            accepted_feedback.get("applied") == "true"
+            and parse_int_text(accepted_feedback.get("apply_count"), 0) == 1
+            and parse_int_text(accepted_feedback.get("amount"), 0) == PROBE_GOLD_AMOUNT
+            and parse_int_text(accepted_feedback.get("resulting_gold"), 0)
+            == expected_client_gold
+        ),
+        "stock_popup_calls": accept_trace["stock_popup_calls"] >= 1,
+        "stock_sound_calls": accept_trace["stock_sound_calls"] >= 1,
         "duplicate_rejected_without_second_credit": (
             result["duplicate_result"].get("pickup.result") == "AlreadyGone"
             and client_gold_after_duplicate == expected_client_gold
             and host_client_after_duplicate is not None
             and host_client_after_duplicate["gold"] == expected_client_gold
+        ),
+        "duplicate_preserved_single_feedback": (
+            duplicate_feedback.get("applied") == "true"
+            and parse_int_text(duplicate_feedback.get("apply_count"), 0) == 1
+            and duplicate_trace["stock_popup_calls"] == accept_trace["stock_popup_calls"]
+            and duplicate_trace["stock_sound_calls"] == accept_trace["stock_sound_calls"]
         ),
     }
     result["ok"] = all(result["conclusion"].values())
@@ -725,6 +892,10 @@ def main() -> int:
         }, indent=2, sort_keys=True))
         return 1
     finally:
+        try:
+            clear_gold_feedback_traces()
+        except Exception:
+            pass
         if not args.no_launch:
             stop_games()
 

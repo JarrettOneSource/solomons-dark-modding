@@ -241,6 +241,8 @@ ReplicatedLootPresentationBinding* FindReplicatedLootPresentationBindingLocked(
     return it == g_replicated_loot_presentations.end() ? nullptr : &*it;
 }
 
+#include "replicated_gold_pickup_feedback.inl"
+
 bool TryListSceneActorsByType(
     std::uint32_t native_type_id,
     std::vector<SDModSceneActorState>* actors) {
@@ -657,6 +659,7 @@ void ClearReplicatedLootPresentationBindingsForSceneSwitch(const char* reason) {
         std::lock_guard<std::mutex> lock(g_replicated_loot_presentation_mutex);
         count = static_cast<std::uint32_t>(g_replicated_loot_presentations.size());
         g_replicated_loot_presentations.clear();
+        ClearReplicatedGoldPickupFeedbackStateLocked();
     }
     if (count != 0) {
         Log(
@@ -673,6 +676,7 @@ void RemoveAllReplicatedLootPresentationActors(const char* reason) {
         std::lock_guard<std::mutex> lock(g_replicated_loot_presentation_mutex);
         bindings = g_replicated_loot_presentations;
         g_replicated_loot_presentations.clear();
+        ClearReplicatedGoldPickupFeedbackStateLocked();
     }
 
     std::uint32_t removed = 0;
@@ -795,7 +799,13 @@ void ReconcileReplicatedLootSnapshotNow(
             const bool missing_from_complete_snapshot =
                 !snapshot.truncated && active_drop_ids.find(it->network_drop_id) == active_drop_ids.end();
             const bool native_actor_gone = !IsSceneActorAddressPresent(it->actor_address);
-            if (wrong_authority || wrong_run || missing_from_complete_snapshot || native_actor_gone) {
+            const bool hold_for_gold_feedback =
+                missing_from_complete_snapshot &&
+                ShouldHoldReplicatedGoldPickupForFeedbackLocked(*it, now_ms);
+            if (wrong_authority ||
+                wrong_run ||
+                (missing_from_complete_snapshot && !hold_for_gold_feedback) ||
+                native_actor_gone) {
                 if (!native_actor_gone) {
                     stale_bindings.push_back(*it);
                 }

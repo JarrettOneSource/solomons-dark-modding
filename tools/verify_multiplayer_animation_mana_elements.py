@@ -11,6 +11,7 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
+from cast_state_probe import read_runtime_layout_offset
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
@@ -68,6 +69,8 @@ ANIMATION_HISTORY_SECONDS = 0.55
 ANIMATION_MATCH_SAMPLE_COUNT = 3
 CAST_FACING_TOLERANCE_DEGREES = 2.0
 CAST_FACING_MATCH_SAMPLE_COUNT = 2
+WATER_CONTINUOUS_VISUAL_MATCH_SAMPLE_COUNT = 3
+FROST_JET_VISUAL_CTOR = read_runtime_layout_offset("water_frost_jet_visual_ctor")
 ANIMATION_MATCH_TOLERANCES = {
     "walk_cycle_primary": 0.18,
     "walk_cycle_secondary": 0.18,
@@ -344,6 +347,43 @@ emit("mouse_left_frames", sd.input.hold_mouse_left_frames({frames}))
     return result
 
 
+def arm_water_visual_trace(pipe_name: str, trace_name: str) -> dict[str, str]:
+    escaped_name = json.dumps(trace_name)
+    return values(
+        pipe_name,
+        f"""
+pcall(sd.debug.untrace_function, {FROST_JET_VISUAL_CTOR})
+sd.debug.clear_trace_hits({escaped_name})
+local ok = sd.debug.trace_function({FROST_JET_VISUAL_CTOR}, {escaped_name})
+print("ok=" .. tostring(ok))
+print("error=" .. tostring(sd.debug.get_last_error and sd.debug.get_last_error() or ""))
+""",
+    )
+
+
+def sample_water_visual_trace(pipe_name: str, trace_name: str) -> dict[str, str]:
+    escaped_name = json.dumps(trace_name)
+    return values(
+        pipe_name,
+        f"""
+local hits = sd.debug.get_trace_hits and sd.debug.get_trace_hits({escaped_name}) or {{}}
+print("visual_calls=" .. tostring(#hits))
+""",
+    )
+
+
+def clear_water_visual_trace(pipe_name: str, trace_name: str) -> dict[str, str]:
+    escaped_name = json.dumps(trace_name)
+    return values(
+        pipe_name,
+        f"""
+pcall(sd.debug.untrace_function, {FROST_JET_VISUAL_CTOR})
+sd.debug.clear_trace_hits({escaped_name})
+print("ok=true")
+""",
+    )
+
+
 def read_proxy_animation(observer_pipe: str, participant_id: int) -> dict[str, str]:
     code = f"""
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
@@ -400,8 +440,18 @@ if player == nil or player.actor_address == nil or player.actor_address == 0 the
   error("player actor unavailable")
 end
 local actor = tonumber(player.actor_address) or 0
+local oh = sd.debug.layout_offset("actor_heading")
+local ox = sd.debug.layout_offset("actor_position_x")
+local oy = sd.debug.layout_offset("actor_position_y")
+local oaimx = sd.debug.layout_offset("actor_aim_target_x")
+local oaimy = sd.debug.layout_offset("actor_aim_target_y")
 emit("available", true)
 emit("actor", actor)
+emit("x", sd.debug.read_float(actor + ox) or 0)
+emit("y", sd.debug.read_float(actor + oy) or 0)
+emit("actor_heading", sd.debug.read_float(actor + oh) or 0)
+emit("aim_x", sd.debug.read_float(actor + oaimx) or 0)
+emit("aim_y", sd.debug.read_float(actor + oaimy) or 0)
 emit("drive_word", player.anim_drive_state_word or 0)
 emit("walk_cycle_primary", player.walk_cycle_primary or 0)
 emit("walk_cycle_secondary", player.walk_cycle_secondary or 0)
@@ -427,6 +477,19 @@ def number(row: dict[str, str], key: str, default: float = 0.0) -> float:
 
 def heading_error(left: float, right: float) -> float:
     return abs((left - right + 180.0) % 360.0 - 180.0)
+
+
+def cast_aim_heading(sample: dict[str, str]) -> float:
+    x = number(sample, "x", float("nan"))
+    y = number(sample, "y", float("nan"))
+    aim_x = number(sample, "aim_x", float("nan"))
+    aim_y = number(sample, "aim_y", float("nan"))
+    if all(math.isfinite(value) for value in (x, y, aim_x, aim_y)):
+        delta_x = aim_x - x
+        delta_y = aim_y - y
+        if (delta_x * delta_x) + (delta_y * delta_y) > 0.0001:
+            return (math.degrees(math.atan2(delta_y, delta_x)) + 90.0) % 360.0
+    return number(sample, "actor_heading", float("nan"))
 
 
 def cast_facing_sample(
@@ -851,25 +914,58 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
         direction=direction.name,
     )
     input_attempts: list[dict[str, object]] = []
+    water_visual: dict[str, object] | None = None
     for input_attempt in range(1, 3):
         pre_clear = clear_local_cast_state(direction)
         source_offset = len(read_log(direction.source_log))
         receiver_offset = len(read_log(direction.receiver_log))
+        water_trace_names = {
+            "owner": f"water_visual.{direction.name}.{input_attempt}.owner",
+            "observer": f"water_visual.{direction.name}.{input_attempt}.observer",
+        }
+        water_trace_arms: dict[str, dict[str, str]] = {}
+        if spec.element == "water":
+            water_trace_arms = {
+                "owner": arm_water_visual_trace(
+                    direction.source_pipe,
+                    water_trace_names["owner"],
+                ),
+                "observer": arm_water_visual_trace(
+                    direction.receiver_pipe,
+                    water_trace_names["observer"],
+                ),
+            }
+            bad_trace_arms = {
+                side: result
+                for side, result in water_trace_arms.items()
+                if result.get("ok") != "true"
+            }
+            if bad_trace_arms:
+                for side, pipe_name in (
+                    ("owner", direction.source_pipe),
+                    ("observer", direction.receiver_pipe),
+                ):
+                    clear_water_visual_trace(pipe_name, water_trace_names[side])
+                raise VerifyFailure(
+                    f"{direction.name} {spec.presentation}: could not arm native "
+                    f"Frost Jet visual traces: {bad_trace_arms}"
+                )
         queue_result = queue_deterministic_primary(direction, spec.frames)
         active_seen = False
         anim_seen = False
         samples: list[dict[str, str]] = []
         facing_samples: list[dict[str, float | bool]] = []
         matching_facing_samples: list[dict[str, float | bool]] = []
-        expected_heading = float(queue_result["expected_heading"])
         deadline = time.monotonic() + 3.0
         while time.monotonic() < deadline:
+            owner = read_owner_animation(direction.source_pipe)
             proxy = read_proxy_animation(direction.receiver_pipe, direction.source_id)
             samples.append(proxy)
             proxy_cast_active = proxy.get("cast_active") == "true"
             active_seen = active_seen or proxy_cast_active
             if proxy_cast_active:
-                facing = cast_facing_sample(proxy, expected_heading)
+                owner_heading = cast_aim_heading(owner)
+                facing = cast_facing_sample(proxy, owner_heading)
                 facing_samples.append(facing)
                 if bool(facing["matched"]):
                     matching_facing_samples.append(facing)
@@ -902,6 +998,12 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
                 require_remote_release=True,
             )
         except VerifyFailure as exc:
+            if spec.element == "water":
+                for side, pipe_name in (
+                    ("owner", direction.source_pipe),
+                    ("observer", direction.receiver_pipe),
+                ):
+                    clear_water_visual_trace(pipe_name, water_trace_names[side])
             input_attempts.append({
                 "attempt": input_attempt,
                 "queue_result": queue_result,
@@ -910,6 +1012,56 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
             if "source cast did not reach native hook/phases" not in str(exc):
                 raise
             continue
+        if spec.element == "water":
+            water_trace_samples = {
+                "owner": sample_water_visual_trace(
+                    direction.source_pipe,
+                    water_trace_names["owner"],
+                ),
+                "observer": sample_water_visual_trace(
+                    direction.receiver_pipe,
+                    water_trace_names["observer"],
+                ),
+            }
+            water_trace_clears = {
+                "owner": clear_water_visual_trace(
+                    direction.source_pipe,
+                    water_trace_names["owner"],
+                ),
+                "observer": clear_water_visual_trace(
+                    direction.receiver_pipe,
+                    water_trace_names["observer"],
+                ),
+            }
+            source_visual_calls = parse_int(
+                water_trace_samples["owner"].get("visual_calls"),
+                0,
+            )
+            observer_visual_calls = parse_int(
+                water_trace_samples["observer"].get("visual_calls"),
+                0,
+            )
+            water_visual = {
+                "constructor": FROST_JET_VISUAL_CTOR,
+                "required_calls": WATER_CONTINUOUS_VISUAL_MATCH_SAMPLE_COUNT,
+                "source_visual_calls": source_visual_calls,
+                "observer_visual_calls": observer_visual_calls,
+                "arms": water_trace_arms,
+                "samples": water_trace_samples,
+                "clears": water_trace_clears,
+            }
+            if source_visual_calls < WATER_CONTINUOUS_VISUAL_MATCH_SAMPLE_COUNT:
+                raise VerifyFailure(
+                    f"{direction.name} {spec.presentation}: "
+                    "owner emitted no native Frost Jet visuals; "
+                    f"calls={source_visual_calls} flow={flow}"
+                )
+            if observer_visual_calls < WATER_CONTINUOUS_VISUAL_MATCH_SAMPLE_COUNT:
+                raise VerifyFailure(
+                    f"{direction.name} {spec.presentation}: "
+                    "observer emitted no native Frost Jet visuals; "
+                    f"calls={observer_visual_calls} flow={flow}"
+                )
         input_attempts.append({
             "attempt": input_attempt,
             "queue_result": queue_result,
@@ -953,6 +1105,7 @@ def verify_continuous_cast(direction: Direction, spec: ElementSpec) -> dict[str,
         "flow": flow,
         "active_seen": active_seen,
         "anim_seen": anim_seen,
+        "water_visual": water_visual,
         "cast_facing": {
             "active_samples": len(facing_samples),
             "matching_samples": len(matching_facing_samples),

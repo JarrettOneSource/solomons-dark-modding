@@ -356,14 +356,31 @@ void ApplyLootPickupResultPacket(
     UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
     const auto result_code = LootPickupResultCodeFromPacketValue(packet.result_code);
     const auto drop_kind = LootDropKindFromPacketValue(packet.drop_kind);
-    if (result_code == LootPickupResultCode::Accepted &&
-        packet.participant_id == g_local_transport.local_peer_id &&
+    if (packet.participant_id == g_local_transport.local_peer_id &&
         drop_kind == LootDropKind::Gold) {
-        if (!TryWriteLocalGlobalGold(packet.resulting_gold)) {
-            Log(
-                "Multiplayer loot pickup result accepted but local gold write failed. resulting_gold=" +
-                std::to_string(packet.resulting_gold) +
-                " network_drop_id=" + std::to_string(packet.network_drop_id));
+        if (result_code == LootPickupResultCode::Accepted) {
+            if (!TryWriteLocalGlobalGold(packet.resulting_gold)) {
+                Log(
+                    "Multiplayer loot pickup result accepted but local gold write failed. resulting_gold=" +
+                    std::to_string(packet.resulting_gold) +
+                    " network_drop_id=" + std::to_string(packet.network_drop_id));
+            }
+            std::string feedback_error;
+            if (!QueueAcceptedReplicatedGoldPickupFeedback(
+                    packet.run_nonce,
+                    packet.network_drop_id,
+                    packet.request_sequence,
+                    packet.amount,
+                    packet.resulting_gold,
+                    now_ms,
+                    &feedback_error)) {
+                Log(
+                    "Multiplayer accepted gold pickup could not queue stock feedback. "
+                    "network_drop_id=" + std::to_string(packet.network_drop_id) +
+                    " error=" + feedback_error);
+            }
+        } else {
+            CancelReplicatedGoldPickupFeedback(packet.network_drop_id);
         }
     }
     if (result_code == LootPickupResultCode::Accepted &&

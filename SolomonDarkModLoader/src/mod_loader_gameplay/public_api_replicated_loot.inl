@@ -68,6 +68,33 @@ void GetReplicatedLootPresentationStates(std::vector<SDModReplicatedLootPresenta
     GetReplicatedLootPresentationStatesInternal(states);
 }
 
+bool QueueAcceptedReplicatedGoldPickupFeedback(
+    std::uint32_t run_nonce,
+    std::uint64_t network_drop_id,
+    std::uint32_t request_sequence,
+    std::int32_t amount,
+    std::int32_t resulting_gold,
+    std::uint64_t accepted_ms,
+    std::string* error_message) {
+    return QueueAcceptedReplicatedGoldPickupFeedbackInternal(
+        run_nonce,
+        network_drop_id,
+        request_sequence,
+        amount,
+        resulting_gold,
+        accepted_ms,
+        error_message);
+}
+
+void CancelReplicatedGoldPickupFeedback(std::uint64_t network_drop_id) {
+    CancelReplicatedGoldPickupFeedbackInternal(network_drop_id);
+}
+
+bool TryGetLastReplicatedGoldPickupFeedbackState(
+    SDModReplicatedGoldPickupFeedbackState* state) {
+    return TryGetLastReplicatedGoldPickupFeedbackStateInternal(state);
+}
+
 void SuppressClientLocalLootActors(const char* reason) {
     QueueClientLocalLootSuppressionInternal(reason, kClientLocalLootSuppressionSettleDelayMs);
 }

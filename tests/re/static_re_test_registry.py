@@ -183,6 +183,7 @@ from static_re_native_movement_contracts import (
     test_smell_source_inventory_is_current,
 )
 from static_re_transport_core_contracts import (
+    test_client_gold_pickup_replays_stock_feedback_once_after_authority_accepts,
     test_local_multiplayer_udp_transport_is_wired,
 )
 from static_re_steam_contracts import (
@@ -220,6 +221,8 @@ from static_re_runtime_cast_contracts import (
     test_remote_held_input_casts_defer_lifecycle_to_sender_input,
     test_remote_per_cast_primary_settles_without_waiting_for_release,
     test_local_primary_network_capture_is_single_owner_and_preserves_lua_events,
+    test_water_continuous_primary_is_captured_from_its_native_dispatcher,
+    test_water_live_verifier_requires_native_visual_emission,
     test_write_watch_rearm_is_owned_by_faulting_thread,
     test_write_watches_are_transparent_to_loader_memory_access,
 )
@@ -647,6 +650,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         "local primary network capture is single-owner and preserves Lua events",
         test_local_primary_network_capture_is_single_owner_and_preserves_lua_events,
     ),
+    (
+        "Water continuous primary is captured from its native dispatcher",
+        test_water_continuous_primary_is_captured_from_its_native_dispatcher,
+    ),
+    (
+        "Water live verifier requires native visual emission",
+        test_water_live_verifier_requires_native_visual_emission,
+    ),
     ("multiplayer nameplates render through native scene passes", test_multiplayer_nameplates_render_from_native_scene_passes),
     ("primary build skill mapping has single runtime owner", test_primary_build_skill_mapping_has_single_runtime_owner),
     ("gameplay selection writes preserve stock run-placement vector", test_gameplay_selection_writes_do_not_corrupt_stock_run_placement_vector),
@@ -791,6 +802,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("active sources reject substitute read APIs and stale path language", test_active_sources_reject_read_or_and_stale_path_language),
     ("accepted native shims are documented", test_accepted_native_shims_are_documented),
     ("hot-path diagnostics are default-off and gated", test_hot_path_diagnostics_are_default_off_and_gated),
+    (
+        "accepted client gold pickups replay stock feedback exactly once",
+        test_client_gold_pickup_replays_stock_feedback_once_after_authority_accepts,
+    ),
     ("local multiplayer UDP transport is wired", test_local_multiplayer_udp_transport_is_wired),
     (
         "world snapshots are complete MTU-sized generations",

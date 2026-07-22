@@ -54,6 +54,92 @@ from static_re_contract_support import (
     read_text,
 )
 
+
+def test_client_gold_pickup_replays_stock_feedback_once_after_authority_accepts() -> str:
+    gold_hook_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/gold_pickup_hook.inl"
+    )
+    reconciliation_text = "\n".join((
+        read_text(
+            ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl"
+        ),
+        read_text(
+            ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_gold_pickup_feedback.inl"
+        ),
+    ))
+    public_api_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_replicated_loot.inl"
+    )
+    gameplay_api_text = read_text(
+        ROOT / "SolomonDarkModLoader/include/mod_loader_gameplay_api.inl"
+    )
+    transport_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/multiplayer_local_transport/loot_pickup_packet_handlers.inl"
+    )
+    lua_gameplay_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp"
+    )
+    verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_gold_pickup_authority.py"
+    )
+    binary_layout_text = read_text(BINARY_LAYOUT)
+
+    required_pairs = (
+        (transport_text, "QueueAcceptedReplicatedGoldPickupFeedback("),
+        (transport_text, "CancelReplicatedGoldPickupFeedback("),
+        (gameplay_api_text, "QueueAcceptedReplicatedGoldPickupFeedback("),
+        (gameplay_api_text, "TryGetLastReplicatedGoldPickupFeedbackState("),
+        (public_api_text, "QueueAcceptedReplicatedGoldPickupFeedbackInternal("),
+        (public_api_text, "TryGetLastReplicatedGoldPickupFeedbackStateInternal("),
+        (reconciliation_text, "MarkReplicatedGoldPickupAwaitingAuthorityInternal("),
+        (reconciliation_text, "ShouldHoldReplicatedGoldPickupForFeedbackLocked("),
+        (reconciliation_text, "TryBeginAcceptedReplicatedGoldPickupFeedbackForActorInternal("),
+        (reconciliation_text, "CompleteReplicatedGoldPickupFeedbackInternal("),
+        (gold_hook_text, "TryBeginAcceptedReplicatedGoldPickupFeedbackForActorInternal("),
+        (gold_hook_text, "kReplicatedGoldLifetimeOffset"),
+        (gold_hook_text, "kActorPendingRemoveOffset"),
+        (gold_hook_text, "pending_remove != 0"),
+        (gold_hook_text, "AbortReplicatedGoldPickupFeedbackInternal("),
+        (gold_hook_text, "feedback.resulting_gold - feedback.amount"),
+        (gold_hook_text, "TryWriteResolvedGlobalInt(kGoldGlobal, feedback.resulting_gold)"),
+        (gold_hook_text, "CompleteReplicatedGoldPickupFeedbackInternal("),
+        (lua_gameplay_text, '"last_gold_feedback"'),
+        (lua_gameplay_text, '"apply_count"'),
+        (binary_layout_text, "gold_pickup_text_feedback=0x005CA7C0"),
+        (binary_layout_text, "gold_pickup_sound_start=0x00407B70"),
+        (verifier_text, 'read_runtime_layout_offset("gold_pickup_text_feedback")'),
+        (verifier_text, 'read_runtime_layout_offset("gold_pickup_sound_start")'),
+        (verifier_text, 'feedback.get("applied") == "true"'),
+        (verifier_text, 'parse_int_text(feedback.get("apply_count"), 0) == 1'),
+        (verifier_text, '"stock_popup_calls"'),
+        (verifier_text, '"stock_sound_calls"'),
+        (verifier_text, '"feedback_applied_once"'),
+        (verifier_text, '"duplicate_preserved_single_feedback"'),
+    )
+    missing = [token for text, token in required_pairs if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "client gold pickup stock-feedback replay missing token(s): "
+            + ", ".join(missing)
+        )
+
+    accepted_replay = re.search(
+        r"if\s*\(TryBeginAcceptedReplicatedGoldPickupFeedbackForActorInternal\s*\("
+        r"(?P<body>.*?)CompleteReplicatedGoldPickupFeedbackInternal\s*\(",
+        gold_hook_text,
+        re.DOTALL,
+    )
+    if accepted_replay is None or "original(self);" not in accepted_replay.group("body"):
+        raise StaticReTestFailure(
+            "client gold pickup must invoke the stock tick only inside an accepted feedback replay"
+        )
+    if gold_hook_text.count("CompleteReplicatedGoldPickupFeedbackInternal(") != 1:
+        raise StaticReTestFailure(
+            "client gold pickup must have exactly one stock-feedback completion site"
+        )
+
+    return "accepted client gold pickups replay stock popup, sound, particles, and credit exactly once"
+
 def test_local_multiplayer_udp_transport_is_wired() -> str:
     protocol_text = read_text(MULTIPLAYER_PROTOCOL)
     runtime_state_text = read_multiplayer_runtime_state_source()

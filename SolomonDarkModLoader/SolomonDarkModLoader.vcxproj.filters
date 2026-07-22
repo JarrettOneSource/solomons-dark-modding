@@ -965,6 +965,9 @@
     <ClInclude Include="src\mod_loader_gameplay\replicated_loot_reconciliation.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\replicated_gold_pickup_feedback.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\replicated_loot_public_api.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>

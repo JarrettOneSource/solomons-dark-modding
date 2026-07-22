@@ -441,7 +441,7 @@ def test_queued_mouse_holds_use_player_tick_duration() -> str:
         (input_queue_text, "input_queue", "last_mouse_right_hold_player_tick_generation.store("),
         (input_queue_text, "input_queue", "const auto queued_frames ="),
         (input_queue_text, "input_queue", "static_cast<std::uint64_t>(queued_frames) * 50"),
-        (player_control_text, "player_control", "capture_kind == LocalPrimaryCastCaptureKind::NativeAirDispatch &&"),
+        (player_control_text, "player_control", "capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary &&"),
         (player_control_text, "player_control", "!TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)"),
     )
     missing = [
@@ -474,7 +474,7 @@ def test_queued_mouse_holds_use_player_tick_duration() -> str:
     if player_control_text.count(
             "!TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)") != 1:
         raise StaticReTestFailure(
-            "only the native Air dispatcher may claim the synthetic input edge")
+            "only the native dispatcher-primary capture may claim the synthetic input edge")
 
     return "queued left/right mouse holds consume once per player tick and preserve repeated primaries"
 
@@ -583,23 +583,25 @@ def test_local_primary_network_capture_is_single_owner_and_preserves_lua_events(
             "run-lifecycle spell hooks must delegate multiplayer Air capture "
             "instead of building transport events")
 
-    native_air_tokens = (
-        "QueueLocalPlayerNativeAirPrimaryCast(self_address, spell_id)",
-        "bool QueueLocalPlayerNativeAirPrimaryCast(",
-        "LocalPrimaryCastCaptureKind::NativeAirDispatch",
-        "descriptor.primary_entry_index != kAirPrimaryEntryIndex",
+    native_dispatcher_tokens = (
+        "QueueLocalPlayerNativeDispatcherPrimaryCast(self_address, spell_id)",
+        "bool QueueLocalPlayerNativeDispatcherPrimaryCast(",
+        "LocalPrimaryCastCaptureKind::NativeDispatcherPrimary",
+        "dispatched_skill_id != kAirPrimaryEntryIndex",
         "TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)",
         "TryConsumeManualSpawnerPrimaryCastAllowance()",
         "multiplayer::QueueLocalSpellCastEvent(",
     )
-    native_air_text = spell_hook_text + mod_loader_header_text + player_control_text + input_queue_text
-    missing_native_air = [
-        token for token in native_air_tokens if token not in native_air_text
+    native_dispatcher_text = (
+        spell_hook_text + mod_loader_header_text + player_control_text + input_queue_text
+    )
+    missing_native_dispatcher = [
+        token for token in native_dispatcher_tokens if token not in native_dispatcher_text
     ]
-    if missing_native_air:
+    if missing_native_dispatcher:
         raise StaticReTestFailure(
             "native Air dispatch does not own the exact multiplayer input edge: "
-            + ", ".join(missing_native_air)
+            + ", ".join(missing_native_dispatcher)
         )
     if (
         "compare_exchange_weak" not in input_queue_text
@@ -612,7 +614,7 @@ def test_local_primary_network_capture_is_single_owner_and_preserves_lua_events(
     air_hook_pos = spell_hook_text.find("void __fastcall HookSpellCast_018")
     air_original_pos = spell_hook_text.find("original(self, unused_edx);", air_hook_pos)
     air_capture_pos = spell_hook_text.find(
-        "QueueLocalPlayerNativeAirPrimaryCast(self_address, spell_id)",
+        "QueueLocalPlayerNativeDispatcherPrimaryCast(self_address, spell_id)",
         air_hook_pos,
     )
     if air_hook_pos < 0 or air_original_pos < air_hook_pos or air_capture_pos <= air_original_pos:
@@ -638,6 +640,98 @@ def test_local_primary_network_capture_is_single_owner_and_preserves_lua_events(
         "Lua spell notification and multiplayer primary capture have distinct "
         "dedupe ownership, with Air captured from its native dispatcher"
     )
+
+
+def test_water_continuous_primary_is_captured_from_its_native_dispatcher() -> str:
+    spell_hook_text = read_text(RUN_LIFECYCLE_SPELL_CAST_HOOKS)
+    mod_loader_header_text = read_text(MOD_LOADER_HEADER)
+    player_control_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
+    )
+    input_queue_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_input_queueing.inl"
+    )
+
+    required_tokens = (
+        (spell_hook_text, "HookSpellCast_020"),
+        (
+            spell_hook_text,
+            "QueueLocalPlayerNativeDispatcherPrimaryCast(self_address, spell_id)",
+        ),
+        (mod_loader_header_text, "bool QueueLocalPlayerNativeDispatcherPrimaryCast("),
+        (player_control_text, "NativeDispatcherPrimary"),
+        (player_control_text, "constexpr std::int32_t kWaterPrimaryEntryIndex = 0x20;"),
+        (player_control_text, "dispatched_skill_id != kWaterPrimaryEntryIndex"),
+        (player_control_text, "TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)"),
+        (input_queue_text, "LocalPrimaryCastCaptureKind::NativeDispatcherPrimary"),
+    )
+    missing = [token for text, token in required_tokens if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "Water continuous primary does not own a multiplayer cast from its "
+            "native dispatcher: " + ", ".join(missing)
+        )
+
+    if "SDMOD_DEFINE_SPELL_CAST_HOOK(020, kHookSpellCast020)" in spell_hook_text:
+        raise StaticReTestFailure(
+            "Water still uses the generic Lua-only spell hook and cannot queue a "
+            "multiplayer cast"
+        )
+
+    water_hook_pos = spell_hook_text.find("void __fastcall HookSpellCast_020")
+    water_original_pos = spell_hook_text.find(
+        "original(self, unused_edx);", water_hook_pos
+    )
+    water_capture_pos = spell_hook_text.find(
+        "QueueLocalPlayerNativeDispatcherPrimaryCast(self_address, spell_id)",
+        water_hook_pos,
+    )
+    water_dispatch_pos = spell_hook_text.find(
+        "DispatchSpellCastForSelf(self_address, spell_id);", water_hook_pos
+    )
+    if not (
+        water_hook_pos >= 0
+        and water_original_pos > water_hook_pos
+        and water_capture_pos > water_original_pos
+        and water_dispatch_pos > water_capture_pos
+    ):
+        raise StaticReTestFailure(
+            "Water multiplayer capture must run once after stock dispatch and before "
+            "the Lua notification"
+        )
+
+    return "Water continuous primary is captured once from native dispatcher entry 0x20"
+
+
+def test_water_live_verifier_requires_native_visual_emission() -> str:
+    verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_animation_mana_elements.py"
+    )
+    binary_layout_text = read_text(BINARY_LAYOUT)
+    required_tokens = (
+        (binary_layout_text, "water_frost_jet_visual_ctor=0x00453550"),
+        (verifier_text, 'read_runtime_layout_offset("water_frost_jet_visual_ctor")'),
+        (verifier_text, "sd.debug.trace_function({FROST_JET_VISUAL_CTOR}"),
+        (verifier_text, "pcall(sd.debug.untrace_function, {FROST_JET_VISUAL_CTOR})"),
+        (verifier_text, "WATER_CONTINUOUS_VISUAL_MATCH_SAMPLE_COUNT"),
+        (verifier_text, "source_visual_calls"),
+        (verifier_text, "observer_visual_calls"),
+        (verifier_text, "owner emitted no native Frost Jet visuals"),
+        (verifier_text, "observer emitted no native Frost Jet visuals"),
+        (verifier_text, "def cast_aim_heading("),
+        (verifier_text, "owner_heading = cast_aim_heading(owner)"),
+        (verifier_text, "cast_facing_sample(proxy, owner_heading)"),
+    )
+    missing = [token for text, token in required_tokens if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "Water live regression does not prove owner and observer native visual "
+            "emission with live facing: " + ", ".join(missing)
+        )
+
+    return "Water live verifier requires native Frost Jet visuals on owner and observer"
 
 
 def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:

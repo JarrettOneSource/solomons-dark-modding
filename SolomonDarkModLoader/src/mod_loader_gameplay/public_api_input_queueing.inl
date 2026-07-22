@@ -82,12 +82,12 @@ bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address) {
                target_actor_address);
 }
 
-bool QueueLocalPlayerNativeAirPrimaryCast(
+bool QueueLocalPlayerNativeDispatcherPrimaryCast(
     uintptr_t actor_address,
     std::int32_t dispatched_skill_id) {
     return QueueLocalPlayerPrimaryCastForMultiplayer(
         actor_address,
-        LocalPrimaryCastCaptureKind::NativeAirDispatch,
+        LocalPrimaryCastCaptureKind::NativeDispatcherPrimary,
         dispatched_skill_id);
 }
 
