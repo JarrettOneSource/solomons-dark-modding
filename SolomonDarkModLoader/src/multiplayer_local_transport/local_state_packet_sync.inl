@@ -333,6 +333,9 @@ void RefreshLocalParticipantFromGameState() {
         RefreshOwnedDerivedStats(
             player_state.derived_stats,
             &local->owned_progression);
+        RefreshOwnedHagathaPerks(
+            player_state.progression_address,
+            &local->owned_progression);
         RefreshOwnedAbilityLoadoutFromProfile(local->character_profile.loadout, &local->owned_progression);
         if (have_world_state) {
             local->runtime.wave = world_state.wave;
@@ -609,6 +612,10 @@ StatePacket BuildLocalStatePacket() {
         local->owned_progression,
         &packet.derived_stat_revision,
         &packet.derived_stats);
+    BuildHagathaPerkPacketState(
+        local->owned_progression,
+        &packet.hagatha_perk_revision,
+        &packet.hagatha_perks);
     PopulateHostLevelUpBarrierStatePacket(
         &packet,
         static_cast<std::uint64_t>(GetTickCount64()));

@@ -189,6 +189,12 @@ from static_re_wsl_steam_stability_contracts import (
 from static_re_inventory_container_contracts import (
     test_nested_sack_inventory_preserves_owner_authored_container_paths,
 )
+from static_re_hagatha_perk_contracts import (
+    test_cheat_death_health_increase_is_captured_as_authoritative_damage,
+    test_hagatha_one_shot_runtime_state_is_host_authoritative,
+    test_hagatha_perks_replicate_as_participant_owned_native_state,
+    test_native_hagatha_perk_catalog_is_complete,
+)
 from static_re_runtime_cast_contracts import (
     test_memory_region_cache_refreshes_newly_committed_native_objects,
     test_multiplayer_nameplates_render_from_native_scene_passes,
@@ -792,6 +798,22 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Nested sack inventory preserves owner-authored container paths",
         test_nested_sack_inventory_preserves_owner_authored_container_paths,
+    ),
+    (
+        "Native Hagatha perk catalog is complete",
+        test_native_hagatha_perk_catalog_is_complete,
+    ),
+    (
+        "Hagatha perks replicate as participant-owned native state",
+        test_hagatha_perks_replicate_as_participant_owned_native_state,
+    ),
+    (
+        "Hagatha one-shot runtime state is host-authoritative",
+        test_hagatha_one_shot_runtime_state_is_host_authoritative,
+    ),
+    (
+        "Cheat Death HP recovery is captured as authoritative damage",
+        test_cheat_death_health_increase_is_captured_as_authoritative_damage,
     ),
     ("Solomon Dark Steam AppID is consistent", test_solomon_dark_steam_app_id_is_consistent),
     (

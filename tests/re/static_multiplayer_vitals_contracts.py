@@ -67,14 +67,14 @@ def test_client_owned_magic_shield_consumption_is_host_authoritative() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 70;",
+        "constexpr std::uint16_t kProtocolVersion = 71;",
         "ParticipantVitalsCorrectionFlagMagicShieldState",
         "std::uint8_t correction_flags;",
         "float magic_shield_absorb_remaining;",
         "float magic_shield_absorb_capacity;",
         "float magic_shield_explosion_fraction;",
         "float magic_shield_hit_flash;",
-        "static_assert(sizeof(ParticipantVitalsCorrectionPacket) == 80",
+        "static_assert(sizeof(ParticipantVitalsCorrectionPacket) == 88",
     ):
         assert token in protocol, f"shield correction protocol lacks: {token}"
 

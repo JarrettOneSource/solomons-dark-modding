@@ -312,6 +312,11 @@ void ApplyRemoteStatePacket(
             packet.derived_stat_revision,
             packet.derived_stats,
             &participant->owned_progression);
+        ApplyHagathaPerkPacketState(
+            packet.hagatha_perk_revision,
+            packet.hagatha_perks,
+            g_local_transport.is_host && participant->runtime.in_run,
+            &participant->owned_progression);
         const bool should_apply_loadout =
             packet.loadout_revision >= participant->owned_progression.loadout_revision;
         if (should_apply_loadout) {

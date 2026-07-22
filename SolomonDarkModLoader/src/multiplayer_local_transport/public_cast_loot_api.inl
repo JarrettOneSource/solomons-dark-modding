@@ -545,6 +545,12 @@ void QueueHostParticipantVitalsCorrection(
         magic_shield_hit_flash);
 }
 
+bool HasAuthoritativeHagathaRuntimeStateChanged(
+    std::uint64_t target_participant_id) {
+    return HasAuthoritativeHagathaRuntimeStateChangedInternal(
+        target_participant_id);
+}
+
 bool ShouldPauseMultiplayerGameplay() {
     if (!g_local_transport.initialized) {
         return false;

@@ -409,6 +409,8 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
             concentration_target_changed ||
             checkpoint.derived_stat_revision !=
                 participant.owned_progression.derived_stat_revision ||
+            checkpoint.hagatha_perk_revision !=
+                participant.owned_progression.hagatha_perk_revision ||
             checkpoint.level != participant.runtime.level ||
             checkpoint.experience != participant.runtime.experience_current ||
             checkpoint.move_speed != participant.runtime.move_speed;
@@ -430,6 +432,8 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
             participant.owned_progression.concentration_revision;
         checkpoint.derived_stat_revision =
             participant.owned_progression.derived_stat_revision;
+        checkpoint.hagatha_perk_revision =
+            participant.owned_progression.hagatha_perk_revision;
         checkpoint.concentration_selection_valid =
             participant.owned_progression.concentration_selection_valid;
         checkpoint.concentration_entry_a =
@@ -447,8 +451,10 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
         bool move_speed_synchronized = false;
         bool concentration_synchronized = false;
         bool derived_stats_synchronized = false;
+        bool hagatha_perks_synchronized = false;
         int entry_state_write_count = 0;
         int derived_stat_write_count = 0;
+        int hagatha_perk_mutation_count = 0;
 
         auto& memory = ProcessMemory::Instance();
         std::int32_t native_level = 0;
@@ -595,6 +601,24 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
             }
         }
 
+        if (participant.owned_progression.hagatha_perks.valid) {
+            const bool apply_hagatha_runtime_state =
+                !g_local_transport.is_host ||
+                !participant.runtime.in_run ||
+                progression_target_changed;
+            if (!ReconcileRemoteHagathaPerks(
+                    progression_address,
+                    participant.owned_progression.hagatha_perks,
+                    apply_hagatha_runtime_state,
+                    &hagatha_perk_mutation_count)) {
+                complete = false;
+            } else {
+                hagatha_perks_synchronized = true;
+            }
+        } else {
+            complete = false;
+        }
+
         // Observer-owned remote progression is passive replicated state. Keep
         // its per-gameplay-slot Concentrate lanes aligned without invoking the
         // stock progression refresh; exact owner-derived fields are copied below.
@@ -654,6 +678,7 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
         if (level_synchronized ||
             move_speed_synchronized ||
             derived_stat_write_count > 0 ||
+            hagatha_perk_mutation_count > 0 ||
             entry_state_write_count > 0 ||
             (!was_complete && complete)) {
             Log(
@@ -676,6 +701,12 @@ void ReconcileRemoteParticipantNativeProgression(std::uint64_t now_ms) {
                     std::to_string(derived_stat_write_count) +
                 " derived_stat_revision=" +
                     std::to_string(participant.owned_progression.derived_stat_revision) +
+                " hagatha_perks_synced=" +
+                    std::to_string(hagatha_perks_synchronized ? 1 : 0) +
+                " hagatha_perk_mutations=" +
+                    std::to_string(hagatha_perk_mutation_count) +
+                " hagatha_perk_revision=" +
+                    std::to_string(participant.owned_progression.hagatha_perk_revision) +
                 " entry_state_writes=" + std::to_string(entry_state_write_count) +
                 " spellbook_revision=" +
                     std::to_string(participant.owned_progression.spellbook_revision) +

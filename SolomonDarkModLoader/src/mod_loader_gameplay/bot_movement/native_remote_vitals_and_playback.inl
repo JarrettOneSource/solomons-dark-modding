@@ -129,6 +129,11 @@ NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
         !replicated_life_increased_since_last_write &&
         native_hp >= 0.0f &&
         native_hp + 0.05f < damage_reference_hp;
+    const bool native_hagatha_runtime_observed =
+        native_max_matches_last_write &&
+        native_hp >= 0.0f &&
+        multiplayer::HasAuthoritativeHagathaRuntimeStateChanged(
+            binding->bot_id);
     const bool native_poison_observed =
         native_transient_readable &&
         (native_transient_flags &
@@ -156,6 +161,7 @@ NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
                  binding->native_remote_webbed_authority_pending_since_ms >=
              2000);
     if (native_damage_observed ||
+        native_hagatha_runtime_observed ||
         native_poison_observed ||
         native_webbed_observed) {
         std::uint8_t corrected_status_flags = 0;
@@ -170,9 +176,13 @@ NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
             binding->native_remote_webbed_authority_pending_since_ms =
                 static_cast<std::uint64_t>(GetTickCount64());
         }
+        const float corrected_life =
+            (native_damage_observed || native_hagatha_runtime_observed)
+                ? native_hp
+                : expected_hp;
         multiplayer::QueueHostParticipantVitalsCorrection(
             binding->bot_id,
-            native_damage_observed ? native_hp : expected_hp,
+            corrected_life,
             native_max_matches_last_write
                 ? native_max_hp
                 : participant->runtime.life_max,

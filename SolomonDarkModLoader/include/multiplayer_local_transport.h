@@ -95,6 +95,8 @@ void QueueHostParticipantVitalsCorrection(
     float magic_shield_absorb_capacity,
     float magic_shield_explosion_fraction,
     float magic_shield_hit_flash);
+bool HasAuthoritativeHagathaRuntimeStateChanged(
+    std::uint64_t target_participant_id);
 bool HasReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id);
 void MarkReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id, float authoritative_hp);
 void ClearReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id);

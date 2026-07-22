@@ -430,6 +430,10 @@ struct QueuedHostParticipantVitalsCorrection {
     float magic_shield_absorb_capacity = 0.0f;
     float magic_shield_explosion_fraction = 0.0f;
     float magic_shield_hit_flash = 0.0f;
+    std::int32_t hagatha_cheat_death_charges = 0;
+    bool hagatha_serendipity_active = false;
+    bool hagatha_reverie_active = false;
+    bool hagatha_runtime_valid = false;
 };
 
 struct ActiveLocalCastInput {
@@ -623,6 +627,7 @@ struct NativeProgressionReconcileCheckpoint {
     std::uint32_t statbook_revision = 0;
     std::uint32_t concentration_revision = 0;
     std::uint32_t derived_stat_revision = 0;
+    std::uint32_t hagatha_perk_revision = 0;
     bool concentration_selection_valid = false;
     std::int32_t concentration_entry_a = -1;
     std::int32_t concentration_entry_b = -1;
@@ -1155,6 +1160,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 }
 
 #include "multiplayer_local_transport/skill_config_and_packet_helpers.inl"
+#include "multiplayer_local_transport/hagatha_perk_state.inl"
 #include "multiplayer_local_transport/run_exit_sync.inl"
 #include "multiplayer_local_transport/world_snapshot_capture.inl"
 #include "multiplayer_local_transport/loot_snapshot_capture.inl"

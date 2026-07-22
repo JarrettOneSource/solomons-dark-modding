@@ -93,6 +93,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "monster_pathfinding_refresh_target", kMonsterPathfindingRefreshTarget),
         SDMOD_ADDR("gameplay.hooks", "badguy_move_step", kBadguyMoveStep),
         SDMOD_ADDR("gameplay.hooks", "actor_progression_refresh", kActorProgressionRefresh),
+        SDMOD_ADDR("gameplay.hooks", "actor_progression_apply_hagatha_perk", kActorProgressionApplyHagathaPerk),
         SDMOD_ADDR("gameplay.hooks", "player_appearance_apply_choice", kPlayerAppearanceApplyChoice),
         SDMOD_ADDR("gameplay.hooks", "player_actor_initialize_control_brain", kPlayerActorInitializeControlBrain),
         SDMOD_ADDR("gameplay.hooks", "skills_wizard_build_primary_spell", kSkillsWizardBuildPrimarySpell),

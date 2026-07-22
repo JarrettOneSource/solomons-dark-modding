@@ -5,13 +5,14 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 70;
+constexpr std::uint16_t kProtocolVersion = 71;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
 constexpr std::uint32_t kParticipantInventorySnapshotMaxItems = 64;
 constexpr std::uint32_t kParticipantRingSlotCount = 3;
 constexpr std::uint32_t kParticipantProgressionBookSnapshotMaxEntries = 128;
+constexpr std::uint32_t kParticipantHagathaPerkMaxCount = 9;
 constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 4;
 constexpr std::uint32_t kWorldSnapshotMaxLogicalActors = 512;
 constexpr std::uint32_t kWorldActorStudentVisualStateBytes = 32;
@@ -274,10 +275,21 @@ constexpr std::int32_t kParticipantDamageX4MaxDurationTicks = 100000;
 
 enum ParticipantVitalsCorrectionFlags : std::uint8_t {
     ParticipantVitalsCorrectionFlagMagicShieldState = 1 << 0,
+    ParticipantVitalsCorrectionFlagHagathaRuntimeState = 1 << 1,
 };
 
 constexpr std::uint8_t kParticipantVitalsCorrectionKnownFlags =
-    ParticipantVitalsCorrectionFlagMagicShieldState;
+    ParticipantVitalsCorrectionFlagMagicShieldState |
+    ParticipantVitalsCorrectionFlagHagathaRuntimeState;
+
+enum ParticipantHagathaRuntimeFlags : std::uint8_t {
+    ParticipantHagathaRuntimeFlagSerendipityActive = 1 << 0,
+    ParticipantHagathaRuntimeFlagReverieActive = 1 << 1,
+};
+
+constexpr std::uint8_t kParticipantHagathaRuntimeKnownFlags =
+    ParticipantHagathaRuntimeFlagSerendipityActive |
+    ParticipantHagathaRuntimeFlagReverieActive;
 
 enum ParticipantInventorySnapshotFlags : std::uint16_t {
     ParticipantInventorySnapshotFlagTruncated = 1 << 0,
@@ -342,6 +354,16 @@ struct ParticipantDerivedStatPacketState {
     std::int32_t meditation_idle_ticks;
 };
 
+struct ParticipantHagathaPerkPacketState {
+    std::uint8_t valid;
+    std::uint8_t perk_count;
+    std::uint8_t perk_capacity;
+    std::uint8_t runtime_flags;
+    std::int32_t cheat_death_charges;
+    std::int8_t perk_selectors[kParticipantHagathaPerkMaxCount];
+    std::uint8_t reserved[3] = {};
+};
+
 struct StatePacket {
     PacketHeader header;
     std::uint64_t participant_id;
@@ -394,6 +416,8 @@ struct StatePacket {
     std::int32_t concentration_entry_b;
     std::uint32_t derived_stat_revision;
     ParticipantDerivedStatPacketState derived_stats;
+    std::uint32_t hagatha_perk_revision;
+    ParticipantHagathaPerkPacketState hagatha_perks;
     std::uint64_t level_up_barrier_id;
     std::uint32_t level_up_barrier_revision;
     std::uint32_t level_up_deadline_remaining_ms;
@@ -917,6 +941,11 @@ struct ParticipantVitalsCorrectionPacket {
     std::uint8_t transient_status_flags;
     std::uint8_t correction_flags;
     std::uint8_t reserved[2] = {};
+    std::int32_t hagatha_cheat_death_charges;
+    std::uint8_t hagatha_serendipity_active;
+    std::uint8_t hagatha_reverie_active;
+    std::uint8_t hagatha_runtime_valid;
+    std::uint8_t hagatha_runtime_reserved = 0;
     std::int32_t poison_remaining_ticks;
     float poison_damage_per_tick;
     std::int32_t webbed_remaining_ticks;
@@ -1068,7 +1097,8 @@ static_assert(sizeof(ParticipantEquippedItemPacketState) == 8, "Unexpected equip
 static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpected progression book entry packet size");
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 56, "Unexpected derived stat packet size");
-static_assert(sizeof(StatePacket) == 4488, "Unexpected state packet size");
+static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20, "Unexpected Hagatha perk packet size");
+static_assert(sizeof(StatePacket) == 4512, "Unexpected state packet size");
 static_assert(sizeof(ParticipantFramePacket) == 298,
               "Unexpected participant frame packet size");
 static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");
@@ -1111,7 +1141,7 @@ static_assert(SpellEffectSnapshotPacketWireSize(
               "A full spell effect snapshot must consume the packet buffer exactly");
 static_assert(sizeof(AirChainTargetPacketState) == 28, "Unexpected Air chain target packet size");
 static_assert(sizeof(AirChainSnapshotPacket) == 260, "Unexpected Air chain snapshot packet size");
-static_assert(sizeof(ParticipantVitalsCorrectionPacket) == 80, "Unexpected participant vitals correction packet size");
+static_assert(sizeof(ParticipantVitalsCorrectionPacket) == 88, "Unexpected participant vitals correction packet size");
 static_assert(sizeof(EnemyDamageClaimPacket) == 72, "Unexpected enemy damage claim packet size");
 static_assert(sizeof(EnemyDamageResultPacket) == 56, "Unexpected enemy damage result packet size");
 static_assert(sizeof(LootPickupRequestPacket) == 56, "Unexpected loot pickup request packet size");

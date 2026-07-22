@@ -194,7 +194,7 @@ int LuaRuntimeGetMod(lua_State* state) {
 void PushOwnedProgressionState(
     lua_State* state,
     const multiplayer::ParticipantOwnedProgressionState& progression) {
-    lua_createtable(state, 0, 32);
+    lua_createtable(state, 0, 34);
     lua_pushboolean(state, progression.initialized ? 1 : 0);
     lua_setfield(state, -2, "initialized");
     lua_pushinteger(state, static_cast<lua_Integer>(progression.gold));
@@ -251,6 +251,40 @@ void PushOwnedProgressionState(
         lua_pushinteger(state, static_cast<lua_Integer>(derived.meditation_idle_ticks));
         lua_setfield(state, -2, "meditation_idle_ticks");
         lua_setfield(state, -2, "derived_stats");
+    }
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(progression.hagatha_perk_revision));
+    lua_setfield(state, -2, "hagatha_perk_revision");
+    if (progression.hagatha_perks.valid) {
+        const auto& perks = progression.hagatha_perks;
+        lua_createtable(state, 0, 7);
+        lua_pushinteger(state, static_cast<lua_Integer>(perks.perk_count));
+        lua_setfield(state, -2, "perk_count");
+        lua_pushinteger(state, static_cast<lua_Integer>(perks.perk_capacity));
+        lua_setfield(state, -2, "perk_capacity");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(perks.cheat_death_charges));
+        lua_setfield(state, -2, "cheat_death_charges");
+        lua_pushboolean(state, perks.serendipity_active ? 1 : 0);
+        lua_setfield(state, -2, "serendipity_active");
+        lua_pushboolean(state, perks.reverie_active ? 1 : 0);
+        lua_setfield(state, -2, "reverie_active");
+        lua_createtable(state, static_cast<int>(perks.perk_count), 0);
+        for (std::size_t index = 0; index < perks.perk_count; ++index) {
+            lua_pushinteger(
+                state,
+                static_cast<lua_Integer>(perks.perk_selectors[index]));
+            lua_rawseti(
+                state,
+                -2,
+                static_cast<lua_Integer>(index + 1));
+        }
+        lua_setfield(state, -2, "selectors");
+        lua_pushboolean(state, 1);
+        lua_setfield(state, -2, "valid");
+        lua_setfield(state, -2, "hagatha_perks");
     }
     lua_pushboolean(state, progression.inventory_host_authoritative ? 1 : 0);
     lua_setfield(state, -2, "inventory_host_authoritative");

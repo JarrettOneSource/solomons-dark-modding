@@ -87,6 +87,25 @@ void QueueHostParticipantVitalsCorrectionInternal(
             shield_state.explosion_fraction;
         queued.magic_shield_hit_flash = shield_state.hit_flash;
     }
+    HagathaRuntimeCorrectionState hagatha_runtime;
+    if (CaptureAuthoritativeHagathaRuntimeState(
+            target_participant_id,
+            &hagatha_runtime)) {
+        queued.correction_flags |=
+            ParticipantVitalsCorrectionFlagHagathaRuntimeState;
+        queued.hagatha_cheat_death_charges =
+            hagatha_runtime.cheat_death_charges;
+        queued.hagatha_serendipity_active =
+            hagatha_runtime.serendipity_active;
+        queued.hagatha_reverie_active =
+            hagatha_runtime.reverie_active;
+        queued.hagatha_runtime_valid = true;
+        if (hagatha_runtime.cheat_death_consumed &&
+            hagatha_runtime.native_life_valid) {
+            queued.life_current = hagatha_runtime.life_current;
+            queued.life_max = hagatha_runtime.life_max;
+        }
+    }
 
     std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
     g_queued_host_participant_vitals_corrections.push_back(queued);
@@ -114,8 +133,29 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
             correction.target_participant_id,
             correction);
         if (!inserted) {
-            it->second.life_current =
-                (std::min)(it->second.life_current, correction.life_current);
+            const bool correction_hagatha_runtime =
+                (correction.correction_flags &
+                 ParticipantVitalsCorrectionFlagHagathaRuntimeState) != 0 &&
+                correction.hagatha_runtime_valid;
+            const bool accumulated_hagatha_runtime =
+                (it->second.correction_flags &
+                 ParticipantVitalsCorrectionFlagHagathaRuntimeState) != 0 &&
+                it->second.hagatha_runtime_valid;
+            const bool correction_consumed_cheat_death =
+                correction_hagatha_runtime && accumulated_hagatha_runtime &&
+                correction.hagatha_cheat_death_charges <
+                    it->second.hagatha_cheat_death_charges;
+            const bool accumulated_consumed_cheat_death =
+                correction_hagatha_runtime && accumulated_hagatha_runtime &&
+                it->second.hagatha_cheat_death_charges <
+                    correction.hagatha_cheat_death_charges;
+            if (correction_consumed_cheat_death) {
+                it->second.life_current = correction.life_current;
+            } else if (!accumulated_consumed_cheat_death) {
+                it->second.life_current = (std::min)(
+                    it->second.life_current,
+                    correction.life_current);
+            }
             const bool correction_poisoned =
                 (correction.transient_status_flags &
                  ParticipantTransientStatusFlagPoisoned) != 0;
@@ -173,6 +213,29 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
                     it->second.magic_shield_hit_flash,
                     correction.magic_shield_hit_flash);
             }
+            if (correction_hagatha_runtime) {
+                it->second.correction_flags |=
+                    ParticipantVitalsCorrectionFlagHagathaRuntimeState;
+                it->second.hagatha_runtime_valid = true;
+                if (accumulated_hagatha_runtime) {
+                    it->second.hagatha_cheat_death_charges = (std::min)(
+                        it->second.hagatha_cheat_death_charges,
+                        correction.hagatha_cheat_death_charges);
+                    it->second.hagatha_serendipity_active =
+                        it->second.hagatha_serendipity_active &&
+                        correction.hagatha_serendipity_active;
+                    it->second.hagatha_reverie_active =
+                        it->second.hagatha_reverie_active &&
+                        correction.hagatha_reverie_active;
+                } else {
+                    it->second.hagatha_cheat_death_charges =
+                        correction.hagatha_cheat_death_charges;
+                    it->second.hagatha_serendipity_active =
+                        correction.hagatha_serendipity_active;
+                    it->second.hagatha_reverie_active =
+                        correction.hagatha_reverie_active;
+                }
+            }
         }
     }
     for (const auto& [target_participant_id, correction] :
@@ -190,6 +253,14 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
                  (std::max)(1.0f, participant->runtime.life_max * 0.1f))) {
             continue;
         }
+        const bool pending_cheat_death_consumed =
+            (correction.correction_flags &
+             ParticipantVitalsCorrectionFlagHagathaRuntimeState) != 0 &&
+            correction.hagatha_runtime_valid &&
+            participant->owned_progression.hagatha_perks.valid &&
+            correction.hagatha_cheat_death_charges <
+                participant->owned_progression.hagatha_perks
+                    .cheat_death_charges;
 
         auto pending_it =
             g_local_transport.pending_participant_vitals_corrections_by_participant.find(
@@ -238,8 +309,26 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
              correction.magic_shield_absorb_remaining +
                      kParticipantVitalsCorrectionEpsilon <
                  pending_it->second.packet.magic_shield_absorb_remaining);
+        const bool correction_hagatha_runtime =
+            (correction.correction_flags &
+             ParticipantVitalsCorrectionFlagHagathaRuntimeState) != 0 &&
+            correction.hagatha_runtime_valid;
+        const bool have_stronger_hagatha_correction =
+            correction_hagatha_runtime &&
+            (pending_it ==
+                 g_local_transport
+                     .pending_participant_vitals_corrections_by_participant.end() ||
+             (pending_it->second.packet.correction_flags &
+              ParticipantVitalsCorrectionFlagHagathaRuntimeState) == 0 ||
+             correction.hagatha_cheat_death_charges <
+                 pending_it->second.packet.hagatha_cheat_death_charges ||
+             (!correction.hagatha_serendipity_active &&
+              pending_it->second.packet.hagatha_serendipity_active != 0) ||
+             (!correction.hagatha_reverie_active &&
+              pending_it->second.packet.hagatha_reverie_active != 0));
         if (!have_stronger_status_correction &&
-            !have_stronger_magic_shield_correction) {
+            !have_stronger_magic_shield_correction &&
+            !have_stronger_hagatha_correction) {
             continue;
         }
 
@@ -258,12 +347,41 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
             correction.magic_shield_explosion_fraction;
         auto effective_magic_shield_hit_flash =
             correction.magic_shield_hit_flash;
+        auto effective_hagatha_cheat_death_charges =
+            correction.hagatha_cheat_death_charges;
+        auto effective_hagatha_serendipity_active =
+            correction.hagatha_serendipity_active;
+        auto effective_hagatha_reverie_active =
+            correction.hagatha_reverie_active;
+        auto effective_hagatha_runtime_valid =
+            correction.hagatha_runtime_valid;
         if (pending_it !=
             g_local_transport
                 .pending_participant_vitals_corrections_by_participant.end()) {
             const auto& previous = pending_it->second.packet;
-            effective_life_current =
-                (std::min)(effective_life_current, previous.life_current);
+            const bool previous_hagatha_runtime =
+                (previous.correction_flags &
+                 ParticipantVitalsCorrectionFlagHagathaRuntimeState) != 0 &&
+                previous.hagatha_runtime_valid != 0;
+            const bool new_hagatha_runtime =
+                (effective_correction_flags &
+                 ParticipantVitalsCorrectionFlagHagathaRuntimeState) != 0 &&
+                effective_hagatha_runtime_valid;
+            const bool correction_consumed_cheat_death =
+                new_hagatha_runtime && previous_hagatha_runtime &&
+                effective_hagatha_cheat_death_charges <
+                    previous.hagatha_cheat_death_charges;
+            const bool previous_consumed_cheat_death =
+                new_hagatha_runtime && previous_hagatha_runtime &&
+                previous.hagatha_cheat_death_charges <
+                    effective_hagatha_cheat_death_charges;
+            if (previous_consumed_cheat_death) {
+                effective_life_current = previous.life_current;
+            } else if (!correction_consumed_cheat_death) {
+                effective_life_current = (std::min)(
+                    effective_life_current,
+                    previous.life_current);
+            }
             effective_status_flags = static_cast<std::uint8_t>(
                 effective_status_flags |
                 (previous.transient_status_flags &
@@ -304,6 +422,29 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
                     effective_magic_shield_hit_flash,
                     previous.magic_shield_hit_flash);
             }
+            if (previous_hagatha_runtime) {
+                effective_correction_flags |=
+                    ParticipantVitalsCorrectionFlagHagathaRuntimeState;
+                if (new_hagatha_runtime) {
+                    effective_hagatha_cheat_death_charges = (std::min)(
+                        effective_hagatha_cheat_death_charges,
+                        previous.hagatha_cheat_death_charges);
+                    effective_hagatha_serendipity_active =
+                        effective_hagatha_serendipity_active &&
+                        previous.hagatha_serendipity_active != 0;
+                    effective_hagatha_reverie_active =
+                        effective_hagatha_reverie_active &&
+                        previous.hagatha_reverie_active != 0;
+                } else {
+                    effective_hagatha_cheat_death_charges =
+                        previous.hagatha_cheat_death_charges;
+                    effective_hagatha_serendipity_active =
+                        previous.hagatha_serendipity_active != 0;
+                    effective_hagatha_reverie_active =
+                        previous.hagatha_reverie_active != 0;
+                }
+                effective_hagatha_runtime_valid = true;
+            }
         }
 
         PendingParticipantVitalsCorrection pending;
@@ -331,6 +472,14 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
             effective_webbed_ticks;
         pending.packet.webbed_strength = effective_webbed_strength;
         pending.packet.correction_flags = effective_correction_flags;
+        pending.packet.hagatha_cheat_death_charges =
+            effective_hagatha_cheat_death_charges;
+        pending.packet.hagatha_serendipity_active =
+            effective_hagatha_serendipity_active ? 1 : 0;
+        pending.packet.hagatha_reverie_active =
+            effective_hagatha_reverie_active ? 1 : 0;
+        pending.packet.hagatha_runtime_valid =
+            effective_hagatha_runtime_valid ? 1 : 0;
         pending.packet.magic_shield_absorb_remaining =
             effective_magic_shield_absorb_remaining;
         pending.packet.magic_shield_absorb_capacity =
@@ -350,9 +499,11 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
                 return;
             }
             mutable_participant->runtime.life_current =
-                (std::min)(
-                    mutable_participant->runtime.life_current,
-                    pending.packet.life_current);
+                pending_cheat_death_consumed
+                    ? pending.packet.life_current
+                    : (std::min)(
+                          mutable_participant->runtime.life_current,
+                          pending.packet.life_current);
             if ((pending.packet.transient_status_flags &
                  (ParticipantTransientStatusFlagPoisoned |
                   ParticipantTransientStatusFlagWebbed)) != 0) {
@@ -374,6 +525,30 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
                     pending.packet.magic_shield_explosion_fraction;
                 mutable_participant->runtime.magic_shield_hit_flash =
                     pending.packet.magic_shield_hit_flash;
+            }
+            if ((pending.packet.correction_flags &
+                 ParticipantVitalsCorrectionFlagHagathaRuntimeState) != 0 &&
+                pending.packet.hagatha_runtime_valid != 0 &&
+                mutable_participant->owned_progression.hagatha_perks.valid) {
+                auto& perks =
+                    mutable_participant->owned_progression.hagatha_perks;
+                const bool changed =
+                    perks.cheat_death_charges !=
+                        pending.packet.hagatha_cheat_death_charges ||
+                    perks.serendipity_active !=
+                        (pending.packet.hagatha_serendipity_active != 0) ||
+                    perks.reverie_active !=
+                        (pending.packet.hagatha_reverie_active != 0);
+                perks.cheat_death_charges =
+                    pending.packet.hagatha_cheat_death_charges;
+                perks.serendipity_active =
+                    pending.packet.hagatha_serendipity_active != 0;
+                perks.reverie_active =
+                    pending.packet.hagatha_reverie_active != 0;
+                if (changed) {
+                    mutable_participant->owned_progression
+                        .hagatha_perk_revision += 1;
+                }
             }
         });
 
@@ -487,6 +662,21 @@ void ApplyParticipantVitalsCorrectionPacket(
     const bool magic_shield_payload_valid = correction_magic_shield
         ? magic_shield_payload_zero || magic_shield_payload_active
         : magic_shield_payload_zero;
+    const bool correction_hagatha_runtime =
+        (packet.correction_flags &
+         ParticipantVitalsCorrectionFlagHagathaRuntimeState) != 0;
+    const bool hagatha_runtime_payload_zero =
+        packet.hagatha_cheat_death_charges == 0 &&
+        packet.hagatha_serendipity_active == 0 &&
+        packet.hagatha_reverie_active == 0 &&
+        packet.hagatha_runtime_valid == 0;
+    const bool hagatha_runtime_payload_valid = correction_hagatha_runtime
+        ? packet.hagatha_runtime_valid != 0 &&
+              packet.hagatha_cheat_death_charges >= 0 &&
+              packet.hagatha_cheat_death_charges <= 1 &&
+              packet.hagatha_serendipity_active <= 1 &&
+              packet.hagatha_reverie_active <= 1
+        : hagatha_runtime_payload_zero;
     if (!IsLocalTransportClient() ||
         !IsConfiguredRemoteAuthorityEndpoint(from) ||
         packet.authority_participant_id == 0 ||
@@ -504,7 +694,8 @@ void ApplyParticipantVitalsCorrectionPacket(
          ~kParticipantVitalsCorrectionKnownFlags) != 0 ||
         !poison_payload_valid ||
         !webbed_payload_valid ||
-        !magic_shield_payload_valid) {
+        !magic_shield_payload_valid ||
+        !hagatha_runtime_payload_valid) {
         return;
     }
 
@@ -537,8 +728,22 @@ void ApplyParticipantVitalsCorrectionPacket(
         return;
     }
 
+    const bool cheat_death_consumed =
+        correction_hagatha_runtime &&
+        packet.hagatha_runtime_valid != 0 &&
+        local->owned_progression.hagatha_perks.valid &&
+        packet.hagatha_cheat_death_charges <
+            local->owned_progression.hagatha_perks.cheat_death_charges;
     const float corrected_life =
-        (std::min)(player_state.hp, packet.life_current);
+        cheat_death_consumed
+            ? packet.life_current
+            : (std::min)(player_state.hp, packet.life_current);
+    if (correction_hagatha_runtime &&
+        !ApplyAuthoritativeHagathaRuntimeCorrection(
+            player_state.progression_address,
+            packet)) {
+        return;
+    }
     const bool wrote = TryWriteLocalPlayerOrbResource(
         static_cast<std::int32_t>(LootOrbResourceKind::Health),
         corrected_life,
@@ -562,7 +767,9 @@ void ApplyParticipantVitalsCorrectionPacket(
                 packet.poison_damage_per_tick,
                 packet.webbed_remaining_ticks,
                 packet.webbed_strength,
-                packet.correction_flags,
+                static_cast<std::uint8_t>(
+                    packet.correction_flags &
+                    ParticipantVitalsCorrectionFlagMagicShieldState),
                 packet.magic_shield_absorb_remaining,
                 packet.magic_shield_absorb_capacity,
                 packet.magic_shield_explosion_fraction,

@@ -169,6 +169,17 @@ struct ParticipantDerivedStatState {
     std::int32_t meditation_idle_ticks = -1;
 };
 
+struct ParticipantHagathaPerkState {
+    bool valid = false;
+    std::uint8_t perk_count = 0;
+    std::uint8_t perk_capacity = 0;
+    std::int32_t cheat_death_charges = 0;
+    bool serendipity_active = false;
+    bool reverie_active = false;
+    std::array<std::int8_t, kParticipantHagathaPerkMaxCount> perk_selectors = {
+        -1, -1, -1, -1, -1, -1, -1, -1, -1};
+};
+
 struct ParticipantOwnedProgressionState {
     bool initialized = false;
     std::int32_t gold = 0;
@@ -184,6 +195,8 @@ struct ParticipantOwnedProgressionState {
     std::int32_t concentration_entry_b = -1;
     std::uint32_t derived_stat_revision = 0;
     ParticipantDerivedStatState derived_stats;
+    std::uint32_t hagatha_perk_revision = 0;
+    ParticipantHagathaPerkState hagatha_perks;
     bool inventory_host_authoritative = false;
     std::uint16_t inventory_item_total_count = 0;
     bool inventory_truncated = false;

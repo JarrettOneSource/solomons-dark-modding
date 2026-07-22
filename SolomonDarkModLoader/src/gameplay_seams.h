@@ -82,6 +82,7 @@ extern uintptr_t kActorWorldLookupObjectByHandle;
 extern uintptr_t kMonsterPathfindingRefreshTarget;
 extern uintptr_t kBadguyMoveStep;
 extern uintptr_t kActorProgressionRefresh;
+extern uintptr_t kActorProgressionApplyHagathaPerk;
 extern uintptr_t kPlayerAppearanceApplyChoice;
 extern uintptr_t kPlayerActorInitializeControlBrain;
 extern uintptr_t kSkillsWizardBuildPrimarySpell;
