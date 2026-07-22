@@ -149,6 +149,9 @@
     <ClInclude Include="include\lua_engine_events.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\lua_draw_runtime.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\lua_mod_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -273,6 +276,12 @@
       <Filter>Header Files\Gameplay Seams</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_exec_pipe.h">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_draw_internal.h">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_draw_renderer\rendering_helpers.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_internal.h">
@@ -1282,6 +1291,9 @@
     <ClCompile Include="src\lua_engine_bindings.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_draw.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_state.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
@@ -1322,6 +1334,18 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_values.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_draw_assets.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_draw_renderer.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_draw_runtime.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_draw_texture_loader.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_mod_runtime.cpp">

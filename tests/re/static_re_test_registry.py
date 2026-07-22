@@ -14,6 +14,9 @@ from static_re_boneyard_contracts import (
 from static_lua_mod_state_contracts import (
     test_lua_mod_state_and_events_are_authority_replicated,
 )
+from static_lua_draw_contracts import (
+    test_lua_draw_is_bounded_local_and_backbuffer_verified,
+)
 from static_multiplayer_transport_contracts import (
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
     test_build_all_rebuilds_native_loader_from_clean_intermediates,
@@ -254,6 +257,10 @@ from static_re_binary_tooling_contracts import (
 )
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "Lua draw is bounded, local, and backbuffer-verified",
+        test_lua_draw_is_bounded_local_and_backbuffer_verified,
+    ),
     (
         "Lua mod state and events are authority-replicated",
         test_lua_mod_state_and_events_are_authority_replicated,

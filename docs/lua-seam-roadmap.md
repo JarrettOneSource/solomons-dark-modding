@@ -147,6 +147,12 @@ race HUDs, tutorial callouts.
 *Multiplayer:* Presentation-class — purely local, MP-safe by construction. Pairs with
 replicated events for synchronized displays.
 
+**Implemented 2026-07-22.** Each mod owns a bounded immediate display list submitted
+from `runtime.tick`; the EndScene renderer supports ASCII text, filled/outlined rects,
+thick lines, all 28 stock sprite atlases, viewport queries, and gameplay
+`world_to_screen`. `sd.hud` is an exact alias and the renderer preserves the caller's
+D3D9 state. See `lua-draw.md` and the opt-in `sample.lua.hud_showcase` mod.
+
 **2. Mutable pre-events (filters).**
 Cancellable/rewritable hooks at already-resolved seams:
 - `damage.dealing` / `damage.taken` — `kPlayerActorMagicDamage` + `kDamageContext*` globals

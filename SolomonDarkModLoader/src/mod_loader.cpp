@@ -7,6 +7,7 @@
 
 #include "bot_runtime.h"
 #include "logger.h"
+#include "lua_draw_runtime.h"
 #include "lua_engine.h"
 #include "lua_exec_pipe.h"
 #include "memory_access.h"
@@ -403,6 +404,25 @@ void Initialize(HMODULE module_handle) {
             }
         } else {
             Log("Debug UI overlay disabled by runtime flags.");
+        }
+
+        if (runtime_flags.loader.lua_engine) {
+            const auto* debug_ui_config = TryGetDebugUiOverlayConfig();
+            std::string lua_draw_error;
+            if (debug_ui_config == nullptr ||
+                debug_ui_config->device_pointer_global == 0 ||
+                !StartLuaDrawRenderer(
+                    debug_ui_config->device_pointer_global,
+                    &lua_draw_error)) {
+                const auto message = lua_draw_error.empty()
+                    ? std::string(
+                        "Lua draw renderer could not resolve the D3D9 device pointer seam.")
+                    : lua_draw_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status("lua-draw-renderer-failed", message);
+                return;
+            }
         }
 
         RefreshStartupStatusSnapshot(&startup_status);

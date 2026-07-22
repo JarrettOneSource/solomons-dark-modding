@@ -42,6 +42,7 @@ void __fastcall HookActorAnimationAdvance(void* self, void* /*unused_edx*/) {
     } context_scope(actor_address, reinterpret_cast<uintptr_t>(_ReturnAddress()));
 
     original(self);
+    CaptureLuaDrawWorldProjection(GetLastSeenD3d9Device());
     if (IsTrackedWizardParticipantActorForHud(actor_address)) {
         std::string display_name;
         std::uint64_t participant_id = 0;

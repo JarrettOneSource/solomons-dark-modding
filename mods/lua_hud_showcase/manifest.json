@@ -1,0 +1,18 @@
+{
+  "id": "sample.lua.hud_showcase",
+  "name": "Lua HUD Showcase",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "events.runtime.tick",
+      "draw.local.immediate",
+      "draw.text",
+      "draw.primitives",
+      "draw.stock_sprites",
+      "draw.world_projection"
+    ]
+  }
+}

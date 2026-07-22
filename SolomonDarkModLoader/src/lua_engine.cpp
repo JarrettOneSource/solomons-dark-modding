@@ -2,6 +2,7 @@
 
 #include "bot_runtime.h"
 #include "logger.h"
+#include "lua_draw_runtime.h"
 #include "lua_engine_bindings_internal.h"
 #include "lua_engine_internal.h"
 #include "lua_mod_runtime.h"
@@ -303,6 +304,11 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "lua.engine",
         "events.runtime.tick",
         "events.replicated.broadcast",
+        "draw.local.immediate",
+        "draw.text",
+        "draw.primitives",
+        "draw.stock_sprites",
+        "draw.world_projection",
         "runtime.mod.info",
         "state.replicated.read",
         "state.replicated.write",
@@ -424,6 +430,9 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     std::filesystem::create_directories(runtime_directory);
     loaded_mods.clear();
     ResetLuaModStateStore();
+    if (!InitializeLuaDrawRuntime(bootstrap.stage_root, error_message)) {
+        return false;
+    }
 
     const auto capabilities = detail::BuildLuaCapabilitySet();
     for (const auto& mod : bootstrap.mods) {
@@ -478,6 +487,7 @@ void ShutdownLuaEngine() {
 
     std::scoped_lock lock(detail::LuaEngineMutex());
     if (!detail::LuaEngineInitializedFlag()) {
+        ShutdownLuaDrawRuntime();
         return;
     }
 
@@ -487,6 +497,7 @@ void ShutdownLuaEngine() {
     }
     loaded_mods.clear();
     ResetLuaModStateStore();
+    ShutdownLuaDrawRuntime();
     detail::LuaRuntimeDirectoryStorage().clear();
     detail::LuaRuntimeBootstrapStorage() = RuntimeBootstrap{};
     detail::LuaEngineInitializedFlag() = false;

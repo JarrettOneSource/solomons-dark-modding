@@ -1,6 +1,7 @@
 #include "lua_engine_internal.h"
 
 #include "logger.h"
+#include "lua_draw_runtime.h"
 
 extern "C" {
 #include "lua.h"
@@ -288,13 +289,18 @@ void DispatchEventToMod(
 }
 
 void DispatchRuntimeTickToMod(LoadedLuaMod* mod, const SDModRuntimeTickContext& context) {
+    if (mod == nullptr || !mod->runtime_tick_registered) {
+        return;
+    }
+    BeginLuaDrawFrame(mod->descriptor.id);
     DispatchEventToMod(
         mod,
         kRuntimeTickEventName,
-        mod != nullptr && mod->runtime_tick_registered,
+        true,
         [&context](lua_State* state) {
             PushRuntimeTickPayload(state, context);
         });
+    CommitLuaDrawFrame(mod->descriptor.id);
 }
 
 void DispatchRunStartedToMod(LoadedLuaMod* mod) {

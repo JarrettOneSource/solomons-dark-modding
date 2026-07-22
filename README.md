@@ -28,7 +28,7 @@ Mods are discovered from `manifest.json`. Each mod may be:
 - **Native** — DLLs under `native/` loaded through `SDModPlugin_Initialize` / `SDModPlugin_Shutdown`.
 - **Hybrid** — any combination of the above.
 
-Sample mods: `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`, `wave_fast_start`, `lua_bots`, `lua_dark_cloud_sort_bootstrap`, `lua_ui_sandbox_lab`.
+Sample mods: `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`, `wave_fast_start`, `lua_bots`, `lua_dark_cloud_sort_bootstrap`, `lua_hud_showcase`, `lua_ui_sandbox_lab`.
 
 Website-distributed packages use the same root-level manifest and may contain
 data overlays/Boneyards, root `images/` art overlays, sandboxed Lua, or any
@@ -83,7 +83,7 @@ present. Provide a 32-bit Steamworks runtime at
 
 ## Loader features
 
-- Embedded Lua engine with the `sd.*` API (gameplay, runtime, replicated state/events, UI, input, debug, bots).
+- Embedded Lua engine with the `sd.*` API (gameplay, runtime, replicated state/events, immediate drawing/HUD, UI, input, debug, bots).
 - Native DLL mod host (`SDModPlugin_Initialize` / `SDModPlugin_Shutdown`).
 - Scriptable bot runtime exposed through `sd.bots.*`, driven from the runtime tick service.
 - Steam bootstrap: `steam_api.dll` load, `SteamAPI_Init`, and legacy friends/matchmaking/networking interface binding.
@@ -175,6 +175,7 @@ py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-u
 - `docs/participant-entrance-follow.md` — hub/private/run follow semantics for participant bots.
 - `docs/lua-memory-tooling.md` — live Lua memory and reverse-engineering helpers.
 - `docs/lua-state-and-events.md` — authority-owned replicated state, ordered custom events, limits, and live acceptance.
+- `docs/lua-draw.md` — local immediate-mode text, primitives, stock sprites, projection, and bounds.
 - `docs/ui-binary-map.md` — recovered UI seams and coverage.
 - `docs/ui-engine-system-map.md` — higher-level UI engine architecture and hook targets.
 - `docs/ui-automation-inventory.md` — semantic `sd.ui` surface coverage and cutover map.

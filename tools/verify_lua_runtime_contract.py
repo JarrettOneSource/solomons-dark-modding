@@ -47,6 +47,16 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
         "get_revision",
         "is_authority",
     ),
+    "draw": (
+        "text",
+        "rect",
+        "line",
+        "sprite",
+        "world_to_screen",
+        "get_viewport",
+        "get_sprite_info",
+        "get_limits",
+    ),
     "bots": (
         "create",
         "destroy",
@@ -202,6 +212,7 @@ end
 for _, name in ipairs({{'debug', 'dofile', 'io', 'loadfile', 'os', 'package', 'require'}}) do
   if _G[name] ~= nil then fail('unsafe_global:' .. name) end
 end
+if sd.hud ~= sd.draw then fail('hud_alias_mismatch') end
 
 check_call('runtime.get_mod', sd.runtime.get_mod, {{'table'}})
 check_call('runtime.get_capabilities', sd.runtime.get_capabilities, {{'table'}})
@@ -209,6 +220,11 @@ check_call('runtime.get_multiplayer_state', sd.runtime.get_multiplayer_state, {{
 check_call('state.snapshot', sd.state.snapshot, {{'table'}})
 check_call('state.get_revision', sd.state.get_revision, {{'number'}})
 check_call('state.is_authority', sd.state.is_authority, {{'boolean'}})
+check_call('draw.get_limits', sd.draw.get_limits, {{'table'}})
+check_call('draw.get_viewport', sd.draw.get_viewport, {{'table', 'nil'}})
+check_call('draw.get_sprite_info', function()
+  return sd.draw.get_sprite_info('Title', 9)
+end, {{'table'}})
 check_call('bots.get_count', sd.bots.get_count, {{'number'}})
 check_call('bots.get_participants', sd.bots.get_participants, {{'table'}})
 check_call('ui.get_surface_id', sd.ui.get_surface_id, {{'string', 'nil'}})
