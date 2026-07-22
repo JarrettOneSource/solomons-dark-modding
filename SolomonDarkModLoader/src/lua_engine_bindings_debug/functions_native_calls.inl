@@ -136,7 +136,7 @@ int LuaDebugQueueNativePoisonBehaviorProbe(lua_State* state) {
 }
 
 // sd.debug.queue_native_magic_hit_behavior_probe(projectile_damage,
-//     magic_damage, attempts, target_participant_id=0)
+//     magic_damage, attempts, target_participant_id=0, poison_damage=0)
 //     -> boolean, string, integer
 // The retail magic-hit work is deferred until after the Lua callback returns.
 int LuaDebugQueueNativeMagicHitBehaviorProbe(lua_State* state) {
@@ -151,12 +151,15 @@ int LuaDebugQueueNativeMagicHitBehaviorProbe(lua_State* state) {
     }
     const auto target_participant_id =
         static_cast<std::uint64_t>(target_participant_integer);
+    const auto poison_damage =
+        static_cast<float>(luaL_optnumber(state, 5, 0.0));
 
     std::string error_message;
     std::uint64_t request_serial = 0;
     const bool queued = QueueNativeMagicHitBehaviorProbe(
         projectile_damage,
         magic_damage,
+        poison_damage,
         attempts,
         target_participant_id,
         &request_serial,

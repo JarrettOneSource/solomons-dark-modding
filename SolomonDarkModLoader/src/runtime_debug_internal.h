@@ -141,7 +141,7 @@ struct GuardedPageState {
     uintptr_t page_base = 0;
     DWORD base_protect = 0;
     size_t ref_count = 0;
-    bool pending_rearm = false;
+    DWORD pending_rearm_thread_id = 0;
 };
 
 struct PendingWriteHit {

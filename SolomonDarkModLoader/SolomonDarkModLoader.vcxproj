@@ -344,6 +344,7 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_mana_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_damage_authority_hook.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\badguy_damage_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\poison_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\webbed_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks_effect_and_dispatch.inl" />

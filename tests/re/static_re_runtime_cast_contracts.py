@@ -1315,6 +1315,78 @@ def test_write_watches_are_transparent_to_loader_memory_access() -> str:
     return "managed PAGE_GUARD watches remain transparent to loader and Lua memory access"
 
 
+def test_write_watch_rearm_is_owned_by_faulting_thread() -> str:
+    internal = read_text(ROOT / "SolomonDarkModLoader/src/runtime_debug_internal.h")
+    handler = RUNTIME_DEBUG_WATCH_HELPERS.read_text(encoding="utf-8")
+
+    required_tokens = (
+        (internal, "DWORD pending_rearm_thread_id = 0;"),
+        (handler, "page_it->second.pending_rearm_thread_id = thread_id;"),
+        (handler, "state.pending_rearm_thread_id != thread_id"),
+        (handler, "state.pending_rearm_thread_id = 0;"),
+    )
+    missing = [token for text, token in required_tokens if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "PAGE_GUARD rearm must remain owned by the thread whose guarded access "
+            "set the trap flag: " + ", ".join(missing)
+        )
+    if "bool pending_rearm" in internal:
+        raise StaticReTestFailure(
+            "global per-page pending_rearm lets one thread consume another thread's "
+            "single-step rearm"
+        )
+
+    return "PAGE_GUARD single-step rearm is owned by the faulting thread"
+
+
+def test_primary_cast_lane_requires_native_collision_segment() -> str:
+    """A cast lane is clear only when stock movement geometry also permits it."""
+
+    gameplay_api = read_text(
+        ROOT / "SolomonDarkModLoader/include/mod_loader_gameplay_api.inl"
+    )
+    gameplay_public_api = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_debug_and_spawn.inl"
+    )
+    lua_nav = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/lua_engine_bindings_debug/functions_nav_grid_and_copy.inl"
+    )
+    lua_registration = read_text(
+        ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_debug.cpp"
+    )
+    cast_harness = read_text(
+        ROOT / "tools/verify_multiplayer_primary_kill_stress.py"
+    )
+
+    required = (
+        (gameplay_api, "TryTestGameplayNavSegment("),
+        (gameplay_public_api, "bool TryTestGameplayNavSegment("),
+        (gameplay_public_api, "IsGameplayPathSegmentTraversable("),
+        (lua_nav, "int LuaDebugTestNavSegment(lua_State* state)"),
+        (lua_nav, "TryTestGameplayNavSegment("),
+        (lua_registration, '&LuaDebugTestNavSegment, "test_nav_segment"'),
+        (cast_harness, "sd.debug.test_nav_segment("),
+        (cast_harness, 'emit("native_query_ok", native_query.ok)'),
+        (cast_harness, 'emit("native_traversable", native_query.traversable)'),
+        (cast_harness, "native_clear and blocker_count == 0"),
+    )
+    missing = [token for text, token in required if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "primary-cast lane selection can ignore stock scenery collision: "
+            + ", ".join(missing)
+        )
+    if 'emit("ok", blocker_count == 0)' in cast_harness:
+        raise StaticReTestFailure(
+            "actor-only clearance still decides whether a primary-cast lane is usable"
+        )
+
+    return "primary-cast lanes require the stock native collision-segment query"
+
+
 def test_player_control_brain_requires_published_gameplay_slot() -> str:
     player_control_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"

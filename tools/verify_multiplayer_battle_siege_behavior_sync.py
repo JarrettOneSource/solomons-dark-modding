@@ -41,6 +41,7 @@ from verify_multiplayer_fireball_explode_effect_sync import (
     launch_pair_ready,
 )
 from verify_multiplayer_primary_kill_stress import (
+    SKELETON_TYPE_ID,
     cleanup_live_enemies,
     parse_float,
     query_run_enemy_by_network_id,
@@ -290,13 +291,19 @@ def max_stat_for_target(
         )
 
 
-def run_cast_trial(direction: Direction, label: str) -> dict[str, Any]:
+def run_cast_trial(
+    direction: Direction,
+    label: str,
+    *,
+    native_type_id: int = SKELETON_TYPE_ID,
+) -> dict[str, Any]:
     cleanup_live_enemies()
     pair = build_manual_pair(
         direction,
         *SECONDARY_TARGET_OFFSET,
         target_hp=TARGET_HP,
         include_secondary=False,
+        native_type_id=native_type_id,
     )
     cast = cast_fireball_pair(
         direction,
@@ -430,6 +437,7 @@ def run_cast_trial(direction: Direction, label: str) -> dict[str, Any]:
             "target_hp": pair["target_hp"],
             "primary_x": pair["primary_x"],
             "primary_y": pair["primary_y"],
+            "native_type_id": native_type_id,
         },
     }
     cleanup_live_enemies()

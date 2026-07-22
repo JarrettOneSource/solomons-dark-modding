@@ -747,6 +747,16 @@ if len_sq < 1 then
   return
 end
 local len = math.sqrt(len_sq)
+local native_query = {
+  ok = false,
+  traversable = false,
+  error = "sd.debug.test_nav_segment is unavailable",
+}
+if sd.debug and sd.debug.test_nav_segment then
+  native_query = sd.debug.test_nav_segment(source_x, source_y, target_x, target_y)
+end
+local native_clear = type(native_query) == "table" and
+  native_query.ok == true and native_query.traversable == true
 local blocked = {}
 local blocker_count = 0
 for _, actor in ipairs(sd.world.list_actors and sd.world.list_actors() or {}) do
@@ -796,8 +806,11 @@ for _, actor in ipairs(sd.world.list_actors and sd.world.list_actors() or {}) do
   end
 end
 table.sort(blocked, function(a, b) return a.distance < b.distance end)
-emit("ok", blocker_count == 0)
-emit("blocked", blocker_count > 0)
+emit("ok", native_clear and blocker_count == 0)
+emit("blocked", not native_clear or blocker_count > 0)
+emit("native_query_ok", native_query.ok)
+emit("native_traversable", native_query.traversable)
+emit("native_error", native_query.error or "")
 emit("blocker_count", blocker_count)
 if blocker_count > 0 then
   local first = blocked[1]
@@ -2123,11 +2136,14 @@ def spawn_one_enemy(
     setup_hp: float = SETUP_TARGET_HP,
     *,
     freeze_on_spawn: bool = True,
+    native_type_id: int = SKELETON_TYPE_ID,
 ) -> dict[str, Any]:
+    if native_type_id <= 0:
+        raise ValueError(f"native_type_id must be positive, got {native_type_id}")
     spawn = values(
         HOST_PIPE,
         SPAWN_MANUAL_ENEMY_LUA
-        .replace("__TYPE_ID__", str(SKELETON_TYPE_ID))
+        .replace("__TYPE_ID__", str(native_type_id))
         .replace("__X__", f"{x:.3f}")
         .replace("__Y__", f"{y:.3f}")
         .replace("__FREEZE_ON_SPAWN__", "true" if freeze_on_spawn else "false"),
@@ -2156,6 +2172,7 @@ def spawn_one_enemy(
         "network_actor_id": network_actor_id,
         "setup_hp": setup_hp,
         "freeze_on_spawn": freeze_on_spawn,
+        "native_type_id": native_type_id,
         "x": x,
         "y": y,
     }

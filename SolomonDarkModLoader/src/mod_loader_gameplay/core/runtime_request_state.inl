@@ -106,6 +106,7 @@ struct PendingNativeMagicHitBehaviorProbe {
     std::uint64_t target_participant_id = 0;
     float projectile_damage = 0.0f;
     float magic_damage = 0.0f;
+    float poison_damage = 0.0f;
     std::uint32_t attempts = 0;
 };
 
@@ -158,6 +159,7 @@ struct GameplayKeyboardInjectionState {
     X86Hook player_actor_secondary_spell_cast_hook;
     X86Hook secondary_cursor_world_projection_hook;
     X86Hook player_actor_magic_damage_hook;
+    X86Hook badguy_damage_hook;
     X86Hook poisoned_modifier_tick_hook;
     X86Hook webbed_modifier_tick_hook;
     X86Hook player_actor_pure_primary_gate_hook;

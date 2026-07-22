@@ -45,7 +45,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 70);
+    lua_createtable(state, 0, 71);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -135,6 +135,7 @@ void RegisterLuaDebugBindings(lua_State* state) {
         "get_native_staff_effect_probe_result");
     RegisterFunction(state, &LuaDebugCallThiscallOutF32x4U32, "call_thiscall_out_f32x4_u32");
     RegisterFunction(state, &LuaDebugGetNavGrid, "get_nav_grid");
+    RegisterFunction(state, &LuaDebugTestNavSegment, "test_nav_segment");
     RegisterFunction(state, &LuaDebugGetGameNpcMotion, "get_gamenpc_motion");
     RegisterFunction(state, &LuaDebugGetWorldMovementGeometry, "get_world_movement_geometry");
     RegisterFunction(state, &LuaDebugCallCdeclU32RetU32, "call_cdecl_u32_ret_u32");

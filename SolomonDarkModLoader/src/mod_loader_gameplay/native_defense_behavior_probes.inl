@@ -159,7 +159,9 @@ bool ExecuteNativeMagicHitBehaviorProbe(
             const float value =
                 index == 0
                     ? request.projectile_damage
-                    : (index == 1 ? request.magic_damage : 0.0f);
+                    : (index == 1
+                           ? request.magic_damage
+                           : (index == 2 ? request.poison_damage : 0.0f));
             wrote_context =
                 memory.TryWriteValue(
                     primary_address + index * sizeof(float),

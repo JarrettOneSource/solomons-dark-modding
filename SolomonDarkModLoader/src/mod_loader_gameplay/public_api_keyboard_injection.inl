@@ -26,6 +26,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
             kSecondaryCursorWorldProjection);
     const auto player_actor_magic_damage =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorMagicDamage);
+    const auto badguy_damage =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kBadguyDamage);
     const auto poisoned_modifier_tick =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPoisonedModifierTick);
     const auto webbed_modifier_tick =
@@ -103,6 +105,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         player_actor_secondary_spell_cast == 0 ||
         secondary_cursor_world_projection == 0 ||
         player_actor_magic_damage == 0 ||
+        badguy_damage == 0 ||
         poisoned_modifier_tick == 0 ||
         webbed_modifier_tick == 0 ||
         damage_context_reset == 0 ||
@@ -111,6 +114,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         damage_context_flags == 0 ||
         damage_context_primary == 0 ||
         damage_context_secondary != damage_context_primary + sizeof(float) ||
+        kDamageSourceGameplaySlotOffset == 0 ||
+        kGameObjectTypeIdOffset == 0 ||
+        kProgressionHagathaPerkFlagBaseOffset == 0 ||
         player_actor_pure_primary_gate == 0 ||
         player_control_brain_update == 0 ||
         pure_primary_spell_start == 0 ||
@@ -845,6 +851,21 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     }
 
     if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(badguy_damage),
+            reinterpret_cast<void*>(&HookBadguyDamage),
+            kBadguyDamageHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.badguy_damage_hook,
+            &hook_error)) {
+        ShutdownGameplayKeyboardInjection();
+        if (error_message != nullptr) {
+            *error_message =
+                "Failed to install Curse Bosses enemy-damage hook: " +
+                hook_error;
+        }
+        return false;
+    }
+
+    if (!InstallSafeX86Hook(
             reinterpret_cast<void*>(poisoned_modifier_tick),
             reinterpret_cast<void*>(&HookPoisonedModifierTick),
             kPoisonedModifierTickHookMinimumPatchSize,
@@ -964,6 +985,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " secondary_cursor_world_projection=" +
             HexString(secondary_cursor_world_projection) +
         " incoming_damage=" + HexString(player_actor_magic_damage) +
+        " enemy_damage=" + HexString(badguy_damage) +
         " poisoned_modifier_tick=" + HexString(poisoned_modifier_tick) +
         " damage_context_reset=" + HexString(damage_context_reset) +
         " damage_context_primary=" + HexString(damage_context_primary) +
@@ -1018,6 +1040,7 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.webbed_modifier_tick_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.poisoned_modifier_tick_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_magic_damage_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.badguy_damage_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);

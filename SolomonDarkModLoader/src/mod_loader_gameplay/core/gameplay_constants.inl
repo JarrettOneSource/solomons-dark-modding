@@ -11,6 +11,8 @@ constexpr std::size_t kPlayerActorSecondarySpellCastHookMinimumPatchSize = 5;
 // followed by a six-byte world-origin load. The safe hook keeps both whole.
 constexpr std::size_t kSecondaryCursorWorldProjectionHookMinimumPatchSize = 5;
 constexpr std::size_t kPlayerActorMagicDamageHookMinimumPatchSize = 5;
+// Badguy::Contact starts with sub esp,8; push ebx; push esi (five bytes).
+constexpr std::size_t kBadguyDamageHookMinimumPatchSize = 5;
 // Mod_Poisoned::Tick begins with one whole five-byte absolute load.
 constexpr std::size_t kPoisonedModifierTickHookMinimumPatchSize = 5;
 // Mod_Webbed::Tick starts with `push ecx` followed by the six-byte absolute
@@ -171,6 +173,39 @@ constexpr std::int32_t kBotNativeActionRearmTicks =
     (kBotNativeActionRearmMinTicks + kBotNativeActionRearmMaxTicks) / 2;
 constexpr std::uint64_t kBotManaReserveRecoveryIntervalMs = 250;
 constexpr float kBotManaReserveRecoveryRatioPerSecond = 0.10f;
+
+constexpr std::uint8_t kHagathaCuringSelector = 11;
+constexpr std::uint8_t kHagathaGlassCannonSelector = 16;
+constexpr std::uint8_t kHagathaCurseBossesSelector = 22;
+constexpr float kHagathaCurseBossesDamageMultiplier = 3.0f;
+constexpr std::uint32_t kDemonSkullNativeTypeId = 0x3F0;
+constexpr std::uint32_t kDemonNativeTypeId = 0x3F1;
+constexpr std::uint32_t kDireFacultyNativeTypeId = 0x3F2;
+constexpr std::uint32_t kHeartmongerNativeTypeId = 0x3F3;
+constexpr std::uint32_t kEtherPrimaryDamageSourceNativeTypeId = 0x7D3;
+constexpr std::uint32_t kFireballDamageSourceNativeTypeId = 0x7D4;
+constexpr std::uint32_t kWaterPrimaryDamageSourceNativeTypeId = 0x7D5;
+constexpr std::uint32_t kFireEmberDamageSourceNativeTypeId = 0x7D6;
+constexpr std::uint32_t kFirewalkerDamageSourceNativeTypeId = 0x7EE;
+constexpr std::uint32_t kMagicStormDamageSourceNativeTypeId = 0x7F0;
+constexpr std::uint32_t kMagicTrapDamageSourceNativeTypeId = 0x7F5;
+
+bool IsHagathaCurseBossesNativeType(std::uint32_t object_type_id) {
+    return object_type_id == kDemonSkullNativeTypeId ||
+           object_type_id == kDemonNativeTypeId ||
+           object_type_id == kDireFacultyNativeTypeId ||
+           object_type_id == kHeartmongerNativeTypeId;
+}
+
+bool IsPlayerAuthoredDamageSourceNativeType(std::uint32_t object_type_id) {
+    return object_type_id == kEtherPrimaryDamageSourceNativeTypeId ||
+           object_type_id == kFireballDamageSourceNativeTypeId ||
+           object_type_id == kWaterPrimaryDamageSourceNativeTypeId ||
+           object_type_id == kFireEmberDamageSourceNativeTypeId ||
+           object_type_id == kFirewalkerDamageSourceNativeTypeId ||
+           object_type_id == kMagicStormDamageSourceNativeTypeId ||
+           object_type_id == kMagicTrapDamageSourceNativeTypeId;
+}
 
 bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id) {
     // WaveData_Parse and FUN_0062D920 identify the stock arena enemy classes.

@@ -204,6 +204,8 @@ from static_re_inventory_container_contracts import (
 )
 from static_re_hagatha_perk_contracts import (
     test_cheat_death_health_increase_is_captured_as_authoritative_damage,
+    test_hagatha_client_damage_ratio_allows_one_claim_quantum,
+    test_hagatha_combat_modifiers_have_exact_two_owner_coverage,
     test_hagatha_derived_stats_have_a_two_owner_steam_matrix,
     test_hagatha_one_shot_runtime_state_is_host_authoritative,
     test_hagatha_perks_replicate_as_participant_owned_native_state,
@@ -213,10 +215,12 @@ from static_re_runtime_cast_contracts import (
     test_memory_region_cache_refreshes_newly_committed_native_objects,
     test_multiplayer_nameplates_render_from_native_scene_passes,
     test_player_control_brain_requires_published_gameplay_slot,
+    test_primary_cast_lane_requires_native_collision_segment,
     test_queued_mouse_holds_use_player_tick_duration,
     test_remote_held_input_casts_defer_lifecycle_to_sender_input,
     test_remote_per_cast_primary_settles_without_waiting_for_release,
     test_local_primary_network_capture_is_single_owner_and_preserves_lua_events,
+    test_write_watch_rearm_is_owned_by_faulting_thread,
     test_write_watches_are_transparent_to_loader_memory_access,
 )
 from static_re_runtime_platform_contracts import (
@@ -657,6 +661,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_write_watches_are_transparent_to_loader_memory_access,
     ),
     (
+        "write-watch rearm is owned by the faulting thread",
+        test_write_watch_rearm_is_owned_by_faulting_thread,
+    ),
+    (
+        "primary-cast lanes require native collision-segment clearance",
+        test_primary_cast_lane_requires_native_collision_segment,
+    ),
+    (
         "player control-brain requires a published gameplay slot",
         test_player_control_brain_requires_published_gameplay_slot,
     ),
@@ -852,6 +864,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Cheat Death HP recovery is captured as authoritative damage",
         test_cheat_death_health_increase_is_captured_as_authoritative_damage,
+    ),
+    (
+        "Hagatha combat modifiers have exact two-owner coverage",
+        test_hagatha_combat_modifiers_have_exact_two_owner_coverage,
+    ),
+    (
+        "Hagatha client damage ratios allow one claim quantum",
+        test_hagatha_client_damage_ratio_allows_one_claim_quantum,
     ),
     ("Solomon Dark Steam AppID is consistent", test_solomon_dark_steam_app_id_is_consistent),
     (

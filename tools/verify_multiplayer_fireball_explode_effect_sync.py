@@ -43,6 +43,7 @@ from verify_multiplayer_primary_kill_stress import (
     place_pair_on_clear_lane,
     prepare_and_queue_caster,
     primary_input_released,
+    SKELETON_TYPE_ID,
     set_manual_spawner_test_mode,
     spawn_one_enemy,
     wait_for_cast_runtime_ready,
@@ -308,6 +309,7 @@ def build_manual_pair(
     *,
     target_hp: float = TARGET_HP,
     include_secondary: bool = True,
+    native_type_id: int = SKELETON_TYPE_ID,
 ) -> dict[str, Any]:
     lane = place_pair_on_clear_lane(
         direction,
@@ -317,9 +319,19 @@ def build_manual_pair(
     target_x = float(lane["x"])
     target_y = float(lane["y"])
 
-    primary = spawn_one_enemy(target_x, target_y, target_hp)
+    primary = spawn_one_enemy(
+        target_x,
+        target_y,
+        target_hp,
+        native_type_id=native_type_id,
+    )
     secondary = (
-        spawn_one_enemy(target_x + offset_x, target_y + offset_y, target_hp)
+        spawn_one_enemy(
+            target_x + offset_x,
+            target_y + offset_y,
+            target_hp,
+            native_type_id=native_type_id,
+        )
         if include_secondary
         else None
     )
@@ -373,6 +385,7 @@ def build_manual_pair(
         "secondary_y": target_y + offset_y,
         "target_hp": target_hp,
         "include_secondary": include_secondary,
+        "native_type_id": native_type_id,
         "primary_spawn": primary,
         "secondary_spawn": secondary,
         "client_primary": client_primary,

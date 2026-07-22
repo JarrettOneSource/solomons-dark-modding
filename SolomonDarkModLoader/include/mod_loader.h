@@ -464,6 +464,7 @@ bool QueueNativePoisonBehaviorProbe(
 bool QueueNativeMagicHitBehaviorProbe(
     float projectile_damage,
     float magic_damage,
+    float poison_damage,
     std::uint32_t attempts,
     std::uint64_t target_participant_id,
     std::uint64_t* request_serial,

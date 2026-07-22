@@ -448,6 +448,10 @@ def test_hagatha_derived_stats_have_a_two_owner_steam_matrix() -> str:
             "sd.debug.call_thiscall_ret_u32(refresh, progression)",
             "wait_for_native_release_after_hub_leave",
             "leave_endpoint_to_main_menu",
+            "blocking_dialog_actions",
+            "sd.ui.find_action('dialog.primary', 'dialog')",
+            'last.get("surface") == "dialog"',
+            'blocking_dialog_actions.append(\n                run_driver.local_sync.activate_native_ui_action(',
             "direction_error",
             "ONBOARDING_TIMEOUT = 90.0",
             '"host_to_client"',
@@ -635,3 +639,237 @@ def test_cheat_death_health_increase_is_captured_as_authoritative_damage() -> st
     if failures:
         raise StaticReTestFailure("; ".join(failures))
     return "Cheat Death HP recovery and one-shot runtime fields have a two-owner Steam regression"
+
+
+def test_hagatha_combat_modifiers_have_exact_two_owner_coverage() -> str:
+    """Curing, Glass Cannon, and Curse Bosses must use their stock damage lanes."""
+
+    seams = read_text(ROOT / "SolomonDarkModLoader/src/gameplay_seams.h")
+    storage = read_text(
+        ROOT / "SolomonDarkModLoader/src/gameplay_seams/address_storage.inl"
+    )
+    address_bindings = read_text(
+        ROOT / "SolomonDarkModLoader/src/gameplay_seams/state_and_address_bindings.inl"
+    )
+    size_bindings = read_text(
+        ROOT / "SolomonDarkModLoader/src/gameplay_seams/size_bindings.inl"
+    )
+    binary_layout = read_text(ROOT / "config/binary-layout.ini")
+    constants = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/gameplay_constants.inl"
+    )
+    native_types = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/native_function_types.inl"
+    )
+    request_state = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/runtime_request_state.inl"
+    )
+    hook_path = (
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/badguy_damage_hook.inl"
+    )
+    hook = read_text(hook_path) if hook_path.is_file() else ""
+    player_damage_hook = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_damage_authority_hook.inl"
+    )
+    hook_registry = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_tick_and_render_hooks.inl"
+    )
+    hook_lifecycle = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_keyboard_injection.inl"
+    )
+    native_probe = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/native_defense_behavior_probes.inl"
+    )
+    public_api = read_text(ROOT / "SolomonDarkModLoader/include/mod_loader.h")
+    action_queue = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_gameplay_action_queues.inl"
+    )
+    lua_debug = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/lua_engine_bindings_debug/functions_native_calls.inl"
+    )
+    defense_harness = read_text(
+        ROOT / "tools/multiplayer_defense_behavior_harness.py"
+    )
+    verifier_path = ROOT / "tools/verify_steam_hagatha_combat_modifier_matrix.py"
+    verifier = read_text(verifier_path) if verifier_path.is_file() else ""
+
+    failures: list[str] = []
+    _require(
+        "Badguy damage seams",
+        seams + storage + address_bindings + size_bindings + binary_layout,
+        (
+            "kBadguyDamage",
+            '"badguy_damage"',
+            "badguy_damage=0x0048A290",
+            "kDamageSourceGameplaySlotOffset",
+            '"damage_source_gameplay_slot"',
+            "damage_source_gameplay_slot=0x60",
+        ),
+        failures,
+    )
+    _require(
+        "Curse Bosses native contract",
+        constants
+        + native_types
+        + request_state
+        + player_damage_hook
+        + hook
+        + hook_registry
+        + hook_lifecycle,
+        (
+            "kHagathaCuringSelector = 11",
+            "kHagathaGlassCannonSelector = 16",
+            "kHagathaCurseBossesSelector = 22",
+            "kHagathaCurseBossesDamageMultiplier = 3.0f",
+            "kDemonSkullNativeTypeId = 0x3F0",
+            "kDemonNativeTypeId = 0x3F1",
+            "kDireFacultyNativeTypeId = 0x3F2",
+            "kHeartmongerNativeTypeId = 0x3F3",
+            "BadguyDamageFn",
+            "badguy_damage_hook",
+            'gameplay_hooks/badguy_damage_hook.inl',
+            "HookBadguyDamage",
+            "ResolveDamageSourceOwnerActorAddress",
+            "ResolveDamageSourceParticipantId",
+            "TryResolveDamageSourceProgressionAddress",
+            "kProgressionHagathaPerkFlagBaseOffset",
+            "TryApplyHagathaCurseBossesDamageMultiplier",
+            "RestoreHagathaCurseBossesDamageLanes",
+            "RemoveX86Hook(&g_gameplay_keyboard_injection.badguy_damage_hook)",
+        ),
+        failures,
+    )
+    if "context_target != actor_address" in hook:
+        failures.append(
+            "Curse Bosses enemy damage is incorrectly gated by the unrelated "
+            "damage_context_target actor-tick global"
+        )
+    _require(
+        "Curing poison-lane probe",
+        request_state + native_probe + public_api + action_queue + lua_debug + defense_harness,
+        (
+            "float poison_damage = 0.0f;",
+            "request.poison_damage",
+            "float poison_damage,",
+            "poison_damage: float = 0.0",
+            "projectile_damage <= 0.0f && magic_damage <= 0.0f &&",
+            "poison_damage <= 0.0f",
+            "index == 2 ? request.poison_damage",
+            "queue_native_magic_hit_behavior_probe(",
+        ),
+        failures,
+    )
+    if not verifier_path.is_file():
+        failures.append("two-owner Steam Hagatha combat-modifier verifier is missing")
+    _require(
+        "two-owner Steam Hagatha combat-modifier verifier",
+        verifier,
+        (
+            "CURING_SELECTOR = 11",
+            "GLASS_CANNON_SELECTOR = 16",
+            "CURSE_BOSSES_SELECTOR = 22",
+            '"host_to_client"',
+            '"client_to_host"',
+            '"curing_poison_incoming"',
+            '"glass_cannon_incoming"',
+            '"glass_cannon_outgoing"',
+            '"curse_bosses_boss_damage"',
+            '"curse_bosses_nonboss_damage"',
+            '"unrelated_owner_unchanged"',
+            "invoke_native_magic_hit_trial",
+            "run_cast_trial",
+            "owner_participant_id",
+            "observer_participant_id",
+            "source_pids = {\"host\": 0, \"client\": 0}",
+            'result["combat_bootstrap"] = primary.enable_manual_stock_spawner_combat()',
+            'result["arena_reset"] = reset_quiet_arena()',
+            "reset_life: bool = True",
+            "if reset_life:",
+            '"reset_life": reset_life',
+            "reset_life=False",
+            "instances = (HOST_INSTANCE, CLIENT_INSTANCE)",
+            "new_crash_artifacts(started_at, instances)",
+            "scoped_new_crash_artifacts",
+            "windows_process_id(HOST_INSTANCE)",
+            'f"SolomonDark.exe.{host_process_id}.dmp"',
+        ),
+        failures,
+    )
+    if "battle_siege.detect_instance_pids()" in verifier:
+        failures.append(
+            "active Steam Hagatha verifier uses the Windows-only local-pair PID resolver"
+        )
+    if "new_crash_artifacts(started_at)" in verifier:
+        failures.append(
+            "active Steam Hagatha verifier omits instance names from crash scanning"
+        )
+    run_entry_index = verifier.find('result["run_entry"] = run_driver.start_shared_run(')
+    combat_bootstrap_index = verifier.find(
+        'result["combat_bootstrap"] = primary.enable_manual_stock_spawner_combat()'
+    )
+    arena_reset_index = verifier.find('result["arena_reset"] = reset_quiet_arena()')
+    if not (
+        run_entry_index >= 0
+        and combat_bootstrap_index > run_entry_index
+        and arena_reset_index > combat_bootstrap_index
+    ):
+        failures.append(
+            "active Steam Hagatha verifier does not bootstrap and reset the stock wave spawners after run entry"
+        )
+
+    if failures:
+        raise StaticReTestFailure("; ".join(failures))
+    return "Curing, Glass Cannon, and repaired Curse Bosses have exact two-owner native damage coverage"
+
+
+def test_hagatha_client_damage_ratio_allows_one_claim_quantum() -> str:
+    """Client Air claims may round one 1/128 step away from a native multiplier."""
+
+    import verify_steam_hagatha_combat_modifier_matrix as verifier
+
+    claim_quantum = getattr(verifier, "CLIENT_DAMAGE_CLAIM_QUANTUM", None)
+    if claim_quantum != 1.0 / 128.0:
+        raise StaticReTestFailure(
+            "Hagatha combat verification does not name the client damage-claim quantum"
+        )
+
+    baseline = 3.0 / 128.0
+    observed = 10.0 / 128.0
+    try:
+        verifier.ratio_contract(
+            "quantized client Air claim",
+            baseline,
+            observed,
+            3.0,
+        )
+    except Exception:
+        pass
+    else:
+        raise StaticReTestFailure(
+            "strict relative tolerance unexpectedly accepts the rounded client claim"
+        )
+
+    try:
+        contract = verifier.ratio_contract(
+            "quantized client Air claim",
+            baseline,
+            observed,
+            3.0,
+            absolute_tolerance=claim_quantum,
+        )
+    except Exception as exc:
+        raise StaticReTestFailure(
+            "one exact client claim quantum must cover native multiplier rounding: "
+            f"{exc}"
+        ) from exc
+    if not contract.get("ok") or contract.get("absolute_tolerance") != claim_quantum:
+        raise StaticReTestFailure(
+            "quantized client claim contract did not record its bounded tolerance"
+        )
+
+    return "client Air multiplier checks allow exactly one 1/128 damage-claim step"

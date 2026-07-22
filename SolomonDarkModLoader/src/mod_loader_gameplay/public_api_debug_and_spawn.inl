@@ -332,6 +332,61 @@ bool TryGetGameplayNavGridState(SDModGameplayNavGridState* state, int subdivisio
     return true;
 }
 
+bool TryTestGameplayNavSegment(
+    float from_x,
+    float from_y,
+    float to_x,
+    float to_y,
+    bool* traversable,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (traversable == nullptr ||
+        !std::isfinite(from_x) ||
+        !std::isfinite(from_y) ||
+        !std::isfinite(to_x) ||
+        !std::isfinite(to_y)) {
+        if (error_message != nullptr) {
+            *error_message = "Nav segment query requires finite coordinates and an output pointer.";
+        }
+        return false;
+    }
+    *traversable = false;
+
+    SDModPlayerState player_state;
+    if (!TryGetPlayerState(&player_state) ||
+        !player_state.valid ||
+        player_state.actor_address == 0 ||
+        player_state.world_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Nav segment query requires a live local player and world.";
+        }
+        return false;
+    }
+
+    GameplayPathGridSnapshot snapshot;
+    if (!TryBuildGameplayPathGridSnapshot(
+            player_state.world_address,
+            &snapshot,
+            error_message)) {
+        return false;
+    }
+
+    ParticipantEntityBinding probe_binding{};
+    probe_binding.actor_address = player_state.actor_address;
+    probe_binding.materialized_world_address = player_state.world_address;
+    *traversable = IsGameplayPathSegmentTraversable(
+        snapshot,
+        &probe_binding,
+        from_x,
+        from_y,
+        to_x,
+        to_y,
+        error_message);
+    return true;
+}
+
 bool RebindSceneActorCell(uintptr_t actor_address, std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();

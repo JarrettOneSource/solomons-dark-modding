@@ -21,6 +21,7 @@ def invoke_native_magic_hit_trial(
     *,
     projectile_damage: float,
     magic_damage: float,
+    poison_damage: float = 0.0,
     attempts: int,
     label: str,
     timeout: float,
@@ -37,7 +38,15 @@ def invoke_native_magic_hit_trial(
         raise ValueError(
             f"magic_damage must be finite and non-negative, got {magic_damage}"
         )
-    if projectile_damage <= 0.0 and magic_damage <= 0.0:
+    if not math.isfinite(poison_damage) or poison_damage < 0.0:
+        raise ValueError(
+            f"poison_damage must be finite and non-negative, got {poison_damage}"
+        )
+    if (
+        projectile_damage <= 0.0
+        and magic_damage <= 0.0
+        and poison_damage <= 0.0
+    ):
         raise ValueError("at least one native magic-hit damage lane must be positive")
     if attempts < 1 or attempts > 1000:
         raise ValueError(f"attempts must be in [1,1000], got {attempts}")
@@ -54,7 +63,7 @@ local function emit(key, value)
 end
 local queued, err, serial = sd.debug.queue_native_magic_hit_behavior_probe(
   {projectile_damage:.9f}, {magic_damage:.9f}, {attempts},
-  {target_participant_id})
+  {target_participant_id}, {poison_damage:.9f})
 emit('queued', queued)
 emit('error', err or '')
 emit('serial', serial or 0)
@@ -117,6 +126,7 @@ emit('error', err or '')
         "request_serial": request_serial,
         "projectile_damage": projectile_damage,
         "magic_damage": magic_damage,
+        "poison_damage": poison_damage,
         "attempts": attempts,
         "require_life_loss": require_life_loss,
         "target_participant_id": target_participant_id,

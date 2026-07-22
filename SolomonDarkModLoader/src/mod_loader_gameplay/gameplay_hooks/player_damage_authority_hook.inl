@@ -28,21 +28,111 @@ void LogLuaDamageFilterHookFailure(
     }
 }
 
-std::uint64_t ResolveLuaDamageFilterParticipantId(uintptr_t actor_address) {
-    if (actor_address == 0) {
+uintptr_t ResolveDamageSourceOwnerActorAddress(uintptr_t source_address) {
+    if (source_address == 0) {
         return 0;
     }
 
     SDModPlayerState local_player;
     if (TryGetPlayerState(&local_player) &&
         local_player.valid &&
-        local_player.actor_address == actor_address) {
+        local_player.actor_address == source_address) {
+        return local_player.actor_address;
+    }
+
+    {
+        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+        const auto* binding = FindParticipantEntityForActor(source_address);
+        if (binding != nullptr) {
+            return binding->actor_address;
+        }
+    }
+
+    for (const auto& [participant_id, effects] :
+         g_replicated_spell_effect_bindings) {
+        const auto effect = std::find_if(
+            effects.begin(),
+            effects.end(),
+            [&](const auto& entry) {
+                return entry.second.actor_address == source_address;
+            });
+        if (effect == effects.end()) {
+            continue;
+        }
+        if (participant_id == multiplayer::GetLocalTransportParticipantId()) {
+            return local_player.valid ? local_player.actor_address : 0;
+        }
+        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+        const auto* binding = FindParticipantEntity(participant_id);
+        return binding == nullptr ? 0 : binding->actor_address;
+    }
+
+    std::uint32_t native_type_id = 0;
+    if (kGameObjectTypeIdOffset == 0 ||
+        !ProcessMemory::Instance().TryReadField(
+            source_address,
+            kGameObjectTypeIdOffset,
+            &native_type_id) ||
+        !IsPlayerAuthoredDamageSourceNativeType(native_type_id)) {
+        return 0;
+    }
+
+    std::int8_t gameplay_slot = -1;
+    if (kDamageSourceGameplaySlotOffset == 0 ||
+        !ProcessMemory::Instance().TryReadField(
+            source_address,
+            kDamageSourceGameplaySlotOffset,
+            &gameplay_slot) ||
+        gameplay_slot < 0 ||
+        gameplay_slot >= static_cast<std::int8_t>(kGameplayPlayerSlotCount)) {
+        return 0;
+    }
+    if (gameplay_slot == 0) {
+        return local_player.valid ? local_player.actor_address : 0;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    const auto* binding = FindParticipantEntityForGameplaySlot(gameplay_slot);
+    return binding == nullptr ? 0 : binding->actor_address;
+}
+
+std::uint64_t ResolveDamageSourceParticipantId(uintptr_t source_address) {
+    const auto owner_actor =
+        ResolveDamageSourceOwnerActorAddress(source_address);
+    if (owner_actor == 0) {
+        return 0;
+    }
+
+    SDModPlayerState local_player;
+    if (TryGetPlayerState(&local_player) &&
+        local_player.valid &&
+        local_player.actor_address == owner_actor) {
         return multiplayer::GetLocalTransportParticipantId();
     }
 
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-    const auto* binding = FindParticipantEntityForActor(actor_address);
+    const auto* binding = FindParticipantEntityForActor(owner_actor);
     return binding == nullptr ? 0 : binding->bot_id;
+}
+
+std::uint64_t ResolveLuaDamageFilterParticipantId(uintptr_t actor_address) {
+    return ResolveDamageSourceParticipantId(actor_address);
+}
+
+bool TryResolveDamageSourceProgressionAddress(
+    uintptr_t source_address,
+    uintptr_t* progression_address) {
+    if (progression_address == nullptr) {
+        return false;
+    }
+    *progression_address = 0;
+    const auto owner_actor =
+        ResolveDamageSourceOwnerActorAddress(source_address);
+    return owner_actor != 0 &&
+           TryResolveActorProgressionRuntime(
+               owner_actor,
+               progression_address) &&
+           *progression_address != 0;
 }
 
 bool TryCaptureLuaDamageFilterContext(

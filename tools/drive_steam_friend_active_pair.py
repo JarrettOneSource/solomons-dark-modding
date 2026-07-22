@@ -278,6 +278,12 @@ def drive_one_to_hub(
         if last["surface"] == "dialog" and "dialog.primary" in available:
             action = ("dialog.primary", "dialog")
         elif (
+            last["surface"] == "simple_menu"
+            and last["scene"] in ("hub", "testrun")
+            and "pause_menu.resume_game" in available
+        ):
+            action = ("pause_menu.resume_game", "simple_menu")
+        elif (
             last["scene"] in ("hub", "testrun")
             and last["surface"] not in BLOCKING_ONBOARDING_SURFACES
         ):

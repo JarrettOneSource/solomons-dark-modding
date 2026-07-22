@@ -106,6 +106,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "ember_config_secondary", kEmberConfigSecondaryOffset),
         SDMOD_SIZE("gameplay.offsets", "ember_config_tertiary", kEmberConfigTertiaryOffset),
         SDMOD_SIZE("gameplay.offsets", "firewalker_source_slot", kFirewalkerSourceSlotOffset),
+        SDMOD_SIZE("gameplay.offsets", "damage_source_gameplay_slot", kDamageSourceGameplaySlotOffset),
         SDMOD_SIZE("gameplay.offsets", "firewalker_collision_scale", kFirewalkerCollisionScaleOffset),
         SDMOD_SIZE("gameplay.offsets", "firewalker_phase", kFirewalkerPhaseOffset),
         SDMOD_SIZE("gameplay.offsets", "firewalker_phase_step", kFirewalkerPhaseStepOffset),

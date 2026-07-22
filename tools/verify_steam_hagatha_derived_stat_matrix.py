@@ -780,6 +780,7 @@ def leave_endpoint_to_main_menu(
 
     deadline = time.monotonic() + min(timeout, 15.0)
     pressed = False
+    blocking_dialog_actions: list[dict[str, Any]] = []
     last: dict[str, str] = {}
     while time.monotonic() < deadline:
         last = parse_key_values(
@@ -788,12 +789,40 @@ def leave_endpoint_to_main_menu(
                 r"""
 local snapshot = sd.ui.get_snapshot()
 local action = sd.ui.find_action('pause_menu.leave_game', 'simple_menu')
+local dialog = sd.ui.find_action('dialog.primary', 'dialog')
+local scene = sd.world.get_scene()
+print('scene=' .. tostring(scene and (scene.kind or scene.name) or ''))
 print('surface=' .. tostring(snapshot and snapshot.surface_id or ''))
 print('action=' .. tostring(action ~= nil))
+print('dialog=' .. tostring(dialog ~= nil))
 """,
                 timeout=5.0,
             )
         )
+        if last.get("scene") not in {"hub", "arena", "testrun"}:
+            release = wait_for_native_release_after_hub_leave(
+                pair,
+                min(timeout, 15.0),
+                (endpoint,),
+            )
+            return {
+                "scene_before": scene,
+                "menu_pressed": pressed,
+                "blocking_dialog_actions": blocking_dialog_actions,
+                "already_released": True,
+                "native_release": release[endpoint],
+            }
+        if last.get("surface") == "dialog" and last.get("dialog") == "true":
+            blocking_dialog_actions.append(
+                run_driver.local_sync.activate_native_ui_action(
+                    endpoint,
+                    "dialog.primary",
+                    "dialog",
+                )
+            )
+            pressed = False
+            time.sleep(0.1)
+            continue
         if last.get("surface") == "simple_menu" and last.get("action") == "true":
             break
         if not pressed:
@@ -826,6 +855,7 @@ print('action=' .. tostring(action ~= nil))
     return {
         "scene_before": scene,
         "menu_pressed": pressed,
+        "blocking_dialog_actions": blocking_dialog_actions,
         "action": action,
         "native_release": release[endpoint],
     }

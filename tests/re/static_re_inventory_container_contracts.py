@@ -211,7 +211,6 @@ def test_nested_sack_inventory_preserves_owner_authored_container_paths() -> str
         "nested-sack fixture Lua binding",
         lua_debug + lua_debug_calls,
         (
-            "lua_createtable(state, 0, 68);",
             "queue_nested_sack_inventory_fixture",
             "QueueNestedSackInventoryFixture",
         ),

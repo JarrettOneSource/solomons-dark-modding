@@ -258,6 +258,7 @@ LONG CALLBACK RuntimeDebug_WriteWatchExceptionHandler(EXCEPTION_POINTERS* except
             static_cast<uintptr_t>(exception_pointers->ExceptionRecord->ExceptionInformation[1]);
         const auto page_base = AlignToPageBase(access_address);
         const auto is_write = access_type == 1u;
+        const auto thread_id = GetCurrentThreadId();
 
         bool handled = false;
         std::vector<PendingWriteHit> hits;
@@ -268,7 +269,7 @@ LONG CALLBACK RuntimeDebug_WriteWatchExceptionHandler(EXCEPTION_POINTERS* except
                 return EXCEPTION_CONTINUE_SEARCH;
             }
 
-            page_it->second.pending_rearm = true;
+            page_it->second.pending_rearm_thread_id = thread_id;
             handled = true;
 
             if (is_write) {
@@ -284,7 +285,7 @@ LONG CALLBACK RuntimeDebug_WriteWatchExceptionHandler(EXCEPTION_POINTERS* except
                     }
 
                     PendingWriteHit hit;
-                    hit.thread_id = GetCurrentThreadId();
+                    hit.thread_id = thread_id;
                     hit.kind = watch.kind;
                     hit.name = watch.name;
                     hit.requested_address = watch.requested_address;
@@ -333,10 +334,10 @@ LONG CALLBACK RuntimeDebug_WriteWatchExceptionHandler(EXCEPTION_POINTERS* except
         {
             std::scoped_lock lock(g_runtime_debug_state.mutex);
             for (auto& [page_base, state] : g_runtime_debug_state.guarded_pages) {
-                if (!state.pending_rearm) {
+                if (state.pending_rearm_thread_id != thread_id) {
                     continue;
                 }
-                state.pending_rearm = false;
+                state.pending_rearm_thread_id = 0;
                 pages_to_rearm.push_back(state);
             }
 

@@ -119,6 +119,33 @@ int LuaDebugGetNavGrid(lua_State* state) {
     return 1;
 }
 
+// sd.debug.test_nav_segment(from_x, from_y, to_x, to_y) -> table
+int LuaDebugTestNavSegment(lua_State* state) {
+    const auto from_x = static_cast<float>(luaL_checknumber(state, 1));
+    const auto from_y = static_cast<float>(luaL_checknumber(state, 2));
+    const auto to_x = static_cast<float>(luaL_checknumber(state, 3));
+    const auto to_y = static_cast<float>(luaL_checknumber(state, 4));
+
+    bool traversable = false;
+    std::string error_message;
+    const bool ok = TryTestGameplayNavSegment(
+        from_x,
+        from_y,
+        to_x,
+        to_y,
+        &traversable,
+        &error_message);
+
+    lua_createtable(state, 0, 3);
+    lua_pushboolean(state, ok ? 1 : 0);
+    lua_setfield(state, -2, "ok");
+    lua_pushboolean(state, traversable ? 1 : 0);
+    lua_setfield(state, -2, "traversable");
+    lua_pushlstring(state, error_message.c_str(), error_message.size());
+    lua_setfield(state, -2, "error");
+    return 1;
+}
+
 // sd.debug.get_gamenpc_motion(actor_address) -> table|nil
 int LuaDebugGetGameNpcMotion(lua_State* state) {
     const auto requested_actor_address = CheckLuaAddress(state, 1, "actor_address");

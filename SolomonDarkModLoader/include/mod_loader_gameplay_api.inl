@@ -74,6 +74,13 @@ bool TryReconcileParticipantConcentrationRuntimeSelections(
     std::int32_t entry_b,
     std::string* error_message);
 bool TryGetGameplayNavGridState(SDModGameplayNavGridState* state, int subdivisions = 1);
+bool TryTestGameplayNavSegment(
+    float from_x,
+    float from_y,
+    float to_x,
+    float to_y,
+    bool* traversable,
+    std::string* error_message);
 void RequestNavGridSnapshotRebuild(int subdivisions);
 std::shared_ptr<const SDModGameplayNavGridState> GetLastNavGridSnapshotShared();
 void RebuildNavGridSnapshotIfRequested_GameplayThread();

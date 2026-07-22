@@ -494,6 +494,7 @@ bool QueueNativePoisonBehaviorProbe(
 bool QueueNativeMagicHitBehaviorProbe(
     float projectile_damage,
     float magic_damage,
+    float poison_damage,
     std::uint32_t attempts,
     std::uint64_t target_participant_id,
     std::uint64_t* request_serial,
@@ -516,7 +517,11 @@ bool QueueNativeMagicHitBehaviorProbe(
         !std::isfinite(magic_damage) ||
         magic_damage < 0.0f ||
         magic_damage > 10000.0f ||
-        (projectile_damage <= 0.0f && magic_damage <= 0.0f) ||
+        !std::isfinite(poison_damage) ||
+        poison_damage < 0.0f ||
+        poison_damage > 10000.0f ||
+        (projectile_damage <= 0.0f && magic_damage <= 0.0f &&
+         poison_damage <= 0.0f) ||
         attempts == 0 ||
         attempts > 1000) {
         if (error_message != nullptr) {
@@ -545,6 +550,7 @@ bool QueueNativeMagicHitBehaviorProbe(
     }
     request.projectile_damage = projectile_damage;
     request.magic_damage = magic_damage;
+    request.poison_damage = poison_damage;
     request.attempts = attempts;
     request.target_participant_id = target_participant_id;
     pending.push_back(request);
