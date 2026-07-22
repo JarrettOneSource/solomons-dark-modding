@@ -28,6 +28,7 @@ using AirLightningChainTargetFn =
         std::uint32_t mask,
         void* exclusions);
 using GoldChangedFn = int(__stdcall*)(int delta, char allow_negative);
+using ExperienceGainFn = void(__thiscall*)(void* self, float amount, char apply_native_scaling);
 using DropSpawnedFn =
     void(__fastcall*)(void* self, void* unused_edx, std::uint32_t x_bits, std::uint32_t y_bits, int amount, int lifetime);
 using LevelUpFn = void(__fastcall*)(void* self, void* unused_edx);
@@ -63,6 +64,7 @@ enum HookIndex : size_t {
     kHookSpellCast3EF,
     kHookSpellCast3F0,
     kHookGoldChanged,
+    kHookExperienceGain,
     kHookDropSpawned,
     kHookLevelUp,
     kHookCount,
@@ -194,6 +196,9 @@ void BuildHookTargets(HookTarget* targets) {
     targets[kHookSpellCast3EF] = {kSpellCast3EF, 7};
     targets[kHookSpellCast3F0] = {kSpellCast3F0, 7};
     targets[kHookGoldChanged] = {kGoldChanged, 9};
+    // Post-eligibility convergence point, before optional native scaling.
+    // Whole instruction: CMP byte ptr [ESP+8],0 (5).
+    targets[kHookExperienceGain] = {kExperienceGain, 5};
     targets[kHookDropSpawned] = {kSpawnRewardGold, 7};
     targets[kHookLevelUp] = {kLevelUp, 6};
 }

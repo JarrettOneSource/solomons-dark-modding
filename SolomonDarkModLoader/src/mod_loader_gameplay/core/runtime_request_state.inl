@@ -133,6 +133,21 @@ struct NativeEnemyDeathProbeResult {
     std::string error;
 };
 
+struct PendingNativeExperienceGainProbe {
+    std::uint64_t request_serial = 0;
+    float amount = 0.0f;
+    bool apply_native_scaling = false;
+};
+
+struct NativeExperienceGainProbeResult {
+    std::uint64_t request_serial = 0;
+    bool success = false;
+    float xp_before = 0.0f;
+    float xp_after = 0.0f;
+    std::uint32_t exception_code = 0;
+    std::string error;
+};
+
 struct PendingNativeStaffEffectProbe {
     std::uint64_t request_serial = 0;
     uintptr_t source_actor = 0;
@@ -266,6 +281,10 @@ struct GameplayKeyboardInjectionState {
     std::deque<PendingNativeEnemyDeathProbe> pending_native_enemy_death_probes;
     std::uint64_t next_native_enemy_death_probe_serial = 1;
     NativeEnemyDeathProbeResult native_enemy_death_probe_result;
+    std::deque<PendingNativeExperienceGainProbe>
+        pending_native_experience_gain_probes;
+    std::uint64_t next_native_experience_gain_probe_serial = 1;
+    NativeExperienceGainProbeResult native_experience_gain_probe_result;
     std::deque<PendingNativeStaffEffectProbe> pending_native_staff_effect_probes;
     std::uint64_t next_native_staff_effect_probe_serial = 1;
     NativeStaffEffectProbeResult native_staff_effect_probe_result;

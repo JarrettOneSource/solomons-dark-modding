@@ -11,6 +11,7 @@
 #include "gameplay_seams.h"
 #include "logger.h"
 #include "lua_engine_events.h"
+#include "lua_event_filters.h"
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_runtime_protocol.h"

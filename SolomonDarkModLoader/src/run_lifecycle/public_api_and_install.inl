@@ -612,6 +612,7 @@ bool InitializeRunLifecycleHooks(std::string* error_message) {
         reinterpret_cast<void*>(&HookSpellCast_3EF),
         reinterpret_cast<void*>(&HookSpellCast_3F0),
         reinterpret_cast<void*>(&HookGoldChanged),
+        reinterpret_cast<void*>(&HookExperienceGain),
         reinterpret_cast<void*>(&HookDropSpawned),
         reinterpret_cast<void*>(&HookLevelUp),
     };
@@ -636,6 +637,7 @@ bool InitializeRunLifecycleHooks(std::string* error_message) {
         "spell.cast.0x3ef",
         "spell.cast.0x3f0",
         "gold.changed",
+        "experience.gain",
         "drop.spawned",
         "level.up",
     };

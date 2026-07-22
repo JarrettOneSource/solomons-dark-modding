@@ -10,6 +10,8 @@ using SecondaryCursorWorldProjectionFn = void*(__thiscall*)(
     float screen_x,
     float screen_y);
 using PlayerActorMagicDamageFn = std::uint32_t(__thiscall*)(void* self);
+using ExperienceGainProbeFn =
+    void(__thiscall*)(void* progression, float amount, char apply_native_scaling);
 using BadguyDamageFn = std::uint8_t(__thiscall*)(void* self);
 using PoisonedModifierTickFn = void(__thiscall*)(void* self);
 using WebbedModifierTickFn = void(__thiscall*)(void* self);

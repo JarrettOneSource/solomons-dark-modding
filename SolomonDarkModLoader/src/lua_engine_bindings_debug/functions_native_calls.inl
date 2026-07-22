@@ -259,6 +259,64 @@ int LuaDebugGetNativeEnemyDeathProbeResult(lua_State* state) {
     return 5;
 }
 
+// sd.debug.queue_native_experience_gain_probe(amount, apply_native_scaling)
+//     -> boolean, string, integer
+// The native XP seam runs after Lua returns so its synchronous filter can
+// acquire the Lua engine instead of failing open on re-entry.
+int LuaDebugQueueNativeExperienceGainProbe(lua_State* state) {
+    const auto amount = static_cast<float>(luaL_checknumber(state, 1));
+    luaL_checktype(state, 2, LUA_TBOOLEAN);
+    const bool apply_native_scaling = lua_toboolean(state, 2) != 0;
+
+    std::string error_message;
+    std::uint64_t request_serial = 0;
+    const bool queued = QueueNativeExperienceGainProbe(
+        amount,
+        apply_native_scaling,
+        &request_serial,
+        &error_message);
+    lua_pushboolean(state, queued ? 1 : 0);
+    lua_pushlstring(state, error_message.c_str(), error_message.size());
+    lua_pushinteger(state, static_cast<lua_Integer>(request_serial));
+    return 3;
+}
+
+// sd.debug.get_native_experience_gain_probe_result(request_serial)
+//     -> boolean, boolean, number, number, integer, string
+int LuaDebugGetNativeExperienceGainProbeResult(lua_State* state) {
+    const auto request_serial =
+        CheckLuaUnsignedInteger<std::uint64_t>(state, 1, "request_serial");
+    bool completed = false;
+    bool success = false;
+    float xp_before = 0.0f;
+    float xp_after = 0.0f;
+    std::uint32_t exception_code = 0;
+    std::string error_message;
+    if (!GetNativeExperienceGainProbeResult(
+            request_serial,
+            &completed,
+            &success,
+            &xp_before,
+            &xp_after,
+            &exception_code,
+            &error_message)) {
+        lua_pushboolean(state, 0);
+        lua_pushboolean(state, 0);
+        lua_pushnumber(state, 0.0);
+        lua_pushnumber(state, 0.0);
+        lua_pushinteger(state, 0);
+        lua_pushliteral(state, "invalid request serial");
+        return 6;
+    }
+    lua_pushboolean(state, completed ? 1 : 0);
+    lua_pushboolean(state, success ? 1 : 0);
+    lua_pushnumber(state, static_cast<lua_Number>(xp_before));
+    lua_pushnumber(state, static_cast<lua_Number>(xp_after));
+    lua_pushinteger(state, static_cast<lua_Integer>(exception_code));
+    lua_pushlstring(state, error_message.c_str(), error_message.size());
+    return 6;
+}
+
 // sd.debug.queue_native_staff_effect_probe(source_actor, target_actor, variant)
 //     -> boolean, string, integer
 // The resolver applies damage and can allocate native effects, so it must run

@@ -165,7 +165,7 @@ effects — the shift from telemetry platform to rules engine.
 *Multiplayer:* Filters execute only where the affected entity is simulated; outcomes
 replicate through existing channels. Authors write them as if single-player.
 
-**Damage, enemy-spawn, drop-roll, wave-spawn, and spell-cast slices implemented 2026-07-22.** `sd.events.filter` exposes
+**Implemented 2026-07-22.** `sd.events.filter` exposes
 ordered, owner-side `damage.dealing` and `damage.taken` rewrites/cancellation at the
 complete nine-float stock damage context. `enemy.spawning` intercepts the legal stock
 constructor call, transactionally rewrites common config fields, and safely cancels
@@ -176,10 +176,12 @@ category or cancel the roll, and restores the shared native policy transactional
 count and pacing or retire it without bypassing native composition, placement,
 construction, or bookkeeping. `spell.casting` runs once before an owner-simulated
 primary or secondary cast and can cancel it before stock effects, mana use, or
-replication. XP/gold resource filters remain. See
+replication. `xp.gaining` rewrites or cancels the input to the stock progression
+gain routine, while `gold.changing` does the same at the global gold mutation
+routine and at host-authoritative remote pickups. See
 `lua-event-filters.md`, `lua-enemy-spawn-filter.md`,
 `lua-drop-roll-filter.md`, `lua-wave-spawn-filter.md`,
-`lua-spell-cast-filter.md`, and the opt-in filter lab mods.
+`lua-spell-cast-filter.md`, `lua-resource-filters.md`, and the opt-in filter lab mods.
 
 **3. `sd.state` + `sd.events.broadcast` — replicated mod state & events.**
 Authority-writable KV bundled into the snapshot/apply stream (late joiners sync it), plus

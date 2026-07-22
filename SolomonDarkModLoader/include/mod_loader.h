@@ -491,6 +491,19 @@ bool GetNativeMagicHitBehaviorProbeResult(
     float* hp_before,
     float* hp_after,
     std::string* error_message);
+bool QueueNativeExperienceGainProbe(
+    float amount,
+    bool apply_native_scaling,
+    std::uint64_t* request_serial,
+    std::string* error_message);
+bool GetNativeExperienceGainProbeResult(
+    std::uint64_t request_serial,
+    bool* completed,
+    bool* success,
+    float* xp_before,
+    float* xp_after,
+    std::uint32_t* exception_code,
+    std::string* error_message);
 bool QueueNativeStaffEffectProbe(
     uintptr_t source_actor,
     uintptr_t target_actor,

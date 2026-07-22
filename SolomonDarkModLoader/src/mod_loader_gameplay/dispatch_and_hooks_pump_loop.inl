@@ -189,6 +189,8 @@ void PumpQueuedGameplayActions() {
     std::vector<PendingNativeMagicHitBehaviorProbe>
         native_magic_hit_behavior_probes;
     std::vector<PendingNativeEnemyDeathProbe> native_enemy_death_probes;
+    std::vector<PendingNativeExperienceGainProbe>
+        native_experience_gain_probes;
     std::vector<PendingNativeStaffEffectProbe>
         native_staff_effect_probes;
     PendingParticipantEntitySyncRequest participant_sync_request;
@@ -348,6 +350,14 @@ void PumpQueuedGameplayActions() {
                 .pending_native_enemy_death_probes.pop_front();
         }
         while (!g_gameplay_keyboard_injection
+                    .pending_native_experience_gain_probes.empty()) {
+            native_experience_gain_probes.push_back(
+                g_gameplay_keyboard_injection
+                    .pending_native_experience_gain_probes.front());
+            g_gameplay_keyboard_injection
+                .pending_native_experience_gain_probes.pop_front();
+        }
+        while (!g_gameplay_keyboard_injection
                     .pending_native_staff_effect_probes.empty()) {
             native_staff_effect_probes.push_back(
                 g_gameplay_keyboard_injection
@@ -425,6 +435,42 @@ void PumpQueuedGameplayActions() {
             ". actor=" + HexString(request.actor_address) +
             " config=" + HexString(request.expected_config_address) +
             " restored=" + std::to_string(config_restored ? 1 : 0) +
+            " seh=" + HexString(static_cast<uintptr_t>(exception_code)) +
+            (probe_error.empty() ? std::string{} : " error=" + probe_error));
+    }
+
+    for (const auto& request : native_experience_gain_probes) {
+        float xp_before = 0.0f;
+        float xp_after = 0.0f;
+        std::uint32_t exception_code = 0;
+        std::string probe_error;
+        const bool success = ExecuteNativeExperienceGainProbe(
+            request,
+            &xp_before,
+            &xp_after,
+            &exception_code,
+            &probe_error);
+        {
+            std::lock_guard<std::mutex> lock(
+                g_gameplay_keyboard_injection
+                    .pending_gameplay_world_actions_mutex);
+            auto& result = g_gameplay_keyboard_injection
+                               .native_experience_gain_probe_result;
+            result.request_serial = request.request_serial;
+            result.success = success;
+            result.xp_before = xp_before;
+            result.xp_after = xp_after;
+            result.exception_code = exception_code;
+            result.error = probe_error;
+        }
+        Log(
+            std::string("Native XP gain probe ") +
+            (success ? "applied" : "failed") +
+            ". amount=" + std::to_string(request.amount) +
+            " native_scaling=" +
+            std::to_string(request.apply_native_scaling ? 1 : 0) +
+            " xp=" + std::to_string(xp_before) + "->" +
+            std::to_string(xp_after) +
             " seh=" + HexString(static_cast<uintptr_t>(exception_code)) +
             (probe_error.empty() ? std::string{} : " error=" + probe_error));
     }

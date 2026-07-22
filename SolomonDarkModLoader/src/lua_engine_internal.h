@@ -80,6 +80,7 @@ void ResetLuaEnemySpawnFilterDiagnostics();
 void ResetLuaDropRollFilterDiagnostics();
 void ResetLuaWaveSpawnFilterDiagnostics();
 void ResetLuaSpellCastFilterDiagnostics();
+void ResetLuaResourceFilterDiagnostics();
 
 void StartLuaEventQueue();
 void StopLuaEventQueue();

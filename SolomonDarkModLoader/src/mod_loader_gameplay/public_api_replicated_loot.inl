@@ -112,3 +112,6 @@ void MarkReplicatedRunEnemyDeathPresented(std::uint64_t network_actor_id) {
 void ClearReplicatedRunEnemyDeathPresentation(std::uint64_t network_actor_id) {
     ClearReplicatedRunEnemyDeathPresentationState(network_actor_id);
 }
+bool IsApplyingAcceptedReplicatedGoldPickupFeedback() {
+    return g_accepted_replicated_gold_feedback_depth != 0;
+}

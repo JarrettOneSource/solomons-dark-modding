@@ -66,18 +66,83 @@ int __stdcall HookGoldChanged(int delta, char allow_negative) {
 
     const auto return_address = reinterpret_cast<uintptr_t>(_ReturnAddress());
     const auto* source = ClassifyGoldChangeSource(return_address, delta);
-    const auto result = original(delta, allow_negative);
+    int gold_before = 0;
+    const bool have_gold_before = TryReadResolvedGlobalInt(kGoldGlobal, &gold_before);
+    auto filtered_delta = delta;
+    if (have_gold_before &&
+        HasLuaGoldChangeFilterHandlers() &&
+        !IsApplyingAcceptedReplicatedGoldPickupFeedback()) {
+        LuaGoldChangeFilterContext filter_context;
+        filter_context.participant_id = multiplayer::GetLocalTransportParticipantId();
+        filter_context.current_gold = gold_before;
+        filter_context.delta = delta;
+        filter_context.allow_negative = allow_negative != 0;
+        filter_context.source = source;
+        if (!ApplyLuaGoldChangeFilters(&filter_context)) {
+            return 0;
+        }
+        filtered_delta = filter_context.delta;
+    }
+
+    const auto result = original(filtered_delta, allow_negative);
     if (result != 0) {
         int gold = 0;
         if (TryReadResolvedGlobalInt(kGoldGlobal, &gold)) {
-            DispatchLuaGoldChanged(gold, delta, source);
+            const auto applied_delta = have_gold_before
+                ? gold - gold_before
+                : filtered_delta;
+            DispatchLuaGoldChanged(gold, applied_delta, source);
         } else {
             Log(
-                "gold.changed native gold global unavailable. delta=" + std::to_string(delta) +
+                "gold.changed native gold global unavailable. delta=" + std::to_string(filtered_delta) +
                 " source=" + std::string(source));
         }
     }
     return result;
+}
+
+void __fastcall HookExperienceGain(
+    void* self,
+    void* /*unused_edx*/,
+    float amount,
+    char apply_native_scaling) {
+    const auto original =
+        GetX86HookTrampoline<ExperienceGainFn>(g_state.hooks[kHookExperienceGain]);
+    if (original == nullptr) {
+        return;
+    }
+
+    const auto progression_address = reinterpret_cast<uintptr_t>(self);
+    float current_xp = 0.0f;
+    const bool have_current_xp =
+        progression_address != 0 &&
+        ProcessMemory::Instance().TryReadField(
+            progression_address,
+            kProgressionXpOffset,
+            &current_xp) &&
+        std::isfinite(current_xp) &&
+        current_xp >= 0.0f;
+    if (have_current_xp &&
+        std::isfinite(amount) &&
+        amount >= 0.0f &&
+        HasLuaXpGainFilterHandlers()) {
+        LuaXpGainFilterContext filter_context;
+        filter_context.progression_address = progression_address;
+        filter_context.participant_id =
+            IsLocalPlayerProgressionForRunLifecycle(progression_address)
+                ? multiplayer::GetLocalTransportParticipantId()
+                : 0;
+        filter_context.current_xp = current_xp;
+        filter_context.amount = amount;
+        filter_context.apply_native_scaling = apply_native_scaling != 0;
+        filter_context.source = apply_native_scaling != 0 ? "reward" : "script";
+        if (!ApplyLuaXpGainFilters(&filter_context)) {
+            return;
+        }
+        amount = filter_context.amount;
+    }
+
+    original(self, amount, apply_native_scaling);
 }
 
 void __fastcall HookDropSpawned(

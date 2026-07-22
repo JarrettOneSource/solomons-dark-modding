@@ -14,6 +14,8 @@ inline constexpr std::uint32_t kLuaEnemySpawningFilterMask = 1u << 2;
 inline constexpr std::uint32_t kLuaDropRollingFilterMask = 1u << 3;
 inline constexpr std::uint32_t kLuaWaveSpawningFilterMask = 1u << 4;
 inline constexpr std::uint32_t kLuaSpellCastingFilterMask = 1u << 5;
+inline constexpr std::uint32_t kLuaXpGainingFilterMask = 1u << 6;
+inline constexpr std::uint32_t kLuaGoldChangingFilterMask = 1u << 7;
 
 struct LuaDamageFilterContext {
     std::uintptr_t source_actor_address = 0;
@@ -110,5 +112,28 @@ struct LuaSpellCastFilterContext {
 
 bool HasLuaSpellCastFilterHandlers();
 bool ApplyLuaSpellCastFilters(const LuaSpellCastFilterContext& context);
+
+struct LuaXpGainFilterContext {
+    std::uintptr_t progression_address = 0;
+    std::uint64_t participant_id = 0;
+    float current_xp = 0.0f;
+    float amount = 0.0f;
+    bool apply_native_scaling = false;
+    const char* source = "unknown";
+};
+
+bool HasLuaXpGainFilterHandlers();
+bool ApplyLuaXpGainFilters(LuaXpGainFilterContext* context);
+
+struct LuaGoldChangeFilterContext {
+    std::uint64_t participant_id = 0;
+    std::int32_t current_gold = 0;
+    std::int32_t delta = 0;
+    bool allow_negative = false;
+    const char* source = "unknown";
+};
+
+bool HasLuaGoldChangeFilterHandlers();
+bool ApplyLuaGoldChangeFilters(LuaGoldChangeFilterContext* context);
 
 }  // namespace sdmod

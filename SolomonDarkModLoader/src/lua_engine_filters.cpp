@@ -50,6 +50,12 @@ std::uint32_t FilterMaskForName(std::string_view filter_name) {
     if (filter_name == "spell.casting") {
         return kLuaSpellCastingFilterMask;
     }
+    if (filter_name == "xp.gaining") {
+        return kLuaXpGainingFilterMask;
+    }
+    if (filter_name == "gold.changing") {
+        return kLuaGoldChangingFilterMask;
+    }
     return 0;
 }
 
@@ -453,6 +459,16 @@ bool HasLuaSpellCastFilterHandlers() {
             kLuaSpellCastingFilterMask) != 0;
 }
 
+bool HasLuaXpGainFilterHandlers() {
+    return (g_registered_filter_mask.load(std::memory_order_acquire) &
+            kLuaXpGainingFilterMask) != 0;
+}
+
+bool HasLuaGoldChangeFilterHandlers() {
+    return (g_registered_filter_mask.load(std::memory_order_acquire) &
+            kLuaGoldChangingFilterMask) != 0;
+}
+
 namespace detail {
 
 void RegisterLuaEventFilterBinding(lua_State* state) {
@@ -466,6 +482,7 @@ void ResetLuaEventFilterRegistrations() {
     ResetLuaDropRollFilterDiagnostics();
     ResetLuaWaveSpawnFilterDiagnostics();
     ResetLuaSpellCastFilterDiagnostics();
+    ResetLuaResourceFilterDiagnostics();
 }
 
 void ClearLuaEventFilterRegistrationsForMod(LoadedLuaMod* mod) {

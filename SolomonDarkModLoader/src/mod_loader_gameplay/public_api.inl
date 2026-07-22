@@ -3,6 +3,7 @@
 #include "public_api_input_queueing.inl"
 #include "public_api_gameplay_action_queues.inl"
 #include "public_api_native_enemy_death_probe.inl"
+#include "public_api_native_experience_gain_probe.inl"
 #include "public_api_hub.inl"
 #include "public_api_participant_queues.inl"
 #include "inventory_snapshot_tree.inl"

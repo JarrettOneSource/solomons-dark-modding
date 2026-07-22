@@ -151,6 +151,7 @@ bool QueueAcceptedReplicatedGoldPickupFeedback(
     std::int32_t resulting_gold,
     std::uint64_t accepted_ms,
     std::string* error_message);
+bool IsApplyingAcceptedReplicatedGoldPickupFeedback();
 void CancelReplicatedGoldPickupFeedback(std::uint64_t network_drop_id);
 bool TryGetLastReplicatedGoldPickupFeedbackState(
     SDModReplicatedGoldPickupFeedbackState* state);

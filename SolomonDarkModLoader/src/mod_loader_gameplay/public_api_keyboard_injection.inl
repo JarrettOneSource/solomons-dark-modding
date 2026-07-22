@@ -961,6 +961,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         g_gameplay_keyboard_injection.pending_native_magic_hit_behavior_probes.clear();
         g_gameplay_keyboard_injection.next_native_magic_hit_behavior_probe_serial = 1;
         g_gameplay_keyboard_injection.native_magic_hit_behavior_probe_result = {};
+        g_gameplay_keyboard_injection.pending_native_experience_gain_probes.clear();
+        g_gameplay_keyboard_injection.next_native_experience_gain_probe_serial = 1;
+        g_gameplay_keyboard_injection.native_experience_gain_probe_result = {};
         g_gameplay_keyboard_injection.pending_native_staff_effect_probes.clear();
         g_gameplay_keyboard_injection.next_native_staff_effect_probe_serial = 1;
         g_gameplay_keyboard_injection.native_staff_effect_probe_result = {};
@@ -1145,6 +1148,9 @@ void ShutdownGameplayKeyboardInjection() {
         g_gameplay_keyboard_injection.pending_native_magic_hit_behavior_probes.clear();
         g_gameplay_keyboard_injection.next_native_magic_hit_behavior_probe_serial = 1;
         g_gameplay_keyboard_injection.native_magic_hit_behavior_probe_result = {};
+        g_gameplay_keyboard_injection.pending_native_experience_gain_probes.clear();
+        g_gameplay_keyboard_injection.next_native_experience_gain_probe_serial = 1;
+        g_gameplay_keyboard_injection.native_experience_gain_probe_result = {};
         g_gameplay_keyboard_injection.pending_native_staff_effect_probes.clear();
         g_gameplay_keyboard_injection.next_native_staff_effect_probe_serial = 1;
         g_gameplay_keyboard_injection.native_staff_effect_probe_result = {};

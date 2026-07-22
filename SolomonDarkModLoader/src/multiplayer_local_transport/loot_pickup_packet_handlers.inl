@@ -151,6 +151,36 @@ void ApplyLootPickupRequestPacket(
         return;
     }
 
+    if (drop_kind == LootDropKind::Gold && participant != nullptr) {
+        sdmod::LuaGoldChangeFilterContext filter_context;
+        filter_context.participant_id = packet.participant_id;
+        filter_context.current_gold = participant->owned_progression.gold;
+        filter_context.delta = payload.amount;
+        filter_context.allow_negative = false;
+        filter_context.source = "pickup";
+        const bool allowed = sdmod::ApplyLuaGoldChangeFilters(&filter_context);
+        const auto resulting_gold =
+            static_cast<std::int64_t>(filter_context.current_gold) +
+            static_cast<std::int64_t>(filter_context.delta);
+        if (!allowed ||
+            resulting_gold < 0 ||
+            resulting_gold > (std::numeric_limits<std::int32_t>::max)()) {
+            SendLootPickupResult(
+                packet,
+                from,
+                LootPickupResultCode::Rejected,
+                drop_kind,
+                BuildLootPickupResultPayloadFromParticipant(participant));
+            RememberLootPickupRequestSequence(packet);
+            Log(
+                "Multiplayer loot pickup rejected. reason=lua_gold_filter "
+                "participant_id=" + std::to_string(packet.participant_id) +
+                " network_drop_id=" + std::to_string(packet.network_drop_id));
+            return;
+        }
+        payload.amount = filter_context.delta;
+    }
+
     std::string queue_error;
     if (!sdmod::QueueHostLootDropDeactivation(
             packet.run_nonce,
@@ -365,19 +395,21 @@ void ApplyLootPickupResultPacket(
                     std::to_string(packet.resulting_gold) +
                     " network_drop_id=" + std::to_string(packet.network_drop_id));
             }
-            std::string feedback_error;
-            if (!QueueAcceptedReplicatedGoldPickupFeedback(
-                    packet.run_nonce,
-                    packet.network_drop_id,
-                    packet.request_sequence,
-                    packet.amount,
-                    packet.resulting_gold,
-                    now_ms,
-                    &feedback_error)) {
-                Log(
-                    "Multiplayer accepted gold pickup could not queue stock feedback. "
-                    "network_drop_id=" + std::to_string(packet.network_drop_id) +
-                    " error=" + feedback_error);
+            if (packet.amount > 0) {
+                std::string feedback_error;
+                if (!QueueAcceptedReplicatedGoldPickupFeedback(
+                        packet.run_nonce,
+                        packet.network_drop_id,
+                        packet.request_sequence,
+                        packet.amount,
+                        packet.resulting_gold,
+                        now_ms,
+                        &feedback_error)) {
+                    Log(
+                        "Multiplayer accepted gold pickup could not queue stock feedback. "
+                        "network_drop_id=" + std::to_string(packet.network_drop_id) +
+                        " error=" + feedback_error);
+                }
             }
         } else {
             CancelReplicatedGoldPickupFeedback(packet.network_drop_id);

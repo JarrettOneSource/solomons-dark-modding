@@ -229,6 +229,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_dispatcher", kSpellCastDispatcher),
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_pure_primary", kSpellCastPurePrimary),
         SDMOD_ADDR("run_lifecycle.hooks", "gold_changed", kGoldChanged),
+        SDMOD_ADDR("run_lifecycle.hooks", "experience_gain", kExperienceGain),
         SDMOD_ADDR("run_lifecycle.hooks", "level_up", kLevelUp),
         SDMOD_ADDR("run_lifecycle.hooks", "level_up_screen_create", kLevelUpScreenCreate),
 

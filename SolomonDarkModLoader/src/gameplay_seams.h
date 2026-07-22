@@ -212,6 +212,7 @@ extern uintptr_t kSpellCast3F0;
 extern uintptr_t kSpellCastDispatcher;
 extern uintptr_t kSpellCastPurePrimary;
 extern uintptr_t kGoldChanged;
+extern uintptr_t kExperienceGain;
 extern uintptr_t kLevelUp;
 extern uintptr_t kLevelUpScreenCreate;
 extern uintptr_t kGoldPickupCaller;

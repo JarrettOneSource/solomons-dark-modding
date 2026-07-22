@@ -13,6 +13,8 @@ Implemented filter families are:
 - `drop.rolling`
 - `wave.spawning`
 - `spell.casting`
+- `xp.gaining`
+- `gold.changing`
 
 The damage filters execute at the stock `PlayerActor::MagicDamage` resolution point. The
 loader runs every `damage.dealing` handler first, then every `damage.taken`
@@ -138,6 +140,8 @@ The stock wave-spawner seam advertises `events.filters.wave_spawn` and is
 documented in [lua-wave-spawn-filter.md](lua-wave-spawn-filter.md).
 The owner-side spell seam advertises `events.filters.spell_cast` and is
 documented in [lua-spell-cast-filter.md](lua-spell-cast-filter.md).
+The XP and gold seams advertise `events.filters.resources` and are documented
+in [lua-resource-filters.md](lua-resource-filters.md).
 
 The live verifier must run against a disposable game process because filter
 registrations last for the life of the Lua state. It invokes the retail damage
