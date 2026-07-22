@@ -2,6 +2,7 @@
 
 #include "bot_runtime.h"
 #include "lua_engine_events.h"
+#include "lua_mod_runtime.h"
 #include "runtime_bootstrap.h"
 #include "sdmod_plugin_api.h"
 
@@ -50,6 +51,8 @@ struct LoadedLuaMod {
     bool drop_spawned_registered = false;
     bool level_up_registered = false;
     std::uint32_t event_filter_mask = 0;
+    bool profile_storage_loaded = false;
+    LuaModStateValues profile_storage_values;
 };
 
 std::mutex& LuaEngineMutex();

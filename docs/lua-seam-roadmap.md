@@ -71,6 +71,8 @@ shared state; simulation calls auto-route to the owner).
 - **`sd.state`** — per-mod `get/set/delete/clear/snapshot`, global revision reads, and
   authority discovery. Host mutations replicate in order and late joiners receive a
   checkpoint.
+- **`sd.storage`** — per-mod local profile `get/set/delete/clear/snapshot` with bounded,
+  transactional persistence under the launcher's isolated mod data root.
 - **`sd.events`** — `on` plus authority-only `broadcast` for mod-defined ordered events.
   Built-in notify events are `runtime.tick`, `run.started`, `run.ended`, `wave.started`,
   `wave.completed`, `enemy.death`, `enemy.spawned`, `spell.cast`, `gold.changed`,
@@ -116,12 +118,13 @@ shared state; simulation calls auto-route to the owner).
 
 ### Structural gaps (why mods can't thrive yet)
 
-1. **Events are notify-only** — mods can watch the game but not veto or reshape it.
-2. **No output channel** — no drawing, no audio, no UI creation from Lua.
-3. **No content registration** — overlays retune existing skills/items/waves, but new
-   content with *scripted behavior* is impossible without native code.
-4. **No blessed persistence or cross-mod contract.** Replicated run state now has the
-   `sd.state`/broadcast seam; profile persistence and local mod-to-mod contracts remain.
+1. **No content registration** — overlays and filters reshape stock behavior, but
+   registered scripted spells, enemies, and items remain to be built.
+2. **Presentation is incomplete** — Lua drawing exists, but audio and authored UI remain.
+3. **Shared simulation control is incomplete** — enemy brains, scene changes, timing,
+   RNG, and other mutations still need authority-routed public seams.
+4. **No cross-mod contract.** Replicated run state and scoped profile persistence now
+   exist; local mod-to-mod contracts remain.
 
 ### Known sharp edges (fix as part of the relevant seam)
 
@@ -224,6 +227,13 @@ replicated movement — mod AI code never runs on clients.
 `.sdmod/storage/<mod-id>/`. Replaces ad-hoc `io.*`; prerequisite for sandboxed trust
 tiers when distribution arrives. *MP:* local (per player). Shared-run state belongs in
 `sd.state`; the API docs draw that line explicitly.
+
+**Implemented 2026-07-22.** `sd.storage` provides bounded typed
+`get/set/delete/clear/snapshot` operations over the launcher-isolated per-mod data root.
+Writes encode a complete candidate and replace the durable file before changing the
+live snapshot; malformed, oversized, cyclic, or foreign data fails visibly. The store is
+strictly local and advertises `storage.profile.local`. See `lua-storage.md` and the
+opt-in `sample.lua.storage_lab` mod.
 
 **7. `sd.audio` — BASS bindings.** The game ships `bass.dll`; bind sample/stream
 play/stop/volume. *Unlocks:* stingers, custom music, voice packs. *MP:* presentation-local;

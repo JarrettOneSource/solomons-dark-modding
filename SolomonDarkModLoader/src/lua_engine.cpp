@@ -314,6 +314,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "draw.stock_sprites",
         "draw.world_projection",
         "runtime.mod.info",
+        "storage.profile.local",
         "state.replicated.read",
         "state.replicated.write",
         "ui.snapshot.read",
@@ -414,6 +415,8 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     mod->gold_changed_registered = false;
     mod->drop_spawned_registered = false;
     mod->level_up_registered = false;
+    mod->profile_storage_loaded = false;
+    mod->profile_storage_values.clear();
 }
 
 void LogLuaMessage(const LoadedLuaMod& mod, const std::string& message) {

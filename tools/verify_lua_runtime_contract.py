@@ -47,6 +47,7 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
         "get_revision",
         "is_authority",
     ),
+    "storage": ("get", "set", "delete", "clear", "snapshot"),
     "draw": (
         "text",
         "rect",

@@ -29,6 +29,9 @@ from static_lua_spell_cast_filter_contracts import (
 from static_lua_resource_filter_contracts import (
     test_lua_resource_filters_are_native_ordered_and_authoritative,
 )
+from static_lua_storage_contracts import (
+    test_lua_storage_is_scoped_bounded_and_transactional,
+)
 from static_multiplayer_transport_contracts import (
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
     test_build_all_rebuilds_native_loader_from_clean_intermediates,
@@ -278,6 +281,10 @@ from static_re_binary_tooling_contracts import (
 )
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "Lua storage is scoped, bounded, and transactional",
+        test_lua_storage_is_scoped_bounded_and_transactional,
+    ),
     (
         "Lua resource filters are native-ordered and authoritative",
         test_lua_resource_filters_are_native_ordered_and_authoritative,
