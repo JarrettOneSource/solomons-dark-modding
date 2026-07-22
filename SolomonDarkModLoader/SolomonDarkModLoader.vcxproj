@@ -351,6 +351,7 @@
     <ClInclude Include="src\mod_loader_gameplay\hub_service_runtime.inl" />
     <ClInclude Include="src\mod_loader_gameplay\nav_grid_snapshot_service.inl" />
     <ClInclude Include="src\mod_loader_gameplay\native_defense_behavior_probes.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\native_enemy_death_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\host_loot_drop_deactivation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\local_player_native_equipment.inl" />
     <ClInclude Include="src\mod_loader_gameplay\native_item_materialization.inl" />
@@ -362,6 +363,7 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_combat_control_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_gameplay_action_queues.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_native_enemy_death_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_keyboard_injection.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_participant_queues.inl" />
@@ -455,6 +457,7 @@
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\actor_world_pause_hook.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\enemy_spawn_filter.inl" />
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\drop_roll_filter.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\enemy_death_reward_level_up_hooks.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\manual_enemy_spawning.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\run_transition_hooks.inl" />
@@ -495,6 +498,7 @@
     <ClCompile Include="src\lua_engine_bindings_ui.cpp" />
     <ClCompile Include="src\lua_engine_events.cpp" />
     <ClCompile Include="src\lua_engine_filters.cpp" />
+    <ClCompile Include="src\lua_engine_drop_filters.cpp" />
     <ClCompile Include="src\lua_engine_enemy_spawn_filters.cpp" />
     <ClCompile Include="src\lua_engine_custom_events.cpp" />
     <ClCompile Include="src\lua_engine_values.cpp" />

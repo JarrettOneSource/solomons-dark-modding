@@ -199,6 +199,63 @@ int LuaDebugGetNativeMagicHitBehaviorProbeResult(lua_State* state) {
     return 5;
 }
 
+// sd.debug.queue_native_enemy_death_probe(actor_address,
+//     expected_config_address, restore_config_address) -> boolean, string, integer
+// The native death presenter runs after Lua returns so synchronous event filters
+// can acquire the Lua engine and inspect the stock drop selector.
+int LuaDebugQueueNativeEnemyDeathProbe(lua_State* state) {
+    const auto actor_address = CheckLuaAddress(state, 1, "actor_address");
+    const auto expected_config_address =
+        CheckLuaAddress(state, 2, "expected_config_address");
+    const auto restore_config_address =
+        CheckLuaAddress(state, 3, "restore_config_address");
+
+    std::string error_message;
+    std::uint64_t request_serial = 0;
+    const bool queued = QueueNativeEnemyDeathProbe(
+        actor_address,
+        expected_config_address,
+        restore_config_address,
+        &request_serial,
+        &error_message);
+    lua_pushboolean(state, queued ? 1 : 0);
+    lua_pushlstring(state, error_message.c_str(), error_message.size());
+    lua_pushinteger(state, static_cast<lua_Integer>(request_serial));
+    return 3;
+}
+
+// sd.debug.get_native_enemy_death_probe_result(request_serial)
+//     -> boolean, boolean, integer, boolean, string
+int LuaDebugGetNativeEnemyDeathProbeResult(lua_State* state) {
+    const auto request_serial =
+        CheckLuaUnsignedInteger<std::uint64_t>(state, 1, "request_serial");
+    bool completed = false;
+    bool success = false;
+    std::uint32_t exception_code = 0;
+    bool config_restored = false;
+    std::string error_message;
+    if (!GetNativeEnemyDeathProbeResult(
+            request_serial,
+            &completed,
+            &success,
+            &exception_code,
+            &config_restored,
+            &error_message)) {
+        lua_pushboolean(state, 0);
+        lua_pushboolean(state, 0);
+        lua_pushinteger(state, 0);
+        lua_pushboolean(state, 0);
+        lua_pushliteral(state, "invalid request serial");
+        return 5;
+    }
+    lua_pushboolean(state, completed ? 1 : 0);
+    lua_pushboolean(state, success ? 1 : 0);
+    lua_pushinteger(state, static_cast<lua_Integer>(exception_code));
+    lua_pushboolean(state, config_restored ? 1 : 0);
+    lua_pushlstring(state, error_message.c_str(), error_message.size());
+    return 5;
+}
+
 // sd.debug.queue_native_staff_effect_probe(source_actor, target_actor, variant)
 //     -> boolean, string, integer
 // The resolver applies damage and can allocate native effects, so it must run

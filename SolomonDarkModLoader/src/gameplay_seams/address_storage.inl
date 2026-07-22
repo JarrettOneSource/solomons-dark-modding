@@ -89,6 +89,7 @@ uintptr_t kGameplayCombatPreludePrimaryMode = 0;
 uintptr_t kGameplayCombatPreludeSecondaryMode = 0;
 uintptr_t kArenaCombatPreludeDispatch = 0;
 uintptr_t kSpawnRewardGold = 0;
+uintptr_t kEnemyDropSelector = 0;
 uintptr_t kSpawnEnemy = 0;
 uintptr_t kSpawnExactEnemyGroup = 0;
 uintptr_t kObjectAllocate = 0;

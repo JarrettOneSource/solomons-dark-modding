@@ -304,6 +304,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "lua.engine",
         "events.runtime.tick",
         "events.replicated.broadcast",
+        "events.filters.drop_roll",
         "events.filters.enemy_spawn",
         "draw.local.immediate",
         "draw.text",

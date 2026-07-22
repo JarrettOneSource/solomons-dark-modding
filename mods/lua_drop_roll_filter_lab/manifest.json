@@ -1,0 +1,13 @@
+{
+  "id": "sample.lua.drop_roll_filter_lab",
+  "name": "Lua Drop Roll Filter Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "events.filters.drop_roll"
+    ]
+  }
+}

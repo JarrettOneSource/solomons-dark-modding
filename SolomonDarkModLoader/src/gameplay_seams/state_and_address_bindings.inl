@@ -117,6 +117,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "gameplay_combat_prelude_secondary_mode", kGameplayCombatPreludeSecondaryMode),
         SDMOD_ADDR("gameplay.hooks", "arena_combat_prelude_dispatch", kArenaCombatPreludeDispatch),
         SDMOD_ADDR("gameplay.hooks", "spawn_reward_gold", kSpawnRewardGold),
+        SDMOD_ADDR("gameplay.hooks", "enemy_drop_selector", kEnemyDropSelector),
         SDMOD_ADDR("gameplay.hooks", "spawn_enemy", kSpawnEnemy),
         SDMOD_ADDR("gameplay.hooks", "object_allocate", kObjectAllocate),
         SDMOD_ADDR("gameplay.hooks", "object_free", kObjectFree),

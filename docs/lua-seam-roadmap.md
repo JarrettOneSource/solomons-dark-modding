@@ -157,20 +157,23 @@ D3D9 state. See `lua-draw.md` and the opt-in `sample.lua.hud_showcase` mod.
 Cancellable/rewritable hooks at already-resolved seams:
 - `damage.dealing` / `damage.taken` — `kPlayerActorMagicDamage` + `kDamageContext*` globals
 - `enemy.spawning` / `wave.spawning` — `kSpawnEnemy`, `kSpawnExactEnemyGroup`, `kWaveSpawnerTick`
-- `drop.rolling` — `kOrbRewardInitialize`, `kItemDropCarrierCtor`
+- `drop.rolling` — `kEnemyDropSelector` (`0x0047C070`, upstream of
+  `kOrbRewardInitialize` and `kItemDropCarrierCtor`)
 - `spell.casting` (pre, cancellable), `xp.gaining`, `gold.changing`
 *Unlocks:* balance overhauls, difficulty directors, custom loot tables, conditional
 effects — the shift from telemetry platform to rules engine.
 *Multiplayer:* Filters execute only where the affected entity is simulated; outcomes
 replicate through existing channels. Authors write them as if single-player.
 
-**Damage and enemy-spawn slices implemented 2026-07-22.** `sd.events.filter` exposes
+**Damage, enemy-spawn, and drop-roll slices implemented 2026-07-22.** `sd.events.filter` exposes
 ordered, owner-side `damage.dealing` and `damage.taken` rewrites/cancellation at the
 complete nine-float stock damage context. `enemy.spawning` intercepts the legal stock
 constructor call, transactionally rewrites common config fields, and safely cancels
-without reviving the removed hand-built `Enemy_Create` path. Drop and wave filters
-remain the next slices. See `lua-event-filters.md`, `lua-enemy-spawn-filter.md`, and
-the opt-in filter lab mods.
+without reviving the removed hand-built `Enemy_Create` path. `drop.rolling` runs at
+the owner-side selector before candidate construction, can force a stock reward
+category or cancel the roll, and restores the shared native policy transactionally.
+The wave filter remains the next slice. See `lua-event-filters.md`,
+`lua-enemy-spawn-filter.md`, `lua-drop-roll-filter.md`, and the opt-in filter lab mods.
 
 **3. `sd.state` + `sd.events.broadcast` — replicated mod state & events.**
 Authority-writable KV bundled into the snapshot/apply stream (late joiners sync it), plus

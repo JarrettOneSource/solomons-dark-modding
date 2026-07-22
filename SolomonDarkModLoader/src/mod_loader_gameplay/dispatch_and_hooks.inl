@@ -9,6 +9,7 @@
 #include "world_snapshot_reconciliation.inl"
 #include "spell_effect_reconciliation.inl"
 #include "native_defense_behavior_probes.inl"
+#include "native_enemy_death_probe.inl"
 #include "native_staff_behavior_probe.inl"
 #include "hub_service_runtime.inl"
 #include "dispatch_and_hooks_gameplay_thread_dispatch.inl"

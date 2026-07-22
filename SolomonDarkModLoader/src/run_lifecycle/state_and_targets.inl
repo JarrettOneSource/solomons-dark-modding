@@ -17,6 +17,7 @@ using GameFreeFn = void(__cdecl*)(void* memory);
 using EnemySpawnedFn =
     void* (__fastcall*)(void* self, void* unused_edx, void* param_2, int enemy_config, void* param_4, int param_5, int param_6, char param_7);
 using EnemyDeathFn = int(__fastcall*)(void* self, void* unused_edx);
+using DropSelectorFn = void(__fastcall*)(void* self, void* unused_edx);
 using SpellCastFn = void(__fastcall*)(void* self, void* unused_edx);
 using AirLightningChainTargetFn =
     void* (__thiscall*)(
@@ -45,6 +46,7 @@ enum HookIndex : size_t {
     kHookWaveSpawnerTick,
     kHookEnemySpawned,
     kHookEnemyDeath,
+    kHookDropSelector,
     kHookSpellCast3EB,
     kHookSpellCast018,
     kHookAirLightningChainTarget,
@@ -133,12 +135,15 @@ constexpr std::size_t kEnemySpawnConfigAttackSpeedOffset = 0x70;
 constexpr std::size_t kEnemySpawnConfigScaleOffset = 0x74;
 constexpr std::size_t kCanceledEnemySpawnResultSize = 0x400;
 constexpr std::uint32_t kMaximumLuaEnemySpawnFilterHookLogCount = 4;
+constexpr std::uint32_t kMaximumLuaDropRollFilterHookLogCount = 4;
 
 alignas(std::uintptr_t)
 std::array<std::uint8_t, kCanceledEnemySpawnResultSize>
     g_canceled_enemy_spawn_result{};
 std::atomic<std::uint32_t> g_lua_enemy_spawn_filter_capture_log_count{0};
 std::atomic<std::uint32_t> g_lua_enemy_spawn_filter_write_log_count{0};
+std::atomic<std::uint32_t> g_lua_drop_roll_filter_capture_log_count{0};
+std::atomic<std::uint32_t> g_lua_drop_roll_filter_write_log_count{0};
 
 void BuildHookTargets(HookTarget* targets) {
     if (targets == nullptr) {
@@ -155,6 +160,8 @@ void BuildHookTargets(HookTarget* targets) {
     targets[kHookWaveSpawnerTick] = {kWaveSpawnerTick, 6};
     targets[kHookEnemySpawned] = {kSpawnEnemy, 7};
     targets[kHookEnemyDeath] = {kEnemyDeath, 10};
+    // Whole instructions: PUSH -1 (2) + PUSH exception handler (5).
+    targets[kHookDropSelector] = {kEnemyDropSelector, 7};
     targets[kHookSpellCast3EB] = {kSpellCast3EB, 8};
     targets[kHookSpellCast018] = {kSpellCast018, 8};
     // Whole instructions: sub esp,18h (3) + fld [esp+24h] (4).

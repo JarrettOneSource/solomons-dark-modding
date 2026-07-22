@@ -5,6 +5,7 @@
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
+#include "native_enemy_lifecycle.h"
 #include "native_spell_stats.h"
 #include "runtime_debug.h"
 
@@ -44,7 +45,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 68);
+    lua_createtable(state, 0, 70);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -116,6 +117,14 @@ void RegisterLuaDebugBindings(lua_State* state) {
         state,
         &LuaDebugGetNativeMagicHitBehaviorProbeResult,
         "get_native_magic_hit_behavior_probe_result");
+    RegisterFunction(
+        state,
+        &LuaDebugQueueNativeEnemyDeathProbe,
+        "queue_native_enemy_death_probe");
+    RegisterFunction(
+        state,
+        &LuaDebugGetNativeEnemyDeathProbeResult,
+        "get_native_enemy_death_probe_result");
     RegisterFunction(
         state,
         &LuaDebugQueueNativeStaffEffectProbe,

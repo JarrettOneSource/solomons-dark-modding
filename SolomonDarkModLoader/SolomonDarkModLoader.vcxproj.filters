@@ -932,6 +932,9 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_gameplay_action_queues.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_native_enemy_death_probe.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -969,6 +972,9 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\native_defense_behavior_probes.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\native_enemy_death_probe.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\native_staff_behavior_probe.inl">
@@ -1226,6 +1232,9 @@
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\enemy_spawn_filter.inl">
       <Filter>Header Files\Run Lifecycle</Filter>
     </ClInclude>
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\drop_roll_filter.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\enemy_death_reward_level_up_hooks.inl">
       <Filter>Header Files\Run Lifecycle</Filter>
     </ClInclude>
@@ -1337,6 +1346,9 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_filters.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_drop_filters.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_enemy_spawn_filters.cpp">

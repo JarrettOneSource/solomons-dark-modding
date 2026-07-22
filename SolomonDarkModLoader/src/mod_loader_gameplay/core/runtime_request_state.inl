@@ -117,6 +117,21 @@ struct NativeMagicHitBehaviorProbeResult {
     std::string error;
 };
 
+struct PendingNativeEnemyDeathProbe {
+    std::uint64_t request_serial = 0;
+    uintptr_t actor_address = 0;
+    uintptr_t expected_config_address = 0;
+    uintptr_t restore_config_address = 0;
+};
+
+struct NativeEnemyDeathProbeResult {
+    std::uint64_t request_serial = 0;
+    bool success = false;
+    std::uint32_t exception_code = 0;
+    bool config_restored = false;
+    std::string error;
+};
+
 struct PendingNativeStaffEffectProbe {
     std::uint64_t request_serial = 0;
     uintptr_t source_actor = 0;
@@ -246,6 +261,9 @@ struct GameplayKeyboardInjectionState {
     std::deque<PendingNativeMagicHitBehaviorProbe> pending_native_magic_hit_behavior_probes;
     std::uint64_t next_native_magic_hit_behavior_probe_serial = 1;
     NativeMagicHitBehaviorProbeResult native_magic_hit_behavior_probe_result;
+    std::deque<PendingNativeEnemyDeathProbe> pending_native_enemy_death_probes;
+    std::uint64_t next_native_enemy_death_probe_serial = 1;
+    NativeEnemyDeathProbeResult native_enemy_death_probe_result;
     std::deque<PendingNativeStaffEffectProbe> pending_native_staff_effect_probes;
     std::uint64_t next_native_staff_effect_probe_serial = 1;
     NativeStaffEffectProbeResult native_staff_effect_probe_result;

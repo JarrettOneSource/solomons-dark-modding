@@ -106,6 +106,7 @@ extern uintptr_t kGameplayCombatPreludePrimaryMode;
 extern uintptr_t kGameplayCombatPreludeSecondaryMode;
 extern uintptr_t kArenaCombatPreludeDispatch;
 extern uintptr_t kSpawnRewardGold;
+extern uintptr_t kEnemyDropSelector;
 extern uintptr_t kSpawnEnemy;
 extern uintptr_t kSpawnExactEnemyGroup;
 extern uintptr_t kObjectAllocate;
