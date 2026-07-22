@@ -66,6 +66,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "player_actor_secondary_spell_cast", kPlayerActorSecondarySpellCast),
         SDMOD_ADDR("gameplay.hooks", "secondary_cursor_world_projection", kSecondaryCursorWorldProjection),
         SDMOD_ADDR("gameplay.hooks", "player_actor_magic_damage", kPlayerActorMagicDamage),
+        SDMOD_ADDR("gameplay.hooks", "poisoned_modifier_tick", kPoisonedModifierTick),
         SDMOD_ADDR("gameplay.hooks", "webbed_modifier_tick", kWebbedModifierTick),
         SDMOD_ADDR("gameplay.hooks", "damage_context_reset", kDamageContextReset),
         SDMOD_ADDR("gameplay.hooks", "staff_effect_resolver", kStaffEffectResolver),

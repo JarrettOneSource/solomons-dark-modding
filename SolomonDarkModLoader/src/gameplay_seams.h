@@ -55,6 +55,7 @@ extern uintptr_t kPlayerActorMoveStep;
 extern uintptr_t kPlayerActorSecondarySpellCast;
 extern uintptr_t kSecondaryCursorWorldProjection;
 extern uintptr_t kPlayerActorMagicDamage;
+extern uintptr_t kPoisonedModifierTick;
 extern uintptr_t kWebbedModifierTick;
 extern uintptr_t kDamageContextReset;
 extern uintptr_t kStaffEffectResolver;

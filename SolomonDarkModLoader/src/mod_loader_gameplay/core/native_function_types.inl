@@ -10,6 +10,7 @@ using SecondaryCursorWorldProjectionFn = void*(__thiscall*)(
     float screen_x,
     float screen_y);
 using PlayerActorMagicDamageFn = std::uint32_t(__thiscall*)(void* self);
+using PoisonedModifierTickFn = void(__thiscall*)(void* self);
 using WebbedModifierTickFn = void(__thiscall*)(void* self);
 using DamageContextResetFn = void(__thiscall*)(void* self);
 using StaffEffectResolverFn = void(__thiscall*)(void* self, std::uint32_t variant);

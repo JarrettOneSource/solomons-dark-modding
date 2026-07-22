@@ -11,6 +11,8 @@ constexpr std::size_t kPlayerActorSecondarySpellCastHookMinimumPatchSize = 5;
 // followed by a six-byte world-origin load. The safe hook keeps both whole.
 constexpr std::size_t kSecondaryCursorWorldProjectionHookMinimumPatchSize = 5;
 constexpr std::size_t kPlayerActorMagicDamageHookMinimumPatchSize = 5;
+// Mod_Poisoned::Tick begins with one whole five-byte absolute load.
+constexpr std::size_t kPoisonedModifierTickHookMinimumPatchSize = 5;
 // Mod_Webbed::Tick starts with `push ecx` followed by the six-byte absolute
 // load of the active actor. Seven bytes preserve whole instructions.
 constexpr std::size_t kWebbedModifierTickHookMinimumPatchSize = 7;

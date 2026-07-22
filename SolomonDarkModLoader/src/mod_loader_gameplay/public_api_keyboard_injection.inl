@@ -26,6 +26,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
             kSecondaryCursorWorldProjection);
     const auto player_actor_magic_damage =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorMagicDamage);
+    const auto poisoned_modifier_tick =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kPoisonedModifierTick);
     const auto webbed_modifier_tick =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kWebbedModifierTick);
     const auto damage_context_reset =
@@ -95,6 +97,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         player_actor_secondary_spell_cast == 0 ||
         secondary_cursor_world_projection == 0 ||
         player_actor_magic_damage == 0 ||
+        poisoned_modifier_tick == 0 ||
         webbed_modifier_tick == 0 ||
         damage_context_reset == 0 ||
         damage_context_target == 0 ||
@@ -825,6 +828,21 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     }
 
     if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(poisoned_modifier_tick),
+            reinterpret_cast<void*>(&HookPoisonedModifierTick),
+            kPoisonedModifierTickHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.poisoned_modifier_tick_hook,
+            &hook_error)) {
+        ShutdownGameplayKeyboardInjection();
+        if (error_message != nullptr) {
+            *error_message =
+                "Failed to install owner poison authority hook: " +
+                hook_error;
+        }
+        return false;
+    }
+
+    if (!InstallSafeX86Hook(
             reinterpret_cast<void*>(webbed_modifier_tick),
             reinterpret_cast<void*>(&HookWebbedModifierTick),
             kWebbedModifierTickHookMinimumPatchSize,
@@ -927,6 +945,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " secondary_cursor_world_projection=" +
             HexString(secondary_cursor_world_projection) +
         " incoming_damage=" + HexString(player_actor_magic_damage) +
+        " poisoned_modifier_tick=" + HexString(poisoned_modifier_tick) +
         " damage_context_reset=" + HexString(damage_context_reset) +
         " pure_primary_gate=" + HexString(player_actor_pure_primary_gate) +
         " control_brain_update=" + HexString(player_control_brain_update) +
@@ -976,8 +995,9 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(
         &g_gameplay_keyboard_injection.secondary_cursor_world_projection_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_secondary_spell_cast_hook);
-    RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_magic_damage_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.webbed_modifier_tick_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.poisoned_modifier_tick_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_magic_damage_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);

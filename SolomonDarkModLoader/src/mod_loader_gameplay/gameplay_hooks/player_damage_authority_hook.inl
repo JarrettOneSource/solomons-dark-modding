@@ -263,7 +263,11 @@ std::uint32_t __fastcall HookPlayerActorMagicDamage(
         return 0;
     }
 
+    const auto actor_address = reinterpret_cast<uintptr_t>(self);
     if (multiplayer::IsLocalTransportClient()) {
+        if (g_client_owner_poison_tick_target == actor_address) {
+            return original(self);
+        }
         // The host owns all incoming wizard damage and transient statuses.
         // Resetting the stock context also releases a rejected queued native
         // modifier so it cannot contaminate a later authoritative correction.
@@ -274,7 +278,6 @@ std::uint32_t __fastcall HookPlayerActorMagicDamage(
         return 0;
     }
 
-    const auto actor_address = reinterpret_cast<uintptr_t>(self);
     RemoteMagicShieldDamageAuthority shield_authority;
     std::string authority_error;
     if (!TryPrepareRemoteMagicShieldDamageAuthority(

@@ -692,32 +692,73 @@ def test_network_clients_reject_stock_incoming_damage_authority() -> str:
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "player_damage_authority_hook.inl"
     )
+    poison_hook = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "poison_authority_hook.inl"
+    )
     installation = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
         "public_api_keyboard_injection.inl"
     )
 
     for source, token in (
+        (layout, "poisoned_modifier_tick=0x00627160"),
         (layout, "damage_context_reset=0x006246F0"),
+        (seam_header, "extern uintptr_t kPoisonedModifierTick;"),
         (seam_header, "extern uintptr_t kDamageContextReset;"),
+        (seam_storage, "uintptr_t kPoisonedModifierTick = 0;"),
         (seam_storage, "uintptr_t kDamageContextReset = 0;"),
+        (
+            seam_bindings,
+            'SDMOD_ADDR("gameplay.hooks", "poisoned_modifier_tick", '
+            "kPoisonedModifierTick)",
+        ),
         (
             seam_bindings,
             'SDMOD_ADDR("gameplay.hooks", "damage_context_reset", '
             "kDamageContextReset)",
         ),
+        (native_types, "using PoisonedModifierTickFn = void(__thiscall*)"),
         (native_types, "using DamageContextResetFn = void(__thiscall*)"),
+        (hook_state, "X86Hook poisoned_modifier_tick_hook;"),
         (hook_state, "X86Hook player_actor_magic_damage_hook;"),
+        (hook_state, "g_client_owner_poison_tick_target"),
         (hook_state, "uintptr_t damage_context_reset_address = 0;"),
         (hook_state, "uintptr_t damage_context_source_address = 0;"),
+        (installation, "reinterpret_cast<void*>(&HookPoisonedModifierTick)"),
+        (installation, "kPoisonedModifierTickHookMinimumPatchSize"),
+        (
+            installation,
+            "RemoveX86Hook(&g_gameplay_keyboard_injection.poisoned_modifier_tick_hook)",
+        ),
         (installation, "reinterpret_cast<void*>(&HookPlayerActorMagicDamage)"),
         (installation, "kPlayerActorMagicDamageHookMinimumPatchSize"),
     ):
         assert token in source, f"incoming-damage authority lacks: {token}"
 
+    for token in (
+        "HookPoisonedModifierTick",
+        "kDamageContextTargetGlobal",
+        "kNativePoisonSourceSlotOffset",
+        "kNativePoisonDamagePerTickOffset",
+        "local_player_tick_actor_address",
+        "g_client_owner_poison_tick_target",
+        "original(self)",
+    ):
+        assert token in poison_hook, (
+            f"owner poison authority scope lacks: {token}"
+        )
+    _require_in_order(
+        poison_hook,
+        "g_client_owner_poison_tick_target = actor_address",
+        "original(self);",
+        "g_client_owner_poison_tick_target = previous_target",
+    )
     _require_in_order(
         hook,
         "if (multiplayer::IsLocalTransportClient())",
+        "if (g_client_owner_poison_tick_target == actor_address)",
+        "return original(self);",
         "const auto reset = reinterpret_cast<DamageContextResetFn>",
         "reset(reinterpret_cast<void*>(",
         "damage_context_source_address",
@@ -730,8 +771,8 @@ def test_network_clients_reject_stock_incoming_damage_authority() -> str:
         "source, including projectiles and hazards"
     )
     return (
-        "network clients reject stock incoming damage and clear queued native "
-        "modifiers until the host sends the authoritative correction"
+        "network clients accept only a scoped local-owner poison tick while "
+        "rejecting other stock incoming damage and queued modifiers"
     )
 
 

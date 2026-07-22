@@ -138,6 +138,7 @@ struct GameplayKeyboardInjectionState {
     X86Hook player_actor_secondary_spell_cast_hook;
     X86Hook secondary_cursor_world_projection_hook;
     X86Hook player_actor_magic_damage_hook;
+    X86Hook poisoned_modifier_tick_hook;
     X86Hook webbed_modifier_tick_hook;
     X86Hook player_actor_pure_primary_gate_hook;
     X86Hook player_control_brain_update_hook;
@@ -296,3 +297,4 @@ void ResetLocalPlayerTickOwnershipState() {
 thread_local std::uint32_t g_multiplayer_client_authorized_hub_run_switch_depth = 0;
 thread_local std::uint32_t g_loader_owned_actor_destroy_unregister_depth = 0;
 thread_local std::uint32_t g_remote_secondary_spell_dispatch_depth = 0;
+thread_local uintptr_t g_client_owner_poison_tick_target = 0;

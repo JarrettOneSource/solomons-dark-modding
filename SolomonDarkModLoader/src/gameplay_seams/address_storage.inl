@@ -38,6 +38,7 @@ uintptr_t kPlayerActorMoveStep = 0;
 uintptr_t kPlayerActorSecondarySpellCast = 0;
 uintptr_t kSecondaryCursorWorldProjection = 0;
 uintptr_t kPlayerActorMagicDamage = 0;
+uintptr_t kPoisonedModifierTick = 0;
 uintptr_t kWebbedModifierTick = 0;
 uintptr_t kDamageContextReset = 0;
 uintptr_t kStaffEffectResolver = 0;
