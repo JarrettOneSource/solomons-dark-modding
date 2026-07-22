@@ -30,7 +30,7 @@ grammar and generated-world details are in
 
 `Region` is factory type 4000. Its constructor at `0x00652830` allocates and
 initializes an 0x8E88-byte object with vtable `0x0079F3E4`. The object is not
-only a tile background. It owns or embeds:
+only a tile background. It owns or embeds this region-local state:
 
 - an `Array<Puppet*>`, a `PuppetManager`, and multiple actor/pointer lists;
 - `MyCollider` and the world movement/collision substrate;
@@ -39,14 +39,20 @@ only a tile background. It owns or embeds:
 - per-frame NPC/presentation arrays and a miscellaneous-light array;
 - four independent grids of 0x800 dwords each;
 - camera, transition, scripted-movement, render-effect, string, and viewport
-  state; and
-- 13 `AmbientSound` bindings into the preconstructed native audio registry.
+  state.
+
+The same constructor also binds 13 **global** `AmbientSound` wrappers to
+preconstructed `SoundLoop` slots. Those 0x10-byte wrappers are not embedded in
+the 0x8E88-byte Region allocation. Base tick `0x0063EFC0` services the global
+mix while a region is active; the exact wrapper addresses and loop mapping are
+in [native-audio-system.md](native-audio-system.md#global-ambient-loop-mix).
 
 Initialize slot `+0x04`, `0x0063E4B0`, requests an object handle/ID from the
 million-entry allocator and stores it at `Region +0x178`. Base tick
 `0x0063EFC0` performs system-level work before a subclass adds room behavior:
 
-1. tick all 13 ambient wrappers and clear their requested per-frame gains;
+1. tick all 13 global ambient wrappers and clear their requested per-frame
+   gains;
 2. update transition alpha/velocity and call virtual slot `+0x128` when an
    endpoint is reached;
 3. reset/fill per-frame presentation and NPC arrays;
@@ -57,10 +63,11 @@ million-entry allocator and stores it at `Region +0x178`. Base tick
 8. drive an optional scripted local-player movement target; and
 9. advance a timing/state gate that can invoke subclass slot `+0xCC`.
 
-The transition, camera, ambient, and actor-list state belongs to the region;
-an atlas record does not own any of it. Destroying or replacing a region must
-retire its manager registrations, actors, collision state, audio wrappers,
-and layout objects before releasing its bundle references.
+The transition, camera, and actor-list state belongs to the region; an atlas
+record does not own any of it. Region destruction at `0x0064A5D0` normalizes
+the global ambient requests before tearing down region-local managers, actors,
+collision state, and layout objects. It does not destroy the global wrappers
+or their registry-owned loops.
 
 ## Fixed regions
 
@@ -87,15 +94,15 @@ The following bindings are executable record selections, not visual guesses:
 
 | Region / routine | Atlas records selected |
 | --- | --- |
-| Courtyard presentation `0x0051EB60` | College 4, 7, 13, 42..44, 59..62, 63..88, 93..118, 505..509; Title 7 and 9 |
+| Courtyard presentation `0x0051EB60` | College 2..4, 7, 12..13, 19, 21..22, 26, 30..31, 40, 42..44, 59..62, 63..88, 93..118, 505..509; Title 7 and 9 |
 | Courtyard tick `0x0050C970` | College 38 for its animated/state-dependent room effect |
-| Mortuary presentation `0x0050EAC0` | Memoratorium 0 and 24..27 |
+| Mortuary presentation `0x0050EAC0` | Memoratorium 0..1, 5, and 24..27 |
 | Mortuary auxiliary pass `0x00518620` | Memoratorium 3, 4, 7..9, 14..23 |
-| StoreRoom presentation `0x00519070` | Storage 7..12 and 13..26 |
+| StoreRoom presentation `0x00519070` | Storage 0..1, 5, and 7..26 |
 | StoreRoom auxiliary pass `0x00500DD0` | Storage 2..4 |
-| Library presentation `0x00511320` | Library 0..2, 4, 5, 17..20 |
+| Library presentation `0x00511320` | Library 0..5 and 17..20 |
 | Library auxiliary pass `0x00512060` | Library 6..11 |
-| Office presentation `0x00519E40` | Office 1, 4, 13..22 |
+| Office presentation `0x00519E40` | Office 1..2, 4, and 13..22 |
 | Office auxiliary pass `0x00501060` | Office 5 |
 
 The room routines build layered scenes. They change renderer transforms and
@@ -104,23 +111,24 @@ layers, submit effect geometry, and restore presentation state. Replacing one
 background record does not replace the room, its collision, or its foreground
 occlusion.
 
-The static singleton-xref pass also identifies retail atlas records for which
-no concrete consumer destination was recovered:
+The original decompiler-source xref pass missed 40 of these selections because
+untyped `thiscall` callees caused Ghidra to discard the ECX sprite argument.
+`tools/ghidra-scripts/trace_singleton_register_offsets.py` follows the actual
+x86 register setup and recovered those calls. After joining both passes, only
+these fixed-room records are dormant in the retail executable:
 
-| Atlas | Records with no mapped record consumer |
+| Atlas | Built records with no stock selection |
 | --- | --- |
-| College | 1..3, 5, 9, 12, 19..36, 39..41, 46 |
-| Memoratorium | 1, 5, 10 |
-| Storage | 0..1, 5..6 |
-| Library | 3, 12, 25..28 |
-| Office | 0, 2, 6 |
+| College | 1, 9, 35, 36, 46 |
+| Memoratorium | 10 |
+| Storage | 6 |
+| Library | 12, 25..28 |
+| Office | 6 |
 
 These records are still parsed and resident when their bundle is acquired.
-The absence of a mapped consumer means no direct field or recovered computed
-range reaches them in the exhaustive executable singleton-xref catalog. They
-are retained as explicit residuals rather than assigned a semantic name from
-appearance alone; isolated runtime coverage is the final check for indirect
-or dormant use.
+The absence of a stock selection means neither decompiled source nor the
+instruction-level singleton trace reaches them. They remain valid bundle ABI
+members, but appearance alone is not evidence of hidden gameplay use.
 
 ## Courtyard and interior actors
 
@@ -130,16 +138,16 @@ they have distinct vtables, sizes, ticks, renderers, and factory identities.
 
 | Type / class | Constructor | Tick | Renderer | Native art |
 | --- | ---: | ---: | ---: | --- |
-| 5001 PerkWitch | `0x005018D0` | `0x0051ADC0` | `0x0051B1D0` | College 45, 89..92, 517..524 |
+| 5001 PerkWitch | `0x005018D0` | `0x0051ADC0` | `0x0051B1D0` | College 5, 45, 89..92, 517..524 |
 | 5002 Student | `0x00501B80` | `0x0050A4E0` | `0x0051B2A0` | College 165..500 in fourteen 24-record directional/animation groups |
 | 5003 Annalist | `0x00502120` | `0x0050A4C0` | `0x0051BFA0` | College 0, 47..50 |
-| 5004 PotionGuy | `0x005023A0` | `0x0050B110` | `0x0051C1A0` | College 54..58, 160..164 |
+| 5004 PotionGuy | `0x005023A0` | `0x0050B110` | `0x0051C1A0` | College 32..34, 54..58, 160..164 |
 | 5005 ItemsGuy | `0x005024C0` | `0x0050A4C0` | `0x0051C660` | College 10, 11, 126..129 |
 | 5006 Illuminator | `0x00502270` | `0x005052B0` | `0x0051C050` | College 8, 119..125 |
 | 5007 Tyrannia | `0x00502450` | `0x0050B1F0` | `0x0051C560` | College 510..516 |
 | 5008 Teacher | `0x00502570` | `0x0050B260` | `0x0051C710` | College 13, 501..504 |
 | 5011 Polisher | `0x0050B4F0` | `0x00505EB0` | `0x0051DD50` | Office 23..26; embedded wipeglass audio loop |
-| 5012 ArchChancellor | `0x00502A80` | `0x0050B6B0` | `0x0051DE40` | Office 3, 7..12 |
+| 5012 ArchChancellor | `0x00502A80` | `0x0050B6B0` | `0x0051DE40` | Office 0, 3, 7..12 |
 | 5013 Librarian | `0x00502C10` | `0x0050A4C0` | `0x0051E0E0` | Library 29..32 |
 | 5016 Dowser | `0x00502C80` | `0x0050A4C0` | `0x0051E1F0` | Library 21..24 |
 | 5017 Memorator | `0x00502D90` | `0x00513090` | `0x0051E270` | Memoratorium 2, 6, 7, 28..75 |
@@ -165,6 +173,27 @@ when both are friendly characters in the same room.
 size 0x268. Constructor state establishes actor group `0x20`, a recipe/config
 pointer path, presentation selector, facing/movement state, callback flags,
 and two initialized color rectangles.
+
+The stock source/recipe materializer at `0x00466FA0` makes the descriptor ABI
+exact. It factory-allocates type 5015, stores descriptor `+0x4C` as actor
+presentation selector `+0x174`, the descriptor pointer itself at `+0x178`, and
+descriptor `+0x50` as behavior/record ID `+0x17C`. It resolves preview
+position through `0x00466600`, applies the position helper at `0x00466200`,
+runs optional region callbacks/effects, registers the actor through
+`0x0063F6D0`, and builds its source-driven visual state through `0x005E3080`.
+A failed registration destroys the new actor and returns null. The only direct
+retail caller is the create-wizard action path, so this proves the descriptor
+layout and publication contract without inventing a general long-lived NPC
+spawner that stock code never calls.
+
+The two formerly opaque descriptor mirrors also have exact editor and runtime
+meanings. `NPC_SETUP` parser `0x004B53F0` reads `IDLE BEHAVIOR` into descriptor
+`+0x56` and `TALK SPEED` into `+0x74`. Render-descriptor builder `0x005E3080`
+sign-extends the first into actor `+0x1C0` and copies the second into actor
+`+0x194`. `GameNPC_Tick (0x00608110)` makes idle-behavior value 1 face the
+local Player. Serializer `0x005E3330` persists both fields, and dialog/action
+path `0x005EA1C0` consumes talk-speed value 1 when it builds the active dialog
+object.
 
 Tick `0x00608110` performs the following recovered flow:
 
@@ -192,8 +221,9 @@ Renderer `0x00622430` switches on presentation selector `+0x174`:
 - the renderer finishes through shared actor-presentation cleanup.
 
 The exact NPCs groups are 3..20, 21..38, 39..92, 93..110, 111..128,
-129..146, 147..164, and 165..218. NPCs record 0 has no mapped concrete
-consumer in the executable xref catalog. A boneyard `NPCRecipe` can configure
+129..146, 147..164, and 165..218. NPCs record 0 is stock-dormant: the
+exhaustive singleton/destination scan finds no compiled selection outside
+bundle construction and teardown. A boneyard `NPCRecipe` can configure
 this compiled class, but it cannot define a new renderer case or extend those
 arrays merely by adding atlas records.
 
@@ -203,8 +233,8 @@ arrays merely by adding atlas records.
 | --- | ---: | --- | --- |
 | 5009 Solomon_Dig | `0x00481C20` | tick `0x0048A8B0`, render `0x004A2610` | Compiled Solomon encounter/cinematic actor; enemy-family logic, not a generic prop. |
 | 5010 Lantern | `0x005E1120` | tick `0x005FF010`, presentation `0x005E61D0` | BadGuys 34 plus dynamic light/state. |
-| 5018 Painting | `0x00502F40` | tick `0x0050A4C0`, callback `0x00506190` | Region-owned composition; no direct standalone atlas field binding recovered. |
-| 5019 Solomon_Riff | `0x004756C0` | tick `0x004756F0`, render `0x004A15E0` | SolomonRiff 1..12; record 0 has no mapped consumer. |
+| 5018 Painting | `0x00502F40` | tick `0x0050A4C0`, callback `0x00506190` | Region-owned composition; the actor has no class-owned singleton selection or standalone atlas field. |
+| 5019 Solomon_Riff | `0x004756C0` | tick `0x004756F0`, render `0x004A15E0` | SolomonRiff 1..12; record 0 is stock-dormant. |
 | 5020 Solomon_DriveBy | `0x00475DD0` | tick `0x004896A0`, render `0x004A1A70` | Solomon 95..184 plus BadGuys 80. |
 | 5021 Portal | `0x0047BD60` | tick `0x00489CC0`, render `0x004A1B30` | Hostile Imp Portal: BadGuys 251..254, 401..419, 1823..1833 and DeadHawg 46..77, 114..144, 180..199. |
 
@@ -214,12 +244,13 @@ in [`native-enemies.md`](native-enemies.md). Room transitions are region and
 scene state, not instances of this class.
 
 Fixed courtyard scenery also includes `CollegeObstacle` 2007,
-`CollegeStatue` 2008, and `CustomObject` 2041. `CollegeObstacle` directly
-selects College 6 and 148..159. The Statue and CustomObject render through
-configured/region-owned state with no direct singleton record binding in the
-current static map. Their object/collision lifetimes still use the shared
-world-object base; the missing direct art join is not evidence that they are
-non-collidable or safe to replace by a texture alone.
+`CollegeStatue` 2008, and `CustomObject` 2041. `CollegeObstacle` renderer
+`0x0051AB20` selects College 6, 20, 23..25, 27..29, and 148..159.
+`CollegeStatue` selects record 39 in vtable function `0x00501490` and record 41
+in `0x00501510`. `CustomObject` remains configured/region-driven without a
+direct singleton record binding. Their object/collision lifetimes still use
+the shared world-object base; art replacement alone does not replace their
+collision or update behavior.
 
 ## Arena world components and derived ownership
 
@@ -235,16 +266,20 @@ The registered world-component band is exact:
 | 3009 | Terrain | Serialized point/scalar arrays transformed into generated vertex/index buffers. |
 | 3010 | FX | Serialized/system effect data object; no standalone atlas binding in this band. |
 | 3011 | FenceGrate_Broken | One materialized broken half; DeadHawg 3. |
-| 3012 | Gate | Two materialized hinged leaves; DeadHawg 7/8 plus moving collision and bounce/damping. |
+| 3012 | Gate | Each of two materialized hinged leaves; DeadHawg 7/8 plus moving collision and bounce/damping. |
 | 3013 | Wall | Generated wall mesh and polygon collision; multiple-shadow option at `DAT_00B3BCA9`. |
 | 3014 | FenceGrate_Rails | Materialized rails; DeadHawg 23 plus generated line/quad geometry. |
 
-`RegionLayout` post-load expands one type-3005 `Fence` into posts and one or
-two derived objects according to its segment code. Gate tick `0x005ED5F0`
-integrates motion, tests the proposed collision segment, rolls back and
-damps/reverses on contact, rebuilds collision state, and rate-limits its sound.
-A peer that synchronizes only the Fence recipe but not identical
-materialization/random state can diverge in both visuals and collision.
+`RegionLayout` post-load expands one type-3005 `Fence` using an exact five-code
+grammar: code 0 creates one `FenceGrate` plus endpoint posts; code 1 creates
+two `FenceGrate_Broken` leaves plus posts; code 2 creates two `Gate` leaves
+plus posts; code 3 creates one `Wall` plus two `ZFightHelper` children and no
+posts; code 4 creates one `FenceGrate_Rails` plus posts. Endpoint posts are
+deduplicated by exact `(x, y)` equality across the materialization pass. Gate
+tick `0x005ED5F0` integrates motion, tests the proposed collision segment,
+rolls back and damps/reverses on contact, rebuilds collision state, and
+rate-limits its sound. A peer that synchronizes only the Fence recipe but not
+identical materialization state can diverge in both visuals and collision.
 
 The principal selector-based outdoor classes are:
 
@@ -280,15 +315,14 @@ document rather than duplicated here.
   spatial handles, derived children, audio loops, and bundle references cannot
   be retired by dropping a pointer or deleting a disk file.
 
-## Remaining validation for this subsystem
+## Closure result
 
-The static construction, class, update, render, art-range, and ownership map is
-complete enough to define the native contracts. Before the overall native-art
-phase is declared complete, the isolated runtime pass still needs to verify:
-
-- representative fixed-room layer ordering and the dormant/unmapped record
-  list;
-- generic `GameNPC` presentation modes and recipe-selected state;
-- representative Tree/Gate/Wall collision and destruction behavior; and
-- the fixed-region ambient-loop transitions without touching another agent's
-  game process.
+The construction, class, update, render, art-range, collision, derived-child,
+and teardown contracts for this subsystem are closed. The instruction-level
+trace reduced the former fixed-room residual list to proved dormant records;
+the source/recipe-to-`GameNPC` field transfer and failure cleanup are exact;
+Fence materialization and endpoint deduplication are exact; and the ambient
+mix is now correctly attributed to global wrappers serviced by Region
+lifecycle. The isolated stock run separately exercised Create, Courtyard,
+Arena, enemy-wave, loot, and GameOver transitions without touching the other
+agent's process; see [native-live-validation.md](native-live-validation.md).

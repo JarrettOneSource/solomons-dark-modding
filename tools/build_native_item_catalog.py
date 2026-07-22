@@ -147,9 +147,12 @@ ART_BINDINGS: dict[str, dict[str, Any]] = {
         "inventory_record_formula": "72 + IMAGE",
         "attachment": {
             "atlas": "Clothes",
-            "records": ["5..12", "3244..3723"],
+            "selector_records": "5..10",
+            "optional_glow_records": "11..12",
+            "pose_banks": ["3244..3483", "3484..3723"],
             "renderer": "0x00578D20",
-            "note": "Animation/frame tables select the concrete record at render time.",
+            "attachment_point_helpers": ["0x005795E0", "0x00579680"],
+            "note": "An optional glow-color argument adds records 11..12 and a generated four-vertex colored/flickering quad; native animation/frame tables select the pose-bank records and attachment points.",
         },
     },
     "hat": {

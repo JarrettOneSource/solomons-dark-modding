@@ -9,9 +9,12 @@ triggers, and timelines. It follows world records through art selection,
 collision construction, update behavior, derived-object ownership, and
 destruction-relevant state.
 
-The static boneyard and outdoor-scenery pass is complete. Isolated runtime
-validation is still required before the larger native-art phase can be called
-complete. Fixed interiors and NPCs are mapped in
+The native boneyard and outdoor-scenery pass is complete. The byte grammar,
+materialization graph, compact-art selectors, collision ownership, reward
+edge cases, and retail SyncBuffer configuration paths have all been closed by
+static analysis and the isolated runtime evidence in
+[`native-live-validation.md`](native-live-validation.md). Fixed interiors and
+NPCs are mapped in
 [`native-regions-npcs-and-world-props.md`](native-regions-npcs-and-world-props.md),
 bosses/portals in [`native-enemies.md`](native-enemies.md), and items plus
 ground pickups in
@@ -56,11 +59,24 @@ for each named child:
     recursive SyncBuffer
 ```
 
-The native implementation can apply a repeating-key XOR transform when a key
-and transform flag are configured on the `SyncBuffer`. Every retail and saved
-editor boneyard cataloged here uses the default empty key and therefore stores
-plain bytes. The checked-in parser intentionally describes and validates that
-observed on-disk form; it does not silently guess an XOR key.
+The native implementation contains a dormant repeating-key XOR transform.
+`SyncBuffer` construction leaves the embedded key string at `+0x04` empty,
+sets transform byte `+0x20` to zero, leaves companion byte `+0x21` at one, and
+sets mode byte `+0x22` to zero. Read path `0x004243C0` only calls transform
+helper `0x004221E0` when the key has nonzero length; the write path has the
+corresponding conditional transform. All fifteen executable call sites that
+construct a `SyncBuffer` were audited: none assigns the key or changes the
+transform byte, and nested buffers only inherit/copy the parent mode byte.
+Consequently, XOR is a latent library capability, not a format variant used or
+enabled by any retail game/editor path. Every retail and saved-editor boneyard
+cataloged here stores plain bytes. The checked-in parser intentionally
+describes and validates that observed on-disk form; it does not silently guess
+an XOR key.
+
+The apparent global `+0x20` write at `0x00424661` is not a SyncBuffer option
+write: disassembly shows it zero-initializing a newly allocated `0x5C`-byte
+anonymous chunk node inside `0x004245B0`. It therefore does not contradict the
+constructor-call-site audit.
 
 ### Native serializer functions
 
@@ -287,9 +303,34 @@ records through `0x00588040`, applies tint/alpha, rotation, scale, and flags,
 then renders the selected DeadHawg record. Arena updater `0x00470A90`
 specially rebuilds bounds/state for compact types 25 through 29.
 
-Compact type numbers are serialized semantics. Types 0 through 6 are proved
-tree-associated debris; the visual names for every remaining number are not
-yet assigned and remain numeric in the generated catalog.
+Compact type numbers are serialized semantics. The binding is direct:
+`DeadHawg record = 114 + compact_type`. The executable does not carry names
+for these records, so the descriptions below are visual classifications of the
+extracted pixels rather than invented native identifiers. Numeric type and
+record remain authoritative.
+
+| Compact type | DeadHawg | Extracted size | Visual classification |
+| ---: | ---: | ---: | --- |
+| 0 | 114 | 229x215 | broad mixed red/green leaf carpet |
+| 1 | 115 | 91x97 | sparse autumn-leaf cluster |
+| 2 | 116 | 218x212 | broad green-leaf carpet |
+| 3 | 117 | 68x77 | sparse long-leaf cluster |
+| 4 | 118 | 233x233 | dense small green-leaf carpet |
+| 5 | 119 | 85x85 | large green-leaf cluster |
+| 6 | 120 | 260x178 | diffuse dark soil/leaf shadow |
+| 7 | 121 | 89x89 | round dark ground patch |
+| 8 | 122 | 62x62 | small dark ground patch |
+| 9..12 | 123..126 | 28x27, 36x35, 36x33, 32x31 | four small paving-stone variants |
+| 13..18 | 127..132 | 22..32 by 21..29 | six pebble/stone-scatter variants |
+| 19..20 | 133..134 | 81x70, 80x72 | two crossed broken-twig/lattice variants |
+| 21..24 | 135..138 | 64..80 by 56..62 | four large irregular rock variants |
+| 25..29 | 139..143 | 56..216 by 49..217 | five irregular opaque shadow/mask silhouettes |
+| 30 | 144 | 81x55 | exposed dead-root/stump cluster |
+
+Types 0 through 6 are also proved tree-associated debris by generator
+`0x0062CB00`. Arena updater `0x00470A90` gives types 25 through 29 the only
+special compact-record update path; this is why their deliberately
+featureless mask silhouettes must not be normalized into ordinary scenery.
 
 ## Static scenery classes and art selectors
 
@@ -327,20 +368,26 @@ path.
 `+0x34`, owner `+0x38`, endpoint/style selectors `+0x3C/+0x40`, and segment
 code byte `+0x44`.
 
-Materializer `0x0064AC90` converts each Fence into runtime scenery:
+Materializer `0x0064AC90` first collects both endpoints of every non-wall
+Fence into an `Array<IPoint>` through `0x00428800`. That insertion routine
+deduplicates exact `(x, y)` coordinates. It creates one Fencepost 3006 for
+each unique coordinate, so an isolated non-wall segment has two posts while
+connected segments share their common post. It then converts each Fence into
+runtime scenery:
 
-| Fence `+0x44` | Derived class/type | Expansion |
+| Fence `+0x44` | Derived class/type | Exact non-post expansion |
 | ---: | --- | --- |
 | 0 | FenceGrate 3007 | one intact repeating grate |
 | 1 | FenceGrate_Broken 3011 | two halves, side flag 0 and 1 |
 | 2 | Gate 3012 | two hinged leaves, side flag 0 and 1 |
-| 3 | Wall 3013 | one generated wall plus Z-fight helper geometry |
+| 3 | Wall 3013 | one generated Wall plus two `ZFightHelper` objects; no posts |
 | 4 | FenceGrate_Rails 3014 | one rail section |
 
-Except for wall code 3, the materializer emits Fencepost 3006 objects at the
-two endpoints. It passes endpoint objects through `0x005F43E0`, copies the
-optional Fence selectors, initializes every derived object, and inserts it
-into RegionLayout scenery.
+For codes 0, 1, 2, and 4, helper `0x005F43E0` resolves each derived leaf's
+endpoints to the nearest already-created posts within the native distance
+threshold and stores those post pointers at inherited fields `+0x1AC/+0x1B0`.
+The materializer copies the optional Fence selectors, initializes every
+derived object, and inserts it into the appropriate RegionLayout owner.
 
 ### Intact and broken grates
 
@@ -384,14 +431,35 @@ self-references. Serializer `0x00606770` writes all geometry and arrays and
 repairs those self-references after reading. Renderer `0x0061E780` consumes
 the generated mesh; collision setup `0x005EEAF0` registers its polygonal
 boundary. Wall has no direct fixed DeadHawg sprite selector. The separately
-loaded loose `WallTop` image belongs to the broader world renderer; a direct
-Wall-class join has not been asserted without an xref.
+loaded loose `WallTop` image is dormant in this retail executable: world-asset
+initializer `0x005BBD90` stores it at owner `+0x31C5F4`, and a full
+instruction-level offset scan finds that builder write as the field's only
+reference. No Wall method or other stock renderer reads it.
 
 FenceGrate_Rails is type 3014. Serializer `0x005E3F60` writes the inherited
 data, side flag, and twelve derived vectors. Builder `0x005F0EC0` produces its
 offset rails and collision quadrilateral. Renderer `0x005E3E70` draws
 DeadHawg record 23 four times with depth offsets; `0x00607440` handles the
 generated line/particle-style geometry path.
+
+### Fence graph teardown
+
+The derived graph is owned by RegionLayout managers, not recursively by the
+serialized Fence record. RegionLayout destruction enters `0x0064A1E0` from
+deleting destructor `0x0064AC70` and tears down ten embedded ObjectManagers
+through `0x00402190`; each manager deletes its owned object list. Fencepost
+and FenceGrate destructors route through the shared `Puppet` teardown. Gate,
+broken-grate, and rail deleting destructor `0x005A9C40` reaches body
+`0x005E1EE0` and then `Puppet` teardown. The two code-3 helpers use the
+`ZFightHelper` vtable at `0x0079D224` and the ordinary `Puppet` destructor.
+
+Wall deleting destructor `0x005FB9A0` enters `0x005F8A80`, frees its owned
+`Array<float>` at `+0x288/+0x28C`, `Array<RaptPoint>` at `+0x298/+0x29C`,
+and `Array<int>` at `+0x2A8/+0x2AC`, then reaches `Puppet` teardown. That base
+path invokes world/collision cleanup `0x00482E90` before releasing remaining
+arrays and lists. Thus a segment cannot be safely hot-removed by freeing its
+Fence specification or one visible leaf: the owner managers must retire the
+whole materialized graph so every collision/spatial registration is removed.
 
 ## Goodie break sequence and transition into ground loot
 
@@ -412,22 +480,40 @@ The visible DeadHawg selector is `phase + 2 * subtype` into the three-record
 array at DeadHawg `+0x1A00`. Before timer 100 an alternating BadGuys indicator
 is also drawn while the Goodie is active.
 
-Reward selection uses the stored seed modulo 18. Proved branches include
-five subtype-0 potions (0..3), six subtype-1 potions (4..7), a small set of
-level-relative generated items (8..9), one category-4 generated item (10),
-three miscellaneous items with selectors 2..4 (11..12), a randomized
-500/800/1100/1400 direct currency-style award (13..16), and a special
-multi-potion bundle (17). The last branch's compiler/decompiler control flow
-contains a suspicious four-allocation prelude, so its exact retained potion
-multiset is reserved for live validation rather than guessed.
+Reward selection uses the stored seed modulo 18. Selectors 0..3 each create
+five subtype-0 potions; selectors 4..7 each create six subtype-1 potions;
+selectors 8..9 create a small set of level-relative generated items; selector
+10 creates one category-4 generated item; selectors 11..12 create three
+miscellaneous items using subtype selectors 2..4; selectors 13..16 directly
+award a randomized 500/800/1100/1400 currency value; and selector 17 creates
+the special multi-potion bundle below.
+
+Selector 17 is statically exact, including a stock allocation bug. Its first
+loop allocates four `Item_Potion` objects but overwrites the local pointer on
+each iteration without finalizing or inserting the first three. Only the
+fourth survives the loop; it is set to subtype 5 and inserted. The branch then
+inserts subtypes 0, 1, 4, 2, and 2. The retained six-potion multiset is:
+
+| Potion subtype | Name | Count |
+| ---: | --- | ---: |
+| 5 | Rejuvenation | 1 |
+| 0 | Health | 1 |
+| 1 | Mana | 1 |
+| 4 | Mind Chug | 1 |
+| 2 | Wizard Chug | 2 |
+
+The first three loop allocations are orphaned/leaked; they are not hidden
+sack contents and must not be reproduced as retained items by a compatible
+parser or content tool.
 
 Each concrete item is finalized through `0x00570C10` and inserted into the
 `Item_Sack` through `0x0055FF20`. If the sack has content, Goodie allocates the
 ground `Sack` object (type `0x7DD`, constructor `0x005E1460`), stores the
 `Item_Sack` pointer at ground Sack `+0x148`, positions it just below the
 Goodie, and registers it in the world. An empty sack is destroyed instead.
-Pickup collision, inventory transfer, and final Sack destruction are covered
-in the dedicated item/ground-loot pass rather than inferred here.
+Pickup collision, exact-pointer inventory transfer, and final Sack destruction
+are mapped in
+[native-items-equipment-and-loot.md](native-items-equipment-and-loot.md).
 
 ## Recipes, triggers, and timelines
 
@@ -478,16 +564,15 @@ These are recovered constraints, not the website/download implementation:
   unregistration. Clearing a pointer list alone leaks native registrations and
   is not a valid hot-reload mechanism.
 
-## Remaining validation for this subsystem
+## Closure result for this subsystem
 
-The static evidence is sufficient to implement parsers and catalog content,
-but the following are deliberately still open:
-
-1. isolated runtime confirmation of fence code 0..4 materialization counts,
-   Gate collision motion, and cleanup;
-2. visual naming of all compact-decoration numeric types;
-3. live confirmation of Goodie's selector-17 retained potion multiset; and
-4. proof of whether any runtime path configures nonempty SyncBuffer XOR keys.
-
-These residuals are tracked as runtime validation, not reasons to alter the
-proved on-disk grammar or RegionLayout schema.
+The former residuals are closed. Machine-code analysis establishes exact
+fence-code expansion, endpoint deduplication, moving Gate collision behavior,
+and manager-driven cleanup. Extracted DeadHawg pixels classify every compact
+type while retaining its numeric ABI. Full decompilation of selector 17 proves
+the six retained potions and three orphaned allocations. Finally, every
+SyncBuffer construction path was audited and none enables the latent XOR
+facility. The isolated runtime pass independently exercised Arena region 4006
+and observed its expected native atlas residency without touching another
+agent's process; see
+[`native-live-validation.md`](native-live-validation.md).

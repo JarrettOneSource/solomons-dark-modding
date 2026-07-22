@@ -466,7 +466,7 @@ than a raw actor pointer.
 
 | Selected ID/build | Handler | Native behavior and owned effects |
 | ---: | ---: | --- |
-| `24` Lightning | `0x0053F9C0` | Traces a beam from the cast origin, retains or reacquires a target, dispatches repeated contact, creates `Mod_Stun (0x1B6A)` when the learned stun scalar is active, emits `Anim_FadeLightning` wrappers, and uses `0x00641340` for the learned chain count. |
+| `24` Lightning | `0x0053F9C0` | Traces a beam from the cast origin, retains or reacquires a target, dispatches repeated contact, creates `Mod_Stun (0x1B6A)` when the learned stun scalar is active, applies the Disintegrate proc through transient damage flag `0x4`, emits `Anim_FadeLightning` wrappers, and uses `0x00641340` for the learned chain count. |
 | `32` Frost Jet | `0x00543860` | Builds a widening cone, emits `Anim_FrostJetEffect`/`_Over`, queries actors through `0x00641B10`, applies damage, pushback, and `Mod_ColdSlow (0x1B69)`. Its learned branches emit `Anim_Hail`, run the Cold Aura circle query, and add Harden armor up to its configured maximum. |
 | `40` Boulder | `0x00544C60` | Creates one persistent `Boulder (0x7D5)`, stores its group/slot handle, then repositions and re-aims it every cast tick. Gargantuan's `mSize` writes boulder `+0x1FC`; Rock Surge's `mChance`/`mManaCost` can move the active rock forward and invoke its surge behavior. |
 | `1003` Fire + Air | `0x005408F0` | Reuses the Lightning beam/chain geometry, adds the normalized fire payload to the contact globals, can attach `Mod_Stun`, and emits the lightning fade chain. |
@@ -475,6 +475,15 @@ than a raw actor pointer.
 | `1006` Ether + Earth | `0x00545360` | Creates a persistent `EBoulder (0x7E1)`, copies normalized damage, duration, size/split and related fields through `+0x230`, and retains it through the common group/slot handle. Its active path emits `Anim_BoulderBit` fragments and can arm recursive child splitting. |
 | `1007` Fire + Earth | `0x0052BB60` | Emits `Anim_Iceblast` presentation at the aimed point and periodically creates randomized `Meteor (0x7E2)` actors. Each meteor receives normalized damage/fire payload fields at `+0x160..+0x17C`; impact behavior belongs to the Meteor lifecycle. |
 | `1008` Water + Earth | `0x00545C20` | Creates a persistent `Hailstones (0x7E4)`, copies normalized damage, duration, size and impact fields through `+0x220`, retains its group/slot identity, and continuously follows the cast origin/heading. |
+
+Disintegrate is not a separate projectile or persistent effect actor. On a
+qualifying Lightning contact, `0x0053F9C0` reads the rounded chance at
+progression `+0x8D2`; a successful percentile roll ORs `0x4` into the
+transient damage-event flags at `0x0081C6E4` before common contact dispatch.
+`Badguy_Contact (0x0048A290)` tests that bit and forces the target's HP to zero
+when its post-hit health is below 20 percent of maximum, matching the shipped
+skill description. The flag is scoped to that damage event and is distinct
+from the skeleton absorption-death flag `0x100`.
 
 The factory creation portions of the three persistent Earth handlers are
 guarded by caster group byte `+0x5C == 0` and an empty active handle. The code
@@ -538,13 +547,20 @@ selector adds `Burn (0x1B73)` for fire, `ElectricBurn (0x1B6B)` for air, and
 `ColdSlow (0x1B69)` for water; ether/earth retain the trap's direct contact
 payload without one of those three modifier branches.
 
-## Remaining closure work
+## Closure result
 
 The 82-ID catalog, rank/refresh ABI, passive and concentration formulas,
 primary/weld dispatch, secondary/advanced switch, staff proc table, spawned
-factory types, modifier IDs, and principal object lifecycles are statically
-mapped. This subsystem remains short of the phase-wide `Complete` label only
-for indirect child-animation record joins and isolated live checks of the
-highest-risk persistent effects, golem reflection, and native bugs documented
-above. Enemy- and item-owned uses of the same modifiers are tracked in their
-respective passes instead of being duplicated here.
+factory types, modifier IDs, art selection, and principal object lifecycles
+are mapped. Generic child-animation art and ownership are closed in
+[native-projectiles-and-effects.md](native-projectiles-and-effects.md#animation-wrapper-art-and-ownership-abi):
+the caller chooses a fixed atlas destination and the wrapper borrows it, so
+there is no hidden per-animation asset registry left to recover.
+
+The isolated runtime pass confirmed native gameplay-world construction,
+enemy materialization, and resident atlas ownership. The optional cast sample
+had no selected spell pointer and is not used as evidence. Exact persistent-
+effect and golem-reflection contracts remain grounded in the decompiled
+branches and native contact ABI above. Enemy- and item-owned uses of the same
+modifiers are tracked in their respective passes instead of being duplicated
+here.

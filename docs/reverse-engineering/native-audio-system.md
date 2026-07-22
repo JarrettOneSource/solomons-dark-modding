@@ -37,7 +37,7 @@ policy, and lifetime by concrete class:
 | `SoundDelayed` | `0x007DB7CC` | `0x004085C0` | Manager-ticked countdown object that invokes its terminal action at zero. |
 | `Music` | `0x007DB7F0` | `0x004086E0` / `0x004088A0` | Two module channels, parsed song/track definitions, channel envelopes, and crossfade state. |
 | `SoundStream` | `0x007DB810` | `0x0040AC60` / `0x0040ACF0` | One BASS stream handle; used for long effects and voices. |
-| `AmbientSound` | `0x007DB818` | tick `0x0040B120` | Region-facing wrapper over a `SoundLoop`; transfers desired volume and starts/stops the loop at zero crossings. |
+| `AmbientSound` | `0x007DB818` | tick `0x0040B120` | Global 0x10-byte wrapper over a registry `SoundLoop`; Region lifecycle services requested gain and zero-crossing start/stop behavior. |
 
 `DAT_00B40239` is the initialized/enabled BASS gate used by load, play, pause,
 attribute, and free paths. `Sound` construction registers with the manager and
@@ -75,12 +75,65 @@ sound uses the narrower countdown at `0x00408690` and destroys itself when
 the counter expires. These are transient manager-owned playback controllers,
 not entries in the compiled asset registry.
 
-Each `AmbientSound` stores a loop pointer and current/desired volume. Its tick
-at `0x0040B120` starts a previously silent loop when desired volume becomes
-nonzero, stops it on the inverse transition, updates the loop's base volume,
-and clears the one-frame desired accumulator. Region update code feeds 13
-such ambient slots. The region owns the spatial/gameplay decision; the loop
-owns the BASS channel.
+### Global ambient loop mix
+
+The Region constructor at `0x00652830` binds 13 global 0x10-byte
+`AmbientSound` wrappers to existing `SoundLoop` objects in the compiled audio
+registry. They are not embedded in, or owned by, each Region allocation.
+Wrapper `+0x04` is the requested-gain accumulator, `+0x08` is the previous
+applied gain, and `+0x0C` is the loop pointer.
+
+`AmbientSound_Tick (0x0040B120)` implements a one-frame request contract:
+
+1. start the loop when previous gain is zero and requested gain is positive;
+2. stop it when previous gain is positive and requested gain is zero;
+3. copy requested gain into the `SoundLoop` base-gain field and, when BASS is
+   enabled, update the channel volume attribute;
+4. copy requested gain to previous gain; and
+5. clear requested gain to zero for the next gameplay frame.
+
+Region base tick `0x0063EFC0` services all 13 wrappers. Gameplay producers
+must therefore renew a nonzero request every frame; a producer becoming
+inactive naturally produces the zero-crossing stop on the next tick.
+
+| Wrapper | Requested gain | Loop pointer | Registry index | Compiled loop path |
+| ---: | ---: | ---: | ---: | --- |
+| `0x0081CB4C` | `0x0081CB50` | `0x0081CB58` | 163 | `sounds\\lowfire__loop` |
+| `0x0081CB5C` | `0x0081CB60` | `0x0081CB68` | 152 | `sounds\\comet__loop` |
+| `0x0081CB6C` | `0x0081CB70` | `0x0081CB78` | 154 | `sounds\\earthquake__loop` |
+| `0x0081CB7C` | `0x0081CB80` | `0x0081CB88` | 156 | `sounds\\electric__loop` |
+| `0x0081CB8C` | `0x0081CB90` | `0x0081CB98` | 158 | `sounds\\flyblown__loop` |
+| `0x0081CB9C` | `0x0081CBA0` | `0x0081CBA8` | 170 | `sounds\\Soul__Loop` |
+| `0x0081CBAC` | `0x0081CBB0` | `0x0081CBB8` | 151 | `sounds\\beam__loop` |
+| `0x0081CBBC` | `0x0081CBC0` | `0x0081CBC8` | 155 | `sounds\\eerie__loop` |
+| `0x0081CBCC` | `0x0081CBD0` | `0x0081CBD8` | 168 | `sounds\\rollingstoneloop__loop` |
+| `0x0081CBDC` | `0x0081CBE0` | `0x0081CBE8` | 166 | `sounds\\PlaneCross__Loop` |
+| `0x0081CBEC` | `0x0081CBF0` | `0x0081CBF8` | 167 | `sounds\\rainfall__loop` |
+| `0x0081CBFC` | `0x0081CC00` | `0x0081CC08` | 164 | `sounds\\maggots__loop` |
+| `0x0081CC0C` | `0x0081CC10` | `0x0081CC18` | 171 | `sounds\\steadywind__loop` |
+
+The direct gameplay request producers are also finite:
+
+| Loop | Functions that reach its requested-gain field |
+| --- | --- |
+| lowfire | `0x00460AB0`, `0x005FF050`, `0x00605C80` |
+| comet | `0x006220D0` |
+| earthquake | `0x00460AB0`, `0x004963C0`, `0x00613200` |
+| electric | `0x00451DC0`, `0x00611EB0`, `0x00628F10` |
+| flyblown | `0x004863A0` |
+| Soul | `0x00460AB0`, `0x00486C30`, `0x0049D0D0` |
+| beam | `0x0044FFE0`, `0x00460AB0`, `0x0049D0D0` |
+| eerie | `0x00605920`, `0x00605C00`, `0x00605C80`, `0x0061C440` |
+| rollingstone | `0x00460AB0`, `0x00620B60` |
+| PlaneCross | `0x00548B00`, `0x005FB460`, `0x006145D0`, `0x0061CF20` |
+| rainfall | `0x00468E50`, `0x006021A0`, `0x00604E90` |
+| maggots | `0x004A2760` |
+| steadywind | `0x00460AB0`, `0x0049D0D0`, `0x00548B00`, `0x005FD7A0`, `0x006021A0`, `0x0061CF20` |
+
+Region destructor `0x0064A5D0` normalizes all 13 requested fields during
+teardown, but the wrappers remain global and the underlying loops remain
+owned by the audio registry. This distinction matters for region replacement:
+retiring a room must stop renewing its requests, not free shared loop objects.
 
 ## Compiled `MyApp` sound registry
 

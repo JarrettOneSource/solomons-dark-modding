@@ -17,15 +17,9 @@ shipped `images` directory:
 
 Addresses in this document are image-base virtual addresses for that exact
 executable. Names beginning with `Native_` are descriptive names assigned by
-this investigation, not original debug symbols.
-
-Evidence labels used below:
-
-- **Confirmed**: direct decompilation/disassembly or exhaustive file parsing.
-- **Correlated**: static code and extracted pixels/configuration agree, but a
-  final runtime observation would improve the semantic name.
-- **Inferred**: the structure is known but its human-facing meaning is still
-  provisional.
+this investigation, not original debug symbols. Behavior claims below are
+grounded in direct decompilation/disassembly, exhaustive file parsing, or the
+isolated runtime validation linked from the system ledger.
 
 ## Shipped visual inputs
 
@@ -321,7 +315,7 @@ matters for custom assets: sprite descriptors, a bundle's reference count,
 renderer page handles, GPU texture slots, and Direct3D device-reset state are
 five different ownership layers.
 
-## Loose-image consumers recovered so far
+## Loose-image ownership and consumers
 
 The world-asset initializer at `0x005BBD90` loads these loose names into one
 world renderer object:
@@ -339,7 +333,9 @@ world renderer object:
 | river/rise vector | `+0x31C5E8/+0x31C5EC` |
 | WallTop | `+0x31C5F4` |
 
-The renderer/use sites and boneyard field relationships are tracked in the
+WallTop has no post-load consumer in the retail executable; the initializer's
+store is the only instruction that references `+0x31C5F4`. The other
+renderer/use sites and boneyard field relationships are tracked in the
 gameplay-system document. `paintbkg` is not a world tile: `0x005BED10` uses it
 as the background for portrait capture and writes the result as
 `Portraits\\portrait%d.raw`.

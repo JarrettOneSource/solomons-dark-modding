@@ -1570,7 +1570,7 @@
       ],
       "behavior": [
         "Primary indexes 0..2 dispatch Death Missile, Blightning, and Direball. Secondary indexes 0..2 dispatch Acid Pain, Tragic Circle, and Ring of Dire.",
-        "The stock UI/config strings expose primary index 3 FAUST JET and secondary index 3 THING OF ICE, but the recovered event dispatcher has no corresponding branch; this remains a live-validation item rather than an invented behavior."
+        "The stock UI/config strings expose primary index 3 FAUST JET and secondary index 3 THING OF ICE, but the recovered event dispatcher has no corresponding branch. These are compiled labels with no stock behavior, not unimplemented catalog guesses."
       ],
       "evidence_functions": {
         "attack_trigger": "0x00475340",
@@ -2398,7 +2398,46 @@
       ],
       "behavior": [
         "Materializes for ten ticks and then remains stationary while animating.",
-        "A randomized countdown selected by the IMP FREQUENCY enum creates an ejected airborne Imp, copies portal team and primary damage, then resets the countdown."
+        "IMP FREQUENCY selects one of six exact lower/upper time ranges. Each bound is multiplied by the global timing scale at 0x00820230 and converted to an integer before being stored at actor +0x234/+0x238.",
+        "When the countdown expires, the normal reset samples the inclusive stored lower..upper range. A separate one-in-eight roll instead samples 0..upper-1, after which an ejected airborne Imp inherits the Portal team and primary damage."
+      ],
+      "frequency_presets": [
+        {
+          "enum": 0,
+          "label": "VERY LOW",
+          "lower": 8.0,
+          "upper": 10.0
+        },
+        {
+          "enum": 1,
+          "label": "LOW",
+          "lower": 6.0,
+          "upper": 8.0
+        },
+        {
+          "enum": 2,
+          "label": "NORMAL",
+          "lower": 3.0,
+          "upper": 4.0
+        },
+        {
+          "enum": 3,
+          "label": "HIGH",
+          "lower": 2.0,
+          "upper": 3.0
+        },
+        {
+          "enum": 4,
+          "label": "VERY HIGH",
+          "lower": 1.0,
+          "upper": 2.0
+        },
+        {
+          "enum": 5,
+          "label": "YOU WILL DIE",
+          "lower": 0.25,
+          "upper": 0.5
+        }
       ],
       "evidence_functions": {
         "tick": "0x00489CC0",

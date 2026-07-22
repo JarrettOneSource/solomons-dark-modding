@@ -32,18 +32,17 @@ join in [`native-asset-object-map.json`](native-asset-object-map.json).
 
 | Atlas | Builder | Singleton | Records | Static result |
 | --- | ---: | ---: | ---: | --- |
-| Fonts | `0x004EA3D0` | `0x008199A0` | 627 | Nine compiled bitmap-font wrappers are live; standalone record 0 has no mapped consumer |
-| UI | `0x004F3590` | `0x008199E4` | 113 | 66 records map directly to 58 native functions; indirect and unobserved records remain explicit |
-| ControlPanel | `0x004E7EF0` | `0x00819988` | 116 | 24 ordinary records plus one 92-glyph font wrapper used by editor/control-panel code |
-| Controls | `0x004E84E0` | `0x0081998C` | 4 | Control-scheme picker selects records 0, 2, or 1; record 3 has no mapped consumer |
-| Create | `0x004E8680` | `0x00819990` | 24 | Create-wizard flow consumes every record except 8 |
-| Loader | `0x004EC1F0` | `0x008199BC` | 5 | Bundle is constructed and released, but none of its records is referenced by the retail loader renderer |
-| GameOver | `0x004EA650` | `0x008199A4` | 3 | Game-over renderer consumes records 0 and 1; record 2 has no mapped consumer |
+| Fonts | `0x004EA3D0` | `0x008199A0` | 627 | Nine compiled bitmap-font wrappers are live; standalone record 0 is stock-dormant |
+| UI | `0x004F3590` | `0x008199E4` | 113 | 107 records have compiled selections; records 35, 36, 38, 60, 67, and 83 are stock-dormant |
+| ControlPanel | `0x004E7EF0` | `0x00819988` | 116 | Ordinary records 0, 4..5, and 8..23 plus the 92-glyph wrapper are live; ordinary records 1..3 and 6..7 are stock-dormant |
+| Controls | `0x004E84E0` | `0x0081998C` | 4 | Control-scheme picker selects records 0, 2, or 1; record 3 is stock-dormant |
+| Create | `0x004E8680` | `0x00819990` | 24 | Create-wizard flow consumes every record except stock-dormant record 8 |
+| Loader | `0x004EC1F0` | `0x008199BC` | 5 | All five records are constructed and released but stock-dormant; the renderer uses primitives |
+| GameOver | `0x004EA650` | `0x008199A4` | 3 | Game-over renderer consumes records 0 and 1; record 2 is stock-dormant |
 
-"No mapped consumer" is deliberately narrower than "can never execute." It
-means the exhaustive singleton-xref and literal-destination pass found no
-compiled record selection. The Loader result is stronger because the sole
-singleton xref, object lifecycle, vtable, and renderer were also traced.
+"Stock-dormant" means the exhaustive singleton-xref, literal-destination, and
+instruction-level register trace found no compiled record selection. It does
+not mean a loader could not address the parsed descriptor through a new hook.
 
 ## Bitmap-font ABI
 
@@ -65,8 +64,8 @@ PNG cannot make it addressable.
 ### `Fonts` wrapper inventory
 
 `Bundle_Fonts` contains one ordinary record followed by nine font wrappers.
-All nine wrappers have compiled consumers. Record 0 is the only record without
-a mapped consumer.
+All nine wrappers have compiled consumers. Ordinary record 0 is the only
+stock-dormant record.
 
 | Group | Records | Runtime destination | Header | Kerning pairs | Glyphs | Proved consumer role |
 | ---: | ---: | ---: | --- | ---: | ---: | --- |
@@ -157,7 +156,7 @@ The exact many-to-many function join is machine-readable in
 `native-atlas-consumers.json`; this table names only strong anchors rather
 than assigning speculative semantics to every visual fragment.
 
-### `UI` records without a direct mapped consumer
+### `UI` decompiler residual and machine-code closure
 
 The following 47 records have no literal-destination mapping in the compiled
 singleton-xref pass:
@@ -168,9 +167,47 @@ singleton-xref pass:
 70..71, 80..83, 98..100
 ```
 
-This residual set can contain selector-table/indirect-index use, dormant
-retail art, or art retained for a disabled flow. It remains a named live-test
-target instead of receiving guessed identities.
+That list is a limitation of the decompiler-source join, not a retail unused
+list. Several native calls have no recovered prototype, so Ghidra omits the
+ECX `thiscall` argument from pseudocode even though the disassembly loads the
+`UI` singleton and adds the exact sprite offset immediately before the call.
+For example:
+
+- `0x005C876B -> 0x005C8777` selects record 81 at `+0x3E3C`;
+- `0x005C87ED -> 0x005C87FA` selects record 82 at `+0x3F00`;
+- `0x005D7950 -> 0x005D7961` stores record 47 at `+0x2434` into a child
+  control, and `0x005D7A5C -> 0x005D7A6D` does the same for record 48;
+- `BeltButton` at `0x005D3E10` selects the record-98..100 vector owner at
+  `+0x40C8`, closing the three mouse-button images.
+
+`tools/ghidra-scripts/trace_singleton_register_offsets.py` follows these
+register-derived fields directly in machine code. It proves 41 of the 47
+decompiler-residual records are live:
+
+```text
+1, 4, 6..7, 9..11, 13..14, 16..17, 22, 24, 26..29,
+34, 39..41, 47..48, 50, 52..57, 63..64, 68, 70..71,
+80..82, 98..100
+```
+
+The recovered consumers span `InventoryGrid`, `InventoryScreen`,
+`DarkCloudSwipebox`, `DarkCloudRating`, `Game`, `BeltButton`, the Hall of
+Fame, skill presentation, and shared panel/control renderers. The six actual
+retail-dormant records are:
+
+| Record | Contact-sheet appearance | Static proof |
+| ---: | --- | --- |
+| `35` | thin gold bar | no singleton-derived field or subfield access outside builder/teardown |
+| `36` | thin gold bar variant | same |
+| `38` | skull | same |
+| `60` | dark rounded square | same |
+| `67` | gray bar | same |
+| `83` | small dot | same |
+
+The only co-occurring `+0x1D50` constants outside teardown belong to the
+`Bonedit` singleton (`0x0081997C`), not `UI`; disassembly at `0x004D738C` and
+`0x005D3B6F` makes that alias distinction explicit. Thus all 113 `UI` records
+now have either a compiled consumer or a proved dormant classification.
 
 ## `ControlPanel`: editor and reusable controls
 
@@ -190,7 +227,7 @@ family and related editing panels. The ordinary record layout is:
   - `22..23` at `+0x06CC`.
 
 Direct native consumers map records `0`, `4`, `5`, and all arrays `8..23`.
-Ordinary records `1..3` and `6..7` have no mapped record consumer. Records
+Ordinary records `1..3` and `6..7` are stock-dormant. Records
 `24..115` belong to the live font wrapper described above and are not dormant
 records.
 
@@ -206,7 +243,7 @@ of three atlas records from the picker bitmask at object `+0x2A0`:
 3. record 1 at bundle `+0x00FC`.
 
 That order is the compiled branch order, not a proposed enum numbering.
-Record 3 at bundle `+0x0284` has no mapped consumer. The picker destructor
+Record 3 at bundle `+0x0284` is stock-dormant. The picker destructor
 releases the atlas bundle through the common bundle-release path.
 
 ## `Create`: create-wizard flow
@@ -223,7 +260,7 @@ The atlas destinations are:
 | Records | Destination | Static consumer result |
 | ---: | ---: | --- |
 | `0..7` | inline `+0x0038` through `+0x0594`, stride `0xC4` | Rendered directly; record 4 also participates in update logic |
-| `8` | inline `+0x0658` | No mapped consumer |
+| `8` | inline `+0x0658` | Stock-dormant |
 | `9..13` | array `+0x0720`, count 5 | Five-choice presentation group in the renderer |
 | `14..15` | array `+0x0730`, count 2 | Navigation/presentation pair used in construction and update |
 | `16..19` | array `+0x0740`, count 4 | Four-state group used by update logic |
@@ -268,7 +305,7 @@ loading failed.
 The three-record builder is `0x004EA650`. The screen uses vtable `0x0079B0CC`;
 its renderer is `0x005C9030`. When the relevant fade/state fields beginning at
 object `+0x7C` are active, it draws records 0 and 1, uses Fonts group 3 for
-text, and composes fullscreen fade layers. Record 2 has no mapped consumer.
+text, and composes fullscreen fade layers. Record 2 is stock-dormant.
 
 ## Lifetime and replacement implications
 
@@ -298,20 +335,25 @@ presentation state. Gameplay-significant UI mods can still include Lua, so the
 future mod manifest must synchronize the complete enabled mod identity rather
 than deciding determinism from file extension alone.
 
-## Remaining live-validation targets
+## Runtime closure and optional sampling
 
-The static art map is closed, but these observations remain useful for the
-isolated runtime pass:
+The isolated 2026-07-21 runtime pass closed the scene-lifetime targets that
+affect the native art contract. Create acquired its atlas and released it on
+the transition to Hub; Game Over acquired its atlas over the still-resident
+arena; and the Loader global was observed pointing at released allocation
+storage after startup-owner destruction. Exact samples and the cross-scene
+reference-count table are in
+[native-live-validation.md](native-live-validation.md).
+
+The following are optional presentation sampling or `sd.ui`-automation work,
+not blockers on the native-art ABI:
 
 1. sample representative records from each Fonts wrapper and confirm wrapper
    destination and text consumer at runtime;
 2. observe the control-scheme bitmask and confirm its record branch while
    cycling the three choices;
 3. observe create-wizard grouped-array selection;
-4. watch the Loader bundle construction and confirm no read from its five
-   sprite fields during the active loading screen;
-5. classify indirect use, if any, among the 47 residual `UI` records;
-6. distinguish native-art closure from remaining semantic `sd.ui` API work.
+4. continue semantic `sd.ui` API work independently of native-art closure.
 
 No website download or automatic mod-enablement behavior was implemented as
 part of this analysis.

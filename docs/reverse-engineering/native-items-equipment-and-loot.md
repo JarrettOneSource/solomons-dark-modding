@@ -132,7 +132,7 @@ serializes its nested item list at `+0x88`.
 | Staff | 7004 / `0x1B5C` | `0x00462050` | Held-equipment renderer. |
 | Hat | 7005 / `0x1B5D` | `0x00461ED0` | Two tint layers. |
 | Robe | 7006 / `0x1B5E` | `0x00461F70` | Two tint layers. |
-| Reserved | 7007 / `0x1B5F` | none recovered | Gap in the registered item range. |
+| Unregistered ID | 7007 / `0x1B5F` | none | Numeric hole with no factory or recipe-materializer branch in the retail executable. |
 | Item_Sack | 7008 / `0x1B60` | `0x005A7520` | Owns a nested 0x58-byte item-list root. |
 | Item_Perk | 7009 / `0x1B61` | `0x00550490` | `+0x88` charm/curse/perk selector. |
 | Item_Map | 7010 / `0x1B62` | `0x005A75D0` | Registered/serializable; no direct stock art or non-constructor type check recovered. |
@@ -214,13 +214,18 @@ onto the wizard:
 | --- | ---: | --- |
 | Hat | `0x005758F0` | Dynamic primary/secondary selector tables at `DAT_00B2E9A4` and `DAT_00B2E9B4`; both colors apply. |
 | Robe | `0x00577DA0` | 5..10, 220..315, and 1588..3243 across pose/selector tables; both colors apply. |
-| Staff | `0x00578D20` | 5..12 and 3244..3723, plus hand/pose geometry selected per animation frame. |
+| Staff | `0x00578D20` | Body selector 5..10; optional glow layers 11..12; pose banks 3244..3483 and 3484..3723; generated hand/glow geometry. |
 | Wand | `0x00579820` | Clothes 15 plus dynamically built line/beam geometry around the hand attachment. |
 
-Staff/Wand helper `0x005795E0` and the parallel wand helper `0x00579680`
-read frame-specific attachment coordinates. The renderer therefore requires
-the Clothes selector tables, the actor's current animation frame, and the live
-item state; an icon replacement alone cannot define new wearable geometry.
+`Staff_RenderAttachment (0x00578D20)` first indexes Clothes records 5..10 by
+the live staff selector. When its optional glow-color argument is present, it
+also draws records 11..12 and a generated four-vertex colored/flickering quad.
+The current pose then selects from the two complete staff banks, records
+3244..3483 and 3484..3723. Staff helper `0x005795E0` and the parallel wand
+helper `0x00579680` return frame-specific attachment points from their native
+tables. The renderer therefore requires the Clothes selector and pose tables,
+the actor's current animation frame, and live item/color state; an icon
+replacement alone cannot define new wearable geometry or glow composition.
 
 ## Equipment ownership and set completion
 
@@ -446,6 +451,12 @@ If transfer never occurs, the carrier destructor destroys the held item. Art
 uses BadGuys 436..441 for bounds/effects, 442..445 for the carrier rendering,
 and records 33/67 for supporting effects. The item's own Inventory icon is not
 the ground carrier shell.
+
+The isolated live pass confirmed this ownership directly: a type-2013 carrier
+held a concrete type-7002 Ring pointer at `+0x148`, and that live Ring carried
+runtime recipe UID 1 at item `+0x18`. The same session enumerated 47 stock
+recipe definitions and materialized a type-2012 Gold actor with amount 7. See
+[native-live-validation.md](native-live-validation.md).
 
 ### Bonus powerup
 

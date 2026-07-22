@@ -16,15 +16,15 @@ native object catalog and preserves allocation size, constructor, vtable,
 selected lifecycle slots, config controls, spawned child types, drop policy,
 behavior evidence, and every directly attributable atlas range/consumer.
 
-The static family pass is complete. Two deliberately narrow runtime checks
-remain in the later live-validation phase:
+The static family pass is complete. The two former residuals are closed at the
+machine-code level:
 
 - Dire Faculty's CFG/UI exposes primary index `3` (`FAUST JET`) and secondary
-  index `3` (`THING OF ICE`), but `0x004804D0` has no event branch for either.
-  The static result is **branch absent**, not a guessed spell implementation.
-- Portal frequency selects randomized countdown bounds, but Ghidra did not
-  recover the enum switch arithmetic cleanly enough to publish exact bounds.
-  The ownership and spawn/reset lifecycle is statically proved.
+  index `3` (`THING OF ICE`), but `0x004804D0` contains no event branch for
+  either. They are dormant stock labels, not undiscovered spell handlers.
+- Portal frequency has six exact compiled lower/upper ranges. The decompiler
+  omitted assignments inside the jump-table cases, so the result below comes
+  from the underlying instructions and constants rather than guessed C.
 
 ## Compiled type census
 
@@ -454,14 +454,35 @@ calling base contact. Death uses the normal reward/drop path.
 
 Portal spends its first ten ticks materializing, then remains stationary.
 Live `+0x230` is the spawn countdown; the config enum selects randomized
-bounds stored at `+0x234/+0x238`. At zero, `0x00489CC0` creates
+bounds stored at `+0x234/+0x238`. `0x00462790` multiplies both values below by
+the global timing scale at `0x00820230` and converts the results to integers:
+
+| Enum | CFG/UI label | Lower value | Upper value |
+| ---: | --- | ---: | ---: |
+| `0` | Very Low | `8` | `10` |
+| `1` | Low | `6` | `8` |
+| `2` | Normal | `3` | `4` |
+| `3` | High | `2` | `3` |
+| `4` | Very High | `1` | `2` |
+| `5` | You Will Die | `0.25` | `0.5` |
+
+Initial configuration adds `RandomInt(upper / 3)` to the constructor-seeded
+countdown. Tick `0x00489CC0` subtracts actor timing delta `+0x120`; after the
+countdown becomes negative, its normal reset samples the inclusive
+`lower..upper` range. A separate one-in-eight roll overrides that reset with
+`RandomInt(upper)`, producing `0..upper-1`. The same expiry creates
 `Imp 0x3EC`, places it at the Portal, marks it airborne/ejected, copies team
-and primary damage, registers it, and resets the randomized countdown.
-Contact `0x0048C370` adds impact particles and then calls base contact. Death
-`0x004A1FA0` performs common rewards/drop selection and a large portal
-fragment/decal presentation.
+and primary damage, and registers it. Contact `0x0048C370` adds impact
+particles and then calls base contact. Death `0x004A1FA0` performs common
+rewards/drop selection and a large portal fragment/decal presentation.
 
 ## Art ownership and record ranges
+
+The isolated runtime pass joined this static map to stock wave creation: one
+stable arena sample contained eleven tracked type-1001 Skeleton actors, each
+using the rebased Skeleton vtable and carrying 2.5/2.5 HP. Atlas lifetime in
+the same scene showed BadGuys resident and DeadHawg held by two owners. See
+[native-live-validation.md](native-live-validation.md).
 
 Enemy art is selected by compiled atlas pointers/array indexes, not by enemy
 CFG filename. The following table lists the principal body/action ranges; the

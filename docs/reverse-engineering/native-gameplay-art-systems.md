@@ -7,19 +7,16 @@ decompilation. It deliberately includes the gameplay logic that gives each
 asset meaning: casting, projectiles, effects, enemies, equipment attachments,
 world construction, ground loot, boneyards, UI, and lifetime/ownership.
 
-The phase is complete only when every row below is either documented with
-static and/or runtime evidence or explicitly proved unused in the retail
-build. A sprite contact sheet without its native consumer does not count as a
-finished mapping.
+The native phase is complete: every row below is documented with static and/or
+runtime evidence, and every former residual record is either joined to its
+consumer or proved dormant in the retail executable. A sprite contact sheet
+without its native consumer was not counted as a finished mapping.
 
 Evidence statuses:
 
 - **Complete**: construction, relevant object state, update/render flow, asset
-  range, lifetime, and custom-content boundary are documented.
-- **Mapped**: principal entry points and assets are known; edge cases or one
-  ownership/formula detail remains.
-- **In progress**: active decompilation, not a completeness claim.
-- **Queued**: inventoried but not yet traced deeply enough.
+  range, lifetime, and custom-content boundary are documented. All ledger rows
+  have reached this state.
 
 ## Coverage ledger
 
@@ -27,22 +24,23 @@ Evidence statuses:
 | --- | --- | --- | --- | --- |
 | Asset lookup/decode/upload/cache/device reset | `0x00413030`, `0x0043DAD0`, `0x0043DE70`, `0x00420140` | all image inputs | Complete | [native-asset-system.md](native-asset-system.md) |
 | Bundle byte grammar and extraction | `0x00413B10`, `0x00413DE0` | 28 `.bundle`/PNG pairs | Complete | [sprite-bundle-format.md](../../tools/sprite-bundle-format.md) |
-| Native RTTI/object registry | 598 recovered vtables and 13,010 slots | constructors, ticks, renderers, destructors | Mapped | [native-class-and-object-registry.md](native-class-and-object-registry.md) |
+| Native RTTI/object registry | 598 recovered vtables and 13,010 slots | constructors, ticks, renderers, destructors | Complete | [native-class-and-object-registry.md](native-class-and-object-registry.md) |
 | Main-menu Solomon figure | `0x004F3210` and title-screen renderers | `Title[3,8,11..15]` | Complete | [main-menu-solomon-visual-re.md](../main-menu-solomon-visual-re.md) |
-| Wizard profile/body/animation/equipment render | `0x005E3080`, `0x0061AA00`, `0x00621780` | Solomon, Clothes, Inventory | Mapped | [wizard-render-animation-deep-dive.md](../wizard-render-animation-deep-dive.md) |
-| Skill catalog and level-up picker | `0x00674EE0`, `0x0067C250`, `0x0066F920` | Skills, LevelPicker | Mapped | [skill-picker-re.md](../skill-picker-re.md) |
-| Spell welding | `0x0067CB70`, `0x006566A0`, `0x00666020` | Skills weld icons/effects | Mapped | [spell-welding.md](spell-welding.md) |
-| Cast ownership/cleanup | `0x00548B00`, `0x00548A00`, `0x0052F3B0` | spell-dependent | Mapped | [spell-cast-cleanup-chain.md](../spell-cast-cleanup-chain.md) |
-| Every primary/secondary spell | skill CFG catalog and native handlers | Skills plus effect atlases | Mapped | [native-skills-and-spells.md](native-skills-and-spells.md) |
-| Every projectile/transient effect | 46 factory classes and 197 decompiled lifecycle methods | BadGuys, DeadHawg, Golem, Unholy, UI plus child animation art | Mapped | [native-projectiles-and-effects.md](native-projectiles-and-effects.md) |
-| Enemy families, attacks, death effects, drops | factory/config/tick/render vtables | BadGuys, Demon, Golem, Heartmonger, Unholy, Faculty | Mapped | [native-enemies.md](native-enemies.md); [skeleton-death-effects-re.md](../skeleton-death-effects-re.md) |
-| Boneyard grammar, procedural generation, and outdoor scenery materialization | `0x0046DC60`, `0x006388B0`, `0x00653660`, `0x006531B0` | DeadHawg plus road/fence loose images and generated meshes | Mapped; static pass complete, live validation pending | [native-boneyards-and-world.md](native-boneyards-and-world.md) |
-| World tiles/props/doors/portals/NPCs/boss rooms | world initializer and object factories | College, Library, Office, Storage, Memoratorium, NPCs, loose images | Mapped; static pass complete, live validation pending | [native-regions-npcs-and-world-props.md](native-regions-npcs-and-world-props.md) |
-| Item catalog/recipes/effects | `0x00574D60`, `0x00573570`, `0x005722A0` | Inventory, Clothes, Solomon attachments | Mapped; static pass complete, live validation pending | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md); [native-item-catalog.json](native-item-catalog.json) |
-| Equipment attachment and stat application | wizard/equipment render and item FX | Clothes, Inventory, Solomon | Mapped; static pass complete, live validation pending | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md) |
-| Ground loot spawn/render/pickup/materialization | `0x0046AA90`, `0x0047C070`, and four reward-actor vtables | BadGuys, Inventory, transient effects | Mapped; static pass complete, live validation pending | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md#ground-reward-actors) |
-| UI, fonts, controls, creation, loader/game-over | UI state/render roots | UI, Fonts, ControlPanel, Controls, Create, Loader, GameOver | Mapped; static pass complete, live validation pending | [native-presentation-ui-fonts-and-loader.md](native-presentation-ui-fonts-and-loader.md) |
-| Sound/music/voice asset registry and gameplay triggers | preload/registry beginning `0x004EE010` | 304 WAV plus MO3/music table | Mapped; static pass complete, live validation pending | [native-audio-system.md](native-audio-system.md); [native-audio-catalog.json](native-audio-catalog.json) |
+| Wizard profile/body/animation/equipment render | `0x005E3080`, `0x0061AA00`, `0x00621780` | Solomon, Clothes, Inventory | Complete | [wizard-render-animation-deep-dive.md](../wizard-render-animation-deep-dive.md) |
+| Skill catalog and level-up picker | `0x00674EE0`, `0x0067C250`, `0x0066F920` | Skills, LevelPicker | Complete | [skill-picker-re.md](../skill-picker-re.md) |
+| Spell welding | `0x0067CB70`, `0x006566A0`, `0x00666020` | Skills weld icons/effects | Complete | [spell-welding.md](spell-welding.md) |
+| Cast ownership/cleanup | `0x00548B00`, `0x00548A00`, `0x0052F3B0` | spell-dependent | Complete | [spell-cast-cleanup-chain.md](../spell-cast-cleanup-chain.md) |
+| Every primary/secondary spell | skill CFG catalog and native handlers | Skills plus effect atlases | Complete | [native-skills-and-spells.md](native-skills-and-spells.md) |
+| Every projectile/transient effect | 46 factory classes and 197 decompiled lifecycle methods | BadGuys, DeadHawg, Golem, Unholy, UI plus child animation art | Complete | [native-projectiles-and-effects.md](native-projectiles-and-effects.md) |
+| Enemy families, attacks, death effects, drops | factory/config/tick/render vtables | BadGuys, Demon, Golem, Heartmonger, Unholy, Faculty | Complete | [native-enemies.md](native-enemies.md); [skeleton-death-effects-re.md](../skeleton-death-effects-re.md) |
+| Boneyard grammar, procedural generation, and outdoor scenery materialization | `0x0046DC60`, `0x006388B0`, `0x00653660`, `0x006531B0` | DeadHawg plus road/fence loose images and generated meshes | Complete | [native-boneyards-and-world.md](native-boneyards-and-world.md) |
+| World tiles/props/doors/portals/NPCs/boss rooms | world initializer and object factories | College, Library, Office, Storage, Memoratorium, NPCs, loose images | Complete | [native-regions-npcs-and-world-props.md](native-regions-npcs-and-world-props.md) |
+| Item catalog/recipes/effects | `0x00574D60`, `0x00573570`, `0x005722A0` | Inventory, Clothes, Solomon attachments | Complete | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md); [native-item-catalog.json](native-item-catalog.json) |
+| Equipment attachment and stat application | wizard/equipment render and item FX | Clothes, Inventory, Solomon | Complete | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md) |
+| Ground loot spawn/render/pickup/materialization | `0x0046AA90`, `0x0047C070`, and four reward-actor vtables | BadGuys, Inventory, transient effects | Complete | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md#ground-reward-actors) |
+| UI, fonts, controls, creation, loader/game-over | UI state/render roots | UI, Fonts, ControlPanel, Controls, Create, Loader, GameOver | Complete | [native-presentation-ui-fonts-and-loader.md](native-presentation-ui-fonts-and-loader.md) |
+| Sound/music/voice asset registry and gameplay triggers | preload/registry beginning `0x004EE010` | 304 WAV plus MO3/music table | Complete | [native-audio-system.md](native-audio-system.md); [native-audio-catalog.json](native-audio-catalog.json) |
+| Isolated runtime verification | Create -> Courtyard -> Arena -> wave/loot -> GameOver | live atlas refs, actors, recipes, reward objects | Complete | [native-live-validation.md](native-live-validation.md) |
 
 ## Confirmed cross-system architecture
 
@@ -139,11 +137,21 @@ sprites without embedding their final record offset in the consuming function.
 | `0..18` | inline sprites `+0x38` through `+0x0E00` | picker/control chrome and utility art |
 | `19..26` | array `+0x0EC8`, 8 sprites | discipline/element labels |
 | `27..122` | array `+0x0ED8`, 96 sprites | skill and spell glyph catalog |
-| `123..124` | array `+0x0EE8`, 2 sprites | presentation pair, consumer trace pending |
-| `125..126` | array `+0x0EF8`, 2 sprites | presentation pair, consumer trace pending |
+| `123..124` | array `+0x0EE8`, 2 sprites | dark tab/square pair; built and released but statically dormant |
+| `125..126` | array `+0x0EF8`, 2 sprites | gray square pair; built and released but statically dormant |
 | `127..155` | array `+0x0F08`, 29 sprites | colored level/perk/weld presentation |
-| `156..163` | array `+0x0F18`, 8 sprites | small picker/status symbols |
-| `164..165` | array `+0x0F28`, 2 sprites | presentation pair, consumer trace pending |
+| `156..163` | array `+0x0F18`, 8 sprites | small picker/status symbols; built and released but statically dormant |
+| `164..165` | array `+0x0F28`, 2 sprites | record 164 is a shared skill/picker/Hall-of-Fame tile; record 165 is never selected |
+
+The residual Skills arrays have now been closed at the machine-code level.
+`FUN_005AF160` is the only function that touches the `+0x0EE8`, `+0x0EF8`,
+and `+0x0F18` vector owners after construction, and its accesses are the
+bundle teardown sequence. The `+0x0F28` vector is consumed by
+`0x004FECB0`, `HallOfFame_Render`, `0x0065E4D0`, `0x00671810`,
+`0x006720F0`, and `0x0067DF80`; each live selection loads the first pointer
+without a one-record stride, proving record 164 is used and record 165 is not.
+The contact-sheet descriptions above identify pixels only; the dormant groups
+must not be treated as hidden gameplay states.
 
 Weld build IDs 1000..1009 map to display selectors `0x51..0x5A` within the
 skill-glyph portion through `0x00665F10`; see
@@ -185,13 +193,13 @@ choices. The already recovered state offsets, directional selection, animation
 groups, and layer ordering are maintained in
 [wizard-render-animation-deep-dive.md](../wizard-render-animation-deep-dive.md).
 
-The item-definition selectors are now joined to their exact Inventory ranges,
-and the Hat/Robe/Staff/Wand attachment paths, seven sink owners, equip/unequip
-transfers, and refresh lifetime are documented in
-[native-items-equipment-and-loot.md](native-items-equipment-and-loot.md). The
-remaining wizard-side work is isolated live validation of pose-dependent
-Clothes selection and equipment replacement; it is no longer an unresolved
-static item map.
+The item-definition selectors are joined to their exact Inventory ranges, and
+the Hat/Robe/Staff/Wand attachment paths, seven sink owners, equip/unequip
+transfers, refresh lifetime, and pose-dependent Clothes selector logic are
+documented in
+[native-items-equipment-and-loot.md](native-items-equipment-and-loot.md).
+The isolated Create/Courtyard/Arena run also verified representative wizard
+and atlas residency against rebased retail addresses.
 
 ## Skill and weld logic recovered
 
@@ -221,15 +229,14 @@ the common cleanup path releases cast-owned state when a cast finishes or is
 cancelled. The established ownership chain and cleanup evidence is in
 [spell-cast-cleanup-chain.md](../spell-cast-cleanup-chain.md).
 
-The native object side is now indexed across 46 projectile/effect classes and
-197 decompiled methods. The vtable roles, construction inheritance, update and
-render roots, contact ABI, modifier creation, and direct class-owned art are in
+The native object side is indexed across 46 projectile/effect classes and 197
+decompiled methods. The vtable roles, construction inheritance, update and
+render roots, contact ABI, modifier creation, direct class-owned art, borrowed
+animation descriptors, owned child animations, and cleanup containers are in
 [native-projectiles-and-effects.md](native-projectiles-and-effects.md). The
-cast-side map now covers every compiled primary, weld, secondary, and advanced
+cast-side map covers every compiled primary, weld, secondary, and advanced
 case, including passive/concentration refresh, spawned types, initialization
-payloads, status modifiers, and persistent toggles. Remaining closure is
-indirect child-animation record joining and isolated live validation of
-high-risk persistent effects.
+payloads, status modifiers, and persistent toggles.
 
 ## Enemy families and enemy-owned children
 
@@ -244,11 +251,11 @@ direct atlas ranges are documented in
 [native-enemy-catalog.json](native-enemy-catalog.json) preserves the finite
 type list and evidence joins.
 
-Two static edge cases remain intentionally labeled for later live validation:
-Dire Faculty exposes but does not dispatch its index-3 primary/secondary
-labels, and Portal's frequency enum chooses countdown bounds whose exact
-switch arithmetic was not recovered cleanly. Neither uncertainty changes the
-proved object ownership or art-consumer map.
+The two former enemy residuals are closed. Dire Faculty's index-3
+primary/secondary strings are present but have no dispatcher branch, proving
+them dormant. Portal's six frequency presets, timing-scale conversion,
+inclusive ordinary reset, and one-in-eight fast-reset override are recovered
+from the machine instructions and preserved in the generated catalog.
 
 ## Item, equipment, and ground-loot map
 
@@ -277,23 +284,42 @@ is not merely a generic Inventory icon drawn in the world.
 The initializer at `0x005BBD90` loads roads 1..5, fence grate, ether plane,
 green plasma, river/rise, and WallTop into a large world-render object. The
 exact destinations are recorded in
-[native-asset-system.md](native-asset-system.md#loose-image-consumers-recovered-so-far).
+[native-asset-system.md](native-asset-system.md#loose-image-ownership-and-consumers).
+WallTop is a dormant stock load: its store to owner `+0x31C5F4` is the only
+compiled reference to that field, so neither Wall nor another renderer reads
+it after initialization.
 `paintbkg` belongs to portrait capture at `0x005BED10`, not ordinary world
 rendering.
 
-## Custom-content seam criteria
+## Closed custom-content contracts
 
-For each remaining family, the final documentation will answer:
+1. Atlas counts, destination fields, factory types, skill/enemy dispatchers,
+   item recipes, and the sound registry are finite compiled identities.
+   Boneyards and their bounded recipe grammar are data-driven; voices and a
+   small set of loose assets are filename-addressed; stock code does not
+   generally enumerate asset directories.
+2. Atlas art is selected by fixed numeric record/pointer ABI, gameplay actors
+   by factory type and config selector, and loose/voice/music content by the
+   specific path grammar documented for that subsystem.
+3. `MyApp`/atlas globals own decoded pages and GPU residency; sprite wrappers
+   borrow or own animation children according to their concrete class; actors
+   own gameplay state and transient children; Region/RegionLayout owns the
+   materialized world graph; reward actors retain live item ownership until a
+   pickup transfer succeeds.
+4. Art changes must be installed before the relevant atlas or region is built.
+   Compatible replacement preserves bundle record count/geometry ABI; reload
+   must follow the documented release/cache/device-reset path. World or logic
+   changes require normal actor, collision, derived-child, audio-request, and
+   layout teardown rather than pointer substitution.
+5. Stock data can replace existing records and compose existing boneyard/NPC
+   primitives within their grammars. New factory types, render cases, spell or
+   enemy dispatcher branches, and gameplay audio triggers require Lua/native
+   hooks or loader-owned extension logic.
+6. Before multiplayer construction, peers must agree on the active mod set and
+   content hashes for Boneyard, Lua, and art, plus every behavior-affecting
+   config, hook, record-layout, timing, RNG-order, collision, and derived-child
+   change. Pixel-only replacement may be classified as presentation state only
+   when geometry and consumer ABI are unchanged.
 
-1. Is content enumerated from disk/config, or is its count/identity compiled?
-2. Is art selected by filename, numeric record index, runtime pointer, or
-   object type?
-3. Which object owns decoded pixels, GPU pages, sprite descriptors, actor state,
-   and transient effects?
-4. What must be rebuilt or invalidated when content changes?
-5. Can stock data add a new member, only replace one, or neither?
-6. Which state must be identical before multiplayer join for deterministic
-   object construction and presentation?
-
-Answers will be consolidated only after the native phase is complete. No
-website download or mod-enablement implementation belongs in this phase.
+No website download or mod-enablement implementation was performed during
+this native decompilation phase.

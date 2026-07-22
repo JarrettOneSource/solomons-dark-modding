@@ -143,6 +143,57 @@ animation objects can add art not visible as a literal in the parent method.
 The factory intentionally has no `0x803` type. This is not an extraction gap:
 the switch proceeds from `0x802` to `0x804`.
 
+## Animation-wrapper art and ownership ABI
+
+The animation classes do not each own a private atlas record. They are generic
+render/lifetime wrappers around a descriptor selected at the creation site.
+This is why a parent method can have a final atlas selection while the child
+class's render method has no atlas-singleton literal.
+
+The recovered layouts and deleting destructors close that indirection:
+
+| Wrapper family | Art/child field | Ownership and teardown |
+| --- | ---: | --- |
+| `Anim_Fade*`, `Anim_Bouncer*`, and related short-lived `Anim_*` objects | sprite descriptor at `+0x1C` | borrowed pointer into a resident bundle; `0x00448DD0` reaches `Object` teardown and never releases the descriptor |
+| `AnimPointer` | sprite descriptor at `+0x13C` | borrowed pointer; `0x005061C0` performs `Puppet` teardown only |
+| `ZAnim` / `ZAnimLit` | child animation object at `+0x13C` | owned object; `0x005E0100`/`0x005E47D0` invokes the child's deleting destructor, nulls the field, then tears down `Puppet` |
+| `ZAnimGroup` | embedded child `ObjectManager` | manager-owned children; `0x005E4860` calls `0x00402190`, which destroys its two embedded manager records and frees the pointer-list allocation before `Puppet` teardown |
+| `ZAnimSplit` / `ZAnimLitObject` | inherited `ZAnim` child | both deleting destructors route through `0x005E0100`; no second sprite or child owner is introduced |
+| registered child effects | world actor/smart-pointer registration | creator relinquishes lifetime after `0x0063E5B0`/`0x0063E5E0`; the parent does not delete the registered child |
+
+For the ordinary fade family, constructor `0x00452E20` initializes the
+descriptor slot and presentation fields; creation sites then assign an exact
+bundle pointer. Examples include `MagicMissile` impact assigning BadGuys
+record 53, Leviathan assigning record 11, and recursive `EBoulder` debris
+selecting the BadGuys `168..171` array. When a creation site indexes an array,
+the runtime pointer is still constrained to that builder-defined record range.
+
+Consequently the final art identity is the pair `(creation site, selected
+atlas destination)`, not the RTTI animation name alone. The complete static
+join is already represented by `native-atlas-consumers.json` and the parent
+relation in `native-projectile-method-index.json`; the wrapper contributes no
+additional filename, page, or hidden selector. This closes the former
+"indirect child-animation" residual without inventing a false one-record-per-
+class mapping.
+
+### Recursive boulder collections
+
+`Boulder` constructor `0x005FA270` creates two separate list owners:
+
+- `+0x13C` is `PointerList<SmartPointer<Boulder::Rock>>`; its backing
+  allocation is at `+0x150`;
+- `+0x200` is `PointerList<void*>`; its backing allocation is at `+0x214`.
+
+Shared destructor body `0x005FA3F0` is used by `Boulder` and `EBoulder` through
+deleting destructor `0x005FBD90`; `Hailstones` uses `0x005FBDB0` and then the
+same body. It frees the auxiliary pointer-list allocation, runs a four-byte
+element destructor across every smart rock reference before freeing that
+allocation, nulls both backing pointers, and finally invokes `Puppet`
+teardown. Recursive `EBoulder` children are separately registered world
+actors; they are not raw pointees recursively deleted by their parent. The
+`Anim_BoulderBit` deleting destructor `0x00479F60` has no collection cleanup
+because each fragment is itself a registered animation object.
+
 ## Proven inheritance and behavioral families
 
 The vtables and constructor chains establish these native families:
@@ -165,7 +216,7 @@ The vtables and constructor chains establish these native families:
 - `RainOfBones` begins with the `AcidRain` constructor, then replaces the type,
   duration, render passes, and tick payload.
 
-## Missile behavior recovered so far
+## Missile behavior and lifecycle
 
 `MagicMissile` stores target group/slot identity at `+0x140/+0x142`, heading at
 `+0x13C`, speed/turn scalars in `+0x120..+0x154`, bounce count at `+0x161`, and
@@ -466,16 +517,18 @@ then queries the impact area and dispatches the comet freeze scalar through
 contact field `0x0081C6E8`. It finally restores the world-color state and
 removes itself. The deleting destructor uses ordinary `Puppet` teardown.
 
-## Remaining closure work for this subsystem
+## Closure result for this subsystem
 
-The static object identities, full vtables, construction chains, direct
-class-owned art, factory/modifier arguments, cast-time payloads, and principal
-update/render/contact roots are mapped. Remaining closure is deliberately
-narrow:
+The static object identities, full vtables, construction chains, direct and
+caller-selected art, factory/modifier arguments, cast-time payloads,
+update/render/contact roots, and destructor ownership are mapped. The isolated
+runtime pass additionally confirmed world actor materialization and the
+resident gameplay-atlas lifetime; see
+[native-live-validation.md](native-live-validation.md).
 
-1. join indirect child-animation selectors to their final atlas records where
-   the parent stores only a runtime sprite pointer;
-2. finish destructor ownership notes for the recursive boulder and animation
-   wrapper collections;
-3. validate high-risk target, reflection, removal, and persistent-area
-   contracts in an isolated live scene.
+The attempted optional player-cast sample did not produce a cast because that
+resumed scene had no selected spell pointer. No runtime claim is based on that
+attempt. Reflection, removal, and persistent-area formulas above instead rest
+on their exact native branch and contact-context flows, which are sufficient
+to close the native ABI. Future automated spell scenarios would be regression
+tests of those recovered contracts, not missing decompilation work.
