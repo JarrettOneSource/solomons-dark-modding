@@ -101,7 +101,10 @@ def test_lua_enemy_spawn_filter_preserves_stock_call_shape_and_ownership() -> st
         "shared config is restored",
     ):
         assert token in documentation, f"enemy-spawn filter documentation lacks: {token}"
-    assert "Damage and enemy-spawn slices implemented" in roadmap
+    assert (
+        "Damage, enemy-spawn, drop-roll, and wave-spawn slices implemented"
+        in roadmap
+    )
     for token in ('"enabled": false', '"events.filters.enemy_spawn"'):
         assert token in sample_manifest, f"enemy-spawn sample manifest lacks: {token}"
     for token in (

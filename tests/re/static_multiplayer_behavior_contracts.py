@@ -2059,9 +2059,8 @@ def test_shared_menu_pause_is_host_authoritative_and_time_bounded() -> str:
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/"
         "player_actor_tick_hook.inl"
     )
-    wave_tick = _read(
-        "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/"
-        "wave_and_enemy_spawn_hooks.inl"
+    wave_tick = read_source_unit(
+        "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks.inl"
     )
     lua_runtime = _read(
         "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp"
