@@ -31,13 +31,20 @@ class ArtifactFailure(RuntimeError):
     pass
 
 
-def sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def sha256_zip_member(
+    archive: zipfile.ZipFile,
+    member: zipfile.ZipInfo,
+) -> str:
+    digest = hashlib.sha256()
+    with archive.open(member) as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
@@ -72,13 +79,23 @@ def expected_game_hash() -> str:
     ).lower()
 
 
-def pe_machine(data: bytes, label: str) -> int:
-    if len(data) < 0x40 or data[:2] != b"MZ":
-        raise ArtifactFailure(f"{label} is not a PE image")
-    pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
-    if pe_offset + 6 > len(data) or data[pe_offset : pe_offset + 4] != b"PE\0\0":
-        raise ArtifactFailure(f"{label} has an invalid PE header")
-    return struct.unpack_from("<H", data, pe_offset + 4)[0]
+def pe_machine_zip_member(
+    archive: zipfile.ZipFile,
+    member: zipfile.ZipInfo,
+    label: str,
+) -> int:
+    with archive.open(member) as handle:
+        dos_header = handle.read(0x40)
+        if len(dos_header) < 0x40 or dos_header[:2] != b"MZ":
+            raise ArtifactFailure(f"{label} is not a PE image")
+        pe_offset = struct.unpack_from("<I", dos_header, 0x3C)[0]
+        if pe_offset + 6 > member.file_size:
+            raise ArtifactFailure(f"{label} has an invalid PE header")
+        handle.seek(pe_offset)
+        pe_header = handle.read(6)
+        if len(pe_header) != 6 or pe_header[:4] != b"PE\0\0":
+            raise ArtifactFailure(f"{label} has an invalid PE header")
+        return struct.unpack_from("<H", pe_header, 4)[0]
 
 
 def parse_checksum_manifest(data: bytes) -> dict[str, str]:
@@ -211,7 +228,7 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
 
         checksum_mismatches: list[str] = []
         for relative, expected_digest in manifest.items():
-            actual_digest = sha256_bytes(archive.read(file_members[relative]))
+            actual_digest = sha256_zip_member(archive, file_members[relative])
             if actual_digest != expected_digest:
                 checksum_mismatches.append(relative)
         if checksum_mismatches:
@@ -227,15 +244,20 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
         }
         actual_machines: dict[str, str] = {}
         for relative, expected_machine in binary_machines.items():
-            machine = pe_machine(archive.read(file_members[relative]), relative)
+            machine = pe_machine_zip_member(
+                archive,
+                file_members[relative],
+                relative,
+            )
             actual_machines[relative] = f"0x{machine:04x}"
             if machine != expected_machine:
                 raise ArtifactFailure(
                     f"{relative} machine is 0x{machine:04x}, expected 0x{expected_machine:04x}"
                 )
 
-        steam_api_digest = sha256_bytes(
-            archive.read(file_members["launcher/assets/steam/win32/steam_api.dll"])
+        steam_api_digest = sha256_zip_member(
+            archive,
+            file_members["launcher/assets/steam/win32/steam_api.dll"],
         )
         if marker.get("steamApiSha256") != steam_api_digest:
             raise ArtifactFailure(

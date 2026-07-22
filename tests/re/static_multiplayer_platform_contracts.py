@@ -790,7 +790,7 @@ def test_website_lobby_links_register_and_route_to_launcher() -> str:
         '"URL Protocol"',
         '$expectedProtocolCommand = "`"$uiExecutable`" `"%1`""',
         "$result.uiSingleInstanceForwarding = $true",
-        '"solomondarkrevived://join/$testLobbyId"',
+        '"solomondarkrevived://join/${testLobbyId}?directory=${testDirectory}"',
         "$result.uiLobbyLinkForwarding = $true",
     ):
         assert token in package_smoke, f"package protocol smoke check lacks: {token}"

@@ -1918,6 +1918,51 @@ def test_run_reentry_audits_only_logs_written_during_the_test() -> str:
     return "run reentry scans only bounded log content appended during its own run"
 
 
+def test_beta_artifact_verifier_streams_large_zip_members() -> str:
+    import hashlib
+    import struct
+    import zipfile
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    import verify_beta_release_artifact as artifact
+
+    payload = bytearray(2 * 1024 * 1024)
+    payload[:2] = b"MZ"
+    struct.pack_into("<I", payload, 0x3C, 0x80)
+    payload[0x80:0x84] = b"PE\0\0"
+    struct.pack_into("<H", payload, 0x84, artifact.PE_I386)
+    expected_digest = hashlib.sha256(payload).hexdigest()
+    with TemporaryDirectory() as directory:
+        archive_path = Path(directory) / "large-member.zip"
+        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as output:
+            output.writestr("large.exe", payload)
+        with zipfile.ZipFile(archive_path) as archive:
+            member = archive.getinfo("large.exe")
+            archive.read = lambda *args, **kwargs: (_ for _ in ()).throw(
+                AssertionError("whole-member buffering is forbidden")
+            )
+            assert artifact.sha256_zip_member(archive, member) == expected_digest
+            assert (
+                artifact.pe_machine_zip_member(archive, member, "large.exe")
+                == artifact.PE_I386
+            )
+    return "beta artifact verification streams hashes and bounded PE headers"
+
+
+def test_beta_package_smoke_forwards_a_valid_website_lobby_uri() -> str:
+    smoke = _read("scripts/Test-BetaReleasePackage.ps1")
+    assert (
+        '$testDirectory = [Uri]::EscapeDataString("http://127.0.0.1:5080")'
+        in smoke
+    )
+    assert (
+        '"solomondarkrevived://join/${testLobbyId}?directory=${testDirectory}"'
+        in smoke
+    )
+    return "package smoke exercises the same directory-bearing URI emitted by the website"
+
+
 def test_animated_loot_comparison_bounds_snapshot_phase_skew() -> str:
     import verify_multiplayer_primary_kill_stress as primary
 

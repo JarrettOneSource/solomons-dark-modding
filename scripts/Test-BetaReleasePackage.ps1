@@ -333,9 +333,10 @@ try {
         }
 
         $testLobbyId = "109775243840973240"
+        $testDirectory = [Uri]::EscapeDataString("http://127.0.0.1:5080")
         $lobbyLinkProcess = Start-Process `
             -FilePath $uiExecutable `
-            -ArgumentList "solomondarkrevived://join/$testLobbyId" `
+            -ArgumentList "solomondarkrevived://join/${testLobbyId}?directory=${testDirectory}" `
             -PassThru
         if (-not $lobbyLinkProcess.WaitForExit(10000)) {
             Stop-Process -Id $lobbyLinkProcess.Id -Force -ErrorAction SilentlyContinue

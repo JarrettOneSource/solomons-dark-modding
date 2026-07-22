@@ -81,6 +81,8 @@ from static_multiplayer_progression_contracts import (
 )
 from static_multiplayer_behavior_contracts import (
     test_animated_loot_comparison_bounds_snapshot_phase_skew,
+    test_beta_artifact_verifier_streams_large_zip_members,
+    test_beta_package_smoke_forwards_a_valid_website_lobby_uri,
     test_cursor_placed_secondaries_replay_owner_world_position,
     test_health_up_contract_composes_with_life_charm,
     test_hub_presentation_uses_stored_authority_across_lifecycle_rotation,
@@ -515,6 +517,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "run reentry audits only logs written during the test",
         test_run_reentry_audits_only_logs_written_during_the_test,
+    ),
+    (
+        "beta artifact verifier streams large ZIP members",
+        test_beta_artifact_verifier_streams_large_zip_members,
+    ),
+    (
+        "beta package smoke forwards a valid website lobby URI",
+        test_beta_package_smoke_forwards_a_valid_website_lobby_uri,
     ),
     (
         "animated loot bounds transport-phase position skew",
