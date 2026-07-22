@@ -62,6 +62,7 @@ from static_multiplayer_platform_contracts import (
     test_proton_input_targets_the_exact_native_game_window,
     test_staff_target_selection_skips_local_only_enemies,
     test_steam_behavior_arena_reset_waits_for_native_spawner,
+    test_ui_sandbox_retries_unlatched_create_choices,
     test_website_lobby_links_register_and_route_to_launcher,
 )
 from static_multiplayer_progression_contracts import (
@@ -377,6 +378,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "pair launcher drains redirected JSON output",
         test_pair_launcher_drains_redirected_json_output,
+    ),
+    (
+        "UI sandbox retries unlatched create choices",
+        test_ui_sandbox_retries_unlatched_create_choices,
     ),
     (
         "packaged desktop UI accepts its single-file launcher",

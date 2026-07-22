@@ -12,6 +12,7 @@ param(
     [ValidateRange(1, 10)]
     [int]$FreezeFailureThreshold = 2,
     [switch]$RequireAttachmentLane,
+    [string]$BotSet = "fire",
     [switch]$KeepRunning
 )
 
@@ -20,16 +21,21 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $launcher = Join-Path $root "dist/launcher/SolomonDarkModLauncher.exe"
+$launcherProcessHelper = Join-Path $PSScriptRoot "LocalMultiplayerLauncher.Process.ps1"
 $luaExecScript = Join-Path $PSScriptRoot "Invoke-LuaExec.ps1"
 $captureScript = Join-Path $PSScriptRoot "Capture-SolomonDarkWindow.ps1"
 $procdumpPath = Join-Path $root "tools/procdump/procdump.exe"
 $presetPath = Join-Path $root "mods/lua_ui_sandbox_lab/config/active_preset.txt"
-$loaderLogPath = Join-Path $root "runtime/stage/.sdmod/logs/solomondarkmodloader.log"
-$crashLogPath = Join-Path $root "runtime/stage/.sdmod/logs/solomondarkmodloader.crash.log"
-$stageReportPath = Join-Path $root "runtime/stage/.sdmod/stage-report.json"
+
+. $launcherProcessHelper
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $artifactRoot = Join-Path $root "runtime/crash-tests/$timestamp"
+$testRuntimeRoot = Join-Path $artifactRoot "runtime"
+$testStageRoot = Join-Path $testRuntimeRoot "stage"
+$loaderLogPath = Join-Path $testStageRoot ".sdmod/logs/solomondarkmodloader.log"
+$crashLogPath = Join-Path $testStageRoot ".sdmod/logs/solomondarkmodloader.crash.log"
+$stageReportPath = Join-Path $testStageRoot ".sdmod/stage-report.json"
 New-Item -ItemType Directory -Force -Path $artifactRoot | Out-Null
 
 function Read-SharedTextFile {
@@ -128,27 +134,41 @@ function Test-AutomationComplete {
 function Invoke-LuaProbe {
     param([Parameter(Mandatory = $true)][string]$Code)
 
-    $stdoutPath = Join-Path $artifactRoot ("probe_stdout_{0:yyyyMMdd_HHmmss_fff}.log" -f (Get-Date))
-    $stderrPath = Join-Path $artifactRoot ("probe_stderr_{0:yyyyMMdd_HHmmss_fff}.log" -f (Get-Date))
-    $process = $null
+    $probeArguments = @(
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        $luaExecScript,
+        "-Code",
+        $Code
+    ) | ForEach-Object { ConvertTo-MultiplayerProcessArgument $_ }
+    $probeArguments = $probeArguments -join " "
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = "powershell.exe"
+    $startInfo.Arguments = $probeArguments
+    $startInfo.WorkingDirectory = $root
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
     $output = ""
     $exitCode = -1
     try {
-        $process = Start-Process `
-            -FilePath "powershell.exe" `
-            -ArgumentList @(
-                "-NoProfile",
-                "-File",
-                $luaExecScript,
-                "-Code",
-                $Code
-            ) `
-            -PassThru `
-            -RedirectStandardOutput $stdoutPath `
-            -RedirectStandardError $stderrPath
+        if (-not $process.Start()) {
+            throw "Failed to start the Lua probe process."
+        }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
 
         if (-not $process.WaitForExit($ProbeTimeoutSeconds * 1000)) {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            if (-not $process.HasExited) {
+                $process.Kill()
+            }
+            $process.WaitForExit()
             return [ordered]@{
                 ok = $false
                 exit_code = -2
@@ -156,23 +176,14 @@ function Invoke-LuaProbe {
             }
         }
 
+        $process.WaitForExit()
         $exitCode = $process.ExitCode
-        $stdout = if (Test-Path -LiteralPath $stdoutPath) {
-            Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue
-        }
-        else {
-            ""
-        }
-        $stderr = if (Test-Path -LiteralPath $stderrPath) {
-            Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue
-        }
-        else {
-            ""
-        }
+        $stdout = $stdoutTask.Result
+        $stderr = $stderrTask.Result
         $output = @($stdout, $stderr) -join [Environment]::NewLine
     }
     finally {
-        Remove-Item -LiteralPath $stdoutPath,$stderrPath -Force -ErrorAction SilentlyContinue
+        $process.Dispose()
     }
 
     return [ordered]@{
@@ -229,12 +240,13 @@ local bot = type(bots) == "table" and bots[1] or nil
 local attachment = type(bot) == "table" and bot.attachment_visual_lane or nil
 local primary = type(bot) == "table" and bot.primary_visual_lane or nil
 local secondary = type(bot) == "table" and bot.secondary_visual_lane or nil
+local actor_address = type(bot) == "table" and tonumber(bot.actor_address) or 0
 return table.concat({
   "scene=" .. tostring(scene and scene.name or "nil"),
   "kind=" .. tostring(scene and scene.kind or "nil"),
   "bot_available=" .. tostring(bot and bot.available or false),
-  "bot_materialized=" .. tostring(bot and (bot.materialized == true or ((bot.actor or 0) ~= 0)) or false),
-  "bot_actor=" .. tostring(bot and (bot.actor or 0) or 0),
+  "bot_materialized=" .. tostring(bot and (bot.entity_materialized == true or actor_address ~= 0) or false),
+  "bot_actor=" .. tostring(actor_address or 0),
   "bot_slot=" .. tostring(bot and (bot.gameplay_slot or bot.slot or "nil") or "nil"),
   "attach_type=" .. tostring(attachment and (attachment.current_object_type_id or 0) or 0),
   "attach_obj=" .. tostring(attachment and (attachment.current_object_address or 0) or 0),
@@ -253,6 +265,8 @@ else {
 $summary = [ordered]@{
     status = "unknown"
     preset = $Preset
+    bot_set = $BotSet
+    runtime_root = $testRuntimeRoot
     soak_seconds = $SoakSeconds
     ready_timeout_seconds = $ReadyTimeoutSeconds
     probe_interval_seconds = $ProbeIntervalSeconds
@@ -266,6 +280,7 @@ $summary = [ordered]@{
     soak_elapsed_seconds = $null
     automation_complete_seen = $false
     probe_output = @()
+    probe_samples = @()
     artifacts = [ordered]@{
         screenshot = $null
         freeze_dump = $null
@@ -284,17 +299,30 @@ try {
     Stop-SolomonDark
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $presetPath) | Out-Null
     Set-Content -LiteralPath $presetPath -Value $Preset -NoNewline -Encoding ASCII
-    $env:SDMOD_UI_SANDBOX_PRESET = $Preset
 
-    $launchOutput = & $launcher launch --json
-    if ($LASTEXITCODE -ne 0) {
-        throw "Launcher launch --json failed with exit code $LASTEXITCODE."
-    }
+    [void](Invoke-LauncherWithEnvironment `
+        -LauncherPath $launcher `
+        -WorkingDirectory $root `
+        -Environment @{} `
+        -Arguments @("enable-mod", "sample.lua.ui_sandbox_lab", "--json", "--runtime-root", $testRuntimeRoot) `
+        -TimeoutSeconds $ReadyTimeoutSeconds)
+    [void](Invoke-LauncherWithEnvironment `
+        -LauncherPath $launcher `
+        -WorkingDirectory $root `
+        -Environment @{} `
+        -Arguments @("enable-mod", "sample.lua.bots", "--json", "--runtime-root", $testRuntimeRoot) `
+        -TimeoutSeconds $ReadyTimeoutSeconds)
 
-    $launch = $launchOutput | ConvertFrom-Json
-    if (-not $launch.success) {
-        throw "Launcher reported failure: $($launch.error)"
-    }
+    $launch = Invoke-LauncherWithEnvironment `
+        -LauncherPath $launcher `
+        -WorkingDirectory $root `
+        -Environment @{
+            SDMOD_UI_SANDBOX_PRESET = $Preset
+            SDMOD_LUA_BOTS_ACTIVE = $BotSet
+        } `
+        -Arguments @("launch", "--json", "--runtime-root", $testRuntimeRoot, "--temporary-profile") `
+        -TimeoutSeconds $ReadyTimeoutSeconds
+    $launchOutput = $launch | ConvertTo-Json -Depth 16
 
     $launchTranscriptPath = Join-Path $artifactRoot "launch.json"
     Set-Content -LiteralPath $launchTranscriptPath -Value $launchOutput -Encoding UTF8
@@ -321,18 +349,29 @@ try {
         }
 
         $probe = Invoke-LuaProbe -Code $probeCode
+        $ready = $probe.ok -and
+            $summary.automation_complete_seen -and
+            $probe.text -match 'scene=hub' -and
+            $probe.text -match 'bot_available=true' -and
+            $probe.text -match 'bot_materialized=true'
+        if ($RequireAttachmentLane) {
+            $ready = $ready -and
+                ($probe.text -match 'attach_type=(?!0\b)\d+') -and
+                ($probe.text -match 'attach_obj=(?!0\b)\d+')
+        }
+        $summary.probe_samples += [ordered]@{
+            phase = "readiness"
+            elapsed_seconds = [math]::Round($readyStopwatch.Elapsed.TotalSeconds, 2)
+            ok = [bool]$probe.ok
+            exit_code = $probe.exit_code
+            automation_complete = [bool]$summary.automation_complete_seen
+            ready_candidate = $ready
+            text = $probe.text
+        }
         if ($probe.ok) {
             $summary.probe_output += $probe.text
             $consecutiveProbeFailures = 0
 
-            $ready = $summary.automation_complete_seen -and
-                $probe.text -match 'scene=hub' -and
-                $probe.text -match 'bot_available=true'
-            if ($RequireAttachmentLane) {
-                $ready = $ready -and
-                    ($probe.text -match 'attach_type=(?!0\b)\d+') -and
-                    ($probe.text -match 'attach_obj=(?!0\b)\d+')
-            }
             if ($ready) {
                 $summary.readiness_elapsed_seconds = [math]::Round($readyStopwatch.Elapsed.TotalSeconds, 2)
                 $summary.status = "ready"
@@ -371,6 +410,15 @@ try {
 
             $probe = Invoke-LuaProbe -Code $probeCode
             $summary.probe_output += $probe.text
+            $summary.probe_samples += [ordered]@{
+                phase = "soak"
+                elapsed_seconds = [math]::Round($soakStopwatch.Elapsed.TotalSeconds, 2)
+                ok = [bool]$probe.ok
+                exit_code = $probe.exit_code
+                automation_complete = [bool]$summary.automation_complete_seen
+                ready_candidate = $null
+                text = $probe.text
+            }
             if ($probe.ok) {
                 $consecutiveProbeFailures = 0
             }
@@ -394,7 +442,22 @@ try {
         }
     }
 
-    $summary.artifacts.crash_artifacts = Get-NewArtifacts -SinceUtc $startedUtc
+    $summary.artifacts.crash_artifacts = @(Get-NewArtifacts -SinceUtc $startedUtc)
+    $summary.artifacts.stage_report = if (Test-Path -LiteralPath $stageReportPath) {
+        $stageReportPath
+    } else {
+        $null
+    }
+    $summary.artifacts.loader_log = if (Test-Path -LiteralPath $loaderLogPath) {
+        $loaderLogPath
+    } else {
+        $null
+    }
+    $summary.artifacts.crash_log = if (Test-Path -LiteralPath $crashLogPath) {
+        $crashLogPath
+    } else {
+        $null
+    }
     $summary.loader_log_tail = Get-SharedTail -Path $loaderLogPath
     $summary.crash_log_tail = Get-SharedTail -Path $crashLogPath
 }
@@ -407,7 +470,7 @@ finally {
         Remove-Item -LiteralPath $presetPath -Force -ErrorAction SilentlyContinue
     }
     else {
-        Set-Content -LiteralPath $presetPath -Value $originalPreset -Encoding ASCII
+        Set-Content -LiteralPath $presetPath -Value $originalPreset -NoNewline -Encoding ASCII
     }
 }
 

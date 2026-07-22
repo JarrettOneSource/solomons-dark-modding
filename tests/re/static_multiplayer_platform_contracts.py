@@ -524,6 +524,7 @@ def test_host_run_exit_is_authoritative_and_self_correcting() -> str:
 
 def test_pair_launcher_drains_redirected_json_output() -> str:
     process_helper = _read("scripts/LocalMultiplayerLauncher.Process.ps1")
+    crash_soak = _read("scripts/Crash-TestHubBotSession.ps1")
 
     for token in (
         "function Read-MultiplayerProcessOutput",
@@ -539,10 +540,75 @@ def test_pair_launcher_drains_redirected_json_output() -> str:
         "$stdout = Read-MultiplayerProcessOutput -Path $stdoutPath",
         "$result = ConvertFrom-MultiplayerLauncherJson -Text $stdout",
     )
+    for token in (
+        '"LocalMultiplayerLauncher.Process.ps1"',
+        "Invoke-LauncherWithEnvironment",
+        "$probeArguments = @(",
+        "ConvertTo-MultiplayerProcessArgument $_",
+        "$startInfo.Arguments = $probeArguments",
+        "$process = New-Object System.Diagnostics.Process",
+        "$stdoutTask = $process.StandardOutput.ReadToEndAsync()",
+        "$stderrTask = $process.StandardError.ReadToEndAsync()",
+        "Set-Content -LiteralPath $presetPath -Value $originalPreset "
+        "-NoNewline -Encoding ASCII",
+        '[string]$BotSet = "fire"',
+        '$testRuntimeRoot = Join-Path $artifactRoot "runtime"',
+        '@("enable-mod", "sample.lua.ui_sandbox_lab", "--json", '
+        '"--runtime-root", $testRuntimeRoot)',
+        '@("enable-mod", "sample.lua.bots", "--json", '
+        '"--runtime-root", $testRuntimeRoot)',
+        '@("launch", "--json", "--runtime-root", $testRuntimeRoot, '
+        '"--temporary-profile")',
+        "SDMOD_LUA_BOTS_ACTIVE = $BotSet",
+        "bot.entity_materialized",
+        "bot.actor_address",
+        "$probe.text -match 'bot_materialized=true'",
+        "$summary.probe_samples += [ordered]@{",
+        "exit_code = $probe.exit_code",
+        "ready_candidate = $ready",
+        "$summary.artifacts.crash_artifacts = @(Get-NewArtifacts -SinceUtc $startedUtc)",
+        "$summary.artifacts.stage_report = if (Test-Path -LiteralPath $stageReportPath)",
+        "$summary.artifacts.loader_log = if (Test-Path -LiteralPath $loaderLogPath)",
+    ):
+        assert token in crash_soak, f"crash soak launcher path lacks: {token}"
+    assert "& $launcher launch --json" not in crash_soak
+    assert "-ArgumentList @(" not in crash_soak
+    assert "Start-Process `" not in crash_soak
+    assert 'Join-Path $root "runtime/stage/' not in crash_soak
+    _require_in_order(
+        crash_soak,
+        "if (-not $process.WaitForExit($ProbeTimeoutSeconds * 1000))",
+        "$process.WaitForExit()",
+        "$exitCode = $process.ExitCode",
+    )
 
     return (
-        "pair launches drain redirected streams before parsing JSON and clean "
-        "up a still-running launcher on every exit path"
+        "pair and crash-soak launches drain redirected streams before parsing "
+        "JSON, preserve spaced probe arguments, isolate the required bot mods, "
+        "and clean up a still-running launcher on every exit path"
+    )
+
+
+def test_ui_sandbox_retries_unlatched_create_choices() -> str:
+    setup = _read("mods/lua_ui_sandbox_lab/scripts/lib/setup.lua")
+
+    for token in (
+        "local CREATE_SELECTION_MAX_ATTEMPTS = 3",
+        "local CREATE_SELECTION_LATCH_TIMEOUT_MS = 5000",
+        'kind = "activate_create_selection"',
+        "selected == step.expected_id",
+        "step._attempt_count >= CREATE_SELECTION_MAX_ATTEMPTS",
+        "step._request_id = nil",
+        '"waiting_for_create_selection_latch"',
+    ):
+        assert token in setup, f"UI sandbox create retry path lacks: {token}"
+    assert setup.count('new_create_selection_step("element"') == 4
+    assert setup.count('new_create_selection_step("discipline"') == 4
+    assert 'kind = "wait_create_selection_ready"' not in setup
+
+    return (
+        "UI sandbox create choices require native selection state to latch and "
+        "retry bounded dispatches that complete without being accepted"
     )
 
 

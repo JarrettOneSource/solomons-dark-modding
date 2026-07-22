@@ -14,6 +14,20 @@ local DISCIPLINE_ACTIONS = {
   body = "create_select_body",
   arcane = "create_select_arcane",
 }
+local CREATE_ELEMENT_IDS = {
+  ether = 0,
+  fire = 1,
+  air = 2,
+  water = 3,
+  earth = 4,
+}
+local CREATE_DISCIPLINE_IDS = {
+  mind = 0,
+  body = 1,
+  arcane = 2,
+}
+local CREATE_SELECTION_MAX_ATTEMPTS = 3
+local CREATE_SELECTION_LATCH_TIMEOUT_MS = 5000
 
 local function read_active_preset_file()
   if type(sd) ~= "table" or type(sd.runtime) ~= "table" or
@@ -91,6 +105,16 @@ local function resolve_create_discipline_action(actions, active_preset)
   return actions.create_select_arcane
 end
 
+local function new_create_selection_step(phase, action_id, expected_id)
+  return {
+    kind = "activate_create_selection",
+    phase = phase,
+    action_id = action_id,
+    surface_id = "create",
+    expected_id = expected_id,
+  }
+end
+
 local function resolve_mode()
   local active_preset = nil
   if type(sd) == "table" and type(sd.runtime) == "table" and
@@ -112,8 +136,13 @@ local function resolve_mode()
 end
 
 local function build_steps(mode, actions, active_preset)
+  local create_element, create_discipline = parse_create_selection(active_preset)
+  create_element = create_element or "water"
+  create_discipline = create_discipline or "arcane"
   local create_element_action = resolve_create_element_action(actions, active_preset)
   local create_discipline_action = resolve_create_discipline_action(actions, active_preset)
+  local create_element_id = CREATE_ELEMENT_IDS[create_element]
+  local create_discipline_id = CREATE_DISCIPLINE_IDS[create_discipline]
 
   local testrun_steps = {
     { kind = "wait_action", action_id = actions.dialog_primary, surface_id = "dialog" },
@@ -124,11 +153,9 @@ local function build_steps(mode, actions, active_preset)
     { kind = "wait_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "activate_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "resolve_new_game_branch", create_surface_id = "create", confirm_action_id = actions.dialog_primary, confirm_surface_id = "dialog" },
-    { kind = "wait_create_selection_ready", phase = "element", action_id = create_element_action },
-    { kind = "activate_action", action_id = create_element_action, surface_id = "create", skip_find = true },
+    new_create_selection_step("element", create_element_action, create_element_id),
     { kind = "delay", duration_ms = 3000 },
-    { kind = "wait_create_selection_ready", phase = "discipline", action_id = create_discipline_action },
-    { kind = "activate_action", action_id = create_discipline_action, surface_id = "create", skip_find = true },
+    new_create_selection_step("discipline", create_discipline_action, create_discipline_id),
     { kind = "wait_surface_not", surface_id = "create" },
     { kind = "delay", duration_ms = 1000 },
     { kind = "hub_start_testrun" },
@@ -144,11 +171,9 @@ local function build_steps(mode, actions, active_preset)
     { kind = "wait_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "activate_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "resolve_new_game_branch", create_surface_id = "create", confirm_action_id = actions.dialog_primary, confirm_surface_id = "dialog" },
-    { kind = "wait_create_selection_ready", phase = "element", action_id = create_element_action },
-    { kind = "activate_action", action_id = create_element_action, surface_id = "create", skip_find = true },
+    new_create_selection_step("element", create_element_action, create_element_id),
     { kind = "delay", duration_ms = 3000 },
-    { kind = "wait_create_selection_ready", phase = "discipline", action_id = create_discipline_action },
-    { kind = "activate_action", action_id = create_discipline_action, surface_id = "create", skip_find = true },
+    new_create_selection_step("discipline", create_discipline_action, create_discipline_id),
     { kind = "wait_surface_not", surface_id = "create" },
     { kind = "delay", duration_ms = 250 },
   }
@@ -162,11 +187,9 @@ local function build_steps(mode, actions, active_preset)
     { kind = "wait_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "activate_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "resolve_new_game_branch", create_surface_id = "create", confirm_action_id = actions.dialog_primary, confirm_surface_id = "dialog" },
-    { kind = "wait_create_selection_ready", phase = "element", action_id = create_element_action },
-    { kind = "activate_action", action_id = create_element_action, surface_id = "create", skip_find = true },
+    new_create_selection_step("element", create_element_action, create_element_id),
     { kind = "delay", duration_ms = 3000 },
-    { kind = "wait_create_selection_ready", phase = "discipline", action_id = create_discipline_action },
-    { kind = "activate_action", action_id = create_discipline_action, surface_id = "create", skip_find = true },
+    new_create_selection_step("discipline", create_discipline_action, create_discipline_id),
     { kind = "wait_surface_not", surface_id = "create" },
     { kind = "delay", duration_ms = 1000 },
   }
@@ -180,11 +203,9 @@ local function build_steps(mode, actions, active_preset)
     { kind = "wait_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "activate_action", action_id = actions.main_menu_new_game, surface_id = "main_menu" },
     { kind = "resolve_new_game_branch", create_surface_id = "create", confirm_action_id = actions.dialog_primary, confirm_surface_id = "dialog" },
-    { kind = "wait_create_selection_ready", phase = "element", action_id = create_element_action },
-    { kind = "activate_action", action_id = create_element_action, surface_id = "create", skip_find = true },
+    new_create_selection_step("element", create_element_action, create_element_id),
     { kind = "delay", duration_ms = 3000 },
-    { kind = "wait_create_selection_ready", phase = "discipline", action_id = create_discipline_action },
-    { kind = "activate_action", action_id = create_discipline_action, surface_id = "create", skip_find = true },
+    new_create_selection_step("discipline", create_discipline_action, create_discipline_id),
     { kind = "wait_surface_not", surface_id = "create" },
     { kind = "delay", duration_ms = 1000 },
     { kind = "hub_start_testrun" },
@@ -405,7 +426,18 @@ local function new(ctx)
     return numeric == nil or numeric == -1 or numeric == 0xFFFFFFFF
   end
 
-  local function wait_create_selection_ready(step)
+  local function activate_create_selection(step, now_ms)
+    local snapshot = ctx.get_snapshot()
+    if type(snapshot) ~= "table" then
+      return nil, "snapshot unavailable"
+    end
+    if snapshot.surface_id ~= "create" then
+      if step.phase == "discipline" then
+        return true
+      end
+      return nil, "active_surface=" .. tostring(snapshot.surface_id)
+    end
+
     local owner_address = ctx.find_surface_object_ptr("create")
     if owner_address == nil or owner_address == 0 then
       return nil, "create owner unavailable"
@@ -430,29 +462,89 @@ local function new(ctx)
 
     local enabled = ctx.read_object_u8(owner_address, enabled_offset)
     local selected = ctx.read_object_u32(owner_address, selected_offset)
-    if enabled ~= nil and enabled ~= 0 and is_create_selection_unset(selected) then
+    if selected == step.expected_id then
       return true
     end
+    if not is_create_selection_unset(selected) then
+      return false, string.format(
+        "create %s selected unexpected id=%s expected=%s",
+        tostring(step.phase),
+        tostring(selected),
+        tostring(step.expected_id))
+    end
 
-    if type(step.action_id) == "string" and type(sd.ui) == "table" and
-        type(sd.ui.find_action) == "function" then
-      local action = sd.ui.find_action(step.action_id, "create")
-      if action ~= nil then
-        return true
+    if step._request_id == nil then
+      if enabled == nil or enabled == 0 then
+        return nil, string.format(
+          "waiting_for_create_%s enabled=%s selected=%s owner=%s",
+          tostring(step.phase),
+          tostring(enabled),
+          tostring(selected),
+          ctx.format_hex32(owner_address))
       end
+      if step._attempt_count ~= nil and
+          step._attempt_count >= CREATE_SELECTION_MAX_ATTEMPTS then
+        return false, string.format(
+          "create %s action did not latch expected id=%s after %d attempts",
+          tostring(step.phase),
+          tostring(step.expected_id),
+          step._attempt_count)
+      end
+      if type(sd.ui) ~= "table" or type(sd.ui.find_action) ~= "function" or
+          type(sd.ui.activate_action) ~= "function" then
+        return false, "create selection UI actions unavailable"
+      end
+      local action = sd.ui.find_action(step.action_id, "create")
+      if action == nil then
+        return nil, "create selection action unavailable"
+      end
+
+      local ok, request_id_or_error = sd.ui.activate_action(step.action_id, "create")
+      if not ok then
+        return false, tostring(request_id_or_error)
+      end
+
+      step._attempt_count = (step._attempt_count or 0) + 1
+      step._request_id = tonumber(request_id_or_error) or 0
+      step._dispatch_completed_at_ms = nil
+      return nil, "waiting_for_dispatch"
     end
 
-    local snapshot = ctx.get_snapshot()
-    if type(snapshot) == "table" and snapshot.surface_id == "create" then
-      return true
+    local dispatch_snapshot = ctx.get_action_dispatch_snapshot(step._request_id)
+    if type(dispatch_snapshot) ~= "table" then
+      return nil, "waiting_for_dispatch"
     end
 
-    return nil, string.format(
-      "waiting_for_create_%s enabled=%s selected=%s owner=%s",
+    local status = tostring(dispatch_snapshot.status or "")
+    if status == "queued" or status == "dispatching" then
+      return nil, "waiting_for_dispatch"
+    end
+    if status == "failed" then
+      return false, tostring(dispatch_snapshot.error_message or "dispatch failed")
+    end
+
+    if step._dispatch_completed_at_ms == nil then
+      step._dispatch_completed_at_ms = now_ms
+    end
+    if now_ms - step._dispatch_completed_at_ms < CREATE_SELECTION_LATCH_TIMEOUT_MS then
+      return nil, "waiting_for_create_selection_latch"
+    end
+    if step._attempt_count >= CREATE_SELECTION_MAX_ATTEMPTS then
+      return false, string.format(
+        "create %s action did not latch expected id=%s after %d attempts",
+        tostring(step.phase),
+        tostring(step.expected_id),
+        step._attempt_count)
+    end
+
+    ctx.log_status(string.format(
+      "create %s action completed without latching id=%s; retrying attempt=%d",
       tostring(step.phase),
-      tostring(enabled),
-      tostring(selected),
-      ctx.format_hex32(owner_address))
+      tostring(step.expected_id),
+      step._attempt_count + 1))
+    step._request_id = nil
+    step._dispatch_completed_at_ms = nil
+    return nil, "retrying_create_selection"
   end
 
   local function wait_scene_prefix(step)
@@ -523,8 +615,8 @@ local function new(ctx)
       return resolve_new_game_branch(step, now_ms)
     end
 
-    if step.kind == "wait_create_selection_ready" then
-      return wait_create_selection_ready(step)
+    if step.kind == "activate_create_selection" then
+      return activate_create_selection(step, now_ms)
     end
 
     if step.kind == "wait_scene_prefix" then
