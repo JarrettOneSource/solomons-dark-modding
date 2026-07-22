@@ -8,10 +8,13 @@
 #include <Windows.h>
 #include <d3d9.h>
 
+#include <array>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <system_error>
 #include <vector>
 
@@ -23,12 +26,14 @@ using EndSceneFn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9* device);
 constexpr size_t kEndSceneVtableIndex = 42;
 constexpr DWORD kDeviceAcquireTimeoutMilliseconds = 5000;
 constexpr DWORD kDeviceAcquirePollMilliseconds = 50;
+constexpr std::size_t kMaximumFrameCallbacks = 8;
 
-D3d9FrameCallback g_callback = nullptr;
-D3d9FrameCallback g_post_callback = nullptr;
+std::array<D3d9FrameCallback, kMaximumFrameCallbacks> g_callbacks{};
+std::size_t g_callback_count = 0;
+std::mutex g_hook_mutex;
 EndSceneFn g_original_end_scene = nullptr;
 void** g_end_scene_slot = nullptr;
-IDirect3DDevice9* g_last_seen_device = nullptr;
+std::atomic<IDirect3DDevice9*> g_last_seen_device{nullptr};
 bool g_hook_installed = false;
 
 std::string D3d9CaptureHresult(const char* operation, HRESULT result) {
@@ -112,7 +117,7 @@ std::size_t D3d9CaptureBytesPerPixel(D3DFORMAT format) {
 }
 
 HRESULT STDMETHODCALLTYPE HookEndScene(IDirect3DDevice9* device) {
-    g_last_seen_device = device;
+    g_last_seen_device.store(device, std::memory_order_release);
     lua_exec_diag::g_last_endscene_ms.store(
         static_cast<std::uint64_t>(GetTickCount64()),
         std::memory_order_release);
@@ -120,11 +125,18 @@ HRESULT STDMETHODCALLTYPE HookEndScene(IDirect3DDevice9* device) {
         1,
         std::memory_order_release);
     const auto result = g_original_end_scene != nullptr ? g_original_end_scene(device) : D3D_OK;
-    if (g_callback != nullptr) {
-        g_callback(device);
+
+    std::array<D3d9FrameCallback, kMaximumFrameCallbacks> callbacks{};
+    std::size_t callback_count = 0;
+    {
+        std::scoped_lock lock(g_hook_mutex);
+        callbacks = g_callbacks;
+        callback_count = g_callback_count;
     }
-    if (g_post_callback != nullptr) {
-        g_post_callback(device);
+    for (std::size_t index = 0; index < callback_count; ++index) {
+        if (callbacks[index] != nullptr) {
+            callbacks[index](device);
+        }
     }
 
     return result;
@@ -176,7 +188,7 @@ bool TryAcquireDevicePointer(uintptr_t device_pointer_global, IDirect3DDevice9**
         if (ProcessMemory::Instance().TryReadValue(resolved_global, &raw_device_pointer) && raw_device_pointer != 0) {
             *device = reinterpret_cast<IDirect3DDevice9*>(static_cast<uintptr_t>(raw_device_pointer));
             Log(
-                "Debug UI overlay D3D9 hook: resolved live device pointer from " +
+                "D3D9 frame hook: resolved live device pointer from " +
                 HexString(device_pointer_global) + " -> " + HexString(raw_device_pointer));
             return true;
         }
@@ -201,8 +213,21 @@ bool InstallD3d9FrameHook(uintptr_t device_pointer_global, D3d9FrameCallback cal
         return false;
     }
 
+    std::scoped_lock lock(g_hook_mutex);
+    for (std::size_t index = 0; index < g_callback_count; ++index) {
+        if (g_callbacks[index] == callback) {
+            return true;
+        }
+    }
+    if (g_callback_count >= g_callbacks.size()) {
+        if (error_message != nullptr) {
+            *error_message = "D3D9 frame callback capacity was exhausted.";
+        }
+        return false;
+    }
+
     if (g_hook_installed) {
-        g_callback = callback;
+        g_callbacks[g_callback_count++] = callback;
         return true;
     }
 
@@ -221,26 +246,54 @@ bool InstallD3d9FrameHook(uintptr_t device_pointer_global, D3d9FrameCallback cal
 
     g_end_scene_slot = &vtable[kEndSceneVtableIndex];
     g_original_end_scene = reinterpret_cast<EndSceneFn>(*g_end_scene_slot);
-    g_callback = callback;
 
     if (!PatchHookSlot(g_end_scene_slot, reinterpret_cast<void*>(&HookEndScene), error_message)) {
-        g_callback = nullptr;
         g_original_end_scene = nullptr;
         g_end_scene_slot = nullptr;
         return false;
     }
 
+    g_callbacks[g_callback_count++] = callback;
     g_hook_installed = true;
-    Log("Debug UI overlay D3D9 hook: EndScene slot patched on the live device.");
+    Log("D3D9 frame hook: EndScene slot patched on the live device.");
     return true;
 }
 
-void SetD3d9PostFrameCallback(D3d9FrameCallback callback) {
-    g_post_callback = callback;
+void RemoveD3d9FrameCallback(D3d9FrameCallback callback) {
+    if (callback == nullptr) {
+        return;
+    }
+
+    std::scoped_lock lock(g_hook_mutex);
+    std::size_t found_index = g_callback_count;
+    for (std::size_t index = 0; index < g_callback_count; ++index) {
+        if (g_callbacks[index] == callback) {
+            found_index = index;
+            break;
+        }
+    }
+    if (found_index == g_callback_count) {
+        return;
+    }
+    for (std::size_t index = found_index + 1; index < g_callback_count; ++index) {
+        g_callbacks[index - 1] = g_callbacks[index];
+    }
+    g_callbacks[--g_callback_count] = nullptr;
+    if (g_callback_count != 0) {
+        return;
+    }
+
+    if (g_end_scene_slot != nullptr && g_original_end_scene != nullptr) {
+        PatchHookSlot(g_end_scene_slot, reinterpret_cast<void*>(g_original_end_scene), nullptr);
+    }
+    g_original_end_scene = nullptr;
+    g_end_scene_slot = nullptr;
+    g_last_seen_device.store(nullptr, std::memory_order_release);
+    g_hook_installed = false;
 }
 
 IDirect3DDevice9* GetLastSeenD3d9Device() {
-    return g_last_seen_device;
+    return g_last_seen_device.load(std::memory_order_acquire);
 }
 
 bool CaptureD3d9BackBufferBmp(
@@ -444,6 +497,7 @@ bool CaptureD3d9BackBufferBmp(
 }
 
 void RemoveD3d9FrameHook() {
+    std::scoped_lock lock(g_hook_mutex);
     if (!g_hook_installed) {
         return;
     }
@@ -452,11 +506,11 @@ void RemoveD3d9FrameHook() {
         PatchHookSlot(g_end_scene_slot, reinterpret_cast<void*>(g_original_end_scene), nullptr);
     }
 
-    g_callback = nullptr;
-    g_post_callback = nullptr;
+    g_callbacks.fill(nullptr);
+    g_callback_count = 0;
     g_original_end_scene = nullptr;
     g_end_scene_slot = nullptr;
-    g_last_seen_device = nullptr;
+    g_last_seen_device.store(nullptr, std::memory_order_release);
     g_hook_installed = false;
 }
 

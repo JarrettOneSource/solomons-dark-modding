@@ -1,5 +1,5 @@
 void ShutdownDebugUiOverlay() {
-    RemoveD3d9FrameHook();
+    RemoveD3d9FrameCallback(&OnD3d9Frame);
     RemoveX86Hook(&g_debug_ui_overlay_state.ui_rect_dispatch_hook);
     RemoveX86Hook(&g_debug_ui_overlay_state.ui_panel_render_hook);
     RemoveX86Hook(&g_debug_ui_overlay_state.ui_unlabeled_control_render_hook);
