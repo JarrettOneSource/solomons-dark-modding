@@ -76,6 +76,7 @@ bool IsBuiltInLuaEventName(std::string_view event_name);
 bool IsValidCustomLuaEventName(std::string_view event_name);
 void ResetLuaEventFilterRegistrations();
 void ClearLuaEventFilterRegistrationsForMod(LoadedLuaMod* mod);
+void ResetLuaEnemySpawnFilterDiagnostics();
 
 void StartLuaEventQueue();
 void StopLuaEventQueue();

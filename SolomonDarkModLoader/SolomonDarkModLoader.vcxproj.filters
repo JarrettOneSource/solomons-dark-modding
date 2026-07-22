@@ -1223,6 +1223,9 @@
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\actor_world_pause_hook.inl">
       <Filter>Header Files\Run Lifecycle</Filter>
     </ClInclude>
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\enemy_spawn_filter.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\enemy_death_reward_level_up_hooks.inl">
       <Filter>Header Files\Run Lifecycle</Filter>
     </ClInclude>
@@ -1334,6 +1337,9 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_filters.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_enemy_spawn_filters.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_custom_events.cpp">

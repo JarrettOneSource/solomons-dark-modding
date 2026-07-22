@@ -126,6 +126,19 @@ constexpr std::size_t kWaveSpawnerLongDelayCountdownOffset = 0x2C;
 constexpr std::uint64_t kManualRunEnemySpawnerFreshnessWindowMs = 5000;
 constexpr std::size_t kQueuedReplicatedRunEnemySpawnLimit = 16;
 constexpr std::size_t kReplicatedCatchupSpawnBurstPerSpawnerTick = 8;
+constexpr std::size_t kEnemySpawnConfigHpOffset = 0x58;
+constexpr std::size_t kEnemySpawnConfigFamilyValuesOffset = 0x5C;
+constexpr std::size_t kEnemySpawnConfigChaseSpeedOffset = 0x6C;
+constexpr std::size_t kEnemySpawnConfigAttackSpeedOffset = 0x70;
+constexpr std::size_t kEnemySpawnConfigScaleOffset = 0x74;
+constexpr std::size_t kCanceledEnemySpawnResultSize = 0x400;
+constexpr std::uint32_t kMaximumLuaEnemySpawnFilterHookLogCount = 4;
+
+alignas(std::uintptr_t)
+std::array<std::uint8_t, kCanceledEnemySpawnResultSize>
+    g_canceled_enemy_spawn_result{};
+std::atomic<std::uint32_t> g_lua_enemy_spawn_filter_capture_log_count{0};
+std::atomic<std::uint32_t> g_lua_enemy_spawn_filter_write_log_count{0};
 
 void BuildHookTargets(HookTarget* targets) {
     if (targets == nullptr) {

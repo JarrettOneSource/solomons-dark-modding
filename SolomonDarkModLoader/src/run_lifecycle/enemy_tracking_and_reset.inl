@@ -147,6 +147,8 @@ void ResetRunLifecycleBookkeeping(bool clear_enemy_tracking = true) {
     g_state.combat_prelude_only_suppression.store(false, std::memory_order_release);
     g_state.wave_start_enemy_tracking.store(false, std::memory_order_release);
     g_state.manual_enemy_spawner_test_mode.store(false, std::memory_order_release);
+    g_lua_enemy_spawn_filter_capture_log_count.store(0, std::memory_order_relaxed);
+    g_lua_enemy_spawn_filter_write_log_count.store(0, std::memory_order_relaxed);
     {
         std::lock_guard<std::mutex> lock(g_state.wave_spawner_log_mutex);
         g_state.logged_wave_spawners.clear();

@@ -128,7 +128,69 @@ void* __fastcall HookEnemySpawned(
         return nullptr;
     }
 
-    auto* enemy = original(self, unused_edx, param_2, enemy_config, param_4, param_5, param_6, param_7);
+    const auto config_address = static_cast<uintptr_t>(
+        static_cast<std::uint32_t>(enemy_config));
+    LuaEnemySpawnFilterContext original_filter_context;
+    bool restore_filter_context = false;
+    if (HasLuaEnemySpawnFilterHandlers() &&
+        !multiplayer::IsLocalTransportClient() &&
+        !g_manual_run_enemy_spawner_tick_active) {
+        LuaEnemySpawnFilterContext filtered_context;
+        if (!TryCaptureLuaEnemySpawnFilterContext(
+                reinterpret_cast<uintptr_t>(self),
+                config_address,
+                &filtered_context)) {
+            LogLuaEnemySpawnFilterHookFailure(
+                &g_lua_enemy_spawn_filter_capture_log_count,
+                "enemy.spawning skipped because the stock config could not "
+                "be captured. config=" + HexString(config_address));
+        } else {
+            original_filter_context = filtered_context;
+            if (!ApplyLuaEnemySpawnFilters(&filtered_context)) {
+                return CanceledEnemySpawnResult();
+            }
+            if (LuaEnemySpawnFilterContextChanged(
+                    original_filter_context,
+                    filtered_context)) {
+                const auto write_result = WriteLuaEnemySpawnFilterConfig(
+                    original_filter_context,
+                    filtered_context);
+                restore_filter_context =
+                    write_result == LuaEnemySpawnConfigWriteResult::Applied;
+                if (write_result != LuaEnemySpawnConfigWriteResult::Applied) {
+                    LogLuaEnemySpawnFilterHookFailure(
+                        &g_lua_enemy_spawn_filter_write_log_count,
+                        "enemy.spawning rewrite failed. config=" +
+                            HexString(config_address) + " restored=" +
+                            (write_result ==
+                                     LuaEnemySpawnConfigWriteResult::RestoredAfterFailure
+                                 ? "1"
+                                 : "0"));
+                    if (write_result ==
+                        LuaEnemySpawnConfigWriteResult::RestoreFailed) {
+                        return CanceledEnemySpawnResult();
+                    }
+                }
+            }
+        }
+    }
+
+    auto* enemy = original(
+        self,
+        unused_edx,
+        param_2,
+        enemy_config,
+        param_4,
+        param_5,
+        param_6,
+        param_7);
+    if (restore_filter_context &&
+        !RestoreLuaEnemySpawnFilterConfig(original_filter_context)) {
+        LogLuaEnemySpawnFilterHookFailure(
+            &g_lua_enemy_spawn_filter_write_log_count,
+            "enemy.spawning stock config restore failed after construction. "
+            "config=" + HexString(config_address));
+    }
     if (enemy == nullptr || !IsCombatArenaActiveForEnemyTracking()) {
         return enemy;
     }

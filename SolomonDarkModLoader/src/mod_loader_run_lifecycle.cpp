@@ -1,4 +1,5 @@
 #include "lua_engine_events.h"
+#include "lua_event_filters.h"
 #include "bot_runtime.h"
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"

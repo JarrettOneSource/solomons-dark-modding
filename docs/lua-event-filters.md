@@ -5,10 +5,11 @@ Unlike `sd.events.on`, which observes a queued notification after simulation,
 a filter runs inside the native owner seam before the outcome is committed. A
 filter may leave the outcome unchanged, rewrite it, or cancel it.
 
-The first implemented filter family is incoming wizard damage:
+Implemented filter families are:
 
 - `damage.dealing`
 - `damage.taken`
+- `enemy.spawning`
 
 Both execute at the stock `PlayerActor::MagicDamage` resolution point. The
 loader runs every `damage.dealing` handler first, then every `damage.taken`
@@ -123,8 +124,11 @@ unrecoverable restore cancels and resets the context.
 
 ## Capability and verification
 
-The damage seam advertises `events.filters.damage`. A mod that depends on it
-should list that name in `runtime.requiredCapabilities`.
+The damage seam advertises `events.filters.damage`. The enemy construction
+seam advertises `events.filters.enemy_spawn`; its payload, owner rules, and
+native cancellation contract are documented in
+[lua-enemy-spawn-filter.md](lua-enemy-spawn-filter.md). A mod should list the
+capabilities it depends on in `runtime.requiredCapabilities`.
 
 The live verifier must run against a disposable game process because filter
 registrations last for the life of the Lua state. It invokes the retail damage
@@ -135,5 +139,5 @@ and then proves cancellation leaves HP unchanged:
 py -3 tools/verify_lua_damage_filters.py --pipe SolomonDarkModLoader_LuaExec
 ```
 
-Spawn, drop, and wave filters remain separate roadmap slices; this document
-does not promise those names before their owner seams ship.
+Drop and wave filters remain separate roadmap slices; this document does not
+promise those names before their owner seams ship.

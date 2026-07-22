@@ -454,6 +454,7 @@
     <ClInclude Include="src\run_lifecycle\public_api_and_install.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\actor_world_pause_hook.inl" />
+    <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\enemy_spawn_filter.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\enemy_death_reward_level_up_hooks.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\manual_enemy_spawning.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\run_transition_hooks.inl" />
@@ -494,6 +495,7 @@
     <ClCompile Include="src\lua_engine_bindings_ui.cpp" />
     <ClCompile Include="src\lua_engine_events.cpp" />
     <ClCompile Include="src\lua_engine_filters.cpp" />
+    <ClCompile Include="src\lua_engine_enemy_spawn_filters.cpp" />
     <ClCompile Include="src\lua_engine_custom_events.cpp" />
     <ClCompile Include="src\lua_engine_values.cpp" />
     <ClCompile Include="src\lua_draw_assets.cpp" />

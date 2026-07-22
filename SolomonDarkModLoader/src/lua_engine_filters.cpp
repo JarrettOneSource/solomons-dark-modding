@@ -19,8 +19,10 @@ extern "C" {
 namespace sdmod {
 namespace {
 
-constexpr std::uint32_t kDamageDealingFilterMask = 1u << 0;
-constexpr std::uint32_t kDamageTakenFilterMask = 1u << 1;
+constexpr std::uint32_t kDamageDealingFilterMask =
+    kLuaDamageDealingFilterMask;
+constexpr std::uint32_t kDamageTakenFilterMask =
+    kLuaDamageTakenFilterMask;
 constexpr std::uint32_t kDamageFilterMask =
     kDamageDealingFilterMask | kDamageTakenFilterMask;
 constexpr float kMaximumAbsoluteDamageLane = 1'000'000.0f;
@@ -35,6 +37,9 @@ std::uint32_t FilterMaskForName(std::string_view filter_name) {
     }
     if (filter_name == "damage.taken") {
         return kDamageTakenFilterMask;
+    }
+    if (filter_name == "enemy.spawning") {
+        return kLuaEnemySpawningFilterMask;
     }
     return 0;
 }
@@ -419,6 +424,11 @@ bool ApplyLuaDamageFilters(LuaDamageFilterContext* context) {
     return true;
 }
 
+bool HasLuaEnemySpawnFilterHandlers() {
+    return (g_registered_filter_mask.load(std::memory_order_acquire) &
+            kLuaEnemySpawningFilterMask) != 0;
+}
+
 namespace detail {
 
 void RegisterLuaEventFilterBinding(lua_State* state) {
@@ -428,6 +438,7 @@ void RegisterLuaEventFilterBinding(lua_State* state) {
 void ResetLuaEventFilterRegistrations() {
     g_registered_filter_mask.store(0, std::memory_order_release);
     g_busy_log_count.store(0, std::memory_order_relaxed);
+    ResetLuaEnemySpawnFilterDiagnostics();
 }
 
 void ClearLuaEventFilterRegistrationsForMod(LoadedLuaMod* mod) {
