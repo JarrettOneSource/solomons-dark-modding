@@ -153,6 +153,55 @@ paths (`0.0`, `0.1`, and so on). RegionLayout is Arena child 12. The
 RegionLayout object itself is its first child, so its exact node path in every
 cataloged file is `0.12.0`.
 
+## Arena and editor base-field rendering
+
+There is no loose arena-ground image. The base fill is produced by the
+renderer, and the positive render path is now recovered rather than inferred
+only from the absence of a file:
+
+1. `Arena::Render` at `0x0046EC80` passes RGB `(0, 0, 0)` to `0x0057D4E0`.
+   That helper calls renderer clear wrapper `0x0041D840` with alpha `1.0`.
+2. `Bonedit::Render` at `0x004D5F40` calls `0x0041D840` directly with RGBA
+   `(0, 0, 0, 1)`.
+3. `0x0041D840` reaches `0x00440D40`, which packs the four channels and calls
+   Direct3D device vtable slot `+0xAC` (`IDirect3DDevice9::Clear`). The field
+   therefore starts as an opaque black render-target clear, not decoded image
+   pixels.
+4. Both renderers then walk the visible world rectangle in 200-by-200 logical
+   steps and call sprite draw helper `0x004142E0`. `Bonedit` and a normal
+   Arena use absolute Sprite object `0x00B2F368`, which is DeadHawg record 21.
+   Arena field modes 1 and 2 instead use `0x00B2F2A4`, DeadHawg record 20.
+
+The two fixed descriptors are adjacent 0xC4-byte Sprite objects in the loaded
+DeadHawg bundle object:
+
+| DeadHawg record | Static Sprite address | Atlas crop | Logical canvas | Native use |
+| ---: | ---: | ---: | ---: | --- |
+| 20 | `0x00B2F2A4` | 102x77 | 102x77 | Arena field modes 1/2 |
+| 21 | `0x00B2F368` | 43x35 | 200x200 | `Bonedit` and Arena mode 0 |
+
+The Arena constructor `0x00464EE0` initializes mode byte `+0x8F20` to zero.
+Temporary procedural generation path `0x0046D7B0` chooses a value in 0..2 and
+copies it to the generated Arena, while script dispatcher `0x00689750` can
+write the byte explicitly. Instructions `0x0046F528`, `0x0046F651`, and
+`0x004D6223` contain the absolute Sprite addresses. This compiler-folded
+addressing is an important exception to the singleton-relative consumer scan:
+DeadHawg record 21 must not be read as dormant merely because its destination
+has no mapped consumer in `native-asset-object-map.json`.
+
+`paintbkg` is unrelated to this path. Function `0x005BED10` uses it while
+capturing portraits and writes `Portraits\\portrait%d.raw`; no Arena or
+`Bonedit` ground renderer consumes it.
+
+The website editor's `arena-ground.webp` is consequently a derived reference
+asset, not a recovered loose game file. Website commit `1060924` samples the
+composed retail editor field, mirror-tiles it to remove seams, and stores an
+84,158-byte WebP (SHA-256
+`dabc48e7af0220283889647f57cde6442aecc79629555ce9104815ebadbdb070`).
+Those are literally captured retail render pixels and are appropriate for the
+browser editor's calm survey-scale approximation. They should not be listed
+as a native disk asset or treated as evidence that `paintbkg` is ground art.
+
 ## RegionLayout schema
 
 RegionLayout is embedded in Arena/Region state at `+0x8510`. Its constructor

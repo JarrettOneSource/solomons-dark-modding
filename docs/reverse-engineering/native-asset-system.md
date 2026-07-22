@@ -340,6 +340,15 @@ gameplay-system document. `paintbkg` is not a world tile: `0x005BED10` uses it
 as the background for portrait capture and writes the result as
 `Portraits\\portrait%d.raw`.
 
+There is likewise no omitted loose arena-ground file. `Arena::Render`
+`0x0046EC80` and `Bonedit::Render` `0x004D5F40` begin with an opaque-black
+Direct3D render-target clear through `0x0041D840` and `0x00440D40`, then tile
+fixed DeadHawg records 20 or 21 over the bounded field. The default Arena and
+`Bonedit` use record 21; Arena field modes 1/2 use record 20. The exact mode,
+addresses, descriptor geometry, and derived website-editor texture provenance
+are documented in
+[native-boneyards-and-world.md](native-boneyards-and-world.md#arena-and-editor-base-field-rendering).
+
 ## Native constraints relevant to later mod support
 
 These are architectural facts, not yet an implementation plan:

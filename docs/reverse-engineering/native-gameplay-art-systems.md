@@ -33,7 +33,7 @@ Evidence statuses:
 | Every primary/secondary spell | skill CFG catalog and native handlers | Skills plus effect atlases | Complete | [native-skills-and-spells.md](native-skills-and-spells.md) |
 | Every projectile/transient effect | 46 factory classes and 197 decompiled lifecycle methods | BadGuys, DeadHawg, Golem, Unholy, UI plus child animation art | Complete | [native-projectiles-and-effects.md](native-projectiles-and-effects.md) |
 | Enemy families, attacks, death effects, drops | factory/config/tick/render vtables | BadGuys, Demon, Golem, Heartmonger, Unholy, Faculty | Complete | [native-enemies.md](native-enemies.md); [skeleton-death-effects-re.md](../skeleton-death-effects-re.md) |
-| Boneyard grammar, procedural generation, and outdoor scenery materialization | `0x0046DC60`, `0x006388B0`, `0x00653660`, `0x006531B0` | DeadHawg plus road/fence loose images and generated meshes | Complete | [native-boneyards-and-world.md](native-boneyards-and-world.md) |
+| Boneyard grammar, base-field rendering, procedural generation, and outdoor scenery materialization | `0x0046EC80`, `0x004D5F40`, `0x0046DC60`, `0x006388B0`, `0x00653660`, `0x006531B0` | Direct3D clear, DeadHawg 20/21, road/fence loose images, and generated meshes | Complete | [native-boneyards-and-world.md](native-boneyards-and-world.md) |
 | World tiles/props/doors/portals/NPCs/boss rooms | world initializer and object factories | College, Library, Office, Storage, Memoratorium, NPCs, loose images | Complete | [native-regions-npcs-and-world-props.md](native-regions-npcs-and-world-props.md) |
 | Item catalog/recipes/effects | `0x00574D60`, `0x00573570`, `0x005722A0` | Inventory, Clothes, Solomon attachments | Complete | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md); [native-item-catalog.json](native-item-catalog.json) |
 | Equipment attachment and stat application | wizard/equipment render and item FX | Clothes, Inventory, Solomon | Complete | [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md) |
@@ -290,6 +290,17 @@ compiled reference to that field, so neither Wall nor another renderer reads
 it after initialization.
 `paintbkg` belongs to portrait capture at `0x005BED10`, not ordinary world
 rendering.
+
+The arena base field is also closed positively. Arena renderer `0x0046EC80`
+and editor renderer `0x004D5F40` clear the target to opaque black through
+`0x0041D840` -> `0x00440D40` -> Direct3D `Clear`, then stamp DeadHawg record
+21 across the visible field at 200-pixel logical intervals. Arena modes 1/2
+substitute record 20. Their use of absolute Sprite addresses
+`0x00B2F368`/`0x00B2F2A4` is a compiler-folded exception to the generated
+singleton-relative consumer join. The website editor's mirror-tiled ground
+WebP is a documented capture of this composed retail presentation, not a
+native loose texture. See
+[native-boneyards-and-world.md](native-boneyards-and-world.md#arena-and-editor-base-field-rendering).
 
 ## Closed custom-content contracts
 
