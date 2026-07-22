@@ -411,10 +411,11 @@ internal static class WebsiteModPackageInstaller
 
             var target = overlay.Target;
             var allowedDataTarget = target.StartsWith("data/", StringComparison.Ordinal);
+            var allowedImageTarget = target.StartsWith("images/", StringComparison.Ordinal);
             var allowedCustomBoneyard =
                 target.StartsWith("sandbox/DarkCloud/mylevels/", StringComparison.Ordinal) &&
                 target.EndsWith(".boneyard", StringComparison.Ordinal);
-            if (!allowedDataTarget && !allowedCustomBoneyard)
+            if (!allowedDataTarget && !allowedImageTarget && !allowedCustomBoneyard)
             {
                 throw new InvalidDataException(
                     $"Website-downloaded overlay target is not allowed: {overlay.Target}");

@@ -31,10 +31,17 @@ Mods are discovered from `manifest.json`. Each mod may be:
 Sample mods: `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`, `wave_fast_start`, `lua_bots`, `lua_dark_cloud_sort_bootstrap`, `lua_ui_sandbox_lab`.
 
 Website-distributed packages use the same root-level manifest and may contain
-data overlays/Boneyards, sandboxed Lua, or both. Native DLL mods remain manual
-installations and are never auto-downloaded. The public authoring guide, JSON
-Schema, and package examples live in the website repository under
-`frontend/public/`.
+data overlays/Boneyards, root `images/` art overlays, sandboxed Lua, or any
+combination of those three. Native DLL mods remain manual installations and
+are never auto-downloaded. The public authoring guide, JSON Schema, and package
+examples live in the website repository under `frontend/public/`.
+
+Downloaded art overlays replace files in the game's native `images/` tree.
+Compatible sprite replacements must preserve the stock PNG/bundle consumer
+ABI: bundle record destinations, record count, and geometry remain fixed unless
+the mod also supplies loader-owned code that expands those native tables. The
+website path intentionally supports deterministic art replacement, not an
+unbounded new-atlas registry.
 
 Boneyard overlays are parsed against the retail SyncBuffer container before
 they are discovered or downloaded. Stock-level replacements target

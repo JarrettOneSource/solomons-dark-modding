@@ -53,6 +53,10 @@ static async Task TestWebsitePackageInstallAsync()
                   "target": "sandbox/DarkCloud/mylevels/Contract Arena.boneyard",
                   "source": "files/Contract Arena.boneyard",
                   "format": "boneyard"
+                },
+                {
+                  "target": "images/Skills.png",
+                  "source": "files/Skills.png"
                 }
               ],
               "runtime": {
@@ -64,6 +68,7 @@ static async Task TestWebsitePackageInstallAsync()
             }
             """),
         ["files/Contract Arena.boneyard"] = BoneyardFixture(),
+        ["files/Skills.png"] = "website art contract"u8.ToArray(),
         ["scripts/main.lua"] = Encoding.UTF8.GetBytes("return true\n")
     };
     var package = CreateZip(entries);
@@ -93,7 +98,7 @@ static async Task TestWebsitePackageInstallAsync()
             CancellationToken.None);
         Require(installed.Manifest.Id == required.Id, "installed manifest id changed");
         Require(installed.RequiresLuaRuntime, "combined package did not retain Lua runtime");
-        Require(installed.Manifest.Overlays.Count == 1, "combined package did not retain Boneyard overlay");
+        Require(installed.Manifest.Overlays.Count == 2, "combined package did not retain Boneyard and art overlays");
         Require(File.Exists(Path.Combine(installed.RootPath, "scripts", "main.lua")), "Lua script missing");
         Require(
             File.Exists(Path.Combine(installed.RootPath, "files", "Contract Arena.boneyard")),
@@ -102,8 +107,8 @@ static async Task TestWebsitePackageInstallAsync()
         var stageRoot = Path.Combine(cacheRoot, "stage");
         Directory.CreateDirectory(stageRoot);
         Require(
-            OverlayStageMaterializer.Materialize(stageRoot, [installed]) == 1,
-            "combined package overlay was not materialized");
+            OverlayStageMaterializer.Materialize(stageRoot, [installed]) == 2,
+            "combined package overlays were not materialized");
         var stagedBoneyard = Path.Combine(
             stageRoot,
             "sandbox",
@@ -114,6 +119,11 @@ static async Task TestWebsitePackageInstallAsync()
         Require(
             File.ReadAllBytes(stagedBoneyard).SequenceEqual(BoneyardFixture()),
             "staged custom Boneyard bytes changed");
+        var stagedArt = Path.Combine(stageRoot, "images", "Skills.png");
+        Require(File.Exists(stagedArt), "website art overlay was not staged under images/");
+        Require(
+            File.ReadAllBytes(stagedArt).SequenceEqual(entries["files/Skills.png"]),
+            "staged website art bytes changed");
 
         var cached = WebsiteModPackageInstaller.TryLoadExact(installed.RootPath, required);
         Require(cached is not null, "exact cached package was not reusable");

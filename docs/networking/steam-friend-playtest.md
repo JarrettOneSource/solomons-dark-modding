@@ -154,6 +154,13 @@ host's exact mod set when it is available. If the website is unavailable, the
 launcher falls back to the locally enabled set, so all players can still join
 after manually installing and enabling the same exact mods.
 
+The exact set may contain Boneyard/data overlays, sandboxed Lua, root
+`images/` art replacements, or any combination. After **Join Game**, preflight
+reuses an exact manual installation or download-cache entry before requesting a
+missing package from the website. Package and extracted-content hashes are
+verified before the host set is enabled for that launch; the user's persistent
+mod selections are not rewritten.
+
 The equivalent command-line launches are:
 
 ```powershell
