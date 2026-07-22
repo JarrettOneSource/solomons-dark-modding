@@ -56,6 +56,10 @@ TURN_UNDEAD_HEADING_TOLERANCE_DEGREES = 2.0
 TURN_UNDEAD_MINIMUM_DISPLACEMENT = 24.0
 TURN_UNDEAD_MINIMUM_RADIAL_GAIN = 18.0
 TURN_UNDEAD_MAXIMUM_VISUAL_POSITION_ERROR = 32.0
+TURN_UNDEAD_MONITOR_SECONDS = 8.0
+TURN_UNDEAD_MONITOR_ARM_TIMEOUT_SECONDS = 60.0
+TURN_UNDEAD_MONITOR_MAX_SAMPLES = 320
+TURN_UNDEAD_TIMELINE_ALIGNMENT_TOLERANCE_MS = 150.0
 
 
 @dataclass(frozen=True)
@@ -489,6 +493,175 @@ emit('activation_scalar', string.format('%.6f', activation_scalar))
 emit('duration_ticks', duration_ticks)
 emit('dead', actor.dead or false)
 emit('tracked', actor.tracked_enemy or false)
+"""
+
+
+ARM_TURN_UNDEAD_MONITOR_LUA = r"""
+local network_actor_id = tonumber("__NETWORK_ID__") or 0
+local duration_ms = tonumber("__DURATION_MS__") or 8000
+local arm_timeout_ms = tonumber("__ARM_TIMEOUT_MS__") or 60000
+local max_samples = tonumber("__MAX_SAMPLES__") or 320
+local function emit(k,v) print(k .. '=' .. tostring(v)) end
+local offsets = {
+  heading = sd.debug.layout_offset('actor_heading'),
+  flee_heading = sd.debug.layout_offset('actor_turn_undead_flee_heading'),
+  activation_scalar =
+    sd.debug.layout_offset('actor_turn_undead_activation_scalar'),
+  duration = sd.debug.layout_offset('actor_turn_undead_duration_ticks'),
+}
+local layout_available = network_actor_id ~= 0 and
+  offsets.heading ~= nil and offsets.flee_heading ~= nil and
+  offsets.activation_scalar ~= nil and offsets.duration ~= nil
+if not layout_available then
+  emit('armed', false)
+  emit('error', 'Turn Undead monitor layout unavailable')
+  return
+end
+if not _G.__sdmod_turn_undead_monitor_registered then
+  sd.events.on('runtime.tick', function(event)
+    local monitor = _G.__sdmod_turn_undead_monitor
+    if type(monitor) ~= 'table' or not monitor.active then return end
+    local now = type(event) == 'table' and
+      tonumber(event.monotonic_milliseconds) or 0
+    if now <= 0 then
+      monitor.error = 'runtime.tick monotonic timestamp unavailable'
+      monitor.active = false
+      monitor.done = true
+      return
+    end
+    if monitor.started_ms == 0 then monitor.started_ms = now end
+    monitor.tick_count = monitor.tick_count + 1
+    local actor = sd.world.get_run_enemy_by_network_id and
+      sd.world.get_run_enemy_by_network_id(monitor.network_actor_id) or nil
+    if actor == nil then
+      monitor.not_found_count = monitor.not_found_count + 1
+    else
+      local address = tonumber(actor.actor_address) or 0
+      local function read_float(offset)
+        local ok, value = pcall(sd.debug.read_float, address + offset)
+        if not ok then return nil end
+        return tonumber(value)
+      end
+      local function read_i32(offset)
+        local ok, value = pcall(sd.debug.read_i32, address + offset)
+        if not ok then return nil end
+        return tonumber(value)
+      end
+      local heading = read_float(monitor.offsets.heading)
+      local flee_heading = read_float(monitor.offsets.flee_heading)
+      local activation_scalar =
+        read_float(monitor.offsets.activation_scalar)
+      local duration_ticks = read_i32(monitor.offsets.duration)
+      if heading == nil or flee_heading == nil or
+          activation_scalar == nil or duration_ticks == nil then
+        monitor.error = 'Turn Undead actor state became unreadable'
+        monitor.active = false
+        monitor.done = true
+        return
+      end
+      monitor.sample_count = monitor.sample_count + 1
+      local positive = duration_ticks > 0
+      if positive then
+        monitor.positive_sample_count = monitor.positive_sample_count + 1
+        monitor.peak_duration_ticks = math.max(
+          monitor.peak_duration_ticks, duration_ticks)
+        if monitor.first_active_ms == 0 then
+          monitor.first_active_ms = now
+        end
+        monitor.last_active_ms = now
+      end
+      local after_activation = monitor.first_active_ms > 0
+      local terminal_edge = monitor.previous_duration_ticks > 0 and
+        duration_ticks <= 0
+      local sample_due = monitor.last_stored_ms == 0 or
+        now - monitor.last_stored_ms >= 40
+      if after_activation and (terminal_edge or sample_due) then
+        if #monitor.samples < monitor.max_samples then
+          table.insert(monitor.samples, {
+            monotonic_ms = now,
+            duration_ticks = duration_ticks,
+            x = tonumber(actor.x) or 0,
+            y = tonumber(actor.y) or 0,
+            heading = heading,
+            flee_heading = flee_heading,
+            activation_scalar = activation_scalar,
+          })
+          monitor.last_stored_ms = now
+        else
+          monitor.truncated = true
+        end
+      end
+      monitor.previous_duration_ticks = duration_ticks
+    end
+    local capture_complete = monitor.first_active_ms > 0 and
+      now - monitor.first_active_ms >= monitor.duration_ms
+    local arm_expired = monitor.first_active_ms == 0 and
+      now - monitor.started_ms >= monitor.arm_timeout_ms
+    if capture_complete or arm_expired then
+      monitor.active = false
+      monitor.done = true
+      monitor.finished_ms = now
+    end
+  end)
+  _G.__sdmod_turn_undead_monitor_registered = true
+end
+_G.__sdmod_turn_undead_monitor = {
+  active = true,
+  done = false,
+  error = '',
+  network_actor_id = network_actor_id,
+  duration_ms = duration_ms,
+  arm_timeout_ms = arm_timeout_ms,
+  max_samples = max_samples,
+  offsets = offsets,
+  started_ms = 0,
+  finished_ms = 0,
+  first_active_ms = 0,
+  last_active_ms = 0,
+  last_stored_ms = 0,
+  tick_count = 0,
+  sample_count = 0,
+  positive_sample_count = 0,
+  peak_duration_ticks = 0,
+  previous_duration_ticks = 0,
+  not_found_count = 0,
+  truncated = false,
+  samples = {},
+}
+emit('armed', true)
+emit('network_actor_id', network_actor_id)
+"""
+
+
+COLLECT_TURN_UNDEAD_MONITOR_LUA = r"""
+local function emit(k,v)
+  print(k .. '=' .. tostring(v == nil and '' or v))
+end
+local monitor = _G.__sdmod_turn_undead_monitor or {}
+emit('active', monitor.active)
+emit('done', monitor.done)
+emit('error', monitor.error)
+emit('network_actor_id', monitor.network_actor_id)
+emit('tick_count', monitor.tick_count)
+emit('sample_count', monitor.sample_count)
+emit('positive_sample_count', monitor.positive_sample_count)
+emit('peak_duration_ticks', monitor.peak_duration_ticks)
+emit('first_active_ms', monitor.first_active_ms)
+emit('last_active_ms', monitor.last_active_ms)
+emit('not_found_count', monitor.not_found_count)
+emit('truncated', monitor.truncated)
+local samples = monitor.samples or {}
+emit('stored_sample_count', #samples)
+for index, sample in ipairs(samples) do
+  local prefix = 'sample.' .. index .. '.'
+  emit(prefix .. 'monotonic_ms', sample.monotonic_ms)
+  emit(prefix .. 'duration_ticks', sample.duration_ticks)
+  emit(prefix .. 'x', sample.x)
+  emit(prefix .. 'y', sample.y)
+  emit(prefix .. 'heading', sample.heading)
+  emit(prefix .. 'flee_heading', sample.flee_heading)
+  emit(prefix .. 'activation_scalar', sample.activation_scalar)
+end
 """
 
 
@@ -1403,6 +1576,278 @@ def query_turn_undead_pair(
         }
 
 
+def arm_turn_undead_monitor(
+    pair: SteamFriendActivePair,
+    endpoint: str,
+    network_id: int,
+) -> dict[str, str]:
+    script = (
+        ARM_TURN_UNDEAD_MONITOR_LUA.replace(
+            "__NETWORK_ID__",
+            str(network_id),
+        )
+        .replace(
+            "__DURATION_MS__",
+            str(round(TURN_UNDEAD_MONITOR_SECONDS * 1000.0)),
+        )
+        .replace(
+            "__ARM_TIMEOUT_MS__",
+            str(round(TURN_UNDEAD_MONITOR_ARM_TIMEOUT_SECONDS * 1000.0)),
+        )
+        .replace(
+            "__MAX_SAMPLES__",
+            str(TURN_UNDEAD_MONITOR_MAX_SAMPLES),
+        )
+    )
+    values = parse_key_values(pair.lua(endpoint, script, timeout=8.0))
+    if values.get("armed") != "true":
+        raise VerifyFailure(
+            f"Turn Undead monitor failed to arm on {endpoint}: {values}"
+        )
+    return values
+
+
+def arm_turn_undead_monitors(
+    pair: SteamFriendActivePair,
+    network_id: int,
+) -> dict[str, dict[str, str]]:
+    endpoints = {
+        "host": HOST_ENDPOINT,
+        "client": CLIENT_ENDPOINT,
+    }
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {
+            label: executor.submit(
+                arm_turn_undead_monitor,
+                pair,
+                endpoint,
+                network_id,
+            )
+            for label, endpoint in endpoints.items()
+        }
+        return {label: future.result() for label, future in futures.items()}
+
+
+def _parse_turn_undead_monitor(values: dict[str, str]) -> dict[str, Any]:
+    first_active_ms = _float(values, "first_active_ms")
+    stored_sample_count = parse_int_text(
+        values.get("stored_sample_count"),
+        0,
+    )
+    samples = []
+    for index in range(1, stored_sample_count + 1):
+        monotonic_ms = _float(values, f"sample.{index}.monotonic_ms")
+        samples.append(
+            {
+                "monotonic_ms": monotonic_ms,
+                "elapsed_from_activation_ms": (
+                    monotonic_ms - first_active_ms
+                    if first_active_ms > 0
+                    else math.nan
+                ),
+                "duration_ticks": parse_int_text(
+                    values.get(f"sample.{index}.duration_ticks"),
+                    0,
+                ),
+                "x": _float(values, f"sample.{index}.x"),
+                "y": _float(values, f"sample.{index}.y"),
+                "heading": _float(values, f"sample.{index}.heading"),
+                "flee_heading": _float(
+                    values,
+                    f"sample.{index}.flee_heading",
+                ),
+                "activation_scalar": _float(
+                    values,
+                    f"sample.{index}.activation_scalar",
+                ),
+            }
+        )
+    return {
+        "active": values.get("active") == "true",
+        "done": values.get("done") == "true",
+        "error": values.get("error", ""),
+        "network_actor_id": parse_int_text(
+            values.get("network_actor_id"),
+            0,
+        ),
+        "tick_count": parse_int_text(values.get("tick_count"), 0),
+        "sample_count": parse_int_text(values.get("sample_count"), 0),
+        "positive_sample_count": parse_int_text(
+            values.get("positive_sample_count"),
+            0,
+        ),
+        "peak_duration_ticks": parse_int_text(
+            values.get("peak_duration_ticks"),
+            0,
+        ),
+        "first_active_ms": first_active_ms,
+        "last_active_ms": _float(values, "last_active_ms"),
+        "not_found_count": parse_int_text(
+            values.get("not_found_count"),
+            0,
+        ),
+        "truncated": values.get("truncated") == "true",
+        "stored_sample_count": stored_sample_count,
+        "samples": samples,
+    }
+
+
+def query_turn_undead_monitor(
+    pair: SteamFriendActivePair,
+    endpoint: str,
+) -> dict[str, Any]:
+    values = parse_key_values(
+        pair.lua(endpoint, COLLECT_TURN_UNDEAD_MONITOR_LUA, timeout=8.0)
+    )
+    return _parse_turn_undead_monitor(values)
+
+
+def query_turn_undead_monitors(
+    pair: SteamFriendActivePair,
+) -> dict[str, dict[str, Any]]:
+    endpoints = {
+        "host": HOST_ENDPOINT,
+        "client": CLIENT_ENDPOINT,
+    }
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {
+            label: executor.submit(
+                query_turn_undead_monitor,
+                pair,
+                endpoint,
+            )
+            for label, endpoint in endpoints.items()
+        }
+        return {label: future.result() for label, future in futures.items()}
+
+
+def collect_turn_undead_monitor(
+    pair: SteamFriendActivePair,
+    endpoint: str,
+    timeout: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    monitor: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        monitor = query_turn_undead_monitor(pair, endpoint)
+        if monitor["error"]:
+            raise VerifyFailure(
+                f"Turn Undead monitor failed on {endpoint}: "
+                f"{_turn_undead_monitor_summary(monitor)}"
+            )
+        if monitor["done"]:
+            return monitor
+        time.sleep(0.05)
+    raise VerifyFailure(
+        f"Turn Undead monitor timed out on {endpoint}: "
+        f"{_turn_undead_monitor_summary(monitor)}"
+    )
+
+
+def collect_turn_undead_monitors(
+    pair: SteamFriendActivePair,
+    timeout: float,
+) -> dict[str, dict[str, Any]]:
+    endpoints = {
+        "host": HOST_ENDPOINT,
+        "client": CLIENT_ENDPOINT,
+    }
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {
+            label: executor.submit(
+                collect_turn_undead_monitor,
+                pair,
+                endpoint,
+                timeout,
+            )
+            for label, endpoint in endpoints.items()
+        }
+        return {label: future.result() for label, future in futures.items()}
+
+
+def _turn_undead_monitor_summary(
+    monitor: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in monitor.items()
+        if key != "samples"
+    }
+
+
+def _best_turn_undead_active_pair(
+    monitors: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    host_samples = [
+        sample
+        for sample in monitors["host"]["samples"]
+        if sample["duration_ticks"] > 0
+    ]
+    client_samples = [
+        sample
+        for sample in monitors["client"]["samples"]
+        if sample["duration_ticks"] > 0
+    ]
+    candidates: list[dict[str, Any]] = []
+    for host in host_samples:
+        for client in client_samples:
+            alignment_error_ms = abs(
+                float(host["elapsed_from_activation_ms"])
+                - float(client["elapsed_from_activation_ms"])
+            )
+            if (
+                alignment_error_ms
+                > TURN_UNDEAD_TIMELINE_ALIGNMENT_TOLERANCE_MS
+            ):
+                continue
+            duration_error = abs(
+                int(host["duration_ticks"])
+                - int(client["duration_ticks"])
+            )
+            flee_heading_error = _heading_error_degrees(
+                float(host["flee_heading"]),
+                float(client["flee_heading"]),
+            )
+            scalar_error = abs(
+                float(host["activation_scalar"])
+                - float(client["activation_scalar"])
+            )
+            scalar_tolerance = max(
+                0.02,
+                0.02
+                * max(
+                    abs(float(host["activation_scalar"])),
+                    abs(float(client["activation_scalar"])),
+                ),
+            )
+            candidates.append(
+                {
+                    "states": {"host": host, "client": client},
+                    "alignment_error_ms": alignment_error_ms,
+                    "duration_error_ticks": duration_error,
+                    "flee_heading_error_degrees": flee_heading_error,
+                    "activation_scalar_error": scalar_error,
+                    "activation_scalar_tolerance": scalar_tolerance,
+                }
+            )
+    if not candidates:
+        return {}
+    return min(
+        candidates,
+        key=lambda candidate: (
+            candidate["duration_error_ticks"]
+            > TURN_UNDEAD_DURATION_TOLERANCE_TICKS,
+            candidate["flee_heading_error_degrees"]
+            > TURN_UNDEAD_HEADING_TOLERANCE_DEGREES,
+            candidate["activation_scalar_error"]
+            > candidate["activation_scalar_tolerance"],
+            candidate["alignment_error_ms"],
+            candidate["duration_error_ticks"],
+            candidate["flee_heading_error_degrees"],
+        ),
+    )
+
+
 def require_turn_undead_baseline(
     pair: SteamFriendActivePair,
     network_id: int,
@@ -1461,68 +1906,52 @@ def wait_for_turn_undead_activation(
 ) -> dict[str, Any]:
     started = time.monotonic()
     deadline = started + timeout
-    samples = 0
-    last: dict[str, Any] = {}
+    polls = 0
+    last_monitors: dict[str, dict[str, Any]] = {}
+    best: dict[str, Any] = {}
     while time.monotonic() < deadline:
-        states = query_turn_undead_pair(pair, network_id)
-        samples += 1
-        host = states["host"]
-        client = states["client"]
-        duration_error = abs(
-            int(host["duration_ticks"]) - int(client["duration_ticks"])
-        )
-        flee_heading_error = _heading_error_degrees(
-            float(host["flee_heading"]),
-            float(client["flee_heading"]),
-        )
-        scalar_error = abs(
-            float(host["activation_scalar"])
-            - float(client["activation_scalar"])
-        )
-        scalar_tolerance = max(
-            0.02,
-            0.02
-            * max(
-                abs(float(host["activation_scalar"])),
-                abs(float(client["activation_scalar"])),
-            ),
-        )
-        position_error = math.hypot(
-            float(host["x"]) - float(client["x"]),
-            float(host["y"]) - float(client["y"]),
-        )
-        last = {
-            "states": states,
-            "duration_error_ticks": duration_error,
-            "flee_heading_error_degrees": flee_heading_error,
-            "activation_scalar_error": scalar_error,
-            "activation_scalar_tolerance": scalar_tolerance,
-            "position_error": position_error,
-            "samples": samples,
-            "elapsed_seconds": time.monotonic() - started,
-        }
+        last_monitors = query_turn_undead_monitors(pair)
+        polls += 1
+        for label, monitor in last_monitors.items():
+            if monitor["error"]:
+                raise VerifyFailure(
+                    f"Turn Undead monitor failed on {label}: "
+                    f"{_turn_undead_monitor_summary(monitor)}"
+                )
+            if monitor["network_actor_id"] != network_id:
+                raise VerifyFailure(
+                    f"Turn Undead monitor changed target on {label}: "
+                    f"{_turn_undead_monitor_summary(monitor)}"
+                )
+        best = _best_turn_undead_active_pair(last_monitors)
         if (
-            all(
-                state["available"]
-                and state["layout_available"]
-                and state["readable"]
-                and state["tracked"]
-                and not state["dead"]
-                and state["object_type_id"]
-                in TURN_UNDEAD_ELIGIBLE_ACTOR_TYPES
-                and state["duration_ticks"] > 0
-                for state in states.values()
-            )
-            and duration_error <= TURN_UNDEAD_DURATION_TOLERANCE_TICKS
-            and flee_heading_error
+            best
+            and best["duration_error_ticks"]
+            <= TURN_UNDEAD_DURATION_TOLERANCE_TICKS
+            and best["flee_heading_error_degrees"]
             <= TURN_UNDEAD_HEADING_TOLERANCE_DEGREES
-            and scalar_error <= scalar_tolerance
+            and best["activation_scalar_error"]
+            <= best["activation_scalar_tolerance"]
         ):
-            return last
+            best["polls"] = polls
+            best["elapsed_seconds"] = time.monotonic() - started
+            best["monitor_summaries"] = {
+                label: _turn_undead_monitor_summary(monitor)
+                for label, monitor in last_monitors.items()
+            }
+            return best
+        if last_monitors and all(
+            monitor["done"] for monitor in last_monitors.values()
+        ):
+            break
         time.sleep(0.03)
+    monitor_summaries = {
+        label: _turn_undead_monitor_summary(monitor)
+        for label, monitor in last_monitors.items()
+    }
     raise VerifyFailure(
         "Turn Undead did not establish matching native flee state on both "
-        f"peers: {last}"
+        f"peers: monitors={monitor_summaries} best={best}"
     )
 
 
@@ -1556,10 +1985,36 @@ def wait_for_turn_undead_flee(
     network_id = int(target["network_id"])
     caster_x = float(target["owner_transform"][0])
     caster_y = float(target["owner_transform"][1])
-    initial_host_x = float(activation["states"]["host"]["x"])
-    initial_host_y = float(activation["states"]["host"]["y"])
-    initial_client_x = float(activation["states"]["client"]["x"])
-    initial_client_y = float(activation["states"]["client"]["y"])
+    monitors = collect_turn_undead_monitors(pair, timeout)
+    for label, monitor in monitors.items():
+        if monitor["network_actor_id"] != network_id:
+            raise VerifyFailure(
+                f"Turn Undead monitor changed target on {label}: "
+                f"{_turn_undead_monitor_summary(monitor)}"
+            )
+        if monitor["positive_sample_count"] <= 0:
+            raise VerifyFailure(
+                f"Turn Undead never became active on {label}: "
+                f"{_turn_undead_monitor_summary(monitor)}"
+            )
+        if monitor["truncated"]:
+            raise VerifyFailure(
+                f"Turn Undead timeline truncated on {label}: "
+                f"{_turn_undead_monitor_summary(monitor)}"
+            )
+
+    host_samples = monitors["host"]["samples"]
+    client_samples = monitors["client"]["samples"]
+    initial_host = next(
+        sample for sample in host_samples if sample["duration_ticks"] > 0
+    )
+    initial_client = next(
+        sample for sample in client_samples if sample["duration_ticks"] > 0
+    )
+    initial_host_x = float(initial_host["x"])
+    initial_host_y = float(initial_host["y"])
+    initial_client_x = float(initial_client["x"])
+    initial_client_y = float(initial_client["y"])
     initial_host_radius = math.hypot(
         initial_host_x - caster_x,
         initial_host_y - caster_y,
@@ -1568,84 +2023,97 @@ def wait_for_turn_undead_flee(
         initial_client_x - caster_x,
         initial_client_y - caster_y,
     )
-    started = time.monotonic()
-    deadline = started + timeout
-    samples = 0
+    evaluated_pairs = 0
     last: dict[str, Any] = {}
     best_active: dict[str, Any] = {}
     best_active_radial_gain = -math.inf
-    while time.monotonic() < deadline:
-        states = query_turn_undead_pair(pair, network_id)
-        samples += 1
-        host = states["host"]
-        client = states["client"]
-        host_displacement = math.hypot(
-            float(host["x"]) - initial_host_x,
-            float(host["y"]) - initial_host_y,
-        )
-        client_displacement = math.hypot(
-            float(client["x"]) - initial_client_x,
-            float(client["y"]) - initial_client_y,
-        )
-        host_radial_gain = (
-            math.hypot(
-                float(host["x"]) - caster_x,
-                float(host["y"]) - caster_y,
+    for host in host_samples:
+        if int(host["duration_ticks"]) <= 0:
+            continue
+        for client in client_samples:
+            if int(client["duration_ticks"]) <= 0:
+                continue
+            alignment_error_ms = abs(
+                float(host["elapsed_from_activation_ms"])
+                - float(client["elapsed_from_activation_ms"])
             )
-            - initial_host_radius
-        )
-        client_radial_gain = (
-            math.hypot(
-                float(client["x"]) - caster_x,
-                float(client["y"]) - caster_y,
+            if (
+                alignment_error_ms
+                > TURN_UNDEAD_TIMELINE_ALIGNMENT_TOLERANCE_MS
+            ):
+                continue
+            evaluated_pairs += 1
+            host_displacement = math.hypot(
+                float(host["x"]) - initial_host_x,
+                float(host["y"]) - initial_host_y,
             )
-            - initial_client_radius
-        )
-        position_error = math.hypot(
-            float(host["x"]) - float(client["x"]),
-            float(host["y"]) - float(client["y"]),
-        )
-        last = {
-            "states": states,
-            "host_displacement": host_displacement,
-            "client_displacement": client_displacement,
-            "host_radial_gain": host_radial_gain,
-            "client_radial_gain": client_radial_gain,
-            "position_error": position_error,
-            "samples": samples,
-            "elapsed_seconds": time.monotonic() - started,
-        }
-        both_active = all(
-            int(state["duration_ticks"]) > 0 for state in states.values()
-        )
-        minimum_radial_gain = min(host_radial_gain, client_radial_gain)
-        if both_active and minimum_radial_gain > best_active_radial_gain:
-            best_active_radial_gain = minimum_radial_gain
-            best_active = last
-        if (
-            all(
-                state["available"]
-                and state["readable"]
-                and state["tracked"]
-                and not state["dead"]
-                and state["duration_ticks"] > 0
-                for state in states.values()
+            client_displacement = math.hypot(
+                float(client["x"]) - initial_client_x,
+                float(client["y"]) - initial_client_y,
             )
-            and host_displacement >= TURN_UNDEAD_MINIMUM_DISPLACEMENT
-            and client_displacement >= TURN_UNDEAD_MINIMUM_DISPLACEMENT
-            and host_radial_gain >= TURN_UNDEAD_MINIMUM_RADIAL_GAIN
-            and client_radial_gain >= TURN_UNDEAD_MINIMUM_RADIAL_GAIN
-            and position_error <= TURN_UNDEAD_MAXIMUM_VISUAL_POSITION_ERROR
-        ):
-            return last
-        if samples > 1 and all(
-            int(state["duration_ticks"]) <= 0 for state in states.values()
-        ):
-            break
-        time.sleep(0.05)
+            host_radial_gain = (
+                math.hypot(
+                    float(host["x"]) - caster_x,
+                    float(host["y"]) - caster_y,
+                )
+                - initial_host_radius
+            )
+            client_radial_gain = (
+                math.hypot(
+                    float(client["x"]) - caster_x,
+                    float(client["y"]) - caster_y,
+                )
+                - initial_client_radius
+            )
+            position_error = math.hypot(
+                float(host["x"]) - float(client["x"]),
+                float(host["y"]) - float(client["y"]),
+            )
+            last = {
+                "states": {"host": host, "client": client},
+                "host_displacement": host_displacement,
+                "client_displacement": client_displacement,
+                "host_radial_gain": host_radial_gain,
+                "client_radial_gain": client_radial_gain,
+                "position_error": position_error,
+                "alignment_error_ms": alignment_error_ms,
+                "evaluated_pairs": evaluated_pairs,
+            }
+            minimum_radial_gain = min(host_radial_gain, client_radial_gain)
+            if minimum_radial_gain > best_active_radial_gain:
+                best_active_radial_gain = minimum_radial_gain
+                best_active = last
+            if (
+                host_displacement >= TURN_UNDEAD_MINIMUM_DISPLACEMENT
+                and client_displacement >= TURN_UNDEAD_MINIMUM_DISPLACEMENT
+                and host_radial_gain >= TURN_UNDEAD_MINIMUM_RADIAL_GAIN
+                and client_radial_gain >= TURN_UNDEAD_MINIMUM_RADIAL_GAIN
+                and position_error
+                <= TURN_UNDEAD_MAXIMUM_VISUAL_POSITION_ERROR
+            ):
+                return {
+                    "flee": last,
+                    "activation": activation,
+                    "monitors": {
+                        label: _turn_undead_monitor_summary(monitor)
+                        for label, monitor in monitors.items()
+                    },
+                    "duration_sequences": {
+                        label: [
+                            sample["duration_ticks"]
+                            for sample in monitor["samples"]
+                        ]
+                        for label, monitor in monitors.items()
+                    },
+                }
+    monitor_summaries = {
+        label: _turn_undead_monitor_summary(monitor)
+        for label, monitor in monitors.items()
+    }
     raise VerifyFailure(
         "Turn Undead did not produce converged movement away from its caster: "
-        f"last={last} best_active={best_active}"
+        f"last={last} best_active={best_active} "
+        f"monitors={monitor_summaries}"
     )
 
 
@@ -2816,6 +3284,11 @@ def run_generic(
         pair,
         direction.source_pipe,
     )
+    turn_undead_monitor_arms = (
+        arm_turn_undead_monitors(pair, int(target["network_id"]))
+        if target is not None and skill.row == TURN_UNDEAD_ROW
+        else None
+    )
     turn_undead_freeze_clear = (
         clear_turn_undead_target_freeze(
             pair,
@@ -2847,7 +3320,7 @@ def run_generic(
         if target is not None and skill.row == TURN_UNDEAD_ROW
         else None
     )
-    turn_undead_flee = (
+    turn_undead_timeline = (
         wait_for_turn_undead_flee(
             pair,
             target,
@@ -2925,10 +3398,12 @@ def run_generic(
         {
             "baseline": turn_undead_baseline,
             "activation": turn_undead_activation,
+            "monitor_arms": turn_undead_monitor_arms,
             "freeze_clear": turn_undead_freeze_clear,
-            "flee": turn_undead_flee,
+            "flee": turn_undead_timeline["flee"],
+            "timeline": turn_undead_timeline,
         }
-        if turn_undead_flee is not None
+        if turn_undead_timeline is not None
         else (
             dampen_witness
             if dampen_witness is not None
@@ -3000,8 +3475,9 @@ def run_generic(
         "dampen_shared_view_geometry": dampen_shared_view_geometry,
         "turn_undead_baseline": turn_undead_baseline,
         "turn_undead_activation": turn_undead_activation,
+        "turn_undead_monitor_arms": turn_undead_monitor_arms,
         "turn_undead_freeze_clear": turn_undead_freeze_clear,
-        "turn_undead_flee": turn_undead_flee,
+        "turn_undead_timeline": turn_undead_timeline,
         "target_modifier_baseline": target_modifier_baseline,
         "target_modifier_witness": target_modifier_witness,
         "before_owner": before_owner,

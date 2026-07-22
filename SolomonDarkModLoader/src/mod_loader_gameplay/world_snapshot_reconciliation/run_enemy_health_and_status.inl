@@ -81,8 +81,14 @@ bool ApplyReplicatedWorldActorTransform(
 
     bool wrote_position = false;
     if (position_changed) {
+        const bool hard_correct_transient_run_enemy =
+            authoritative_actor.tracked_enemy &&
+            !authoritative_actor.dead &&
+            (authoritative_actor.status_flags &
+             multiplayer::WorldActorStatusFlagTurnUndeadActive) != 0;
         const bool soft_correct_live_run_enemy =
             !force_write &&
+            !hard_correct_transient_run_enemy &&
             have_current_position &&
             authoritative_actor.tracked_enemy &&
             !authoritative_actor.dead &&

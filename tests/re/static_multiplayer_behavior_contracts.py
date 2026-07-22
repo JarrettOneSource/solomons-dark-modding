@@ -938,9 +938,21 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
         'SecondarySkillSpec(77, "Turn Undead", "turn_undead", True)',
         "TURN_UNDEAD_ELIGIBLE_ACTOR_TYPES",
         "QUERY_TURN_UNDEAD_STATE_LUA",
+        "ARM_TURN_UNDEAD_MONITOR_LUA",
+        "COLLECT_TURN_UNDEAD_MONITOR_LUA",
         "actor_turn_undead_flee_heading",
         "actor_turn_undead_activation_scalar",
         "actor_turn_undead_duration_ticks",
+        "arm_turn_undead_monitors(",
+        "collect_turn_undead_monitors(",
+        '"positive_sample_count"',
+        '"peak_duration_ticks"',
+        '"first_active_ms"',
+        '"last_active_ms"',
+        "arm_timeout_ms",
+        "monitor.first_active_ms > 0",
+        "now - monitor.first_active_ms >= monitor.duration_ms",
+        "now - monitor.started_ms >= monitor.arm_timeout_ms",
         "require_turn_undead_baseline(",
         "wait_for_turn_undead_activation(",
         "clear_turn_undead_target_freeze(",
@@ -948,13 +960,21 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
         "TURN_UNDEAD_MINIMUM_DISPLACEMENT",
         "TURN_UNDEAD_MINIMUM_RADIAL_GAIN",
         "TURN_UNDEAD_MAXIMUM_VISUAL_POSITION_ERROR",
-        'and state["duration_ticks"] > 0',
+        'sample["duration_ticks"] > 0',
         "best_active_radial_gain",
+        '"timeline": turn_undead_timeline',
     ):
         assert token in harness, f"secondary behavior harness lacks: {token}"
     assert harness.count(
         "input_cast, delivery = cast_secondary_until_delivered("
     ) == 4
+    assert "if after_activation and (terminal_edge or sample_due) then" in harness
+    assert (
+        "if after_activation and (positive or terminal_edge or sample_due) then"
+        not in harness
+    )
+    assert '"turn_undead_timeline": turn_undead_timeline' in harness
+    assert '"turn_undead_flee": turn_undead_flee' not in harness
     for source, token in (
         (transport, "kMagicStormNativeTypeId = 0x07F0"),
         (spell_effect_sync, "case kMagicStormNativeTypeId:"),
@@ -1000,6 +1020,18 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
         (world_reconciliation, "CopyWorldActorTransientStatusState("),
         (world_reconciliation, "ApplyReplicatedRunEnemyTransientStatus("),
         (world_reconciliation, "local_duration_ticks > 0"),
+        (
+            world_reconciliation,
+            "const bool hard_correct_transient_run_enemy =",
+        ),
+        (
+            world_reconciliation,
+            "WorldActorStatusFlagTurnUndeadActive",
+        ),
+        (
+            world_reconciliation,
+            "!hard_correct_transient_run_enemy",
+        ),
     ):
         assert token in source, (
             f"authoritative Turn Undead status path lacks: {token}"
