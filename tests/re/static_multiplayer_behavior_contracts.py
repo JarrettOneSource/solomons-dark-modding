@@ -1890,6 +1890,34 @@ def test_primary_kill_stress_requires_native_death_evidence_at_epsilon_hp() -> s
     return "rounded low HP cannot consume the final retry without a native death signal"
 
 
+def test_run_reentry_audits_only_logs_written_during_the_test() -> str:
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    import verify_steam_friend_run_exit_reentry as reentry
+
+    token = (
+        "Multiplayer session/transport tick rejected outside its owning "
+        "AppMainTick thread."
+    )
+    with TemporaryDirectory() as directory:
+        log = Path(directory) / "loader.log"
+        log.write_text(token + "\n", encoding="utf-8")
+        positions = reentry.capture_log_positions((log,))
+        with log.open("a", encoding="utf-8") as stream:
+            stream.write("new lifecycle activity\n")
+        reentry.assert_no_wrong_thread_rejections(positions)
+        with log.open("a", encoding="utf-8") as stream:
+            stream.write(token + "\n")
+        try:
+            reentry.assert_no_wrong_thread_rejections(positions)
+        except reentry.VerifyFailure:
+            pass
+        else:
+            raise AssertionError("new wrong-thread rejection was not detected")
+    return "run reentry scans only bounded log content appended during its own run"
+
+
 def test_animated_loot_comparison_bounds_snapshot_phase_skew() -> str:
     import verify_multiplayer_primary_kill_stress as primary
 

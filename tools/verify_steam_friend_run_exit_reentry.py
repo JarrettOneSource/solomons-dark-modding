@@ -287,13 +287,37 @@ def instance_log(instance: str, override_environment_variable: str) -> Path:
     )
 
 
-def assert_no_wrong_thread_rejections(log_paths: tuple[Path, Path]) -> None:
+def capture_log_positions(
+    log_paths: tuple[Path, ...],
+) -> tuple[tuple[Path, int], ...]:
+    return tuple(
+        (log_path, log_path.stat().st_size if log_path.is_file() else 0)
+        for log_path in log_paths
+    )
+
+
+def log_contains_token_after(log_path: Path, offset: int, token: bytes) -> bool:
+    if not log_path.is_file():
+        return False
+    with log_path.open("rb") as stream:
+        size = stream.seek(0, 2)
+        stream.seek(offset if size >= offset else 0)
+        overlap = b""
+        while chunk := stream.read(64 * 1024):
+            window = overlap + chunk
+            if token in window:
+                return True
+            overlap = window[-(len(token) - 1):]
+    return False
+
+
+def assert_no_wrong_thread_rejections(
+    log_positions: tuple[tuple[Path, int], ...],
+) -> None:
     token = "Multiplayer session/transport tick rejected outside its owning AppMainTick thread."
-    for log_path in log_paths:
-        if log_path.is_file() and token in log_path.read_text(
-            encoding="utf-8",
-            errors="replace",
-        ):
+    token_bytes = token.encode("utf-8")
+    for log_path, offset in log_positions:
+        if log_contains_token_after(log_path, offset, token_bytes):
             raise VerifyFailure(
                 f"wrong-thread transport tick was rejected in {log_path}"
             )
@@ -317,6 +341,7 @@ def run(
         instance_log(host_instance, "SDMOD_STEAM_HOST_LOG_PATH"),
         instance_log(client_instance, "SDMOD_STEAM_CLIENT_LOG_PATH"),
     )
+    log_positions = capture_log_positions(log_paths)
     started_at = time.time()
     discovered = configure_pair(pair)
     scene_views = [
@@ -376,7 +401,7 @@ def run(
             )
         records.append(record)
 
-    assert_no_wrong_thread_rejections(log_paths)
+    assert_no_wrong_thread_rejections(log_positions)
     crashes = new_crash_artifacts(started_at, instances)
     if crashes:
         raise VerifyFailure(f"new crash artifacts appeared: {crashes}")

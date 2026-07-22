@@ -97,6 +97,7 @@ from static_multiplayer_behavior_contracts import (
     test_primary_kill_stress_resumes_only_a_contiguous_passed_prefix,
     test_reconnect_verifier_has_a_dedicated_cold_launch_timeout,
     test_remote_webbed_escape_consumes_owner_movement_intent,
+    test_run_reentry_audits_only_logs_written_during_the_test,
     test_secondary_replay_preserves_owner_authored_aim_when_target_resolves,
     test_secondary_behavior_matrix_uses_native_two_owner_witnesses,
     test_secondary_matrix_isolates_prior_native_effect_lifetimes,
@@ -510,6 +511,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "primary kill stress requires native death evidence at epsilon HP",
         test_primary_kill_stress_requires_native_death_evidence_at_epsilon_hp,
+    ),
+    (
+        "run reentry audits only logs written during the test",
+        test_run_reentry_audits_only_logs_written_during_the_test,
     ),
     (
         "animated loot bounds transport-phase position skew",
