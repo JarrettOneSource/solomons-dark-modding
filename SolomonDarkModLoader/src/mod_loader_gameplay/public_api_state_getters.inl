@@ -412,6 +412,8 @@ bool TryGetPlayerState(SDModPlayerState* state) {
         kProgressionSecondaryRechargeMultiplierOffset != 0 &&
         kProgressionOffensiveDamageMultiplierOffset != 0 &&
         kProgressionOffensiveManaMultiplierOffset != 0 &&
+        kProgressionMeleeDamageMultiplierOffset != 0 &&
+        kProgressionPushStrengthOffset != 0 &&
         kProgressionMeditationRecoveryBonusOffset != 0 &&
         kProgressionMeditationIdleTicksOffset != 0 &&
         TryReadFiniteFloatField(
@@ -458,6 +460,14 @@ bool TryGetPlayerState(SDModPlayerState* state) {
             progression_address,
             kProgressionOffensiveManaMultiplierOffset,
             &derived.offensive_mana_multiplier) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionMeleeDamageMultiplierOffset,
+            &derived.melee_damage_multiplier) &&
+        TryReadFiniteFloatField(
+            progression_address,
+            kProgressionPushStrengthOffset,
+            &derived.push_strength) &&
         TryReadFiniteFloatField(
             progression_address,
             kProgressionMeditationRecoveryBonusOffset,

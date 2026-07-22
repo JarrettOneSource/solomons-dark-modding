@@ -165,6 +165,8 @@ struct ParticipantDerivedStatState {
     float secondary_recharge_multiplier = 0.0f;
     float offensive_damage_multiplier = 0.0f;
     float offensive_mana_multiplier = 0.0f;
+    float melee_damage_multiplier = 0.0f;
+    float push_strength = 0.0f;
     float meditation_recovery_bonus = 0.0f;
     std::int32_t meditation_idle_ticks = -1;
 };

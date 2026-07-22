@@ -21,6 +21,8 @@ extern std::size_t kProgressionPickupRangeOffset;
 extern std::size_t kProgressionSecondaryRechargeMultiplierOffset;
 extern std::size_t kProgressionOffensiveDamageMultiplierOffset;
 extern std::size_t kProgressionOffensiveManaMultiplierOffset;
+extern std::size_t kProgressionMeleeDamageMultiplierOffset;
+extern std::size_t kProgressionPushStrengthOffset;
 extern std::size_t kProgressionCurrentSpellIdOffset;
 extern std::size_t kProgressionPrimaryStatValuesOffset;
 extern std::size_t kProgressionPrimaryStatCountOffset;

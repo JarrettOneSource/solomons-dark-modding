@@ -263,6 +263,8 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "progression_secondary_recharge_multiplier", kProgressionSecondaryRechargeMultiplierOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_offensive_damage_multiplier", kProgressionOffensiveDamageMultiplierOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_offensive_mana_multiplier", kProgressionOffensiveManaMultiplierOffset),
+        SDMOD_SIZE("gameplay.offsets", "progression_melee_damage_multiplier", kProgressionMeleeDamageMultiplierOffset),
+        SDMOD_SIZE("gameplay.offsets", "progression_push_strength", kProgressionPushStrengthOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_current_spell_id", kProgressionCurrentSpellIdOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_primary_stat_values", kProgressionPrimaryStatValuesOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_primary_stat_count", kProgressionPrimaryStatCountOffset),

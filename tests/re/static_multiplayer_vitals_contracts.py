@@ -67,7 +67,7 @@ def test_client_owned_magic_shield_consumption_is_host_authoritative() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 72;",
+        "constexpr std::uint16_t kProtocolVersion = 73;",
         "ParticipantVitalsCorrectionFlagMagicShieldState",
         "std::uint8_t correction_flags;",
         "float magic_shield_absorb_remaining;",

@@ -261,6 +261,8 @@ if ledger_derived then
   emit('ledger.derived.secondary_recharge_multiplier', ledger_derived.secondary_recharge_multiplier)
   emit('ledger.derived.offensive_damage_multiplier', ledger_derived.offensive_damage_multiplier)
   emit('ledger.derived.offensive_mana_multiplier', ledger_derived.offensive_mana_multiplier)
+  emit('ledger.derived.melee_damage_multiplier', ledger_derived.melee_damage_multiplier)
+  emit('ledger.derived.push_strength', ledger_derived.push_strength)
   emit('ledger.derived.meditation_recovery_bonus', ledger_derived.meditation_recovery_bonus)
   emit('ledger.derived.meditation_idle_ticks', ledger_derived.meditation_idle_ticks)
 end
@@ -343,6 +345,8 @@ if progression ~= 0 then
   emit('native.derived.secondary_recharge_multiplier', sd.debug.read_float(progression + offset('progression_secondary_recharge_multiplier')))
   emit('native.derived.offensive_damage_multiplier', sd.debug.read_float(progression + offset('progression_offensive_damage_multiplier')))
   emit('native.derived.offensive_mana_multiplier', sd.debug.read_float(progression + offset('progression_offensive_mana_multiplier')))
+  emit('native.derived.melee_damage_multiplier', sd.debug.read_float(progression + offset('progression_melee_damage_multiplier')))
+  emit('native.derived.push_strength', sd.debug.read_float(progression + offset('progression_push_strength')))
   emit('native.derived.meditation_idle_ticks', sd.debug.read_i32(progression + offset('progression_meditation_idle_ticks')))
   emit('native.derived.meditation_recovery_bonus', sd.debug.read_float(progression + offset('progression_meditation_recovery_bonus')))
   emit('native.nonlocal_mode', sd.debug.read_u8(progression + offset('progression_nonlocal_mode_flag')))
@@ -590,6 +594,12 @@ def query_progression_snapshot(
                 "offensive_mana_multiplier": _parse_float(
                     values, "ledger.derived.offensive_mana_multiplier"
                 ),
+                "melee_damage_multiplier": _parse_float(
+                    values, "ledger.derived.melee_damage_multiplier"
+                ),
+                "push_strength": _parse_float(
+                    values, "ledger.derived.push_strength"
+                ),
                 "meditation_recovery_bonus": _parse_float(
                     values, "ledger.derived.meditation_recovery_bonus"
                 ),
@@ -665,6 +675,12 @@ def query_progression_snapshot(
                 ),
                 "offensive_mana_multiplier": _parse_float(
                     values, "native.derived.offensive_mana_multiplier"
+                ),
+                "melee_damage_multiplier": _parse_float(
+                    values, "native.derived.melee_damage_multiplier"
+                ),
+                "push_strength": _parse_float(
+                    values, "native.derived.push_strength"
                 ),
                 "meditation_idle_ticks": parse_int_text(
                     values.get("native.derived.meditation_idle_ticks"), 0

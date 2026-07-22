@@ -277,6 +277,12 @@ bool ApplyAuthoritativeParticipantDerivedStats(
             kProgressionOffensiveManaMultiplierOffset,
             desired.offensive_mana_multiplier) &&
         reconcile_float(
+            kProgressionMeleeDamageMultiplierOffset,
+            desired.melee_damage_multiplier) &&
+        reconcile_float(
+            kProgressionPushStrengthOffset,
+            desired.push_strength) &&
+        reconcile_float(
             kProgressionMeditationRecoveryBonusOffset,
             desired.meditation_recovery_bonus);
 

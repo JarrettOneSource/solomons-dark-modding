@@ -13,6 +13,8 @@
     "selector_count": "0x7C4",
     "flag_base": "0x7CC",
     "capacity": "0x800",
+    "melee_damage_multiplier": "0x6F4",
+    "push_strength": "0x818",
     "cheat_death_enabled": "0x81C",
     "cheat_death_charges": "0x820",
     "serendipity_active": "0x73C",

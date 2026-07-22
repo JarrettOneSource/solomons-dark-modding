@@ -197,6 +197,7 @@ from static_re_inventory_container_contracts import (
 )
 from static_re_hagatha_perk_contracts import (
     test_cheat_death_health_increase_is_captured_as_authoritative_damage,
+    test_hagatha_derived_stats_have_a_two_owner_steam_matrix,
     test_hagatha_one_shot_runtime_state_is_host_authoritative,
     test_hagatha_perks_replicate_as_participant_owned_native_state,
     test_native_hagatha_perk_catalog_is_complete,
@@ -824,6 +825,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Hagatha one-shot runtime state is host-authoritative",
         test_hagatha_one_shot_runtime_state_is_host_authoritative,
+    ),
+    (
+        "Hagatha derived stats have a two-owner Steam matrix",
+        test_hagatha_derived_stats_have_a_two_owner_steam_matrix,
     ),
     (
         "Cheat Death HP recovery is captured as authoritative damage",

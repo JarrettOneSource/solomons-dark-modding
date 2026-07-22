@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 72;
+constexpr std::uint16_t kProtocolVersion = 73;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -361,6 +361,8 @@ struct ParticipantDerivedStatPacketState {
     float secondary_recharge_multiplier;
     float offensive_damage_multiplier;
     float offensive_mana_multiplier;
+    float melee_damage_multiplier;
+    float push_strength;
     float meditation_recovery_bonus;
     std::int32_t meditation_idle_ticks;
 };
@@ -1165,9 +1167,9 @@ static_assert(sizeof(ParticipantInventoryItemPacketState) == 20, "Unexpected inv
 static_assert(sizeof(ParticipantEquippedItemPacketState) == 8, "Unexpected equipped item packet size");
 static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpected progression book entry packet size");
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
-static_assert(sizeof(ParticipantDerivedStatPacketState) == 56, "Unexpected derived stat packet size");
+static_assert(sizeof(ParticipantDerivedStatPacketState) == 64, "Unexpected derived stat packet size");
 static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20, "Unexpected Hagatha perk packet size");
-static_assert(sizeof(StatePacket) == 4512, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 4520, "Unexpected state packet size");
 static_assert(sizeof(ParticipantFramePacket) == 298,
               "Unexpected participant frame packet size");
 static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");

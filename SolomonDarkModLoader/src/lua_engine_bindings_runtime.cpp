@@ -223,7 +223,7 @@ void PushOwnedProgressionState(
     lua_setfield(state, -2, "derived_stat_revision");
     if (progression.derived_stats.valid) {
         const auto& derived = progression.derived_stats;
-        lua_createtable(state, 0, 13);
+        lua_createtable(state, 0, 15);
         lua_pushnumber(state, static_cast<lua_Number>(derived.cast_speed_multiplier));
         lua_setfield(state, -2, "cast_speed_multiplier");
         lua_pushnumber(state, static_cast<lua_Number>(derived.mana_recovery_multiplier));
@@ -246,6 +246,10 @@ void PushOwnedProgressionState(
         lua_setfield(state, -2, "offensive_damage_multiplier");
         lua_pushnumber(state, static_cast<lua_Number>(derived.offensive_mana_multiplier));
         lua_setfield(state, -2, "offensive_mana_multiplier");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.melee_damage_multiplier));
+        lua_setfield(state, -2, "melee_damage_multiplier");
+        lua_pushnumber(state, static_cast<lua_Number>(derived.push_strength));
+        lua_setfield(state, -2, "push_strength");
         lua_pushnumber(state, static_cast<lua_Number>(derived.meditation_recovery_bonus));
         lua_setfield(state, -2, "meditation_recovery_bonus");
         lua_pushinteger(state, static_cast<lua_Integer>(derived.meditation_idle_ticks));

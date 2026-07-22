@@ -288,6 +288,8 @@ bool DerivedStatsEqual(
            left.secondary_recharge_multiplier == right.secondary_recharge_multiplier &&
            left.offensive_damage_multiplier == right.offensive_damage_multiplier &&
            left.offensive_mana_multiplier == right.offensive_mana_multiplier &&
+           left.melee_damage_multiplier == right.melee_damage_multiplier &&
+           left.push_strength == right.push_strength &&
            left.meditation_recovery_bonus == right.meditation_recovery_bonus &&
            left.meditation_idle_ticks == right.meditation_idle_ticks;
 }
@@ -312,6 +314,8 @@ void RefreshOwnedDerivedStats(
     next.secondary_recharge_multiplier = native_stats.secondary_recharge_multiplier;
     next.offensive_damage_multiplier = native_stats.offensive_damage_multiplier;
     next.offensive_mana_multiplier = native_stats.offensive_mana_multiplier;
+    next.melee_damage_multiplier = native_stats.melee_damage_multiplier;
+    next.push_strength = native_stats.push_strength;
     next.meditation_recovery_bonus = native_stats.meditation_recovery_bonus;
     next.meditation_idle_ticks = native_stats.meditation_idle_ticks;
     if (DerivedStatsEqual(owned_progression->derived_stats, next)) {
@@ -344,6 +348,8 @@ void BuildDerivedStatPacketState(
     packet->secondary_recharge_multiplier = stats.secondary_recharge_multiplier;
     packet->offensive_damage_multiplier = stats.offensive_damage_multiplier;
     packet->offensive_mana_multiplier = stats.offensive_mana_multiplier;
+    packet->melee_damage_multiplier = stats.melee_damage_multiplier;
+    packet->push_strength = stats.push_strength;
     packet->meditation_recovery_bonus = stats.meditation_recovery_bonus;
     packet->meditation_idle_ticks = stats.meditation_idle_ticks;
 }
@@ -364,6 +370,8 @@ bool IsSaneDerivedStatPacketState(const ParticipantDerivedStatPacketState& packe
            sane_float(packet.secondary_recharge_multiplier) &&
            sane_float(packet.offensive_damage_multiplier) &&
            sane_float(packet.offensive_mana_multiplier) &&
+           sane_float(packet.melee_damage_multiplier) &&
+           sane_float(packet.push_strength) &&
            sane_float(packet.meditation_recovery_bonus) &&
            packet.meditation_idle_ticks >= -1 &&
            packet.meditation_idle_ticks <= 1000000000;
@@ -392,6 +400,8 @@ void ApplyDerivedStatPacketState(
     stats.secondary_recharge_multiplier = packet.secondary_recharge_multiplier;
     stats.offensive_damage_multiplier = packet.offensive_damage_multiplier;
     stats.offensive_mana_multiplier = packet.offensive_mana_multiplier;
+    stats.melee_damage_multiplier = packet.melee_damage_multiplier;
+    stats.push_strength = packet.push_strength;
     stats.meditation_recovery_bonus = packet.meditation_recovery_bonus;
     stats.meditation_idle_ticks = packet.meditation_idle_ticks;
     owned_progression->derived_stats = stats;

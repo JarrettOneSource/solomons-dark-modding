@@ -100,6 +100,8 @@ def test_native_hagatha_perk_catalog_is_complete() -> str:
         "selector_count": "0x7C4",
         "flag_base": "0x7CC",
         "capacity": "0x800",
+        "melee_damage_multiplier": "0x6F4",
+        "push_strength": "0x818",
         "cheat_death_enabled": "0x81C",
         "cheat_death_charges": "0x820",
         "serendipity_active": "0x73C",
@@ -184,13 +186,13 @@ def test_hagatha_perks_replicate_as_participant_owned_native_state() -> str:
         "wire protocol",
         protocol,
         (
-            "constexpr std::uint16_t kProtocolVersion = 72;",
+            "constexpr std::uint16_t kProtocolVersion = 73;",
             "kParticipantHagathaPerkMaxCount = 9",
             "struct ParticipantHagathaPerkPacketState",
             "std::uint32_t hagatha_perk_revision;",
             "ParticipantHagathaPerkPacketState hagatha_perks;",
             "static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20",
-            "static_assert(sizeof(StatePacket) == 4512",
+            "static_assert(sizeof(StatePacket) == 4520",
         ),
         failures,
     )
@@ -394,6 +396,142 @@ def test_hagatha_one_shot_runtime_state_is_host_authoritative() -> str:
     if failures:
         raise StaticReTestFailure("; ".join(failures))
     return "host-consumed Cheat Death and until-hurt flags reliably correct the owning client"
+
+
+def test_hagatha_derived_stats_have_a_two_owner_steam_matrix() -> str:
+    """Every stock derived-stat perk must be proven on both native actors."""
+
+    verifier_path = ROOT / "tools/verify_steam_hagatha_derived_stat_matrix.py"
+    fixture_path = ROOT / "tools/hagatha_bare_hands_fixture.py"
+    failures: list[str] = []
+    if not verifier_path.is_file():
+        failures.append("two-owner Steam Hagatha derived-stat verifier is missing")
+        verifier = ""
+    else:
+        verifier = read_text(verifier_path)
+    if not fixture_path.is_file():
+        failures.append("stock Bare Hands weapon fixture is missing")
+        fixture = ""
+    else:
+        fixture = read_text(fixture_path)
+    _require(
+        "two-owner Steam Hagatha derived-stat verifier",
+        verifier + fixture,
+        (
+            "LIFE_SELECTOR = 0",
+            "MANA_SELECTOR = 1",
+            "SPEED_SELECTOR = 2",
+            "WAR_SELECTOR = 10",
+            "FOCUS_SELECTOR = 18",
+            "BARE_HANDS_SELECTOR = 20",
+            "BRUTE_SELECTOR = 26",
+            "TONIC_SELECTOR = 27",
+            "query_progression_snapshot",
+            "assert_relative_effect",
+            "owner_native",
+            "observer_native",
+            "observer_ledger",
+            "observer_owner_unchanged",
+            "corrupt_observer_field",
+            "self_corrected",
+            "BARE_HANDS_REFRESH = 0x0065F9A0",
+            "LOADOUT_TABLE = 0x0081C264",
+            "loadout_table_address = sd.debug.resolve_game_address",
+            "query_local_weapon_binding",
+            "set_local_weapon_presence",
+            "assert_bare_hands_armed_inactive",
+            "verify_bare_hands_direction",
+            '"armed_inactive"',
+            '"unarmed_active"',
+            '"restored_armed"',
+            "sd.debug.write_ptr",
+            "sd.debug.call_thiscall_ret_u32(refresh, progression)",
+            "wait_for_native_release_after_hub_leave",
+            "leave_endpoint_to_main_menu",
+            "direction_error",
+            "ONBOARDING_TIMEOUT = 90.0",
+            '"host_to_client"',
+            '"client_to_host"',
+        ),
+        failures,
+    )
+    if "SPELL_MANA = FieldExpectation" in verifier or (
+        "BARE_HANDS_SPELL_MANA = FieldExpectation" in verifier
+    ):
+        failures.append(
+            "Hagatha verifier treats raw spell-builder mana as final native cast spend"
+        )
+    if '"secondary_recharge",\n    1.25,' not in verifier:
+        failures.append(
+            "Hagatha Focus verifier does not use the stock recharge-rate multiplier"
+        )
+
+    protocol = read_text(
+        ROOT / "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
+    )
+    runtime_state = read_text(
+        ROOT / "SolomonDarkModLoader/include/multiplayer_runtime_state.h"
+    )
+    public_state = read_text(ROOT / "SolomonDarkModLoader/include/mod_loader.h")
+    offsets = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/gameplay_seams/progression_and_actor_offsets.inl"
+    )
+    storage = read_text(
+        ROOT / "SolomonDarkModLoader/src/gameplay_seams/address_storage.inl"
+    )
+    bindings = read_text(
+        ROOT / "SolomonDarkModLoader/src/gameplay_seams/size_bindings.inl"
+    )
+    binary_layout = read_text(ROOT / "config/binary-layout.ini")
+    capture = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_state_getters.inl"
+    )
+    state_sync = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/owned_progression_state.inl"
+    )
+    native_sync = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/native_progression_sync.inl"
+    )
+    _require(
+        "Brute derived-state model",
+        protocol + runtime_state + public_state,
+        (
+            "melee_damage_multiplier",
+            "push_strength",
+        ),
+        failures,
+    )
+    _require(
+        "Brute native offsets",
+        offsets + storage + bindings + binary_layout,
+        (
+            "kProgressionMeleeDamageMultiplierOffset",
+            "kProgressionPushStrengthOffset",
+            '"progression_melee_damage_multiplier"',
+            '"progression_push_strength"',
+            "progression_melee_damage_multiplier=0x6F4",
+            "progression_push_strength=0x818",
+        ),
+        failures,
+    )
+    _require(
+        "Brute capture and correction",
+        capture + state_sync + native_sync,
+        (
+            "melee_damage_multiplier",
+            "push_strength",
+            "kProgressionMeleeDamageMultiplierOffset",
+            "kProgressionPushStrengthOffset",
+        ),
+        failures,
+    )
+    if failures:
+        raise StaticReTestFailure("; ".join(failures))
+    return "all stock Hagatha derived-stat outcomes have a two-owner Steam matrix"
 
 
 def test_cheat_death_health_increase_is_captured_as_authoritative_damage() -> str:
