@@ -289,17 +289,21 @@ void DispatchEventToMod(
 }
 
 void DispatchRuntimeTickToMod(LoadedLuaMod* mod, const SDModRuntimeTickContext& context) {
-    if (mod == nullptr || !mod->runtime_tick_registered) {
+    if (mod == nullptr || mod->state == nullptr ||
+        (!mod->runtime_tick_registered && !HasLuaTimers(mod))) {
         return;
     }
     BeginLuaDrawFrame(mod->descriptor.id);
-    DispatchEventToMod(
-        mod,
-        kRuntimeTickEventName,
-        true,
-        [&context](lua_State* state) {
-            PushRuntimeTickPayload(state, context);
-        });
+    DispatchLuaTimersToMod(mod, context);
+    if (mod->runtime_tick_registered) {
+        DispatchEventToMod(
+            mod,
+            kRuntimeTickEventName,
+            true,
+            [&context](lua_State* state) {
+                PushRuntimeTickPayload(state, context);
+            });
+    }
     CommitLuaDrawFrame(mod->descriptor.id);
 }
 
@@ -419,7 +423,8 @@ void DispatchRuntimeTickToLuaMods(const SDModRuntimeTickContext& context) {
 
 bool HasAnyLuaRuntimeTickHandlers() {
     for (const auto& mod : LoadedLuaModsStorage()) {
-        if (mod != nullptr && mod->runtime_tick_registered) {
+        if (mod != nullptr &&
+            (mod->runtime_tick_registered || HasLuaTimers(mod.get()))) {
             return true;
         }
     }

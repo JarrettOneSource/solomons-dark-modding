@@ -60,7 +60,7 @@ credentials.
   state; stale item/equipment identities did not leak into the replacement.
 - The explicit flat Boneyard matches on both staged copies and contains no
   scenery, roads, fences, or static collision circles. The embedded Lua runtime
-  contract passes on both peers with 13 namespaces and 111 required functions.
+  contract passes on both peers with 14 namespaces and 116 required functions.
 
 A genuine cross-account Steam peer handshake has been exercised on this
 machine with a Windows host and a WSLg/Proton joiner. The joiner accepted a

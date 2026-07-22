@@ -315,6 +315,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "draw.world_projection",
         "runtime.mod.info",
         "storage.profile.local",
+        "timer.local.scheduler",
         "state.replicated.read",
         "state.replicated.write",
         "ui.snapshot.read",
@@ -400,6 +401,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     }
 
     ClearLuaEventFilterRegistrationsForMod(mod);
+    ClearLuaTimersForMod(mod);
     if (mod->state != nullptr) {
         lua_close(mod->state);
         mod->state = nullptr;
@@ -417,6 +419,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     mod->level_up_registered = false;
     mod->profile_storage_loaded = false;
     mod->profile_storage_values.clear();
+    mod->next_timer_id = 1;
 }
 
 void LogLuaMessage(const LoadedLuaMod& mod, const std::string& message) {

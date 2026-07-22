@@ -126,10 +126,11 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "RegisterLuaDebugBindings",
         "RegisterLuaStateBindings",
         "RegisterLuaStorageBindings",
+        "RegisterLuaTimerBindings",
         "RegisterLuaDrawBindings",
     ):
         assert registration in bindings
-    assert "lua_createtable(mod->state, 0, 14);" in bindings
+    assert "lua_createtable(mod->state, 0, 15);" in bindings
     assert "lua_pcall" in events, "Lua event handlers must be fault isolated"
 
     for token in (
@@ -191,7 +192,7 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "pending Lua exec requests are cancelable, stock scene-load stalls fit "
         "inside the hang backstop, pump skips fail by invariant, pipe shutdown "
         "interrupts its wait, hook events are deferred without re-entering the "
-        "Lua VM, handlers remain isolated, and all thirteen current sd namespaces "
+        "Lua VM, handlers remain isolated, and all fourteen current sd namespaces "
         "are registered"
     )
 

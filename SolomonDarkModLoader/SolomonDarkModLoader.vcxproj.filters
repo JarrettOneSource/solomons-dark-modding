@@ -1321,6 +1321,12 @@
     <ClCompile Include="src\lua_engine_bindings_state.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_storage.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_timer.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_debug.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>

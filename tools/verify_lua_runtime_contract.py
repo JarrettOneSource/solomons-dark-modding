@@ -48,6 +48,7 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
         "is_authority",
     ),
     "storage": ("get", "set", "delete", "clear", "snapshot"),
+    "timer": ("after", "every", "sequence", "cancel", "clear"),
     "draw": (
         "text",
         "rect",

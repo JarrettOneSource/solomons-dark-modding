@@ -73,6 +73,8 @@ shared state; simulation calls auto-route to the owner).
   checkpoint.
 - **`sd.storage`** — per-mod local profile `get/set/delete/clear/snapshot` with bounded,
   transactional persistence under the launcher's isolated mod data root.
+- **`sd.timer`** — bounded per-mod `after/every/sequence/cancel/clear` scheduling on the
+  monotonic runtime tick; callbacks and handles are released when the mod unloads.
 - **`sd.events`** — `on` plus authority-only `broadcast` for mod-defined ordered events.
   Built-in notify events are `runtime.tick`, `run.started`, `run.ended`, `wave.started`,
   `wave.completed`, `enemy.death`, `enemy.spawned`, `spell.cast`, `gold.changed`,
@@ -247,6 +249,12 @@ action handlers that mutate shared state are simulation-class and auto-route.
 **9. `sd.timer` + coroutine scheduler.** `after(ms, fn)`, `every(ms, fn)`, `sequence{}`
 sugar over `runtime.tick` (every mod hand-rolls this today). *MP:* local; docs steer
 simulation decisions into filters/authority hooks.
+
+**Implemented 2026-07-22.** `sd.timer` provides cancelable one-shot and repeating
+callbacks plus a single-handle ordered `sequence` scheduler. It uses the runtime's
+monotonic game-thread tick, bounds retained callbacks and per-tick work, cancels failing
+callbacks, and tears down every registry reference with the owning mod. It advertises
+`timer.local.scheduler`; see `lua-timer.md` and the opt-in `sample.lua.timer_lab` mod.
 
 **10. `sd.bus` — cross-mod contracts.** Publish/subscribe across loaded mods plus
 `provides`/`requires` in `manifest.json`. *Unlocks:* framework mods (quest engine, UI kit)

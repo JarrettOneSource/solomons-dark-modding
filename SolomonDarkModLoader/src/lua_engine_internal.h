@@ -35,6 +35,27 @@ inline constexpr char kGoldChangedEventName[] = "gold.changed";
 inline constexpr char kDropSpawnedEventName[] = "drop.spawned";
 inline constexpr char kLevelUpEventName[] = "level.up";
 
+enum class LuaTimerKind {
+    Once,
+    Repeating,
+    Sequence,
+};
+
+struct LuaTimerSequenceStep {
+    std::uint32_t delay_ms = 0;
+    int callback_reference = -2;
+};
+
+struct LuaTimerEntry {
+    std::uint64_t id = 0;
+    std::uint64_t due_ms = 0;
+    std::uint32_t interval_ms = 0;
+    int callback_reference = -2;
+    LuaTimerKind kind = LuaTimerKind::Once;
+    std::vector<LuaTimerSequenceStep> sequence_steps;
+    std::size_t sequence_index = 0;
+};
+
 struct LoadedLuaMod {
     RuntimeModDescriptor descriptor;
     std::vector<std::string> capabilities;
@@ -53,6 +74,8 @@ struct LoadedLuaMod {
     std::uint32_t event_filter_mask = 0;
     bool profile_storage_loaded = false;
     LuaModStateValues profile_storage_values;
+    std::vector<LuaTimerEntry> timers;
+    std::uint64_t next_timer_id = 1;
 };
 
 std::mutex& LuaEngineMutex();
@@ -79,6 +102,11 @@ bool IsBuiltInLuaEventName(std::string_view event_name);
 bool IsValidCustomLuaEventName(std::string_view event_name);
 void ResetLuaEventFilterRegistrations();
 void ClearLuaEventFilterRegistrationsForMod(LoadedLuaMod* mod);
+bool HasLuaTimers(const LoadedLuaMod* mod);
+void DispatchLuaTimersToMod(
+    LoadedLuaMod* mod,
+    const SDModRuntimeTickContext& context);
+void ClearLuaTimersForMod(LoadedLuaMod* mod);
 void ResetLuaEnemySpawnFilterDiagnostics();
 void ResetLuaDropRollFilterDiagnostics();
 void ResetLuaWaveSpawnFilterDiagnostics();

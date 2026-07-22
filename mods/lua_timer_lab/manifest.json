@@ -1,0 +1,13 @@
+{
+  "id": "sample.lua.timer_lab",
+  "name": "Lua Timer Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "timer.local.scheduler"
+    ]
+  }
+}

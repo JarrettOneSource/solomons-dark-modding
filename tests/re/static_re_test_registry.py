@@ -32,6 +32,9 @@ from static_lua_resource_filter_contracts import (
 from static_lua_storage_contracts import (
     test_lua_storage_is_scoped_bounded_and_transactional,
 )
+from static_lua_timer_contracts import (
+    test_lua_timers_are_bounded_local_and_tick_driven,
+)
 from static_multiplayer_transport_contracts import (
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
     test_build_all_rebuilds_native_loader_from_clean_intermediates,
@@ -281,6 +284,10 @@ from static_re_binary_tooling_contracts import (
 )
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "Lua timers are bounded, local, and tick-driven",
+        test_lua_timers_are_bounded_local_and_tick_driven,
+    ),
     (
         "Lua storage is scoped, bounded, and transactional",
         test_lua_storage_is_scoped_bounded_and_transactional,

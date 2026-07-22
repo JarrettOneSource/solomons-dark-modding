@@ -21,6 +21,7 @@ void RegisterLuaEventBroadcastBinding(lua_State* state);
 void RegisterLuaEventFilterBinding(lua_State* state);
 void RegisterLuaStateBindings(lua_State* state);
 void RegisterLuaStorageBindings(lua_State* state);
+void RegisterLuaTimerBindings(lua_State* state);
 void RegisterLuaDrawBindings(lua_State* state);
 void RegisterLuaBotBindings(lua_State* state);
 void RegisterLuaUiBindings(lua_State* state);
