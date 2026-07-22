@@ -174,8 +174,10 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint64_t> claimed_primary_cast_edge_serial{0};
     std::atomic<std::uint32_t> pending_mouse_left_edge_events{0};
     std::atomic<std::uint32_t> pending_mouse_left_frames{0};
+    std::atomic<std::uint64_t> last_mouse_left_hold_player_tick_generation{0};
     std::atomic<bool> last_observed_mouse_right_down{false};
     std::atomic<std::uint32_t> pending_mouse_right_frames{0};
+    std::atomic<std::uint64_t> last_mouse_right_hold_player_tick_generation{0};
     std::atomic<uintptr_t> input_state_address{0};
     std::atomic<float> pending_movement_x{0.0f};
     std::atomic<float> pending_movement_y{0.0f};

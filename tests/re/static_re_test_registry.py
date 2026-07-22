@@ -185,6 +185,7 @@ from static_re_runtime_cast_contracts import (
     test_memory_region_cache_refreshes_newly_committed_native_objects,
     test_multiplayer_nameplates_render_from_native_scene_passes,
     test_player_control_brain_requires_published_gameplay_slot,
+    test_queued_mouse_holds_use_player_tick_duration,
     test_remote_held_input_casts_defer_lifecycle_to_sender_input,
     test_remote_per_cast_primary_settles_without_waiting_for_release,
     test_local_primary_network_capture_is_single_owner_and_preserves_lua_events,
@@ -568,6 +569,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("bot out-of-mana probe checks pre-execution rejection", test_bot_out_of_mana_probe_checks_pre_execution_rejection),
     ("held primary mana uses native spend scale and start rate", test_held_primary_mana_uses_native_spend_scale_and_start_rate),
     ("remote per-cast primary settles without waiting for release", test_remote_per_cast_primary_settles_without_waiting_for_release),
+    ("queued mouse holds use player-tick duration", test_queued_mouse_holds_use_player_tick_duration),
     ("remote held input casts defer lifecycle to sender input", test_remote_held_input_casts_defer_lifecycle_to_sender_input),
     (
         "local primary network capture is single-owner and preserves Lua events",

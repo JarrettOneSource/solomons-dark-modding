@@ -33,6 +33,42 @@ bool ClearRawGameplayMouseRight(uintptr_t input_state_address) {
     return ClearRawGameplayMouseButton(input_state_address, kMouseRightMask);
 }
 
+bool ConsumeGameplayMouseHoldFrameForCurrentPlayerTick(
+    std::atomic<std::uint32_t>& pending_frames,
+    std::atomic<std::uint64_t>& last_consumed_generation) {
+    const auto player_tick_generation =
+        g_gameplay_keyboard_injection.local_player_tick_generation.load(
+            std::memory_order_acquire);
+    if (player_tick_generation == 0) {
+        return false;
+    }
+
+    auto previous_generation =
+        last_consumed_generation.load(std::memory_order_acquire);
+    while (previous_generation != player_tick_generation) {
+        if (!last_consumed_generation.compare_exchange_weak(
+                previous_generation,
+                player_tick_generation,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
+            continue;
+        }
+
+        auto available = pending_frames.load(std::memory_order_acquire);
+        while (available > 0) {
+            if (pending_frames.compare_exchange_weak(
+                    available,
+                    available - 1,
+                    std::memory_order_acq_rel,
+                    std::memory_order_acquire)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return false;
+}
+
 void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
     const auto self_address = reinterpret_cast<uintptr_t>(self);
     if (self_address != 0) {
@@ -100,16 +136,7 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
     }
 
     auto& pending = g_gameplay_keyboard_injection.pending_mouse_left_frames;
-    auto available = pending.load(std::memory_order_acquire);
-    while (available > 0) {
-        if (!pending.compare_exchange_weak(
-                available,
-                available - 1,
-                std::memory_order_acq_rel,
-                std::memory_order_acquire)) {
-            continue;
-        }
-
+    if (pending.load(std::memory_order_acquire) > 0) {
         int buffer_index = -1;
         if (!ProcessMemory::Instance().TryReadField(
                 self_address,
@@ -117,7 +144,6 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
                 &buffer_index) ||
             buffer_index < 0 ||
             buffer_index >= kGameplayInputBufferCount) {
-            pending.fetch_add(1, std::memory_order_acq_rel);
             return;
         }
 
@@ -135,7 +161,13 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
             ProcessMemory::Instance().TryWriteField(gameplay_address, kGameplayCastIntentOffset, pressed);
 
         if (wrote_mouse_button || wrote_cast_intent) {
-            g_gameplay_keyboard_injection.injected_mouse_left_active.store(true, std::memory_order_release);
+            (void)ConsumeGameplayMouseHoldFrameForCurrentPlayerTick(
+                pending,
+                g_gameplay_keyboard_injection.last_mouse_left_hold_player_tick_generation);
+            const bool was_injected =
+                g_gameplay_keyboard_injection.injected_mouse_left_active.exchange(
+                    true,
+                    std::memory_order_acq_rel);
             g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(true, std::memory_order_release);
             auto& pending_edge_events = g_gameplay_keyboard_injection.pending_mouse_left_edge_events;
             auto available_edge_events = pending_edge_events.load(std::memory_order_acquire);
@@ -150,11 +182,13 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
                 RecordGameplayMouseLeftEdge();
                 break;
             }
-            Log(
-                "Injected gameplay mouse-left click. input_state=" + HexString(self_address) +
-                " buffer_index=" + std::to_string(buffer_index) +
-                " gameplay=" + (have_gameplay_address ? HexString(gameplay_address) : std::string("0x00000000")) +
-                " cast_intent=" + std::to_string(wrote_cast_intent ? 1 : 0));
+            if (!was_injected) {
+                Log(
+                    "Injected gameplay mouse-left click. input_state=" + HexString(self_address) +
+                    " buffer_index=" + std::to_string(buffer_index) +
+                    " gameplay=" + (have_gameplay_address ? HexString(gameplay_address) : std::string("0x00000000")) +
+                    " cast_intent=" + std::to_string(wrote_cast_intent ? 1 : 0));
+            }
         }
         return;
     }
@@ -204,16 +238,7 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
 
     auto& pending_right =
         g_gameplay_keyboard_injection.pending_mouse_right_frames;
-    auto available_right = pending_right.load(std::memory_order_acquire);
-    while (available_right > 0) {
-        if (!pending_right.compare_exchange_weak(
-                available_right,
-                available_right - 1,
-                std::memory_order_acq_rel,
-                std::memory_order_acquire)) {
-            continue;
-        }
-
+    if (pending_right.load(std::memory_order_acquire) > 0) {
         int buffer_index = -1;
         if (!ProcessMemory::Instance().TryReadField(
                 self_address,
@@ -221,7 +246,6 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
                 &buffer_index) ||
             buffer_index < 0 ||
             buffer_index >= kGameplayInputBufferCount) {
-            pending_right.fetch_add(1, std::memory_order_acq_rel);
             return;
         }
 
@@ -233,18 +257,22 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
                 self_address,
                 mouse_button_offset,
                 pressed)) {
-            g_gameplay_keyboard_injection.injected_mouse_right_active.store(
-                true,
-                std::memory_order_release);
+            (void)ConsumeGameplayMouseHoldFrameForCurrentPlayerTick(
+                pending_right,
+                g_gameplay_keyboard_injection.last_mouse_right_hold_player_tick_generation);
+            const bool was_injected =
+                g_gameplay_keyboard_injection.injected_mouse_right_active.exchange(
+                    true,
+                    std::memory_order_acq_rel);
             g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(
                 true,
                 std::memory_order_release);
-            Log(
-                "Injected gameplay mouse-right click. input_state=" +
-                HexString(self_address) +
-                " buffer_index=" + std::to_string(buffer_index));
-        } else {
-            pending_right.fetch_add(1, std::memory_order_acq_rel);
+            if (!was_injected) {
+                Log(
+                    "Injected gameplay mouse-right click. input_state=" +
+                    HexString(self_address) +
+                    " buffer_index=" + std::to_string(buffer_index));
+            }
         }
         return;
     }

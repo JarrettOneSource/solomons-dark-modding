@@ -791,6 +791,12 @@ void ClearManualSpawnerSuppressedLocalPrimaryCastState(uintptr_t actor_address) 
 
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_right_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.last_mouse_left_hold_player_tick_generation.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.last_mouse_right_hold_player_tick_generation.store(
+        0,
+        std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.store(
         0,
@@ -976,13 +982,16 @@ bool QueueLocalPlayerPrimaryCastForMultiplayer(
     }
 
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-    const auto edge_serial = GetGameplayMouseLeftEdgeSerial();
-    const auto edge_tick_ms = GetGameplayMouseLeftEdgeTickMs();
-    if (edge_serial == 0 ||
-        edge_tick_ms == 0 ||
-        now_ms < edge_tick_ms ||
-        now_ms - edge_tick_ms > kLocalPrimaryCastEdgeCaptureWindowMs) {
-        return false;
+    std::uint64_t edge_serial = 0;
+    if (capture_kind == LocalPrimaryCastCaptureKind::NativeAirDispatch) {
+        edge_serial = GetGameplayMouseLeftEdgeSerial();
+        const auto edge_tick_ms = GetGameplayMouseLeftEdgeTickMs();
+        if (edge_serial == 0 ||
+            edge_tick_ms == 0 ||
+            now_ms < edge_tick_ms ||
+            now_ms - edge_tick_ms > kLocalPrimaryCastEdgeCaptureWindowMs) {
+            return false;
+        }
     }
 
     ResolvedPrimaryCastDescriptor primary_descriptor{};
@@ -1051,12 +1060,24 @@ bool QueueLocalPlayerPrimaryCastForMultiplayer(
             std::memory_order_acquire) == 0) {
         return false;
     }
-    if (!TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)) {
+    if (capture_kind == LocalPrimaryCastCaptureKind::NativeAirDispatch &&
+        !TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)) {
         return false;
     }
     if (native_air_manual_cast &&
         !TryConsumeManualSpawnerPrimaryCastAllowance()) {
         return false;
+    }
+
+    if (capture_kind == LocalPrimaryCastCaptureKind::PurePrimaryStart) {
+        static std::atomic<uintptr_t> s_last_pure_primary_actor{0};
+        static std::atomic<std::uint64_t> s_last_pure_primary_tick_ms{0};
+        if (s_last_pure_primary_actor.load(std::memory_order_acquire) == actor_address &&
+            s_last_pure_primary_tick_ms.load(std::memory_order_acquire) == now_ms) {
+            return false;
+        }
+        s_last_pure_primary_actor.store(actor_address, std::memory_order_release);
+        s_last_pure_primary_tick_ms.store(now_ms, std::memory_order_release);
     }
 
     const auto native_queue_id = multiplayer::QueueLocalSpellCastEvent(

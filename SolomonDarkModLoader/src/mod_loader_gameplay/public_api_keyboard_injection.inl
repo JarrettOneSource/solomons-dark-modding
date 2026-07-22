@@ -877,8 +877,10 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.last_mouse_left_hold_player_tick_generation.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_right_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.last_mouse_right_hold_player_tick_generation.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.input_state_address.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_movement_x.store(0.0f, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_movement_y.store(0.0f, std::memory_order_release);
@@ -1042,8 +1044,10 @@ void ShutdownGameplayKeyboardInjection() {
         std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.last_mouse_left_hold_player_tick_generation.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_right_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.last_mouse_right_hold_player_tick_generation.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.input_state_address.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_movement_x.store(0.0f, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_movement_y.store(0.0f, std::memory_order_release);

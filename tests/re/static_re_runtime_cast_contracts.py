@@ -416,6 +416,69 @@ def test_remote_per_cast_primary_settles_without_waiting_for_release() -> str:
     return "remote per-cast primaries settle from projectile observation and verifier rejects overfire"
 
 
+def test_queued_mouse_holds_use_player_tick_duration() -> str:
+    runtime_state_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/runtime_request_state.inl"
+    )
+    mouse_refresh_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_mouse_refresh_hook.inl"
+    )
+    input_queue_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_input_queueing.inl"
+    )
+    player_control_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
+    )
+
+    required_tokens = (
+        (runtime_state_text, "runtime_state", "last_mouse_left_hold_player_tick_generation"),
+        (runtime_state_text, "runtime_state", "last_mouse_right_hold_player_tick_generation"),
+        (mouse_refresh_text, "mouse_refresh", "ConsumeGameplayMouseHoldFrameForCurrentPlayerTick("),
+        (mouse_refresh_text, "mouse_refresh", "local_player_tick_generation.load("),
+        (mouse_refresh_text, "mouse_refresh", "last_mouse_left_hold_player_tick_generation"),
+        (mouse_refresh_text, "mouse_refresh", "last_mouse_right_hold_player_tick_generation"),
+        (input_queue_text, "input_queue", "last_mouse_left_hold_player_tick_generation.store("),
+        (input_queue_text, "input_queue", "last_mouse_right_hold_player_tick_generation.store("),
+        (input_queue_text, "input_queue", "const auto queued_frames ="),
+        (input_queue_text, "input_queue", "static_cast<std::uint64_t>(queued_frames) * 50"),
+        (player_control_text, "player_control", "capture_kind == LocalPrimaryCastCaptureKind::NativeAirDispatch &&"),
+        (player_control_text, "player_control", "!TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)"),
+    )
+    missing = [
+        f"{label}:{token}"
+        for text, label, token in required_tokens
+        if token not in text
+    ]
+    if missing:
+        raise StaticReTestFailure(
+            "queued gameplay mouse holds are not player-tick bounded: " +
+            ", ".join(missing))
+
+    helper_start = mouse_refresh_text.find(
+        "bool ConsumeGameplayMouseHoldFrameForCurrentPlayerTick(")
+    hook_start = mouse_refresh_text.find("void __fastcall HookGameplayMouseRefresh(")
+    if helper_start == -1 or hook_start == -1 or helper_start >= hook_start:
+        raise StaticReTestFailure("player-tick mouse-hold consumer is not isolated before the hook")
+    helper_body = mouse_refresh_text[helper_start:hook_start]
+    generation_read = helper_body.find("local_player_tick_generation.load(")
+    generation_claim = helper_body.find("last_consumed_generation.compare_exchange_weak(")
+    pending_decrement = helper_body.find("pending_frames.compare_exchange_weak(")
+    if not (0 <= generation_read < generation_claim < pending_decrement):
+        raise StaticReTestFailure(
+            "mouse-hold frames must claim a new player-tick generation before decrementing")
+    if mouse_refresh_text.count(
+            "ConsumeGameplayMouseHoldFrameForCurrentPlayerTick(") != 3:
+        raise StaticReTestFailure(
+            "player-tick mouse-hold consumer must serve exactly left and right injection")
+
+    if player_control_text.count(
+            "!TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)") != 1:
+        raise StaticReTestFailure(
+            "only the native Air dispatcher may claim the synthetic input edge")
+
+    return "queued left/right mouse holds consume once per player tick and preserve repeated primaries"
+
+
 def test_remote_held_input_casts_defer_lifecycle_to_sender_input() -> str:
     processing_text = read_text(PENDING_CAST_PROCESSING)
 

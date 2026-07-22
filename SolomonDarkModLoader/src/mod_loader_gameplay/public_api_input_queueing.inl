@@ -203,13 +203,17 @@ bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_m
         return false;
     }
 
-    g_gameplay_keyboard_injection.pending_mouse_left_frames.fetch_add(
-        frames,
-        std::memory_order_acq_rel);
-    g_gameplay_keyboard_injection.pending_mouse_left_edge_events.fetch_add(1, std::memory_order_acq_rel);
+    const auto queued_frames =
+        g_gameplay_keyboard_injection.pending_mouse_left_frames.fetch_add(
+            frames,
+            std::memory_order_acq_rel) + frames;
+    g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(
+        1,
+        std::memory_order_release);
     if (IsRunLifecycleManualEnemySpawnerTestModeEnabled()) {
         constexpr std::uint64_t kManualSpawnerPrimaryCastControlGraceMinMs = 1500;
-        const auto frame_grace_ms = static_cast<std::uint64_t>(frames) * 50 + 250;
+        const auto frame_grace_ms =
+            static_cast<std::uint64_t>(queued_frames) * 50 + 250;
         const auto grace_ms =
             frame_grace_ms > kManualSpawnerPrimaryCastControlGraceMinMs
                 ? frame_grace_ms
@@ -271,6 +275,7 @@ bool QueueGameplayMouseRightHoldFrames(
 
 void ClearQueuedGameplayMouseLeft() {
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
+    g_gameplay_keyboard_injection.last_mouse_left_hold_player_tick_generation.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.store(
         0,
@@ -301,6 +306,9 @@ void ClearQueuedGameplayMouseLeft() {
 
 void ClearQueuedGameplayMouseRight() {
     g_gameplay_keyboard_injection.pending_mouse_right_frames.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.last_mouse_right_hold_player_tick_generation.store(
         0,
         std::memory_order_release);
     g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(
