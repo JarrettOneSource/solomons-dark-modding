@@ -126,6 +126,37 @@ bool StartPendingBotCastRequest(
         }
     }
 
+    if (!IsNativeRemoteParticipantBinding(binding) &&
+        HasLuaSpellCastFilterHandlers()) {
+        auto filter_context = CaptureLuaSpellCastFilterContext(
+            actor_address,
+            binding->bot_id,
+            request.kind == multiplayer::BotCastKind::Primary
+                ? LuaSpellCastKind::Primary
+                : LuaSpellCastKind::Secondary,
+            request.skill_id,
+            request.kind == multiplayer::BotCastKind::Secondary
+                ? request.secondary_slot
+                : -1);
+        ApplyLuaSpellCastAimOverrides(
+            have_aim_heading,
+            aim_heading,
+            have_aim_target,
+            aim_target_x,
+            aim_target_y,
+            effective_target_actor_address,
+            &filter_context);
+        if (!ApplyLuaSpellCastFilters(filter_context)) {
+            Log(
+                "[lua] canceled owner-side bot spell cast. participant_id=" +
+                std::to_string(binding->bot_id) +
+                " actor=" + HexString(actor_address) +
+                " skill_id=" + std::to_string(request.skill_id));
+            RetireCanceledOwnerBotSpellCast(binding);
+            return true;
+        }
+    }
+
     float heading_before = 0.0f;
     float aim_x_before = 0.0f;
     float aim_y_before = 0.0f;

@@ -37,6 +37,7 @@ Included sample mods:
 - `lua_dark_cloud_sort_bootstrap` (semantic dialog-dismiss bootstrap to the title menu checkpoint)
 - `lua_damage_filter_lab` (opt-in owner-side incoming-damage rewrite example)
 - `lua_hud_showcase` (opt-in immediate-mode text, primitives, stock sprites, and world marker)
+- `lua_spell_cast_filter_lab` (opt-in one-shot owner-side primary-cast cancellation example)
 - `lua_ui_sandbox_lab` (semantic UI lab presets backed by live snapshots and engine-level action activation; preset selected via config file or environment)
 - `skill_shock_nova`
 - `story_custom_intro`

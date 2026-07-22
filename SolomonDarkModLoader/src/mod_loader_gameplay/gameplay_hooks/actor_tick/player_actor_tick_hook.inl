@@ -331,6 +331,20 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             return;
         }
 
+        // A rejected request is consumed before this hook reaches the retail
+        // tick. Letting that same tick continue can turn the already-authored
+        // control-brain facing vector into a one-shot action at 0x0052DA80,
+        // after Lua has canceled the attempt. Suppress exactly that tick; the
+        // binding returns to the ordinary idle path on the next frame.
+        if (binding->suppress_next_stock_tick_after_spell_filter_cancel) {
+            binding->suppress_next_stock_tick_after_spell_filter_cancel = false;
+            Log(
+                "[lua] suppressed owner-side bot stock tick after canceled spell cast. "
+                "participant_id=" + std::to_string(binding->bot_id) +
+                " actor=" + HexString(actor_address));
+            return;
+        }
+
         // Clear stale loader movement input before every stock bot tick.
         // Clear the previous frame's vector before stock can use it.
         // active casts receive target/control input through selection state, and
@@ -885,7 +899,71 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         ScopedLocalPlayerScriptedMovementInput scripted_movement_input(
             gameplay_address_for_pump);
         ScopedLocalPlayerRushMovementScale rush_movement_scale(actor_address);
+
+        std::uint8_t saved_cast_intent = 0;
+        std::uint8_t saved_mouse_left = 0;
+        std::size_t live_mouse_left_offset = 0;
+        const bool have_cast_intent =
+            memory.TryReadField(
+                gameplay_address_for_pump,
+                kGameplayCastIntentOffset,
+                &saved_cast_intent);
+        int input_buffer_index = -1;
+        bool have_mouse_left = false;
+        if (memory.TryReadField(
+                gameplay_address_for_pump,
+                kGameplayInputBufferIndexOffset,
+                &input_buffer_index) &&
+            input_buffer_index >= 0 &&
+            input_buffer_index < kGameplayInputBufferCount) {
+            live_mouse_left_offset = static_cast<std::size_t>(
+                input_buffer_index * kGameplayInputBufferStride +
+                kGameplayMouseLeftButtonOffset);
+            have_mouse_left =
+                memory.TryReadField(
+                    gameplay_address_for_pump,
+                    live_mouse_left_offset,
+                    &saved_mouse_left);
+        }
+        bool cast_intent_masked = false;
+        bool mouse_left_masked = false;
+        if (((have_cast_intent && saved_cast_intent != 0) ||
+             (have_mouse_left && saved_mouse_left != 0)) &&
+            HasLuaSpellCastFilterHandlers()) {
+            std::int32_t skill_id = 0;
+            if (TryResolveLocalPlayerPrimarySpellFilterSkillId(
+                    actor_address,
+                    &skill_id) &&
+                !ApplyLocalPlayerPrimarySpellFilter(actor_address, skill_id)) {
+                if (have_cast_intent) {
+                    cast_intent_masked =
+                        memory.TryWriteField<std::uint8_t>(
+                            gameplay_address_for_pump,
+                            kGameplayCastIntentOffset,
+                            0);
+                }
+                if (have_mouse_left) {
+                    mouse_left_masked =
+                        memory.TryWriteField<std::uint8_t>(
+                            gameplay_address_for_pump,
+                            live_mouse_left_offset,
+                            0);
+                }
+            }
+        }
         original(self);
+        if (cast_intent_masked) {
+            (void)memory.TryWriteField<std::uint8_t>(
+                gameplay_address_for_pump,
+                kGameplayCastIntentOffset,
+                saved_cast_intent);
+        }
+        if (mouse_left_masked) {
+            (void)memory.TryWriteField<std::uint8_t>(
+                gameplay_address_for_pump,
+                live_mouse_left_offset,
+                saved_mouse_left);
+        }
     } else {
         original(self);
     }

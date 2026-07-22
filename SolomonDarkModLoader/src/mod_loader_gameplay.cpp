@@ -71,6 +71,7 @@ namespace {
 #include "mod_loader_gameplay/core/boneyard_generator_patch.inl"
 
 #include "mod_loader_gameplay/scene_and_animation.inl"
+#include "mod_loader_gameplay/lua_spell_cast_filter.inl"
 #include "mod_loader_gameplay/standalone_materialization.inl"
 #include "mod_loader_gameplay/bot_pathfinding.inl"
 #include "mod_loader_gameplay/bot_registry_and_movement.inl"

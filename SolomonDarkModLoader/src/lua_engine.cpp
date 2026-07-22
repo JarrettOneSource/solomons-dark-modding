@@ -328,6 +328,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
     if (IsGameplayKeyboardInjectionInitialized()) {
         capabilities.emplace_back("input.keyboard.inject");
         capabilities.emplace_back("events.filters.damage");
+        capabilities.emplace_back("events.filters.spell_cast");
     }
 
     if (multiplayer::IsBotRuntimeInitialized()) {

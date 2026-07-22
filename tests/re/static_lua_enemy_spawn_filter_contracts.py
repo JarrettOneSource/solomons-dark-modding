@@ -102,7 +102,7 @@ def test_lua_enemy_spawn_filter_preserves_stock_call_shape_and_ownership() -> st
     ):
         assert token in documentation, f"enemy-spawn filter documentation lacks: {token}"
     assert (
-        "Damage, enemy-spawn, drop-roll, and wave-spawn slices implemented"
+        "Damage, enemy-spawn, drop-roll, wave-spawn, and spell-cast slices implemented"
         in roadmap
     )
     for token in ('"enabled": false', '"events.filters.enemy_spawn"'):

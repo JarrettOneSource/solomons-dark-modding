@@ -504,6 +504,7 @@
     <ClCompile Include="src\lua_engine_drop_filters.cpp" />
     <ClCompile Include="src\lua_engine_enemy_spawn_filters.cpp" />
     <ClCompile Include="src\lua_engine_wave_spawn_filters.cpp" />
+    <ClCompile Include="src\lua_engine_spell_cast_filters.cpp" />
     <ClCompile Include="src\lua_engine_custom_events.cpp" />
     <ClCompile Include="src\lua_engine_values.cpp" />
     <ClCompile Include="src\lua_draw_assets.cpp" />

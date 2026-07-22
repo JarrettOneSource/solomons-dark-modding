@@ -13,6 +13,7 @@ inline constexpr std::uint32_t kLuaDamageTakenFilterMask = 1u << 1;
 inline constexpr std::uint32_t kLuaEnemySpawningFilterMask = 1u << 2;
 inline constexpr std::uint32_t kLuaDropRollingFilterMask = 1u << 3;
 inline constexpr std::uint32_t kLuaWaveSpawningFilterMask = 1u << 4;
+inline constexpr std::uint32_t kLuaSpellCastingFilterMask = 1u << 5;
 
 struct LuaDamageFilterContext {
     std::uintptr_t source_actor_address = 0;
@@ -83,5 +84,31 @@ struct LuaWaveSpawnFilterContext {
 
 bool HasLuaWaveSpawnFilterHandlers();
 bool ApplyLuaWaveSpawnFilters(LuaWaveSpawnFilterContext* context);
+
+enum class LuaSpellCastKind : std::uint8_t {
+    Primary = 0,
+    Secondary,
+};
+
+struct LuaSpellCastFilterContext {
+    std::uintptr_t caster_actor_address = 0;
+    std::uint64_t caster_participant_id = 0;
+    LuaSpellCastKind kind = LuaSpellCastKind::Primary;
+    std::int32_t skill_id = 0;
+    std::int32_t secondary_slot = -1;
+    bool has_position = false;
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    bool has_direction = false;
+    float direction_x = 0.0f;
+    float direction_y = 0.0f;
+    std::uintptr_t target_actor_address = 0;
+    bool has_aim_target = false;
+    float aim_target_x = 0.0f;
+    float aim_target_y = 0.0f;
+};
+
+bool HasLuaSpellCastFilterHandlers();
+bool ApplyLuaSpellCastFilters(const LuaSpellCastFilterContext& context);
 
 }  // namespace sdmod

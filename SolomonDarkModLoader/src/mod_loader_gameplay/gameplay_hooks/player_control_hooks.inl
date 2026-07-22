@@ -761,27 +761,11 @@ bool IsUsableLocalPlayerCastAimTarget(
     float position_y,
     float aim_target_x,
     float aim_target_y) {
-    if (!std::isfinite(position_x) ||
-        !std::isfinite(position_y) ||
-        !std::isfinite(aim_target_x) ||
-        !std::isfinite(aim_target_y)) {
-        return false;
-    }
-    if (std::abs(aim_target_x) < 0.001f && std::abs(aim_target_y) < 0.001f) {
-        return false;
-    }
-
-    const auto dx = aim_target_x - position_x;
-    const auto dy = aim_target_y - position_y;
-    const auto distance = std::sqrt((dx * dx) + (dy * dy));
-    constexpr float kMinCastAimDistance = 1.0f;
-    constexpr float kMaxCastAimDistance = 4096.0f;
-    constexpr float kMaxCastAimCoordinateMagnitude = 20000.0f;
-    return std::isfinite(distance) &&
-           distance >= kMinCastAimDistance &&
-           distance <= kMaxCastAimDistance &&
-           std::abs(aim_target_x) <= kMaxCastAimCoordinateMagnitude &&
-           std::abs(aim_target_y) <= kMaxCastAimCoordinateMagnitude;
+    return IsUsableSpellCastAimTarget(
+        position_x,
+        position_y,
+        aim_target_x,
+        aim_target_y);
 }
 
 void ClearManualSpawnerSuppressedLocalPrimaryCastState(uintptr_t actor_address) {

@@ -12,6 +12,7 @@ Implemented filter families are:
 - `enemy.spawning`
 - `drop.rolling`
 - `wave.spawning`
+- `spell.casting`
 
 The damage filters execute at the stock `PlayerActor::MagicDamage` resolution point. The
 loader runs every `damage.dealing` handler first, then every `damage.taken`
@@ -135,6 +136,8 @@ selector advertises `events.filters.drop_roll` and is documented in
 [lua-drop-roll-filter.md](lua-drop-roll-filter.md).
 The stock wave-spawner seam advertises `events.filters.wave_spawn` and is
 documented in [lua-wave-spawn-filter.md](lua-wave-spawn-filter.md).
+The owner-side spell seam advertises `events.filters.spell_cast` and is
+documented in [lua-spell-cast-filter.md](lua-spell-cast-filter.md).
 
 The live verifier must run against a disposable game process because filter
 registrations last for the life of the Lua state. It invokes the retail damage
@@ -143,4 +146,11 @@ and then proves cancellation leaves HP unchanged:
 
 ```powershell
 py -3 tools/verify_lua_damage_filters.py --pipe SolomonDarkModLoader_LuaExec
+```
+
+The spell filter has a separate cancel/allow lifecycle verifier because its
+acceptance boundary includes bot request retirement and native cast state:
+
+```powershell
+py -3 tools/verify_lua_spell_cast_filters.py --pipe SolomonDarkModLoader_LuaExec
 ```

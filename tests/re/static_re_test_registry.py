@@ -23,6 +23,9 @@ from static_lua_event_filter_contracts import (
 from static_lua_enemy_spawn_filter_contracts import (
     test_lua_enemy_spawn_filter_preserves_stock_call_shape_and_ownership,
 )
+from static_lua_spell_cast_filter_contracts import (
+    test_lua_spell_filter_is_owner_side_precast_and_once_per_attempt,
+)
 from static_multiplayer_transport_contracts import (
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
     test_build_all_rebuilds_native_loader_from_clean_intermediates,
@@ -272,6 +275,10 @@ from static_re_binary_tooling_contracts import (
 )
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "Lua spell filters are owner-side and once per attempt",
+        test_lua_spell_filter_is_owner_side_precast_and_once_per_attempt,
+    ),
     (
         "Lua enemy-spawn filter preserves stock call shape and ownership",
         test_lua_enemy_spawn_filter_preserves_stock_call_shape_and_ownership,

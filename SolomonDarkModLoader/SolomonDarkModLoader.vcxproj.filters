@@ -1366,6 +1366,9 @@
     <ClCompile Include="src\lua_engine_wave_spawn_filters.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_spell_cast_filters.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_engine_custom_events.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>

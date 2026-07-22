@@ -47,6 +47,9 @@ std::uint32_t FilterMaskForName(std::string_view filter_name) {
     if (filter_name == "wave.spawning") {
         return kLuaWaveSpawningFilterMask;
     }
+    if (filter_name == "spell.casting") {
+        return kLuaSpellCastingFilterMask;
+    }
     return 0;
 }
 
@@ -445,6 +448,11 @@ bool HasLuaWaveSpawnFilterHandlers() {
             kLuaWaveSpawningFilterMask) != 0;
 }
 
+bool HasLuaSpellCastFilterHandlers() {
+    return (g_registered_filter_mask.load(std::memory_order_acquire) &
+            kLuaSpellCastingFilterMask) != 0;
+}
+
 namespace detail {
 
 void RegisterLuaEventFilterBinding(lua_State* state) {
@@ -457,6 +465,7 @@ void ResetLuaEventFilterRegistrations() {
     ResetLuaEnemySpawnFilterDiagnostics();
     ResetLuaDropRollFilterDiagnostics();
     ResetLuaWaveSpawnFilterDiagnostics();
+    ResetLuaSpellCastFilterDiagnostics();
 }
 
 void ClearLuaEventFilterRegistrationsForMod(LoadedLuaMod* mod) {

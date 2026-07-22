@@ -37,6 +37,111 @@ struct LocalSecondaryCursorProjectionCaptureContext {
     uintptr_t actor_world_address = 0;
 };
 
+struct LocalPrimarySpellFilterState {
+    uintptr_t actor_address = 0;
+    std::int32_t skill_id = 0;
+    std::uint64_t mouse_edge_serial = 0;
+    std::uint64_t mouse_edge_tick_ms = 0;
+    bool allowed = true;
+};
+
+LocalPrimarySpellFilterState g_local_primary_spell_filter_state;
+
+bool TryResolveLocalPlayerPrimarySpellFilterSkillId(
+    uintptr_t actor_address,
+    std::int32_t* skill_id) {
+    if (actor_address == 0 || skill_id == nullptr) {
+        return false;
+    }
+
+    *skill_id = 0;
+    if (ProcessMemory::Instance().TryReadField(
+            actor_address,
+            kActorPrimarySkillIdOffset,
+            skill_id) &&
+        *skill_id > 0) {
+        return true;
+    }
+
+    int selection_state = -1;
+    if (!TryReadGameplayIndexStateValue(
+            static_cast<int>(kGameplayIndexStateActorSelectionBaseIndex),
+            &selection_state)) {
+        return false;
+    }
+
+    uintptr_t progression_address = 0;
+    if (!TryResolveActorProgressionRuntime(
+            actor_address,
+            &progression_address)) {
+        return false;
+    }
+
+    NativePrimarySpellSelection selection{};
+    if (!TryResolveNativePrimarySelectionFromLiveProgression(
+            progression_address,
+            selection_state,
+            selection_state,
+            &selection) ||
+        selection.build_skill_id <= 0) {
+        return false;
+    }
+
+    *skill_id = selection.build_skill_id;
+    return true;
+}
+
+bool ApplyLocalPlayerPrimarySpellFilter(
+    uintptr_t actor_address,
+    std::int32_t skill_id) {
+    if (!HasLuaSpellCastFilterHandlers()) {
+        return true;
+    }
+
+    const auto edge_serial = GetGameplayMouseLeftEdgeSerial();
+    const auto edge_tick_ms = GetGameplayMouseLeftEdgeTickMs();
+    const auto& previous = g_local_primary_spell_filter_state;
+    if (edge_serial != 0 &&
+        edge_tick_ms != 0 &&
+        previous.actor_address == actor_address &&
+        previous.skill_id == skill_id &&
+        previous.mouse_edge_serial == edge_serial &&
+        previous.mouse_edge_tick_ms == edge_tick_ms) {
+        return previous.allowed;
+    }
+
+    constexpr std::uint64_t kPrimarySpellFilterEdgeWindowMs = 500;
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (edge_serial == 0 ||
+        edge_tick_ms == 0 ||
+        now_ms < edge_tick_ms ||
+        now_ms - edge_tick_ms > kPrimarySpellFilterEdgeWindowMs) {
+        return true;
+    }
+
+    const auto context = CaptureLuaSpellCastFilterContext(
+        actor_address,
+        multiplayer::GetLocalTransportParticipantId(),
+        LuaSpellCastKind::Primary,
+        skill_id);
+    const bool allowed = ApplyLuaSpellCastFilters(context);
+    g_local_primary_spell_filter_state = {
+        actor_address,
+        skill_id,
+        edge_serial,
+        edge_tick_ms,
+        allowed,
+    };
+    if (!allowed) {
+        Log(
+            "[lua] canceled owner-side local primary spell cast. actor=" +
+            HexString(actor_address) +
+            " skill_id=" + std::to_string(skill_id) +
+            " mouse_edge=" + std::to_string(edge_serial));
+    }
+    return allowed;
+}
+
 thread_local LocalSecondaryCursorProjectionCaptureContext*
     g_local_secondary_cursor_projection_capture = nullptr;
 
@@ -121,22 +226,11 @@ bool IsUsableSecondaryCastAimTarget(
     float position_y,
     float aim_target_x,
     float aim_target_y) {
-    if (!std::isfinite(position_x) ||
-        !std::isfinite(position_y) ||
-        !std::isfinite(aim_target_x) ||
-        !std::isfinite(aim_target_y) ||
-        (std::abs(aim_target_x) < 0.001f &&
-         std::abs(aim_target_y) < 0.001f)) {
-        return false;
-    }
-    const auto dx = aim_target_x - position_x;
-    const auto dy = aim_target_y - position_y;
-    const auto distance = std::sqrt(dx * dx + dy * dy);
-    return std::isfinite(distance) &&
-           distance >= 1.0f &&
-           distance <= 4096.0f &&
-           std::abs(aim_target_x) <= 20000.0f &&
-           std::abs(aim_target_y) <= 20000.0f;
+    return IsUsableSpellCastAimTarget(
+        position_x,
+        position_y,
+        aim_target_x,
+        aim_target_y);
 }
 
 bool TryCaptureLocalSecondaryCastOrigin(
@@ -356,6 +450,22 @@ std::uint8_t __fastcall HookPlayerActorSecondarySpellCast(
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    if (g_remote_secondary_spell_dispatch_depth == 0 &&
+        IsActorCurrentLocalPlayerSlotZero(actor_address) &&
+        HasLuaSpellCastFilterHandlers()) {
+        const auto filter_context = CaptureLuaSpellCastFilterContext(
+            actor_address,
+            multiplayer::GetLocalTransportParticipantId(),
+            LuaSpellCastKind::Secondary,
+            skill_entry_index);
+        if (!ApplyLuaSpellCastFilters(filter_context)) {
+            Log(
+                "[lua] canceled owner-side local secondary spell cast. actor=" +
+                HexString(actor_address) +
+                " skill_id=" + std::to_string(skill_entry_index));
+            return 0;
+        }
+    }
     const auto turn_undead_precast_state =
         CaptureAuthoritativeTurnUndeadPrecastState(
             actor_address,
