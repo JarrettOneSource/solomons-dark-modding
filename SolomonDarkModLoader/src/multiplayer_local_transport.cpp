@@ -166,6 +166,7 @@ constexpr std::uint32_t kWaterPrimaryNativeTypeId = 0x07D5;
 constexpr std::uint32_t kFireEmberNativeTypeId = 0x07D6;
 constexpr std::uint32_t kFirewalkerTrailNativeTypeId = 0x07EE;
 constexpr std::uint32_t kMagicStormNativeTypeId = 0x07F0;
+constexpr std::uint32_t kMagicTrapNativeTypeId = 0x07F5;
 constexpr std::uint32_t kSolomonDigNativeTypeId = 0x1391;
 constexpr std::uint32_t kSolomonRunStaticNativeTypeId = 0x1392;
 constexpr std::size_t kGoldRewardAmountTierOffset = 0x13C;

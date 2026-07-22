@@ -21,6 +21,7 @@ constexpr std::uint32_t kReplicatedFireballPrimaryNativeTypeId = 0x07D4;
 constexpr std::uint32_t kReplicatedWaterPrimaryNativeTypeId = 0x07D5;
 constexpr std::uint32_t kReplicatedFireEmberNativeTypeId = 0x07D6;
 constexpr std::uint32_t kReplicatedFirewalkerTrailNativeTypeId = 0x07EE;
+constexpr std::uint32_t kReplicatedMagicTrapNativeTypeId = 0x07F5;
 
 #include "spell_effect_materialization.inl"
 
@@ -56,6 +57,36 @@ bool IsNativeReplayDrivenPrimarySpellEffect(std::uint32_t native_type_id) {
     default:
         return false;
     }
+}
+
+bool TryRequestReplicatedSpellEffectRetirement(
+    uintptr_t actor_address,
+    const multiplayer::SpellEffectSnapshot& effect) {
+    if (actor_address == 0 ||
+        !effect.terminal ||
+        effect.native_type_id != kReplicatedMagicTrapNativeTypeId) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t pending_remove = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorPendingRemoveOffset,
+            &pending_remove)) {
+        return false;
+    }
+    if (pending_remove != 0) {
+        return true;
+    }
+
+    DWORD exception_code = 0;
+    return CallActorRequestRetirementSafe(actor_address, &exception_code) &&
+           memory.TryReadField(
+               actor_address,
+               kActorPendingRemoveOffset,
+               &pending_remove) &&
+           pending_remove != 0;
 }
 
 bool TryApplyReplicatedSpellEffectState(
@@ -131,6 +162,12 @@ bool TryApplyReplicatedSpellEffectState(
     }
 
     if (effect.terminal) {
+        if (TryRequestReplicatedSpellEffectRetirement(
+                actor_address,
+                effect)) {
+            apply_info->terminal_write_count += 1;
+            wrote_any = true;
+        }
         std::size_t lifetime_offset = 0;
         if (effect.native_type_id == kReplicatedFireEmberNativeTypeId) {
             lifetime_offset = kEmberLifetimeOffset;

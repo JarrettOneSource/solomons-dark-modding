@@ -43,6 +43,7 @@ NATIVE_TARGET_MODIFIER_TYPES = {
     30: 0x1B76,  # Prismatic Shock
     35: 0x1B6F,  # Ring of Ice
 }
+MAGIC_TRAP_NATIVE_TYPE_ID = 0x07F5
 MAGIC_SHIELD_ROW = 54
 MAGIC_SHIELD_RANK_ONE_ABSORB = 25.0
 MAGIC_SHIELD_FIRST_HIT_DAMAGE = 20.0
@@ -81,7 +82,7 @@ SKILLS = (
     SecondarySkillSpec(46, "Stoneskin", "self_status"),
     SecondarySkillSpec(48, "Teleport", "teleport"),
     SecondarySkillSpec(49, "Magic Circle", "field", False, True),
-    SecondarySkillSpec(50, "Magic Trap", "field", True, True),
+    SecondarySkillSpec(50, "Magic Trap", "field", True, True, MAGIC_TRAP_NATIVE_TYPE_ID),
     SecondarySkillSpec(51, "Dampen", "dampen"),
     SecondarySkillSpec(54, "Magic Shield", "magic_shield"),
     SecondarySkillSpec(72, "Acid Rain", "field", True, True, 0x07FE),
@@ -122,6 +123,7 @@ if not _G.__sdmod_secondary_effect_monitor_registered then
           if row == nil then
             row = {
               type_id = type_id,
+              actor_slot = tonumber(actor.actor_slot) or -1,
               first_x = tonumber(actor.x) or 0,
               first_y = tonumber(actor.y) or 0,
               last_x = tonumber(actor.x) or 0,
@@ -201,6 +203,7 @@ emit('new_actor_count', #rows)
 for index, row in ipairs(rows) do
   local prefix = 'actor.' .. index .. '.'
   emit(prefix .. 'type_id', row.actor.type_id)
+  emit(prefix .. 'actor_slot', row.actor.actor_slot)
   emit(prefix .. 'first_x', row.actor.first_x)
   emit(prefix .. 'first_y', row.actor.first_y)
   emit(prefix .. 'last_x', row.actor.last_x)
@@ -659,6 +662,9 @@ def collect_effect_monitor(
     actors = [
         {
             "type_id": parse_int_text(values.get(f"actor.{index}.type_id"), 0),
+            "actor_slot": parse_int_text(
+                values.get(f"actor.{index}.actor_slot"), -1
+            ),
             "first_x": _float(values, f"actor.{index}.first_x"),
             "first_y": _float(values, f"actor.{index}.first_y"),
             "last_x": _float(values, f"actor.{index}.last_x"),
@@ -892,6 +898,44 @@ def verify_synchronized_effect_positions(
         "tolerance": tolerance,
         "maximum_position_error": maximum_position_error,
         "matches": matches,
+    }
+
+
+def verify_participant_owned_effect_slots(
+    direction: focus.Direction,
+    skill: SecondarySkillSpec,
+    effects: dict[str, dict[str, Any]],
+) -> dict[str, list[int]] | None:
+    if skill.row != 50:
+        return None
+
+    owner_slots = sorted(
+        {
+            actor["actor_slot"]
+            for actor in effects["owner"]["actors"]
+            if actor["type_id"] == MAGIC_TRAP_NATIVE_TYPE_ID
+        }
+    )
+    observer_slots = sorted(
+        {
+            actor["actor_slot"]
+            for actor in effects["observer"]["actors"]
+            if actor["type_id"] == MAGIC_TRAP_NATIVE_TYPE_ID
+        }
+    )
+    if owner_slots != [0]:
+        raise VerifyFailure(
+            f"{direction.name} Magic Trap was not owned by the local stock "
+            f"actor slot: owner_slots={owner_slots}"
+        )
+    if not observer_slots or any(slot <= 0 for slot in observer_slots):
+        raise VerifyFailure(
+            f"{direction.name} Magic Trap observer copy did not use a "
+            f"remote participant slot: observer_slots={observer_slots}"
+        )
+    return {
+        "owner_slots": owner_slots,
+        "observer_slots": observer_slots,
     }
 
 
@@ -2943,6 +2987,11 @@ def run_generic(
         skill,
         effects,
     )
+    participant_owned_effect_slots = verify_participant_owned_effect_slots(
+        direction,
+        skill,
+        effects,
+    )
 
     return {
         "behavior": skill.behavior,
@@ -2966,6 +3015,7 @@ def run_generic(
         "effects": effects,
         "shared_effect_types": shared_effect_types,
         "effect_position_sync": effect_position_sync,
+        "participant_owned_effect_slots": participant_owned_effect_slots,
         "after_owner": after_owner,
         "after_observer": after_observer,
         "vitals_convergence": vitals_convergence,

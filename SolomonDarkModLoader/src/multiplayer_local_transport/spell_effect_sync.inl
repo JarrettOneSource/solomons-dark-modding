@@ -6,6 +6,7 @@ bool IsReplicatedSpellEffectNativeType(std::uint32_t native_type_id) {
     case kFireEmberNativeTypeId:
     case kFirewalkerTrailNativeTypeId:
     case kMagicStormNativeTypeId:
+    case kMagicTrapNativeTypeId:
         return true;
     default:
         return false;
@@ -297,22 +298,24 @@ void RefreshLocalSpellEffectTracking(
             const auto priority = [](const SpellEffectPacketState& effect) {
                 const bool active =
                     (effect.flags & SpellEffectStateFlagActive) != 0;
-                if (!active) {
-                    return 2;
+                if (!active && effect.native_type_id == kMagicTrapNativeTypeId) {
+                    return 0;
                 }
-                return effect.native_type_id == kFirewalkerTrailNativeTypeId
-                           ? 1
-                           : 0;
+                if (active && effect.native_type_id != kFirewalkerTrailNativeTypeId) {
+                    return 1;
+                }
+                return active ? 2 : 3;
             };
             const auto left_priority = priority(left);
             const auto right_priority = priority(right);
             if (left_priority != right_priority) {
                 return left_priority < right_priority;
             }
-            // Keep long-lived projectiles and child effects ahead of trail
-            // churn. Within the bounded trail/tombstone partitions, the most
-            // recent serials carry the current visual and teardown state.
-            return left_priority == 0
+            // Magic Trap has no native observer-side expiry, so
+            // its oldest teardown records must survive the packet cap. Keep
+            // long-lived active effects next, then recent trail churn and
+            // supplementary terminal records.
+            return left_priority <= 1
                        ? left.effect_serial < right.effect_serial
                        : left.effect_serial > right.effect_serial;
         });

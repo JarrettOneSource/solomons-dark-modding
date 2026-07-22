@@ -1416,6 +1416,86 @@ def test_secondary_matrix_isolates_prior_native_effect_lifetimes() -> str:
     )
 
 
+def test_magic_trap_lifetime_follows_cast_owner() -> str:
+    transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")
+    effect_sync = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "spell_effect_sync.inl"
+    )
+    secondary_harness = _read(
+        "tools/multiplayer_secondary_behavior_harness.py"
+    )
+    effect_reconciliation = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "spell_effect_reconciliation.inl"
+    )
+    world_protocol = _read(
+        "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
+    )
+    world_reconciliation = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "world_snapshot_reconciliation/apply_snapshot.inl"
+    )
+
+    assert "kMagicTrapNativeTypeId = 0x07F5" in transport
+    for token in (
+        "case kMagicTrapNativeTypeId:",
+        "SpellEffectStateFlagTerminal",
+        "!active && effect.native_type_id == kMagicTrapNativeTypeId",
+    ):
+        assert token in effect_sync, (
+            f"Magic Trap participant-owned effect tracking lacks {token}"
+        )
+    _require_in_order(
+        effect_sync,
+        "!active && effect.native_type_id == kMagicTrapNativeTypeId",
+        "active && effect.native_type_id != kFirewalkerTrailNativeTypeId",
+    )
+
+    for token in (
+        "MAGIC_TRAP_NATIVE_TYPE_ID = 0x07F5",
+        '"Magic Trap",',
+        "MAGIC_TRAP_NATIVE_TYPE_ID)",
+        "actor_slot = tonumber(actor.actor_slot) or -1",
+        "emit(prefix .. 'actor_slot', row.actor.actor_slot)",
+        '"actor_slot": parse_int_text(',
+        "def verify_participant_owned_effect_slots(",
+        'owner_slots != [0]',
+        'any(slot <= 0 for slot in observer_slots)',
+        '"participant_owned_effect_slots": participant_owned_effect_slots',
+    ):
+        assert token in secondary_harness, (
+            f"Magic Trap live ownership witness lacks {token}"
+        )
+    _require_in_order(
+        secondary_harness,
+        "effects = collect_effect_monitors(pair, direction, timeout)",
+        "participant_owned_effect_slots = verify_participant_owned_effect_slots(",
+        '"participant_owned_effect_slots": participant_owned_effect_slots',
+    )
+
+    for token in (
+        "kReplicatedMagicTrapNativeTypeId = 0x07F5",
+        "TryRequestReplicatedSpellEffectRetirement(",
+        "CallActorRequestRetirementSafe(",
+        "kActorPendingRemoveOffset",
+    ):
+        assert token in effect_reconciliation, (
+            f"Magic Trap observer retirement lacks {token}"
+        )
+
+    assert "kMagicTrapNativeTypeId" not in world_protocol
+    assert (
+        "IsReplicatedRunPlayerCreatedRetirementAuthoritative"
+        not in world_reconciliation
+    )
+
+    return (
+        "Magic Trap transform and terminal state follow the casting "
+        "participant in both ownership directions"
+    )
+
+
 def test_mana_recovery_tolerance_respects_float32_precision() -> str:
     import verify_multiplayer_all_stat_sync as stats
 

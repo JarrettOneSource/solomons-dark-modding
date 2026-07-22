@@ -85,6 +85,7 @@ from static_multiplayer_behavior_contracts import (
     test_hub_presentation_uses_stored_authority_across_lifecycle_rotation,
     test_hub_services_use_typed_native_lua_dispatch,
     test_loot_materialization_waits_for_native_field_convergence,
+    test_magic_trap_lifetime_follows_cast_owner,
     test_mana_recovery_precondition_holds_zero_until_replication,
     test_mana_recovery_tolerance_respects_float32_precision,
     test_mana_up_contract_replaces_the_initial_rank_bonus,
@@ -402,6 +403,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "secondary matrix isolates prior native effect lifetimes",
         test_secondary_matrix_isolates_prior_native_effect_lifetimes,
+    ),
+    (
+        "Magic Trap lifetime follows its cast owner",
+        test_magic_trap_lifetime_follows_cast_owner,
     ),
     (
         "secondary replay preserves owner-authored aim",
