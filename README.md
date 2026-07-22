@@ -137,10 +137,18 @@ py -3 .\tools\verify_beta_release_artifact.py
 ```
 
 The result is
-`artifacts\SolomonDarkMultiplayerBeta-v0.1.0-beta.7.zip` plus
+`artifacts\SolomonDarkMultiplayerBeta-v<version>.zip` plus
 `artifacts\SHA256SUMS.txt`. The archive includes the self-contained desktop and
 x86 launchers, loader, config, sample mods, and the x86 Steam runtime; it does
-not include Solomon's Dark or Steam credentials. See
+not include Solomon's Dark or Steam credentials.
+
+Published GitHub releases attach the authorized standalone original game as
+`Solomons-Dark-0.72.5-Original-Game.zip` with a matching `.sha256` asset. The
+release workflow copies the canonical, hash-pinned game archive from
+`v0.1.0-beta.8`; it never packages a developer's local game directory or save
+data.
+
+See
 `docs/networking/steam-friend-playtest.md` for the host/join sequence and
 current beta limits.
 

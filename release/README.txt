@@ -4,7 +4,9 @@ Version {{VERSION}}
 ABOUT THIS BETA
 
 This beta adds Steam multiplayer to the original 32-bit Solomon's Dark 0.72.5.
-The beta does not include the game.
+The beta ZIP does not include the game. GitHub releases provide the original
+game as a separate optional download named
+Solomons-Dark-0.72.5-Original-Game.zip.
 
 Each player needs:
 
