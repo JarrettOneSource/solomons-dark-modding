@@ -93,7 +93,7 @@ from static_multiplayer_platform_contracts import (
     test_host_run_exit_is_authoritative_and_self_correcting,
     test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery,
     test_native_local_player_keeps_stock_input_and_equipment_ownership,
-    test_packaged_ui_accepts_single_file_launcher,
+    test_packaged_ui_uses_proton_compatible_launcher,
     test_packaged_ui_does_not_inherit_test_world_overrides,
     test_pair_launcher_drains_redirected_json_output,
     test_progression_matrices_prearm_quiet_spawning_before_run_entry,
@@ -490,8 +490,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_ui_sandbox_retries_unlatched_create_choices,
     ),
     (
-        "packaged desktop UI accepts its single-file launcher",
-        test_packaged_ui_accepts_single_file_launcher,
+        "packaged desktop UI uses its Proton-compatible launcher",
+        test_packaged_ui_uses_proton_compatible_launcher,
     ),
     (
         "beta package smoke canonicalizes Windows path aliases",

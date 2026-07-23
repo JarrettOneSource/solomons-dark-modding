@@ -36,6 +36,9 @@ $extractedRoot = Join-Path $smokeRoot $releaseName
 $runtimeRoot = Join-Path $smokeRoot "runtime"
 $uiExecutable = Join-Path $extractedRoot "SolomonDarkMultiplayerBeta.exe"
 $launcherExecutable = Join-Path $extractedRoot "launcher/SolomonDarkModLauncher.exe"
+$launcherCoreClr = Join-Path $extractedRoot "launcher/coreclr.dll"
+$launcherPrivateCoreLib = Join-Path $extractedRoot "launcher/System.Private.CoreLib.dll"
+$launcherRuntimeConfig = Join-Path $extractedRoot "launcher/SolomonDarkModLauncher.runtimeconfig.json"
 $result = [ordered]@{
     ok = $false
     archive = $ArchivePath
@@ -118,7 +121,13 @@ New-Item -ItemType Directory -Path $smokeRoot -Force | Out-Null
 
 try {
     Expand-Archive -Path $ArchivePath -DestinationPath $smokeRoot -Force
-    foreach ($requiredPath in @($uiExecutable, $launcherExecutable)) {
+    foreach ($requiredPath in @(
+            $uiExecutable,
+            $launcherExecutable,
+            $launcherCoreClr,
+            $launcherPrivateCoreLib,
+            $launcherRuntimeConfig
+        )) {
         if (-not (Test-Path $requiredPath -PathType Leaf)) {
             throw "Extracted beta is missing $requiredPath"
         }

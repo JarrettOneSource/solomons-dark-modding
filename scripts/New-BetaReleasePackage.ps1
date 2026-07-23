@@ -190,8 +190,7 @@ dotnet publish $launcherProject `
     -c $configuration `
     -r win-x86 `
     --self-contained true `
-    -p:PublishSingleFile=true `
-    -p:IncludeNativeLibrariesForSelfExtract=true `
+    -p:PublishSingleFile=false `
     -p:DebugType=None `
     -p:DebugSymbols=false `
     -o $launcherPublish
@@ -219,7 +218,17 @@ Copy-Item $nativeLoaderOutput (Join-Path $packageRoot "launcher/$loaderFileName"
 $packagedUi = Join-Path $packageRoot $uiExecutableName
 $packagedLauncher = Join-Path $packageRoot "launcher/$launcherExecutableName"
 $packagedLoader = Join-Path $packageRoot "launcher/$loaderFileName"
-foreach ($requiredBinary in @($packagedUi, $packagedLauncher, $packagedLoader)) {
+$packagedLauncherCoreClr = Join-Path $packageRoot "launcher/coreclr.dll"
+$packagedLauncherPrivateCoreLib = Join-Path $packageRoot "launcher/System.Private.CoreLib.dll"
+$packagedLauncherRuntimeConfig = Join-Path $packageRoot "launcher/SolomonDarkModLauncher.runtimeconfig.json"
+foreach ($requiredBinary in @(
+        $packagedUi,
+        $packagedLauncher,
+        $packagedLoader,
+        $packagedLauncherCoreClr,
+        $packagedLauncherPrivateCoreLib,
+        $packagedLauncherRuntimeConfig
+    )) {
     if (-not (Test-Path $requiredBinary -PathType Leaf)) {
         throw "Published package is missing $requiredBinary."
     }
