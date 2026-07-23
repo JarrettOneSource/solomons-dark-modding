@@ -19,6 +19,7 @@ LAUNCHER_COMPATIBILITY = (
 )
 WAVE_DOCUMENTATION = ROOT / "docs/lua-waves.md"
 LUA_SEAM_ROADMAP = ROOT / "docs/lua-seam-roadmap.md"
+STATE_EVENTS_DOCUMENTATION = ROOT / "docs/lua-state-and-events.md"
 
 
 def _read_version(path: Path, pattern: str) -> int:
@@ -64,6 +65,18 @@ class ProtocolVersionAlignmentTests(unittest.TestCase):
         )
 
         self.assertEqual(native, roadmap)
+
+    def test_state_events_documentation_matches_native_wire_protocol(self) -> None:
+        native = _read_version(
+            NATIVE_PROTOCOL,
+            r"kProtocolVersion\s*=\s*(\d+);",
+        )
+        documentation = _read_version(
+            STATE_EVENTS_DOCUMENTATION,
+            r"Protocol version (\d+) carries the host-authored Lua stream",
+        )
+
+        self.assertEqual(native, documentation)
 
 
 if __name__ == "__main__":
