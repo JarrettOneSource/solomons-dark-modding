@@ -162,14 +162,27 @@ internal sealed class SteamWebsiteSessionClient
 
     private static string? ReadLauncherError(string payload)
     {
-        try
+        foreach (var line in payload.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
-            return JsonSerializer.Deserialize<LauncherErrorResponse>(payload, JsonOptions)?.Error;
+            var trimmed = line.Trim();
+            if (!trimmed.StartsWith('{'))
+            {
+                continue;
+            }
+            try
+            {
+                var error = JsonSerializer.Deserialize<LauncherErrorResponse>(trimmed, JsonOptions)?.Error;
+                if (!string.IsNullOrWhiteSpace(error))
+                {
+                    return error;
+                }
+            }
+            catch (JsonException)
+            {
+            }
         }
-        catch (JsonException)
-        {
-            return string.IsNullOrWhiteSpace(payload) ? null : payload.Trim();
-        }
+
+        return null;
     }
 
     private sealed class DirectoryAuthenticationResponse
