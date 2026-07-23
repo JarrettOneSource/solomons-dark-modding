@@ -949,10 +949,16 @@ def test_website_lobby_links_register_and_route_to_launcher() -> str:
     )
     _require_in_order(
         executor,
-        "command.MultiplayerMode == MultiplayerLaunchMode.Join",
+        "RequiresLobbyModSync(command)",
         "command.SteamLobbyId is { } lobbyId",
         "LobbyModSynchronizer.SynchronizeAsync(",
     )
+    for token in (
+        "command.Mode is LauncherMode.Launch or LauncherMode.Stage",
+        "LauncherMode.Stage => ExecuteStage(",
+        "LobbyModSync: lobbyModSync",
+    ):
+        assert token in executor, f"headless join staging lacks website sync: {token}"
     for token in (
         "TryFetchJoinManifestAsync",
         "LobbyModSyncResult.Offline(localCatalog",

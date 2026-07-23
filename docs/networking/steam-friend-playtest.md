@@ -185,6 +185,10 @@ The equivalent command-line launches are:
 .\launcher\SolomonDarkModLauncher.exe launch --multiplayer join --lobby-id <lobby-id>
 ```
 
+To verify the same resolve, hash-check, download-cache, and exact staging path
+without starting the game, replace `launch` with `stage` on the join command.
+The staged catalog then contains only the website host set.
+
 Use `--instance <name>` when preserving separate staged/profile state for
 repeatable diagnosis. The launcher profile is isolated from the retail Solomon
 Dark APPDATA tree; `--temporary-profile` additionally resets that isolated

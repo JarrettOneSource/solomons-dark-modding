@@ -43,8 +43,7 @@ internal static class LauncherCommandExecutor
         }
 
         LobbyModSyncResult? lobbyModSync = null;
-        if (command.Mode == LauncherMode.Launch &&
-            command.MultiplayerMode == MultiplayerLaunchMode.Join &&
+        if (RequiresLobbyModSync(command) &&
             command.SteamLobbyId is { } lobbyId)
         {
             lobbyModSync = LobbyModSynchronizer.SynchronizeAsync(
@@ -65,7 +64,12 @@ internal static class LauncherCommandExecutor
                 configuration,
                 catalog,
                 modUpdate),
-            LauncherMode.Stage => ExecuteStage(command, configuration, catalog, modUpdate),
+            LauncherMode.Stage => ExecuteStage(
+                command,
+                configuration,
+                catalog,
+                modUpdate,
+                lobbyModSync),
             LauncherMode.Launch => ExecuteLaunch(
                 command,
                 configuration,
@@ -78,6 +82,11 @@ internal static class LauncherCommandExecutor
             _ => throw new InvalidOperationException($"Unsupported mode: {command.Mode}")
         };
     }
+
+    internal static bool RequiresLobbyModSync(LauncherCommand command) =>
+        command.Mode is LauncherMode.Launch or LauncherMode.Stage &&
+        command.MultiplayerMode == MultiplayerLaunchMode.Join &&
+        command.SteamLobbyId is not null;
 
     private static LauncherCommandExecution ExecuteJoinPreview(
         LauncherCommand command,
@@ -101,7 +110,8 @@ internal static class LauncherCommandExecutor
         LauncherCommand command,
         LauncherConfiguration configuration,
         ModCatalog catalog,
-        WebsiteModUpdateResult? modUpdate)
+        WebsiteModUpdateResult? modUpdate,
+        LobbyModSyncResult? lobbyModSync)
     {
         var stageResult = StageBuilder.Build(configuration, catalog);
         return new LauncherCommandExecution(
@@ -109,6 +119,7 @@ internal static class LauncherCommandExecutor
             configuration,
             catalog,
             modUpdate,
+            LobbyModSync: lobbyModSync,
             StageResult: stageResult);
     }
 

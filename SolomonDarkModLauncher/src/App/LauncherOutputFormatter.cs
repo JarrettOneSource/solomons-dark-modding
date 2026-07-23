@@ -17,7 +17,7 @@ internal static class LauncherOutputFormatter
             string.Empty,
             "Commands:",
             "  launch               Mirror Solomon Dark into the stage root, stage enabled overlay or runtime mods, start the staged game, inject SolomonDarkModLoader.dll, and wait for loader startup completion.",
-            "  stage                Mirror Solomon Dark into the stage root and stage enabled overlay or runtime mods without launching.",
+            "  stage                Mirror Solomon Dark into the stage root and stage enabled overlay or runtime mods without launching. A concrete multiplayer join also synchronizes the website host mod set.",
             "  list-mods            Discover overlay or runtime manifests and print enabled or disabled mods.",
             "  directory-auth       Verify the active Steam user with the lobby directory.",
             "  join-preview         Compare a lobby's website mod list against local mods without launching. Requires --lobby-id.",
@@ -74,6 +74,7 @@ internal static class LauncherOutputFormatter
             case LauncherMode.Stage:
                 AppendConfiguration(builder, execution.Configuration);
                 AppendModUpdates(builder, execution.ModUpdate);
+                AppendLobbyModSync(builder, execution.LobbyModSync);
                 AppendModList(builder, execution.Catalog);
                 AppendStageResult(builder, execution.StageResult!);
                 break;

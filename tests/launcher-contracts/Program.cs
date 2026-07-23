@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using SolomonDarkModding.Versioning;
+using SolomonDarkModLauncher.App;
 using SolomonDarkModLauncher.Commands;
 using SolomonDarkModLauncher.Launch;
 using SolomonDarkModLauncher.Mods;
@@ -1468,6 +1469,24 @@ static Task TestAutomaticWebsiteSyncAsync()
     Require(
         website.LobbyHost.DirectoryBaseUrl == "https://mods.example.test/community",
         "website directory path base was lost");
+    Require(
+        LauncherCommandExecutor.RequiresLobbyModSync(website),
+        "concrete launch joins did not request website mod synchronization");
+
+    var stage = LauncherCommandParser.Parse(
+        [
+            "stage",
+            "--multiplayer", "join",
+            "--lobby-id", "123",
+            "--directory-url", "https://mods.example.test/community"
+        ]);
+    Require(
+        LauncherCommandExecutor.RequiresLobbyModSync(stage),
+        "concrete stage joins did not request website mod synchronization");
+    var ordinaryStage = LauncherCommandParser.Parse(["stage"]);
+    Require(
+        !LauncherCommandExecutor.RequiresLobbyModSync(ordinaryStage),
+        "ordinary staging unexpectedly requested website mod synchronization");
 
     var invalidRejected = false;
     try
