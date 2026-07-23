@@ -310,6 +310,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     SendQueuedHostParticipantVitalsCorrections(now_ms);
     SendQueuedAuthoritativeLuaItemGrants();
     SendQueuedLuaRegisteredSpellCasts();
+    SendLuaRegisteredSpellEffectSnapshots(now_ms);
     SendQueuedLootPickupRequests();
     SendQueuedLevelUpChoices();
     SendLuaModStream(now_ms);

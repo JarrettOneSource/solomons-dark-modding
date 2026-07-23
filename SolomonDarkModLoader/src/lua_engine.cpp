@@ -329,6 +329,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "waves.schedule.read",
         "spells.register",
         "spells.read",
+        "spells.effects.read",
         "items.register",
         "items.read",
         "enemies.register",

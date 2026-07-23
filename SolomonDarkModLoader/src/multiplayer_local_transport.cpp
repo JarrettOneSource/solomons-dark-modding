@@ -41,6 +41,7 @@
 #include <map>
 #include <mutex>
 #include <random>
+#include <set>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -133,6 +134,10 @@ constexpr std::size_t kLuaItemGrantMaximumQueuedRequests = 256;
 constexpr std::size_t kLuaItemGrantMaximumRememberedRequests = 512;
 constexpr std::size_t kLuaRegisteredSpellMaximumQueuedCasts = 256;
 constexpr std::size_t kLuaRegisteredSpellMaximumRememberedCasts = 512;
+constexpr std::uint64_t kLuaRegisteredSpellEffectSnapshotIntervalMs = 50;
+constexpr std::uint64_t kLuaRegisteredSpellEffectSnapshotExpiryMs = 1500;
+constexpr std::size_t
+    kLuaRegisteredSpellEffectSnapshotBudgetBytesPerSecond = 128u * 1024u;
 
 std::uint64_t BandwidthLimitedSnapshotIntervalMs(
     std::size_t wire_size,
@@ -724,6 +729,27 @@ struct QueuedLuaRegisteredSpellCast {
     LuaRegisteredSpellCastRequest request;
 };
 
+struct PendingLuaRegisteredSpellEffectSnapshot {
+    std::uint32_t generation = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t scene_epoch = 0;
+    std::uint16_t fragment_count = 0;
+    std::uint16_t received_fragment_count = 0;
+    std::uint16_t effect_total_count = 0;
+    std::uint64_t last_update_ms = 0;
+    std::vector<LuaRegisteredSpellEffectState> effects;
+    std::vector<std::uint8_t> received_fragments;
+};
+
+struct CompletedLuaRegisteredSpellEffectSnapshot {
+    std::uint64_t owner_participant_id = 0;
+    std::uint32_t generation = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t scene_epoch = 0;
+    std::uint64_t received_ms = 0;
+    std::vector<LuaRegisteredSpellEffectState> effects;
+};
+
 struct PendingLuaModStreamAssembly {
     LuaModStreamMessageKind kind = LuaModStreamMessageKind::StateCheckpoint;
     std::uint64_t authority_participant_id = 0;
@@ -794,6 +820,7 @@ struct LocalTransportState {
     std::uint64_t last_loot_snapshot_send_ms = 0;
     std::uint64_t last_spell_effect_snapshot_send_ms = 0;
     std::uint64_t last_lua_mod_checkpoint_send_ms = 0;
+    std::uint64_t last_lua_registered_spell_effect_snapshot_send_ms = 0;
     std::uint64_t last_lua_mod_stream_sent_sequence = 0;
     std::uint64_t last_lua_mod_stream_applied_sequence = 0;
     std::uint32_t next_lua_mod_message_id = 1;
@@ -892,6 +919,14 @@ struct LocalTransportState {
         received_lua_registered_spell_cast_request_ids;
     std::deque<std::uint64_t>
         received_lua_registered_spell_cast_request_order;
+    std::unordered_map<std::uint64_t, std::uint32_t>
+        next_lua_registered_spell_effect_generation_by_owner;
+    std::unordered_set<std::uint64_t>
+        local_lua_registered_spell_effect_snapshot_owners;
+    std::unordered_map<std::uint64_t, PendingLuaRegisteredSpellEffectSnapshot>
+        pending_lua_registered_spell_effect_snapshots;
+    std::unordered_map<std::uint64_t, CompletedLuaRegisteredSpellEffectSnapshot>
+        completed_lua_registered_spell_effect_snapshots;
     ActiveLocalCastInput active_local_cast_input;
     std::vector<PendingAirChainTerminal> pending_air_chain_terminals;
     std::uint32_t next_hub_world_actor_serial = 1;
@@ -929,6 +964,7 @@ std::uint64_t g_next_lua_item_grant_request_id = 1;
 std::vector<QueuedLuaRegisteredSpellCast>
     g_queued_lua_registered_spell_casts;
 std::uint64_t g_next_lua_registered_spell_cast_request_id = 1;
+std::mutex g_lua_registered_spell_effect_snapshot_mutex;
 QueuedLocalAirChainFrame g_queued_local_air_chain_frame;
 bool g_have_queued_local_air_chain_frame = false;
 std::uint32_t g_next_local_loot_pickup_request_sequence = 1;
@@ -1271,6 +1307,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/incoming_packet_sync.inl"
 #include "multiplayer_local_transport/lua_item_grant_sync.inl"
 #include "multiplayer_local_transport/lua_registered_spell_cast_sync.inl"
+#include "multiplayer_local_transport/lua_registered_spell_effect_sync.inl"
 #include "multiplayer_local_transport/lua_mod_stream_codec.inl"
 #include "multiplayer_local_transport/lua_mod_stream_sync.inl"
 #include "multiplayer_local_transport/shared_gameplay_pause_sync.inl"
@@ -1505,6 +1542,44 @@ bool QueueOwnerRoutedLuaRegisteredSpellCast(
         owner_participant_id,
         local_owner,
         error_message);
+}
+
+std::vector<LuaRegisteredSpellEffectState>
+SnapshotReplicatedLuaRegisteredSpellEffects() {
+    std::lock_guard<std::mutex> lock(
+        g_lua_registered_spell_effect_snapshot_mutex);
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    std::vector<LuaRegisteredSpellEffectState> effects;
+    for (auto it = g_local_transport
+                       .completed_lua_registered_spell_effect_snapshots.begin();
+         it != g_local_transport
+                   .completed_lua_registered_spell_effect_snapshots.end();) {
+        if (now_ms - it->second.received_ms >
+            kLuaRegisteredSpellEffectSnapshotExpiryMs) {
+            it = g_local_transport
+                     .completed_lua_registered_spell_effect_snapshots.erase(it);
+            continue;
+        }
+        effects.insert(
+            effects.end(),
+            it->second.effects.begin(),
+            it->second.effects.end());
+        ++it;
+    }
+    std::sort(
+        effects.begin(),
+        effects.end(),
+        [](const LuaRegisteredSpellEffectState& left,
+           const LuaRegisteredSpellEffectState& right) {
+            if (left.owner_participant_id != right.owner_participant_id) {
+                return left.owner_participant_id < right.owner_participant_id;
+            }
+            if (left.content_id != right.content_id) {
+                return left.content_id < right.content_id;
+            }
+            return left.effect_id < right.effect_id;
+        });
+    return effects;
 }
 
 bool QueueLocalLevelUpChoice(

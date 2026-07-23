@@ -16,6 +16,10 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "lua_registered_spell_cast_sync.inl"
     )
+    effect_transport = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "lua_registered_spell_effect_sync.inl"
+    )
     dispatch = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "incoming_packet_dispatch.inl"
@@ -35,6 +39,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         '"spells.register"',
         '"spells.read"',
         '"spells.cast.owner"',
+        '"spells.effects.read"',
     ):
         assert capability in engine, f"spell capability lacks: {capability}"
     for token in (
@@ -57,6 +62,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         'RegisterFunction(state, &LuaSpellsGet, "get")',
         'RegisterFunction(state, &LuaSpellsList, "list")',
         'RegisterFunction(state, &LuaSpellsCast, "cast")',
+        'RegisterFunction(state, &LuaSpellsGetEffects, "get_effects")',
         "RegisterLuaContentIdentityForMod(",
         "LuaContentKind::Spell",
         "kLuaMaximumRegisteredSpellsPerMod = 256",
@@ -112,6 +118,10 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "Protocol 77",
         "once for that actor",
         "generic content-ID-based effect snapshot channel",
+        "four effects per fragment",
+        "retirement snapshot removes",
+        "callbacks continue to run only",
+        "simulation owner; remote peers",
     ):
         assert token in documentation, f"spell documentation lacks: {token}"
     for token in (
@@ -124,6 +134,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
     for token in (
         "kMaximumEffectsPerCast = 16",
         "kMaximumEffectsPerMod = 128",
+        "kMaximumEffectsAcrossRuntime = 256",
         "kMaximumReplicatedEffectDataBytes = 128",
         "TickLuaRegisteredSpellEffects",
         "on_tick_reference",
@@ -141,17 +152,56 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
     ):
         assert token in transport, f"Lua spell owner routing lacks: {token}"
     for token in (
+        "SendLuaRegisteredSpellEffectSnapshots",
+        "SendLuaRegisteredSpellEffectSnapshotForOwner",
+        "ValidateLuaRegisteredSpellEffectSnapshotEnvelope",
+        "ApplyLuaRegisteredSpellEffectSnapshotPacket",
+        "RelayPacketBufferToPeers",
+        "pending_lua_registered_spell_effect_snapshots",
+        "completed_lua_registered_spell_effect_snapshots",
+        "SnapshotLocalLuaRegisteredSpellEffects",
+        "local_lua_registered_spell_effect_snapshot_owners",
+        "BandwidthLimitedSnapshotIntervalMs",
+        "kLuaRegisteredSpellEffectSnapshotBudgetBytesPerSecond",
+        "const auto completed_it",
+        "std::set<std::pair<std::uint64_t, std::uint64_t>> effect_ids",
+    ):
+        assert token in effect_transport, (
+            f"Lua spell effect replication lacks: {token}"
+        )
+    _require_in_order(
+        effect_transport,
+        "const auto completed_it",
+        "assembly.received_fragments[packet.fragment_index] = 1",
+        "RelayPacketBufferToPeers",
+    )
+    for token in (
         "constexpr std::uint16_t kProtocolVersion = 77;",
         "LuaRegisteredSpellCast = 23",
         "struct LuaRegisteredSpellCastPacket",
         "static_assert(sizeof(LuaRegisteredSpellCastPacket) == 76",
+        "LuaRegisteredSpellEffectSnapshot = 24",
+        "kLuaRegisteredSpellEffectMaxLogicalEffects = 256",
+        "kLuaRegisteredSpellEffectStatesPerFragment = 4",
+        "struct LuaRegisteredSpellEffectPacketState",
+        "struct LuaRegisteredSpellEffectSnapshotPacket",
+        "static_assert(sizeof(LuaRegisteredSpellEffectPacketState) == 248",
+        "kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes == 44",
+        "sizeof(LuaRegisteredSpellEffectSnapshotPacket) == 1036",
     ):
         assert token in protocol, f"Lua spell protocol lacks: {token}"
     assert "ApplyLuaRegisteredSpellCastPacket(packet, from, now_ms)" in dispatch
-    assert "**Spell catalog and owner runtime implemented 2026-07-22.**" in roadmap
+    assert "ApplyLuaRegisteredSpellEffectSnapshotPacket(" in dispatch
+    assert (
+        "**Spell catalog, owner runtime, and generic effect replication "
+        "implemented 2026-07-22.**" in roadmap
+    )
     for token in (
         "sd.spells.list",
         "sd.spells.get(expected_id)",
+        'sd.runtime.has_capability("spells.effects.read")',
+        "sd.spells.get_effects()",
+        "effect_snapshot_schema_valid",
         "descriptor_copy_isolated",
         "raw_internals_absent",
         "late_registration_rejected",
@@ -159,6 +209,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         assert token in verifier, f"spell verifier lacks: {token}"
 
     return (
-        "sd.spells owner-routes deterministic casts and runs bounded owner-side "
-        "effect callbacks without exposing native IDs, addresses, or functions"
+        "sd.spells owner-routes deterministic casts, runs bounded owner-side "
+        "callbacks, and replicates generic effect snapshots without exposing "
+        "native IDs, addresses, or functions"
     )

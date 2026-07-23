@@ -1,5 +1,6 @@
 #include "lua_engine_bindings_internal.h"
 
+#include "lua_engine.h"
 #include "lua_engine_values.h"
 #include "multiplayer_local_transport.h"
 
@@ -11,6 +12,9 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
+
+#include <Windows.h>
 
 namespace sdmod::detail {
 namespace {
@@ -424,6 +428,45 @@ void PushSpellDefinition(
     lua_setfield(state, -2, "has_on_hit");
 }
 
+void PushSpellEffectState(
+    lua_State* state,
+    const LuaRegisteredSpellEffectState& effect,
+    bool local_owner) {
+    lua_createtable(state, 0, 15);
+    lua_pushinteger(state, static_cast<lua_Integer>(effect.effect_id));
+    lua_setfield(state, -2, "effect_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(effect.cast_request_id));
+    lua_setfield(state, -2, "request_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(effect.content_id));
+    lua_setfield(state, -2, "content_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(effect.owner_participant_id));
+    lua_setfield(state, -2, "owner_participant_id");
+    lua_pushlstring(state, effect.key.data(), effect.key.size());
+    lua_setfield(state, -2, "key");
+    lua_pushnumber(state, effect.x);
+    lua_setfield(state, -2, "x");
+    lua_pushnumber(state, effect.y);
+    lua_setfield(state, -2, "y");
+    lua_pushnumber(state, effect.velocity_x);
+    lua_setfield(state, -2, "velocity_x");
+    lua_pushnumber(state, effect.velocity_y);
+    lua_setfield(state, -2, "velocity_y");
+    lua_pushnumber(state, effect.radius);
+    lua_setfield(state, -2, "radius");
+    lua_pushinteger(state, effect.age_ms);
+    lua_setfield(state, -2, "age_ms");
+    lua_pushinteger(state, effect.remaining_ms);
+    lua_setfield(state, -2, "remaining_ms");
+    PushLuaModValue(state, effect.data);
+    lua_setfield(state, -2, "data");
+    lua_pushboolean(state, local_owner ? 1 : 0);
+    lua_setfield(state, -2, "local_owner");
+}
+
 int LuaSpellsRegister(lua_State* state) {
     luaL_checktype(state, 1, LUA_TTABLE);
     RejectUnknownSpellRegistrationFields(state, 1);
@@ -638,14 +681,62 @@ int LuaSpellsCast(lua_State* state) {
     return 1;
 }
 
+int LuaSpellsGetEffects(lua_State* state) {
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    std::vector<LuaRegisteredSpellEffectState> local_effects;
+    for (const auto& loaded_mod : LoadedLuaModsStorage()) {
+        if (loaded_mod == nullptr) {
+            continue;
+        }
+        for (const auto& effect : loaded_mod->spell_effects) {
+            LuaRegisteredSpellEffectState state_value;
+            state_value.owner_participant_id = effect.owner_participant_id;
+            state_value.cast_request_id = effect.cast_request_id;
+            state_value.content_id = effect.content_id;
+            state_value.effect_id = effect.effect_id;
+            state_value.key = effect.key;
+            state_value.x = effect.x;
+            state_value.y = effect.y;
+            state_value.velocity_x = effect.velocity_x;
+            state_value.velocity_y = effect.velocity_y;
+            state_value.radius = effect.radius;
+            state_value.age_ms = static_cast<std::uint32_t>((std::min)(
+                now_ms > effect.created_ms ? now_ms - effect.created_ms : 0,
+                std::uint64_t{0xFFFFFFFFu}));
+            state_value.remaining_ms = static_cast<std::uint32_t>((std::min)(
+                effect.expires_ms > now_ms ? effect.expires_ms - now_ms : 0,
+                std::uint64_t{0xFFFFFFFFu}));
+            state_value.data = effect.data;
+            local_effects.push_back(std::move(state_value));
+        }
+    }
+    auto replicated_effects =
+        multiplayer::SnapshotReplicatedLuaRegisteredSpellEffects();
+    lua_createtable(
+        state,
+        static_cast<int>(local_effects.size() + replicated_effects.size()),
+        0);
+    lua_Integer output_index = 1;
+    for (const auto& effect : local_effects) {
+        PushSpellEffectState(state, effect, true);
+        lua_seti(state, -2, output_index++);
+    }
+    for (const auto& effect : replicated_effects) {
+        PushSpellEffectState(state, effect, false);
+        lua_seti(state, -2, output_index++);
+    }
+    return 1;
+}
+
 }  // namespace
 
 void RegisterLuaSpellBindings(lua_State* state) {
-    lua_createtable(state, 0, 4);
+    lua_createtable(state, 0, 5);
     RegisterFunction(state, &LuaSpellsRegister, "register");
     RegisterFunction(state, &LuaSpellsGet, "get");
     RegisterFunction(state, &LuaSpellsList, "list");
     RegisterFunction(state, &LuaSpellsCast, "cast");
+    RegisterFunction(state, &LuaSpellsGetEffects, "get_effects");
     lua_setfield(state, -2, "spells");
 }
 

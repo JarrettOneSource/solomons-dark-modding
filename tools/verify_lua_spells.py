@@ -21,7 +21,9 @@ PROBE = r'''
 assert(sd.runtime.has_capability("spells.register"))
 assert(sd.runtime.has_capability("spells.read"))
 assert(sd.runtime.has_capability("spells.cast.owner"))
+assert(sd.runtime.has_capability("spells.effects.read"))
 assert(type(sd.spells.cast) == "function")
+assert(type(sd.spells.get_effects) == "function")
 local expected_id = 8348995147374483494
 local found = nil
 for _, spell in ipairs(sd.spells.list()) do
@@ -60,8 +62,25 @@ local late_register_ok = pcall(sd.spells.register, {
   cfg = {name = "Late Spell"},
   on_cast = function() end,
 })
+local effect_snapshot_schema_valid = true
+for _, effect in ipairs(sd.spells.get_effects()) do
+  effect_snapshot_schema_valid = effect_snapshot_schema_valid and
+      type(effect.effect_id) == "number" and
+      type(effect.request_id) == "number" and
+      type(effect.content_id) == "number" and
+      type(effect.owner_participant_id) == "number" and
+      type(effect.key) == "string" and
+      type(effect.x) == "number" and type(effect.y) == "number" and
+      type(effect.velocity_x) == "number" and
+      type(effect.velocity_y) == "number" and
+      type(effect.radius) == "number" and
+      type(effect.age_ms) == "number" and
+      type(effect.remaining_ms) == "number" and
+      type(effect.local_owner) == "boolean"
+end
 
 print("stable_id=" .. tostring(found.id))
+print("effect_snapshot_schema_valid=" .. tostring(effect_snapshot_schema_valid))
 print("descriptor_copy_isolated=" .. tostring(by_id.cfg.name == "Gravity Well"))
 print("raw_internals_absent=" .. tostring(raw_internals_absent))
 print("zero_rejected=" .. tostring(not zero_ok))
@@ -74,6 +93,7 @@ def run(pipe_name: str) -> dict[str, Any]:
     values = parse_key_values(lua(pipe_name, PROBE, timeout=12.0))
     for field in (
         "descriptor_copy_isolated",
+        "effect_snapshot_schema_valid",
         "raw_internals_absent",
         "zero_rejected",
         "fraction_rejected",

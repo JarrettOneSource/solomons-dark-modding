@@ -135,9 +135,9 @@ shared state; simulation calls auto-route to the owner).
 ### Structural gaps (why mods can't thrive yet)
 
 1. **Scripted spell presentation remains** — deterministic spell metadata, owner-routed
-   callback execution, and bounded local effects now join registered items and
-   stock-archetype enemies; picker/input integration and generic modded-effect snapshot
-   replication remain to complete the content-registration tier.
+   callback execution, bounded effects, and generic effect snapshots now join registered
+   items and stock-archetype enemies; picker/input integration remains to complete the
+   content-registration tier.
 2. **Presentation is incomplete** — Lua drawing exists, but audio and authored UI remain.
 3. **Shared simulation control is incomplete** — enemy brains, scene changes, timing,
    and other mutations still need authority-routed public seams.
@@ -229,8 +229,8 @@ acceptance verifier. See `lua-state-and-events.md`.
   `kInventoryInsertOrStackItem`, `kItemRecipeClone`, recipe table globals.
 *Unlocks:* new-content packs — the ecosystem's lifeblood.
 *Multiplayer:* content IDs from `hash(mod_id, key)`; spell behaviors run on the
-simulation owner, effect transforms replicate. Work item: a **generic modded-effect
-replication channel** (today's channels are per-native-type: ember, firewalker).
+simulation owner, while the implemented generic modded-effect channel fragments,
+authenticates, relays, retires, and exposes semantic effect snapshots on every peer.
 
 **Identity foundation implemented 2026-07-22.** All three content families share the
 `sd.content.v1` FNV-1a-64 derivation over canonical `(mod_id, key)` strings, mapped into
@@ -241,7 +241,7 @@ identities are removed with their owning Lua state. See `lua-content-identity.md
 **Item registration and grants implemented 2026-07-22.** `sd.items.register`, `get`, and
 `list` bind stable content keys to exact recipe name/type pairs in the effective item
 catalog. `sd.items.grant` is authority-only, routes a stable content ID to a selected
-participant over protocol 76, and lets that owner resolve its peer-local recipe UID just
+participant over protocol 77, and lets that owner resolve its peer-local recipe UID just
 before verified stock inventory insertion. Recipe UIDs and addresses never become wire
 identity; reliable target authentication and request deduplication make the mutation
 multiplayer-safe. See `lua-items.md`.
@@ -251,16 +251,17 @@ multiplayer-safe. See `lua-items.md`.
 Authority-only `sd.enemies.spawn` queues the verified exact-group stock spawner with a
 valid modifier array, transactionally composes per-spawn HP/speed/scale with ordered
 spawn filters, and attaches per-actor loot policy without mutating shared config.
-Protocol 76 carries the content ID and effective constructor values through world
+Protocol 77 carries the content ID and effective constructor values through world
 snapshots and death tombstones; spawn/death notify events expose the same stable ID on
 every peer. See `lua-enemies.md`.
 
-**Spell catalog and owner runtime implemented 2026-07-22.** `sd.spells.register`, `get`,
-`list`, and `cast` bind deterministic identities to bounded immutable config and
-owner-state callbacks. Protocol 77 routes host commands to the affected participant's
-owner, where `on_cast`, timed `on_tick`, and once-per-actor `on_hit` callbacks drive a
-bounded address-free effect lifecycle. Native picker/input integration and generic effect
-snapshot replication remain. See `lua-spells.md`.
+**Spell catalog, owner runtime, and generic effect replication implemented 2026-07-22.**
+`sd.spells.register`, `get`, `list`, `cast`, and `get_effects` bind deterministic
+identities to bounded immutable config and owner-state callbacks. Protocol 77 routes host
+commands to the affected participant's owner, where `on_cast`, timed `on_tick`, and
+once-per-actor `on_hit` callbacks drive a bounded address-free effect lifecycle. The same
+protocol fragments and relays complete per-owner effect generations, including explicit
+empty retirement snapshots. Native picker/input integration remains. See `lua-spells.md`.
 
 **5. `sd.ai` — enemy brain overrides.**
 Per-enemy move goals (`kGameNpcSetMoveGoal`), target override (fixes the slot-1–3
@@ -341,7 +342,7 @@ budget. `get_schedule(n)` parses the effective staged `wave.txt`; because random
 group selection has no RNG-free exact future composition, planned rows use a
 documented deterministic largest-remainder projection that sums to `SPAWN`.
 Spawner identities attribute overlapping births and deaths, `wave.started`
-includes planned composition, and protocol 76 carries a bounded validated
+includes planned composition, and protocol 77 carries a bounded validated
 summary in authenticated authority participant frames for identical peer reads.
 See `lua-waves.md` and the read-only `tools/verify_lua_waves.py` probe.
 
@@ -431,8 +432,6 @@ Multiplayer column = how it behaves once built on the MP-native contract.
 
 - **Authority migration:** if the authority peer leaves mid-run, does mod simulation state
   (`sd.state`, filter ownership, AI brains) migrate? Punt (end run) vs. handoff protocol.
-- **Generic modded-effect replication:** schema for effect transforms/lifecycle generic
-  enough for arbitrary Lua spells (today's channels are per-native-type: ember, firewalker).
 - **Determinism audit scope:** what native systems consume `kNativeGlobalRngStateGlobal`
   outside runs (menu shuffles?) — matters for Trials/Replay fidelity.
 - **Trust tiers:** `has_capability` exists; when distribution arrives, which classes gate

@@ -1,8 +1,9 @@
 # Lua scripted spells
 
 `sd.spells` owns deterministic identities, immutable metadata, owner-routed
-casting, and bounded scripted effect lifecycles for primary and secondary
-spells. Picker presentation and remote effect snapshots remain separate work.
+casting, and bounded replicated scripted effect lifecycles for primary and
+secondary spells. Native picker and player-input integration remain separate
+work.
 
 ## Registration
 
@@ -73,7 +74,7 @@ local all = sd.spells.list()
 Descriptors contain `id`, `mod_id`, `key`, `slot`, a fresh `cfg` copy, and
 `has_on_cast`/`has_on_tick`/`has_on_hit`. They contain no Lua registry index,
 native skill ID, config address, actor address, or function value. The
-capabilities are `spells.register` and `spells.read`.
+capabilities are `spells.register`, `spells.read`, and `spells.effects.read`.
 
 ## Owner-routed casting
 
@@ -115,12 +116,34 @@ the effect, `false` to retire it, or a patch containing `x`, `y`, `velocity_x`,
 `velocity_y`, `radius`, `data`, and optional `done = true`. Invalid callbacks
 are logged and leave the last valid effect state intact.
 
+## Replicated effect snapshots
+
+`sd.spells.get_effects()` returns the local owner's live effects together with
+the latest complete snapshots from remote owners. Every row contains
+`effect_id`, `request_id`, `content_id`, `owner_participant_id`, `key`, `x`,
+`y`, `velocity_x`, `velocity_y`, `radius`, `age_ms`, `remaining_ms`, `data`,
+and `local_owner`. The API is address-free and does not create a native actor;
+mods can use the semantic state to present an effect with `sd.draw`.
+
+Protocol 77 carries at most 256 logical effects, four effects per fragment,
+with deterministic content and owner identities. The owner publishes the
+snapshot; a host authenticates and relays remote-owner fragments. A completed
+generation replaces that owner's previous generation atomically, and an empty
+retirement snapshot removes its final effects. Incomplete snapshots never
+become visible, stale generations are rejected, and a remote snapshot expires
+after 1.5 seconds without a refresh. The publishing cadence starts at 50 ms and
+is bandwidth-limited to 128 KiB/s of logical snapshot payload.
+
+Only transform, timing, identity, and the bounded 128-byte `data` value cross
+the network. `on_cast`, `on_tick`, and `on_hit` callbacks continue to run only
+on the simulation owner; remote peers consume presentation state and never
+replay gameplay behavior.
+
 ## Current boundary
 
-The definition is callable from Lua, but is not yet selectable in the native
-skill picker or bound to native player input. The generic content-ID-based effect snapshot channel
-is also still pending, so callbacks run only on the
-simulation owner and remote peers cannot present those transforms yet.
+The definition is callable from Lua and its generic content-ID-based effect snapshot channel
+is available to every peer, but it is not yet selectable in the native skill
+picker or bound to native player input.
 
 The disabled-by-default `sample.lua.spells_registry_lab` mod registers a
 `gravity_well` definition and its bounded field lifecycle. It never casts on

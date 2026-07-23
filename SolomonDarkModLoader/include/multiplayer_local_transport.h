@@ -8,8 +8,10 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace sdmod {
+struct LuaRegisteredSpellEffectState;
 struct SDModSceneActorState;
 }
 
@@ -49,6 +51,8 @@ bool QueueOwnerRoutedLuaRegisteredSpellCast(
     std::uint64_t* owner_participant_id,
     bool* local_owner,
     std::string* error_message);
+std::vector<sdmod::LuaRegisteredSpellEffectState>
+SnapshotReplicatedLuaRegisteredSpellEffects();
 bool PublishAuthoritativeLuaModStateSet(
     const std::string& mod_id,
     const std::string& key,

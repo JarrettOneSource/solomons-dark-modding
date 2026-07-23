@@ -116,6 +116,16 @@ void ResetRemoteParticipantSessionEpoch(
         g_local_transport.received_lua_item_grant_request_order.clear();
         g_local_transport.received_lua_registered_spell_cast_request_ids.clear();
         g_local_transport.received_lua_registered_spell_cast_request_order.clear();
+        {
+            std::lock_guard<std::mutex> snapshot_lock(
+                g_lua_registered_spell_effect_snapshot_mutex);
+            g_local_transport
+                .pending_lua_registered_spell_effect_snapshots.erase(
+                    participant_id);
+            g_local_transport
+                .completed_lua_registered_spell_effect_snapshots.erase(
+                    participant_id);
+        }
         ResetLuaModStateStore();
     }
 

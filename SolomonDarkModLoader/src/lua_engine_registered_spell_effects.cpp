@@ -26,6 +26,7 @@ namespace {
 
 constexpr std::size_t kMaximumEffectsPerCast = 16;
 constexpr std::size_t kMaximumEffectsPerMod = 128;
+constexpr std::size_t kMaximumEffectsAcrossRuntime = 256;
 constexpr std::size_t kMaximumEffectKeyBytes = 64;
 constexpr std::size_t kMaximumReplicatedEffectDataBytes = 128;
 constexpr std::size_t kMaximumRememberedHitActors = 512;
@@ -532,6 +533,17 @@ bool CreateLuaSpellEffectsFromCallbackResult(
     if (mod->spell_effects.size() + descriptors.size() >
         kMaximumEffectsPerMod) {
         *error_message = "registered spell effect limit for this mod was reached";
+        return false;
+    }
+    std::size_t runtime_effect_count = 0;
+    for (const auto& loaded_mod : LoadedLuaModsStorage()) {
+        if (loaded_mod != nullptr) {
+            runtime_effect_count += loaded_mod->spell_effects.size();
+        }
+    }
+    if (runtime_effect_count + descriptors.size() >
+        kMaximumEffectsAcrossRuntime) {
+        *error_message = "registered spell effect runtime limit was reached";
         return false;
     }
 

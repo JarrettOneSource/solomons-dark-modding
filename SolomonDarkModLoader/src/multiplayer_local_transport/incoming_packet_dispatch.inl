@@ -34,6 +34,26 @@ bool SteamSpellEffectPacketOwnerMatches(
            packet.owner_participant_id == sender_steam_id;
 }
 
+bool SteamLuaRegisteredSpellEffectPacketOwnerMatches(
+    const void* data,
+    std::size_t size,
+    std::uint64_t sender_steam_id) {
+    if (data == nullptr ||
+        size < kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes ||
+        size > sizeof(LuaRegisteredSpellEffectSnapshotPacket)) {
+        return false;
+    }
+    LuaRegisteredSpellEffectSnapshotPacket packet{};
+    std::memcpy(&packet, data, size);
+    return IsValidHeader(
+               packet.header,
+               PacketKind::LuaRegisteredSpellEffectSnapshot) &&
+        IsValidLuaRegisteredSpellEffectSnapshotPacketWireSize(
+            size,
+            packet.effect_count) &&
+        packet.owner_participant_id == sender_steam_id;
+}
+
 bool IsAuthorizedSteamGameplayPacket(
     std::uint64_t sender_steam_id,
     const void* data,
@@ -80,6 +100,11 @@ bool IsAuthorizedSteamGameplayPacket(
             [](const CastPacket& packet) { return packet.participant_id; });
     case PacketKind::SpellEffectSnapshot:
         return SteamSpellEffectPacketOwnerMatches(
+            data,
+            size,
+            sender_steam_id);
+    case PacketKind::LuaRegisteredSpellEffectSnapshot:
+        return SteamLuaRegisteredSpellEffectPacketOwnerMatches(
             data,
             size,
             sender_steam_id);
@@ -137,6 +162,31 @@ void DispatchReceivedPacket(
         }
 
         const auto kind = static_cast<PacketKind>(header.kind);
+        if (kind == PacketKind::LuaRegisteredSpellEffectSnapshot &&
+            received >= static_cast<int>(
+                kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes) &&
+            received <= static_cast<int>(
+                sizeof(LuaRegisteredSpellEffectSnapshotPacket))) {
+            LuaRegisteredSpellEffectSnapshotPacket packet{};
+            std::memcpy(
+                &packet,
+                packet_buffer.data(),
+                static_cast<std::size_t>(received));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::LuaRegisteredSpellEffectSnapshot) ||
+                !IsValidLuaRegisteredSpellEffectSnapshotPacketWireSize(
+                    static_cast<std::size_t>(received),
+                    packet.effect_count)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaRegisteredSpellEffectSnapshotPacket(
+                packet,
+                from,
+                now_ms);
+            continue;
+        }
         if (kind == PacketKind::LuaRegisteredSpellCast &&
             received ==
                 static_cast<int>(sizeof(LuaRegisteredSpellCastPacket))) {

@@ -16,6 +16,7 @@ SteamNetworkSendMode SteamSendModeForPacket(const Packet& packet) {
     case PacketKind::LootSnapshot:
     case PacketKind::SpellEffectSnapshot:
     case PacketKind::AirChainSnapshot:
+    case PacketKind::LuaRegisteredSpellEffectSnapshot:
         return SteamNetworkSendMode::UnreliableNoDelay;
     default:
         return SteamNetworkSendMode::ReliableNoNagle;

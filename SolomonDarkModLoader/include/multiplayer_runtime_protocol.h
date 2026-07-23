@@ -25,6 +25,10 @@ constexpr std::uint32_t kAirChainSnapshotMaxTargets = 8;
 constexpr std::uint32_t kSecondaryLoadoutSlotCount = 8;
 constexpr std::uint32_t kLuaModStreamFragmentPayloadBytes = 1024;
 constexpr std::uint16_t kLuaModStreamMaxFragments = 64;
+constexpr std::uint16_t kLuaRegisteredSpellEffectMaxLogicalEffects = 256;
+constexpr std::uint16_t kLuaRegisteredSpellEffectStatesPerFragment = 4;
+constexpr std::uint8_t kLuaRegisteredSpellEffectKeyBytes = 64;
+constexpr std::uint8_t kLuaRegisteredSpellEffectDataBytes = 128;
 constexpr std::uint16_t kWaveSummaryMaxCompositionRows = 20;
 
 enum class PacketKind : std::uint16_t {
@@ -51,6 +55,7 @@ enum class PacketKind : std::uint16_t {
     LuaModStream = 21,
     LuaItemGrant = 22,
     LuaRegisteredSpellCast = 23,
+    LuaRegisteredSpellEffectSnapshot = 24,
 };
 
 enum class LuaModStreamMessageKind : std::uint8_t {
@@ -1155,6 +1160,58 @@ struct LuaRegisteredSpellCastPacket {
     std::uint8_t reserved[7] = {};
 };
 
+struct LuaRegisteredSpellEffectPacketState {
+    std::uint64_t effect_id;
+    std::uint64_t cast_request_id;
+    std::uint64_t content_id;
+    float x;
+    float y;
+    float velocity_x;
+    float velocity_y;
+    float radius;
+    std::uint32_t age_ms;
+    std::uint32_t remaining_ms;
+    std::uint16_t data_size;
+    std::uint8_t key_size;
+    std::uint8_t flags = 0;
+    char key[kLuaRegisteredSpellEffectKeyBytes] = {};
+    std::uint8_t data[kLuaRegisteredSpellEffectDataBytes] = {};
+};
+
+struct LuaRegisteredSpellEffectSnapshotPacket {
+    PacketHeader header;
+    std::uint64_t owner_participant_id;
+    std::uint32_t generation;
+    std::uint32_t run_nonce;
+    std::uint32_t scene_epoch;
+    std::uint16_t fragment_index;
+    std::uint16_t fragment_count;
+    std::uint16_t effect_count;
+    std::uint16_t effect_total_count;
+    std::uint8_t flags = 0;
+    std::uint8_t reserved[3] = {};
+    LuaRegisteredSpellEffectPacketState
+        effects[kLuaRegisteredSpellEffectStatesPerFragment];
+};
+
+constexpr std::size_t kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes =
+    offsetof(LuaRegisteredSpellEffectSnapshotPacket, effects);
+
+constexpr std::size_t LuaRegisteredSpellEffectSnapshotPacketWireSize(
+    std::uint16_t effect_count) {
+    return kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes +
+        static_cast<std::size_t>(effect_count) *
+            sizeof(LuaRegisteredSpellEffectPacketState);
+}
+
+constexpr bool IsValidLuaRegisteredSpellEffectSnapshotPacketWireSize(
+    std::size_t received_bytes,
+    std::uint16_t effect_count) {
+    return effect_count <= kLuaRegisteredSpellEffectStatesPerFragment &&
+        received_bytes ==
+            LuaRegisteredSpellEffectSnapshotPacketWireSize(effect_count);
+}
+
 struct LootPickupResultPacket {
     PacketHeader header;
     std::uint64_t authority_participant_id;
@@ -1304,6 +1361,12 @@ static_assert(sizeof(LootPickupRequestPacket) == 56, "Unexpected loot pickup req
 static_assert(sizeof(LuaItemGrantPacket) == 84, "Unexpected Lua item grant packet size");
 static_assert(sizeof(LuaRegisteredSpellCastPacket) == 76,
               "Unexpected Lua registered spell cast packet size");
+static_assert(sizeof(LuaRegisteredSpellEffectPacketState) == 248,
+              "Unexpected Lua registered spell effect state size");
+static_assert(kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes == 44,
+              "Unexpected Lua registered spell effect packet prefix size");
+static_assert(sizeof(LuaRegisteredSpellEffectSnapshotPacket) == 1036,
+              "Unexpected Lua registered spell effect snapshot packet size");
 static_assert(sizeof(LootPickupResultPacket) == 164, "Unexpected loot pickup result packet size");
 
 }  // namespace sdmod::multiplayer

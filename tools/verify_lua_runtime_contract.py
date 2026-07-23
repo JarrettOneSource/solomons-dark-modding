@@ -54,7 +54,7 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
     "nav": ("get_grid", "test_segment"),
     "scene": ("get_state", "switch_region"),
     "waves": ("get_state", "get_schedule"),
-    "spells": ("register", "get", "list", "cast"),
+    "spells": ("register", "get", "list", "cast", "get_effects"),
     "items": ("register", "get", "list", "grant"),
     "enemies": ("register", "get", "list", "spawn"),
     "draw": (
