@@ -61,6 +61,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private string linkedAccountName_ = string.Empty;
     private DateTimeOffset lastCloudAccountRefreshUtc_;
     private CloudSaveGameSession? activeSaveSession_;
+    private bool isLauncherUpdatePromptOpen_;
+    private string availableLauncherVersion_ = string.Empty;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
@@ -106,6 +108,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         DismissCrashReportCommand = new RelayCommand(
             _ => DismissCrashReport(),
             _ => IsCrashPromptOpen && !IsCrashSubmitting);
+        InstallLauncherUpdateCommand = new RelayCommand(
+            _ => AcceptLauncherUpdate(),
+            _ => IsLauncherUpdatePromptOpen && !IsBusy);
+        DismissLauncherUpdateCommand = new RelayCommand(
+            _ => DismissLauncherUpdate(),
+            _ => IsLauncherUpdatePromptOpen && !IsBusy);
 
         steamInviteListener_.NotificationReceived += OnSteamInviteNotification;
         steamInviteListener_.Start();
@@ -267,6 +275,24 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public bool HasCrashSubmissionError => !string.IsNullOrWhiteSpace(CrashSubmissionError);
 
     public string CrashSubmitButtonText => IsCrashSubmitting ? "Submitting…" : "Submit Logs";
+
+    public bool IsLauncherUpdatePromptOpen
+    {
+        get => isLauncherUpdatePromptOpen_;
+        private set
+        {
+            if (SetProperty(ref isLauncherUpdatePromptOpen_, value))
+            {
+                RaiseCommandStates();
+            }
+        }
+    }
+
+    public string AvailableLauncherVersion
+    {
+        get => availableLauncherVersion_;
+        private set => SetProperty(ref availableLauncherVersion_, value);
+    }
 
     public bool HostPrivacyFriends
     {
@@ -447,8 +473,15 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public RelayCommand OpenWebsiteAccountCommand { get; }
     public RelayCommand SubmitCrashReportCommand { get; }
     public RelayCommand DismissCrashReportCommand { get; }
+    public RelayCommand InstallLauncherUpdateCommand { get; }
+    public RelayCommand DismissLauncherUpdateCommand { get; }
 
-    private bool CanInteract() => !IsBusy && !IsCrashPromptOpen;
+    public event EventHandler? LauncherUpdateAccepted;
+
+    private bool CanInteract() =>
+        !IsBusy &&
+        !IsCrashPromptOpen &&
+        !IsLauncherUpdatePromptOpen;
 
     private bool CanLaunch() =>
         CanInteract() && isGameReady_ && activeGameProcessId_ == 0;
@@ -1123,11 +1156,41 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         TryLaunchPendingLobbyJoin();
     }
 
+    public void OfferLauncherUpdate(string version)
+    {
+        AvailableLauncherVersion = $"v{version}";
+        IsLauncherUpdatePromptOpen = true;
+    }
+
+    private void AcceptLauncherUpdate()
+    {
+        if (!IsLauncherUpdatePromptOpen || IsBusy)
+        {
+            return;
+        }
+
+        IsLauncherUpdatePromptOpen = false;
+        LauncherUpdateAccepted?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void DismissLauncherUpdate()
+    {
+        if (!IsLauncherUpdatePromptOpen || IsBusy)
+        {
+            return;
+        }
+
+        IsLauncherUpdatePromptOpen = false;
+        StatusText = "Launcher update postponed.";
+        TryLaunchPendingLobbyJoin();
+    }
+
     public void BeginLauncherUpdate(string version)
     {
+        IsLauncherUpdatePromptOpen = false;
         ClearError();
         IsBusy = true;
-        StatusText = $"Downloading launcher {version}…";
+        StatusText = $"Downloading launcher v{version}…";
     }
 
     public void ReportLauncherUpdateFailure(string message)
@@ -1135,6 +1198,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         SetError(message);
         IsBusy = false;
         StatusText = "The launcher update failed. You can keep using this version.";
+        TryLaunchPendingLobbyJoin();
     }
 
     private void JoinLobbyDirect()
@@ -1353,6 +1417,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         ManageSavesCommand.RaiseCanExecuteChanged();
         SubmitCrashReportCommand.RaiseCanExecuteChanged();
         DismissCrashReportCommand.RaiseCanExecuteChanged();
+        InstallLauncherUpdateCommand.RaiseCanExecuteChanged();
+        DismissLauncherUpdateCommand.RaiseCanExecuteChanged();
     }
 
     private void UpdateLaunchPreview()

@@ -14,15 +14,40 @@ internal static class LauncherSelfUpdater
         "https://api.github.com/repos/JarrettOneSource/solomons-dark-modding/releases?per_page=100";
     private const long MaximumArchiveBytes = 512L * 1024L * 1024L;
 
-    public static async Task<bool> CheckAndStartAsync(
-        string currentVersionText,
-        string activationArgument,
-        Action<string> updateFound)
+    public static async Task<LauncherRelease?> CheckAsync(
+        string currentVersionText)
     {
-        if (!TryFindPortableRoot(out var portableRoot, out var launcherPath) ||
+        if (!TryFindPortableRoot(out _, out _) ||
             !SemanticVersion.TryParse(currentVersionText, out var currentVersion))
         {
-            return false;
+            return null;
+        }
+
+        try
+        {
+            using var metadataCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var client = CreateClient();
+            var json = await client.GetStringAsync(ReleasesUrl, metadataCancellation.Token);
+            return SelectUpdate(json, currentVersion!);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or
+                                          TaskCanceledException or
+                                          JsonException or
+                                          InvalidOperationException or
+                                          KeyNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    public static async Task StartUpdateAsync(
+        LauncherRelease release,
+        string activationArgument)
+    {
+        if (!TryFindPortableRoot(out var portableRoot, out var launcherPath))
+        {
+            throw new InvalidOperationException(
+                "Launcher updates are only available from the portable release.");
         }
 
         var updatesRoot = Path.Combine(
@@ -31,27 +56,6 @@ internal static class LauncherSelfUpdater
             "updates");
         CleanUpdateCache(updatesRoot);
 
-        LauncherRelease? release;
-        try
-        {
-            using var metadataCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            using var client = CreateClient();
-            var json = await client.GetStringAsync(ReleasesUrl, metadataCancellation.Token);
-            release = SelectUpdate(json, currentVersion!);
-        }
-        catch (Exception exception) when (exception is HttpRequestException or
-                                          TaskCanceledException or
-                                          JsonException)
-        {
-            return false;
-        }
-
-        if (release is null)
-        {
-            return false;
-        }
-
-        updateFound(release.Version.Value);
         var updateDirectory = Path.Combine(updatesRoot, release.Version.Value);
         Directory.CreateDirectory(updateDirectory);
 
@@ -134,7 +138,6 @@ internal static class LauncherSelfUpdater
         {
             throw new InvalidOperationException("The launcher updater did not start.");
         }
-        return true;
     }
 
     internal static LauncherRelease? SelectUpdate(
