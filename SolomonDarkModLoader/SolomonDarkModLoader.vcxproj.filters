@@ -1405,6 +1405,12 @@
     <ClCompile Include="src\lua_engine_enemy_ai.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_audio.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_audio.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_spells.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>

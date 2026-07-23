@@ -339,6 +339,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "ai.read",
     };
 
+    AppendLuaAudioCapabilities(&capabilities);
     if (multiplayer::IsFoundationInitialized()) {
         capabilities.emplace_back("multiplayer.foundation");
     }
@@ -431,6 +432,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaBusSubscriptionsForMod(mod);
     ClearLuaRegisteredSpellInputSelectionsForMod(mod->descriptor.id);
     ClearLuaEnemyAiRuntimeForMod(mod);
+    ResetLuaAudioRuntimeForMod(mod);
     UnregisterLuaContentIdentitiesForMod(mod->descriptor.id);
     if (mod->state != nullptr) {
         lua_close(mod->state);
@@ -495,6 +497,7 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
         ShutdownWaveIntelligence();
         return false;
     }
+    detail::InitializeLuaAudioRuntime();
 
     const auto capabilities = detail::BuildLuaCapabilitySet();
     detail::LoadLuaModsForBootstrap(bootstrap, capabilities);
@@ -517,6 +520,7 @@ void ShutdownLuaEngine() {
 
     std::scoped_lock lock(detail::LuaEngineMutex());
     if (!detail::LuaEngineInitializedFlag()) {
+        detail::ShutdownLuaAudioRuntime();
         ShutdownLuaDrawRuntime();
         ShutdownWaveIntelligence();
         ResetLuaContentRegistry();
@@ -533,6 +537,7 @@ void ShutdownLuaEngine() {
     detail::ResetLuaRegisteredSpellRuntime();
     detail::ResetLuaEnemyAiRuntime();
     detail::ResetLuaEventFilterRegistrations();
+    detail::ShutdownLuaAudioRuntime();
     ShutdownLuaDrawRuntime();
     ShutdownWaveIntelligence();
     detail::LuaRuntimeDirectoryStorage().clear();

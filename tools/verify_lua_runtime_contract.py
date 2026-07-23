@@ -75,6 +75,15 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
         "stop",
         "clear",
     ),
+    "audio": (
+        "play_sample",
+        "play_stream",
+        "stop",
+        "set_volume",
+        "get_state",
+        "clear",
+        "is_available",
+    ),
     "draw": (
         "text",
         "rect",
@@ -251,6 +260,8 @@ check_call('state.is_authority', sd.state.is_authority, {{'boolean'}})
 check_call('rng.get_seed', sd.rng.get_seed, {{'number', 'nil'}})
 check_call('nav.get_grid', sd.nav.get_grid, {{'table', 'nil'}})
 check_call('draw.get_limits', sd.draw.get_limits, {{'table'}})
+check_call('audio.is_available', sd.audio.is_available, {{'boolean'}})
+check_call('audio.get_state', sd.audio.get_state, {{'table'}})
 check_call('draw.get_viewport', sd.draw.get_viewport, {{'table', 'nil'}})
 check_call('draw.get_sprite_info', function()
   return sd.draw.get_sprite_info('Title', 9)

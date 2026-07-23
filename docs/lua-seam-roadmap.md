@@ -85,12 +85,18 @@ shared state; simulation calls auto-route to the owner).
   authenticated host intent moves connected clients and Lua-controlled participants.
 - **`sd.waves`** — effective schedule plus authority-replicated wave state, composition,
   and spawn/death accounting.
+- **`sd.spells`** — deterministic registration, local input selection, owner-routed
+  casts and callbacks, and replicated generic effect state.
 - **`sd.items`** — deterministic recipe-backed registration and authority-routed grants
   resolved against each recipient's peer-local native catalog.
 - **`sd.enemies`** — deterministic semantic stock-archetype registration and
   authority-owned exact spawning with per-actor stats and loot policy.
 - **`sd.ai`** — registered-enemy authority brains with bounded per-spawn
   blackboards, semantic participant targets, and collision-preserving point goals.
+- **`sd.draw` / `sd.hud`** — bounded presentation-local text, primitives, stock
+  sprites, viewport reads, and world projection on the D3D9 backbuffer.
+- **`sd.audio`** — mod-root samples and streams through the game-owned BASS device,
+  with opaque local handles, volume, state, stop, and deterministic cleanup.
 - **`sd.events`** — `on` plus authority-only `broadcast` for mod-defined ordered events.
   Built-in notify events are `runtime.tick`, `run.started`, `run.ended`, `wave.started`,
   `wave.completed`, `enemy.death`, `enemy.spawned`, `spell.cast`, `gold.changed`,
@@ -138,9 +144,10 @@ shared state; simulation calls auto-route to the owner).
 
 1. **Scripted spell presentation remains** — deterministic spell metadata, owner-routed
    callback execution, bounded effects, and generic effect snapshots now join registered
-   items and stock-archetype enemies; picker/input integration remains to complete the
-   content-registration tier.
-2. **Presentation is incomplete** — Lua drawing exists, but audio and authored UI remain.
+   items and stock-archetype enemies, and direct primary/belt input is integrated; an
+   authored picker still depends on the remaining UI-authoring seam.
+2. **Authored UI remains incomplete** — Lua drawing and local custom audio exist, but
+   mods still cannot build native-style surfaces and controls.
 3. **Shared timing control is incomplete** — enemy brains and scene changes are now
    authority-owned, while coherent pause/slow-motion still needs its public seam.
 4. **Author DX and presentation parity policy remain incomplete.** Cross-mod contracts now
@@ -304,6 +311,15 @@ opt-in `sample.lua.storage_lab` mod.
 **7. `sd.audio` — BASS bindings.** The game ships `bass.dll`; bind sample/stream
 play/stop/volume. *Unlocks:* stingers, custom music, voice packs. *MP:* presentation-local;
 synchronized cues = replicated event + local playback.
+
+**Implemented 2026-07-23.** `sd.audio` dynamically binds the already-loaded,
+game-owned `bass.dll` for mod-root-scoped samples and streams, opaque playback
+handles, live volume, stop, semantic state, and per-mod cleanup. Canonical path
+containment, four explicit formats, 64-playback per-mod and 256-playback global
+limits, and a 512 MiB asset ceiling keep the local presentation surface bounded.
+The loader neither loads nor initializes BASS. Audio never replicates; authority
+code broadcasts a semantic custom event and every peer performs the cue locally.
+See `lua-audio.md` and the opt-in `sample.lua.audio_lab` mod.
 
 **8. `sd.ui` authoring.** Create surfaces/panels/buttons/labels through the game's UI
 engine (`ui-engine-system-map.md`); reuse the semantic action layer for input. *Unlocks:*

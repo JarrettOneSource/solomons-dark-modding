@@ -135,9 +135,9 @@ bool RegisterLuaBindings(LoadedLuaMod* mod, std::string* error_message) {
     lua_setglobal(mod->state, "print");
 
     // runtime, events, state, storage, timer, bus, rng, nav, scene, waves,
-    // spells, items, enemies, ai, draw/hud, bots, ui, input, gameplay, player,
-    // world, hub, debug
-    lua_createtable(mod->state, 0, 24);
+    // spells, items, enemies, ai, audio, draw/hud, bots, ui, input, gameplay,
+    // player, world, hub, debug
+    lua_createtable(mod->state, 0, 25);
     RegisterLuaRuntimeBindings(mod->state);
     RegisterLuaEventBindings(mod->state);
     RegisterLuaStateBindings(mod->state);
@@ -152,6 +152,7 @@ bool RegisterLuaBindings(LoadedLuaMod* mod, std::string* error_message) {
     RegisterLuaItemBindings(mod->state);
     RegisterLuaEnemyBindings(mod->state);
     RegisterLuaAiBindings(mod->state);
+    RegisterLuaAudioBindings(mod->state);
     RegisterLuaDrawBindings(mod->state);
     RegisterLuaBotBindings(mod->state);
     RegisterLuaUiBindings(mod->state);

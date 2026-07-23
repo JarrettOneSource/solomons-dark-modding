@@ -517,6 +517,8 @@
     <ClCompile Include="src\lua_engine_bindings_enemies.cpp" />
     <ClCompile Include="src\lua_engine_bindings_ai.cpp" />
     <ClCompile Include="src\lua_engine_enemy_ai.cpp" />
+    <ClCompile Include="src\lua_engine_bindings_audio.cpp" />
+    <ClCompile Include="src\lua_engine_audio.cpp" />
     <ClCompile Include="src\lua_engine_bindings_bots.cpp" />
     <ClCompile Include="src\lua_engine_bindings_debug.cpp" />
     <ClCompile Include="src\lua_exec_pipe.cpp" />

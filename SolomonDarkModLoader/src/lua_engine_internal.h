@@ -117,6 +117,32 @@ enum class LuaEnemyLootPolicy : std::uint8_t {
     Potion,
 };
 
+enum class LuaAudioPlaybackKind : std::uint8_t {
+    Sample,
+    Stream,
+};
+
+struct LuaAudioPlayback {
+    std::uint64_t id = 0;
+    LuaAudioPlaybackKind kind = LuaAudioPlaybackKind::Sample;
+    std::string relative_path;
+    std::uint32_t sample_handle = 0;
+    std::uint32_t channel_handle = 0;
+    float volume = 1.0f;
+    bool loop = false;
+    std::uint64_t created_ms = 0;
+};
+
+struct LuaAudioPlaybackSnapshot {
+    std::uint64_t id = 0;
+    LuaAudioPlaybackKind kind = LuaAudioPlaybackKind::Sample;
+    std::string relative_path;
+    float volume = 1.0f;
+    bool loop = false;
+    std::uint64_t created_ms = 0;
+    std::string activity;
+};
+
 struct LuaEnemyDefinition {
     LuaContentIdentity identity;
     std::string base_name;
@@ -178,6 +204,8 @@ struct LoadedLuaMod {
     std::vector<LuaEnemyDefinition> enemy_definitions;
     std::vector<LuaEnemyAiRegistration> enemy_ai_registrations;
     std::vector<LuaEnemyAiInstance> enemy_ai_instances;
+    std::vector<LuaAudioPlayback> audio_playbacks;
+    std::uint64_t next_audio_playback_id = 1;
 };
 
 std::mutex& LuaEngineMutex();
@@ -244,6 +272,35 @@ void DispatchLuaEnemyAiThink(
     const SDModRuntimeTickContext& context);
 void ResetLuaEnemyAiRuntime();
 void ClearLuaEnemyAiRuntimeForMod(LoadedLuaMod* mod);
+void InitializeLuaAudioRuntime();
+void ShutdownLuaAudioRuntime();
+bool IsLuaAudioRuntimeAvailable();
+void AppendLuaAudioCapabilities(std::vector<std::string>* capabilities);
+bool PlayLuaAudio(
+    LoadedLuaMod* mod,
+    LuaAudioPlaybackKind kind,
+    std::string_view relative_path,
+    float volume,
+    bool loop,
+    std::uint64_t* playback_id,
+    std::string* error_message);
+bool StopLuaAudioPlayback(LoadedLuaMod* mod, std::uint64_t playback_id);
+bool SetLuaAudioPlaybackVolume(
+    LoadedLuaMod* mod,
+    std::uint64_t playback_id,
+    float volume,
+    bool* found,
+    std::string* error_message);
+bool TryGetLuaAudioPlaybackSnapshot(
+    const LoadedLuaMod* mod,
+    std::uint64_t playback_id,
+    LuaAudioPlaybackSnapshot* snapshot);
+std::vector<LuaAudioPlaybackSnapshot> SnapshotLuaAudioPlaybacks(
+    const LoadedLuaMod* mod);
+bool HasLuaAudioPlaybacks(const LoadedLuaMod* mod);
+void TickLuaAudioRuntime();
+std::size_t ClearLuaAudioRuntimeForMod(LoadedLuaMod* mod);
+void ResetLuaAudioRuntimeForMod(LoadedLuaMod* mod);
 bool CreateLuaSpellEffectsFromCallbackResult(
     LoadedLuaMod* mod,
     const LuaSpellDefinition& definition,

@@ -31,6 +31,7 @@ void RegisterLuaSpellBindings(lua_State* state);
 void RegisterLuaItemBindings(lua_State* state);
 void RegisterLuaEnemyBindings(lua_State* state);
 void RegisterLuaAiBindings(lua_State* state);
+void RegisterLuaAudioBindings(lua_State* state);
 void RegisterLuaDrawBindings(lua_State* state);
 void RegisterLuaBotBindings(lua_State* state);
 void RegisterLuaUiBindings(lua_State* state);

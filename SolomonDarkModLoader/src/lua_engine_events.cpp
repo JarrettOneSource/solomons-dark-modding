@@ -459,7 +459,8 @@ bool HasAnyLuaRuntimeTickHandlers() {
     for (const auto& mod : LoadedLuaModsStorage()) {
         if (mod != nullptr &&
             (mod->runtime_tick_registered || HasLuaTimers(mod.get()) ||
-             HasLuaEnemyAiRegistrations(mod.get()))) {
+             HasLuaEnemyAiRegistrations(mod.get()) ||
+             HasLuaAudioPlaybacks(mod.get()))) {
             return true;
         }
     }

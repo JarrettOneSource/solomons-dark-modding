@@ -1,0 +1,16 @@
+{
+  "id": "sample.lua.audio_lab",
+  "name": "Lua Audio Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "events.replicated.broadcast",
+      "audio.local.playback",
+      "audio.sample",
+      "audio.stream"
+    ]
+  }
+}
