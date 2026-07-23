@@ -21,7 +21,12 @@ def test_lua_camera_is_native_bounded_owned_and_presentation_local() -> str:
     manifest = _read("mods/lua_camera_lab/manifest.json")
     sample = _read("mods/lua_camera_lab/scripts/main.lua")
     verifier = _read("tools/verify_lua_camera.py")
+    multiplayer_verifier = _read("tools/verify_lua_camera_multiplayer.py")
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_camera_multiplayer_verifier.py"
+    )
     runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaCameraBindings(mod->state);" in binding_root
     assert "lua_createtable(mod->state, 0, 29);" in binding_root
@@ -180,6 +185,42 @@ def test_lua_camera_is_native_bounded_owned_and_presentation_local() -> str:
         "extra_clear_rejected",
     ):
         assert token in verifier, f"Lua camera verifier lacks: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.camera_lab"',
+        "HOST_FOCUS",
+        "CLIENT_FOCUS",
+        "STATE_PROBE",
+        "HOST_FOCUS_PROBE",
+        "CLIENT_FOCUS_PROBE",
+        "SHAKE_PROBE",
+        "native_focus_applied",
+        "native_feedback_changed",
+        "require_quiet=True",
+        "--confirm-mutation",
+        "tile_windows=False",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua camera multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_focus_state_requires_native_center_and_exact_local_target",
+        "test_shake_request_requires_synchronous_native_feedback_delta",
+        "test_mutation_confirmation_is_required_before_contact",
+        "test_disposable_pair_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_incomplete_process_ledger_stops_only_owned_process",
+        "test_run_proves_independent_focus_and_host_shake_isolation",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"Lua camera multiplayer verifier tests lack: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_camera_multiplayer_verifier"
+        in workflow
+    )
     assert '"camera": ("get_state", "set_focus", "clear_focus", "shake")' in runtime_verifier
 
-    return "Lua camera native/local ownership contract is wired"
+    return "Lua camera native/local ownership has exact two-peer acceptance"

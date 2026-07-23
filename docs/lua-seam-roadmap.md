@@ -481,8 +481,10 @@ authority-only stock wave start, identical sorted live summaries, and matching
   **Implemented 2026-07-22.** `sd.camera` provides bounded local view inspection,
   per-mod world-focus ownership, automatic lifecycle cleanup, and the stock native
   shake path. Six post-Region-tick hooks translate the primary, expanded, and culling
-  view origins together without exposing pointers or changing simulation state. See
-  `lua-camera.md` and `reverse-engineering/native-camera-control.md`.
+  view origins together without exposing pointers or changing simulation state. The
+  opt-in two-peer acceptance proves independent native focus ownership, local shake
+  feedback, exact schemas, and clean release on both peers. See `lua-camera.md` and
+  `reverse-engineering/native-camera-control.md`.
 - **`sd.sprites`** — runtime sprite/frame registration using the reversed bundle format,
   so mods add art without clobbering whole atlases. *MP:* local; art parity comes from the
   mod-set handshake.

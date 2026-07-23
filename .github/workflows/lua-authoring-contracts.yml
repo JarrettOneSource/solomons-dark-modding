@@ -55,5 +55,7 @@ jobs:
         run: python -m unittest tests.test_lua_scene_multiplayer_verifier
       - name: Test Lua multiplayer navigation verifier
         run: python -m unittest tests.test_lua_nav_multiplayer_verifier
+      - name: Test Lua multiplayer camera verifier
+        run: python -m unittest tests.test_lua_camera_multiplayer_verifier
       - name: Verify all static Lua seam contracts
         run: python tests/re/run_static_re_tests.py --lua-only

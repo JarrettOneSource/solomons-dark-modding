@@ -86,3 +86,21 @@ The namespace advertises `camera.local.read`, `camera.local.focus`, and
 `camera.local.shake`. The disabled `sample.lua.camera_lab` mod supplies manual
 helpers, and `tools/verify_lua_camera.py` validates the contract against an
 already-running gameplay Region.
+
+## Two-peer acceptance
+
+Use a disposable pair for the complete presentation-local matrix:
+
+```powershell
+py tools/verify_lua_camera_multiplayer.py --launch-pair --confirm-mutation
+```
+
+The verifier stages only `sample.lua.camera_lab` and enters one isolated run.
+It requires exact capability, namespace, state-schema, authority, participant,
+and address-free evidence on both peers. The host and client then acquire
+different fixed focus points; each native post-tick camera center must converge
+to its own point without changing the other peer. A host-only shake must change
+the native magnitude/accumulator feedback lanes synchronously while the client
+remains quiescent, after which both focus owners release cleanly. Window tiling
+and global process cleanup are disabled, and only the two process IDs returned
+by this launch are stopped.
