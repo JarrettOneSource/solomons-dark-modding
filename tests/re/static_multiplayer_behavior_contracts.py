@@ -722,7 +722,7 @@ def test_network_clients_reject_stock_incoming_damage_authority() -> str:
         (native_types, "using DamageContextResetFn = void(__thiscall*)"),
         (hook_state, "X86Hook poisoned_modifier_tick_hook;"),
         (hook_state, "X86Hook player_actor_magic_damage_hook;"),
-        (hook_state, "g_client_owner_poison_tick_target"),
+        (hook_state, "g_client_owner_authorized_damage_target"),
         (hook_state, "uintptr_t damage_context_reset_address = 0;"),
         (hook_state, "uintptr_t damage_context_source_address = 0;"),
         (installation, "reinterpret_cast<void*>(&HookPoisonedModifierTick)"),
@@ -742,7 +742,7 @@ def test_network_clients_reject_stock_incoming_damage_authority() -> str:
         "kNativePoisonSourceSlotOffset",
         "kNativePoisonDamagePerTickOffset",
         "local_player_tick_actor_address",
-        "g_client_owner_poison_tick_target",
+        "g_client_owner_authorized_damage_target",
         "original(self)",
     ):
         assert token in poison_hook, (
@@ -750,14 +750,14 @@ def test_network_clients_reject_stock_incoming_damage_authority() -> str:
         )
     _require_in_order(
         poison_hook,
-        "g_client_owner_poison_tick_target = actor_address",
+        "g_client_owner_authorized_damage_target = actor_address",
         "original(self);",
-        "g_client_owner_poison_tick_target = previous_target",
+        "g_client_owner_authorized_damage_target = previous_target",
     )
     _require_in_order(
         hook,
         "if (multiplayer::IsLocalTransportClient() &&",
-        "g_client_owner_poison_tick_target != actor_address",
+        "g_client_owner_authorized_damage_target != actor_address",
         "ResetActiveDamageContext();",
         "return 0;",
         "if (HasLuaDamageFilterHandlers())",
@@ -769,7 +769,7 @@ def test_network_clients_reject_stock_incoming_damage_authority() -> str:
         "source, including projectiles and hazards"
     )
     return (
-        "network clients accept only a scoped local-owner poison tick while "
+        "network clients accept only scoped host-authorized local damage while "
         "rejecting other stock incoming damage and queued modifiers"
     )
 

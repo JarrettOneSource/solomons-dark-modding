@@ -480,7 +480,7 @@ std::uint32_t __fastcall HookPlayerActorMagicDamage(
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
     if (multiplayer::IsLocalTransportClient() &&
-        g_client_owner_poison_tick_target != actor_address) {
+        g_client_owner_authorized_damage_target != actor_address) {
         // The host owns all incoming wizard damage and transient statuses.
         // Resetting the stock context also releases a rejected queued native
         // modifier so it cannot contaminate a later authoritative correction.
@@ -488,38 +488,41 @@ std::uint32_t __fastcall HookPlayerActorMagicDamage(
         return 0;
     }
 
-    if (HasLuaDamageFilterHandlers()) {
-        LuaDamageFilterContext filtered_context;
-        if (!TryCaptureLuaDamageFilterContext(
-                actor_address,
-                &filtered_context)) {
-            LogLuaDamageFilterHookFailure(
-                &g_lua_damage_filter_capture_log_count,
-                "damage filters skipped because the native context could not "
-                "be captured. actor=" + HexString(actor_address));
-        } else {
-            const auto original_context = filtered_context;
-            if (!ApplyLuaDamageFilters(&filtered_context)) {
-                ResetActiveDamageContext();
-                return 0;
-            }
-            if (filtered_context.lanes != original_context.lanes) {
-                const auto write_result = WriteLuaDamageFilterLanes(
-                    original_context,
-                    filtered_context);
-                if (write_result != LuaDamageLaneWriteResult::Applied) {
-                    LogLuaDamageFilterHookFailure(
-                        &g_lua_damage_filter_write_log_count,
-                        "damage filter rewrite failed. actor=" +
-                            HexString(actor_address) + " restored=" +
-                            (write_result ==
-                                     LuaDamageLaneWriteResult::RestoredAfterFailure
-                                 ? "1"
-                                 : "0"));
-                    if (write_result ==
-                        LuaDamageLaneWriteResult::RestoreFailed) {
-                        ResetActiveDamageContext();
-                        return 0;
+    if (!g_authoritative_local_player_damage_replay_active) {
+        if (HasLuaDamageFilterHandlers()) {
+            LuaDamageFilterContext filtered_context;
+            if (!TryCaptureLuaDamageFilterContext(
+                    actor_address,
+                    &filtered_context)) {
+                LogLuaDamageFilterHookFailure(
+                    &g_lua_damage_filter_capture_log_count,
+                    "damage filters skipped because the native context could "
+                    "not be captured. actor=" + HexString(actor_address));
+            } else {
+                const auto original_context = filtered_context;
+                if (!ApplyLuaDamageFilters(&filtered_context)) {
+                    ResetActiveDamageContext();
+                    return 0;
+                }
+                if (filtered_context.lanes != original_context.lanes) {
+                    const auto write_result = WriteLuaDamageFilterLanes(
+                        original_context,
+                        filtered_context);
+                    if (write_result !=
+                        LuaDamageLaneWriteResult::Applied) {
+                        LogLuaDamageFilterHookFailure(
+                            &g_lua_damage_filter_write_log_count,
+                            "damage filter rewrite failed. actor=" +
+                                HexString(actor_address) + " restored=" +
+                                (write_result ==
+                                         LuaDamageLaneWriteResult::RestoredAfterFailure
+                                     ? "1"
+                                     : "0"));
+                        if (write_result ==
+                            LuaDamageLaneWriteResult::RestoreFailed) {
+                            ResetActiveDamageContext();
+                            return 0;
+                        }
                     }
                 }
             }

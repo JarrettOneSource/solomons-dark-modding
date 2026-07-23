@@ -14,6 +14,7 @@ param(
     [string]$ClientName = "Client Player",
     [string]$ThirdName = "Observer Player",
     [string]$InstancePrefix = "local-mp",
+    [string]$GameDirectory = "",
     [switch]$EnableThird,
     [switch]$DisableMultiplayerTransport,
     [switch]$UseSandboxPresetFlow,
@@ -200,6 +201,9 @@ function Start-MultiplayerInstance {
     )
     if ($Role -eq "client" -or ($Role -eq "host" -and $TemporaryHostProfile)) {
         $args += "--temporary-profile"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($GameDirectory)) {
+        $args += @("--game-dir", $GameDirectory)
     }
 
     Invoke-LauncherWithEnvironment `

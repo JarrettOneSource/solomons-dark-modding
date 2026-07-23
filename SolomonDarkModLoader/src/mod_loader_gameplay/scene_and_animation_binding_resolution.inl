@@ -5,6 +5,12 @@ void RecordGameplayMouseLeftEdge() {
     g_gameplay_keyboard_injection.mouse_left_edge_serial.fetch_add(1, std::memory_order_acq_rel);
 }
 
+void RecordGameplayMouseRightEdge() {
+    g_gameplay_keyboard_injection.mouse_right_edge_serial.fetch_add(
+        1,
+        std::memory_order_acq_rel);
+}
+
 std::string NormalizeInjectedKeyName(std::string_view value) {
     std::string normalized;
     normalized.reserve(value.size());

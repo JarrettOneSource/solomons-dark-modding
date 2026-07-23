@@ -12,6 +12,7 @@ import time
 from collections.abc import Mapping
 from pathlib import Path
 
+from multiplayer_defense_behavior_harness import invoke_native_magic_hit_trial
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
@@ -30,13 +31,17 @@ from verify_local_multiplayer_sync import (
     wait_for_remote,
     wait_for_scene,
 )
-from verify_player_health_death_sync import set_local_player_vitals
-
-
 POSITION_TOLERANCE = 0.25
 VITAL_TOLERANCE = 0.05
 OUTPUT = ROOT / "runtime" / "multiplayer_death_spectator_respawn.json"
-WAVE_FIXTURE = ROOT / "tests" / "fixtures" / "waves" / "physical_stat_test.txt"
+ACCEPTANCE_MOD_ID = "sample.lua.ui_sandbox_lab"
+WAVE_FIXTURE = (
+    ROOT
+    / "tests"
+    / "fixtures"
+    / "waves"
+    / "death_spectator_respawn_test.txt"
+)
 
 
 SPECTATOR_STATE_PROBE = r"""
@@ -141,6 +146,27 @@ end
 emit("attempted", attempted)
 emit("triggered", triggered)
 """
+
+
+def _apply_authoritative_client_lethal_hit(
+    host_pipe: str,
+) -> dict[str, object]:
+    trial = invoke_native_magic_hit_trial(
+        host_pipe,
+        projectile_damage=0.0,
+        magic_damage=1000.0,
+        attempts=2,
+        label="client death spectator",
+        timeout=8.0,
+        target_participant_id=CLIENT_ID,
+    )
+    hp_after = float(trial["hp_after"])
+    if not math.isfinite(hp_after) or hp_after > VITAL_TOLERANCE:
+        raise VerifyFailure(
+            "authoritative client lethal hit did not reach zero life: "
+            f"{trial}"
+        )
+    return trial
 
 
 def _number(values: Mapping[str, str], key: str) -> float:
@@ -265,6 +291,10 @@ def _reserve_udp_ports(count: int) -> list[int]:
             handle.close()
 
 
+def _default_instance_prefix() -> str:
+    return f"ds-{os.getpid():x}-{time.time_ns() & 0xFFFF:04x}"
+
+
 def query_spectator_state(pipe_name: str) -> dict[str, str]:
     return parse_key_values(
         lua(pipe_name, SPECTATOR_STATE_PROBE, timeout=8.0)
@@ -317,6 +347,26 @@ def _disable_bots(pipe_names: list[str]) -> dict[str, int]:
             )
         counts[pipe_name] = count
     return counts
+
+
+def _start_testrun_when_ready(
+    host_pipe: str,
+    *,
+    timeout: float = 20.0,
+) -> None:
+    deadline = time.monotonic() + timeout
+    last_error = ""
+    while time.monotonic() < deadline:
+        try:
+            start_testrun(host_pipe)
+            return
+        except VerifyFailure as exc:
+            last_error = str(exc)
+        time.sleep(0.25)
+    raise VerifyFailure(
+        "host testrun request never reached stable scene identity: "
+        f"{last_error}"
+    )
 
 
 def _wait_for_wave(
@@ -393,6 +443,7 @@ def run_live_verification(
     *,
     instance_prefix: str,
     ports: list[int],
+    game_directory: Path | None,
 ) -> dict[str, object]:
     launch = launch_pair(
         host_preset="map_create_fire_mind_hub",
@@ -407,6 +458,8 @@ def run_live_verification(
         host_port=ports[0],
         client_port=ports[1],
         third_port=ports[2],
+        game_directory=game_directory,
+        exact_mod_id=ACCEPTANCE_MOD_ID,
     )
     process_ids = game_process_ids(launch)
     if len(process_ids) != 3:
@@ -427,7 +480,7 @@ def run_live_verification(
     }
     try:
         result["bots_disabled"] = _disable_bots(pipe_names)
-        start_testrun(host_pipe)
+        _start_testrun_when_ready(host_pipe)
         for pipe_name in pipe_names:
             wait_for_scene(pipe_name, "testrun", 45.0)
 
@@ -451,25 +504,14 @@ def run_live_verification(
                 )
         result["relationships"] = relationships
 
-        set_local_player_vitals(
-            client_pipe,
-            375.0,
-            500.0,
-            mp=300.0,
-            max_mp=300.0,
-        )
         death_written_at = time.monotonic()
-        set_local_player_vitals(
-            client_pipe,
-            -50.0,
-            500.0,
-            mp=300.0,
-            max_mp=300.0,
+        result["lethal_hit"] = _apply_authoritative_client_lethal_hit(
+            host_pipe
         )
         death_presentation = _wait_for_values(
             client_pipe,
             death_presentation_state_matches,
-            timeout=2.5,
+            timeout=5.0,
             description="native death presentation without Game Over",
         )
         result["death_presentation"] = death_presentation
@@ -585,16 +627,21 @@ def main() -> int:
         type=Path,
         default=OUTPUT,
     )
+    parser.add_argument(
+        "--game-dir",
+        type=Path,
+        default=None,
+        help="Retail game directory override for isolated worktrees.",
+    )
     args = parser.parse_args()
 
-    instance_prefix = args.instance_prefix or (
-        f"death-spec-{os.getpid()}-{int(time.time())}"
-    )
+    instance_prefix = args.instance_prefix or _default_instance_prefix()
     result: dict[str, object] = {"ok": False}
     try:
         result = run_live_verification(
             instance_prefix=instance_prefix,
             ports=_reserve_udp_ports(3),
+            game_directory=args.game_dir,
         )
         exit_code = 0
     except Exception as exc:  # noqa: BLE001 - emit full verifier failure.

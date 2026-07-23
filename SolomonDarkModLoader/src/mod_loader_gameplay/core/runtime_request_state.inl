@@ -231,6 +231,7 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint32_t> pending_mouse_left_frames{0};
     std::atomic<std::uint64_t> last_mouse_left_hold_player_tick_generation{0};
     std::atomic<bool> last_observed_mouse_right_down{false};
+    std::atomic<std::uint64_t> mouse_right_edge_serial{0};
     std::atomic<std::uint32_t> pending_mouse_right_frames{0};
     std::atomic<std::uint64_t> last_mouse_right_hold_player_tick_generation{0};
     std::atomic<uintptr_t> input_state_address{0};
@@ -364,4 +365,5 @@ void ResetLocalPlayerTickOwnershipState() {
 thread_local std::uint32_t g_multiplayer_client_authorized_hub_run_switch_depth = 0;
 thread_local std::uint32_t g_loader_owned_actor_destroy_unregister_depth = 0;
 thread_local std::uint32_t g_remote_secondary_spell_dispatch_depth = 0;
-thread_local uintptr_t g_client_owner_poison_tick_target = 0;
+thread_local uintptr_t g_client_owner_authorized_damage_target = 0;
+thread_local bool g_authoritative_local_player_damage_replay_active = false;

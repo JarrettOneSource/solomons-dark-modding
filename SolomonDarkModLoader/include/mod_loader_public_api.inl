@@ -34,6 +34,7 @@ void ClearQueuedGameplayMouseRight();
 bool ClearLocalPlayerGameplayCastState(std::string* error_message);
 std::uint64_t GetGameplayMouseLeftEdgeSerial();
 std::uint64_t GetGameplayMouseLeftEdgeTickMs();
+std::uint64_t GetGameplayMouseRightEdgeSerial();
 bool TryClaimGameplayMouseLeftPrimaryCastEdge(std::uint64_t edge_serial);
 bool IsGameplayMouseLeftDown();
 bool IsGameplayMouseRightDown();

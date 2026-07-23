@@ -240,6 +240,7 @@ def launch_pair(
     host_port: int = 47770,
     client_port: int = 47771,
     third_port: int = 47772,
+    game_directory: Path | None = None,
     exact_mod_id: str | None = None,
     exact_mod_ids: Iterable[str] | None = None,
 ) -> dict[str, object]:
@@ -306,6 +307,11 @@ def launch_pair(
         args.append("-NoTileWindows")
     if allow_focus_steal:
         args.append("-AllowFocusSteal")
+    if game_directory is not None:
+        args.extend([
+            "-GameDirectory",
+            path_for_powershell(game_directory),
+        ])
     if serialized_exact_mod_ids is not None:
         args.extend(["-ExactModIds", serialized_exact_mod_ids])
     process_id_ledger: Path | None = None

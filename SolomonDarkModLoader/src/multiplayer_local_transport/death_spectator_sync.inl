@@ -9,6 +9,8 @@ struct LocalDeathSpectatorState {
     std::uint64_t target_participant_id = 0;
     bool click_armed = true;
     std::uint64_t click_consumed_ms = 0;
+    std::uint64_t observed_mouse_left_edge_serial = 0;
+    std::uint64_t observed_mouse_right_edge_serial = 0;
 };
 
 LocalDeathSpectatorState g_local_death_spectator;
@@ -302,6 +304,39 @@ void ResetLocalDeathSpectatorState(std::string_view reason) {
     }
 }
 
+bool HoldLocalSpectatorDeathVitals() {
+    SDModPlayerState player;
+    if (!TryGetPlayerState(&player) ||
+        !player.valid ||
+        !std::isfinite(player.hp) ||
+        !std::isfinite(player.max_hp) ||
+        !std::isfinite(player.mp) ||
+        !std::isfinite(player.max_mp) ||
+        player.max_hp <= 0.0f ||
+        player.max_mp <= 0.0f) {
+        return false;
+    }
+    if (player.hp > 0.0f &&
+        !TryWriteLocalPlayerOrbResource(
+            static_cast<std::int32_t>(
+                LootOrbResourceKind::Health),
+            0.0f,
+            player.max_hp,
+            player.mp,
+            player.max_mp)) {
+        return false;
+    }
+    UpdateRuntimeState([&](RuntimeState& state) {
+        auto* local = FindLocalParticipant(state);
+        if (local == nullptr) {
+            return;
+        }
+        local->runtime.life_current = 0.0f;
+        local->runtime.life_max = player.max_hp;
+    });
+    return true;
+}
+
 std::vector<std::uint64_t> CollectAliveSpectatorTargetIds(
     const RuntimeState& runtime_state,
     std::uint32_t run_nonce) {
@@ -397,16 +432,33 @@ void TickLocalSpectatorTarget(std::uint64_t now_ms) {
 
     const bool mouse_left_down = IsGameplayMouseLeftDown();
     const bool mouse_right_down = IsGameplayMouseRightDown();
+    const auto mouse_left_edge_serial =
+        GetGameplayMouseLeftEdgeSerial();
+    const auto mouse_right_edge_serial =
+        GetGameplayMouseRightEdgeSerial();
+    const bool mouse_left_edge =
+        mouse_left_edge_serial !=
+        g_local_death_spectator.observed_mouse_left_edge_serial;
+    const bool mouse_right_edge =
+        mouse_right_edge_serial !=
+        g_local_death_spectator.observed_mouse_right_edge_serial;
     bool advance = false;
     if (g_local_death_spectator.click_armed &&
-        (mouse_left_down || mouse_right_down)) {
+        (mouse_left_edge ||
+         mouse_right_edge ||
+         mouse_left_down ||
+         mouse_right_down)) {
         advance = true;
         g_local_death_spectator.click_armed = false;
         g_local_death_spectator.click_consumed_ms = now_ms;
-        if (mouse_left_down) {
+        g_local_death_spectator.observed_mouse_left_edge_serial =
+            mouse_left_edge_serial;
+        g_local_death_spectator.observed_mouse_right_edge_serial =
+            mouse_right_edge_serial;
+        if (mouse_left_edge || mouse_left_down) {
             ClearQueuedGameplayMouseLeft();
         }
-        if (mouse_right_down) {
+        if (mouse_right_edge || mouse_right_down) {
             ClearQueuedGameplayMouseRight();
         }
     } else if (!g_local_death_spectator.click_armed &&
@@ -454,12 +506,20 @@ void TickLocalSpectatorTarget(std::uint64_t now_ms) {
 }
 
 void TickLocalDeathSpectator(std::uint64_t now_ms) {
+    if (g_local_death_spectator.phase !=
+        DeathSpectatorPhase::Inactive) {
+        (void)HoldLocalSpectatorDeathVitals();
+    }
     if (g_local_death_spectator.phase ==
             DeathSpectatorPhase::DeathPresentation &&
         now_ms >= g_local_death_spectator.death_started_ms &&
         now_ms - g_local_death_spectator.death_started_ms >=
             kDeathPresentationDurationMs) {
         g_local_death_spectator.phase = DeathSpectatorPhase::Spectating;
+        g_local_death_spectator.observed_mouse_left_edge_serial =
+            GetGameplayMouseLeftEdgeSerial();
+        g_local_death_spectator.observed_mouse_right_edge_serial =
+            GetGameplayMouseRightEdgeSerial();
         Log(
             "Multiplayer death presentation completed; spectator mode active.");
     }

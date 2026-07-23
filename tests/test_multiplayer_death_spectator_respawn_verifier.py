@@ -17,6 +17,11 @@ import verify_multiplayer_death_spectator_respawn as verifier  # noqa: E402
 
 
 class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
+    def test_generated_instance_prefix_stays_below_native_path_limit(self) -> None:
+        prefix = verifier._default_instance_prefix()
+        self.assertLessEqual(len(prefix), 18)
+        self.assertRegex(prefix, r"^ds-[0-9a-f]+-[0-9a-f]{4}$")
+
     def test_death_presentation_stays_in_run_without_game_over_surface(self) -> None:
         values = {
             "active": "true",

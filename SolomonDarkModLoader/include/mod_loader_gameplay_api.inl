@@ -157,6 +157,7 @@ bool TryRespawnLocalPlayerAt(
     float world_x,
     float world_y,
     std::string* error_message);
+bool TryApplyAuthoritativeLocalPlayerDeath(std::string* error_message);
 bool QueueManualRunEnemySpawn(
     int type_id,
     float x,

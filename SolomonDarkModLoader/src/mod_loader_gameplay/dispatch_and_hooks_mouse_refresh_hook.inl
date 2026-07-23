@@ -130,9 +130,14 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
                 live_mouse_right_offset,
                 &mouse_right) &&
             mouse_right != 0;
-        g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(
-            right_is_pressed,
-            std::memory_order_release);
+        const bool right_was_pressed =
+            g_gameplay_keyboard_injection.last_observed_mouse_right_down
+                .exchange(
+                    right_is_pressed,
+                    std::memory_order_acq_rel);
+        if (right_is_pressed && !right_was_pressed) {
+            RecordGameplayMouseRightEdge();
+        }
     }
 
     auto& pending = g_gameplay_keyboard_injection.pending_mouse_left_frames;
@@ -264,9 +269,14 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
                 g_gameplay_keyboard_injection.injected_mouse_right_active.exchange(
                     true,
                     std::memory_order_acq_rel);
-            g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(
-                true,
-                std::memory_order_release);
+            const bool was_pressed =
+                g_gameplay_keyboard_injection.last_observed_mouse_right_down
+                    .exchange(
+                        true,
+                        std::memory_order_acq_rel);
+            if (!was_pressed) {
+                RecordGameplayMouseRightEdge();
+            }
             if (!was_injected) {
                 Log(
                     "Injected gameplay mouse-right click. input_state=" +

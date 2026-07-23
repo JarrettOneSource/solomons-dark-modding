@@ -75,6 +75,25 @@ def test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode() ->
         ROOT
         / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/run_transition_hooks.inl"
     )
+    gameplay_header = read_text(
+        ROOT / "SolomonDarkModLoader/include/mod_loader_gameplay_api.inl"
+    )
+    gameplay_death = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_authoritative_local_player_death.inl"
+    )
+    damage_state = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/core/runtime_request_state.inl"
+    )
+    damage_hook = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_damage_authority_hook.inl"
+    )
+    vitals_correction = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/participant_vitals_correction.inl"
+    )
     native_re_text = read_text(
         ROOT / "docs/reverse-engineering/native-player-death-spectator.md"
     )
@@ -84,6 +103,20 @@ def test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode() ->
         "bool TryBuildDeathSpectatorStatusText(",
     ):
         assert token in transport_header, f"death spectator public API lacks: {token}"
+
+    assert "bool TryApplyAuthoritativeLocalPlayerDeath(" in gameplay_header
+    for token in (
+        "ExecuteNativeMagicHitBehaviorProbe(",
+        "g_client_owner_authorized_damage_target",
+        "g_authoritative_local_player_damage_replay_active",
+    ):
+        combined_damage = gameplay_death + damage_state + damage_hook
+        assert token in combined_damage, (
+            f"authoritative client death replay lacks: {token}"
+        )
+    assert "TryWriteLocalPlayerOrbResource(" in gameplay_death
+    assert "if (player.hp <= 0.0f)" not in gameplay_death
+    assert "TryApplyAuthoritativeLocalPlayerDeath(" in vitals_correction
 
     for token in (
         "kDeathPresentationDurationMs = 3000",
@@ -140,6 +173,13 @@ def test_dead_client_spectates_alive_players_with_local_camera_and_hud() -> str:
     camera_runtime = read_text(
         ROOT / "SolomonDarkModLoader/src/lua_camera_runtime.cpp"
     )
+    gameplay_public_api = read_text(
+        ROOT / "SolomonDarkModLoader/include/mod_loader_public_api.inl"
+    )
+    mouse_refresh_hook = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_mouse_refresh_hook.inl"
+    )
     overlay_renderer = read_text(
         ROOT
         / "SolomonDarkModLoader/src/debug_ui_overlay/gameplay_death_spectator_rendering.inl"
@@ -163,11 +203,16 @@ def test_dead_client_spectates_alive_players_with_local_camera_and_hud() -> str:
         "participant.runtime.life_current > 0.0f",
         "IsGameplayMouseLeftDown()",
         "IsGameplayMouseRightDown()",
+        "GetGameplayMouseLeftEdgeSerial()",
+        "GetGameplayMouseRightEdgeSerial()",
+        "HoldLocalSpectatorDeathVitals()",
         "ClearQueuedGameplayMouseLeft()",
         "ClearQueuedGameplayMouseRight()",
         "ClearLocalCameraFocus(kDeathSpectatorCameraOwner)",
     ):
         assert token in transport_text, f"spectator target loop lacks: {token}"
+    assert "GetGameplayMouseRightEdgeSerial();" in gameplay_public_api
+    assert "RecordGameplayMouseRightEdge();" in mouse_refresh_hook
     assert re.search(
         r"SetLocalCameraFocus\s*\(\s*kDeathSpectatorCameraOwner",
         transport_text,
@@ -304,7 +349,13 @@ def test_death_spectator_has_isolated_three_owner_live_regression() -> str:
         "respawn_state_matches",
         "sd.input.click_normalized(0.5, 0.5)",
         "sd.input.hold_mouse_right_frames(1)",
+        "invoke_native_magic_hit_trial(",
+        "target_participant_id=CLIENT_ID",
+        "attempts=2",
+        "_start_testrun_when_ready(host_pipe)",
         "sd.world.trigger_enemy_death(address)",
+        "death_spectator_respawn_test.txt",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
         "third_player=True",
         "kill_existing=False",
         "stop_game_processes(process_ids)",
@@ -314,16 +365,21 @@ def test_death_spectator_has_isolated_three_owner_live_regression() -> str:
 
     for token in (
         'instance_prefix: str = "local-mp"',
+        "game_directory: Path | None = None",
         '"-InstancePrefix"',
+        '"-GameDirectory"',
         "host_pipe = f\"SolomonDarkModLoader_LuaExec_{instance_prefix}-host\"",
     ):
         assert token in launcher_driver, f"isolated pair driver lacks: {token}"
     for token in (
         '[string]$InstancePrefix = "local-mp"',
+        '[string]$GameDirectory = ""',
         '$hostInstance = "$InstancePrefix-host"',
+        '$args += @("--game-dir", $GameDirectory)',
         "hostLuaPipe = $hostLuaPipe",
     ):
         assert token in pair_script, f"isolated pair script lacks: {token}"
+    assert "game_directory=game_directory" in verifier
 
     assert "verify_multiplayer_death_spectator_respawn.py" in native_re
     return (

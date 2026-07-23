@@ -18,6 +18,16 @@ After that presentation window, the transport changes only presentation-local
 camera and HUD state; simulation authority remains with the existing host and
 participant-owner lanes.
 
+Incoming client damage remains host-authoritative. When an authenticated vitals
+correction reaches zero life, the client aligns its local orb to one hit point
+and replays one lethal hit through the retail magic-damage handler. The narrow
+replay scope admits only the local actor, skips Lua damage filters that the host
+already applied, and must synchronously reach both zero life and the
+death-presentation state. While spectator state is active, each transport tick
+holds local life at zero so native regeneration cannot make the corpse appear
+alive to peers. Nonlethal corrections continue through the direct orb-resource
+path.
+
 The host captures the run-entry spawn position and publishes a monotonically
 new wave-respawn epoch when the authoritative wave summary reaches
 `completed`. The command is repeated in both the disposable participant frame

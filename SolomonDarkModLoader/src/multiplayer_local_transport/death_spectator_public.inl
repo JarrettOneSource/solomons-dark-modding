@@ -28,6 +28,10 @@ bool BeginLocalDeathSpectatorPresentation() {
         DeathSpectatorPhase::DeathPresentation;
     g_local_death_spectator.death_started_ms =
         static_cast<std::uint64_t>(GetTickCount64());
+    g_local_death_spectator.observed_mouse_left_edge_serial =
+        GetGameplayMouseLeftEdgeSerial();
+    g_local_death_spectator.observed_mouse_right_edge_serial =
+        GetGameplayMouseRightEdgeSerial();
     g_local_death_spectator.click_armed =
         !IsGameplayMouseLeftDown() &&
         !IsGameplayMouseRightDown();

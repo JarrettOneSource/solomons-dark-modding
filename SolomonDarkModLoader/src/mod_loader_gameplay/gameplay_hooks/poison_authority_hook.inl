@@ -45,8 +45,9 @@ void __fastcall HookPoisonedModifierTick(
         return;
     }
 
-    const auto previous_target = g_client_owner_poison_tick_target;
-    g_client_owner_poison_tick_target = actor_address;
+    const auto previous_target =
+        g_client_owner_authorized_damage_target;
+    g_client_owner_authorized_damage_target = actor_address;
     original(self);
-    g_client_owner_poison_tick_target = previous_target;
+    g_client_owner_authorized_damage_target = previous_target;
 }

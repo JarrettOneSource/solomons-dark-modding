@@ -141,6 +141,22 @@ void ApplyParticipantVitalsCorrectionPacket(
             packet)) {
         return;
     }
+    if (corrected_life <= 0.0f) {
+        std::string death_error;
+        if (!TryApplyAuthoritativeLocalPlayerDeath(
+                &death_error)) {
+            Log(
+                "Multiplayer authoritative local death replay is pending. "
+                "authority_participant_id=" +
+                std::to_string(packet.authority_participant_id) +
+                " target_participant_id=" +
+                std::to_string(packet.target_participant_id) +
+                " correction_sequence=" +
+                std::to_string(packet.correction_sequence) +
+                " error=" + death_error);
+            return;
+        }
+    }
     const bool wrote = TryWriteLocalPlayerOrbResource(
         static_cast<std::int32_t>(LootOrbResourceKind::Health),
         corrected_life,
