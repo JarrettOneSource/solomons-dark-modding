@@ -44,6 +44,7 @@ def test_lua_net_is_fragmented_authenticated_and_host_relayed() -> str:
     manifest = _read("mods/lua_net_lab/manifest.json")
     sample = _read("mods/lua_net_lab/scripts/main.lua")
     verifier = _read("tools/verify_lua_net.py")
+    multiplayer_verifier = _read("tools/verify_lua_net_multiplayer.py")
     runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
 
     for item in (
@@ -194,9 +195,38 @@ def test_lua_net_is_fragmented_authenticated_and_host_relayed() -> str:
         "subscription_lifetime_valid",
     ):
         assert token in verifier, f"Lua net verifier lacks: {token}"
+    for token in (
+        "HOST_PUBLISH",
+        "CLIENT_PUBLISH",
+        "payload_bytes=2050",
+        "payload_bytes=2562",
+        "payload_bytes=3074",
+        "payload_bytes=4098",
+        "sender=HOST_ID",
+        "sender=CLIENT_ID",
+        "target=HOST_ID",
+        "target=CLIENT_ID",
+        "broadcast=True",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua net multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "verify_lua_net_multiplayer.py --launch-pair",
+        "fragmented binary unicast",
+        "target, sequence, broadcast flag",
+        "cleans up only the exact process IDs",
+    ):
+        assert token in documentation, (
+            f"Lua net multiplayer acceptance docs lack: {token}"
+        )
     assert '"net": (' in runtime_verifier
 
     return (
         "sd.net carries bounded binary participant messages through an "
-        "authenticated host relay and dispatches them only on the Lua game thread"
+        "authenticated host relay, with exact two-peer fragmented live acceptance, "
+        "and dispatches them only on the Lua game thread"
     )

@@ -116,6 +116,16 @@ The namespace advertises `net.raw.fragmented`,
 `net.participant.unicast`, and `net.participant.broadcast`.
 `tools/verify_lua_net.py` checks the address-free API, binary-safe local
 broadcast, subscription lifetime, limits, and validation behavior against an
-already-running loader. The static contract additionally checks packet bounds,
-hop/source authentication, host relay rules, replay suppression, lifecycle
-cleanup, docs, and the disabled sample mod.
+already-running loader.
+
+`tools/verify_lua_net_multiplayer.py --launch-pair` stages one exact Lua mod on
+an isolated host/client pair and verifies fragmented binary unicast in both
+directions plus broadcast in both directions. It requires the exact sender,
+target, sequence, broadcast flag, payload length, and boundary bytes on each
+recipient, so host relay, source attribution, binary preservation, and
+deduplication are live acceptance conditions. The launcher preserves unrelated
+game processes and cleans up only the exact process IDs it started.
+
+The static contract additionally checks packet bounds, hop/source
+authentication, host relay rules, replay suppression, lifecycle cleanup, docs,
+and the disabled sample mod.
