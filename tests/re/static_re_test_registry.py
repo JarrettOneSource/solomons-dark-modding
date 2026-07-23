@@ -48,6 +48,9 @@ from static_lua_items_contracts import (
 from static_lua_enemies_contracts import (
     test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity,
 )
+from static_lua_spells_contracts import (
+    test_lua_spells_register_stable_metadata_and_owned_callbacks,
+)
 from static_lua_foundations_contracts import (
     test_lua_nav_is_bounded_read_only_and_native_backed,
     test_lua_run_seed_is_authority_owned_and_native_applied,
@@ -345,6 +348,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua enemies use exact stock spawning and replicated content identity",
         test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity,
+    ),
+    (
+        "Lua spells register stable metadata and owned callbacks",
+        test_lua_spells_register_stable_metadata_and_owned_callbacks,
     ),
     (
         "Lua timers are bounded, local, and tick-driven",

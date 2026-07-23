@@ -31,6 +31,11 @@ int main() {
                 6415373166652859851ull,
             "shock_nova content ID drifted") ||
         !Require(
+            ComputeLuaContentNetworkId(
+                "sample.lua.spells_registry_lab",
+                "gravity_well") == 8348995147374483494ull,
+            "gravity_well content ID drifted") ||
+        !Require(
             ComputeLuaContentNetworkId("sample.lua.enemies", "grave_tyrant") ==
                 7260085584278011992ull,
             "grave_tyrant content ID drifted") ||

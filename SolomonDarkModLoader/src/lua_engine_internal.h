@@ -70,6 +70,20 @@ struct LuaItemDefinition {
     std::uint32_t native_type_id = 0;
 };
 
+enum class LuaSpellSlot : std::uint8_t {
+    Primary = 0,
+    Secondary,
+};
+
+struct LuaSpellDefinition {
+    LuaContentIdentity identity;
+    LuaSpellSlot slot = LuaSpellSlot::Primary;
+    LuaModValue config;
+    int on_cast_reference = -2;
+    int on_tick_reference = -2;
+    int on_hit_reference = -2;
+};
+
 enum class LuaEnemyLootPolicy : std::uint8_t {
     Stock = 0,
     None,
@@ -116,6 +130,7 @@ struct LoadedLuaMod {
     std::uint64_t next_timer_id = 1;
     std::vector<LuaBusSubscription> bus_subscriptions;
     std::uint64_t next_bus_subscription_id = 1;
+    std::vector<LuaSpellDefinition> spell_definitions;
     std::vector<LuaItemDefinition> item_definitions;
     std::vector<LuaEnemyDefinition> enemy_definitions;
 };
