@@ -670,6 +670,28 @@ def test_packaged_ui_uses_proton_compatible_launcher() -> str:
     )
 
 
+def test_beta_release_documents_steam_deck_shortcut() -> str:
+    readme = _read("release/README.txt")
+
+    for token in (
+        "STEAM DECK",
+        "Add a Non-Steam Game",
+        "top-level",
+        "SolomonDarkMultiplayerBeta.exe",
+        "Do not select launcher/SolomonDarkModLauncher.exe",
+        "Start In",
+        "leave Launch Options empty",
+        "Proton 10 or Proton 11",
+        "Return to Gaming Mode",
+    ):
+        assert token in readme, f"Steam Deck release instructions lack: {token}"
+
+    return (
+        "the release tells Steam Deck users how to add the real launcher with "
+        "Proton"
+    )
+
+
 def test_beta_release_smoke_canonicalizes_packaged_steam_path() -> str:
     smoke = _read("scripts/Test-BetaReleasePackage.ps1")
 

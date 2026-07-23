@@ -87,6 +87,7 @@ from static_multiplayer_ownership_contracts import (
 )
 from static_multiplayer_platform_contracts import (
     test_active_steam_behavior_harnesses_preserve_fixture_state,
+    test_beta_release_documents_steam_deck_shortcut,
     test_beta_release_smoke_canonicalizes_packaged_steam_path,
     test_defense_probes_follow_host_damage_authority,
     test_explicit_blank_boneyard_removes_native_scenery_and_collision,
@@ -492,6 +493,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "packaged desktop UI uses its Proton-compatible launcher",
         test_packaged_ui_uses_proton_compatible_launcher,
+    ),
+    (
+        "beta release documents its Steam Deck shortcut",
+        test_beta_release_documents_steam_deck_shortcut,
     ),
     (
         "beta package smoke canonicalizes Windows path aliases",

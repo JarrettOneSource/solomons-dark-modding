@@ -28,6 +28,21 @@ HOW TO PLAY
 9. Wait until every wizard is visible in the hub.
 10. Start a run.
 
+STEAM DECK
+
+1. Switch to Desktop Mode and extract the entire beta ZIP into a new folder.
+   Do not run the launcher from inside the ZIP or extract a new beta over an
+   older beta folder.
+2. In Steam, select Add a Game > Add a Non-Steam Game, browse with the file
+   type set to All Files, and select the top-level
+   SolomonDarkMultiplayerBeta.exe.
+   Do not select launcher/SolomonDarkModLauncher.exe; that is an internal
+   helper and is not the desktop launcher.
+3. Open the shortcut's Properties. Set Target to the top-level EXE, set
+   Start In to the extracted beta folder, leave Launch Options empty, and use
+   Compatibility to force a Proton 10 or Proton 11 version.
+4. Return to Gaming Mode and start the shortcut.
+
 LIMITS
 
 - Multiplayer supports a maximum of four players.
@@ -44,6 +59,9 @@ PROBLEM SOLVING
 
 - Unsupported game: Select the original Solomon's Dark 0.72.5 folder.
 - Steam does not start: Start Steam. Make sure that your Steam account is active.
+- Steam Deck Play returns immediately to Play: Confirm that the full beta was
+  extracted, the shortcut targets the top-level EXE, and Proton is forced in
+  the shortcut's Compatibility settings.
 - Missing player: Wait in the hub. If the connection does not recover, close both games.
 - After you close both games, start a new lobby.
 - The log files are in:
