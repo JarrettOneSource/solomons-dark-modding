@@ -1327,6 +1327,9 @@
     <ClCompile Include="src\lua_engine_bindings_timer.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_bus.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_debug.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
@@ -1355,6 +1358,9 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_mod_loading.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_events.cpp">

@@ -133,8 +133,14 @@ internal static class LauncherOutputFormatter
             var runtimeSummary = mod.RequiresRuntime
                 ? $"runtime={mod.Manifest.RuntimeKind}:{mod.Manifest.Runtime.ApiVersion}"
                 : "runtime=-";
+            var providedContracts = mod.Manifest.Provides.Count == 0
+                ? "-"
+                : string.Join(",", mod.Manifest.Provides);
+            var requiredContracts = mod.Manifest.Requires.Count == 0
+                ? "-"
+                : string.Join(",", mod.Manifest.Requires);
             builder.AppendLine(
-                $"- {mod.Manifest.Id} [{state}] priority={mod.Manifest.Priority} overlays={mod.Manifest.Overlays.Count} {runtimeSummary} requires={requiredMods}");
+                $"- {mod.Manifest.Id} [{state}] priority={mod.Manifest.Priority} overlays={mod.Manifest.Overlays.Count} {runtimeSummary} requiredMods={requiredMods} provides={providedContracts} requires={requiredContracts}");
         }
 
         builder.AppendLine();

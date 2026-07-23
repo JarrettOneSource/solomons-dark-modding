@@ -28,7 +28,9 @@ Mods are discovered from `manifest.json`. Each mod may be:
 - **Native** — DLLs under `native/` loaded through `SDModPlugin_Initialize` / `SDModPlugin_Shutdown`.
 - **Hybrid** — any combination of the above.
 
-Sample mods: `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`, `wave_fast_start`, `lua_bots`, `lua_dark_cloud_sort_bootstrap`, `lua_hud_showcase`, `lua_ui_sandbox_lab`.
+Sample mods include `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`,
+`wave_fast_start`, `lua_bots`, `lua_dark_cloud_sort_bootstrap`,
+`lua_hud_showcase`, `lua_ui_sandbox_lab`, and the paired Lua bus labs.
 
 Website-distributed packages use the same root-level manifest and may contain
 data overlays/Boneyards, root `images/` art overlays, sandboxed Lua, or any
@@ -83,7 +85,7 @@ present. Provide a 32-bit Steamworks runtime at
 
 ## Loader features
 
-- Embedded Lua engine with the `sd.*` API (gameplay, runtime, replicated state/events, immediate drawing/HUD, UI, input, debug, bots).
+- Embedded Lua engine with the `sd.*` API (gameplay, runtime, replicated state/events, local storage/timers/bus, immediate drawing/HUD, UI, input, debug, bots).
 - Native DLL mod host (`SDModPlugin_Initialize` / `SDModPlugin_Shutdown`).
 - Scriptable bot runtime exposed through `sd.bots.*`, driven from the runtime tick service.
 - Steam bootstrap: `steam_api.dll` load, `SteamAPI_Init`, and legacy friends/matchmaking/networking interface binding.

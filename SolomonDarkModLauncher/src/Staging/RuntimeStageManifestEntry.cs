@@ -16,4 +16,6 @@ internal sealed record RuntimeStageManifestEntry(
     string? StageEntryScriptPath,
     string? StageEntryDllPath,
     IReadOnlyList<string> RequiredCapabilities,
-    IReadOnlyList<string> OptionalCapabilities);
+    IReadOnlyList<string> OptionalCapabilities,
+    IReadOnlyList<string> Provides,
+    IReadOnlyList<string> Requires);

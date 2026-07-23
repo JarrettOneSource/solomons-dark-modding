@@ -23,6 +23,8 @@ struct RuntimeModDescriptor {
     std::filesystem::path entry_dll_path;
     std::vector<std::string> required_capabilities;
     std::vector<std::string> optional_capabilities;
+    std::vector<std::string> provides;
+    std::vector<std::string> requires;
 
     bool HasLuaEntry() const {
         return !entry_script_path.empty();

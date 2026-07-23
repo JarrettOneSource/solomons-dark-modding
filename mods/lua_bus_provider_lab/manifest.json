@@ -1,0 +1,16 @@
+{
+  "id": "sample.lua.bus_provider_lab",
+  "name": "Lua Bus Provider Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "bus.local.contracts"
+    ]
+  },
+  "provides": [
+    "sample.bus.echo.v1"
+  ]
+}

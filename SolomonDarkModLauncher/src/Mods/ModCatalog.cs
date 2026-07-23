@@ -30,6 +30,7 @@ internal sealed class ModCatalog
         var enabledIds = new HashSet<string>(
             enabledMods.Select(mod => mod.Manifest.Id),
             StringComparer.OrdinalIgnoreCase);
+        EnsureRuntimeContractsResolved(enabledMods);
 
         return new ModCatalog
         {
@@ -56,6 +57,7 @@ internal sealed class ModCatalog
             throw new InvalidOperationException(
                 "The exact multiplayer mod set did not resolve to every requested mod.");
         }
+        EnsureRuntimeContractsResolved(discovered);
 
         return new ModCatalog
         {
@@ -89,6 +91,28 @@ internal sealed class ModCatalog
             if (!ids.Add(mod.Manifest.Id))
             {
                 throw new InvalidOperationException($"Duplicate mod id detected: {mod.Manifest.Id}");
+            }
+        }
+    }
+
+    private static void EnsureRuntimeContractsResolved(
+        IReadOnlyList<DiscoveredMod> enabledMods)
+    {
+        var providedContracts = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var mod in enabledMods)
+        {
+            providedContracts.UnionWith(mod.Manifest.Provides);
+        }
+
+        foreach (var mod in enabledMods)
+        {
+            foreach (var requiredContract in mod.Manifest.Requires)
+            {
+                if (!providedContracts.Contains(requiredContract))
+                {
+                    throw new InvalidOperationException(
+                        $"Mod {mod.Manifest.Id} requires missing runtime contract: {requiredContract}");
+                }
             }
         }
     }

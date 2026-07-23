@@ -6,8 +6,12 @@ internal static class ModManifestValidator
     {
         if (manifest.Overlays is null || manifest.Runtime is null ||
             manifest.RequiredMods is null ||
+            manifest.Provides is null ||
+            manifest.Requires is null ||
             manifest.Overlays.Any(overlay => overlay is null) ||
             manifest.RequiredMods.Any(required => required is null) ||
+            manifest.Provides.Any(contract => contract is null) ||
+            manifest.Requires.Any(contract => contract is null) ||
             manifest.Runtime.RequiredCapabilities is null ||
             manifest.Runtime.OptionalCapabilities is null ||
             manifest.Runtime.RequiredCapabilities.Any(capability => capability is null) ||
@@ -49,6 +53,7 @@ internal static class ModManifestValidator
         }
 
         ValidateRequiredMods(manifestPath, manifest.Id, manifest.RequiredMods);
+        ValidateRuntimeContracts(manifestPath, manifest);
     }
 
     private static void ValidateRuntime(string manifestPath, ModManifest manifest)
@@ -118,6 +123,55 @@ internal static class ModManifestValidator
             {
                 throw new InvalidOperationException(
                     $"Duplicate capability '{capability}' in {propertyName}: {manifestPath}");
+            }
+        }
+    }
+
+    private static void ValidateRuntimeContracts(
+        string manifestPath,
+        ModManifest manifest)
+    {
+        if ((manifest.Provides.Count != 0 || manifest.Requires.Count != 0) &&
+            !manifest.RequiresLuaRuntime)
+        {
+            throw new InvalidOperationException(
+                $"provides/requires are available only to Lua runtime mods: {manifestPath}");
+        }
+
+        ValidateContractList(manifestPath, manifest.Provides, "provides");
+        ValidateContractList(manifestPath, manifest.Requires, "requires");
+        var provided = new HashSet<string>(manifest.Provides, StringComparer.Ordinal);
+        foreach (var requiredContract in manifest.Requires)
+        {
+            if (provided.Contains(requiredContract))
+            {
+                throw new InvalidOperationException(
+                    $"Mod {manifest.Id} cannot both provide and require '{requiredContract}': {manifestPath}");
+            }
+        }
+    }
+
+    private static void ValidateContractList(
+        string manifestPath,
+        IReadOnlyList<string> contracts,
+        string propertyName)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var contract in contracts)
+        {
+            if (contract.Length == 0 || contract.Length > 128 ||
+                contract.Any(character =>
+                    !((character >= 'a' && character <= 'z') ||
+                      (character >= '0' && character <= '9') ||
+                      character is '.' or '_' or '-' or ':')))
+            {
+                throw new InvalidOperationException(
+                    $"Invalid lowercase contract identifier '{contract}' in {propertyName}: {manifestPath}");
+            }
+            if (!seen.Add(contract))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate contract '{contract}' in {propertyName}: {manifestPath}");
             }
         }
     }

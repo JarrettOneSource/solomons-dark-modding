@@ -248,6 +248,8 @@ bool LoadRuntimeBootstrap(
         std::string entry_dll_path;
         std::string required_capabilities;
         std::string optional_capabilities;
+        std::string provides;
+        std::string requires;
 
         if (!TryReadRequiredValue(sections, section_name, "root_path", &root_path, error_message, path) ||
             !TryReadRequiredValue(sections, section_name, "manifest_path", &manifest_path, error_message, path) ||
@@ -282,6 +284,20 @@ bool LoadRuntimeBootstrap(
                 "optional_capabilities",
                 &optional_capabilities,
                 error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "provides",
+                &provides,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "requires",
+                &requires,
+                error_message,
                 path)) {
             return false;
         }
@@ -301,6 +317,8 @@ bool LoadRuntimeBootstrap(
 
         mod.required_capabilities = SplitCapabilities(required_capabilities);
         mod.optional_capabilities = SplitCapabilities(optional_capabilities);
+        mod.provides = SplitCapabilities(provides);
+        mod.requires = SplitCapabilities(requires);
         bootstrap->mods.push_back(std::move(mod));
     }
 

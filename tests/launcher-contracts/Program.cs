@@ -15,6 +15,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("downloaded native payload rejection", TestDownloadedNativePayloadAsync),
     ("website lobby preflight", TestWebsiteLobbyPreflightAsync),
     ("exact manual catalog", TestExactManualCatalogAsync),
+    ("Lua bus runtime contracts", TestLuaBusRuntimeContractsAsync),
     ("invalid Boneyard rejection", TestInvalidBoneyardRejectionAsync),
     ("automatic website sync with offline fallback", TestAutomaticWebsiteSyncAsync),
     ("website join URI", TestWebsiteJoinUriAsync)
@@ -311,6 +312,96 @@ static Task TestExactManualCatalogAsync()
             missingDependencyRejected = true;
         }
         Require(missingDependencyRejected, "exact sets accepted a missing dependency");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestLuaBusRuntimeContractsAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var providerRoot = Path.Combine(root, "provider");
+        Directory.CreateDirectory(Path.Combine(providerRoot, "scripts"));
+        File.WriteAllText(
+            Path.Combine(providerRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.bus-provider",
+              "name": "Bus Provider",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua"
+              },
+              "provides": ["tests.bus.echo.v1"]
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(providerRoot, "scripts", "main.lua"),
+            "return true\n");
+
+        var consumerRoot = Path.Combine(root, "consumer");
+        Directory.CreateDirectory(Path.Combine(consumerRoot, "scripts"));
+        File.WriteAllText(
+            Path.Combine(consumerRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.bus-consumer",
+              "name": "Bus Consumer",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua"
+              },
+              "requires": ["tests.bus.echo.v1"]
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(consumerRoot, "scripts", "main.lua"),
+            "return true\n");
+
+        var provider = ModDiscovery.DiscoverRoot(providerRoot);
+        var consumer = ModDiscovery.DiscoverRoot(consumerRoot);
+        var catalog = ModCatalog.CreateExact([consumer, provider]);
+        Require(catalog.EnabledMods.Count == 2, "bus contract set did not resolve");
+
+        var stageRoot = Path.Combine(root, "stage");
+        var runtime = RuntimeMetadataStageMaterializer.Materialize(
+            stageRoot,
+            catalog.EnabledMods,
+            RuntimeStageOptions.Default);
+        var bootstrap = File.ReadAllText(runtime.RuntimeBootstrapPath);
+        Require(
+            bootstrap.Contains("provides=tests.bus.echo.v1", StringComparison.Ordinal),
+            "provided bus contract was not staged");
+        Require(
+            bootstrap.Contains("requires=tests.bus.echo.v1", StringComparison.Ordinal),
+            "required bus contract was not staged");
+        Require(
+            runtime.StagedRuntimeMods.Single(mod => mod.Id == provider.Manifest.Id)
+                .Provides.SequenceEqual(["tests.bus.echo.v1"]),
+            "provider stage descriptor lost its contract");
+        Require(
+            runtime.StagedRuntimeMods.Single(mod => mod.Id == consumer.Manifest.Id)
+                .Requires.SequenceEqual(["tests.bus.echo.v1"]),
+            "consumer stage descriptor lost its contract");
+
+        var missingProviderRejected = false;
+        try
+        {
+            ModCatalog.CreateExact([consumer]);
+        }
+        catch (InvalidOperationException)
+        {
+            missingProviderRejected = true;
+        }
+        Require(missingProviderRejected, "catalog accepted an unresolved bus contract");
     }
     finally
     {

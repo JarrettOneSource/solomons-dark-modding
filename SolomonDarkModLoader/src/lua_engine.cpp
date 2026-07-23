@@ -316,6 +316,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "runtime.mod.info",
         "storage.profile.local",
         "timer.local.scheduler",
+        "bus.local.contracts",
         "state.replicated.read",
         "state.replicated.write",
         "ui.snapshot.read",
@@ -402,6 +403,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
 
     ClearLuaEventFilterRegistrationsForMod(mod);
     ClearLuaTimersForMod(mod);
+    ClearLuaBusSubscriptionsForMod(mod);
     if (mod->state != nullptr) {
         lua_close(mod->state);
         mod->state = nullptr;
@@ -420,6 +422,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     mod->profile_storage_loaded = false;
     mod->profile_storage_values.clear();
     mod->next_timer_id = 1;
+    mod->next_bus_subscription_id = 1;
 }
 
 void LogLuaMessage(const LoadedLuaMod& mod, const std::string& message) {
@@ -451,39 +454,7 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     }
 
     const auto capabilities = detail::BuildLuaCapabilitySet();
-    for (const auto& mod : bootstrap.mods) {
-        if (!mod.HasLuaEntry()) {
-            continue;
-        }
-
-        if (mod.api_version != SDMOD_RUNTIME_API_VERSION) {
-            Log(
-                "[lua][" + mod.id + "] skipping mod due to apiVersion mismatch. host=" +
-                std::string(SDMOD_RUNTIME_API_VERSION) + " mod=" + mod.api_version);
-            continue;
-        }
-
-        std::string missing_capability;
-        if (!detail::SupportsLuaModRequiredCapabilities(mod, capabilities, &missing_capability)) {
-            Log(
-                "[lua][" + mod.id + "] skipping mod due to unsupported required capability: " + missing_capability);
-            continue;
-        }
-
-        auto loaded_mod = std::make_unique<detail::LoadedLuaMod>();
-        loaded_mod->descriptor = mod;
-        loaded_mod->capabilities = capabilities;
-
-        std::string load_error;
-        if (!detail::CreateLuaStateForMod(loaded_mod.get(), &load_error)) {
-            detail::CloseLuaStateForMod(loaded_mod.get());
-            Log("[lua][" + mod.id + "] failed to load entry script: " + load_error);
-            continue;
-        }
-
-        detail::LogLuaMessage(*loaded_mod, "loaded entry script: " + mod.entry_script_path.string());
-        loaded_mods.push_back(std::move(loaded_mod));
-    }
+    detail::LoadLuaModsForBootstrap(bootstrap, capabilities);
 
     Log("Lua engine initialized.");
     Log("Lua runtime directory: " + runtime_directory.string());

@@ -56,6 +56,12 @@ struct LuaTimerEntry {
     std::size_t sequence_index = 0;
 };
 
+struct LuaBusSubscription {
+    std::uint64_t id = 0;
+    std::string topic;
+    int callback_reference = -2;
+};
+
 struct LoadedLuaMod {
     RuntimeModDescriptor descriptor;
     std::vector<std::string> capabilities;
@@ -76,6 +82,8 @@ struct LoadedLuaMod {
     LuaModStateValues profile_storage_values;
     std::vector<LuaTimerEntry> timers;
     std::uint64_t next_timer_id = 1;
+    std::vector<LuaBusSubscription> bus_subscriptions;
+    std::uint64_t next_bus_subscription_id = 1;
 };
 
 std::mutex& LuaEngineMutex();
@@ -89,6 +97,9 @@ bool SupportsLuaModRequiredCapabilities(
     const RuntimeModDescriptor& mod,
     const std::vector<std::string>& capabilities,
     std::string* missing_capability);
+void LoadLuaModsForBootstrap(
+    const RuntimeBootstrap& bootstrap,
+    const std::vector<std::string>& capabilities);
 
 bool CreateLuaStateForMod(LoadedLuaMod* mod, std::string* error_message);
 void CloseLuaStateForMod(LoadedLuaMod* mod);
@@ -107,6 +118,7 @@ void DispatchLuaTimersToMod(
     LoadedLuaMod* mod,
     const SDModRuntimeTickContext& context);
 void ClearLuaTimersForMod(LoadedLuaMod* mod);
+void ClearLuaBusSubscriptionsForMod(LoadedLuaMod* mod);
 void ResetLuaEnemySpawnFilterDiagnostics();
 void ResetLuaDropRollFilterDiagnostics();
 void ResetLuaWaveSpawnFilterDiagnostics();

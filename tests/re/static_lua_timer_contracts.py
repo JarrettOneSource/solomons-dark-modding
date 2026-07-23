@@ -19,7 +19,7 @@ def test_lua_timers_are_bounded_local_and_tick_driven() -> str:
     verifier = _read("tools/verify_lua_timers.py")
 
     assert "RegisterLuaTimerBindings(mod->state)" in bindings
-    assert "lua_createtable(mod->state, 0, 15);" in bindings
+    assert "lua_createtable(mod->state, 0, 16);" in bindings
     assert "std::vector<LuaTimerEntry> timers" in internal
     assert '"timer.local.scheduler"' in engine
     assert "ClearLuaTimersForMod(mod)" in engine

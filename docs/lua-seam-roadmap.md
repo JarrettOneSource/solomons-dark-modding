@@ -75,6 +75,8 @@ shared state; simulation calls auto-route to the owner).
   transactional persistence under the launcher's isolated mod data root.
 - **`sd.timer`** — bounded per-mod `after/every/sequence/cancel/clear` scheduling on the
   monotonic runtime tick; callbacks and handles are released when the mod unloads.
+- **`sd.bus`** — bounded synchronous local publish/subscribe with manifest-declared
+  provider contracts and provider-first Lua load ordering.
 - **`sd.events`** — `on` plus authority-only `broadcast` for mod-defined ordered events.
   Built-in notify events are `runtime.tick`, `run.started`, `run.ended`, `wave.started`,
   `wave.completed`, `enemy.death`, `enemy.spawned`, `spell.cast`, `gold.changed`,
@@ -260,6 +262,14 @@ callbacks, and tears down every registry reference with the owning mod. It adver
 `provides`/`requires` in `manifest.json`. *Unlocks:* framework mods (quest engine, UI kit)
 that content mods build on — the compounding mechanism of a real ecosystem. *MP:* local
 dispatch; a bus message that must reach all peers is just `sd.events.broadcast`.
+
+**Implemented 2026-07-22.** `sd.bus` provides synchronous bounded
+`publish/subscribe/unsubscribe` plus `has/providers` contract discovery. The launcher
+rejects unresolved enabled sets; the loader orders consumers after successfully loaded
+providers and skips them when a real provider is unavailable. Payloads cross isolated Lua
+states through the bounded value codec, subscriptions are snapshot-dispatched and cleaned
+up with their owner, and nested work is capped. It advertises `bus.local.contracts`; see
+`lua-bus.md` and the opt-in provider/consumer lab pair.
 
 **11. `sd.net` — escape hatch.** Raw mod-defined messages between participants for the
 rare mod that outgrows `sd.state`/broadcast (e.g., streaming large payloads). Most mods

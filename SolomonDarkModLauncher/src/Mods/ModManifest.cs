@@ -9,6 +9,8 @@ internal sealed class ModManifest
     public List<OverlayDefinition> Overlays { get; init; } = [];
     public RuntimeModDefinition Runtime { get; init; } = new();
     public List<string> RequiredMods { get; init; } = [];
+    public List<string> Provides { get; init; } = [];
+    public List<string> Requires { get; init; } = [];
 
     public bool RequiresRuntime => Runtime.RequiresRuntime;
     public bool RequiresLuaRuntime => Runtime.RequiresLuaRuntime;

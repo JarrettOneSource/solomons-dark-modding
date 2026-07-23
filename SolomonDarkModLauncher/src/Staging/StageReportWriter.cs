@@ -87,7 +87,9 @@ internal static class StageReportWriter
                     mod.StageEntryScriptPath,
                     mod.StageEntryDllPath,
                     mod.RequiredCapabilities,
-                    mod.OptionalCapabilities
+                    mod.OptionalCapabilities,
+                    mod.Provides,
+                    mod.Requires
                 })
             },
             enabledMods = enabledMods.Select(mod => new
@@ -97,6 +99,8 @@ internal static class StageReportWriter
                 mod.Manifest.Version,
                 mod.Manifest.Priority,
                 mod.Manifest.RequiredMods,
+                mod.Manifest.Provides,
+                mod.Manifest.Requires,
                 requiresRuntime = mod.RequiresRuntime,
                 runtimeKind = mod.Manifest.RuntimeKind,
                 runtime = mod.RequiresRuntime

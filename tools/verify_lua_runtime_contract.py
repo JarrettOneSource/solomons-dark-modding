@@ -49,6 +49,7 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
     ),
     "storage": ("get", "set", "delete", "clear", "snapshot"),
     "timer": ("after", "every", "sequence", "cancel", "clear"),
+    "bus": ("publish", "subscribe", "unsubscribe", "has", "providers"),
     "draw": (
         "text",
         "rect",
