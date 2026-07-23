@@ -38,6 +38,10 @@ from static_lua_timer_contracts import (
 from static_lua_bus_contracts import (
     test_lua_bus_is_manifest_resolved_bounded_and_local,
 )
+from static_lua_foundations_contracts import (
+    test_lua_nav_is_bounded_read_only_and_native_backed,
+    test_lua_run_seed_is_authority_owned_and_native_applied,
+)
 from static_multiplayer_transport_contracts import (
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
     test_build_all_rebuilds_native_loader_from_clean_intermediates,
@@ -292,6 +296,14 @@ from static_re_binary_tooling_contracts import (
 )
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "Lua run seed is authority-owned and native-applied",
+        test_lua_run_seed_is_authority_owned_and_native_applied,
+    ),
+    (
+        "Lua navigation is bounded, read-only, and native-backed",
+        test_lua_nav_is_bounded_read_only_and_native_backed,
+    ),
     (
         "Lua bus is manifest-resolved, bounded, and local",
         test_lua_bus_is_manifest_resolved_bounded_and_local,

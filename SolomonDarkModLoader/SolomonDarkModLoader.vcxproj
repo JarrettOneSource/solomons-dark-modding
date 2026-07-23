@@ -493,6 +493,7 @@
     <ClCompile Include="src\lua_engine_bindings_storage.cpp" />
     <ClCompile Include="src\lua_engine_bindings_timer.cpp" />
     <ClCompile Include="src\lua_engine_bindings_bus.cpp" />
+    <ClCompile Include="src\lua_engine_bindings_foundations.cpp" />
     <ClCompile Include="src\lua_engine_bindings_bots.cpp" />
     <ClCompile Include="src\lua_engine_bindings_debug.cpp" />
     <ClCompile Include="src\lua_exec_pipe.cpp" />

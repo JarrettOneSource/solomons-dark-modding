@@ -186,7 +186,10 @@ py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-u
 - `docs/lua-memory-tooling.md` — live Lua memory and reverse-engineering helpers.
 - `docs/lua-state-and-events.md` — authority-owned replicated state, ordered custom events, limits, and live acceptance.
 - `docs/lua-draw.md` — local immediate-mode text, primitives, stock sprites, projection, and bounds.
+- `docs/lua-rng.md` — authority-owned native run seeds and multiplayer run-nonce behavior.
+- `docs/lua-nav.md` — bounded address-free native grid and path-segment queries.
 - `docs/lua-event-filters.md` — synchronous owner-side damage rewrites, cancellation, ordering, and live acceptance.
+- `docs/reverse-engineering/game-timing-scale.md` — evidence that the timing global is a tick-frequency constant, not a safe speed control.
 - `docs/ui-binary-map.md` — recovered UI seams and coverage.
 - `docs/ui-engine-system-map.md` — higher-level UI engine architecture and hook targets.
 - `docs/ui-automation-inventory.md` — semantic `sd.ui` surface coverage and cutover map.

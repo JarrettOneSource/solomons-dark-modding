@@ -101,8 +101,8 @@ Current same-scene follow behavior:
 - beyond `250` units, the bot chooses a random traversable point between
   `100` and `250` units from the player and issues a `move_to`
 - same-scene follow now snaps that chosen target to the nearest traversable
-  nav-grid sample before issuing the move, instead of trusting coarse cell
-  centers or a raw point inside a blocked follow cell
+  `sd.nav` native-placement sample before issuing the move, instead of trusting
+  coarse cell centers or a raw point inside a blocked follow cell
 
 Current primary attack range behavior:
 

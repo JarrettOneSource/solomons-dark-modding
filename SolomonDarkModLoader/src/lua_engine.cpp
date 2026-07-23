@@ -333,6 +333,8 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         capabilities.emplace_back("input.keyboard.inject");
         capabilities.emplace_back("events.filters.damage");
         capabilities.emplace_back("events.filters.spell_cast");
+        capabilities.emplace_back("rng.run.seed");
+        capabilities.emplace_back("nav.read");
     }
 
     if (multiplayer::IsBotRuntimeInitialized()) {

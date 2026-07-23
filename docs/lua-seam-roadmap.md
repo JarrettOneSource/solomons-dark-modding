@@ -77,6 +77,10 @@ shared state; simulation calls auto-route to the owner).
   monotonic runtime tick; callbacks and handles are released when the mod unloads.
 - **`sd.bus`** — bounded synchronous local publish/subscribe with manifest-declared
   provider contracts and provider-first Lua load ordering.
+- **`sd.rng`** — authority-owned exact seed selection for the next native arena-generation
+  pass, carried to peers through the run nonce.
+- **`sd.nav`** — bounded address-free native grid snapshots and player-sized path-segment
+  tests.
 - **`sd.events`** — `on` plus authority-only `broadcast` for mod-defined ordered events.
   Built-in notify events are `runtime.tick`, `run.started`, `run.ended`, `wave.started`,
   `wave.completed`, `enemy.death`, `enemy.spawned`, `spell.cast`, `gold.changed`,
@@ -126,9 +130,10 @@ shared state; simulation calls auto-route to the owner).
    registered scripted spells, enemies, and items remain to be built.
 2. **Presentation is incomplete** — Lua drawing exists, but audio and authored UI remain.
 3. **Shared simulation control is incomplete** — enemy brains, scene changes, timing,
-   RNG, and other mutations still need authority-routed public seams.
-4. **No cross-mod contract.** Replicated run state and scoped profile persistence now
-   exist; local mod-to-mod contracts remain.
+   and other mutations still need authority-routed public seams.
+4. **Author DX and presentation parity policy remain incomplete.** Cross-mod contracts now
+   exist, but generated editor stubs, hot reload, and manifest-enforced classification of
+   presentation-only mods remain.
 
 ### Known sharp edges (fix as part of the relevant seam)
 
@@ -292,14 +297,30 @@ wave summary, so `get_state()` answers identically on every peer.
 
 ### Tier 3 — nearly-free power-ups and polish
 
-- **`sd.time.set_scale()`** — `kGameTimingScaleGlobal` is resolved; slow-mo, pause,
-  frame-step. *MP:* shared-simulation variable → authority-gated + replicated (or
-  refused in sessions).
+- **`sd.time.set_scale()`** — slow-mo, pause, frame-step. *MP:* shared-simulation variable
+  → authority-gated + replicated (or refused in sessions).
+
+  **Investigated 2026-07-22.** The previously proposed `kGameTimingScaleGlobal` shortcut
+  is not a speed multiplier. Headless Ghidra found 136 xrefs that use its live value
+  (`100.0`) as a ticks-per-second conversion, including divisions; zeroing it is unsafe
+  and changing it cannot coherently pause existing counters. A correct seam must gate
+  actor-world/player/wave ticks and compose with replicated multiplayer pause state. See
+  `reverse-engineering/game-timing-scale.md`.
 - **`sd.rng.set_seed()`** — `kNativeRngInitialize` + `kNativeGlobalRngStateGlobal`;
   daily challenges, practice, replays. *MP:* authority seeds, seed replicates at run start.
+
+  **Implemented 2026-07-22.** `sd.rng` provides `get_seed/set_seed` and accepts an exact
+  bounded seed only from the offline/host simulation authority before a run. The existing
+  run-nonce path carries it to clients and every peer applies it through the stock initializer
+  immediately before arena generation. See `lua-rng.md`.
 - **`sd.nav`** — promote `get_nav_grid` + native `movement_collision_test_circle_placement`
   bridge out of `sd.debug` into a blessed pathfinding/LOS API (native collision test is
   already the required path — make it the easy one). *MP:* read-only, safe everywhere.
+
+  **Implemented 2026-07-22.** `sd.nav` provides `get_grid/test_segment` with bounded
+  subdivision sampling, asynchronous gameplay-thread snapshots, finite segment tests, and
+  no raw process addresses. It reuses the native player-sized collision and path rules and
+  advertises `nav.read`. See `lua-nav.md`.
 - **`sd.scene`** — region/level switching (`kGameplaySwitchRegion`, transition globals)
   paired with `.boneyard` overlays. *MP:* authority-routed; scene epochs already replicate.
 - **`sd.camera`** — cutscenes, boss intros, shake. Only major seam with **no RE done yet**.
@@ -324,7 +345,7 @@ Multiplayer column = how it behaves once built on the MP-native contract.
 | **Balance Workshop** | Full numbers overhaul + conditional effects (glass cannon, thorns) | ~85% | damage filters for conditional parts | Filters run owner-side; identical rules for all peers via mod parity |
 | **Streamer Mode** | Twitch chat spawns enemies / heals / curses via channel points (external bot → exec pipe works now) | ~70% | HUD toasts, audio stingers | Spawn calls auto-route to authority; toasts via broadcast → every peer sees chat chaos |
 | **The Director** | L4D-style adaptive difficulty: watches DPS/health/economy, reshapes waves live | ~60% | `wave.spawning` filter, `sd.waves` reads, per-hit damage events, HUD | Runs entirely authority-side; intensity in `sd.state` for client HUDs |
-| **Solomon's Trials** | Daily seeded challenge + leaderboard on the existing Website backend | ~55% | `sd.rng`, `sd.storage`, submit contract (offer control exists: `choose_level_up_option`) | Authority seeds the run; co-op daily boards become possible |
+| **Solomon's Trials** | Daily seeded challenge + leaderboard on the existing Website backend | ~80% | Website submit contract (offer control exists: `choose_level_up_option`) | Authority seeds the run; co-op daily boards become possible |
 | **Cartographer** | Custom arena/campaign packs with narration | ~50% (static overlays work now) | level tooling, `sd.scene`, per-level hooks | Scene switches authority-routed; epochs already replicate |
 | **Boneyard Together+** | Custom co-op modes: wave race, shared-fate, trading | ~45% | `sd.state`/broadcast, HUD, damage-share filters | The showcase — entire mod is `sd.state` + filters + HUD |
 | **Boneyard Bosses** | Multi-phase scripted bosses, telegraphs, enrage, unique loot | ~40% | `sd.ai`, spawn fix, HUD telegraphs, audio, drop injection | Boss brain on authority; phase in `sd.state`; telegraphs drawn locally per peer |

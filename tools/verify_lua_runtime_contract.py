@@ -50,6 +50,8 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
     "storage": ("get", "set", "delete", "clear", "snapshot"),
     "timer": ("after", "every", "sequence", "cancel", "clear"),
     "bus": ("publish", "subscribe", "unsubscribe", "has", "providers"),
+    "rng": ("get_seed", "set_seed"),
+    "nav": ("get_grid", "test_segment"),
     "draw": (
         "text",
         "rect",
@@ -223,6 +225,8 @@ check_call('runtime.get_multiplayer_state', sd.runtime.get_multiplayer_state, {{
 check_call('state.snapshot', sd.state.snapshot, {{'table'}})
 check_call('state.get_revision', sd.state.get_revision, {{'number'}})
 check_call('state.is_authority', sd.state.is_authority, {{'boolean'}})
+check_call('rng.get_seed', sd.rng.get_seed, {{'number', 'nil'}})
+check_call('nav.get_grid', sd.nav.get_grid, {{'table', 'nil'}})
 check_call('draw.get_limits', sd.draw.get_limits, {{'table'}})
 check_call('draw.get_viewport', sd.draw.get_viewport, {{'table', 'nil'}})
 check_call('draw.get_sprite_info', function()
