@@ -29,11 +29,12 @@ HOW TO PLAY
    Send Logs to Cloud button for support.
 7. The host clicks Host Game and selects Friends Only or Public.
    Host Game does not open an invite picker automatically.
-8. The host goes to the hub.
+8. Pick a loadout. The game connects and opens the hub.
 9. Select the host's lobby through Steam, the website, or use a Lobby ID.
    If the host has mods you do not have, the launcher lists them and asks
    before downloading them from the website.
-10. Wait until every wizard is visible in the hub, then start a run.
+10. Pick a loadout and wait until every wizard is visible in the hub.
+11. Start the run. The loading screen clears when the Boneyard is ready.
 
 SAVES
 
