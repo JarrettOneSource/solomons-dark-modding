@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Verify deterministic Lua spell registration without casting a spell."""
+"""Verify Lua spell registration and its authored picker without casting."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "runtime" / "lua_spells_verification.json"
 DEFAULT_PIPE = "SolomonDarkModLoader_LuaExec"
 EXPECTED_CONTENT_ID = 8348995147374483494
+PICKER_MOD_ID = "sample.lua.spells_registry_lab"
 
 
 PROBE = r'''
@@ -113,7 +115,86 @@ print("selection_round_trip=" .. tostring(
 '''
 
 
-def run(pipe_name: str) -> dict[str, Any]:
+PICKER_EQUIP_PROBE = r'''
+local mod = assert(sd.runtime.get_mod())
+assert(mod.id == "sample.lua.spells_registry_lab",
+    "picker verification requires sample.lua.spells_registry_lab as the first loaded Lua mod")
+local selection = sd.spells.get_selection()
+if selection.secondary[1] ~= nil then
+  assert(sd.spells.clear_selection("secondary", 1))
+end
+local ok, request = sd.ui.perform({
+  surface_id = "spell_picker",
+  action_id = "equip_gravity_well",
+})
+assert(ok == true and type(request) == "number" and request > 0,
+    "visible spell picker equip action was not queued")
+print("exec_target=" .. mod.id)
+print("picker_visible=true")
+print("equip_queued=true")
+print("equip_request_id=" .. tostring(request))
+'''
+
+
+PICKER_CLEAR_PROBE = r'''
+local selection = sd.spells.get_selection()
+assert(selection.secondary[1] and
+    selection.secondary[1].id == 8348995147374483494,
+    "Gravity Well was not equipped before clear")
+local ok, request = sd.ui.perform({
+  surface_id = "spell_picker",
+  action_id = "clear_gravity_well",
+})
+assert(ok == true and type(request) == "number" and request > 0,
+    "visible spell picker clear action was not queued")
+print("clear_queued=true")
+print("clear_request_id=" .. tostring(request))
+'''
+
+
+PICKER_STATUS_PROBE = r'''
+local selected = sd.spells.get_selection().secondary[1]
+print("slot1_selected=" .. tostring(selected ~= nil))
+print("slot1_content_id=" .. tostring(selected and selected.id or 0))
+'''
+
+
+PICKER_CLEANUP_PROBE = r'''
+local mod = sd.runtime.get_mod()
+if mod and mod.id == "sample.lua.spells_registry_lab" then
+  local selected = sd.spells.get_selection().secondary[1]
+  if selected ~= nil then
+    sd.spells.clear_selection("secondary", 1)
+  end
+end
+return true
+'''
+
+
+def _wait_for_picker_state(
+    pipe_name: str,
+    *,
+    selected: bool,
+    timeout: float,
+) -> dict[str, str]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = parse_key_values(lua(pipe_name, PICKER_STATUS_PROBE, timeout=12.0))
+        is_selected = last.get("slot1_selected") == "true"
+        content_matches = (
+            last.get("slot1_content_id") == str(EXPECTED_CONTENT_ID)
+            if selected
+            else last.get("slot1_content_id") == "0"
+        )
+        if is_selected == selected and content_matches:
+            return last
+        time.sleep(0.05)
+    expected = "equipped" if selected else "cleared"
+    raise VerifyFailure(f"spell picker did not become {expected}: {last}")
+
+
+def run(pipe_name: str, timeout: float = 12.0) -> dict[str, Any]:
     values = parse_key_values(lua(pipe_name, PROBE, timeout=12.0))
     for field in (
         "descriptor_copy_isolated",
@@ -128,18 +209,57 @@ def run(pipe_name: str) -> dict[str, Any]:
             raise VerifyFailure(f"spell registry contract failed {field}: {values}")
     if values.get("stable_id") != str(EXPECTED_CONTENT_ID):
         raise VerifyFailure(f"spell registry stable id differs: {values}")
-    return {"ok": True, "pipe": pipe_name, "values": values}
+
+    try:
+        equip = parse_key_values(lua(pipe_name, PICKER_EQUIP_PROBE, timeout=12.0))
+        if (
+            equip.get("exec_target") != PICKER_MOD_ID
+            or equip.get("picker_visible") != "true"
+            or equip.get("equip_queued") != "true"
+        ):
+            raise VerifyFailure(f"spell picker equip action failed: {equip}")
+        equipped = _wait_for_picker_state(
+            pipe_name,
+            selected=True,
+            timeout=timeout,
+        )
+
+        clear = parse_key_values(lua(pipe_name, PICKER_CLEAR_PROBE, timeout=12.0))
+        if clear.get("clear_queued") != "true":
+            raise VerifyFailure(f"spell picker clear action failed: {clear}")
+        cleared = _wait_for_picker_state(
+            pipe_name,
+            selected=False,
+            timeout=timeout,
+        )
+        return {
+            "ok": True,
+            "pipe": pipe_name,
+            "values": values,
+            "picker": {
+                "equip": equip,
+                "equipped": equipped,
+                "clear": clear,
+                "cleared": cleared,
+            },
+        }
+    finally:
+        try:
+            lua(pipe_name, PICKER_CLEANUP_PROBE, timeout=12.0)
+        except Exception:  # noqa: BLE001 - preserve the primary failure.
+            pass
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pipe", default=DEFAULT_PIPE)
     parser.add_argument("--output", type=Path, default=OUTPUT)
+    parser.add_argument("--timeout", type=float, default=12.0)
     args = parser.parse_args()
 
     result: dict[str, Any] = {"ok": False, "pipe": args.pipe}
     try:
-        result = run(args.pipe)
+        result = run(args.pipe, timeout=max(1.0, args.timeout))
         return_code = 0
     except Exception as error:  # noqa: BLE001 - preserve exact live evidence.
         result["error"] = str(error)

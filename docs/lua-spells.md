@@ -201,3 +201,21 @@ The disabled-by-default `sample.lua.spells_registry_lab` mod registers a
 `gravity_well` definition and its bounded field lifecycle, then presents a
 native-authored local picker that equips or clears belt slot 1. It never casts
 on its own.
+
+## Live acceptance
+
+Enable only `sample.lua.spells_registry_lab`, launch through the normal staged
+launcher, and run:
+
+```bash
+py -3 tools/verify_lua_spells.py
+```
+
+The named-pipe exec target is the first loaded Lua mod, so the isolated sample
+launch makes the verifier execute in the picker owner's state. It validates the
+registry and selection contracts, activates the visible picker's
+`equip_gravity_well` and `clear_gravity_well` buttons through `sd.ui.perform`,
+waits for both presentation callbacks, and leaves belt slot 1 clear. The
+programmatic action is accepted only while that owned authored surface is
+visible. Run `tools/verify_lua_ui_authoring.py` in the same rendered session for
+pixel-level D3D9 backbuffer evidence of the native-authored renderer.

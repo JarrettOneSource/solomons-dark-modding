@@ -48,6 +48,8 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
     picker_documentation = _read("docs/spell-picker-re.md")
     roadmap = _read("docs/lua-seam-roadmap.md")
     verifier = _read("tools/verify_lua_spells.py")
+    verifier_tests = _read("tests/test_lua_spells_verifier.py")
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
     native_test = _read("tests/native/lua_content_registry_tests.cpp")
 
     assert "RegisterLuaSpellBindings(mod->state)" in root_bindings
@@ -158,6 +160,10 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "Mods build their visual catalog",
         "There is deliberately no fixed framework catalog widget",
         "native-authored local picker",
+        "## Live acceptance",
+        "py -3 tools/verify_lua_spells.py",
+        "first loaded Lua mod",
+        "leaves belt slot 1 clear",
     ):
         assert token in documentation, f"spell documentation lacks: {token}"
     for token in (
@@ -278,8 +284,22 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "raw_internals_absent",
         "late_registration_rejected",
         "selection_round_trip",
+        "PICKER_EQUIP_PROBE",
+        "PICKER_CLEAR_PROBE",
+        'surface_id = "spell_picker"',
+        'action_id = "equip_gravity_well"',
+        'action_id = "clear_gravity_well"',
+        "picker_visible",
+        "_wait_for_picker_state",
+        "PICKER_CLEANUP_PROBE",
     ):
         assert token in verifier, f"spell verifier lacks: {token}"
+    for token in (
+        "test_run_activates_and_clears_the_owned_picker",
+        "test_failed_picker_action_still_clears_slot_one",
+    ):
+        assert token in verifier_tests, f"spell verifier tests lack: {token}"
+    assert "python -m unittest tests.test_lua_spells_verifier" in workflow
 
     return (
         "sd.spells owner-routes deterministic casts, runs bounded owner-side "

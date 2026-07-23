@@ -27,3 +27,5 @@ jobs:
         run: python -m unittest tests.test_lua_authoring_verifier
       - name: Test Lua UI authoring verifier
         run: python -m unittest tests.test_lua_ui_authoring_verifier
+      - name: Test Lua spell picker verifier
+        run: python -m unittest tests.test_lua_spells_verifier
