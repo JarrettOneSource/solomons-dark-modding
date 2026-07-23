@@ -143,6 +143,25 @@ documented in [lua-spell-cast-filter.md](lua-spell-cast-filter.md).
 The XP and gold seams advertise `events.filters.resources` and are documented
 in [lua-resource-filters.md](lua-resource-filters.md).
 
+Exact two-peer registry acceptance uses the disabled
+`sample.lua.filter_acceptance_lab` mod. It registers all eight filter names on
+both members of a disposable pair, rejects invalid registrations, and queues
+one zero-delta scripted XP call on each peer in turn. The native before/after
+XP totals must be identical. The callback must carry that process's owner
+participant ID, increment only its local `xp.gaining` counter, and remain
+invisible to the other process, proving process-local callback execution:
+
+```powershell
+py -3 tools/verify_lua_filters_multiplayer.py --launch-pair --confirm-zero-xp-probe
+```
+
+That neutral probe proves complete registry availability and owner-local
+execution without changing progression. It does not stand in for native
+rewrite/cancel acceptance for each family; the family-specific verifiers
+remain those outcome gates. The pair launcher neither tiles windows nor
+terminates pre-existing game processes, and teardown stops only the two exact
+process IDs returned by that launch.
+
 The live verifier must run against a disposable game process because filter
 registrations last for the life of the Lua state. It invokes the retail damage
 handler after Lua returns, proves two ordered rewrites change actual HP loss,

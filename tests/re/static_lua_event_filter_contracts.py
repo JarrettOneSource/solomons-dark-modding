@@ -28,6 +28,16 @@ def test_lua_damage_filters_are_ordered_owner_side_and_transactional() -> str:
     sample = _read("mods/lua_damage_filter_lab/scripts/main.lua")
     live_verifier = _read("tools/verify_lua_damage_filters.py")
     runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
+    pair_manifest = _read("mods/lua_filter_acceptance_lab/manifest.json")
+    pair_sample = _read(
+        "mods/lua_filter_acceptance_lab/scripts/main.lua"
+    )
+    pair_verifier = _read("tools/verify_lua_filters_multiplayer.py")
+    pair_tests = _read(
+        "tests/test_lua_filters_multiplayer_verifier.py"
+    )
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
+    roadmap = _read("docs/lua-seam-roadmap.md")
 
     for token in (
         "kLuaDamageFilterLaneCount = 9",
@@ -134,8 +144,76 @@ def test_lua_damage_filters_are_ordered_owner_side_and_transactional() -> str:
         assert token in live_verifier, f"live damage-filter verifier lacks: {token}"
     assert '"events": ("on", "broadcast", "filter")' in runtime_verifier
 
+    for token in (
+        '"enabled": false',
+        '"events.filters.damage"',
+        '"events.filters.enemy_spawn"',
+        '"events.filters.drop_roll"',
+        '"events.filters.wave_spawn"',
+        '"events.filters.spell_cast"',
+        '"events.filters.resources"',
+    ):
+        assert token in pair_manifest, (
+            f"filter-pair sample manifest lacks: {token}"
+        )
+    for token in (
+        "type(sd.events.filter)",
+        "sd.runtime.has_capability(capability)",
+        "filter acceptance lab ready",
+    ):
+        assert token in pair_sample, f"filter-pair sample lacks: {token}"
+    for token in (
+        "sample.lua.filter_acceptance_lab",
+        "FILTER_NAMES = (",
+        '"damage.dealing"',
+        '"damage.taken"',
+        '"enemy.spawning"',
+        '"drop.rolling"',
+        '"wave.spawning"',
+        '"spell.casting"',
+        '"xp.gaining"',
+        '"gold.changing"',
+        "queue_native_experience_gain_probe(0.0, false)",
+        "before_xp == after_xp",
+        "--confirm-zero-xp-probe",
+        "tile_windows=False",
+        "kill_existing=False",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in pair_verifier, (
+            f"two-peer filter verifier lacks: {token}"
+        )
+    for token in (
+        "test_confirmation_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_incomplete_process_ledger_stops_only_owned_process",
+        "test_run_proves_exact_registry_and_owner_local_isolation",
+    ):
+        assert token in pair_tests, f"filter-pair verifier tests lack: {token}"
+    assert (
+        "python -m unittest tests.test_lua_filters_multiplayer_verifier"
+        in workflow
+    )
+    for source in (documentation, roadmap):
+        for token in (
+            "Exact two-peer",
+            "zero-delta",
+            "owner",
+            "process-local",
+            "family-specific",
+        ):
+            assert token in source, (
+                f"filter multiplayer documentation lacks: {token}"
+            )
+    assert (
+        "tools/verify_lua_filters_multiplayer.py "
+        "--launch-pair --confirm-zero-xp-probe"
+        in documentation
+    )
+
     return (
         "damage filters run synchronously after the owner gate, compose in stable "
         "order, validate patches transactionally, reset on cancellation, and have "
-        "docs, an opt-in sample, namespace coverage, and native-hit acceptance"
+        "docs, an opt-in sample, namespace coverage, native-hit acceptance, and "
+        "exact-pair registry isolation"
     )

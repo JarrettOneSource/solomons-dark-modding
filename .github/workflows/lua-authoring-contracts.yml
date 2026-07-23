@@ -71,5 +71,7 @@ jobs:
         run: python -m unittest tests.test_lua_bus_multiplayer_verifier
       - name: Test Lua multiplayer draw verifier
         run: python -m unittest tests.test_lua_draw_multiplayer_verifier
+      - name: Test Lua multiplayer filter verifier
+        run: python -m unittest tests.test_lua_filters_multiplayer_verifier
       - name: Verify all static Lua seam contracts
         run: python tests/re/run_static_re_tests.py --lua-only

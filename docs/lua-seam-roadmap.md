@@ -227,6 +227,10 @@ routine and at host-authoritative remote pickups. See
 `lua-event-filters.md`, `lua-enemy-spawn-filter.md`,
 `lua-drop-roll-filter.md`, `lua-wave-spawn-filter.md`,
 `lua-spell-cast-filter.md`, `lua-resource-filters.md`, and the opt-in filter lab mods.
+Exact two-peer registry acceptance registers all eight names on both peers and
+uses separate zero-delta native XP probes to prove owner participant identity,
+process-local callback isolation, and unchanged progression. The
+family-specific live verifiers remain the native rewrite/cancel outcome gates.
 
 **3. `sd.state` + `sd.events.broadcast` — replicated mod state & events.**
 Authority-writable KV bundled into the snapshot/apply stream (late joiners sync it), plus
