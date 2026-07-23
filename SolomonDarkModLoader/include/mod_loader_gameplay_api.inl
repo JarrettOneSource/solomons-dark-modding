@@ -79,6 +79,9 @@ bool RestoreRunLifecycleFrozenManualEnemyPosition(uintptr_t actor_address);
 void PinRunLifecycleFrozenManualEnemies();
 void ClearRunLifecycleManualEnemyFreeze(uintptr_t actor_address = 0);
 bool TryGetPlayerState(SDModPlayerState* state);
+bool RestoreLocalPlayerMana(
+    float* resulting_mana,
+    std::string* error_message);
 bool ResetLocalPlayerManaDeltaObservation();
 bool TakeLocalPlayerManaDeltaObservation(
     SDModLocalManaDeltaObservation* observation);

@@ -173,6 +173,7 @@ def test_lua_damage_filters_are_ordered_owner_side_and_transactional() -> str:
         '"spell.casting"',
         '"xp.gaining"',
         '"gold.changing"',
+        '"mana.changing"',
         "queue_native_experience_gain_probe(0.0, false)",
         "before_xp == after_xp",
         "--confirm-zero-xp-probe",

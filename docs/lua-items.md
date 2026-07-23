@@ -1,7 +1,8 @@
 # Lua items
 
-`sd.items` gives scripts deterministic identities for item recipes without turning a
-peer's mutable native recipe numbers or memory addresses into multiplayer contracts.
+`sd.items` gives scripts deterministic identities for stock recipe bindings and
+Lua-authored consumable potions without turning a peer's mutable native recipe
+numbers, custom native subtypes, or memory addresses into multiplayer contracts.
 
 ## Registering an item
 
@@ -16,8 +17,8 @@ local item = sd.items.register({
 ```
 
 `key` follows the canonical content-key rules in `lua-content-identity.md`. `name` and
-`type` identify exactly one recipe in the effective staged `items.cfg`; supported types
-are `ring`, `amulet`, `staff`, `hat`, `robe`, and `wand`. Authors do not register a
+`type` identify exactly one recipe in the effective staged `items.cfg`; recipe-backed
+types are `ring`, `amulet`, `staff`, `hat`, `robe`, and `wand`. Authors do not register a
 numeric recipe UID. The registry rejects duplicate keys, cross-kind key reuse, and a
 second mod binding the same recipe name/type pair. A mod may register at most 256 items,
 and the shared content registry is bounded at 4096 identities.
@@ -39,6 +40,60 @@ persists and allocates these numbers independently, so replicated item operation
 the stable `id` and resolve the receiving peer's UID from exact name/type at execution.
 Catalog lookup is lazy: registration can finish before the game loads its item data.
 
+## Registering a custom potion
+
+Register the icon atlas first, then use the `potion` item type:
+
+```lua
+sd.sprites.register(
+  "green_potion",
+  "sprites/green_potion.png",
+  "sprites/green_potion.bundle")
+
+local potion = sd.items.register({
+  key = "green_potion",
+  name = "Green Potion",
+  type = "potion",
+  description = "A custom timed potion.",
+  icon = {atlas = "green_potion", frame = 0},
+  duration_ms = 180000,
+  consume_vfx = {
+    kind = "spell_glow",
+    color = {0.15, 1.0, 0.25, 1.0},
+  },
+  on_consume = function(event)
+    print("local owner consumed", event.content_id, event.use_id)
+  end,
+})
+```
+
+`description` contains 1 through 1,024 bytes. `icon.atlas` must be a sprite key
+registered by the same mod, and `icon.frame` must resolve inside that atlas.
+`duration_ms` is immutable metadata from 0 through 86,400,000; the mod decides
+what the duration means. `on_consume` is required and runs only on the consuming
+participant's process. `consume_vfx` is optional; the current semantic
+`spell_glow` kind constructs the game's native `SpellGlow` animation around the
+participant on every peer using the supplied finite RGBA color.
+
+Custom potions use peer-local native subtype reservations only to enter the
+stock inventory. Their descriptors add `consumable`, `description`, `icon`,
+`duration_ms`, `native_subtype`, and optional `consume_vfx` fields. The subtype
+is diagnostic local state. Network inventory, loot, pickup, and use messages
+carry the stable content ID and resolve that peer's subtype at the native edge.
+
+Every accepted use also queues `item.consumed` on every peer:
+
+```lua
+sd.events.on("item.consumed", function(event)
+  -- content_id, mod_id, key, participant_id, use_id, duration_ms, local_owner
+end)
+```
+
+`use_id` is deduplicated within the current participant session and run.
+`local_owner` is true only on the consuming process. This replicated event is
+the correct place to maintain effect state needed by an authority-side filter;
+the direct `on_consume` callback is the correct place for owner-local actions.
+
 ## Looking up registrations
 
 ```lua
@@ -56,7 +111,8 @@ runtime capabilities.
 
 ## Granting a registered item
 
-`sd.items.grant` accepts an owned content key or any registered stable content ID:
+`sd.items.grant` accepts an owned recipe-backed content key or any registered
+recipe-backed stable content ID:
 
 ```lua
 local local_request = sd.items.grant("pentaclostic_ring")
@@ -66,7 +122,9 @@ local remote_request = sd.items.grant(item.id, {
 })
 ```
 
-Only the offline or host simulation authority may grant an item. Omitting
+Only the offline or host simulation authority may grant a recipe-backed item.
+Custom consumable potions enter inventory through the loot path described
+below. Omitting
 `participant_id` targets the authority's local participant. A multiplayer host may use
 the positive ID from a connected participant descriptor to target that participant;
 unknown and disconnected IDs are rejected before queueing. A client cannot author a
@@ -82,7 +140,7 @@ The returned table confirms queue acceptance, not native completion:
 | `local_target` | Whether the authority queued its own inventory mutation |
 
 The target owner resolves the registered name/type to its own recipe UID immediately
-before calling the stock inventory insertion routine on the gameplay pump. Protocol 80
+before calling the stock inventory insertion routine on the gameplay pump. Protocol 81
 carries only the authority ID, target ID, request ID, stable content ID, and optional
 color state; recipe UIDs and native addresses never cross the wire. Steam delivery is
 reliable, the receiver accepts the command only from its configured host, and bounded
@@ -105,6 +163,31 @@ sd.items.grant("ceremonial_robe", {
 
 `color_state` is rejected for every other item type. Granting advertises the
 `items.grant.authority` capability.
+
+## Registering custom loot
+
+`sd.loot.register` adds a registered consumable to the shared additive loot
+pool while the owning entry script is loading:
+
+```lua
+sd.loot.register({
+  item = potion.id, -- an owned key is also accepted
+  chance = 0.5,
+  boss_chance = 1.0,
+})
+```
+
+Both chances are finite values from 0 through 1. The authority rolls every
+entry independently after a supported hostile enemy dies. `chance` applies to
+ordinary enemies; `boss_chance` applies to the exact stock Demon Skull, Demon,
+Dire Faculty, and Heartmonger boss types. A successful roll creates the custom
+potion through the stock item-drop actor. The drop's stable content ID,
+peer-local subtype resolution, pickup request/result, inventory stack, name,
+description, icon, and use action all follow the existing multiplayer loot and
+native inventory paths.
+
+`sd.loot.list()` returns the current additive entries. The capabilities are
+`loot.register` and `items.consumables.register`.
 
 ## Verification
 
@@ -136,3 +219,9 @@ only the client's inventory through that peer's resolved recipe UID, and a
 host-local command changes only the host's inventory. Both mutations must add
 exactly one recipe unit. The verifier records each peer's local recipe UID and
 stops only the exact processes it launched.
+
+`canary.lua.invincibility_potion` is the end-to-end custom-content canary. Its
+manually baked bright-green potion drops at 50 percent from ordinary enemies
+and 100 percent from bosses, enters the stock inventory, emits native
+`SpellGlow`, and combines a replicated three-minute effect with damage and mana
+filters.

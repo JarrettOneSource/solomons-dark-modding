@@ -15,6 +15,7 @@ Implemented filter families are:
 - `spell.casting`
 - `xp.gaining`
 - `gold.changing`
+- `mana.changing`
 
 The damage filters execute at the stock `PlayerActor::MagicDamage` resolution point. The
 loader runs every `damage.dealing` handler first, then every `damage.taken`
@@ -140,11 +141,11 @@ The stock wave-spawner seam advertises `events.filters.wave_spawn` and is
 documented in [lua-wave-spawn-filter.md](lua-wave-spawn-filter.md).
 The owner-side spell seam advertises `events.filters.spell_cast` and is
 documented in [lua-spell-cast-filter.md](lua-spell-cast-filter.md).
-The XP and gold seams advertise `events.filters.resources` and are documented
+The XP, gold, and mana seams advertise `events.filters.resources` and are documented
 in [lua-resource-filters.md](lua-resource-filters.md).
 
 Exact two-peer registry acceptance uses the disabled
-`sample.lua.filter_acceptance_lab` mod. It registers all eight filter names on
+`sample.lua.filter_acceptance_lab` mod. It registers all nine filter names on
 both members of a disposable pair, rejects invalid registrations, and queues
 one zero-delta scripted XP call on each peer in turn. The native before/after
 XP totals must be identical. The callback must carry that process's owner

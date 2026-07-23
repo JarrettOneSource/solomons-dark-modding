@@ -20,6 +20,10 @@ def test_lua_resource_filters_are_native_ordered_and_authoritative() -> str:
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "gold_pickup_hook.inl"
     )
+    mana_hook = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "player_mana_hooks.inl"
+    )
     loot_authority = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "loot_pickup_packet_handlers.inl"
@@ -43,16 +47,20 @@ def test_lua_resource_filters_are_native_ordered_and_authoritative() -> str:
     for token in (
         "kLuaXpGainingFilterMask",
         "kLuaGoldChangingFilterMask",
+        "kLuaManaChangingFilterMask",
         "struct LuaXpGainFilterContext",
         "struct LuaGoldChangeFilterContext",
+        "struct LuaManaChangeFilterContext",
         "ApplyLuaXpGainFilters",
         "ApplyLuaGoldChangeFilters",
+        "ApplyLuaManaChangeFilters",
     ):
         assert token in public_api, f"resource-filter public contract lacks: {token}"
 
     for token in (
         'filter_name == "xp.gaining"',
         'filter_name == "gold.changing"',
+        'filter_name == "mana.changing"',
         "ResetLuaResourceFilterDiagnostics",
     ):
         assert token in registration, f"resource-filter registration lacks: {token}"
@@ -65,6 +73,11 @@ def test_lua_resource_filters_are_native_ordered_and_authoritative() -> str:
         'lua_setfield(state, -2, "current_gold")',
         'lua_setfield(state, -2, "resulting_gold")',
         'lua_setfield(state, -2, "would_succeed")',
+        'kManaChangingFilterName[] = "mana.changing"',
+        'lua_setfield(state, -2, "current_mana")',
+        'lua_setfield(state, -2, "maximum_mana")',
+        "ParseManaChangePatch",
+        "ApplyLuaManaChangeFilters",
         "for (const auto& mod : detail::LoadedLuaModsStorage())",
         "std::try_to_lock",
         "filter result ignored",
@@ -114,6 +127,13 @@ def test_lua_resource_filters_are_native_ordered_and_authoritative() -> str:
         "--g_accepted_replicated_loot_feedback_depth",
     )
     _require_in_order(
+        mana_hook,
+        "TryReadProgressionMana(",
+        "ApplyLuaManaChangeFilters(&filtered_context)",
+        "delta = filtered_context.delta",
+        "return original(self, delta, allow_prompt)",
+    )
+    _require_in_order(
         loot_authority,
         'filter_context.source = "pickup"',
         "sdmod::ApplyLuaGoldChangeFilters(&filter_context)",
@@ -129,6 +149,7 @@ def test_lua_resource_filters_are_native_ordered_and_authoritative() -> str:
     for token in (
         "## XP payload",
         "## Gold payload",
+        "## Mana payload",
         "## Handler results",
         "## Ownership and replication",
         "accepted feedback replay is explicitly excluded",
@@ -151,6 +172,6 @@ def test_lua_resource_filters_are_native_ordered_and_authoritative() -> str:
         assert token in live_verifier, f"resource-filter live verifier lacks: {token}"
 
     return (
-        "XP and gold filters run in stable Lua order before stock mutation, "
-        "filter remote gold at host authority, and exclude accepted client replay"
+        "XP, gold, and mana filters run in stable Lua order before stock "
+        "mutation, preserve owner identity, and exclude accepted client replay"
     )

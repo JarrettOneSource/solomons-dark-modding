@@ -144,7 +144,7 @@ def test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving() -> s
         "rotates the native movement vector",
         "PlayerActor_MoveStep",
         "Clients create no controller instances",
-        "protocol-80 world snapshots",
+        "protocol-81 world snapshots",
         "4096 bytes",
         "64 due callbacks",
         "verify_lua_ai_multiplayer.py --launch-pair --confirm-mutation",

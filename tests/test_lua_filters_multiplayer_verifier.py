@@ -116,7 +116,7 @@ class LuaFiltersMultiplayerVerifierTests(unittest.TestCase):
             },
         }
 
-    def test_contract_requires_all_eight_filters_and_peer_identity(self) -> None:
+    def test_contract_requires_all_nine_filters_and_peer_identity(self) -> None:
         values = self._contract(
             authority=True,
             participant_id=verifier.HOST_ID,

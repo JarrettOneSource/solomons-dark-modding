@@ -39,6 +39,7 @@ FILTER_NAMES = (
     "spell.casting",
     "xp.gaining",
     "gold.changing",
+    "mana.changing",
 )
 FILTER_KEYS = {
     "damage.dealing": "damage_dealing_count",
@@ -49,6 +50,7 @@ FILTER_KEYS = {
     "spell.casting": "spell_casting_count",
     "xp.gaining": "xp_gaining_count",
     "gold.changing": "gold_changing_count",
+    "mana.changing": "mana_changing_count",
 }
 
 
@@ -85,6 +87,7 @@ local filter_names = {
   "spell.casting",
   "xp.gaining",
   "gold.changing",
+  "mana.changing",
 }
 local acceptance = {
   counts = {},
@@ -187,6 +190,8 @@ print("xp_gaining_count=" .. tostring(
   acceptance and acceptance.counts["xp.gaining"] or 0))
 print("gold_changing_count=" .. tostring(
   acceptance and acceptance.counts["gold.changing"] or 0))
+print("mana_changing_count=" .. tostring(
+  acceptance and acceptance.counts["mana.changing"] or 0))
 print("total=" .. tostring(acceptance and acceptance.total or 0))
 print("trace=" .. tostring(
   acceptance and table.concat(acceptance.trace, ",") or ""))

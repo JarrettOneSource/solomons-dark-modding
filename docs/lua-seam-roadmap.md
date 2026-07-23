@@ -207,7 +207,7 @@ Cancellable/rewritable hooks at already-resolved seams:
 - `enemy.spawning` / `wave.spawning` — `kSpawnEnemy`, `kSpawnExactEnemyGroup`, `kWaveSpawnerTick`
 - `drop.rolling` — `kEnemyDropSelector` (`0x0047C070`, upstream of
   `kOrbRewardInitialize` and `kItemDropCarrierCtor`)
-- `spell.casting` (pre, cancellable), `xp.gaining`, `gold.changing`
+- `spell.casting` (pre, cancellable), `xp.gaining`, `gold.changing`, `mana.changing`
 *Unlocks:* balance overhauls, difficulty directors, custom loot tables, conditional
 effects — the shift from telemetry platform to rules engine.
 *Multiplayer:* Filters execute only where the affected entity is simulated; outcomes
@@ -226,11 +226,13 @@ construction, or bookkeeping. `spell.casting` runs once before an owner-simulate
 primary or secondary cast and can cancel it before stock effects, mana use, or
 replication. `xp.gaining` rewrites or cancels the input to the stock progression
 gain routine, while `gold.changing` does the same at the global gold mutation
-routine and at host-authoritative remote pickups. See
+routine and at host-authoritative remote pickups. `mana.changing` wraps the
+owner-simulated native wizard mana writer and can rewrite or cancel signed
+changes without bypassing stock cast behavior. See
 `lua-event-filters.md`, `lua-enemy-spawn-filter.md`,
 `lua-drop-roll-filter.md`, `lua-wave-spawn-filter.md`,
 `lua-spell-cast-filter.md`, `lua-resource-filters.md`, and the opt-in filter lab mods.
-Exact two-peer registry acceptance registers all eight names on both peers and
+Exact two-peer registry acceptance registers all nine names on both peers and
 uses separate zero-delta native XP probes to prove owner participant identity,
 process-local callback isolation, and unchanged progression. The
 family-specific live verifiers remain the native rewrite/cancel outcome gates.
@@ -280,6 +282,17 @@ participant over protocol 81, and lets that owner resolve its peer-local recipe 
 before verified stock inventory insertion. Recipe UIDs and addresses never become wire
 identity; reliable target authentication and request deduplication make the mutation
 multiplayer-safe. See `lua-items.md`.
+
+**Custom consumables and additive loot implemented 2026-07-23.** A `potion`
+registration binds stable content identity to a mod-owned sprite, stock-facing
+name/help text, duration metadata, an owner-only `on_consume` callback, and an
+optional native `SpellGlow` request. `sd.loot.register` independently rolls
+normal and exact stock-boss chances at the authority's enemy-death seam.
+Protocol 81 carries stable content IDs through drops, pickup results, inventory,
+and deduplicated use events while each peer resolves its own native subtype.
+The `canary.lua.invincibility_potion` mod exercises the complete path with a
+baked-green potion, 50/100 percent loot policy, stock inventory use, replicated
+three-minute invincibility, and owner-side infinite mana.
 
 **Enemy registration and spawning implemented 2026-07-22.** `sd.enemies.register`,
 `get`, and `list` bind deterministic identities to semantic hostile stock classes.

@@ -1044,6 +1044,27 @@ int LuaPlayerGetState(lua_State* state) {
     return 1;
 }
 
+int LuaPlayerRestoreMana(lua_State* state) {
+    luaL_argcheck(
+        state,
+        lua_gettop(state) == 0,
+        1,
+        "sd.player.restore_mana expects no arguments");
+
+    float resulting_mana = 0.0f;
+    std::string error_message;
+    if (!RestoreLocalPlayerMana(
+            &resulting_mana,
+            &error_message)) {
+        lua_pushboolean(state, 0);
+        lua_pushstring(state, error_message.c_str());
+        return 2;
+    }
+    lua_pushboolean(state, 1);
+    lua_pushnumber(state, static_cast<lua_Number>(resulting_mana));
+    return 2;
+}
+
 int LuaPlayerGetInventoryState(lua_State* state) {
     SDModInventoryState inventory_state;
     if (!TryGetPlayerInventoryState(&inventory_state) || !inventory_state.valid) {
@@ -2045,8 +2066,9 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaGameplaySetRunEnemyHealth, "set_run_enemy_health");
     lua_setfield(state, -2, "gameplay");
 
-    lua_createtable(state, 0, 4);
+    lua_createtable(state, 0, 5);
     RegisterFunction(state, &LuaPlayerGetState, "get_state");
+    RegisterFunction(state, &LuaPlayerRestoreMana, "restore_mana");
     RegisterFunction(state, &LuaPlayerGetInventoryState, "get_inventory_state");
     RegisterFunction(state, &LuaPlayerEquipInventoryItem, "equip_inventory_item");
     RegisterFunction(state, &LuaPlayerGetProgressionBookState, "get_progression_book_state");
