@@ -49,6 +49,14 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
     documentation = _read("docs/lua-waves.md")
     roadmap = _read("docs/lua-seam-roadmap.md")
     verifier = _read("tools/verify_lua_waves.py")
+    multiplayer_verifier = _read("tools/verify_lua_waves_multiplayer.py")
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_waves_multiplayer_verifier.py"
+    )
+    manifest = _read("mods/lua_waves_lab/manifest.json")
+    sample = _read("mods/lua_waves_lab/scripts/main.lua")
+    fixture = _read("tests/fixtures/waves/lua_wave_filter_test.txt")
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaWaveBindings(mod->state)" in bindings
     assert "lua_engine_bindings_waves.cpp" in project
@@ -136,6 +144,9 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
         "same authority summary on host and clients",
         "waves.schedule.read",
         "current protocol version is 80",
+        "verify_lua_waves_multiplayer.py --launch-pair --confirm-mutation",
+        "same sorted aggregate and per-type live summary",
+        "stops only the two process IDs",
     ):
         assert token in documentation, f"Lua wave documentation lacks: {token}"
     assert "**Implemented 2026-07-22.** `sd.waves.get_state()`" in roadmap
@@ -146,8 +157,53 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
         "raw_addresses_absent",
     ):
         assert token in verifier, f"Lua wave verifier lacks: {token}"
+    for token in (
+        '"id": "sample.lua.waves_lab"',
+        '"enabled": false',
+        '"waves.read"',
+        '"waves.schedule.read"',
+    ):
+        assert token in manifest, f"Lua waves sample manifest lacks: {token}"
+    for token in (
+        'sd.events.on("wave.started"',
+        'sd.runtime.has_capability("waves.read")',
+        'sd.runtime.has_capability("waves.schedule.read")',
+    ):
+        assert token in sample, f"Lua waves sample lacks: {token}"
+    for token in ("SPAWN:2", "SPAWN:3"):
+        assert token in fixture, f"Lua waves acceptance fixture lacks: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.waves_lab"',
+        "WAVE_OVERRIDE",
+        "schedule_signature",
+        "event_composition_signature",
+        "active_wave_matches",
+        "--confirm-mutation",
+        "tile_windows=False",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua waves multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_schedule_requires_exact_controlled_projection",
+        "test_active_wave_requires_event_and_exact_composition",
+        "test_mutation_confirmation_is_required_before_contact",
+        "test_disposable_pair_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_run_stages_exact_mod_and_stops_only_launched_pair",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"Lua waves multiplayer verifier tests lack: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_waves_multiplayer_verifier"
+        in workflow
+    )
 
     return (
         "sd.waves parses the effective schedule, attributes authority births and "
-        "deaths, and accepts bounded summaries only from the authenticated host"
+        "deaths, and has exact two-peer authenticated summary acceptance"
     )

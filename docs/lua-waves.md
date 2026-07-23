@@ -143,3 +143,21 @@ python tools/verify_lua_waves.py
 ```
 
 Use `--pipe` for a non-default Lua exec pipe.
+
+## Two-peer acceptance
+
+The full authority/replication acceptance uses a disposable local pair and a
+controlled two-wave schedule:
+
+```powershell
+py tools/verify_lua_waves_multiplayer.py --launch-pair --confirm-mutation
+```
+
+The verifier stages only `sample.lua.waves_lab`, keeps unrelated Solomon Dark
+processes untouched, and suppresses window tiling. Before combat it requires
+the exact same parsed schedule on both peers and a clean idle semantic state.
+It then starts stock waves only on the host and requires one `wave.started`
+event plus the same sorted aggregate and per-type live summary on the client.
+The client result must match the authority's exact composition while exposing
+no mutator or native address. The verifier stops only the two process IDs
+returned by its own launch.
