@@ -123,7 +123,7 @@ the same binary representation.
 
 ## Network behavior
 
-Protocol version 80 carries the host-authored Lua stream. Each mutation and event
+Protocol version 81 carries the host-authored Lua stream. Each mutation and event
 has a 64-bit stream sequence. Messages are split into bounded 1 KiB fragments,
 reassembled with fixed memory/count limits, authenticated as coming from the
 configured authority, and applied only when the next contiguous sequence is
