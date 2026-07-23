@@ -45,6 +45,11 @@ def test_lua_items_register_stable_identity_and_resolve_peer_local_recipes() -> 
     roadmap = _read("docs/lua-seam-roadmap.md")
     verifier = _read("tools/verify_lua_items.py")
     grant_verifier = _read("tools/verify_lua_item_grant.py")
+    multiplayer_verifier = _read("tools/verify_lua_items_multiplayer.py")
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_items_multiplayer_verifier.py"
+    )
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaItemBindings(mod->state)" in root_bindings
     assert "lua_engine_bindings_items.cpp" in project
@@ -201,8 +206,48 @@ def test_lua_items_register_stable_identity_and_resolve_peer_local_recipes() -> 
         "refusing inventory mutation",
     ):
         assert token in grant_verifier, f"item grant verifier lacks: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.items_registry_lab"',
+        "CLIENT_REJECTION",
+        "_remote_grant_probe(CLIENT_ID)",
+        "target_participant_id=CLIENT_ID",
+        "target_participant_id=LOCAL_TARGET_ID",
+        "unit_count=client_before + 1",
+        "unit_count=host_before + 1",
+        "--confirm-mutation",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"item multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_item_state_requires_exact_content_recipe_and_units",
+        "test_grant_result_requires_exact_route",
+        "test_run_stages_exact_mod_and_stops_only_launched_pair",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"item multiplayer verifier tests lack: {token}"
+        )
+    normalized_documentation = " ".join(documentation.split())
+    for token in (
+        "verify_lua_items_multiplayer.py --launch-pair --confirm-mutation",
+        "client cannot author a grant",
+        "changes only the client's inventory",
+        "peer's resolved recipe UID",
+        "changes only the host's inventory",
+        "stops only the exact processes",
+    ):
+        assert token in normalized_documentation, (
+            f"item multiplayer docs lack: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_items_multiplayer_verifier"
+        in workflow
+    )
 
     return (
         "sd.items registers deterministic identities and authority-routes stable IDs "
-        "to verified peer-local stock inventory insertion without wire recipe UIDs"
+        "to exact two-peer stock inventory insertion without wire recipe UIDs"
     )

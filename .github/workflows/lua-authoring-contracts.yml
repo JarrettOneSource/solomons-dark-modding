@@ -39,5 +39,7 @@ jobs:
         run: python -m unittest tests.test_lua_time_multiplayer_verifier
       - name: Test Lua multiplayer UI verifier
         run: python -m unittest tests.test_lua_ui_multiplayer_verifier
+      - name: Test Lua multiplayer item verifier
+        run: python -m unittest tests.test_lua_items_multiplayer_verifier
       - name: Verify all static Lua seam contracts
         run: python tests/re/run_static_re_tests.py --lua-only

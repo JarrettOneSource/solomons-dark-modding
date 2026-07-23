@@ -123,3 +123,16 @@ one real local inventory mutation and therefore requires an explicit confirmatio
 ```powershell
 py tools/verify_lua_item_grant.py --confirm-mutation
 ```
+
+The two-peer verifier stages only the item registry lab, enters an isolated
+host/client run, and performs one real grant to each participant:
+
+```powershell
+py tools/verify_lua_items_multiplayer.py --launch-pair --confirm-mutation
+```
+
+It proves that a client cannot author a grant, a host-to-client command changes
+only the client's inventory through that peer's resolved recipe UID, and a
+host-local command changes only the host's inventory. Both mutations must add
+exactly one recipe unit. The verifier records each peer's local recipe UID and
+stops only the exact processes it launched.
