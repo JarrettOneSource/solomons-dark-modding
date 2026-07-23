@@ -129,6 +129,7 @@ from static_multiplayer_ownership_contracts import (
 )
 from static_multiplayer_platform_contracts import (
     test_active_steam_behavior_harnesses_preserve_fixture_state,
+    test_beta_release_contains_no_bundled_mods_or_generated_residue,
     test_beta_release_documents_steam_deck_shortcut,
     test_beta_release_smoke_canonicalizes_packaged_steam_path,
     test_defense_probes_follow_host_damage_authority,
@@ -602,6 +603,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "beta release documents its Steam Deck shortcut",
         test_beta_release_documents_steam_deck_shortcut,
+    ),
+    (
+        "beta release contains no bundled mods or generated residue",
+        test_beta_release_contains_no_bundled_mods_or_generated_residue,
     ),
     (
         "Proton contract runner avoids the GE11 UMU shim hang",

@@ -7,7 +7,8 @@ The repository excludes original game files, staged runtime output, and local ed
 The friend-playtest beta is distributed as a self-contained ZIP. Extract it,
 run `SolomonDarkMultiplayerBeta.exe`, and choose the original Solomon Dark
 0.72.5 folder; release users do not need Visual Studio or a .NET installation.
-Bundled sample mods are discovered but start disabled on a clean install.
+Release archives contain no bundled mods. Mods are installed explicitly from
+the website or added to the launcher's managed `mods/` directory.
 
 ## Components
 
@@ -167,8 +168,8 @@ py -3 .\tools\verify_beta_release_artifact.py
 
 The result is `artifacts\SolomonDarkMultiplayerBeta-v<version>.zip`. The archive
 includes the self-contained desktop launcher, updater, x86 launcher, loader,
-config, sample mods, and x86 Steam runtime; it does not include Solomon's Dark
-or Steam credentials.
+config, and x86 Steam runtime. It contains no default or sample mods, generated
+runtime residue, Solomon's Dark files, save data, or Steam credentials.
 
 After an abnormal game exit, the desktop launcher checks the native crash log,
 minidumps, and process exit code, then asks before submitting anything. Choosing

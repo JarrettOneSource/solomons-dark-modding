@@ -88,9 +88,24 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
         "launcher/assets/steam/win32/steam_api.dll",
         "config/binary-layout.ini",
         "config/debug-ui.ini",
-        "mods/README.md",
     }
-    forbidden_extensions = {".pdb", ".ilk", ".lib", ".exp"}
+    forbidden_extensions = {
+        ".pdb",
+        ".ilk",
+        ".lib",
+        ".exp",
+        ".log",
+        ".dmp",
+        ".tmp",
+        ".bak",
+    }
+    forbidden_directory_names = {
+        ".git",
+        ".pytest_cache",
+        ".vs",
+        "__pycache__",
+        "runtime",
+    }
     forbidden_names = {
         "solomondark.exe",
         "sb.exe",
@@ -140,9 +155,11 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
             lower_parts = {part.lower() for part in path.parts}
             if path.suffix.lower() in forbidden_extensions:
                 forbidden.append(relative)
+            elif path.parts[0].casefold() == "mods":
+                forbidden.append(relative)
             elif lower_name in forbidden_names or lower_name.startswith("ssfn"):
                 forbidden.append(relative)
-            elif ".git" in lower_parts or "runtime" in lower_parts:
+            elif forbidden_directory_names & lower_parts:
                 forbidden.append(relative)
         if forbidden:
             raise ArtifactFailure(

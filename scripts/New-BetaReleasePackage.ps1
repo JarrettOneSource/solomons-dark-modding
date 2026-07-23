@@ -246,7 +246,6 @@ foreach ($requiredBinary in @(
 }
 
 Copy-Item (Join-Path $root "config") $packageRoot -Recurse -Force
-Copy-Item (Join-Path $root "mods") $packageRoot -Recurse -Force
 
 $steamApiSource = Resolve-SteamApiDll
 $packagedSteamDirectory = Join-Path $packageRoot "launcher/assets/steam/win32"

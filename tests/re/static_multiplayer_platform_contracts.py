@@ -692,6 +692,48 @@ def test_beta_release_documents_steam_deck_shortcut() -> str:
     )
 
 
+def test_beta_release_contains_no_bundled_mods_or_generated_residue() -> str:
+    package = _read("scripts/New-BetaReleasePackage.ps1")
+    smoke = _read("scripts/Test-BetaReleasePackage.ps1")
+    verifier = _read("tools/verify_beta_release_artifact.py")
+    readme = _read("README.md")
+
+    assert 'Copy-Item (Join-Path $root "mods")' not in package, (
+        "the beta package still copies repository sample mods"
+    )
+    assert '"mods/README.md"' not in verifier, (
+        "the artifact verifier still requires bundled mod content"
+    )
+    for token in (
+        'path.parts[0].casefold() == "mods"',
+        '".log"',
+        '".dmp"',
+        '".tmp"',
+        '".bak"',
+        '"__pycache__"',
+        '".pytest_cache"',
+    ):
+        assert token in verifier, (
+            f"the clean artifact verifier lacks: {token}"
+        )
+    assert "$result.modCount -ne 0" in smoke, (
+        "the package smoke does not require a zero-mod catalog"
+    )
+    assert "$catalog.mods[0]" not in smoke, (
+        "the zero-mod package smoke still indexes a bundled mod"
+    )
+    assert (
+        "Bundled sample mods are discovered but start disabled on a clean install."
+        not in readme
+    ), "the package documentation still promises bundled sample mods"
+    assert "Release archives contain no bundled mods." in readme
+
+    return (
+        "release construction, smoke testing, and archive verification require "
+        "zero bundled mods and reject generated residue"
+    )
+
+
 def test_proton_contract_runner_avoids_ge11_umu_shim_hang() -> str:
     runner = _read("scripts/Test-ProtonLauncherContracts.sh")
     readme = _read("README.md")

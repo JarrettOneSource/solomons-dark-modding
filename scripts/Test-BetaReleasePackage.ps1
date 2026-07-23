@@ -158,10 +158,9 @@ try {
     $catalog = Invoke-JsonLauncher -Arguments (@("list-mods") + $commonArguments)
     $result.workspaceRoot = $catalog.configuration.workspaceRoot
     $result.modCount = @($catalog.mods).Count
-    if ($result.modCount -lt 1) {
-        throw "Extracted beta discovered no mods."
+    if ($result.modCount -ne 0) {
+        throw "Extracted beta discovered $($result.modCount) bundled mods; releases must contain none."
     }
-    $expectedDisplayedModVersion = "v$($catalog.mods[0].version)"
     $result.enabledModCount = @($catalog.mods | Where-Object { $_.enabled }).Count
     if ($result.enabledModCount -ne 0) {
         throw "A clean extracted beta enabled $($result.enabledModCount) mods; releases must start with zero enabled mods."
@@ -275,7 +274,8 @@ try {
             $catalogSummary = $visibleText |
                 Where-Object { $_ -match $modSummaryPattern } |
                 Select-Object -First 1
-            if ($catalogReady -and $catalogSummary) {
+            $catalogSummaryReady = $result.modCount -eq 0 -or $catalogSummary
+            if ($catalogReady -and $catalogSummaryReady) {
                 $result.uiCatalogStatus = "Ready"
                 break
             }
@@ -294,11 +294,6 @@ try {
                 Select-Object -Unique) -join "; "
             throw "Packaged desktop launcher did not refresh its mod catalog. $diagnostics"
         }
-        if ($visibleText -notcontains $expectedDisplayedModVersion) {
-            throw "Packaged desktop launcher did not show mod version $expectedDisplayedModVersion."
-        }
-        $result.uiDisplayedModVersion = $expectedDisplayedModVersion
-
         $requiredMultiplayerActions = @(
             "Host Game",
             "Join Lobby ID",
