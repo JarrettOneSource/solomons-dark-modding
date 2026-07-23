@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.Http.Json;
-using System.Reflection;
 using System.Text.Json;
+using SolomonDarkModLauncher.Infrastructure;
 using SolomonDarkModLauncher.Mods;
 
 namespace SolomonDarkModLauncher.Launch;
@@ -364,10 +364,7 @@ internal static class LobbyDirectoryPublisher
             character is >= '0' and <= '9' or >= 'a' and <= 'f');
     }
 
-    private static string GetLauncherVersion() =>
-        typeof(LobbyDirectoryPublisher).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion ?? "unknown";
+    private static string GetLauncherVersion() => LauncherVersionInfo.Informational;
 
     private static void AppendLog(string path, string message)
     {

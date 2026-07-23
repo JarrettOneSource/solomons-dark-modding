@@ -172,7 +172,7 @@ try {
             "stage",
             "--multiplayer", "host",
             "--lobby-privacy", "public",
-            "--directory-url", "https://solomon.genericproject.xyz"
+            "--directory-url", "https://solomondarker.com"
         ) + $commonArguments)
     $result.stagedExecutable = $stage.stage.stageExecutablePath
     if (-not (Test-Path $result.stagedExecutable -PathType Leaf)) {

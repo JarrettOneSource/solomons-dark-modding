@@ -18,6 +18,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly CrashReportSubmissionClient crashReportSubmissionClient_;
     private readonly CloudSaveClient cloudSaveClient_;
     private readonly CloudSaveBackupCoordinator cloudSaveBackupCoordinator_;
+    private readonly DiagnosticLogUploader diagnosticLogUploader_;
     private readonly SteamInviteListenerClient steamInviteListener_ = new();
     private readonly StringBuilder transcriptBuilder_ = new();
     private readonly CancellationTokenSource lifetimeCancellation_ = new();
@@ -59,8 +60,18 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private string cloudAccountStatus_ = "Checking Steam link…";
     private bool isCloudLinked_;
     private string linkedAccountName_ = string.Empty;
+    private string steamIdText_ = string.Empty;
     private DateTimeOffset lastCloudAccountRefreshUtc_;
     private CloudSaveGameSession? activeSaveSession_;
+    private bool isSettingsOpen_;
+    private bool isAccountBusy_;
+    private bool isSendingLogs_;
+    private string diagnosticsStatusText_ =
+        "Send Logs uploads launcher and loader logs to private website storage.";
+    private bool isModDownloadPromptOpen_;
+    private string modDownloadPromptText_ = string.Empty;
+    private string? consentedJoinStatusText_;
+    private IReadOnlyList<string>? pendingLobbyMods_;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
@@ -74,6 +85,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         cloudSaveBackupCoordinator_ = new CloudSaveBackupCoordinator(
             client_.SaveCatalog,
             cloudSaveClient_);
+        diagnosticLogUploader_ = new DiagnosticLogUploader(steamWebsiteSessionClient_);
         instanceName_ = client.InstanceName;
         debugUiEnabled_ = client.DebugUiEnabled;
         lobbyId_ = client.LobbyId;
@@ -100,6 +112,24 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         OpenGameFolderCommand = new RelayCommand(_ => OpenFolder(GameDirectory), _ => CanOpenFolder(GameDirectory));
         ManageSavesCommand = new RelayCommand(_ => OpenSaveManager(), _ => CanManageSaves());
         OpenWebsiteAccountCommand = new RelayCommand(_ => OpenWebsiteAccount());
+        OpenSettingsCommand = new RelayCommand(
+            _ => OpenSettings(),
+            _ => !IsCrashPromptOpen && !IsModDownloadPromptOpen);
+        RefreshAccountCommand = new RelayCommand(
+            _ => _ = RefreshCloudAccountAsync(forceRefresh: true),
+            _ => !isAccountBusy_);
+        UnlinkAccountCommand = new RelayCommand(
+            _ => _ = UnlinkAccountAsync(),
+            _ => IsCloudLinked && !isAccountBusy_);
+        SendLogsCommand = new RelayCommand(
+            _ => _ = SendLogsAsync(),
+            _ => !IsSendingLogs);
+        ConfirmModDownloadCommand = new RelayCommand(
+            _ => ConfirmModDownload(),
+            _ => IsModDownloadPromptOpen && !IsBusy);
+        DeclineModDownloadCommand = new RelayCommand(
+            _ => DeclineModDownload(),
+            _ => IsModDownloadPromptOpen && !IsBusy);
         SubmitCrashReportCommand = new RelayCommand(
             _ => _ = SubmitCrashReportAsync(),
             _ => IsCrashPromptOpen && !IsCrashSubmitting);
@@ -128,6 +158,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public ObservableCollection<LobbyMemberViewModel> LobbyMembers { get; } = [];
 
     public ObservableCollection<string> LobbySharedMods { get; } = [];
+
+    public ObservableCollection<string> ModDownloadItems { get; } = [];
 
     public string Title => "Solomon Dark Revived";
     public string Version
@@ -214,6 +246,63 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         get => isHowToPlayOpen_;
         private set => SetProperty(ref isHowToPlayOpen_, value);
     }
+
+    public bool IsSettingsOpen
+    {
+        get => isSettingsOpen_;
+        private set
+        {
+            if (SetProperty(ref isSettingsOpen_, value))
+            {
+                RaiseCommandStates();
+            }
+        }
+    }
+
+    public bool IsModDownloadPromptOpen
+    {
+        get => isModDownloadPromptOpen_;
+        private set
+        {
+            if (SetProperty(ref isModDownloadPromptOpen_, value))
+            {
+                RaiseCommandStates();
+            }
+        }
+    }
+
+    public string ModDownloadPromptText
+    {
+        get => modDownloadPromptText_;
+        private set => SetProperty(ref modDownloadPromptText_, value);
+    }
+
+    public bool IsSendingLogs
+    {
+        get => isSendingLogs_;
+        private set
+        {
+            if (SetProperty(ref isSendingLogs_, value))
+            {
+                OnPropertyChanged(nameof(SendLogsButtonText));
+                RaiseCommandStates();
+            }
+        }
+    }
+
+    public string SendLogsButtonText => IsSendingLogs ? "Sending…" : "Send Logs to Cloud";
+
+    public string DiagnosticsStatusText
+    {
+        get => diagnosticsStatusText_;
+        private set => SetProperty(ref diagnosticsStatusText_, value);
+    }
+
+    public string LinkedAccountDetailText => IsCloudLinked
+        ? $"{linkedAccountName_} · Steam {steamIdText_}"
+        : string.IsNullOrWhiteSpace(steamIdText_)
+            ? "No website account is linked."
+            : $"Steam {steamIdText_} · no website account linked";
 
     public bool IsHostSetupOpen
     {
@@ -445,15 +534,24 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public RelayCommand OpenGameFolderCommand { get; }
     public RelayCommand ManageSavesCommand { get; }
     public RelayCommand OpenWebsiteAccountCommand { get; }
+    public RelayCommand OpenSettingsCommand { get; }
+    public RelayCommand RefreshAccountCommand { get; }
+    public RelayCommand UnlinkAccountCommand { get; }
+    public RelayCommand SendLogsCommand { get; }
+    public RelayCommand ConfirmModDownloadCommand { get; }
+    public RelayCommand DeclineModDownloadCommand { get; }
     public RelayCommand SubmitCrashReportCommand { get; }
     public RelayCommand DismissCrashReportCommand { get; }
 
-    private bool CanInteract() => !IsBusy && !IsCrashPromptOpen;
+    private bool CanInteractInSettings() =>
+        !IsBusy && !IsCrashPromptOpen && !IsModDownloadPromptOpen;
+
+    private bool CanInteract() => CanInteractInSettings() && !IsSettingsOpen;
 
     private bool CanLaunch() =>
         CanInteract() && isGameReady_ && activeGameProcessId_ == 0;
 
-    private bool CanManageSaves() => CanInteract() && activeGameProcessId_ == 0;
+    private bool CanManageSaves() => CanInteractInSettings() && activeGameProcessId_ == 0;
 
     private bool CanJoinLobbyId() =>
         CanLaunch() && ulong.TryParse(LobbyId, out var lobbyId) && lobbyId != 0;
@@ -531,6 +629,98 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private void OpenSettings()
+    {
+        IsSettingsOpen = true;
+        _ = RefreshCloudAccountAsync(forceRefresh: false);
+    }
+
+    public void CloseSettings()
+    {
+        IsSettingsOpen = false;
+    }
+
+    private async Task UnlinkAccountAsync()
+    {
+        if (isAccountBusy_)
+        {
+            return;
+        }
+
+        isAccountBusy_ = true;
+        RaiseCommandStates();
+        CloudAccountStatus = "Unlinking the Steam account…";
+        try
+        {
+            await steamWebsiteSessionClient_.UnlinkAccountAsync(
+                DirectoryUrl,
+                lifetimeCancellation_.Token);
+            CloudAccountStatus = "The Steam account was unlinked.";
+        }
+        catch (OperationCanceledException) when (lifetimeCancellation_.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception) when (
+            exception is IOException or
+            InvalidOperationException or
+            HttpRequestException or
+            JsonException or
+            TaskCanceledException or
+            System.ComponentModel.Win32Exception)
+        {
+            CloudAccountStatus = exception.Message;
+        }
+        finally
+        {
+            isAccountBusy_ = false;
+            RaiseCommandStates();
+        }
+
+        await RefreshCloudAccountAsync(forceRefresh: true);
+    }
+
+    private async Task SendLogsAsync()
+    {
+        if (IsSendingLogs)
+        {
+            return;
+        }
+
+        IsSendingLogs = true;
+        DiagnosticsStatusText = "Collecting logs and uploading them to the website…";
+        try
+        {
+            var receipt = await diagnosticLogUploader_.SubmitAsync(
+                lastResponse_,
+                TranscriptText,
+                Version,
+                DirectoryUrl,
+                lifetimeCancellation_.Token);
+            DiagnosticsStatusText =
+                $"Logs uploaded as {receipt.LogId} at {receipt.SubmittedAtUtc.LocalDateTime:g}.";
+        }
+        catch (OperationCanceledException) when (lifetimeCancellation_.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception) when (
+            exception is IOException or
+            UnauthorizedAccessException or
+            InvalidDataException or
+            InvalidOperationException or
+            HttpRequestException or
+            JsonException or
+            TaskCanceledException or
+            System.ComponentModel.Win32Exception)
+        {
+            DiagnosticsStatusText = $"The logs were not uploaded: {exception.Message}";
+        }
+        finally
+        {
+            IsSendingLogs = false;
+        }
+    }
+
     public void RefreshCloudAccountAfterActivation()
     {
         if (DateTimeOffset.UtcNow - lastCloudAccountRefreshUtc_ < TimeSpan.FromSeconds(10))
@@ -588,7 +778,9 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             LauncherUiCommandMode.LaunchSinglePlayer or
             LauncherUiCommandMode.Stage)
         {
-            StopSteamSessionMonitoring(clearStatus: true);
+            StopSteamSessionMonitoring(
+                clearStatus: true,
+                preservePendingLobbyMods: mode == LauncherUiCommandMode.JoinSteam);
         }
 
         IsBusy = true;
@@ -641,6 +833,13 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             LobbyId = multiplayer.LobbyId.ToString();
         }
+        if (mode == LauncherUiCommandMode.HostSteam)
+        {
+            pendingLobbyMods_ = invocation.Response.Mods
+                .Where(mod => mod.Enabled)
+                .Select(mod => $"{mod.Name} {mod.Version}")
+                .ToArray();
+        }
         if (mode is LauncherUiCommandMode.HostSteam or LauncherUiCommandMode.JoinSteam &&
             multiplayer is not null)
         {
@@ -672,7 +871,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             LauncherUiCommandMode.Stage => "Stage ready",
             LauncherUiCommandMode.LaunchSinglePlayer => "Game started",
             LauncherUiCommandMode.HostSteam => "Ready",
-            LauncherUiCommandMode.JoinSteam => "Ready",
+            LauncherUiCommandMode.JoinSteam =>
+                invocation.Response.LobbyModSync is { DownloadedModCount: > 0 } sync
+                    ? $"Downloaded {sync.DownloadedModCount} host " +
+                      (sync.DownloadedModCount == 1 ? "mod" : "mods") +
+                      " from the website."
+                    : "Ready",
             LauncherUiCommandMode.EnableMod => "Ready",
             LauncherUiCommandMode.DisableMod => "Ready",
             _ => "Ready"
@@ -859,8 +1063,10 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 forceRefresh,
                 lifetimeCancellation_.Token);
             linkedAccountName_ = state.LinkedAccount?.Username ?? string.Empty;
+            steamIdText_ = state.SteamId;
             IsCloudLinked = state.LinkedAccount is not null;
             OnPropertyChanged(nameof(AccountButtonText));
+            OnPropertyChanged(nameof(LinkedAccountDetailText));
             CloudAccountStatus = state.LinkedAccount is { } account
                 ? $"Cloud backup enabled for {account.Username}."
                 : "Cloud backup is off until this Steam account is linked.";
@@ -879,6 +1085,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             linkedAccountName_ = string.Empty;
             IsCloudLinked = false;
             OnPropertyChanged(nameof(AccountButtonText));
+            OnPropertyChanged(nameof(LinkedAccountDetailText));
             CloudAccountStatus =
                 $"Cloud unavailable; local saves still work. {exception.Message}";
         }
@@ -1031,6 +1238,14 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             }
         }
 
+        if (LobbySharedMods.Count == 0 && pendingLobbyMods_ is { Count: > 0 } sharedMods)
+        {
+            foreach (var sharedMod in sharedMods)
+            {
+                LobbySharedMods.Add(sharedMod);
+            }
+        }
+
         IsInLobby = true;
     }
 
@@ -1121,9 +1336,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private void JoinLobbyDirect()
     {
         client_.UseDirectLobbyJoin();
-        _ = ExecuteActionAsync(
-            LauncherUiCommandMode.JoinSteam,
-            $"The launcher joins lobby {LobbyId}.");
+        _ = JoinLobbyWithModCheckAsync($"The launcher joins lobby {LobbyId}.");
     }
 
     private void TryLaunchPendingLobbyJoin()
@@ -1135,10 +1348,144 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         pendingLobbyJoinId_ = null;
         LobbyId = lobbyId.ToString();
-        _ = ExecuteActionAsync(
-            LauncherUiCommandMode.JoinSteam,
-            $"The launcher joins lobby {lobbyId}.");
+        _ = JoinLobbyWithModCheckAsync($"The launcher joins lobby {lobbyId}.");
     }
+
+    private async Task JoinLobbyWithModCheckAsync(string joinStatusText)
+    {
+        if (IsBusy || IsModDownloadPromptOpen)
+        {
+            return;
+        }
+
+        pendingLobbyMods_ = null;
+        IsBusy = true;
+        StatusText = "The launcher checks the host's mod list.";
+        CommandPreviewText = client_.BuildCommandPreview(LauncherUiCommandMode.JoinPreview);
+        LauncherUiInvocationResult invocation;
+        try
+        {
+            invocation = await client_.InvokeAsync(LauncherUiCommandMode.JoinPreview);
+        }
+        catch (Exception ex)
+        {
+            SetError(ex.Message);
+            StatusText = "The command failed. Read the error message.";
+            IsBusy = false;
+            return;
+        }
+
+        AppendTranscript(invocation);
+        IsBusy = false;
+
+        var preview = invocation.Response?.JoinPreview;
+        if (preview is null || !preview.UsedWebsite || !invocation.Succeeded)
+        {
+            var reason = preview?.Error ?? invocation.ErrorMessage;
+            StatusText = string.IsNullOrWhiteSpace(reason)
+                ? "The website has no mod list for this lobby. Joining with your current mods."
+                : $"Mod check unavailable ({reason.TrimEnd('.')}). Joining with your current mods.";
+            await ExecuteUiCommandAsync(LauncherUiCommandMode.JoinSteam, joinStatusText);
+            return;
+        }
+
+        if (preview.HostProtocolVersion is { } hostProtocol &&
+            hostProtocol != preview.LocalProtocolVersion)
+        {
+            SetError(
+                "The host is on a different Solomon Dark Revived version " +
+                $"(host: {preview.HostLoaderVersion ?? "unknown"}, you: {Version}). " +
+                "Both players need the same launcher version to play together.");
+            StatusText = "Join canceled: the game versions do not match.";
+            return;
+        }
+
+        if (preview.UnavailableCount > 0)
+        {
+            var unavailable = preview.Mods
+                .Where(mod => mod.State == "unavailable")
+                .Select(mod => $"{mod.DisplayName} {mod.Version}");
+            SetError(
+                "Mod list mismatch that can't be repaired automatically. The host has mods " +
+                $"that are not available for download: {string.Join(", ", unavailable)}. " +
+                "Ask the host to publish them on the website or disable them.");
+            StatusText = "Join canceled: the host's mods are not downloadable.";
+            return;
+        }
+
+        pendingLobbyMods_ = preview.Mods
+            .Select(mod => $"{mod.DisplayName} {mod.Version}")
+            .ToArray();
+
+        if (preview.DownloadCount > 0)
+        {
+            ModDownloadItems.Clear();
+            foreach (var mod in preview.Mods.Where(mod => mod.State == "needsDownload"))
+            {
+                var line = $"{mod.DisplayName} {mod.Version}";
+                if (mod.DownloadSizeBytes is { } size)
+                {
+                    line += $" — {FormatSize(size)}";
+                }
+                if (!string.IsNullOrWhiteSpace(mod.InstalledVersion))
+                {
+                    line += mod.InstalledVersion == mod.Version
+                        ? " (replaces your local copy)"
+                        : $" (you have {mod.InstalledVersion})";
+                }
+                ModDownloadItems.Add(line);
+            }
+
+            ModDownloadPromptText =
+                "The host has mods enabled, would you like to download them to join?";
+            consentedJoinStatusText_ = joinStatusText;
+            StatusText = "Waiting for your mod download choice.";
+            IsModDownloadPromptOpen = true;
+            return;
+        }
+
+        StatusText = preview.Mods.Count == 0
+            ? "The host plays without mods."
+            : "Your mods already match the host.";
+        await ExecuteUiCommandAsync(LauncherUiCommandMode.JoinSteam, joinStatusText);
+    }
+
+    private void ConfirmModDownload()
+    {
+        if (!IsModDownloadPromptOpen)
+        {
+            return;
+        }
+
+        var joinStatusText = consentedJoinStatusText_ ??
+            $"The launcher joins lobby {LobbyId}.";
+        consentedJoinStatusText_ = null;
+        IsModDownloadPromptOpen = false;
+        _ = ExecuteUiCommandAsync(
+            LauncherUiCommandMode.JoinSteam,
+            joinStatusText);
+    }
+
+    private void DeclineModDownload()
+    {
+        if (!IsModDownloadPromptOpen)
+        {
+            return;
+        }
+
+        consentedJoinStatusText_ = null;
+        pendingLobbyMods_ = null;
+        IsModDownloadPromptOpen = false;
+        StatusText = "Join canceled. No mods were downloaded.";
+        TryLaunchPendingLobbyJoin();
+    }
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        >= 1024 * 1024 => $"{bytes / (1024.0 * 1024.0):0.#} MB",
+        >= 1024 => $"{bytes / 1024.0:0.#} KB",
+        _ => $"{bytes} bytes"
+    };
 
     private void StopSteamInviteListener()
     {
@@ -1153,19 +1500,25 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private void StopSteamSessionMonitoring(bool clearStatus)
+    private void StopSteamSessionMonitoring(
+        bool clearStatus,
+        bool preservePendingLobbyMods = false)
     {
         steamSessionMonitorCancellation_?.Cancel();
         steamSessionMonitorCancellation_?.Dispose();
         steamSessionMonitorCancellation_ = null;
         if (clearStatus)
         {
-            ClearSteamSessionStatus();
+            ClearSteamSessionStatus(preservePendingLobbyMods);
         }
     }
 
-    private void ClearSteamSessionStatus()
+    private void ClearSteamSessionStatus(bool preservePendingLobbyMods = false)
     {
+        if (!preservePendingLobbyMods)
+        {
+            pendingLobbyMods_ = null;
+        }
         ClearLobbyDetails();
     }
 
@@ -1332,6 +1685,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         OpenProfileFolderCommand.RaiseCanExecuteChanged();
         OpenGameFolderCommand.RaiseCanExecuteChanged();
         ManageSavesCommand.RaiseCanExecuteChanged();
+        OpenSettingsCommand.RaiseCanExecuteChanged();
+        RefreshAccountCommand.RaiseCanExecuteChanged();
+        UnlinkAccountCommand.RaiseCanExecuteChanged();
+        SendLogsCommand.RaiseCanExecuteChanged();
+        ConfirmModDownloadCommand.RaiseCanExecuteChanged();
+        DeclineModDownloadCommand.RaiseCanExecuteChanged();
         SubmitCrashReportCommand.RaiseCanExecuteChanged();
         DismissCrashReportCommand.RaiseCanExecuteChanged();
     }

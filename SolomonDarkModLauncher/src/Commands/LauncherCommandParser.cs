@@ -40,7 +40,7 @@ internal static class LauncherCommandParser
                 continue;
             }
 
-            if (arg is "launch" or "stage" or "list-mods" or "directory-auth")
+            if (arg is "launch" or "stage" or "list-mods" or "directory-auth" or "join-preview")
             {
                 mode = ParseMode(arg);
                 continue;
@@ -178,6 +178,15 @@ internal static class LauncherCommandParser
             throw new InvalidOperationException($"Unknown argument: {arg}");
         }
 
+        if (mode == LauncherMode.JoinPreview)
+        {
+            if (steamLobbyId is null)
+            {
+                throw new InvalidOperationException("join-preview requires --lobby-id.");
+            }
+            multiplayerMode = MultiplayerLaunchMode.Join;
+        }
+
         var lobbyHost = LobbyHostOptions.Create(lobbyPrivacy, directoryBaseUrl);
         var multiplayer = MultiplayerLaunchOptions.Create(
             multiplayerMode,
@@ -226,6 +235,7 @@ internal static class LauncherCommandParser
             "stage" => LauncherMode.Stage,
             "list-mods" => LauncherMode.ListMods,
             "directory-auth" => LauncherMode.AuthenticateDirectory,
+            "join-preview" => LauncherMode.JoinPreview,
             "enable-mod" => LauncherMode.EnableMod,
             "disable-mod" => LauncherMode.DisableMod,
             _ => throw new InvalidOperationException($"Unsupported mode: {value}")

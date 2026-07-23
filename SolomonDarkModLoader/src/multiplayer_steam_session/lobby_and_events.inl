@@ -49,12 +49,17 @@ bool ValidateJoinedLobby(std::string* error_message) {
             SteamGetLobbyData(g_session.lobby_id, kLobbyProtocolKey),
             &advertised_protocol) ||
         advertised_protocol != kProtocolVersion) {
-        *error_message = "Lobby uses a different multiplayer protocol version.";
+        *error_message =
+            "This lobby is on a different Solomon Dark Revived version. "
+            "Update both players to the same launcher version.";
         return false;
     }
     if (SteamGetLobbyData(g_session.lobby_id, kLobbyManifestKey) !=
         g_session.manifest_sha256_text) {
-        *error_message = "Lobby mod/game build fingerprint does not match.";
+        *error_message =
+            "Mod list mismatch. Your mods or game build do not match this "
+            "lobby's. Join through the launcher or the website lobby browser "
+            "and it downloads the host's mods for you.";
         return false;
     }
     if (!TryParseUnsigned64(

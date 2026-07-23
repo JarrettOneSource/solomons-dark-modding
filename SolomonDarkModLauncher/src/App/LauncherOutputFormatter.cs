@@ -20,6 +20,7 @@ internal static class LauncherOutputFormatter
             "  stage                Mirror Solomon Dark into the stage root and stage enabled overlay or runtime mods without launching.",
             "  list-mods            Discover overlay or runtime manifests and print enabled or disabled mods.",
             "  directory-auth       Verify the active Steam user with the lobby directory.",
+            "  join-preview         Compare a lobby's website mod list against local mods without launching. Requires --lobby-id.",
             "  enable-mod <mod-id>  Persistently enable a discovered overlay or runtime mod.",
             "  disable-mod <mod-id> Persistently disable a discovered overlay or runtime mod.",
             string.Empty,
@@ -85,6 +86,9 @@ internal static class LauncherOutputFormatter
             case LauncherMode.DisableMod:
                 AppendModStateChange(builder, execution.ModStateChange!);
                 AppendModList(builder, execution.Catalog);
+                break;
+            case LauncherMode.JoinPreview:
+                AppendJoinPreview(builder, execution.JoinPreview!);
                 break;
             default:
                 throw new InvalidOperationException($"Unsupported mode: {execution.Command.Mode}");
@@ -170,6 +174,38 @@ internal static class LauncherOutputFormatter
             $"Website lobby mods: required={result.RequiredModCount} " +
             $"manual={result.ReusedManualModCount} cached={result.ReusedCachedModCount} " +
             $"downloaded={result.DownloadedModCount}");
+        builder.AppendLine();
+    }
+
+    private static void AppendJoinPreview(StringBuilder builder, LobbyJoinPreview preview)
+    {
+        builder.AppendLine($"Join preview for lobby {preview.LobbyId}:");
+        if (!preview.UsedWebsite)
+        {
+            builder.AppendLine($"Website mod list unavailable: {preview.Error}");
+            builder.AppendLine();
+            return;
+        }
+
+        builder.AppendLine(
+            $"Host build: protocol={preview.HostBuild?.ProtocolVersion?.ToString() ?? "unknown"} " +
+            $"launcher={preview.HostBuild?.LoaderVersion ?? "unknown"}");
+        builder.AppendLine(
+            $"Host mods: total={preview.Mods.Count} installed={preview.InstalledCount} " +
+            $"cached={preview.CachedCount} needDownload={preview.DownloadCount} " +
+            $"unavailable={preview.UnavailableCount}");
+        foreach (var mod in preview.Mods)
+        {
+            var installedHint = mod.InstalledVersion is null
+                ? string.Empty
+                : $" (installed: {mod.InstalledVersion})";
+            var sizeHint = mod.DownloadSizeBytes is { } size
+                ? $" {size} bytes"
+                : string.Empty;
+            builder.AppendLine(
+                $"- {mod.Id} {mod.Version} [{mod.State}]{installedHint}{sizeHint}");
+        }
+
         builder.AppendLine();
     }
 

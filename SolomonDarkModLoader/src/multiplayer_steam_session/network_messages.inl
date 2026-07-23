@@ -49,10 +49,7 @@ void HandleSessionHelloAck(
     }
     const auto result = static_cast<SessionHelloResultCode>(packet.result_code);
     if (result != SessionHelloResultCode::Accepted) {
-        SetError(
-            std::string("Host rejected session handshake: ") +
-                HelloResultLabel(result) + '.',
-            true);
+        SetError(HelloResultUserMessage(result), true);
         return;
     }
     if ((packet.capabilities & kRequiredSessionCapabilities) !=

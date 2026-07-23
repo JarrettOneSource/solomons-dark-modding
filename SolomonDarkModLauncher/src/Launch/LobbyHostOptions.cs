@@ -4,7 +4,7 @@ internal sealed record LobbyHostOptions(
     MultiplayerLobbyPrivacy Privacy,
     string DirectoryBaseUrl)
 {
-    public const string DefaultDirectoryBaseUrl = "https://solomon.genericproject.xyz";
+    public const string DefaultDirectoryBaseUrl = "https://solomondarker.com";
 
     public static LobbyHostOptions Create(
         MultiplayerLobbyPrivacy privacy,
