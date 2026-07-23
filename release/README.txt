@@ -21,6 +21,7 @@ HOW TO PLAY
 3. Make sure that your Steam account is active.
 4. Start SolomonDarkMultiplayerBeta.exe.
 5. Select the folder that contains the original SolomonDark.exe.
+   Bundled mods start disabled; enable only the mods you want in the launcher.
 6. The host clicks Host Game and selects Friends Only or Public.
 7. The host goes to the hub.
 8. Select the host's lobby through Steam, or use a Lobby ID.
@@ -47,5 +48,9 @@ PROBLEM SOLVING
 - After you close both games, start a new lobby.
 - The log files are in:
   %LOCALAPPDATA%\SolomonDarkMultiplayerBeta\runtime
+- If the game crashes, the launcher asks before submitting crash diagnostics.
+  Submit Logs sends logs, runtime configuration, the enabled-mod list, and any
+  minidump to private website storage under your Steam identity. Don't Send
+  sends nothing. Saves and Steam credentials are not included.
 
 The launcher does not store or package Steam credentials.

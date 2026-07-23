@@ -63,6 +63,8 @@ internal sealed class LauncherCliStage
 internal sealed class LauncherCliLaunch
 {
     public int ProcessId { get; set; }
+    public string LaunchToken { get; set; } = string.Empty;
+    public DateTimeOffset StartedAtUtc { get; set; }
     public string LoaderPath { get; set; } = string.Empty;
     public string StartupCode { get; set; } = string.Empty;
     public string StartupMessage { get; set; } = string.Empty;

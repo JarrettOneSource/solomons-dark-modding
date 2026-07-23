@@ -18,7 +18,9 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Lua bus runtime contracts", TestLuaBusRuntimeContractsAsync),
     ("invalid Boneyard rejection", TestInvalidBoneyardRejectionAsync),
     ("automatic website sync with offline fallback", TestAutomaticWebsiteSyncAsync),
-    ("website join URI", TestWebsiteJoinUriAsync)
+    ("website join URI", TestWebsiteJoinUriAsync),
+    ("clean install enables zero mods", TestCleanInstallEnablesZeroModsAsync),
+    ("crash capture archive", TestCrashCaptureArchiveAsync)
 };
 
 var failures = 0;
@@ -37,6 +39,139 @@ foreach (var test in tests)
 }
 
 return failures == 0 ? 0 : 1;
+
+static Task TestCleanInstallEnablesZeroModsAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var modsRoot = Path.Combine(root, "mods");
+        Directory.CreateDirectory(modsRoot);
+        foreach (var id in new[] { "tests.first", "tests.second" })
+        {
+            var modRoot = Path.Combine(modsRoot, id);
+            Directory.CreateDirectory(modRoot);
+            File.WriteAllText(
+                Path.Combine(modRoot, "manifest.json"),
+                $$"""
+                {
+                  "id": "{{id}}",
+                  "name": "{{id}}",
+                  "version": "1.0.0",
+                  "overlays": [{
+                    "target": "images/{{id}}.png",
+                    "source": "files/{{id}}.png"
+                  }]
+                }
+                """);
+            Directory.CreateDirectory(Path.Combine(modRoot, "files"));
+            File.WriteAllText(Path.Combine(modRoot, "files", $"{id}.png"), id);
+        }
+
+        var statePath = Path.Combine(root, "runtime", "mod-manager-state.json");
+        var cleanCatalog = ModCatalog.Load(modsRoot, ModStateStore.Load(statePath));
+        Require(cleanCatalog.DiscoveredMods.Count == 2, "clean install did not discover packaged mods");
+        Require(cleanCatalog.EnabledMods.Count == 0, "clean install enabled packaged mods by default");
+
+        ModStateStore.SetEnabledAtomic(statePath, "tests.first", enabled: true);
+        var optedInCatalog = ModCatalog.Load(modsRoot, ModStateStore.Load(statePath));
+        Require(optedInCatalog.EnabledMods.Count == 1, "an explicit mod choice was not persisted");
+        Require(optedInCatalog.IsEnabled("tests.first"), "the selected mod was not enabled");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestCrashCaptureArchiveAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var stageRoot = Path.Combine(root, "stage");
+        var runtimeRoot = Path.Combine(stageRoot, ".sdmod", "runtime");
+        var logsRoot = Path.Combine(runtimeRoot, "logs");
+        Directory.CreateDirectory(logsRoot);
+        var crashLogPath = Path.Combine(logsRoot, "solomondarkmodloader.crash.log");
+        var loaderLogPath = Path.Combine(logsRoot, "solomondarkmodloader.log");
+        File.WriteAllText(crashLogPath, "unhandled exception code=0xC0000005\n");
+        File.WriteAllText(loaderLogPath, "loader attached\n");
+        var dumpPath = Path.Combine(
+            logsRoot,
+            "solomondarkmodloader.crash.20260722_120000_000.tid7.dmp");
+        File.WriteAllBytes(dumpPath, [0x4D, 0x44, 0x4D, 0x50]);
+
+        var response = new LauncherCliResponse
+        {
+            Success = true,
+            Configuration = new LauncherCliConfiguration { RuntimeProfile = "release" },
+            Mods =
+            [
+                new LauncherCliMod { Id = "tests.enabled", Version = "1.2.3", Enabled = true },
+                new LauncherCliMod { Id = "tests.disabled", Version = "4.5.6", Enabled = false }
+            ],
+            Stage = new LauncherCliStage
+            {
+                StageRoot = stageRoot,
+                StageRuntimeRootPath = runtimeRoot,
+                StageReportPath = Path.Combine(stageRoot, ".sdmod", "stage-report.json")
+            },
+            Launch = new LauncherCliLaunch
+            {
+                ProcessId = 123,
+                LaunchToken = "0123456789abcdef0123456789abcdef",
+                StartedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+                LoaderPath = Path.Combine(root, "SolomonDarkModLoader.dll")
+            }
+        };
+
+        var capture = CrashReportCapture.TryCreate(response, 0, "contract-test")
+            ?? throw new InvalidOperationException("native crash artifacts were not detected");
+        Require(capture.Metadata.HasCrashLog, "crash log was not recorded in metadata");
+        Require(capture.Metadata.MinidumpCount == 1, "minidump was not recorded in metadata");
+        Require(capture.Metadata.EnabledMods.Count == 1, "crash report did not isolate enabled mods");
+
+        var archivePath = CrashReportArchiveBuilder.Build(capture);
+        try
+        {
+            using var archive = ZipFile.OpenRead(archivePath);
+            var entryNames = archive.Entries.Select(entry => entry.FullName).ToHashSet(StringComparer.Ordinal);
+            Require(entryNames.Contains("report.json"), "crash archive is missing report.json");
+            Require(entryNames.Contains("logs/crash.log"), "crash archive is missing the crash log");
+            Require(entryNames.Contains("logs/loader.log"), "crash archive is missing the loader log");
+            Require(entryNames.Contains($"dumps/{Path.GetFileName(dumpPath)}"), "crash archive is missing the minidump");
+            Require(entryNames.All(name => !Path.IsPathRooted(name)), "crash archive exposed absolute entry paths");
+            using var manifestReader = new StreamReader(
+                archive.GetEntry("report.json")!.Open());
+            var manifest = manifestReader.ReadToEnd();
+            Require(
+                !manifest.Contains(root, StringComparison.OrdinalIgnoreCase),
+                "crash manifest exposed a local source path");
+        }
+        finally
+        {
+            File.Delete(archivePath);
+        }
+
+        File.WriteAllText(crashLogPath, string.Empty);
+        File.Delete(dumpPath);
+        Require(
+            CrashReportCapture.TryCreate(response, 0, "contract-test") is null,
+            "a clean zero exit was classified as a crash");
+        Require(
+            CrashReportCapture.TryCreate(response, unchecked((int)0xC0000005), "contract-test") is not null,
+            "an abnormal process exit without a dump was not classified as a crash");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
 
 static async Task TestWebsitePackageInstallAsync()
 {

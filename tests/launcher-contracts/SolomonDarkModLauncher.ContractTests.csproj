@@ -12,6 +12,12 @@
     <ProjectReference Include="..\..\SolomonDarkModLauncher\SolomonDarkModLauncher.csproj" />
     <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherJoinUri.cs"
              Link="LauncherJoinUri.cs" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherCliResponse.cs"
+             Link="LauncherCliResponse.cs" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\CrashReportCapture.cs"
+             Link="CrashReportCapture.cs" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\CrashReportArchiveBuilder.cs"
+             Link="CrashReportArchiveBuilder.cs" />
     <None Include="..\fixtures\boneyards\flat_multiplayer_test.boneyard"
           Link="fixtures\flat_multiplayer_test.boneyard"
           CopyToOutputDirectory="PreserveNewest" />
