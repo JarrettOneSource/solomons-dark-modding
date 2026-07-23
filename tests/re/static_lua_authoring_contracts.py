@@ -41,6 +41,12 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
     authoring_sample = _read("mods/lua_authoring_lab/scripts/main.lua")
     authoring_verifier = _read("tools/verify_lua_authoring.py")
     authoring_verifier_tests = _read("tests/test_lua_authoring_verifier.py")
+    multiplayer_verifier = _read(
+        "tools/verify_lua_authoring_multiplayer.py"
+    )
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_authoring_multiplayer_verifier.py"
+    )
     documentation = _read("docs/lua-authoring.md")
     roadmap = _read("docs/lua-seam-roadmap.md")
 
@@ -223,6 +229,10 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
     assert "python tools/generate_lua_api_stubs.py --check" in workflow
     assert "python -m unittest tests.test_lua_api_stub_generator" in workflow
     assert "python -m unittest tests.test_lua_authoring_verifier" in workflow
+    assert (
+        "python -m unittest tests.test_lua_authoring_multiplayer_verifier"
+        in workflow
+    )
 
     for token in (
         '"Lua hot reload bootstrap"',
@@ -268,6 +278,32 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
             f"authoring verifier regression tests lack: {token}"
         )
     for token in (
+        "SNAPSHOT_PROBE",
+        "ACCEPTANCE_MOD_ID = MOD_ID",
+        "_assert_pair_stays(",
+        "_source_versions(",
+        "source_path.read_bytes() != original",
+        "refusing to overwrite it",
+        "tile_windows=False",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"authoring multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_snapshot_requires_transport_pair_and_stable_surface",
+        "test_disposable_pair_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_incomplete_process_ledger_stops_only_owned_process",
+        "test_run_defers_one_edit_on_both_peers_and_restores_source",
+        "test_concurrent_source_change_is_never_overwritten",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"authoring multiplayer verifier tests lack: {token}"
+        )
+    for token in (
         "## Editor API",
         "## Entry-script hot reload",
         "## In-game exec console",
@@ -278,6 +314,11 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
         "Windows uses a bounded redirected-pipe reader",
         "can activate",
         "does not synthesize global keyboard input or steal focus",
+        "verify_lua_authoring_multiplayer.py --launch-pair",
+        "Both peers are",
+        "observed through the same interval",
+        "refuses to overwrite a concurrent",
+        "source change, never tiles windows",
     ):
         assert token in documentation, f"Lua authoring documentation lacks: {token}"
     assert "**Implemented 2026-07-23.** The checked-in `api/lua/sd.lua`" in roadmap
@@ -285,5 +326,6 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
     return (
         "Lua authoring derives editor metadata from native registrations, reloads "
         "opt-in source states only on safe offline pumps, and executes the bounded "
-        "in-game console through the shared async queue"
+        "in-game console through the shared async queue with exact two-peer "
+        "transport-deferral acceptance"
     )

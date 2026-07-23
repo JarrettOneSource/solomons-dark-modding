@@ -120,6 +120,21 @@ connected. It reads the same `transport_enabled` runtime predicate as the native
 reload gate, rather than waiting for the transport to report ready. Every path
 restores the entry script's exact original bytes.
 
+For exact local-UDP pair coverage, use:
+
+```bash
+python tools/verify_lua_authoring_multiplayer.py --launch-pair
+```
+
+The pair verifier stages only `sample.lua.authoring_lab`, waits for the
+authenticated host/client session, and applies one source edit. Both peers are
+observed through the same interval. Each peer must retain its baseline version
+and exact native UI surface handle with `transport_enabled` and
+`transport_ready` true. The verifier then restores the original bytes and
+repeats the two-peer stability interval. It refuses to overwrite a concurrent
+source change, never tiles windows or performs global process cleanup, and stops
+only the two process IDs returned by its launch.
+
 The offline matrix was live-confirmed on 0.72.5 on 2026-07-23: the authored
 surface handle changed from `1` to `4` on the valid edit, the syntax-invalid
 candidate preserved handle `4`, the restored baseline recreated handle `7`, and

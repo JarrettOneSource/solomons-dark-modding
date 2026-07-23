@@ -522,7 +522,9 @@ authority-only stock wave start, identical sorted live summaries, and matching
   `Ctrl+Backtick` opens a bounded draw-list console that submits to the same gameplay-safe
   async queue and result capture as the external named pipe. A disabled invisible lab and
   source-restoring verifier cover offline reload, syntax preservation, and whole-transport
-  deferral without synthesizing desktop input. See `lua-authoring.md`.
+  deferral without synthesizing desktop input. Exact two-peer acceptance applies one
+  candidate while proving stable baseline code and native UI handles on both
+  transport-enabled peers, then restores the source byte-for-byte. See `lua-authoring.md`.
 
 ---
 
