@@ -33,7 +33,12 @@ int main() {
         !Require(
             ComputeLuaContentNetworkId("sample.lua.enemies", "grave_tyrant") ==
                 7260085584278011992ull,
-            "grave_tyrant content ID drifted")) {
+            "grave_tyrant content ID drifted") ||
+        !Require(
+            ComputeLuaContentNetworkId(
+                "sample.lua.items_registry_lab",
+                "pentaclostic_ring") == 5785942626980372610ull,
+            "pentaclostic_ring content ID drifted")) {
         return 1;
     }
 

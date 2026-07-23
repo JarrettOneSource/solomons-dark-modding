@@ -327,6 +327,8 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "ui.action.activate",
         "waves.read",
         "waves.schedule.read",
+        "items.register",
+        "items.read",
     };
 
     if (multiplayer::IsFoundationInitialized()) {
@@ -436,6 +438,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     mod->profile_storage_values.clear();
     mod->next_timer_id = 1;
     mod->next_bus_subscription_id = 1;
+    mod->item_definitions.clear();
 }
 
 void LogLuaMessage(const LoadedLuaMod& mod, const std::string& message) {

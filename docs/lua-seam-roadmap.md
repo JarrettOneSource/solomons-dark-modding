@@ -230,6 +230,12 @@ a positive 63-bit Lua-integer namespace. Duplicate keys, cross-kind reuse, and h
 collisions fail instead of probing by load order. Registration is entry-script-only and
 identities are removed with their owning Lua state. See `lua-content-identity.md`.
 
+**Item registration implemented 2026-07-22.** `sd.items.register`, `get`, and `list`
+bind stable content keys to exact recipe name/type pairs in the effective item catalog.
+Each peer lazily resolves its own runtime recipe UID, so a persisted local counter never
+becomes network identity; descriptors remain address-free. See `lua-items.md`. Item
+granting and its authoritative stable-ID channel remain part of this roadmap item.
+
 **5. `sd.ai` — enemy brain overrides.**
 Per-enemy move goals (`kGameNpcSetMoveGoal`), target override (fixes the slot-1–3
 targeting limitation foundationally, replacing the pathfinder-hang dead end), `on_think`

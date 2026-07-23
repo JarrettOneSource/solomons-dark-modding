@@ -284,6 +284,7 @@ extern std::size_t kItemDropHeldItemOffset;
 extern std::size_t kItemInstanceRecipeUidOffset;
 extern std::size_t kItemWearableColorStateOffset;
 extern std::size_t kItemRecipeDefinitionUidOffset;
+extern std::size_t kItemRecipeDefinitionNameOffset;
 extern std::size_t kItemRecipeDefinitionTypeIdOffset;
 extern std::size_t kRegionObjectTypeIdOffset;
 extern std::size_t kObjectHeaderWordOffset;

@@ -42,6 +42,9 @@ from static_lua_bus_contracts import (
 from static_lua_content_identity_contracts import (
     test_lua_content_ids_are_canonical_deterministic_and_load_scoped,
 )
+from static_lua_items_contracts import (
+    test_lua_items_register_stable_identity_and_resolve_peer_local_recipes,
+)
 from static_lua_foundations_contracts import (
     test_lua_nav_is_bounded_read_only_and_native_backed,
     test_lua_run_seed_is_authority_owned_and_native_applied,
@@ -329,6 +332,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua content IDs are canonical, deterministic, and load-scoped",
         test_lua_content_ids_are_canonical_deterministic_and_load_scoped,
+    ),
+    (
+        "Lua items register stable identity and resolve peer-local recipes",
+        test_lua_items_register_stable_identity_and_resolve_peer_local_recipes,
     ),
     (
         "Lua timers are bounded, local, and tick-driven",

@@ -63,6 +63,13 @@ struct LuaBusSubscription {
     int callback_reference = -2;
 };
 
+struct LuaItemDefinition {
+    LuaContentIdentity identity;
+    std::string recipe_name;
+    std::string item_type;
+    std::uint32_t native_type_id = 0;
+};
+
 struct LoadedLuaMod {
     RuntimeModDescriptor descriptor;
     std::vector<std::string> capabilities;
@@ -86,6 +93,7 @@ struct LoadedLuaMod {
     std::uint64_t next_timer_id = 1;
     std::vector<LuaBusSubscription> bus_subscriptions;
     std::uint64_t next_bus_subscription_id = 1;
+    std::vector<LuaItemDefinition> item_definitions;
 };
 
 std::mutex& LuaEngineMutex();

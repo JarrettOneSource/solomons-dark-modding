@@ -1,3 +1,15 @@
+bool TryResolveNativeItemRecipeByName(
+    std::string_view recipe_name,
+    std::uint32_t expected_item_type_id,
+    std::uint32_t* recipe_uid,
+    std::string* error_message) {
+    return TryResolveNativeItemRecipeByNameInternal(
+        recipe_name,
+        expected_item_type_id,
+        recipe_uid,
+        error_message);
+}
+
 bool QueuePlayerInventoryItemEquip(
     std::uint32_t recipe_uid,
     std::string* error_message) {

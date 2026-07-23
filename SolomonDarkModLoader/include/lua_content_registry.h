@@ -9,6 +9,7 @@
 namespace sdmod {
 
 inline constexpr std::size_t kLuaContentMaximumIdentifierLength = 128;
+inline constexpr std::size_t kLuaContentMaximumRegisteredIdentities = 4096;
 
 enum class LuaContentKind : std::uint8_t {
     Spell,

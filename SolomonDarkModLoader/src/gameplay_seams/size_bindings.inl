@@ -60,6 +60,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "item_instance_recipe_uid", kItemInstanceRecipeUidOffset),
         SDMOD_SIZE("gameplay.offsets", "item_wearable_color_state", kItemWearableColorStateOffset),
         SDMOD_SIZE("gameplay.offsets", "item_recipe_definition_uid", kItemRecipeDefinitionUidOffset),
+        SDMOD_SIZE("gameplay.offsets", "item_recipe_definition_name", kItemRecipeDefinitionNameOffset),
         SDMOD_SIZE("gameplay.offsets", "item_recipe_definition_type_id", kItemRecipeDefinitionTypeIdOffset),
         SDMOD_SIZE("gameplay.offsets", "region_object_type_id", kRegionObjectTypeIdOffset),
         SDMOD_SIZE("gameplay.offsets", "object_header_word", kObjectHeaderWordOffset),

@@ -18,7 +18,7 @@ def test_lua_storage_is_scoped_bounded_and_transactional() -> str:
     verifier = _read("tools/verify_lua_storage.py")
 
     assert "RegisterLuaStorageBindings(mod->state)" in bindings
-    assert "lua_createtable(mod->state, 0, 20);" in bindings
+    assert "lua_createtable(mod->state, 0, 21);" in bindings
     assert "LuaModStateValues profile_storage_values" in internal
     assert '"storage.profile.local"' in engine
     assert "lua_engine_bindings_storage.cpp" in project

@@ -267,6 +267,7 @@ std::size_t kItemDropHeldItemOffset = 0;
 std::size_t kItemInstanceRecipeUidOffset = 0;
 std::size_t kItemWearableColorStateOffset = 0;
 std::size_t kItemRecipeDefinitionUidOffset = 0;
+std::size_t kItemRecipeDefinitionNameOffset = 0;
 std::size_t kItemRecipeDefinitionTypeIdOffset = 0;
 std::size_t kRegionObjectTypeIdOffset = 0;
 std::size_t kObjectHeaderWordOffset = 0;

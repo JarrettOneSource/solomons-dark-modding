@@ -157,6 +157,10 @@ bool RegisterLuaContentIdentity(
         }
         return false;
     }
+    if (registry.size() >= kLuaContentMaximumRegisteredIdentities) {
+        SetError(error_message, "Lua content identity registry is full.");
+        return false;
+    }
 
     const auto inserted = registry.emplace(candidate.network_id, std::move(candidate));
     *identity = inserted.first->second;

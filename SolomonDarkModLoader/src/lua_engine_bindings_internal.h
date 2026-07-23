@@ -27,6 +27,7 @@ void RegisterLuaRngBindings(lua_State* state);
 void RegisterLuaNavBindings(lua_State* state);
 void RegisterLuaSceneBindings(lua_State* state);
 void RegisterLuaWaveBindings(lua_State* state);
+void RegisterLuaItemBindings(lua_State* state);
 void RegisterLuaDrawBindings(lua_State* state);
 void RegisterLuaBotBindings(lua_State* state);
 void RegisterLuaUiBindings(lua_State* state);
