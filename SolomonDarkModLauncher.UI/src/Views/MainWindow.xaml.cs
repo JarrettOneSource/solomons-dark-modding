@@ -111,6 +111,24 @@ public partial class MainWindow : Window
         CloseHowToPlay();
     }
 
+    private void SettingsClose_Click(object sender, RoutedEventArgs e)
+    {
+        CloseSettings();
+    }
+
+    private void SettingsScrim_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        CloseSettings();
+    }
+
+    private void CloseSettings()
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.CloseSettings();
+        }
+    }
+
     private void HowToPlayScrim_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         CloseHowToPlay();

@@ -340,8 +340,17 @@ void HandleSessionHello(
         peer.rejected = true;
     }
     SendHelloAck(message.sender_steam_id, packet.session_nonce, result);
-    Log(
-        "Steam multiplayer hello result. steam_id=" +
-        std::to_string(message.sender_steam_id) +
-        " result=" + HelloResultLabel(result));
+    if (result == SessionHelloResultCode::Accepted) {
+        Log(
+            "Steam multiplayer hello result. steam_id=" +
+            std::to_string(message.sender_steam_id) +
+            " result=" + HelloResultLabel(result));
+    } else {
+        Log(
+            "Steam multiplayer rejected " +
+            (peer.display_name.empty()
+                 ? "steam_id=" + std::to_string(message.sender_steam_id)
+                 : peer.display_name) +
+            ": " + HelloResultUserMessage(result));
+    }
 }

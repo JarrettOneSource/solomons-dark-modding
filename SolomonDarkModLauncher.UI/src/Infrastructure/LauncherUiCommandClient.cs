@@ -7,7 +7,7 @@ namespace SolomonDarkModLauncher.UI.Infrastructure;
 
 internal sealed class LauncherUiCommandClient
 {
-    private const string DefaultDirectoryUrl = "https://solomon.genericproject.xyz";
+    private const string DefaultDirectoryUrl = "https://solomondarker.com";
 
     private static readonly string[] TestOnlyChildEnvironmentVariables =
     {

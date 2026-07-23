@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 
 namespace SolomonDarkModLauncher.UI.Infrastructure;
@@ -49,6 +52,62 @@ internal sealed class SteamWebsiteSessionClient
         finally
         {
             authenticationLock_.Release();
+        }
+    }
+
+    public async Task UnlinkAccountAsync(
+        string directoryUrl,
+        CancellationToken cancellationToken = default)
+    {
+        directoryUrl = directoryUrl.TrimEnd('/');
+        var session = await GetAsync(directoryUrl, cancellationToken: cancellationToken);
+        if (session.LinkedAccount is null)
+        {
+            return;
+        }
+
+        using var client = new HttpClient
+        {
+            BaseAddress = new Uri(directoryUrl + "/"),
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+        using var request = new HttpRequestMessage(HttpMethod.Delete, "api/auth/steam");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
+        using var response = await client.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"The website refused to unlink this Steam account ({(int)response.StatusCode}): " +
+                await ReadWebsiteErrorAsync(response, cancellationToken));
+        }
+
+        await authenticationLock_.WaitAsync(cancellationToken);
+        try
+        {
+            cachedSession_ = null;
+        }
+        finally
+        {
+            authenticationLock_.Release();
+        }
+    }
+
+    private static async Task<string> ReadWebsiteErrorAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var error = await response.Content.ReadFromJsonAsync<LauncherErrorResponse>(
+                JsonOptions,
+                cancellationToken);
+            return string.IsNullOrWhiteSpace(error?.Error)
+                ? response.ReasonPhrase ?? "request failed"
+                : error.Error;
+        }
+        catch (JsonException)
+        {
+            return response.ReasonPhrase ?? "request failed";
         }
     }
 

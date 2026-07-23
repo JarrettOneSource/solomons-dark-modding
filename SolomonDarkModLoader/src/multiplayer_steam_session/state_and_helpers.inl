@@ -349,6 +349,47 @@ const char* HelloResultLabel(SessionHelloResultCode result) {
     return "unknown";
 }
 
+std::string HelloResultUserMessage(SessionHelloResultCode result) {
+    const char* text;
+    switch (result) {
+    case SessionHelloResultCode::Accepted:
+        text = "The host accepted the connection";
+        break;
+    case SessionHelloResultCode::ProtocolMismatch:
+        text =
+            "The host is on a different Solomon Dark Revived version. "
+            "Update both players to the same launcher version";
+        break;
+    case SessionHelloResultCode::ManifestMismatch:
+        text =
+            "Mod list mismatch. Your mods or game build do not match the host's. "
+            "Join through the launcher or the website lobby browser and it "
+            "downloads the host's mods for you";
+        break;
+    case SessionHelloResultCode::LobbyMismatch:
+        text = "The lobby changed while joining. Try joining again";
+        break;
+    case SessionHelloResultCode::IdentityMismatch:
+        text = "Steam identity validation failed. Restart the game and try again";
+        break;
+    case SessionHelloResultCode::LobbyFull:
+        text = "The lobby is full";
+        break;
+    case SessionHelloResultCode::HostMismatch:
+        text = "The lobby host changed while joining. Try joining again";
+        break;
+    case SessionHelloResultCode::CapabilityMismatch:
+        text =
+            "The host requires multiplayer features this build does not have. "
+            "Update both players to the same launcher version";
+        break;
+    default:
+        text = "The host rejected the connection";
+        break;
+    }
+    return std::string(text) + " (" + HelloResultLabel(result) + ").";
+}
+
 void SetError(std::string message, bool leave_lobby) {
     Log("Steam multiplayer session error: " + message);
     g_session.error_text = std::move(message);
