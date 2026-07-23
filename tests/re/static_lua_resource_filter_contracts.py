@@ -109,9 +109,9 @@ def test_lua_resource_filters_are_native_ordered_and_authoritative() -> str:
 
     _require_in_order(
         gold_pickup,
-        "++g_accepted_replicated_gold_feedback_depth",
+        "++g_accepted_replicated_loot_feedback_depth",
         "original(self)",
-        "--g_accepted_replicated_gold_feedback_depth",
+        "--g_accepted_replicated_loot_feedback_depth",
     )
     _require_in_order(
         loot_authority,

@@ -705,6 +705,69 @@ def test_water_continuous_primary_is_captured_from_its_native_dispatcher() -> st
     return "Water continuous primary is captured once from native dispatcher entry 0x20"
 
 
+def test_earth_primary_is_captured_from_its_native_dispatcher() -> str:
+    spell_hook_text = read_text(RUN_LIFECYCLE_SPELL_CAST_HOOKS)
+    mod_loader_header_text = read_text(MOD_LOADER_HEADER)
+    player_control_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
+    )
+    input_queue_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_input_queueing.inl"
+    )
+
+    required_tokens = (
+        (spell_hook_text, "HookSpellCast_028"),
+        (
+            spell_hook_text,
+            "QueueLocalPlayerNativeDispatcherPrimaryCast(self_address, spell_id)",
+        ),
+        (mod_loader_header_text, "bool QueueLocalPlayerNativeDispatcherPrimaryCast("),
+        (player_control_text, "NativeDispatcherPrimary"),
+        (player_control_text, "constexpr std::int32_t kEarthPrimaryEntryIndex = 0x28;"),
+        (player_control_text, "dispatched_skill_id != kEarthPrimaryEntryIndex"),
+        (player_control_text, "TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)"),
+        (input_queue_text, "LocalPrimaryCastCaptureKind::NativeDispatcherPrimary"),
+    )
+    missing = [token for text, token in required_tokens if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "Earth primary does not own a multiplayer cast from its native "
+            "dispatcher: " + ", ".join(missing)
+        )
+
+    if "SDMOD_DEFINE_SPELL_CAST_HOOK(028, kHookSpellCast028)" in spell_hook_text:
+        raise StaticReTestFailure(
+            "Earth still uses the generic Lua-only spell hook and cannot queue a "
+            "multiplayer cast"
+        )
+
+    earth_hook_pos = spell_hook_text.find("void __fastcall HookSpellCast_028")
+    earth_original_pos = spell_hook_text.find(
+        "original(self, unused_edx);", earth_hook_pos
+    )
+    earth_capture_pos = spell_hook_text.find(
+        "QueueLocalPlayerNativeDispatcherPrimaryCast(self_address, spell_id)",
+        earth_hook_pos,
+    )
+    earth_dispatch_pos = spell_hook_text.find(
+        "DispatchSpellCastForSelf(self_address, spell_id);", earth_hook_pos
+    )
+    if not (
+        earth_hook_pos >= 0
+        and earth_original_pos > earth_hook_pos
+        and earth_capture_pos > earth_original_pos
+        and earth_dispatch_pos > earth_capture_pos
+    ):
+        raise StaticReTestFailure(
+            "Earth multiplayer capture must run once after stock dispatch and before "
+            "the Lua notification"
+        )
+
+    return "Earth primary is captured once from native dispatcher entry 0x28"
+
+
 def test_water_live_verifier_requires_native_visual_emission() -> str:
     verifier_text = read_text(
         ROOT / "tools/verify_multiplayer_animation_mana_elements.py"
@@ -732,6 +795,33 @@ def test_water_live_verifier_requires_native_visual_emission() -> str:
         )
 
     return "Water live verifier requires native Frost Jet visuals on owner and observer"
+
+
+def test_earth_live_verifier_requires_native_boulder_visual_emission() -> str:
+    verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_animation_mana_elements.py"
+    )
+    binary_layout_text = read_text(BINARY_LAYOUT)
+    required_tokens = (
+        (binary_layout_text, "earth_boulder_ctor=0x005FA270"),
+        (verifier_text, 'read_runtime_layout_offset("earth_boulder_ctor")'),
+        (verifier_text, 'ElementSpec("earth", "earth_boulder", "projectile", 0x7D5'),
+        (verifier_text, "sd.debug.trace_function({EARTH_BOULDER_CTOR}"),
+        (verifier_text, "pcall(sd.debug.untrace_function, {EARTH_BOULDER_CTOR})"),
+        (verifier_text, "source_visual_calls"),
+        (verifier_text, "observer_visual_calls"),
+        (verifier_text, "owner emitted no native Earth Boulder visual"),
+        (verifier_text, "observer emitted no native Earth Boulder visual"),
+        (verifier_text, "wait_for_remote_projectile_spawn_sequences("),
+    )
+    missing = [token for text, token in required_tokens if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "Earth live regression does not prove owner and observer native Boulder "
+            "visual emission: " + ", ".join(missing)
+        )
+
+    return "Earth live verifier requires native Boulder visuals on owner and observer"
 
 
 def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:

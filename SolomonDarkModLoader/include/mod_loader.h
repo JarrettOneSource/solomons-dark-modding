@@ -384,6 +384,39 @@ struct SDModReplicatedGoldPickupFeedbackState {
     std::uint64_t applied_ms = 0;
 };
 
+struct SDModReplicatedLootPickupFeedbackState {
+    bool valid = false;
+    bool accepted = false;
+    bool applied = false;
+    multiplayer::LootDropKind drop_kind = multiplayer::LootDropKind::Unknown;
+    std::uint64_t network_drop_id = 0;
+    std::uint32_t run_nonce = 0;
+    uintptr_t actor_address = 0;
+    std::uint32_t request_sequence = 0;
+    std::int32_t amount = 0;
+    std::int32_t resulting_gold = 0;
+    std::int32_t resource_kind = -1;
+    float presentation_value = 0.0f;
+    float resource_delta = 0.0f;
+    float resulting_life_current = 0.0f;
+    float resulting_life_max = 0.0f;
+    float resulting_mana_current = 0.0f;
+    float resulting_mana_max = 0.0f;
+    std::uint32_t item_type_id = 0;
+    std::uint32_t item_recipe_uid = 0;
+    std::int32_t item_slot = -1;
+    std::int32_t stack_count = 0;
+    std::int32_t powerup_kind = -1;
+    std::int32_t powerup_skill_entry_index = -1;
+    std::uint16_t powerup_skill_resulting_active = 0;
+    std::int32_t damage_x4_remaining_ticks = 0;
+    bool stock_feedback_applied = false;
+    bool notification_applied = false;
+    std::uint32_t apply_count = 0;
+    std::uint64_t accepted_ms = 0;
+    std::uint64_t applied_ms = 0;
+};
+
 struct SDModHostLootDropDeactivationResult {
     std::uint32_t run_nonce = 0;
     std::uint64_t network_drop_id = 0;

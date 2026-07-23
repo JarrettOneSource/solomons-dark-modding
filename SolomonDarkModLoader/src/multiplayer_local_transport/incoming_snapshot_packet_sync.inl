@@ -249,7 +249,16 @@ LootSnapshotRuntimeInfo BuildLootSnapshotRuntimeInfo(
                  !std::isfinite(packet_drop.auxiliary))) ||
             ((drop_kind == LootDropKind::Item || drop_kind == LootDropKind::Potion) &&
                 packet_drop.item_type_id == 0) ||
-            (drop_kind == LootDropKind::Item && packet_drop.item_recipe_uid == 0)) {
+            (drop_kind == LootDropKind::Potion &&
+                (packet_drop.item_type_id != kPotionItemTypeId ||
+                 packet_drop.item_slot < kStockPotionSubtypeMin ||
+                 packet_drop.item_slot > kStockPotionSubtypeMax)) ||
+            (drop_kind == LootDropKind::Item &&
+                packet_drop.item_recipe_uid == 0 &&
+                !IsSupportedNonRecipeLootItem(
+                    packet_drop.item_type_id,
+                    packet_drop.item_recipe_uid,
+                    packet_drop.item_slot))) {
             continue;
         }
 

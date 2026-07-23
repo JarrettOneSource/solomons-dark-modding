@@ -131,3 +131,16 @@ static_assert(sizeof(NativeGameString) == 0x1C, "Native game string layout chang
 
 using NativeStringAssignFn = void(__thiscall*)(void* self, char* text);
 using NativeExactTextObjectRenderFn = void(__thiscall*)(void* self, NativeGameString text, float x, float y);
+
+struct NativeRgbaColor {
+    float red = 1.0f;
+    float green = 1.0f;
+    float blue = 1.0f;
+    float alpha = 1.0f;
+};
+static_assert(sizeof(NativeRgbaColor) == 0x10, "Native color layout changed");
+
+using NativePickupNotificationFn = void(__thiscall*)(
+    void* self,
+    NativeGameString text,
+    NativeRgbaColor color);

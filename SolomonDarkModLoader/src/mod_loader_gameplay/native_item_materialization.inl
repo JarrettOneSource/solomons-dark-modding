@@ -243,6 +243,82 @@ bool CloneNativeItemFromRecipe(
     return true;
 }
 
+bool BuildNativeItemFromLootSnapshot(
+    const multiplayer::LootDropSnapshot& drop,
+    uintptr_t* item_address,
+    std::string* error_message) {
+    if (item_address != nullptr) {
+        *item_address = 0;
+    }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (item_address == nullptr || drop.item_type_id == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Native item materialization requires an exact item identity.";
+        }
+        return false;
+    }
+
+    if (drop.item_recipe_uid != 0) {
+        return CloneNativeItemFromRecipe(
+            drop.item_recipe_uid,
+            drop.item_type_id,
+            drop.item_color_state,
+            drop.item_color_state_valid,
+            item_address,
+            error_message);
+    }
+
+    constexpr std::int32_t kNativeMiscItemSubtypeMin = 0;
+    constexpr std::int32_t kNativeMiscItemSubtypeMax = 3;
+    if (drop.item_type_id != kInventoryMiscItemTypeId ||
+        drop.item_slot < kNativeMiscItemSubtypeMin ||
+        drop.item_slot > kNativeMiscItemSubtypeMax) {
+        if (error_message != nullptr) {
+            *error_message = "Unsupported non-recipe native item identity.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto factory_address = memory.ResolveGameAddressOrZero(kGameObjectFactory);
+    const auto factory_context_address =
+        memory.ResolveGameAddressOrZero(kGameObjectFactoryContextGlobal);
+    uintptr_t built_item_address = 0;
+    DWORD exception_code = 0;
+    if (factory_address == 0 ||
+        factory_context_address == 0 ||
+        !CallGameObjectFactorySafe(
+            factory_address,
+            factory_context_address,
+            static_cast<int>(kInventoryMiscItemTypeId),
+            &built_item_address,
+            &exception_code) ||
+        built_item_address == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Misc item factory creation failed with 0x" +
+                HexString(static_cast<uintptr_t>(exception_code)) + ".";
+        }
+        return false;
+    }
+
+    if (!memory.TryWriteField(
+            built_item_address,
+            kItemSlotOffset,
+            drop.item_slot)) {
+        DestroyUnownedNativeItem(built_item_address, "misc_item_slot_seed_failed");
+        if (error_message != nullptr) {
+            *error_message = "Failed to seed the exact misc item subtype.";
+        }
+        return false;
+    }
+
+    *item_address = built_item_address;
+    return true;
+}
+
 bool SpawnNativeItemDropFromRecipe(
     const multiplayer::LootDropSnapshot& drop,
     uintptr_t* carrier_address,
@@ -261,7 +337,10 @@ bool SpawnNativeItemDropFromRecipe(
         held_item_address == nullptr ||
         drop.drop_kind != multiplayer::LootDropKind::Item ||
         drop.item_type_id == 0 ||
-        drop.item_recipe_uid == 0 ||
+        (drop.item_recipe_uid == 0 &&
+         (drop.item_type_id != kInventoryMiscItemTypeId ||
+          drop.item_slot < 0 ||
+          drop.item_slot > 3)) ||
         !std::isfinite(drop.position_x) ||
         !std::isfinite(drop.position_y)) {
         if (error_message != nullptr) {
@@ -297,11 +376,8 @@ bool SpawnNativeItemDropFromRecipe(
     }
 
     uintptr_t item_address = 0;
-    if (!CloneNativeItemFromRecipe(
-            drop.item_recipe_uid,
-            drop.item_type_id,
-            drop.item_color_state,
-            drop.item_color_state_valid,
+    if (!BuildNativeItemFromLootSnapshot(
+            drop,
             &item_address,
             error_message)) {
         return false;

@@ -71,6 +71,8 @@ CAST_FACING_TOLERANCE_DEGREES = 2.0
 CAST_FACING_MATCH_SAMPLE_COUNT = 2
 WATER_CONTINUOUS_VISUAL_MATCH_SAMPLE_COUNT = 3
 FROST_JET_VISUAL_CTOR = read_runtime_layout_offset("water_frost_jet_visual_ctor")
+EARTH_BOULDER_VISUAL_MATCH_SAMPLE_COUNT = 1
+EARTH_BOULDER_CTOR = read_runtime_layout_offset("earth_boulder_ctor")
 ANIMATION_MATCH_TOLERANCES = {
     "walk_cycle_primary": 0.18,
     "walk_cycle_secondary": 0.18,
@@ -378,6 +380,43 @@ def clear_water_visual_trace(pipe_name: str, trace_name: str) -> dict[str, str]:
         pipe_name,
         f"""
 pcall(sd.debug.untrace_function, {FROST_JET_VISUAL_CTOR})
+sd.debug.clear_trace_hits({escaped_name})
+print("ok=true")
+""",
+    )
+
+
+def arm_earth_boulder_visual_trace(pipe_name: str, trace_name: str) -> dict[str, str]:
+    escaped_name = json.dumps(trace_name)
+    return values(
+        pipe_name,
+        f"""
+pcall(sd.debug.untrace_function, {EARTH_BOULDER_CTOR})
+sd.debug.clear_trace_hits({escaped_name})
+local ok = sd.debug.trace_function({EARTH_BOULDER_CTOR}, {escaped_name})
+print("ok=" .. tostring(ok))
+print("error=" .. tostring(sd.debug.get_last_error and sd.debug.get_last_error() or ""))
+""",
+    )
+
+
+def sample_earth_boulder_visual_trace(pipe_name: str, trace_name: str) -> dict[str, str]:
+    escaped_name = json.dumps(trace_name)
+    return values(
+        pipe_name,
+        f"""
+local hits = sd.debug.get_trace_hits and sd.debug.get_trace_hits({escaped_name}) or {{}}
+print("visual_calls=" .. tostring(#hits))
+""",
+    )
+
+
+def clear_earth_boulder_visual_trace(pipe_name: str, trace_name: str) -> dict[str, str]:
+    escaped_name = json.dumps(trace_name)
+    return values(
+        pipe_name,
+        f"""
+pcall(sd.debug.untrace_function, {EARTH_BOULDER_CTOR})
 sd.debug.clear_trace_hits({escaped_name})
 print("ok=true")
 """,
@@ -806,10 +845,42 @@ def verify_projectile_cast(direction: Direction, spec: ElementSpec) -> dict[str,
         projectile_type=f"0x{spec.projectile_type:X}",
     )
     input_attempts: list[dict[str, object]] = []
+    earth_visual: dict[str, object] | None = None
     for input_attempt in range(1, 3):
         pre_clear = clear_local_cast_state(direction)
         source_offset = len(read_log(direction.source_log))
         receiver_offset = len(read_log(direction.receiver_log))
+        earth_trace_names = {
+            "owner": f"earth_boulder_visual.{direction.name}.{input_attempt}.owner",
+            "observer": f"earth_boulder_visual.{direction.name}.{input_attempt}.observer",
+        }
+        earth_trace_arms: dict[str, dict[str, str]] = {}
+        if spec.element == "earth":
+            earth_trace_arms = {
+                "owner": arm_earth_boulder_visual_trace(
+                    direction.source_pipe,
+                    earth_trace_names["owner"],
+                ),
+                "observer": arm_earth_boulder_visual_trace(
+                    direction.receiver_pipe,
+                    earth_trace_names["observer"],
+                ),
+            }
+            bad_trace_arms = {
+                side: result
+                for side, result in earth_trace_arms.items()
+                if result.get("ok") != "true"
+            }
+            if bad_trace_arms:
+                for side, pipe_name in (
+                    ("owner", direction.source_pipe),
+                    ("observer", direction.receiver_pipe),
+                ):
+                    clear_earth_boulder_visual_trace(pipe_name, earth_trace_names[side])
+                raise VerifyFailure(
+                    f"{direction.name} {spec.presentation}: could not arm native "
+                    f"Earth Boulder visual traces: {bad_trace_arms}"
+                )
         before = sample_projectiles(direction.receiver_pipe, duration=0.2)
         queue_result = queue_deterministic_primary(direction, spec.frames)
         sample_telemetry_window(
@@ -829,6 +900,12 @@ def verify_projectile_cast(direction: Direction, spec: ElementSpec) -> dict[str,
                 require_held=spec.frames > TAP_FRAMES,
             )
         except VerifyFailure as exc:
+            if spec.element == "earth":
+                for side, pipe_name in (
+                    ("owner", direction.source_pipe),
+                    ("observer", direction.receiver_pipe),
+                ):
+                    clear_earth_boulder_visual_trace(pipe_name, earth_trace_names[side])
             input_attempts.append({
                 "attempt": input_attempt,
                 "queue_result": queue_result,
@@ -840,6 +917,56 @@ def verify_projectile_cast(direction: Direction, spec: ElementSpec) -> dict[str,
             ):
                 raise
             continue
+        if spec.element == "earth":
+            earth_trace_samples = {
+                "owner": sample_earth_boulder_visual_trace(
+                    direction.source_pipe,
+                    earth_trace_names["owner"],
+                ),
+                "observer": sample_earth_boulder_visual_trace(
+                    direction.receiver_pipe,
+                    earth_trace_names["observer"],
+                ),
+            }
+            earth_trace_clears = {
+                "owner": clear_earth_boulder_visual_trace(
+                    direction.source_pipe,
+                    earth_trace_names["owner"],
+                ),
+                "observer": clear_earth_boulder_visual_trace(
+                    direction.receiver_pipe,
+                    earth_trace_names["observer"],
+                ),
+            }
+            source_visual_calls = parse_int(
+                earth_trace_samples["owner"].get("visual_calls"),
+                0,
+            )
+            observer_visual_calls = parse_int(
+                earth_trace_samples["observer"].get("visual_calls"),
+                0,
+            )
+            earth_visual = {
+                "constructor": EARTH_BOULDER_CTOR,
+                "required_calls": EARTH_BOULDER_VISUAL_MATCH_SAMPLE_COUNT,
+                "source_visual_calls": source_visual_calls,
+                "observer_visual_calls": observer_visual_calls,
+                "arms": earth_trace_arms,
+                "samples": earth_trace_samples,
+                "clears": earth_trace_clears,
+            }
+            if source_visual_calls < EARTH_BOULDER_VISUAL_MATCH_SAMPLE_COUNT:
+                raise VerifyFailure(
+                    f"{direction.name} {spec.presentation}: "
+                    "owner emitted no native Earth Boulder visual; "
+                    f"calls={source_visual_calls} flow={flow}"
+                )
+            if observer_visual_calls < EARTH_BOULDER_VISUAL_MATCH_SAMPLE_COUNT:
+                raise VerifyFailure(
+                    f"{direction.name} {spec.presentation}: "
+                    "observer emitted no native Earth Boulder visual; "
+                    f"calls={observer_visual_calls} flow={flow}"
+                )
         input_attempts.append({
             "attempt": input_attempt,
             "queue_result": queue_result,
@@ -898,6 +1025,7 @@ def verify_projectile_cast(direction: Direction, spec: ElementSpec) -> dict[str,
         "before": before,
         "observed": observed,
         "projectile_type": type_key,
+        "earth_visual": earth_visual,
         "runtime_observed_sequences": runtime_observed_sequences,
         "new_addresses": sorted(observed_addresses - before_addresses),
         "sample_observed_projectile": (

@@ -1,5 +1,3 @@
-thread_local std::uint32_t g_accepted_replicated_gold_feedback_depth = 0;
-
 void __fastcall HookGoldPickupTick(void* self, void* /*unused_edx*/) {
     const auto original =
         GetX86HookTrampoline<GoldPickupTickFn>(g_gameplay_keyboard_injection.gold_pickup_hook);
@@ -54,9 +52,9 @@ void __fastcall HookGoldPickupTick(void* self, void* /*unused_edx*/) {
                     return;
                 }
 
-                ++g_accepted_replicated_gold_feedback_depth;
+                ++g_accepted_replicated_loot_feedback_depth;
                 original(self);
-                --g_accepted_replicated_gold_feedback_depth;
+                --g_accepted_replicated_loot_feedback_depth;
                 std::uint8_t pending_remove = 0;
                 const bool stock_feedback_applied =
                     memory.TryReadField(

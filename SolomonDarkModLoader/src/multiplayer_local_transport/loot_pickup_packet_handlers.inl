@@ -429,6 +429,24 @@ void ApplyLootPickupResultPacket(
                 std::to_string(packet.resource_delta) +
                 " network_drop_id=" + std::to_string(packet.network_drop_id));
         }
+        std::string feedback_error;
+        if (!QueueAcceptedReplicatedOrbPickupFeedback(
+                packet.run_nonce,
+                packet.network_drop_id,
+                packet.request_sequence,
+                packet.resource_kind,
+                packet.resource_delta,
+                packet.resulting_life_current,
+                packet.resulting_life_max,
+                packet.resulting_mana_current,
+                packet.resulting_mana_max,
+                now_ms,
+                &feedback_error)) {
+            Log(
+                "Multiplayer accepted orb pickup could not queue stock feedback. "
+                "network_drop_id=" + std::to_string(packet.network_drop_id) +
+                " error=" + feedback_error);
+        }
     }
     if (result_code == LootPickupResultCode::Accepted &&
         drop_kind == LootDropKind::Powerup) {
@@ -532,6 +550,32 @@ void ApplyLootPickupResultPacket(
                 std::to_string(packet.network_drop_id) +
                 " error=" + powerup_apply_error);
         }
+        if (packet.participant_id == g_local_transport.local_peer_id) {
+            std::string feedback_error;
+            if (!QueueAcceptedReplicatedPowerupPickupFeedback(
+                    packet.run_nonce,
+                    packet.network_drop_id,
+                    packet.request_sequence,
+                    packet.powerup_kind,
+                    packet.powerup_skill_entry_index,
+                    packet.powerup_skill_resulting_active,
+                    packet.damage_x4_remaining_ticks,
+                    now_ms,
+                    &feedback_error)) {
+                Log(
+                    "Multiplayer accepted powerup pickup could not queue stock feedback. "
+                    "network_drop_id=" + std::to_string(packet.network_drop_id) +
+                    " error=" + feedback_error);
+            }
+        }
+    }
+
+    if (packet.participant_id == g_local_transport.local_peer_id &&
+        result_code != LootPickupResultCode::Accepted &&
+        (drop_kind == LootDropKind::Gold ||
+         drop_kind == LootDropKind::Orb ||
+         drop_kind == LootDropKind::Powerup)) {
+        CancelReplicatedLootPickupFeedback(packet.network_drop_id);
     }
 
     PublishLootPickupResultRuntimeInfo(packet, now_ms);

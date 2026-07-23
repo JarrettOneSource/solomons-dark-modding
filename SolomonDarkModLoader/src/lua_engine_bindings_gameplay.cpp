@@ -499,6 +499,80 @@ void PushReplicatedGoldPickupFeedback(
     lua_setfield(state, -2, "applied_ms");
 }
 
+void PushReplicatedLootPickupFeedback(
+    lua_State* state,
+    const SDModReplicatedLootPickupFeedbackState& feedback) {
+    lua_createtable(state, 0, 30);
+    lua_pushboolean(state, feedback.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushboolean(state, feedback.accepted ? 1 : 0);
+    lua_setfield(state, -2, "accepted");
+    lua_pushboolean(state, feedback.applied ? 1 : 0);
+    lua_setfield(state, -2, "applied");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.drop_kind));
+    lua_setfield(state, -2, "kind_id");
+    lua_pushstring(state, multiplayer::LootDropKindLabel(feedback.drop_kind));
+    lua_setfield(state, -2, "kind");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.network_drop_id));
+    lua_setfield(state, -2, "network_drop_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.run_nonce));
+    lua_setfield(state, -2, "run_nonce");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.actor_address));
+    lua_setfield(state, -2, "actor_address");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.request_sequence));
+    lua_setfield(state, -2, "request_sequence");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.amount));
+    lua_setfield(state, -2, "amount");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.resulting_gold));
+    lua_setfield(state, -2, "resulting_gold");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.resource_kind));
+    lua_setfield(state, -2, "resource_kind");
+    lua_pushnumber(state, static_cast<lua_Number>(feedback.presentation_value));
+    lua_setfield(state, -2, "presentation_value");
+    lua_pushnumber(state, static_cast<lua_Number>(feedback.resource_delta));
+    lua_setfield(state, -2, "resource_delta");
+    lua_pushnumber(state, static_cast<lua_Number>(feedback.resulting_life_current));
+    lua_setfield(state, -2, "resulting_life_current");
+    lua_pushnumber(state, static_cast<lua_Number>(feedback.resulting_life_max));
+    lua_setfield(state, -2, "resulting_life_max");
+    lua_pushnumber(state, static_cast<lua_Number>(feedback.resulting_mana_current));
+    lua_setfield(state, -2, "resulting_mana_current");
+    lua_pushnumber(state, static_cast<lua_Number>(feedback.resulting_mana_max));
+    lua_setfield(state, -2, "resulting_mana_max");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.item_type_id));
+    lua_setfield(state, -2, "item_type_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.item_recipe_uid));
+    lua_setfield(state, -2, "item_recipe_uid");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.item_slot));
+    lua_setfield(state, -2, "item_slot");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.stack_count));
+    lua_setfield(state, -2, "stack_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.powerup_kind));
+    lua_setfield(state, -2, "powerup_kind_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(feedback.powerup_skill_entry_index));
+    lua_setfield(state, -2, "powerup_skill_entry_index");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(feedback.powerup_skill_resulting_active));
+    lua_setfield(state, -2, "powerup_skill_resulting_active");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(feedback.damage_x4_remaining_ticks));
+    lua_setfield(state, -2, "damage_x4_remaining_ticks");
+    lua_pushboolean(state, feedback.stock_feedback_applied ? 1 : 0);
+    lua_setfield(state, -2, "stock_feedback_applied");
+    lua_pushboolean(state, feedback.notification_applied ? 1 : 0);
+    lua_setfield(state, -2, "notification_applied");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.apply_count));
+    lua_setfield(state, -2, "apply_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.accepted_ms));
+    lua_setfield(state, -2, "accepted_ms");
+    lua_pushinteger(state, static_cast<lua_Integer>(feedback.applied_ms));
+    lua_setfield(state, -2, "applied_ms");
+}
+
 void PushReplicatedWorldActorBinding(
     lua_State* state,
     const multiplayer::WorldSnapshotActorBindingRuntimeInfo& binding) {
@@ -1405,6 +1479,11 @@ int LuaWorldGetReplicatedLoot(lua_State* state) {
     if (runtime.last_loot_pickup_result.valid) {
         PushLootPickupResult(state, runtime.last_loot_pickup_result);
         lua_setfield(state, -2, "last_pickup_result");
+    }
+    SDModReplicatedLootPickupFeedbackState pickup_feedback;
+    if (TryGetLastReplicatedLootPickupFeedbackState(&pickup_feedback)) {
+        PushReplicatedLootPickupFeedback(state, pickup_feedback);
+        lua_setfield(state, -2, "last_pickup_feedback");
     }
     SDModReplicatedGoldPickupFeedbackState gold_feedback;
     if (TryGetLastReplicatedGoldPickupFeedbackState(&gold_feedback)) {

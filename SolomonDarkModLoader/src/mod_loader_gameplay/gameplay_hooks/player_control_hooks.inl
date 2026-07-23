@@ -928,6 +928,7 @@ enum class LocalPrimaryCastCaptureKind {
 
 constexpr std::int32_t kAirPrimaryEntryIndex = 0x18;
 constexpr std::int32_t kWaterPrimaryEntryIndex = 0x20;
+constexpr std::int32_t kEarthPrimaryEntryIndex = 0x28;
 constexpr std::uint64_t kLocalPrimaryCastEdgeCaptureWindowMs = 1000;
 
 bool TryResolveLocalPlayerPrimaryCastDescriptor(
@@ -990,7 +991,8 @@ bool QueueLocalPlayerPrimaryCastForMultiplayer(
     }
     if (capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary &&
         dispatched_skill_id != kAirPrimaryEntryIndex &&
-        dispatched_skill_id != kWaterPrimaryEntryIndex) {
+        dispatched_skill_id != kWaterPrimaryEntryIndex &&
+        dispatched_skill_id != kEarthPrimaryEntryIndex) {
         return false;
     }
     if (capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary &&

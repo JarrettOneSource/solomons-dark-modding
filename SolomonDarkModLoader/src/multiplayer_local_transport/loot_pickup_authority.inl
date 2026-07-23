@@ -422,10 +422,20 @@ bool ValidateLootPickupRequest(
         if (drop_kind == LootDropKind::Potion && drop.item_type_id != kPotionItemTypeId) {
             return reject("potion_type_mismatch", LootPickupResultCode::Rejected);
         }
+        if (drop_kind == LootDropKind::Potion &&
+            (drop.item_slot < kStockPotionSubtypeMin ||
+             drop.item_slot > kStockPotionSubtypeMax)) {
+            return reject("unsupported_potion_subtype", LootPickupResultCode::Unsupported);
+        }
         if (drop_kind == LootDropKind::Item && drop.item_type_id == kPotionItemTypeId) {
             return reject("item_type_mismatch", LootPickupResultCode::Rejected);
         }
-        if (drop_kind == LootDropKind::Item && drop.item_recipe_uid == 0) {
+        if (drop_kind == LootDropKind::Item &&
+            drop.item_recipe_uid == 0 &&
+            !IsSupportedNonRecipeLootItem(
+                drop.item_type_id,
+                drop.item_recipe_uid,
+                drop.item_slot)) {
             return reject("item_missing_recipe_uid", LootPickupResultCode::Rejected);
         }
     }

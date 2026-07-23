@@ -5,6 +5,30 @@ enum class NativeInventoryCreditOutcome {
     ApplyStateUnknown,
 };
 
+constexpr std::size_t kAcceptedItemDropBounceOffset = 0x140;
+constexpr std::size_t kAcceptedItemDropMotionOffset = 0x144;
+constexpr std::size_t kAcceptedItemDropPickupDelayOffset = 0x14C;
+
+bool CallAcceptedItemDropPickupTickSafe(
+    uintptr_t carrier_actor_address,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    const auto original = GetX86HookTrampoline<ItemDropPickupTickFn>(
+        g_gameplay_keyboard_injection.item_drop_pickup_hook);
+    if (original == nullptr || carrier_actor_address == 0) {
+        return false;
+    }
+
+    __try {
+        original(reinterpret_cast<void*>(carrier_actor_address));
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
 void ClearNativeInventoryCreditState() {
     std::lock_guard<std::mutex> lock(
         g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
@@ -54,8 +78,14 @@ bool TryGetNativeInventoryQuantity(
     }
 
     const bool is_potion = item_type_id == kReplicatedLootPotionItemTypeId;
-    if ((is_potion && (item_slot < 0 || item_slot > 1)) ||
-        (!is_potion && item_recipe_uid == 0)) {
+    const bool is_nonrecipe_item = IsSupportedReplicatedNonRecipeItem(
+        item_type_id,
+        item_recipe_uid,
+        item_slot);
+    if ((is_potion &&
+         (item_slot < kStockPotionSubtypeMin ||
+          item_slot > kStockPotionSubtypeMax)) ||
+        (!is_potion && item_recipe_uid == 0 && !is_nonrecipe_item)) {
         return false;
     }
 
@@ -69,6 +99,10 @@ bool TryGetNativeInventoryQuantity(
                 continue;
             }
             total += (std::max)(item.stack_count, 1);
+        } else if (is_nonrecipe_item) {
+            if (item.slot == item_slot) {
+                ++total;
+            }
         } else if (item.recipe_uid == item_recipe_uid) {
             ++total;
         }
@@ -110,12 +144,19 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
         request.item_type_id != 0 &&
         !is_potion &&
         request.item_recipe_uid != 0;
+    const bool is_supported_nonrecipe_item =
+        IsSupportedReplicatedNonRecipeItem(
+            request.item_type_id,
+            request.item_recipe_uid,
+            request.item_slot);
     if (!multiplayer::IsLocalTransportClient() ||
         request.authority_participant_id == 0 ||
         request.run_nonce == 0 ||
         request.network_drop_id == 0 ||
-        (!is_potion && !is_recipe_item) ||
-        (is_potion && (request.item_slot < 0 || request.item_slot > 1)) ||
+        (!is_potion && !is_recipe_item && !is_supported_nonrecipe_item) ||
+        (is_potion &&
+         (request.item_slot < kStockPotionSubtypeMin ||
+          request.item_slot > kStockPotionSubtypeMax)) ||
         request.stack_count <= 0 ||
         request.inventory_revision == 0) {
         return fail(
@@ -167,13 +208,6 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
     }
 
     auto& memory = ProcessMemory::Instance();
-    const auto insert_function_address =
-        memory.ResolveGameAddressOrZero(kInventoryInsertOrStackItem);
-    if (insert_function_address == 0) {
-        return fail(
-            NativeInventoryCreditOutcome::FailedBeforeApply,
-            "Inventory_InsertOrStackItem seam is unavailable");
-    }
 
     ReplicatedLootPresentationBinding carrier_binding;
     bool have_carrier = false;
@@ -201,7 +235,10 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
          carrier_binding.drop_kind != expected_drop_kind ||
          carrier_binding.native_type_id != kReplicatedLootItemDropNativeTypeId ||
          carrier_binding.item_type_id != request.item_type_id ||
-         (!is_potion && carrier_binding.item_recipe_uid != request.item_recipe_uid) ||
+         (is_recipe_item &&
+          carrier_binding.item_recipe_uid != request.item_recipe_uid) ||
+         ((is_potion || is_supported_nonrecipe_item) &&
+          carrier_binding.item_slot != request.item_slot) ||
          !IsSceneActorAddressPresent(carrier_binding.actor_address))) {
         if (carrier_binding.actor_address != 0 &&
             IsSceneActorAddressPresent(carrier_binding.actor_address)) {
@@ -217,6 +254,7 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
     uintptr_t held_item_address = 0;
     std::uint32_t held_item_type_id = 0;
     std::uint32_t held_item_recipe_uid = 0;
+    std::int32_t held_item_slot = -1;
     if (have_carrier) {
         if (!memory.TryReadField(
                 carrier_binding.actor_address,
@@ -228,12 +266,18 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
                 kGameObjectTypeIdOffset,
                 &held_item_type_id) ||
             held_item_type_id != request.item_type_id ||
-            (!is_potion &&
+            (is_recipe_item &&
              (!memory.TryReadField(
                   held_item_address,
                   kItemInstanceRecipeUidOffset,
                   &held_item_recipe_uid) ||
-              held_item_recipe_uid != request.item_recipe_uid))) {
+              held_item_recipe_uid != request.item_recipe_uid)) ||
+            ((is_potion || is_supported_nonrecipe_item) &&
+             (!memory.TryReadField(
+                  held_item_address,
+                  kItemSlotOffset,
+                  &held_item_slot) ||
+              held_item_slot != request.item_slot))) {
             DWORD remove_exception_code = 0;
             (void)RemoveReplicatedLootPresentationActor(
                 carrier_binding,
@@ -294,6 +338,8 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
         carrier_binding.y = player_state.y;
         carrier_binding.item_type_id = request.item_type_id;
         carrier_binding.item_recipe_uid = request.item_recipe_uid;
+        carrier_binding.item_slot = request.item_slot;
+        carrier_binding.stack_count = request.stack_count;
         have_carrier = true;
 
         if (!memory.TryReadField(
@@ -306,12 +352,18 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
                 kGameObjectTypeIdOffset,
                 &held_item_type_id) ||
             held_item_type_id != request.item_type_id ||
-            (!is_potion &&
+            (is_recipe_item &&
              (!memory.TryReadField(
                   held_item_address,
                   kItemInstanceRecipeUidOffset,
                   &held_item_recipe_uid) ||
-              held_item_recipe_uid != request.item_recipe_uid))) {
+              held_item_recipe_uid != request.item_recipe_uid)) ||
+            ((is_potion || is_supported_nonrecipe_item) &&
+             (!memory.TryReadField(
+                  held_item_address,
+                  kItemSlotOffset,
+                  &held_item_slot) ||
+              held_item_slot != request.item_slot))) {
             DWORD remove_exception_code = 0;
             (void)RemoveReplicatedLootPresentationActor(
                 carrier_binding,
@@ -330,6 +382,11 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
                 held_item_address,
                 kPotionStackCountOffset,
                 request.stack_count);
+    } else if (is_supported_nonrecipe_item) {
+        authoritative_fields_seeded = memory.TryWriteField(
+            held_item_address,
+            kItemSlotOffset,
+            request.item_slot);
     } else if (request.item_color_state_valid &&
                (request.item_type_id == kStandaloneWizardHatVisualTypeId ||
                 request.item_type_id == kStandaloneWizardRobeVisualTypeId)) {
@@ -348,45 +405,72 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
             "unable to seed the authoritative native item fields");
     }
 
-    const uintptr_t cleared_held_item_address = 0;
-    if (!memory.TryWriteField(
+    SDModPlayerState player_state;
+    float original_x = 0.0f;
+    float original_y = 0.0f;
+    const float settled_motion = 0.0f;
+    const std::int32_t pickup_delay = 1;
+    const bool carrier_prepared =
+        TryGetPlayerState(&player_state) &&
+        player_state.valid &&
+        std::isfinite(player_state.x) &&
+        std::isfinite(player_state.y) &&
+        memory.TryReadField(
             carrier_binding.actor_address,
-            kItemDropHeldItemOffset,
-            cleared_held_item_address)) {
+            kActorPositionXOffset,
+            &original_x) &&
+        memory.TryReadField(
+            carrier_binding.actor_address,
+            kActorPositionYOffset,
+            &original_y) &&
+        memory.TryWriteField(
+            carrier_binding.actor_address,
+            kActorPositionXOffset,
+            player_state.x) &&
+        memory.TryWriteField(
+            carrier_binding.actor_address,
+            kActorPositionYOffset,
+            player_state.y) &&
+        memory.TryWriteField(
+            carrier_binding.actor_address,
+            kAcceptedItemDropBounceOffset,
+            settled_motion) &&
+        memory.TryWriteField(
+            carrier_binding.actor_address,
+            kAcceptedItemDropMotionOffset,
+            settled_motion) &&
+        memory.TryWriteField(
+            carrier_binding.actor_address,
+            kAcceptedItemDropPickupDelayOffset,
+            pickup_delay);
+    if (!carrier_prepared) {
         DWORD remove_exception_code = 0;
         (void)RemoveReplicatedLootPresentationActor(
             carrier_binding,
             &remove_exception_code);
         return fail(
             NativeInventoryCreditOutcome::Retry,
-            "unable to transfer native item ownership out of its carrier");
+            "unable to prepare the native item carrier for accepted pickup replay");
     }
 
-    DWORD insert_exception_code = 0;
-    const bool insert_called = CallInventoryInsertOrStackItemSafe(
-        insert_function_address,
-        inventory_before.item_list_root_address,
-        held_item_address,
-        &insert_exception_code);
-
-    DWORD remove_exception_code = 0;
-    const bool carrier_removed = RemoveReplicatedLootPresentationActor(
-        carrier_binding,
-        &remove_exception_code);
-    if (!carrier_removed) {
-        Log(
-            "native_inventory: item carrier removal failed after ownership transfer. "
-            "network_drop_id=" + std::to_string(request.network_drop_id) +
-            " actor=" + HexString(carrier_binding.actor_address) +
-            " seh=" + HexString(static_cast<uintptr_t>(remove_exception_code)));
-    }
-
-    if (!insert_called) {
-        return fail(
-            NativeInventoryCreditOutcome::ApplyStateUnknown,
-            "Inventory_InsertOrStackItem raised 0x" +
-                HexString(static_cast<uintptr_t>(insert_exception_code)));
-    }
+    DWORD pickup_exception_code = 0;
+    const bool pickup_tick_called = CallAcceptedItemDropPickupTickSafe(
+        carrier_binding.actor_address,
+        &pickup_exception_code);
+    std::uint8_t pending_remove = 0;
+    uintptr_t held_item_after = held_item_address;
+    const bool stock_feedback_applied =
+        pickup_tick_called &&
+        memory.TryReadField(
+            carrier_binding.actor_address,
+            kActorPendingRemoveOffset,
+            &pending_remove) &&
+        memory.TryReadField(
+            carrier_binding.actor_address,
+            kItemDropHeldItemOffset,
+            &held_item_after) &&
+        pending_remove != 0 &&
+        held_item_after == 0;
 
     SDModInventoryState inventory_after;
     std::int64_t quantity_after = 0;
@@ -399,22 +483,58 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
             &quantity_after)) {
         return fail(
             NativeInventoryCreditOutcome::ApplyStateUnknown,
-            "native item insertion completed but its result could not be read");
+            "stock item pickup replay completed but its inventory result could not be read");
     }
 
     const auto expected_quantity_after =
         quantity_before + static_cast<std::int64_t>(is_potion ? request.stack_count : 1);
     if (quantity_after < expected_quantity_after) {
+        if (pickup_tick_called &&
+            pending_remove == 0 &&
+            held_item_after == held_item_address) {
+            DWORD remove_exception_code = 0;
+            (void)RemoveReplicatedLootPresentationActor(
+                carrier_binding,
+                &remove_exception_code);
+            return fail(
+                NativeInventoryCreditOutcome::Retry,
+                "stock item pickup replay did not reach its collection branch");
+        }
         return fail(
             NativeInventoryCreditOutcome::ApplyStateUnknown,
-            "native item insertion did not increase the requested inventory identity: before=" +
+            "stock item pickup replay did not increase the requested inventory identity: before=" +
                 std::to_string(quantity_before) +
                 " after=" + std::to_string(quantity_after) +
                 " expected=" + std::to_string(expected_quantity_after));
     }
 
+    if (!pickup_tick_called) {
+        return fail(
+            NativeInventoryCreditOutcome::ApplyStateUnknown,
+            "stock item pickup replay raised 0x" +
+                HexString(static_cast<uintptr_t>(pickup_exception_code)));
+    }
+    if (!stock_feedback_applied) {
+        Log(
+            "native_inventory: item inventory credit applied but stock carrier retirement "
+            "could not be confirmed. network_drop_id=" +
+            std::to_string(request.network_drop_id));
+    }
+
     const bool ledger_converged =
         multiplayer::MarkLocalInventoryNativeConverged(request.inventory_revision);
+    PublishCompletedReplicatedInventoryPickupFeedbackInternal(
+        expected_drop_kind,
+        request.run_nonce,
+        request.network_drop_id,
+        carrier_binding.actor_address,
+        request.item_type_id,
+        request.item_recipe_uid,
+        request.item_slot,
+        request.stack_count,
+        stock_feedback_applied,
+        request.queued_ms,
+        static_cast<std::uint64_t>(::GetTickCount64()));
     Log(
         "native_inventory: applied authoritative item pickup. network_drop_id=" +
         std::to_string(request.network_drop_id) +
@@ -422,6 +542,8 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
         " item_recipe_uid=" + std::to_string(request.item_recipe_uid) +
         " slot=" + std::to_string(request.item_slot) +
         " stack=" + std::to_string(request.stack_count) +
+        " stock_feedback_applied=" +
+        std::to_string(stock_feedback_applied ? 1 : 0) +
         " native_quantity=" + std::to_string(quantity_before) + "->" +
         std::to_string(quantity_after) +
         " inventory_revision=" + std::to_string(request.inventory_revision) +
@@ -460,11 +582,18 @@ bool QueueNativeInventoryCreditInternal(
     }
     const bool is_potion = item_type_id == kReplicatedLootPotionItemTypeId;
     const bool is_recipe_item = item_type_id != 0 && !is_potion && item_recipe_uid != 0;
+    const bool is_supported_nonrecipe_item =
+        IsSupportedReplicatedNonRecipeItem(
+            item_type_id,
+            item_recipe_uid,
+            item_slot);
     if (authority_participant_id == 0 ||
         run_nonce == 0 ||
         network_drop_id == 0 ||
-        (!is_potion && !is_recipe_item) ||
-        (is_potion && (item_slot < 0 || item_slot > 1)) ||
+        (!is_potion && !is_recipe_item && !is_supported_nonrecipe_item) ||
+        (is_potion &&
+         (item_slot < kStockPotionSubtypeMin ||
+          item_slot > kStockPotionSubtypeMax)) ||
         stack_count <= 0 ||
         inventory_revision == 0) {
         return fail("Native inventory credit metadata is invalid.");
